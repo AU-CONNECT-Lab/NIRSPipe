@@ -108,11 +108,12 @@ def main(
     crop_tmax:     Annotated[Optional[float], typer.Option("--crop-tmax",     help="End time in seconds to crop to (single segment).")] = None,
 
     # ---- post: GLM (glm mode) ----
+    stim_dur:        Annotated[Optional[float],       typer.Option("--stim-dur",        help="Stimulus duration (s) for annotation-based events. Mutually exclusive with --events-path.")] = None,
     hrf_model:       Annotated[Optional[HRFModel],   typer.Option("--hrf-model",       help="HRF basis. spm_derivative adds temporal derivative column.")] = None,
     noise_model:     Annotated[Optional[NoiseModel],  typer.Option("--noise-model",     help="Residual autocorrelation model.")] = None,
     drift_model:     Annotated[Optional[DriftModel],  typer.Option("--drift-model",     help="Low-frequency drift regressors in design matrix.")] = None,
-    drift_high_pass: Annotated[Optional[float],       typer.Option("--drift-high-pass", help="High-pass cutoff for cosine drift (Hz).")] = None,
-    drift_order:     Annotated[Optional[int],         typer.Option("--drift-order",     help="Polynomial drift order (polynomial drift model only).")] = None,
+    drift_high_pass: Annotated[Optional[float],       typer.Option("--drift-high-pass", help="High-pass cutoff for cosine drift in Hz.")] = None,
+    drift_order:     Annotated[int,                   typer.Option("--drift-order",     help="Polynomial drift order (polynomial drift model only).")] = 1,
     fir_delays:      Annotated[Optional[str],         typer.Option("--fir-delays",      help="FIR delay bins in scans, comma-separated, e.g. '0,1,2,3,4,5' (only used when --hrf-model fir).")] = None,
     short_channel:   Annotated[Optional[ShortChannel],typer.Option("--short-channel",   help="Short-channel confound regressor strategy.")] = None,
     events_path:     Annotated[Optional[Path],        typer.Option("--events-path",     help="Path to *_events.tsv. If omitted, extracted from snirf annotations.")] = None,

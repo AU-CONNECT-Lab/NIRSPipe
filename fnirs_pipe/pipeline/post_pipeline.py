@@ -46,6 +46,7 @@ class PostConfig:
     crop_tmax: float | None = None
 
     # GLM (glm mode)
+    stim_dur:        float | None          = None
     hrf_model:       str | None            = None
     noise_model:     str | None            = None
     drift_model:     str | None            = None
@@ -106,9 +107,14 @@ def run_post(
         missing = [f for f in ("hrf_model", "noise_model", "drift_model") if getattr(config, f) is None]
         if missing:
             raise ValueError(f"GLM mode requires: {', '.join('--' + f.replace('_', '-') for f in missing)}")
+        if config.events_path is not None and config.stim_dur is not None:
+            raise ValueError("--events-path and --stim-dur are mutually exclusive")
+        if config.events_path is None and config.stim_dur is None:
+            raise NotImplementedError("rest analysis is not yet implemented")
         logger.info("sub-%s | GLM (%s / %s)", config.subject, config.hrf_model, config.noise_model)
         _, glm_est, dm = run_glm_pipeline(
             result,
+            stim_dur=config.stim_dur,
             hrf_model=config.hrf_model,
             noise_model=config.noise_model,
             drift_model=config.drift_model,

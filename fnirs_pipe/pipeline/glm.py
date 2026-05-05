@@ -45,14 +45,13 @@ def _short_channel_regressors(haemo: mne.io.Raw, strategy: SCRStrategy) -> dict[
         "short_ch_hbr_mean": hbr_data.mean(axis=0),
     }
 
-# TODO：stim_dur? Clean deafults and None values in function signatures.
 def build_design_matrix(
     raw: mne.io.Raw,
-    stim_dur: float = 1.0,
-    hrf_model: HRFModel = "spm",
-    drift_model: DriftModel = "cosine",
-    high_pass: float = 0.01,
-    drift_order: int = 1,
+    stim_dur: float | None,
+    hrf_model: HRFModel,
+    drift_model: DriftModel,
+    high_pass: float | None,
+    drift_order: int | None,
     fir_delays: tuple[int, ...] = (0,),
     add_regs: pd.DataFrame | None = None,
     add_reg_names: list[str] | None = None,
@@ -62,25 +61,25 @@ def build_design_matrix(
 ) -> pd.DataFrame:
     """
     Build a design matrix for GLM analysis.
-    Modified from mne_nirs.experimental_design.make_first_level_design_matrix to accept external events and confounds, 
+    Modified from mne_nirs.experimental_design.make_first_level_design_matrix to accept external events and confounds,
     and to handle the case where no events are present (read from snirf annotations instead).
 
     Parameters
     ----------
     raw : mne.io.Raw
         The raw fNIRS data.
-    stim_dur : float, optional
-        The duration of the stimulus, by default 1.0.
-    hrf_model : HRFModel, optional
-        The HRF model to use, by default "spm".
-    drift_model : DriftModel, optional
-        The drift model to use, by default "cosine".
-    high_pass : float, optional
-        The high-pass filter frequency, by default 0.01.
-    drift_order : int, optional
-        The order of the drift polynomial, by default 1.
+    stim_dur : float | None
+        Stimulus duration in seconds. Required when events is None (annotation fallback).
+    hrf_model : HRFModel
+        The HRF model to use.
+    drift_model : DriftModel
+        The drift model to use.
+    high_pass : float | None
+        High-pass cutoff for cosine drift (Hz). Only used when drift_model='cosine'.
+    drift_order : int | None
+        Polynomial drift order. Only used when drift_model='polynomial'.
     fir_delays : tuple[int, ...], optional
-        The delays for the FIR model, by default (0,).
+        FIR delay bins in scans, by default (0,).
     add_regs : pd.DataFrame | None, optional
         Additional regressors to include in the design matrix, by default None.
     add_reg_names : list[str] | None, optional
@@ -90,16 +89,15 @@ def build_design_matrix(
     oversampling : int, optional
         The oversampling factor, by default 50.
     events : pd.DataFrame | None, optional
-        Events data frame with columns 'onset', 'duration', and 'trial_type', by default None.
+        Events DataFrame with columns 'onset', 'duration', 'trial_type'. If None, reads from snirf annotations.
 
     Returns
     -------
     pd.DataFrame
         The design matrix.
-    
+
     # https://mne.tools/mne-nirs/dev/_modules/mne_nirs/experimental_design/_experimental_design.html#make_first_level_design_matrix
     # https://nilearn.github.io/dev/modules/generated/nilearn.glm.first_level.make_first_level_design_matrix.html
-
     """
     
     from nilearn.glm.first_level import make_first_level_design_matrix
@@ -107,6 +105,8 @@ def build_design_matrix(
     frame_times = raw.times
 
     if events is None:
+        if stim_dur is None:
+            raise ValueError("stim_dur required when no events DataFrame provided")
         conditions = raw.annotations.description
         onsets = raw.annotations.onset - raw.first_time
         duration = stim_dur * np.ones(len(conditions))
@@ -145,6 +145,7 @@ def compute_contrasts(
 
 def run_glm_pipeline(
     haemo: mne.io.Raw,
+    stim_dur: float,
     hrf_model: HRFModel,
     noise_model: NoiseModel,
     drift_model: DriftModel,
@@ -164,6 +165,7 @@ def run_glm_pipeline(
 
     dm = build_design_matrix(
         raw=haemo,
+        stim_dur=stim_dur,
         hrf_model=hrf_model,
         drift_model=drift_model,
         high_pass=high_pass,

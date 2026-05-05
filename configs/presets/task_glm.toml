@@ -1,12 +1,7 @@
-[workflow]
-mode = "glm"
-
-[denoising]
 high_pass = 0.01
 low_pass = 0.5
-detrend = true
-short_channel_regression = "none"
 
-[glm]
-hrf_model = "canonical"
-solver = "ar-irls"
+hrf_model = "spm"
+noise_model = "ar1"
+drift_model = "cosine"
+drift_high_pass = 0.01

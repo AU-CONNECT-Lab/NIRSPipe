@@ -138,10 +138,10 @@ class PrepConfig:
     subject: str
     dpf: list[float]                        # required; one value or one per wavelength
     sci_threshold: float                    # required; e.g. 0.8
-    session: str | None = None
-    motion_correction: str | None = None
     cardiac_l_freq: float
     cardiac_h_freq: float
+    session: str | None = None
+    motion_correction: str | None = None
     exclude_channels: list[str] = field(default_factory=list)
     ignore: list[str] = field(default_factory=list)
 

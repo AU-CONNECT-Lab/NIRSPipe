@@ -25,11 +25,14 @@ def _build_post_config(subject: str, session: str | None, args: dict[str, Any], 
     from fnirs_pipe.pipeline.post_pipeline import PostConfig
 
     # CLI takes priority over TOML; Typer Enum values are unwrapped to plain strings.
-    def pick(cli_key: str, toml_key: str | None = None) -> Any:
+    def pick(cli_key: str, toml_key: str | None = None, default: Any = None) -> Any:
         cli_val = args.get(cli_key)
         if cli_val is not None:
             return _v(cli_val)
-        return toml.get(toml_key or cli_key)
+        toml_val = toml.get(toml_key or cli_key)
+        if toml_val is not None:
+            return toml_val
+        return default
 
     sp = pick("segments_path")
     ep = pick("events_path")
@@ -53,6 +56,7 @@ def _build_post_config(subject: str, session: str | None, args: dict[str, Any], 
         segments_path=str(sp) if sp else None,
         crop_tmin=pick("crop_tmin"),
         crop_tmax=pick("crop_tmax"),
+        stim_dur=pick("stim_dur"),
         hrf_model=pick("hrf_model"),
         noise_model=pick("noise_model"),
         drift_model=pick("drift_model"),
