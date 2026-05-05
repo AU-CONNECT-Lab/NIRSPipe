@@ -25,6 +25,23 @@ Known bug: `_write_denoised_snirf` references `config.ica` which does not exist 
 GLM design matrix figure and activation panel in place.  
 Per-channel HRF panel and FC matrix heatmap are stubs.
 
+## v0.5 — Raw QC CLI (`fnirs-qc`) `[ ]`
+
+Separate CLI command for lightweight raw data quality inspection, independent of the prep pipeline.
+
+- BIDS dir + subject label as input (consistent with `fnirs-pipe` conventions)
+- Runs `compute_raw_iqm` only (no OD conversion, no Beer-Lambert)
+- Outputs IQM TOML sidecar + lightweight HTML report (SCI/PSP channel summary, intensity figure)
+- Use case: same-day acquisition QA before committing to full preprocessing
+
+## v0.6 — Group-Level QC Report `[ ]`
+
+Group-level QC aggregation across subjects.
+
+- Aggregate IQM scalars from per-subject TOML sidecars into a group-level summary
+- Visualizations: distribution plots per metric, outlier flagging across subjects
+- Output: group-level HTML report + CSV/TSV table of all subject IQMs
+
 ---
 
 ## Pending decisions
@@ -38,3 +55,6 @@ Per-channel HRF panel and FC matrix heatmap are stubs.
 
 - Functional connectivity mode (deferred; not in CLI)
 - Group-level report (`run_group_level`)
+- **Per-step before/after comparison** — interactive channel-level signal comparison across preprocessing steps (OD → SCI → motcorrected → haemo); needs design work before implementation
+- **Epoch/HRF preview** — stimulus-locked epoch average per channel (HbO/HbR mean ± std across trials), task data only; quick sanity check without full GLM
+- **Multi-run QC comparison** — aggregate and compare IQM scalars across runs within the same subject/session; BIDS `run-` entity already supported

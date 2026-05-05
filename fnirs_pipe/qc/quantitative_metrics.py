@@ -159,6 +159,17 @@ def _haemo_quality_metrics(raw_haemo: mne.io.Raw) -> dict[str, Any]:
     hbo_names = [raw_haemo.ch_names[i] for i in hbo_picks]
     hbr_names = [raw_haemo.ch_names[i] for i in hbr_picks]
 
+    # tSNR = mean/std per channel; valid only on unfiltered Beer-Lambert output (mean != 0).
+    # TODO: verify raw_haemo passed here is always pre-bandpass when called from pipeline.
+    tsnr_hbo = {
+        n: (float(hbo_data[i].mean() / hbo_data[i].std()) if hbo_data[i].std() > 0 else None)
+        for i, n in enumerate(hbo_names)
+    }
+    tsnr_hbr = {
+        n: (float(hbr_data[i].mean() / hbr_data[i].std()) if hbr_data[i].std() > 0 else None)
+        for i, n in enumerate(hbr_names)
+    }
+
     hbo_map = {n.rsplit(" ", 1)[0]: hbo_data[i] for i, n in enumerate(hbo_names)}
     hbr_map = {n.rsplit(" ", 1)[0]: hbr_data[i] for i, n in enumerate(hbr_names)}
     corr_per_ch = {
@@ -166,6 +177,16 @@ def _haemo_quality_metrics(raw_haemo: mne.io.Raw) -> dict[str, Any]:
         for key in hbo_map if key in hbr_map
     }
     return {
+        "tsnr_hbo_mean": (
+            float(np.nanmean([v for v in tsnr_hbo.values() if v is not None]))
+            if tsnr_hbo else None
+        ),
+        "tsnr_hbr_mean": (
+            float(np.nanmean([v for v in tsnr_hbr.values() if v is not None]))
+            if tsnr_hbr else None
+        ),
+        "tsnr_hbo_per_channel": tsnr_hbo,
+        "tsnr_hbr_per_channel": tsnr_hbr,
         "hbo_hbr_corr_mean": (
             float(np.mean(list(corr_per_ch.values()))) if corr_per_ch else None
         ),
@@ -266,6 +287,17 @@ def compute_raw_iqm(
     record.update(_cardiac_power_metrics(raw_intensity))
     record.update(_motion_metrics(raw_intensity))
     return record
+
+
+def compute_glm_iqm(residuals: np.ndarray) -> dict[str, Any]:
+    """IQM metrics requiring GLM residuals (post-GLM QC).
+
+    residuals: shape (n_channels, n_timepoints).
+    TODO: implement Durbin-Watson per channel (cf. AFNI 3dREMLfit -Rwherr).
+    """
+    return {
+        "durbin_watson": None,  # TODO: statsmodels.stats.stattools.durbin_watson per channel
+    }
 
 
 def compute_haemo_iqm(raw_haemo: mne.io.Raw) -> dict[str, Any]:
