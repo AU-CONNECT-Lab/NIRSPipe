@@ -51,8 +51,17 @@ def _intensity_metrics(raw_intensity: mne.io.Raw) -> dict[str, Any]:
             ch: float(ch_means[i])
             for i, ch in enumerate(raw_intensity.ch_names)
         }
+        wl_groups: dict[str, list[float]] = {}
+        for ch, cv in cv_per_ch.items():
+            wl = ch.split()[-1]
+            wl_groups.setdefault(wl, []).append(cv)
+        cv_mean_per_wl = {
+            f"cv_mean_{wl}": float(np.mean(vals))
+            for wl, vals in sorted(wl_groups.items())
+        }
         return {
             "cv_mean": float(np.mean(list(cv_per_ch.values()))) if cv_per_ch else None,
+            **cv_mean_per_wl,
             "cv_per_channel": cv_per_ch,
             "snr_mean": float(np.mean(list(snr_per_ch.values()))) if snr_per_ch else None,
             "snr_per_channel": snr_per_ch,
@@ -106,6 +115,42 @@ def _psp_metrics(raw_intensity: mne.io.Raw) -> dict[str, Any]:
         return {"psp_mean": None, "psp_per_channel": {}}
 
 
+def _cardiac_power_metrics(raw_intensity: mne.io.Raw) -> dict[str, Any]:
+    """Cardiac Power (CP): narrow/wide band power ratio at per-channel cardiac peak.
+
+    Bizzego et al. 2022 (IEEE TNSRE 30:2292-2300).
+    fc = peak frequency in 0.83-2.5 Hz; CP = power(fc±0.2 Hz) / power(fc±0.5 Hz).
+    """
+    try:
+        psd = raw_intensity.compute_psd(fmin=0.5, fmax=3.0, verbose=False)
+        freqs = psd.freqs
+        psd_data = psd.get_data()
+        cardiac_mask = (freqs >= 0.83) & (freqs <= 2.5)
+        if not cardiac_mask.any():
+            raise ValueError("no frequencies in cardiac band")
+        cardiac_freqs = freqs[cardiac_mask]
+        cp_per_ch: dict[str, float | None] = {}
+        for i, ch in enumerate(raw_intensity.ch_names):
+            ch_psd = psd_data[i]
+            fc = cardiac_freqs[np.argmax(ch_psd[cardiac_mask])]
+            narrow = ch_psd[(freqs >= fc - 0.2) & (freqs <= fc + 0.2)]
+            wide = ch_psd[(freqs >= fc - 0.5) & (freqs <= fc + 0.5)]
+            wide_mean = float(wide.mean()) if wide.size > 0 else 0.0
+            cp_per_ch[ch] = (
+                float(narrow.mean() / wide_mean)
+                if narrow.size > 0 and wide_mean > 0
+                else None
+            )
+        valid = [v for v in cp_per_ch.values() if v is not None]
+        return {
+            "cp_mean": float(np.mean(valid)) if valid else None,
+            "cp_per_channel": cp_per_ch,
+        }
+    except Exception as e:
+        logger.warning("Cardiac Power failed: %s", e)
+        return {"cp_mean": None, "cp_per_channel": {}}
+
+
 def _haemo_quality_metrics(raw_haemo: mne.io.Raw) -> dict[str, Any]:
     hbo_picks = mne.pick_types(raw_haemo.info, fnirs="hbo")
     hbr_picks = mne.pick_types(raw_haemo.info, fnirs="hbr")
@@ -114,17 +159,6 @@ def _haemo_quality_metrics(raw_haemo: mne.io.Raw) -> dict[str, Any]:
     hbo_names = [raw_haemo.ch_names[i] for i in hbo_picks]
     hbr_names = [raw_haemo.ch_names[i] for i in hbr_picks]
 
-    def _tsnr(data: np.ndarray, names: list[str]) -> dict[str, float | None]:
-        # temporal SNR on haemodynamic signal, not a channel quality metric
-        out = {}
-        for i, name in enumerate(names):
-            std = float(data[i].std())
-            out[name] = float(data[i].mean() / std) if std > 0 else None
-        return out
-
-    tsnr_hbo = _tsnr(hbo_data, hbo_names)
-    tsnr_hbr = _tsnr(hbr_data, hbr_names)
-
     hbo_map = {n.rsplit(" ", 1)[0]: hbo_data[i] for i, n in enumerate(hbo_names)}
     hbr_map = {n.rsplit(" ", 1)[0]: hbr_data[i] for i, n in enumerate(hbr_names)}
     corr_per_ch = {
@@ -132,16 +166,6 @@ def _haemo_quality_metrics(raw_haemo: mne.io.Raw) -> dict[str, Any]:
         for key in hbo_map if key in hbr_map
     }
     return {
-        "tsnr_hbo_mean": (
-            float(np.nanmean([v for v in tsnr_hbo.values() if v is not None]))
-            if tsnr_hbo else None
-        ),
-        "tsnr_hbr_mean": (
-            float(np.nanmean([v for v in tsnr_hbr.values() if v is not None]))
-            if tsnr_hbr else None
-        ),
-        "tsnr_hbo_per_channel": tsnr_hbo,
-        "tsnr_hbr_per_channel": tsnr_hbr,
         "hbo_hbr_corr_mean": (
             float(np.mean(list(corr_per_ch.values()))) if corr_per_ch else None
         ),
@@ -192,6 +216,7 @@ def _motion_metrics(raw_intensity: mne.io.Raw) -> dict[str, Any]:
         # per-channel threshold avoids high-dynamic-range channels dominating spike count
         thresh = 3.0 * diff_data.std(axis=1, keepdims=True)
         gvtd_ts = np.sqrt(np.mean(diff_data ** 2, axis=0))
+        # TODO: add gvtd timeseries-derived metrics (e.g. fraction of timepoints above threshold)
         return {
             "spike_count": int((np.abs(diff_data) > thresh).sum()),
             "temporal_derivative_variance": {
@@ -238,6 +263,7 @@ def compute_raw_iqm(
     record.update(_intensity_metrics(raw_intensity))
     record.update(_channel_distance_metrics(raw_intensity))
     record.update(_psp_metrics(raw_intensity))
+    record.update(_cardiac_power_metrics(raw_intensity))
     record.update(_motion_metrics(raw_intensity))
     return record
 
