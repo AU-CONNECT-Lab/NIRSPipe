@@ -1,0 +1,8 @@
+[workflow]
+mode = "denoise"
+
+[denoising]
+high_pass = 0.01
+low_pass = 0.2
+detrend = true
+short_channel_regression = "none"

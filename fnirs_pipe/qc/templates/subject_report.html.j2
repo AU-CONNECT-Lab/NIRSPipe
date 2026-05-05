@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>fnirs-pipe QC — sub-{{ subject }}</title>
+  <style>
+    /* ---- base ---- */
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 14px; line-height: 1.5; color: #2c3e50;
+      padding: 1.5rem 2rem 4rem;
+    }
+    h1 { font-size: 1.5rem; margin: 0 0 0.25rem; }
+    h2 { font-size: 1.1rem; font-weight: 600; color: #34495e;
+         border-left: 4px solid #2980b9; padding-left: 0.6rem;
+         margin: 2rem 0 0.75rem; }
+    h3 { font-size: 0.95rem; margin: 1rem 0 0.4rem; color: #555; }
+    pre { background: #f4f4f4; padding: 0.75rem 1rem; border-radius: 4px;
+          overflow-x: auto; font-size: 0.82rem; white-space: pre-wrap;
+          word-break: break-all; }
+    img { max-width: 100%; border: 1px solid #ddd; border-radius: 4px;
+          display: block; margin-top: 0.5rem; }
+    table { border-collapse: collapse; width: 100%; font-size: 0.85rem; }
+    th, td { border: 1px solid #ddd; padding: 0.35rem 0.7rem; text-align: left; }
+    th { background: #f0f3f6; font-weight: 600; }
+
+    /* ---- top nav ---- */
+    #report-nav {
+      position: sticky; top: 0; z-index: 100;
+      background: #fff; border-bottom: 2px solid #2980b9;
+      padding: 0.4rem 2rem; display: flex; align-items: center;
+      gap: 0.25rem; flex-wrap: wrap; font-size: 0.85rem;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    }
+    #report-nav a {
+      color: #2980b9; text-decoration: none; font-weight: 600;
+      padding: 0.2rem 0.55rem; border-radius: 3px;
+    }
+    #report-nav a:hover { background: #eaf3fb; }
+    .nav-sep { color: #ccc; padding: 0 0.2rem; }
+
+    /* ---- header bar ---- */
+    .page-header {
+      display: flex; align-items: baseline; justify-content: space-between;
+      padding-bottom: 0.5rem; margin-bottom: 1.5rem;
+    }
+    .page-header .subtitle { font-size: 0.85rem; color: #888; }
+
+    /* ---- summary box ---- */
+    .summary-box {
+      background: #f8fafc; border: 1px solid #d0dae6;
+      border-radius: 6px; padding: 1rem 1.25rem; margin-bottom: 1.5rem;
+    }
+    .summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 2rem; }
+    .summary-grid table { font-size: 0.88rem; border: none; }
+    .summary-grid td, .summary-grid th { border: none; padding: 0.2rem 0.5rem 0.2rem 0; }
+    .summary-grid th { background: none; width: 140px; color: #666; font-weight: 500; }
+
+    /* ---- badges ---- */
+    .badge-green  { color: #27ae60; font-weight: 700; }
+    .badge-yellow { color: #e67e22; font-weight: 700; }
+    .badge-red    { color: #c0392b; font-weight: 700; }
+
+    /* ---- collapsible steps ---- */
+    details { border: 1px solid #dde3ea; border-radius: 5px;
+              margin-bottom: 0.75rem; }
+    details > summary {
+      padding: 0.6rem 1rem; cursor: pointer; font-weight: 600;
+      background: #f0f3f6; border-radius: 4px; list-style: none;
+      display: flex; align-items: center; gap: 0.5rem;
+      user-select: none;
+    }
+    details > summary::-webkit-details-marker { display: none; }
+    details > summary::before {
+      content: "▶"; font-size: 0.65rem; transition: transform 0.15s;
+    }
+    details[open] > summary::before { transform: rotate(90deg); }
+    .details-body { padding: 0.75rem 1rem 1rem; }
+    .step-desc { color: #555; margin: 0 0 0.75rem; }
+    .fig-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;
+               margin-top: 0.5rem; }
+    .fig-row.single { grid-template-columns: 1fr; }
+
+    /* ---- SCI table ---- */
+    .sci-table td.bad  { background: #fde8e8; color: #c0392b; }
+    .sci-table td.good { background: #e8f8ee; color: #1e8449; }
+
+    /* ---- placeholder ---- */
+    .placeholder {
+      background: repeating-linear-gradient(
+        45deg, #f9f9f9, #f9f9f9 10px, #f1f1f1 10px, #f1f1f1 20px
+      );
+      border: 1px dashed #ccc; border-radius: 4px;
+      padding: 1.5rem; text-align: center; color: #aaa;
+      font-style: italic; font-size: 0.85rem; margin-top: 0.5rem;
+    }
+
+    /* ---- errors ---- */
+    .error-list { background: #fff3f3; border: 1px solid #f5c6cb;
+                  border-radius: 4px; padding: 0.75rem 1rem; }
+    .error-list li { color: #c0392b; font-size: 0.85rem; }
+    .no-errors { color: #27ae60; font-weight: 600; }
+
+    /* ---- methods tabs ---- */
+    .tab-bar { display: flex; gap: 0; margin-bottom: -1px; }
+    .tab-btn {
+      padding: 0.35rem 0.9rem; border: 1px solid #ccc; background: #f5f5f5;
+      cursor: pointer; font-size: 0.82rem; border-bottom: none;
+      border-radius: 4px 4px 0 0;
+    }
+    .tab-btn.active { background: #fff; font-weight: 600; color: #2980b9; }
+    .tab-content { display: none; border: 1px solid #ccc; border-radius: 0 4px 4px 4px; }
+    .tab-content.active { display: block; }
+    .tab-content pre { border: none; border-radius: 0 4px 4px 4px; margin: 0; }
+
+    /* ---- plotly figures ---- */
+    .plotly-fig { margin-top: 0.5rem; overflow: hidden; }
+
+    /* ---- two-column panel grid (e.g. heatmap + optode) ---- */
+    .panel-grid-2 {
+      display: grid; grid-template-columns: 2fr 1fr; gap: 0.75rem; margin-top: 0.75rem;
+    }
+    @media (max-width: 900px) { .panel-grid-2 { grid-template-columns: 1fr; } }
+
+    /* ---- full-width responsive images ---- */
+    img.responsive { width: 100%; height: auto; display: block; border: none; }
+
+    /* ---- quantitative metrics ---- */
+    .qm-box { background: #f8fafc; border: 1px solid #d0dae6; border-radius: 6px;
+              padding: 0.75rem 1.25rem 0.75rem; margin-bottom: 1.5rem; }
+    .qm-list { font-size: 0.88rem; column-count: 2; column-gap: 2.5rem;
+               margin: 0; padding: 0; list-style: none; }
+    .qm-list li { display: flex; justify-content: space-between; padding: 0.18rem 0;
+                  border-bottom: 1px solid #eef0f3; break-inside: avoid; gap: 1rem; }
+    .qm-list .ql { color: #666; white-space: nowrap; }
+    .qm-list .qv { font-weight: 600; white-space: nowrap; }
+    .qm-ok   { color: #27ae60; }
+    .qm-warn { color: #e67e22; }
+    .qm-bad  { color: #c0392b; }
+    .qm-table { font-size: 0.82rem; margin-top: 0.5rem; }
+    .qm-table td.bad  { color: #c0392b; }
+    .qm-table td.good { color: #27ae60; }
+    .qm-table td.neg  { color: #27ae60; }
+    .qm-table td.pos  { color: #c0392b; }
+
+    /* ---- GLM beta table ---- */
+    .glm-beta-table { font-size: 0.80rem; border-collapse: collapse; margin-top: 0.25rem; }
+    .glm-beta-table th, .glm-beta-table td { border: 1px solid #ddd; padding: 0.22rem 0.55rem; text-align: right; }
+    .glm-beta-table th { background: #f0f3f6; text-align: center; }
+    .glm-beta-table td:first-child, .glm-beta-table td:nth-child(2) { text-align: left; }
+    .glm-beta-table td.pos { color: #c0392b; }
+    .glm-beta-table td.neg { color: #27ae60; }
+    .glm-beta-table td.chroma-hbo { color: #c0392b; font-weight: 600; }
+    .glm-beta-table td.chroma-hbr { color: #2471a3; font-weight: 600; }
+
+    /* ---- figure path caption ---- */
+    .fig-path {
+      font-size: 0.75rem; color: #888; margin: 0.3rem 0 0;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    }
+    .fig-path::before { content: "file: "; }
+
+    /* ---- plotly iframes ---- */
+    .plotly-frame {
+      width: 100%; border: none; display: block; margin-top: 0.5rem;
+    }
+  </style>
+</head>
+<body>
+
+<!-- ================================================================ top nav -->
+<nav id="report-nav">
+  <a href="#Final">Summary</a>
+  <a href="#Metrics">Metrics</a>
+  <span class="nav-sep">|</span>
+  <a href="#Signal">Signal</a>
+  <a href="#Motion">Motion</a>
+  <a href="#HbO_HbR">HbO/HbR</a>
+  {% if glm_design_path or glm_activation_path %}<a href="#GLM">GLM</a>{% endif %}
+  <span class="nav-sep">|</span>
+  <a href="#Methods">Methods</a>
+</nav>
+
+<!-- ================================================================ header -->
+<div class="page-header">
+  <h1>fnirs-pipe QC Report &mdash; sub-{{ subject }}</h1>
+  <span class="subtitle">v{{ versions.get('fnirs-pipe', 'unknown') }} &bull; {{ run_date }}</span>
+</div>
+
+<!-- ============================================================== summary -->
+<h2 id="Final">Summary</h2>
+<div class="summary-box">
+  <div class="summary-grid">
+    <table>
+      <tr><th>Subject</th><td>sub-{{ subject }}</td></tr>
+      <tr><th>Date</th><td>{{ run_date }}</td></tr>
+      <tr><th>fnirs-pipe</th><td>v{{ versions.get('fnirs-pipe', 'n/a') }}</td></tr>
+      <tr><th>MNE</th><td>v{{ versions.get('mne', 'n/a') }}</td></tr>
+      <tr><th>Python</th><td>{{ versions.get('python', 'n/a') }}</td></tr>
+    </table>
+    <table>
+      <tr>
+        <th>Bad channels</th>
+        <td><span class="{{ badge_class }}">{{ n_bad }}/{{ n_total }} ({{ "%.0f"|format(bad_rate) }}%)</span></td>
+      </tr>
+      <tr><th>SCI threshold</th><td>{{ config.sci_threshold }}</td></tr>
+      <tr><th>Bad ch. action</th><td>{{ config.bad_channel_action }}</td></tr>
+      <tr><th>Motion corr.</th><td>{{ config.motion_correction }}</td></tr>
+      <tr><th>DPF</th><td>{{ config.dpf | join(', ') }}</td></tr>
+    </table>
+  </div>
+  {% if bad_channels %}
+  <p style="margin: 0.75rem 0 0; font-size:0.85rem;">
+    <strong>Bad channels:</strong> {{ bad_channels | join(', ') }}
+  </p>
+  {% endif %}
+  <h3 style="margin-top:1rem;">Run command</h3>
+  <pre>{{ run_command }}</pre>
+</div>
+
+<!-- ======================================================= preprocessing -->
+<h2>Preprocessing</h2>
+
+<!-- step a: OD conversion -->
+<details open>
+  <summary>a. OD Conversion</summary>
+  <div class="details-body">
+    <p class="step-desc">
+      Raw intensity signals were converted to optical density (OD).
+      Long channels only (source-detector distance &gt; 1&thinsp;cm).
+    </p>
+    <div class="fig-row">
+      <div>
+        <h3>Raw intensity traces</h3>
+        {% if od_traces_path %}
+          <img src="{{ od_traces_path }}" alt="Raw intensity traces" />
+          <p class="fig-path">{{ od_traces_path }}</p>
+        {% else %}
+          <div class="placeholder">Figure generation failed — see Errors section.</div>
+        {% endif %}
+      </div>
+      <div>
+        <h3>Power spectral density (0&ndash;2&thinsp;Hz)</h3>
+        {% if od_psd_path %}
+          <img src="{{ od_psd_path }}" alt="OD PSD" />
+          <p class="fig-path">{{ od_psd_path }}</p>
+        {% else %}
+          <div class="placeholder">Figure generation failed — see Errors section.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</details>
+
+<!-- step b: SCI / PSP quality panels -->
+<details id="Signal" open>
+  <summary>b. Raw Signal Quality (SCI / PSP / Short Channel)</summary>
+  <div class="details-body">
+    <p class="step-desc">
+      Scalp coupling index (SCI) and peak spectral power (PSP) computed per channel.
+      SCI threshold: <strong>{{ config.sci_threshold }}</strong>.
+      Action on bad channels: <strong>{{ config.bad_channel_action }}</strong>.
+    </p>
+
+    <h3>SCI</h3>
+    {% if sci_panel_path %}
+      <iframe class="plotly-frame" src="{{ sci_panel_path }}" title="SCI panel" style="height:{{ sci_panel_h }}px"></iframe>
+      <p class="fig-path">{{ sci_panel_path }}</p>
+      {% if brain_views_path %}
+        <h3>Channel quality — 3D &amp; optode map</h3>
+        <p style="font-size:0.82rem; color:#666; margin:0 0 0.3rem;">Green = good, red = below threshold.</p>
+        <img class="responsive" src="{{ brain_views_path }}" alt="Brain views + optode" />
+        <p class="fig-path">{{ brain_views_path }}</p>
+      {% endif %}
+      {% if sci_quality_path %}
+        <iframe class="plotly-frame" src="{{ sci_quality_path }}" title="SCI per segment" style="height:{{ sci_quality_h }}px"></iframe>
+        <p class="fig-path">{{ sci_quality_path }}</p>
+      {% endif %}
+    {% else %}
+      <div class="placeholder">SCI panel not available — pass sci_scores_matrix and sci_win_times to build_subject_report.</div>
+    {% endif %}
+
+    <h3>PSP</h3>
+    {% if psp_panel_path %}
+      <iframe class="plotly-frame" src="{{ psp_panel_path }}" title="PSP panel" style="height:{{ psp_panel_h }}px"></iframe>
+      <p class="fig-path">{{ psp_panel_path }}</p>
+      {% if psp_heatmap_path %}
+        <iframe class="plotly-frame" src="{{ psp_heatmap_path }}" title="PSP heatmap" style="height:{{ psp_heatmap_h }}px; margin-top:0.5rem;"></iframe>
+        <p class="fig-path">{{ psp_heatmap_path }}</p>
+      {% endif %}
+    {% else %}
+      <div class="placeholder">PSP data not available — pass <code>psp_scores_matrix</code> and <code>psp_win_times</code> to <code>build_subject_report</code>.</div>
+    {% endif %}
+
+    {% if short_channel_path %}
+    <h3>Short-channel PSD</h3>
+    <p class="step-desc">
+      PSD of short-separation channels (&lt; 1&thinsp;cm) overlaid on long-channel PSDs.
+      A prominent cardiac peak in short channels indicates effective regression is possible.
+    </p>
+    <img class="responsive" src="{{ short_channel_path }}" alt="Short-channel PSD" />
+    <p class="fig-path">{{ short_channel_path }}</p>
+    {% endif %}
+  </div>
+</details>
+
+<!-- step c: motion correction -->
+<details id="Motion" open>
+  <summary>c. Motion Correction</summary>
+  <div class="details-body">
+    <p class="step-desc">
+      Motion correction method: <strong>{{ config.motion_correction }}</strong>.
+    </p>
+    {% if carpet_path %}
+      <h3>Carpet plot (z-score per channel)</h3>
+      <img class="responsive" src="{{ carpet_path }}" alt="Carpet plot" />
+      <p class="fig-path">{{ carpet_path }}</p>
+    {% endif %}
+    {% if motion_panel_path %}
+      <h3>GVTD + time series</h3>
+      <iframe class="plotly-frame" src="{{ motion_panel_path }}" title="Motion panel" style="height:{{ motion_panel_h }}px"></iframe>
+      <p class="fig-path">{{ motion_panel_path }}</p>
+    {% else %}
+      <div class="placeholder">Motion panel not available (pass motion_spans + segments).</div>
+    {% endif %}
+    {% if bad_segment_zoom_path %}
+      <h3>Bad segment zoom — top segments by duration</h3>
+      <img src="{{ bad_segment_zoom_path }}" alt="Bad segment zoom" />
+      <p class="fig-path">{{ bad_segment_zoom_path }}</p>
+    {% endif %}
+  </div>
+</details>
+
+<!-- step d: HbO / HbR -->
+<details id="HbO_HbR" open>
+  <summary>d. HbO / HbR (Beer-Lambert)</summary>
+  <div class="details-body">
+    <p class="step-desc">
+      Modified Beer-Lambert law applied with DPF = {{ config.dpf | join(', ') }}.
+    </p>
+    <div class="fig-row">
+      <div>
+        <h3>HbO / HbR traces</h3>
+        {% if haemo_traces_path %}
+          <img src="{{ haemo_traces_path }}" alt="HbO/HbR traces" />
+          <p class="fig-path">{{ haemo_traces_path }}</p>
+        {% else %}
+          <div class="placeholder">Figure generation failed — see Errors section.</div>
+        {% endif %}
+      </div>
+      <div>
+        <h3>Power spectral density (0&ndash;2&thinsp;Hz)</h3>
+        {% if haemo_psd_path %}
+          <img src="{{ haemo_psd_path }}" alt="HbO/HbR PSD" />
+          <p class="fig-path">{{ haemo_psd_path }}</p>
+        {% else %}
+          <div class="placeholder">Figure generation failed — see Errors section.</div>
+        {% endif %}
+      </div>
+    </div>
+
+    <h3>HbO–HbR Correlation</h3>
+    {% if hbo_hbr_path %}
+      <img class="responsive" src="{{ hbo_hbr_path }}" alt="HbO–HbR correlation panel" />
+      <p class="fig-path">{{ hbo_hbr_path }}</p>
+    {% else %}
+      <div class="placeholder">Figure generation failed — see Errors section.</div>
+    {% endif %}
+  </div>
+</details>
+
+<!-- step e: PSD -->
+<details open>
+  <summary>e. Power Spectral Density (before / after bandpass)</summary>
+  <div class="details-body">
+    <p class="step-desc">
+      PSD before and after bandpass filter. Coloured bands: Mayer wave (~0.1&thinsp;Hz),
+      respiration (0.1–0.5&thinsp;Hz), cardiac (0.7–1.5&thinsp;Hz).
+      HbO = red, HbR = blue; thin lines = individual channels, thick = mean.
+    </p>
+    {% if psd_panel_path %}
+      <iframe class="plotly-frame" src="{{ psd_panel_path }}" title="PSD panel" style="height:{{ psd_panel_h }}px"></iframe>
+      <p class="fig-path">{{ psd_panel_path }}</p>
+    {% else %}
+      <div class="placeholder">Figure generation failed — see Errors section.</div>
+    {% endif %}
+  </div>
+</details>
+
+<!-- ======================================================= postprocessing -->
+<h2 id="Postprocessing">Postprocessing</h2>
+
+<details id="GLM" {% if glm_design_path or glm_betas_html or glm_activation_path %}open{% endif %}>
+  <summary>GLM</summary>
+  <div class="details-body">
+    {% if glm_design_path or glm_design_heatmap_path %}
+      <h3>Design matrix</h3>
+      {% if glm_design_path %}
+        <img class="responsive" src="{{ glm_design_path }}" alt="Design matrix — regressor time series" />
+        <p class="fig-path">{{ glm_design_path }}</p>
+      {% endif %}
+      {% if glm_design_heatmap_path %}
+        <img class="responsive" src="{{ glm_design_heatmap_path }}" alt="Design matrix — heatmap" style="margin-top:0.5rem;" />
+        <p class="fig-path">{{ glm_design_heatmap_path }}</p>
+      {% endif %}
+    {% else %}
+      <div class="placeholder">Design matrix not available — pass design_matrix to build_subject_report.</div>
+    {% endif %}
+
+    {% if glm_activation_path %}
+      <h3>Activation by condition</h3>
+      <img src="{{ glm_activation_path }}" alt="Activation by condition" style="max-width:100%;" />
+      <p class="fig-path">{{ glm_activation_path }}</p>
+    {% endif %}
+
+  </div>
+</details>
+
+<details>
+  <summary>Connectivity</summary>
+  <div class="details-body">
+    <p class="step-desc">[PLACEHOLDER] Connectivity mode — not yet implemented.</p>
+    <div class="placeholder">[PLACEHOLDER] FC matrix heatmap.</div>
+  </div>
+</details>
+
+<!-- ================================================= quantitative metrics -->
+{% macro qm_val(v, fmt='.3f') %}{% if v is not none %}{{ ('%' ~ fmt) | format(v) }}{% else %}<span style="color:#aaa">n/a</span>{% endif %}{% endmacro %}
+{% macro pct(v) %}{% if v is not none %}{{ "%.1f"|format(v * 100) }}%{% else %}<span style="color:#aaa">n/a</span>{% endif %}{% endmacro %}
+
+<h2 id="Metrics">Quantitative Metrics</h2>
+<div class="qm-box">
+  {% macro qv_class(v, ok_test, warn_test) %}{% if v is not none %}{% if ok_test %}qm-ok{% elif warn_test %}qm-warn{% else %}qm-bad{% endif %}{% endif %}{% endmacro %}
+  <ul class="qm-list">
+    {% set ret  = iqm.get('channel_retention_rate') %}
+    {% set sci  = iqm.get('sci_mean') %}
+    {% set corr = iqm.get('hbo_hbr_corr_mean') %}
+    {% set ret_pct = iqm.get('pct_data_retained') %}
+    {% set snr  = iqm.get('snr_mean') %}
+    {% set spk  = iqm.get('spike_count') %}
+    <li><span class="ql">Channel retention</span>
+        <span class="qv {{ qv_class(ret, ret >= 0.9, ret >= 0.7) }}">{{ pct(ret) }}</span></li>
+    <li><span class="ql">Mean SCI</span>
+        <span class="qv {{ qv_class(sci, sci >= 0.75, sci >= 0.5) }}">{{ qm_val(sci) }}</span></li>
+    <li><span class="ql">Mean PSP</span>
+        <span class="qv">{{ qm_val(iqm.get('psp_mean')) }}</span></li>
+    <li><span class="ql">Mean SNR (intensity)</span>
+        <span class="qv {{ qv_class(snr, snr >= 100, snr >= 20) }}">{{ qm_val(snr, '.1f') }}</span></li>
+    <li><span class="ql">Mean HbO–HbR corr</span>
+        <span class="qv {{ qv_class(corr, corr < -0.3, corr < 0) }}">{{ qm_val(corr) }}</span></li>
+    <li><span class="ql">% data retained</span>
+        <span class="qv {{ qv_class(ret_pct, ret_pct >= 0.8, ret_pct >= 0.6) }}">{{ pct(ret_pct) }}</span></li>
+    <li><span class="ql">GVTD mean</span>
+        <span class="qv">{{ qm_val(iqm.get('gvtd_mean'), '.3e') }}</span></li>
+    <li><span class="ql">Spike count</span>
+        <span class="qv {{ qv_class(spk, spk == 0, spk < 10) }}">{% if spk is not none %}{{ spk }}{% else %}<span style="color:#aaa">n/a</span>{% endif %}</span></li>
+    <li><span class="ql">Residual cardiac power</span>
+        <span class="qv">{{ qm_val(iqm.get('residual_cardiac_power'), '.3e') }}</span></li>
+    <li><span class="ql">Low-freq drift (HbO)</span>
+        <span class="qv">{{ qm_val(iqm.get('lowfreq_drift_amplitude'), '.3e') }}</span></li>
+  </ul>
+
+  {% if channel_rows %}
+  <details>
+    <summary style="font-weight:500; font-size:0.88rem; cursor:pointer;">Per-channel metrics</summary>
+    <div style="overflow-x:auto; margin-top:0.5rem;">
+      <table class="qm-table">
+        <thead>
+          <tr>
+            <th>Channel</th><th>Status</th><th>SCI</th>
+            <th>SNR (intensity)</th><th>CV</th><th>HbO–HbR corr</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for row in channel_rows %}
+          <tr>
+            <td>{{ row.name }}</td>
+            <td class="{{ 'bad' if row.is_bad else 'good' }}">{{ 'BAD' if row.is_bad else 'OK' }}</td>
+            <td class="{{ 'bad' if row.sci is not none and row.sci < 0.75 else '' }}">
+              {% if row.sci is not none %}{{ "%.3f"|format(row.sci) }}{% else %}—{% endif %}
+            </td>
+            <td>{% if row.snr is not none %}{{ "%.1f"|format(row.snr) }}{% else %}—{% endif %}</td>
+            <td>{% if row.cv is not none %}{{ "%.3f"|format(row.cv) }}{% else %}—{% endif %}</td>
+            <td class="{{ 'neg' if row.corr is not none and row.corr < 0 else ('pos' if row.corr is not none else '') }}">
+              {% if row.corr is not none %}{{ "%.3f"|format(row.corr) }}{% else %}—{% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </details>
+  {% endif %}
+</div>
+
+<!-- =========================================================== errors -->
+<h2>Errors &amp; Warnings</h2>
+{% if errors %}
+  <ul class="error-list">
+    {% for e in errors %}<li>{{ e }}</li>{% endfor %}
+  </ul>
+{% else %}
+  <p class="no-errors">No errors or warnings.</p>
+{% endif %}
+
+<!-- ============================================================= methods -->
+<h2 id="Methods">Methods</h2>
+<p style="font-size:0.85rem; color:#666;">
+  Auto-generated skeleton. Replace <code>[PLACEHOLDER]</code> with your own prose
+  and <code>(Author et al., Year)</code> with real citations.
+</p>
+
+<div class="tab-bar">
+  <button class="tab-btn active" onclick="showTab(event,'tab-plain')">Plain text</button>
+  <button class="tab-btn" onclick="showTab(event,'tab-md')">Markdown</button>
+  <button class="tab-btn" onclick="showTab(event,'tab-latex')">LaTeX</button>
+</div>
+<div id="tab-plain"  class="tab-content active"><pre>{{ methods.plain }}</pre></div>
+<div id="tab-md"     class="tab-content"><pre>{{ methods.markdown }}</pre></div>
+<div id="tab-latex"  class="tab-content"><pre>{{ methods.latex }}</pre></div>
+
+<!-- ========================================================== versions -->
+<h2>Software Versions</h2>
+<table style="max-width:400px;">
+  <tr><th>Package</th><th>Version</th></tr>
+  {% for pkg, ver in versions.items() %}
+  <tr><td>{{ pkg }}</td><td>{{ ver }}</td></tr>
+  {% endfor %}
+</table>
+
+<script>
+function showTab(event, id) {
+  document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  event.target.classList.add('active');
+}
+
+</script>
+
+</body>
+</html>

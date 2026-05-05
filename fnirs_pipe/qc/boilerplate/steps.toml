@@ -1,0 +1,62 @@
+# Pipeline step prose templates.
+#
+# [header] is the opening sentence of the Methods section.
+# {ver} is replaced with the installed fnirs-pipe version.
+
+[header]
+plain    = "fNIRS data were preprocessed using fnirs-pipe v{ver}."
+markdown = "fNIRS data were preprocessed using **fnirs-pipe** v{ver}."
+latex    = "fNIRS data were preprocessed using \\texttt{{fnirs-pipe}} v{ver}."
+
+#
+#
+# Each section is one pipeline step. Keys:
+#   plain     - sentence with {param} slots; {citations} expands to "(Author et al., Year)"
+#   citations - list of BibTeX keys from references.bib
+#
+# A missing section means the step is omitted from the Methods (e.g. motion_none).
+# {citations} is removed automatically when the citations list is empty.
+
+[od_conversion]
+plain = "Raw intensity signals were converted to optical density (OD) using MNE-Python {citations}."
+citations = ["Gramfort2013"]
+
+[sci_marking]
+plain = "Channel signal quality was assessed using the scalp coupling index (SCI) {citations}. Channels with SCI below {threshold} were {action}."
+citations = ["Pollonini2014"]
+
+[motion_tddr]
+plain = "Motion artifacts were corrected using temporal derivative distribution repair (TDDR) {citations}."
+citations = ["Fishburn2019"]
+
+[motion_wavelet]
+plain = "Motion artifacts were suppressed using wavelet-based filtering."
+citations = []
+
+[motion_spline]
+plain = "Motion artifacts were suppressed using spline interpolation."
+citations = []
+
+[beer_lambert]
+plain = "Haemoglobin concentration changes (HbO, HbR) were estimated from OD using the modified Beer-Lambert law {citations} with a differential path length factor (DPF) of {dpf}."
+citations = ["Delpy1988", "Cope1988"]
+
+[bandpass]
+plain = "Data were bandpass filtered ({l_freq}–{h_freq} Hz) using a zero-phase FIR filter (Hamming window)."
+citations = []
+
+[highpass]
+plain = "Data were high-pass filtered at {l_freq} Hz using a zero-phase FIR filter (Hamming window)."
+citations = []
+
+[lowpass]
+plain = "Data were low-pass filtered at {h_freq} Hz using a zero-phase FIR filter (Hamming window)."
+citations = []
+
+[resample]
+plain = "Data were resampled to {sfreq} Hz."
+citations = []
+
+[glm]
+plain = "A first-level general linear model (GLM) was fitted to the haemodynamic time series using a {hrf_model} haemodynamic response function, a {noise_model} noise model, and a {drift_model} drift term (high-pass cutoff: {drift_high_pass} Hz) {citations}."
+citations = ["Santosa2018"]

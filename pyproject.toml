@@ -1,0 +1,54 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fnirs-pipe"
+version = "0.1.0.dev0"
+description = "A BIDS-compatible fNIRS preprocessing and postprocessing pipeline"
+requires-python = ">=3.10"
+dependencies = [
+    "mne>=1.6",
+    "mne-nirs>=0.6",
+    "nilearn>=0.10",
+    "scipy>=1.11",
+    "numpy>=1.24",
+    "pybids>=0.16",
+    "mne-bids>=0.14",
+    "h5py>=3.9",          # snirf (HDF5)
+    "tables>=3.8",        # HDF5 backend for mne-nirs glm_est.save()
+    "pandas>=2.0",
+    "jinja2>=3.1",
+    "plotly>=5.18",
+    "typer>=0.12",
+    "flask>=3.0",
+    "tomli>=2.0; python_version < '3.11'",
+    "bibtexparser>=2.0.0b1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4",
+    "pytest-cov",
+    "ruff",
+    "mypy",
+]
+
+[project.scripts]
+fnirs-pipe  = "fnirs_pipe.cli.run:app"
+fnirs-recon = "fnirs_pipe.cli.recon:app"
+fnirs-rate  = "fnirs_pipe.cli.rate:app"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["fnirs_pipe*"]
+
+[tool.setuptools.package-data]
+fnirs_pipe = ["qc/boilerplate/*.toml", "qc/boilerplate/*.bib"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
