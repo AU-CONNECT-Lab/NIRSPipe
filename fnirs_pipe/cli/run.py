@@ -122,6 +122,9 @@ def main(
     # ---- post: other ----
     combine_runs: Annotated[bool, typer.Option("--combine-runs/--no-combine-runs", help="Concatenate multiple runs before postprocessing.")] = False,
 
+    # ---- QC viewer ----
+    qc_raw: Annotated[Optional[str], typer.Option("--qc-raw", help="Launch interactive raw QC viewer for a participant label, e.g. --qc-raw 01. Skips pipeline.")] = None,
+
     # ---- output ----
     no_report:    Annotated[bool,        typer.Option("--no-report/--report")] = False,
     n_jobs:       Annotated[int,         typer.Option("--n-jobs", help="Parallel subject jobs.")] = 1,
@@ -143,9 +146,60 @@ def main(
     Step order within each mode:
       bandpass → resample → [GLM if mode=glm]
     """
+    if qc_raw is not None:
+        _launch_qc_viewer(bids_dir, output_dir, subject=qc_raw,
+                          session_label=session_label, task_label=task_label,
+                          skip_validation=skip_bids_validation)
+        return
+
     from fnirs_pipe.cli.workflows import run_participant_level, run_group_level
 
     if analysis_level == AnalysisLevel.participant:
         run_participant_level(locals())
     else:
         run_group_level(locals())
+
+
+def _launch_qc_viewer(
+    bids_dir: Path,
+    output_dir: Path,
+    subject: str,
+    session_label: "list[str] | None" = None,
+    task_label: "list[str] | None" = None,
+    skip_validation: bool = False,
+) -> None:
+    from fnirs_pipe.io.bids import get_layout, get_nirs_files
+    from fnirs_pipe.qc.app import launch
+
+    layout = get_layout(bids_dir, validate=not skip_validation)
+    sessions = session_label or [None]
+    tasks    = task_label    or [None]
+
+    runs = []
+    for session in sessions:
+        for task in tasks:
+            files = get_nirs_files(layout, subject=subject, session=session, task=task)
+            for f in files:
+                entities = layout.parse_file_entities(str(f))
+                parts = [f"sub-{subject}"]
+                if entities.get("session"): parts.append(f"ses-{entities['session']}")
+                if entities.get("task"):    parts.append(f"task-{entities['task']}")
+                if entities.get("run"):     parts.append(f"run-{entities['run']}")
+                label = "_".join(parts)
+
+                # look for associated events.tsv (same entities, different suffix)
+                snirf_p = Path(f)
+                events_p = snirf_p.parent / (snirf_p.name.replace("_nirs.snirf", "_events.tsv"))
+                runs.append({
+                    "label":       label,
+                    "snirf_path":  str(f),
+                    "events_path": str(events_p) if events_p.exists() else None,
+                })
+
+    if not runs:
+        typer.echo(f"Error: no SNIRF files found for sub-{subject}.", err=True)
+        raise typer.Exit(1)
+
+    typer.echo(f"Launching QC viewer for sub-{subject} ({len(runs)} run(s)) …")
+    out_dir = output_dir / f"sub-{subject}" / "nirs"
+    launch(runs, out_dir)

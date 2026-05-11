@@ -1,0 +1,882 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<title>fnirs-pipe Raw Viewer</title>
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 13px; color: #2c3e50;
+  margin: 0; padding: 0.6rem 0.8rem 2rem;
+  background: #f5f7fa;
+}
+h1 { font-size: 1.05rem; margin: 0; }
+.hint { font-size: 0.78rem; color: #888; }
+
+/* nav */
+#qc-nav {
+  position: sticky; top: 0; z-index: 100;
+  background: #fff; border-bottom: 1px solid #dde3ea;
+  padding: 0.4rem 0.8rem;
+  display: flex; align-items: center; gap: 1rem;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.07);
+  margin: -0.6rem -0.8rem 0.6rem;
+}
+.nav-right { margin-left: auto; display: flex; align-items: center; gap: 0.5rem; }
+select#run-select {
+  font-size: 0.82rem; border: 1px solid #ced4da; border-radius: 4px;
+  padding: 0.2rem 0.4rem; background: #f8f9fa;
+}
+
+/* cards */
+.card {
+  background: #fff; border: 1px solid #dde3ea; border-radius: 6px;
+  overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+}
+
+/* grids */
+.row { display: grid; gap: 0.5rem; margin-bottom: 0.5rem; }
+.row-main    { grid-template-columns: 3fr 1fr; align-items: start; }
+.row-detail  { grid-template-columns: 1fr; }
+.row-layout  { grid-template-columns: 1fr 2fr; }
+.row-psd-ep  { grid-template-columns: 1fr; }
+@media (max-width: 900px) {
+  .row-main, .row-layout { grid-template-columns: 1fr; }
+}
+
+/* buttons */
+.btn {
+  padding: 0.25rem 0.6rem; border: 1px solid #dde3ea; border-radius: 4px;
+  background: #f8f9fa; cursor: pointer; font-size: 0.82rem; color: #2c3e50;
+  transition: background 0.15s;
+}
+.btn:hover { background: #e9ecef; }
+.btn-primary { background: #3498db; color: #fff; border-color: #3498db; }
+.btn-primary:hover { background: #2176ae; }
+.btn-danger  { color: #c0392b; border-color: #e74c3c; }
+.btn-danger:hover  { background: #fdecea; }
+.btn-active  { background: #ebf5fb; border-color: #3498db; color: #2176ae; font-weight: 600; }
+
+
+#mk-card { display: flex; flex-direction: column; overflow: hidden; }
+#marker-editor { padding: 0.6rem 0.8rem; flex: 1; min-height: 0; display: flex; flex-direction: column; }
+#marker-editor h3 { margin: 0 0 0.4rem; font-size: 0.88rem; color: #2c3e50; }
+.mk-offset-row { display: flex; align-items: center; gap: 0.3rem; margin-bottom: 0.5rem; flex-wrap: wrap; }
+.mk-offset-row label { font-size: 0.78rem; color: #6c757d; }
+#step-input {
+  width: 60px; border: 1px solid #ced4da; border-radius: 4px;
+  padding: 0.2rem 0.3rem; font-size: 0.82rem;
+}
+.mk-toolbar { display: flex; gap: 0.3rem; align-items: center; margin-bottom: 0.4rem; flex-wrap: wrap; }
+#mode-hint {
+  font-size: 0.78rem; color: #3498db; font-style: italic;
+  padding: 0.1rem 0.35rem; background: #ebf5fb; border-radius: 3px; display: none;
+}
+#mk-count { font-size: 0.75rem; color: #6c757d; }
+.mk-table-wrap { flex: 1; overflow-y: auto; }
+#marker-table { border-collapse: collapse; width: 100%; font-size: 0.80rem; }
+#marker-table th, #marker-table td {
+  border: 1px solid #dde3ea; padding: 0.22rem 0.45rem; text-align: left;
+}
+#marker-table th { background: #f1f3f5; font-weight: 600; position: sticky; top: 0; }
+#marker-table tbody tr:hover { background: #f8f9fa; cursor: pointer; }
+#marker-table tbody tr.mk-selected { background: #ebf5fb; }
+.mk-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; }
+#marker-table input[type="number"], #marker-table input[type="text"] {
+  border: 1px solid #ced4da; border-radius: 3px;
+  padding: 0.1rem 0.25rem; font-size: 0.80rem;
+}
+#marker-table { table-layout: fixed; }
+#marker-table input[type="number"] { width: 100%; }
+#marker-table input[type="text"]   { width: 100%; }
+.mk-rename-row {
+  display: flex; align-items: center; gap: 0.3rem;
+  margin-bottom: 0.4rem; flex-wrap: wrap;
+}
+.mk-rename-row input {
+  width: 80px; border: 1px solid #ced4da; border-radius: 4px;
+  padding: 0.18rem 0.28rem; font-size: 0.80rem;
+}
+.mk-rename-row span { color: #6c757d; font-size: 0.82rem; }
+
+/* detail panel placeholder */
+#detail-placeholder {
+  display: flex; align-items: center; justify-content: center;
+  height: 120px; color: #adb5bd; font-size: 0.85rem; font-style: italic;
+}
+
+/* IQM panel */
+#iqm-panel { padding: 0.5rem 1rem 0.6rem; }
+#iqm-panel h3 { margin: 0 0 0.4rem; font-size: 0.88rem; }
+.qm-list { font-size: 0.88rem; column-count: 2; column-gap: 2.5rem;
+           margin: 0; padding: 0; list-style: none; }
+.qm-list li { display: flex; justify-content: space-between; padding: 0.18rem 0;
+              border-bottom: 1px solid #eef0f3; break-inside: avoid; gap: 1rem; }
+.qm-list .ql { color: #666; white-space: nowrap; }
+.qm-list .qv { font-weight: 600; white-space: nowrap; }
+.qm-ok   { color: #27ae60; }
+.qm-warn { color: #e67e22; }
+.qm-bad  { color: #c0392b; }
+
+/* bad channel list */
+#bad-list { font-size: 0.78rem; color: #c0392b; margin-top: 0.3rem; }
+
+/* panel titles */
+.panel-title {
+  font-size: 0.78rem; font-weight: 600; color: #6c757d;
+  padding: 0.3rem 0.6rem; border-bottom: 1px solid #dde3ea;
+  background: #f8f9fa;
+}
+</style>
+</head>
+<body>
+
+<nav id="qc-nav">
+  <h1>fnirs&#8209;pipe Raw Viewer</h1>
+  <div class="nav-right">
+    {% if run_labels|length > 1 %}
+    <select id="run-select" onchange="switchRun(this.value)">
+      {% for label in run_labels %}
+      <option value="{{ loop.index0 }}" {% if loop.index0 == run_idx %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+    {% else %}
+    <span style="font-size:0.82rem;color:#6c757d;">{{ run_labels[0] if run_labels else '' }}</span>
+    {% endif %}
+    <button class="btn btn-primary" onclick="saveData()">&#8595; Save</button>
+  </div>
+</nav>
+
+<!-- Row 1: time series + marker editor -->
+<div class="row row-main">
+  <div class="card">
+    <div class="panel-title">Raw signal &nbsp;<span style="font-weight:400;color:#aaa">blue = short channel &bull; orange = long &bull; click trace = select channel &bull; double-click = reset</span></div>
+    <div id="ts-plot"></div>
+  </div>
+  <div class="card" id="mk-card">
+    <div class="panel-title">Marker Editor &nbsp;<span id="mk-count"></span></div>
+    <div id="marker-editor">
+      <div class="mk-offset-row">
+        <label>Step (s):</label>
+        <input id="step-input" type="number" value="1.0" step="0.1" min="0.001"/>
+        <button class="btn" onclick="offsetAll(-getStep())">&#8722; All</button>
+        <button class="btn" onclick="offsetAll(+getStep())">&#43; All</button>
+        <button class="btn btn-danger" id="btn-sel-minus" onclick="offsetSelected(-getStep())" disabled>&#8722; Sel</button>
+        <button class="btn" id="btn-sel-plus"  onclick="offsetSelected(+getStep())"  disabled>&#43; Sel</button>
+      </div>
+      <div class="mk-rename-row">
+        <span>Rename</span>
+        <input type="text" id="rename-from" placeholder="old"/>
+        <span>&#8594;</span>
+        <input type="text" id="rename-to"   placeholder="new"/>
+        <button class="btn" onclick="batchRename()">Apply All</button>
+      </div>
+      <div class="mk-toolbar">
+        <button class="btn" id="btn-add" onclick="toggleAddMode()">&#43; Add</button>
+        <span id="mode-hint">Click on the signal to place a marker</span>
+        <button class="btn btn-primary" onclick="exportTSV()">&#8595; Export TSV</button>
+      </div>
+      <div class="mk-table-wrap">
+        <table id="marker-table">
+          <colgroup>
+            <col style="width:24px"/>
+            <col style="width:88px"/>
+            <col style="width:68px"/>
+            <col style="width:80px"/>
+            <col style="width:28px"/>
+          </colgroup>
+          <thead><tr>
+            <th></th><th>Onset (s)</th><th>Dur (s)</th><th>Description</th><th></th>
+          </tr></thead>
+          <tbody id="mk-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Row 2: single-channel detail -->
+<div class="row row-detail">
+  <div class="card" id="detail-card">
+    <div class="panel-title" id="detail-title">Channel detail &nbsp;<span style="font-weight:400;color:#aaa">click a channel in the signal panel to inspect HbO / HbR</span></div>
+    <div id="detail-placeholder">click a channel to view HbO &amp; HbR</div>
+    <div id="detail-plot" style="display:none"></div>
+  </div>
+</div>
+
+<!-- Row 3: 2D layout + 3D brain -->
+<div class="row row-layout">
+  <div class="card">
+    <div class="panel-title">Optode layout (2D top-down) &nbsp;<span style="font-weight:400;color:#aaa">colour = SCI &bull; click = highlight &bull; dbl-click = mark bad</span></div>
+    <div id="layout-2d-plot"></div>
+  </div>
+  <div class="card">
+    <div class="panel-title">Channel positions (3D, fsaverage)</div>
+    <div id="layout-3d-plot"></div>
+  </div>
+</div>
+
+<!-- Row 4: PSD + Epoch -->
+<div class="row row-psd-ep">
+  <div class="card">
+    <div class="panel-title">PSD &nbsp;<span style="font-weight:400;color:#aaa" id="psd-subtitle">mean across channels (OD)</span></div>
+    <div id="psd-plot"></div>
+  </div>
+  <div class="card">
+    <div class="panel-title">Epoch preview &nbsp;<span style="font-weight:400;color:#aaa" id="epoch-subtitle">select a channel to view</span></div>
+    <div id="epoch-plot"></div>
+  </div>
+</div>
+
+<!-- Row 5: IQM -->
+<div class="card" style="margin-bottom:0.5rem">
+  <div id="iqm-panel">
+    <h3>Image Quality Metrics &nbsp;<span style="font-weight:400;font-size:0.78rem;color:#adb5bd">(raw intensity)</span></h3>
+    <ul id="iqm-list" class="qm-list"></ul>
+    <div id="bad-list"></div>
+  </div>
+</div>
+
+<script>
+// ─── state ───────────────────────────────────────────────────────────────────
+var _tsData      = null;   // full timeseries payload from /api/timeseries
+var _markers     = [];     // [{onset, duration, description, color}]
+var _condColors  = {};
+var _selectedMk  = -1;
+var _addMode     = false;
+var _selChannel  = null;   // currently selected channel pair (e.g. "S1_D1")
+var _bandShapes  = [];     // physiological band rects (set once)
+var _mkRO        = null;   // ResizeObserver for mk card height sync
+
+function _syncMkHeight() {
+  var tsCard = document.getElementById("ts-plot").closest(".card");
+  var mkCard = document.getElementById("mk-card");
+  if (!tsCard || !mkCard) return;
+  var h = tsCard.offsetHeight;
+  console.log("[height-sync] tsCard=" + h + "px  mkCard-before=" + mkCard.offsetHeight + "px");
+  if (h < 50) { console.warn("[height-sync] tsCard not ready yet"); return; }
+  mkCard.style.height = h + "px";
+}
+
+// ─── utilities ───────────────────────────────────────────────────────────────
+function getStep() { return parseFloat(document.getElementById("step-input").value) || 1.0; }
+
+function _esc(s) {
+  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+function chPair(chName) {
+  // "S1_D1 760" → "S1_D1"   or   "S1_D1 hbo" → "S1_D1"
+  return chName.replace(/\s+\S+$/, "");
+}
+
+function hexToRgba(hex, alpha) {
+  var r = parseInt(hex.slice(1,3), 16);
+  var g = parseInt(hex.slice(3,5), 16);
+  var b = parseInt(hex.slice(5,7), 16);
+  return "rgba(" + r + "," + g + "," + b + "," + alpha + ")";
+}
+
+// ─── initial load ─────────────────────────────────────────────────────────────
+window.addEventListener("DOMContentLoaded", function() {
+  loadTimeSeries();
+  loadLayout();
+  loadPsdMean();
+  loadIqm();
+});
+
+// ─── time series ─────────────────────────────────────────────────────────────
+function loadTimeSeries() {
+  fetch("/api/timeseries").then(r => r.json()).then(data => {
+    _tsData     = data;
+    _markers    = data.markers;
+    _condColors = data.cond_colors || {};
+    renderTimeSeries(data);
+    renderMarkerTable();
+  });
+}
+
+// TS panel: only very subtle block shading — no lines, no ribbon
+function _markerShapesTS() {
+  var shapes = [];
+  _markers.forEach(function(m, i) {
+    if (m.duration <= 0.1) return;
+    var sel   = (i === _selectedMk);
+    var color = m.color || "#f39c12";
+    shapes.push({
+      type:"rect", xref:"x", yref:"paper",
+      x0: m.onset, x1: m.onset + m.duration, y0: 0, y1: 1,
+      fillcolor: hexToRgba(color, sel ? 0.22 : 0.09),
+      line: { width: sel ? 1.2 : 0, color: color }, layer: "below",
+    });
+  });
+  return shapes;
+}
+
+// Detail / epoch panels: same rect-shadow style as TS panel, higher opacity
+function _markerShapes() {
+  var shapes = [];
+  _markers.forEach(function(m, i) {
+    var sel   = (i === _selectedMk);
+    var color = m.color || "#f39c12";
+    var dur = m.duration > 0.1 ? m.duration : 0.5;
+    shapes.push({
+      type:"rect", xref:"x", yref:"paper",
+      x0: m.onset, x1: m.onset + dur, y0: 0, y1: 1,
+      fillcolor: hexToRgba(color, sel ? 0.35 : 0.18),
+      line: { width: sel ? 1 : 0, color: color }, layer: "below",
+    });
+  });
+  return shapes;
+}
+
+function renderTimeSeries(data) {
+  var n = data.traces.length;
+  var traces = data.traces.map(function(t, i) {
+    return {
+      x: data.times, y: t.y,
+      name: t.ch, mode: "lines",
+      line: { width: 0.9, color: t.color },
+      customdata: Array(data.times.length).fill(t.ch),
+      hovertemplate: "<b>%{customdata}</b><extra></extra>",
+    };
+  });
+
+  // band stripes
+  _bandShapes = data.traces.map(function(t, i) {
+    return {
+      type:"rect", xref:"paper", yref:"y", layer:"below",
+      x0:0, x1:1, y0: t.offset - 1.5, y1: t.offset + 1.5,
+      fillcolor: i % 2 === 0 ? "rgba(0,0,0,0.025)" : "rgba(0,0,0,0)",
+      line: { width: 0 },
+    };
+  });
+
+  var tsHeight = Math.max(380, n * 22 + 80);
+  var layout = {
+    xaxis: { title: "Time (s)", gridcolor: "#eeeeee", zerolinecolor: "#cccccc" },
+    yaxis: { showticklabels: false, gridcolor: "#eeeeee" },
+    plot_bgcolor: "white", paper_bgcolor: "white",
+    shapes: _bandShapes.concat(_markerShapesTS()),
+    height: tsHeight,
+    margin: { l:55, r:15, t:12, b:40 },
+    legend: { font: { size: 8 }, tracegroupgap: 0 },
+    hovermode: "closest",
+  };
+
+  Plotly.newPlot("ts-plot", traces, layout, { responsive: true, displayModeBar: true })
+    .then(function() {
+      _syncMkHeight();
+      // ResizeObserver keeps heights in sync when window resizes trigger Plotly's responsive resize
+      if (_mkRO) _mkRO.disconnect();
+      var tsCard = document.getElementById("ts-plot").closest(".card");
+      _mkRO = new ResizeObserver(_syncMkHeight);
+      _mkRO.observe(tsCard);
+    });
+
+  // click → select channel
+  document.getElementById("ts-plot").on("plotly_click", function(evt) {
+    if (!evt.points || !evt.points[0]) return;
+    var pt = evt.points[0];
+    if (_addMode) {
+      addMarkerAtX(pt.x);
+      return;
+    }
+    var chName = pt.data.name;
+    selectChannel(chPair(chName));
+    highlightTrace(chName);
+  });
+
+  document.getElementById("ts-plot").on("plotly_doubleclick", function() {
+    resetHighlight();
+    _selChannel = null;
+  });
+}
+
+function refreshTsShapes() {
+  Plotly.relayout("ts-plot", { shapes: _bandShapes.concat(_markerShapesTS()) });
+}
+
+function highlightTrace(chName) {
+  if (!_tsData) return;
+  var n = _tsData.traces.length;
+  var ops = [], fills = [], fcolors = [];
+  for (var i = 0; i < n; i++) {
+    var sel = _tsData.traces[i].ch === chName;
+    ops.push(sel ? 1.0 : 0.05);
+    fills.push(sel ? "tozeroy" : "none");
+    fcolors.push(sel ? "rgba(0,0,0,0.06)" : "rgba(0,0,0,0)");
+  }
+  Plotly.restyle("ts-plot", { opacity: ops, fill: fills, fillcolor: fcolors });
+}
+
+function resetHighlight() {
+  if (!_tsData) return;
+  var n = _tsData.traces.length;
+  Plotly.restyle("ts-plot", {
+    opacity:   Array(n).fill(1.0),
+    fill:      Array(n).fill("none"),
+    fillcolor: Array(n).fill("rgba(0,0,0,0)"),
+  });
+}
+
+// ─── channel detail ───────────────────────────────────────────────────────────
+function selectChannel(pair) {
+  if (_selChannel === pair) return;
+  _selChannel = pair;
+  document.getElementById("detail-title").innerHTML =
+    "Channel detail &nbsp;<span style='font-weight:400;color:#aaa'>" + _esc(pair) + "</span>";
+  document.getElementById("detail-placeholder").style.display = "none";
+  document.getElementById("detail-plot").style.display = "block";
+
+  fetch("/api/channel?pair=" + encodeURIComponent(pair))
+    .then(function(r) { if (!r.ok) throw new Error("channel " + r.status); return r.json(); })
+    .then(function(d) {
+      try { renderDetail(d.detail); }         catch(e) { console.error("renderDetail", e); }
+      try { if (d.psd && d.psd.freqs) renderPsdChannel(d.psd, pair); }
+           catch(e) { console.error("renderPsd", e); }
+      try { if (d.epoch && d.epoch.times) renderEpoch(d.epoch, pair); }
+           catch(e) { console.error("renderEpoch", e); }
+    })
+    .catch(function(e) { console.warn("selectChannel fetch failed:", e); });
+
+  // sync optode highlights
+  highlightOptode2D(pair);
+  highlightOptode3D(pair);
+}
+
+function renderDetail(det) {
+  var traces = [
+    { x: det.times, y: det.hbo, name: "HbO", mode: "lines",
+      line: { color: "#e74c3c", width: 1.5 }, fill: "tozeroy",
+      fillcolor: "rgba(231,76,60,0.06)" },
+    { x: det.times, y: det.hbr, name: "HbR", mode: "lines",
+      line: { color: "#3498db", width: 1.5 }, fill: "tozeroy",
+      fillcolor: "rgba(52,152,219,0.06)" },
+  ];
+  var layout = {
+    xaxis: { title: "Time (s)", gridcolor: "#eeeeee", zerolinecolor: "#cccccc" },
+    yaxis: { title: "Conc. (µmol/L)", gridcolor: "#eeeeee" },
+    plot_bgcolor: "white", paper_bgcolor: "white",
+    height: 160, margin: { l:55, r:15, t:8, b:38 },
+    legend: { font: { size: 9 }, orientation: "h", y: 1.12 },
+    shapes: _markerShapes(),
+  };
+  Plotly.react("detail-plot", traces, layout, { responsive: true, displayModeBar: false });
+}
+
+// ─── PSD ─────────────────────────────────────────────────────────────────────
+var _psdBands = [
+  { name:"Mayer",   x0:0.07, x1:0.13, color:"rgba(52,152,219,0.10)" },
+  { name:"Resp",    x0:0.15, x1:0.40, color:"rgba(39,174,96,0.08)"  },
+  { name:"Cardiac", x0:0.70, x1:1.50, color:"rgba(231,76,60,0.08)"  },
+];
+
+function _psdLayout(title) {
+  return {
+    xaxis: { title:"Frequency (Hz)", range:[0,2], gridcolor:"#eeeeee" },
+    yaxis: { title:"Power", type:"log", gridcolor:"#eeeeee" },
+    plot_bgcolor:"white", paper_bgcolor:"white",
+    height:220, margin:{ l:60, r:15, t:8, b:38 },
+    legend:{ font:{ size:9 } },
+    shapes: _psdBands.map(function(b) {
+      return { type:"rect", xref:"x", yref:"paper",
+               x0:b.x0, x1:b.x1, y0:0, y1:1,
+               fillcolor:b.color, line:{ width:0 } };
+    }),
+    annotations: _psdBands.map(function(b) {
+      return { x:(b.x0+b.x1)/2, y:0.97, xref:"x", yref:"paper",
+               text:b.name, showarrow:false, font:{ size:8, color:"#666" } };
+    }),
+  };
+}
+
+function loadPsdMean() {
+  fetch("/api/psd_mean").then(r => r.json()).then(d => {
+    if (!d.freqs) return;
+    var bgTraces = (d.all || []).map(function(ch) {
+      return { x:d.freqs, y:ch, mode:"lines",
+               line:{ width:0.6, color:"rgba(100,150,200,0.18)" },
+               showlegend:false, hoverinfo:"skip" };
+    });
+    var meanTrace = { x:d.freqs, y:d.mean, name:"Mean (OD)", mode:"lines",
+                      line:{ width:2.5, color:"#2980b9" } };
+    Plotly.newPlot("psd-plot", bgTraces.concat([meanTrace]), _psdLayout(), { responsive:true, displayModeBar:false });
+  });
+}
+
+function renderPsdChannel(psd, pair) {
+  document.getElementById("psd-subtitle").textContent = pair;
+  var traces = [
+    { x:psd.freqs, y:psd.hbo, name:"HbO", mode:"lines", line:{ color:"#e74c3c", width:2 } },
+    { x:psd.freqs, y:psd.hbr, name:"HbR", mode:"lines", line:{ color:"#3498db", width:2 } },
+  ];
+  Plotly.react("psd-plot", traces, _psdLayout(), { responsive:true, displayModeBar:false });
+}
+
+// ─── Epoch preview ────────────────────────────────────────────────────────────
+function renderEpoch(epoch, pair) {
+  document.getElementById("epoch-subtitle").textContent = pair + "  (baseline −5 → 0 s)";
+  var traces = [];
+  var colors10 = ["#e74c3c","#3498db","#2ecc71","#f39c12","#9b59b6","#1abc9c","#e67e22","#34495e"];
+  var ci = 0;
+  Object.entries(epoch.conditions).forEach(function([cond, d]) {
+    var baseColor = _condColors[cond] || colors10[ci % colors10.length];
+    traces.push({ x:epoch.times, y:d.hbo, name:cond + " HbO (n=" + d.n + ")",
+                  mode:"lines", line:{ color:baseColor, width:2 } });
+    traces.push({ x:epoch.times, y:d.hbr, name:cond + " HbR",
+                  mode:"lines", line:{ color:baseColor, width:1.2, dash:"dot" } });
+    ci++;
+  });
+  var layout = {
+    xaxis: { title:"Time rel. onset (s)", gridcolor:"#eeeeee", zerolinecolor:"#cccccc" },
+    yaxis: { title:"Conc. (µmol/L)", gridcolor:"#eeeeee" },
+    shapes: [{ type:"line", xref:"x", yref:"paper",
+               x0:0, x1:0, y0:0, y1:1, line:{ color:"#7f8c8d", width:1, dash:"dash" } }],
+    plot_bgcolor:"white", paper_bgcolor:"white",
+    height:220, margin:{ l:60, r:15, t:8, b:38 },
+    legend:{ font:{ size:8 }, tracegroupgap:0 },
+    annotations: [{ x:0, y:1.0, xref:"x", yref:"paper",
+                    text:"onset", showarrow:false, font:{ size:8, color:"#7f8c8d" }, xanchor:"left" }],
+  };
+  Plotly.react("epoch-plot", traces, layout, { responsive:true, displayModeBar:false });
+}
+
+// ─── Optode layout ────────────────────────────────────────────────────────────
+function loadLayout() {
+  fetch("/api/layout").then(r => r.json()).then(d => {
+    if (d.layout_2d) render2D(d.layout_2d);
+    if (d.layout_3d) render3D(d.layout_3d);
+    else loadBrainMesh3D(d.layout_3d);
+  });
+}
+
+function _sciColor(sci) {
+  if (sci === null || sci === undefined) return "#aaa";
+  if (sci >= 0.75) return "#27ae60";
+  if (sci >= 0.5)  return "#f39c12";
+  return "#e74c3c";
+}
+
+function render2D(d) {
+  var markerColors = d.colors.map(function(c, i) { return _sciColor(d.sci[i]); });
+  var traces = [
+    { x:d.lines_x, y:d.lines_y, mode:"lines",
+      line:{ color:"#bdc3c7", width:2 }, hoverinfo:"skip", showlegend:false },
+    { x:d.x, y:d.y, mode:"markers+text",
+      text: d.ch_names.map(function(n) { return n.split(" ")[0]; }),
+      textposition:"top center", textfont:{ size:7 },
+      marker:{ size:10, color:markerColors, opacity:0.9, line:{ width:0.8, color:"#555" } },
+      customdata:d.ch_names,
+      hovertemplate:"<b>%{customdata}</b><extra></extra>",
+      showlegend:false },
+  ];
+  var layout = {
+    xaxis:{ showgrid:false, zeroline:false, title:"x (mm)" },
+    yaxis:{ showgrid:false, zeroline:false, title:"y (mm)", scaleanchor:"x" },
+    plot_bgcolor:"#f8f9fa", paper_bgcolor:"white",
+    height:700, margin:{ l:40, r:15, t:10, b:40 },
+    hovermode:"closest",
+  };
+  Plotly.newPlot("layout-2d-plot", traces, layout, { responsive:true, displayModeBar:false });
+
+  document.getElementById("layout-2d-plot").on("plotly_click", function(evt) {
+    var pt = evt.points[0];
+    if (!pt || pt.curveNumber !== 1) return;
+    var ch = pt.customdata;
+    selectChannel(chPair(ch));
+    highlightTrace(ch);
+  });
+  document.getElementById("layout-2d-plot").on("plotly_doubleclick", function() {
+    toggleBadFromOptode();
+  });
+}
+
+function render3D(d) {
+  if (!d) { loadBrainMesh3D(null); return; }
+  fetch("/api/brain_mesh").then(r => r.json()).then(bm => {
+    var traces = [];
+    (bm.meshes || []).forEach(function(m) {
+      traces.push({
+        type:"mesh3d",
+        x:m.x, y:m.y, z:m.z,
+        i:m.i, j:m.j, k:m.k,
+        color:"#e3e3e3", opacity:0.55, flatshading:false,
+        lighting:{ ambient:0.85, diffuse:0.5, specular:0.4, fresnel:0.6 },
+        lightposition:{ x:100, y:200, z:300 },
+        hoverinfo:"skip", showlegend:false,
+      });
+    });
+    // S-D lines
+    if (d.lines_x && d.lines_x.length) {
+      traces.push({ type:"scatter3d", x:d.lines_x, y:d.lines_y, z:d.lines_z,
+                    mode:"lines", line:{ color:"#95a5a6", width:4 },
+                    hoverinfo:"skip", showlegend:false });
+    }
+    // channel spheres
+    traces.push({
+      type:"scatter3d",
+      x:d.x, y:d.y, z:d.z, mode:"markers",
+      marker:{ size:7, color:d.colors, opacity:0.92, line:{ width:0.5, color:"#333" } },
+      customdata:d.ch_names,
+      hovertemplate:"<b>%{customdata}</b><br>%{x:.1f}, %{y:.1f}, %{z:.1f} mm<extra></extra>",
+      name:"Channels", showlegend:true,
+    });
+    // highlight overlay (empty by default)
+    traces.push({
+      type:"scatter3d", x:[], y:[], z:[], mode:"markers",
+      marker:{ size:14, color:"#f39c12", opacity:1.0, line:{ width:1.5, color:"#e67e22" } },
+      hoverinfo:"skip", showlegend:false, name:"_hl",
+    });
+
+    var layout = {
+      scene:{ xaxis:{ visible:false }, yaxis:{ visible:false }, zaxis:{ visible:false },
+              camera:{ eye:{ x:0, y:-1.9, z:0.6 } }, bgcolor:"#ffffff" },
+      margin:{ l:0, r:0, t:0, b:0 },
+      paper_bgcolor:"#ffffff", height:700,
+      legend:{ x:0.01, y:0.99, font:{ size:9 } },
+    };
+    Plotly.newPlot("layout-3d-plot", traces, layout, { responsive:true });
+
+    document.getElementById("layout-3d-plot").on("plotly_click", function(evt) {
+      var pt = evt.points[0];
+      if (!pt) return;
+      var tr = document.getElementById("layout-3d-plot").data[pt.curveNumber];
+      if (tr.type !== "scatter3d" || !tr.customdata) return;
+      var ch = Array.isArray(pt.customdata) ? pt.customdata[0] : pt.customdata;
+      if (!ch) return;
+      selectChannel(chPair(ch));
+      highlightTrace(ch);
+    });
+  });
+}
+
+function highlightOptode2D(pair) {
+  var div = document.getElementById("layout-2d-plot");
+  if (!div || !div.data || div.data.length < 2) return;
+  var chTrace = div.data[1];
+  if (!chTrace || !chTrace.customdata) return;
+  var sizes = [], opacities = [], lineWidths = [];
+  chTrace.customdata.forEach(function(ch) {
+    var sel = chPair(ch) === pair;
+    sizes.push(sel ? 15 : 10);
+    opacities.push(sel ? 1.0 : 0.55);
+    lineWidths.push(sel ? 2.0 : 0.8);
+  });
+  Plotly.restyle("layout-2d-plot", {
+    "marker.size":             [sizes],
+    "marker.opacity":          [opacities],
+    "marker.line.width":       [lineWidths],
+  }, [1]);
+}
+function highlightOptode3D(pair) {
+  var div = document.getElementById("layout-3d-plot");
+  if (!div || !div.data) return;
+  var hlIdx = div.data.findIndex(function(t) { return t.name === "_hl"; });
+  var chIdx = div.data.findIndex(function(t) { return t.customdata && t.customdata.length > 0; });
+  if (hlIdx < 0 || chIdx < 0) return;
+  var tr = div.data[chIdx];
+  for (var p = 0; p < (tr.customdata || []).length; p++) {
+    if (chPair(tr.customdata[p]) === pair) {
+      setTimeout(function() {
+        Plotly.restyle("layout-3d-plot",
+          { x:[[tr.x[p]]], y:[[tr.y[p]]], z:[[tr.z[p]]] }, [hlIdx]);
+      }, 0);
+      return;
+    }
+  }
+}
+function toggleBadFromOptode() { /* handled via double-click on ts trace */ }
+
+// ─── Marker table & editing ───────────────────────────────────────────────────
+function renderMarkerTable() {
+  var tbody = document.getElementById("mk-tbody");
+  tbody.innerHTML = "";
+  if (!_markers.length) {
+    tbody.innerHTML = "<tr><td colspan='5' style='color:#adb5bd;font-style:italic;text-align:center'>No markers</td></tr>";
+    document.getElementById("mk-count").textContent = "";
+    return;
+  }
+  _markers.forEach(function(m, i) {
+    var color = m.color || "#f39c12";
+    var tr = document.createElement("tr");
+    if (i === _selectedMk) tr.className = "mk-selected";
+    tr.innerHTML =
+      "<td><span class='mk-dot' style='background:" + color + "'></span>" + _esc(m.description) + "</td>" +
+      "<td><input type='number' step='0.001' min='0' value='" + m.onset.toFixed(3) +
+        "' onchange=\"updateMarker(" + i + ",'onset',this.value)\"/></td>" +
+      "<td><input type='number' step='0.1'  min='0' value='" + m.duration.toFixed(2) +
+        "' onchange=\"updateMarker(" + i + ",'duration',this.value)\"/></td>" +
+      "<td><input type='text' value='" + _esc(m.description) +
+        "' onchange=\"updateMarker(" + i + ",'description',this.value)\"/></td>" +
+      "<td><button class='btn btn-danger' style='padding:0.1rem 0.3rem' onclick='deleteMk(" + i + ")'>&#10005;</button></td>";
+    tr.addEventListener("click", function(e) {
+      if (e.target.tagName === "INPUT" || e.target.tagName === "BUTTON") return;
+      selectMk(i);
+    });
+    tbody.appendChild(tr);
+  });
+  document.getElementById("mk-count").textContent = "(" + _markers.length + ")";
+  var hasSel = _selectedMk >= 0 && _selectedMk < _markers.length;
+  document.getElementById("btn-sel-minus").disabled = !hasSel;
+  document.getElementById("btn-sel-plus").disabled  = !hasSel;
+}
+
+function selectMk(i) {
+  _selectedMk = (i === _selectedMk) ? -1 : i;
+  renderMarkerTable();
+  refreshTsShapes();
+}
+
+function updateMarker(i, field, val) {
+  var body = { idx: i };
+  body[field] = field === "description" ? val : parseFloat(val);
+  fetch("/api/markers/update", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body) })
+    .then(r => r.json()).then(d => { _markers = d.markers; renderMarkerTable(); refreshTsShapes(); });
+}
+
+function deleteMk(i) {
+  fetch("/api/markers/delete", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({idx:i}) })
+    .then(r => r.json()).then(d => {
+      _markers = d.markers; _selectedMk = -1;
+      renderMarkerTable(); refreshTsShapes();
+    });
+}
+
+function offsetAll(delta) {
+  fetch("/api/markers/offset", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({delta:delta}) })
+    .then(r => r.json()).then(d => {
+      _markers = d.markers; renderMarkerTable(); refreshTsShapes();
+      if (_selChannel) fetchAndUpdateDetailMarkers();
+    });
+}
+
+function offsetSelected(delta) {
+  if (_selectedMk < 0 || _selectedMk >= _markers.length) return;
+  var m = _markers[_selectedMk];
+  updateMarker(_selectedMk, "onset", m.onset + delta);
+}
+
+function fetchAndUpdateDetailMarkers() {
+  if (!_selChannel) return;
+  // re-fetch epoch after offset change
+  fetch("/api/channel?pair=" + encodeURIComponent(_selChannel))
+    .then(r => r.json()).then(d => {
+      if (d.epoch && d.epoch.times) renderEpoch(d.epoch, _selChannel);
+      if (document.getElementById("detail-plot").style.display !== "none" && d.detail)
+        Plotly.relayout("detail-plot", { shapes: _markerShapes() });
+    });
+}
+
+// add mode
+function toggleAddMode() {
+  _addMode = !_addMode;
+  document.getElementById("btn-add").className = _addMode ? "btn btn-active" : "btn";
+  document.getElementById("mode-hint").style.display = _addMode ? "inline" : "none";
+}
+
+function addMarkerAtX(x) {
+  fetch("/api/markers/add", { method:"POST", headers:{"Content-Type":"application/json"},
+                               body:JSON.stringify({onset:x, duration:1.0, description:"stim"}) })
+    .then(r => r.json()).then(d => {
+      _markers = d.markers.map(function(m, i) {
+        m.color = _condColors[m.description] || "#f39c12";
+        return m;
+      });
+      toggleAddMode();
+      renderMarkerTable(); refreshTsShapes();
+    });
+}
+
+function batchRename() {
+  var from = document.getElementById("rename-from").value.trim();
+  var to   = document.getElementById("rename-to").value.trim();
+  if (!from) return;
+  fetch("/api/markers/replace_description", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({old: from, new: to}),
+  }).then(r => r.json()).then(function(d) {
+    _markers    = d.markers;
+    _condColors = d.cond_colors || _condColors;
+    document.getElementById("rename-from").value = "";
+    document.getElementById("rename-to").value   = "";
+    renderMarkerTable();
+    refreshTsShapes();
+  });
+}
+
+function exportTSV() {
+  var lines = ["onset\tduration\tdescription"];
+  _markers.forEach(function(m) {
+    lines.push(m.onset.toFixed(4) + "\t" + m.duration.toFixed(4) + "\t" + m.description);
+  });
+  var blob = new Blob([lines.join("\r\n")], { type:"text/tab-separated-values" });
+  var a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = "edited_events.tsv";
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+}
+
+// ─── IQM ─────────────────────────────────────────────────────────────────────
+function loadIqm() {
+  fetch("/api/iqm").then(r => r.json()).then(d => renderIqm(d));
+}
+
+function renderIqm(d) {
+  var s = d.scalars || {};
+  function fmt(v, dec) { return (v === null || v === undefined) ? "—" : parseFloat(v).toFixed(dec||2); }
+  function cls(v, okTest, warnTest) {
+    if (v === null || v === undefined) return "";
+    return okTest ? "qm-ok" : warnTest ? "qm-warn" : "qm-bad";
+  }
+  function li(label, value, c) {
+    return "<li><span class='ql'>" + label + "</span>"
+         + "<span class='qv" + (c ? " " + c : "") + "'>" + value + "</span></li>";
+  }
+
+  var ret = s.channel_retention_rate;
+  var sci = s.sci_mean;
+  var snr = s.snr_mean;
+  var spk = s.spike_count;
+  var retPct = ret !== null && ret !== undefined ? (ret * 100).toFixed(1) + "%" : "—";
+
+  var html =
+    li("Channel retention", retPct,        cls(ret, ret >= 0.9, ret >= 0.7)) +
+    li("Mean SCI",          fmt(sci, 3),   cls(sci, sci >= 0.75, sci >= 0.5)) +
+    li("Mean SNR",          fmt(snr, 1),   cls(snr, snr >= 100,  snr >= 20)) +
+    li("Mean CP",           fmt(s.cp_mean, 3)) +
+    li("Spike count",       spk !== null && spk !== undefined ? spk : "—",
+                            cls(spk, spk === 0, spk < 10));
+
+  if (_tsData && _tsData.times) {
+    var dur = _tsData.times[_tsData.times.length - 1] - _tsData.times[0];
+    html += li("Duration", dur.toFixed(0) + " s");
+  }
+
+  document.getElementById("iqm-list").innerHTML = html;
+}
+
+// ─── run switcher ─────────────────────────────────────────────────────────────
+function switchRun(idx) {
+  fetch("/api/run/" + idx, { method:"POST" }).then(r => r.json()).then(function() {
+    _selChannel = null; _selectedMk = -1; _addMode = false;
+    document.getElementById("detail-placeholder").style.display = "flex";
+    document.getElementById("detail-plot").style.display = "none";
+    loadTimeSeries();
+    loadLayout();
+    loadPsdMean();
+    loadIqm();
+  });
+}
+
+// ─── save ─────────────────────────────────────────────────────────────────────
+function saveData() {
+  fetch("/api/save", { method:"POST" }).then(r => r.json()).then(function(d) {
+    alert("Saved:\n" + (d.saved || []).join("\n"));
+  });
+}
+</script>
+</body>
+</html>
