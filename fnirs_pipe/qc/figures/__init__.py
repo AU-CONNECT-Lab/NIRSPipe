@@ -1,3 +1,12 @@
+from .raw_figures import (
+    build_ts_figure,
+    build_channel_figure,
+    build_layout_figure,
+    build_psd_mean_figure,
+    condition_colors,
+    sci_color,
+    psd_layout,
+)
 from .sci_psp_panel import (
     quality_panel, binary_heatmap_figure, timeseries_figure,
     lollipop_scores_figure, sci_segment_heatmap_figure, CHANNEL_CLICK_JS,
@@ -19,6 +28,13 @@ from .optode_layout import optode_layout_figure, optode_layout_static
 from .short_channel import short_channel_figure
 
 __all__ = [
+    "build_ts_figure",
+    "build_channel_figure",
+    "build_layout_figure",
+    "build_psd_mean_figure",
+    "condition_colors",
+    "sci_color",
+    "psd_layout",
     "quality_panel",
     "binary_heatmap_figure",
     "timeseries_figure",

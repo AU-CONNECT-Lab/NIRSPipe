@@ -241,14 +241,13 @@ select#run-select {
 
 <script>
 // ─── state ───────────────────────────────────────────────────────────────────
-var _tsData      = null;   // full timeseries payload from /api/timeseries
-var _markers     = [];     // [{onset, duration, description, color}]
-var _condColors  = {};
-var _selectedMk  = -1;
-var _addMode     = false;
-var _selChannel  = null;   // currently selected channel pair (e.g. "S1_D1")
-var _bandShapes  = [];     // physiological band rects (set once)
-var _mkRO        = null;   // ResizeObserver for mk card height sync
+var _markers    = [];   // [{onset, duration, description, color}]
+var _condColors = {};
+var _selectedMk = -1;
+var _addMode    = false;
+var _selChannel = null;
+var _bandShapes = [];   // band stripe shapes from server, used by refreshTsShapes
+var _mkRO       = null;
 
 function _syncMkHeight() {
   var tsCard = document.getElementById("ts-plot").closest(".card");
@@ -289,11 +288,33 @@ window.addEventListener("DOMContentLoaded", function() {
 
 // ─── time series ─────────────────────────────────────────────────────────────
 function loadTimeSeries() {
-  fetch("/api/timeseries").then(r => r.json()).then(data => {
-    _tsData     = data;
+  fetch("/api/ts_figure").then(r => r.json()).then(function(data) {
     _markers    = data.markers;
     _condColors = data.cond_colors || {};
-    renderTimeSeries(data);
+    _bandShapes = data.band_shapes || [];
+
+    Plotly.newPlot("ts-plot", data.figure.data, data.figure.layout,
+                   { responsive: true, displayModeBar: true })
+      .then(function() {
+        _syncMkHeight();
+        if (_mkRO) _mkRO.disconnect();
+        var tsCard = document.getElementById("ts-plot").closest(".card");
+        _mkRO = new ResizeObserver(_syncMkHeight);
+        _mkRO.observe(tsCard);
+      });
+
+    document.getElementById("ts-plot").on("plotly_click", function(evt) {
+      if (!evt.points || !evt.points[0]) return;
+      var pt = evt.points[0];
+      if (_addMode) { addMarkerAtX(pt.x); return; }
+      selectChannel(chPair(pt.data.name));
+      highlightTrace(pt.data.name);
+    });
+    document.getElementById("ts-plot").on("plotly_doubleclick", function() {
+      resetHighlight();
+      _selChannel = null;
+    });
+
     renderMarkerTable();
   });
 }
@@ -332,79 +353,17 @@ function _markerShapes() {
   return shapes;
 }
 
-function renderTimeSeries(data) {
-  var n = data.traces.length;
-  var traces = data.traces.map(function(t, i) {
-    return {
-      x: data.times, y: t.y,
-      name: t.ch, mode: "lines",
-      line: { width: 0.9, color: t.color },
-      customdata: Array(data.times.length).fill(t.ch),
-      hovertemplate: "<b>%{customdata}</b><extra></extra>",
-    };
-  });
-
-  // band stripes
-  _bandShapes = data.traces.map(function(t, i) {
-    return {
-      type:"rect", xref:"paper", yref:"y", layer:"below",
-      x0:0, x1:1, y0: t.offset - 1.5, y1: t.offset + 1.5,
-      fillcolor: i % 2 === 0 ? "rgba(0,0,0,0.025)" : "rgba(0,0,0,0)",
-      line: { width: 0 },
-    };
-  });
-
-  var tsHeight = Math.max(380, n * 22 + 80);
-  var layout = {
-    xaxis: { title: "Time (s)", gridcolor: "#eeeeee", zerolinecolor: "#cccccc" },
-    yaxis: { showticklabels: false, gridcolor: "#eeeeee" },
-    plot_bgcolor: "white", paper_bgcolor: "white",
-    shapes: _bandShapes.concat(_markerShapesTS()),
-    height: tsHeight,
-    margin: { l:55, r:15, t:12, b:40 },
-    legend: { font: { size: 8 }, tracegroupgap: 0 },
-    hovermode: "closest",
-  };
-
-  Plotly.newPlot("ts-plot", traces, layout, { responsive: true, displayModeBar: true })
-    .then(function() {
-      _syncMkHeight();
-      // ResizeObserver keeps heights in sync when window resizes trigger Plotly's responsive resize
-      if (_mkRO) _mkRO.disconnect();
-      var tsCard = document.getElementById("ts-plot").closest(".card");
-      _mkRO = new ResizeObserver(_syncMkHeight);
-      _mkRO.observe(tsCard);
-    });
-
-  // click → select channel
-  document.getElementById("ts-plot").on("plotly_click", function(evt) {
-    if (!evt.points || !evt.points[0]) return;
-    var pt = evt.points[0];
-    if (_addMode) {
-      addMarkerAtX(pt.x);
-      return;
-    }
-    var chName = pt.data.name;
-    selectChannel(chPair(chName));
-    highlightTrace(chName);
-  });
-
-  document.getElementById("ts-plot").on("plotly_doubleclick", function() {
-    resetHighlight();
-    _selChannel = null;
-  });
-}
-
 function refreshTsShapes() {
   Plotly.relayout("ts-plot", { shapes: _bandShapes.concat(_markerShapesTS()) });
 }
 
 function highlightTrace(chName) {
-  if (!_tsData) return;
-  var n = _tsData.traces.length;
+  var div = document.getElementById("ts-plot");
+  if (!div || !div.data) return;
+  var n = div.data.length;
   var ops = [], fills = [], fcolors = [];
   for (var i = 0; i < n; i++) {
-    var sel = _tsData.traces[i].ch === chName;
+    var sel = div.data[i].name === chName;
     ops.push(sel ? 1.0 : 0.05);
     fills.push(sel ? "tozeroy" : "none");
     fcolors.push(sel ? "rgba(0,0,0,0.06)" : "rgba(0,0,0,0)");
@@ -413,8 +372,9 @@ function highlightTrace(chName) {
 }
 
 function resetHighlight() {
-  if (!_tsData) return;
-  var n = _tsData.traces.length;
+  var div = document.getElementById("ts-plot");
+  if (!div || !div.data) return;
+  var n = div.data.length;
   Plotly.restyle("ts-plot", {
     opacity:   Array(n).fill(1.0),
     fill:      Array(n).fill("none"),
@@ -431,225 +391,68 @@ function selectChannel(pair) {
   document.getElementById("detail-placeholder").style.display = "none";
   document.getElementById("detail-plot").style.display = "block";
 
-  fetch("/api/channel?pair=" + encodeURIComponent(pair))
-    .then(function(r) { if (!r.ok) throw new Error("channel " + r.status); return r.json(); })
+  fetch("/api/channel_figure?pair=" + encodeURIComponent(pair))
+    .then(function(r) { if (!r.ok) throw new Error(r.status); return r.json(); })
     .then(function(d) {
-      try { renderDetail(d.detail); }         catch(e) { console.error("renderDetail", e); }
-      try { if (d.psd && d.psd.freqs) renderPsdChannel(d.psd, pair); }
-           catch(e) { console.error("renderPsd", e); }
-      try { if (d.epoch && d.epoch.times) renderEpoch(d.epoch, pair); }
-           catch(e) { console.error("renderEpoch", e); }
+      if (d.detail_figure)
+        Plotly.react("detail-plot", d.detail_figure.data, d.detail_figure.layout,
+                     { responsive: true, displayModeBar: false });
+      if (d.psd_figure) {
+        document.getElementById("psd-subtitle").textContent = pair;
+        Plotly.react("psd-plot", d.psd_figure.data, d.psd_figure.layout,
+                     { responsive: true, displayModeBar: false });
+      }
+      if (d.epoch_figure) {
+        document.getElementById("epoch-subtitle").textContent = pair + "  (baseline −5 → 0 s)";
+        Plotly.react("epoch-plot", d.epoch_figure.data, d.epoch_figure.layout,
+                     { responsive: true, displayModeBar: false });
+      }
     })
-    .catch(function(e) { console.warn("selectChannel fetch failed:", e); });
+    .catch(function(e) { console.warn("selectChannel failed:", e); });
 
-  // sync optode highlights
   highlightOptode2D(pair);
   highlightOptode3D(pair);
 }
 
-function renderDetail(det) {
-  var traces = [
-    { x: det.times, y: det.hbo, name: "HbO", mode: "lines",
-      line: { color: "#e74c3c", width: 1.5 }, fill: "tozeroy",
-      fillcolor: "rgba(231,76,60,0.06)" },
-    { x: det.times, y: det.hbr, name: "HbR", mode: "lines",
-      line: { color: "#3498db", width: 1.5 }, fill: "tozeroy",
-      fillcolor: "rgba(52,152,219,0.06)" },
-  ];
-  var layout = {
-    xaxis: { title: "Time (s)", gridcolor: "#eeeeee", zerolinecolor: "#cccccc" },
-    yaxis: { title: "Conc. (µmol/L)", gridcolor: "#eeeeee" },
-    plot_bgcolor: "white", paper_bgcolor: "white",
-    height: 160, margin: { l:55, r:15, t:8, b:38 },
-    legend: { font: { size: 9 }, orientation: "h", y: 1.12 },
-    shapes: _markerShapes(),
-  };
-  Plotly.react("detail-plot", traces, layout, { responsive: true, displayModeBar: false });
-}
-
-// ─── PSD ─────────────────────────────────────────────────────────────────────
-var _psdBands = [
-  { name:"Mayer",   x0:0.07, x1:0.13, color:"rgba(52,152,219,0.10)" },
-  { name:"Resp",    x0:0.15, x1:0.40, color:"rgba(39,174,96,0.08)"  },
-  { name:"Cardiac", x0:0.70, x1:1.50, color:"rgba(231,76,60,0.08)"  },
-];
-
-function _psdLayout(title) {
-  return {
-    xaxis: { title:"Frequency (Hz)", range:[0,2], gridcolor:"#eeeeee" },
-    yaxis: { title:"Power", type:"log", gridcolor:"#eeeeee" },
-    plot_bgcolor:"white", paper_bgcolor:"white",
-    height:220, margin:{ l:60, r:15, t:8, b:38 },
-    legend:{ font:{ size:9 } },
-    shapes: _psdBands.map(function(b) {
-      return { type:"rect", xref:"x", yref:"paper",
-               x0:b.x0, x1:b.x1, y0:0, y1:1,
-               fillcolor:b.color, line:{ width:0 } };
-    }),
-    annotations: _psdBands.map(function(b) {
-      return { x:(b.x0+b.x1)/2, y:0.97, xref:"x", yref:"paper",
-               text:b.name, showarrow:false, font:{ size:8, color:"#666" } };
-    }),
-  };
-}
-
+// ─── PSD (mean, before channel selected) ─────────────────────────────────────
 function loadPsdMean() {
-  fetch("/api/psd_mean").then(r => r.json()).then(d => {
-    if (!d.freqs) return;
-    var bgTraces = (d.all || []).map(function(ch) {
-      return { x:d.freqs, y:ch, mode:"lines",
-               line:{ width:0.6, color:"rgba(100,150,200,0.18)" },
-               showlegend:false, hoverinfo:"skip" };
-    });
-    var meanTrace = { x:d.freqs, y:d.mean, name:"Mean (OD)", mode:"lines",
-                      line:{ width:2.5, color:"#2980b9" } };
-    Plotly.newPlot("psd-plot", bgTraces.concat([meanTrace]), _psdLayout(), { responsive:true, displayModeBar:false });
+  fetch("/api/psd_mean_figure").then(r => r.json()).then(function(d) {
+    if (d.figure)
+      Plotly.newPlot("psd-plot", d.figure.data, d.figure.layout,
+                     { responsive: true, displayModeBar: false });
   });
-}
-
-function renderPsdChannel(psd, pair) {
-  document.getElementById("psd-subtitle").textContent = pair;
-  var traces = [
-    { x:psd.freqs, y:psd.hbo, name:"HbO", mode:"lines", line:{ color:"#e74c3c", width:2 } },
-    { x:psd.freqs, y:psd.hbr, name:"HbR", mode:"lines", line:{ color:"#3498db", width:2 } },
-  ];
-  Plotly.react("psd-plot", traces, _psdLayout(), { responsive:true, displayModeBar:false });
-}
-
-// ─── Epoch preview ────────────────────────────────────────────────────────────
-function renderEpoch(epoch, pair) {
-  document.getElementById("epoch-subtitle").textContent = pair + "  (baseline −5 → 0 s)";
-  var traces = [];
-  var colors10 = ["#e74c3c","#3498db","#2ecc71","#f39c12","#9b59b6","#1abc9c","#e67e22","#34495e"];
-  var ci = 0;
-  Object.entries(epoch.conditions).forEach(function([cond, d]) {
-    var baseColor = _condColors[cond] || colors10[ci % colors10.length];
-    traces.push({ x:epoch.times, y:d.hbo, name:cond + " HbO (n=" + d.n + ")",
-                  mode:"lines", line:{ color:baseColor, width:2 } });
-    traces.push({ x:epoch.times, y:d.hbr, name:cond + " HbR",
-                  mode:"lines", line:{ color:baseColor, width:1.2, dash:"dot" } });
-    ci++;
-  });
-  var layout = {
-    xaxis: { title:"Time rel. onset (s)", gridcolor:"#eeeeee", zerolinecolor:"#cccccc" },
-    yaxis: { title:"Conc. (µmol/L)", gridcolor:"#eeeeee" },
-    shapes: [{ type:"line", xref:"x", yref:"paper",
-               x0:0, x1:0, y0:0, y1:1, line:{ color:"#7f8c8d", width:1, dash:"dash" } }],
-    plot_bgcolor:"white", paper_bgcolor:"white",
-    height:220, margin:{ l:60, r:15, t:8, b:38 },
-    legend:{ font:{ size:8 }, tracegroupgap:0 },
-    annotations: [{ x:0, y:1.0, xref:"x", yref:"paper",
-                    text:"onset", showarrow:false, font:{ size:8, color:"#7f8c8d" }, xanchor:"left" }],
-  };
-  Plotly.react("epoch-plot", traces, layout, { responsive:true, displayModeBar:false });
 }
 
 // ─── Optode layout ────────────────────────────────────────────────────────────
 function loadLayout() {
-  fetch("/api/layout").then(r => r.json()).then(d => {
-    if (d.layout_2d) render2D(d.layout_2d);
-    if (d.layout_3d) render3D(d.layout_3d);
-    else loadBrainMesh3D(d.layout_3d);
-  });
-}
-
-function _sciColor(sci) {
-  if (sci === null || sci === undefined) return "#aaa";
-  if (sci >= 0.75) return "#27ae60";
-  if (sci >= 0.5)  return "#f39c12";
-  return "#e74c3c";
-}
-
-function render2D(d) {
-  var markerColors = d.colors.map(function(c, i) { return _sciColor(d.sci[i]); });
-  var traces = [
-    { x:d.lines_x, y:d.lines_y, mode:"lines",
-      line:{ color:"#bdc3c7", width:2 }, hoverinfo:"skip", showlegend:false },
-    { x:d.x, y:d.y, mode:"markers+text",
-      text: d.ch_names.map(function(n) { return n.split(" ")[0]; }),
-      textposition:"top center", textfont:{ size:7 },
-      marker:{ size:10, color:markerColors, opacity:0.9, line:{ width:0.8, color:"#555" } },
-      customdata:d.ch_names,
-      hovertemplate:"<b>%{customdata}</b><extra></extra>",
-      showlegend:false },
-  ];
-  var layout = {
-    xaxis:{ showgrid:false, zeroline:false, title:"x (mm)" },
-    yaxis:{ showgrid:false, zeroline:false, title:"y (mm)", scaleanchor:"x" },
-    plot_bgcolor:"#f8f9fa", paper_bgcolor:"white",
-    height:700, margin:{ l:40, r:15, t:10, b:40 },
-    hovermode:"closest",
-  };
-  Plotly.newPlot("layout-2d-plot", traces, layout, { responsive:true, displayModeBar:false });
-
-  document.getElementById("layout-2d-plot").on("plotly_click", function(evt) {
-    var pt = evt.points[0];
-    if (!pt || pt.curveNumber !== 1) return;
-    var ch = pt.customdata;
-    selectChannel(chPair(ch));
-    highlightTrace(ch);
-  });
-  document.getElementById("layout-2d-plot").on("plotly_doubleclick", function() {
-    toggleBadFromOptode();
-  });
-}
-
-function render3D(d) {
-  if (!d) { loadBrainMesh3D(null); return; }
-  fetch("/api/brain_mesh").then(r => r.json()).then(bm => {
-    var traces = [];
-    (bm.meshes || []).forEach(function(m) {
-      traces.push({
-        type:"mesh3d",
-        x:m.x, y:m.y, z:m.z,
-        i:m.i, j:m.j, k:m.k,
-        color:"#e3e3e3", opacity:0.55, flatshading:false,
-        lighting:{ ambient:0.85, diffuse:0.5, specular:0.4, fresnel:0.6 },
-        lightposition:{ x:100, y:200, z:300 },
-        hoverinfo:"skip", showlegend:false,
+  fetch("/api/layout_figure").then(r => r.json()).then(function(d) {
+    if (d.layout_2d_figure) {
+      Plotly.newPlot("layout-2d-plot", d.layout_2d_figure.data, d.layout_2d_figure.layout,
+                     { responsive: true, displayModeBar: false });
+      document.getElementById("layout-2d-plot").on("plotly_click", function(evt) {
+        var pt = evt.points[0];
+        if (!pt || pt.curveNumber !== 1) return;
+        selectChannel(chPair(pt.customdata));
+        highlightTrace(pt.customdata);
       });
-    });
-    // S-D lines
-    if (d.lines_x && d.lines_x.length) {
-      traces.push({ type:"scatter3d", x:d.lines_x, y:d.lines_y, z:d.lines_z,
-                    mode:"lines", line:{ color:"#95a5a6", width:4 },
-                    hoverinfo:"skip", showlegend:false });
+      document.getElementById("layout-2d-plot").on("plotly_doubleclick", function() {
+        toggleBadFromOptode();
+      });
     }
-    // channel spheres
-    traces.push({
-      type:"scatter3d",
-      x:d.x, y:d.y, z:d.z, mode:"markers",
-      marker:{ size:7, color:d.colors, opacity:0.92, line:{ width:0.5, color:"#333" } },
-      customdata:d.ch_names,
-      hovertemplate:"<b>%{customdata}</b><br>%{x:.1f}, %{y:.1f}, %{z:.1f} mm<extra></extra>",
-      name:"Channels", showlegend:true,
-    });
-    // highlight overlay (empty by default)
-    traces.push({
-      type:"scatter3d", x:[], y:[], z:[], mode:"markers",
-      marker:{ size:14, color:"#f39c12", opacity:1.0, line:{ width:1.5, color:"#e67e22" } },
-      hoverinfo:"skip", showlegend:false, name:"_hl",
-    });
-
-    var layout = {
-      scene:{ xaxis:{ visible:false }, yaxis:{ visible:false }, zaxis:{ visible:false },
-              camera:{ eye:{ x:0, y:-1.9, z:0.6 } }, bgcolor:"#ffffff" },
-      margin:{ l:0, r:0, t:0, b:0 },
-      paper_bgcolor:"#ffffff", height:700,
-      legend:{ x:0.01, y:0.99, font:{ size:9 } },
-    };
-    Plotly.newPlot("layout-3d-plot", traces, layout, { responsive:true });
-
-    document.getElementById("layout-3d-plot").on("plotly_click", function(evt) {
-      var pt = evt.points[0];
-      if (!pt) return;
-      var tr = document.getElementById("layout-3d-plot").data[pt.curveNumber];
-      if (tr.type !== "scatter3d" || !tr.customdata) return;
-      var ch = Array.isArray(pt.customdata) ? pt.customdata[0] : pt.customdata;
-      if (!ch) return;
-      selectChannel(chPair(ch));
-      highlightTrace(ch);
-    });
+    if (d.layout_3d_figure) {
+      Plotly.newPlot("layout-3d-plot", d.layout_3d_figure.data, d.layout_3d_figure.layout,
+                     { responsive: true });
+      document.getElementById("layout-3d-plot").on("plotly_click", function(evt) {
+        var pt = evt.points[0];
+        if (!pt) return;
+        var tr = document.getElementById("layout-3d-plot").data[pt.curveNumber];
+        if (tr.type !== "scatter3d" || !tr.customdata) return;
+        var ch = Array.isArray(pt.customdata) ? pt.customdata[0] : pt.customdata;
+        if (!ch) return;
+        selectChannel(chPair(ch));
+        highlightTrace(ch);
+      });
+    }
   });
 }
 
@@ -761,12 +564,12 @@ function offsetSelected(delta) {
 
 function fetchAndUpdateDetailMarkers() {
   if (!_selChannel) return;
-  // re-fetch epoch after offset change
-  fetch("/api/channel?pair=" + encodeURIComponent(_selChannel))
-    .then(r => r.json()).then(d => {
-      if (d.epoch && d.epoch.times) renderEpoch(d.epoch, _selChannel);
-      if (document.getElementById("detail-plot").style.display !== "none" && d.detail)
-        Plotly.relayout("detail-plot", { shapes: _markerShapes() });
+  Plotly.relayout("detail-plot", { shapes: _markerShapes() });
+  fetch("/api/channel_figure?pair=" + encodeURIComponent(_selChannel))
+    .then(r => r.json()).then(function(d) {
+      if (d.epoch_figure)
+        Plotly.react("epoch-plot", d.epoch_figure.data, d.epoch_figure.layout,
+                     { responsive: true, displayModeBar: false });
     });
 }
 
@@ -850,9 +653,10 @@ function renderIqm(d) {
     li("Spike count",       spk !== null && spk !== undefined ? spk : "—",
                             cls(spk, spk === 0, spk < 10));
 
-  if (_tsData && _tsData.times) {
-    var dur = _tsData.times[_tsData.times.length - 1] - _tsData.times[0];
-    html += li("Duration", dur.toFixed(0) + " s");
+  var tsDiv = document.getElementById("ts-plot");
+  if (tsDiv && tsDiv.layout && tsDiv.layout.xaxis && tsDiv.layout.xaxis.range) {
+    var r = tsDiv.layout.xaxis.range;
+    html += li("Duration", (r[1] - r[0]).toFixed(0) + " s");
   }
 
   document.getElementById("iqm-list").innerHTML = html;
