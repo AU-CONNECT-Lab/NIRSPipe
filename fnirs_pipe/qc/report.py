@@ -1,99 +1,41 @@
 """Generate per-subject HTML QC report using Jinja2 + Plotly.
 
-Report architecture: reportlets
----------------------------------
-Each preprocessing/postprocessing step contributes an independent HTML fragment
-(a "reportlet"). build_subject_report() collects all reportlets and renders them
-into a single per-subject HTML via Jinja2.
+Each section is an independent _section_*() builder that returns a dict of
+template variables. Failures are caught by _guard() and appended to the errors
+list — the rest of the report still renders.
 
-If a step fails or is skipped, its reportlet slot is left empty with a warning
-banner — the rest of the report still renders.
+Report sections
+---------------
+Summary
+  Subject metadata, bad-channel badge, run command.
 
-References:
-  MNE built-in report:  https://mne.tools/stable/auto_tutorials/preprocessing/14_quality_control_report.html
+a. Raw Signal
+  Per-channel HbO/HbR timeseries + PSD + epoch preview (dropdown selector).
 
-IQM output
-----------------------------------
-Inspired by MRIQC/AFNI. See quantitative_metrics.py for metric definitions.
-Candidate sidecar format: JSONL (one record per subject/session).
+b. Raw Signal Quality (SCI / PSP)
+  Windowed SCI/PSP heatmap + lollipop summary (build_sci_psp_figure).
+  Brain-surface quality map + optode flat map (if head coordinates available).
 
-Raw signal QC (computed on intensity or OD data, before Beer-Lambert):
-  - sci_mean / sci_per_channel    : Scalp Coupling Index
-  - psp_mean / psp_per_channel    : Peak Spectral Power at cardiac frequency
-  - cv_mean / cv_per_channel      : Coefficient of Variation of raw intensity
-  - channel_retention_rate        : fraction of channels surviving SCI threshold
+c. Motion Correction
+  GVTD + carpet plot; bad-segment zoom; per-channel before/after OD traces.
 
-Processed data QC (computed on HbO/HbR time series, model-agnostic):
-  - tsnr_hbo / tsnr_hbr           : temporal SNR per channel (mean / std)
-  - hbo_hbr_corr                  : HbO-HbR Pearson r per channel (expect < 0)
-  - residual_cardiac_power        : HbO power in 0.7-1.5 Hz after bandpass
-  - residual_resp_power           : HbO power in 0.1-0.5 Hz after bandpass
-  - lowfreq_drift_amplitude_hbo   : HbO peak-to-peak amplitude below 0.01 Hz
-  - lowfreq_drift_amplitude_hbr   : HbR peak-to-peak amplitude below 0.01 Hz
-  - spike_count                   : number of 1st-derivative threshold crossings
-  - temporal_derivative_variance  : var(diff(hbo)) — sensitive to abrupt changes
-  - pct_data_retained             : fraction of timepoints not annotated as bad
+d. HbO / HbR (Beer-Lambert)
+  HbO–HbR correlation panel.
 
-Design rationale (following MRIQC, Esteban et al. 2017 PLOS ONE):
-  metrics are selected from literature + expert judgement; they must be
-  (1) model-agnostic — no task design or HRF assumption required,
-  (2) computable from standard MNE/numpy without extra dependencies,
-  (3) interpretable as a scalar per channel or a single summary scalar.
-  R2, CNR of HRF, and other GLM-derived quantities are explicitly excluded
-  because they depend on the task design and are not data quality indicators.
+e. PSD (before / after bandpass)
+  Full-dataset PSD panel + per-channel PSD detail (dropdown selector).
 
-Report sections and content
------------------------------
-1. Executive Summary (top of report)
-   - Subject metadata: ID, session, age, acquisition hardware
-   - BIDS validation result
-   - Key QC indicators with traffic lights:
-       bad channel rate  (<10% green / 10-30% yellow / >30% red)
-       mean SCI
-       mean cardiac peak power
-       % frames censored by FD threshold (if used)
-       HbO/HbR mean correlation
+f. Epoch / HRF Preview
+  Grand-mean HbO/HbR averaged across good channels, baseline-corrected.
 
-2. Per-step preprocessing reportlets (in pipeline order)
-   a. Raw data
-      - mne.Report: raw signal traces (HbO/HbR or intensity)
-      - mne.Report: PSD of raw signal
-   b. OD conversion
-      - mne.Report: PSD after OD conversion (verify no DC offset issues)
-   c. SCI / bad channels
-      - figures.sci_topography(): 2-D probe layout coloured by SCI score
-      - figures.peak_power_plot(): cardiac peak power bar chart per channel
-      - figures.channel_snr_plot(): per-channel SNR in physiological band
-      - Table: all channels flagged as bad + their SCI scores
-      NOTE: this section is the primary decision aid for --bad-channel-action.
-      When --bad-channel-action keep is used, bad channels are shown with a
-      distinct marker so the user can inspect raw traces before re-running with drop.
-   d. Motion detection & correction
-      - figures.carpet_plot()
-      - GVTD timeseries (top panel, computed on OD)
-      - bad segment zoom: top-N worst segments before/after correction
-   e. Beer-Lambert / final HbO/HbR
-      - figures.hbo_hbr_correlation(): per-channel HbO vs HbR scatter coloured by
-          channel (short/long); fit line + r value; expected r < -0.5 for good signal.
-      - mne.Report: HbO/HbR time series traces
-      - figures.psd_plot(): PSD before/after bandpass (if applied),
-          annotate cardiac (~1 Hz) and Mayer wave (~0.1 Hz) peaks
-          + filter response curve (TODO)
+Postprocessing (GLM mode)
+  Design-matrix timeseries + heatmap; activation panel per condition.
 
-3. Postprocessing reportlet (mode-dependent, appended after prep)
-   glm mode:
-      - Design matrix heatmap
-      - Per-channel HRF with uncertainty + control condition
-      - Contrast map (channel-level t-values, coloured probe layout)
+Quantitative Metrics
+  IQM scalar summary (channel retention, SCI, PSP, SNR, HbO–HbR corr, etc.)
+  + per-channel table; CSV sidecar saved to nirs/ output directory.
 
-4. Methods & provenance
-   - boilerplate.generate_methods_text(): paste-ready Methods paragraph
-   - Software versions table
-   - Pipeline parameters used for this run (from sidecar JSON)
-
-Planned additions
------------------
-Split raw checkpoint
+Errors / Methods / Software Versions
 """
 
 import base64
@@ -119,12 +61,9 @@ from fnirs_pipe.qc.figures import (
     psd_figure,
     quality_brain_views,
     optode_layout_static,
-    short_channel_figure,
     design_matrix_static_figure,
     design_matrix_heatmap,
     build_epoch_preview_figure,
-    build_ts_figure,
-    build_layout_figure,
     build_sci_psp_figure,
     build_channel_figure,
     build_motion_detail_figure,
@@ -258,10 +197,6 @@ def _prepare_long_raw(raw_intensity: mne.io.Raw, subject: str) -> mne.io.Raw:
 # Section builders — each returns a dict of template variables
 # ---------------------------------------------------------------------------
 
-def _section_od(raw_long: mne.io.Raw, subject: str, errors: list, figures_dir: Path) -> dict:
-    return {}
-
-
 def _section_sci(
     raw_intensity: mne.io.Raw,
     sci_scores: dict,
@@ -297,49 +232,6 @@ def _section_sci(
         )
 
     return {"sci_psp_panel_path": sci_psp_panel_path, "sci_psp_panel_h": sci_psp_panel_h}
-
-
-def _section_raw_viewer(
-    raw_intensity: mne.io.Raw,
-    bad_channels: list[str],
-    sci_scores: dict[str, float],
-    subject: str,
-    errors: list,
-    figures_dir: Path,
-) -> dict:
-    ts_path = ts_h = None
-    layout_2d_path = layout_3d_path = None
-    layout_h = 500
-
-    anns = raw_intensity.annotations
-    markers = [
-        {"onset": float(a["onset"]), "duration": float(a["duration"]),
-         "description": str(a["description"])}
-        for a in anns
-    ]
-
-    with _guard("Raw TS figure", errors, subject):
-        fig, _, _, _, _, _ = build_ts_figure(
-            raw_intensity, markers, set(bad_channels), 4000, 0.015,
-        )
-        ts_path, ts_h = _save_plotly_html(fig, figures_dir / "raw_ts.html")
-
-    with _guard("Layout figures", errors, subject):
-        fig_2d, fig_3d = build_layout_figure(
-            raw_intensity, set(bad_channels), sci_scores, 0.015,
-        )
-        if fig_2d:
-            fig_2d.update_layout(height=500)
-            layout_2d_path, layout_h = _save_plotly_html(fig_2d, figures_dir / "layout_2d.html")
-        if fig_3d:
-            fig_3d.update_layout(height=500)
-            layout_3d_path, _ = _save_plotly_html(fig_3d, figures_dir / "layout_3d.html")
-
-    return {
-        "raw_ts_path":     ts_path,        "raw_ts_h":     ts_h,
-        "layout_2d_path":  layout_2d_path,
-        "layout_3d_path":  layout_3d_path, "layout_h":     layout_h,
-    }
 
 
 def _section_channel_detail(
@@ -618,21 +510,6 @@ def _section_brain(
 
 
 
-def _section_short_channel(
-    raw_intensity: mne.io.Raw,
-    subject: str,
-    errors: list,
-    figures_dir: Path,
-) -> dict:
-    short_channel_path = None
-    with _guard("Short-channel figure", errors, subject):
-        b64 = short_channel_figure(raw_intensity)
-        if b64 is not None:
-            _save_b64_png(b64, figures_dir / "short_channel_psd.png")
-            short_channel_path = "figures/short_channel_psd.png"
-    return {"short_channel_path": short_channel_path}
-
-
 def _section_glm(
     design_matrix: "Any | None",
     glm_est: "Any | None",
@@ -773,9 +650,6 @@ def build_subject_report(
 
     figures_dir = out_path.parent / "figures"
 
-    od_vars           = _section_od(raw_long, subject, errors, figures_dir)
-    raw_viewer_vars   = _section_raw_viewer(raw_intensity, bad_channels, sci_scores,
-                                            subject, errors, figures_dir)
     sci_vars          = _section_sci(
                             raw_intensity, sci_scores, bad_channels, config,
                             sci_scores_matrix, sci_win_times,
@@ -793,7 +667,6 @@ def build_subject_report(
     brain_vars        = _section_brain(
                             sci_scores, bad_channels, coords_head, good_mask, raw_intensity,
                             subject, errors, figures_dir, ch_names_brain=ch_names_brain)
-    short_ch_vars     = _section_short_channel(raw_intensity, subject, errors, figures_dir)
     epoch_vars        = _section_epoch_preview(raw_haemo, subject, errors, figures_dir)
     glm_vars          = _section_glm(design_matrix, glm_est, raw_haemo, subject, errors, figures_dir, segments=segments)
     iqm_vars          = _section_iqm(raw_long, raw_haemo, sci_scores, bad_channels, subject, errors,
@@ -825,8 +698,7 @@ def build_subject_report(
         config=config,
         errors=errors,
         methods=generate_methods_text(config, versions=versions),
-        **od_vars,
-        **raw_viewer_vars,
+
         **sci_vars,
         **motion_vars,
         **motion_det_vars,
@@ -835,7 +707,7 @@ def build_subject_report(
         **psd_det_vars,
         **iqm_vars,
         **brain_vars,
-        **short_ch_vars,
+
         **epoch_vars,
         **glm_vars,
     )
