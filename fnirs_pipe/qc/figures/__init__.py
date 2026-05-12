@@ -5,7 +5,6 @@ from .raw_figures import (
     build_psd_mean_figure,
     build_sci_psp_figure,
     build_epoch_preview_figure,
-    build_motion_detail_figure,
     condition_colors,
     sci_color,
     psd_layout,
@@ -17,8 +16,7 @@ from .sci_psp_panel import (
 from .brain_views import quality_brain_views
 from .channel_metrics import lollipop_chart
 from .motion_panel import (
-    nirs_carpet_figure, motion_correction_panel,
-    carpet_static_figure, bad_segment_zoom_figure,
+    carpet_gvtd_figure, bad_segment_zoom_figure, build_motion_detail_figure,
 )
 from .psd_plot import psd_figure
 from .glm_figures import (
@@ -37,7 +35,6 @@ __all__ = [
     "build_psd_mean_figure",
     "build_sci_psp_figure",
     "build_epoch_preview_figure",
-    "build_motion_detail_figure",
     "condition_colors",
     "sci_color",
     "psd_layout",
@@ -48,10 +45,9 @@ __all__ = [
     "sci_segment_heatmap_figure",
     "quality_brain_views",
     "lollipop_chart",
-    "nirs_carpet_figure",
-    "motion_correction_panel",
-    "carpet_static_figure",
+    "carpet_gvtd_figure",
     "bad_segment_zoom_figure",
+    "build_motion_detail_figure",
     "psd_figure",
     "design_matrix_figure",
     "design_matrix_static_figure",

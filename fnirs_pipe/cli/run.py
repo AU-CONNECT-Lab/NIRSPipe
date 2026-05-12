@@ -75,9 +75,9 @@ def main(
     output_dir:     Annotated[Path,          typer.Argument(help="Output directory (BIDS Derivatives).")],
     analysis_level: Annotated[AnalysisLevel, typer.Argument(help="Processing level.")],
 
-    # ---- prep (required) ----
-    dpf:           Annotated[list[float], typer.Option("--dpf",          help="Differential pathlength factor. One value or one per wavelength.")],
-    sci_threshold: Annotated[float,       typer.Option("--sci-threshold", help="SCI threshold for bad channel detection, e.g. 0.8.")],
+    # ---- prep (required unless --qc-raw) ----
+    dpf:           Annotated[Optional[list[float]], typer.Option("--dpf",          help="Differential pathlength factor. One value or one per wavelength.")] = None,
+    sci_threshold: Annotated[Optional[float],       typer.Option("--sci-threshold", help="SCI threshold for bad channel detection, e.g. 0.8.")] = None,
 
     # ---- subject / session / task selection ----
     participant_label: Annotated[Optional[list[str]], typer.Option("--participant-label", help="Subject ID(s) to process.")] = None,
@@ -151,6 +151,13 @@ def main(
                           session_label=session_label, task_label=task_label,
                           skip_validation=skip_bids_validation)
         return
+
+    if dpf is None:
+        typer.echo("Error: Missing option '--dpf'.", err=True)
+        raise typer.Exit(1)
+    if sci_threshold is None:
+        typer.echo("Error: Missing option '--sci-threshold'.", err=True)
+        raise typer.Exit(1)
 
     from fnirs_pipe.cli.workflows import run_participant_level, run_group_level
 

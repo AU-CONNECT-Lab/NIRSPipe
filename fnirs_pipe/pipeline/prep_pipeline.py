@@ -132,6 +132,8 @@ class PrepResult:
     sci_win_times: "np.ndarray | None" = None
     psp_scores_matrix: "np.ndarray | None" = None
     psp_win_times: "np.ndarray | None" = None
+    raw_od_before_motion: "mne.io.Raw | None" = None
+    raw_od_after_motion: "mne.io.Raw | None" = None
 
 @dataclass
 class PrepConfig:
@@ -211,6 +213,7 @@ def run_prep(
 
     # step 4: motion correction (spike/step artifact repair)
     logger.info("sub-%s | step 4: motion correction (%s)", config.subject, config.motion_correction)
+    raw_od_before_motion = raw_od.copy()
     raw_od = correct_motion(raw_od, method=config.motion_correction)
     _save(raw_od, "motcorrected", "motion_correction")
 
@@ -241,6 +244,8 @@ def run_prep(
         sci_win_times=sci_times,
         psp_scores_matrix=psp_matrix,
         psp_win_times=psp_times,
+        raw_od_before_motion=raw_od_before_motion,
+        raw_od_after_motion=raw_od,
     )
 
 

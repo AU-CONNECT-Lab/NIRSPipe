@@ -113,8 +113,7 @@ from jinja2 import Environment, FileSystemLoader
 
 from fnirs_pipe.qc.boilerplate import collect_software_versions, generate_methods_text
 from fnirs_pipe.qc.figures import (
-    motion_correction_panel,
-    carpet_static_figure,
+    carpet_gvtd_figure,
     bad_segment_zoom_figure,
     hbo_hbr_correlation_panel,
     psd_figure,
@@ -373,20 +372,21 @@ def _section_channel_detail(
 
 
 def _section_motion_detail(
-    raw_long: mne.io.Raw,
-    raw_before_motion: mne.io.Raw | None,
+    raw_od_before: mne.io.Raw | None,
+    raw_od_after: mne.io.Raw | None,
     subject: str,
     errors: list,
     figures_dir: Path,
+    segments: dict | None = None,
     max_pts: int = 4000,
 ) -> dict:
-    if raw_before_motion is None:
+    if raw_od_before is None or raw_od_after is None:
         return {"motion_detail_pairs": []}
-    shared_chs = [c for c in raw_long.ch_names if c in raw_before_motion.ch_names]
+    shared_chs = [c for c in raw_od_after.ch_names if c in raw_od_before.ch_names]
     saved = []
     for ch in shared_chs:
         with _guard(f"Motion detail {ch}", errors, subject):
-            fig = build_motion_detail_figure(raw_before_motion, raw_long, ch, max_pts)
+            fig = build_motion_detail_figure(raw_od_before, raw_od_after, ch, segments, max_pts)
             fname = f"motion_detail_{_pair_fname(ch)}.html"
             h = _save_multi_fig_html([fig], figures_dir / fname)
             saved.append({"pair": ch, "path": f"figures/{fname}", "h": h})
@@ -427,26 +427,13 @@ def _section_motion(
     figures_dir: Path,
     raw_before_motion: mne.io.Raw | None = None,
 ) -> dict:
-    motion_panel_path = None
-    motion_panel_h = 0
+    carpet_gvtd_path = None
     bad_segment_zoom_path = None
-    carpet_path = None
 
-    with _guard("Carpet plot", errors, subject):
-        b64 = carpet_static_figure(raw_long, ch_names=raw_long.ch_names, segments=segments)
-        _save_b64_png(b64, figures_dir / "carpet.png")
-        carpet_path = "figures/carpet.png"
-
-    with _guard("Motion panel", errors, subject):
-        sci_thr = getattr(config, "sci_threshold", 0.75)
-        motion_colors = [
-            "#3498db" if sci_scores.get(c, 0) >= sci_thr else "#e74c3c"
-            for c in raw_long.ch_names
-        ]
-        fig_motion = motion_correction_panel(
-            raw_long, raw_long.ch_names, motion_colors, segments or {},
-        )
-        motion_panel_path, motion_panel_h = _save_plotly_html(fig_motion, figures_dir / "motion_panel.html")
+    with _guard("Carpet + GVTD", errors, subject):
+        b64 = carpet_gvtd_figure(raw_long, raw_long.ch_names, segments)
+        _save_b64_png(b64, figures_dir / "carpet_gvtd.png")
+        carpet_gvtd_path = "figures/carpet_gvtd.png"
 
     with _guard("Bad segment zoom", errors, subject):
         all_spans = [
@@ -467,9 +454,8 @@ def _section_motion(
             bad_segment_zoom_path = "figures/bad_segment_zoom.png"
 
     return {
-        "motion_panel_path": motion_panel_path, "motion_panel_h": motion_panel_h,
+        "carpet_gvtd_path": carpet_gvtd_path,
         "bad_segment_zoom_path": bad_segment_zoom_path,
-        "carpet_path": carpet_path,
     }
 
 
@@ -772,6 +758,7 @@ def build_subject_report(
     good_mask: np.ndarray | None = None,
     ch_names_brain: list[str] | None = None,
     raw_before_motion: mne.io.Raw | None = None,
+    raw_after_motion: mne.io.Raw | None = None,
     design_matrix: "Any | None" = None,
     glm_est: "Any | None" = None,
     l_freq: float | None = None,
@@ -797,7 +784,7 @@ def build_subject_report(
     motion_vars       = _section_motion(
                             raw_long, sci_scores, config, segments, subject, errors,
                             figures_dir, raw_before_motion=raw_before_motion)
-    motion_det_vars   = _section_motion_detail(raw_long, raw_before_motion, subject, errors, figures_dir)
+    motion_det_vars   = _section_motion_detail(raw_before_motion, raw_after_motion, subject, errors, figures_dir, segments=segments)
     haemo_vars        = _section_haemo(raw_haemo, config, subject, errors, figures_dir,
                                        l_freq=l_freq, h_freq=h_freq)
     channel_det_vars  = _section_channel_detail(raw_haemo, subject, errors, figures_dir)

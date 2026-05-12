@@ -597,36 +597,6 @@ def build_sci_psp_figure(
     return fig
 
 
-def build_motion_detail_figure(
-    raw_before: mne.io.Raw,
-    raw_after: mne.io.Raw,
-    ch_name: str,
-    max_pts: int = 4000,
-) -> go.Figure:
-    """Two-subplot before/after motion-correction timeseries for one channel."""
-    def _get(raw: mne.io.Raw, ch: str):
-        idx = raw.ch_names.index(ch)
-        data, times = raw.get_data(picks=[idx], return_times=True)
-        data, times = _decimate(data, times, max_pts)
-        return times.tolist(), data[0].tolist()
-
-    t_b, y_b = _get(raw_before, ch_name)
-    t_a, y_a = _get(raw_after,  ch_name)
-
-    fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.06,
-                        subplot_titles=["Before motion correction", "After motion correction"])
-    fig.add_trace(go.Scatter(x=t_b, y=y_b, mode="lines",
-                             line=dict(color="#95a5a6", width=1.2), showlegend=False), row=1, col=1)
-    fig.add_trace(go.Scatter(x=t_a, y=y_a, mode="lines",
-                             line=dict(color="#2c3e50", width=1.2), showlegend=False), row=2, col=1)
-    fig.update_xaxes(title_text="Time (s)", gridcolor="#eee", row=2, col=1)
-    fig.update_yaxes(title_text="Signal", gridcolor="#eee")
-    fig.update_layout(
-        title_text=ch_name, height=340,
-        plot_bgcolor="white", paper_bgcolor="white",
-        margin=dict(l=60, r=20, t=55, b=40),
-    )
-    return fig
 
 
 def build_epoch_preview_figure(

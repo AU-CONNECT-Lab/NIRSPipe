@@ -188,6 +188,8 @@
   <a href="#Epoch">Epoch</a>
   {% if glm_design_path or glm_activation_path %}<a href="#GLM">GLM</a>{% endif %}
   <span class="nav-sep">|</span>
+  <a href="#Metrics">Metrics</a>
+  <a href="#Errors">Errors</a>
   <a href="#Methods">Methods</a>
 </nav>
 
@@ -294,17 +296,12 @@
     <p class="step-desc">
       Motion correction method: <strong>{{ config.motion_correction }}</strong>.
     </p>
-    {% if carpet_path %}
-      <h3>Carpet plot (z-score per channel)</h3>
-      <img class="responsive" src="{{ carpet_path }}" alt="Carpet plot" />
-      <p class="fig-path">{{ carpet_path }}</p>
-    {% endif %}
-    {% if motion_panel_path %}
-      <h3>GVTD + time series</h3>
-      <iframe class="plotly-frame" src="{{ motion_panel_path }}" title="Motion panel" style="height:{{ motion_panel_h }}px"></iframe>
-      <p class="fig-path">{{ motion_panel_path }}</p>
+    {% if carpet_gvtd_path %}
+      <h3>GVTD + Carpet plot</h3>
+      <img class="responsive" src="{{ carpet_gvtd_path }}" alt="GVTD + Carpet plot" />
+      <p class="fig-path">{{ carpet_gvtd_path }}</p>
     {% else %}
-      <div class="placeholder">Motion panel not available (pass motion_spans + segments).</div>
+      <div class="placeholder">GVTD + Carpet not available.</div>
     {% endif %}
     {% if bad_segment_zoom_path %}
       <h3>Bad segment zoom — top segments by duration</h3>
@@ -505,7 +502,7 @@
 </div>
 
 <!-- =========================================================== errors -->
-<h2>Errors &amp; Warnings</h2>
+<h2 id="Errors">Errors &amp; Warnings</h2>
 {% if errors %}
   <ul class="error-list">
     {% for e in errors %}<li>{{ e }}</li>{% endfor %}
