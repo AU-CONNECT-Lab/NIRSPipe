@@ -249,7 +249,10 @@ def build_channel_figure(
                 epoch_traces = []
                 for ci, (cond, _) in enumerate(event_id.items()):
                     try:
-                        ep = epochs[cond].get_data()
+                        ep_subset = epochs[cond]
+                        if len(ep_subset) == 0:
+                            continue
+                        ep = ep_subset.get_data()
                         base_color = cond_colors_.get(cond, colors10[ci % len(colors10)])
                         epoch_traces += [
                             go.Scatter(x=epochs.times.tolist(),
