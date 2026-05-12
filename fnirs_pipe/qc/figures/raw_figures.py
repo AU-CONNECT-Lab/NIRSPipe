@@ -7,6 +7,7 @@ import os
 import mne
 import numpy as np
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
 from fnirs_pipe.utils.logging import get_logger
 
@@ -456,4 +457,253 @@ def build_psd_mean_figure(raw: mne.io.Raw) -> go.Figure | None:
         return go.Figure(data=traces, layout=go.Layout(**psd_layout()))
     except Exception as exc:
         logger.warning("mean PSD failed: %s", exc)
+        return None
+
+
+def build_sci_psp_figure(
+    sci_scores: dict[str, float],
+    psp_per_channel: dict[str, float],
+    bad_channels: set[str],
+    sci_threshold: float = 0.75,
+    psp_threshold: float = 0.1,
+    sci_matrix: np.ndarray | None = None,
+    sci_win_times: np.ndarray | None = None,
+    psp_matrix: np.ndarray | None = None,
+    psp_win_times: np.ndarray | None = None,
+) -> go.Figure:
+    from .sci_psp_panel import lollipop_scores_figure as _lollipop, _SPACING
+
+    ch_names = list(sci_scores.keys())
+    sci_arr  = np.array([sci_scores.get(ch, 0.0) for ch in ch_names])
+    has_psp  = bool(psp_per_channel)
+    psp_arr  = np.array([psp_per_channel.get(ch, 0.0) for ch in ch_names]) if has_psp else None
+
+    has_matrices = (
+        sci_matrix is not None and sci_win_times is not None
+        and psp_matrix is not None and psp_win_times is not None
+        and has_psp
+    )
+
+    if not has_matrices:
+        sci_colors = [
+            "#e74c3c" if ch in bad_channels
+            else ("#27ae60" if sci_scores.get(ch, 0.0) >= sci_threshold else "#f39c12")
+            for ch in ch_names
+        ]
+        if not has_psp:
+            return _lollipop(ch_names, sci_arr, sci_colors, sci_threshold, "SCI")
+        psp_colors = ["#27ae60" if psp_per_channel.get(ch, 0.0) >= psp_threshold
+                      else "#e74c3c" for ch in ch_names]
+        fig_sci = _lollipop(ch_names, sci_arr, sci_colors, sci_threshold, "SCI")
+        fig_psp = _lollipop(ch_names, psp_arr,  psp_colors, psp_threshold, "PSP")
+        n_ch = len(ch_names)
+        combined = make_subplots(rows=1, cols=2, shared_yaxes=True,
+                                 horizontal_spacing=0.08, subplot_titles=["SCI", "PSP"])
+        for t in fig_sci.data: combined.add_trace(t, row=1, col=1)
+        for t in fig_psp.data: combined.add_trace(t, row=1, col=2)
+        combined.update_yaxes(tickvals=[i * _SPACING for i in range(n_ch)],
+                               ticktext=ch_names, autorange="reversed",
+                               tickfont=dict(size=9), row=1, col=1)
+        combined.update_yaxes(autorange="reversed", showticklabels=False, row=1, col=2)
+        combined.update_layout(height=min(max(300, n_ch * 14 + 100), 700),
+                                margin=dict(l=110, r=30, t=40, b=40),
+                                plot_bgcolor="white", paper_bgcolor="white")
+        return combined
+
+    ch_sorted  = ch_names
+    sci_sorted = sci_arr
+    psp_sorted = psp_arr
+    sci_mat_s  = sci_matrix
+    psp_mat_s  = psp_matrix
+    wt_sci     = np.asarray(sci_win_times).ravel()
+    wt_psp     = np.asarray(psp_win_times).ravel()
+
+    sci_colors = [
+        "#e74c3c" if ch in bad_channels
+        else ("#27ae60" if sci_scores.get(ch, 0.0) >= sci_threshold else "#f39c12")
+        for ch in ch_sorted
+    ]
+    psp_colors = ["#27ae60" if psp_per_channel.get(ch, 0.0) >= psp_threshold
+                  else "#e74c3c" for ch in ch_sorted]
+
+    n_ch   = len(ch_sorted)
+    row_h  = min(max(220, n_ch * 14 + 80), 480)
+
+    fig = make_subplots(
+        rows=2, cols=2,
+        shared_yaxes=True,
+        column_widths=[0.875, 0.125],
+        row_heights=[0.5, 0.5],
+        vertical_spacing=0.06,
+        horizontal_spacing=0.02,
+        subplot_titles=["SCI (windowed)", "Mean SCI", "PSP (windowed)", "Mean PSP"],
+    )
+
+    fig.add_trace(go.Heatmap(
+        z=sci_mat_s, x=wt_sci.tolist(), y=ch_sorted,
+        colorscale="RdYlGn", zmid=sci_threshold,
+        colorbar=dict(title="SCI", thickness=10, len=0.44, y=0.78, x=1.01),
+        hovertemplate="Ch: %{y}<br>t=%{x:.1f}s<br>SCI=%{z:.3f}<extra></extra>",
+        name="SCI",
+    ), row=1, col=1)
+
+    sx, sy = [], []
+    for ch, v in zip(ch_sorted, sci_sorted):
+        sx += [0.0, float(v), None]; sy += [ch, ch, None]
+    fig.add_trace(go.Scatter(x=sx, y=sy, mode="lines",
+                             line=dict(color="#aaa", width=1.2),
+                             showlegend=False, hoverinfo="skip"), row=1, col=2)
+    fig.add_trace(go.Scatter(x=sci_sorted.tolist(), y=ch_sorted, mode="markers",
+                             marker=dict(size=7, color=sci_colors,
+                                         line=dict(width=0.5, color="#333")),
+                             showlegend=False,
+                             hovertemplate="%{y}: %{x:.3f}<extra></extra>"), row=1, col=2)
+    fig.add_vline(x=sci_threshold, line_dash="dash", line_color="#888",
+                  line_width=1, row=1, col=2)
+
+    fig.add_trace(go.Heatmap(
+        z=psp_mat_s, x=wt_psp.tolist(), y=ch_sorted,
+        colorscale="RdYlGn", zmid=psp_threshold,
+        colorbar=dict(title="PSP", thickness=10, len=0.44, y=0.22, x=1.01),
+        hovertemplate="Ch: %{y}<br>t=%{x:.1f}s<br>PSP=%{z:.3f}<extra></extra>",
+        name="PSP",
+    ), row=2, col=1)
+
+    px_, py_ = [], []
+    for ch, v in zip(ch_sorted, psp_sorted):
+        px_ += [0.0, float(v), None]; py_ += [ch, ch, None]
+    fig.add_trace(go.Scatter(x=px_, y=py_, mode="lines",
+                             line=dict(color="#aaa", width=1.2),
+                             showlegend=False, hoverinfo="skip"), row=2, col=2)
+    fig.add_trace(go.Scatter(x=psp_sorted.tolist(), y=ch_sorted, mode="markers",
+                             marker=dict(size=7, color=psp_colors,
+                                         line=dict(width=0.5, color="#333")),
+                             showlegend=False,
+                             hovertemplate="%{y}: %{x:.3f}<extra></extra>"), row=2, col=2)
+    fig.add_vline(x=psp_threshold, line_dash="dash", line_color="#888",
+                  line_width=1, row=2, col=2)
+
+    fig.update_yaxes(autorange="reversed", tickfont=dict(size=9), row=1, col=1)
+    fig.update_yaxes(autorange="reversed", showticklabels=False, row=1, col=2)
+    fig.update_yaxes(autorange="reversed", tickfont=dict(size=9), row=2, col=1)
+    fig.update_yaxes(autorange="reversed", showticklabels=False, row=2, col=2)
+    fig.update_xaxes(title_text="Time (s)", gridcolor="#eee", row=2, col=1)
+    fig.update_xaxes(title_text="Score", row=2, col=2)
+    fig.update_layout(
+        height=row_h * 2 + 80,
+        margin=dict(l=120, r=110, t=50, b=40),
+        plot_bgcolor="white", paper_bgcolor="white",
+    )
+    return fig
+
+
+def build_motion_detail_figure(
+    raw_before: mne.io.Raw,
+    raw_after: mne.io.Raw,
+    ch_name: str,
+    max_pts: int = 4000,
+) -> go.Figure:
+    """Two-subplot before/after motion-correction timeseries for one channel."""
+    def _get(raw: mne.io.Raw, ch: str):
+        idx = raw.ch_names.index(ch)
+        data, times = raw.get_data(picks=[idx], return_times=True)
+        data, times = _decimate(data, times, max_pts)
+        return times.tolist(), data[0].tolist()
+
+    t_b, y_b = _get(raw_before, ch_name)
+    t_a, y_a = _get(raw_after,  ch_name)
+
+    fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.06,
+                        subplot_titles=["Before motion correction", "After motion correction"])
+    fig.add_trace(go.Scatter(x=t_b, y=y_b, mode="lines",
+                             line=dict(color="#95a5a6", width=1.2), showlegend=False), row=1, col=1)
+    fig.add_trace(go.Scatter(x=t_a, y=y_a, mode="lines",
+                             line=dict(color="#2c3e50", width=1.2), showlegend=False), row=2, col=1)
+    fig.update_xaxes(title_text="Time (s)", gridcolor="#eee", row=2, col=1)
+    fig.update_yaxes(title_text="Signal", gridcolor="#eee")
+    fig.update_layout(
+        title_text=ch_name, height=340,
+        plot_bgcolor="white", paper_bgcolor="white",
+        margin=dict(l=60, r=20, t=55, b=40),
+    )
+    return fig
+
+
+def build_epoch_preview_figure(
+    raw_haemo: mne.io.Raw,
+    epoch_tmin: float = -5.0,
+    epoch_tmax: float = 25.0,
+) -> go.Figure | None:
+    anns = raw_haemo.annotations
+    markers = [
+        {"onset": float(a["onset"]), "duration": float(a["duration"]),
+         "description": str(a["description"])}
+        for a in anns
+        if not str(a["description"]).upper().startswith("BAD")
+    ]
+    if not markers:
+        return None
+
+    cond_colors_ = condition_colors(markers)
+    colors10 = ["#e74c3c", "#3498db", "#2ecc71", "#f39c12",
+                "#9b59b6", "#1abc9c", "#e67e22", "#34495e"]
+    try:
+        events_mne, event_id = mne.events_from_annotations(raw_haemo, verbose=False)
+        if len(events_mne) == 0:
+            return None
+
+        epochs = mne.Epochs(
+            raw_haemo, events_mne, event_id,
+            tmin=epoch_tmin, tmax=epoch_tmax,
+            baseline=(epoch_tmin, 0),
+            preload=True, verbose=False,
+        )
+        hbo_picks = mne.pick_types(epochs.info, fnirs="hbo")
+        hbr_picks = mne.pick_types(epochs.info, fnirs="hbr")
+
+        traces = []
+        for ci, cond in enumerate(event_id):
+            try:
+                ep = epochs[cond].get_data()
+                base_color = cond_colors_.get(cond, colors10[ci % len(colors10)])
+                if len(hbo_picks) > 0:
+                    grand_hbo = ep[:, hbo_picks, :].mean(axis=(0, 1)) * 1e6
+                    traces.append(go.Scatter(
+                        x=epochs.times.tolist(), y=grand_hbo.tolist(),
+                        name=f"{cond} HbO (n={ep.shape[0]})", mode="lines",
+                        line=dict(color=base_color, width=2),
+                    ))
+                if len(hbr_picks) > 0:
+                    grand_hbr = ep[:, hbr_picks, :].mean(axis=(0, 1)) * 1e6
+                    traces.append(go.Scatter(
+                        x=epochs.times.tolist(), y=grand_hbr.tolist(),
+                        name=f"{cond} HbR", mode="lines",
+                        line=dict(color=base_color, width=1.5, dash="dot"),
+                    ))
+            except Exception:
+                pass
+
+        if not traces:
+            return None
+
+        return go.Figure(
+            data=traces,
+            layout=go.Layout(
+                xaxis=dict(title="Time rel. onset (s)", gridcolor="#eeeeee",
+                           zerolinecolor="#cccccc"),
+                yaxis=dict(title="Conc. (µmol/L)", gridcolor="#eeeeee"),
+                shapes=[dict(type="line", xref="x", yref="paper",
+                             x0=0, x1=0, y0=0, y1=1,
+                             line=dict(color="#7f8c8d", width=1, dash="dash"))],
+                annotations=[dict(x=0, y=1.0, xref="x", yref="paper",
+                                  text="onset", showarrow=False,
+                                  font=dict(size=8, color="#7f8c8d"),
+                                  xanchor="left")],
+                plot_bgcolor="white", paper_bgcolor="white",
+                height=300, margin=dict(l=60, r=15, t=20, b=38),
+                legend=dict(font=dict(size=9)),
+            ),
+        )
+    except Exception as exc:
+        logger.warning("epoch preview failed: %s", exc)
         return None

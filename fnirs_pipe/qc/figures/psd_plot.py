@@ -50,32 +50,28 @@ def _filter_response_trace(
     )
 
 
-def _add_band_annotations(fig: go.Figure, row: int, fmax: float) -> None:
+def _add_band_annotations(fig: go.Figure, fmax: float) -> None:
     for band in _BANDS:
         if band["x0"] > fmax:
             continue
-        fig.add_vrect(
-            x0=band["x0"], x1=min(band["x1"], fmax),
-            fillcolor=band["color"], line_width=0, layer="below",
-            row=row, col=1,
-        )
-        fig.add_vrect(
-            x0=band["x0"], x1=min(band["x1"], fmax),
-            fillcolor=band["color"], line_width=0, layer="below",
-            row=row, col=2,
-        )
+        for row in (1, 2):
+            fig.add_vrect(
+                x0=band["x0"], x1=min(band["x1"], fmax),
+                fillcolor=band["color"], line_width=0, layer="below",
+                row=row, col=1,
+            )
 
     for band in _BANDS:
         if band["label_x"] > fmax:
             continue
-        for col in (1, 2):
+        for row in (1, 2):
+            ax = "" if row == 1 else "2"
             fig.add_annotation(
                 x=band["label_x"], y=1.0,
-                xref=f"x{col if col > 1 else ''}", yref=f"y{col if col > 1 else ''} domain",
+                xref=f"x{ax}", yref=f"y{ax} domain",
                 text=band["label"], showarrow=False,
                 font=dict(size=8, color="#555"),
                 textangle=-90, xanchor="center", yanchor="top",
-                row=row, col=col,
             )
 
 
@@ -145,11 +141,13 @@ def psd_figure(
     psd_after = raw_filtered.compute_psd(fmax=fmax, verbose=False)
 
     freqs = psd_before.freqs
-    # get_data(picks=...) correctly selects rows even when psd.info has more channels
-    data_b_hbo = psd_before.get_data(picks="hbo")
-    data_b_hbr = psd_before.get_data(picks="hbr")
-    data_a_hbo = psd_after.get_data(picks="hbo")
-    data_a_hbr = psd_after.get_data(picks="hbr")
+    ch_names = psd_before.info["ch_names"]
+    hbo_chs = [c for c in ch_names if c.endswith(" hbo")]
+    hbr_chs = [c for c in ch_names if c.endswith(" hbr")]
+    data_b_hbo = psd_before.get_data(picks=hbo_chs) if hbo_chs else np.empty((0, len(freqs)))
+    data_b_hbr = psd_before.get_data(picks=hbr_chs) if hbr_chs else np.empty((0, len(freqs)))
+    data_a_hbo = psd_after.get_data(picks=hbo_chs) if hbo_chs else np.empty((0, len(freqs)))
+    data_a_hbr = psd_after.get_data(picks=hbr_chs) if hbr_chs else np.empty((0, len(freqs)))
 
     filter_str = ""
     if l_freq is not None:
@@ -158,9 +156,9 @@ def psd_figure(
         filter_str += f"{'  ' if filter_str else ''}LP {h_freq} Hz"
 
     fig = make_subplots(
-        rows=1, cols=2,
-        shared_yaxes=True,
-        horizontal_spacing=0.06,
+        rows=2, cols=1,
+        shared_xaxes=True,
+        vertical_spacing=0.10,
         subplot_titles=["Before bandpass", f"After bandpass ({filter_str})"],
     )
 
@@ -169,22 +167,23 @@ def psd_figure(
     for trace in _psd_traces(freqs, data_b_hbr, "hbr", _HBR_COLOR, _HBR_MEAN_COLOR, True):
         fig.add_trace(trace, row=1, col=1)
     for trace in _psd_traces(freqs, data_a_hbo, "hbo", _HBO_COLOR, _HBO_MEAN_COLOR, False):
-        fig.add_trace(trace, row=1, col=2)
+        fig.add_trace(trace, row=2, col=1)
     for trace in _psd_traces(freqs, data_a_hbr, "hbr", _HBR_COLOR, _HBR_MEAN_COLOR, False):
-        fig.add_trace(trace, row=1, col=2)
+        fig.add_trace(trace, row=2, col=1)
 
-    _add_band_annotations(fig, row=1, fmax=fmax)
+    _add_band_annotations(fig, fmax=fmax)
 
     fr_trace = _filter_response_trace(l_freq, h_freq, h_trans_bandwidth,
                                       raw_haemo.info["sfreq"], fmax)
     if fr_trace is not None:
-        fig.add_trace(fr_trace, row=1, col=2)
+        fig.add_trace(fr_trace, row=2, col=1)
 
-    fig.update_xaxes(title_text="Frequency (Hz)", gridcolor="#eeeeee")
-    fig.update_yaxes(title_text="Power (dB)", gridcolor="#eeeeee", col=1)
+    fig.update_xaxes(gridcolor="#eeeeee", row=1, col=1)
+    fig.update_xaxes(title_text="Frequency (Hz)", gridcolor="#eeeeee", row=2, col=1)
+    fig.update_yaxes(title_text="Power (dB)", gridcolor="#eeeeee")
     fig.update_layout(
         title=title,
-        height=420,
+        height=580,
         margin=dict(l=70, r=30, t=80, b=50),
         plot_bgcolor="white",
         paper_bgcolor="white",

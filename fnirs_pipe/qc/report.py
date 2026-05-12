@@ -113,8 +113,6 @@ from jinja2 import Environment, FileSystemLoader
 
 from fnirs_pipe.qc.boilerplate import collect_software_versions, generate_methods_text
 from fnirs_pipe.qc.figures import (
-    quality_panel,
-    sci_segment_heatmap_figure,
     motion_correction_panel,
     carpet_static_figure,
     bad_segment_zoom_figure,
@@ -125,6 +123,12 @@ from fnirs_pipe.qc.figures import (
     short_channel_figure,
     design_matrix_static_figure,
     design_matrix_heatmap,
+    build_epoch_preview_figure,
+    build_ts_figure,
+    build_layout_figure,
+    build_sci_psp_figure,
+    build_channel_figure,
+    build_motion_detail_figure,
 )
 from fnirs_pipe.qc.quantitative_metrics import compute_iqm
 from fnirs_pipe.utils.logging import get_logger
@@ -134,6 +138,37 @@ if TYPE_CHECKING:
 
 logger = get_logger("qc.report")
 _TEMPLATE_DIR = Path(__file__).parent / "templates"
+_PLOTLY_CDN   = "https://cdn.plot.ly/plotly-2.35.2.min.js"
+
+
+def _pair_fname(pair: str) -> str:
+    return pair.replace(" ", "_").replace("/", "-").replace("\\", "-")
+
+
+def _save_multi_fig_html(figs: list, path: Path) -> int:
+    """Stack multiple Plotly figures in one HTML file. Returns total height px."""
+    head = (
+        f'<meta charset="UTF-8">'
+        f'<script src="{_PLOTLY_CDN}"></script>'
+        f'<style>*{{box-sizing:border-box;}}body{{margin:0;padding:0;background:#fff;}}'
+        f'.pfig{{margin-bottom:2px;}}</style>'
+    )
+    parts = [f"<!DOCTYPE html><html><head>{head}</head><body>"]
+    total_h = 0
+    for i, fig in enumerate(figs):
+        if fig is None:
+            continue
+        h = _figure_height(fig)
+        total_h += h + 2
+        fig_html = fig.to_html(
+            full_html=False, include_plotlyjs=False,
+            div_id=f"pfig{i}", config={"responsive": True},
+        )
+        parts.append(f'<div class="pfig">{fig_html}</div>')
+    parts.append("</body></html>")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(parts), encoding="utf-8")
+    return max(total_h, 100)
 
 
 # ---------------------------------------------------------------------------
@@ -225,20 +260,7 @@ def _prepare_long_raw(raw_intensity: mne.io.Raw, subject: str) -> mne.io.Raw:
 # ---------------------------------------------------------------------------
 
 def _section_od(raw_long: mne.io.Raw, subject: str, errors: list, figures_dir: Path) -> dict:
-    od_traces_path = od_psd_path = None
-    with _guard("OD traces", errors, subject):
-        fig = raw_long.plot(
-            n_channels=min(20, len(raw_long.ch_names)),
-            duration=min(30.0, raw_long.times[-1]),
-            show=False, verbose=False, scalings="auto",
-        )
-        _save_mpl_fig(fig, figures_dir / "od_traces.png")
-        od_traces_path = "figures/od_traces.png"
-    with _guard("OD PSD", errors, subject):
-        fig_psd = raw_long.compute_psd(fmax=2.0, verbose=False).plot(show=False)
-        _save_mpl_fig(fig_psd, figures_dir / "od_psd.png")
-        od_psd_path = "figures/od_psd.png"
-    return {"od_traces_path": od_traces_path, "od_psd_path": od_psd_path}
+    return {}
 
 
 def _section_sci(
@@ -254,47 +276,145 @@ def _section_sci(
     errors: list,
     figures_dir: Path,
 ) -> dict:
-    sci_panel_path  = psp_panel_path  = None
-    sci_quality_path = psp_heatmap_path = None
-    sci_panel_h = psp_panel_h = sci_quality_h = psp_heatmap_h = 0
     ch_names = list(sci_scores.keys())
+    sci_psp_panel_path = None
+    sci_psp_panel_h = 0
 
-    if sci_scores_matrix is not None and sci_win_times is not None and sci_scores:
-        with _guard("SCI panel", errors, subject):
-            fig_sci = quality_panel(
-                raw_intensity, ch_names, sci_scores_matrix,
-                sci_win_times, threshold=0.75, title="SCI", metric_label="SCI",
-            )
-            sci_panel_path, sci_panel_h = _save_plotly_html(fig_sci, figures_dir / "sci_panel.html")
-        with _guard("SCI heatmap", errors, subject):
-            fig_sci_hm = sci_segment_heatmap_figure(
-                ch_names, sci_scores_matrix, sci_win_times,
-                threshold=0.75, metric_label="SCI",
-            )
-            sci_quality_path, sci_quality_h = _save_plotly_html(
-                fig_sci_hm, figures_dir / "sci_quality.html"
-            )
+    psp_per_ch: dict = {}
+    if psp_scores_matrix is not None and psp_scores_matrix.shape[0] == len(ch_names):
+        psp_per_ch = dict(zip(ch_names, psp_scores_matrix.mean(axis=1)))
 
-    if psp_scores_matrix is not None and psp_win_times is not None and sci_scores:
-        with _guard("PSP panel", errors, subject):
-            fig_psp = quality_panel(
-                raw_intensity, ch_names, psp_scores_matrix,
-                psp_win_times, threshold=0.1, title="PSP", metric_label="PSP",
-            )
-            psp_panel_path, psp_panel_h = _save_plotly_html(fig_psp, figures_dir / "psp_panel.html")
-        with _guard("PSP heatmap", errors, subject):
-            fig_psp_hm = sci_segment_heatmap_figure(
-                ch_names, psp_scores_matrix, psp_win_times,
-                threshold=0.1, metric_label="PSP",
-            )
-            psp_heatmap_path, psp_heatmap_h = _save_plotly_html(fig_psp_hm, figures_dir / "psp_heatmap.html")
+    with _guard("SCI/PSP panel", errors, subject):
+        fig = build_sci_psp_figure(
+            sci_scores, psp_per_ch, set(bad_channels),
+            sci_threshold=getattr(config, "sci_threshold", 0.75),
+            sci_matrix=sci_scores_matrix,
+            sci_win_times=sci_win_times,
+            psp_matrix=psp_scores_matrix,
+            psp_win_times=psp_win_times,
+        )
+        sci_psp_panel_path, sci_psp_panel_h = _save_plotly_html(
+            fig, figures_dir / "sci_psp_panel.html"
+        )
+
+    return {"sci_psp_panel_path": sci_psp_panel_path, "sci_psp_panel_h": sci_psp_panel_h}
+
+
+def _section_raw_viewer(
+    raw_intensity: mne.io.Raw,
+    bad_channels: list[str],
+    sci_scores: dict[str, float],
+    subject: str,
+    errors: list,
+    figures_dir: Path,
+) -> dict:
+    ts_path = ts_h = None
+    layout_2d_path = layout_3d_path = None
+    layout_h = 500
+
+    anns = raw_intensity.annotations
+    markers = [
+        {"onset": float(a["onset"]), "duration": float(a["duration"]),
+         "description": str(a["description"])}
+        for a in anns
+    ]
+
+    with _guard("Raw TS figure", errors, subject):
+        fig, _, _, _, _, _ = build_ts_figure(
+            raw_intensity, markers, set(bad_channels), 4000, 0.015,
+        )
+        ts_path, ts_h = _save_plotly_html(fig, figures_dir / "raw_ts.html")
+
+    with _guard("Layout figures", errors, subject):
+        fig_2d, fig_3d = build_layout_figure(
+            raw_intensity, set(bad_channels), sci_scores, 0.015,
+        )
+        if fig_2d:
+            fig_2d.update_layout(height=500)
+            layout_2d_path, layout_h = _save_plotly_html(fig_2d, figures_dir / "layout_2d.html")
+        if fig_3d:
+            fig_3d.update_layout(height=500)
+            layout_3d_path, _ = _save_plotly_html(fig_3d, figures_dir / "layout_3d.html")
 
     return {
-        "sci_panel_path":   sci_panel_path,   "sci_panel_h":   sci_panel_h,
-        "psp_panel_path":   psp_panel_path,   "psp_panel_h":   psp_panel_h,
-        "sci_quality_path": sci_quality_path, "sci_quality_h": sci_quality_h,
-        "psp_heatmap_path": psp_heatmap_path, "psp_heatmap_h": psp_heatmap_h,
+        "raw_ts_path":     ts_path,        "raw_ts_h":     ts_h,
+        "layout_2d_path":  layout_2d_path,
+        "layout_3d_path":  layout_3d_path, "layout_h":     layout_h,
     }
+
+
+def _section_channel_detail(
+    raw_haemo: mne.io.Raw,
+    subject: str,
+    errors: list,
+    figures_dir: Path,
+    epoch_tmin: float = -5.0,
+    epoch_tmax: float = 25.0,
+    max_pts: int = 4000,
+) -> dict:
+    anns = raw_haemo.annotations
+    markers = [
+        {"onset": float(a["onset"]), "duration": float(a["duration"]),
+         "description": str(a["description"])}
+        for a in anns
+        if not str(a["description"]).upper().startswith("BAD")
+    ]
+    pairs = sorted(set(ch[:-4] for ch in raw_haemo.ch_names if ch.endswith(" hbo")))
+    saved = []
+    for pair in pairs:
+        with _guard(f"Channel detail {pair}", errors, subject):
+            detail_fig, psd_fig, epoch_fig = build_channel_figure(
+                raw_haemo, markers, pair, max_pts, epoch_tmin, epoch_tmax,
+            )
+            fname = f"ch_detail_{_pair_fname(pair)}.html"
+            h = _save_multi_fig_html([detail_fig, psd_fig, epoch_fig], figures_dir / fname)
+            saved.append({"pair": pair, "path": f"figures/{fname}", "h": h})
+    return {"channel_pairs": saved}
+
+
+def _section_motion_detail(
+    raw_long: mne.io.Raw,
+    raw_before_motion: mne.io.Raw | None,
+    subject: str,
+    errors: list,
+    figures_dir: Path,
+    max_pts: int = 4000,
+) -> dict:
+    if raw_before_motion is None:
+        return {"motion_detail_pairs": []}
+    shared_chs = [c for c in raw_long.ch_names if c in raw_before_motion.ch_names]
+    saved = []
+    for ch in shared_chs:
+        with _guard(f"Motion detail {ch}", errors, subject):
+            fig = build_motion_detail_figure(raw_before_motion, raw_long, ch, max_pts)
+            fname = f"motion_detail_{_pair_fname(ch)}.html"
+            h = _save_multi_fig_html([fig], figures_dir / fname)
+            saved.append({"pair": ch, "path": f"figures/{fname}", "h": h})
+    return {"motion_detail_pairs": saved}
+
+
+def _section_psd_detail(
+    raw_haemo: mne.io.Raw,
+    subject: str,
+    errors: list,
+    figures_dir: Path,
+    l_freq: float | None = None,
+    h_freq: float | None = 0.4,
+) -> dict:
+    pairs = sorted(set(ch[:-4] for ch in raw_haemo.ch_names if ch.endswith(" hbo")))
+    saved = []
+    for pair in pairs:
+        with _guard(f"PSD detail {pair}", errors, subject):
+            picks = [c for c in (f"{pair} hbo", f"{pair} hbr") if c in raw_haemo.ch_names]
+            if not picks:
+                continue
+            raw_sub = raw_haemo.copy().pick(picks)
+            fig = psd_figure(raw_sub, l_freq=l_freq, h_freq=h_freq, fmax=2.0,
+                             title=f"PSD — {pair}")
+            fname = f"psd_detail_{_pair_fname(pair)}.html"
+            path, h = _save_plotly_html(fig, figures_dir / fname)
+            saved.append({"pair": pair, "path": path, "h": h})
+    return {"psd_detail_pairs": saved}
 
 
 def _section_motion(
@@ -362,20 +482,8 @@ def _section_haemo(
     l_freq: float | None = None,
     h_freq: float | None = None,
 ) -> dict:
-    haemo_traces_path = haemo_psd_path = hbo_hbr_path = psd_panel_path = None
+    hbo_hbr_path = psd_panel_path = None
     psd_panel_h = 0
-    with _guard("HbO/HbR traces", errors, subject):
-        fig_h = raw_haemo.plot(
-            n_channels=min(20, len(raw_haemo.ch_names)),
-            duration=min(30.0, raw_haemo.times[-1]),
-            show=False, verbose=False, scalings="auto",
-        )
-        _save_mpl_fig(fig_h, figures_dir / "haemo_traces.png")
-        haemo_traces_path = "figures/haemo_traces.png"
-    with _guard("HbO/HbR PSD", errors, subject):
-        fig_h_psd = raw_haemo.compute_psd(fmax=2.0, verbose=False).plot(show=False)
-        _save_mpl_fig(fig_h_psd, figures_dir / "haemo_psd.png")
-        haemo_psd_path = "figures/haemo_psd.png"
     with _guard("HbO-HbR correlation panel", errors, subject):
         b64 = hbo_hbr_correlation_panel(raw_haemo)
         _save_b64_png(b64, figures_dir / "hbo_hbr_corr.png")
@@ -384,11 +492,28 @@ def _section_haemo(
         fig_psd_custom = psd_figure(raw_haemo, l_freq=l_freq, h_freq=h_freq, fmax=2.0)
         psd_panel_path, psd_panel_h = _save_plotly_html(fig_psd_custom, figures_dir / "psd_panel.html")
     return {
-        "haemo_traces_path": haemo_traces_path,
-        "haemo_psd_path":    haemo_psd_path,
-        "hbo_hbr_path":      hbo_hbr_path,
-        "psd_panel_path":    psd_panel_path, "psd_panel_h": psd_panel_h,
+        "hbo_hbr_path":   hbo_hbr_path,
+        "psd_panel_path": psd_panel_path, "psd_panel_h": psd_panel_h,
     }
+
+
+def _section_epoch_preview(
+    raw_haemo: mne.io.Raw,
+    subject: str,
+    errors: list,
+    figures_dir: Path,
+    epoch_tmin: float = -5.0,
+    epoch_tmax: float = 25.0,
+) -> dict:
+    epoch_preview_path = None
+    epoch_preview_h = 0
+    with _guard("Epoch preview", errors, subject):
+        fig = build_epoch_preview_figure(raw_haemo, epoch_tmin=epoch_tmin, epoch_tmax=epoch_tmax)
+        if fig is not None:
+            epoch_preview_path, epoch_preview_h = _save_plotly_html(
+                fig, figures_dir / "epoch_preview.html"
+            )
+    return {"epoch_preview_path": epoch_preview_path, "epoch_preview_h": epoch_preview_h}
 
 
 def _scalars_to_toml(data: dict) -> str:
@@ -662,6 +787,8 @@ def build_subject_report(
     figures_dir = out_path.parent / "figures"
 
     od_vars           = _section_od(raw_long, subject, errors, figures_dir)
+    raw_viewer_vars   = _section_raw_viewer(raw_intensity, bad_channels, sci_scores,
+                                            subject, errors, figures_dir)
     sci_vars          = _section_sci(
                             raw_intensity, sci_scores, bad_channels, config,
                             sci_scores_matrix, sci_win_times,
@@ -670,12 +797,17 @@ def build_subject_report(
     motion_vars       = _section_motion(
                             raw_long, sci_scores, config, segments, subject, errors,
                             figures_dir, raw_before_motion=raw_before_motion)
+    motion_det_vars   = _section_motion_detail(raw_long, raw_before_motion, subject, errors, figures_dir)
     haemo_vars        = _section_haemo(raw_haemo, config, subject, errors, figures_dir,
                                        l_freq=l_freq, h_freq=h_freq)
+    channel_det_vars  = _section_channel_detail(raw_haemo, subject, errors, figures_dir)
+    psd_det_vars      = _section_psd_detail(raw_haemo, subject, errors, figures_dir,
+                                            l_freq=l_freq, h_freq=h_freq)
     brain_vars        = _section_brain(
                             sci_scores, bad_channels, coords_head, good_mask, raw_intensity,
                             subject, errors, figures_dir, ch_names_brain=ch_names_brain)
     short_ch_vars     = _section_short_channel(raw_intensity, subject, errors, figures_dir)
+    epoch_vars        = _section_epoch_preview(raw_haemo, subject, errors, figures_dir)
     glm_vars          = _section_glm(design_matrix, glm_est, raw_haemo, subject, errors, figures_dir, segments=segments)
     iqm_vars          = _section_iqm(raw_long, raw_haemo, sci_scores, bad_channels, subject, errors,
                                      out_dir=out_path.parent / "nirs")
@@ -707,12 +839,17 @@ def build_subject_report(
         errors=errors,
         methods=generate_methods_text(config, versions=versions),
         **od_vars,
+        **raw_viewer_vars,
         **sci_vars,
         **motion_vars,
+        **motion_det_vars,
         **haemo_vars,
+        **channel_det_vars,
+        **psd_det_vars,
         **iqm_vars,
         **brain_vars,
         **short_ch_vars,
+        **epoch_vars,
         **glm_vars,
     )
     out_path.parent.mkdir(parents=True, exist_ok=True)

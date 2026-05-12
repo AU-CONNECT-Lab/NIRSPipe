@@ -117,6 +117,13 @@
     /* ---- plotly figures ---- */
     .plotly-fig { margin-top: 0.5rem; overflow: hidden; }
 
+    /* ---- channel / detail selectors ---- */
+    .ch-select {
+      font-size: 0.82rem; border: 1px solid #ced4da; border-radius: 4px;
+      padding: 0.2rem 0.5rem; background: #f8f9fa;
+      margin: 0.6rem 0 0.3rem; display: block;
+    }
+
     /* ---- two-column panel grid (e.g. heatmap + optode) ---- */
     .panel-grid-2 {
       display: grid; grid-template-columns: 2fr 1fr; gap: 0.75rem; margin-top: 0.75rem;
@@ -174,9 +181,11 @@
   <a href="#Final">Summary</a>
   <a href="#Metrics">Metrics</a>
   <span class="nav-sep">|</span>
-  <a href="#Signal">Signal</a>
+  <a href="#RawSignal">Raw Signal</a>
+  <a href="#Signal">SCI/PSP</a>
   <a href="#Motion">Motion</a>
   <a href="#HbO_HbR">HbO/HbR</a>
+  <a href="#Epoch">Epoch</a>
   {% if glm_design_path or glm_activation_path %}<a href="#GLM">GLM</a>{% endif %}
   <span class="nav-sep">|</span>
   <a href="#Methods">Methods</a>
@@ -222,34 +231,31 @@
 <!-- ======================================================= preprocessing -->
 <h2>Preprocessing</h2>
 
-<!-- step a: OD conversion -->
-<details open>
-  <summary>a. OD Conversion</summary>
+<!-- step a: Raw Signal -->
+<details id="RawSignal" open>
+  <summary>a. Raw Signal</summary>
   <div class="details-body">
     <p class="step-desc">
-      Raw intensity signals were converted to optical density (OD).
-      Long channels only (source-detector distance &gt; 1&thinsp;cm).
+      Per-channel HbO/HbR timeseries, PSD, and epoch-averaged response.
     </p>
-    <div class="fig-row">
-      <div>
-        <h3>Raw intensity traces</h3>
-        {% if od_traces_path %}
-          <img src="{{ od_traces_path }}" alt="Raw intensity traces" />
-          <p class="fig-path">{{ od_traces_path }}</p>
-        {% else %}
-          <div class="placeholder">Figure generation failed — see Errors section.</div>
-        {% endif %}
-      </div>
-      <div>
-        <h3>Power spectral density (0&ndash;2&thinsp;Hz)</h3>
-        {% if od_psd_path %}
-          <img src="{{ od_psd_path }}" alt="OD PSD" />
-          <p class="fig-path">{{ od_psd_path }}</p>
-        {% else %}
-          <div class="placeholder">Figure generation failed — see Errors section.</div>
-        {% endif %}
-      </div>
-    </div>
+
+    {% if channel_pairs %}
+    <h3>Per-channel HbO / HbR &amp; PSD &amp; Epoch</h3>
+    <p style="font-size:0.82rem;color:#666;margin:0 0 0.3rem;">
+      Select a channel to view its HbO/HbR timeseries, PSD, and epoch-averaged response.
+    </p>
+    <select class="ch-select"
+            onchange="document.getElementById('ch-det-frame').src=this.value">
+      {% for ch in channel_pairs %}
+      <option value="{{ ch.path }}">{{ ch.pair }}</option>
+      {% endfor %}
+    </select>
+    <iframe id="ch-det-frame" class="plotly-frame"
+            src="{{ channel_pairs[0].path }}"
+            style="height:{{ channel_pairs[0].h + 20 }}px;"></iframe>
+    {% else %}
+    <div class="placeholder">Channel detail not available.</div>
+    {% endif %}
   </div>
 </details>
 
@@ -263,45 +269,21 @@
       Action on bad channels: <strong>{{ config.bad_channel_action }}</strong>.
     </p>
 
-    <h3>SCI</h3>
-    {% if sci_panel_path %}
-      <iframe class="plotly-frame" src="{{ sci_panel_path }}" title="SCI panel" style="height:{{ sci_panel_h }}px"></iframe>
-      <p class="fig-path">{{ sci_panel_path }}</p>
-      {% if brain_views_path %}
-        <h3>Channel quality — 3D &amp; optode map</h3>
-        <p style="font-size:0.82rem; color:#666; margin:0 0 0.3rem;">Green = good, red = below threshold.</p>
-        <img class="responsive" src="{{ brain_views_path }}" alt="Brain views + optode" />
-        <p class="fig-path">{{ brain_views_path }}</p>
-      {% endif %}
-      {% if sci_quality_path %}
-        <iframe class="plotly-frame" src="{{ sci_quality_path }}" title="SCI per segment" style="height:{{ sci_quality_h }}px"></iframe>
-        <p class="fig-path">{{ sci_quality_path }}</p>
-      {% endif %}
+    {% if sci_psp_panel_path %}
+      <iframe class="plotly-frame" src="{{ sci_psp_panel_path }}" title="SCI/PSP panel"
+              style="height:{{ sci_psp_panel_h }}px"></iframe>
+      <p class="fig-path">{{ sci_psp_panel_path }}</p>
     {% else %}
-      <div class="placeholder">SCI panel not available — pass sci_scores_matrix and sci_win_times to build_subject_report.</div>
+      <div class="placeholder">SCI/PSP panel not available.</div>
     {% endif %}
 
-    <h3>PSP</h3>
-    {% if psp_panel_path %}
-      <iframe class="plotly-frame" src="{{ psp_panel_path }}" title="PSP panel" style="height:{{ psp_panel_h }}px"></iframe>
-      <p class="fig-path">{{ psp_panel_path }}</p>
-      {% if psp_heatmap_path %}
-        <iframe class="plotly-frame" src="{{ psp_heatmap_path }}" title="PSP heatmap" style="height:{{ psp_heatmap_h }}px; margin-top:0.5rem;"></iframe>
-        <p class="fig-path">{{ psp_heatmap_path }}</p>
-      {% endif %}
-    {% else %}
-      <div class="placeholder">PSP data not available — pass <code>psp_scores_matrix</code> and <code>psp_win_times</code> to <code>build_subject_report</code>.</div>
+    {% if brain_views_path %}
+      <h3>Channel quality — 3D &amp; optode map</h3>
+      <p style="font-size:0.82rem; color:#666; margin:0 0 0.3rem;">Green = good, red = below threshold.</p>
+      <img class="responsive" src="{{ brain_views_path }}" alt="Brain views + optode" />
+      <p class="fig-path">{{ brain_views_path }}</p>
     {% endif %}
 
-    {% if short_channel_path %}
-    <h3>Short-channel PSD</h3>
-    <p class="step-desc">
-      PSD of short-separation channels (&lt; 1&thinsp;cm) overlaid on long-channel PSDs.
-      A prominent cardiac peak in short channels indicates effective regression is possible.
-    </p>
-    <img class="responsive" src="{{ short_channel_path }}" alt="Short-channel PSD" />
-    <p class="fig-path">{{ short_channel_path }}</p>
-    {% endif %}
   </div>
 </details>
 
@@ -329,6 +311,22 @@
       <img src="{{ bad_segment_zoom_path }}" alt="Bad segment zoom" />
       <p class="fig-path">{{ bad_segment_zoom_path }}</p>
     {% endif %}
+
+    {% if motion_detail_pairs %}
+    <h3>Per-channel before / after motion correction</h3>
+    <p style="font-size:0.82rem;color:#666;margin:0 0 0.3rem;">
+      Select a channel to compare the OD signal before and after motion correction.
+    </p>
+    <select class="ch-select"
+            onchange="document.getElementById('mot-det-frame').src=this.value">
+      {% for ch in motion_detail_pairs %}
+      <option value="{{ ch.path }}">{{ ch.pair }}</option>
+      {% endfor %}
+    </select>
+    <iframe id="mot-det-frame" class="plotly-frame"
+            src="{{ motion_detail_pairs[0].path }}"
+            style="height:{{ motion_detail_pairs[0].h + 20 }}px;"></iframe>
+    {% endif %}
   </div>
 </details>
 
@@ -339,27 +337,6 @@
     <p class="step-desc">
       Modified Beer-Lambert law applied with DPF = {{ config.dpf | join(', ') }}.
     </p>
-    <div class="fig-row">
-      <div>
-        <h3>HbO / HbR traces</h3>
-        {% if haemo_traces_path %}
-          <img src="{{ haemo_traces_path }}" alt="HbO/HbR traces" />
-          <p class="fig-path">{{ haemo_traces_path }}</p>
-        {% else %}
-          <div class="placeholder">Figure generation failed — see Errors section.</div>
-        {% endif %}
-      </div>
-      <div>
-        <h3>Power spectral density (0&ndash;2&thinsp;Hz)</h3>
-        {% if haemo_psd_path %}
-          <img src="{{ haemo_psd_path }}" alt="HbO/HbR PSD" />
-          <p class="fig-path">{{ haemo_psd_path }}</p>
-        {% else %}
-          <div class="placeholder">Figure generation failed — see Errors section.</div>
-        {% endif %}
-      </div>
-    </div>
-
     <h3>HbO–HbR Correlation</h3>
     {% if hbo_hbr_path %}
       <img class="responsive" src="{{ hbo_hbr_path }}" alt="HbO–HbR correlation panel" />
@@ -384,6 +361,39 @@
       <p class="fig-path">{{ psd_panel_path }}</p>
     {% else %}
       <div class="placeholder">Figure generation failed — see Errors section.</div>
+    {% endif %}
+
+    {% if psd_detail_pairs %}
+    <h3>Per-channel PSD (before / after bandpass)</h3>
+    <p style="font-size:0.82rem;color:#666;margin:0 0 0.3rem;">
+      Select a channel to compare its PSD before and after bandpass filtering.
+    </p>
+    <select class="ch-select"
+            onchange="document.getElementById('psd-det-frame').src=this.value">
+      {% for ch in psd_detail_pairs %}
+      <option value="{{ ch.path }}">{{ ch.pair }}</option>
+      {% endfor %}
+    </select>
+    <iframe id="psd-det-frame" class="plotly-frame"
+            src="{{ psd_detail_pairs[0].path }}"
+            style="height:{{ psd_detail_pairs[0].h + 20 }}px;"></iframe>
+    {% endif %}
+  </div>
+</details>
+
+<!-- step f: Epoch / HRF preview -->
+<details id="Epoch" open>
+  <summary>f. Epoch / HRF Preview (grand mean)</summary>
+  <div class="details-body">
+    <p class="step-desc">
+      Grand-mean HbO and HbR responses averaged across good channels, baseline-corrected
+      to the pre-stimulus window (−5 to 0&thinsp;s). Each condition is shown separately.
+    </p>
+    {% if epoch_preview_path %}
+      <iframe class="plotly-frame" src="{{ epoch_preview_path }}" title="Epoch preview" style="height:{{ epoch_preview_h }}px"></iframe>
+      <p class="fig-path">{{ epoch_preview_path }}</p>
+    {% else %}
+      <div class="placeholder">No stimulus events found — epoch preview not available.</div>
     {% endif %}
   </div>
 </details>

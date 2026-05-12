@@ -206,7 +206,19 @@ select#run-select {
   </div>
 </div>
 
-<!-- Row 3: 2D layout + 3D brain -->
+<!-- Row 3: PSD + Epoch -->
+<div class="row row-psd-ep">
+  <div class="card">
+    <div class="panel-title">PSD &nbsp;<span style="font-weight:400;color:#aaa" id="psd-subtitle">mean across channels (OD)</span></div>
+    <div id="psd-plot"></div>
+  </div>
+  <div class="card">
+    <div class="panel-title">Epoch preview &nbsp;<span style="font-weight:400;color:#aaa" id="epoch-subtitle">select a channel to view</span></div>
+    <div id="epoch-plot"></div>
+  </div>
+</div>
+
+<!-- Row 4: 2D layout + 3D brain -->
 <div class="row row-layout">
   <div class="card">
     <div class="panel-title">Optode layout (2D top-down) &nbsp;<span style="font-weight:400;color:#aaa">colour = SCI &bull; click = highlight &bull; dbl-click = mark bad</span></div>
@@ -218,15 +230,11 @@ select#run-select {
   </div>
 </div>
 
-<!-- Row 4: PSD + Epoch -->
-<div class="row row-psd-ep">
+<!-- Row 5: SCI / PSP -->
+<div class="row" style="margin-bottom:0.5rem;">
   <div class="card">
-    <div class="panel-title">PSD &nbsp;<span style="font-weight:400;color:#aaa" id="psd-subtitle">mean across channels (OD)</span></div>
-    <div id="psd-plot"></div>
-  </div>
-  <div class="card">
-    <div class="panel-title">Epoch preview &nbsp;<span style="font-weight:400;color:#aaa" id="epoch-subtitle">select a channel to view</span></div>
-    <div id="epoch-plot"></div>
+    <div class="panel-title">SCI / PSP &nbsp;<span style="font-weight:400;color:#aaa">scalp coupling index and peak spectral power per channel &bull; red = below threshold</span></div>
+    <div id="sci-psp-plot"></div>
   </div>
 </div>
 
@@ -283,6 +291,7 @@ window.addEventListener("DOMContentLoaded", function() {
   loadTimeSeries();
   loadLayout();
   loadPsdMean();
+  loadSciPsp();
   loadIqm();
 });
 
@@ -412,6 +421,15 @@ function selectChannel(pair) {
 
   highlightOptode2D(pair);
   highlightOptode3D(pair);
+}
+
+// ─── SCI / PSP ────────────────────────────────────────────────────────────────
+function loadSciPsp() {
+  fetch("/api/sci_psp_figure").then(r => r.json()).then(function(d) {
+    if (d.figure)
+      Plotly.newPlot("sci-psp-plot", d.figure.data, d.figure.layout,
+                     { responsive: true, displayModeBar: false });
+  });
 }
 
 // ─── PSD (mean, before channel selected) ─────────────────────────────────────
@@ -671,6 +689,7 @@ function switchRun(idx) {
     loadTimeSeries();
     loadLayout();
     loadPsdMean();
+    loadSciPsp();
     loadIqm();
   });
 }

@@ -30,6 +30,7 @@ from fnirs_pipe.qc.figures import (
     build_channel_figure,
     build_layout_figure,
     build_psd_mean_figure,
+    build_sci_psp_figure,
     build_ts_figure,
     condition_colors,
 )
@@ -49,6 +50,10 @@ _raw_haemo: mne.io.Raw | None = None
 _markers: list[dict] = []
 _bad_channels: set[str] = set()
 _sci_scores: dict[str, float] = {}
+_sci_matrix: Any = None
+_sci_win_times: Any = None
+_psp_matrix: Any = None
+_psp_win_times: Any = None
 _iqm: dict[str, Any] = {}
 _runs: list[dict] = []
 _run_idx: int = 0
@@ -67,6 +72,7 @@ _EPOCH_TMAX = 25.0
 
 def _load_run(run_idx: int) -> None:
     global _raw, _raw_haemo, _markers, _sci_scores, _iqm, _run_idx, _bad_channels
+    global _sci_matrix, _sci_win_times, _psp_matrix, _psp_win_times
 
     _run_idx = run_idx
     run = _runs[run_idx]
@@ -84,6 +90,14 @@ def _load_run(run_idx: int) -> None:
         _sci_scores = {ch: 1.0 for ch in raw.ch_names}
 
     bad = [ch for ch, s in _sci_scores.items() if s < _SCI_THRESHOLD]
+
+    try:
+        from fnirs_pipe.pipeline.prep_pipeline import compute_windowed_sci, compute_windowed_psp
+        _sci_matrix, _sci_win_times = compute_windowed_sci(raw_od_sci)
+        _psp_matrix, _psp_win_times = compute_windowed_psp(raw_od_sci)
+    except Exception as exc:
+        logger.warning("windowed SCI/PSP failed: %s", exc)
+        _sci_matrix = _sci_win_times = _psp_matrix = _psp_win_times = None
 
     try:
         _iqm = compute_raw_iqm(raw, _sci_scores, bad)
@@ -184,6 +198,19 @@ def api_layout_figure():
         "layout_2d_figure": fig_2d.to_dict() if fig_2d else None,
         "layout_3d_figure": fig_3d.to_dict() if fig_3d else None,
     })
+
+
+@app.route("/api/sci_psp_figure")
+def api_sci_psp_figure():
+    if _raw is None:
+        return jsonify({"error": "no data loaded"}), 503
+    psp_per_ch = _iqm.get("psp_per_channel", {})
+    fig = build_sci_psp_figure(
+        _sci_scores, psp_per_ch, _bad_channels, _SCI_THRESHOLD,
+        sci_matrix=_sci_matrix, sci_win_times=_sci_win_times,
+        psp_matrix=_psp_matrix, psp_win_times=_psp_win_times,
+    )
+    return jsonify({"figure": fig.to_dict()})
 
 
 @app.route("/api/psd_mean_figure")

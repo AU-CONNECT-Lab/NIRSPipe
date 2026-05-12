@@ -5,6 +5,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from fnirs_pipe.exceptions import MissingDerivativesError
+
 
 def build_output_path(
     output_dir: Path,
@@ -62,6 +64,26 @@ def write_sidecar_json(out_path: Path, provenance: dict[str, Any]) -> None:
     sidecar_path = out_path.with_suffix(".json")
     sidecar_path.write_text(json.dumps(provenance, indent=2))
 
+
+
+def find_preproc_snirf(output_dir: Path, subject_id: str, task: str) -> Path:
+    """Locate the desc-preproc snirf for *subject_id* under *output_dir*.
+
+    Raises MissingDerivativesError if the derivatives directory or file is absent.
+    """
+    nirs_dir = output_dir / subject_id / "nirs"
+    if not nirs_dir.exists():
+        raise MissingDerivativesError(f"Derivatives directory not found: {nirs_dir}")
+
+    candidates = sorted(nirs_dir.glob(f"{subject_id}_task-{task}_*desc-preproc_nirs.snirf"))
+    if not candidates:
+        candidates = sorted(nirs_dir.glob(f"{subject_id}_*desc-preproc_nirs.snirf"))
+    if not candidates:
+        raise MissingDerivativesError(
+            f"No desc-preproc snirf found for {subject_id} (task={task}) in {nirs_dir}. "
+            "Run fnirs-pipe preprocessing first."
+        )
+    return candidates[0]
 
 
 def write_dataset_description(output_dir: Path) -> None:
