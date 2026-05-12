@@ -1,4 +1,4 @@
-"""fnirs-hyper CLI — hyperscanning group QC."""
+"""fnirs-qc CLI — quality control for fNIRS data."""
 
 from __future__ import annotations
 
@@ -10,16 +10,62 @@ import typer
 from fnirs_pipe.utils.logging import get_logger
 
 app = typer.Typer(
-    name="fnirs-hyper",
-    help="Hyperscanning QC: alignment, channel quality, and inter-brain coherence.",
+    name="fnirs-qc",
+    help="fNIRS quality control: interactive viewer and group-level reports.",
     pretty_exceptions_show_locals=False,
 )
 
-logger = get_logger("cli.hyper")
+logger = get_logger("cli.qc")
 
 
 @app.command()
-def run(
+def prep_raw(
+    bids_dir: Annotated[Path, typer.Argument(help="BIDS dataset root")],
+    output_dir: Annotated[Path, typer.Argument(help="fnirs-pipe derivatives directory")],
+    participant_label: Annotated[str, typer.Argument(help="Subject ID to inspect, e.g. '01'")],
+    session_label: Annotated[Optional[list[str]], typer.Option("--session-label", help="Session label(s) to include.")] = None,
+    task_label: Annotated[Optional[list[str]], typer.Option("--task-label", help="Task label(s) to include.")] = None,
+    skip_bids_validation: Annotated[bool, typer.Option("--skip-bids-validation/--no-skip-bids-validation")] = False,
+) -> None:
+    """Launch interactive raw QC viewer for a single participant."""
+    from fnirs_pipe.io.bids import get_layout, get_nirs_files
+    from fnirs_pipe.qc.app import launch
+
+    layout = get_layout(bids_dir, validate=not skip_bids_validation)
+    sessions = session_label or [None]
+    tasks    = task_label    or [None]
+
+    runs = []
+    for session in sessions:
+        for task in tasks:
+            files = get_nirs_files(layout, subject=participant_label, session=session, task=task)
+            for f in files:
+                entities = layout.parse_file_entities(str(f))
+                parts = [f"sub-{participant_label}"]
+                if entities.get("session"): parts.append(f"ses-{entities['session']}")
+                if entities.get("task"):    parts.append(f"task-{entities['task']}")
+                if entities.get("run"):     parts.append(f"run-{entities['run']}")
+                label = "_".join(parts)
+
+                snirf_p = Path(f)
+                events_p = snirf_p.parent / (snirf_p.name.replace("_nirs.snirf", "_events.tsv"))
+                runs.append({
+                    "label":       label,
+                    "snirf_path":  str(f),
+                    "events_path": str(events_p) if events_p.exists() else None,
+                })
+
+    if not runs:
+        typer.echo(f"Error: no SNIRF files found for sub-{participant_label}.", err=True)
+        raise typer.Exit(1)
+
+    typer.echo(f"Launching QC viewer for sub-{participant_label} ({len(runs)} run(s)) ...")
+    out_dir = output_dir / f"sub-{participant_label}" / "nirs"
+    launch(runs, out_dir)
+
+
+@app.command()
+def hyper_raw(
     bids_dir: Annotated[Path, typer.Argument(help="BIDS dataset root")],
     output_dir: Annotated[Path, typer.Argument(help="fnirs-pipe derivatives directory")],
     pairs_csv: Annotated[Path, typer.Option("--pairs-csv", help=(
@@ -27,10 +73,10 @@ def run(
         "Each unique (group_id, task) pair is processed as one session."
     ))],
     group_id: Annotated[Optional[str], typer.Option("--group-id", help=(
-        "Process only this group_id (all tasks). Omit to process all groups."
+        "Process only this group_id. Omit to process all groups."
     ))] = None,
     sci_threshold: Annotated[float, typer.Option("--sci-threshold", help=(
-        "SCI pass/fail threshold for channel usability heatmap."
+        "SCI pass/fail threshold for channel quality comparison."
     ))] = 0.80,
     coherence_fmin: Annotated[float, typer.Option("--fmin", help=(
         "Lower bound (Hz) for coherence frequency band."
@@ -38,7 +84,11 @@ def run(
     coherence_fmax: Annotated[float, typer.Option("--fmax", help=(
         "Upper bound (Hz) for coherence frequency band."
     ))] = 0.10,
+    session_label: Annotated[Optional[list[str]], typer.Option("--session-label", help="Session label(s) to include.")] = None,
+    task_label: Annotated[Optional[list[str]], typer.Option("--task-label", help="Task label(s) to include.")] = None,
+    skip_bids_validation: Annotated[bool, typer.Option("--skip-bids-validation/--no-skip-bids-validation")] = False,
 ) -> None:
+    """Generate hyperscanning raw QC report (BIDS derivatives)."""
     from fnirs_pipe.exceptions import AlignmentError, GroupCSVError, MissingDerivativesError
     from fnirs_pipe.qc.hyperscanning.align import align_recordings
     from fnirs_pipe.qc.hyperscanning.io import load_group_haemo, load_group_iqm, parse_group_csv
@@ -63,7 +113,7 @@ def run(
     n_ok = n_fail = 0
     for (gid, task), members in groups.items():
         label = f"{gid}/{task}"
-        typer.echo(f"  → {label} ({len(members)} subjects)")
+        typer.echo(f"  -> {label} ({len(members)} subjects)")
         try:
             iqm_data = load_group_iqm(output_dir, members)
             raws = load_group_haemo(output_dir, members)
@@ -84,7 +134,7 @@ def run(
                 coherence_fmin=coherence_fmin,
                 coherence_fmax=coherence_fmax,
             )
-            typer.echo(f"     report → {report_path}")
+            typer.echo(f"     report -> {report_path}")
             n_ok += 1
         except MissingDerivativesError as exc:
             typer.echo(f"     [skip] {exc}", err=True)

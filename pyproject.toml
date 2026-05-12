@@ -38,7 +38,7 @@ dev = [
 fnirs-pipe  = "fnirs_pipe.cli.run:app"
 fnirs-recon = "fnirs_pipe.cli.recon:app"
 fnirs-rate  = "fnirs_pipe.cli.rate:app"
-fnirs-hyper = "fnirs_pipe.cli.hyper:app"
+fnirs-qc    = "fnirs_pipe.cli.qc:app"
 
 [tool.setuptools.packages.find]
 where = ["."]
