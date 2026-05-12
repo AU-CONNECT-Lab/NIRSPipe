@@ -115,10 +115,14 @@ def hyper_raw(
 ) -> None:
     """Generate hyperscanning raw QC report (BIDS derivatives)."""
     from fnirs_pipe.exceptions import AlignmentError, GroupCSVError, MissingDerivativesError
-    from fnirs_pipe.qc.hyperscanning.align import align_recordings
-    from fnirs_pipe.qc.hyperscanning.io import load_group_haemo, load_group_iqm, parse_group_csv
-    from fnirs_pipe.qc.hyperscanning.metrics import compute_pairwise_coherence
-    from fnirs_pipe.qc.hyperscanning.report import build_hyper_report
+    from fnirs_pipe.pipeline.hyperscanning import (
+        align_recordings,
+        compute_pairwise_coherence,
+        load_group_haemo,
+        load_group_iqm,
+        parse_group_csv,
+    )
+    from fnirs_pipe.qc.hyper_report import build_hyper_report
 
     try:
         groups = parse_group_csv(pairs_csv)

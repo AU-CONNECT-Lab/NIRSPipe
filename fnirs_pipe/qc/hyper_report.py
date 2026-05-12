@@ -1,3 +1,5 @@
+"""Generate hyperscanning group-level raw QC report."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -5,7 +7,7 @@ from pathlib import Path
 import mne
 import pandas as pd
 
-from fnirs_pipe.qc.hyperscanning.io import GroupEntry
+from fnirs_pipe.pipeline.hyperscanning import GroupEntry
 
 
 def build_hyper_report(
@@ -17,7 +19,7 @@ def build_hyper_report(
     offsets: dict[str, float],
     coherence_df: pd.DataFrame,
     output_dir: Path,
-    sci_threshold: float = 0.75,
+    sci_threshold: float = 0.8,
     coherence_fmin: float = 0.01,
     coherence_fmax: float = 0.10,
 ) -> Path:
