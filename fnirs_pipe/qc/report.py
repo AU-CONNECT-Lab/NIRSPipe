@@ -67,6 +67,7 @@ from fnirs_pipe.qc.figures import (
     build_sci_psp_figure,
     build_channel_figure,
     build_motion_detail_figure,
+    channel_quality_heatmap,
 )
 from fnirs_pipe.qc.quantitative_metrics import compute_iqm
 from fnirs_pipe.utils.logging import get_logger
@@ -462,6 +463,30 @@ def _section_iqm(
     return {"iqm": iqm, "channel_rows": channel_rows}
 
 
+def _section_channel_summary(
+    channel_rows: list,
+    iqm: dict,
+    subject: str,
+    errors: list,
+    figures_dir: Path,
+    sci_thresh: float = 0.75,
+) -> dict:
+    path, h = None, 0
+    with _guard("Channel quality summary", errors, subject):
+        ch_names = [r["name"] for r in channel_rows]
+        is_bad   = [r["is_bad"] for r in channel_rows]
+        sci_pc   = {r["name"]: r["sci"] for r in channel_rows if r["sci"] is not None}
+        cv_pc    = {r["name"]: r["cv"]  for r in channel_rows if r["cv"]  is not None}
+        snr_pc   = {r["name"]: r["snr"] for r in channel_rows if r["snr"] is not None}
+        psp_pc   = iqm.get("psp_per_channel", {})
+        fig = channel_quality_heatmap(
+            ch_names, is_bad, sci_pc, cv_pc, snr_pc, psp_pc,
+            sci_thresh=sci_thresh,
+        )
+        path, h = _save_plotly_html(fig, figures_dir / "channel_summary.html")
+    return {"channel_summary_path": path, "channel_summary_h": h}
+
+
 def _section_brain(
     sci_scores: dict,
     bad_channels: list,
@@ -671,7 +696,9 @@ def build_subject_report(
     glm_vars          = _section_glm(design_matrix, glm_est, raw_haemo, subject, errors, figures_dir, segments=segments)
     iqm_vars          = _section_iqm(raw_long, raw_haemo, sci_scores, bad_channels, subject, errors,
                                      out_dir=out_path.parent / "nirs")
-
+    ch_summary_vars   = _section_channel_summary(
+                            iqm_vars["channel_rows"], iqm_vars["iqm"], subject, errors, figures_dir,
+                            sci_thresh=getattr(config, "sci_threshold", 0.75))
 
     n_bad    = len(bad_channels)
     n_total  = len(sci_scores)
@@ -710,6 +737,7 @@ def build_subject_report(
 
         **epoch_vars,
         **glm_vars,
+        **ch_summary_vars,
     )
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(html, encoding="utf-8")

@@ -247,6 +247,12 @@ select#run-select {
   </div>
 </div>
 
+<!-- Row 6: Channel quality summary heatmap -->
+<div class="card" style="margin-bottom:0.5rem">
+  <div class="panel-title">Channel Quality Summary &nbsp;<span style="font-weight:400;color:#aaa">Status / SCI / CV / PSP / SNR per channel &bull; green&nbsp;=&nbsp;pass, red&nbsp;=&nbsp;fail</span></div>
+  <div id="ch-summary-plot"></div>
+</div>
+
 <script>
 // ─── state ───────────────────────────────────────────────────────────────────
 var _markers    = [];   // [{onset, duration, description, color}]
@@ -293,6 +299,7 @@ window.addEventListener("DOMContentLoaded", function() {
   loadPsdMean();
   loadSciPsp();
   loadIqm();
+  loadChannelSummary();
 });
 
 // ─── time series ─────────────────────────────────────────────────────────────
@@ -421,6 +428,15 @@ function selectChannel(pair) {
 
   highlightOptode2D(pair);
   highlightOptode3D(pair);
+}
+
+// ─── Channel quality summary ──────────────────────────────────────────────────
+function loadChannelSummary() {
+  fetch("/api/channel_summary_figure").then(r => r.json()).then(function(d) {
+    if (d.figure)
+      Plotly.newPlot("ch-summary-plot", d.figure.data, d.figure.layout,
+                     { responsive: true, displayModeBar: false });
+  });
 }
 
 // ─── SCI / PSP ────────────────────────────────────────────────────────────────
@@ -691,6 +707,7 @@ function switchRun(idx) {
     loadPsdMean();
     loadSciPsp();
     loadIqm();
+    loadChannelSummary();
   });
 }
 

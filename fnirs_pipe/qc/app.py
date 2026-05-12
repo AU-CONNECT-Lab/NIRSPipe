@@ -33,6 +33,7 @@ from fnirs_pipe.qc.figures import (
     build_sci_psp_figure,
     build_ts_figure,
     condition_colors,
+    channel_quality_heatmap,
 )
 from fnirs_pipe.qc.quantitative_metrics import compute_raw_iqm
 from fnirs_pipe.utils.logging import get_logger
@@ -209,6 +210,23 @@ def api_sci_psp_figure():
         _sci_scores, psp_per_ch, _bad_channels, _SCI_THRESHOLD,
         sci_matrix=_sci_matrix, sci_win_times=_sci_win_times,
         psp_matrix=_psp_matrix, psp_win_times=_psp_win_times,
+    )
+    return jsonify({"figure": fig.to_dict()})
+
+
+@app.route("/api/channel_summary_figure")
+def api_channel_summary_figure():
+    if _raw is None:
+        return jsonify({"error": "no data loaded"}), 503
+    ch_names = list(_sci_scores.keys())
+    is_bad   = [ch in _bad_channels for ch in ch_names]
+    fig = channel_quality_heatmap(
+        ch_names, is_bad,
+        sci_per_ch=_iqm.get("sci_per_channel", _sci_scores),
+        cv_per_ch=_iqm.get("cv_per_channel", {}),
+        snr_per_ch=_iqm.get("snr_per_channel", {}),
+        psp_per_ch=_iqm.get("psp_per_channel", {}),
+        sci_thresh=_SCI_THRESHOLD,
     )
     return jsonify({"figure": fig.to_dict()})
 

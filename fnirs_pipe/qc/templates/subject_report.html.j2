@@ -189,6 +189,7 @@
   {% if glm_design_path or glm_activation_path %}<a href="#GLM">GLM</a>{% endif %}
   <span class="nav-sep">|</span>
   <a href="#Metrics">Metrics</a>
+  {% if channel_summary_path %}<a href="#ChannelSummary">Ch. Summary</a>{% endif %}
   <a href="#Errors">Errors</a>
   <a href="#Methods">Methods</a>
 </nav>
@@ -500,6 +501,20 @@
   </details>
   {% endif %}
 </div>
+
+{% if channel_summary_path %}
+<!-- ===================================================== channel summary -->
+<h2 id="ChannelSummary">Channel Quality Summary</h2>
+<p style="font-size:0.82rem;color:#666;margin:0 0 0.6rem;">
+  Per-channel pass/fail for Status, SCI, CV, PSP, and SNR.
+  Green&nbsp;=&nbsp;pass, red&nbsp;=&nbsp;fail, white&nbsp;=&nbsp;missing data.
+</p>
+<div style="overflow-x:auto;">
+  <iframe src="{{ channel_summary_path }}"
+          width="100%" height="{{ channel_summary_h + 20 }}px"
+          style="border:none;min-width:500px;display:block;"></iframe>
+</div>
+{% endif %}
 
 <!-- =========================================================== errors -->
 <h2 id="Errors">Errors &amp; Warnings</h2>
