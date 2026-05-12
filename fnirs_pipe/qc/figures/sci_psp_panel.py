@@ -8,18 +8,6 @@ _BAD_COLOR  = "#F8786E"
 _MAX_TS_PTS = 3000
 _SPACING    = 3
 
-# translucent fill colors for annotation segments in timeseries_figure
-_SEGMENT_PALETTE = [
-    "rgba(231,76,60,0.20)",
-    "rgba(230,126,34,0.20)",
-    "rgba(155,89,182,0.20)",
-    "rgba(26,188,156,0.20)",
-    "rgba(41,128,185,0.20)",
-    "rgba(243,156,18,0.20)",
-]
-
-
-# Do not delete this function; it may be useful for future pass/fail column in quality_panel.
 def binary_heatmap_figure(
     ch_names: list[str],
     good_mask: np.ndarray,
