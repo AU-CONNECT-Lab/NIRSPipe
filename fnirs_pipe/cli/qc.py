@@ -25,43 +25,68 @@ def prep_raw(
     participant_label: Annotated[str, typer.Argument(help="Subject ID to inspect, e.g. '01'")],
     session_label: Annotated[Optional[list[str]], typer.Option("--session-label", help="Session label(s) to include.")] = None,
     task_label: Annotated[Optional[list[str]], typer.Option("--task-label", help="Task label(s) to include.")] = None,
+    sci_threshold: Annotated[float, typer.Option("--sci-threshold", help="SCI pass/fail threshold for bad channel detection.")] = 0.8,
     skip_bids_validation: Annotated[bool, typer.Option("--skip-bids-validation/--no-skip-bids-validation")] = False,
 ) -> None:
-    """Launch interactive raw QC viewer for a single participant."""
+    """Generate static raw QC report for a single participant."""
+    from collections import defaultdict
+
     from fnirs_pipe.io.bids import get_layout, get_nirs_files
-    from fnirs_pipe.qc.app import launch
+    from fnirs_pipe.qc.prep_raw_report import build_prep_raw_report
 
     layout = get_layout(bids_dir, validate=not skip_bids_validation)
     sessions = session_label or [None]
     tasks    = task_label    or [None]
 
-    runs = []
+    all_runs: list[dict] = []
+    groups: dict[tuple, list[dict]] = defaultdict(list)
+
     for session in sessions:
         for task in tasks:
             files = get_nirs_files(layout, subject=participant_label, session=session, task=task)
             for f in files:
                 entities = layout.parse_file_entities(str(f))
+                actual_ses = entities.get("session")
+                actual_task = entities.get("task")
+                actual_run = entities.get("run")
+
                 parts = [f"sub-{participant_label}"]
-                if entities.get("session"): parts.append(f"ses-{entities['session']}")
-                if entities.get("task"):    parts.append(f"task-{entities['task']}")
-                if entities.get("run"):     parts.append(f"run-{entities['run']}")
+                if actual_ses:  parts.append(f"ses-{actual_ses}")
+                if actual_task: parts.append(f"task-{actual_task}")
+                if actual_run:  parts.append(f"run-{actual_run}")
                 label = "_".join(parts)
 
                 snirf_p = Path(f)
                 events_p = snirf_p.parent / (snirf_p.name.replace("_nirs.snirf", "_events.tsv"))
-                runs.append({
+                run_dict = {
                     "label":       label,
                     "snirf_path":  str(f),
                     "events_path": str(events_p) if events_p.exists() else None,
-                })
+                    "session":     actual_ses,
+                    "task":        actual_task,
+                }
+                all_runs.append(run_dict)
+                groups[(actual_ses, actual_task)].append(run_dict)
 
-    if not runs:
+    if not all_runs:
         typer.echo(f"Error: no SNIRF files found for sub-{participant_label}.", err=True)
         raise typer.Exit(1)
 
-    typer.echo(f"Launching QC viewer for sub-{participant_label} ({len(runs)} run(s)) ...")
-    out_dir = output_dir / f"sub-{participant_label}" / "nirs"
-    launch(runs, out_dir)
+    # Generate one HTML per (session, task) group before launching viewer
+    for (ses, task), group_runs in groups.items():
+        name_parts = [f"sub-{participant_label}"]
+        if ses:  name_parts.append(f"ses-{ses}")
+        if task: name_parts.append(f"task-{task}")
+        html_path = output_dir / ("_".join(name_parts) + "_raw.html")
+        typer.echo(f"Generating raw QC report: {html_path.name} ...")
+        try:
+            build_prep_raw_report(group_runs, html_path, sci_threshold=sci_threshold)
+            typer.echo(f"  -> {html_path}")
+        except Exception as exc:
+            logger.exception("Raw report generation failed for %s", html_path.name)
+            typer.echo(f"  [error] {exc}", err=True)
+
+    typer.echo(f"Done. {len(all_runs)} run(s) processed.")
 
 
 @app.command()

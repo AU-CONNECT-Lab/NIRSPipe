@@ -149,8 +149,13 @@ def _load_run(run_idx: int) -> None:
 
 @app.route("/")
 def index():
+    import json
     run_labels = [r["label"] for r in _runs]
-    return render_template("raw_viewer.html", run_labels=run_labels, run_idx=_run_idx)
+    return render_template(
+        "raw_viewer.html",
+        data_json="null",
+        run_labels_json=json.dumps(run_labels),
+    )
 
 
 @app.route("/api/ts_figure")

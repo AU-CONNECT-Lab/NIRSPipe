@@ -104,7 +104,7 @@ def build_ts_figure(
         std = float(np.std(arr))
         normed = ((arr - arr.mean()) / std).tolist() if std > 0 else (arr - arr.mean()).tolist()
         shifted = [v + i * 3 for v in normed]
-        color = "#e74c3c" if ch in bad_channels else (all_colors[pick] if pick < len(all_colors) else "#aaa")
+        color = "#b2bec3" if ch in bad_channels else (all_colors[pick] if pick < len(all_colors) else "#aaa")
         traces.append(go.Scatter(
             x=times_list, y=shifted, name=ch, mode="lines",
             line=dict(width=0.9, color=color),
@@ -321,7 +321,7 @@ def build_layout_figure(
             lines_y += [src[1] * 1000, det[1] * 1000, None]
 
         marker_colors_2d = [
-            "#e74c3c" if n in bad_channels else sci_color(sci_scores.get(n))
+            "#949e9f" if n in bad_channels else sci_color(sci_scores.get(n))
             for n in ch_names
         ]
         fig_2d = go.Figure(
@@ -398,7 +398,7 @@ def build_layout_figure(
             ))
 
         ch_colors_3d = [
-            "#e74c3c" if n in bad_channels else colors[i]
+            "#7f8c8d" if n in bad_channels else colors[i]
             for i, n in enumerate(ch_names)
         ]
         traces_3d += [
