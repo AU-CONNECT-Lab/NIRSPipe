@@ -1,1 +1,305 @@
-{# TODO: hyperscanning QC report template #}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<title>fnirs-pipe Hyper Raw Report — {{ group_id }} / {{ task }}</title>
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 13px; color: #2c3e50;
+  margin: 0; padding: 0.6rem 0.8rem 2rem;
+  background: #f5f7fa;
+}
+h1 { font-size: 1.05rem; margin: 0; }
+
+#qc-nav {
+  position: sticky; top: 0; z-index: 100;
+  background: #fff; border-bottom: 1px solid #dde3ea;
+  padding: 0.4rem 0.8rem;
+  display: flex; align-items: center; gap: 1rem;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.07);
+  margin: -0.6rem -0.8rem 0.6rem;
+  flex-wrap: wrap;
+}
+.nav-meta { font-size: 0.78rem; color: #6c757d; }
+
+.card {
+  background: #fff; border: 1px solid #dde3ea; border-radius: 6px;
+  overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+}
+
+.row { display: grid; gap: 0.5rem; margin-bottom: 0.5rem; }
+.row-2     { grid-template-columns: 1fr 1fr; }
+.row-coh   { grid-template-columns: 1fr 2fr; }
+.row-layout{ grid-template-columns: 1fr 2fr; }
+@media (max-width: 900px) {
+  .row-2, .row-coh, .row-layout { grid-template-columns: 1fr; }
+}
+
+.panel-title {
+  font-size: 0.78rem; font-weight: 600; color: #6c757d;
+  padding: 0.3rem 0.6rem; border-bottom: 1px solid #dde3ea;
+  background: #f8f9fa; display: flex; align-items: center; gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.panel-hint { font-weight: 400; color: #aaa; }
+
+select#ch-select {
+  font-size: 0.78rem; border: 1px solid #ced4da; border-radius: 4px;
+  padding: 0.15rem 0.35rem; background: #fff; margin-left: auto; max-width: 220px;
+}
+
+#align-table { border-collapse: collapse; width: 100%; font-size: 0.82rem; }
+#align-table th, #align-table td {
+  border: 1px solid #dde3ea; padding: 0.28rem 0.55rem; text-align: left;
+}
+#align-table th { background: #f1f3f5; font-weight: 600; }
+#align-table tbody tr:hover { background: #f8f9fa; }
+.align-wrap { padding: 0.5rem 0.8rem; }
+
+#iqm-panel { padding: 0.55rem 1rem 0.65rem; }
+#iqm-panel h3 { margin: 0 0 0.4rem; font-size: 0.88rem; }
+.qm-list { font-size: 0.88rem; column-count: 2; column-gap: 2.5rem;
+           margin: 0; padding: 0; list-style: none; }
+.qm-list li { display: flex; justify-content: space-between; padding: 0.18rem 0;
+              border-bottom: 1px solid #eef0f3; break-inside: avoid; gap: 1rem; }
+.qm-list .ql { color: #666; white-space: nowrap; }
+.qm-list .qv { font-weight: 600; white-space: nowrap; }
+.qm-ok   { color: #27ae60; }
+.qm-warn { color: #e67e22; }
+.qm-bad  { color: #c0392b; }
+</style>
+</head>
+<body>
+
+<nav id="qc-nav">
+  <h1>fnirs&#8209;pipe &nbsp; Hyper Raw Report</h1>
+  <span class="nav-meta">group: <b>{{ group_id }}</b></span>
+  <span class="nav-meta">task: <b>{{ task }}</b></span>
+  <span class="nav-meta">subjects: <b>{{ subject_ids | join(", ") }}</b></span>
+  <span class="nav-meta" style="margin-left:auto">
+    SCI thr: {{ "%.2f"|format(sci_threshold) }} &bull;
+    Coh: {{ "%.3f"|format(coherence_fmin) }}–{{ "%.3f"|format(coherence_fmax) }} Hz
+  </span>
+</nav>
+
+<!-- Alignment table -->
+<div class="card" style="margin-bottom:0.5rem">
+  <div class="panel-title">Time Alignment
+    <span class="panel-hint">crop offset from first shared trigger &bull; all recordings trimmed to shortest</span>
+  </div>
+  <div class="align-wrap">
+    <table id="align-table">
+      <thead><tr><th>Subject</th><th>Offset (s)</th><th>Aligned duration (s)</th></tr></thead>
+      <tbody id="align-tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Trigger timeline -->
+<div class="card" style="margin-bottom:0.5rem">
+  <div class="panel-title">Trigger Timeline
+    <span class="panel-hint">event onsets per subject after alignment &bull; verify sync</span>
+  </div>
+  <div id="trigger-plot"></div>
+</div>
+
+<!-- HbO / HbR signal overlay (full width, channel selector in title) -->
+<div class="card" style="margin-bottom:0.5rem">
+  <div class="panel-title">
+    Signal Overlay
+    <span class="panel-hint">HbO (top) &bull; HbR (bottom) &bull; aligned recordings</span>
+    <select id="ch-select"></select>
+  </div>
+  <div id="trace-plot"></div>
+</div>
+
+<!-- PSD then Epoch -->
+<div class="card" style="margin-bottom:0.5rem">
+  <div class="panel-title">PSD (HbO)
+    <span class="panel-hint" id="psd-hint">select a channel above</span>
+  </div>
+  <div id="psd-plot"></div>
+</div>
+<div class="card" style="margin-bottom:0.5rem">
+  <div class="panel-title">Mean Epoch Comparison
+    <span class="panel-hint" id="epoch-hint">select a channel above &bull; colour = subject &bull; dash = condition</span>
+  </div>
+  <div id="epoch-plot"></div>
+</div>
+
+<!-- Optode layout: 2D + 3D -->
+<div class="row row-layout" style="margin-bottom:0.5rem">
+  <div class="card">
+    <div class="panel-title">Optode Layout (2D)
+      <span class="panel-hint">green = all good &bull; yellow = mixed &bull; gray = all bad</span>
+    </div>
+    <div id="layout-2d-plot"></div>
+  </div>
+  <div class="card">
+    <div class="panel-title">Channel Positions (3D, fsaverage)</div>
+    <div id="layout-3d-plot"></div>
+  </div>
+</div>
+
+<!-- Coherence: bar chart + windowed heatmap -->
+<div class="row row-coh" style="margin-bottom:0.5rem">
+  <div class="card">
+    <div class="panel-title">Inter-subject Coherence (mean)
+      <span class="panel-hint">sorted by mean ISC</span>
+    </div>
+    <div id="coh-bar-plot"></div>
+  </div>
+  <div class="card">
+    <div class="panel-title">Windowed ISC (time &times; channel)
+      <span class="panel-hint">sliding window in coherence band</span>
+    </div>
+    <div id="coh-ts-plot"></div>
+  </div>
+</div>
+
+<!-- Channel quality summary -->
+<div class="card" style="margin-bottom:0.5rem">
+  <div class="panel-title">Channel Quality Summary (Group)
+    <span class="panel-hint">green = all subjects good &bull; yellow = mixed &bull; red = all bad</span>
+  </div>
+  <div id="ch-summary-plot"></div>
+</div>
+
+<!-- Hyper-level IQM -->
+<div class="card" style="margin-bottom:0.5rem">
+  <div id="iqm-panel">
+    <h3>Group-level Quality Metrics
+      <span style="font-weight:400;font-size:0.78rem;color:#adb5bd">(hyperscanning)</span>
+    </h3>
+    <ul id="iqm-list" class="qm-list"></ul>
+  </div>
+</div>
+
+<script>
+var _FIGS        = {{ figures_json | safe }};
+var _PER_CHANNEL = {{ per_channel_json | safe }};
+var _ALIGN       = {{ alignment_json | safe }};
+var _CH_PAIRS    = {{ ch_pairs_json | safe }};
+var _IQM         = {{ iqm_json | safe }};
+var _N_SUBS      = {{ subject_ids | length }};
+
+var _cfg    = { responsive: true, displayModeBar: false };
+var _cfgBar = { responsive: true, displayModeBar: true };
+
+// ── alignment table ──────────────────────────────────────────────────────────
+(function() {
+  var tbody = document.getElementById("align-tbody");
+  _ALIGN.forEach(function(row) {
+    var tr = document.createElement("tr");
+    tr.innerHTML =
+      "<td>" + row.subject_id + "</td>" +
+      "<td>" + (row.offset_s   !== null ? row.offset_s.toFixed(3)   : "—") + "</td>" +
+      "<td>" + (row.duration_s !== null ? row.duration_s.toFixed(1) : "—") + "</td>";
+    tbody.appendChild(tr);
+  });
+})();
+
+// ── channel selector ─────────────────────────────────────────────────────────
+(function() {
+  var sel = document.getElementById("ch-select");
+  _CH_PAIRS.forEach(function(pair, i) {
+    var opt = document.createElement("option");
+    opt.value = i; opt.textContent = pair;
+    sel.appendChild(opt);
+  });
+  sel.addEventListener("change", function() { _selectPair(parseInt(this.value)); });
+})();
+
+// ── channel switching ─────────────────────────────────────────────────────────
+function _selectPair(pairIdx) {
+  var pair = _CH_PAIRS[pairIdx];
+
+  // Trace figure: n_ch*n_subs HbO + n_ch*n_subs HbR + n_subs ghost traces
+  if (_FIGS.trace) {
+    var n_per_hb = _CH_PAIRS.length * _N_SUBS;
+    var vis = [];
+    for (var i = 0; i < n_per_hb; i++) vis.push(Math.floor(i / _N_SUBS) === pairIdx);
+    for (var i = 0; i < n_per_hb; i++) vis.push(Math.floor(i / _N_SUBS) === pairIdx);
+    for (var j = 0; j < _N_SUBS; j++) vis.push(true);
+    Plotly.restyle("trace-plot", { visible: vis });
+  }
+
+  document.getElementById("psd-hint").textContent   = pair;
+  document.getElementById("epoch-hint").textContent = pair + "  ·  colour = subject  ·  dash = condition";
+
+  var ch = _PER_CHANNEL[pair] || {};
+
+  // PSD
+  if (ch.psd)   Plotly.react("psd-plot",   ch.psd.data,   ch.psd.layout,   _cfg);
+  else          Plotly.purge("psd-plot");
+
+  // Epoch
+  if (ch.epoch) Plotly.react("epoch-plot", ch.epoch.data, ch.epoch.layout, _cfg);
+  else          Plotly.purge("epoch-plot");
+}
+
+// ── IQM panel ─────────────────────────────────────────────────────────────────
+(function() {
+  var q = _IQM;
+  function li(label, value, cls) {
+    return "<li><span class='ql'>" + label + "</span>" +
+           "<span class='qv" + (cls ? " " + cls : "") + "'>" + value + "</span></li>";
+  }
+  var pct = q.pct_all_good;
+  document.getElementById("iqm-list").innerHTML =
+    li("Channels — all good",
+       (q.n_all_good != null ? q.n_all_good : "—") +
+         (q.n_total ? " / " + q.n_total : ""),
+       pct != null ? (pct >= 80 ? "qm-ok" : pct >= 50 ? "qm-warn" : "qm-bad") : "") +
+    li("Channels — mixed",   q.n_mixed   != null ? q.n_mixed   : "—") +
+    li("Channels — all bad", q.n_all_bad != null ? q.n_all_bad : "—",
+       q.n_all_bad > 0 ? "qm-bad" : "") +
+    li("Mean ISC",
+       q.mean_isc != null ? q.mean_isc.toFixed(3) : "—",
+       q.mean_isc != null ?
+         (q.mean_isc >= 0.3 ? "qm-ok" : q.mean_isc >= 0.1 ? "qm-warn" : "qm-bad") : "") +
+    li("Peak ISC channel",
+       q.peak_isc_channel
+         ? q.peak_isc_channel + " (" + (q.peak_isc != null ? q.peak_isc.toFixed(3) : "—") + ")"
+         : "—") +
+    li("Aligned duration",    q.aligned_duration_s != null ? q.aligned_duration_s + " s" : "—") +
+    li("Max alignment offset",q.max_offset_s       != null ? q.max_offset_s + " s"       : "—");
+})();
+
+// ── initial render ────────────────────────────────────────────────────────────
+window.addEventListener("DOMContentLoaded", function() {
+  if (_FIGS.trigger_timeline)
+    Plotly.newPlot("trigger-plot", _FIGS.trigger_timeline.data,
+                   _FIGS.trigger_timeline.layout, _cfg);
+
+  if (_FIGS.trace)
+    Plotly.newPlot("trace-plot", _FIGS.trace.data, _FIGS.trace.layout, _cfgBar);
+
+  if (_FIGS.layout_2d)
+    Plotly.newPlot("layout-2d-plot", _FIGS.layout_2d.data,
+                   _FIGS.layout_2d.layout, _cfg);
+
+  if (_FIGS.layout_3d)
+    Plotly.newPlot("layout-3d-plot", _FIGS.layout_3d.data,
+                   _FIGS.layout_3d.layout, { responsive: true });
+
+  if (_FIGS.coherence_bar)
+    Plotly.newPlot("coh-bar-plot", _FIGS.coherence_bar.data,
+                   _FIGS.coherence_bar.layout, _cfg);
+
+  if (_FIGS.coh_timeseries)
+    Plotly.newPlot("coh-ts-plot", _FIGS.coh_timeseries.data,
+                   _FIGS.coh_timeseries.layout, _cfg);
+
+  if (_FIGS.ch_summary)
+    Plotly.newPlot("ch-summary-plot", _FIGS.ch_summary.data,
+                   _FIGS.ch_summary.layout, _cfg);
+
+  if (_CH_PAIRS.length > 0) _selectPair(0);
+});
+</script>
+</body>
+</html>
