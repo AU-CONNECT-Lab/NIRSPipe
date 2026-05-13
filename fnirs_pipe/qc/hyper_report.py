@@ -137,3 +137,26 @@ def build_hyper_report(
     output_path.write_text(html, encoding="utf-8")
     logger.info("Hyper raw report saved: %s", output_path)
     return output_path
+
+
+def build_hyper_post_report(
+    group_id: str,
+    task: str,
+    group: list[GroupEntry],
+    aligned_raws: dict[str, mne.io.Raw],
+    offsets: dict[str, float],
+    output_dir: Path,
+    roi_map: dict[str, list[str]] | None = None,
+    wtc_fmin: float = 0.004,
+    wtc_fmax: float = 0.20,
+    isc_threshold: float = 0.3,
+) -> Path:
+    """Build hyperscanning post-QC report.
+
+    Sections:
+      1. Per-channel WTC  — time-frequency coherence per channel
+      2. ROI-level WTC    — WTC averaged within anatomical ROIs (requires roi_map)
+      3. ISC matrix       — inter-brain correlation heatmap (channel × channel)
+      4. Connectivity     — inter-brain connectogram, arcs filtered by isc_threshold
+    """
+    raise NotImplementedError("build_hyper_post_report is not yet implemented")

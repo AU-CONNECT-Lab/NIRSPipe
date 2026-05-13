@@ -179,3 +179,102 @@ def hyper_raw(
     typer.echo(f"\nDone: {n_ok} succeeded, {n_fail} failed.")
     if n_fail > 0:
         raise typer.Exit(1)
+
+
+@app.command()
+def hyper_post(
+    bids_dir: Annotated[Path, typer.Argument(help="BIDS dataset root")],
+    output_dir: Annotated[Path, typer.Argument(help="fnirs-pipe derivatives directory")],
+    pairs_csv: Annotated[Path, typer.Option("--pairs-csv", help=(
+        "CSV with columns: group_id, subject_id, task. "
+        "Each unique (group_id, task) pair is processed as one session."
+    ))],
+    group_id: Annotated[Optional[str], typer.Option("--group-id", help=(
+        "Process only this group_id. Omit to process all groups."
+    ))] = None,
+    roi_mapping: Annotated[Optional[Path], typer.Option("--roi-mapping", help=(
+        "JSON file mapping ROI labels to lists of channel names. "
+        "Used for ROI-level WTC. Optional."
+    ))] = None,
+    wtc_fmin: Annotated[float, typer.Option("--wtc-fmin", help=(
+        "Lower bound (Hz) for WTC frequency axis."
+    ))] = 0.004,
+    wtc_fmax: Annotated[float, typer.Option("--wtc-fmax", help=(
+        "Upper bound (Hz) for WTC frequency axis."
+    ))] = 0.20,
+    isc_threshold: Annotated[float, typer.Option("--isc-threshold", help=(
+        "Minimum mean ISC to draw an arc in the connectivity circle."
+    ))] = 0.3,
+    session_label: Annotated[Optional[list[str]], typer.Option("--session-label", help="Session label(s) to include.")] = None,
+    task_label: Annotated[Optional[list[str]], typer.Option("--task-label", help="Task label(s) to include.")] = None,
+    skip_bids_validation: Annotated[bool, typer.Option("--skip-bids-validation/--no-skip-bids-validation")] = False,
+) -> None:
+    """Generate hyperscanning post-processing QC report (WTC, ISC, connectivity)."""
+    import json
+
+    from fnirs_pipe.exceptions import AlignmentError, GroupCSVError, MissingDerivativesError
+    from fnirs_pipe.pipeline.hyperscanning import (
+        align_recordings,
+        load_group_haemo,
+        parse_group_csv,
+    )
+    from fnirs_pipe.qc.hyper_report import build_hyper_post_report
+
+    try:
+        groups = parse_group_csv(pairs_csv)
+    except GroupCSVError as exc:
+        typer.echo(f"[error] {exc}", err=True)
+        raise typer.Exit(1)
+
+    if group_id is not None:
+        groups = {k: v for k, v in groups.items() if k[0] == group_id}
+        if not groups:
+            typer.echo(f"[error] group_id '{group_id}' not found in CSV", err=True)
+            raise typer.Exit(1)
+
+    roi_map: dict[str, list[str]] | None = None
+    if roi_mapping is not None:
+        try:
+            roi_map = json.loads(roi_mapping.read_text())
+        except Exception as exc:
+            typer.echo(f"[error] failed to load ROI mapping: {exc}", err=True)
+            raise typer.Exit(1)
+
+    n_total = len(groups)
+    typer.echo(f"Processing {n_total} group session(s)...")
+
+    n_ok = n_fail = 0
+    for (gid, task), members in groups.items():
+        label = f"{gid}/{task}"
+        typer.echo(f"  -> {label} ({len(members)} subjects)")
+        try:
+            raws = load_group_haemo(output_dir, members)
+            aligned_raws, offsets = align_recordings(raws, task)
+            report_path = build_hyper_post_report(
+                group_id=gid,
+                task=task,
+                group=members,
+                aligned_raws=aligned_raws,
+                offsets=offsets,
+                output_dir=output_dir,
+                roi_map=roi_map,
+                wtc_fmin=wtc_fmin,
+                wtc_fmax=wtc_fmax,
+                isc_threshold=isc_threshold,
+            )
+            typer.echo(f"     report -> {report_path}")
+            n_ok += 1
+        except MissingDerivativesError as exc:
+            typer.echo(f"     [skip] {exc}", err=True)
+            n_fail += 1
+        except AlignmentError as exc:
+            typer.echo(f"     [skip] alignment failed: {exc}", err=True)
+            n_fail += 1
+        except Exception as exc:
+            logger.exception("group %s task %s failed", gid, task)
+            typer.echo(f"     [error] unexpected error: {exc}", err=True)
+            n_fail += 1
+
+    typer.echo(f"\nDone: {n_ok} succeeded, {n_fail} failed.")
+    if n_fail > 0:
+        raise typer.Exit(1)
