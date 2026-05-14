@@ -1,0 +1,5 @@
+high_pass = 0.01
+low_pass = 0.1
+
+drift_model = "cosine"
+drift_high_pass = 0.01

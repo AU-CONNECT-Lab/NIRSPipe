@@ -238,6 +238,20 @@ def align_recordings(
     return aligned, offsets
 
 
+def trim_to_shortest(
+    raws: dict[str, mne.io.Raw],
+) -> tuple[dict[str, mne.io.Raw], dict[str, float]]:
+    """Trim all recordings to the shortest duration without trigger-based alignment.
+
+    Use for resting-state data where no shared trigger exists.
+    Returns (trimmed_raws, {subject_id: 0.0}).
+    """
+    min_duration = min(r.times[-1] for r in raws.values())
+    trimmed = {sid: raw.copy().crop(tmax=min_duration) for sid, raw in raws.items()}
+    offsets = {sid: 0.0 for sid in raws}
+    return trimmed, offsets
+
+
 def normalize_raws(raws: dict[str, mne.io.Raw]) -> dict[str, mne.io.Raw]:
     """Z-score each channel independently per subject (mean=0, std=1 across time).
 

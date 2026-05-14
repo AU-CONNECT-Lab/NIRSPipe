@@ -30,6 +30,7 @@ class MotionCorrection(str, Enum):
 class PostMode(str, Enum):
     denoise = "denoise"
     glm = "glm"
+    rest = "rest"
 
 class HRFModel(str, Enum):
     spm = "spm"

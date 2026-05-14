@@ -113,6 +113,10 @@ def hyper_raw(
         "Z-score each channel per subject after alignment. "
         "Useful when subjects have very different signal amplitudes."
     ))] = False,
+    no_align: Annotated[bool, typer.Option("--no-align", help=(
+        "Skip trigger-based alignment; trim all recordings to the shortest duration. "
+        "Use for resting-state data without shared triggers."
+    ))] = False,
     session_label: Annotated[Optional[list[str]], typer.Option("--session-label", help="Session label(s) to include.")] = None,
     task_label: Annotated[Optional[list[str]], typer.Option("--task-label", help="Task label(s) to include.")] = None,
     skip_bids_validation: Annotated[bool, typer.Option("--skip-bids-validation/--no-skip-bids-validation")] = False,
@@ -127,6 +131,7 @@ def hyper_raw(
         load_group_raw_bids,
         normalize_raws,
         parse_group_csv,
+        trim_to_shortest,
     )
     from fnirs_pipe.qc.hyper_report import build_hyper_report
 
@@ -153,7 +158,10 @@ def hyper_raw(
             raws_cw = load_group_raw_bids(bids_dir, members)
             iqm_data = compute_group_iqm_raw(members, raws_cw, sci_threshold, output_dir)
             raws_haemo = {sid: _raw_to_haemo(r) for sid, r in raws_cw.items()}
-            aligned_raws, offsets = align_recordings(raws_haemo, task)
+            if no_align:
+                aligned_raws, offsets = trim_to_shortest(raws_haemo)
+            else:
+                aligned_raws, offsets = align_recordings(raws_haemo, task)
             if normalize:
                 aligned_raws = normalize_raws(aligned_raws)
             coherence_df = compute_pairwise_coherence(
@@ -218,6 +226,10 @@ def hyper_post(
         "Z-score each channel per subject after alignment. "
         "Useful when subjects have very different signal amplitudes."
     ))] = False,
+    no_align: Annotated[bool, typer.Option("--no-align", help=(
+        "Skip trigger-based alignment; trim all recordings to the shortest duration. "
+        "Use for resting-state data without shared triggers."
+    ))] = False,
     session_label: Annotated[Optional[list[str]], typer.Option("--session-label", help="Session label(s) to include.")] = None,
     task_label: Annotated[Optional[list[str]], typer.Option("--task-label", help="Task label(s) to include.")] = None,
     skip_bids_validation: Annotated[bool, typer.Option("--skip-bids-validation/--no-skip-bids-validation")] = False,
@@ -231,6 +243,7 @@ def hyper_post(
         load_group_haemo,
         normalize_raws,
         parse_group_csv,
+        trim_to_shortest,
     )
     from fnirs_pipe.qc.hyper_report import build_hyper_post_report
 
@@ -263,7 +276,10 @@ def hyper_post(
         typer.echo(f"  -> {label} ({len(members)} subjects)")
         try:
             raws = load_group_haemo(output_dir, members)
-            aligned_raws, offsets = align_recordings(raws, task)
+            if no_align:
+                aligned_raws, offsets = trim_to_shortest(raws)
+            else:
+                aligned_raws, offsets = align_recordings(raws, task)
             if normalize:
                 aligned_raws = normalize_raws(aligned_raws)
             report_path = build_hyper_post_report(

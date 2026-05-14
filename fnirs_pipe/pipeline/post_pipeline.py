@@ -23,7 +23,7 @@ from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("post.pipeline")
 
-Mode = Literal["denoise", "glm"]
+Mode = Literal["denoise", "glm", "rest"]
 
 
 @dataclass
@@ -109,8 +109,6 @@ def run_post(
             raise ValueError(f"GLM mode requires: {', '.join('--' + f.replace('_', '-') for f in missing)}")
         if config.events_path is not None and config.stim_dur is not None:
             raise ValueError("--events-path and --stim-dur are mutually exclusive")
-        if config.events_path is None and config.stim_dur is None:
-            raise NotImplementedError("rest analysis is not yet implemented")
         logger.info("sub-%s | GLM (%s / %s)", config.subject, config.hrf_model, config.noise_model)
         _, glm_est, dm, raw_resid = run_glm_pipeline(
             result,
@@ -124,6 +122,25 @@ def run_post(
             short_channel=config.short_channel,
             events_path=config.events_path,
             contrast_def=config.contrast_def,
+            output_dir=str(output_dir / f"sub-{config.subject}" / "nirs"),
+        )
+        _write_step_snirf(raw_resid, config, output_dir, desc="errts", source_entities=source_entities)
+
+    elif mode == "rest":
+        if config.drift_model is None:
+            raise ValueError("rest mode requires --drift-model")
+        logger.info("sub-%s | rest confound regression", config.subject)
+        _, glm_est, dm, raw_resid = run_glm_pipeline(
+            result,
+            stim_dur=None,
+            hrf_model="spm",
+            noise_model="ols",
+            drift_model=config.drift_model,
+            high_pass=config.drift_high_pass,
+            drift_order=config.drift_order,
+            fir_delays=None,
+            short_channel=config.short_channel,
+            events=pd.DataFrame({"trial_type": [], "onset": [], "duration": []}),
             output_dir=str(output_dir / f"sub-{config.subject}" / "nirs"),
         )
         _write_step_snirf(raw_resid, config, output_dir, desc="errts", source_entities=source_entities)

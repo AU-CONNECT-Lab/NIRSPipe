@@ -145,7 +145,7 @@ def compute_contrasts(
 
 def run_glm_pipeline(
     haemo: mne.io.Raw,
-    stim_dur: float,
+    stim_dur: float | None,
     hrf_model: HRFModel,
     noise_model: NoiseModel,
     drift_model: DriftModel,
@@ -153,12 +153,14 @@ def run_glm_pipeline(
     drift_order: int | None,
     fir_delays: tuple[int, ...] | None,
     events_path: str | None = None,
+    events: pd.DataFrame | None = None,
     short_channel: bool | SCRStrategy | None = None,
     contrast_def: dict[str, Any] | None = None,
     output_dir: str | None = None,
 ) -> mne.io.Raw:
-    # prefer external TSV (BIDS); fall back to annotations embedded in the snirf
-    events = pd.read_csv(events_path, sep="\t") if events_path else None
+    # explicit events take precedence; then external TSV; then snirf annotations
+    if events is None:
+        events = pd.read_csv(events_path, sep="\t") if events_path else None
 
     confound_cols = _short_channel_regressors(haemo, short_channel) if short_channel else {}
     confounds = pd.DataFrame(confound_cols) if confound_cols else None
