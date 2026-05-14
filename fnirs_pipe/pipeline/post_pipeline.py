@@ -144,8 +144,40 @@ def run_post(
             output_dir=str(output_dir / f"sub-{config.subject}" / "nirs"),
         )
         _write_step_snirf(raw_resid, config, output_dir, desc="errts", source_entities=source_entities)
+        _write_rest_derivatives(raw_resid, config, output_dir, source_entities=source_entities)
 
     return result, glm_est, dm
+
+def _write_rest_derivatives(
+    raw_resid: mne.io.Raw,
+    config: PostConfig,
+    output_dir: Path,
+    source_entities: dict[str, str] | None = None,
+) -> None:
+    from fnirs_pipe.io.derivatives import build_output_path
+    from fnirs_pipe.pipeline.restingstate import compute_alff, compute_fc
+
+    entities = {k: v for k, v in (source_entities or {}).items() if k in ("task", "run")}
+
+    if config.low_pass is not None and config.high_pass is not None:
+        alff_df = compute_alff(raw_resid, low_pass=config.low_pass, high_pass=config.high_pass)
+        alff_path = build_output_path(
+            output_dir=output_dir, subject=config.subject, session=config.session,
+            entities=entities, suffix="alff", extension=".tsv",
+        )
+        alff_df.to_csv(alff_path, sep="\t", index=False)
+        logger.info("sub-%s | alff → %s", config.subject, alff_path)
+    else:
+        logger.warning("sub-%s | skipping ALFF: --high-pass and --low-pass required", config.subject)
+
+    fc_df = compute_fc(raw_resid)
+    fc_path = build_output_path(
+        output_dir=output_dir, subject=config.subject, session=config.session,
+        entities=entities, suffix="fc", extension=".tsv",
+    )
+    fc_df.to_csv(fc_path, sep="\t", index_label="channel")
+    logger.info("sub-%s | fc → %s", config.subject, fc_path)
+
 
 def _crop_to_segments(raw: mne.io.Raw, segments_path: str) -> mne.io.Raw:
     df = pd.read_csv(segments_path, sep="\t")
