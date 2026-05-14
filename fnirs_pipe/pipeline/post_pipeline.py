@@ -112,7 +112,7 @@ def run_post(
         if config.events_path is None and config.stim_dur is None:
             raise NotImplementedError("rest analysis is not yet implemented")
         logger.info("sub-%s | GLM (%s / %s)", config.subject, config.hrf_model, config.noise_model)
-        _, glm_est, dm = run_glm_pipeline(
+        _, glm_est, dm, raw_resid = run_glm_pipeline(
             result,
             stim_dur=config.stim_dur,
             hrf_model=config.hrf_model,
@@ -126,6 +126,7 @@ def run_post(
             contrast_def=config.contrast_def,
             output_dir=str(output_dir / f"sub-{config.subject}" / "nirs"),
         )
+        _write_step_snirf(raw_resid, config, output_dir, desc="errts", source_entities=source_entities)
 
     return result, glm_est, dm
 

@@ -178,12 +178,17 @@ def run_glm_pipeline(
 
     glm_est = fit_glm(haemo, dm, noise_model=noise_model)
 
+    # nilearn stores residuals as (n_times, 1) per channel; squeeze removes the trailing dim
+    resid_data = np.array([glm_est.data[ch].residuals for ch in glm_est.ch_names]).squeeze(-1)
+    raw_resid = haemo.copy()
+    raw_resid._data[:] = resid_data
+
     contrasts = compute_contrasts(glm_est, contrast_def) if contrast_def else None
 
     if output_dir:
         _save_glm_outputs(glm_est, dm, Path(output_dir), contrasts=contrasts)
 
-    return haemo, glm_est, dm
+    return haemo, glm_est, dm, raw_resid
 
 
 def _save_glm_outputs(
