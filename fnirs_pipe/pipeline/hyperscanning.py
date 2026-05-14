@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 from scipy.signal import coherence
 
-from fnirs_pipe.exceptions import AlignmentError, GroupCSVError
+from fnirs_pipe.exceptions import AlignmentError, GroupCSVError, MissingDerivativesError
 from fnirs_pipe.io.derivatives import find_preproc_snirf
 from fnirs_pipe.utils import load_toml
 
@@ -70,6 +70,109 @@ def load_group_haemo(output_dir: Path, group: list[GroupEntry]) -> dict[str, mne
             str(snirf_path), preload=True, verbose=False
         )
     return result
+
+
+def load_group_raw_bids(bids_dir: Path, group: list[GroupEntry]) -> dict[str, mne.io.Raw]:
+    """Load raw CW-amplitude SNIRF from BIDS for each group member.
+
+    Returns {subject_id: raw_intensity}.
+    Raises MissingDerivativesError if no SNIRF is found for any member.
+    """
+    from fnirs_pipe.io.bids import get_layout, get_nirs_files
+
+    layout = get_layout(bids_dir, validate=False)
+    result: dict[str, mne.io.Raw] = {}
+    for entry in group:
+        sub_label = entry.subject_id.removeprefix("sub-")
+        files = get_nirs_files(layout, subject=sub_label, task=entry.task)
+        if not files:
+            raise MissingDerivativesError(
+                f"No SNIRF found in BIDS for {entry.subject_id} task-{entry.task}"
+            )
+        result[entry.subject_id] = mne.io.read_raw_snirf(
+            str(files[0]), preload=True, verbose=False
+        )
+    return result
+
+
+def _raw_to_haemo(raw: mne.io.Raw, dpf: float = 6.0) -> mne.io.Raw:
+    raw_od = mne.preprocessing.nirs.optical_density(raw.copy(), verbose=False)
+    return mne.preprocessing.nirs.beer_lambert_law(raw_od, ppf=dpf)
+
+
+def compute_group_iqm_raw(
+    group: list[GroupEntry],
+    raws: dict[str, mne.io.Raw],
+    sci_threshold: float,
+    output_dir: Path,
+) -> dict[str, dict]:
+    """Compute raw-level IQM (SCI, bad channels) for each group member.
+
+    Writes two TSVs to output_dir following BIDS/MRIQC conventions:
+      group-{gid}_task-{task}_hyper-raw_iqm.tsv      — one row per subject (scalars)
+      group-{gid}_task-{task}_hyper-raw_channels.tsv  — one row per subject × channel
+
+    Returns {subject_id: iqm_dict} for use in the HTML report.
+    """
+    from fnirs_pipe.qc.quantitative_metrics import compute_raw_iqm
+
+    gid  = group[0].group_id
+    task = group[0].task
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    iqm_data: dict[str, dict] = {}
+    scalar_rows: list[dict] = []
+    channel_rows: list[dict] = []
+
+    for entry in group:
+        raw = raws[entry.subject_id]
+
+        try:
+            raw_od  = mne.preprocessing.nirs.optical_density(raw.copy(), verbose=False)
+            sci_arr = mne.preprocessing.nirs.scalp_coupling_index(raw_od, verbose=False)
+            sci_scores = {ch: float(sci_arr[i]) for i, ch in enumerate(raw.ch_names)}
+        except Exception:
+            sci_scores = {ch: float("nan") for ch in raw.ch_names}
+
+        bad_channels = [ch for ch, s in sci_scores.items() if s < sci_threshold]
+
+        try:
+            iqm = compute_raw_iqm(raw, sci_scores, bad_channels)
+        except Exception:
+            iqm = {}
+
+        iqm["sci_per_channel"] = sci_scores
+        iqm["bad_channels"]    = bad_channels
+        iqm_data[entry.subject_id] = iqm
+
+        scalar_rows.append({
+            "group_id":               gid,
+            "subject_id":             entry.subject_id,
+            "task":                   task,
+            "sci_mean":               iqm.get("sci_mean"),
+            "n_bad_channels":         len(bad_channels),
+            "channel_retention_rate": iqm.get("channel_retention_rate"),
+        })
+
+        for ch, sci_val in sci_scores.items():
+            channel_rows.append({
+                "group_id":   gid,
+                "subject_id": entry.subject_id,
+                "task":       task,
+                "channel":    ch,
+                "sci":        sci_val,
+                "is_bad":     ch in bad_channels,
+            })
+
+    stem = f"group-{gid}_task-{task}_hyper-raw"
+    pd.DataFrame(scalar_rows).to_csv(
+        output_dir / f"{stem}_iqm.tsv", sep="\t", index=False
+    )
+    pd.DataFrame(channel_rows).to_csv(
+        output_dir / f"{stem}_channels.tsv", sep="\t", index=False
+    )
+
+    return iqm_data
 
 
 def align_recordings(

@@ -113,13 +113,14 @@ def hyper_raw(
     task_label: Annotated[Optional[list[str]], typer.Option("--task-label", help="Task label(s) to include.")] = None,
     skip_bids_validation: Annotated[bool, typer.Option("--skip-bids-validation/--no-skip-bids-validation")] = False,
 ) -> None:
-    """Generate hyperscanning raw QC report (BIDS derivatives)."""
+    """Generate hyperscanning raw QC report from BIDS raw data."""
     from fnirs_pipe.exceptions import AlignmentError, GroupCSVError, MissingDerivativesError
     from fnirs_pipe.pipeline.hyperscanning import (
+        _raw_to_haemo,
         align_recordings,
+        compute_group_iqm_raw,
         compute_pairwise_coherence,
-        load_group_haemo,
-        load_group_iqm,
+        load_group_raw_bids,
         parse_group_csv,
     )
     from fnirs_pipe.qc.hyper_report import build_hyper_report
@@ -144,9 +145,10 @@ def hyper_raw(
         label = f"{gid}/{task}"
         typer.echo(f"  -> {label} ({len(members)} subjects)")
         try:
-            iqm_data = load_group_iqm(output_dir, members)
-            raws = load_group_haemo(output_dir, members)
-            aligned_raws, offsets = align_recordings(raws, task)
+            raws_cw = load_group_raw_bids(bids_dir, members)
+            iqm_data = compute_group_iqm_raw(members, raws_cw, sci_threshold, output_dir)
+            raws_haemo = {sid: _raw_to_haemo(r) for sid, r in raws_cw.items()}
+            aligned_raws, offsets = align_recordings(raws_haemo, task)
             coherence_df = compute_pairwise_coherence(
                 aligned_raws, fmin=coherence_fmin, fmax=coherence_fmax
             )
