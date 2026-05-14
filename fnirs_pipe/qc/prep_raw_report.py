@@ -19,24 +19,6 @@ _EPOCH_TMIN = -5.0
 _EPOCH_TMAX = 25.0
 
 
-def _load_markers(run: dict) -> list[dict]:
-    events_path = run.get("events_path")
-    if events_path and Path(events_path).exists():
-        import pandas as pd
-        df = pd.read_csv(events_path, sep="\t")
-        cols = df.columns.tolist()
-        desc_col = next((c for c in ("trial_type", "description") if c in cols), None)
-        return [
-            {
-                "onset":       float(row["onset"]),
-                "duration":    float(row.get("duration", 1.0)),
-                "description": str(row[desc_col]) if desc_col else "stim",
-            }
-            for _, row in df.iterrows()
-        ]
-    return []
-
-
 def _process_run(run: dict, sci_threshold: float) -> dict:
     from fnirs_pipe.qc.figures import (
         build_channel_figure,
@@ -83,7 +65,15 @@ def _process_run(run: dict, sci_threshold: float) -> dict:
     except Exception as exc:
         logger.warning("Beer-Lambert failed: %s", exc)
 
-    markers = _load_markers(run)
+    markers = [
+        {
+            "onset":       float(a["onset"]),
+            "duration":    float(a["duration"]),
+            "description": str(a["description"]),
+        }
+        for a in raw.annotations
+        if not str(a["description"]).upper().startswith("BAD")
+    ]
     cond_colors = condition_colors(markers)
     for m in markers:
         m["color"] = cond_colors.get(m["description"], "#f39c12")

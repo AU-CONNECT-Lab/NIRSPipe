@@ -155,11 +155,9 @@ def load_run(n_clicks, run_path, sci_thresh, cache_dir):
     if not run_path:
         return no_update, dbc.Alert("Select a run first.", color="warning")
 
-    sci_threshold    = float(sci_thresh if sci_thresh is not None else 0.8)
-    snirf_path       = run_path
-    events_candidate = snirf_path.replace("_nirs.snirf", "_events.tsv")
-    events_path      = events_candidate if Path(events_candidate).exists() else None
-    cache_key        = _make_cache_key(snirf_path, sci_threshold)
+    sci_threshold = float(sci_thresh if sci_thresh is not None else 0.8)
+    snirf_path    = run_path
+    cache_key     = _make_cache_key(snirf_path, sci_threshold)
 
     disk_path = None
     if cache_dir and Path(cache_dir).is_dir():
@@ -186,7 +184,7 @@ def load_run(n_clicks, run_path, sci_thresh, cache_dir):
         try:
             from fnirs_pipe.qc.prep_raw_report import _process_run
             result = _process_run(
-                {"snirf_path": snirf_path, "events_path": events_path},
+                {"snirf_path": snirf_path},
                 sci_threshold,
             )
             _RESULT_CACHE[cache_key] = result
