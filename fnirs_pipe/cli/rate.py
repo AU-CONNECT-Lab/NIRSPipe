@@ -41,71 +41,71 @@ def rate(
     FNIRSRatingApp(output_dir, subjects).run(port=port)
 
 
-@app.command(name="raw-indiv")
-def raw_indiv(
-    bids_dir: Annotated[Path, typer.Argument(help="BIDS dataset root.")],
-    output_dir: Annotated[Path, typer.Argument(help="fnirs-pipe derivatives directory.")],
-    participant_label: Annotated[str, typer.Argument(help="Subject ID to inspect, e.g. '01'.")],
-    session_label: Annotated[Optional[list[str]], typer.Option("--session-label", help="Session label(s) to include.")] = None,
-    task_label: Annotated[Optional[list[str]], typer.Option("--task-label", help="Task label(s) to include.")] = None,
-    port: Annotated[int, typer.Option("--port", help="Local server port.")] = 5050,
-    skip_bids_validation: Annotated[bool, typer.Option("--skip-bids-validation/--no-skip-bids-validation")] = False,
-) -> None:
-    """Launch interactive Flask viewer for a single participant's raw fNIRS data."""
-    from fnirs_pipe.io.bids import get_layout, get_nirs_files
-    from fnirs_pipe.qc.app import launch
+# @app.command(name="raw-indiv")
+# def raw_indiv(
+#     bids_dir: Annotated[Path, typer.Argument(help="BIDS dataset root.")],
+#     output_dir: Annotated[Path, typer.Argument(help="fnirs-pipe derivatives directory.")],
+#     participant_label: Annotated[str, typer.Argument(help="Subject ID to inspect, e.g. '01'.")],
+#     session_label: Annotated[Optional[list[str]], typer.Option("--session-label", help="Session label(s) to include.")] = None,
+#     task_label: Annotated[Optional[list[str]], typer.Option("--task-label", help="Task label(s) to include.")] = None,
+#     port: Annotated[int, typer.Option("--port", help="Local server port.")] = 5050,
+#     skip_bids_validation: Annotated[bool, typer.Option("--skip-bids-validation/--no-skip-bids-validation")] = False,
+# ) -> None:
+#     """Launch interactive Flask viewer for a single participant's raw fNIRS data."""
+#     from fnirs_pipe.io.bids import get_layout, get_nirs_files
+#     from fnirs_pipe.qc.app import launch
 
-    layout = get_layout(bids_dir, validate=not skip_bids_validation)
-    sessions = session_label or [None]
-    tasks    = task_label    or [None]
+#     layout = get_layout(bids_dir, validate=not skip_bids_validation)
+#     sessions = session_label or [None]
+#     tasks    = task_label    or [None]
 
-    all_runs: list[dict] = []
-    for session in sessions:
-        for task in tasks:
-            files = get_nirs_files(layout, subject=participant_label, session=session, task=task)
-            for f in files:
-                entities = layout.parse_file_entities(str(f))
-                actual_ses  = entities.get("session")
-                actual_task = entities.get("task")
-                actual_run  = entities.get("run")
+#     all_runs: list[dict] = []
+#     for session in sessions:
+#         for task in tasks:
+#             files = get_nirs_files(layout, subject=participant_label, session=session, task=task)
+#             for f in files:
+#                 entities = layout.parse_file_entities(str(f))
+#                 actual_ses  = entities.get("session")
+#                 actual_task = entities.get("task")
+#                 actual_run  = entities.get("run")
 
-                parts = [f"sub-{participant_label}"]
-                if actual_ses:  parts.append(f"ses-{actual_ses}")
-                if actual_task: parts.append(f"task-{actual_task}")
-                if actual_run:  parts.append(f"run-{actual_run}")
-                label = "_".join(parts)
+#                 parts = [f"sub-{participant_label}"]
+#                 if actual_ses:  parts.append(f"ses-{actual_ses}")
+#                 if actual_task: parts.append(f"task-{actual_task}")
+#                 if actual_run:  parts.append(f"run-{actual_run}")
+#                 label = "_".join(parts)
 
-                snirf_p = Path(f)
-                events_p = snirf_p.parent / (snirf_p.name.replace("_nirs.snirf", "_events.tsv"))
-                all_runs.append({
-                    "label":       label,
-                    "snirf_path":  str(f),
-                    "events_path": str(events_p) if events_p.exists() else None,
-                    "session":     actual_ses,
-                    "task":        actual_task,
-                })
+#                 snirf_p = Path(f)
+#                 events_p = snirf_p.parent / (snirf_p.name.replace("_nirs.snirf", "_events.tsv"))
+#                 all_runs.append({
+#                     "label":       label,
+#                     "snirf_path":  str(f),
+#                     "events_path": str(events_p) if events_p.exists() else None,
+#                     "session":     actual_ses,
+#                     "task":        actual_task,
+#                 })
 
-    if not all_runs:
-        typer.echo(f"Error: no SNIRF files found for sub-{participant_label}.", err=True)
-        raise typer.Exit(1)
+#     if not all_runs:
+#         typer.echo(f"Error: no SNIRF files found for sub-{participant_label}.", err=True)
+#         raise typer.Exit(1)
 
-    typer.echo(f"Launching viewer for sub-{participant_label} ({len(all_runs)} run(s)) ...")
-    out_dir = output_dir / f"sub-{participant_label}" / "nirs"
-    launch(all_runs, out_dir, port=port)
+#     typer.echo(f"Launching viewer for sub-{participant_label} ({len(all_runs)} run(s)) ...")
+#     out_dir = output_dir / f"sub-{participant_label}" / "nirs"
+#     launch(all_runs, out_dir, port=port)
 
 
-@app.command(name="raw-hyper")
-def raw_hyper(
-    bids_dir: Annotated[Path, typer.Argument(help="BIDS dataset root.")],
-    output_dir: Annotated[Path, typer.Argument(help="fnirs-pipe derivatives directory.")],
-    pairs_csv: Annotated[Path, typer.Option("--pairs-csv", help="CSV with columns: group_id, subject_id, task.")],
-    group_id: Annotated[Optional[str], typer.Option("--group-id", help="Process only this group_id.")] = None,
-    port: Annotated[int, typer.Option("--port", help="Local server port.")] = 5051,
-    skip_bids_validation: Annotated[bool, typer.Option("--skip-bids-validation/--no-skip-bids-validation")] = False,
-) -> None:
-    """Launch interactive Flask viewer for hyperscanning raw fNIRS data (not yet implemented)."""
-    raise NotImplementedError(
-        f"fnirs-rate raw-hyper is not yet implemented "
-        f"(bids={bids_dir}, output={output_dir}, pairs={pairs_csv}, "
-        f"group={group_id}, port={port}, skip_val={skip_bids_validation})."
-    )
+# @app.command(name="raw-hyper")
+# def raw_hyper(
+#     bids_dir: Annotated[Path, typer.Argument(help="BIDS dataset root.")],
+#     output_dir: Annotated[Path, typer.Argument(help="fnirs-pipe derivatives directory.")],
+#     pairs_csv: Annotated[Path, typer.Option("--pairs-csv", help="CSV with columns: group_id, subject_id, task.")],
+#     group_id: Annotated[Optional[str], typer.Option("--group-id", help="Process only this group_id.")] = None,
+#     port: Annotated[int, typer.Option("--port", help="Local server port.")] = 5051,
+#     skip_bids_validation: Annotated[bool, typer.Option("--skip-bids-validation/--no-skip-bids-validation")] = False,
+# ) -> None:
+#     """Launch interactive Flask viewer for hyperscanning raw fNIRS data (not yet implemented)."""
+#     raise NotImplementedError(
+#         f"fnirs-rate raw-hyper is not yet implemented "
+#         f"(bids={bids_dir}, output={output_dir}, pairs={pairs_csv}, "
+#         f"group={group_id}, port={port}, skip_val={skip_bids_validation})."
+#     )

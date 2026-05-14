@@ -21,7 +21,7 @@ dependencies = [
     "jinja2>=3.1",
     "plotly>=5.18",
     "typer>=0.12",
-    "flask>=3.0",
+    "dash>=2.16",
     "tomli>=2.0; python_version < '3.11'",
     "bibtexparser>=2.0.0b1",
 ]
@@ -39,6 +39,7 @@ fnirs-pipe  = "fnirs_pipe.cli.run:app"
 fnirs-recon = "fnirs_pipe.cli.recon:app"
 fnirs-rate  = "fnirs_pipe.cli.rate:app"
 fnirs-qc    = "fnirs_pipe.cli.qc:app"
+fnirs-gui   = "fnirs_pipe.cli.gui:app"
 
 [tool.setuptools.packages.find]
 where = ["."]
