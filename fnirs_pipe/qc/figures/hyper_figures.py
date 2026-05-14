@@ -18,8 +18,8 @@ logger = get_logger("qc.figures.hyper")
 
 _MAX_TS_PTS = 4000
 
-_SUB_COLORS   = ["#3498db", "#e74c3c", "#2ecc71", "#f39c12",
-                  "#9b59b6", "#1abc9c", "#e67e22", "#34495e"]
+_SUB_COLORS   = ["#8e44ad", "#e67e22", "#16a085", "#f39c12",
+                  "#2c3e50", "#1abc9c", "#c0392b", "#34495e"]
 _COND_PALETTE = ["#e74c3c", "#3498db", "#2ecc71", "#f39c12",
                   "#9b59b6", "#1abc9c", "#e67e22", "#34495e"]
 _COND_DASHES  = ["solid", "dash", "dot", "dashdot", "longdash"]
@@ -119,7 +119,7 @@ def _hover_sci(pair: str, iqm_data: dict, subject_ids: list[str]) -> str:
     for sid in subject_ids:
         sci_d = iqm_data.get(sid, {}).get("sci_per_channel", {})
         val = sci_d.get(f"{pair} hbo") or sci_d.get(pair)
-        lines.append(f"sub-{sid}: SCI = {val:.3f}" if val is not None else f"sub-{sid}: N/A")
+        lines.append(f"{sid}: SCI = {val:.3f}" if val is not None else f"{sid}: N/A")
     return "<br>".join(lines)
 
 
@@ -165,7 +165,7 @@ def build_trigger_timeline(
                 showlegend=(desc not in seen),
                 hovertemplate=(
                     f"<b>{desc}</b><br>onset: %{{x:.2f}} s"
-                    f"<br>sub-{sid}<extra></extra>"
+                    f"<br>{sid}<extra></extra>"
                 ),
             ))
             seen.add(desc)
@@ -231,7 +231,7 @@ def build_signal_overlay(
                     y_vals = (arr[0] * 1e6).tolist()
                 fig.add_trace(go.Scatter(
                     x=t_vals, y=y_vals,
-                    name=f"sub-{sid}", mode="lines",
+                    name=sid, mode="lines",
                     line=dict(color=_SUB_COLORS[sub_idx % len(_SUB_COLORS)], width=1.3),
                     visible=(ch_idx == 0),
                     showlegend=False,
@@ -242,7 +242,7 @@ def build_signal_overlay(
     for sub_idx, sid in enumerate(subject_ids):
         fig.add_trace(go.Scatter(
             x=[None], y=[None], mode="lines",
-            name=f"sub-{sid}",
+            name=sid,
             line=dict(color=_SUB_COLORS[sub_idx % len(_SUB_COLORS)], width=1.5),
             showlegend=True, visible=True,
             legendgroup=sid,
@@ -298,7 +298,7 @@ def build_psd(
         mask = freqs <= fmax
         traces.append(go.Scatter(
             x=freqs[mask].tolist(), y=psd[mask].tolist(),
-            name=f"sub-{sid}", mode="lines",
+            name=sid, mode="lines",
             line=dict(color=_SUB_COLORS[sub_idx % len(_SUB_COLORS)], width=1.8),
         ))
 
@@ -374,7 +374,7 @@ def build_epoch(
                 traces.append(go.Scatter(
                     x=epochs.times.tolist(),
                     y=(ep[:, 0, :].mean(axis=0) * 1e6).tolist(),
-                    name=f"sub-{sid} {desc} (n={ep.shape[0]})",
+                    name=f"{sid} {desc} (n={ep.shape[0]})",
                     mode="lines",
                     line=dict(color=sub_color, width=1.8,
                               dash=_COND_DASHES[ci % len(_COND_DASHES)]),
@@ -665,8 +665,10 @@ def compute_windowed_coherence(
     hbo_picks  = mne.pick_types(ref_raw.info, fnirs="hbo")
     pair_names = [ref_raw.ch_names[p].rsplit(" ", 1)[0] for p in hbo_picks]
     starts     = list(range(0, n_times - win_samp + 1, step_samp))
-    # nperseg: small enough for >=3 segments, large enough to cover fmax
-    nperseg    = min(win_samp // 3, max(32, int(sfreq / fmax)))
+    # freq_req: minimum nperseg so that at least one bin falls within [fmin, fmax]
+    # capped at win_samp//2 so scipy coherence has >=2 segments per window
+    freq_req = max(32, int(np.ceil(sfreq / fmax)))
+    nperseg  = min(win_samp // 2, freq_req)
 
     rows: list[dict] = []
     for sub1, sub2 in combinations(subject_ids, 2):
@@ -782,7 +784,7 @@ def build_channel_summary(
         for sid in subject_ids:
             sci_d = iqm_data.get(sid, {}).get("sci_per_channel", {})
             val   = sci_d.get(f"{ch} hbo") or sci_d.get(ch)
-            sci_vals.append(f"sub-{sid}: {val:.3f}" if val is not None else f"sub-{sid}: N/A")
+            sci_vals.append(f"{sid}: {val:.3f}" if val is not None else f"{sid}: N/A")
 
         if not known:
             c, status = _NA_COLOR, "N/A"

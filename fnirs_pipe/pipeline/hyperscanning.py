@@ -130,14 +130,22 @@ def compute_group_iqm_raw(
         try:
             raw_od  = mne.preprocessing.nirs.optical_density(raw.copy(), verbose=False)
             sci_arr = mne.preprocessing.nirs.scalp_coupling_index(raw_od, verbose=False)
-            sci_scores = {ch: float(sci_arr[i]) for i, ch in enumerate(raw.ch_names)}
+            sci_cw  = {ch: float(sci_arr[i]) for i, ch in enumerate(raw.ch_names)}
         except Exception:
-            sci_scores = {ch: float("nan") for ch in raw.ch_names}
+            sci_cw = {ch: float("nan") for ch in raw.ch_names}
 
-        bad_channels = [ch for ch, s in sci_scores.items() if s < sci_threshold]
+        sci_scores: dict[str, float] = {}
+        for ch, val in sci_cw.items():
+            pair = ch.rsplit(" ", 1)[0]
+            sci_scores[f"{pair} hbo"] = val
+            sci_scores[pair] = val
+
+        bad_channels = [
+            ch for ch, s in sci_cw.items() if s < sci_threshold
+        ]
 
         try:
-            iqm = compute_raw_iqm(raw, sci_scores, bad_channels)
+            iqm = compute_raw_iqm(raw, sci_cw, bad_channels)
         except Exception:
             iqm = {}
 
@@ -154,7 +162,7 @@ def compute_group_iqm_raw(
             "channel_retention_rate": iqm.get("channel_retention_rate"),
         })
 
-        for ch, sci_val in sci_scores.items():
+        for ch, sci_val in sci_cw.items():
             channel_rows.append({
                 "group_id":   gid,
                 "subject_id": entry.subject_id,
