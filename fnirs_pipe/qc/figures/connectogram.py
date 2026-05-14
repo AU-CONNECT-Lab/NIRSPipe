@@ -1,9 +1,8 @@
 """Circular connectivity (connectogram) figure.
 
-fc_connectogram():  within-subject FC connectogram from a channel × channel DataFrame.
-                    HbO and HbR are drawn as separate circles and stacked vertically.
-
-# TODO: hyper variant — inter-brain connectogram (Sub1 left semicircle, Sub2 right semicircle).
+fc_connectogram():    within-subject FC connectogram from a channel × channel DataFrame.
+                      HbO and HbR are drawn as separate circles and stacked vertically.
+isc_connectogram():   inter-brain connectogram, Sub1 on left semicircle, Sub2 on right.
 """
 
 from __future__ import annotations
@@ -104,9 +103,8 @@ def _single_circle(
         show=False,
     )
     fig.set_size_inches(8, 8)
-    fig.subplots_adjust(left=0.05, right=0.95, top=0.95, bottom=0.05)
     buf = io.BytesIO()
-    fig.savefig(buf, format="png", dpi=300, pad_inches=0.05, facecolor="white")
+    fig.savefig(buf, format="png", dpi=300, bbox_inches="tight", pad_inches=0.05, facecolor="white")
     plt.close(fig)
     buf.seek(0)
     return buf.read()
@@ -166,5 +164,93 @@ def fc_connectogram(
 
     buf = io.BytesIO()
     combined.save(buf, format="png", dpi=(300, 300))
+    buf.seek(0)
+    return base64.b64encode(buf.read()).decode()
+
+
+def isc_connectogram(
+    isc_mat: np.ndarray,
+    ch_names: list[str],
+    subject_ids: tuple[str, str],
+    threshold: float = 0.3,
+    n_lines: int | None = None,
+    diagonal_only: bool = False,
+    title: str = "Inter-brain ISC Connectogram",
+) -> str:
+    """Return base64 PNG of inter-brain connectogram.
+
+    Sub1 channels occupy the left semicircle; Sub2 the right.
+
+    Args:
+        isc_mat:       n × n ISC matrix from compute_isc().
+        ch_names:      Channel labels (n,), without HbO/HbR type suffix.
+        subject_ids:   (sub1_id, sub2_id) used as group colour labels.
+        threshold:     Minimum |ISC| to draw an arc (ignored when n_lines set).
+        n_lines:       Draw only the top-N strongest arcs.
+        diagonal_only: If True (default), draw only same-channel arcs
+                       (sub1_ch_i ↔ sub2_ch_i). Keeps the plot readable.
+        title:         Figure title.
+    """
+    from mne.viz.circle import _plot_connectivity_circle, circular_layout
+
+    n = len(ch_names)
+    if n == 0:
+        raise ValueError("ch_names is empty")
+
+    sub1_id, sub2_id = subject_ids[0], subject_ids[1]
+
+    # internal unique names for layout; display names are shown in the figure
+    uniq_sub1 = [f"{c}__1" for c in ch_names]
+    uniq_sub2 = [f"{c}__2" for c in ch_names]
+    all_uniq  = uniq_sub1 + uniq_sub2
+    display_names = list(ch_names) + list(ch_names)
+
+    # 2n × 2n connectivity: only cross-brain arcs filled
+    conn = np.zeros((2 * n, 2 * n))
+    block = np.diag(np.diag(isc_mat)) if diagonal_only else isc_mat.copy()
+    if n_lines is None:
+        block[np.abs(block) < threshold] = 0.0
+    conn[:n, n:] = block
+    conn[n:, :n] = block.T
+
+    # sub1 on left half, sub2 on right half
+    node_angles = circular_layout(
+        all_uniq, all_uniq,
+        start_pos=90,
+        group_boundaries=[0, n],
+        group_sep=12,
+    )
+
+    groups = {c: sub1_id for c in uniq_sub1}
+    groups.update({c: sub2_id for c in uniq_sub2})
+    # purple / green — avoids confusion with HbO (red) / HbR (blue)
+    color_map   = {sub1_id: "#8e44ad", sub2_id: "#27ae60"}
+    node_colors = [mcolors.to_rgba(color_map[groups[c]]) for c in all_uniq]
+
+    fig, _ = _plot_connectivity_circle(
+        conn,
+        display_names,
+        node_angles=node_angles,
+        node_colors=node_colors,
+        n_lines=n_lines,
+        colormap="RdBu_r",
+        vmin=-1.0,
+        vmax=1.0,
+        colorbar=True,
+        colorbar_size=0.12,
+        colorbar_pos=(-0.2, 0.1),
+        title=title,
+        facecolor="white",
+        textcolor="#2c3e50",
+        node_edgecolor="white",
+        linewidth=1.5,
+        fontsize_names=6,
+        padding=1.0,
+        show=False,
+    )
+    fig.set_size_inches(10, 10)
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=300, bbox_inches="tight", pad_inches=0.05, facecolor="white")
+    plt.close(fig)
     buf.seek(0)
     return base64.b64encode(buf.read()).decode()

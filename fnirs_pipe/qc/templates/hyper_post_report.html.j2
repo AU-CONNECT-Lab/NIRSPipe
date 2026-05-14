@@ -91,10 +91,46 @@ select#ch-select-post {
   <div id="wtc-plot"></div>
 </div>
 
+<!-- ISC panel — HbO -->
+{% if isc_panel_hbo_b64 %}
+<div class="card">
+  <div class="panel-title">
+    Inter-brain Synchrony — HbO
+    <span class="panel-hint">
+      topomap (per-channel ISC) &bull; ISC matrix (channel &times; channel Pearson r) &bull;
+      connectogram (|ISC| &ge; {{ "%.2f"|format(isc_threshold) }}) &bull;
+      <span style="color:#8e44ad">&#9632;</span> {{ subject_ids[0] }}
+      <span style="color:#27ae60">&#9632;</span> {{ subject_ids[1] }}
+    </span>
+  </div>
+  <div style="text-align:center; padding:0.5rem">
+    <img src="data:image/png;base64,{{ isc_panel_hbo_b64 }}" style="max-width:100%"/>
+  </div>
+</div>
+{% endif %}
+
+<!-- ISC panel — HbR -->
+{% if isc_panel_hbr_b64 %}
+<div class="card">
+  <div class="panel-title">
+    Inter-brain Synchrony — HbR
+    <span class="panel-hint">
+      topomap (per-channel ISC) &bull; ISC matrix (channel &times; channel Pearson r) &bull;
+      connectogram (|ISC| &ge; {{ "%.2f"|format(isc_threshold) }}) &bull;
+      <span style="color:#8e44ad">&#9632;</span> {{ subject_ids[0] }}
+      <span style="color:#27ae60">&#9632;</span> {{ subject_ids[1] }}
+    </span>
+  </div>
+  <div style="text-align:center; padding:0.5rem">
+    <img src="data:image/png;base64,{{ isc_panel_hbr_b64 }}" style="max-width:100%"/>
+  </div>
+</div>
+{% endif %}
+
 <script>
-var _PER_CH  = {{ per_channel_post_json | safe }};
+var _PER_CH   = {{ per_channel_post_json | safe }};
 var _CH_PAIRS = {{ ch_pairs_post_json | safe }};
-var _ALIGN   = {{ alignment_json | safe }};
+var _ALIGN    = {{ alignment_json | safe }};
 var _cfg = { responsive: true, displayModeBar: true };
 
 // alignment table

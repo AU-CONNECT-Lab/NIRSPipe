@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
+import base64
+import io
+
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 import numpy as np
 import mne
-import pandas as pd
 import plotly.graph_objects as go
 
 from fnirs_pipe.utils.logging import get_logger
@@ -89,7 +94,7 @@ def build_wtc_channel(
     return fig
 
 
-# TODO (optional): ROI-level WTC — average HbO within each anatomical ROI
+# TODO: ROI-level WTC — average HbO within each anatomical ROI
 # (roi_map: {"PFC_left": ["S1-D1", ...], ...}), then compute WTC on the
 # averaged signal. Requires roi_map passed from CLI --roi-mapping.
 def build_wtc_roi(
@@ -104,10 +109,125 @@ def build_wtc_roi(
     raise NotImplementedError
 
 
-def build_isc_matrix(
+def compute_isc(
     aligned_raws: dict[str, mne.io.Raw],
     subject_ids: list[str],
-) -> go.Figure | None:
-    """Inter-brain correlation heatmap (Sub1 channels × Sub2 channels, Pearson r)."""
-    raise NotImplementedError
+    ch_type: str = "hbo",
+) -> tuple[np.ndarray, list[str]] | tuple[None, None]:
+    """Compute inter-brain Pearson r matrix (n_ch × n_ch).
 
+    matrix[i, j] = Pearson r between sub1_ch_i and sub2_ch_j.
+    Diagonal = same-channel ISC.
+
+    Args:
+        ch_type: "hbo" or "hbr".
+    """
+    if len(subject_ids) < 2:
+        return None, None
+    raw1 = aligned_raws.get(subject_ids[0])
+    raw2 = aligned_raws.get(subject_ids[1])
+    if raw1 is None or raw2 is None:
+        return None, None
+
+    picks1 = mne.pick_types(raw1.info, fnirs=ch_type)
+    picks2 = mne.pick_types(raw2.info, fnirs=ch_type)
+    n = min(len(picks1), len(picks2))
+    if n == 0:
+        return None, None
+
+    data1 = raw1.get_data(picks=picks1[:n])
+    data2 = raw2.get_data(picks=picks2[:n])
+    ch_names = [raw1.ch_names[picks1[i]].rsplit(" ", 1)[0] for i in range(n)]
+
+    def _zscore(x: np.ndarray) -> np.ndarray:
+        mu  = x.mean(axis=1, keepdims=True)
+        std = x.std(axis=1, keepdims=True)
+        std[std < 1e-12] = 1.0
+        return (x - mu) / std
+
+    d1 = _zscore(data1)
+    d2 = _zscore(data2)
+    isc_mat = (d1 @ d2.T) / d1.shape[1]
+    np.clip(isc_mat, -1.0, 1.0, out=isc_mat)
+    return isc_mat, ch_names
+
+
+def build_isc_panel(
+    isc_mat: np.ndarray,
+    ch_names: list[str],
+    subject_ids: list[str],
+    ch_type: str = "hbo",
+    isc_threshold: float = 0.3,
+) -> str:
+    """Return base64 PNG of 2-panel ISC summary: ISC matrix | connectogram.
+
+    Args:
+        isc_mat:       n × n ISC matrix from compute_isc().
+        ch_names:      Channel labels (n,), without type suffix.
+        subject_ids:   [sub1_id, sub2_id, ...].
+        ch_type:       "hbo" or "hbr", shown in titles.
+        isc_threshold: Minimum |ISC| arc threshold forwarded to connectogram.
+    """
+    from PIL import Image
+    from fnirs_pipe.qc.figures.connectogram import isc_connectogram as _isc_conn
+
+    if isc_mat is None or len(ch_names) == 0:
+        return ""
+
+    n          = len(ch_names)
+    isc_diag   = np.diag(isc_mat)
+    sub1_label = subject_ids[0] if subject_ids else "Sub1"
+    sub2_label = subject_ids[1] if len(subject_ids) > 1 else "Sub2"
+    type_label = ch_type.upper()
+
+    # height driven by matrix size so it can be square; cap to [5, 9]
+    sq = float(np.clip(n * 0.20, 5.0, 9.0))
+    fig = plt.figure(figsize=(sq * 2.4, sq + 1.0))
+    gs  = fig.add_gridspec(1, 2, width_ratios=[2, 2], wspace=0.35)
+    ax_matrix = fig.add_subplot(gs[0])
+    ax_circle = fig.add_subplot(gs[1])
+
+    # left: channel × channel ISC heatmap
+    im = ax_matrix.imshow(isc_mat, cmap="RdBu_r", vmin=-1, vmax=1,
+                           aspect="equal", interpolation="nearest")
+    step = max(1, n // 20)
+    idxs = list(range(0, n, step))
+    ax_matrix.set_xticks(idxs)
+    ax_matrix.set_xticklabels([ch_names[i] for i in idxs],
+                               fontsize=6, rotation=45, ha="right")
+    ax_matrix.set_yticks(idxs)
+    ax_matrix.set_yticklabels([ch_names[i] for i in idxs], fontsize=6)
+    ax_matrix.set_xlabel(sub2_label, fontsize=8)
+    ax_matrix.set_ylabel(sub1_label, fontsize=8)
+    ax_matrix.set_title(f"ISC matrix ({type_label})", fontsize=9, pad=4)
+    plt.colorbar(im, ax=ax_matrix, shrink=0.75, label="Pearson r", pad=0.02)
+
+    # right: connectogram embedded as image
+    try:
+        b64 = _isc_conn(
+            isc_mat, ch_names,
+            (sub1_label, sub2_label),
+            threshold=isc_threshold,
+            title=f"ISC {type_label}",
+        )
+        circle_bytes = base64.b64decode(b64)
+        circle_img   = np.array(Image.open(io.BytesIO(circle_bytes)).convert("RGB"))
+        ax_circle.imshow(circle_img)
+        ax_circle.axis("off")
+    except Exception as exc:
+        logger.debug("ISC connectogram embed failed: %s", exc)
+        ax_circle.text(0.5, 0.5, f"Connectogram\nunavailable\n{exc}",
+                       ha="center", va="center",
+                       transform=ax_circle.transAxes, fontsize=8, color="#888")
+        ax_circle.axis("off")
+
+    fig.suptitle(
+        f"Inter-brain Synchrony ({type_label})  —  {sub1_label} × {sub2_label}",
+        fontsize=10, y=1.01,
+    )
+
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=300, bbox_inches="tight", facecolor="white")
+    plt.close(fig)
+    buf.seek(0)
+    return base64.b64encode(buf.read()).decode()

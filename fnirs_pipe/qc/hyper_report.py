@@ -155,12 +155,16 @@ def build_hyper_post_report(
 
     Sections:
       1. Per-channel WTC  — Morlet wavelet coherence, one heatmap per channel
+      2. ISC matrix       — inter-brain Pearson r heatmap (channel × channel)
+      3. ISC connectogram — inter-brain arcs filtered by isc_threshold
       TODO: ROI-level WTC — WTC averaged within anatomical ROIs (requires roi_map)
-      TODO: ISC matrix    — inter-brain Pearson r heatmap (channel × channel)
-      TODO: Connectivity  — inter-brain connectogram, arcs filtered by isc_threshold
     """
     from fnirs_pipe.pipeline.hyperscanning import WTCResult, compute_wtc
-    from fnirs_pipe.qc.figures.hyper_post_figures import build_wtc_channel
+    from fnirs_pipe.qc.figures.hyper_post_figures import (
+        build_isc_panel,
+        build_wtc_channel,
+        compute_isc,
+    )
 
     subject_ids  = [e.subject_id for e in group]
     ref_raw      = aligned_raws.get(subject_ids[0]) if subject_ids else None
@@ -219,6 +223,23 @@ def build_hyper_post_report(
                 )
             per_channel_post[pair] = {"wtc": wtc_fig}
 
+    # Compute ISC panels (HbO and HbR)
+    def _isc_panel(ch_type: str) -> str:
+        try:
+            isc_mat, isc_ch_names = compute_isc(aligned_raws, subject_ids, ch_type)
+            if isc_mat is None:
+                return ""
+            return build_isc_panel(
+                isc_mat, isc_ch_names, subject_ids,
+                ch_type=ch_type, isc_threshold=isc_threshold,
+            )
+        except Exception as exc:
+            logger.warning("ISC panel (%s) failed: %s", ch_type, exc)
+            return ""
+
+    isc_panel_hbo_b64 = _isc_panel("hbo")
+    isc_panel_hbr_b64 = _isc_panel("hbr")
+
     output_path = output_dir / f"group-{group_id}_task-{task}_hyper-post.html"
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -233,6 +254,8 @@ def build_hyper_post_report(
         alignment_json=json.dumps(alignment_rows),
         per_channel_post_json=json.dumps(per_channel_post),
         ch_pairs_post_json=json.dumps(ch_pairs_post),
+        isc_panel_hbo_b64=isc_panel_hbo_b64,
+        isc_panel_hbr_b64=isc_panel_hbr_b64,
     )
     output_path.write_text(html, encoding="utf-8")
     logger.info("Hyper post report saved: %s", output_path)
