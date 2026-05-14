@@ -26,6 +26,7 @@ from .glm_figures import (
 )
 from .correlation_panel import hbo_hbr_correlation_panel
 from .optode_layout import optode_layout_static
+from .rest_figures import alff_falff_figure, fc_matrix_figure
 
 __all__ = [
     "build_ts_figure",
@@ -54,4 +55,6 @@ __all__ = [
     "glm_betas_figure",
     "hbo_hbr_correlation_panel",
     "optode_layout_static",
+    "alff_falff_figure",
+    "fc_matrix_figure",
 ]

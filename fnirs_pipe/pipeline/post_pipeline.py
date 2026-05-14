@@ -68,9 +68,11 @@ def run_post(
     mode: Mode = "denoise",
     source_entities: dict[str, str] | None = None,
 ) -> tuple:
-    """Run post-processing pipeline. Returns (result, glm_est, design_matrix).
+    """Run post-processing pipeline.
 
-    glm_est and design_matrix are None for non-GLM modes.
+    Returns (result, glm_est, design_matrix, alff_df, fc_df).
+    glm_est / design_matrix are None for non-GLM modes.
+    alff_df / fc_df are None for non-rest modes.
     """
 
     result = raw_haemo.copy()
@@ -102,7 +104,7 @@ def run_post(
         except Exception:
             logger.warning("sub-%s | haemo IQM failed", config.subject, exc_info=True)
 
-    glm_est = dm = None
+    glm_est = dm = alff_df = fc_df = None
     if mode == "glm":
         missing = [f for f in ("hrf_model", "noise_model", "drift_model") if getattr(config, f) is None]
         if missing:
@@ -144,21 +146,23 @@ def run_post(
             output_dir=str(output_dir / f"sub-{config.subject}" / "nirs"),
         )
         _write_step_snirf(raw_resid, config, output_dir, desc="errts", source_entities=source_entities)
-        _write_rest_derivatives(raw_resid, config, output_dir, source_entities=source_entities)
+        alff_df, fc_df = _write_rest_derivatives(raw_resid, config, output_dir, source_entities=source_entities)
 
-    return result, glm_est, dm
+    return result, glm_est, dm, alff_df, fc_df
 
 def _write_rest_derivatives(
     raw_resid: mne.io.Raw,
     config: PostConfig,
     output_dir: Path,
     source_entities: dict[str, str] | None = None,
-) -> None:
+) -> tuple:
+    """Write ALFF/fALFF and FC TSVs. Returns (alff_df | None, fc_df)."""
     from fnirs_pipe.io.derivatives import build_output_path
     from fnirs_pipe.pipeline.restingstate import compute_alff, compute_fc
 
     entities = {k: v for k, v in (source_entities or {}).items() if k in ("task", "run")}
 
+    alff_df = None
     if config.low_pass is not None and config.high_pass is not None:
         alff_df = compute_alff(raw_resid, low_pass=config.low_pass, high_pass=config.high_pass)
         alff_path = build_output_path(
@@ -177,6 +181,8 @@ def _write_rest_derivatives(
     )
     fc_df.to_csv(fc_path, sep="\t", index_label="channel")
     logger.info("sub-%s | fc → %s", config.subject, fc_path)
+
+    return alff_df, fc_df
 
 
 def _crop_to_segments(raw: mne.io.Raw, segments_path: str) -> mne.io.Raw:

@@ -185,8 +185,11 @@
   <a href="#Signal">SCI/PSP</a>
   <a href="#Motion">Motion</a>
   <a href="#HbO_HbR">HbO/HbR</a>
-  <a href="#Epoch">Epoch</a>
-  {% if glm_design_path or glm_activation_path %}<a href="#GLM">GLM</a>{% endif %}
+  {% if mode != 'rest' %}<a href="#Epoch">Epoch</a>{% endif %}
+  {% if mode == 'rest' %}
+  {% if rest_alff_path %}<a href="#RestALFF">ALFF/fALFF</a>{% endif %}
+  {% if rest_fc_path %}<a href="#RestFC">FC</a>{% endif %}
+  {% elif glm_design_path or glm_activation_path %}<a href="#GLM">GLM</a>{% endif %}
   <span class="nav-sep">|</span>
   <a href="#Metrics">Metrics</a>
   {% if channel_summary_path %}<a href="#ChannelSummary">Ch. Summary</a>{% endif %}
@@ -379,7 +382,8 @@
   </div>
 </details>
 
-<!-- step f: Epoch / HRF preview -->
+<!-- step f: Epoch / HRF preview (task/GLM mode only) -->
+{% if mode != 'rest' %}
 <details id="Epoch" open>
   <summary>f. Epoch / HRF Preview (grand mean)</summary>
   <div class="details-body">
@@ -395,10 +399,47 @@
     {% endif %}
   </div>
 </details>
+{% endif %}
 
 <!-- ======================================================= postprocessing -->
 <h2 id="Postprocessing">Postprocessing</h2>
 
+{% if mode == 'rest' %}
+<!-- Resting-state results -->
+<details id="RestALFF" {% if rest_alff_path %}open{% endif %}>
+  <summary>ALFF / fALFF</summary>
+  <div class="details-body">
+    <p class="step-desc">
+      Amplitude of Low-Frequency Fluctuations (ALFF) and fractional ALFF (fALFF) per channel,
+      computed from the denoised residual time series. HbO in red, HbR in blue.
+      Dashed lines mark per-group means.
+    </p>
+    {% if rest_alff_path %}
+      <img class="responsive" src="{{ rest_alff_path }}" alt="ALFF / fALFF per channel" />
+      <p class="fig-path">{{ rest_alff_path }}</p>
+    {% else %}
+      <div class="placeholder">ALFF not computed — --high-pass and --low-pass are required.</div>
+    {% endif %}
+  </div>
+</details>
+
+<details id="RestFC" {% if rest_fc_path %}open{% endif %}>
+  <summary>Functional Connectivity</summary>
+  <div class="details-body">
+    <p class="step-desc">
+      Channel-level Pearson correlation matrix computed from the denoised residual time series.
+      HbO and HbR are shown as separate heatmaps.
+    </p>
+    {% if rest_fc_path %}
+      <img class="responsive" src="{{ rest_fc_path }}" alt="Functional connectivity matrix" />
+      <p class="fig-path">{{ rest_fc_path }}</p>
+    {% else %}
+      <div class="placeholder">FC matrix not available.</div>
+    {% endif %}
+  </div>
+</details>
+
+{% else %}
 <details id="GLM" {% if glm_design_path or glm_betas_html or glm_activation_path %}open{% endif %}>
   <summary>GLM</summary>
   <div class="details-body">
@@ -425,13 +466,7 @@
   </div>
 </details>
 
-<details>
-  <summary>Connectivity</summary>
-  <div class="details-body">
-    <p class="step-desc">[PLACEHOLDER] Connectivity mode — not yet implemented.</p>
-    <div class="placeholder">[PLACEHOLDER] FC matrix heatmap.</div>
-  </div>
-</details>
+{% endif %}
 
 <!-- ================================================= quantitative metrics -->
 {% macro qm_val(v, fmt='.3f') %}{% if v is not none %}{{ ('%' ~ fmt) | format(v) }}{% else %}<span style="color:#aaa">n/a</span>{% endif %}{% endmacro %}

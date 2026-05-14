@@ -1,4 +1,8 @@
-"""Motion annotation figures: carpet + GVTD combined, bad segment zoom, per-channel detail."""
+"""Motion annotation figures: carpet + GVTD combined, bad segment zoom, per-channel detail.
+
+# TODO: carpet_gvtd_figure is currently called on pre-processing data; it should move to the
+#       raw QC report so rest/task post-processing reports show post-denoising carpet instead.
+"""
 
 import base64
 import io

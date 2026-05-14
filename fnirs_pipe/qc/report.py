@@ -68,6 +68,8 @@ from fnirs_pipe.qc.figures import (
     build_channel_figure,
     build_motion_detail_figure,
     channel_quality_heatmap,
+    alff_falff_figure,
+    fc_matrix_figure,
 )
 from fnirs_pipe.qc.quantitative_metrics import compute_iqm
 from fnirs_pipe.utils.logging import get_logger
@@ -587,6 +589,27 @@ def _section_glm(
     }
 
 
+def _section_rest(
+    alff_df: "Any | None",
+    fc_df: "Any | None",
+    subject: str,
+    errors: list,
+    figures_dir: Path,
+) -> dict:
+    alff_path = fc_path = None
+    with _guard("ALFF/fALFF figure", errors, subject):
+        if alff_df is not None:
+            b64 = alff_falff_figure(alff_df)
+            _save_b64_png(b64, figures_dir / "rest_alff.png")
+            alff_path = "figures/rest_alff.png"
+    with _guard("FC matrix figure", errors, subject):
+        if fc_df is not None:
+            b64 = fc_matrix_figure(fc_df)
+            _save_b64_png(b64, figures_dir / "rest_fc.png")
+            fc_path = "figures/rest_fc.png"
+    return {"rest_alff_path": alff_path, "rest_fc_path": fc_path}
+
+
 def _glm_betas_table(df: "Any", conditions: list[str]) -> str:
     """Return an HTML table of per-channel GLM betas (theta)."""
     import html as _html
@@ -665,6 +688,9 @@ def build_subject_report(
     glm_est: "Any | None" = None,
     l_freq: float | None = None,
     h_freq: float | None = None,
+    mode: str | None = None,
+    alff_df: "Any | None" = None,
+    fc_df: "Any | None" = None,
 ) -> None:
     """Render a per-subject prep QC report and save as HTML."""
     errors: list[str] = []
@@ -694,6 +720,7 @@ def build_subject_report(
                             subject, errors, figures_dir, ch_names_brain=ch_names_brain)
     epoch_vars        = _section_epoch_preview(raw_haemo, subject, errors, figures_dir)
     glm_vars          = _section_glm(design_matrix, glm_est, raw_haemo, subject, errors, figures_dir, segments=segments)
+    rest_vars         = _section_rest(alff_df, fc_df, subject, errors, figures_dir)
     iqm_vars          = _section_iqm(raw_long, raw_haemo, sci_scores, bad_channels, subject, errors,
                                      out_dir=out_path.parent / "nirs")
     ch_summary_vars   = _section_channel_summary(
@@ -737,7 +764,9 @@ def build_subject_report(
 
         **epoch_vars,
         **glm_vars,
+        **rest_vars,
         **ch_summary_vars,
+        mode=mode or "",
     )
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(html, encoding="utf-8")

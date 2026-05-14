@@ -51,5 +51,5 @@ def compute_alff(raw: mne.io.Raw, low_pass: float, high_pass: float) -> pd.DataF
 def compute_fc(raw: mne.io.Raw) -> pd.DataFrame:
     # uses nilearn.connectome.ConnectivityMeasure
     from nilearn.connectome import ConnectivityMeasure
-    fc = ConnectivityMeasure(kind="correlation").fit_transform([raw.get_data().T])[0]
+    fc = ConnectivityMeasure(kind="correlation", standardize=False).fit_transform([raw.get_data().T])[0]
     return pd.DataFrame(fc, index=raw.ch_names, columns=raw.ch_names)

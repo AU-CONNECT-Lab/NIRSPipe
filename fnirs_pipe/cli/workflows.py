@@ -141,12 +141,12 @@ def run_participant_level(args: dict[str, Any]) -> None:
                         logger.exception("prep failed for %s", snirf_path)
                         raise
 
-                glm_est = dm = None
+                glm_est = dm = alff_df = fc_df = None
                 if args.get("mode") is not None:
-                    glm_est, dm = _run_post_for_subject(subject, sessions, args, toml, output_dir)
+                    glm_est, dm, alff_df, fc_df = _run_post_for_subject(subject, sessions, args, toml, output_dir)
 
                 if not args.get("no_report") and last_result is not None:
-                    _emit_subject_report(subject, sub_dir, last_raw, last_result, prep_config, args, glm_est, dm)
+                    _emit_subject_report(subject, sub_dir, last_raw, last_result, prep_config, args, glm_est, dm, alff_df=alff_df, fc_df=fc_df)
 
 
 def _make_prep_config(subject: str, session: str | None, args: dict[str, Any]) -> "PrepConfig":
@@ -164,7 +164,7 @@ def _make_prep_config(subject: str, session: str | None, args: dict[str, Any]) -
     )
 
 
-def _emit_subject_report(subject, sub_dir, last_raw, last_result, prep_config, args, glm_est, dm):
+def _emit_subject_report(subject, sub_dir, last_raw, last_result, prep_config, args, glm_est, dm, alff_df=None, fc_df=None):
     import mne
     import numpy as np
     from fnirs_pipe.qc.report import build_subject_report
@@ -208,6 +208,9 @@ def _emit_subject_report(subject, sub_dir, last_raw, last_result, prep_config, a
         glm_est=glm_est,
         l_freq=args.get("high_pass"),
         h_freq=args.get("low_pass"),
+        mode=_v(args.get("mode")) if args.get("mode") else None,
+        alff_df=alff_df,
+        fc_df=fc_df,
     )
 
 
@@ -226,7 +229,7 @@ def _run_post_for_subject(
     tasks: list[str | None] = task_label if task_label else [None]
 
     post_layout = get_layout(output_dir, validate=False)
-    last_glm_est = last_dm = None
+    last_glm_est = last_dm = last_alff_df = last_fc_df = None
     for session in sessions:
         post_config = _build_post_config(subject, session, args, toml)
         for task in tasks:
@@ -246,14 +249,16 @@ def _run_post_for_subject(
                 logger.info("post (%s): %s", mode, snirf_path.name)
                 try:
                     raw_haemo = mne.io.read_raw_snirf(str(snirf_path), preload=True)
-                    _, glm_est, dm = run_post(raw_haemo, post_config, output_dir=output_dir, mode=mode, source_entities=src_entities)
+                    _, glm_est, dm, alff_df, fc_df = run_post(raw_haemo, post_config, output_dir=output_dir, mode=mode, source_entities=src_entities)
                     if glm_est is not None:
                         last_glm_est, last_dm = glm_est, dm
+                    if fc_df is not None:
+                        last_alff_df, last_fc_df = alff_df, fc_df
                 except Exception:
                     logger.exception("post failed for %s", snirf_path)
                     raise
 
-    return last_glm_est, last_dm
+    return last_glm_est, last_dm, last_alff_df, last_fc_df
 
 
 def run_group_level(args: dict[str, Any]) -> None:

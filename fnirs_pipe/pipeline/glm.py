@@ -30,7 +30,11 @@ SCRStrategy = Literal["mean", "pca"]
 def _short_channel_regressors(haemo: mne.io.Raw, strategy: SCRStrategy) -> dict[str, np.ndarray]:
     from mne_nirs.channels import get_short_channels
 
-    short = get_short_channels(haemo)
+    try:
+        short = get_short_channels(haemo)
+    except ValueError:
+        logger.warning("no short channels found — skipping short-channel regressors")
+        return {}
     hbo_data = short.copy().pick(picks="hbo").get_data()  # (n_channels, n_times)
     hbr_data = short.copy().pick(picks="hbr").get_data()
     if strategy == "pca":
