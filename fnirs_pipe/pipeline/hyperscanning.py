@@ -238,6 +238,26 @@ def align_recordings(
     return aligned, offsets
 
 
+def normalize_raws(raws: dict[str, mne.io.Raw]) -> dict[str, mne.io.Raw]:
+    """Z-score each channel independently per subject (mean=0, std=1 across time).
+
+    Applied after alignment so all subjects share the same time axis.
+    Channels with near-zero variance are left unchanged (divided by 1.0).
+
+    Affects signal overlay display only; coherence and ISC values are scale-invariant
+    and unchanged. SCI / bad-channel detection run on raw CW data before normalization.
+    """
+    result: dict[str, mne.io.Raw] = {}
+    for sid, raw in raws.items():
+        r = raw.copy()
+        data = r.get_data()
+        mu = data.mean(axis=1, keepdims=True)
+        sd = data.std(axis=1, keepdims=True)
+        r._data[:] = (data - mu) / np.where(sd < 1e-12, 1.0, sd)
+        result[sid] = r
+    return result
+
+
 def compute_pairwise_coherence(
     raws: dict[str, mne.io.Raw],
     fmin: float = 0.01,

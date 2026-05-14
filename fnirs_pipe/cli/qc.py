@@ -109,6 +109,10 @@ def hyper_raw(
     coherence_fmax: Annotated[float, typer.Option("--fmax", help=(
         "Upper bound (Hz) for coherence frequency band."
     ))] = 0.10,
+    normalize: Annotated[bool, typer.Option("--normalize/--no-normalize", help=(
+        "Z-score each channel per subject after alignment. "
+        "Useful when subjects have very different signal amplitudes."
+    ))] = False,
     session_label: Annotated[Optional[list[str]], typer.Option("--session-label", help="Session label(s) to include.")] = None,
     task_label: Annotated[Optional[list[str]], typer.Option("--task-label", help="Task label(s) to include.")] = None,
     skip_bids_validation: Annotated[bool, typer.Option("--skip-bids-validation/--no-skip-bids-validation")] = False,
@@ -121,6 +125,7 @@ def hyper_raw(
         compute_group_iqm_raw,
         compute_pairwise_coherence,
         load_group_raw_bids,
+        normalize_raws,
         parse_group_csv,
     )
     from fnirs_pipe.qc.hyper_report import build_hyper_report
@@ -149,6 +154,8 @@ def hyper_raw(
             iqm_data = compute_group_iqm_raw(members, raws_cw, sci_threshold, output_dir)
             raws_haemo = {sid: _raw_to_haemo(r) for sid, r in raws_cw.items()}
             aligned_raws, offsets = align_recordings(raws_haemo, task)
+            if normalize:
+                aligned_raws = normalize_raws(aligned_raws)
             coherence_df = compute_pairwise_coherence(
                 aligned_raws, fmin=coherence_fmin, fmax=coherence_fmax
             )
@@ -207,6 +214,10 @@ def hyper_post(
     isc_threshold: Annotated[float, typer.Option("--isc-threshold", help=(
         "Minimum mean ISC to draw an arc in the connectivity circle."
     ))] = 0.3,
+    normalize: Annotated[bool, typer.Option("--normalize/--no-normalize", help=(
+        "Z-score each channel per subject after alignment. "
+        "Useful when subjects have very different signal amplitudes."
+    ))] = False,
     session_label: Annotated[Optional[list[str]], typer.Option("--session-label", help="Session label(s) to include.")] = None,
     task_label: Annotated[Optional[list[str]], typer.Option("--task-label", help="Task label(s) to include.")] = None,
     skip_bids_validation: Annotated[bool, typer.Option("--skip-bids-validation/--no-skip-bids-validation")] = False,
@@ -218,6 +229,7 @@ def hyper_post(
     from fnirs_pipe.pipeline.hyperscanning import (
         align_recordings,
         load_group_haemo,
+        normalize_raws,
         parse_group_csv,
     )
     from fnirs_pipe.qc.hyper_report import build_hyper_post_report
@@ -252,6 +264,8 @@ def hyper_post(
         try:
             raws = load_group_haemo(output_dir, members)
             aligned_raws, offsets = align_recordings(raws, task)
+            if normalize:
+                aligned_raws = normalize_raws(aligned_raws)
             report_path = build_hyper_post_report(
                 group_id=gid,
                 task=task,
