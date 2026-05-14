@@ -6,40 +6,52 @@ Status: `[ ]` not started · `[~]` in progress · `[x]` done · `[?]` needs revi
 
 ## v0.1 — Preprocessing Core `[x]`
 
-End-to-end single-subject preprocessing implemented: OD conversion, SCI marking, motion correction (TDDR), Beer-Lambert.  
-Pipeline reorganized into `pipeline/prep_pipeline.py`; intermediate snirf written at each step.
+End-to-end single-subject preprocessing: OD conversion, SCI marking, motion correction (TDDR), Beer-Lambert.
+Pipeline reorganized into `pipeline/prep_pipeline.py`; intermediate SNIRF written at each step.
 
 ## v0.2 — QC Preprocessing Report `[x]`
 
-Full QC report system implemented: SCI/PSP heatmaps, GVTD timeseries, carpet plot, HbO-HbR correlation panel, PSD, brain views, IQM sidecar.  
-Output correctness has not been formally validated; treat as demo quality pending review.
+Per-subject HTML report: SCI/PSP heatmaps, GVTD timeseries, motion carpet, HbO/HbR correlation panel, PSD, brain views, IQM sidecar.
 
-## v0.3 — Postprocessing `[~]`
+## v0.3 — Postprocessing & GLM `[x]`
 
-Task GLM (`pipeline/glm.py`) and denoise mode implemented.  
-Connectivity mode removed from CLI; deferred to a later milestone.  
-Known bug: `_write_denoised_snirf` references `config.ica` which does not exist on `PostConfig` → `AttributeError` in denoise/glm mode.
+Task GLM (`pipeline/glm.py`) and denoise mode implemented.
+GLM QC section added to report; raw residuals written as a separate SNIRF.
 
-## v0.4 — QC Postprocessing Visualization `[~]`
+## v0.4 — Raw QC CLI `[x]`
 
-GLM design matrix figure and activation panel in place.  
-Per-channel HRF panel and FC matrix heatmap are stubs.
+`fnirs-qc` CLI implemented with `prep-raw` subcommand and interactive HTML viewer.
+IQM expanded with cardiac power and tSNR metrics; channel quality summary figure added.
 
-## v0.5 — Raw QC CLI (`fnirs-qc`) `[ ]`
+## v0.5 — Hyperscanning Pipeline `[x]`
 
-Separate CLI command for lightweight raw data quality inspection, independent of the prep pipeline.
+Hyperscanning pipeline consolidated into `pipeline/hyperscanning.py`.
+WTC computation, connectogram visualization, ISC computation.
+Group-level raw QC report and per-dyad post-processing QC report implemented.
 
-- BIDS dir + subject label as input (consistent with `fnirs-pipe` conventions)
-- Runs `compute_raw_iqm` only (no OD conversion, no Beer-Lambert)
-- Outputs IQM TOML sidecar + lightweight HTML report (SCI/PSP channel summary, intensity figure)
-- Use case: same-day acquisition QA before committing to full preprocessing
+## v0.6 — Resting-State Analysis `[x]`
 
-## v0.6 — Group-Level QC Report `[ ]`
+Resting-state mode added to hyperscanning pipeline: ALFF/fALFF computation, functional connectivity matrix, resting-state QC report.
 
-Group-level QC aggregation across subjects.
+## v0.7 — GUI Interface `[~]`
 
-- Aggregate IQM scalars from per-subject TOML sidecars into a group-level summary
-- Visualizations: distribution plots per metric, outlier flagging across subjects
+Dash-based `fnirs-gui` application with multi-page routing.
+Data Preparation page (SNIRF loader, marker editor, IQM display) implemented.
+Analysis page is a stub; callbacks and data flow not yet wired.
+
+## v0.8 — GUI Analysis Page & Pipeline Integration `[ ]`
+
+Complete the Analysis page in `fnirs-gui`:
+
+- Connect pipeline execution (prep, GLM, denoise) to the GUI via background callbacks
+- Display live progress and log output in the interface
+- Show report preview or figure output after run completes
+
+## v0.9 — Group-Level QC Report `[ ]`
+
+Aggregate IQM scalars from per-subject TOML sidecars into a group-level summary.
+
+- Distribution plots per metric, outlier flagging across subjects
 - Output: group-level HTML report + CSV/TSV table of all subject IQMs
 
 ---
@@ -47,14 +59,11 @@ Group-level QC aggregation across subjects.
 ## Pending decisions
 
 - Short-channel regression: `--short-channel {none,mean,pca}` flag wired in CLI; confirm integration into prep pipeline
-- ICA: module stub exists; implementation deferred
-- Group-level CLI (second-level GLM): not started
-- Fix `PostConfig` missing `ica` field (`_write_denoised_snirf` bug)
+- Group-level second-level GLM: not started
 
 ## Backlog
 
-- Functional connectivity mode (deferred; not in CLI)
-- Group-level report (`run_group_level`)
-- **Per-step before/after comparison** — interactive channel-level signal comparison across preprocessing steps (OD → SCI → motcorrected → haemo); needs design work before implementation
-- **Epoch/HRF preview** — stimulus-locked epoch average per channel (HbO/HbR mean ± std across trials), task data only; quick sanity check without full GLM
+- **Per-step before/after comparison** — interactive channel-level signal comparison across preprocessing steps (OD → SCI → motion-corrected → haemo); needs design work before implementation
+- **Epoch/HRF preview** — stimulus-locked epoch average per channel (HbO/HbR mean ± std across trials), task data only
 - **Multi-run QC comparison** — aggregate and compare IQM scalars across runs within the same subject/session; BIDS `run-` entity already supported
+- Functional connectivity mode for task data (currently raises `NotImplementedError`)
