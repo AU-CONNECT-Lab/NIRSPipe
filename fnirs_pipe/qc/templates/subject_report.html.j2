@@ -436,6 +436,12 @@
     {% else %}
       <div class="placeholder">FC matrix not available.</div>
     {% endif %}
+    {% if rest_fc_circle_path %}
+      <h3>Connectogram (threshold |r| ≥ 0.3)</h3>
+      <p class="step-desc">HbO and HbR channels together, nodes colour-coded by source. Only connections above threshold are drawn.</p>
+      <img class="responsive" src="{{ rest_fc_circle_path }}" alt="FC connectogram" />
+      <p class="fig-path">{{ rest_fc_circle_path }}</p>
+    {% endif %}
   </div>
 </details>
 

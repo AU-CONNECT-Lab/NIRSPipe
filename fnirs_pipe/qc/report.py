@@ -70,6 +70,7 @@ from fnirs_pipe.qc.figures import (
     channel_quality_heatmap,
     alff_falff_figure,
     fc_matrix_figure,
+    fc_connectogram,
 )
 from fnirs_pipe.qc.quantitative_metrics import compute_iqm
 from fnirs_pipe.utils.logging import get_logger
@@ -596,7 +597,7 @@ def _section_rest(
     errors: list,
     figures_dir: Path,
 ) -> dict:
-    alff_path = fc_path = None
+    alff_path = fc_path = fc_circle_path = None
     with _guard("ALFF/fALFF figure", errors, subject):
         if alff_df is not None:
             b64 = alff_falff_figure(alff_df)
@@ -607,7 +608,12 @@ def _section_rest(
             b64 = fc_matrix_figure(fc_df)
             _save_b64_png(b64, figures_dir / "rest_fc.png")
             fc_path = "figures/rest_fc.png"
-    return {"rest_alff_path": alff_path, "rest_fc_path": fc_path}
+    with _guard("FC connectogram", errors, subject):
+        if fc_df is not None:
+            b64 = fc_connectogram(fc_df)
+            _save_b64_png(b64, figures_dir / "rest_fc_circle.png")
+            fc_circle_path = "figures/rest_fc_circle.png"
+    return {"rest_alff_path": alff_path, "rest_fc_path": fc_path, "rest_fc_circle_path": fc_circle_path}
 
 
 def _glm_betas_table(df: "Any", conditions: list[str]) -> str:

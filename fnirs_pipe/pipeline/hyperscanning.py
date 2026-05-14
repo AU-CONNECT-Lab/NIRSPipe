@@ -272,6 +272,12 @@ def normalize_raws(raws: dict[str, mne.io.Raw]) -> dict[str, mne.io.Raw]:
     return result
 
 
+# TODO (optional): extend with PLI / wPLI via mne-connectivity.
+# Merge both subjects' channels into one Epochs object, then call
+# spectral_connectivity_epochs(method=["pli", "wpli"]).
+# PLI/wPLI resist zero-lag volume conduction — less critical for fNIRS
+# (sensors are physically separate across brains) but useful if shared
+# environmental noise (e.g. respiration) inflates coherence.
 def compute_pairwise_coherence(
     raws: dict[str, mne.io.Raw],
     fmin: float = 0.01,
