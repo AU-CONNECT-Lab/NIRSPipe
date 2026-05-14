@@ -154,9 +154,86 @@ def build_hyper_post_report(
     """Build hyperscanning post-QC report.
 
     Sections:
-      1. Per-channel WTC  — time-frequency coherence per channel
-      2. ROI-level WTC    — WTC averaged within anatomical ROIs (requires roi_map)
-      3. ISC matrix       — inter-brain correlation heatmap (channel × channel)
-      4. Connectivity     — inter-brain connectogram, arcs filtered by isc_threshold
+      1. Per-channel WTC  — Morlet wavelet coherence, one heatmap per channel
+      TODO: ROI-level WTC — WTC averaged within anatomical ROIs (requires roi_map)
+      TODO: ISC matrix    — inter-brain Pearson r heatmap (channel × channel)
+      TODO: Connectivity  — inter-brain connectogram, arcs filtered by isc_threshold
     """
-    raise NotImplementedError("build_hyper_post_report is not yet implemented")
+    from fnirs_pipe.pipeline.hyperscanning import WTCResult, compute_wtc
+    from fnirs_pipe.qc.figures.hyper_post_figures import build_wtc_channel
+
+    subject_ids  = [e.subject_id for e in group]
+    ref_raw      = aligned_raws.get(subject_ids[0]) if subject_ids else None
+    markers_list = _extract_markers(ref_raw) if ref_raw else []
+    all_descs    = list(dict.fromkeys(m["description"] for m in markers_list))
+    cond_colors_ = _cond_colors(all_descs)
+
+    alignment_rows = [
+        {
+            "subject_id": sid,
+            "offset_s":   round(offsets.get(sid, 0.0), 3),
+            "duration_s": round(aligned_raws[sid].times[-1], 1)
+                          if sid in aligned_raws else None,
+        }
+        for sid in subject_ids
+    ]
+
+    def _safe_post(name: str, fn, *args):
+        try:
+            fig = fn(*args)
+            return fig.to_dict() if fig is not None else None
+        except Exception as exc:
+            logger.warning("%s figure failed: %s", name, exc)
+            return None
+
+    # Compute WTC
+    wtc_result: WTCResult | None = None
+    try:
+        logger.info("Computing WTC for %d channels...", len(subject_ids))
+        wtc_result = compute_wtc(aligned_raws, fmin=wtc_fmin, fmax=wtc_fmax)
+    except Exception as exc:
+        logger.warning("WTC computation failed: %s", exc)
+
+    pair_key   = next(iter(wtc_result.pairs)) if wtc_result and wtc_result.pairs else None
+    pair_label = f"{pair_key[0]} × {pair_key[1]}" if pair_key else ""
+
+    # Build per-channel WTC figures
+    ch_pairs_post: list[str] = []
+    per_channel_post: dict[str, dict] = {}
+    if ref_raw:
+        hbo_picks = mne.pick_types(ref_raw.info, fnirs="hbo")
+        for pick in hbo_picks:
+            ch_name = ref_raw.ch_names[pick]
+            pair    = ch_name.rsplit(" ", 1)[0] if " " in ch_name else ch_name
+            if pair in per_channel_post:
+                continue
+            ch_pairs_post.append(pair)
+
+            wtc_fig = None
+            if wtc_result and pair_key:
+                ch_data = wtc_result.pairs.get(pair_key, {}).get(pair)
+                wtc_fig = _safe_post(
+                    "wtc", build_wtc_channel,
+                    ch_data, wtc_result.freqs, wtc_result.times,
+                    pair_label, markers_list, cond_colors_,
+                )
+            per_channel_post[pair] = {"wtc": wtc_fig}
+
+    output_path = output_dir / f"group-{group_id}_task-{task}_hyper-post.html"
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    env  = Environment(loader=FileSystemLoader(str(_TEMPLATE_DIR)), autoescape=False)
+    html = env.get_template("hyper_post_report.html.j2").render(
+        group_id=group_id,
+        task=task,
+        subject_ids=subject_ids,
+        wtc_fmin=wtc_fmin,
+        wtc_fmax=wtc_fmax,
+        isc_threshold=isc_threshold,
+        alignment_json=json.dumps(alignment_rows),
+        per_channel_post_json=json.dumps(per_channel_post),
+        ch_pairs_post_json=json.dumps(ch_pairs_post),
+    )
+    output_path.write_text(html, encoding="utf-8")
+    logger.info("Hyper post report saved: %s", output_path)
+    return output_path

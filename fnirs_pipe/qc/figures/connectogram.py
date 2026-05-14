@@ -82,7 +82,7 @@ def _single_circle(
     node_colors = [mcolors.to_rgba(color_map[groups.get(c, "other")]) for c in sorted_ch]
     display_names = [c.replace(" hbo", "").replace(" hbr", "") for c in sorted_ch]
 
-    fig, _ = _plot_connectivity_circle(
+    fig, ax = _plot_connectivity_circle(
         fc_sorted,
         display_names,
         node_angles=node_angles,
@@ -100,11 +100,13 @@ def _single_circle(
         node_edgecolor="white",
         linewidth=1.5,
         fontsize_names=7,
+        padding=1.0,
         show=False,
     )
     fig.set_size_inches(8, 8)
+    fig.subplots_adjust(left=0.05, right=0.95, top=0.95, bottom=0.05)
     buf = io.BytesIO()
-    fig.savefig(buf, format="png", dpi=300, bbox_inches="tight", facecolor="white")
+    fig.savefig(buf, format="png", dpi=300, pad_inches=0.05, facecolor="white")
     plt.close(fig)
     buf.seek(0)
     return buf.read()
@@ -155,12 +157,12 @@ def fc_connectogram(
         return base64.b64encode(pngs[0]).decode()
 
     imgs = [Image.open(io.BytesIO(p)).convert("RGB") for p in pngs]
-    w = max(im.width for im in imgs)
-    combined = Image.new("RGB", (w, sum(im.height for im in imgs)), (255, 255, 255))
-    y = 0
+    h = max(im.height for im in imgs)
+    combined = Image.new("RGB", (sum(im.width for im in imgs), h), (255, 255, 255))
+    x = 0
     for im in imgs:
-        combined.paste(im, (0, y))
-        y += im.height
+        combined.paste(im, (x, 0))
+        x += im.width
 
     buf = io.BytesIO()
     combined.save(buf, format="png", dpi=(300, 300))

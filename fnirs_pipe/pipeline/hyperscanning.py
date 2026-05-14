@@ -14,6 +14,9 @@ from scipy.signal import coherence
 from fnirs_pipe.exceptions import AlignmentError, GroupCSVError, MissingDerivativesError
 from fnirs_pipe.io.derivatives import find_preproc_snirf
 from fnirs_pipe.utils import load_toml
+from fnirs_pipe.utils.logging import get_logger
+
+logger = get_logger("pipeline.hyperscanning")
 
 
 @dataclass
@@ -270,6 +273,93 @@ def normalize_raws(raws: dict[str, mne.io.Raw]) -> dict[str, mne.io.Raw]:
         r._data[:] = (data - mu) / np.where(sd < 1e-12, 1.0, sd)
         result[sid] = r
     return result
+
+
+@dataclass
+class WTCResult:
+    """Pairwise wavelet transform coherence per HbO channel.
+
+    pairs[(sub1, sub2)][ch_name] = {"wtc": ndarray(n_freqs, n_times),
+                                     "coi": ndarray(n_times)}
+    freqs: ascending Hz.  times: decimated aligned time axis (seconds).
+    """
+    pairs: dict
+    freqs: np.ndarray
+    times: np.ndarray
+
+
+def compute_wtc(
+    raws: dict[str, mne.io.Raw],
+    fmin: float = 0.004,
+    fmax: float = 0.20,
+) -> WTCResult:
+    """Compute pairwise WTC per HbO channel using pycwt Morlet wavelet.
+
+    Time axis decimated to ≤4 Hz for display performance.
+    Frequency axis filtered to [fmin, fmax] Hz and sorted ascending.
+    """
+    import pycwt  # optional dependency; installed via pip install pycwt
+
+    subject_ids = list(raws.keys())
+    if len(subject_ids) < 2:
+        raise ValueError("Need at least 2 subjects for WTC")
+
+    ref_raw = raws[subject_ids[0]]
+    sfreq   = float(ref_raw.info["sfreq"])
+    dt      = 1.0 / sfreq
+    step    = max(1, int(round(sfreq)))  # decimate to ~1 Hz for display
+
+    result_pairs: dict = {}
+    shared_freqs: np.ndarray | None = None
+    shared_times: np.ndarray | None = None
+
+    for sub1, sub2 in combinations(subject_ids, 2):
+        raw1, raw2 = raws[sub1], raws[sub2]
+        picks1     = mne.pick_types(raw1.info, fnirs="hbo")
+        picks2     = mne.pick_types(raw2.info, fnirs="hbo")
+        ch_names   = [raw1.ch_names[p].rsplit(" ", 1)[0] for p in picks1]
+
+        pair_data: dict[str, dict | None] = {}
+        for i in range(min(len(picks1), len(picks2))):
+            ch   = ch_names[i]
+            sig1 = raw1.get_data(picks=[picks1[i]])[0].astype(np.float64)
+            sig2 = raw2.get_data(picks=[picks2[i]])[0].astype(np.float64)
+            try:
+                WCT, _, coi, freqs, _ = pycwt.wct(
+                    sig1, sig2, dt=dt,
+                    dj=1.0 / 8,
+                    sig=False, normalize=True,
+                )
+                # pycwt zero-pads to next power of 2 — trim back to signal length
+                n_sig = len(sig1)
+                WCT  = WCT[:, :n_sig]
+                coi  = coi[:n_sig]
+
+                # ascending freq order + band filter + decimate
+                order       = np.argsort(freqs)
+                freqs_s     = freqs[order]
+                WCT_s       = WCT[order]
+                band        = (freqs_s >= fmin) & (freqs_s <= fmax)
+                WCT_band    = WCT_s[band][:, ::step].astype(np.float32)
+                freqs_band  = freqs_s[band]
+                coi_dec     = coi[::step].astype(np.float32)
+
+                if shared_freqs is None:
+                    shared_freqs = freqs_band
+                    shared_times = ref_raw.times[::step]
+
+                pair_data[ch] = {"wtc": WCT_band, "coi": coi_dec}
+            except Exception as exc:
+                logger.warning("WTC failed %s-%s ch %s: %s", sub1, sub2, ch, exc)
+                pair_data[ch] = None
+
+        result_pairs[(sub1, sub2)] = pair_data
+
+    return WTCResult(
+        pairs=result_pairs,
+        freqs=shared_freqs if shared_freqs is not None else np.array([]),
+        times=shared_times if shared_times is not None else np.array([]),
+    )
 
 
 # TODO (optional): extend with PLI / wPLI via mne-connectivity.

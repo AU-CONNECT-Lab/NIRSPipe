@@ -147,6 +147,12 @@ def hyper_raw(
             typer.echo(f"[error] group_id '{group_id}' not found in CSV", err=True)
             raise typer.Exit(1)
 
+    if task_label is not None:
+        groups = {k: v for k, v in groups.items() if k[1] in task_label}
+        if not groups:
+            typer.echo(f"[error] task_label {task_label} not found in CSV", err=True)
+            raise typer.Exit(1)
+
     n_total = len(groups)
     typer.echo(f"Processing {n_total} group session(s)...")
 
@@ -257,6 +263,12 @@ def hyper_post(
         groups = {k: v for k, v in groups.items() if k[0] == group_id}
         if not groups:
             typer.echo(f"[error] group_id '{group_id}' not found in CSV", err=True)
+            raise typer.Exit(1)
+
+    if task_label is not None:
+        groups = {k: v for k, v in groups.items() if k[1] in task_label}
+        if not groups:
+            typer.echo(f"[error] task_label {task_label} not found in CSV", err=True)
             raise typer.Exit(1)
 
     roi_map: dict[str, list[str]] | None = None
