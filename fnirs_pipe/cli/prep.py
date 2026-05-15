@@ -21,6 +21,54 @@ app.add_typer(markers_app, name="edit-markers")
 logger = get_logger("cli.prep")
 
 
+@app.command("crop")
+def crop(
+    bids_dir:        Annotated[Path, typer.Argument(help="BIDS dataset root.")],
+    derivatives_dir: Annotated[Path, typer.Argument(help="Derivatives output directory.")],
+    sub:  Annotated[str,           typer.Option("--sub",  help="Subject ID, e.g. '01'.")],
+    ses:  Annotated[Optional[str], typer.Option("--ses",  help="Session label.")] = None,
+    task: Annotated[Optional[str], typer.Option("--task", help="Task label.")] = None,
+    run:  Annotated[Optional[str], typer.Option("--run",  help="Run label.")] = None,
+    tmin: Annotated[Optional[float], typer.Option("--tmin", help="Start time in seconds (single segment).")] = None,
+    tmax: Annotated[Optional[float], typer.Option("--tmax", help="End time in seconds (single segment).")] = None,
+    segments_path: Annotated[Optional[Path], typer.Option("--segments-path", help="TSV with onset/duration columns defining segments to keep.")] = None,
+    combine: Annotated[bool, typer.Option("--combine/--no-combine", help="Concatenate multi-segment output into one file.")] = False,
+    skip_bids_validation: Annotated[bool, typer.Option("--skip-bids-validation/--no-skip-bids-validation")] = False,
+) -> None:
+    """Crop a raw SNIRF and write to derivatives/cropped/.
+
+    Single segment: --tmin / --tmax (either or both).
+    Multi-segment:  --segments-path TSV with onset/duration columns.
+    Use --combine to concatenate multi-segment output into one file.
+    """
+    if segments_path is not None and (tmin is not None or tmax is not None):
+        typer.echo("[error] --segments-path and --tmin/--tmax are mutually exclusive.", err=True)
+        raise typer.Exit(1)
+    if segments_path is None and tmin is None and tmax is None:
+        typer.echo("[error] Specify --segments-path or at least one of --tmin / --tmax.", err=True)
+        raise typer.Exit(1)
+    if combine and segments_path is None:
+        typer.echo("[error] --combine requires --segments-path.", err=True)
+        raise typer.Exit(1)
+
+    from fnirs_pipe.pipeline.crop import crop_snirf
+
+    try:
+        out_paths = crop_snirf(
+            bids_dir, derivatives_dir, sub,
+            ses=ses, task=task, run=run,
+            tmin=tmin, tmax=tmax,
+            segments_path=segments_path,
+            combine=combine,
+            validate=not skip_bids_validation,
+        )
+        for p in out_paths:
+            typer.echo(f"Written: {p}")
+    except (FileNotFoundError, ValueError) as exc:
+        typer.echo(f"[error] {exc}", err=True)
+        raise typer.Exit(1)
+
+
 @markers_app.command("export")
 def markers_export(
     bids_dir: Annotated[Path, typer.Argument(help="BIDS dataset root.")],

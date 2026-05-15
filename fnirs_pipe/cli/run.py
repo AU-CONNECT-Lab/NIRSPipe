@@ -103,11 +103,6 @@ def main(
     # ---- post: resample ----
     resample_sfreq: Annotated[Optional[float], typer.Option("--resample-sfreq", help="Target sampling rate in Hz after filtering, e.g. 2.0.")] = None,
 
-    # ---- post: crop ----
-    segments_path: Annotated[Optional[Path],  typer.Option("--segments-path", help="TSV file with onset/duration columns defining segments to keep.")] = None,
-    crop_tmin:     Annotated[Optional[float], typer.Option("--crop-tmin",     help="Start time in seconds to crop to (single segment).")] = None,
-    crop_tmax:     Annotated[Optional[float], typer.Option("--crop-tmax",     help="End time in seconds to crop to (single segment).")] = None,
-
     # ---- post: GLM (glm mode) ----
     stim_dur:        Annotated[Optional[float],       typer.Option("--stim-dur",        help="Stimulus duration (s) for annotation-based events. Mutually exclusive with --events-path.")] = None,
     hrf_model:       Annotated[Optional[HRFModel],   typer.Option("--hrf-model",       help="HRF basis. spm_derivative adds temporal derivative column.")] = None,

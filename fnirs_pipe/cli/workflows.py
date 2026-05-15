@@ -34,7 +34,6 @@ def _build_post_config(subject: str, session: str | None, args: dict[str, Any], 
             return toml_val
         return default
 
-    sp = pick("segments_path")
     ep = pick("events_path")
     sc = pick("short_channel")
     raw_fir = pick("fir_delays")  # CLI passes a comma-separated string, e.g. "0,1,2"
@@ -53,9 +52,6 @@ def _build_post_config(subject: str, session: str | None, args: dict[str, Any], 
         high_pass=pick("high_pass"),
         low_pass=pick("low_pass"),
         resample_sfreq=pick("resample_sfreq"),
-        segments_path=str(sp) if sp else None,
-        crop_tmin=pick("crop_tmin"),
-        crop_tmax=pick("crop_tmax"),
         stim_dur=pick("stim_dur"),
         hrf_model=pick("hrf_model"),
         noise_model=pick("noise_model"),

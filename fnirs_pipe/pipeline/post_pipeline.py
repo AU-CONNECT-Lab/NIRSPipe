@@ -39,12 +39,6 @@ class PostConfig:
     # resample
     resample_sfreq: float | None = None
 
-    # crop (applied after filtering, before GLM)
-    # segments_path takes priority; crop_tmin/crop_tmax used only when segments_path is None
-    segments_path: str | None = None
-    crop_tmin: float | None = None
-    crop_tmax: float | None = None
-
     # GLM (glm mode)
     stim_dur:        float | None          = None
     hrf_model:       str | None            = None
@@ -89,13 +83,6 @@ def run_post(
         result = resample(result, config.resample_sfreq)
         if mode in ("denoise", "glm"):
             last_snirf_path = _write_step_snirf(result, config, output_dir, desc="resampled", source_entities=source_entities)
-
-    if config.segments_path is not None:
-        logger.info("sub-%s | crop to segments: %s", config.subject, config.segments_path)
-        result = _crop_to_segments(result, config.segments_path)
-    elif config.crop_tmin is not None or config.crop_tmax is not None:
-        logger.info("sub-%s | crop: tmin=%s tmax=%s", config.subject, config.crop_tmin, config.crop_tmax)
-        result = result.crop(tmin=config.crop_tmin, tmax=config.crop_tmax)
 
     if last_snirf_path is not None:
         try:
@@ -183,15 +170,6 @@ def _write_rest_derivatives(
     logger.info("sub-%s | fc → %s", config.subject, fc_path)
 
     return alff_df, fc_df
-
-
-def _crop_to_segments(raw: mne.io.Raw, segments_path: str) -> mne.io.Raw:
-    df = pd.read_csv(segments_path, sep="\t")
-    segments = [
-        raw.copy().crop(tmin=row.onset, tmax=row.onset + row.duration)
-        for _, row in df.iterrows()
-    ]
-    return mne.concatenate_raws(segments)
 
 
 def _write_step_snirf(haemo: mne.io.Raw, config: PostConfig, output_dir: Path, desc: str, source_entities: dict[str, str] | None = None) -> None:
