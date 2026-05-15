@@ -7,7 +7,7 @@ import re
 from pathlib import Path
 
 import dash_bootstrap_components as dbc
-from dash import Input, Output, Patch, State, callback, ctx, dcc, html, no_update
+from dash import ALL, Input, Output, Patch, State, callback, ctx, dcc, html, no_update
 
 # Server-side cache: cache_key -> _process_run result dict (large figures stay here)
 _RESULT_CACHE: dict[str, dict] = {}
@@ -188,10 +188,34 @@ def load_run(n_clicks, run_path, sci_thresh, cache_dir):
                 {"snirf_path": snirf_path},
                 sci_threshold,
             )
-            # extract raw_haemo before caching (not picklable)
             raw_haemo = result.pop("_raw_haemo", None)
             if raw_haemo is not None:
                 _HAEMO_CACHE[cache_key] = raw_haemo
+
+            # Precompute all channel detail figures while raw_haemo is in memory
+            if raw_haemo is not None:
+                from fnirs_pipe.qc.figures import build_channel_figure
+                from fnirs_pipe.qc.prep_raw_report import (
+                    _EPOCH_TMAX, _EPOCH_TMIN, _MAX_TS_PTS,
+                )
+                channels = result.setdefault("channels", {})
+                markers = result.get("ts", {}).get("markers", [])
+                for pair in result.get("channel_pairs", []):
+                    try:
+                        d_fig, p_fig, e_fig = build_channel_figure(
+                            raw_haemo, markers, pair,
+                            _MAX_TS_PTS, _EPOCH_TMIN, _EPOCH_TMAX,
+                        )
+                        channels[pair] = {
+                            "detail_figure": d_fig.to_dict() if d_fig else None,
+                            "psd_figure":    p_fig.to_dict() if p_fig else None,
+                            "epoch_figure":  e_fig.to_dict() if e_fig else None,
+                        }
+                    except Exception as exc:
+                        print(f"[DEBUG load_run] channel {pair!r} failed: {exc}")
+                        channels[pair] = {}
+                print(f"[DEBUG load_run] precomputed {len(channels)} channel pairs")
+
             _RESULT_CACHE[cache_key] = result
             if disk_path:
                 try:
@@ -224,7 +248,7 @@ def load_run(n_clicks, run_path, sci_thresh, cache_dir):
     Output("dp-sci-psp-figure",    "figure"),
     Output("dp-channel-psd",       "figure",  allow_duplicate=True),
     Output("dp-ch-summary-figure", "figure"),
-    Output("dp-marker-table",      "data",    allow_duplicate=True),
+    Output("dp-marker-store",       "data",    allow_duplicate=True),
     Output("dp-channel-selector",  "options"),
     Output("dp-iqm-table",         "data"),
     Output("dp-channel-selector",  "value",   allow_duplicate=True),
@@ -256,13 +280,17 @@ def restore_from_store(store, _tick):
 
     markers = cached.get("ts", {}).get("markers", [])
     marker_rows = [
-        {"onset": m["onset"], "duration": m["duration"], "trial_type": m.get("description", "")}
+        {
+            "onset":      m["onset"],
+            "duration":   m["duration"],
+            "trial_type": m.get("description", ""),
+            "color":      m.get("color", "#888"),
+        }
         for m in markers
     ] or no_update
 
     ch_pairs = cached.get("channel_pairs", sorted(cached.get("channels", {}).keys()))
     ch_options = [{"label": p, "value": p} for p in ch_pairs] or no_update
-    first_pair = ch_pairs[0] if ch_pairs else no_update
 
     iqm_scalars = cached.get("iqm", {}).get("scalars", {})
     iqm_rows = [
@@ -280,7 +308,7 @@ def restore_from_store(store, _tick):
         marker_rows,
         ch_options,
         iqm_rows,
-        first_pair,
+        no_update,
         _fig(cached, "evoked_topo",      "figure"),
         _fig(cached, "trigger_timeline", "figure"),
     )
@@ -459,24 +487,138 @@ def update_channel_detail(channel_pair, store):
     )
 
 
+# ── Marker rows: render ───────────────────────────────────────────────────────
+
+def _make_marker_row(i: int, row: dict):
+    color = row.get("color", "#888")
+    return dbc.Row([
+        dbc.Col(
+            dcc.Checklist(
+                id={"type": "mk-sel", "index": i},
+                options=[{"label": "", "value": "on"}],
+                value=[],
+                inputStyle={"cursor": "pointer"},
+            ),
+            width="auto", className="d-flex align-items-center ps-1",
+        ),
+        dbc.Col(
+            html.Span("●", style={"color": color, "fontSize": "10px"}),
+            width="auto", className="d-flex align-items-center pe-0",
+        ),
+        dbc.Col(
+            dbc.Input(
+                id={"type": "mk-onset", "index": i},
+                type="number", value=row.get("onset", 0.0),
+                debounce=True, size="sm", style={"width": "80px"},
+            ),
+            width=4,
+        ),
+        dbc.Col(
+            dbc.Input(
+                id={"type": "mk-dur", "index": i},
+                type="number", value=row.get("duration", 1.0),
+                debounce=True, size="sm", style={"width": "65px"},
+            ),
+            width=3,
+        ),
+        dbc.Col(
+            dbc.Input(
+                id={"type": "mk-type", "index": i},
+                type="text", value=row.get("trial_type", ""),
+                debounce=True, size="sm",
+            ),
+        ),
+        dbc.Col(
+            dbc.Button(
+                "×", id={"type": "mk-del", "index": i},
+                color="outline-danger", size="sm",
+                style={"padding": "0 6px", "lineHeight": "1.4"},
+            ),
+            width="auto",
+        ),
+    ], className="g-1 mb-1 align-items-center flex-nowrap px-1")
+
+
+@callback(
+    Output("dp-marker-rows-container", "children"),
+    Input("dp-marker-store", "data"),
+)
+def render_marker_rows(rows):
+    rows = rows or []
+    if not rows:
+        return html.Div("No markers", className="text-muted small px-2 py-1")
+    return [_make_marker_row(i, r) for i, r in enumerate(rows)]
+
+
+@callback(
+    Output("dp-marker-store", "data", allow_duplicate=True),
+    Input({"type": "mk-del", "index": ALL}, "n_clicks"),
+    State("dp-marker-store", "data"),
+    prevent_initial_call=True,
+)
+def delete_marker_row(del_clicks, rows):
+    if not any(c for c in (del_clicks or [])):
+        return no_update
+    trigger = ctx.triggered_id
+    if not isinstance(trigger, dict):
+        return no_update
+    idx = trigger["index"]
+    rows = rows or []
+    return [r for i, r in enumerate(rows) if i != idx]
+
+
+@callback(
+    Output("dp-marker-store", "data", allow_duplicate=True),
+    Input({"type": "mk-onset", "index": ALL}, "value"),
+    Input({"type": "mk-dur",   "index": ALL}, "value"),
+    Input({"type": "mk-type",  "index": ALL}, "value"),
+    State("dp-marker-store", "data"),
+    prevent_initial_call=True,
+)
+def sync_marker_fields(onsets, durs, types, rows):
+    current = rows or []
+    n = len(onsets)
+    if n == 0:
+        return no_update
+    updated = []
+    changed = False
+    for i in range(n):
+        base = current[i] if i < len(current) else {}
+        new_onset    = float(onsets[i]) if onsets[i] is not None else base.get("onset", 0.0)
+        new_dur      = float(durs[i])   if durs[i]   is not None else base.get("duration", 1.0)
+        new_type     = types[i]         if types[i]  is not None else base.get("trial_type", "")
+        if (new_onset != base.get("onset") or new_dur != base.get("duration")
+                or new_type != base.get("trial_type", "")):
+            changed = True
+        updated.append({
+            "color":      base.get("color", "#888"),
+            "onset":      new_onset,
+            "duration":   new_dur,
+            "trial_type": new_type,
+        })
+    if not changed and len(updated) == len(current):
+        return no_update
+    return updated
+
+
 # ── Marker table editing ──────────────────────────────────────────────────────
 
 @callback(
-    Output("dp-marker-table", "data", allow_duplicate=True),
+    Output("dp-marker-store", "data", allow_duplicate=True),
     Input("dp-add-marker-btn", "n_clicks"),
-    State("dp-marker-table",   "data"),
+    State("dp-marker-store",   "data"),
     prevent_initial_call=True,
 )
 def add_marker_row(n_clicks, rows):
-    rows = rows or []
-    rows.append({"onset": 0.0, "duration": 1.0, "trial_type": ""})
+    rows = list(rows or [])
+    rows.append({"onset": 0.0, "duration": 1.0, "trial_type": "", "color": "#888"})
     return rows
 
 
 @callback(
     Output("dp-save-status", "children"),
     Input("dp-save-markers-btn", "n_clicks"),
-    State("dp-marker-table",     "data"),
+    State("dp-marker-store",     "data"),
     State("dp-run-store",        "data"),
     State("app-output-dir",      "data"),
     prevent_initial_call=True,
@@ -510,52 +652,54 @@ def save_markers(n_clicks, rows, store, output_dir):
         return dbc.Alert(f"Save failed: {exc}", color="danger", className="mb-0 py-2")
 
 
-# ── Enable/disable − Sel / + Sel ─────────────────────────────────────────────
+# ── Enable/disable − Sel / + Sel (uses row checkboxes) ───────────────────────
 
 @callback(
     Output("dp-offset-sel-minus", "disabled"),
     Output("dp-offset-sel-plus",  "disabled"),
-    Input("dp-marker-table",      "selected_rows"),
+    Input({"type": "mk-sel", "index": ALL}, "value"),
 )
-def toggle_sel_buttons(selected):
-    disabled = not bool(selected)
-    return disabled, disabled
+def toggle_sel_buttons(sel_values):
+    any_selected = any(bool(v) for v in (sel_values or []))
+    return not any_selected, not any_selected
 
 
 # ── Marker offset (all / selected) ────────────────────────────────────────────
 
 @callback(
-    Output("dp-marker-table", "data", allow_duplicate=True),
+    Output("dp-marker-store", "data", allow_duplicate=True),
     Input("dp-offset-all-minus", "n_clicks"),
     Input("dp-offset-all-plus",  "n_clicks"),
     State("dp-step-input",       "value"),
-    State("dp-marker-table",     "data"),
+    State("dp-marker-store",     "data"),
     prevent_initial_call=True,
 )
 def offset_all_markers(minus_clicks, plus_clicks, step, rows):
     if not rows:
         return no_update
     delta = -(step or 1.0) if ctx.triggered_id == "dp-offset-all-minus" else (step or 1.0)
+    rows = [r.copy() for r in rows]
     for row in rows:
         row["onset"] = max(0.0, round(float(row.get("onset", 0)) + delta, 4))
     return rows
 
 
 @callback(
-    Output("dp-marker-table", "data", allow_duplicate=True),
-    Input("dp-offset-sel-minus", "n_clicks"),
-    Input("dp-offset-sel-plus",  "n_clicks"),
-    State("dp-step-input",       "value"),
-    State("dp-marker-table",     "data"),
-    State("dp-marker-table",     "selected_rows"),
+    Output("dp-marker-store", "data", allow_duplicate=True),
+    Input("dp-offset-sel-minus",            "n_clicks"),
+    Input("dp-offset-sel-plus",             "n_clicks"),
+    State("dp-step-input",                  "value"),
+    State("dp-marker-store",                "data"),
+    State({"type": "mk-sel", "index": ALL}, "value"),
     prevent_initial_call=True,
 )
-def offset_selected_marker(minus_clicks, plus_clicks, step, rows, selected):
-    if not rows or not selected:
+def offset_selected_markers(minus_clicks, plus_clicks, step, rows, sel_values):
+    if not rows:
         return no_update
     delta = -(step or 1.0) if ctx.triggered_id == "dp-offset-sel-minus" else (step or 1.0)
-    for i in selected:
-        if i < len(rows):
+    rows = [r.copy() for r in rows]
+    for i, sel in enumerate(sel_values or []):
+        if sel and i < len(rows):
             rows[i]["onset"] = max(0.0, round(float(rows[i].get("onset", 0)) + delta, 4))
     return rows
 
@@ -563,19 +707,20 @@ def offset_selected_marker(minus_clicks, plus_clicks, step, rows, selected):
 # ── Batch rename ──────────────────────────────────────────────────────────────
 
 @callback(
-    Output("dp-marker-table",    "data", allow_duplicate=True),
-    Output("dp-rename-from",     "value"),
-    Output("dp-rename-to",       "value"),
+    Output("dp-marker-store",  "data", allow_duplicate=True),
+    Output("dp-rename-from",   "value"),
+    Output("dp-rename-to",     "value"),
     Input("dp-batch-rename-btn", "n_clicks"),
     State("dp-rename-from",      "value"),
     State("dp-rename-to",        "value"),
-    State("dp-marker-table",     "data"),
+    State("dp-marker-store",     "data"),
     prevent_initial_call=True,
 )
 def batch_rename_markers(n_clicks, from_val, to_val, rows):
     if not rows or not from_val:
         return no_update, no_update, no_update
     to_val = to_val or ""
+    rows = [r.copy() for r in rows]
     for row in rows:
         if row.get("trial_type") == from_val:
             row["trial_type"] = to_val
@@ -587,7 +732,7 @@ def batch_rename_markers(n_clicks, from_val, to_val, rows):
 @callback(
     Output("dp-tsv-download",  "data"),
     Input("dp-export-tsv-btn", "n_clicks"),
-    State("dp-marker-table",   "data"),
+    State("dp-marker-store",   "data"),
     prevent_initial_call=True,
 )
 def export_tsv(n_clicks, rows):
@@ -602,6 +747,34 @@ def export_tsv(n_clicks, rows):
             f"{r.get('trial_type', '')}\n"
         )
     return dcc.send_string(buf.getvalue(), "events.tsv")
+
+
+# ── Signal Topo: highlight selected channel box ───────────────────────────────
+
+@callback(
+    Output("dp-evoked-topo", "figure", allow_duplicate=True),
+    Input("dp-channel-selector", "value"),
+    State("dp-run-store", "data"),
+    prevent_initial_call=True,
+)
+def highlight_topo_channel(channel_pair, store):
+    if not store:
+        return no_update
+    cached = _RESULT_CACHE.get(store.get("cache_key"), {})
+    pairs = cached.get("channel_pairs", [])
+    if not pairs:
+        return no_update
+    patched = Patch()
+    for i, pair in enumerate(pairs):
+        if pair == channel_pair:
+            patched["layout"]["shapes"][i]["line"]["color"] = "#f39c12"
+            patched["layout"]["shapes"][i]["line"]["width"] = 2.5
+            patched["layout"]["shapes"][i]["fillcolor"] = "rgba(243,156,18,0.12)"
+        else:
+            patched["layout"]["shapes"][i]["line"]["color"] = "#ccc"
+            patched["layout"]["shapes"][i]["line"]["width"] = 0.8
+            patched["layout"]["shapes"][i]["fillcolor"] = "rgba(255,255,255,0.80)"
+    return patched
 
 
 # ── Channel Detail title (updates when channel is selected) ──────────────────
@@ -687,13 +860,26 @@ def on_layout_2d_click(click_data, store):
 def on_topo_click(click_data, store):
     if not click_data or not store:
         return no_update
-    cached      = _RESULT_CACHE.get(store.get("cache_key"), {})
+    cached = _RESULT_CACHE.get(store.get("cache_key"), {})
     valid_pairs = set(cached.get("channel_pairs", []))
-    points      = click_data.get("points", [])
+    points = click_data.get("points", [])
     if not points:
         return no_update
-    pair = points[0].get("customdata", "")
-    print(f"[DEBUG on_topo_click] pair={pair!r}, valid={pair in valid_pairs}")
+
+    # Use curveNumber to index into the figure's stored trace list and read
+    # its customdata — avoids the "nearest point across subplots" misfire.
+    curve_num = points[0].get("curveNumber", 0)
+    fig_dict = cached.get("evoked_topo", {}).get("figure", {})
+    traces = fig_dict.get("data", [])
+    if curve_num < len(traces):
+        cd = traces[curve_num].get("customdata", [])
+        pair = cd[0] if isinstance(cd, list) and cd else str(cd) if cd else ""
+        if pair in valid_pairs:
+            print(f"[DEBUG on_topo_click] curve={curve_num}, pair={pair!r}")
+            return pair
+
+    # Fallback: customdata on the point itself
+    pair = str(points[0].get("customdata", ""))
     return pair if pair in valid_pairs else no_update
 
 

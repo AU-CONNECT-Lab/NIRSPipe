@@ -7,38 +7,76 @@ import os
 import dash
 import dash_bootstrap_components as dbc
 import dash_cytoscape as cyto
-from dash import dcc, html
+from dash import Input, Output, State, callback, dcc, html, no_update
 
 cyto.load_extra_layouts()
 
 
-def _sidebar() -> dbc.Nav:
-    return dbc.Nav(
-        [
+_SIDEBAR_EXPANDED = {
+    "position": "fixed", "top": 0, "left": 0, "bottom": 0,
+    "width": "200px", "background": "#2c3e50",
+    "transition": "width 0.2s", "overflow": "hidden", "zIndex": 1000,
+}
+_SIDEBAR_COLLAPSED = {
+    **_SIDEBAR_EXPANDED,
+    "width": "44px",
+}
+_CONTENT_EXPANDED  = {"marginLeft": "200px", "padding": "2rem", "transition": "margin-left 0.2s"}
+_CONTENT_COLLAPSED = {"marginLeft": "44px",  "padding": "2rem", "transition": "margin-left 0.2s"}
+
+
+def _sidebar() -> html.Div:
+    return html.Div(
+        id="app-sidebar",
+        style=_SIDEBAR_EXPANDED,
+        children=[
             html.Div(
-                [
-                    html.H5("fnirs-pipe", className="text-white mb-0"),
-                    html.Small("Interface", className="text-white-50"),
+                className="d-flex align-items-center px-2 pt-3 pb-2",
+                children=[
+                    html.Div(
+                        id="app-sidebar-title",
+                        className="me-auto",
+                        children=[
+                            html.H5("fnirs-pipe", className="text-white mb-0"),
+                            html.Small("Interface", className="text-white-50"),
+                        ],
+                    ),
+                    dbc.Button(
+                        "☰", id="app-sidebar-toggle",
+                        color="link", size="sm",
+                        className="text-white p-0",
+                        style={"fontSize": "1.1rem", "lineHeight": 1},
+                    ),
                 ],
-                className="px-3 pt-3 pb-2",
             ),
             html.Hr(className="border-secondary my-0"),
-            dbc.NavLink("Data Preparation", href="/",            active="exact", className="text-white"),
-            dbc.NavLink("Batch Prep",       href="/batch-prep", active="exact", className="text-white"),
-            dbc.NavLink("Hyper Align",      href="/hyper-align",active="exact", className="text-white"),
-            dbc.NavLink("Analysis",         href="/analysis",   active="exact", className="text-white"),
+            dbc.Collapse(
+                id="app-sidebar-nav",
+                is_open=True,
+                children=dbc.Nav([
+                    dbc.NavLink("Data Preparation", href="/",            active="exact", className="text-white"),
+                    dbc.NavLink("Batch Prep",       href="/batch-prep", active="exact", className="text-white"),
+                    dbc.NavLink("Hyper Align",      href="/hyper-align",active="exact", className="text-white"),
+                    dbc.NavLink("Analysis",         href="/analysis",   active="exact", className="text-white"),
+                ], vertical=True, pills=True),
+            ),
         ],
-        vertical=True,
-        pills=True,
-        style={
-            "position":   "fixed",
-            "top":        0,
-            "left":       0,
-            "bottom":     0,
-            "width":      "200px",
-            "background": "#2c3e50",
-        },
     )
+
+
+@callback(
+    Output("app-sidebar",       "style"),
+    Output("app-page-content",  "style"),
+    Output("app-sidebar-nav",   "is_open"),
+    Output("app-sidebar-title", "style"),
+    Input("app-sidebar-toggle", "n_clicks"),
+    State("app-sidebar-nav",    "is_open"),
+    prevent_initial_call=True,
+)
+def _toggle_sidebar(n_clicks, is_open):
+    if is_open:
+        return _SIDEBAR_COLLAPSED, _CONTENT_COLLAPSED, False, {"display": "none"}
+    return _SIDEBAR_EXPANDED, _CONTENT_EXPANDED, True, {}
 
 
 def launch(port: int = 8050) -> None:
@@ -64,8 +102,9 @@ def launch(port: int = 8050) -> None:
         dcc.Store(id="dp-run-store",   storage_type="memory"),
         _sidebar(),
         html.Div(
-            dash.page_container,
-            style={"marginLeft": "200px", "padding": "2rem"},
+            id="app-page-content",
+            children=dash.page_container,
+            style=_CONTENT_EXPANDED,
         ),
     ])
 

@@ -689,34 +689,60 @@ def build_trigger_timeline_single(
     if not markers:
         return None
 
+    all_descs: list[str] = []
     by_desc: dict[str, list[dict]] = {}
     for m in markers:
-        by_desc.setdefault(m["description"], []).append(m)
+        desc = m["description"]
+        if desc not in all_descs:
+            all_descs.append(desc)
+        by_desc.setdefault(desc, []).append(m)
 
     traces = []
-    for desc, events in by_desc.items():
+
+    # Summary row at y=0: all conditions overlaid with their own colours
+    for desc in all_descs:
         color = cond_colors.get(desc, "#999")
-        xs, ys = [], []
-        for e in events:
-            xs += [e["onset"], e["onset"], None]
-            ys += [0.0, 1.0, None]
+        onsets = [e["onset"] for e in by_desc[desc]]
         traces.append(go.Scatter(
-            x=xs, y=ys, mode="lines",
-            line=dict(color=color, width=2.0),
+            x=onsets,
+            y=[0] * len(onsets),
+            mode="markers",
+            marker=dict(symbol="line-ns-open", size=16, color=color,
+                        line=dict(width=2.0, color=color)),
             name=desc,
+            showlegend=False,
             hovertemplate=f"<b>{desc}</b><br>t=%{{x:.2f}} s<extra></extra>",
         ))
 
+    # Per-condition rows starting at y=1
+    for desc_idx, desc in enumerate(all_descs, start=1):
+        color = cond_colors.get(desc, "#999")
+        onsets = [e["onset"] for e in by_desc[desc]]
+        traces.append(go.Scatter(
+            x=onsets,
+            y=[desc_idx] * len(onsets),
+            mode="markers",
+            marker=dict(symbol="line-ns-open", size=16, color=color,
+                        line=dict(width=2.0, color=color)),
+            name=desc,
+            showlegend=False,
+            hovertemplate=f"<b>{desc}</b><br>t=%{{x:.2f}} s<extra></extra>",
+        ))
+
+    n = len(all_descs)
     return go.Figure(
         data=traces,
         layout=go.Layout(
             xaxis=dict(title="Time (s)", gridcolor="#eeeeee"),
-            yaxis=dict(showticklabels=False, showgrid=False, range=[0, 1]),
+            yaxis=dict(tickvals=[0] + list(range(1, n + 1)),
+                       ticktext=["(all)"] + all_descs,
+                       autorange="reversed", gridcolor="#eeeeee",
+                       tickfont=dict(size=10)),
             plot_bgcolor="white", paper_bgcolor="white",
-            height=100,
-            margin=dict(l=20, r=15, t=8, b=38),
-            legend=dict(font=dict(size=9), orientation="h", y=1.35, x=0),
-            hovermode="x unified",
+            height=max(80, (n + 1) * 40 + 50),
+            margin=dict(l=120, r=15, t=8, b=38),
+            hovermode="closest",
+            showlegend=False,
         ),
     )
 
@@ -726,7 +752,10 @@ def build_evoked_topo_figure(
     markers: list[dict],
     max_ts_pts: int = 2000,
 ) -> go.Figure | None:
-    hbo_entries = [(i, ch) for i, ch in enumerate(raw_haemo.ch_names) if ch.endswith(" hbo")]
+    hbo_entries = sorted(
+        [(i, ch) for i, ch in enumerate(raw_haemo.ch_names) if ch.endswith(" hbo")],
+        key=lambda x: x[1].rsplit(" ", 1)[0],
+    )
     if not hbo_entries:
         return None
 
@@ -737,13 +766,13 @@ def build_evoked_topo_figure(
     if np.any(locs != 0):
         lo, hi = locs.min(axis=0), locs.max(axis=0)
         span = np.where(hi - lo > 0, hi - lo, 1.0)
-        norm = (locs - lo) / span * 0.78 + 0.09
+        norm = (locs - lo) / span * 0.82 + 0.06
     else:
         ncols = int(np.ceil(np.sqrt(n)))
         nrows = int(np.ceil(n / ncols))
         norm = np.array([
-            [(i % ncols + 0.5) / ncols * 0.78 + 0.09,
-             (i // ncols + 0.5) / nrows * 0.78 + 0.09]
+            [(i % ncols + 0.5) / ncols * 0.82 + 0.06,
+             (i // ncols + 0.5) / nrows * 0.82 + 0.06]
             for i in range(n)
         ])
 
@@ -760,8 +789,7 @@ def build_evoked_topo_figure(
     times_list = times.tolist()
     ch_names_picked = [raw_haemo.ch_names[i] for i in picks]
 
-    _H, _ML, _MR, _MT, _MB = 750, 20, 130, 30, 20
-    _W = (_H - _MT - _MB) + _ML + _MR  # 700 + 150 = 850
+    _H, _ML, _MR, _MT, _MB = 700, 10, 10, 12, 8
 
     hw, hh = 0.050, 0.025
     box_shapes = []
@@ -832,35 +860,35 @@ def build_evoked_topo_figure(
     head_shapes = [
         dict(type="circle",
              xref="paper", yref="paper",
-             x0=0.04, y0=0.04, x1=0.96, y1=0.96,
+             x0=0.01, y0=0.01, x1=0.99, y1=0.99,
              line=dict(color="#bbb", width=2),
              fillcolor="rgba(245,245,245,0.45)",
              layer="below"),
         dict(type="path",
-             path="M 0.455,0.955 L 0.500,0.995 L 0.545,0.955",
+             path="M 0.455,0.982 L 0.500,1.018 L 0.545,0.982",
              xref="paper", yref="paper",
              line=dict(color="#bbb", width=2),
              layer="below"),
         dict(type="path",
-             path="M 0.040,0.560 Q 0.005,0.500 0.040,0.440",
+             path="M 0.010,0.560 Q -0.028,0.500 0.010,0.440",
              xref="paper", yref="paper",
              line=dict(color="#bbb", width=2),
              layer="below"),
         dict(type="path",
-             path="M 0.960,0.560 Q 0.995,0.500 0.960,0.440",
+             path="M 0.990,0.560 Q 1.028,0.500 0.990,0.440",
              xref="paper", yref="paper",
              line=dict(color="#bbb", width=2),
              layer="below"),
     ]
 
     fig.update_layout(
-        width=_W,
         height=_H,
         plot_bgcolor="rgba(0,0,0,0)",
         paper_bgcolor="white",
         margin=dict(l=_ML, r=_MR, t=_MT, b=_MB),
         shapes=box_shapes + head_shapes,
-        legend=dict(x=1.01, y=0.99, font=dict(size=10),
+        legend=dict(x=0.99, y=0.99, xanchor="right",
+                    font=dict(size=9), bgcolor="rgba(255,255,255,0.75)",
                     title=dict(text="HbO / HbR", font=dict(size=9))),
     )
     return fig

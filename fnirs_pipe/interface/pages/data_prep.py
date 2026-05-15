@@ -8,12 +8,6 @@ from dash import dash_table, dcc, html
 
 dash.register_page(__name__, path="/", name="Data Preparation")
 
-_MARKER_COLS = [
-    {"name": "Onset (s)",    "id": "onset",      "editable": True, "type": "numeric"},
-    {"name": "Duration (s)", "id": "duration",   "editable": True, "type": "numeric"},
-    {"name": "Trial Type",   "id": "trial_type", "editable": True},
-]
-
 _IQM_COLS = [
     {"name": "Metric", "id": "metric"},
     {"name": "Value",  "id": "value"},
@@ -25,16 +19,17 @@ _SEG_COLS = [
 ]
 
 
-def _card(title, *children):
+def _card(title, *children, extra_class=""):
+    cls = ("mb-3 " + extra_class).strip() if extra_class else "mb-3"
     return dbc.Card(
         [dbc.CardHeader(title), dbc.CardBody(list(children))],
-        className="mb-3",
+        className=cls,
     )
 
 
-def _crop_card():
+def _crop_card(extra_class=""):
     return _card("Crop",
-        dcc.Graph(id="dp-trigger-timeline", style={"height": "110px"}),
+        dcc.Graph(id="dp-trigger-timeline"),
         dbc.Row([
             dbc.Col(
                 dbc.RadioItems(
@@ -95,10 +90,11 @@ def _crop_card():
             ),
         ]),
         html.Div(id="dp-crop-status", className="mt-1 small"),
+        extra_class=extra_class,
     )
 
 
-def _marker_editor():
+def _marker_editor(extra_class=""):
     return _card("Markers",
         # Step offset row
         dbc.Row([
@@ -108,13 +104,13 @@ def _marker_editor():
                               min=0.001, step=0.1, size="sm",
                               style={"width": "64px"}), width="auto"),
             dbc.Col(dbc.ButtonGroup([
-                dbc.Button("−All", id="dp-offset-all-minus", size="sm",
+                dbc.Button("− All", id="dp-offset-all-minus", size="sm",
                            color="outline-secondary"),
-                dbc.Button("+All", id="dp-offset-all-plus",  size="sm",
+                dbc.Button("+ All", id="dp-offset-all-plus",  size="sm",
                            color="outline-secondary"),
-                dbc.Button("−Sel", id="dp-offset-sel-minus", size="sm",
+                dbc.Button("− Sel", id="dp-offset-sel-minus", size="sm",
                            color="outline-danger", disabled=True),
-                dbc.Button("+Sel", id="dp-offset-sel-plus",  size="sm",
+                dbc.Button("+ Sel", id="dp-offset-sel-plus",  size="sm",
                            color="outline-secondary", disabled=True),
             ]), width="auto"),
         ], className="g-1 mb-2 align-items-center flex-wrap"),
@@ -130,36 +126,44 @@ def _marker_editor():
             dbc.Col(dbc.Input(id="dp-rename-to", type="text",
                               placeholder="new", size="sm",
                               style={"width": "72px"}), width="auto"),
-            dbc.Col(dbc.Button("Apply", id="dp-batch-rename-btn",
+            dbc.Col(dbc.Button("Apply All", id="dp-batch-rename-btn",
                                size="sm", color="outline-secondary"), width="auto"),
         ], className="g-1 mb-2 align-items-center flex-wrap"),
-        # Table
-        dash_table.DataTable(
-            id="dp-marker-table",
-            columns=_MARKER_COLS,
-            editable=True,
-            row_deletable=True,
-            row_selectable="single",
-            style_table={"overflowX": "auto", "maxHeight": "260px",
-                         "overflowY": "auto"},
-            style_header={"fontWeight": "600", "fontSize": "0.78rem"},
-            style_cell={"fontSize": "0.78rem", "padding": "3px 6px"},
-        ),
+        # Column headers
+        dbc.Row([
+            dbc.Col(width=1),
+            dbc.Col(html.Small("Onset (s)",   className="text-muted fw-semibold"), width=4),
+            dbc.Col(html.Small("Dur (s)",     className="text-muted fw-semibold"), width=3),
+            dbc.Col(html.Small("Description", className="text-muted fw-semibold")),
+        ], className="g-1 px-2 mb-1"),
+        # Dynamic rows (rendered by callback)
+        html.Div(id="dp-marker-rows-container",
+                 style={"maxHeight": "280px", "overflowY": "auto"}),
         # Toolbar
-        dbc.ButtonGroup([
-            dbc.Button("+ Add",       id="dp-add-marker-btn",
-                       color="outline-secondary", size="sm"),
-            dbc.Button("↓ TSV",       id="dp-export-tsv-btn",
-                       color="outline-primary",   size="sm"),
-            dbc.Button("Save",        id="dp-save-markers-btn",
-                       color="outline-success",   size="sm"),
-        ], className="mt-2"),
+        dbc.Row([
+            dbc.Col(
+                dbc.ButtonGroup([
+                    dbc.Button("+ Add",        id="dp-add-marker-btn",
+                               color="outline-secondary", size="sm"),
+                    dbc.Button("↓ Export TSV", id="dp-export-tsv-btn",
+                               color="primary",           size="sm"),
+                ]),
+                width="auto",
+            ),
+            dbc.Col(
+                dbc.Button("Save", id="dp-save-markers-btn",
+                           color="outline-success", size="sm"),
+                width="auto", className="ms-auto",
+            ),
+        ], className="g-1 mt-2 align-items-center"),
         html.Div(id="dp-save-status", className="mt-2 small"),
+        extra_class=extra_class,
     )
 
 
 layout = dbc.Container([
     dcc.Download(id="dp-tsv-download"),
+    dcc.Store(id="dp-marker-store", storage_type="memory"),
     dcc.Interval(id="dp-mount-tick", interval=150, max_intervals=1),
 
     dbc.Row([dbc.Col([html.H3("Data Preparation"), html.Hr()])]),
@@ -232,44 +236,19 @@ layout = dbc.Container([
         dbc.Tab(label="Viewer", tab_id="tab-viewer", children=[
             html.Div(className="mt-3", children=[
 
-                # Topo (full width, top of viewer)
+                # Signal Topo (full width, circle centered)
                 _card("Signal Topo",
-                    html.Small("raw HbO / HbR per channel · click trace to select",
+                    html.Small("raw HbO / HbR per channel · click to select",
                                className="text-muted d-block mb-1"),
-                    dcc.Graph(id="dp-evoked-topo"),
+                    html.Div(
+                        dcc.Graph(id="dp-evoked-topo",
+                                  style={"height": "700px"},
+                                  config={"responsive": True}),
+                        style={"width": "700px", "margin": "0 auto"},
+                    ),
                 ),
 
-                # Crop (trigger timeline + crop controls)
-                _crop_card(),
-
-                # Raw Signal | Marker Editor
-                dbc.Row([
-                    dbc.Col(
-                        _card("Raw Signal",
-                            html.Small(
-                                "blue = short channel · orange = long · "
-                                "click trace = select channel",
-                                className="text-muted d-block mb-1",
-                            ),
-                            dcc.Graph(id="dp-ts-figure"),
-                        ),
-                        width=9,
-                    ),
-                    dbc.Col(_marker_editor(), width=3),
-                ], className="mb-3", align="start"),
-
-                # Channel selector
-                dbc.Row([
-                    dbc.Col(
-                        dcc.Dropdown(
-                            id="dp-channel-selector", options=[],
-                            placeholder="Select channel pair · or click a trace above",
-                        ),
-                        width=5,
-                    ),
-                ], className="mb-2"),
-
-                # Channel Detail
+                # Channel Detail (full width)
                 dbc.Card([
                     dbc.CardHeader(html.Span([
                         "Channel Detail",
@@ -279,15 +258,28 @@ layout = dbc.Container([
                             className="text-muted fw-normal",
                         ),
                     ])),
-                    dbc.CardBody(dcc.Graph(id="dp-channel-detail")),
+                    dbc.CardBody([
+                        dcc.Dropdown(
+                            id="dp-channel-selector", options=[],
+                            placeholder="Select channel pair · or click a trace",
+                            className="mb-2",
+                        ),
+                        dcc.Graph(id="dp-channel-detail"),
+                    ]),
                 ], className="mb-3"),
 
-                # PSD
+                # PSD (below Channel Detail)
                 _card("PSD",
                     html.Small("mean across channels",
                                id="dp-psd-subtitle", className="text-muted d-block mb-1"),
                     dcc.Graph(id="dp-channel-psd"),
                 ),
+
+                # Crop | Markers  (stretch so both cards reach the same height)
+                dbc.Row([
+                    dbc.Col(_crop_card("h-100"), width=9),
+                    dbc.Col(_marker_editor("h-100"), width=3),
+                ], className="mb-3", align="stretch"),
 
                 # Epoch Preview
                 _card("Epoch Preview",
@@ -317,6 +309,20 @@ layout = dbc.Container([
         # ════════════════════════════════════════════════════════════════════
         dbc.Tab(label="QC Metrics", tab_id="tab-qc", children=[
             html.Div(className="mt-3", children=[
+
+                dbc.Card([
+                    dbc.CardHeader(html.Span([
+                        "Raw Signal",
+                        html.Small(
+                            " · blue = short channel · orange = long"
+                            " · click trace = select channel · double-click = reset",
+                            className="text-muted fw-normal",
+                        ),
+                    ])),
+                    dbc.CardBody([
+                        dcc.Graph(id="dp-ts-figure"),
+                    ]),
+                ], className="mb-3"),
 
                 _card("SCI / PSP",
                       dcc.Graph(id="dp-sci-psp-figure",
