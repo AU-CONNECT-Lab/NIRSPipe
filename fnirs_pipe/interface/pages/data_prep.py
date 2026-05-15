@@ -155,103 +155,116 @@ layout = dbc.Container([
         html.Div(id="dp-load-status", className="mt-2 small"),
     ),
 
-    # ── Row 1: Raw Signal (wide) | Marker Editor (narrow) ────────────────────
-    # Mirrors HTML row-main: grid-template-columns 3fr 1fr
-    dbc.Row([
-        dbc.Col(
-            _card("Raw Signal",
-                html.Small(
-                    "blue = short channel · orange = long · "
-                    "click trace = select channel",
-                    className="text-muted d-block mb-1",
+    dbc.Tabs([
+
+        # ════════════════════════════════════════════════════════════════════
+        dbc.Tab(label="Viewer", tab_id="tab-viewer", children=[
+            html.Div(className="mt-3", children=[
+
+                # Topo (full width, top of viewer)
+                _card("Signal Topo",
+                    html.Small("raw HbO / HbR per channel · click trace to select",
+                               className="text-muted d-block mb-1"),
+                    dcc.Graph(id="dp-evoked-topo"),
                 ),
-                dcc.Graph(id="dp-ts-figure"),
-            ),
-            width=9,
-        ),
-        dbc.Col(
-            _marker_editor(),
-            width=3,
-        ),
-    ], className="mb-3", align="start"),
 
-    # ── Channel selector row (above Channel Detail, like HTML click-to-select) ─
-    dbc.Row([
-        dbc.Col(
-            dcc.Dropdown(
-                id="dp-channel-selector", options=[],
-                placeholder="Select channel pair · or click a trace above",
-            ),
-            width=5,
-        ),
-    ], className="mb-2"),
+                # Raw Signal | Marker Editor
+                dbc.Row([
+                    dbc.Col(
+                        _card("Raw Signal",
+                            html.Small(
+                                "blue = short channel · orange = long · "
+                                "click trace = select channel",
+                                className="text-muted d-block mb-1",
+                            ),
+                            dcc.Graph(id="dp-ts-figure"),
+                        ),
+                        width=9,
+                    ),
+                    dbc.Col(_marker_editor(), width=3),
+                ], className="mb-3", align="start"),
 
-    # ── Row 2: Channel Detail (full width, title updates on selection) ────────
-    dbc.Card([
-        dbc.CardHeader(html.Span([
-            "Channel Detail",
-            html.Small(
-                " · click a channel trace to view HbO / HbR",
-                id="dp-detail-title",
-                className="text-muted fw-normal",
-            ),
-        ])),
-        dbc.CardBody(dcc.Graph(id="dp-channel-detail")),
-    ], className="mb-3"),
+                # Channel selector
+                dbc.Row([
+                    dbc.Col(
+                        dcc.Dropdown(
+                            id="dp-channel-selector", options=[],
+                            placeholder="Select channel pair · or click a trace above",
+                        ),
+                        width=5,
+                    ),
+                ], className="mb-2"),
 
-    # ── Row 3: PSD (full width, mean → per-channel on selection) ─────────────
-    _card("PSD",
-        html.Small("mean across channels",
-                   id="dp-psd-subtitle", className="text-muted d-block mb-1"),
-        dcc.Graph(id="dp-channel-psd"),
-    ),
+                # Channel Detail
+                dbc.Card([
+                    dbc.CardHeader(html.Span([
+                        "Channel Detail",
+                        html.Small(
+                            " · click a channel trace to view HbO / HbR",
+                            id="dp-detail-title",
+                            className="text-muted fw-normal",
+                        ),
+                    ])),
+                    dbc.CardBody(dcc.Graph(id="dp-channel-detail")),
+                ], className="mb-3"),
 
-    # ── Row 4: Epoch preview (full width) ─────────────────────────────────────
-    _card("Epoch Preview",
-        html.Small("select a channel to view",
-                   id="dp-epoch-subtitle", className="text-muted d-block mb-1"),
-        dcc.Graph(id="dp-channel-epoch"),
-    ),
+                # PSD
+                _card("PSD",
+                    html.Small("mean across channels",
+                               id="dp-psd-subtitle", className="text-muted d-block mb-1"),
+                    dcc.Graph(id="dp-channel-psd"),
+                ),
 
-    # ── Row 5: Evoked topo ───────────────────────────────────────────────────
-    _card("Evoked HbO (Topo)",
-        html.Small("click a channel trace to select · HbO grand average per condition",
-                   className="text-muted d-block mb-1"),
-        dcc.Graph(id="dp-evoked-topo"),
-    ),
+                # Epoch Preview
+                _card("Epoch Preview",
+                    html.Small("select a channel to view",
+                               id="dp-epoch-subtitle", className="text-muted d-block mb-1"),
+                    dcc.Graph(id="dp-channel-epoch"),
+                ),
 
-    # ── Row 6: Layout 2D (narrow) | 3D (wide) ────────────────────────────────
-    # Mirrors HTML row-layout: grid-template-columns 1fr 2fr
-    dbc.Row([
-        dbc.Col(
-            _card("Optode Layout (2D)",
-                  html.Small("colour = SCI · click = select channel",
-                             className="text-muted d-block mb-1"),
-                  dcc.Graph(id="dp-layout-2d")),
-            width=4,
-        ),
-        dbc.Col(
-            _card("3D (fsaverage)", dcc.Graph(id="dp-layout-3d")),
-            width=8,
-        ),
-    ], className="mb-3"),
+                # Optode 2D | 3D
+                dbc.Row([
+                    dbc.Col(
+                        _card("Optode Layout (2D)",
+                              html.Small("colour = SCI · click = select channel",
+                                         className="text-muted d-block mb-1"),
+                              dcc.Graph(id="dp-layout-2d")),
+                        width=4,
+                    ),
+                    dbc.Col(
+                        _card("3D (fsaverage)", dcc.Graph(id="dp-layout-3d")),
+                        width=8,
+                    ),
+                ], className="mb-3"),
 
-    # ── Row 6: SCI / PSP ─────────────────────────────────────────────────────
-    _card("SCI / PSP", dcc.Graph(id="dp-sci-psp-figure")),
+            ]),
+        ]),
 
-    # ── Row 7: IQM ───────────────────────────────────────────────────────────
-    _card("Image Quality Metrics",
-        dash_table.DataTable(
-            id="dp-iqm-table",
-            columns=_IQM_COLS,
-            style_table={"overflowX": "auto"},
-        ),
-    ),
+        # ════════════════════════════════════════════════════════════════════
+        dbc.Tab(label="QC Metrics", tab_id="tab-qc", children=[
+            html.Div(className="mt-3", children=[
 
-    # ── Row 8: Channel Quality Heatmap ────────────────────────────────────────
-    _card("Channel Quality Summary",
-          html.Small("status / SCI / CV / PSP / SNR per channel",
-                     className="text-muted d-block mb-1"),
-          dcc.Graph(id="dp-ch-summary-figure")),
+                _card("SCI / PSP",
+                      dcc.Graph(id="dp-sci-psp-figure",
+                                style={"minHeight": "400px"})),
+
+                _card("Image Quality Metrics",
+                    dash_table.DataTable(
+                        id="dp-iqm-table",
+                        columns=_IQM_COLS,
+                        style_table={"overflowX": "auto"},
+                    ),
+                ),
+
+                _card("Channel Quality Summary",
+                      html.Small("status / SCI / CV / PSP / SNR per channel",
+                                 className="text-muted d-block mb-1"),
+                      dcc.Graph(id="dp-ch-summary-figure",
+                                style={"minHeight": "400px"})),
+
+            ]),
+        ]),
+
+    ], id="dp-tabs", active_tab="tab-viewer"),
 
 ], fluid=True)

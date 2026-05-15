@@ -153,22 +153,11 @@ def _process_run(run: dict, sci_threshold: float) -> dict:
         "per_channel": {k: v for k, v in iqm.items() if isinstance(v, dict) and k.endswith("_per_channel")},
     }
 
-    # per-channel detail
-    channels: dict[str, dict] = {}
+    channel_pairs: list[str] = []
     if raw_haemo is not None:
-        pairs = sorted({ch.rsplit(" ", 1)[0] for ch in raw_haemo.ch_names if ch.endswith(" hbo")})
-        for pair in pairs:
-            try:
-                detail_fig, psd_fig, epoch_fig = build_channel_figure(
-                    raw_haemo, markers, pair, _MAX_TS_PTS, _EPOCH_TMIN, _EPOCH_TMAX,
-                )
-                channels[pair] = {
-                    "detail_figure": detail_fig.to_dict() if detail_fig else None,
-                    "psd_figure":    psd_fig.to_dict()    if psd_fig    else None,
-                    "epoch_figure":  epoch_fig.to_dict()  if epoch_fig  else None,
-                }
-            except Exception as exc:
-                logger.warning("channel_figure %s failed: %s", pair, exc)
+        channel_pairs = sorted({
+            ch.rsplit(" ", 1)[0] for ch in raw_haemo.ch_names if ch.endswith(" hbo")
+        })
 
     evoked_topo_data = {}
     if raw_haemo is not None:
@@ -180,14 +169,16 @@ def _process_run(run: dict, sci_threshold: float) -> dict:
             logger.warning("evoked_topo_figure failed: %s", exc)
 
     return {
-        "ts":          ts_data,
-        "layout":      layout_data,
-        "sci_psp":     sci_psp_data,
-        "psd":         psd_data,
-        "ch_summary":  ch_summary_data,
-        "iqm":         iqm_data,
-        "channels":    channels,
-        "evoked_topo": evoked_topo_data,
+        "ts":           ts_data,
+        "layout":       layout_data,
+        "sci_psp":      sci_psp_data,
+        "psd":          psd_data,
+        "ch_summary":   ch_summary_data,
+        "iqm":          iqm_data,
+        "channel_pairs": channel_pairs,
+        "channels":     {},          # populated lazily on channel selection
+        "evoked_topo":  evoked_topo_data,
+        "_raw_haemo":   raw_haemo,   # stripped before disk cache
     }
 
 

@@ -12,6 +12,8 @@ from dash import Input, Output, Patch, State, callback, ctx, dcc, html, no_updat
 
 # Server-side cache: cache_key -> _process_run result dict (large figures stay here)
 _RESULT_CACHE: dict[str, dict] = {}
+# In-memory only: cache_key -> raw_haemo MNE object (not pickled)
+_HAEMO_CACHE: dict[str, object] = {}
 
 
 def _parse_bids_entities(filename: str) -> dict:
@@ -187,6 +189,10 @@ def load_run(n_clicks, run_path, sci_thresh, cache_dir):
                 {"snirf_path": snirf_path},
                 sci_threshold,
             )
+            # extract raw_haemo before caching (not picklable)
+            raw_haemo = result.pop("_raw_haemo", None)
+            if raw_haemo is not None:
+                _HAEMO_CACHE[cache_key] = raw_haemo
             _RESULT_CACHE[cache_key] = result
             if disk_path:
                 try:
@@ -199,7 +205,7 @@ def load_run(n_clicks, run_path, sci_thresh, cache_dir):
         except Exception as exc:
             return no_update, dbc.Alert(f"Failed to load: {exc}", color="danger")
 
-    print(f"[DEBUG load_run] source={source}, sci_psp={list(result.get('sci_psp', {}).keys())}, channels={len(result.get('channels', {}))}")
+    print(f"[DEBUG load_run] source={source}, pairs={len(result.get('channel_pairs', []))}")
 
     store = {
         "cache_key":  cache_key,
@@ -254,7 +260,7 @@ def restore_from_store(store, _tick):
         for m in markers
     ] or no_update
 
-    ch_pairs = sorted(cached.get("channels", {}).keys())
+    ch_pairs = cached.get("channel_pairs", sorted(cached.get("channels", {}).keys()))
     ch_options = [{"label": p, "value": p} for p in ch_pairs] or no_update
     first_pair = ch_pairs[0] if ch_pairs else no_update
 
@@ -279,36 +285,99 @@ def restore_from_store(store, _tick):
     )
 
 
-# ── Trace click → highlight + channel selector ────────────────────────────────
+# ── Trace click → channel selector only (highlight handled by selector callback) ─
 
 @callback(
     Output("dp-channel-selector", "value"),
-    Output("dp-ts-figure",        "figure",  allow_duplicate=True),
     Input("dp-ts-figure",         "clickData"),
     State("dp-run-store",         "data"),
     prevent_initial_call=True,
 )
 def on_ts_click(click_data, store):
     if not click_data or not store:
-        return no_update, no_update
+        return no_update
     cached      = _RESULT_CACHE.get(store.get("cache_key"), {})
     ts_fig      = cached.get("ts", {}).get("figure", {})
     trace_names = [t.get("name", "") for t in ts_fig.get("data", [])]
-    valid_pairs = set(cached.get("channels", {}).keys())
+    valid_pairs = set(cached.get("channel_pairs", []))
 
     curve_num = click_data["points"][0]["curveNumber"]
-    print(f"[DEBUG on_ts_click] curve_num={curve_num}, n_traces={len(trace_names)}")
     if curve_num >= len(trace_names):
-        return no_update, no_update
+        return no_update
     trace_name = trace_names[curve_num]
     pair = trace_name.rsplit(" ", 1)[0] if " " in trace_name else trace_name
-    print(f"[DEBUG on_ts_click] trace_name={trace_name!r}, pair={pair!r}, valid={pair in valid_pairs}")
+    print(f"[DEBUG on_ts_click] pair={pair!r}, valid={pair in valid_pairs}")
+    return pair if pair in valid_pairs else no_update
+
+
+# ── Selector → highlight Raw Signal traces ────────────────────────────────────
+
+@callback(
+    Output("dp-ts-figure", "figure", allow_duplicate=True),
+    Input("dp-channel-selector", "value"),
+    State("dp-run-store",        "data"),
+    prevent_initial_call=True,
+)
+def highlight_ts_from_selector(channel_pair, store):
+    if not store:
+        return no_update
+    cached      = _RESULT_CACHE.get(store.get("cache_key"), {})
+    ts_fig      = cached.get("ts", {}).get("figure", {})
+    trace_names = [t.get("name", "") for t in ts_fig.get("data", [])]
+    if not trace_names:
+        return no_update
+
+    def _pair(name):
+        return name.rsplit(" ", 1)[0] if " " in name else name
 
     patched = Patch()
     for i, name in enumerate(trace_names):
-        patched["data"][i]["opacity"] = 1.0 if name == trace_name else 0.05
+        patched["data"][i]["opacity"] = 1.0 if (
+            not channel_pair or _pair(name) == channel_pair
+        ) else 0.05
+    return patched
 
-    return pair, patched
+
+# ── Selector → highlight 3D optode ───────────────────────────────────────────
+
+@callback(
+    Output("dp-layout-3d", "figure", allow_duplicate=True),
+    Input("dp-channel-selector", "value"),
+    State("dp-run-store",        "data"),
+    prevent_initial_call=True,
+)
+def highlight_optode_3d(channel_pair, store):
+    if not store:
+        return no_update
+    cached   = _RESULT_CACHE.get(store.get("cache_key"), {})
+    fig_dict = cached.get("layout", {}).get("layout_3d_figure")
+    if not isinstance(fig_dict, dict):
+        return no_update
+    try:
+        traces  = fig_dict.get("data", [])
+        ch_tr   = next((t for t in traces if t.get("name") == "Channels"), None)
+        hl_idx  = next((i for i, t in enumerate(traces) if t.get("name") == "_hl"), None)
+        if ch_tr is None or hl_idx is None:
+            return no_update
+
+        customdata = ch_tr.get("customdata", [])
+        xs, ys, zs = ch_tr.get("x", []), ch_tr.get("y", []), ch_tr.get("z", [])
+        target = f"{channel_pair} hbo" if channel_pair else None
+
+        if target and target in customdata:
+            idx = customdata.index(target)
+            hx, hy, hz = [xs[idx]], [ys[idx]], [zs[idx]]
+        else:
+            hx, hy, hz = [], [], []
+
+        patched = Patch()
+        patched["data"][hl_idx]["x"] = hx
+        patched["data"][hl_idx]["y"] = hy
+        patched["data"][hl_idx]["z"] = hz
+        return patched
+    except Exception as exc:
+        print(f"[DEBUG highlight_optode_3d] {exc}")
+        return no_update
 
 
 def _placeholder_fig(msg: str, height: int = 220) -> dict:
@@ -341,11 +410,47 @@ def _placeholder_fig(msg: str, height: int = 220) -> dict:
 def update_channel_detail(channel_pair, store):
     if not store or not channel_pair:
         return no_update, no_update, no_update
-    cached   = _RESULT_CACHE.get(store.get("cache_key"), {})
-    channels = cached.get("channels", {})
-    ch_data  = channels.get(channel_pair, {})
-    print(f"[DEBUG update_channel_detail] pair={channel_pair!r}, "
-          f"available_pairs={list(channels.keys())[:5]}, found={bool(ch_data)}")
+
+    cache_key = store.get("cache_key")
+    cached    = _RESULT_CACHE.get(cache_key, {})
+    channels  = cached.setdefault("channels", {})
+
+    if channel_pair not in channels:
+        # lazy compute
+        raw_haemo = _HAEMO_CACHE.get(cache_key)
+        if raw_haemo is None:
+            # loaded from disk cache — recompute haemo from SNIRF
+            try:
+                import mne
+                snirf_path = store.get("snirf_path", "")
+                raw = mne.io.read_raw_snirf(snirf_path, preload=True, verbose=False)
+                raw_od = mne.preprocessing.nirs.optical_density(raw, verbose=False)
+                raw_haemo = mne.preprocessing.nirs.beer_lambert_law(raw_od, ppf=6.0)
+                _HAEMO_CACHE[cache_key] = raw_haemo
+            except Exception as exc:
+                print(f"[DEBUG update_channel_detail] recompute haemo failed: {exc}")
+                return (
+                    _placeholder_fig("Failed to load channel data", 160),
+                    no_update, no_update,
+                )
+        try:
+            from fnirs_pipe.qc.figures import build_channel_figure
+            from fnirs_pipe.qc.prep_raw_report import _MAX_TS_PTS, _EPOCH_TMIN, _EPOCH_TMAX
+            markers = cached.get("ts", {}).get("markers", [])
+            detail_fig, psd_fig, epoch_fig = build_channel_figure(
+                raw_haemo, markers, channel_pair, _MAX_TS_PTS, _EPOCH_TMIN, _EPOCH_TMAX,
+            )
+            channels[channel_pair] = {
+                "detail_figure": detail_fig.to_dict() if detail_fig else None,
+                "psd_figure":    psd_fig.to_dict()    if psd_fig    else None,
+                "epoch_figure":  epoch_fig.to_dict()  if epoch_fig  else None,
+            }
+            print(f"[DEBUG update_channel_detail] computed {channel_pair!r}")
+        except Exception as exc:
+            print(f"[DEBUG update_channel_detail] build failed: {exc}")
+            channels[channel_pair] = {}
+
+    ch_data = channels.get(channel_pair, {})
     return (
         ch_data.get("detail_figure") or _placeholder_fig("No channel data", 160),
         ch_data.get("psd_figure")    or _placeholder_fig("No PSD available", 220),
@@ -547,7 +652,7 @@ def on_layout_2d_click(click_data, store):
     if not click_data or not store:
         return no_update
     cached      = _RESULT_CACHE.get(store.get("cache_key"), {})
-    valid_pairs = set(cached.get("channels", {}).keys())
+    valid_pairs = set(cached.get("channel_pairs", []))
     points      = click_data.get("points", [])
     if not points:
         return no_update
@@ -569,7 +674,7 @@ def on_topo_click(click_data, store):
     if not click_data or not store:
         return no_update
     cached      = _RESULT_CACHE.get(store.get("cache_key"), {})
-    valid_pairs = set(cached.get("channels", {}).keys())
+    valid_pairs = set(cached.get("channel_pairs", []))
     points      = click_data.get("points", [])
     if not points:
         return no_update
