@@ -60,22 +60,9 @@ select#run-select {
 .btn-active  { background: #ebf5fb; border-color: #3498db; color: #2176ae; font-weight: 600; }
 
 #mk-card { display: flex; flex-direction: column; overflow: hidden; }
-#marker-editor { padding: 0.6rem 0.8rem; flex: 1; min-height: 0; display: flex; flex-direction: column; }
-#marker-editor h3 { margin: 0 0 0.4rem; font-size: 0.88rem; color: #2c3e50; }
-.mk-offset-row { display: flex; align-items: center; gap: 0.3rem; margin-bottom: 0.5rem; flex-wrap: wrap; }
-.mk-offset-row label { font-size: 0.78rem; color: #6c757d; }
-#step-input {
-  width: 60px; border: 1px solid #ced4da; border-radius: 4px;
-  padding: 0.2rem 0.3rem; font-size: 0.82rem;
-}
-.mk-toolbar { display: flex; gap: 0.3rem; align-items: center; margin-bottom: 0.4rem; flex-wrap: wrap; }
-#mode-hint {
-  font-size: 0.78rem; color: #3498db; font-style: italic;
-  padding: 0.1rem 0.35rem; background: #ebf5fb; border-radius: 3px; display: none;
-}
+#mk-table-wrap { flex: 1; overflow-y: auto; padding: 0.4rem 0.6rem; }
 #mk-count { font-size: 0.75rem; color: #6c757d; }
-.mk-table-wrap { flex: 1; overflow-y: auto; }
-#marker-table { border-collapse: collapse; width: 100%; font-size: 0.80rem; }
+#marker-table { border-collapse: collapse; width: 100%; font-size: 0.80rem; table-layout: fixed; }
 #marker-table th, #marker-table td {
   border: 1px solid #dde3ea; padding: 0.22rem 0.45rem; text-align: left;
 }
@@ -83,22 +70,6 @@ select#run-select {
 #marker-table tbody tr:hover { background: #f8f9fa; cursor: pointer; }
 #marker-table tbody tr.mk-selected { background: #ebf5fb; }
 .mk-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; }
-#marker-table input[type="number"], #marker-table input[type="text"] {
-  border: 1px solid #ced4da; border-radius: 3px;
-  padding: 0.1rem 0.25rem; font-size: 0.80rem;
-}
-#marker-table { table-layout: fixed; }
-#marker-table input[type="number"] { width: 100%; }
-#marker-table input[type="text"]   { width: 100%; }
-.mk-rename-row {
-  display: flex; align-items: center; gap: 0.3rem;
-  margin-bottom: 0.4rem; flex-wrap: wrap;
-}
-.mk-rename-row input {
-  width: 80px; border: 1px solid #ced4da; border-radius: 4px;
-  padding: 0.18rem 0.28rem; font-size: 0.80rem;
-}
-.mk-rename-row span { color: #6c757d; font-size: 0.82rem; }
 
 /* detail panel placeholder */
 #detail-placeholder {
@@ -137,7 +108,6 @@ select#run-select {
   <div class="nav-right">
     <select id="run-select" onchange="switchRun(this.value)" style="display:none"></select>
     <span id="run-label-single" style="font-size:0.82rem;color:#6c757d"></span>
-    <button class="btn btn-primary" onclick="saveData()">&#8595; Save</button>
   </div>
 </nav>
 
@@ -148,43 +118,19 @@ select#run-select {
     <div id="ts-plot"></div>
   </div>
   <div class="card" id="mk-card">
-    <div class="panel-title">Marker Editor &nbsp;<span id="mk-count"></span></div>
-    <div id="marker-editor">
-      <div class="mk-offset-row">
-        <label>Step (s):</label>
-        <input id="step-input" type="number" value="1.0" step="0.1" min="0.001"/>
-        <button class="btn" onclick="offsetAll(-getStep())">&#8722; All</button>
-        <button class="btn" onclick="offsetAll(+getStep())">&#43; All</button>
-        <button class="btn btn-danger" id="btn-sel-minus" onclick="offsetSelected(-getStep())" disabled>&#8722; Sel</button>
-        <button class="btn" id="btn-sel-plus"  onclick="offsetSelected(+getStep())"  disabled>&#43; Sel</button>
-      </div>
-      <div class="mk-rename-row">
-        <span>Rename</span>
-        <input type="text" id="rename-from" placeholder="old"/>
-        <span>&#8594;</span>
-        <input type="text" id="rename-to"   placeholder="new"/>
-        <button class="btn" onclick="batchRename()">Apply All</button>
-      </div>
-      <div class="mk-toolbar">
-        <button class="btn" id="btn-add" onclick="toggleAddMode()">&#43; Add</button>
-        <span id="mode-hint">Click on the signal to place a marker</span>
-        <button class="btn btn-primary" onclick="exportTSV()">&#8595; Export TSV</button>
-      </div>
-      <div class="mk-table-wrap">
-        <table id="marker-table">
-          <colgroup>
-            <col style="width:24px"/>
-            <col style="width:88px"/>
-            <col style="width:68px"/>
-            <col style="width:80px"/>
-            <col style="width:28px"/>
-          </colgroup>
-          <thead><tr>
-            <th></th><th>Onset (s)</th><th>Dur (s)</th><th>Description</th><th></th>
-          </tr></thead>
-          <tbody id="mk-tbody"></tbody>
-        </table>
-      </div>
+    <div class="panel-title">Events &nbsp;<span id="mk-count"></span></div>
+    <div id="mk-table-wrap">
+      <table id="marker-table">
+        <colgroup>
+          <col style="width:45%"/>
+          <col style="width:28%"/>
+          <col style="width:27%"/>
+        </colgroup>
+        <thead><tr>
+          <th>Description</th><th>Onset (s)</th><th>Dur (s)</th>
+        </tr></thead>
+        <tbody id="mk-tbody"></tbody>
+      </table>
     </div>
   </div>
 </div>
@@ -275,7 +221,6 @@ var _run_idx     = 0;
 var _markers    = [];
 var _condColors = {};
 var _selectedMk = -1;
-var _addMode    = false;
 var _selChannel = null;
 var _bandShapes = [];
 var _mkRO       = null;
@@ -298,8 +243,6 @@ var _mkRO       = null;
 })();
 
 // ─── utilities ────────────────────────────────────────────────────────────────
-function getStep() { return parseFloat(document.getElementById("step-input").value) || 1.0; }
-
 function _esc(s) {
   return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 }
@@ -352,7 +295,6 @@ function loadTimeSeries() {
     document.getElementById("ts-plot").on("plotly_click", function(evt) {
       if (!evt.points || !evt.points[0]) return;
       var pt = evt.points[0];
-      if (_addMode) { addMarkerAtX(pt.x); return; }
       selectChannel(chPair(pt.data.name));
       highlightTrace(pt.data.name);
     });
@@ -650,7 +592,7 @@ function renderMarkerTable() {
   var tbody = document.getElementById("mk-tbody");
   tbody.innerHTML = "";
   if (!_markers.length) {
-    tbody.innerHTML = "<tr><td colspan='5' style='color:#adb5bd;font-style:italic;text-align:center'>No markers</td></tr>";
+    tbody.innerHTML = "<tr><td colspan='3' style='color:#adb5bd;font-style:italic;text-align:center'>No events</td></tr>";
     document.getElementById("mk-count").textContent = "";
     return;
   }
@@ -660,23 +602,12 @@ function renderMarkerTable() {
     if (i === _selectedMk) tr.className = "mk-selected";
     tr.innerHTML =
       "<td><span class='mk-dot' style='background:" + color + "'></span>" + _esc(m.description) + "</td>" +
-      "<td><input type='number' step='0.001' min='0' value='" + m.onset.toFixed(3) +
-        "' onchange=\"updateMarker(" + i + ",'onset',this.value)\"/></td>" +
-      "<td><input type='number' step='0.1'  min='0' value='" + m.duration.toFixed(2) +
-        "' onchange=\"updateMarker(" + i + ",'duration',this.value)\"/></td>" +
-      "<td><input type='text' value='" + _esc(m.description) +
-        "' onchange=\"updateMarker(" + i + ",'description',this.value)\"/></td>" +
-      "<td><button class='btn btn-danger' style='padding:0.1rem 0.3rem' onclick='deleteMk(" + i + ")'>&#10005;</button></td>";
-    tr.addEventListener("click", function(e) {
-      if (e.target.tagName === "INPUT" || e.target.tagName === "BUTTON") return;
-      selectMk(i);
-    });
+      "<td>" + m.onset.toFixed(3) + "</td>" +
+      "<td>" + m.duration.toFixed(2) + "</td>";
+    tr.addEventListener("click", function() { selectMk(i); });
     tbody.appendChild(tr);
   });
   document.getElementById("mk-count").textContent = "(" + _markers.length + ")";
-  var hasSel = _selectedMk >= 0 && _selectedMk < _markers.length;
-  document.getElementById("btn-sel-minus").disabled = !hasSel;
-  document.getElementById("btn-sel-plus").disabled  = !hasSel;
 }
 
 function selectMk(i) {
@@ -685,109 +616,11 @@ function selectMk(i) {
   refreshTsShapes();
 }
 
-// ─── marker editing (Flask: persisted; static: no-op) ─────────────────────────
-function updateMarker(i, field, val) {
-  if (!_STATIC_DATA) {
-    var body = { idx: i };
-    body[field] = field === "description" ? val : parseFloat(val);
-    fetch("/api/markers/update", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body) })
-      .then(r => r.json()).then(d => { _markers = d.markers; renderMarkerTable(); refreshTsShapes(); });
-  }
-}
-
-function deleteMk(i) {
-  if (!_STATIC_DATA) {
-    fetch("/api/markers/delete", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({idx:i}) })
-      .then(r => r.json()).then(d => {
-        _markers = d.markers; _selectedMk = -1;
-        renderMarkerTable(); refreshTsShapes();
-      });
-  }
-}
-
-function offsetAll(delta) {
-  if (!_STATIC_DATA) {
-    fetch("/api/markers/offset", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({delta:delta}) })
-      .then(r => r.json()).then(d => {
-        _markers = d.markers; renderMarkerTable(); refreshTsShapes();
-        if (_selChannel) fetchAndUpdateDetailMarkers();
-      });
-  }
-}
-
-function offsetSelected(delta) {
-  if (!_STATIC_DATA && _selectedMk >= 0 && _selectedMk < _markers.length)
-    updateMarker(_selectedMk, "onset", _markers[_selectedMk].onset + delta);
-}
-
-function batchRename() {
-  if (!_STATIC_DATA) {
-    var from = document.getElementById("rename-from").value.trim();
-    var to   = document.getElementById("rename-to").value.trim();
-    if (!from) return;
-    fetch("/api/markers/replace_description", {
-      method: "POST", headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({old: from, new: to}),
-    }).then(r => r.json()).then(function(d) {
-      _markers = d.markers; _condColors = d.cond_colors || _condColors;
-      document.getElementById("rename-from").value = "";
-      document.getElementById("rename-to").value   = "";
-      renderMarkerTable(); refreshTsShapes();
-    });
-  }
-}
-
-function fetchAndUpdateDetailMarkers() {
-  if (!_selChannel) return;
-  Plotly.relayout("detail-plot", { shapes: _markerShapes() });
-  if (!_STATIC_DATA) {
-    fetch("/api/channel_figure?pair=" + encodeURIComponent(_selChannel))
-      .then(r => r.json()).then(function(d) {
-        if (d.epoch_figure)
-          Plotly.react("epoch-plot", d.epoch_figure.data, d.epoch_figure.layout,
-                       { responsive: true, displayModeBar: false });
-      });
-  }
-}
-
-function toggleAddMode() {
-  _addMode = !_addMode;
-  document.getElementById("btn-add").className = _addMode ? "btn btn-active" : "btn";
-  document.getElementById("mode-hint").style.display = _addMode ? "inline" : "none";
-}
-
-function addMarkerAtX(x) {
-  if (!_STATIC_DATA) {
-    fetch("/api/markers/add", { method:"POST", headers:{"Content-Type":"application/json"},
-                                body:JSON.stringify({onset:x, duration:1.0, description:"stim"}) })
-      .then(r => r.json()).then(d => {
-        _markers = d.markers.map(function(m) {
-          m.color = _condColors[m.description] || "#f39c12";
-          return m;
-        });
-        toggleAddMode(); renderMarkerTable(); refreshTsShapes();
-      });
-  } else {
-    toggleAddMode();
-  }
-}
-
-function exportTSV() {
-  var lines = ["onset\tduration\tdescription"];
-  _markers.forEach(function(m) {
-    lines.push(m.onset.toFixed(4) + "\t" + m.duration.toFixed(4) + "\t" + m.description);
-  });
-  var blob = new Blob([lines.join("\r\n")], { type:"text/tab-separated-values" });
-  var a = document.createElement("a");
-  a.href = URL.createObjectURL(blob); a.download = "events.tsv";
-  document.body.appendChild(a); a.click(); document.body.removeChild(a);
-}
-
 // ─── run switcher ─────────────────────────────────────────────────────────────
 function switchRun(idx) {
   function _reload() {
     _run_idx = parseInt(idx);
-    _selChannel = null; _selectedMk = -1; _addMode = false;
+    _selChannel = null; _selectedMk = -1;
     document.getElementById("detail-placeholder").style.display = "flex";
     document.getElementById("detail-plot").style.display = "none";
     loadTimeSeries(); loadLayout(); loadPsdMean();
@@ -801,16 +634,6 @@ function switchRun(idx) {
   }
 }
 
-// ─── save ─────────────────────────────────────────────────────────────────────
-function saveData() {
-  if (_STATIC_DATA) {
-    alert("This is a read-only snapshot.\nTo edit markers, use the interactive viewer:\n  fnirs-rate raw-indiv <bids_dir> <output_dir> <subject>");
-  } else {
-    fetch("/api/save", { method:"POST" }).then(r => r.json()).then(function(d) {
-      alert("Saved:\n" + (d.saved || []).join("\n"));
-    });
-  }
-}
 </script>
 </body>
 </html>
