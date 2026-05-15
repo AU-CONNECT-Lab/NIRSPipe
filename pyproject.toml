@@ -37,6 +37,7 @@ dev = [
 
 [project.scripts]
 fnirs-pipe  = "fnirs_pipe.cli.run:app"
+fnirs-prep  = "fnirs_pipe.cli.prep:app"
 fnirs-recon = "fnirs_pipe.cli.recon:app"
 fnirs-rate  = "fnirs_pipe.cli.rate:app"
 fnirs-qc    = "fnirs_pipe.cli.qc:app"
