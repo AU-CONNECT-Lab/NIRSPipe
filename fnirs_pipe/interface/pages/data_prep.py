@@ -19,11 +19,82 @@ _IQM_COLS = [
     {"name": "Value",  "id": "value"},
 ]
 
+_SEG_COLS = [
+    {"name": "Onset (s)",    "id": "onset",    "editable": True, "type": "numeric"},
+    {"name": "Duration (s)", "id": "duration", "editable": True, "type": "numeric"},
+]
+
 
 def _card(title, *children):
     return dbc.Card(
         [dbc.CardHeader(title), dbc.CardBody(list(children))],
         className="mb-3",
+    )
+
+
+def _crop_card():
+    return _card("Crop",
+        dcc.Graph(id="dp-trigger-timeline", style={"height": "110px"}),
+        dbc.Row([
+            dbc.Col(
+                dbc.RadioItems(
+                    id="dp-crop-mode",
+                    options=[
+                        {"label": "Single segment",  "value": "single"},
+                        {"label": "Multi-segment", "value": "multi"},
+                    ],
+                    value="single", inline=True, className="small",
+                ),
+                width="auto", className="d-flex align-items-center",
+            ),
+            dbc.Col(
+                html.Div(id="dp-crop-single-panel",
+                         className="d-flex gap-2 align-items-center flex-wrap",
+                         children=[
+                    dbc.Label("tmin (s)", className="small mb-0"),
+                    dbc.Input(id="dp-crop-tmin", type="number", size="sm",
+                              placeholder="0.0", style={"width": "80px"}),
+                    dbc.Label("tmax (s)", className="small mb-0"),
+                    dbc.Input(id="dp-crop-tmax", type="number", size="sm",
+                              placeholder="end", style={"width": "80px"}),
+                    dbc.Button("Use zoom", id="dp-crop-use-zoom",
+                               size="sm", color="outline-secondary"),
+                ]),
+                width="auto",
+            ),
+            dbc.Col(
+                html.Div(id="dp-crop-multi-panel", style={"display": "none"},
+                         className="d-flex gap-2 align-items-center flex-wrap",
+                         children=[
+                    dbc.Button("+ Segment", id="dp-crop-add-seg-btn",
+                               size="sm", color="outline-secondary"),
+                    dbc.Checklist(
+                        id="dp-crop-combine",
+                        options=[{"label": "Combine into one file", "value": "combine"}],
+                        value=[], inline=True, className="small",
+                    ),
+                ]),
+                width="auto",
+            ),
+            dbc.Col(
+                dbc.Button("Apply", id="dp-crop-apply-btn",
+                           size="sm", color="outline-success"),
+                width="auto", className="ms-auto d-flex align-items-center",
+            ),
+        ], className="g-2 mt-2 align-items-center flex-wrap"),
+        html.Div(id="dp-crop-seg-wrap", style={"display": "none"}, className="mt-2",
+                 children=[
+            dash_table.DataTable(
+                id="dp-crop-seg-table",
+                columns=_SEG_COLS,
+                editable=True,
+                row_deletable=True,
+                style_table={"overflowX": "auto", "maxHeight": "150px", "overflowY": "auto"},
+                style_header={"fontWeight": "600", "fontSize": "0.78rem"},
+                style_cell={"fontSize": "0.78rem", "padding": "3px 6px"},
+            ),
+        ]),
+        html.Div(id="dp-crop-status", className="mt-1 small"),
     )
 
 
@@ -167,6 +238,9 @@ layout = dbc.Container([
                                className="text-muted d-block mb-1"),
                     dcc.Graph(id="dp-evoked-topo"),
                 ),
+
+                # Crop (trigger timeline + crop controls)
+                _crop_card(),
 
                 # Raw Signal | Marker Editor
                 dbc.Row([

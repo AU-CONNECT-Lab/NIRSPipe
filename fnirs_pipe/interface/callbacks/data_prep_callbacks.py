@@ -229,16 +229,17 @@ def load_run(n_clicks, run_path, sci_thresh, cache_dir):
     Output("dp-iqm-table",         "data"),
     Output("dp-channel-selector",  "value",   allow_duplicate=True),
     Output("dp-evoked-topo",       "figure"),
+    Output("dp-trigger-timeline",  "figure"),
     Input("dp-run-store",          "data"),
     Input("dp-mount-tick",         "n_intervals"),
     prevent_initial_call="initial_duplicate",
 )
 def restore_from_store(store, _tick):
     if not store:
-        return (no_update,) * 11
+        return (no_update,) * 12
     cached = _RESULT_CACHE.get(store.get("cache_key"), {})
     if not cached:
-        return (no_update,) * 11
+        return (no_update,) * 12
 
     def _fig(nested, *keys):
         d = nested
@@ -270,17 +271,18 @@ def restore_from_store(store, _tick):
     ] or no_update
 
     return (
-        _fig(cached, "ts",          "figure"),
-        _fig(cached, "layout",      "layout_2d_figure"),
-        _fig(cached, "layout",      "layout_3d_figure"),
+        _fig(cached, "ts",               "figure"),
+        _fig(cached, "layout",           "layout_2d_figure"),
+        _fig(cached, "layout",           "layout_3d_figure"),
         sci_psp_out,
-        _fig(cached, "psd",         "figure"),
+        _fig(cached, "psd",              "figure"),
         ch_sum_out,
         marker_rows,
         ch_options,
         iqm_rows,
         first_pair,
-        _fig(cached, "evoked_topo", "figure"),
+        _fig(cached, "evoked_topo",      "figure"),
+        _fig(cached, "trigger_timeline", "figure"),
     )
 
 
@@ -693,3 +695,141 @@ def on_topo_click(click_data, store):
     pair = points[0].get("customdata", "")
     print(f"[DEBUG on_topo_click] pair={pair!r}, valid={pair in valid_pairs}")
     return pair if pair in valid_pairs else no_update
+
+
+# ── Crop: show/hide mode panels ───────────────────────────────────────────────
+
+@callback(
+    Output("dp-crop-single-panel", "style"),
+    Output("dp-crop-multi-panel",  "style"),
+    Output("dp-crop-seg-wrap",     "style"),
+    Input("dp-crop-mode", "value"),
+)
+def toggle_crop_mode(mode):
+    show, hide = {}, {"display": "none"}
+    if mode == "single":
+        return show, hide, hide
+    return hide, show, show
+
+
+# ── Crop: add segment row ─────────────────────────────────────────────────────
+
+@callback(
+    Output("dp-crop-seg-table", "data", allow_duplicate=True),
+    Input("dp-crop-add-seg-btn", "n_clicks"),
+    State("dp-crop-seg-table",   "data"),
+    prevent_initial_call=True,
+)
+def add_crop_segment(n_clicks, rows):
+    rows = rows or []
+    rows.append({"onset": 0.0, "duration": 30.0})
+    return rows
+
+
+# ── Crop: fill tmin/tmax from zoom range ──────────────────────────────────────
+
+@callback(
+    Output("dp-crop-tmin", "value"),
+    Output("dp-crop-tmax", "value"),
+    Input("dp-crop-use-zoom",    "n_clicks"),
+    State("dp-trigger-timeline", "relayoutData"),
+    prevent_initial_call=True,
+)
+def use_zoom_range(n_clicks, relayout):
+    if not relayout:
+        return no_update, no_update
+    tmin = relayout.get("xaxis.range[0]")
+    tmax = relayout.get("xaxis.range[1]")
+    return tmin, tmax
+
+
+# ── Crop: highlight crop region on timeline ───────────────────────────────────
+
+@callback(
+    Output("dp-trigger-timeline", "figure", allow_duplicate=True),
+    Input("dp-crop-tmin",         "value"),
+    Input("dp-crop-tmax",         "value"),
+    Input("dp-crop-seg-table",    "data"),
+    Input("dp-crop-mode",         "value"),
+    prevent_initial_call=True,
+)
+def update_crop_highlight(tmin, tmax, segments, mode):
+    patched = Patch()
+    shapes = []
+    fill = "rgba(52, 152, 219, 0.15)"
+    if mode == "single":
+        if tmin is not None or tmax is not None:
+            shapes.append({
+                "type": "rect", "xref": "x", "yref": "paper",
+                "x0": float(tmin) if tmin is not None else 0,
+                "x1": float(tmax) if tmax is not None else 1e9,
+                "y0": 0, "y1": 1,
+                "fillcolor": fill, "line": {"width": 0},
+            })
+    elif mode == "multi" and segments:
+        for row in segments:
+            onset    = row.get("onset")
+            duration = row.get("duration")
+            if onset is not None and duration is not None:
+                shapes.append({
+                    "type": "rect", "xref": "x", "yref": "paper",
+                    "x0": float(onset), "x1": float(onset) + float(duration),
+                    "y0": 0, "y1": 1,
+                    "fillcolor": fill, "line": {"width": 0},
+                })
+    patched["layout"]["shapes"] = shapes
+    return patched
+
+
+# ── Crop: apply ───────────────────────────────────────────────────────────────
+
+@callback(
+    Output("dp-crop-status",    "children"),
+    Input("dp-crop-apply-btn",  "n_clicks"),
+    State("dp-crop-mode",       "value"),
+    State("dp-crop-tmin",       "value"),
+    State("dp-crop-tmax",       "value"),
+    State("dp-crop-seg-table",  "data"),
+    State("dp-crop-combine",    "value"),
+    State("dp-run-store",       "data"),
+    State("app-output-dir",     "data"),
+    prevent_initial_call=True,
+)
+def apply_crop(n_clicks, mode, tmin, tmax, seg_rows, combine_val, store, output_dir):
+    if not store or not store.get("snirf_path"):
+        return dbc.Alert("No run loaded.", color="warning", className="mb-0 py-2")
+    if not output_dir:
+        return dbc.Alert("Output directory not set.", color="warning", className="mb-0 py-2")
+
+    import pandas as pd
+    from fnirs_pipe.pipeline.crop import crop_snirf_from_path
+
+    snirf_path = Path(store["snirf_path"])
+    entities   = _parse_bids_entities(snirf_path.name)
+    sub        = entities.get("sub", "")
+    ses        = entities.get("ses")
+    combine    = bool(combine_val)
+
+    try:
+        if mode == "single":
+            if tmin is None and tmax is None:
+                return dbc.Alert("Set tmin or tmax.", color="warning", className="mb-0 py-2")
+            out_paths = crop_snirf_from_path(
+                snirf_path, Path(output_dir), sub, ses,
+                tmin=float(tmin) if tmin is not None else None,
+                tmax=float(tmax) if tmax is not None else None,
+            )
+        else:
+            if not seg_rows:
+                return dbc.Alert("Add at least one segment.", color="warning", className="mb-0 py-2")
+            df = pd.DataFrame(seg_rows, columns=["onset", "duration"])
+            df["onset"]    = pd.to_numeric(df["onset"],    errors="coerce").fillna(0.0)
+            df["duration"] = pd.to_numeric(df["duration"], errors="coerce").fillna(0.0)
+            out_paths = crop_snirf_from_path(
+                snirf_path, Path(output_dir), sub, ses,
+                segments_df=df, combine=combine,
+            )
+        names = ", ".join(p.name for p in out_paths)
+        return dbc.Alert(f"Written: {names}", color="success", className="mb-0 py-2")
+    except Exception as exc:
+        return dbc.Alert(f"Crop failed: {exc}", color="danger", className="mb-0 py-2")

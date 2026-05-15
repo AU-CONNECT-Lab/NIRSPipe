@@ -29,6 +29,73 @@ def _write_segment(raw_seg, out_snirf: Path) -> None:
     annotations_to_df(raw_seg).to_csv(events_path, sep="\t", index=False)
 
 
+def _setup_deriv_dir(derivatives_dir: Path, sub: str, ses: str | None) -> Path:
+    out_nirs_dir = deriv_nirs_dir(derivatives_dir, _DERIV_NAME, sub, ses)
+    ensure_dataset_description(derivatives_dir / _DERIV_NAME, _DERIV_NAME, "fnirs-prep crop")
+    out_nirs_dir.mkdir(parents=True, exist_ok=True)
+    return out_nirs_dir
+
+
+def _crop_raw(
+    raw,
+    out_nirs_dir: Path,
+    stem: str,
+    *,
+    tmin: float | None,
+    tmax: float | None,
+    segments_df: pd.DataFrame | None,
+    combine: bool,
+) -> list[Path]:
+    import mne
+
+    if segments_df is not None:
+        segs = [
+            raw.copy().crop(tmin=row.onset, tmax=row.onset + row.duration)
+            for _, row in segments_df.iterrows()
+        ]
+        if combine:
+            out = out_nirs_dir / f"{stem}_nirs.snirf"
+            _write_segment(mne.concatenate_raws(segs), out)
+            logger.info("Written combined: %s", out)
+            return [out]
+        out_paths: list[Path] = []
+        for i, seg in enumerate(segs, start=1):
+            out = out_nirs_dir / f"{stem}_seg-{i:02d}_nirs.snirf"
+            _write_segment(seg, out)
+            logger.info("Written segment %d: %s", i, out)
+            out_paths.append(out)
+        return out_paths
+
+    cropped = raw.copy().crop(tmin=tmin, tmax=tmax)
+    out = out_nirs_dir / f"{stem}_nirs.snirf"
+    _write_segment(cropped, out)
+    logger.info("Written: %s", out)
+    return [out]
+
+
+def crop_snirf_from_path(
+    snirf_path: Path,
+    derivatives_dir: Path,
+    sub: str,
+    ses: str | None = None,
+    *,
+    tmin: float | None = None,
+    tmax: float | None = None,
+    segments_df: pd.DataFrame | None = None,
+    combine: bool = False,
+) -> list[Path]:
+    """Crop a SNIRF given its path directly (no BIDS layout lookup).
+
+    Public entry point shared by the interface. Returns list of written SNIRF paths.
+    """
+    stem = bids_stem(snirf_path)
+    out_nirs_dir = _setup_deriv_dir(derivatives_dir, sub, ses)
+    copy_sidecars(snirf_path, stem, out_nirs_dir)
+    raw = read_raw_snirf(snirf_path)
+    return _crop_raw(raw, out_nirs_dir, stem,
+                     tmin=tmin, tmax=tmax, segments_df=segments_df, combine=combine)
+
+
 def crop_snirf(
     bids_dir: Path,
     derivatives_dir: Path,
@@ -43,7 +110,7 @@ def crop_snirf(
     combine: bool = False,
     validate: bool = False,
 ) -> list[Path]:
-    """Crop a raw SNIRF and write to derivatives/cropped/.
+    """Crop a raw SNIRF via BIDS layout lookup and write to derivatives/cropped/.
 
     Single segment: use tmin/tmax.
     Multi-segment: use segments_path (TSV with onset/duration columns).
@@ -51,44 +118,12 @@ def crop_snirf(
 
     Returns list of written SNIRF paths.
     """
-    import mne
-
     snirf_path = find_snirf(bids_dir, sub, ses, task, run, validate=validate)
     stem = bids_stem(snirf_path)
-
-    out_nirs_dir = deriv_nirs_dir(derivatives_dir, _DERIV_NAME, sub, ses)
-    ensure_dataset_description(
-        derivatives_dir / _DERIV_NAME, _DERIV_NAME, "fnirs-prep crop"
-    )
-    out_nirs_dir.mkdir(parents=True, exist_ok=True)
+    out_nirs_dir = _setup_deriv_dir(derivatives_dir, sub, ses)
     copy_sidecars(snirf_path, stem, out_nirs_dir)
-
     raw = read_raw_snirf(snirf_path)
 
-    if segments_path is not None:
-        df = pd.read_csv(segments_path, sep="\t")
-        segments = [
-            raw.copy().crop(tmin=row.onset, tmax=row.onset + row.duration)
-            for _, row in df.iterrows()
-        ]
-
-        if combine:
-            combined = mne.concatenate_raws(segments)
-            out = out_nirs_dir / f"{stem}_nirs.snirf"
-            _write_segment(combined, out)
-            logger.info("Written combined: %s", out)
-            return [out]
-
-        out_paths: list[Path] = []
-        for i, seg in enumerate(segments, start=1):
-            out = out_nirs_dir / f"{stem}_seg-{i:02d}_nirs.snirf"
-            _write_segment(seg, out)
-            logger.info("Written segment %d: %s", i, out)
-            out_paths.append(out)
-        return out_paths
-
-    cropped = raw.copy().crop(tmin=tmin, tmax=tmax)
-    out = out_nirs_dir / f"{stem}_nirs.snirf"
-    _write_segment(cropped, out)
-    logger.info("Written: %s", out)
-    return [out]
+    segments_df = pd.read_csv(segments_path, sep="\t") if segments_path is not None else None
+    return _crop_raw(raw, out_nirs_dir, stem,
+                     tmin=tmin, tmax=tmax, segments_df=segments_df, combine=combine)
