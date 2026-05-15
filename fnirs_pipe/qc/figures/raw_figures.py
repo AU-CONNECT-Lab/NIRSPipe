@@ -721,7 +721,11 @@ def build_evoked_topo_figure(
     times_list = times.tolist()
     ch_names_picked = [raw_haemo.ch_names[i] for i in picks]
 
-    hw, hh = 0.055, 0.065
+    _H, _ML, _MR, _MT, _MB = 750, 20, 130, 30, 20
+    _W = (_H - _MT - _MB) + _ML + _MR  # 700 + 150 = 850
+
+    hw, hh = 0.050, 0.025
+    box_shapes = []
     fig = go.Figure()
 
     for pi, pair in enumerate(pairs):
@@ -739,6 +743,13 @@ def build_evoked_topo_figure(
             yk: dict(domain=[y0, y1], showticklabels=False, showgrid=False,
                      zeroline=False, anchor=xr),
         })
+        box_shapes.append(dict(
+            type="rect", xref="paper", yref="paper",
+            x0=x0, y0=y0, x1=x1, y1=y1,
+            line=dict(color="#ccc", width=0.8),
+            fillcolor="rgba(255,255,255,0.80)",
+            layer="below",
+        ))
 
         first = (pi == 0)
         try:
@@ -779,28 +790,23 @@ def build_evoked_topo_figure(
             xanchor="center", yanchor="bottom",
         )
 
-    # 2D head silhouette in paper coordinates
     head_shapes = [
-        # skull circle
         dict(type="circle",
              xref="paper", yref="paper",
              x0=0.04, y0=0.04, x1=0.96, y1=0.96,
              line=dict(color="#bbb", width=2),
              fillcolor="rgba(245,245,245,0.45)",
              layer="below"),
-        # nose (top)
         dict(type="path",
              path="M 0.455,0.955 L 0.500,0.995 L 0.545,0.955",
              xref="paper", yref="paper",
              line=dict(color="#bbb", width=2),
              layer="below"),
-        # left ear
         dict(type="path",
              path="M 0.040,0.560 Q 0.005,0.500 0.040,0.440",
              xref="paper", yref="paper",
              line=dict(color="#bbb", width=2),
              layer="below"),
-        # right ear
         dict(type="path",
              path="M 0.960,0.560 Q 0.995,0.500 0.960,0.440",
              xref="paper", yref="paper",
@@ -809,12 +815,13 @@ def build_evoked_topo_figure(
     ]
 
     fig.update_layout(
-        height=750,
+        width=_W,
+        height=_H,
         plot_bgcolor="rgba(0,0,0,0)",
         paper_bgcolor="white",
-        margin=dict(l=20, r=130, t=30, b=20),
-        shapes=head_shapes,
+        margin=dict(l=_ML, r=_MR, t=_MT, b=_MB),
+        shapes=box_shapes + head_shapes,
         legend=dict(x=1.01, y=0.99, font=dict(size=10),
-                    title=dict(text="Condition (HbO)", font=dict(size=9))),
+                    title=dict(text="HbO / HbR", font=dict(size=9))),
     )
     return fig
