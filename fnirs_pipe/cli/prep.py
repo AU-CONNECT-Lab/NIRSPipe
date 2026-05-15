@@ -92,6 +92,107 @@ def crop(
         raise typer.Exit(1)
 
 
+@app.command("align")
+def align(
+    bids_dir:        Annotated[Path, typer.Argument(help="BIDS dataset root.")],
+    derivatives_dir: Annotated[Path, typer.Argument(help="Derivatives output directory.")],
+    group_csv:       Annotated[Path, typer.Option("--group-csv", help="CSV with group_id, subject_id, task columns.")],
+    skip_bids_validation: Annotated[bool, typer.Option("--skip-bids-validation/--no-skip-bids-validation")] = False,
+) -> None:
+    """Align multi-subject recordings by shared trigger and write SNIRF files.
+
+    Each (group_id, task) in --group-csv is aligned independently.
+    If no shared trigger is found, that group is skipped with a warning.
+    Outputs: derivatives/aligned/sub-{sub}/nirs/{stem}_nirs.snirf
+             derivatives/aligned/group-{gid}_task-{task}_align-offsets.tsv
+    """
+    import mne
+    import pandas as pd
+
+    from fnirs_pipe.exceptions import AlignmentError
+    from fnirs_pipe.pipeline.hyperscanning import (
+        align_recordings, load_group_raw_bids, parse_group_csv,
+    )
+    from fnirs_pipe.utils.snirf_prep import (
+        annotations_to_df, bids_stem, copy_sidecars, deriv_nirs_dir,
+        ensure_dataset_description, find_snirf,
+    )
+
+    _DERIV_NAME = "aligned"
+
+    try:
+        groups = parse_group_csv(group_csv)
+    except Exception as exc:
+        typer.echo(f"[error] {exc}", err=True)
+        raise typer.Exit(1)
+
+    n_fail = 0
+    for (group_id, task), group in groups.items():
+        typer.echo(f"Group {group_id} task-{task} ({len(group)} subjects)")
+
+        try:
+            raws = load_group_raw_bids(bids_dir, group)
+        except Exception as exc:
+            typer.echo(f"  [error] loading: {exc}", err=True)
+            n_fail += 1
+            continue
+
+        try:
+            aligned_raws, offsets = align_recordings(raws, task)
+        except AlignmentError as exc:
+            typer.echo(f"  [warning] {exc}", err=True)
+            n_fail += 1
+            continue
+
+        ensure_dataset_description(
+            derivatives_dir / _DERIV_NAME, _DERIV_NAME, "fnirs-prep align"
+        )
+
+        offset_rows: list[dict] = []
+        for entry in group:
+            sub_label = entry.subject_id.removeprefix("sub-")
+            try:
+                snirf_path = find_snirf(
+                    bids_dir, sub_label, None, task, None,
+                    validate=not skip_bids_validation,
+                )
+            except Exception as exc:
+                typer.echo(f"  {entry.subject_id}: [error] {exc}", err=True)
+                n_fail += 1
+                continue
+
+            stem     = bids_stem(snirf_path)
+            out_dir  = deriv_nirs_dir(derivatives_dir, _DERIV_NAME, sub_label, None)
+            out_dir.mkdir(parents=True, exist_ok=True)
+            copy_sidecars(snirf_path, stem, out_dir)
+
+            out_snirf   = out_dir / f"{stem}_nirs.snirf"
+            raw_aligned = aligned_raws[entry.subject_id]
+            mne.export.export_raw(
+                str(out_snirf), raw_aligned, fmt="snirf", overwrite=True, verbose=False
+            )
+            annotations_to_df(raw_aligned).to_csv(
+                out_dir / f"{stem}_events.tsv", sep="\t", index=False
+            )
+
+            typer.echo(f"  {entry.subject_id}: offset={offsets[entry.subject_id]:.3f}s -> {out_snirf.name}")
+            offset_rows.append({
+                "subject_id": entry.subject_id,
+                "offset_s":   round(offsets[entry.subject_id], 3),
+                "duration_s": round(raw_aligned.times[-1], 1),
+            })
+
+        offsets_path = (
+            derivatives_dir / _DERIV_NAME
+            / f"group-{group_id}_task-{task}_align-offsets.tsv"
+        )
+        pd.DataFrame(offset_rows).to_csv(offsets_path, sep="\t", index=False)
+        typer.echo(f"  Offsets: {offsets_path.name}")
+
+    if n_fail:
+        raise typer.Exit(1)
+
+
 @markers_app.command("export")
 def markers_export(
     bids_dir: Annotated[Path, typer.Argument(help="BIDS dataset root.")],
