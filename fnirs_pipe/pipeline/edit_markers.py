@@ -32,6 +32,39 @@ def _df_to_annotations(df: pd.DataFrame):
     )
 
 
+def apply_markers_from_df(
+    snirf_path: Path,
+    derivatives_dir: Path,
+    sub: str,
+    ses: str | None,
+    df: pd.DataFrame,
+) -> Path:
+    """Read snirf_path, replace annotations with df, write to derivatives/marker_edited/.
+
+    Public entry point shared by the CLI (via apply_markers) and the interface callbacks.
+    Returns the path to the written SNIRF.
+    """
+    import mne
+
+    stem = bids_stem(snirf_path)
+    out_nirs_dir = deriv_nirs_dir(derivatives_dir, _DERIV_NAME, sub, ses)
+    ensure_dataset_description(
+        derivatives_dir / _DERIV_NAME, _DERIV_NAME, "fnirs-prep edit-markers"
+    )
+    out_nirs_dir.mkdir(parents=True, exist_ok=True)
+    copy_sidecars(snirf_path, stem, out_nirs_dir)
+
+    raw = read_raw_snirf(snirf_path)
+    raw.set_annotations(_df_to_annotations(df))
+
+    out_snirf = out_nirs_dir / f"{stem}_nirs.snirf"
+    mne.export.export_raw(str(out_snirf), raw, fmt="snirf", overwrite=True, verbose=False)
+    annotations_to_df(raw).to_csv(out_nirs_dir / f"{stem}_events.tsv", sep="\t", index=False)
+
+    logger.info("Written to %s", out_nirs_dir)
+    return out_snirf
+
+
 def export_markers(
     bids_dir: Path,
     sub: str,
@@ -84,52 +117,32 @@ def apply_markers(
     Exactly one of tsv/shift/set_duration/rename must be provided.
     Returns the path to the written SNIRF.
     """
-    import mne
-
     snirf_path = find_snirf(bids_dir, sub, ses, task, run, validate=validate)
-    stem = bids_stem(snirf_path)
-
-    out_nirs_dir = deriv_nirs_dir(derivatives_dir, _DERIV_NAME, sub, ses)
-    ensure_dataset_description(
-        derivatives_dir / _DERIV_NAME, _DERIV_NAME, "fnirs-prep edit-markers"
-    )
-    out_nirs_dir.mkdir(parents=True, exist_ok=True)
-    copy_sidecars(snirf_path, stem, out_nirs_dir)
-
-    raw = read_raw_snirf(snirf_path)
 
     if tsv is not None:
         df = pd.read_csv(tsv, sep="\t")
-        raw.set_annotations(_df_to_annotations(df))
-
-    elif shift is not None:
+    else:
+        raw = read_raw_snirf(snirf_path)
         a = raw.annotations
-        raw.set_annotations(mne.Annotations(
-            onset=np.maximum(0.0, a.onset + shift),
-            duration=a.duration,
-            description=a.description,
-        ))
 
-    elif set_duration is not None:
-        a = raw.annotations
-        raw.set_annotations(mne.Annotations(
-            onset=a.onset,
-            duration=np.full(len(a), set_duration),
-            description=a.description,
-        ))
+        if shift is not None:
+            df = pd.DataFrame({
+                "onset":      np.maximum(0.0, a.onset + shift),
+                "duration":   a.duration,
+                "trial_type": a.description,
+            })
+        elif set_duration is not None:
+            df = pd.DataFrame({
+                "onset":      a.onset,
+                "duration":   np.full(len(a), set_duration),
+                "trial_type": a.description,
+            })
+        elif rename is not None:
+            rename_map = dict(r.split(":", 1) for r in rename)
+            df = pd.DataFrame({
+                "onset":      a.onset,
+                "duration":   a.duration,
+                "trial_type": [rename_map.get(d, d) for d in a.description],
+            })
 
-    elif rename is not None:
-        rename_map = dict(r.split(":", 1) for r in rename)
-        a = raw.annotations
-        raw.set_annotations(mne.Annotations(
-            onset=a.onset,
-            duration=a.duration,
-            description=[rename_map.get(d, d) for d in a.description],
-        ))
-
-    out_snirf = out_nirs_dir / f"{stem}_nirs.snirf"
-    mne.export.export_raw(str(out_snirf), raw, fmt="snirf", overwrite=True, verbose=False)
-    annotations_to_df(raw).to_csv(out_nirs_dir / f"{stem}_events.tsv", sep="\t", index=False)
-
-    logger.info("Written to %s", out_nirs_dir)
-    return out_snirf
+    return apply_markers_from_df(snirf_path, derivatives_dir, sub, ses, df)

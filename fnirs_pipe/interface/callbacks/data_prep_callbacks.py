@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import csv
 import io
 import re
 from pathlib import Path
@@ -477,20 +476,33 @@ def add_marker_row(n_clicks, rows):
     Input("dp-save-markers-btn", "n_clicks"),
     State("dp-marker-table",     "data"),
     State("dp-run-store",        "data"),
+    State("app-output-dir",      "data"),
     prevent_initial_call=True,
 )
-def save_markers(n_clicks, rows, store):
+def save_markers(n_clicks, rows, store, output_dir):
     if not store or not store.get("snirf_path"):
         return dbc.Alert("No run loaded.", color="warning", className="mb-0 py-2")
-    events_path = store["snirf_path"].replace("_nirs.snirf", "_events.tsv")
+    if not output_dir:
+        return dbc.Alert("Output directory not set.", color="warning", className="mb-0 py-2")
+
+    import pandas as pd
+    from fnirs_pipe.pipeline.edit_markers import apply_markers_from_df
+
+    snirf_path = Path(store["snirf_path"])
+    entities = _parse_bids_entities(snirf_path.name)
+    sub = entities.get("sub", "")
+    ses = entities.get("ses")
+
     rows = rows or []
+    df = pd.DataFrame(rows, columns=["onset", "duration", "trial_type"])
+    df["onset"]    = pd.to_numeric(df["onset"],    errors="coerce").fillna(0.0)
+    df["duration"] = pd.to_numeric(df["duration"], errors="coerce").fillna(0.0)
+
     try:
-        with open(events_path, "w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=["onset", "duration", "trial_type"],
-                                    delimiter="\t", extrasaction="ignore")
-            writer.writeheader()
-            writer.writerows(rows)
-        return dbc.Alert(f"Saved: {Path(events_path).name}",
+        out_snirf = apply_markers_from_df(
+            snirf_path, Path(output_dir), sub, ses, df
+        )
+        return dbc.Alert(f"Saved to derivatives: {out_snirf.name}",
                          color="success", className="mb-0 py-2")
     except Exception as exc:
         return dbc.Alert(f"Save failed: {exc}", color="danger", className="mb-0 py-2")
