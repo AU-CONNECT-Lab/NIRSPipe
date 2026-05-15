@@ -46,7 +46,7 @@ layout = dbc.Container([
     ),
 
     # ── Subjects ──────────────────────────────────────────────────────────────
-    _card("Subjects",
+    html.Div(id="bp-subjects-card", children=_card("Subjects",
         dbc.Row([
             dbc.Col(dbc.Button("Detect", id="bp-detect-btn",
                                color="primary", size="sm"), width="auto"),
@@ -57,10 +57,10 @@ layout = dbc.Container([
         ], className="g-2 mb-2"),
         html.Div(id="bp-subjects-result", className="mb-2"),
         html.Div(id="bp-subjects-container"),
-    ),
+    )),
 
     # ── Run filter ────────────────────────────────────────────────────────────
-    _card("Run Filter (optional)",
+    html.Div(id="bp-run-filter-card", children=_card("Run Filter (optional)",
         dbc.Row([
             dbc.Col([
                 dbc.Label("Session"),
@@ -78,18 +78,35 @@ layout = dbc.Container([
                           placeholder="e.g. 01", size="sm"),
             ], width=2),
         ], className="g-3"),
-    ),
+    )),
 
     # ── Operation ─────────────────────────────────────────────────────────────
     _card("Operation",
         dbc.RadioItems(
             id="bp-operation",
             options=[
-                {"label": "Edit Markers", "value": "markers"},
-                {"label": "Crop",         "value": "crop"},
+                {"label": "Edit Markers",        "value": "markers"},
+                {"label": "Crop",                "value": "crop"},
+                {"label": "Hyperscanning Align", "value": "hyper_align"},
             ],
             value="markers", inline=True, className="mb-3",
         ),
+
+        # Hyper Align panel ───────────────────────────────────────────────────
+        html.Div(id="bp-hyper-panel", style={"display": "none"}, children=[
+            dbc.Row([
+                dbc.Col([
+                    dbc.Label("Group CSV", className="small mb-0"),
+                    dbc.Input(id="bp-group-csv", type="text", size="sm",
+                              placeholder="/path/to/groups.csv"),
+                ], width=6),
+            ], className="g-2"),
+            html.Small(
+                "CSV columns: group_id, subject_id, task. "
+                "Each (group_id, task) pair is aligned independently.",
+                className="text-muted d-block mt-1",
+            ),
+        ]),
 
         # Markers panel ───────────────────────────────────────────────────────
         html.Div(id="bp-markers-panel", children=[

@@ -96,13 +96,23 @@ def manage_subjects(detect_clicks, select_all_clicks, clear_clicks, bids_dir, cu
 # ── Toggle operation panel ────────────────────────────────────────────────────
 
 @callback(
-    Output("bp-markers-panel", "style"),
-    Output("bp-crop-panel",    "style"),
+    Output("bp-subjects-card",  "style"),
+    Output("bp-run-filter-card","style"),
+    Output("bp-markers-panel",  "style"),
+    Output("bp-crop-panel",     "style"),
+    Output("bp-hyper-panel",    "style"),
     Input("bp-operation", "value"),
 )
 def toggle_operation(op):
     show, hide = {}, {"display": "none"}
-    return (show, hide) if op == "markers" else (hide, show)
+    is_hyper = op == "hyper_align"
+    return (
+        hide if is_hyper else show,
+        hide if is_hyper else show,
+        show if op == "markers"   else hide,
+        show if op == "crop"      else hide,
+        show if is_hyper          else hide,
+    )
 
 
 # ── Toggle marker sub-operation ───────────────────────────────────────────────
@@ -183,6 +193,7 @@ def add_crop_segment(n_clicks, rows):
     State("bp-crop-tmax",   "value"),
     State("bp-crop-seg-table", "data"),
     State("bp-crop-combine","value"),
+    State("bp-group-csv",   "value"),
     State("bp-n-jobs",      "value"),
     prevent_initial_call=True,
 )
@@ -191,12 +202,96 @@ def run_batch(
     bids_dir, deriv_dir, ses, task, run,
     operation, marker_op, shift_val, duration_val, rename_rows,
     crop_mode, crop_tmin, crop_tmax, seg_rows, combine_val,
-    n_jobs,
+    group_csv, n_jobs,
 ):
     if not bids_dir or not deriv_dir:
         return dbc.Alert("Set BIDS and derivatives directories.", color="warning")
 
-    # Resolve selected subjects
+    # ── Hyperscanning Align ───────────────────────────────────────────────────
+    if operation == "hyper_align":
+        if not group_csv:
+            return dbc.Alert("Set Group CSV path.", color="warning")
+
+        from pathlib import Path as _Path
+
+        from fnirs_pipe.exceptions import AlignmentError
+        from fnirs_pipe.pipeline.hyperscanning import (
+            align_recordings, load_group_raw_bids, parse_group_csv,
+        )
+        from fnirs_pipe.utils.snirf_prep import (
+            annotations_to_df, bids_stem, copy_sidecars,
+            deriv_nirs_dir, ensure_dataset_description, find_snirf,
+        )
+
+        import mne as _mne
+        import pandas as _pd
+
+        _DERIV_NAME = "aligned"
+        bids_path_  = _Path(bids_dir)
+        deriv_path_ = _Path(deriv_dir)
+
+        try:
+            groups = parse_group_csv(_Path(group_csv))
+        except Exception as exc:
+            return dbc.Alert(f"Group CSV error: {exc}", color="danger")
+
+        results: list[tuple[str, bool, str]] = []
+
+        for (group_id, task_), group in groups.items():
+            try:
+                raws = load_group_raw_bids(bids_path_, group)
+                aligned_raws, offsets = align_recordings(raws, task_)
+            except AlignmentError as exc:
+                for entry in group:
+                    sub_label = entry.subject_id.removeprefix("sub-")
+                    results.append((sub_label, False, f"[alignment] {exc}"))
+                continue
+            except Exception as exc:
+                for entry in group:
+                    sub_label = entry.subject_id.removeprefix("sub-")
+                    results.append((sub_label, False, str(exc)))
+                continue
+
+            ensure_dataset_description(
+                deriv_path_ / _DERIV_NAME, _DERIV_NAME, "fnirs-prep batch align"
+            )
+            offset_rows: list[dict] = []
+            for entry in group:
+                sid       = entry.subject_id
+                sub_label = sid.removeprefix("sub-")
+                try:
+                    snirf_path = find_snirf(bids_path_, sub_label, None, task_, None)
+                    stem    = bids_stem(snirf_path)
+                    out_dir = deriv_nirs_dir(deriv_path_, _DERIV_NAME, sub_label, None)
+                    out_dir.mkdir(parents=True, exist_ok=True)
+                    copy_sidecars(snirf_path, stem, out_dir)
+                    out_snirf   = out_dir / f"{stem}_nirs.snirf"
+                    raw_aligned = aligned_raws[sid]
+                    _mne.export.export_raw(
+                        str(out_snirf), raw_aligned, fmt="snirf",
+                        overwrite=True, verbose=False,
+                    )
+                    annotations_to_df(raw_aligned).to_csv(
+                        out_dir / f"{stem}_events.tsv", sep="\t", index=False,
+                    )
+                    offset_rows.append({
+                        "subject_id": sid,
+                        "offset_s":   round(offsets.get(sid, 0.0), 3),
+                        "duration_s": round(raw_aligned.times[-1], 1),
+                    })
+                    results.append((sub_label, True, out_snirf.name))
+                except Exception as exc:
+                    results.append((sub_label, False, str(exc)))
+
+            offsets_path = (
+                deriv_path_ / _DERIV_NAME
+                / f"group-{group_id}_task-{task_}_align-offsets.tsv"
+            )
+            _pd.DataFrame(offset_rows).to_csv(offsets_path, sep="\t", index=False)
+
+        return _build_log(results)
+
+    # Resolve selected subjects (markers / crop)
     subjects: list[str] = []
     if isinstance(subjects_container, dict):
         subjects = subjects_container.get("props", {}).get("value", [])
