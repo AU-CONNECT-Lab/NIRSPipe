@@ -22,6 +22,7 @@ _EPOCH_TMAX = 25.0
 def _process_run(run: dict, sci_threshold: float) -> dict:
     from fnirs_pipe.qc.figures import (
         build_channel_figure,
+        build_evoked_topo_figure,
         build_layout_figure,
         build_psd_mean_figure,
         build_sci_psp_figure,
@@ -169,14 +170,24 @@ def _process_run(run: dict, sci_threshold: float) -> dict:
             except Exception as exc:
                 logger.warning("channel_figure %s failed: %s", pair, exc)
 
+    evoked_topo_data = {}
+    if raw_haemo is not None:
+        try:
+            fig = build_evoked_topo_figure(raw_haemo, markers)
+            if fig:
+                evoked_topo_data = {"figure": fig.to_dict()}
+        except Exception as exc:
+            logger.warning("evoked_topo_figure failed: %s", exc)
+
     return {
-        "ts":         ts_data,
-        "layout":     layout_data,
-        "sci_psp":    sci_psp_data,
-        "psd":        psd_data,
-        "ch_summary": ch_summary_data,
-        "iqm":        iqm_data,
-        "channels":   channels,
+        "ts":          ts_data,
+        "layout":      layout_data,
+        "sci_psp":     sci_psp_data,
+        "psd":         psd_data,
+        "ch_summary":  ch_summary_data,
+        "iqm":         iqm_data,
+        "channels":    channels,
+        "evoked_topo": evoked_topo_data,
     }
 
 

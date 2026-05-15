@@ -223,16 +223,17 @@ def load_run(n_clicks, run_path, sci_thresh, cache_dir):
     Output("dp-channel-selector",  "options"),
     Output("dp-iqm-table",         "data"),
     Output("dp-channel-selector",  "value",   allow_duplicate=True),
+    Output("dp-evoked-topo",       "figure"),
     Input("dp-run-store",          "data"),
     Input("dp-mount-tick",         "n_intervals"),
     prevent_initial_call="initial_duplicate",
 )
 def restore_from_store(store, _tick):
     if not store:
-        return (no_update,) * 10
+        return (no_update,) * 11
     cached = _RESULT_CACHE.get(store.get("cache_key"), {})
     if not cached:
-        return (no_update,) * 10
+        return (no_update,) * 11
 
     def _fig(nested, *keys):
         d = nested
@@ -264,16 +265,17 @@ def restore_from_store(store, _tick):
     ] or no_update
 
     return (
-        _fig(cached, "ts",     "figure"),
-        _fig(cached, "layout", "layout_2d_figure"),
-        _fig(cached, "layout", "layout_3d_figure"),
+        _fig(cached, "ts",          "figure"),
+        _fig(cached, "layout",      "layout_2d_figure"),
+        _fig(cached, "layout",      "layout_3d_figure"),
         sci_psp_out,
-        _fig(cached, "psd",    "figure"),
+        _fig(cached, "psd",         "figure"),
         ch_sum_out,
         marker_rows,
         ch_options,
         iqm_rows,
         first_pair,
+        _fig(cached, "evoked_topo", "figure"),
     )
 
 
@@ -552,4 +554,25 @@ def on_layout_2d_click(click_data, store):
     ch_name = points[0].get("customdata", "")
     pair    = ch_name.rsplit(" ", 1)[0] if " " in ch_name else ch_name
     print(f"[DEBUG on_layout_2d_click] ch_name={ch_name!r}, pair={pair!r}, valid={pair in valid_pairs}")
+    return pair if pair in valid_pairs else no_update
+
+
+# ── Evoked topo click → channel selector ─────────────────────────────────────
+
+@callback(
+    Output("dp-channel-selector", "value", allow_duplicate=True),
+    Input("dp-evoked-topo", "clickData"),
+    State("dp-run-store",   "data"),
+    prevent_initial_call=True,
+)
+def on_topo_click(click_data, store):
+    if not click_data or not store:
+        return no_update
+    cached      = _RESULT_CACHE.get(store.get("cache_key"), {})
+    valid_pairs = set(cached.get("channels", {}).keys())
+    points      = click_data.get("points", [])
+    if not points:
+        return no_update
+    pair = points[0].get("customdata", "")
+    print(f"[DEBUG on_topo_click] pair={pair!r}, valid={pair in valid_pairs}")
     return pair if pair in valid_pairs else no_update

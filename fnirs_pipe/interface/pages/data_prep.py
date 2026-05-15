@@ -213,7 +213,14 @@ layout = dbc.Container([
         dcc.Graph(id="dp-channel-epoch"),
     ),
 
-    # ── Row 5: Layout 2D (narrow) | 3D (wide) ────────────────────────────────
+    # ── Row 5: Evoked topo ───────────────────────────────────────────────────
+    _card("Evoked HbO (Topo)",
+        html.Small("click a channel trace to select · HbO grand average per condition",
+                   className="text-muted d-block mb-1"),
+        dcc.Graph(id="dp-evoked-topo"),
+    ),
+
+    # ── Row 6: Layout 2D (narrow) | 3D (wide) ────────────────────────────────
     # Mirrors HTML row-layout: grid-template-columns 1fr 2fr
     dbc.Row([
         dbc.Col(

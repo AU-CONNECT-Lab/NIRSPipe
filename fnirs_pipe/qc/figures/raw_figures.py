@@ -680,3 +680,141 @@ def build_epoch_preview_figure(
     except Exception as exc:
         logger.warning("epoch preview failed: %s", exc)
         return None
+
+
+def build_evoked_topo_figure(
+    raw_haemo: mne.io.Raw,
+    markers: list[dict],
+    max_ts_pts: int = 2000,
+) -> go.Figure | None:
+    hbo_entries = [(i, ch) for i, ch in enumerate(raw_haemo.ch_names) if ch.endswith(" hbo")]
+    if not hbo_entries:
+        return None
+
+    pairs = [ch.rsplit(" ", 1)[0] for _, ch in hbo_entries]
+    n = len(pairs)
+
+    locs = np.array([raw_haemo.info["chs"][i]["loc"][:2] for i, _ in hbo_entries])
+    if np.any(locs != 0):
+        lo, hi = locs.min(axis=0), locs.max(axis=0)
+        span = np.where(hi - lo > 0, hi - lo, 1.0)
+        norm = (locs - lo) / span * 0.78 + 0.09
+    else:
+        ncols = int(np.ceil(np.sqrt(n)))
+        nrows = int(np.ceil(n / ncols))
+        norm = np.array([
+            [(i % ncols + 0.5) / ncols * 0.78 + 0.09,
+             (i // ncols + 0.5) / nrows * 0.78 + 0.09]
+            for i in range(n)
+        ])
+
+    _HBO_COLOR = "#e74c3c"
+    _HBR_COLOR = "#3498db"
+
+    picks = [i for i, _ in hbo_entries] + [
+        raw_haemo.ch_names.index(f"{p} hbr")
+        for p in pairs
+        if f"{p} hbr" in raw_haemo.ch_names
+    ]
+    data, times = raw_haemo.get_data(picks=picks, return_times=True)
+    data, times = _decimate(data, times, max_ts_pts)
+    times_list = times.tolist()
+    ch_names_picked = [raw_haemo.ch_names[i] for i in picks]
+
+    hw, hh = 0.055, 0.065
+    fig = go.Figure()
+
+    for pi, pair in enumerate(pairs):
+        cx, cy = float(norm[pi, 0]), float(norm[pi, 1])
+        x0, x1 = max(0.0, cx - hw), min(1.0, cx + hw)
+        y0, y1 = max(0.0, cy - hh), min(1.0, cy + hh)
+        ai = pi + 1
+        xk = "xaxis" if ai == 1 else f"xaxis{ai}"
+        yk = "yaxis" if ai == 1 else f"yaxis{ai}"
+        xr = "x"    if ai == 1 else f"x{ai}"
+        yr = "y"    if ai == 1 else f"y{ai}"
+        fig.update_layout(**{
+            xk: dict(domain=[x0, x1], showticklabels=False, showgrid=False,
+                     zeroline=False, anchor=yr),
+            yk: dict(domain=[y0, y1], showticklabels=False, showgrid=False,
+                     zeroline=False, anchor=xr),
+        })
+
+        first = (pi == 0)
+        try:
+            hbo_row = ch_names_picked.index(f"{pair} hbo")
+            hbo_y = (data[hbo_row] * 1e6).tolist()
+            fig.add_trace(go.Scatter(
+                x=times_list, y=hbo_y,
+                name="HbO", mode="lines",
+                line=dict(color=_HBO_COLOR, width=1.0),
+                xaxis=xr, yaxis=yr,
+                customdata=[pair] * len(times_list),
+                legendgroup="hbo", showlegend=first,
+                hovertemplate=f"<b>{pair}</b> %{{x:.1f}}s %{{y:.2f}} µM<extra>HbO</extra>",
+            ))
+        except (ValueError, IndexError):
+            pass
+
+        try:
+            hbr_row = ch_names_picked.index(f"{pair} hbr")
+            hbr_y = (data[hbr_row] * 1e6).tolist()
+            fig.add_trace(go.Scatter(
+                x=times_list, y=hbr_y,
+                name="HbR", mode="lines",
+                line=dict(color=_HBR_COLOR, width=1.0),
+                xaxis=xr, yaxis=yr,
+                customdata=[pair] * len(times_list),
+                legendgroup="hbr", showlegend=first,
+                hovertemplate=f"<b>{pair}</b> %{{x:.1f}}s %{{y:.2f}} µM<extra>HbR</extra>",
+            ))
+        except (ValueError, IndexError):
+            pass
+
+        fig.add_annotation(
+            x=(x0 + x1) / 2, y=y1 + 0.003,
+            xref="paper", yref="paper",
+            text=pair, showarrow=False,
+            font=dict(size=7, color="#444"),
+            xanchor="center", yanchor="bottom",
+        )
+
+    # 2D head silhouette in paper coordinates
+    head_shapes = [
+        # skull circle
+        dict(type="circle",
+             xref="paper", yref="paper",
+             x0=0.04, y0=0.04, x1=0.96, y1=0.96,
+             line=dict(color="#bbb", width=2),
+             fillcolor="rgba(245,245,245,0.45)",
+             layer="below"),
+        # nose (top)
+        dict(type="path",
+             path="M 0.455,0.955 L 0.500,0.995 L 0.545,0.955",
+             xref="paper", yref="paper",
+             line=dict(color="#bbb", width=2),
+             layer="below"),
+        # left ear
+        dict(type="path",
+             path="M 0.040,0.560 Q 0.005,0.500 0.040,0.440",
+             xref="paper", yref="paper",
+             line=dict(color="#bbb", width=2),
+             layer="below"),
+        # right ear
+        dict(type="path",
+             path="M 0.960,0.560 Q 0.995,0.500 0.960,0.440",
+             xref="paper", yref="paper",
+             line=dict(color="#bbb", width=2),
+             layer="below"),
+    ]
+
+    fig.update_layout(
+        height=750,
+        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="white",
+        margin=dict(l=20, r=130, t=30, b=20),
+        shapes=head_shapes,
+        legend=dict(x=1.01, y=0.99, font=dict(size=10),
+                    title=dict(text="Condition (HbO)", font=dict(size=9))),
+    )
+    return fig
