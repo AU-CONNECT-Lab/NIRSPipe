@@ -27,47 +27,65 @@ def _decimate(arr: np.ndarray, times: np.ndarray, max_pts: int):
 _ZOOM_COLORS = ["#e74c3c", "#2980b9", "#27ae60"]
 
 
+def _first_wavelength_indices(ch_names: list[str]) -> list[int]:
+    """Return indices of channels belonging to the numerically smallest wavelength."""
+    wl_map: dict[int, list[int]] = {}
+    for i, ch in enumerate(ch_names):
+        token = ch.split()[-1]
+        try:
+            wl = int(float(token))
+            wl_map.setdefault(wl, []).append(i)
+        except ValueError:
+            pass
+    if not wl_map:
+        return list(range(0, len(ch_names), 2))
+    return wl_map[sorted(wl_map)[0]]
+
+
 def carpet_gvtd_figure(
     raw: mne.io.Raw,
     ch_names: list[str],
     segments: "dict | None" = None,
     z_threshold: float = 3.0,
 ) -> str:
-    """GVTD (top) + carpet heatmap (bottom), shared x-axis. Returns base64 PNG."""
-    data, times = raw.get_data(picks=ch_names, return_times=True)
+    """GVTD (top, all channels) + OD carpet heatmap (bottom, one wavelength), shared x-axis."""
+    raw_od = mne.preprocessing.nirs.optical_density(raw.copy())
+    od_data, times = raw_od.get_data(picks=ch_names, return_times=True)
 
     MAX_PTS = 2000
-    if data.shape[1] > MAX_PTS:
-        step = data.shape[1] // MAX_PTS
-        data  = data[:, ::step]
-        times = times[::step]
+    n_pts = od_data.shape[1]
+    if n_pts > MAX_PTS:
+        step    = n_pts // MAX_PTS
+        od_data = od_data[:, ::step]
+        times   = times[::step]
 
-    mean = data.mean(axis=1, keepdims=True)
-    std  = data.std(axis=1, keepdims=True)
-    std[std == 0] = 1.0
-    data_z = np.clip((data - mean) / std, -z_threshold, z_threshold)
-
-    raw_od = mne.preprocessing.nirs.optical_density(raw.copy())
-    od_data, od_times = raw_od.get_data(picks=ch_names, return_times=True)
-    if od_data.shape[1] > MAX_PTS:
-        step = od_data.shape[1] // MAX_PTS
-        od_data  = od_data[:, ::step]
-        od_times = od_times[::step]
     gvtd   = np.sqrt(np.mean(np.diff(od_data, axis=1) ** 2, axis=0))
-    t_gvtd = od_times[1:]
+    t_gvtd = times[1:]
     p95    = float(np.percentile(gvtd, 95))
 
-    n_ch     = len(ch_names)
+    # carpet: one wavelength, OD space
+    wl_idx   = _first_wavelength_indices(ch_names)
+    carpet   = od_data[wl_idx, :]
+    mean     = carpet.mean(axis=1, keepdims=True)
+    std      = carpet.std(axis=1, keepdims=True)
+    std[std == 0] = 1.0
+    data_z   = np.clip((carpet - mean) / std, -z_threshold, z_threshold)
+
+    n_ch     = len(wl_idx)
     carpet_h = max(1.5, n_ch * 0.09)
-    fig, (ax_g, ax_c) = plt.subplots(
-        2, 1,
-        figsize=(12, carpet_h + 1.5),
-        sharex=True,
-        gridspec_kw={"height_ratios": [1.5, carpet_h]},
+    fig = plt.figure(figsize=(12, carpet_h + 1.5))
+    gs  = fig.add_gridspec(
+        2, 2,
+        height_ratios=[1.5, carpet_h],
+        width_ratios=[1, 0.025],
+        hspace=0.0, wspace=0.05,
     )
-    fig.subplots_adjust(hspace=0.06)
+    ax_g = fig.add_subplot(gs[0, 0])
+    ax_c = fig.add_subplot(gs[1, 0], sharex=ax_g)
+    cax  = fig.add_subplot(gs[1, 1])
 
     ax_g.plot(t_gvtd, gvtd, lw=1.0, color="#2c3e50")
+    ax_g.set_xlim(times[0], times[-1])
     ax_g.axhline(p95, ls="--", lw=0.8, color="#e74c3c", label=f"p95={p95:.4f}")
     ax_g.set_ylabel("GVTD", fontsize=8)
     ax_g.legend(fontsize=7, loc="upper right", framealpha=0.6)
@@ -85,7 +103,7 @@ def carpet_gvtd_figure(
     ax_c.set_xlabel("Time (s)", fontsize=9)
     for sp in ax_c.spines.values():
         sp.set_visible(False)
-    plt.colorbar(im, ax=ax_c, label="Z-score", shrink=0.7, pad=0.01, aspect=30)
+    fig.colorbar(im, cax=cax, label="Z-score")
 
     if segments:
         for k, (label, spans) in enumerate(segments.items()):
