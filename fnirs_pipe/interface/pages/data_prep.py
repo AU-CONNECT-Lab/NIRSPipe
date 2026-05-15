@@ -19,17 +19,18 @@ _SEG_COLS = [
 ]
 
 
-def _card(title, *children, extra_class=""):
+def _card(title, *children, extra_class="", body_class="", body_style=None):
     cls = ("mb-3 " + extra_class).strip() if extra_class else "mb-3"
     return dbc.Card(
-        [dbc.CardHeader(title), dbc.CardBody(list(children))],
+        [dbc.CardHeader(title),
+         dbc.CardBody(list(children), className=body_class or None, style=body_style)],
         className=cls,
     )
 
 
 def _crop_card(extra_class=""):
     return _card("Crop",
-        dcc.Graph(id="dp-trigger-timeline"),
+        dcc.Graph(id="dp-trigger-timeline", style={"minHeight": "300px"}),
         dbc.Row([
             dbc.Col(
                 dbc.RadioItems(
@@ -91,6 +92,7 @@ def _crop_card(extra_class=""):
         ]),
         html.Div(id="dp-crop-status", className="mt-1 small"),
         extra_class=extra_class,
+        body_class="p-2",
     )
 
 
@@ -138,7 +140,7 @@ def _marker_editor(extra_class=""):
         ], className="g-1 px-2 mb-1"),
         # Dynamic rows (rendered by callback)
         html.Div(id="dp-marker-rows-container",
-                 style={"maxHeight": "280px", "overflowY": "auto"}),
+                 style={"maxHeight": "300px", "overflowY": "auto"}),
         # Toolbar
         dbc.Row([
             dbc.Col(
@@ -236,17 +238,34 @@ layout = dbc.Container([
         dbc.Tab(label="Viewer", tab_id="tab-viewer", children=[
             html.Div(className="mt-3", children=[
 
-                # Signal Topo (full width, circle centered)
-                _card("Signal Topo",
-                    html.Small("raw HbO / HbR per channel · click to select",
-                               className="text-muted d-block mb-1"),
-                    html.Div(
-                        dcc.Graph(id="dp-evoked-topo",
-                                  style={"height": "700px"},
-                                  config={"responsive": True}),
-                        style={"width": "700px", "margin": "0 auto"},
+                # Signal Topo + Optode layouts side by side
+                dbc.Row([
+                    dbc.Col(
+                        _card("Signal Topo",
+                            html.Small("raw HbO / HbR per channel · click to select",
+                                       className="text-muted d-block mb-1"),
+                            html.Div(
+                                dcc.Graph(id="dp-evoked-topo", responsive=True),
+                                style={
+                                    "maxWidth": "700px", "width": "100%",
+                                    "aspectRatio": "1 / 1", "margin": "0 auto",
+                                },
+                            ),
+                        ),
+                        width=7,
                     ),
-                ),
+                    dbc.Col([
+                        _card("Optode Layout (2D)",
+                              html.Small("colour = SCI · click = select channel",
+                                         className="text-muted d-block mb-1"),
+                              dcc.Graph(id="dp-layout-2d", responsive=True,
+                                        style={"height": "300px"}),
+                              body_class="p-2"),
+                        _card("3D (fsaverage)",
+                              dcc.Graph(id="dp-layout-3d", responsive=True,
+                                        style={"height": "390px"})),
+                    ], width=5),
+                ], className="mb-3", align="start"),
 
                 # Channel Detail (full width)
                 dbc.Card([
@@ -275,11 +294,11 @@ layout = dbc.Container([
                     dcc.Graph(id="dp-channel-psd"),
                 ),
 
-                # Crop | Markers  (stretch so both cards reach the same height)
+                # Crop | Markers
                 dbc.Row([
-                    dbc.Col(_crop_card("h-100"), width=9),
-                    dbc.Col(_marker_editor("h-100"), width=3),
-                ], className="mb-3", align="stretch"),
+                    dbc.Col(_crop_card(), width=9),
+                    dbc.Col(_marker_editor(), width=3),
+                ], className="mb-3", align="start"),
 
                 # Epoch Preview
                 _card("Epoch Preview",
@@ -287,21 +306,6 @@ layout = dbc.Container([
                                id="dp-epoch-subtitle", className="text-muted d-block mb-1"),
                     dcc.Graph(id="dp-channel-epoch"),
                 ),
-
-                # Optode 2D | 3D
-                dbc.Row([
-                    dbc.Col(
-                        _card("Optode Layout (2D)",
-                              html.Small("colour = SCI · click = select channel",
-                                         className="text-muted d-block mb-1"),
-                              dcc.Graph(id="dp-layout-2d")),
-                        width=4,
-                    ),
-                    dbc.Col(
-                        _card("3D (fsaverage)", dcc.Graph(id="dp-layout-3d")),
-                        width=8,
-                    ),
-                ], className="mb-3"),
 
             ]),
         ]),

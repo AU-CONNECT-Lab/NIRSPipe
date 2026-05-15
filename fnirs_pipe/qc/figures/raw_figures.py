@@ -725,7 +725,7 @@ def build_trigger_timeline_single(
             marker=dict(symbol="line-ns-open", size=16, color=color,
                         line=dict(width=2.0, color=color)),
             name=desc,
-            showlegend=False,
+            showlegend=True,
             hovertemplate=f"<b>{desc}</b><br>t=%{{x:.2f}} s<extra></extra>",
         ))
 
@@ -739,10 +739,12 @@ def build_trigger_timeline_single(
                        autorange="reversed", gridcolor="#eeeeee",
                        tickfont=dict(size=10)),
             plot_bgcolor="white", paper_bgcolor="white",
-            height=max(80, (n + 1) * 40 + 50),
-            margin=dict(l=120, r=15, t=8, b=38),
+            height=max(120, (n + 1) * 60 + 60),
+            margin=dict(l=120, r=100, t=8, b=38),
             hovermode="closest",
-            showlegend=False,
+            showlegend=True,
+            legend=dict(x=1.01, y=1.0, xanchor="left",
+                        font=dict(size=9), itemsizing="constant"),
         ),
     )
 
@@ -881,7 +883,9 @@ def build_evoked_topo_figure(
              layer="below"),
     ]
 
+    _W = _H - _MT - _MB + _ML + _MR  # keep plot area square (680×680)
     fig.update_layout(
+        width=_W,
         height=_H,
         plot_bgcolor="rgba(0,0,0,0)",
         paper_bgcolor="white",
