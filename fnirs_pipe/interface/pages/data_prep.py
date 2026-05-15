@@ -324,6 +324,10 @@ layout = dbc.Container([
                     ]),
                 ], className="mb-3"),
 
+                _card("Carpet + GVTD",
+                      html.Img(id="dp-carpet-gvtd",
+                               style={"width": "100%", "display": "block"})),
+
                 _card("SCI / PSP",
                       dcc.Graph(id="dp-sci-psp-figure",
                                 style={"minHeight": "400px"})),

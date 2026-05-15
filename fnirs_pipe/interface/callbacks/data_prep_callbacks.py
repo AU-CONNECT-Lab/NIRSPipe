@@ -254,13 +254,14 @@ def load_run(n_clicks, run_path, sci_thresh, cache_dir):
     Output("dp-channel-selector",  "value",   allow_duplicate=True),
     Output("dp-evoked-topo",       "figure"),
     Output("dp-trigger-timeline",  "figure"),
+    Output("dp-carpet-gvtd",       "src"),
     Input("dp-run-store",          "data"),
     Input("dp-mount-tick",         "n_intervals"),
     prevent_initial_call="initial_duplicate",
 )
 def restore_from_store(store, _tick):
     if not store:
-        return (no_update,) * 12
+        return (no_update,) * 13
     cached = _RESULT_CACHE.get(store.get("cache_key"), {})
     if not cached:
         return (no_update,) * 12
@@ -298,6 +299,9 @@ def restore_from_store(store, _tick):
         for k, v in iqm_scalars.items()
     ] or no_update
 
+    b64 = cached.get("carpet_gvtd", {}).get("b64")
+    carpet_src = f"data:image/png;base64,{b64}" if b64 else no_update
+
     return (
         _fig(cached, "ts",               "figure"),
         _fig(cached, "layout",           "layout_2d_figure"),
@@ -311,6 +315,7 @@ def restore_from_store(store, _tick):
         no_update,
         _fig(cached, "evoked_topo",      "figure"),
         _fig(cached, "trigger_timeline", "figure"),
+        carpet_src,
     )
 
 
