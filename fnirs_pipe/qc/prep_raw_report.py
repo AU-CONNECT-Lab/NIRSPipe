@@ -26,7 +26,9 @@ def _process_run(run: dict, sci_threshold: float) -> dict:
         build_layout_figure,
         build_psd_mean_figure,
         build_sci_psp_figure,
+        build_trigger_timeline_single,
         build_ts_figure,
+        carpet_gvtd_figure,
         channel_quality_heatmap,
         condition_colors,
     )
@@ -109,6 +111,14 @@ def _process_run(run: dict, sci_threshold: float) -> dict:
     except Exception as exc:
         logger.warning("layout_figure failed: %s", exc)
 
+    # carpet_gvtd
+    carpet_gvtd_data = {}
+    try:
+        b64 = carpet_gvtd_figure(raw, raw.ch_names)
+        carpet_gvtd_data = {"b64": b64}
+    except Exception as exc:
+        logger.warning("carpet_gvtd_figure failed: %s", exc)
+
     # sci_psp
     sci_psp_data = {}
     try:
@@ -129,6 +139,15 @@ def _process_run(run: dict, sci_threshold: float) -> dict:
             psd_data = {"figure": fig.to_dict()}
     except Exception as exc:
         logger.warning("psd_mean_figure failed: %s", exc)
+
+    # trigger_timeline
+    trigger_timeline_data = {}
+    try:
+        fig = build_trigger_timeline_single(markers, cond_colors)
+        if fig:
+            trigger_timeline_data = {"figure": fig.to_dict()}
+    except Exception as exc:
+        logger.warning("trigger_timeline_single failed: %s", exc)
 
     # channel_summary
     ch_summary_data = {}
@@ -169,17 +188,42 @@ def _process_run(run: dict, sci_threshold: float) -> dict:
             logger.warning("evoked_topo_figure failed: %s", exc)
 
     return {
-        "ts":           ts_data,
-        "layout":       layout_data,
-        "sci_psp":      sci_psp_data,
-        "psd":          psd_data,
-        "ch_summary":   ch_summary_data,
-        "iqm":          iqm_data,
-        "channel_pairs": channel_pairs,
-        "channels":     {},          # populated lazily on channel selection
-        "evoked_topo":  evoked_topo_data,
-        "_raw_haemo":   raw_haemo,   # stripped before disk cache
+        "ts":               ts_data,
+        "layout":           layout_data,
+        "carpet_gvtd":      carpet_gvtd_data,
+        "sci_psp":          sci_psp_data,
+        "psd":              psd_data,
+        "trigger_timeline": trigger_timeline_data,
+        "ch_summary":       ch_summary_data,
+        "iqm":              iqm_data,
+        "channel_pairs":    channel_pairs,
+        "channels":         {},          # populated lazily on channel selection
+        "evoked_topo":      evoked_topo_data,
+        "_raw_haemo":       raw_haemo,   # stripped before disk cache
     }
+
+
+def _build_channels_static(
+    raw_haemo: mne.io.Raw,
+    markers: list[dict],
+    channel_pairs: list[str],
+) -> dict[str, dict]:
+    from fnirs_pipe.qc.figures import build_channel_figure
+
+    channels: dict[str, dict] = {}
+    for pair in channel_pairs:
+        try:
+            detail_fig, psd_fig, epoch_fig = build_channel_figure(
+                raw_haemo, markers, pair, _MAX_TS_PTS, _EPOCH_TMIN, _EPOCH_TMAX,
+            )
+            channels[pair] = {
+                "detail_figure": detail_fig.to_dict() if detail_fig else None,
+                "psd_figure":    psd_fig.to_dict()    if psd_fig    else None,
+                "epoch_figure":  epoch_fig.to_dict()  if epoch_fig  else None,
+            }
+        except Exception as exc:
+            logger.warning("channel_figure %s failed: %s", pair, exc)
+    return channels
 
 
 def build_prep_raw_report(
@@ -192,7 +236,15 @@ def build_prep_raw_report(
     for i, run in enumerate(runs):
         logger.info("[%d/%d] processing %s ...", i + 1, len(runs), run["label"])
         try:
-            static_data.append(_process_run(run, sci_threshold))
+            d = _process_run(run, sci_threshold)
+            raw_haemo = d.pop("_raw_haemo", None)
+            if raw_haemo is not None:
+                d["channels"] = _build_channels_static(
+                    raw_haemo,
+                    (d.get("ts") or {}).get("markers", []),
+                    d.get("channel_pairs", []),
+                )
+            static_data.append(d)
         except Exception as exc:
             logger.error("Failed to process run %s: %s", run["label"], exc)
             static_data.append({})

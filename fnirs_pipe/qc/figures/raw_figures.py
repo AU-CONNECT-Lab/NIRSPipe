@@ -682,6 +682,45 @@ def build_epoch_preview_figure(
         return None
 
 
+def build_trigger_timeline_single(
+    markers: list[dict],
+    cond_colors: dict[str, str],
+) -> go.Figure | None:
+    if not markers:
+        return None
+
+    by_desc: dict[str, list[dict]] = {}
+    for m in markers:
+        by_desc.setdefault(m["description"], []).append(m)
+
+    traces = []
+    for desc, events in by_desc.items():
+        color = cond_colors.get(desc, "#999")
+        xs, ys = [], []
+        for e in events:
+            xs += [e["onset"], e["onset"], None]
+            ys += [0.0, 1.0, None]
+        traces.append(go.Scatter(
+            x=xs, y=ys, mode="lines",
+            line=dict(color=color, width=2.0),
+            name=desc,
+            hovertemplate=f"<b>{desc}</b><br>t=%{{x:.2f}} s<extra></extra>",
+        ))
+
+    return go.Figure(
+        data=traces,
+        layout=go.Layout(
+            xaxis=dict(title="Time (s)", gridcolor="#eeeeee"),
+            yaxis=dict(showticklabels=False, showgrid=False, range=[0, 1]),
+            plot_bgcolor="white", paper_bgcolor="white",
+            height=100,
+            margin=dict(l=20, r=15, t=8, b=38),
+            legend=dict(font=dict(size=9), orientation="h", y=1.35, x=0),
+            hovermode="x unified",
+        ),
+    )
+
+
 def build_evoked_topo_figure(
     raw_haemo: mne.io.Raw,
     markers: list[dict],

@@ -198,12 +198,24 @@ select#run-select {
   </div>
 </div>
 
-<!-- Row 3: PSD + Epoch -->
-<div class="row row-psd-ep">
+<!-- Row 3: PSD -->
+<div class="row" style="margin-bottom:0.5rem;">
   <div class="card">
     <div class="panel-title">PSD &nbsp;<span style="font-weight:400;color:#aaa" id="psd-subtitle">mean across channels (OD)</span></div>
     <div id="psd-plot"></div>
   </div>
+</div>
+
+<!-- Row 3b: Trigger Timeline -->
+<div class="row" style="margin-bottom:0.5rem;">
+  <div class="card">
+    <div class="panel-title">Trigger Timeline &nbsp;<span style="font-weight:400;color:#aaa">event onsets colored by condition</span></div>
+    <div id="trigger-timeline-plot"></div>
+  </div>
+</div>
+
+<!-- Row 3c: Epoch preview -->
+<div class="row" style="margin-bottom:0.5rem;">
   <div class="card">
     <div class="panel-title">Epoch preview &nbsp;<span style="font-weight:400;color:#aaa" id="epoch-subtitle">select a channel to view</span></div>
     <div id="epoch-plot"></div>
@@ -219,6 +231,14 @@ select#run-select {
   <div class="card">
     <div class="panel-title">Channel positions (3D, fsaverage)</div>
     <div id="layout-3d-plot"></div>
+  </div>
+</div>
+
+<!-- Row 4b: Carpet / GVTD -->
+<div class="row" style="margin-bottom:0.5rem;">
+  <div class="card">
+    <div class="panel-title">Carpet / GVTD &nbsp;<span style="font-weight:400;color:#aaa">z-score carpet (all channels) with global variance of temporal derivative</span></div>
+    <div id="carpet-gvtd-panel" style="padding:0.4rem 0.6rem;text-align:center;"></div>
   </div>
 </div>
 
@@ -307,6 +327,8 @@ window.addEventListener("DOMContentLoaded", function() {
   loadTimeSeries();
   loadLayout();
   loadPsdMean();
+  loadTriggerTimeline();
+  loadCarpetGvtd();
   loadSciPsp();
   loadIqm();
   loadChannelSummary();
@@ -515,6 +537,34 @@ function highlightOptode3D(pair) {
 }
 
 function toggleBadFromOptode() { /* handled via double-click on ts trace */ }
+
+// ─── Trigger Timeline ─────────────────────────────────────────────────────────
+function loadTriggerTimeline() {
+  function _render(d) {
+    if (d.figure)
+      Plotly.newPlot("trigger-timeline-plot", d.figure.data, d.figure.layout,
+                     { responsive: true, displayModeBar: false });
+  }
+  if (_STATIC_DATA) {
+    _render((_STATIC_DATA[_run_idx] || {}).trigger_timeline || {});
+  } else {
+    fetch("/api/trigger_timeline_figure").then(r => r.json()).then(_render);
+  }
+}
+
+// ─── Carpet / GVTD ────────────────────────────────────────────────────────────
+function loadCarpetGvtd() {
+  var panel = document.getElementById("carpet-gvtd-panel");
+  if (!panel) return;
+  var b64 = ((_STATIC_DATA || [])[_run_idx] || {}).carpet_gvtd
+             ? ((_STATIC_DATA[_run_idx]).carpet_gvtd || {}).b64 : null;
+  if (b64) {
+    panel.innerHTML = '<img src="data:image/png;base64,' + b64
+      + '" style="max-width:100%;display:block;margin:0 auto;">';
+  } else {
+    panel.innerHTML = '<span style="color:#adb5bd;font-style:italic;font-size:0.85rem;">No data</span>';
+  }
+}
 
 // ─── SCI / PSP ────────────────────────────────────────────────────────────────
 function loadSciPsp() {
@@ -741,6 +791,7 @@ function switchRun(idx) {
     document.getElementById("detail-placeholder").style.display = "flex";
     document.getElementById("detail-plot").style.display = "none";
     loadTimeSeries(); loadLayout(); loadPsdMean();
+    loadTriggerTimeline(); loadCarpetGvtd();
     loadSciPsp(); loadIqm(); loadChannelSummary();
   }
   if (_STATIC_DATA) {
