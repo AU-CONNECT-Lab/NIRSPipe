@@ -23,8 +23,9 @@ def _sidebar() -> dbc.Nav:
                 className="px-3 pt-3 pb-2",
             ),
             html.Hr(className="border-secondary my-0"),
-            dbc.NavLink("Data Preparation", href="/",         active="exact", className="text-white"),
-            dbc.NavLink("Analysis",          href="/analysis", active="exact", className="text-white"),
+            dbc.NavLink("Data Preparation", href="/",           active="exact", className="text-white"),
+            dbc.NavLink("Batch Prep",       href="/batch-prep", active="exact", className="text-white"),
+            dbc.NavLink("Analysis",         href="/analysis",  active="exact", className="text-white"),
         ],
         vertical=True,
         pills=True,
@@ -51,6 +52,7 @@ def launch(port: int = 8050) -> None:
     )
 
     import fnirs_pipe.interface.callbacks.data_prep_callbacks
+    import fnirs_pipe.interface.callbacks.batch_prep_callbacks
     import fnirs_pipe.interface.callbacks.analysis_callbacks
 
     app.layout = html.Div([
