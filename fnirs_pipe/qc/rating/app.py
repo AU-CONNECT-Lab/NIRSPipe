@@ -471,7 +471,7 @@ _CD_JS = """
 })();
 </script>"""
 
-
+# TODO: read rating json each time generate html report
 class RawRatingApp:
     """Flask server for rating a single raw QC HTML report and annotating channel decisions."""
 
@@ -614,6 +614,320 @@ class RawRatingApp:
         webbrowser.open(url)
 
         logger.info("fnirs-rate raw on http://localhost:%d — Ctrl+C to stop", port)
+        try:
+            while True:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            logger.info("shutting down")
+
+
+_HYPER_SECTIONS = ["Signal_Quality", "Coherence", "Final"]
+
+_HYPER_CD_JS = """
+<script id="hyper-cd-script">
+(function(){
+  var _IS_FLASK       = (typeof window._HYPER_DECISIONS !== "undefined");
+  var _hyperDecisions = _IS_FLASK ? JSON.parse(JSON.stringify(window._HYPER_DECISIONS)) : {};
+  var _hdOpen = true, _hdTimer = null;
+
+  window.toggleHyperDecisions = function() {
+    _hdOpen = !_hdOpen;
+    document.getElementById("hyper-decisions-body").style.display = _hdOpen ? "" : "none";
+    document.getElementById("hyper-decisions-arrow").innerHTML = _hdOpen ? "&#9660;" : "&#9658;";
+    if (_hdOpen) buildTable();
+  };
+
+  document.addEventListener("DOMContentLoaded", function() {
+    if (!_IS_FLASK) {
+      var _hint = document.querySelector("#hyper-decisions-card .panel-title span span");
+      if (_hint) _hint.textContent = "read-only · launch via fnirs-rate hyper to save decisions";
+    }
+    document.getElementById("hyper-decisions-body").style.display = "";
+    document.getElementById("hyper-decisions-arrow").innerHTML = "&#9660;";
+    buildTable();
+  });
+
+  function buildTable() {
+    var tbody = document.getElementById("hyper-decisions-tbody");
+    if (!tbody) return;
+    tbody.innerHTML = "";
+    var subjects = window._HYPER_SUBJECTS || Object.keys(window._SCI_PER_SUBJECT || {});
+    var pairs    = window._CH_PAIRS || [];
+    if (!pairs.length) {
+      var cols = subjects.length * 2 + 1;
+      tbody.innerHTML = "<tr><td colspan='"+cols+"' style='color:#adb5bd;font-style:italic;text-align:center;padding:.5rem'>No channels</td></tr>";
+      return;
+    }
+    var _bl = "border-left:2px solid #f0f0f0";
+    pairs.forEach(function(pair) {
+      var tr = document.createElement("tr");
+      var td0 = document.createElement("td");
+      td0.style.cssText = "padding:.18rem .5rem;border-bottom:1px solid #f0f0f0;font-weight:500";
+      td0.textContent = pair;
+      tr.appendChild(td0);
+      subjects.forEach(function(sid) {
+        var hbo = pair + " hbo";
+        var hbr = pair + " hbr";
+        var sciPCh = (window._SCI_PER_SUBJECT || {})[sid] || {};
+        var sciVal = sciPCh[hbo] != null ? sciPCh[hbo] : (sciPCh[hbr] != null ? sciPCh[hbr] : null);
+        var below  = sciVal !== null && sciVal < (window._SCI_THRESHOLD || 0.8);
+
+        var tdSci = document.createElement("td");
+        tdSci.style.cssText = "padding:.18rem .45rem;border-bottom:1px solid #f0f0f0;text-align:center;font-variant-numeric:tabular-nums;" + _bl + ";color:" + (below ? "#c0392b" : "#6c757d");
+        tdSci.textContent = sciVal !== null ? sciVal.toFixed(3) : "—";
+        tr.appendChild(tdSci);
+
+        if (!_hyperDecisions[sid]) _hyperDecisions[sid] = {};
+        var state = _hyperDecisions[sid][hbo] || "unrated";
+        var chip = document.createElement("span");
+        chip.className = "cd-chip cd-" + state;
+        chip.textContent = {unrated:"—", good:"good", bad:"bad"}[state];
+        chip.addEventListener("click", (function(s, h1, h2, c) {
+          return function() {
+            if (!_IS_FLASK) return;
+            if (!_hyperDecisions[s]) _hyperDecisions[s] = {};
+            var cur  = _hyperDecisions[s][h1] || "unrated";
+            var next = {unrated:"good", good:"bad", bad:"unrated"}[cur];
+            _hyperDecisions[s][h1] = next;
+            _hyperDecisions[s][h2] = next;
+            c.className  = "cd-chip cd-" + next;
+            c.textContent = {unrated:"—", good:"good", bad:"bad"}[next];
+            save();
+          };
+        })(sid, hbo, hbr, chip));
+
+        var tdDec = document.createElement("td");
+        tdDec.style.cssText = "padding:.18rem .45rem;border-bottom:1px solid #f0f0f0;text-align:center";
+        tdDec.appendChild(chip);
+        tr.appendChild(tdDec);
+      });
+      tbody.appendChild(tr);
+    });
+  }
+
+  function save() {
+    if (_hdTimer) clearTimeout(_hdTimer);
+    _hdTimer = setTimeout(function() {
+      fetch("/save_hyper_decisions", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify(_hyperDecisions),
+      })
+      .then(function(r) { return r.json(); })
+      .then(function(d) { if (d.status !== "success") console.warn("hyper cd save failed:", d); })
+      .catch(function(e) { console.warn("hyper cd save error:", e); });
+    }, 500);
+  }
+})();
+</script>"""
+
+
+class HyperRatingApp:
+    """Flask server for the hyperscanning raw QC viewer with per-subject channel decisions."""
+
+    def __init__(self, html_path: Path, output_dir: Path, sci_threshold: float = 0.8):
+        self.html_path     = html_path
+        self.output_dir    = output_dir
+        self.sci_threshold = sci_threshold
+        stem = html_path.stem  # "group-A_task-tapping_hyper-raw"
+        m = re.match(r"group-(.+?)_task-(.+?)_hyper-raw$", stem)
+        self.group_id  = m.group(1) if m else "unknown"
+        self.task      = m.group(2) if m else "unknown"
+        self.ratings_path = output_dir / f"{stem}_ratings.json"
+        self.app = Flask(__name__)
+        self._setup_routes()
+
+    def _extract_subjects(self, html: str) -> list[str]:
+        m = re.search(r"subjects:\s*<b>(.*?)</b>", html)
+        if m:
+            return [s.strip() for s in m.group(1).split(",") if s.strip()]
+        return []
+
+    def _build_modules(self) -> list[list[dict]]:
+        return [[{"id": s, "name": s.replace("_", " ")} for s in _HYPER_SECTIONS]]
+
+    def _load_ratings(self) -> tuple[dict, dict]:
+        if not self.ratings_path.exists():
+            return {}, {}
+        try:
+            data = json.loads(self.ratings_path.read_text(encoding="utf-8"))
+            return data.get("ratings", {}), data.get("notes", {})
+        except Exception:
+            return {}, {}
+
+    def _load_decisions(self, subject_ids: list[str]) -> dict:
+        """Return {sid: {ch: state}} by flattening each subject's run-level JSON."""
+        result: dict[str, dict] = {}
+        for sid in subject_ids:
+            sub_prefix = sid if sid.startswith("sub-") else f"sub-{sid}"
+            path = self.output_dir / f"{sub_prefix}_task-{self.task}_raw_channel_decisions.json"
+            if not path.exists():
+                result[sid] = {}
+                continue
+            try:
+                run_data = json.loads(path.read_text(encoding="utf-8"))
+                flat: dict[str, str] = {}
+                for run_decisions in run_data.values():
+                    if isinstance(run_decisions, dict):
+                        flat.update(run_decisions)
+                result[sid] = flat
+            except Exception:
+                result[sid] = {}
+        return result
+
+    def _build_cd_section(self, subject_ids: list[str]) -> str:
+        top_ths = "".join(
+            f'<th colspan="2" style="text-align:center;padding:.22rem .5rem;border-bottom:1px solid #dde3ea;'
+            f'background:#f8f9fa;font-weight:600;border-left:2px solid #dde3ea">{sid}</th>'
+            for sid in subject_ids
+        )
+        sub_ths = "".join(
+            '<th style="text-align:center;padding:.18rem .4rem;border-bottom:2px solid #dde3ea;'
+            'background:#f8f9fa;font-weight:500;color:#6c757d;font-size:.76rem;border-left:2px solid #dde3ea">SCI</th>'
+            '<th style="text-align:center;padding:.18rem .4rem;border-bottom:2px solid #dde3ea;'
+            'background:#f8f9fa;font-weight:500;color:#6c757d;font-size:.76rem">Decision</th>'
+            for _ in subject_ids
+        )
+        return (
+            '<div class="card" style="margin-bottom:.5rem" id="hyper-decisions-card">'
+            '<div class="panel-title" style="cursor:pointer;user-select:none;display:flex;align-items:center"'
+            ' onclick="toggleHyperDecisions()">'
+            '<span>Channel Decisions &nbsp;'
+            '<span style="font-weight:400;color:#aaa">per subject &bull; click to expand</span></span>'
+            '<span id="hyper-decisions-arrow" style="margin-left:auto">&#9660;</span>'
+            "</div>"
+            '<div id="hyper-decisions-body" style="padding:.4rem .6rem .6rem">'
+            '<p style="font-size:.75rem;color:#888;margin:0 0 .4rem">'
+            "Click chip to cycle: &#8212; &#8594; good &#8594; bad. Saves to each subject's JSON.</p>"
+            '<table style="border-collapse:collapse;width:100%;font-size:.82rem">'
+            "<thead>"
+            "<tr>"
+            '<th rowspan="2" style="text-align:left;padding:.22rem .5rem;border-bottom:2px solid #dde3ea;'
+            'background:#f8f9fa;font-weight:600;vertical-align:bottom">Channel</th>'
+            f"{top_ths}"
+            "</tr>"
+            f"<tr>{sub_ths}</tr>"
+            "</thead>"
+            '<tbody id="hyper-decisions-tbody"></tbody>'
+            "</table></div></div>"
+        )
+
+    def _inject(self, html: str) -> str:
+        subject_ids    = self._extract_subjects(html)
+        modules        = self._build_modules()
+        ratings, notes = self._load_ratings()
+        decisions      = self._load_decisions(subject_ids)
+
+        decisions_var = (
+            f"<script>"
+            f"var _HYPER_DECISIONS={json.dumps(decisions, ensure_ascii=False)};"
+            f"var _HYPER_SUBJECTS={json.dumps(subject_ids, ensure_ascii=False)};"
+            f"var _SCI_THRESHOLD={self.sci_threshold};"
+            f"</script>"
+        )
+
+        js = (
+            _QC_JS
+            .replace("__SUBJECT__", self.html_path.stem)
+            .replace("__MODULES__", json.dumps(modules))
+            .replace("__RATINGS__", json.dumps(ratings))
+            .replace("__NOTES__",   json.dumps(notes))
+            .replace('fetch("/save_ratings"', 'fetch("/save_hyper_ratings"')
+        )
+
+        html = html.replace("</head>", f"{_QC_CSS}{decisions_var}</head>", 1)
+        html = html.replace("<body>",  f"<body>\n{_QC_BAR_HTML}",        1)
+
+        # new HTML (from template) already has the card + JS — only inject QC rating bar script
+        if 'id="hyper-decisions-card"' in html:
+            html = html.replace("</body>", f"{js}</body>", 1)
+        else:
+            cd_section = self._build_cd_section(subject_ids)
+            html = html.replace("</body>", f"{_CD_CSS}{cd_section}{_HYPER_CD_JS}{js}</body>", 1)
+
+        return html
+
+    def _setup_routes(self) -> None:
+        app = self.app
+
+        @app.route("/")
+        def index():
+            if not self.html_path.exists():
+                return f"<h2>Report not found: {self.html_path}</h2>", 404
+            return self._inject(self.html_path.read_text(encoding="utf-8"))
+
+        @app.route("/save_hyper_ratings", methods=["POST"])
+        def save_hyper_ratings():
+            return self._handle_save_ratings()
+
+        @app.route("/save_hyper_decisions", methods=["POST"])
+        def save_hyper_decisions():
+            return self._handle_save_decisions()
+
+    def _handle_save_ratings(self):
+        data = request.json
+        if not data:
+            return jsonify({"status": "fail", "message": "empty body"}), 400
+        try:
+            record = {
+                "stem":     self.html_path.stem,
+                "rated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S"),
+                "ratings":  data.get("ratings", {}),
+                "notes":    data.get("notes", {}),
+            }
+            self.ratings_path.write_text(
+                json.dumps(record, indent=2, ensure_ascii=False), encoding="utf-8"
+            )
+            return jsonify({"status": "success"})
+        except Exception as exc:
+            logger.exception("save_hyper_ratings failed")
+            return jsonify({"status": "fail", "message": str(exc)}), 500
+
+    def _handle_save_decisions(self):
+        """Merge chip states back into each subject's run-level JSON."""
+        data = request.json  # {sid: {ch: state}}
+        if data is None:
+            return jsonify({"status": "fail", "message": "empty body"}), 400
+        try:
+            for sid, ch_states in data.items():
+                sub_prefix = sid if sid.startswith("sub-") else f"sub-{sid}"
+                path = self.output_dir / f"{sub_prefix}_task-{self.task}_raw_channel_decisions.json"
+                if path.exists():
+                    try:
+                        existing = json.loads(path.read_text(encoding="utf-8"))
+                    except Exception:
+                        existing = {}
+                else:
+                    existing = {}
+                if existing:
+                    for run_key in existing:
+                        if isinstance(existing[run_key], dict):
+                            existing[run_key].update(ch_states)
+                else:
+                    existing["_hyper"] = dict(ch_states)
+                path.write_text(
+                    json.dumps(existing, indent=2, ensure_ascii=False), encoding="utf-8"
+                )
+            return jsonify({"status": "success"})
+        except Exception as exc:
+            logger.exception("save_hyper_decisions failed")
+            return jsonify({"status": "fail", "message": str(exc)}), 500
+
+    def run(self, port: int = 5053) -> None:
+        import logging as _logging
+        _logging.getLogger("werkzeug").setLevel(_logging.ERROR)
+
+        def _serve():
+            self.app.run(host="127.0.0.1", port=port, debug=False, use_reloader=False)
+
+        threading.Thread(target=_serve, daemon=True).start()
+        time.sleep(1.0)
+
+        url = f"http://localhost:{port}/"
+        logger.info("hyper viewer → %s", url)
+        webbrowser.open(url)
+
+        logger.info("fnirs-rate hyper on http://localhost:%d — Ctrl+C to stop", port)
         try:
             while True:
                 time.sleep(1)

@@ -70,6 +70,11 @@ select#ch-select {
 .qm-ok   { color: #27ae60; }
 .qm-warn { color: #e67e22; }
 .qm-bad  { color: #c0392b; }
+.cd-chip{cursor:pointer;padding:.1rem .5rem;border-radius:3px;font-size:.78rem;
+  font-weight:600;display:inline-block;min-width:4.2rem;text-align:center}
+.cd-chip.cd-unrated{background:#e9ecef;color:#6c757d}
+.cd-chip.cd-good{background:#d4edda;color:#155724}
+.cd-chip.cd-bad{background:#f8d7da;color:#721c24}
 </style>
 </head>
 <body>
@@ -179,12 +184,13 @@ select#ch-select {
 </div>
 
 <script>
-var _FIGS        = {{ figures_json | safe }};
-var _PER_CHANNEL = {{ per_channel_json | safe }};
-var _ALIGN       = {{ alignment_json | safe }};
-var _CH_PAIRS    = {{ ch_pairs_json | safe }};
-var _IQM         = {{ iqm_json | safe }};
-var _N_SUBS      = {{ subject_ids | length }};
+var _FIGS            = {{ figures_json | safe }};
+var _PER_CHANNEL     = {{ per_channel_json | safe }};
+var _ALIGN           = {{ alignment_json | safe }};
+var _CH_PAIRS        = {{ ch_pairs_json | safe }};
+var _IQM             = {{ iqm_json | safe }};
+var _N_SUBS          = {{ subject_ids | length }};
+var _SCI_PER_SUBJECT = {{ sci_per_subject_json | safe }};
 
 var _cfg    = { responsive: true, displayModeBar: false };
 var _cfgBar = { responsive: true, displayModeBar: true };
@@ -300,6 +306,133 @@ window.addEventListener("DOMContentLoaded", function() {
 
   if (_CH_PAIRS.length > 0) _selectPair(0);
 });
+</script>
+
+<!-- Channel Decisions (per subject) — populated by fnirs-rate hyper when served via Flask -->
+<div class="card" style="margin-bottom:.5rem" id="hyper-decisions-card">
+  <div class="panel-title" style="cursor:pointer;user-select:none;display:flex;align-items:center"
+       onclick="toggleHyperDecisions()">
+    <span>Channel Decisions &nbsp;<span style="font-weight:400;color:#aaa">per subject &bull; click to expand</span></span>
+    <span id="hyper-decisions-arrow" style="margin-left:auto">&#9658;</span>
+  </div>
+  <div id="hyper-decisions-body" style="display:none;padding:.4rem .6rem .6rem">
+    <p style="font-size:.75rem;color:#888;margin:0 0 .4rem">Click chip to cycle: &#8212; &#8594; good &#8594; bad. Saves to each subject's JSON (only active when launched via <code>fnirs-rate hyper</code>).</p>
+    <table style="border-collapse:collapse;width:100%;font-size:.82rem">
+      <thead>
+        <tr>
+          <th rowspan="2" style="text-align:left;padding:.22rem .5rem;border-bottom:2px solid #dde3ea;background:#f8f9fa;font-weight:600;vertical-align:bottom">Channel</th>
+          {% for sid in subject_ids %}
+          <th colspan="2" style="text-align:center;padding:.22rem .5rem;border-bottom:1px solid #dde3ea;background:#f8f9fa;font-weight:600;border-left:2px solid #dde3ea">{{ sid }}</th>
+          {% endfor %}
+        </tr>
+        <tr>
+          {% for sid in subject_ids %}
+          <th style="text-align:center;padding:.18rem .4rem;border-bottom:2px solid #dde3ea;background:#f8f9fa;font-weight:500;color:#6c757d;font-size:.76rem;border-left:2px solid #dde3ea">SCI</th>
+          <th style="text-align:center;padding:.18rem .4rem;border-bottom:2px solid #dde3ea;background:#f8f9fa;font-weight:500;color:#6c757d;font-size:.76rem">Decision</th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody id="hyper-decisions-tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+(function(){
+  var _IS_FLASK       = (typeof window._HYPER_DECISIONS !== "undefined");
+  var _hyperDecisions = _IS_FLASK ? JSON.parse(JSON.stringify(window._HYPER_DECISIONS)) : {};
+  var _hdOpen = true, _hdTimer = null;
+
+  window.toggleHyperDecisions = function() {
+    _hdOpen = !_hdOpen;
+    document.getElementById("hyper-decisions-body").style.display = _hdOpen ? "" : "none";
+    document.getElementById("hyper-decisions-arrow").innerHTML = _hdOpen ? "&#9660;" : "&#9658;";
+    if (_hdOpen) buildTable();
+  };
+
+  document.addEventListener("DOMContentLoaded", function() {
+    if (!_IS_FLASK) {
+      var _hint = document.querySelector("#hyper-decisions-card .panel-title span span");
+      if (_hint) _hint.textContent = "read-only · launch via fnirs-rate hyper to save decisions";
+    }
+    document.getElementById("hyper-decisions-body").style.display = "";
+    document.getElementById("hyper-decisions-arrow").innerHTML = "&#9660;";
+    buildTable();
+  });
+
+  function buildTable() {
+    var tbody = document.getElementById("hyper-decisions-tbody");
+    if (!tbody) return;
+    tbody.innerHTML = "";
+    var subjects = window._HYPER_SUBJECTS || Object.keys(window._SCI_PER_SUBJECT || {});
+    var pairs    = window._CH_PAIRS || [];
+    if (!pairs.length) {
+      var cols = subjects.length * 2 + 1;
+      tbody.innerHTML = "<tr><td colspan='"+cols+"' style='color:#adb5bd;font-style:italic;text-align:center;padding:.5rem'>No channels</td></tr>";
+      return;
+    }
+    var _borderLeft = "border-left:2px solid #f0f0f0";
+    pairs.forEach(function(pair) {
+      var tr = document.createElement("tr");
+      var td0 = document.createElement("td");
+      td0.style.cssText = "padding:.18rem .5rem;border-bottom:1px solid #f0f0f0;font-weight:500";
+      td0.textContent = pair;
+      tr.appendChild(td0);
+      subjects.forEach(function(sid) {
+        var hbo = pair + " hbo";
+        var hbr = pair + " hbr";
+        var sciPCh = (window._SCI_PER_SUBJECT || {})[sid] || {};
+        var sciVal = sciPCh[hbo] != null ? sciPCh[hbo] : (sciPCh[hbr] != null ? sciPCh[hbr] : null);
+        var below  = sciVal !== null && sciVal < (window._SCI_THRESHOLD || 0.8);
+
+        var tdSci = document.createElement("td");
+        tdSci.style.cssText = "padding:.18rem .45rem;border-bottom:1px solid #f0f0f0;text-align:center;font-variant-numeric:tabular-nums;" + _borderLeft + ";color:" + (below ? "#c0392b" : "#6c757d");
+        tdSci.textContent = sciVal !== null ? sciVal.toFixed(3) : "—";
+        tr.appendChild(tdSci);
+
+        if (!_hyperDecisions[sid]) _hyperDecisions[sid] = {};
+        var state = _hyperDecisions[sid][hbo] || "unrated";
+        var chip = document.createElement("span");
+        chip.className = "cd-chip cd-" + state;
+        chip.textContent = {unrated:"—", good:"good", bad:"bad"}[state];
+        chip.addEventListener("click", (function(s, h1, h2, c) {
+          return function() {
+            if (!_IS_FLASK) return;
+            if (!_hyperDecisions[s]) _hyperDecisions[s] = {};
+            var cur  = _hyperDecisions[s][h1] || "unrated";
+            var next = {unrated:"good", good:"bad", bad:"unrated"}[cur];
+            _hyperDecisions[s][h1] = next;
+            _hyperDecisions[s][h2] = next;
+            c.className   = "cd-chip cd-" + next;
+            c.textContent = {unrated:"—", good:"good", bad:"bad"}[next];
+            save();
+          };
+        })(sid, hbo, hbr, chip));
+
+        var tdDec = document.createElement("td");
+        tdDec.style.cssText = "padding:.18rem .45rem;border-bottom:1px solid #f0f0f0;text-align:center";
+        tdDec.appendChild(chip);
+        tr.appendChild(tdDec);
+      });
+      tbody.appendChild(tr);
+    });
+  }
+
+  function save() {
+    if (typeof window._HYPER_DECISIONS === "undefined") return;
+    if (_hdTimer) clearTimeout(_hdTimer);
+    _hdTimer = setTimeout(function() {
+      fetch("/save_hyper_decisions", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify(_hyperDecisions),
+      })
+      .then(function(r) { return r.json(); })
+      .then(function(d) { if (d.status !== "success") console.warn("hyper cd save failed:", d); })
+      .catch(function(e) { console.warn("hyper cd save error:", e); });
+    }, 500);
+  }
+})();
 </script>
 </body>
 </html>

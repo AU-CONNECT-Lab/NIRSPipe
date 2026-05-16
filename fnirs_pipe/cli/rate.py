@@ -66,3 +66,23 @@ def raw(
 
     typer.echo(f"Launching raw viewer: {html_path.name} ...")
     RawRatingApp(html_path, output_dir, sci_threshold).run(port=port)
+
+
+@app.command()
+def hyper(
+    output_dir: Annotated[Path, typer.Argument(help="fnirs-pipe output directory.")],
+    group_id: Annotated[str, typer.Argument(help="Group ID, e.g. 'A'.")],
+    task_label: Annotated[str, typer.Argument(help="Task label, e.g. 'tapping'.")],
+    sci_threshold: Annotated[float, typer.Option("--sci-threshold", help="SCI threshold.")] = 0.8,
+    port: Annotated[int, typer.Option("--port", help="Local server port.")] = 5053,
+) -> None:
+    """Launch interactive hyperscanning QC viewer with section ratings and channel decisions."""
+    from fnirs_pipe.qc.rating.app import HyperRatingApp
+
+    html_path = output_dir / f"group-{group_id}_task-{task_label}_hyper-raw.html"
+    if not html_path.exists():
+        typer.echo(f"Error: hyper report not found: {html_path}", err=True)
+        raise typer.Exit(1)
+
+    typer.echo(f"Launching hyper viewer: {html_path.name} ...")
+    HyperRatingApp(html_path, output_dir, sci_threshold).run(port=port)

@@ -117,6 +117,11 @@ def build_hyper_report(
         iqm_data, coherence_df, aligned_raws, offsets, subject_ids, sci_threshold
     )
 
+    sci_per_subject = {
+        sid: iqm_data.get(sid, {}).get("sci_per_channel", {})
+        for sid in subject_ids
+    }
+
     output_path = output_dir / f"group-{group_id}_task-{task}_hyper-raw.html"
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -133,6 +138,7 @@ def build_hyper_report(
         per_channel_json=json.dumps(per_channel),
         ch_pairs_json=json.dumps(ch_pairs),
         iqm_json=json.dumps(iqm),
+        sci_per_subject_json=json.dumps(sci_per_subject),
     )
     output_path.write_text(html, encoding="utf-8")
     logger.info("Hyper raw report saved: %s", output_path)
