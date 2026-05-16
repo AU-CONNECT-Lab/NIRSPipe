@@ -310,12 +310,10 @@ window.addEventListener("DOMContentLoaded", function() {
 
 <!-- Channel Decisions (per subject) — populated by fnirs-rate hyper when served via Flask -->
 <div class="card" style="margin-bottom:.5rem" id="hyper-decisions-card">
-  <div class="panel-title" style="cursor:pointer;user-select:none;display:flex;align-items:center"
-       onclick="toggleHyperDecisions()">
-    <span>Channel Decisions &nbsp;<span style="font-weight:400;color:#aaa">per subject &bull; click to expand</span></span>
-    <span id="hyper-decisions-arrow" style="margin-left:auto">&#9658;</span>
+  <div class="panel-title">
+    <span>Channel Decisions &nbsp;<span id="hyper-decisions-hint" style="font-weight:400;color:#aaa">per subject</span></span>
   </div>
-  <div id="hyper-decisions-body" style="display:none;padding:.4rem .6rem .6rem">
+  <div id="hyper-decisions-body" style="padding:.4rem .6rem .6rem">
     <p style="font-size:.75rem;color:#888;margin:0 0 .4rem">Click chip to cycle: &#8212; &#8594; good &#8594; bad. Saves to each subject's JSON (only active when launched via <code>fnirs-rate hyper</code>).</p>
     <table style="border-collapse:collapse;width:100%;font-size:.82rem">
       <thead>
@@ -341,22 +339,13 @@ window.addEventListener("DOMContentLoaded", function() {
 (function(){
   var _IS_FLASK       = (typeof window._HYPER_DECISIONS !== "undefined");
   var _hyperDecisions = _IS_FLASK ? JSON.parse(JSON.stringify(window._HYPER_DECISIONS)) : {};
-  var _hdOpen = true, _hdTimer = null;
-
-  window.toggleHyperDecisions = function() {
-    _hdOpen = !_hdOpen;
-    document.getElementById("hyper-decisions-body").style.display = _hdOpen ? "" : "none";
-    document.getElementById("hyper-decisions-arrow").innerHTML = _hdOpen ? "&#9660;" : "&#9658;";
-    if (_hdOpen) buildTable();
-  };
+  var _hdTimer = null;
 
   document.addEventListener("DOMContentLoaded", function() {
     if (!_IS_FLASK) {
-      var _hint = document.querySelector("#hyper-decisions-card .panel-title span span");
-      if (_hint) _hint.textContent = "read-only · launch via fnirs-rate hyper to save decisions";
+      var hint = document.getElementById("hyper-decisions-hint");
+      if (hint) hint.textContent = "read-only · launch via fnirs-rate hyper to save decisions";
     }
-    document.getElementById("hyper-decisions-body").style.display = "";
-    document.getElementById("hyper-decisions-arrow").innerHTML = "&#9660;";
     buildTable();
   });
 

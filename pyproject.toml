@@ -42,6 +42,7 @@ fnirs-recon = "fnirs_pipe.cli.recon:app"
 fnirs-rate  = "fnirs_pipe.cli.rate:app"
 fnirs-qc    = "fnirs_pipe.cli.qc:app"
 fnirs-gui   = "fnirs_pipe.cli.gui:app"
+fnirs-log   = "fnirs_pipe.cli.db:app"
 
 [tool.setuptools.packages.find]
 where = ["."]

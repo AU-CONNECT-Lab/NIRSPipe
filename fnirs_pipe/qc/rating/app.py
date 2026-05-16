@@ -372,12 +372,10 @@ _CD_CSS = """
 
 _CD_SECTION_HTML = """
 <div class="card" style="margin-bottom:.5rem" id="ch-decisions-card">
-  <div class="panel-title" style="cursor:pointer;user-select:none;display:flex;align-items:center"
-       onclick="toggleChDecisions()">
-    <span>Channel Decisions &nbsp;<span style="font-weight:400;color:#aaa">good / bad / unrated per channel &bull; click to expand</span></span>
-    <span id="ch-decisions-arrow" style="margin-left:auto">&#9658;</span>
+  <div class="panel-title">
+    <span>Channel Decisions &nbsp;<span id="ch-decisions-hint" style="font-weight:400;color:#aaa">good / bad / unrated per channel</span></span>
   </div>
-  <div id="ch-decisions-body" style="display:none;padding:.4rem .6rem .6rem">
+  <div id="ch-decisions-body" style="padding:.4rem .6rem .6rem">
     <p style="font-size:.75rem;color:#888;margin:0 0 .4rem">Rows in red have SCI below threshold. Click chip to cycle: &#8212; &#8594; good &#8594; bad. Saves automatically.</p>
     <table style="border-collapse:collapse;width:100%;font-size:.82rem;table-layout:fixed">
       <colgroup><col style="width:48%"/><col style="width:16%"/><col style="width:36%"/></colgroup>
@@ -397,14 +395,15 @@ _CD_JS = """
   var _IS_FLASK     = (typeof _CHANNEL_DECISIONS !== "undefined");
   var _chDecisions  = _IS_FLASK ? (_CHANNEL_DECISIONS || {}) : {};
   var _sciThresh    = (typeof _SCI_THRESHOLD !== "undefined") ? _SCI_THRESHOLD : 0.8;
-  var _cdOpen = false, _cdTimer = null;
+  var _cdTimer = null;
 
-  window.toggleChDecisions = function() {
-    _cdOpen = !_cdOpen;
-    document.getElementById("ch-decisions-body").style.display = _cdOpen ? "" : "none";
-    document.getElementById("ch-decisions-arrow").innerHTML = _cdOpen ? "&#9660;" : "&#9658;";
-    if (_cdOpen) buildTable();
-  };
+  document.addEventListener("DOMContentLoaded", function() {
+    if (!_IS_FLASK) {
+      var hint = document.getElementById("ch-decisions-hint");
+      if (hint) hint.textContent = "read-only · launch via fnirs-rate raw to save decisions";
+    }
+    buildTable();
+  });
 
   function buildTable() {
     var tbody = document.getElementById("ch-decisions-tbody");
@@ -439,6 +438,7 @@ _CD_JS = """
       chip.className  ="cd-chip cd-"+state;
       chip.textContent={unrated:"—",good:"good",bad:"bad"}[state];
       chip.addEventListener("click",function(){
+        if(!_IS_FLASK) return;
         if(!_chDecisions[runLbl]) _chDecisions[runLbl]={};
         var next={unrated:"good",good:"bad",bad:"unrated"}[_chDecisions[runLbl][hbo]||"unrated"];
         _chDecisions[runLbl][hbo]=next;
@@ -628,22 +628,13 @@ _HYPER_CD_JS = """
 (function(){
   var _IS_FLASK       = (typeof window._HYPER_DECISIONS !== "undefined");
   var _hyperDecisions = _IS_FLASK ? JSON.parse(JSON.stringify(window._HYPER_DECISIONS)) : {};
-  var _hdOpen = true, _hdTimer = null;
-
-  window.toggleHyperDecisions = function() {
-    _hdOpen = !_hdOpen;
-    document.getElementById("hyper-decisions-body").style.display = _hdOpen ? "" : "none";
-    document.getElementById("hyper-decisions-arrow").innerHTML = _hdOpen ? "&#9660;" : "&#9658;";
-    if (_hdOpen) buildTable();
-  };
+  var _hdTimer = null;
 
   document.addEventListener("DOMContentLoaded", function() {
     if (!_IS_FLASK) {
-      var _hint = document.querySelector("#hyper-decisions-card .panel-title span span");
-      if (_hint) _hint.textContent = "read-only · launch via fnirs-rate hyper to save decisions";
+      var hint = document.getElementById("hyper-decisions-hint");
+      if (hint) hint.textContent = "read-only · launch via fnirs-rate hyper to save decisions";
     }
-    document.getElementById("hyper-decisions-body").style.display = "";
-    document.getElementById("hyper-decisions-arrow").innerHTML = "&#9660;";
     buildTable();
   });
 
@@ -790,11 +781,9 @@ class HyperRatingApp:
         )
         return (
             '<div class="card" style="margin-bottom:.5rem" id="hyper-decisions-card">'
-            '<div class="panel-title" style="cursor:pointer;user-select:none;display:flex;align-items:center"'
-            ' onclick="toggleHyperDecisions()">'
+            '<div class="panel-title">'
             '<span>Channel Decisions &nbsp;'
-            '<span style="font-weight:400;color:#aaa">per subject &bull; click to expand</span></span>'
-            '<span id="hyper-decisions-arrow" style="margin-left:auto">&#9660;</span>'
+            '<span id="hyper-decisions-hint" style="font-weight:400;color:#aaa">per subject</span></span>'
             "</div>"
             '<div id="hyper-decisions-body" style="padding:.4rem .6rem .6rem">'
             '<p style="font-size:.75rem;color:#888;margin:0 0 .4rem">'
