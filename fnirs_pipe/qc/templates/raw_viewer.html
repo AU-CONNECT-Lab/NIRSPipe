@@ -93,6 +93,13 @@ select#run-select {
 /* bad channel list */
 #bad-list { font-size: 0.78rem; color: #c0392b; margin-top: 0.3rem; }
 
+/* channel decision chips */
+.cd-chip { cursor:pointer; padding:0.1rem 0.5rem; border-radius:3px; font-size:0.78rem;
+           font-weight:600; display:inline-block; min-width:4.2rem; text-align:center; }
+.cd-chip.cd-unrated { background:#e9ecef; color:#6c757d; }
+.cd-chip.cd-good    { background:#d4edda; color:#155724; }
+.cd-chip.cd-bad     { background:#f8d7da; color:#721c24; }
+
 /* panel titles */
 .panel-title {
   font-size: 0.78rem; font-weight: 600; color: #6c757d;
@@ -211,6 +218,26 @@ select#run-select {
   <div id="ch-summary-plot"></div>
 </div>
 
+<!-- Row 8: Channel Decisions -->
+<div class="card" style="margin-bottom:0.5rem" id="ch-decisions-card">
+  <div class="panel-title" style="cursor:pointer;user-select:none;display:flex;align-items:center" onclick="toggleChDecisions()">
+    <span>Channel Decisions &nbsp;<span style="font-weight:400;color:#aaa">good / bad / unrated per channel &bull; click to expand</span></span>
+    <span id="ch-decisions-arrow" style="margin-left:auto">&#9658;</span>
+  </div>
+  <div id="ch-decisions-body" style="display:none;padding:0.4rem 0.6rem 0.6rem">
+    <p style="font-size:0.75rem;color:#888;margin:0 0 0.4rem">Rows in red have SCI below threshold. Click the decision chip to cycle: &#8212; &#8594; good &#8594; bad. Saves automatically.</p>
+    <table id="ch-decisions-table" style="border-collapse:collapse;width:100%;font-size:0.82rem;table-layout:fixed">
+      <colgroup><col style="width:48%"/><col style="width:16%"/><col style="width:36%"/></colgroup>
+      <thead><tr>
+        <th style="text-align:left;padding:0.22rem 0.5rem;border-bottom:2px solid #dde3ea;background:#f8f9fa;font-weight:600">Channel</th>
+        <th style="text-align:left;padding:0.22rem 0.5rem;border-bottom:2px solid #dde3ea;background:#f8f9fa;font-weight:600">SCI</th>
+        <th style="text-align:left;padding:0.22rem 0.5rem;border-bottom:2px solid #dde3ea;background:#f8f9fa;font-weight:600">Decision</th>
+      </tr></thead>
+      <tbody id="ch-decisions-tbody"></tbody>
+    </table>
+  </div>
+</div>
+
 <script>
 // null = Flask mode (fetch API); array = static mode (pre-computed JSON)
 var _STATIC_DATA = {{ data_json | safe }};
@@ -224,6 +251,13 @@ var _selectedMk = -1;
 var _selChannel = null;
 var _bandShapes = [];
 var _mkRO       = null;
+
+// channel decisions (injected by Flask when served via fnirs-rate raw)
+var _IS_FLASK       = (typeof _CHANNEL_DECISIONS !== "undefined");
+var _chDecisions    = _IS_FLASK ? (window._CHANNEL_DECISIONS || {}) : {};
+var _sciThreshold   = (typeof _SCI_THRESHOLD !== "undefined") ? _SCI_THRESHOLD : 0.8;
+var _cdOpen         = false;
+var _cdSaveTimer    = null;
 
 // ─── init run selector ────────────────────────────────────────────────────────
 (function() {
@@ -626,12 +660,102 @@ function switchRun(idx) {
     loadTimeSeries(); loadLayout(); loadPsdMean();
     loadTriggerTimeline(); loadCarpetGvtd();
     loadSciPsp(); loadIqm(); loadChannelSummary();
+    if (_cdOpen) buildChDecisionsTable();
   }
   if (_STATIC_DATA) {
     _reload();
   } else {
     fetch("/api/run/" + idx, { method:"POST" }).then(r => r.json()).then(_reload);
   }
+}
+
+// ─── channel decisions ────────────────────────────────────────────────────────
+function toggleChDecisions() {
+  _cdOpen = !_cdOpen;
+  document.getElementById("ch-decisions-body").style.display = _cdOpen ? "" : "none";
+  document.getElementById("ch-decisions-arrow").innerHTML = _cdOpen ? "&#9660;" : "&#9658;";
+  if (_cdOpen) buildChDecisionsTable();
+}
+
+function buildChDecisionsTable() {
+  var tbody = document.getElementById("ch-decisions-tbody");
+  if (!tbody) return;
+  tbody.innerHTML = "";
+  var runLabel = _RUN_LABELS[_run_idx];
+  var d        = (_STATIC_DATA || [])[_run_idx] || {};
+  var pairs    = d.channel_pairs || [];
+  var sciPerCh = ((d.iqm || {}).per_channel || {}).sci_per_channel || {};
+
+  var channels = [];
+  pairs.forEach(function(pair) {
+    channels.push(pair + " hbo");
+    channels.push(pair + " hbr");
+  });
+
+  if (!channels.length) {
+    tbody.innerHTML = "<tr><td colspan='3' style='color:#adb5bd;font-style:italic;text-align:center;padding:0.5rem'>No channels found</td></tr>";
+    return;
+  }
+
+  var decided = _chDecisions[runLabel] || {};
+
+  pairs.forEach(function(pair) {
+    var hbo  = pair + " hbo";
+    var hbr  = pair + " hbr";
+    var vals = Object.keys(sciPerCh)
+      .filter(function(k) { return k.startsWith(pair + " "); })
+      .map(function(k) { return sciPerCh[k]; });
+    var sci   = vals.length ? vals[0] : null;
+    var below = sci !== null && sci < _sciThreshold;
+
+    var tr = document.createElement("tr");
+    tr.style.background = below ? "#fff8f8" : "";
+
+    // pair decision: one chip writes both hbo + hbr simultaneously
+    var state = decided[hbo] || "unrated";
+    var chip  = document.createElement("span");
+    chip.className   = "cd-chip cd-" + state;
+    chip.textContent = {unrated: "—", good: "good", bad: "bad"}[state];
+    chip.addEventListener("click", function() {
+      if (!_chDecisions[runLabel]) _chDecisions[runLabel] = {};
+      var next = {unrated: "good", good: "bad", bad: "unrated"}[_chDecisions[runLabel][hbo] || "unrated"];
+      _chDecisions[runLabel][hbo] = next;
+      _chDecisions[runLabel][hbr] = next;
+      chip.className   = "cd-chip cd-" + next;
+      chip.textContent = {unrated: "—", good: "good", bad: "bad"}[next];
+      _cdScheduleSave();
+    });
+
+    var td1 = document.createElement("td");
+    td1.style.cssText = "padding:0.18rem 0.5rem;border-bottom:1px solid #f0f0f0";
+    td1.textContent = pair;
+
+    var td2 = document.createElement("td");
+    td2.style.cssText = "padding:0.18rem 0.5rem;border-bottom:1px solid #f0f0f0;font-variant-numeric:tabular-nums;color:" + (below ? "#c0392b" : "#2c3e50");
+    td2.textContent = sci !== null ? sci.toFixed(3) : "—";
+
+    var td3 = document.createElement("td");
+    td3.style.cssText = "padding:0.18rem 0.5rem;border-bottom:1px solid #f0f0f0";
+    td3.appendChild(chip);
+
+    tr.appendChild(td1); tr.appendChild(td2); tr.appendChild(td3);
+    tbody.appendChild(tr);
+  });
+}
+
+function _cdScheduleSave() {
+  if (!_IS_FLASK) return;
+  if (_cdSaveTimer) clearTimeout(_cdSaveTimer);
+  _cdSaveTimer = setTimeout(function() {
+    fetch("/save_channel_decisions", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(_chDecisions),
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) { if (d.status !== "success") console.warn("channel decisions save failed:", d); })
+    .catch(function(e) { console.warn("channel decisions save error:", e); });
+  }, 500);
 }
 
 </script>

@@ -39,3 +39,30 @@ def rate(
         raise typer.Exit(1)
 
     FNIRSRatingApp(output_dir, subjects).run(port=port)
+
+
+@app.command()
+def raw(
+    output_dir: Annotated[Path, typer.Argument(help="fnirs-pipe output directory.")],
+    participant_label: Annotated[str, typer.Argument(help="Subject ID, e.g. '01'.")],
+    session_label: Annotated[Optional[str], typer.Option("--session-label", help="Session label.")] = None,
+    task_label: Annotated[Optional[str], typer.Option("--task-label", help="Task label.")] = None,
+    sci_threshold: Annotated[float, typer.Option("--sci-threshold", help="SCI threshold for pre-highlighting bad channels.")] = 0.8,
+    port: Annotated[int, typer.Option("--port", help="Local server port.")] = 5052,
+) -> None:
+    """Launch interactive raw QC viewer with section ratings and channel decisions."""
+    from fnirs_pipe.qc.rating.app import RawRatingApp
+
+    name_parts = [f"sub-{participant_label}"]
+    if session_label:
+        name_parts.append(f"ses-{session_label}")
+    if task_label:
+        name_parts.append(f"task-{task_label}")
+    html_path = output_dir / ("_".join(name_parts) + "_raw.html")
+
+    if not html_path.exists():
+        typer.echo(f"Error: raw report not found: {html_path}", err=True)
+        raise typer.Exit(1)
+
+    typer.echo(f"Launching raw viewer: {html_path.name} ...")
+    RawRatingApp(html_path, output_dir, sci_threshold).run(port=port)
