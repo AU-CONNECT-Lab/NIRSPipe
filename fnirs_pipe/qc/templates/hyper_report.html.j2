@@ -103,9 +103,17 @@ select#ch-select {
   </div>
 </div>
 
-<!-- Trigger timeline -->
+<!-- Trigger timeline (raw, before alignment) -->
+<div class="card" style="margin-bottom:0.5rem" id="trigger-raw-card">
+  <div class="panel-title">Trigger Timeline (Raw)
+    <span class="panel-hint">event onsets per subject before alignment &bull; original recording time</span>
+  </div>
+  <div id="trigger-raw-plot"></div>
+</div>
+
+<!-- Trigger timeline (after alignment) -->
 <div class="card" style="margin-bottom:0.5rem">
-  <div class="panel-title">Trigger Timeline
+  <div class="panel-title">Trigger Timeline (Aligned)
     <span class="panel-hint">event onsets per subject after alignment &bull; verify sync</span>
   </div>
   <div id="trigger-plot"></div>
@@ -277,6 +285,12 @@ function _selectPair(pairIdx) {
 
 // ── initial render ────────────────────────────────────────────────────────────
 window.addEventListener("DOMContentLoaded", function() {
+  if (_FIGS.trigger_timeline_raw)
+    Plotly.newPlot("trigger-raw-plot", _FIGS.trigger_timeline_raw.data,
+                   _FIGS.trigger_timeline_raw.layout, _cfg);
+  else
+    document.getElementById("trigger-raw-card").style.display = "none";
+
   if (_FIGS.trigger_timeline)
     Plotly.newPlot("trigger-plot", _FIGS.trigger_timeline.data,
                    _FIGS.trigger_timeline.layout, _cfg);

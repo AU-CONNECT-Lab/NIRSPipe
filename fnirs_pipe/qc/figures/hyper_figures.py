@@ -130,6 +130,7 @@ def _hover_sci(pair: str, iqm_data: dict, subject_ids: list[str]) -> str:
 def build_trigger_timeline(
     aligned_raws: dict[str, mne.io.Raw],
     subject_ids: list[str],
+    xlabel: str = "Time (s) [aligned]",
 ) -> go.Figure | None:
     per_sub: dict[str, list[dict]] = {}
     all_descs: list[str] = []
@@ -173,7 +174,7 @@ def build_trigger_timeline(
     return go.Figure(
         data=traces,
         layout=go.Layout(
-            xaxis=dict(title="Time (s) [aligned]", gridcolor="#eeeeee"),
+            xaxis=dict(title=xlabel, gridcolor="#eeeeee"),
             yaxis=dict(tickvals=list(range(len(subject_ids))),
                        ticktext=[f"sub-{s}" for s in subject_ids],
                        autorange="reversed", gridcolor="#eeeeee",

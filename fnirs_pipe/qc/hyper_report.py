@@ -39,6 +39,7 @@ def build_hyper_report(
     iqm_data: dict[str, dict],
     aligned_raws: dict[str, mne.io.Raw],
     offsets: dict[str, float],
+    raw_raws: dict[str, mne.io.Raw] | None = None,
     coherence_df: pd.DataFrame,
     output_dir: Path,
     sci_threshold: float = 0.8,
@@ -83,6 +84,10 @@ def build_hyper_report(
         windowed_coh_df = pd.DataFrame()
 
     figs = {
+        "trigger_timeline_raw": _safe(
+            "trigger_timeline_raw", build_trigger_timeline,
+            raw_raws, subject_ids, "Time (s) [raw]",
+        ) if raw_raws else None,
         "trigger_timeline": _safe("trigger_timeline", build_trigger_timeline,
                                   aligned_raws, subject_ids),
         "trace":            _safe("trace", build_signal_overlay,

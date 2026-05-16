@@ -180,6 +180,7 @@ def hyper_raw(
                 iqm_data=iqm_data,
                 aligned_raws=aligned_raws,
                 offsets=offsets,
+                raw_raws=raws_haemo,
                 coherence_df=coherence_df,
                 output_dir=output_dir,
                 sci_threshold=sci_threshold,
