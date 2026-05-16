@@ -26,7 +26,6 @@ def _build_script_text(
     high_pass: float | None = None,
     low_pass: float | None = None,
     resample_sfreq: float | None = None,
-    ica: bool = False,
     segments_path: str | None = None,
     crop_tmin: float | None = None,
     crop_tmax: float | None = None,
@@ -113,7 +112,6 @@ def _build_script_text(
         w(f'    high_pass={_q(high_pass)},')
         w(f'    low_pass={_q(low_pass)},')
         w(f'    resample_sfreq={_q(resample_sfreq)},')
-        w(f'    ica={ica!r},')
         if segments_path is not None:
             w(f'    segments_path="{segments_path}",')
         if crop_tmin is not None:
@@ -218,7 +216,6 @@ def write_run_script(
         high_pass=args.get("high_pass"),
         low_pass=args.get("low_pass"),
         resample_sfreq=args.get("resample_sfreq"),
-        ica=args.get("ica", False),
         segments_path=_fwd(args.get("segments_path")),
         crop_tmin=args.get("crop_tmin"),
         crop_tmax=args.get("crop_tmax"),

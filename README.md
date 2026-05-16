@@ -33,13 +33,12 @@ pip install -e ".[dev]"
 fnirs-pipe /data/bids /data/derivatives participant \
   --participant-label 01 02 \
   --dpf 6.0 \
-  --sci-threshold 0.8 \
-  --bad-channel-action mark
+  --sci-threshold 0.8
 
 # Preprocessing + GLM
 fnirs-pipe /data/bids /data/derivatives participant \
   --participant-label 01 \
-  --dpf 6.0 --sci-threshold 0.8 --bad-channel-action mark \
+  --dpf 6.0 --sci-threshold 0.8 \
   --mode glm \
   --hrf-model spm --noise-model ar1 \
   --high-pass 0.01 --low-pass 0.5 \
@@ -49,19 +48,19 @@ fnirs-pipe /data/bids /data/derivatives participant \
 # FIR GLM
 fnirs-pipe /data/bids /data/derivatives participant \
   --participant-label 01 \
-  --dpf 6.0 --sci-threshold 0.8 --bad-channel-action mark \
+  --dpf 6.0 --sci-threshold 0.8 \
   --mode glm --hrf-model fir --fir-delays "0,1,2,3,4,5,6,7,8,9"
 
 # Children dataset (higher cardiac band)
 fnirs-pipe /data/bids /data/derivatives participant \
   --participant-label 01 \
-  --dpf 5.5 --sci-threshold 0.8 --bad-channel-action mark \
+  --dpf 5.5 --sci-threshold 0.8 \
   --cardiac-l-freq 1.0 --cardiac-h-freq 2.5
 
 # Parallel subjects, custom TOML config for post
 fnirs-pipe /data/bids /data/derivatives participant \
   --participant-label 01 02 03 \
-  --dpf 6.0 --sci-threshold 0.8 --bad-channel-action mark \
+  --dpf 6.0 --sci-threshold 0.8 \
   --mode glm --config glm_params.toml \
   --n-jobs 4
 ```
@@ -89,7 +88,6 @@ fnirs-pipe bids_dir output_dir {participant,group} [OPTIONS]
 Required:
   --dpf FLOAT [FLOAT ...]      Differential pathlength factor. One value or one per wavelength.
   --sci-threshold FLOAT        SCI threshold for bad channel detection (e.g. 0.8).
-  --bad-channel-action         {mark,interpolate}  What to do with bad channels.
 
 Subject / session / task selection:
   --participant-label LABEL [LABEL ...]

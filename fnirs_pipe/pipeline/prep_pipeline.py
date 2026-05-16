@@ -29,7 +29,6 @@ from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("pipeline.prep")
 
-BadChannelAction = Literal["mark"]
 MotionMethod = Literal["tddr", "wavelet", "spline", "none"]
 
 # Step 1: BIDS validation
@@ -79,15 +78,12 @@ def mark_bad_channels(
     """Mark channels below SCI threshold into raw.info['bads'].
 
     Returns raw (modified in-place), list of bad channel names, and SCI scores dict.
-    Always called first, regardless of --bad-channel-action.
     """
     sci_scores = compute_sci(raw_od)
     bad_chs = [ch for ch, score in sci_scores.items() if score < threshold]
     raw_od.info["bads"] = bad_chs
     return raw_od, bad_chs, sci_scores
 
-# def apply_bad_channel_action(raw, action):
-#     Removed for now; only "mark" is supported. Reinstate if needed.
 
 # Step 4: Motion correction
 def correct_motion(raw_od: mne.io.Raw, method: MotionMethod | None = None) -> mne.io.Raw:

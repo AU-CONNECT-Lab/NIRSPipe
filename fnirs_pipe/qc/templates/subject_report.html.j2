@@ -220,7 +220,6 @@
         <td><span class="{{ badge_class }}">{{ n_bad }}/{{ n_total }} ({{ "%.0f"|format(bad_rate) }}%)</span></td>
       </tr>
       <tr><th>SCI threshold</th><td>{{ config.sci_threshold }}</td></tr>
-      <tr><th>Bad ch. action</th><td>{{ config.bad_channel_action }}</td></tr>
       <tr><th>Motion corr.</th><td>{{ config.motion_correction }}</td></tr>
       <tr><th>DPF</th><td>{{ config.dpf | join(', ') }}</td></tr>
     </table>
@@ -272,7 +271,6 @@
     <p class="step-desc">
       Scalp coupling index (SCI) and peak spectral power (PSP) computed per channel.
       SCI threshold: <strong>{{ config.sci_threshold }}</strong>.
-      Action on bad channels: <strong>{{ config.bad_channel_action }}</strong>.
     </p>
 
     {% if sci_psp_panel_path %}
