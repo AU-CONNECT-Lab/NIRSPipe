@@ -130,6 +130,8 @@ class PrepResult:
     psp_win_times: "np.ndarray | None" = None
     raw_od_before_motion: "mne.io.Raw | None" = None
     raw_od_after_motion: "mne.io.Raw | None" = None
+    iqm_raw: "dict | None" = None
+    iqm_final: "dict | None" = None
 
 @dataclass
 class PrepConfig:
@@ -201,9 +203,11 @@ def run_prep(
     sci_path = _save(raw_od, "sci", "sci_pruning", extra_provenance={"bad_channels": bad_chs})
 
     # raw IQM checkpoint — intensity metrics on original signal before any correction
+    iqm_raw: dict | None = None
     try:
         from fnirs_pipe.qc.quantitative_metrics import compute_raw_iqm, save_iqm_toml
-        save_iqm_toml(compute_raw_iqm(raw, sci_scores, bad_chs), config.subject, sci_path.parent, suffix="_raw")
+        iqm_raw = compute_raw_iqm(raw, sci_scores, bad_chs)
+        save_iqm_toml(iqm_raw, config.subject, sci_path.parent, suffix="_raw")
     except Exception:
         logger.warning("sub-%s | raw IQM failed", config.subject, exc_info=True)
 
@@ -219,9 +223,11 @@ def run_prep(
     preproc_path = _save(raw_haemo, "preproc", "beer_lambert")
 
     # haemo IQM checkpoint — baseline, overwritten by post-pipeline if filter/resample runs
+    iqm_final: dict | None = None
     try:
         from fnirs_pipe.qc.quantitative_metrics import compute_haemo_iqm, save_iqm_toml
-        save_iqm_toml(compute_haemo_iqm(raw_haemo), config.subject, preproc_path.parent)
+        iqm_final = compute_haemo_iqm(raw_haemo)
+        save_iqm_toml(iqm_final, config.subject, preproc_path.parent)
     except Exception:
         logger.warning("sub-%s | haemo IQM failed", config.subject, exc_info=True)
 
@@ -242,6 +248,8 @@ def run_prep(
         psp_win_times=psp_times,
         raw_od_before_motion=raw_od_before_motion,
         raw_od_after_motion=raw_od,
+        iqm_raw=iqm_raw,
+        iqm_final=iqm_final,
     )
 
 

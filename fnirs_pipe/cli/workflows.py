@@ -6,6 +6,7 @@ Does no signal processing itself.
 """
 
 import sys
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -15,6 +16,7 @@ from fnirs_pipe.io.derivatives import write_dataset_description
 import mne
 from fnirs_pipe.pipeline.prep_pipeline import PrepConfig, run_prep
 from fnirs_pipe.utils import unwrap_enum as _v
+from fnirs_pipe.utils import job_db as _jdb
 from fnirs_pipe.utils.logging import get_logger, setup_logging
 from fnirs_pipe.utils.run_record import write_run_record
 from fnirs_pipe.utils.run_script import write_run_script
@@ -98,44 +100,81 @@ def run_participant_level(args: dict[str, Any]) -> None:
 
     tasks: list[str | None] = task_label if task_label else [None]
 
-    for subject in participant_label:
-        # Record-keeping: create a log file and save a copy of the run command for each subject, 
-        # along with a TOML of the parameters used for this run (including any CLI overrides).
-        sub_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        sub_dir = output_dir / f"sub-{subject}"
-        log_file = sub_dir / "logs" / f"sub-{subject}_{sub_timestamp}.log"
-        setup_logging(verbose=verbose, log_file=log_file)
-        logger.info("sub-%s | starting", subject)
-        write_run_record(args, subject, sub_timestamp, output_dir, sub_dir=sub_dir)
-        write_run_script(args, subject, sub_timestamp, output_dir, sub_dir=sub_dir)
+    from fnirs_pipe import __version__
+    db_path = output_dir / "logs" / "fnirs_pipe.db"
+    execution_id = _jdb.log_execution(
+        db_path=db_path,
+        command_line=" ".join(sys.argv),
+        fnirs_pipe_version=__version__,
+        input_dir=str(bids_dir),
+        output_dir=str(output_dir),
+        subjects=participant_label,
+        work_dir=str(work_dir) if work_dir else None,
+        session_labels=session_label,
+        task_labels=task_label,
+        mode=_v(args["mode"]) if args.get("mode") else None,
+        dry_run=args.get("dry_run", False),
+    )
 
-        sessions: list[str | None] = session_label if session_label else [None]
+    try:
+        for subject in participant_label:
+            sub_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            sub_dir = output_dir / f"sub-{subject}"
+            log_file = sub_dir / "logs" / f"sub-{subject}_{sub_timestamp}.log"
+            setup_logging(verbose=verbose, log_file=log_file)
+            logger.info("sub-%s | starting", subject)
+            write_run_record(args, subject, sub_timestamp, output_dir, sub_dir=sub_dir)
+            write_run_script(args, subject, sub_timestamp, output_dir, sub_dir=sub_dir)
 
-        for session in sessions:
-            for task in tasks:
-                files = get_nirs_files(
-                    layout, subject=subject, session=session,
-                    task=task, filter_file=bids_filter_file,
-                )
+            _jdb.log_run_start(
+                db_path, execution_id, subject,
+                sci_threshold=args["sci_threshold"],
+                dpf=args["dpf"],
+                motion_correction=args["motion_correction"].value,
+                mode=_v(args["mode"]) if args.get("mode") else None,
+                high_pass=args.get("high_pass"),
+                low_pass=args.get("low_pass"),
+                hrf_model=_v(args["hrf_model"]) if args.get("hrf_model") else None,
+            )
 
-                if not files:
-                    label = f"sub-{subject}" + (f" ses-{session}" if session else "") + (f" task-{task}" if task else "")
-                    logger.warning("no snirf files found for %s, skipping", label)
-                    continue
+            t0 = time.monotonic()
+            subject_status = "SUCCESS"
+            subject_error: str | None = None
+            last_raw = last_result = None
+            prep_config = None
+            try:
+                sessions: list[str | None] = session_label if session_label else [None]
 
-                last_raw = last_result = None
-                for snirf_path in files:
-                    src_entities = layout.parse_file_entities(str(snirf_path))
-                    prep_config = _make_prep_config(subject, session, args)
-                    logger.info("processing: %s", snirf_path)
-                    try:
-                        raw = mne.io.read_raw_snirf(str(snirf_path), preload=True)
-                        result = run_prep(raw, prep_config, output_dir=output_dir, source_entities=src_entities, work_dir=work_dir)
-                        logger.info("finished prep: %s", snirf_path.name)
-                        last_raw, last_result = raw, result
-                    except Exception:
-                        logger.exception("prep failed for %s", snirf_path)
-                        raise
+                for session in sessions:
+                    for task in tasks:
+                        files = get_nirs_files(
+                            layout, subject=subject, session=session,
+                            task=task, filter_file=bids_filter_file,
+                        )
+
+                        if not files:
+                            label = f"sub-{subject}" + (f" ses-{session}" if session else "") + (f" task-{task}" if task else "")
+                            logger.warning("no snirf files found for %s, skipping", label)
+                            continue
+
+                        for snirf_path in files:
+                            src_entities = layout.parse_file_entities(str(snirf_path))
+                            prep_config = _make_prep_config(subject, session, args)
+                            logger.info("processing: %s", snirf_path)
+                            try:
+                                raw = mne.io.read_raw_snirf(str(snirf_path), preload=True)
+                                result = run_prep(raw, prep_config, output_dir=output_dir, source_entities=src_entities, work_dir=work_dir)
+                                logger.info("finished prep: %s", snirf_path.name)
+                                last_raw, last_result = raw, result
+                            except Exception:
+                                logger.exception("prep failed for %s", snirf_path)
+                                raise
+
+                if last_result is not None:
+                    if last_result.iqm_raw:
+                        _jdb.log_iqm(db_path, execution_id, subject, "raw", last_result.iqm_raw)
+                    if last_result.iqm_final:
+                        _jdb.log_iqm(db_path, execution_id, subject, "final", last_result.iqm_final)
 
                 glm_est = dm = alff_df = fc_df = None
                 if args.get("mode") is not None:
@@ -143,6 +182,24 @@ def run_participant_level(args: dict[str, Any]) -> None:
 
                 if not args.get("no_report") and last_result is not None:
                     _emit_subject_report(subject, sub_dir, last_raw, last_result, prep_config, args, glm_est, dm, alff_df=alff_df, fc_df=fc_df)
+
+            except Exception as exc:
+                subject_status = "FAILED"
+                subject_error = str(exc)
+                raise
+            finally:
+                _jdb.log_run_end(
+                    db_path, execution_id, subject,
+                    status=subject_status,
+                    error_msg=subject_error,
+                    duration_seconds=time.monotonic() - t0,
+                )
+
+        _jdb.update_execution(db_path, execution_id, "COMPLETED")
+
+    except Exception:
+        _jdb.update_execution(db_path, execution_id, "FAILED")
+        raise
 
 
 def _make_prep_config(subject: str, session: str | None, args: dict[str, Any]) -> "PrepConfig":
