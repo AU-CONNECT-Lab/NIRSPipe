@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <title>fnirs-pipe Raw Viewer</title>
-<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<script src="plotly.min.js"></script>
 <style>
 *, *::before, *::after { box-sizing: border-box; }
 body {
@@ -167,11 +167,19 @@ select#run-select {
   </div>
 </div>
 
-<!-- Row 3c: Epoch preview -->
-<div class="row" style="margin-bottom:0.5rem;">
+<!-- Row 3c: Epoch preview (Flask mode only; in static mode epochs are bundled in channel detail) -->
+<div class="row" id="epoch-row" style="margin-bottom:0.5rem;">
   <div class="card">
     <div class="panel-title">Epoch preview &nbsp;<span style="font-weight:400;color:#aaa" id="epoch-subtitle">select a channel to view</span></div>
     <div id="epoch-plot"></div>
+  </div>
+</div>
+
+<!-- Row 3d: Evoked topo (static mode only) -->
+<div class="row" id="evoked-topo-row" style="margin-bottom:0.5rem;display:none;">
+  <div class="card">
+    <div class="panel-title">Evoked response &nbsp;<span style="font-weight:400;color:#aaa">grand-mean topomap per condition</span></div>
+    <div id="evoked-topo-panel"></div>
   </div>
 </div>
 
@@ -282,6 +290,24 @@ function _esc(s) {
 
 function chPair(chName) { return chName.replace(/\s+\S+$/, ""); }
 
+function _pairFname(pair) {
+  return pair.replace(/ /g, "_").replace(/\//g, "-").replace(/\\/g, "-");
+}
+
+function _setIframeSrc(divId, src, h) {
+  var div = document.getElementById(divId);
+  if (!div) return;
+  var iframe = div.querySelector("iframe");
+  if (!iframe) {
+    iframe = document.createElement("iframe");
+    iframe.style.cssText = "width:100%;border:none;display:block;";
+    div.innerHTML = "";
+    div.appendChild(iframe);
+  }
+  if (h) iframe.height = h;
+  iframe.src = src;
+}
+
 function hexToRgba(hex, alpha) {
   var r = parseInt(hex.slice(1,3), 16);
   var g = parseInt(hex.slice(3,5), 16);
@@ -300,6 +326,10 @@ function _syncMkHeight() {
 
 // ─── initial load ─────────────────────────────────────────────────────────────
 window.addEventListener("DOMContentLoaded", function() {
+  if (_STATIC_DATA) {
+    var epochRow = document.getElementById("epoch-row");
+    if (epochRow) epochRow.style.display = "none";
+  }
   loadTimeSeries();
   loadLayout();
   loadPsdMean();
@@ -308,6 +338,7 @@ window.addEventListener("DOMContentLoaded", function() {
   loadSciPsp();
   loadIqm();
   loadChannelSummary();
+  loadEvokedTopo();
   buildChDecisionsTable();
 });
 
@@ -410,26 +441,26 @@ function selectChannel(pair) {
   document.getElementById("detail-placeholder").style.display = "none";
   document.getElementById("detail-plot").style.display = "block";
 
-  function _render(d) {
-    if (d.detail_figure)
-      Plotly.react("detail-plot", d.detail_figure.data, d.detail_figure.layout,
-                   { responsive: true, displayModeBar: false });
-    if (d.psd_figure) {
-      document.getElementById("psd-subtitle").textContent = pair;
-      Plotly.react("psd-plot", d.psd_figure.data, d.psd_figure.layout,
-                   { responsive: true, displayModeBar: false });
-    }
-    if (d.epoch_figure) {
-      document.getElementById("epoch-subtitle").textContent = pair + "  (baseline −5 → 0 s)";
-      Plotly.react("epoch-plot", d.epoch_figure.data, d.epoch_figure.layout,
-                   { responsive: true, displayModeBar: false });
-    }
-  }
-
   if (_STATIC_DATA) {
-    var d = ((_STATIC_DATA[_run_idx] || {}).channels || {})[pair];
-    if (d) _render(d);
+    var paths = (_STATIC_DATA[_run_idx] || {}).figure_paths || {};
+    var tmpl  = paths.ch_detail_template;
+    if (tmpl) _setIframeSrc("detail-plot", tmpl.replace("{pair}", _pairFname(pair)), 900);
   } else {
+    function _render(d) {
+      if (d.detail_figure)
+        Plotly.react("detail-plot", d.detail_figure.data, d.detail_figure.layout,
+                     { responsive: true, displayModeBar: false });
+      if (d.psd_figure) {
+        document.getElementById("psd-subtitle").textContent = pair;
+        Plotly.react("psd-plot", d.psd_figure.data, d.psd_figure.layout,
+                     { responsive: true, displayModeBar: false });
+      }
+      if (d.epoch_figure) {
+        document.getElementById("epoch-subtitle").textContent = pair + "  (baseline −5 → 0 s)";
+        Plotly.react("epoch-plot", d.epoch_figure.data, d.epoch_figure.layout,
+                     { responsive: true, displayModeBar: false });
+      }
+    }
     fetch("/api/channel_figure?pair=" + encodeURIComponent(pair))
       .then(function(r) { if (!r.ok) throw new Error(r.status); return r.json(); })
       .then(_render)
@@ -516,15 +547,14 @@ function toggleBadFromOptode() { /* handled via double-click on ts trace */ }
 
 // ─── Trigger Timeline ─────────────────────────────────────────────────────────
 function loadTriggerTimeline() {
-  function _render(d) {
-    if (d.figure)
-      Plotly.newPlot("trigger-timeline-plot", d.figure.data, d.figure.layout,
-                     { responsive: true, displayModeBar: false });
-  }
   if (_STATIC_DATA) {
-    _render((_STATIC_DATA[_run_idx] || {}).trigger_timeline || {});
+    var p = ((_STATIC_DATA[_run_idx] || {}).figure_paths || {}).trigger;
+    if (p && p.src) _setIframeSrc("trigger-timeline-plot", p.src, p.h || 120);
   } else {
-    fetch("/api/trigger_timeline_figure").then(r => r.json()).then(_render);
+    fetch("/api/trigger_timeline_figure").then(r => r.json()).then(function(d) {
+      if (d.figure) Plotly.newPlot("trigger-timeline-plot", d.figure.data, d.figure.layout,
+                                   { responsive: true, displayModeBar: false });
+    });
   }
 }
 
@@ -532,11 +562,13 @@ function loadTriggerTimeline() {
 function loadCarpetGvtd() {
   var panel = document.getElementById("carpet-gvtd-panel");
   if (!panel) return;
-  var b64 = ((_STATIC_DATA || [])[_run_idx] || {}).carpet_gvtd
-             ? ((_STATIC_DATA[_run_idx]).carpet_gvtd || {}).b64 : null;
-  if (b64) {
-    panel.innerHTML = '<img src="data:image/png;base64,' + b64
-      + '" style="max-width:100%;display:block;margin:0 auto;">';
+  if (_STATIC_DATA) {
+    var p = ((_STATIC_DATA[_run_idx] || {}).figure_paths || {}).carpet;
+    if (p && p.src) {
+      panel.innerHTML = '<img src="' + p.src + '" style="max-width:100%;display:block;margin:0 auto;">';
+    } else {
+      panel.innerHTML = '<span style="color:#adb5bd;font-style:italic;font-size:0.85rem;">No data</span>';
+    }
   } else {
     panel.innerHTML = '<span style="color:#adb5bd;font-style:italic;font-size:0.85rem;">No data</span>';
   }
@@ -544,44 +576,50 @@ function loadCarpetGvtd() {
 
 // ─── SCI / PSP ────────────────────────────────────────────────────────────────
 function loadSciPsp() {
-  function _render(d) {
-    if (d.figure)
-      Plotly.newPlot("sci-psp-plot", d.figure.data, d.figure.layout,
-                     { responsive: true, displayModeBar: false });
-  }
   if (_STATIC_DATA) {
-    _render((_STATIC_DATA[_run_idx] || {}).sci_psp || {});
+    var p = ((_STATIC_DATA[_run_idx] || {}).figure_paths || {}).sci_psp;
+    if (p && p.src) _setIframeSrc("sci-psp-plot", p.src, p.h || 400);
   } else {
-    fetch("/api/sci_psp_figure").then(r => r.json()).then(_render);
+    fetch("/api/sci_psp_figure").then(r => r.json()).then(function(d) {
+      if (d.figure) Plotly.newPlot("sci-psp-plot", d.figure.data, d.figure.layout,
+                                   { responsive: true, displayModeBar: false });
+    });
   }
 }
 
 // ─── PSD (mean) ───────────────────────────────────────────────────────────────
 function loadPsdMean() {
-  function _render(d) {
-    if (d.figure)
-      Plotly.newPlot("psd-plot", d.figure.data, d.figure.layout,
-                     { responsive: true, displayModeBar: false });
-  }
   if (_STATIC_DATA) {
-    _render((_STATIC_DATA[_run_idx] || {}).psd || {});
+    var p = ((_STATIC_DATA[_run_idx] || {}).figure_paths || {}).psd;
+    if (p && p.src) _setIframeSrc("psd-plot", p.src, p.h || 350);
   } else {
-    fetch("/api/psd_mean_figure").then(r => r.json()).then(_render);
+    fetch("/api/psd_mean_figure").then(r => r.json()).then(function(d) {
+      if (d.figure) Plotly.newPlot("psd-plot", d.figure.data, d.figure.layout,
+                                   { responsive: true, displayModeBar: false });
+    });
   }
 }
 
 // ─── Channel quality summary ──────────────────────────────────────────────────
 function loadChannelSummary() {
-  function _render(d) {
-    if (d.figure)
-      Plotly.newPlot("ch-summary-plot", d.figure.data, d.figure.layout,
-                     { responsive: true, displayModeBar: false });
-  }
   if (_STATIC_DATA) {
-    _render((_STATIC_DATA[_run_idx] || {}).ch_summary || {});
+    var p = ((_STATIC_DATA[_run_idx] || {}).figure_paths || {}).ch_summary;
+    if (p && p.src) _setIframeSrc("ch-summary-plot", p.src, p.h || 500);
   } else {
-    fetch("/api/channel_summary_figure").then(r => r.json()).then(_render);
+    fetch("/api/channel_summary_figure").then(r => r.json()).then(function(d) {
+      if (d.figure) Plotly.newPlot("ch-summary-plot", d.figure.data, d.figure.layout,
+                                   { responsive: true, displayModeBar: false });
+    });
   }
+}
+
+// ─── Evoked topo (static mode only) ───────────────────────────────────────────
+function loadEvokedTopo() {
+  if (!_STATIC_DATA) return;
+  var p   = ((_STATIC_DATA[_run_idx] || {}).figure_paths || {}).evoked_topo;
+  var row = document.getElementById("evoked-topo-row");
+  if (row) row.style.display = (p && p.src) ? "" : "none";
+  if (p && p.src) _setIframeSrc("evoked-topo-panel", p.src, p.h || 400);
 }
 
 // ─── IQM ──────────────────────────────────────────────────────────────────────
@@ -660,7 +698,7 @@ function switchRun(idx) {
     loadTimeSeries(); loadLayout(); loadPsdMean();
     loadTriggerTimeline(); loadCarpetGvtd();
     loadSciPsp(); loadIqm(); loadChannelSummary();
-    buildChDecisionsTable();
+    loadEvokedTopo(); buildChDecisionsTable();
   }
   if (_STATIC_DATA) {
     _reload();

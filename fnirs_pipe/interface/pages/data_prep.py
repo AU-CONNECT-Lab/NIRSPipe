@@ -165,7 +165,8 @@ def _marker_editor(extra_class=""):
 
 layout = dbc.Container([
     dcc.Download(id="dp-tsv-download"),
-    dcc.Store(id="dp-marker-store", storage_type="memory"),
+    dcc.Store(id="dp-marker-store",    storage_type="memory"),
+    dcc.Store(id="dp-decisions-store", storage_type="memory"),
     dcc.Interval(id="dp-mount-tick", interval=150, max_intervals=1),
 
     dbc.Row([dbc.Col([html.H3("Data Preparation"), html.Hr()])]),
@@ -349,6 +350,14 @@ layout = dbc.Container([
                                  className="text-muted d-block mb-1"),
                       dcc.Graph(id="dp-ch-summary-figure",
                                 style={"minHeight": "400px"})),
+
+                _card("Channel Decisions",
+                      html.Small("click chip to cycle: — → good → bad · auto-saves",
+                                 className="text-muted d-block mb-2"),
+                      html.Div(id="dp-decisions-table",
+                               children=html.Small("Load a run to rate channels.",
+                                                   className="text-muted")),
+                      html.Div(id="dp-decisions-status", className="mt-1 small text-muted")),
 
             ]),
         ]),

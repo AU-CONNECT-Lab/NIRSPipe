@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import json
 import re
 from pathlib import Path
 
@@ -1024,3 +1025,166 @@ def apply_crop(n_clicks, mode, tmin, tmax, seg_rows, combine_val, store, output_
         return dbc.Alert(f"Written: {names}", color="success", className="mb-0 py-2")
     except Exception as exc:
         return dbc.Alert(f"Crop failed: {exc}", color="danger", className="mb-0 py-2")
+
+
+# ── Channel Decisions ─────────────────────────────────────────────────────────
+
+_CD_STATES = ["unrated", "good", "bad"]
+_CD_COLOR  = {"unrated": "outline-secondary", "good": "success", "bad": "danger"}
+_CD_LABEL  = {"unrated": "—", "good": "good", "bad": "bad"}
+
+
+def _decisions_file_info(snirf_path: str, output_dir: str) -> tuple[Path, str]:
+    """Return (decisions_json_path, run_label) for the given snirf file."""
+    entities  = _parse_bids_entities(Path(snirf_path).stem)
+    sub       = entities.get("sub", "unknown")
+    ses       = entities.get("ses")
+    task      = entities.get("task")
+    run       = entities.get("run")
+    base_parts = [f"sub-{sub}"]
+    if ses:  base_parts.append(f"ses-{ses}")
+    if task: base_parts.append(f"task-{task}")
+    html_stem  = "_".join(base_parts) + "_raw"
+    run_parts  = list(base_parts)
+    if run:  run_parts.append(f"run-{run}")
+    run_label  = "_".join(run_parts)
+    return Path(output_dir) / f"{html_stem}_channel_decisions.json", run_label
+
+
+def _read_decisions(dec_path: Path, run_label: str) -> dict:
+    if not dec_path.exists():
+        return {}
+    try:
+        data = json.loads(dec_path.read_text(encoding="utf-8"))
+        return data.get(run_label, {})
+    except Exception:
+        return {}
+
+
+def _write_decisions(dec_path: Path, run_label: str, run_decisions: dict) -> None:
+    existing: dict = {}
+    if dec_path.exists():
+        try:
+            existing = json.loads(dec_path.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    existing[run_label] = run_decisions
+    dec_path.write_text(json.dumps(existing, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+def _cd_btn(pair: str, state: str) -> dbc.Button:
+    s = state if state in _CD_STATES else "unrated"
+    return dbc.Button(
+        _CD_LABEL[s],
+        id={"type": "dp-cd-btn", "index": pair},
+        color=_CD_COLOR[s],
+        size="sm",
+        n_clicks=0,
+        style={"minWidth": "3.5rem", "fontSize": "0.78rem"},
+    )
+
+
+def _build_decisions_table(pairs: list[str], sci_map: dict,
+                            run_decisions: dict, sci_thresh: float) -> html.Table:
+    _th = lambda t: html.Th(t, style={"padding": "4px 8px", "fontWeight": "600",
+                                       "borderBottom": "2px solid #dde3ea",
+                                       "background": "#f8f9fa", "fontSize": "0.8rem"})
+    rows = []
+    for pair in pairs:
+        hbo   = f"{pair} hbo"
+        sci   = sci_map.get(hbo, sci_map.get(f"{pair} hbr", None))
+        below = sci is not None and sci < sci_thresh
+        state = run_decisions.get(hbo, "unrated")
+        rows.append(html.Tr([
+            html.Td(pair, style={"fontWeight": "500", "padding": "3px 8px",
+                                  "background": "#fff8f8" if below else "",
+                                  "borderBottom": "1px solid #f0f0f0"}),
+            html.Td(f"{sci:.3f}" if sci is not None else "—",
+                    style={"color": "#c0392b" if below else "#6c757d",
+                           "fontVariantNumeric": "tabular-nums",
+                           "padding": "3px 8px",
+                           "borderBottom": "1px solid #f0f0f0"}),
+            html.Td(_cd_btn(pair, state),
+                    style={"padding": "2px 6px", "borderBottom": "1px solid #f0f0f0"}),
+        ]))
+    return html.Table(
+        [html.Thead(html.Tr([_th("Channel"), _th("SCI"), _th("Decision")])),
+         html.Tbody(rows)],
+        style={"borderCollapse": "collapse", "width": "100%", "fontSize": "0.82rem"},
+    )
+
+
+@callback(
+    Output("dp-decisions-store", "data"),
+    Output("dp-decisions-table", "children"),
+    Input("dp-run-store", "data"),
+    State("dp-sci-thresh",    "value"),
+    State("app-output-dir",   "data"),
+    prevent_initial_call=True,
+)
+def load_decisions(store, sci_thresh, output_dir):
+    if not store or not output_dir:
+        return no_update, no_update
+    cached    = _RESULT_CACHE.get(store.get("cache_key"), {})
+    pairs     = cached.get("channel_pairs", [])
+    sci_map   = (cached.get("iqm") or {}).get("per_channel", {}).get("sci_per_channel", {})
+    sci_thresh = float(sci_thresh or 0.8)
+    if not pairs:
+        return {}, html.Small("No channels found.", className="text-muted")
+
+    dec_path, run_label = _decisions_file_info(store["snirf_path"], output_dir)
+    run_decisions       = _read_decisions(dec_path, run_label)
+
+    state = {"snirf_path": store["snirf_path"], "output_dir": output_dir,
+             "run_label": run_label, "dec_path": str(dec_path),
+             "sci_threshold": sci_thresh, "run_decisions": run_decisions}
+    table = html.Div(
+        _build_decisions_table(pairs, sci_map, run_decisions, sci_thresh),
+        style={"maxHeight": "300px", "overflowY": "auto"},
+    )
+    return state, table
+
+
+@callback(
+    Output("dp-decisions-store", "data",    allow_duplicate=True),
+    Output("dp-decisions-table", "children",allow_duplicate=True),
+    Output("dp-decisions-status","children"),
+    Input({"type": "dp-cd-btn", "index": ALL}, "n_clicks"),
+    State("dp-decisions-store", "data"),
+    State("dp-run-store",       "data"),
+    State("dp-sci-thresh",      "value"),
+    prevent_initial_call=True,
+)
+def click_cd(_, dec_state, run_store, sci_thresh):
+    if not dec_state or not ctx.triggered_id:
+        return no_update, no_update, no_update
+    triggered = ctx.triggered_id
+    if not isinstance(triggered, dict) or triggered.get("type") != "dp-cd-btn":
+        return no_update, no_update, no_update
+
+    pair          = triggered["index"]
+    run_decisions = dict(dec_state.get("run_decisions", {}))
+    hbo, hbr      = f"{pair} hbo", f"{pair} hbr"
+    cur           = run_decisions.get(hbo, "unrated")
+    new           = _CD_STATES[(_CD_STATES.index(cur) + 1) % len(_CD_STATES)]
+    run_decisions[hbo] = new
+    run_decisions[hbr] = new
+
+    dec_state = {**dec_state, "run_decisions": run_decisions}
+
+    try:
+        _write_decisions(Path(dec_state["dec_path"]),
+                         dec_state["run_label"], run_decisions)
+        msg = "Saved."
+    except Exception as exc:
+        msg = f"Save failed: {exc}"
+
+    cached     = _RESULT_CACHE.get((run_store or {}).get("cache_key"), {})
+    pairs      = cached.get("channel_pairs", [])
+    sci_map    = (cached.get("iqm") or {}).get("per_channel", {}).get("sci_per_channel", {})
+    sci_thresh = float(sci_thresh or 0.8)
+    table = html.Div(
+        _build_decisions_table(pairs, sci_map, run_decisions, sci_thresh),
+        style={"maxHeight": "300px", "overflowY": "auto"},
+    )
+    return dec_state, table, msg
