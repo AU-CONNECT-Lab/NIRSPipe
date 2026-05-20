@@ -195,15 +195,17 @@ def _process_run(
         logger.warning("layout_figure failed: %s", exc)
 
     # ── file: carpet GVTD (PNG) ────────────────────────────────────────────────
+    carpet_b64 = None
     try:
-        b64      = carpet_gvtd_figure(raw, raw.ch_names)
-        png_name = f"{label}_desc-carpet_fnirs.png"
-        (fig_dir / png_name).write_bytes(base64.b64decode(b64))
+        carpet_b64 = carpet_gvtd_figure(raw, raw.ch_names)
+        png_name   = f"{label}_desc-carpet_fnirs.png"
+        (fig_dir / png_name).write_bytes(base64.b64decode(carpet_b64))
         figure_paths["carpet"] = {"src": f"{label}/figures/{png_name}"}
     except Exception as exc:
         logger.warning("carpet_gvtd_figure failed: %s", exc)
 
     # ── file: SCI / PSP ────────────────────────────────────────────────────────
+    sci_psp_inline: dict = {}
     try:
         fig   = build_sci_psp_figure(
             sci_scores, psp_per_ch, bad_channels, sci_threshold,
@@ -213,6 +215,7 @@ def _process_run(
         fname = f"{label}_desc-scipsp_fnirs.html"
         h     = _save_figure_html(fig, fig_dir / fname)
         figure_paths["sci_psp"] = {"src": f"{label}/figures/{fname}", "h": h}
+        sci_psp_inline = {"figure": fig.to_dict()}
     except Exception as exc:
         logger.warning("sci_psp_figure failed: %s", exc)
 
@@ -227,16 +230,19 @@ def _process_run(
         logger.warning("psd_mean_figure failed: %s", exc)
 
     # ── file: trigger timeline ─────────────────────────────────────────────────
+    trigger_timeline_inline: dict = {}
     try:
         fig = build_trigger_timeline_single(markers, cond_colors_)
         if fig:
             fname = f"{label}_desc-trigger_fnirs.html"
             h     = _save_figure_html(fig, fig_dir / fname)
             figure_paths["trigger"] = {"src": f"{label}/figures/{fname}", "h": h}
+            trigger_timeline_inline = {"figure": fig.to_dict()}
     except Exception as exc:
         logger.warning("trigger_timeline_single failed: %s", exc)
 
     # ── file: channel quality summary ──────────────────────────────────────────
+    ch_summary_inline: dict = {}
     try:
         ch_names = list(sci_scores.keys())
         is_bad   = [ch in bad_channels for ch in ch_names]
@@ -251,10 +257,12 @@ def _process_run(
         fname = f"{label}_desc-chsummary_fnirs.html"
         h     = _save_figure_html(fig, fig_dir / fname)
         figure_paths["ch_summary"] = {"src": f"{label}/figures/{fname}", "h": h}
+        ch_summary_inline = {"figure": fig.to_dict()}
     except Exception as exc:
         logger.warning("channel_quality_heatmap failed: %s", exc)
 
     # ── file: evoked topo ──────────────────────────────────────────────────────
+    evoked_topo_inline: dict = {}
     if raw_haemo is not None:
         try:
             fig = build_evoked_topo_figure(raw_haemo, markers)
@@ -262,6 +270,7 @@ def _process_run(
                 fname = f"{label}_desc-evokedtopo_fnirs.html"
                 h     = _save_figure_html(fig, fig_dir / fname)
                 figure_paths["evoked_topo"] = {"src": f"{label}/figures/{fname}", "h": h}
+                evoked_topo_inline = {"figure": fig.to_dict()}
         except Exception as exc:
             logger.warning("evoked_topo_figure failed: %s", exc)
 
@@ -291,8 +300,13 @@ def _process_run(
     logger.info("IQM JSON → %s", iqm_path)
 
     return {
-        "ts":     ts_inline,
-        "layout": layout_inline,
+        "ts":           ts_inline,
+        "layout":       layout_inline,
+        "evoked_topo":  evoked_topo_inline,
+        "carpet_gvtd":  {"b64": carpet_b64} if carpet_b64 else {},
+        "sci_psp":          sci_psp_inline,
+        "ch_summary":       ch_summary_inline,
+        "trigger_timeline": trigger_timeline_inline,
         "iqm": {
             "scalars":     {k: v for k, v in iqm.items() if not isinstance(v, (dict, list))},
             "per_channel": {"sci_per_channel": iqm.get("sci_per_channel", {})},

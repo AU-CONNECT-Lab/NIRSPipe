@@ -18,6 +18,8 @@ _SEG_COLS = [
     {"name": "Duration (s)", "id": "duration", "editable": True, "type": "numeric"},
 ]
 
+_HIDDEN = {"display": "none"}
+
 
 def _card(title, *children, extra_class="", body_class="", body_style=None):
     cls = ("mb-3 " + extra_class).strip() if extra_class else "mb-3"
@@ -30,7 +32,9 @@ def _card(title, *children, extra_class="", body_class="", body_style=None):
 
 def _crop_card(extra_class=""):
     return _card("Crop",
-        dcc.Graph(id="dp-trigger-timeline", style={"minHeight": "300px"}),
+        html.Div(id="dp-trigger-timeline-wrap", style=_HIDDEN, children=[
+            dcc.Graph(id="dp-trigger-timeline", style={"minHeight": "300px"}),
+        ]),
         dbc.Row([
             dbc.Col(
                 dbc.RadioItems(
@@ -98,7 +102,6 @@ def _crop_card(extra_class=""):
 
 def _marker_editor(extra_class=""):
     return _card("Markers",
-        # Step offset row
         dbc.Row([
             dbc.Col(dbc.Label("Step (s)", className="small mb-0"), width="auto",
                     className="d-flex align-items-center pe-0"),
@@ -116,7 +119,6 @@ def _marker_editor(extra_class=""):
                            color="outline-secondary", disabled=True),
             ]), width="auto"),
         ], className="g-1 mb-2 align-items-center flex-wrap"),
-        # Batch rename row
         dbc.Row([
             dbc.Col(dbc.Label("Rename", className="small mb-0"), width="auto",
                     className="d-flex align-items-center pe-0"),
@@ -131,17 +133,14 @@ def _marker_editor(extra_class=""):
             dbc.Col(dbc.Button("Apply All", id="dp-batch-rename-btn",
                                size="sm", color="outline-secondary"), width="auto"),
         ], className="g-1 mb-2 align-items-center flex-wrap"),
-        # Column headers
         dbc.Row([
             dbc.Col(width=1),
             dbc.Col(html.Small("Onset (s)",   className="text-muted fw-semibold"), width=4),
             dbc.Col(html.Small("Dur (s)",     className="text-muted fw-semibold"), width=3),
             dbc.Col(html.Small("Description", className="text-muted fw-semibold")),
         ], className="g-1 px-2 mb-1"),
-        # Dynamic rows (rendered by callback)
         html.Div(id="dp-marker-rows-container",
                  style={"maxHeight": "300px", "overflowY": "auto"}),
-        # Toolbar
         dbc.Row([
             dbc.Col(
                 dbc.ButtonGroup([
@@ -245,13 +244,10 @@ layout = dbc.Container([
                         _card("Signal Topo",
                             html.Small("raw HbO / HbR per channel · click to select",
                                        className="text-muted d-block mb-1"),
-                            html.Div(
-                                dcc.Graph(id="dp-evoked-topo", responsive=True),
-                                style={
-                                    "maxWidth": "700px", "width": "100%",
-                                    "aspectRatio": "1 / 1", "margin": "0 auto",
-                                },
-                            ),
+                            html.Div(id="dp-evoked-topo-wrap", style=_HIDDEN, children=[
+                                dcc.Graph(id="dp-evoked-topo", responsive=True,
+                                          style={"aspectRatio": "1 / 1"}),
+                            ]),
                         ),
                         width=7,
                     ),
@@ -259,12 +255,16 @@ layout = dbc.Container([
                         _card("Optode Layout (2D)",
                               html.Small("colour = SCI · click = select channel",
                                          className="text-muted d-block mb-1"),
-                              dcc.Graph(id="dp-layout-2d", responsive=True,
-                                        style={"height": "300px"}),
+                              html.Div(id="dp-layout-2d-wrap", style=_HIDDEN, children=[
+                                  dcc.Graph(id="dp-layout-2d", responsive=True,
+                                            style={"height": "300px"}),
+                              ]),
                               body_class="p-2"),
                         _card("3D (fsaverage)",
-                              dcc.Graph(id="dp-layout-3d", responsive=True,
-                                        style={"height": "390px"})),
+                              html.Div(id="dp-layout-3d-wrap", style=_HIDDEN, children=[
+                                  dcc.Graph(id="dp-layout-3d", responsive=True,
+                                            style={"height": "390px"}),
+                              ])),
                     ], width=5),
                 ], className="mb-3", align="start"),
 
@@ -284,7 +284,9 @@ layout = dbc.Container([
                             placeholder="Select channel pair · or click a trace",
                             className="mb-2",
                         ),
-                        dcc.Graph(id="dp-channel-detail"),
+                        html.Div(id="dp-channel-detail-wrap", style=_HIDDEN, children=[
+                            dcc.Graph(id="dp-channel-detail"),
+                        ]),
                     ]),
                 ], className="mb-3"),
 
@@ -292,7 +294,9 @@ layout = dbc.Container([
                 _card("PSD",
                     html.Small("mean across channels",
                                id="dp-psd-subtitle", className="text-muted d-block mb-1"),
-                    dcc.Graph(id="dp-channel-psd"),
+                    html.Div(id="dp-channel-psd-wrap", style=_HIDDEN, children=[
+                        dcc.Graph(id="dp-channel-psd"),
+                    ]),
                 ),
 
                 # Crop | Markers
@@ -305,7 +309,9 @@ layout = dbc.Container([
                 _card("Epoch Preview",
                     html.Small("select a channel to view",
                                id="dp-epoch-subtitle", className="text-muted d-block mb-1"),
-                    dcc.Graph(id="dp-channel-epoch"),
+                    html.Div(id="dp-channel-epoch-wrap", style=_HIDDEN, children=[
+                        dcc.Graph(id="dp-channel-epoch"),
+                    ]),
                 ),
 
             ]),
@@ -325,17 +331,22 @@ layout = dbc.Container([
                         ),
                     ])),
                     dbc.CardBody([
-                        dcc.Graph(id="dp-ts-figure"),
+                        html.Div(id="dp-ts-figure-wrap", style=_HIDDEN, children=[
+                            dcc.Graph(id="dp-ts-figure"),
+                        ]),
                     ]),
                 ], className="mb-3"),
 
                 _card("Carpet + GVTD",
-                      html.Img(id="dp-carpet-gvtd",
-                               style={"width": "100%", "display": "block"})),
+                      html.Div(id="dp-carpet-gvtd-wrap", style=_HIDDEN, children=[
+                          html.Img(id="dp-carpet-gvtd",
+                                   style={"width": "100%", "display": "block"}),
+                      ])),
 
                 _card("SCI / PSP",
-                      dcc.Graph(id="dp-sci-psp-figure",
-                                style={"minHeight": "400px"})),
+                      html.Div(id="dp-sci-psp-figure-wrap", style=_HIDDEN, children=[
+                          dcc.Graph(id="dp-sci-psp-figure", style={"minHeight": "400px"}),
+                      ])),
 
                 _card("Image Quality Metrics",
                     dash_table.DataTable(
@@ -348,8 +359,9 @@ layout = dbc.Container([
                 _card("Channel Quality Summary",
                       html.Small("status / SCI / CV / PSP / SNR per channel",
                                  className="text-muted d-block mb-1"),
-                      dcc.Graph(id="dp-ch-summary-figure",
-                                style={"minHeight": "400px"})),
+                      html.Div(id="dp-ch-summary-figure-wrap", style=_HIDDEN, children=[
+                          dcc.Graph(id="dp-ch-summary-figure", style={"minHeight": "400px"}),
+                      ])),
 
                 _card("Channel Decisions",
                       html.Small("click chip to cycle: — → good → bad · auto-saves",

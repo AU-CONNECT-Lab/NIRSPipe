@@ -185,9 +185,12 @@ def load_run(n_clicks, run_path, sci_thresh, cache_dir):
     if result is None:
         try:
             from fnirs_pipe.qc.prep_raw_report import _process_run
+            run_label = Path(snirf_path).stem
+            run_dir = Path(cache_dir) if cache_dir and Path(cache_dir).is_dir() else Path(snirf_path).parent
             result = _process_run(
-                {"snirf_path": snirf_path},
+                {"snirf_path": snirf_path, "label": run_label},
                 sci_threshold,
+                run_dir,
             )
             raw_haemo = result.pop("_raw_haemo", None)
             if raw_haemo is not None:
@@ -242,30 +245,40 @@ def load_run(n_clicks, run_path, sci_thresh, cache_dir):
 
 # ── Restore all graphs from store (fires on load AND on page re-mount) ────────
 
+_SHOW = {}
+
 @callback(
-    Output("dp-ts-figure",         "figure"),
-    Output("dp-layout-2d",         "figure"),
-    Output("dp-layout-3d",         "figure"),
-    Output("dp-sci-psp-figure",    "figure"),
-    Output("dp-channel-psd",       "figure",  allow_duplicate=True),
-    Output("dp-ch-summary-figure", "figure"),
-    Output("dp-marker-store",       "data",    allow_duplicate=True),
-    Output("dp-channel-selector",  "options"),
-    Output("dp-iqm-table",         "data"),
-    Output("dp-channel-selector",  "value",   allow_duplicate=True),
-    Output("dp-evoked-topo",       "figure"),
-    Output("dp-trigger-timeline",  "figure"),
-    Output("dp-carpet-gvtd",       "src"),
+    Output("dp-ts-figure",              "figure"),
+    Output("dp-layout-2d",              "figure"),
+    Output("dp-layout-3d",              "figure"),
+    Output("dp-sci-psp-figure",         "figure"),
+    Output("dp-channel-psd",            "figure",  allow_duplicate=True),
+    Output("dp-ch-summary-figure",      "figure"),
+    Output("dp-marker-store",           "data",    allow_duplicate=True),
+    Output("dp-channel-selector",       "options"),
+    Output("dp-iqm-table",              "data"),
+    Output("dp-channel-selector",       "value",   allow_duplicate=True),
+    Output("dp-evoked-topo",            "figure"),
+    Output("dp-trigger-timeline",       "figure"),
+    Output("dp-carpet-gvtd",            "src"),
+    Output("dp-ts-figure-wrap",         "style"),
+    Output("dp-layout-2d-wrap",         "style"),
+    Output("dp-layout-3d-wrap",         "style"),
+    Output("dp-sci-psp-figure-wrap",    "style"),
+    Output("dp-ch-summary-figure-wrap", "style"),
+    Output("dp-evoked-topo-wrap",       "style"),
+    Output("dp-trigger-timeline-wrap",  "style"),
+    Output("dp-carpet-gvtd-wrap",       "style"),
     Input("dp-run-store",          "data"),
     Input("dp-mount-tick",         "n_intervals"),
     prevent_initial_call="initial_duplicate",
 )
 def restore_from_store(store, _tick):
     if not store:
-        return (no_update,) * 13
+        return (no_update,) * 21
     cached = _RESULT_CACHE.get(store.get("cache_key"), {})
     if not cached:
-        return (no_update,) * 12
+        return (no_update,) * 21
 
     def _fig(nested, *keys):
         d = nested
@@ -275,10 +288,14 @@ def restore_from_store(store, _tick):
             d = d.get(k)
         return d or no_update
 
-    sci_psp_out = _fig(cached, "sci_psp",    "figure")
-    ch_sum_out  = _fig(cached, "ch_summary", "figure")
-    print(f"[DEBUG restore] sci_psp populated: {sci_psp_out is not no_update}")
-    print(f"[DEBUG restore] ch_summary populated: {ch_sum_out is not no_update}")
+    ts_fig       = _fig(cached, "ts",               "figure")
+    layout_2d    = _fig(cached, "layout",           "layout_2d_figure")
+    layout_3d    = _fig(cached, "layout",           "layout_3d_figure")
+    sci_psp_out  = _fig(cached, "sci_psp",          "figure")
+    psd_out      = _fig(cached, "psd",              "figure")
+    ch_sum_out   = _fig(cached, "ch_summary",       "figure")
+    evoked_topo  = _fig(cached, "evoked_topo",      "figure")
+    trigger_tl   = _fig(cached, "trigger_timeline", "figure")
 
     markers = cached.get("ts", {}).get("markers", [])
     marker_rows = [
@@ -303,20 +320,31 @@ def restore_from_store(store, _tick):
     b64 = cached.get("carpet_gvtd", {}).get("b64")
     carpet_src = f"data:image/png;base64,{b64}" if b64 else no_update
 
+    def _wrap(val):
+        return _SHOW if val is not no_update else no_update
+
     return (
-        _fig(cached, "ts",               "figure"),
-        _fig(cached, "layout",           "layout_2d_figure"),
-        _fig(cached, "layout",           "layout_3d_figure"),
+        ts_fig,
+        layout_2d,
+        layout_3d,
         sci_psp_out,
-        _fig(cached, "psd",              "figure"),
+        psd_out,
         ch_sum_out,
         marker_rows,
         ch_options,
         iqm_rows,
         no_update,
-        _fig(cached, "evoked_topo",      "figure"),
-        _fig(cached, "trigger_timeline", "figure"),
+        evoked_topo,
+        trigger_tl,
         carpet_src,
+        _wrap(ts_fig),
+        _wrap(layout_2d),
+        _wrap(layout_3d),
+        _wrap(sci_psp_out),
+        _wrap(ch_sum_out),
+        _wrap(evoked_topo),
+        _wrap(trigger_tl),
+        _wrap(carpet_src),
     )
 
 
@@ -435,16 +463,19 @@ def _placeholder_fig(msg: str, height: int = 220) -> dict:
 # ── Per-channel detail (reads pre-computed figures from store) ────────────────
 
 @callback(
-    Output("dp-channel-detail", "figure"),
-    Output("dp-channel-psd",    "figure",  allow_duplicate=True),
-    Output("dp-channel-epoch",  "figure"),
+    Output("dp-channel-detail",      "figure"),
+    Output("dp-channel-psd",         "figure",  allow_duplicate=True),
+    Output("dp-channel-epoch",       "figure"),
+    Output("dp-channel-detail-wrap", "style"),
+    Output("dp-channel-psd-wrap",    "style"),
+    Output("dp-channel-epoch-wrap",  "style"),
     Input("dp-channel-selector", "value"),
     State("dp-run-store",        "data"),
     prevent_initial_call=True,
 )
 def update_channel_detail(channel_pair, store):
     if not store or not channel_pair:
-        return no_update, no_update, no_update
+        return no_update, no_update, no_update, no_update, no_update, no_update
 
     cache_key = store.get("cache_key")
     cached    = _RESULT_CACHE.get(cache_key, {})
@@ -466,7 +497,7 @@ def update_channel_detail(channel_pair, store):
                 print(f"[DEBUG update_channel_detail] recompute haemo failed: {exc}")
                 return (
                     _placeholder_fig("Failed to load channel data", 160),
-                    no_update, no_update,
+                    no_update, no_update, _SHOW, no_update, no_update,
                 )
         try:
             from fnirs_pipe.qc.figures import build_channel_figure
@@ -490,6 +521,9 @@ def update_channel_detail(channel_pair, store):
         ch_data.get("detail_figure") or _placeholder_fig("No channel data", 160),
         ch_data.get("psd_figure")    or _placeholder_fig("No PSD available", 220),
         ch_data.get("epoch_figure")  or _placeholder_fig("No markers — epoch preview not available", 220),
+        _SHOW,
+        _SHOW,
+        _SHOW,
     )
 
 
@@ -1123,7 +1157,7 @@ def _build_decisions_table(pairs: list[str], sci_map: dict,
     prevent_initial_call=True,
 )
 def load_decisions(store, sci_thresh, output_dir):
-    if not store or not output_dir:
+    if not store:
         return no_update, no_update
     cached    = _RESULT_CACHE.get(store.get("cache_key"), {})
     pairs     = cached.get("channel_pairs", [])
@@ -1132,15 +1166,16 @@ def load_decisions(store, sci_thresh, output_dir):
     if not pairs:
         return {}, html.Small("No channels found.", className="text-muted")
 
-    dec_path, run_label = _decisions_file_info(store["snirf_path"], output_dir)
-    run_decisions       = _read_decisions(dec_path, run_label)
+    run_decisions = {}
+    state: dict = {"snirf_path": store["snirf_path"], "sci_threshold": sci_thresh}
+    if output_dir:
+        dec_path, run_label = _decisions_file_info(store["snirf_path"], output_dir)
+        run_decisions       = _read_decisions(dec_path, run_label)
+        state.update({"output_dir": output_dir, "run_label": run_label,
+                      "dec_path": str(dec_path), "run_decisions": run_decisions})
 
-    state = {"snirf_path": store["snirf_path"], "output_dir": output_dir,
-             "run_label": run_label, "dec_path": str(dec_path),
-             "sci_threshold": sci_thresh, "run_decisions": run_decisions}
     table = html.Div(
         _build_decisions_table(pairs, sci_map, run_decisions, sci_thresh),
-        style={"maxHeight": "300px", "overflowY": "auto"},
     )
     return state, table
 
@@ -1172,12 +1207,15 @@ def click_cd(_, dec_state, run_store, sci_thresh):
 
     dec_state = {**dec_state, "run_decisions": run_decisions}
 
-    try:
-        _write_decisions(Path(dec_state["dec_path"]),
-                         dec_state["run_label"], run_decisions)
-        msg = "Saved."
-    except Exception as exc:
-        msg = f"Save failed: {exc}"
+    if dec_state.get("dec_path"):
+        try:
+            _write_decisions(Path(dec_state["dec_path"]),
+                             dec_state["run_label"], run_decisions)
+            msg = "Saved."
+        except Exception as exc:
+            msg = f"Save failed: {exc}"
+    else:
+        msg = "No output dir set — decisions not saved."
 
     cached     = _RESULT_CACHE.get((run_store or {}).get("cache_key"), {})
     pairs      = cached.get("channel_pairs", [])
@@ -1185,6 +1223,5 @@ def click_cd(_, dec_state, run_store, sci_thresh):
     sci_thresh = float(sci_thresh or 0.8)
     table = html.Div(
         _build_decisions_table(pairs, sci_map, run_decisions, sci_thresh),
-        style={"maxHeight": "300px", "overflowY": "auto"},
     )
     return dec_state, table, msg
