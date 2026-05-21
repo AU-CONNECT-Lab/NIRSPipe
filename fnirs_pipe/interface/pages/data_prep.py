@@ -177,17 +177,12 @@ layout = dbc.Container([
                 dbc.Label("BIDS Directory"),
                 dbc.Input(id="dp-bids-dir", type="text",
                           placeholder="/path/to/bids"),
-            ], width=4),
+            ], width=6),
             dbc.Col([
-                dbc.Label("Output Directory"),
+                dbc.Label(["Output Directory ", html.Span("*", className="text-danger")]),
                 dbc.Input(id="dp-output-dir", type="text",
-                          placeholder="/path/to/output"),
-            ], width=4),
-            dbc.Col([
-                dbc.Label("Cache Directory"),
-                dbc.Input(id="dp-cache-dir", type="text",
-                          placeholder="/path/to/cache  (optional)"),
-            ], width=4),
+                          placeholder="/path/to/output  (required)"),
+            ], width=6),
         ], className="g-3"),
     ),
 
@@ -217,17 +212,12 @@ layout = dbc.Container([
             dbc.Col([
                 dcc.Dropdown(id="dp-run-dropdown", options=[],
                              placeholder="Select run"),
-            ], width=5),
+            ], width=7),
             dbc.Col([
                 dbc.Label("SCI Threshold"),
                 dbc.Input(id="dp-sci-thresh", type="number", value=0.8,
                           min=0.0, max=1.0, step=0.01),
-            ], width=2),
-            dbc.Col([
-                dbc.Label(" "),
-                dbc.Button("Load Run", id="dp-load-btn", color="success",
-                           className="d-block w-100"),
-            ], width="auto", className="d-flex align-items-end"),
+            ], width=3),
         ], className="g-3 align-items-end"),
         html.Div(id="dp-load-status", className="mt-2 small"),
     ),

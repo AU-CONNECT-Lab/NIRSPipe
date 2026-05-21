@@ -98,7 +98,6 @@ def launch(port: int = 8050) -> None:
     app.layout = html.Div([
         dcc.Store(id="app-bids-dir",   storage_type="session"),
         dcc.Store(id="app-output-dir", storage_type="session"),
-        dcc.Store(id="app-cache-dir",  storage_type="local"),
         dcc.Store(id="dp-run-store",   storage_type="memory"),
         _sidebar(),
         html.Div(

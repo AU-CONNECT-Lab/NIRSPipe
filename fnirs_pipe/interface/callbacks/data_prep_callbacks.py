@@ -53,22 +53,6 @@ def _dp_dirs_to_store(bids_dir, output_dir):
     return bids_dir, output_dir
 
 
-@callback(
-    Output("app-cache-dir", "data", allow_duplicate=True),
-    Input("dp-cache-dir", "value"),
-    prevent_initial_call=True,
-)
-def _cache_dir_to_store(cache_dir):
-    return cache_dir
-
-
-@callback(
-    Output("dp-cache-dir", "value"),
-    Input("app-cache-dir", "data"),
-    prevent_initial_call="initial_duplicate",
-)
-def _restore_cache_dir(cache_dir):
-    return cache_dir or no_update
 
 
 # ── Subject detection ─────────────────────────────────────────────────────────
@@ -145,30 +129,28 @@ def populate_runs(subject, bids_dir):
 @callback(
     Output("dp-run-store",   "data"),
     Output("dp-load-status", "children"),
-    Input("dp-load-btn",  "n_clicks"),
-    State("dp-run-dropdown", "value"),
+    Input("dp-run-dropdown", "value"),
     State("dp-sci-thresh",   "value"),
-    State("app-cache-dir",   "data"),
+    State("app-output-dir",  "data"),
     prevent_initial_call=True,
 )
-def load_run(n_clicks, run_path, sci_thresh, cache_dir):
+def load_run(run_path, sci_thresh, output_dir):
     import pickle
 
     if not run_path:
-        return no_update, dbc.Alert("Select a run first.", color="warning")
+        return no_update, no_update
+    if not output_dir or not Path(output_dir).is_dir():
+        return no_update, dbc.Alert("Set Output Directory first.", color="warning")
 
     sci_threshold = float(sci_thresh if sci_thresh is not None else 0.8)
     snirf_path    = run_path
     cache_key     = _make_cache_key(snirf_path, sci_threshold)
-
-    disk_path = None
-    if cache_dir and Path(cache_dir).is_dir():
-        disk_path = Path(cache_dir) / f"{cache_key}.pkl"
+    disk_path     = Path(output_dir) / ".fnirs_cache" / f"{cache_key}.pkl"
 
     if cache_key in _RESULT_CACHE:
         result = _RESULT_CACHE[cache_key]
         source = "memory"
-    elif disk_path and disk_path.exists():
+    elif disk_path.exists():
         try:
             with open(disk_path, "rb") as f:
                 result = pickle.load(f)
@@ -186,7 +168,7 @@ def load_run(n_clicks, run_path, sci_thresh, cache_dir):
         try:
             from fnirs_pipe.qc.prep_raw_report import _process_run
             run_label = Path(snirf_path).stem
-            run_dir = Path(cache_dir) if cache_dir and Path(cache_dir).is_dir() else Path(snirf_path).parent
+            run_dir   = Path(output_dir) / ".fnirs_cache"
             result = _process_run(
                 {"snirf_path": snirf_path, "label": run_label},
                 sci_threshold,
@@ -196,7 +178,6 @@ def load_run(n_clicks, run_path, sci_thresh, cache_dir):
             if raw_haemo is not None:
                 _HAEMO_CACHE[cache_key] = raw_haemo
 
-            # Precompute all channel detail figures while raw_haemo is in memory
             if raw_haemo is not None:
                 from fnirs_pipe.qc.figures import build_channel_figure
                 from fnirs_pipe.qc.prep_raw_report import (
@@ -218,7 +199,6 @@ def load_run(n_clicks, run_path, sci_thresh, cache_dir):
                     except Exception as exc:
                         print(f"[DEBUG load_run] channel {pair!r} failed: {exc}")
                         channels[pair] = {}
-                print(f"[DEBUG load_run] precomputed {len(channels)} channel pairs")
 
             _RESULT_CACHE[cache_key] = result
             if disk_path:
@@ -226,7 +206,6 @@ def load_run(n_clicks, run_path, sci_thresh, cache_dir):
                     disk_path.parent.mkdir(parents=True, exist_ok=True)
                     with open(disk_path, "wb") as f:
                         pickle.dump(result, f)
-                    print(f"[DEBUG load_run] saved to disk: {disk_path}")
                 except Exception as exc:
                     print(f"[DEBUG load_run] disk cache save failed: {exc}")
         except Exception as exc:
