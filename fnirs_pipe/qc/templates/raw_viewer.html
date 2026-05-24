@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <title>fnirs-pipe Raw Viewer</title>
-<script src="plotly.min.js"></script>
+<script src="https://cdn.plot.ly/plotly-3.5.0.min.js"></script>
 <style>
 *, *::before, *::after { box-sizing: border-box; }
 body {
@@ -291,7 +291,7 @@ function _esc(s) {
 function chPair(chName) { return chName.replace(/\s+\S+$/, ""); }
 
 function _pairFname(pair) {
-  return pair.replace(/ /g, "_").replace(/\//g, "-").replace(/\\/g, "-");
+  return pair.replace(/[^a-zA-Z0-9]/g, "");
 }
 
 function _setIframeSrc(divId, src, h) {

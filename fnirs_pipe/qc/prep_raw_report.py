@@ -9,6 +9,11 @@ from pathlib import Path
 import mne
 from jinja2 import Environment, FileSystemLoader
 
+from fnirs_pipe.qc.figure_io import (
+    _pair_fname,
+    _save_figure_html,
+    _save_multi_fig_html,
+)
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("qc.prep_raw_report")
@@ -18,79 +23,6 @@ _MAX_TS_PTS   = 4000
 _SHORT_THRESH = 0.015
 _EPOCH_TMIN   = -5.0
 _EPOCH_TMAX   = 25.0
-_IFRAME_CSS   = "html,body{margin:0;padding:0;overflow:hidden;width:100%;height:100%;}"
-
-
-def _ensure_plotly_js(target_dir: Path) -> None:
-    """Copy plotly.min.js from the installed package to target_dir (once)."""
-    dst = target_dir / "plotly.min.js"
-    if not dst.exists():
-        import shutil
-        import plotly as _plotly
-        src = Path(_plotly.__file__).parent / "package_data" / "plotly.min.js"
-        shutil.copy2(src, dst)
-
-
-def _figure_height(fig, default: int = 500) -> int:
-    h = getattr(getattr(fig, "layout", None), "height", None)
-    if h:
-        return int(h)
-    for trace in getattr(fig, "data", ()):
-        if getattr(trace, "type", "") == "heatmap":
-            y = getattr(trace, "y", None)
-            if y is not None:
-                return max(300, min(len(y) * 22 + 140, 1400))
-    return default
-
-
-def _save_figure_html(fig, path: Path) -> int:
-    """Save a single Plotly figure as standalone iframe-ready HTML. Returns height px."""
-    h = _figure_height(fig)
-    fig.update_layout(height=h)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    _ensure_plotly_js(path.parent)
-    html = fig.to_html(
-        full_html=True, include_plotlyjs=False, config={"responsive": True}
-    )
-    html = html.replace(
-        "<head>",
-        '<head>\n<style>' + _IFRAME_CSS + '</style>\n<script src="plotly.min.js"></script>',
-        1,
-    )
-    path.write_text(html, encoding="utf-8")
-    return h
-
-
-def _save_multi_fig_html(figs: list, path: Path) -> int:
-    """Stack multiple Plotly figures in one HTML file. Returns total height px."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    _ensure_plotly_js(path.parent)
-    head = (
-        '<meta charset="UTF-8">'
-        '<script src="plotly.min.js"></script>'
-        f'<style>*{{box-sizing:border-box;}}{_IFRAME_CSS}.pfig{{margin-bottom:2px;}}</style>'
-    )
-    parts = [f"<!DOCTYPE html><html><head>{head}</head><body>"]
-    total_h = 0
-    for i, fig in enumerate(figs):
-        if fig is None:
-            continue
-        h = _figure_height(fig)
-        total_h += h + 2
-        fig.update_layout(height=h)
-        fig_html = fig.to_html(
-            full_html=False, include_plotlyjs=False,
-            div_id=f"pfig{i}", config={"responsive": True},
-        )
-        parts.append(f'<div class="pfig">{fig_html}</div>')
-    parts.append("</body></html>")
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text("\n".join(parts), encoding="utf-8")
-    return max(total_h, 100)
-
-
-def _pair_fname(pair: str) -> str:
-    return pair.replace(" ", "_").replace("/", "-").replace("\\", "-")
 
 
 def _process_run(
@@ -198,7 +130,7 @@ def _process_run(
     carpet_b64 = None
     try:
         carpet_b64 = carpet_gvtd_figure(raw, raw.ch_names)
-        png_name   = f"{label}_desc-carpet_fnirs.png"
+        png_name   = f"{label}_desc-carpet_nirs.png"
         (fig_dir / png_name).write_bytes(base64.b64decode(carpet_b64))
         figure_paths["carpet"] = {"src": f"{label}/figures/{png_name}"}
     except Exception as exc:
@@ -212,7 +144,7 @@ def _process_run(
             sci_matrix=sci_matrix, sci_win_times=sci_win_times,
             psp_matrix=psp_matrix, psp_win_times=psp_win_times,
         )
-        fname = f"{label}_desc-scipsp_fnirs.html"
+        fname = f"{label}_desc-scipsp_nirs.html"
         h     = _save_figure_html(fig, fig_dir / fname)
         figure_paths["sci_psp"] = {"src": f"{label}/figures/{fname}", "h": h}
         sci_psp_inline = {"figure": fig.to_dict()}
@@ -223,7 +155,7 @@ def _process_run(
     try:
         fig = build_psd_mean_figure(raw)
         if fig:
-            fname = f"{label}_desc-psd_fnirs.html"
+            fname = f"{label}_desc-psd_nirs.html"
             h     = _save_figure_html(fig, fig_dir / fname)
             figure_paths["psd"] = {"src": f"{label}/figures/{fname}", "h": h}
     except Exception as exc:
@@ -234,7 +166,7 @@ def _process_run(
     try:
         fig = build_trigger_timeline_single(markers, cond_colors_)
         if fig:
-            fname = f"{label}_desc-trigger_fnirs.html"
+            fname = f"{label}_desc-trigger_nirs.html"
             h     = _save_figure_html(fig, fig_dir / fname)
             figure_paths["trigger"] = {"src": f"{label}/figures/{fname}", "h": h}
             trigger_timeline_inline = {"figure": fig.to_dict()}
@@ -254,7 +186,7 @@ def _process_run(
             psp_per_ch=psp_per_ch,
             sci_thresh=sci_threshold,
         )
-        fname = f"{label}_desc-chsummary_fnirs.html"
+        fname = f"{label}_desc-chsummary_nirs.html"
         h     = _save_figure_html(fig, fig_dir / fname)
         figure_paths["ch_summary"] = {"src": f"{label}/figures/{fname}", "h": h}
         ch_summary_inline = {"figure": fig.to_dict()}
@@ -267,7 +199,7 @@ def _process_run(
         try:
             fig = build_evoked_topo_figure(raw_haemo, markers)
             if fig:
-                fname = f"{label}_desc-evokedtopo_fnirs.html"
+                fname = f"{label}_desc-evokedtopo_nirs.html"
                 h     = _save_figure_html(fig, fig_dir / fname)
                 figure_paths["evoked_topo"] = {"src": f"{label}/figures/{fname}", "h": h}
                 evoked_topo_inline = {"figure": fig.to_dict()}
@@ -285,17 +217,17 @@ def _process_run(
                 detail_fig, psd_fig, epoch_fig = build_channel_figure(
                     raw_haemo, markers, pair, _MAX_TS_PTS, _EPOCH_TMIN, _EPOCH_TMAX,
                 )
-                fname = f"{label}_desc-ch-{_pair_fname(pair)}_fnirs.html"
+                fname = f"{label}_desc-ch{_pair_fname(pair)}_nirs.html"
                 _save_multi_fig_html([detail_fig, psd_fig, epoch_fig], fig_dir / fname)
             except Exception as exc:
                 logger.warning("channel_figure %s failed: %s", pair, exc)
         if channel_pairs:
             figure_paths["ch_detail_template"] = (
-                f"{label}/figures/{label}_desc-ch-{{pair}}_fnirs.html"
+                f"{label}/figures/{label}_desc-ch{{pair}}_nirs.html"
             )
 
     # ── file: IQM JSON ─────────────────────────────────────────────────────────
-    iqm_path = run_dir / f"{label}_desc-iqm_fnirs.json"
+    iqm_path = run_dir / f"{label}_desc-iqm_nirs.json"
     iqm_path.write_text(json.dumps(iqm, indent=2, default=str), encoding="utf-8")
     logger.info("IQM JSON → %s", iqm_path)
 
@@ -336,7 +268,6 @@ def build_prep_raw_report(
             logger.error("Failed to process run %s: %s", label, exc)
             static_data.append({})
 
-    _ensure_plotly_js(output_dir)
     run_labels = [r["label"] for r in runs]
 
     env      = Environment(loader=FileSystemLoader(str(_TEMPLATE_DIR)), autoescape=False)

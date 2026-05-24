@@ -79,7 +79,7 @@ def hyper(
     """Launch interactive hyperscanning QC viewer with section ratings and channel decisions."""
     from fnirs_pipe.qc.rating.app import HyperRatingApp
 
-    html_path = output_dir / f"group-{group_id}_task-{task_label}_hyper-raw.html"
+    html_path = output_dir / f"group-{group_id}_task-{task_label}_desc-hyperraw_nirs.html"
     if not html_path.exists():
         typer.echo(f"Error: hyper report not found: {html_path}", err=True)
         raise typer.Exit(1)

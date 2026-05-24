@@ -4,7 +4,6 @@
 <head>
 <meta charset="UTF-8"/>
 <title>fnirs-pipe Hyper Raw Report — {{ group_id }} / {{ task }}</title>
-<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
 <style>
 {{ base_css }}
 
@@ -20,6 +19,8 @@ select#ch-select {
   font-size: 0.78rem; border: 1px solid #ced4da; border-radius: 4px;
   padding: 0.15rem 0.35rem; background: #fff; margin-left: auto; max-width: 220px;
 }
+
+.plot-frame { width: 100%; border: none; display: block; }
 
 #iqm-panel { padding: 0.55rem 1rem 0.65rem; }
 #iqm-panel h3 { margin: 0 0 0.4rem; font-size: 0.88rem; }
@@ -62,64 +63,68 @@ select#ch-select {
 </div>
 {% endcall %}
 
-<!-- Trigger timeline (raw, before alignment) -->
+{% if figure_paths.trigger_timeline_raw %}
 {% call card("Trigger Timeline (Raw)", hint="event onsets per subject before alignment &bull; original recording time", id="trigger-raw-card") %}
-<div id="trigger-raw-plot"></div>
+<iframe class="plot-frame" src="{{ figure_paths.trigger_timeline_raw.src }}"
+        style="height:{{ figure_paths.trigger_timeline_raw.h }}px"></iframe>
 {% endcall %}
+{% endif %}
 
-<!-- Trigger timeline (after alignment) -->
+{% if figure_paths.trigger_timeline %}
 {% call card("Trigger Timeline (Aligned)", hint="event onsets per subject after alignment &bull; verify sync") %}
-<div id="trigger-plot"></div>
+<iframe class="plot-frame" src="{{ figure_paths.trigger_timeline.src }}"
+        style="height:{{ figure_paths.trigger_timeline.h }}px"></iframe>
 {% endcall %}
+{% endif %}
 
-<!-- HbO / HbR signal overlay (full width, channel selector in title) -->
-<div class="card" style="margin-bottom:0.5rem">
+<!-- Per-channel (signal overlay + PSD + mean epoch comparison) -->
+<div class="card">
   <div class="panel-title">
-    Signal Overlay
-    <span class="panel-hint">HbO (top) &bull; HbR (bottom) &bull; aligned recordings</span>
+    Per-channel
+    <span class="panel-hint">signal overlay (HbO/HbR) &bull; PSD &bull; mean epoch &bull; multi-subject</span>
     <select id="ch-select"></select>
   </div>
-  <div id="trace-plot"></div>
-</div>
-
-<!-- PSD then Epoch -->
-<div class="card" style="margin-bottom:0.5rem">
-  <div class="panel-title">PSD (HbO)
-    <span class="panel-hint" id="psd-hint">select a channel above</span>
-  </div>
-  <div id="psd-plot"></div>
-</div>
-<div class="card" style="margin-bottom:0.5rem">
-  <div class="panel-title">Mean Epoch Comparison
-    <span class="panel-hint" id="epoch-hint">select a channel above &bull; colour = subject &bull; dash = condition</span>
-  </div>
-  <div id="epoch-plot"></div>
+  <iframe id="ch-detail-iframe" class="plot-frame" style="height:1200px"></iframe>
 </div>
 
 <!-- Optode layout: 2D + 3D -->
 <div class="row row-layout" style="margin-bottom:0.5rem">
+  {% if figure_paths.layout_2d %}
   {% call card("Optode Layout (2D)", hint="green = all good &bull; yellow = mixed &bull; gray = all bad") %}
-  <div id="layout-2d-plot"></div>
+  <iframe class="plot-frame" src="{{ figure_paths.layout_2d.src }}"
+          style="height:{{ figure_paths.layout_2d.h }}px"></iframe>
   {% endcall %}
+  {% endif %}
+  {% if figure_paths.layout_3d %}
   {% call card("Channel Positions (3D, fsaverage)") %}
-  <div id="layout-3d-plot"></div>
+  <iframe class="plot-frame" src="{{ figure_paths.layout_3d.src }}"
+          style="height:{{ figure_paths.layout_3d.h }}px"></iframe>
   {% endcall %}
+  {% endif %}
 </div>
 
 <!-- Coherence: bar chart + windowed heatmap -->
 <div class="row row-coh" style="margin-bottom:0.5rem">
+  {% if figure_paths.coherence_bar %}
   {% call card("Inter-subject Coherence (mean)", hint="sorted by mean ISC") %}
-  <div id="coh-bar-plot"></div>
+  <iframe class="plot-frame" src="{{ figure_paths.coherence_bar.src }}"
+          style="height:{{ figure_paths.coherence_bar.h }}px"></iframe>
   {% endcall %}
+  {% endif %}
+  {% if figure_paths.coh_timeseries %}
   {% call card("Windowed ISC (time &times; channel)", hint="sliding window in coherence band") %}
-  <div id="coh-ts-plot"></div>
+  <iframe class="plot-frame" src="{{ figure_paths.coh_timeseries.src }}"
+          style="height:{{ figure_paths.coh_timeseries.h }}px"></iframe>
   {% endcall %}
+  {% endif %}
 </div>
 
-<!-- Channel quality summary -->
+{% if figure_paths.ch_summary %}
 {% call card("Channel Quality Summary (Group)", hint="green = all subjects good &bull; yellow = mixed &bull; red = all bad") %}
-<div id="ch-summary-plot"></div>
+<iframe class="plot-frame" src="{{ figure_paths.ch_summary.src }}"
+        style="height:{{ figure_paths.ch_summary.h }}px"></iframe>
 {% endcall %}
+{% endif %}
 
 <!-- Hyper-level IQM -->
 <div class="card" style="margin-bottom:0.5rem">
@@ -132,16 +137,19 @@ select#ch-select {
 </div>
 
 <script>
-var _FIGS            = {{ figures_json | safe }};
-var _PER_CHANNEL     = {{ per_channel_json | safe }};
-var _ALIGN           = {{ alignment_json | safe }};
-var _CH_PAIRS        = {{ ch_pairs_json | safe }};
-var _IQM             = {{ iqm_json | safe }};
-var _N_SUBS          = {{ subject_ids | length }};
-var _SCI_PER_SUBJECT = {{ sci_per_subject_json | safe }};
+var _ALIGN          = {{ alignment_json | safe }};
+var _CH_PAIRS       = {{ ch_pairs_json | safe }};
+var _IQM            = {{ iqm_json | safe }};
+var _CH_DETAIL_TMPL = {{ ch_detail_template_json | safe }};
 
-var _cfg    = { responsive: true, displayModeBar: false };
-var _cfgBar = { responsive: true, displayModeBar: true };
+window._SCI_PER_SUBJECT = {{ sci_per_subject_json | safe }};
+window._SCI_THRESHOLD   = {{ sci_threshold }};
+window._CH_PAIRS        = _CH_PAIRS;
+window._HYPER_SUBJECTS  = {{ subject_ids | tojson }};
+
+function _pairFname(pair) {
+  return pair.replace(/[^a-zA-Z0-9]/g, "");
+}
 
 // ── alignment table ──────────────────────────────────────────────────────────
 (function() {
@@ -156,44 +164,22 @@ var _cfgBar = { responsive: true, displayModeBar: true };
   });
 })();
 
-// ── channel selector ─────────────────────────────────────────────────────────
+// ── channel selector → swap per-channel iframe src ───────────────────────────
 (function() {
-  var sel = document.getElementById("ch-select");
-  _CH_PAIRS.forEach(function(pair, i) {
+  var sel   = document.getElementById("ch-select");
+  var frame = document.getElementById("ch-detail-iframe");
+  _CH_PAIRS.forEach(function(pair) {
     var opt = document.createElement("option");
-    opt.value = i; opt.textContent = pair;
+    opt.value = pair; opt.textContent = pair;
     sel.appendChild(opt);
   });
-  sel.addEventListener("change", function() { _selectPair(parseInt(this.value)); });
-})();
-
-// ── channel switching ─────────────────────────────────────────────────────────
-function _selectPair(pairIdx) {
-  var pair = _CH_PAIRS[pairIdx];
-
-  // Trace figure: n_ch*n_subs HbO + n_ch*n_subs HbR + n_subs ghost traces
-  if (_FIGS.trace) {
-    var n_per_hb = _CH_PAIRS.length * _N_SUBS;
-    var vis = [];
-    for (var i = 0; i < n_per_hb; i++) vis.push(Math.floor(i / _N_SUBS) === pairIdx);
-    for (var i = 0; i < n_per_hb; i++) vis.push(Math.floor(i / _N_SUBS) === pairIdx);
-    for (var j = 0; j < _N_SUBS; j++) vis.push(true);
-    Plotly.restyle("trace-plot", { visible: vis });
+  function _load(pair) {
+    if (!_CH_DETAIL_TMPL) return;
+    frame.src = _CH_DETAIL_TMPL.replace("{pair}", _pairFname(pair));
   }
-
-  document.getElementById("psd-hint").textContent   = pair;
-  document.getElementById("epoch-hint").textContent = pair + "  ·  colour = subject  ·  dash = condition";
-
-  var ch = _PER_CHANNEL[pair] || {};
-
-  // PSD
-  if (ch.psd)   Plotly.react("psd-plot",   ch.psd.data,   ch.psd.layout,   _cfg);
-  else          Plotly.purge("psd-plot");
-
-  // Epoch
-  if (ch.epoch) Plotly.react("epoch-plot", ch.epoch.data, ch.epoch.layout, _cfg);
-  else          Plotly.purge("epoch-plot");
-}
+  sel.addEventListener("change", function() { _load(this.value); });
+  if (_CH_PAIRS.length > 0) _load(_CH_PAIRS[0]);
+})();
 
 // ── IQM panel ─────────────────────────────────────────────────────────────────
 (function() {
@@ -222,44 +208,6 @@ function _selectPair(pairIdx) {
     li("Aligned duration",    q.aligned_duration_s != null ? q.aligned_duration_s + " s" : "—") +
     li("Max alignment offset",q.max_offset_s       != null ? q.max_offset_s + " s"       : "—");
 })();
-
-// ── initial render ────────────────────────────────────────────────────────────
-window.addEventListener("DOMContentLoaded", function() {
-  if (_FIGS.trigger_timeline_raw)
-    Plotly.newPlot("trigger-raw-plot", _FIGS.trigger_timeline_raw.data,
-                   _FIGS.trigger_timeline_raw.layout, _cfg);
-  else
-    document.getElementById("trigger-raw-card").style.display = "none";
-
-  if (_FIGS.trigger_timeline)
-    Plotly.newPlot("trigger-plot", _FIGS.trigger_timeline.data,
-                   _FIGS.trigger_timeline.layout, _cfg);
-
-  if (_FIGS.trace)
-    Plotly.newPlot("trace-plot", _FIGS.trace.data, _FIGS.trace.layout, _cfgBar);
-
-  if (_FIGS.layout_2d)
-    Plotly.newPlot("layout-2d-plot", _FIGS.layout_2d.data,
-                   _FIGS.layout_2d.layout, _cfg);
-
-  if (_FIGS.layout_3d)
-    Plotly.newPlot("layout-3d-plot", _FIGS.layout_3d.data,
-                   _FIGS.layout_3d.layout, { responsive: true });
-
-  if (_FIGS.coherence_bar)
-    Plotly.newPlot("coh-bar-plot", _FIGS.coherence_bar.data,
-                   _FIGS.coherence_bar.layout, _cfg);
-
-  if (_FIGS.coh_timeseries)
-    Plotly.newPlot("coh-ts-plot", _FIGS.coh_timeseries.data,
-                   _FIGS.coh_timeseries.layout, _cfg);
-
-  if (_FIGS.ch_summary)
-    Plotly.newPlot("ch-summary-plot", _FIGS.ch_summary.data,
-                   _FIGS.ch_summary.layout, _cfg);
-
-  if (_CH_PAIRS.length > 0) _selectPair(0);
-});
 </script>
 
 <!-- Channel Decisions (per subject) — populated by fnirs-rate hyper when served via Flask -->

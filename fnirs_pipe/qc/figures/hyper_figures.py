@@ -274,6 +274,65 @@ def build_signal_overlay(
     return fig
 
 
+def build_signal_overlay_pair(
+    aligned_raws: dict[str, mne.io.Raw],
+    subject_ids: list[str],
+    pair: str,
+    markers_list: list[dict],
+    cond_colors_: dict[str, str],
+) -> go.Figure | None:
+    """Single-channel-pair signal overlay (multi-subject), for iframe per-channel pages."""
+    if not aligned_raws:
+        return None
+
+    fig = make_subplots(
+        rows=2, cols=1, shared_xaxes=True,
+        row_heights=[0.5, 0.5], vertical_spacing=0.06,
+        subplot_titles=["HbO", "HbR"],
+    )
+
+    for row_idx, hb_type in enumerate(["hbo", "hbr"], start=1):
+        ch_name = f"{pair} {hb_type}"
+        for sub_idx, sid in enumerate(subject_ids):
+            raw = aligned_raws.get(sid)
+            if raw is None or ch_name not in raw.ch_names:
+                continue
+            pick = raw.ch_names.index(ch_name)
+            arr, times = _decimate(
+                raw.get_data(picks=[pick]), raw.times, _MAX_TS_PTS
+            )
+            fig.add_trace(go.Scatter(
+                x=times.tolist(), y=(arr[0] * 1e6).tolist(),
+                name=sid, mode="lines",
+                line=dict(color=_SUB_COLORS[sub_idx % len(_SUB_COLORS)], width=1.3),
+                showlegend=(row_idx == 1),
+                legendgroup=sid,
+            ), row=row_idx, col=1)
+
+    mkr_shapes = []
+    for m in markers_list:
+        color = cond_colors_.get(m["description"], "#f39c12")
+        if m["duration"] > 0.1:
+            mkr_shapes.append(dict(
+                type="rect", xref="x", yref="paper",
+                x0=m["onset"], x1=m["onset"] + m["duration"], y0=0, y1=1,
+                fillcolor=_hex_to_rgba(color, 0.08),
+                line=dict(width=0), layer="below",
+            ))
+
+    fig.update_layout(
+        shapes=mkr_shapes,
+        plot_bgcolor="white", paper_bgcolor="white",
+        height=400, margin=dict(l=60, r=15, t=30, b=40),
+        legend=dict(font=dict(size=9)),
+        hovermode="x unified",
+    )
+    fig.update_xaxes(gridcolor="#eeeeee")
+    fig.update_xaxes(title_text="Time (s) [aligned]", row=2, col=1)
+    fig.update_yaxes(title_text="µmol/L", gridcolor="#eeeeee")
+    return fig
+
+
 # ---------------------------------------------------------------------------
 # Figure: per-channel PSD (HbO, multi-subject)
 # ---------------------------------------------------------------------------

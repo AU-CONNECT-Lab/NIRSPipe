@@ -720,8 +720,8 @@ class HyperRatingApp:
         self.html_path     = html_path
         self.output_dir    = output_dir
         self.sci_threshold = sci_threshold
-        stem = html_path.stem  # "group-A_task-tapping_hyper-raw"
-        m = re.match(r"group-(.+?)_task-(.+?)_hyper-raw$", stem)
+        stem = html_path.stem  # "group-A_task-tapping_desc-hyperraw_nirs"
+        m = re.match(r"group-(.+?)_task-(.+?)_desc-hyperraw_nirs$", stem)
         self.group_id  = m.group(1) if m else "unknown"
         self.task      = m.group(2) if m else "unknown"
         self.ratings_path = output_dir / f"{stem}_ratings.json"
