@@ -73,6 +73,14 @@ fnirs-rate /data/derivatives --participant-label 01 02
 
 Opens a local browser UI for rating each subject's QC report section by section. Ratings are saved to `sub-<id>/figures/sub-<id>_ratings.toml` and appended to `group_ratings.jsonl`.
 
+To merge run logs and IQM metrics into a queryable SQLite database:
+
+```bash
+fnirs-log merge /data/derivatives
+```
+
+Each `fnirs-pipe` run writes JSONL event files to `logs/json/`. `fnirs-log merge` consolidates them into `logs/fnirs_pipe.db` (tables: `pipeline_executions`, `runs`, `iqm`, `command_outputs`).
+
 To convert raw scanner files to BIDS format, use the separate conversion tool:
 
 ```bash
@@ -151,14 +159,22 @@ Other:
 ```
 output/
   dataset_description.json
-  logs/fnirs-pipe_TIMESTAMP.log
+  logs/
+    fnirs_pipe.db                       # SQLite DB (after fnirs-log merge)
+    json/                               # JSONL event files written per run
   sub-01/
     sub-01_qc.html                      # per-subject QC report
+    logs/
+      sub-01_TIMESTAMP.toml             # run record (parameters)
+      sub-01_TIMESTAMP_script.py        # reproducible run script
     nirs/
       sub-01_desc-od_nirs.snirf
       sub-01_desc-sci_nirs.snirf
       sub-01_desc-motcorrected_nirs.snirf
       sub-01_desc-preproc_nirs.snirf
+      sub-01_iqm_raw.toml               # IQM at raw checkpoint
+      sub-01_iqm.toml                   # IQM at Beer-Lambert checkpoint
+      sub-01_channel_metrics.csv
       sub-01_desc-denoised_nirs.snirf   # present when --mode denoise or glm
 ```
 
@@ -175,11 +191,11 @@ output/
 
 ```
 fnirs_pipe/
-  cli/          Typer entry points: fnirs-pipe (prep + post) and fnirs-recon (BIDS conversion)
-  pipeline/     prep_pipeline, post_pipeline, glm, denoise
+  cli/          fnirs-pipe, fnirs-recon, fnirs-qc, fnirs-rate, fnirs-gui, fnirs-log
+  pipeline/     prep_pipeline, post_pipeline, glm, denoise, hyperscanning, restingstate
   io/           BIDS layout, snirf read/write, derivatives output
   qc/           HTML report, Plotly figures, quantitative metrics, boilerplate text
-  utils/        logging, run_record
+  utils/        logging, run_record, job_db
 ```
 
 ## Development

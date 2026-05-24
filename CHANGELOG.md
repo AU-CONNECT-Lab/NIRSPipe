@@ -7,6 +7,10 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- `fnirs-log merge` CLI: consolidates JSONL event files into a SQLite database (`logs/fnirs_pipe.db`)
+- `utils/job_db.py`: JSONL writers for pipeline executions, per-subject runs, IQM checkpoints, and stdout/stderr; SQLite merge logic
+- `fnirs-pipe` now logs execution start/end, per-subject run start/end, and IQM scalars (raw + final) as JSONL on every run
+- `PrepResult` now exposes `iqm_raw` and `iqm_final` dicts for downstream use
 - `fnirs-gui` Data Preparation page: SNIRF file picker, editable marker table, IQM summary panel
 - `fnirs-gui` Analysis page (stub)
 

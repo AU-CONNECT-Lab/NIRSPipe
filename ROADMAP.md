@@ -39,7 +39,13 @@ Dash-based `fnirs-gui` application with multi-page routing.
 Data Preparation page (SNIRF loader, marker editor, IQM display) implemented.
 Analysis page is a stub; callbacks and data flow not yet wired.
 
-## v0.8 — GUI Analysis Page & Pipeline Integration `[ ]`
+## v0.8 — Run Logging & IQM Database `[x]`
+
+JSONL-based event logging wired into `fnirs-pipe` run flow.
+`fnirs-log merge` consolidates JSONL files into a SQLite database (`pipeline_executions`, `runs`, `iqm`, `command_outputs`).
+`PrepResult` now returns `iqm_raw` and `iqm_final` for downstream use.
+
+## v0.9 — GUI Analysis Page & Pipeline Integration `[ ]`
 
 Complete the Analysis page in `fnirs-gui`:
 
@@ -47,7 +53,7 @@ Complete the Analysis page in `fnirs-gui`:
 - Display live progress and log output in the interface
 - Show report preview or figure output after run completes
 
-## v0.9 — Group-Level QC Report `[ ]`
+## v0.10 — Group-Level QC Report `[ ]`
 
 Aggregate IQM scalars from per-subject TOML sidecars into a group-level summary.
 
