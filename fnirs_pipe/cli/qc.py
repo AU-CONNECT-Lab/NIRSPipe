@@ -60,6 +60,7 @@ def prep_raw(
                 events_p = snirf_p.parent / (snirf_p.name.replace("_nirs.snirf", "_events.tsv"))
                 run_dict = {
                     "label":       label,
+                    "subject_id":  participant_label,
                     "snirf_path":  str(f),
                     "events_path": str(events_p) if events_p.exists() else None,
                     "session":     actual_ses,
@@ -77,7 +78,7 @@ def prep_raw(
         name_parts = [f"sub-{participant_label}"]
         if ses:  name_parts.append(f"ses-{ses}")
         if task: name_parts.append(f"task-{task}")
-        html_path = output_dir / ("_".join(name_parts) + "_raw.html")
+        html_path = output_dir / ("_".join(name_parts) + "_desc-raw_nirs.html")
         typer.echo(f"Generating raw QC report: {html_path.name} ...")
         try:
             build_prep_raw_report(group_runs, html_path, sci_threshold=sci_threshold)
@@ -153,6 +154,8 @@ def hyper_raw(
             typer.echo(f"[error] task_label {task_label} not found in CSV", err=True)
             raise typer.Exit(1)
 
+    ses = session_label[0] if session_label else None
+
     n_total = len(groups)
     typer.echo(f"Processing {n_total} group session(s)...")
 
@@ -183,6 +186,7 @@ def hyper_raw(
                 raw_raws=raws_haemo,
                 coherence_df=coherence_df,
                 output_dir=output_dir,
+                session=ses,
                 sci_threshold=sci_threshold,
                 coherence_fmin=coherence_fmin,
                 coherence_fmax=coherence_fmax,

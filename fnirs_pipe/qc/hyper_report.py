@@ -33,6 +33,7 @@ def build_hyper_report(
     coherence_df: pd.DataFrame,
     output_dir: Path,
     raw_raws: dict[str, mne.io.Raw] | None = None,
+    session: str | None = None,
     sci_threshold: float = 0.8,
     coherence_fmin: float = 0.01,
     coherence_fmax: float = 0.10,
@@ -47,7 +48,7 @@ def build_hyper_report(
         group_id=group_id, task=task, group=group,
         iqm_data=iqm_data, aligned_raws=aligned_raws, offsets=offsets,
         coherence_df=coherence_df, output_dir=output_dir,
-        raw_raws=raw_raws, sci_threshold=sci_threshold,
+        raw_raws=raw_raws, session=session, sci_threshold=sci_threshold,
         coherence_fmin=coherence_fmin, coherence_fmax=coherence_fmax,
         epoch_tmin=epoch_tmin, epoch_tmax=epoch_tmax,
         coherence_window_s=coherence_window_s, coherence_step_s=coherence_step_s,
@@ -58,7 +59,11 @@ def build_hyper_report(
         for sid in meta["subject_ids"]
     }
 
-    output_path = output_dir / f"group-{group_id}_task-{task}_desc-hyperraw_nirs.html"
+    name_parts = [f"group-{group_id}"]
+    if session:
+        name_parts.append(f"ses-{session}")
+    name_parts.append(f"task-{task}")
+    output_path = output_dir / ("_".join(name_parts) + "_desc-hyperraw_nirs.html")
 
     env  = Environment(loader=FileSystemLoader(str(_TEMPLATE_DIR)), autoescape=False)
     html = env.get_template("hyper_report.html.j2").render(

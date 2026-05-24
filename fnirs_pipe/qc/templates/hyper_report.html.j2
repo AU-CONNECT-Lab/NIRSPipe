@@ -84,7 +84,7 @@ select#ch-select {
     <span class="panel-hint">signal overlay (HbO/HbR) &bull; PSD &bull; mean epoch &bull; multi-subject</span>
     <select id="ch-select"></select>
   </div>
-  <iframe id="ch-detail-iframe" class="plot-frame" style="height:1200px"></iframe>
+  <iframe id="ch-detail-iframe" class="plot-frame" style="height:600px"></iframe>
 </div>
 
 <!-- Optode layout: 2D + 3D -->
@@ -125,6 +125,19 @@ select#ch-select {
         style="height:{{ figure_paths.ch_summary.h }}px"></iframe>
 {% endcall %}
 {% endif %}
+
+<script>
+window.addEventListener("message", function(e) {
+  if (!e.data || e.data.type !== "iframe-resize") return;
+  var frames = document.querySelectorAll("iframe");
+  for (var i = 0; i < frames.length; i++) {
+    if (frames[i].contentWindow === e.source) {
+      frames[i].style.height = e.data.h + "px";
+      return;
+    }
+  }
+});
+</script>
 
 <!-- Hyper-level IQM -->
 <div class="card" style="margin-bottom:0.5rem">

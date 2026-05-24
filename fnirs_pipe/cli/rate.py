@@ -58,7 +58,7 @@ def raw(
         name_parts.append(f"ses-{session_label}")
     if task_label:
         name_parts.append(f"task-{task_label}")
-    html_path = output_dir / ("_".join(name_parts) + "_raw.html")
+    html_path = output_dir / ("_".join(name_parts) + "_desc-raw_nirs.html")
 
     if not html_path.exists():
         typer.echo(f"Error: raw report not found: {html_path}", err=True)
@@ -73,13 +73,18 @@ def hyper(
     output_dir: Annotated[Path, typer.Argument(help="fnirs-pipe output directory.")],
     group_id: Annotated[str, typer.Argument(help="Group ID, e.g. 'A'.")],
     task_label: Annotated[str, typer.Argument(help="Task label, e.g. 'tapping'.")],
+    session_label: Annotated[Optional[str], typer.Option("--session-label", help="Session label.")] = None,
     sci_threshold: Annotated[float, typer.Option("--sci-threshold", help="SCI threshold.")] = 0.8,
     port: Annotated[int, typer.Option("--port", help="Local server port.")] = 5053,
 ) -> None:
     """Launch interactive hyperscanning QC viewer with section ratings and channel decisions."""
     from fnirs_pipe.qc.rating.app import HyperRatingApp
 
-    html_path = output_dir / f"group-{group_id}_task-{task_label}_desc-hyperraw_nirs.html"
+    name_parts = [f"group-{group_id}"]
+    if session_label:
+        name_parts.append(f"ses-{session_label}")
+    name_parts.append(f"task-{task_label}")
+    html_path = output_dir / ("_".join(name_parts) + "_desc-hyperraw_nirs.html")
     if not html_path.exists():
         typer.echo(f"Error: hyper report not found: {html_path}", err=True)
         raise typer.Exit(1)

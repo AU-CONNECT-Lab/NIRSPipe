@@ -477,11 +477,14 @@ class RawRatingApp:
 
     def __init__(self, html_path: Path, output_dir: Path, sci_threshold: float = 0.8):
         self.html_path      = html_path
-        self.stem           = html_path.stem          # e.g. "sub-01_task-rest_raw"
+        self.stem           = html_path.stem          # e.g. "sub-01_task-rest_desc-raw_nirs"
         self.output_dir     = output_dir
         self.sci_threshold  = sci_threshold
-        self.ratings_path   = output_dir / f"{self.stem}_ratings.json"
-        self.decisions_path = output_dir / f"{self.stem}_channel_decisions.json"
+        # Strip BIDS suffix so sidecar JSON keeps the legacy "_raw_*.json" naming
+        # (also matches the hard-coded paths in hyper_align_callbacks / hyper rating app).
+        bids_prefix = self.stem.removesuffix("_desc-raw_nirs")
+        self.ratings_path   = output_dir / f"{bids_prefix}_raw_ratings.json"
+        self.decisions_path = output_dir / f"{bids_prefix}_raw_channel_decisions.json"
         self.app = Flask(__name__)
         self._setup_routes()
 
@@ -720,11 +723,14 @@ class HyperRatingApp:
         self.html_path     = html_path
         self.output_dir    = output_dir
         self.sci_threshold = sci_threshold
-        stem = html_path.stem  # "group-A_task-tapping_desc-hyperraw_nirs"
-        m = re.match(r"group-(.+?)_task-(.+?)_desc-hyperraw_nirs$", stem)
+        stem = html_path.stem  # "group-A[_ses-01]_task-tapping_desc-hyperraw_nirs"
+        m = re.match(r"group-([^_]+)(?:_ses-([^_]+))?_task-(.+?)_desc-hyperraw_nirs$", stem)
         self.group_id  = m.group(1) if m else "unknown"
-        self.task      = m.group(2) if m else "unknown"
-        self.ratings_path = output_dir / f"{stem}_ratings.json"
+        self.session   = m.group(2) if m else None
+        self.task      = m.group(3) if m else "unknown"
+        # Strip BIDS suffix so ratings JSON keeps the legacy "_hyper-raw_*.json" naming.
+        bids_prefix = stem.removesuffix("_desc-hyperraw_nirs")
+        self.ratings_path = output_dir / f"{bids_prefix}_hyper-raw_ratings.json"
         self.app = Flask(__name__)
         self._setup_routes()
 

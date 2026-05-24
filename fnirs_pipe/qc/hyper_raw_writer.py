@@ -40,6 +40,7 @@ def _process_hyper_raw_group(
     coherence_df: pd.DataFrame,
     output_dir: Path,
     raw_raws: dict[str, mne.io.Raw] | None = None,
+    session: str | None = None,
     sci_threshold: float = 0.8,
     coherence_fmin: float = 0.01,
     coherence_fmax: float = 0.10,
@@ -51,10 +52,17 @@ def _process_hyper_raw_group(
     """Compute hyper raw figures, save each as a standalone HTML, write IQM JSON.
     Returns the metadata dict the main viewer HTML needs."""
 
-    label    = f"group-{group_id}_task-{task}"
-    data_dir = output_dir / f"{label}_desc-hyperraw_nirs"
-    fig_dir  = data_dir / "figures"
+    label_parts = [f"group-{group_id}"]
+    if session:
+        label_parts.append(f"ses-{session}")
+    label_parts.append(f"task-{task}")
+    label    = "_".join(label_parts)
+
+    group_dir = output_dir / f"group-{group_id}"
+    fig_dir   = group_dir / "figures"
+    iqm_dir   = group_dir / (f"ses-{session}" if session else "") / "nirs"
     fig_dir.mkdir(parents=True, exist_ok=True)
+    iqm_dir.mkdir(parents=True, exist_ok=True)
 
     subject_ids  = [e.subject_id for e in group]
     first_raw    = aligned_raws.get(subject_ids[0]) if subject_ids else None
@@ -90,7 +98,7 @@ def _process_hyper_raw_group(
                 return
             fname = f"{label}_desc-{desc}_nirs.html"
             h = _save_figure_html(fig, fig_dir / fname)
-            figure_paths[name] = {"src": f"{data_dir.name}/figures/{fname}", "h": h}
+            figure_paths[name] = {"src": f"{group_dir.name}/figures/{fname}", "h": h}
         except Exception as exc:
             logger.warning("%s figure failed: %s", name, exc)
 
@@ -137,13 +145,13 @@ def _process_hyper_raw_group(
 
     if ch_pairs:
         figure_paths["ch_detail_template"] = (
-            f"{data_dir.name}/figures/{label}_desc-ch{{pair}}_nirs.html"
+            f"{group_dir.name}/figures/{label}_desc-ch{{pair}}_nirs.html"
         )
 
     iqm = compute_hyper_iqm(
         iqm_data, coherence_df, aligned_raws, offsets, subject_ids, sci_threshold,
     )
-    iqm_path = data_dir / f"{label}_desc-iqm_nirs.json"
+    iqm_path = iqm_dir / f"{label}_desc-iqm_nirs.json"
     iqm_path.write_text(json.dumps(iqm, indent=2, default=str), encoding="utf-8")
     logger.info("Hyper IQM JSON → %s", iqm_path)
 
@@ -153,5 +161,5 @@ def _process_hyper_raw_group(
         "iqm":           iqm,
         "ch_pairs":      ch_pairs,
         "figure_paths":  figure_paths,
-        "data_subdir":   data_dir.name,
+        "data_subdir":   group_dir.name,
     }

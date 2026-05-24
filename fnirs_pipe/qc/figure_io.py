@@ -7,7 +7,16 @@ from pathlib import Path
 
 PLOTLY_CDN_URL = "https://cdn.plot.ly/plotly-3.5.0.min.js"
 
-_IFRAME_CSS = "html,body{margin:0;padding:0;overflow:hidden;width:100%;height:100%;}"
+_IFRAME_CSS = "html,body{margin:0;padding:0;width:100%;}"
+
+_RESIZE_JS = (
+    "<script>(function(){"
+    "function _h(){parent.postMessage({type:'iframe-resize',h:document.body.scrollHeight},'*');}"
+    "window.addEventListener('load',_h);"
+    "setTimeout(_h,300);"
+    "try{new ResizeObserver(_h).observe(document.body);}catch(e){}"
+    "})();</script>"
+)
 
 
 def _figure_height(fig, default: int = 500) -> int:
@@ -32,7 +41,7 @@ def _save_figure_html(fig, path: Path) -> int:
     )
     html = html.replace(
         "<head>",
-        f'<head>\n<style>{_IFRAME_CSS}</style>\n<script src="{PLOTLY_CDN_URL}"></script>',
+        f'<head>\n<style>{_IFRAME_CSS}</style>\n<script src="{PLOTLY_CDN_URL}"></script>\n{_RESIZE_JS}',
         1,
     )
     path.write_text(html, encoding="utf-8")
@@ -46,6 +55,7 @@ def _save_multi_fig_html(figs: list, path: Path) -> int:
         '<meta charset="UTF-8">'
         f'<script src="{PLOTLY_CDN_URL}"></script>'
         f'<style>*{{box-sizing:border-box;}}{_IFRAME_CSS}.pfig{{margin-bottom:2px;}}</style>'
+        f'{_RESIZE_JS}'
     )
     parts = [f"<!DOCTYPE html><html><head>{head}</head><body>"]
     total_h = 0

@@ -304,9 +304,20 @@ function _setIframeSrc(divId, src, h) {
     div.innerHTML = "";
     div.appendChild(iframe);
   }
-  if (h) iframe.height = h;
+  if (h) iframe.style.height = h + "px";
   iframe.src = src;
 }
+
+window.addEventListener("message", function(e) {
+  if (!e.data || e.data.type !== "iframe-resize") return;
+  var frames = document.querySelectorAll("iframe");
+  for (var i = 0; i < frames.length; i++) {
+    if (frames[i].contentWindow === e.source) {
+      frames[i].style.height = e.data.h + "px";
+      return;
+    }
+  }
+});
 
 function hexToRgba(hex, alpha) {
   var r = parseInt(hex.slice(1,3), 16);

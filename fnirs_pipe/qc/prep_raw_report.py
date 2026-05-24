@@ -28,7 +28,7 @@ _EPOCH_TMAX   = 25.0
 def _process_run(
     run: dict,
     sci_threshold: float,
-    run_dir: Path,
+    sub_dir: Path,
 ) -> dict:
     """Compute all data, save figure HTMLs + IQM JSON. Returns inline dict for HTML."""
     from fnirs_pipe.qc.figures import (
@@ -46,8 +46,11 @@ def _process_run(
     from fnirs_pipe.qc.quantitative_metrics import compute_raw_iqm
 
     label   = run["label"]
-    fig_dir = run_dir / "figures"
+    session = run.get("session")
+    fig_dir = sub_dir / "figures"
+    iqm_dir = sub_dir / (f"ses-{session}" if session else "") / "nirs"
     fig_dir.mkdir(parents=True, exist_ok=True)
+    iqm_dir.mkdir(parents=True, exist_ok=True)
 
     raw = mne.io.read_raw_snirf(run["snirf_path"], preload=True, verbose=False)
 
@@ -132,7 +135,7 @@ def _process_run(
         carpet_b64 = carpet_gvtd_figure(raw, raw.ch_names)
         png_name   = f"{label}_desc-carpet_nirs.png"
         (fig_dir / png_name).write_bytes(base64.b64decode(carpet_b64))
-        figure_paths["carpet"] = {"src": f"{label}/figures/{png_name}"}
+        figure_paths["carpet"] = {"src": f"{sub_dir.name}/figures/{png_name}"}
     except Exception as exc:
         logger.warning("carpet_gvtd_figure failed: %s", exc)
 
@@ -146,7 +149,7 @@ def _process_run(
         )
         fname = f"{label}_desc-scipsp_nirs.html"
         h     = _save_figure_html(fig, fig_dir / fname)
-        figure_paths["sci_psp"] = {"src": f"{label}/figures/{fname}", "h": h}
+        figure_paths["sci_psp"] = {"src": f"{sub_dir.name}/figures/{fname}", "h": h}
         sci_psp_inline = {"figure": fig.to_dict()}
     except Exception as exc:
         logger.warning("sci_psp_figure failed: %s", exc)
@@ -157,7 +160,7 @@ def _process_run(
         if fig:
             fname = f"{label}_desc-psd_nirs.html"
             h     = _save_figure_html(fig, fig_dir / fname)
-            figure_paths["psd"] = {"src": f"{label}/figures/{fname}", "h": h}
+            figure_paths["psd"] = {"src": f"{sub_dir.name}/figures/{fname}", "h": h}
     except Exception as exc:
         logger.warning("psd_mean_figure failed: %s", exc)
 
@@ -168,7 +171,7 @@ def _process_run(
         if fig:
             fname = f"{label}_desc-trigger_nirs.html"
             h     = _save_figure_html(fig, fig_dir / fname)
-            figure_paths["trigger"] = {"src": f"{label}/figures/{fname}", "h": h}
+            figure_paths["trigger"] = {"src": f"{sub_dir.name}/figures/{fname}", "h": h}
             trigger_timeline_inline = {"figure": fig.to_dict()}
     except Exception as exc:
         logger.warning("trigger_timeline_single failed: %s", exc)
@@ -188,7 +191,7 @@ def _process_run(
         )
         fname = f"{label}_desc-chsummary_nirs.html"
         h     = _save_figure_html(fig, fig_dir / fname)
-        figure_paths["ch_summary"] = {"src": f"{label}/figures/{fname}", "h": h}
+        figure_paths["ch_summary"] = {"src": f"{sub_dir.name}/figures/{fname}", "h": h}
         ch_summary_inline = {"figure": fig.to_dict()}
     except Exception as exc:
         logger.warning("channel_quality_heatmap failed: %s", exc)
@@ -201,7 +204,7 @@ def _process_run(
             if fig:
                 fname = f"{label}_desc-evokedtopo_nirs.html"
                 h     = _save_figure_html(fig, fig_dir / fname)
-                figure_paths["evoked_topo"] = {"src": f"{label}/figures/{fname}", "h": h}
+                figure_paths["evoked_topo"] = {"src": f"{sub_dir.name}/figures/{fname}", "h": h}
                 evoked_topo_inline = {"figure": fig.to_dict()}
         except Exception as exc:
             logger.warning("evoked_topo_figure failed: %s", exc)
@@ -223,11 +226,11 @@ def _process_run(
                 logger.warning("channel_figure %s failed: %s", pair, exc)
         if channel_pairs:
             figure_paths["ch_detail_template"] = (
-                f"{label}/figures/{label}_desc-ch{{pair}}_nirs.html"
+                f"{sub_dir.name}/figures/{label}_desc-ch{{pair}}_nirs.html"
             )
 
     # ── file: IQM JSON ─────────────────────────────────────────────────────────
-    iqm_path = run_dir / f"{label}_desc-iqm_nirs.json"
+    iqm_path = iqm_dir / f"{label}_desc-iqm_nirs.json"
     iqm_path.write_text(json.dumps(iqm, indent=2, default=str), encoding="utf-8")
     logger.info("IQM JSON → %s", iqm_path)
 
@@ -259,10 +262,10 @@ def build_prep_raw_report(
 
     for i, run in enumerate(runs):
         label   = run["label"]
-        run_dir = output_dir / label
+        sub_dir = output_dir / f"sub-{run['subject_id']}"
         logger.info("[%d/%d] processing %s ...", i + 1, len(runs), label)
         try:
-            d = _process_run(run, sci_threshold, run_dir)
+            d = _process_run(run, sci_threshold, sub_dir)
             static_data.append(d)
         except Exception as exc:
             logger.error("Failed to process run %s: %s", label, exc)
