@@ -14,6 +14,8 @@ def compute_alff(raw: mne.io.Raw, low_pass: float, high_pass: float) -> pd.DataF
     """Compute ALFF and fALFF per channel.
 
     Input should be the denoised (errts) time series, already bandpass-filtered.
+
+    TODO: revalidate computation of ALFF and fALFF
     """
     data = raw.get_data()  # (n_channels, n_times)
     fs = raw.info["sfreq"]

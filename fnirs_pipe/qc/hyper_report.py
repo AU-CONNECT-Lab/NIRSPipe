@@ -30,6 +30,7 @@ from fnirs_pipe.utils.logging import get_logger
 logger = get_logger("qc.hyper_report")
 
 _TEMPLATE_DIR = Path(__file__).parent / "templates"
+_BASE_CSS     = (_TEMPLATE_DIR / "_base.css").read_text(encoding="utf-8")
 
 
 def build_hyper_report(
@@ -132,6 +133,7 @@ def build_hyper_report(
 
     env  = Environment(loader=FileSystemLoader(str(_TEMPLATE_DIR)), autoescape=False)
     html = env.get_template("hyper_report.html.j2").render(
+        base_css=_BASE_CSS,
         group_id=group_id,
         task=task,
         subject_ids=subject_ids,
@@ -256,6 +258,7 @@ def build_hyper_post_report(
 
     env  = Environment(loader=FileSystemLoader(str(_TEMPLATE_DIR)), autoescape=False)
     html = env.get_template("hyper_post_report.html.j2").render(
+        base_css=_BASE_CSS,
         group_id=group_id,
         task=task,
         subject_ids=subject_ids,

@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import dash_bootstrap_components as dbc
-from dash import Input, Output, State, callback, no_update
+from dash import ALL, Input, Output, State, callback, ctx, html, no_update
 
 # aligned_raws not JSON-serializable — keep in process memory
 _ALIGNED_CACHE: dict[str, dict] = {}
@@ -296,3 +297,244 @@ def export_snirfs(n_clicks, bids_dir, deriv_dir, group_csv):
         color="success" if not errors else "warning",
         className="mb-0 py-2",
     )
+
+
+# Channel Decisions
+
+_HA_CD_STATES = ["unrated", "good", "bad"]
+_HA_CD_COLOR  = {"unrated": "secondary", "good": "success", "bad": "danger"}
+_HA_CD_LABEL  = {"unrated": "—", "good": "good", "bad": "bad"}
+_HA_RUN_KEY   = "_hyper"
+
+
+def _ha_cd_btn(sid: str, pair: str, state: str) -> dbc.Button:
+    return dbc.Button(
+        _HA_CD_LABEL[state],
+        id={"type": "ha-cd-btn", "index": f"{sid}|{pair}"},
+        color=_HA_CD_COLOR[state],
+        size="sm",
+        n_clicks=0,
+        style={"minWidth": "54px", "fontSize": "0.75rem", "padding": "1px 6px"},
+    )
+
+
+def _ha_decisions_path(deriv_dir: str, sid: str, task: str) -> Path:
+    sub_label = sid.removeprefix("sub-")
+    return Path(deriv_dir) / f"sub-{sub_label}_task-{task}_raw_channel_decisions.json"
+
+
+def _read_ha_decisions(deriv_dir: str, subject_ids: list, task: str) -> dict:
+    decisions: dict = {}
+    for sid in subject_ids:
+        path = _ha_decisions_path(deriv_dir, sid, task)
+        if path.exists():
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+                decisions[sid] = data.get(_HA_RUN_KEY, {})
+            except Exception:
+                decisions[sid] = {}
+        else:
+            decisions[sid] = {}
+    return decisions
+
+
+def _write_ha_decisions(deriv_dir: str, task: str, decisions: dict) -> None:
+    for sid, ch_map in decisions.items():
+        path = _ha_decisions_path(deriv_dir, sid, task)
+        existing: dict = {}
+        if path.exists():
+            try:
+                existing = json.loads(path.read_text(encoding="utf-8"))
+            except Exception:
+                pass
+        existing[_HA_RUN_KEY] = ch_map
+        path.write_text(json.dumps(existing, indent=2), encoding="utf-8")
+
+
+def _compute_sci_from_cw(raws: dict, subject_ids: list) -> dict:
+    try:
+        import mne_nirs
+    except ImportError:
+        return {sid: {} for sid in subject_ids}
+
+    sci_by_sid: dict = {}
+    for sid in subject_ids:
+        raw = raws.get(sid)
+        if raw is None:
+            sci_by_sid[sid] = {}
+            continue
+        try:
+            sci_arr = mne_nirs.signal_enhancement.scalp_coupling_index(raw)
+            pair_sci: dict = {}
+            for i, ch in enumerate(raw.ch_names):
+                pair = ch.rsplit(" ", 1)[0] if " " in ch else ch
+                pair_sci.setdefault(pair, []).append(float(sci_arr[i]))
+            sci_by_sid[sid] = {p: round(sum(v) / len(v), 3) for p, v in pair_sci.items()}
+        except Exception:
+            sci_by_sid[sid] = {}
+    return sci_by_sid
+
+
+def _build_ha_decisions_table(
+    subject_ids: list,
+    ch_pairs: list,
+    sci_by_sid: dict,
+    decisions: dict,
+    sci_thresh: float = 0.8,
+) -> html.Div:
+    header_cells = [html.Th("Channel", style={"fontSize": "0.78rem"})]
+    for sid in subject_ids:
+        header_cells.append(
+            html.Th(sid, colSpan=2,
+                    style={"fontSize": "0.78rem", "textAlign": "center"})
+        )
+    sub_header = [html.Th("")]
+    for _ in subject_ids:
+        sub_header += [
+            html.Th("SCI",      style={"fontSize": "0.72rem", "color": "#888"}),
+            html.Th("Decision", style={"fontSize": "0.72rem", "color": "#888"}),
+        ]
+
+    rows = []
+    for pair in ch_pairs:
+        cells = [html.Td(pair, style={"fontSize": "0.78rem", "whiteSpace": "nowrap"})]
+        for sid in subject_ids:
+            sci_val = sci_by_sid.get(sid, {}).get(pair)
+            sci_style: dict = {"fontSize": "0.75rem", "textAlign": "center"}
+            if sci_val is not None and sci_val < sci_thresh:
+                sci_style["color"] = "#dc3545"
+            sci_text = f"{sci_val:.2f}" if sci_val is not None else "—"
+            state_key = f"{pair} hbo"
+            state = decisions.get(sid, {}).get(state_key, "unrated")
+            if state not in _HA_CD_STATES:
+                state = "unrated"
+            cells += [
+                html.Td(sci_text, style=sci_style),
+                html.Td(_ha_cd_btn(sid, pair, state), style={"textAlign": "center"}),
+            ]
+        rows.append(html.Tr(cells))
+
+    table = html.Table(
+        [
+            html.Thead([html.Tr(header_cells), html.Tr(sub_header)]),
+            html.Tbody(rows),
+        ],
+        style={"width": "100%", "borderCollapse": "collapse", "fontSize": "0.78rem"},
+    )
+    return html.Div(table, style={"overflowX": "auto", "maxHeight": "420px",
+                                  "overflowY": "auto"})
+
+
+def _ha_ch_pairs_from_haemo(aligned_raws: dict, subject_ids: list) -> list:
+    import mne
+    aligned_haemo = _to_haemo(aligned_raws)
+    ch_pairs: list = []
+    ref = next((aligned_haemo[s] for s in subject_ids if s in aligned_haemo), None)
+    if ref:
+        for pick in mne.pick_types(ref.info, fnirs="hbo"):
+            ch = ref.ch_names[pick]
+            pair = ch.rsplit(" ", 1)[0] if " " in ch else ch
+            if pair not in ch_pairs:
+                ch_pairs.append(pair)
+    return ch_pairs
+
+
+@callback(
+    Output("ha-decisions-table",  "children"),
+    Output("ha-decisions-status", "children"),
+    Input("ha-group-select",      "value"),
+    State("ha-bids-dir",          "value"),
+    State("ha-group-csv",         "value"),
+    State("ha-deriv-dir",         "value"),
+    prevent_initial_call=True,
+)
+def load_ha_decisions(group_val, bids_dir, group_csv, deriv_dir):
+    if not group_val or not bids_dir or not group_csv:
+        return no_update, no_update
+
+    key   = _cache_key(bids_dir, group_csv)
+    cache = _ALIGNED_CACHE.get(key)
+    if not cache:
+        return no_update, no_update
+
+    parts = group_val.split("|", 1)
+    if len(parts) != 2:
+        return no_update, no_update
+    group_id, task = parts[0], parts[1]
+
+    info = cache["groups"].get((group_id, task))
+    if not info:
+        return no_update, no_update
+
+    subject_ids  = info["subject_ids"]
+    aligned_raws = info["aligned_raws"]
+
+    ch_pairs   = _ha_ch_pairs_from_haemo(aligned_raws, subject_ids)
+    sci_by_sid = _compute_sci_from_cw(aligned_raws, subject_ids)
+    decisions  = (
+        _read_ha_decisions(deriv_dir, subject_ids, task)
+        if deriv_dir else {s: {} for s in subject_ids}
+    )
+
+    table  = _build_ha_decisions_table(subject_ids, ch_pairs, sci_by_sid, decisions)
+    status = f"{len(ch_pairs)} channel pair(s) · {len(subject_ids)} subject(s)"
+    return table, status
+
+
+@callback(
+    Output("ha-decisions-table",  "children", allow_duplicate=True),
+    Output("ha-decisions-status", "children", allow_duplicate=True),
+    Input({"type": "ha-cd-btn", "index": ALL}, "n_clicks"),
+    State("ha-group-select", "value"),
+    State("ha-bids-dir",     "value"),
+    State("ha-group-csv",    "value"),
+    State("ha-deriv-dir",    "value"),
+    prevent_initial_call=True,
+)
+def click_ha_cd(n_clicks_list, group_val, bids_dir, group_csv, deriv_dir):
+    if not ctx.triggered_id or not isinstance(ctx.triggered_id, dict):
+        return no_update, no_update
+    if not any(n for n in n_clicks_list if n):
+        return no_update, no_update
+
+    index = ctx.triggered_id["index"]
+    iparts = index.split("|", 1)
+    if len(iparts) != 2:
+        return no_update, no_update
+    sid, pair = iparts[0], iparts[1]
+
+    if not group_val or not bids_dir or not group_csv or not deriv_dir:
+        return no_update, no_update
+
+    key   = _cache_key(bids_dir, group_csv)
+    cache = _ALIGNED_CACHE.get(key)
+    if not cache:
+        return no_update, no_update
+
+    gparts = group_val.split("|", 1)
+    if len(gparts) != 2:
+        return no_update, no_update
+    group_id, task = gparts[0], gparts[1]
+
+    info = cache["groups"].get((group_id, task))
+    if not info:
+        return no_update, no_update
+
+    subject_ids  = info["subject_ids"]
+    aligned_raws = info["aligned_raws"]
+
+    decisions  = _read_ha_decisions(deriv_dir, subject_ids, task)
+    state_key  = f"{pair} hbo"
+    cur_state  = decisions.get(sid, {}).get(state_key, "unrated")
+    if cur_state not in _HA_CD_STATES:
+        cur_state = "unrated"
+    next_state = _HA_CD_STATES[(_HA_CD_STATES.index(cur_state) + 1) % len(_HA_CD_STATES)]
+
+    decisions.setdefault(sid, {})[state_key] = next_state
+    _write_ha_decisions(deriv_dir, task, decisions)
+
+    ch_pairs   = _ha_ch_pairs_from_haemo(aligned_raws, subject_ids)
+    sci_by_sid = _compute_sci_from_cw(aligned_raws, subject_ids)
+    table  = _build_ha_decisions_table(subject_ids, ch_pairs, sci_by_sid, decisions)
+    status = f"Saved · {len(ch_pairs)} channel pair(s)"
+    return table, status

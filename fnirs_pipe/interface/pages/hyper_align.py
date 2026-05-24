@@ -25,6 +25,7 @@ def _card(title, *children):
 
 
 layout = dbc.Container([
+    dcc.Store(id="ha-decisions-store", storage_type="memory"),
     dbc.Row([dbc.Col([html.H3("Hyperscanning Align"), html.Hr()])]),
 
     _card("Data Source",
@@ -84,6 +85,15 @@ layout = dbc.Container([
             html.Small("HbO per subject (µmol/L) · first channel shown by default",
                        className="text-muted d-block mb-1"),
             dcc.Graph(id="ha-signal-overlay"),
+        ),
+
+        _card("Channel Decisions",
+            html.Small("per-subject good/bad decisions · click chip to cycle · auto-saves",
+                       className="text-muted d-block mb-2"),
+            html.Div(id="ha-decisions-table",
+                     children=html.Small("Select a group to rate channels.",
+                                         className="text-muted")),
+            html.Div(id="ha-decisions-status", className="mt-1 small text-muted"),
         ),
 
         _card("Export",

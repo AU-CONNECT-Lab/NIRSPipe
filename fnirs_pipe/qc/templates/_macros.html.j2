@@ -1,0 +1,15 @@
+{# Shared Jinja macros for QC report templates.
+   Usage: {% from "_macros.html.j2" import card %} #}
+
+{# Simple card with title bar. Use {% call card(...) %}body{% endcall %}.
+   For panels needing extra controls (e.g. a <select>) inside the title row,
+   keep the inline HTML version instead of using this macro. #}
+{% macro card(title, hint=None, id=None) -%}
+<div class="card"{% if id %} id="{{ id }}"{% endif %}>
+  <div class="panel-title">
+    {{ title }}
+    {%- if hint %} <span class="panel-hint">{{ hint }}</span>{% endif %}
+  </div>
+  {{ caller() }}
+</div>
+{%- endmacro %}

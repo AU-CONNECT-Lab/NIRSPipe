@@ -114,6 +114,19 @@
     .tab-content.active { display: block; }
     .tab-content pre { border: none; border-radius: 0 4px 4px 4px; margin: 0; }
 
+    /* ---- boilerplate (Methods) HTML rendering ---- */
+    .boilerplate-html {
+      font-family: "Bitstream Charter", Georgia, Times, serif;
+      background: #f8f9fa; padding: 1rem 1.25rem;
+      border-radius: 0 4px 4px 4px;
+      font-size: 0.9rem; line-height: 1.55;
+    }
+    .boilerplate-para { margin: 0 0 0.6rem; }
+    .boilerplate-cite { color: #555; }
+    .boilerplate-refs-title { font-size: 0.95rem; margin: 0.8rem 0 0.3rem; }
+    .boilerplate-refs { font-size: 0.82rem; padding-left: 1.3rem; }
+    .boilerplate-refs li { margin-bottom: 0.3rem; }
+
     /* ---- plotly figures ---- */
     .plotly-fig { margin-top: 0.5rem; overflow: hidden; }
 
@@ -568,18 +581,20 @@
 <!-- ============================================================= methods -->
 <h2 id="Methods">Methods</h2>
 <p style="font-size:0.85rem; color:#666;">
-  Auto-generated skeleton. Replace <code>[PLACEHOLDER]</code> with your own prose
-  and <code>(Author et al., Year)</code> with real citations.
+  Auto-generated from the pipeline configuration. Citations follow APA 7;
+  switch tabs to copy as Markdown or LaTeX.
 </p>
 
 <div class="tab-bar">
-  <button class="tab-btn active" onclick="showTab(event,'tab-plain')">Plain text</button>
+  <button class="tab-btn active" onclick="showTab(event,'tab-rendered')">Rendered</button>
+  <button class="tab-btn" onclick="showTab(event,'tab-plain')">Plain text</button>
   <button class="tab-btn" onclick="showTab(event,'tab-md')">Markdown</button>
   <button class="tab-btn" onclick="showTab(event,'tab-latex')">LaTeX</button>
 </div>
-<div id="tab-plain"  class="tab-content active"><pre>{{ methods.plain }}</pre></div>
-<div id="tab-md"     class="tab-content"><pre>{{ methods.markdown }}</pre></div>
-<div id="tab-latex"  class="tab-content"><pre>{{ methods.latex }}</pre></div>
+<div id="tab-rendered" class="tab-content active"><div class="boilerplate-html">{{ methods.html }}</div></div>
+<div id="tab-plain"    class="tab-content"><pre>{{ methods.plain }}</pre></div>
+<div id="tab-md"       class="tab-content"><pre>{{ methods.markdown }}</pre></div>
+<div id="tab-latex"    class="tab-content"><pre>{{ methods.latex }}</pre></div>
 
 <!-- ========================================================== versions -->
 <h2>Software Versions</h2>

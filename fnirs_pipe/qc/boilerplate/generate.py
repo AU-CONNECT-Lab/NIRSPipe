@@ -80,7 +80,10 @@ def _fmt_citations(keys: list[str], refs: dict, fmt: str) -> str:
     if fmt == "latex":
         return r"\cite{" + ",".join(keys) + "}"
     parts = [_cite_plain(refs[k]) if k in refs else k for k in keys]
-    return "(" + "; ".join(parts) + ")"
+    text = "(" + "; ".join(parts) + ")"
+    if fmt == "html":
+        return f'<span class="boilerplate-cite">{text}</span>'
+    return text
 
 
 # ---- Resource loading ----
@@ -166,6 +169,18 @@ def _collect_prose(active: list[tuple[str, dict]], steps: dict, refs: dict, fmt:
     return out
 
 
+def _with_connectives(sentences: list[str]) -> list[str]:
+    """Prepend 'Finally, ' to the last sentence to soften paragraph end."""
+    if len(sentences) <= 1:
+        return sentences
+    last = sentences[-1]
+    if last and last[0].isupper():
+        last = "Finally, " + last[0].lower() + last[1:]
+    else:
+        last = "Finally, " + last
+    return sentences[:-1] + [last]
+
+
 def _apa_ref(entry: dict) -> str:
     """Format one BibTeX entry as an APA 7 reference string."""
     authors  = _apa_authors(entry.get("author", ""))
@@ -193,6 +208,19 @@ def _apa_ref(entry: dict) -> str:
     if doi:
         line += f" https://doi.org/{doi}"
     return line
+
+
+def _build_html(header_text: str, refs: dict, active: list[tuple[str, dict]], steps: dict) -> str:
+    """Render Methods as inline HTML fragment for embedding in the report."""
+    prose_html = _with_connectives(_collect_prose(active, steps, refs, "html"))
+    paragraph = " ".join([header_text] + prose_html)
+    out = [f'<p class="boilerplate-para">{paragraph}</p>']
+    reflist = _build_reflist(active, steps, refs)
+    if reflist:
+        items = "".join(f"<li>{line}</li>" for line in reflist.splitlines())
+        out.append('<h4 class="boilerplate-refs-title">References</h4>')
+        out.append(f'<ol class="boilerplate-refs">{items}</ol>')
+    return "\n".join(out)
 
 
 def _build_reflist(active: list[tuple[str, dict]], steps: dict, refs: dict) -> str:
@@ -223,9 +251,9 @@ def generate_methods_text(
     ver = (versions or {}).get("fnirs-pipe", "unknown")
     active = _active_steps(prep_config, post_config, mode)
 
-    prose_plain = _collect_prose(active, steps, refs, "plain")
-    prose_md    = _collect_prose(active, steps, refs, "markdown")
-    prose_latex = _collect_prose(active, steps, refs, "latex")
+    prose_plain = _with_connectives(_collect_prose(active, steps, refs, "plain"))
+    prose_md    = _with_connectives(_collect_prose(active, steps, refs, "markdown"))
+    prose_latex = _with_connectives(_collect_prose(active, steps, refs, "latex"))
     reflist     = _build_reflist(active, steps, refs)
 
     header = steps.get("header", {})
@@ -233,27 +261,27 @@ def generate_methods_text(
     header_md    = header.get("markdown", header_plain).format(ver=ver)
     header_latex = header.get("latex", header_plain).format(ver=ver)
 
-    plain = header_plain + "\n\n" + "\n\n".join(prose_plain)
+    para_plain = " ".join([header_plain] + prose_plain)
+    plain = para_plain
     if reflist:
         plain += "\n\nReferences\n\n" + reflist
 
-    md_items = "\n".join(f"- {s}" for s in prose_md)
+    para_md = " ".join([header_md] + prose_md)
     md_refs = ""
     if reflist:
         md_refs = "\n\n### References\n\n" + "\n\n".join(f"- {l}" for l in reflist.splitlines())
-    markdown = f"## Methods\n\n{header_md}\n\n{md_items}{md_refs}"
+    markdown = f"## Methods\n\n{para_md}{md_refs}"
 
-    latex_items = "\n".join(f"  \\item {s}" for s in prose_latex)
+    para_latex = " ".join([header_latex] + prose_latex)
     latex = (
         "\\subsection{fNIRS Preprocessing}\n"
-        f"{header_latex}\n\n"
-        "\\begin{itemize}\n"
-        f"{latex_items}\n"
-        "\\end{itemize}\n"
+        f"{para_latex}\n"
         "% BibTeX keys: see fnirs_pipe/qc/boilerplate/references.bib"
     )
 
-    return {"plain": plain, "markdown": markdown, "latex": latex}
+    html = _build_html(header_plain, refs, active, steps)
+
+    return {"plain": plain, "markdown": markdown, "latex": latex, "html": html}
 
 
 def collect_software_versions() -> dict[str, str]:

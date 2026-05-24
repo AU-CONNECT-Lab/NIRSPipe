@@ -1,3 +1,4 @@
+{% from "_macros.html.j2" import card %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -5,30 +6,7 @@
 <title>fnirs-pipe Hyper Raw Report — {{ group_id }} / {{ task }}</title>
 <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
 <style>
-*, *::before, *::after { box-sizing: border-box; }
-body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  font-size: 13px; color: #2c3e50;
-  margin: 0; padding: 0.6rem 0.8rem 2rem;
-  background: #f5f7fa;
-}
-h1 { font-size: 1.05rem; margin: 0; }
-
-#qc-nav {
-  position: sticky; top: 0; z-index: 100;
-  background: #fff; border-bottom: 1px solid #dde3ea;
-  padding: 0.4rem 0.8rem;
-  display: flex; align-items: center; gap: 1rem;
-  box-shadow: 0 1px 6px rgba(0,0,0,0.07);
-  margin: -0.6rem -0.8rem 0.6rem;
-  flex-wrap: wrap;
-}
-.nav-meta { font-size: 0.78rem; color: #6c757d; }
-
-.card {
-  background: #fff; border: 1px solid #dde3ea; border-radius: 6px;
-  overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.06);
-}
+{{ base_css }}
 
 .row { display: grid; gap: 0.5rem; margin-bottom: 0.5rem; }
 .row-2     { grid-template-columns: 1fr 1fr; }
@@ -38,26 +16,10 @@ h1 { font-size: 1.05rem; margin: 0; }
   .row-2, .row-coh, .row-layout { grid-template-columns: 1fr; }
 }
 
-.panel-title {
-  font-size: 0.78rem; font-weight: 600; color: #6c757d;
-  padding: 0.3rem 0.6rem; border-bottom: 1px solid #dde3ea;
-  background: #f8f9fa; display: flex; align-items: center; gap: 0.5rem;
-  flex-wrap: wrap;
-}
-.panel-hint { font-weight: 400; color: #aaa; }
-
 select#ch-select {
   font-size: 0.78rem; border: 1px solid #ced4da; border-radius: 4px;
   padding: 0.15rem 0.35rem; background: #fff; margin-left: auto; max-width: 220px;
 }
-
-#align-table { border-collapse: collapse; width: 100%; font-size: 0.82rem; }
-#align-table th, #align-table td {
-  border: 1px solid #dde3ea; padding: 0.28rem 0.55rem; text-align: left;
-}
-#align-table th { background: #f1f3f5; font-weight: 600; }
-#align-table tbody tr:hover { background: #f8f9fa; }
-.align-wrap { padding: 0.5rem 0.8rem; }
 
 #iqm-panel { padding: 0.55rem 1rem 0.65rem; }
 #iqm-panel h3 { margin: 0 0 0.4rem; font-size: 0.88rem; }
@@ -91,33 +53,24 @@ select#ch-select {
 </nav>
 
 <!-- Alignment table -->
-<div class="card" style="margin-bottom:0.5rem">
-  <div class="panel-title">Time Alignment
-    <span class="panel-hint">crop offset from first shared trigger &bull; all recordings trimmed to shortest</span>
-  </div>
-  <div class="align-wrap">
-    <table id="align-table">
-      <thead><tr><th>Subject</th><th>Offset (s)</th><th>Aligned duration (s)</th></tr></thead>
-      <tbody id="align-tbody"></tbody>
-    </table>
-  </div>
+{% call card("Time Alignment", hint="crop offset from first shared trigger &bull; all recordings trimmed to shortest") %}
+<div class="align-wrap">
+  <table id="align-table">
+    <thead><tr><th>Subject</th><th>Offset (s)</th><th>Aligned duration (s)</th></tr></thead>
+    <tbody id="align-tbody"></tbody>
+  </table>
 </div>
+{% endcall %}
 
 <!-- Trigger timeline (raw, before alignment) -->
-<div class="card" style="margin-bottom:0.5rem" id="trigger-raw-card">
-  <div class="panel-title">Trigger Timeline (Raw)
-    <span class="panel-hint">event onsets per subject before alignment &bull; original recording time</span>
-  </div>
-  <div id="trigger-raw-plot"></div>
-</div>
+{% call card("Trigger Timeline (Raw)", hint="event onsets per subject before alignment &bull; original recording time", id="trigger-raw-card") %}
+<div id="trigger-raw-plot"></div>
+{% endcall %}
 
 <!-- Trigger timeline (after alignment) -->
-<div class="card" style="margin-bottom:0.5rem">
-  <div class="panel-title">Trigger Timeline (Aligned)
-    <span class="panel-hint">event onsets per subject after alignment &bull; verify sync</span>
-  </div>
-  <div id="trigger-plot"></div>
-</div>
+{% call card("Trigger Timeline (Aligned)", hint="event onsets per subject after alignment &bull; verify sync") %}
+<div id="trigger-plot"></div>
+{% endcall %}
 
 <!-- HbO / HbR signal overlay (full width, channel selector in title) -->
 <div class="card" style="margin-bottom:0.5rem">
@@ -145,41 +98,28 @@ select#ch-select {
 
 <!-- Optode layout: 2D + 3D -->
 <div class="row row-layout" style="margin-bottom:0.5rem">
-  <div class="card">
-    <div class="panel-title">Optode Layout (2D)
-      <span class="panel-hint">green = all good &bull; yellow = mixed &bull; gray = all bad</span>
-    </div>
-    <div id="layout-2d-plot"></div>
-  </div>
-  <div class="card">
-    <div class="panel-title">Channel Positions (3D, fsaverage)</div>
-    <div id="layout-3d-plot"></div>
-  </div>
+  {% call card("Optode Layout (2D)", hint="green = all good &bull; yellow = mixed &bull; gray = all bad") %}
+  <div id="layout-2d-plot"></div>
+  {% endcall %}
+  {% call card("Channel Positions (3D, fsaverage)") %}
+  <div id="layout-3d-plot"></div>
+  {% endcall %}
 </div>
 
 <!-- Coherence: bar chart + windowed heatmap -->
 <div class="row row-coh" style="margin-bottom:0.5rem">
-  <div class="card">
-    <div class="panel-title">Inter-subject Coherence (mean)
-      <span class="panel-hint">sorted by mean ISC</span>
-    </div>
-    <div id="coh-bar-plot"></div>
-  </div>
-  <div class="card">
-    <div class="panel-title">Windowed ISC (time &times; channel)
-      <span class="panel-hint">sliding window in coherence band</span>
-    </div>
-    <div id="coh-ts-plot"></div>
-  </div>
+  {% call card("Inter-subject Coherence (mean)", hint="sorted by mean ISC") %}
+  <div id="coh-bar-plot"></div>
+  {% endcall %}
+  {% call card("Windowed ISC (time &times; channel)", hint="sliding window in coherence band") %}
+  <div id="coh-ts-plot"></div>
+  {% endcall %}
 </div>
 
 <!-- Channel quality summary -->
-<div class="card" style="margin-bottom:0.5rem">
-  <div class="panel-title">Channel Quality Summary (Group)
-    <span class="panel-hint">green = all subjects good &bull; yellow = mixed &bull; red = all bad</span>
-  </div>
-  <div id="ch-summary-plot"></div>
-</div>
+{% call card("Channel Quality Summary (Group)", hint="green = all subjects good &bull; yellow = mixed &bull; red = all bad") %}
+<div id="ch-summary-plot"></div>
+{% endcall %}
 
 <!-- Hyper-level IQM -->
 <div class="card" style="margin-bottom:0.5rem">
