@@ -58,6 +58,7 @@ from fnirs_pipe.qc.boilerplate import collect_software_versions, generate_method
 from fnirs_pipe.qc.figure_io import (
     PLOTLY_CDN_URL, _IFRAME_CSS, _RESIZE_JS,
     _figure_height, _pair_fname, _save_multi_fig_html,
+    extract_markers, get_channel_pairs,
 )
 from fnirs_pipe.qc.figures import (
     carpet_gvtd_figure,
@@ -204,14 +205,8 @@ def _section_channel_detail(
     epoch_tmax: float = 25.0,
     max_pts: int = 4000,
 ) -> dict:
-    anns = raw_haemo.annotations
-    markers = [
-        {"onset": float(a["onset"]), "duration": float(a["duration"]),
-         "description": str(a["description"])}
-        for a in anns
-        if not str(a["description"]).upper().startswith("BAD")
-    ]
-    pairs = sorted(set(ch[:-4] for ch in raw_haemo.ch_names if ch.endswith(" hbo")))
+    markers = extract_markers(raw_haemo)
+    pairs = get_channel_pairs(raw_haemo)
     saved = []
     for pair in pairs:
         with _guard(f"Channel detail {pair}", errors, subject):
@@ -254,7 +249,7 @@ def _section_psd_detail(
     l_freq: float | None = None,
     h_freq: float | None = 0.4,
 ) -> dict:
-    pairs = sorted(set(ch[:-4] for ch in raw_haemo.ch_names if ch.endswith(" hbo")))
+    pairs = get_channel_pairs(raw_haemo)
     saved = []
     for pair in pairs:
         with _guard(f"PSD detail {pair}", errors, subject):

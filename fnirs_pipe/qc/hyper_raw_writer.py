@@ -9,10 +9,12 @@ import mne
 import pandas as pd
 
 from fnirs_pipe.pipeline.hyperscanning import GroupEntry
-from fnirs_pipe.qc.figure_io import _pair_fname, _save_figure_html, _save_multi_fig_html
+from fnirs_pipe.qc.figure_io import (
+    _pair_fname, _save_figure_html, _save_multi_fig_html,
+    extract_markers, get_channel_pairs,
+)
 from fnirs_pipe.qc.figures.hyper_figures import (
     _cond_colors,
-    _extract_markers,
     build_channel_summary,
     build_coherence_bar,
     build_coherence_timeseries,
@@ -66,7 +68,7 @@ def _process_hyper_raw_group(
 
     subject_ids  = [e.subject_id for e in group]
     first_raw    = aligned_raws.get(subject_ids[0]) if subject_ids else None
-    markers_list = _extract_markers(first_raw) if first_raw else []
+    markers_list = extract_markers(first_raw) if first_raw else []
     all_descs    = list(dict.fromkeys(m["description"] for m in markers_list))
     cond_colors_ = _cond_colors(all_descs)
 
@@ -116,19 +118,9 @@ def _process_hyper_raw_group(
     _safe_save("ch_summary",     "chsummary",
                build_channel_summary, iqm_data, subject_ids, sci_threshold)
 
-    ch_pairs: list[str] = []
-    if first_raw:
-        hbo_picks = mne.pick_types(first_raw.info, fnirs="hbo")
-        seen: set[str] = set()
-        for pick in hbo_picks:
-            ch_name = first_raw.ch_names[pick]
-            pair    = ch_name.rsplit(" ", 1)[0] if " " in ch_name else ch_name
-            if pair in seen:
-                continue
-            seen.add(pair)
-            ch_pairs.append(pair)
-
-            try:
+    ch_pairs: list[str] = get_channel_pairs(first_raw) if first_raw else []
+    for pair in ch_pairs:
+        try:
                 trace_fig = build_signal_overlay_pair(
                     aligned_raws, subject_ids, pair, markers_list, cond_colors_,
                 )

@@ -10,9 +10,8 @@ import mne
 from jinja2 import Environment, FileSystemLoader
 
 from fnirs_pipe.qc.figure_io import (
-    _pair_fname,
-    _save_figure_html,
-    _save_multi_fig_html,
+    _pair_fname, _save_figure_html, _save_multi_fig_html,
+    extract_markers, get_channel_pairs,
 )
 from fnirs_pipe.utils.logging import get_logger
 
@@ -85,15 +84,7 @@ def _process_run(
     except Exception as exc:
         logger.warning("Beer-Lambert failed: %s", exc)
 
-    markers = [
-        {
-            "onset":       float(a["onset"]),
-            "duration":    float(a["duration"]),
-            "description": str(a["description"]),
-        }
-        for a in raw.annotations
-        if not str(a["description"]).upper().startswith("BAD")
-    ]
+    markers = extract_markers(raw)
     cond_colors_ = condition_colors(markers)
     for m in markers:
         m["color"] = cond_colors_.get(m["description"], "#f39c12")
@@ -212,9 +203,7 @@ def _process_run(
     # ── file: per-channel detail HTML ──────────────────────────────────────────
     channel_pairs: list[str] = []
     if raw_haemo is not None:
-        channel_pairs = sorted({
-            ch.rsplit(" ", 1)[0] for ch in raw_haemo.ch_names if ch.endswith(" hbo")
-        })
+        channel_pairs = get_channel_pairs(raw_haemo)
         for pair in channel_pairs:
             try:
                 detail_fig, psd_fig, epoch_fig = build_channel_figure(

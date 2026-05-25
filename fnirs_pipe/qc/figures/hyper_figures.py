@@ -12,6 +12,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from scipy.signal import coherence, welch
 
+from fnirs_pipe.qc.figure_io import extract_markers as _extract_markers
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("qc.figures.hyper")
@@ -63,16 +64,6 @@ def _decimate(arr: np.ndarray, times: np.ndarray, max_pts: int):
     return arr[:, ::step], times[::step]
 
 
-def _extract_markers(raw: mne.io.Raw) -> list[dict]:
-    return [
-        {
-            "onset":       round(float(a["onset"]), 4),
-            "duration":    round(float(a["duration"]), 4),
-            "description": str(a["description"]),
-        }
-        for a in raw.annotations
-        if not str(a["description"]).upper().startswith("BAD")
-    ]
 
 
 def _cond_colors(descriptions: list[str]) -> dict[str, str]:

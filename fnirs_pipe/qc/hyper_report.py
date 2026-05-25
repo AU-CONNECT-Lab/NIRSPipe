@@ -10,10 +10,8 @@ import pandas as pd
 from jinja2 import Environment, FileSystemLoader
 
 from fnirs_pipe.pipeline.hyperscanning import GroupEntry
-from fnirs_pipe.qc.figures.hyper_figures import (
-    _cond_colors,
-    _extract_markers,
-)
+from fnirs_pipe.qc.figure_io import extract_markers, get_channel_pairs
+from fnirs_pipe.qc.figures.hyper_figures import _cond_colors
 from fnirs_pipe.qc.hyper_raw_writer import _process_hyper_raw_group
 from fnirs_pipe.utils.logging import get_logger
 
@@ -115,7 +113,7 @@ def build_hyper_post_report(
 
     subject_ids  = [e.subject_id for e in group]
     ref_raw      = aligned_raws.get(subject_ids[0]) if subject_ids else None
-    markers_list = _extract_markers(ref_raw) if ref_raw else []
+    markers_list = extract_markers(ref_raw) if ref_raw else []
     all_descs    = list(dict.fromkeys(m["description"] for m in markers_list))
     cond_colors_ = _cond_colors(all_descs)
 
@@ -149,26 +147,18 @@ def build_hyper_post_report(
     pair_label = f"{pair_key[0]} × {pair_key[1]}" if pair_key else ""
 
     # Build per-channel WTC figures
-    ch_pairs_post: list[str] = []
+    ch_pairs_post: list[str] = get_channel_pairs(ref_raw) if ref_raw else []
     per_channel_post: dict[str, dict] = {}
-    if ref_raw:
-        hbo_picks = mne.pick_types(ref_raw.info, fnirs="hbo")
-        for pick in hbo_picks:
-            ch_name = ref_raw.ch_names[pick]
-            pair    = ch_name.rsplit(" ", 1)[0] if " " in ch_name else ch_name
-            if pair in per_channel_post:
-                continue
-            ch_pairs_post.append(pair)
-
-            wtc_fig = None
-            if wtc_result and pair_key:
-                ch_data = wtc_result.pairs.get(pair_key, {}).get(pair)
-                wtc_fig = _safe_post(
-                    "wtc", build_wtc_channel,
-                    ch_data, wtc_result.freqs, wtc_result.times,
-                    pair_label, markers_list, cond_colors_,
-                )
-            per_channel_post[pair] = {"wtc": wtc_fig}
+    for pair in ch_pairs_post:
+        wtc_fig = None
+        if wtc_result and pair_key:
+            ch_data = wtc_result.pairs.get(pair_key, {}).get(pair)
+            wtc_fig = _safe_post(
+                "wtc", build_wtc_channel,
+                ch_data, wtc_result.freqs, wtc_result.times,
+                pair_label, markers_list, cond_colors_,
+            )
+        per_channel_post[pair] = {"wtc": wtc_fig}
 
     # Compute ISC panels (HbO and HbR)
     def _isc_panel(ch_type: str) -> str:

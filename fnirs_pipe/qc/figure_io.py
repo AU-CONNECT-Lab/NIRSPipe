@@ -5,6 +5,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import mne
+
 PLOTLY_CDN_URL = "https://cdn.plot.ly/plotly-3.5.0.min.js"
 
 _IFRAME_CSS = "html,body{margin:0;padding:0;width:100%;}"
@@ -78,3 +80,29 @@ def _save_multi_fig_html(figs: list, path: Path) -> int:
 def _pair_fname(pair: str) -> str:
     """Strip non-alphanumeric characters so the string is BIDS desc-value safe."""
     return re.sub(r"[^a-zA-Z0-9]", "", pair)
+
+
+def get_channel_pairs(raw: mne.io.Raw) -> list[str]:
+    """Return unique channel pair names (without chroma suffix) in MNE channel order."""
+    picks = mne.pick_types(raw.info, fnirs="hbo")
+    seen: set[str] = set()
+    pairs: list[str] = []
+    for i in picks:
+        pair = raw.ch_names[i].rsplit(" ", 1)[0]
+        if pair not in seen:
+            seen.add(pair)
+            pairs.append(pair)
+    return pairs
+
+
+def extract_markers(raw: mne.io.Raw) -> list[dict]:
+    """Return non-BAD annotations as marker dicts (onset, duration, description)."""
+    return [
+        {
+            "onset":       round(float(a["onset"]), 4),
+            "duration":    round(float(a["duration"]), 4),
+            "description": str(a["description"]),
+        }
+        for a in raw.annotations
+        if not str(a["description"]).upper().startswith("BAD")
+    ]
