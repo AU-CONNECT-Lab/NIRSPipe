@@ -7,7 +7,9 @@ from typing import Annotated, Optional
 
 import typer
 
-from fnirs_pipe.utils.logging import get_logger
+from fnirs_pipe.utils.logging import get_logger, setup_logging
+
+setup_logging()
 
 app = typer.Typer(
     name="fnirs-qc",

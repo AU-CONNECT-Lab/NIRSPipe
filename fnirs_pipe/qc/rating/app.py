@@ -752,12 +752,19 @@ class HyperRatingApp:
         except Exception:
             return {}, {}
 
+    def _decisions_path(self, sid: str) -> Path:
+        sub_prefix = sid if sid.startswith("sub-") else f"sub-{sid}"
+        parts = [sub_prefix]
+        if self.session:
+            parts.append(f"ses-{self.session}")
+        parts.append(f"task-{self.task}")
+        return self.output_dir / ("_".join(parts) + "_raw_channel_decisions.json")
+
     def _load_decisions(self, subject_ids: list[str]) -> dict:
         """Return {sid: {ch: state}} by flattening each subject's run-level JSON."""
         result: dict[str, dict] = {}
         for sid in subject_ids:
-            sub_prefix = sid if sid.startswith("sub-") else f"sub-{sid}"
-            path = self.output_dir / f"{sub_prefix}_task-{self.task}_raw_channel_decisions.json"
+            path = self._decisions_path(sid)
             if not path.exists():
                 result[sid] = {}
                 continue
@@ -885,8 +892,7 @@ class HyperRatingApp:
             return jsonify({"status": "fail", "message": "empty body"}), 400
         try:
             for sid, ch_states in data.items():
-                sub_prefix = sid if sid.startswith("sub-") else f"sub-{sid}"
-                path = self.output_dir / f"{sub_prefix}_task-{self.task}_raw_channel_decisions.json"
+                path = self._decisions_path(sid)
                 if path.exists():
                     try:
                         existing = json.loads(path.read_text(encoding="utf-8"))
