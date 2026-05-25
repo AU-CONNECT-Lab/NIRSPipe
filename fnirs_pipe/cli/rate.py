@@ -73,11 +73,16 @@ def hyper(
     output_dir: Annotated[Path, typer.Argument(help="fnirs-pipe output directory.")],
     group_id: Annotated[str, typer.Argument(help="Group ID, e.g. 'A'.")],
     task_label: Annotated[str, typer.Argument(help="Task label, e.g. 'tapping'.")],
+    pairs_csv: Annotated[Path, typer.Option("--pairs-csv", help=(
+        "CSV with columns: group_id, subject_id, task (same as fnirs-qc hyper-raw). "
+        "Used to look up subject IDs in this group."
+    ))],
     session_label: Annotated[Optional[str], typer.Option("--session-label", help="Session label.")] = None,
     sci_threshold: Annotated[float, typer.Option("--sci-threshold", help="SCI threshold.")] = 0.8,
     port: Annotated[int, typer.Option("--port", help="Local server port.")] = 5053,
 ) -> None:
     """Launch interactive hyperscanning QC viewer with section ratings and channel decisions."""
+    from fnirs_pipe.pipeline.hyperscanning import parse_group_csv
     from fnirs_pipe.qc.rating.app import HyperRatingApp
 
     name_parts = [f"group-{group_id}"]
@@ -89,5 +94,12 @@ def hyper(
         typer.echo(f"Error: hyper report not found: {html_path}", err=True)
         raise typer.Exit(1)
 
+    groups = parse_group_csv(pairs_csv)
+    members = groups.get((group_id, task_label))
+    if not members:
+        typer.echo(f"Error: group_id '{group_id}' + task '{task_label}' not found in {pairs_csv}", err=True)
+        raise typer.Exit(1)
+    subject_ids = [e.subject_id for e in members]
+
     typer.echo(f"Launching hyper viewer: {html_path.name} ...")
-    HyperRatingApp(html_path, output_dir, sci_threshold).run(port=port)
+    HyperRatingApp(html_path, output_dir, subject_ids, sci_threshold).run(port=port)

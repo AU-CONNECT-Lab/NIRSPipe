@@ -16,205 +16,6 @@ logger = get_logger("qc.rating")
 _SECTIONS        = ["Signal", "Motion", "HbO_HbR", "GLM", "Final"]
 _SECTIONS_NO_GLM = ["Signal", "Motion", "HbO_HbR", "Final"]
 
-# Copied from fMRI_QCtoolkit/qc_rating.css, adapted for fNIRS
-_QC_CSS = """
-<style id="qc-rating-style">
-:root {
-  --qc-module-width: 110px;
-  --qc-module-gap: 6px;
-  --qc-run-gap: 16px;
-}
-#qc-container {
-  position: sticky;
-  top: 0;
-  z-index: 1000;
-  background: white;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
-  font-family: Arial, sans-serif;
-  user-select: none;
-  width: 100%;
-}
-#qc-rating-index, #qc-rating-bar {
-  overflow-x: auto;
-  width: 100%;
-  padding: 6px 0;
-  border-bottom: 1px solid #bbb;
-  box-sizing: border-box;
-}
-#qc-rating-index {
-  background-color: #e0e8f8;
-  border-bottom: 2px solid #0078d7;
-  scrollbar-width: none;
-}
-#qc-rating-index::-webkit-scrollbar { display: none; }
-#qc-rating-bar {
-  background-color: #f0f4ff;
-  scrollbar-width: auto;
-}
-#qc-rating-bar::-webkit-scrollbar { height: 8px; display: block; }
-#qc-rating-bar::-webkit-scrollbar-thumb { background: #bbb; border-radius: 4px; }
-#qc-rating-index .qc-inner,
-#qc-rating-bar .qc-inner {
-  display: flex;
-  gap: var(--qc-run-gap);
-  width: max-content;
-  min-width: 100%;
-  box-sizing: content-box;
-}
-#qc-rating-index a {
-  font-weight: 600;
-  color: #004a9f;
-  text-decoration: none;
-  cursor: pointer;
-  padding: 6px 8px;
-  border-radius: 4px;
-  font-size: 14px;
-  white-space: nowrap;
-  user-select: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: var(--qc-module-width);
-  box-sizing: border-box;
-}
-.qc-run-group {
-  display: flex;
-  gap: var(--qc-module-gap);
-}
-.qc-module {
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 8px;
-  border-radius: 6px;
-  border: 1.5px solid transparent;
-  min-width: var(--qc-module-width);
-  box-sizing: border-box;
-  user-select: none;
-  white-space: nowrap;
-  justify-content: center;
-  font-size: 14px;
-}
-.qc-module .qc-icon {
-  font-family: monospace;
-  font-size: 18px;
-  width: 18px;
-  text-align: center;
-}
-.qc-module span.label { font-weight: 600; }
-.qc-module.good  { background-color: #d4edda; border-color: #28a745; color: #155724; }
-.qc-module.bad   { background-color: #f8d7da; border-color: #dc3545; color: #721c24; }
-.qc-module.other { background-color: #fff3cd; border-color: #ffc107; color: #856404; }
-</style>
-"""
-
-# Two-row sticky bar injected right after <body>, matching fMRI_QCtoolkit/base.html structure
-_QC_BAR_HTML = """
-<div id="qc-container" title="Ctrl+click to add comment, click to rate: + &#8594; &#8722; &#8594; ?">
-  <div id="qc-rating-index"><div class="qc-inner"></div></div>
-  <div id="qc-rating-bar"><div class="qc-inner"></div></div>
-</div>
-"""
-
-# JS injected before </body>, adapted from fMRI_QCtoolkit/qc_rating.js
-_QC_JS = """
-<script id="qc-rating-script">
-(function() {
-  var modulesByRun  = __MODULES__;
-  var ratings       = Object.assign({}, __RATINGS__);
-  var notes         = Object.assign({}, __NOTES__);
-  var participantId = "__SUBJECT__";
-
-  var icons        = {NA: "◻", good: "+", bad: "−", other: "?"};
-  var ratingStates = ["NA", "good", "bad", "other"];
-
-  var indexInner = document.querySelector("#qc-rating-index .qc-inner");
-  var barInner   = document.querySelector("#qc-rating-bar .qc-inner");
-
-  // Build index row (module name links) and bar row (clickable rating buttons)
-  modulesByRun.forEach(function(runModules) {
-    var runGroupDiv = document.createElement("div");
-    runGroupDiv.className = "qc-run-group";
-
-    runModules.forEach(function(mod) {
-      // Index link
-      var link = document.createElement("a");
-      link.textContent = mod.name;
-      link.href = "#" + mod.id;
-      indexInner.appendChild(link);
-
-      if (!(mod.id in ratings)) ratings[mod.id] = "NA";
-      if (!(mod.id in notes))   notes[mod.id]   = "";
-
-      // Rating button
-      var modEl = document.createElement("div");
-      modEl.className = "qc-module" + (mod.name === "Final" || mod.name.startsWith("Final") ? " final-module" : "");
-      modEl.innerHTML = '<span class="qc-icon">◻</span><span class="label">' + mod.name + '</span>';
-
-      function updateDisplay(el, id) {
-        var s = ratings[id] || "NA";
-        el.classList.remove("good", "bad", "other");
-        if (s !== "NA") el.classList.add(s);
-        el.querySelector(".qc-icon").textContent = icons[s];
-      }
-
-      modEl.addEventListener("click", (function(m, el) {
-        return function(e) {
-          if (e.ctrlKey) {
-            var v = prompt('Comment for "' + m.name + '"', notes[m.id] || "");
-            if (v !== null) { notes[m.id] = v.trim(); save(); }
-          } else {
-            var idx = ratingStates.indexOf(ratings[m.id] || "NA");
-            ratings[m.id] = ratingStates[(idx + 1) % ratingStates.length];
-            updateDisplay(el, m.id);
-            save();
-          }
-        };
-      })(mod, modEl));
-
-      updateDisplay(modEl, mod.id);
-      runGroupDiv.appendChild(modEl);
-    });
-
-    barInner.appendChild(runGroupDiv);
-  });
-
-  function save() {
-    fetch("/save_ratings", {
-      method: "POST",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({ratings: ratings, notes: notes, id: participantId}),
-    })
-    .then(function(r) { return r.json(); })
-    .then(function(d) {
-      if (d.status !== "success") alert("Failed to save: " + (d.message || ""));
-    })
-    .catch(function() { alert("Network error while saving rating"); });
-  }
-
-  // Synchronised horizontal scrolling between the two rows
-  var indexContainer = document.querySelector("#qc-rating-index");
-  var barContainer   = document.querySelector("#qc-rating-bar");
-  var lockIndex = false, lockBar = false;
-
-  indexContainer.addEventListener("scroll", function() {
-    if (!lockIndex) { lockBar = true; barContainer.scrollLeft = indexContainer.scrollLeft; setTimeout(function(){lockBar=false;},10); }
-  });
-  barContainer.addEventListener("scroll", function() {
-    if (!lockBar) { lockIndex = true; indexContainer.scrollLeft = barContainer.scrollLeft; setTimeout(function(){lockIndex=false;},10); }
-  });
-  indexContainer.addEventListener("wheel", function(e) {
-    if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) {
-      e.preventDefault();
-      indexContainer.scrollLeft += e.deltaY * 0.5;
-    }
-  }, {passive: false});
-})();
-</script>
-"""
-
-
 class FNIRSRatingApp:
     def __init__(self, output_dir: Path, subjects: list[str]):
         self.output_dir = output_dir
@@ -239,34 +40,22 @@ class FNIRSRatingApp:
                 ])
         return groups
 
-    def _load_ratings(self, subject: str) -> tuple[dict, dict]:
+    def _load_ratings(self, subject: str) -> dict:
         toml_path = (self.output_dir / f"sub-{subject}" / "figures"
                      / f"sub-{subject}_ratings.toml")
         if not toml_path.exists():
-            return {}, {}
+            return {"ratings": {}, "notes": {}}
         from fnirs_pipe.utils import load_toml
         data = load_toml(toml_path)
         ratings = {k: v for k, v in data.items()
                    if isinstance(v, str) and k not in ("subject", "rated_at")}
         notes = data.get("notes", {})
-        return ratings, (notes if isinstance(notes, dict) else {})
+        return {"ratings": ratings, "notes": (notes if isinstance(notes, dict) else {})}
 
-    def _inject(self, html: str, subject: str) -> str:
-        modules = self._build_modules(subject)
-        ratings, notes = self._load_ratings(subject)
-        js = (
-            _QC_JS
-            .replace("__SUBJECT__", subject)
-            .replace("__MODULES__", json.dumps(modules))
-            .replace("__RATINGS__", json.dumps(ratings))
-            .replace("__NOTES__",   json.dumps(notes))
-        )
+    def _inject_base_href(self, html: str, subject: str) -> str:
+        """Inject <base href> so relative figure URLs resolve under /sub-<pid> route."""
         base_tag = f'<base href="/sub-{subject}/">'
-        html = html.replace("<head>",  f"<head>\n{base_tag}",   1)
-        html = html.replace("</head>", f"{_QC_CSS}</head>",      1)
-        html = html.replace("<body>",  f"<body>\n{_QC_BAR_HTML}", 1)
-        html = html.replace("</body>", f"{js}</body>",            1)
-        return html
+        return html.replace("<head>", f"<head>\n{base_tag}", 1)
 
     def _setup_routes(self) -> None:
         app = self.app
@@ -276,7 +65,7 @@ class FNIRSRatingApp:
             html_file = self.output_dir / f"sub-{pid}" / f"sub-{pid}_qc.html"
             if not html_file.exists():
                 return f"<h2>Report not found: {html_file}</h2>", 404
-            return self._inject(html_file.read_text(encoding="utf-8"), pid)
+            return self._inject_base_href(html_file.read_text(encoding="utf-8"), pid)
 
         @app.route("/sub-<pid>/figures/<path:filename>")
         def figures(pid, filename):
@@ -289,6 +78,12 @@ class FNIRSRatingApp:
             return send_from_directory(
                 self.output_dir / f"sub-{pid}" / "nirs", filename
             )
+
+        @app.route("/load_ratings/sub-<pid>", methods=["GET"])
+        def load_ratings(pid):
+            payload = self._load_ratings(pid)
+            payload["modules"] = self._build_modules(pid)
+            return jsonify(payload)
 
         @app.route("/save_ratings", methods=["POST"])
         def save_ratings():
@@ -359,119 +154,6 @@ class FNIRSRatingApp:
             logger.info("shutting down")
 
 
-_RAW_SECTIONS = ["Raw_Signal", "SCI_PSP", "Final"]
-
-_CD_CSS = """
-<style id="cd-style">
-.cd-chip{cursor:pointer;padding:.1rem .5rem;border-radius:3px;font-size:.78rem;
-  font-weight:600;display:inline-block;min-width:4.2rem;text-align:center}
-.cd-chip.cd-unrated{background:#e9ecef;color:#6c757d}
-.cd-chip.cd-good{background:#d4edda;color:#155724}
-.cd-chip.cd-bad{background:#f8d7da;color:#721c24}
-</style>"""
-
-_CD_SECTION_HTML = """
-<div class="card" style="margin-bottom:.5rem" id="ch-decisions-card">
-  <div class="panel-title">
-    <span>Channel Decisions &nbsp;<span id="ch-decisions-hint" style="font-weight:400;color:#aaa">good / bad / unrated per channel</span></span>
-  </div>
-  <div id="ch-decisions-body" style="padding:.4rem .6rem .6rem">
-    <p style="font-size:.75rem;color:#888;margin:0 0 .4rem">Rows in red have SCI below threshold. Click chip to cycle: &#8212; &#8594; good &#8594; bad. Saves automatically.</p>
-    <table style="border-collapse:collapse;width:100%;font-size:.82rem;table-layout:fixed">
-      <colgroup><col style="width:48%"/><col style="width:16%"/><col style="width:36%"/></colgroup>
-      <thead><tr>
-        <th style="text-align:left;padding:.22rem .5rem;border-bottom:2px solid #dde3ea;background:#f8f9fa;font-weight:600">Channel</th>
-        <th style="text-align:left;padding:.22rem .5rem;border-bottom:2px solid #dde3ea;background:#f8f9fa;font-weight:600">SCI</th>
-        <th style="text-align:left;padding:.22rem .5rem;border-bottom:2px solid #dde3ea;background:#f8f9fa;font-weight:600">Decision</th>
-      </tr></thead>
-      <tbody id="ch-decisions-tbody"></tbody>
-    </table>
-  </div>
-</div>"""
-
-_CD_JS = """
-<script id="cd-script">
-(function(){
-  var _IS_FLASK     = (typeof _CHANNEL_DECISIONS !== "undefined");
-  var _chDecisions  = _IS_FLASK ? (_CHANNEL_DECISIONS || {}) : {};
-  var _sciThresh    = (typeof _SCI_THRESHOLD !== "undefined") ? _SCI_THRESHOLD : 0.8;
-  var _cdTimer = null;
-
-  document.addEventListener("DOMContentLoaded", function() {
-    if (!_IS_FLASK) {
-      var hint = document.getElementById("ch-decisions-hint");
-      if (hint) hint.textContent = "read-only · launch via fnirs-rate raw to save decisions";
-    }
-    buildTable();
-  });
-
-  function buildTable() {
-    var tbody = document.getElementById("ch-decisions-tbody");
-    if (!tbody) return;
-    tbody.innerHTML = "";
-    var idx   = (typeof _run_idx !== "undefined") ? _run_idx : 0;
-    var lbls  = (typeof _RUN_LABELS !== "undefined") ? _RUN_LABELS : [];
-    var runLbl = lbls[idx] || "";
-    var d      = ((typeof _STATIC_DATA !== "undefined") ? _STATIC_DATA : [])[idx] || {};
-    var pairs  = d.channel_pairs || [];
-    var sciPCh = ((d.iqm || {}).per_channel || {}).sci_per_channel || {};
-
-    var channels = [];
-    pairs.forEach(function(p){ channels.push(p+" hbo"); channels.push(p+" hbr"); });
-    if (!channels.length) {
-      tbody.innerHTML = "<tr><td colspan='3' style='color:#adb5bd;font-style:italic;text-align:center;padding:.5rem'>No channels</td></tr>";
-      return;
-    }
-    var decided = _chDecisions[runLbl] || {};
-    pairs.forEach(function(pair){
-      var hbo  = pair+" hbo";
-      var hbr  = pair+" hbr";
-      var vals = Object.keys(sciPCh).filter(function(k){return k.startsWith(pair+" ");}).map(function(k){return sciPCh[k];});
-      var sci  = vals.length ? vals[0] : null;
-      var below= sci!==null && sci<_sciThresh;
-      var tr   = document.createElement("tr");
-      tr.style.background = below ? "#fff8f8" : "";
-
-      // pair decision: one chip writes both hbo + hbr simultaneously
-      var state= decided[hbo] || "unrated";
-      var chip = document.createElement("span");
-      chip.className  ="cd-chip cd-"+state;
-      chip.textContent={unrated:"—",good:"good",bad:"bad"}[state];
-      chip.addEventListener("click",function(){
-        if(!_IS_FLASK) return;
-        if(!_chDecisions[runLbl]) _chDecisions[runLbl]={};
-        var next={unrated:"good",good:"bad",bad:"unrated"}[_chDecisions[runLbl][hbo]||"unrated"];
-        _chDecisions[runLbl][hbo]=next;
-        _chDecisions[runLbl][hbr]=next;
-        chip.className  ="cd-chip cd-"+next;
-        chip.textContent={unrated:"—",good:"good",bad:"bad"}[next];
-        save();
-      });
-
-      var td1=document.createElement("td"); td1.style.cssText="padding:.18rem .5rem;border-bottom:1px solid #f0f0f0"; td1.textContent=pair;
-      var td2=document.createElement("td"); td2.style.cssText="padding:.18rem .5rem;border-bottom:1px solid #f0f0f0;font-variant-numeric:tabular-nums;color:"+(below?"#c0392b":"#2c3e50"); td2.textContent=sci!==null?sci.toFixed(3):"—";
-      var td3=document.createElement("td"); td3.style.cssText="padding:.18rem .5rem;border-bottom:1px solid #f0f0f0"; td3.appendChild(chip);
-      tr.appendChild(td1); tr.appendChild(td2); tr.appendChild(td3);
-      tbody.appendChild(tr);
-    });
-  }
-
-  window._cdBuildTable = buildTable;
-
-  function save(){
-    if(!_IS_FLASK) return;
-    if(_cdTimer) clearTimeout(_cdTimer);
-    _cdTimer=setTimeout(function(){
-      fetch("/save_channel_decisions",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(_chDecisions)})
-      .then(function(r){return r.json();})
-      .then(function(d){if(d.status!=="success") console.warn("cd save failed:",d);})
-      .catch(function(e){console.warn("cd save error:",e);});
-    },500);
-  }
-})();
-</script>"""
-
-# TODO: read rating json each time generate html report
 class RawRatingApp:
     """Flask server for rating a single raw QC HTML report and annotating channel decisions."""
 
@@ -488,30 +170,14 @@ class RawRatingApp:
         self.app = Flask(__name__)
         self._setup_routes()
 
-    def _extract_run_labels(self, html: str) -> list[str]:
-        m = re.search(r"var _RUN_LABELS\s*=\s*(\[.*?\]);", html)
-        if m:
-            try:
-                return json.loads(m.group(1))
-            except json.JSONDecodeError:
-                pass
-        return []
-
-    def _build_modules(self, run_labels: list[str]) -> list[list[dict]]:
-        return [
-            [{"id": f"{lbl}_{s}", "name": s.replace("_", " ")}
-             for s in _RAW_SECTIONS]
-            for lbl in run_labels
-        ]
-
-    def _load_ratings(self) -> tuple[dict, dict]:
+    def _load_ratings(self) -> dict:
         if not self.ratings_path.exists():
-            return {}, {}
+            return {"ratings": {}, "notes": {}}
         try:
             data = json.loads(self.ratings_path.read_text(encoding="utf-8"))
-            return data.get("ratings", {}), data.get("notes", {})
+            return {"ratings": data.get("ratings", {}), "notes": data.get("notes", {})}
         except Exception:
-            return {}, {}
+            return {"ratings": {}, "notes": {}}
 
     def _load_decisions(self) -> dict:
         if not self.decisions_path.exists():
@@ -521,38 +187,6 @@ class RawRatingApp:
         except Exception:
             return {}
 
-    def _inject(self, html: str) -> str:
-        run_labels = self._extract_run_labels(html)
-        modules    = self._build_modules(run_labels)
-        ratings, notes = self._load_ratings()
-        decisions  = self._load_decisions()
-
-        decisions_var = (
-            f"<script>var _CHANNEL_DECISIONS={json.dumps(decisions, ensure_ascii=False)};"
-            f"var _SCI_THRESHOLD={self.sci_threshold};</script>"
-        )
-
-        js = (
-            _QC_JS
-            .replace("__SUBJECT__",  self.stem)
-            .replace("__MODULES__",  json.dumps(modules))
-            .replace("__RATINGS__",  json.dumps(ratings))
-            .replace("__NOTES__",    json.dumps(notes))
-            .replace('fetch("/save_ratings"', 'fetch("/save_raw_ratings"')
-        )
-
-        html = html.replace("</head>", f"{_QC_CSS}{decisions_var}</head>", 1)
-        html = html.replace("<body>",  f"<body>\n{_QC_BAR_HTML}",          1)
-
-        # old HTML files (generated before template update) don't have the
-        # channel decisions section — inject it alongside the rating JS
-        if 'id="ch-decisions-card"' not in html:
-            html = html.replace("</body>", f"{_CD_CSS}{_CD_SECTION_HTML}{_CD_JS}{js}</body>", 1)
-        else:
-            html = html.replace("</body>", f"{js}</body>", 1)
-
-        return html
-
     def _setup_routes(self) -> None:
         app = self.app
 
@@ -560,7 +194,15 @@ class RawRatingApp:
         def index():
             if not self.html_path.exists():
                 return f"<h2>Report not found: {self.html_path}</h2>", 404
-            return self._inject(self.html_path.read_text(encoding="utf-8"))
+            return self.html_path.read_text(encoding="utf-8")
+
+        @app.route("/load_raw_ratings", methods=["GET"])
+        def load_raw_ratings():
+            return jsonify(self._load_ratings())
+
+        @app.route("/load_channel_decisions", methods=["GET"])
+        def load_channel_decisions():
+            return jsonify(self._load_decisions())
 
         @app.route("/save_raw_ratings", methods=["POST"])
         def save_raw_ratings():
@@ -569,6 +211,10 @@ class RawRatingApp:
         @app.route("/save_channel_decisions", methods=["POST"])
         def save_channel_decisions():
             return self._handle_save_decisions()
+
+        @app.route("/<path:filename>")
+        def static_files(filename):
+            return send_from_directory(self.output_dir, filename)
 
     def _handle_save_ratings(self):
         data = request.json
@@ -624,104 +270,19 @@ class RawRatingApp:
             logger.info("shutting down")
 
 
-_HYPER_SECTIONS = ["Signal_Quality", "Coherence", "Final"]
-
-_HYPER_CD_JS = """
-<script id="hyper-cd-script">
-(function(){
-  var _IS_FLASK       = (typeof window._HYPER_DECISIONS !== "undefined");
-  var _hyperDecisions = _IS_FLASK ? JSON.parse(JSON.stringify(window._HYPER_DECISIONS)) : {};
-  var _hdTimer = null;
-
-  document.addEventListener("DOMContentLoaded", function() {
-    if (!_IS_FLASK) {
-      var hint = document.getElementById("hyper-decisions-hint");
-      if (hint) hint.textContent = "read-only · launch via fnirs-rate hyper to save decisions";
-    }
-    buildTable();
-  });
-
-  function buildTable() {
-    var tbody = document.getElementById("hyper-decisions-tbody");
-    if (!tbody) return;
-    tbody.innerHTML = "";
-    var subjects = window._HYPER_SUBJECTS || Object.keys(window._SCI_PER_SUBJECT || {});
-    var pairs    = window._CH_PAIRS || [];
-    if (!pairs.length) {
-      var cols = subjects.length * 2 + 1;
-      tbody.innerHTML = "<tr><td colspan='"+cols+"' style='color:#adb5bd;font-style:italic;text-align:center;padding:.5rem'>No channels</td></tr>";
-      return;
-    }
-    var _bl = "border-left:2px solid #f0f0f0";
-    pairs.forEach(function(pair) {
-      var tr = document.createElement("tr");
-      var td0 = document.createElement("td");
-      td0.style.cssText = "padding:.18rem .5rem;border-bottom:1px solid #f0f0f0;font-weight:500";
-      td0.textContent = pair;
-      tr.appendChild(td0);
-      subjects.forEach(function(sid) {
-        var hbo = pair + " hbo";
-        var hbr = pair + " hbr";
-        var sciPCh = (window._SCI_PER_SUBJECT || {})[sid] || {};
-        var sciVal = sciPCh[hbo] != null ? sciPCh[hbo] : (sciPCh[hbr] != null ? sciPCh[hbr] : null);
-        var below  = sciVal !== null && sciVal < (window._SCI_THRESHOLD || 0.8);
-
-        var tdSci = document.createElement("td");
-        tdSci.style.cssText = "padding:.18rem .45rem;border-bottom:1px solid #f0f0f0;text-align:center;font-variant-numeric:tabular-nums;" + _bl + ";color:" + (below ? "#c0392b" : "#6c757d");
-        tdSci.textContent = sciVal !== null ? sciVal.toFixed(3) : "—";
-        tr.appendChild(tdSci);
-
-        if (!_hyperDecisions[sid]) _hyperDecisions[sid] = {};
-        var state = _hyperDecisions[sid][hbo] || "unrated";
-        var chip = document.createElement("span");
-        chip.className = "cd-chip cd-" + state;
-        chip.textContent = {unrated:"—", good:"good", bad:"bad"}[state];
-        chip.addEventListener("click", (function(s, h1, h2, c) {
-          return function() {
-            if (!_IS_FLASK) return;
-            if (!_hyperDecisions[s]) _hyperDecisions[s] = {};
-            var cur  = _hyperDecisions[s][h1] || "unrated";
-            var next = {unrated:"good", good:"bad", bad:"unrated"}[cur];
-            _hyperDecisions[s][h1] = next;
-            _hyperDecisions[s][h2] = next;
-            c.className  = "cd-chip cd-" + next;
-            c.textContent = {unrated:"—", good:"good", bad:"bad"}[next];
-            save();
-          };
-        })(sid, hbo, hbr, chip));
-
-        var tdDec = document.createElement("td");
-        tdDec.style.cssText = "padding:.18rem .45rem;border-bottom:1px solid #f0f0f0;text-align:center";
-        tdDec.appendChild(chip);
-        tr.appendChild(tdDec);
-      });
-      tbody.appendChild(tr);
-    });
-  }
-
-  function save() {
-    if (_hdTimer) clearTimeout(_hdTimer);
-    _hdTimer = setTimeout(function() {
-      fetch("/save_hyper_decisions", {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify(_hyperDecisions),
-      })
-      .then(function(r) { return r.json(); })
-      .then(function(d) { if (d.status !== "success") console.warn("hyper cd save failed:", d); })
-      .catch(function(e) { console.warn("hyper cd save error:", e); });
-    }, 500);
-  }
-})();
-</script>"""
-
-
 class HyperRatingApp:
     """Flask server for the hyperscanning raw QC viewer with per-subject channel decisions."""
 
-    def __init__(self, html_path: Path, output_dir: Path, sci_threshold: float = 0.8):
+    def __init__(
+        self,
+        html_path: Path,
+        output_dir: Path,
+        subject_ids: list[str],
+        sci_threshold: float = 0.8,
+    ):
         self.html_path     = html_path
         self.output_dir    = output_dir
+        self.subject_ids   = list(subject_ids)
         self.sci_threshold = sci_threshold
         stem = html_path.stem  # "group-A[_ses-01]_task-tapping_desc-hyperraw_nirs"
         m = re.match(r"group-([^_]+)(?:_ses-([^_]+))?_task-(.+?)_desc-hyperraw_nirs$", stem)
@@ -734,23 +295,14 @@ class HyperRatingApp:
         self.app = Flask(__name__)
         self._setup_routes()
 
-    def _extract_subjects(self, html: str) -> list[str]:
-        m = re.search(r"subjects:\s*<b>(.*?)</b>", html)
-        if m:
-            return [s.strip() for s in m.group(1).split(",") if s.strip()]
-        return []
-
-    def _build_modules(self) -> list[list[dict]]:
-        return [[{"id": s, "name": s.replace("_", " ")} for s in _HYPER_SECTIONS]]
-
-    def _load_ratings(self) -> tuple[dict, dict]:
+    def _load_ratings(self) -> dict:
         if not self.ratings_path.exists():
-            return {}, {}
+            return {"ratings": {}, "notes": {}}
         try:
             data = json.loads(self.ratings_path.read_text(encoding="utf-8"))
-            return data.get("ratings", {}), data.get("notes", {})
+            return {"ratings": data.get("ratings", {}), "notes": data.get("notes", {})}
         except Exception:
-            return {}, {}
+            return {"ratings": {}, "notes": {}}
 
     def _decisions_path(self, sid: str) -> Path:
         sub_prefix = sid if sid.startswith("sub-") else f"sub-{sid}"
@@ -760,10 +312,10 @@ class HyperRatingApp:
         parts.append(f"task-{self.task}")
         return self.output_dir / ("_".join(parts) + "_raw_channel_decisions.json")
 
-    def _load_decisions(self, subject_ids: list[str]) -> dict:
+    def _load_decisions(self) -> dict:
         """Return {sid: {ch: state}} by flattening each subject's run-level JSON."""
         result: dict[str, dict] = {}
-        for sid in subject_ids:
+        for sid in self.subject_ids:
             path = self._decisions_path(sid)
             if not path.exists():
                 result[sid] = {}
@@ -779,76 +331,6 @@ class HyperRatingApp:
                 result[sid] = {}
         return result
 
-    def _build_cd_section(self, subject_ids: list[str]) -> str:
-        top_ths = "".join(
-            f'<th colspan="2" style="text-align:center;padding:.22rem .5rem;border-bottom:1px solid #dde3ea;'
-            f'background:#f8f9fa;font-weight:600;border-left:2px solid #dde3ea">{sid}</th>'
-            for sid in subject_ids
-        )
-        sub_ths = "".join(
-            '<th style="text-align:center;padding:.18rem .4rem;border-bottom:2px solid #dde3ea;'
-            'background:#f8f9fa;font-weight:500;color:#6c757d;font-size:.76rem;border-left:2px solid #dde3ea">SCI</th>'
-            '<th style="text-align:center;padding:.18rem .4rem;border-bottom:2px solid #dde3ea;'
-            'background:#f8f9fa;font-weight:500;color:#6c757d;font-size:.76rem">Decision</th>'
-            for _ in subject_ids
-        )
-        return (
-            '<div class="card" style="margin-bottom:.5rem" id="hyper-decisions-card">'
-            '<div class="panel-title">'
-            '<span>Channel Decisions &nbsp;'
-            '<span id="hyper-decisions-hint" style="font-weight:400;color:#aaa">per subject</span></span>'
-            "</div>"
-            '<div id="hyper-decisions-body" style="padding:.4rem .6rem .6rem">'
-            '<p style="font-size:.75rem;color:#888;margin:0 0 .4rem">'
-            "Click chip to cycle: &#8212; &#8594; good &#8594; bad. Saves to each subject's JSON.</p>"
-            '<table style="border-collapse:collapse;width:100%;font-size:.82rem">'
-            "<thead>"
-            "<tr>"
-            '<th rowspan="2" style="text-align:left;padding:.22rem .5rem;border-bottom:2px solid #dde3ea;'
-            'background:#f8f9fa;font-weight:600;vertical-align:bottom">Channel</th>'
-            f"{top_ths}"
-            "</tr>"
-            f"<tr>{sub_ths}</tr>"
-            "</thead>"
-            '<tbody id="hyper-decisions-tbody"></tbody>'
-            "</table></div></div>"
-        )
-
-    def _inject(self, html: str) -> str:
-        subject_ids    = self._extract_subjects(html)
-        modules        = self._build_modules()
-        ratings, notes = self._load_ratings()
-        decisions      = self._load_decisions(subject_ids)
-
-        decisions_var = (
-            f"<script>"
-            f"var _HYPER_DECISIONS={json.dumps(decisions, ensure_ascii=False)};"
-            f"var _HYPER_SUBJECTS={json.dumps(subject_ids, ensure_ascii=False)};"
-            f"var _SCI_THRESHOLD={self.sci_threshold};"
-            f"</script>"
-        )
-
-        js = (
-            _QC_JS
-            .replace("__SUBJECT__", self.html_path.stem)
-            .replace("__MODULES__", json.dumps(modules))
-            .replace("__RATINGS__", json.dumps(ratings))
-            .replace("__NOTES__",   json.dumps(notes))
-            .replace('fetch("/save_ratings"', 'fetch("/save_hyper_ratings"')
-        )
-
-        html = html.replace("</head>", f"{_QC_CSS}{decisions_var}</head>", 1)
-        html = html.replace("<body>",  f"<body>\n{_QC_BAR_HTML}",        1)
-
-        # new HTML (from template) already has the card + JS — only inject QC rating bar script
-        if 'id="hyper-decisions-card"' in html:
-            html = html.replace("</body>", f"{js}</body>", 1)
-        else:
-            cd_section = self._build_cd_section(subject_ids)
-            html = html.replace("</body>", f"{_CD_CSS}{cd_section}{_HYPER_CD_JS}{js}</body>", 1)
-
-        return html
-
     def _setup_routes(self) -> None:
         app = self.app
 
@@ -856,7 +338,15 @@ class HyperRatingApp:
         def index():
             if not self.html_path.exists():
                 return f"<h2>Report not found: {self.html_path}</h2>", 404
-            return self._inject(self.html_path.read_text(encoding="utf-8"))
+            return self.html_path.read_text(encoding="utf-8")
+
+        @app.route("/load_hyper_ratings", methods=["GET"])
+        def load_hyper_ratings():
+            return jsonify(self._load_ratings())
+
+        @app.route("/load_decisions", methods=["GET"])
+        def load_decisions():
+            return jsonify(self._load_decisions())
 
         @app.route("/save_hyper_ratings", methods=["POST"])
         def save_hyper_ratings():
@@ -865,6 +355,10 @@ class HyperRatingApp:
         @app.route("/save_hyper_decisions", methods=["POST"])
         def save_hyper_decisions():
             return self._handle_save_decisions()
+
+        @app.route("/<path:filename>")
+        def static_files(filename):
+            return send_from_directory(self.output_dir, filename)
 
     def _handle_save_ratings(self):
         data = request.json

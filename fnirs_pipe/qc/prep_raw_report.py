@@ -277,6 +277,8 @@ def build_prep_raw_report(
     template = env.get_template("raw_viewer.html")
     html     = template.render(
         run_labels_json=json.dumps(run_labels),
+        run_labels=run_labels,
+        stem=output_path.stem,
         data_json=json.dumps(static_data),
     )
     output_path.parent.mkdir(parents=True, exist_ok=True)

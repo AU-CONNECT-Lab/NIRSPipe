@@ -189,6 +189,20 @@
 </head>
 <body>
 
+{# Fallback modules: used in static mode and overridden by /load_ratings/<pid> when Flask serves. #}
+{% set _glm_module = [{"id": "GLM", "name": "GLM"}] if (mode == "glm") else [] %}
+{% set rating_subject = "sub-" ~ subject %}
+{% set rating_modules = [[
+  {"id": "Signal", "name": "Signal"},
+  {"id": "Motion", "name": "Motion"},
+  {"id": "HbO_HbR", "name": "HbO HbR"},
+] + _glm_module + [
+  {"id": "Final", "name": "Final"},
+]] %}
+{% set rating_save_endpoint = "/save_ratings" %}
+{% set rating_load_endpoint = "/load_ratings/sub-" ~ subject %}
+{% include "_rating_bar.html.j2" %}
+
 <!-- ================================================================ top nav -->
 <nav id="report-nav">
   <a href="#Final">Summary</a>

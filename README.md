@@ -187,6 +187,31 @@ output/
 - Bad channel rate indicator (green < 10% / yellow 10–30% / red > 30%)
 - Auto-generated Methods section + software versions + references
 
+## QC Report Output Layout
+
+`fnirs-qc prep-raw` and `fnirs-qc hyper-raw` follow a BIDS-derivatives layout
+(mirroring mriqc / fmriprep): main HTMLs at the root, per-entity subdirs hold
+figures and IQM data.
+
+```
+output/qc/
+├── sub-01_task-tapping_desc-raw_nirs.html               # main viewer
+├── sub-01_task-tapping_raw_channel_decisions.json       # rating sidecar
+├── sub-01_task-tapping_raw_ratings.json
+├── sub-01/
+│   ├── figures/                                         # standalone Plotly HTMLs (iframe-loaded)
+│   │   ├── sub-01_task-tapping_desc-scipsp_nirs.html
+│   │   ├── sub-01_task-tapping_desc-chS1D1_nirs.html    # per-channel detail
+│   │   └── ...
+│   └── [ses-XX/]nirs/
+│       └── sub-01[_ses-XX]_task-tapping_desc-iqm_nirs.json
+├── group-G1003_task-nohold_desc-hyperraw_nirs.html
+└── group-G1003/
+    ├── figures/
+    └── [ses-XX/]nirs/
+        └── group-G1003[_ses-XX]_task-nohold_desc-iqm_nirs.json
+```
+
 ## Package Structure
 
 ```

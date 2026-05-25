@@ -96,9 +96,10 @@ select#run-select {
 /* channel decision chips */
 .cd-chip { cursor:pointer; padding:0.1rem 0.5rem; border-radius:3px; font-size:0.78rem;
            font-weight:600; display:inline-block; min-width:4.2rem; text-align:center; }
-.cd-chip.cd-unrated { background:#e9ecef; color:#6c757d; }
-.cd-chip.cd-good    { background:#d4edda; color:#155724; }
-.cd-chip.cd-bad     { background:#f8d7da; color:#721c24; }
+.cd-chip.cd-unrated  { background:#e9ecef; color:#6c757d; }
+.cd-chip.cd-good     { background:#d4edda; color:#155724; }
+.cd-chip.cd-bad      { background:#f8d7da; color:#721c24; }
+.cd-chip.cd-disabled { opacity:0.45; pointer-events:none; cursor:not-allowed; }
 
 /* panel titles */
 .panel-title {
@@ -109,6 +110,20 @@ select#run-select {
 </style>
 </head>
 <body>
+
+{% set ns = namespace(modules=[]) %}
+{% for label in run_labels %}
+  {% set _ = ns.modules.append([
+    {"id": label ~ "_Raw_Signal", "name": "Raw Signal"},
+    {"id": label ~ "_SCI_PSP",    "name": "SCI PSP"},
+    {"id": label ~ "_Final",      "name": "Final"},
+  ]) %}
+{% endfor %}
+{% set rating_subject = stem %}
+{% set rating_modules = ns.modules %}
+{% set rating_save_endpoint = "/save_raw_ratings" %}
+{% set rating_load_endpoint = "/load_raw_ratings" %}
+{% include "_rating_bar.html.j2" %}
 
 <nav id="qc-nav">
   <h1>fnirs&#8209;pipe Raw Viewer</h1>
@@ -259,10 +274,10 @@ var _selChannel = null;
 var _bandShapes = [];
 var _mkRO       = null;
 
-// channel decisions (injected by Flask when served via fnirs-rate raw)
-var _IS_FLASK       = (typeof _CHANNEL_DECISIONS !== "undefined");
-var _chDecisions    = _IS_FLASK ? (window._CHANNEL_DECISIONS || {}) : {};
-var _sciThreshold   = (typeof _SCI_THRESHOLD !== "undefined") ? _SCI_THRESHOLD : 0.8;
+// channel decisions: fetched from /load_channel_decisions when served via fnirs-rate raw
+var _isStaticCD     = true;
+var _chDecisions    = {};
+var _sciThreshold   = 0.8;
 var _cdOpen         = true;
 var _cdSaveTimer    = null;
 
@@ -718,12 +733,20 @@ function switchRun(idx) {
   }
 }
 
-(function() {
-  if (!_IS_FLASK) {
+// Try to fetch existing channel decisions; failure → static (read-only) mode.
+fetch("/load_channel_decisions")
+  .then(function(r) { if (!r.ok) throw new Error("load failed"); return r.json(); })
+  .then(function(data) {
+    _isStaticCD  = false;
+    _chDecisions = data || {};
+    buildChDecisionsTable();
+  })
+  .catch(function() {
+    _isStaticCD = true;
     var h = document.getElementById("ch-decisions-hint");
     if (h) h.textContent = "read-only · launch via fnirs-rate raw to save decisions";
-  }
-})();
+    buildChDecisionsTable();
+  });
 
 // ─── channel decisions ────────────────────────────────────────────────────────
 
@@ -764,18 +787,19 @@ function buildChDecisionsTable() {
     // pair decision: one chip writes both hbo + hbr simultaneously
     var state = decided[hbo] || "unrated";
     var chip  = document.createElement("span");
-    chip.className   = "cd-chip cd-" + state;
+    chip.className   = "cd-chip cd-" + state + (_isStaticCD ? " cd-disabled" : "");
     chip.textContent = {unrated: "—", good: "good", bad: "bad"}[state];
-    chip.addEventListener("click", function() {
-      if (!_IS_FLASK) return;
-      if (!_chDecisions[runLabel]) _chDecisions[runLabel] = {};
-      var next = {unrated: "good", good: "bad", bad: "unrated"}[_chDecisions[runLabel][hbo] || "unrated"];
-      _chDecisions[runLabel][hbo] = next;
-      _chDecisions[runLabel][hbr] = next;
-      chip.className   = "cd-chip cd-" + next;
-      chip.textContent = {unrated: "—", good: "good", bad: "bad"}[next];
-      _cdScheduleSave();
-    });
+    if (!_isStaticCD) {
+      chip.addEventListener("click", function() {
+        if (!_chDecisions[runLabel]) _chDecisions[runLabel] = {};
+        var next = {unrated: "good", good: "bad", bad: "unrated"}[_chDecisions[runLabel][hbo] || "unrated"];
+        _chDecisions[runLabel][hbo] = next;
+        _chDecisions[runLabel][hbr] = next;
+        chip.className   = "cd-chip cd-" + next;
+        chip.textContent = {unrated: "—", good: "good", bad: "bad"}[next];
+        _cdScheduleSave();
+      });
+    }
 
     var td1 = document.createElement("td");
     td1.style.cssText = "padding:0.18rem 0.5rem;border-bottom:1px solid #f0f0f0";
@@ -795,7 +819,7 @@ function buildChDecisionsTable() {
 }
 
 function _cdScheduleSave() {
-  if (!_IS_FLASK) return;
+  if (_isStaticCD) return;
   if (_cdSaveTimer) clearTimeout(_cdSaveTimer);
   _cdSaveTimer = setTimeout(function() {
     fetch("/save_channel_decisions", {

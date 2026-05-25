@@ -7,16 +7,24 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
-- `fnirs-log merge` CLI: consolidates JSONL event files into a SQLite database (`logs/fnirs_pipe.db`)
-- `utils/job_db.py`: JSONL writers for pipeline executions, per-subject runs, IQM checkpoints, and stdout/stderr; SQLite merge logic
-- `fnirs-pipe` now logs execution start/end, per-subject run start/end, and IQM scalars (raw + final) as JSONL on every run
-- `PrepResult` now exposes `iqm_raw` and `iqm_final` dicts for downstream use
-- `fnirs-gui` Data Preparation page: SNIRF file picker, editable marker table, IQM summary panel
-- `fnirs-gui` Analysis page (stub)
+- `fnirs-log merge` + `utils/job_db.py`: SQLite DB from JSONL run logs
+- `fnirs-gui` Data Preparation page (Analysis page stub)
+- Boilerplate: paragraph-style Methods + HTML "Rendered" tab
+- Hyper raw report supports `--session-label`
+
+### Changed
+- **QC reports use BIDS-derivatives layout** (mriqc-style: per-subject / per-group subdirs with `figures/` and `[ses-XX/]nirs/`)
+- Filenames standardized to `_nirs.*` suffix; main HTMLs use BIDS desc (`..._desc-raw_nirs.html`, `..._desc-hyperraw_nirs.html`)
+- Hyper raw report now an iframe shell with auto-resize; Plotly loaded from CDN
+- Shared helpers extracted: `qc/figure_io.py`, `qc/hyper_raw_writer.py`, `_base.css`, `_macros.html.j2`
+
+### Fixed
+- `HyperRatingApp` session-aware path for channel-decisions JSON
+- `fnirs-qc` CLI initializes logging
 
 ### Known Issues
-- Functional connectivity mode raises `NotImplementedError`
-- Group-level report raises `NotImplementedError`
+- Connectivity mode and group-level report raise `NotImplementedError`
+- `compute_alff` numerical validation pending (see TODO)
 
 ---
 

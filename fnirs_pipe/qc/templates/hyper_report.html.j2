@@ -38,9 +38,20 @@ select#ch-select {
 .cd-chip.cd-unrated{background:#e9ecef;color:#6c757d}
 .cd-chip.cd-good{background:#d4edda;color:#155724}
 .cd-chip.cd-bad{background:#f8d7da;color:#721c24}
+.cd-chip.cd-disabled{opacity:.45;pointer-events:none;cursor:not-allowed}
 </style>
 </head>
 <body>
+
+{% set rating_subject = "group-" ~ group_id ~ "_task-" ~ task %}
+{% set rating_modules = [[
+  {"id": "Signal_Quality", "name": "Signal Quality"},
+  {"id": "Coherence", "name": "Coherence"},
+  {"id": "Final", "name": "Final"},
+]] %}
+{% set rating_save_endpoint = "/save_hyper_ratings" %}
+{% set rating_load_endpoint = "/load_hyper_ratings" %}
+{% include "_rating_bar.html.j2" %}
 
 <nav id="qc-nav">
   <h1>fnirs&#8209;pipe &nbsp; Hyper Raw Report</h1>
@@ -252,24 +263,33 @@ function _pairFname(pair) {
 
 <script>
 (function(){
-  var _IS_FLASK       = (typeof window._HYPER_DECISIONS !== "undefined");
-  var _hyperDecisions = _IS_FLASK ? JSON.parse(JSON.stringify(window._HYPER_DECISIONS)) : {};
-  var _hdTimer = null;
+  var _hyperDecisions = {};
+  var _isStatic       = true;
+  var _hdTimer        = null;
 
-  document.addEventListener("DOMContentLoaded", function() {
-    if (!_IS_FLASK) {
+  var subjects = window._HYPER_SUBJECTS || Object.keys(window._SCI_PER_SUBJECT || {});
+  var pairs    = window._CH_PAIRS || [];
+
+  fetch("/load_decisions")
+    .then(function(r) { if (!r.ok) throw new Error("load failed"); return r.json(); })
+    .then(function(data) {
+      _isStatic = false;
+      _hyperDecisions = data || {};
+      var hint = document.getElementById("hyper-decisions-hint");
+      if (hint) hint.textContent = "per subject";
+      buildTable();
+    })
+    .catch(function() {
+      _isStatic = true;
       var hint = document.getElementById("hyper-decisions-hint");
       if (hint) hint.textContent = "read-only · launch via fnirs-rate hyper to save decisions";
-    }
-    buildTable();
-  });
+      buildTable();
+    });
 
   function buildTable() {
     var tbody = document.getElementById("hyper-decisions-tbody");
     if (!tbody) return;
     tbody.innerHTML = "";
-    var subjects = window._HYPER_SUBJECTS || Object.keys(window._SCI_PER_SUBJECT || {});
-    var pairs    = window._CH_PAIRS || [];
     if (!pairs.length) {
       var cols = subjects.length * 2 + 1;
       tbody.innerHTML = "<tr><td colspan='"+cols+"' style='color:#adb5bd;font-style:italic;text-align:center;padding:.5rem'>No channels</td></tr>";
@@ -297,21 +317,22 @@ function _pairFname(pair) {
         if (!_hyperDecisions[sid]) _hyperDecisions[sid] = {};
         var state = _hyperDecisions[sid][hbo] || "unrated";
         var chip = document.createElement("span");
-        chip.className = "cd-chip cd-" + state;
+        chip.className = "cd-chip cd-" + state + (_isStatic ? " cd-disabled" : "");
         chip.textContent = {unrated:"—", good:"good", bad:"bad"}[state];
-        chip.addEventListener("click", (function(s, h1, h2, c) {
-          return function() {
-            if (!_IS_FLASK) return;
-            if (!_hyperDecisions[s]) _hyperDecisions[s] = {};
-            var cur  = _hyperDecisions[s][h1] || "unrated";
-            var next = {unrated:"good", good:"bad", bad:"unrated"}[cur];
-            _hyperDecisions[s][h1] = next;
-            _hyperDecisions[s][h2] = next;
-            c.className   = "cd-chip cd-" + next;
-            c.textContent = {unrated:"—", good:"good", bad:"bad"}[next];
-            save();
-          };
-        })(sid, hbo, hbr, chip));
+        if (!_isStatic) {
+          chip.addEventListener("click", (function(s, h1, h2, c) {
+            return function() {
+              if (!_hyperDecisions[s]) _hyperDecisions[s] = {};
+              var cur  = _hyperDecisions[s][h1] || "unrated";
+              var next = {unrated:"good", good:"bad", bad:"unrated"}[cur];
+              _hyperDecisions[s][h1] = next;
+              _hyperDecisions[s][h2] = next;
+              c.className   = "cd-chip cd-" + next;
+              c.textContent = {unrated:"—", good:"good", bad:"bad"}[next];
+              save();
+            };
+          })(sid, hbo, hbr, chip));
+        }
 
         var tdDec = document.createElement("td");
         tdDec.style.cssText = "padding:.18rem .45rem;border-bottom:1px solid #f0f0f0;text-align:center";
@@ -323,7 +344,7 @@ function _pairFname(pair) {
   }
 
   function save() {
-    if (typeof window._HYPER_DECISIONS === "undefined") return;
+    if (_isStatic) return;
     if (_hdTimer) clearTimeout(_hdTimer);
     _hdTimer = setTimeout(function() {
       fetch("/save_hyper_decisions", {
