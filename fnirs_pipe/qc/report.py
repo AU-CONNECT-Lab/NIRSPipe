@@ -40,6 +40,7 @@ Errors / Methods / Software Versions
 
 import base64
 import csv
+import re
 from contextlib import contextmanager
 import matplotlib
 matplotlib.use("Agg")
@@ -54,6 +55,10 @@ import mne.io
 from jinja2 import Environment, FileSystemLoader
 
 from fnirs_pipe.qc.boilerplate import collect_software_versions, generate_methods_text
+from fnirs_pipe.qc.figure_io import (
+    PLOTLY_CDN_URL, _IFRAME_CSS, _RESIZE_JS,
+    _figure_height, _pair_fname, _save_multi_fig_html,
+)
 from fnirs_pipe.qc.figures import (
     carpet_gvtd_figure,
     bad_segment_zoom_figure,
@@ -80,37 +85,6 @@ if TYPE_CHECKING:
 
 logger = get_logger("qc.report")
 _TEMPLATE_DIR = Path(__file__).parent / "templates"
-_PLOTLY_CDN   = "https://cdn.plot.ly/plotly-2.35.2.min.js"
-
-
-def _pair_fname(pair: str) -> str:
-    return pair.replace(" ", "_").replace("/", "-").replace("\\", "-")
-
-
-def _save_multi_fig_html(figs: list, path: Path) -> int:
-    """Stack multiple Plotly figures in one HTML file. Returns total height px."""
-    head = (
-        f'<meta charset="UTF-8">'
-        f'<script src="{_PLOTLY_CDN}"></script>'
-        f'<style>*{{box-sizing:border-box;}}body{{margin:0;padding:0;background:#fff;}}'
-        f'.pfig{{margin-bottom:2px;}}</style>'
-    )
-    parts = [f"<!DOCTYPE html><html><head>{head}</head><body>"]
-    total_h = 0
-    for i, fig in enumerate(figs):
-        if fig is None:
-            continue
-        h = _figure_height(fig)
-        total_h += h + 2
-        fig_html = fig.to_html(
-            full_html=False, include_plotlyjs=False,
-            div_id=f"pfig{i}", config={"responsive": True},
-        )
-        parts.append(f'<div class="pfig">{fig_html}</div>')
-    parts.append("</body></html>")
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text("\n".join(parts), encoding="utf-8")
-    return max(total_h, 100)
 
 
 # ---------------------------------------------------------------------------
@@ -147,38 +121,21 @@ def _save_b64_png(b64: str, path: Path) -> None:
     path.write_bytes(base64.b64decode(b64))
 
 
-_IFRAME_CSS = "<style>html,body{margin:0;padding:0;overflow:hidden;width:100%;height:100%;}</style>"
-
-
-def _figure_height(fig, default: int = 500) -> int:
-    h = getattr(getattr(fig, "layout", None), "height", None)
-    if h:
-        return int(h)
-    for trace in getattr(fig, "data", ()):
-        if getattr(trace, "type", "") == "heatmap":
-            y = getattr(trace, "y", None)
-            if y is not None:
-                return max(300, min(len(y) * 22 + 140, 1400))
-    return default
-
-
 def _save_plotly_html(fig, path: Path, div_id: str | None = None) -> tuple[str, int]:
-    """Save Plotly figure as standalone HTML. Returns (relative_path, height_px)."""
+    """Save Plotly figure as standalone iframe-ready HTML. Returns (relative_path, height_px)."""
     h = _figure_height(fig)
-    fig.update_layout(height=h)  # width stays auto (responsive)
+    fig.update_layout(height=h)
     path.parent.mkdir(parents=True, exist_ok=True)
     kwargs = {"div_id": div_id} if div_id else {}
-    html = fig.to_html(full_html=True, include_plotlyjs="cdn",
+    html = fig.to_html(full_html=True, include_plotlyjs=False,
                        config={"responsive": True}, **kwargs)
-    html = html.replace("<head>", f"<head>\n{_IFRAME_CSS}", 1)
+    html = html.replace(
+        "<head>",
+        f'<head>\n<style>{_IFRAME_CSS}</style>\n<script src="{PLOTLY_CDN_URL}"></script>\n{_RESIZE_JS}',
+        1,
+    )
     path.write_text(html, encoding="utf-8")
     return f"figures/{path.name}", h
-
-
-def _plotly_to_html(fig, div_id: str | None = None) -> str:
-    kwargs = {"div_id": div_id} if div_id else {}
-    return fig.to_html(full_html=False, include_plotlyjs="cdn",
-                       config={"responsive": True}, **kwargs)
 
 
 # ---------------------------------------------------------------------------
@@ -449,9 +406,8 @@ def _section_iqm(
     with _guard("IQM computation", errors, subject):
         iqm = compute_iqm(raw_long, raw_haemo, sci_scores, bad_channels)
     channel_rows = []
-    import re as _re
     for ch in sci_scores:
-        pair_key = _re.sub(r'\s+(\d+|hbo|hbr)$', '', ch, flags=_re.IGNORECASE)
+        pair_key = re.sub(r'\s+(\d+|hbo|hbr)$', '', ch, flags=re.IGNORECASE)
         channel_rows.append({
             "name":   ch,
             "sci":    iqm.get("sci_per_channel", {}).get(ch),

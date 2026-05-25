@@ -109,8 +109,9 @@ def build_boxplot_per_metric(
             line=dict(color="#7f8c8d"), fillcolor="rgba(189,195,199,0.3)",
             hoverinfo="skip", showlegend=False,
         ), row=r, col=c)
+        rng = np.random.default_rng(seed=idx)
         fig.add_trace(go.Scatter(
-            x=np.random.uniform(-0.18, 0.18, size=len(rows)),
+            x=rng.uniform(-0.18, 0.18, size=len(rows)),
             y=vals, mode="markers",
             marker=dict(color=colors, size=7,
                         line=dict(width=0.5, color="#2c3e50")),

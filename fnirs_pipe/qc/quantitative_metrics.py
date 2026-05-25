@@ -36,16 +36,17 @@ def _intensity_metrics(raw_intensity: mne.io.Raw) -> dict[str, Any]:
     try:
         int_data = raw_intensity.get_data()
         ch_means = int_data.mean(axis=1)
+        ch_stds  = int_data.std(axis=1)
         cv_per_ch = {
-            ch: float(int_data[i].std() / ch_means[i])
+            ch: float(ch_stds[i] / ch_means[i])
             for i, ch in enumerate(raw_intensity.ch_names)
             if ch_means[i] != 0
         }
         # SNR = mean/std on raw intensity per channel
         snr_per_ch = {
-            ch: float(ch_means[i] / int_data[i].std())
+            ch: float(ch_means[i] / ch_stds[i])
             for i, ch in enumerate(raw_intensity.ch_names)
-            if int_data[i].std() > 0
+            if ch_stds[i] > 0
         }
         mean_amp_per_ch = {
             ch: float(ch_means[i])

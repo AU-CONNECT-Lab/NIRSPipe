@@ -52,7 +52,7 @@ def _collect_iqm(
     if not rows:
         return pd.DataFrame(columns=["bids_name"])
     cols = ["bids_name"] + sorted({k for r in rows for k in r if k != "bids_name"})
-    return pd.DataFrame(rows, columns=cols).reindex(columns=cols)
+    return pd.DataFrame(rows, columns=cols)
 
 
 def _build_group(
