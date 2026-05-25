@@ -53,12 +53,12 @@ Complete the Analysis page in `fnirs-gui`:
 - Display live progress and log output in the interface
 - Show report preview or figure output after run completes
 
-## v0.10 — Group-Level QC Report `[ ]`
+## v0.10 — Group-Level QC Report `[x]`
 
-Aggregate IQM scalars from per-subject TOML sidecars into a group-level summary.
+`fnirs-qc group-raw` aggregates `sub-*/nirs/*_desc-iqm_nirs.json` into `group_nirs.{tsv,html}`.
+`fnirs-qc group-hyper-raw` aggregates `group-*/nirs/*_desc-iqm_nirs.json` into `group_hyper_nirs.{tsv,html}`.
 
-- Distribution plots per metric, outlier flagging across subjects
-- Output: group-level HTML report + CSV/TSV table of all subject IQMs
+HTML report (iframe shell): subject × metric robust-z heatmap, per-metric boxplots with Tukey 1.5×IQR outlier highlighting, sortable table, outlier panel.
 
 ---
 

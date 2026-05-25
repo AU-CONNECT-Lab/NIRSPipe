@@ -1,0 +1,180 @@
+{% from "_macros.html.j2" import card %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<title>{{ title }}</title>
+<style>
+{{ base_css }}
+
+.plot-frame { width: 100%; border: none; display: block; }
+
+#qc-nav .nav-meta b { color: #2c3e50; }
+
+#summary-bar {
+  padding: 0.6rem 1rem;
+  font-size: 0.88rem;
+  color: #2c3e50;
+}
+#summary-bar a {
+  color: #2980b9; text-decoration: none; font-weight: 600;
+  margin-left: 0.6rem;
+}
+#summary-bar a:hover { text-decoration: underline; }
+
+#group-table-wrap { padding: 0; overflow: auto; max-height: 600px; }
+table.group-table {
+  width: 100%; border-collapse: collapse; font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+}
+table.group-table th, table.group-table td {
+  border-bottom: 1px solid #eef0f3; padding: 0.25rem 0.55rem; text-align: right;
+  white-space: nowrap;
+}
+table.group-table th {
+  background: #f8f9fa; cursor: pointer; user-select: none;
+  position: sticky; top: 0; font-weight: 600; text-align: right;
+  border-bottom: 2px solid #dde3ea;
+}
+table.group-table th:first-child, table.group-table td:first-child {
+  text-align: left; position: sticky; left: 0; background: #fff;
+  border-right: 1px solid #dde3ea;
+}
+table.group-table th:first-child { background: #f8f9fa; z-index: 2; }
+table.group-table tbody tr:hover td { background: #f5fbff; }
+table.group-table th .sort-ind { color: #adb5bd; font-size: 0.7rem; margin-left: 0.3rem; }
+
+#outlier-list { padding: 0.6rem 1rem; font-size: 0.85rem; }
+#outlier-list ul { margin: 0; padding-left: 1.2rem; }
+#outlier-list li { padding: 0.18rem 0; border-bottom: 1px solid #eef0f3; }
+#outlier-list li b { color: #c0392b; }
+#outlier-list .no-out { color: #27ae60; font-weight: 600; }
+.outlier-metric {
+  display: inline-block; background: #fff3cd; color: #856404;
+  padding: 0.05rem 0.4rem; margin: 0 0.15rem; border-radius: 3px; font-size: 0.78rem;
+}
+</style>
+</head>
+<body>
+
+<nav id="qc-nav">
+  <h1>{{ title }}</h1>
+  <span class="nav-meta">rows: <b>{{ n_rows }}</b></span>
+  <span class="nav-meta">metrics: <b>{{ n_metrics }}</b></span>
+  <span class="nav-meta" style="margin-left:auto">
+    <a href="{{ tsv_name }}" download style="color:#2980b9;text-decoration:none;font-weight:600">⬇ {{ tsv_name }}</a>
+  </span>
+</nav>
+
+<div class="card" id="summary-card">
+  <div id="summary-bar">
+    Jump to: <a href="#heatmap">Heatmap</a> · <a href="#boxplots">Boxplots</a> · <a href="#outliers">Outliers</a> · <a href="#table">Table</a>
+  </div>
+</div>
+
+<a id="heatmap"></a>
+{% if figure_paths.heatmap %}
+{% call card("Heatmap (subject &times; metric, robust z-score)", hint="red &asymp; high &bull; blue &asymp; low &bull; |z| &gt; 2 likely outlier") %}
+<iframe class="plot-frame" src="{{ figure_paths.heatmap.src }}"
+        style="height:{{ figure_paths.heatmap.h }}px"></iframe>
+{% endcall %}
+{% endif %}
+
+<a id="boxplots"></a>
+{% if figure_paths.boxplot %}
+{% call card("Boxplot per metric", hint="distribution + per-subject scatter &bull; red dots = Tukey 1.5&times;IQR outliers") %}
+<iframe class="plot-frame" src="{{ figure_paths.boxplot.src }}"
+        style="height:{{ figure_paths.boxplot.h }}px"></iframe>
+{% endcall %}
+{% endif %}
+
+<a id="outliers"></a>
+{% call card("Outliers", hint="subjects beyond Tukey fence (Q1 &minus; 1.5&times;IQR, Q3 + 1.5&times;IQR) on any metric") %}
+<div id="outlier-list">
+  {% if outliers %}
+  <ul>
+    {% for sid, metrics in outliers.items() %}
+    <li><b>{{ sid }}</b> &mdash;
+      {% for m in metrics %}<span class="outlier-metric">{{ m }}</span>{% endfor %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="no-out">No outliers flagged.</p>
+  {% endif %}
+</div>
+{% endcall %}
+
+<a id="table"></a>
+{% call card("All metrics (sortable)", hint="click column header to sort &bull; first column sticky") %}
+<div id="group-table-wrap">
+  <table class="group-table" id="group-table">
+    <thead><tr>
+      {% for c in table_columns %}
+      <th data-col="{{ loop.index0 }}">{{ c }}<span class="sort-ind">⇅</span></th>
+      {% endfor %}
+    </tr></thead>
+    <tbody>
+      {% for row in table_rows %}
+      <tr>
+        {% for v in row %}
+        <td>{{ v if v is not none else "—" }}</td>
+        {% endfor %}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endcall %}
+
+<script>
+(function() {
+  var table = document.getElementById("group-table");
+  if (!table) return;
+  var thead = table.querySelector("thead");
+  var tbody = table.querySelector("tbody");
+  var asc = {};
+
+  function cellValue(td) {
+    var v = td.textContent.trim();
+    if (v === "" || v === "—") return null;
+    var n = Number(v);
+    return Number.isFinite(n) ? n : v.toLowerCase();
+  }
+
+  thead.querySelectorAll("th").forEach(function(th) {
+    th.addEventListener("click", function() {
+      var col = +th.dataset.col;
+      var direction = asc[col] = !asc[col];
+      var rows = Array.from(tbody.querySelectorAll("tr"));
+      rows.sort(function(a, b) {
+        var va = cellValue(a.children[col]);
+        var vb = cellValue(b.children[col]);
+        if (va === null && vb === null) return 0;
+        if (va === null) return 1;
+        if (vb === null) return -1;
+        if (va < vb) return direction ? -1 : 1;
+        if (va > vb) return direction ? 1 : -1;
+        return 0;
+      });
+      rows.forEach(function(r) { tbody.appendChild(r); });
+      thead.querySelectorAll(".sort-ind").forEach(function(s) { s.textContent = "⇅"; });
+      th.querySelector(".sort-ind").textContent = direction ? "▲" : "▼";
+    });
+  });
+
+  // iframe auto-resize listener (same protocol as figure_io.py)
+  window.addEventListener("message", function(e) {
+    if (!e.data || e.data.type !== "iframe-resize") return;
+    var frames = document.querySelectorAll("iframe");
+    for (var i = 0; i < frames.length; i++) {
+      if (frames[i].contentWindow === e.source) {
+        frames[i].style.height = e.data.h + "px";
+        return;
+      }
+    }
+  });
+})();
+</script>
+</body>
+</html>

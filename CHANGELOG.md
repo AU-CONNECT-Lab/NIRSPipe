@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 - `fnirs-gui` Data Preparation page (Analysis page stub)
 - Boilerplate: paragraph-style Methods + HTML "Rendered" tab
 - Hyper raw report supports `--session-label`
+- `fnirs-qc group-raw` / `group-hyper-raw`: mriqc-style group reports (heatmap, boxplots, table, outlier panel)
 
 ### Changed
 - **QC reports use BIDS-derivatives layout** (mriqc-style: per-subject / per-group subdirs with `figures/` and `[ses-XX/]nirs/`)
@@ -23,7 +24,7 @@ All notable changes to this project will be documented in this file.
 - `fnirs-qc` CLI initializes logging
 
 ### Known Issues
-- Connectivity mode and group-level report raise `NotImplementedError`
+- Connectivity mode raises `NotImplementedError`
 - `compute_alff` numerical validation pending (see TODO)
 
 ---

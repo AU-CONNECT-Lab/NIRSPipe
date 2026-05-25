@@ -212,6 +212,28 @@ def hyper_raw(
 
 
 @app.command()
+def group_raw(
+    output_dir: Annotated[Path, typer.Argument(help="fnirs-pipe derivatives directory (contains sub-*/nirs/ IQM JSONs)")],
+) -> None:
+    """Aggregate per-subject prep-raw IQMs into group_nirs.tsv + group_nirs.html."""
+    from fnirs_pipe.qc.group_writer import build_group_raw_report
+
+    path = build_group_raw_report(output_dir)
+    typer.echo(f"report -> {path}")
+
+
+@app.command()
+def group_hyper_raw(
+    output_dir: Annotated[Path, typer.Argument(help="fnirs-pipe derivatives directory (contains group-*/nirs/ IQM JSONs)")],
+) -> None:
+    """Aggregate per-group hyper-raw IQMs into group_hyper_nirs.tsv + group_hyper_nirs.html."""
+    from fnirs_pipe.qc.group_writer import build_group_hyper_raw_report
+
+    path = build_group_hyper_raw_report(output_dir)
+    typer.echo(f"report -> {path}")
+
+
+@app.command()
 def hyper_post(
     bids_dir: Annotated[Path, typer.Argument(help="BIDS dataset root")],
     output_dir: Annotated[Path, typer.Argument(help="fnirs-pipe derivatives directory")],
