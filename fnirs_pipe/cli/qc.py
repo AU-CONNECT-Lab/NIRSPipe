@@ -234,6 +234,34 @@ def group_hyper_raw(
 
 
 @app.command()
+def window_raw(
+    bids_dir: Annotated[Path, typer.Argument(help="BIDS dataset root")],
+    output_dir: Annotated[Path, typer.Argument(help="QC output directory (where group_nirs.html lives)")],
+    task_label: Annotated[str, typer.Option("--task-label", help="BIDS task label (one task at a time).")],
+    tstart: Annotated[float, typer.Option("--tstart", help="Window start time (s)")],
+    tend: Annotated[float, typer.Option("--tend",   help="Window end time (s)")],
+    participant_label: Annotated[Optional[list[str]], typer.Option("--participant-label", help="Subject(s) to include (default: all).")] = None,
+    session_label: Annotated[Optional[list[str]], typer.Option("--session-label", help="Session label(s) to include.")] = None,
+    align: Annotated[str, typer.Option("--align", help="t=0 origin: 'none' = recording start, 'trigger' = first matching annotation.")] = "none",
+    trigger_name: Annotated[Optional[str], typer.Option("--trigger-name", help="Annotation description used when --align trigger.")] = None,
+    name: Annotated[Optional[str], typer.Option("--name", help="Output suffix (default: window-{tstart}-{tend}).")] = None,
+    sci_threshold: Annotated[float, typer.Option("--sci-threshold", help="SCI threshold for bad-channel detection.")] = 0.8,
+    skip_bids_validation: Annotated[bool, typer.Option("--skip-bids-validation/--no-skip-bids-validation")] = False,
+) -> None:
+    """Crop each subject's raw to [tstart, tend] + aggregate IQM into a windowed group report."""
+    from fnirs_pipe.qc.window_writer import build_window_raw_report
+
+    path = build_window_raw_report(
+        bids_dir=bids_dir, output_dir=output_dir,
+        task=task_label, tstart=tstart, tend=tend,
+        participant_label=participant_label, session_label=session_label,
+        align=align, trigger_name=trigger_name, name=name,
+        sci_threshold=sci_threshold, skip_bids_validation=skip_bids_validation,
+    )
+    typer.echo(f"report -> {path}")
+
+
+@app.command()
 def hyper_post(
     bids_dir: Annotated[Path, typer.Argument(help="BIDS dataset root")],
     output_dir: Annotated[Path, typer.Argument(help="fnirs-pipe derivatives directory")],

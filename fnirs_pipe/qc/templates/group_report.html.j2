@@ -68,7 +68,9 @@ table.group-table th .sort-ind { color: #adb5bd; font-size: 0.7rem; margin-left:
 
 <div class="card" id="summary-card">
   <div id="summary-bar">
-    Jump to: <a href="#heatmap">Heatmap</a> · <a href="#boxplots">Boxplots</a> · <a href="#outliers">Outliers</a> · <a href="#table">Table</a>
+    Jump to: <a href="#heatmap">Heatmap</a> · <a href="#boxplots">Boxplots</a>
+    {% if windowed_panels %} · <a href="#windowed">Time × subject</a>{% endif %}
+    · <a href="#outliers">Outliers</a> · <a href="#table">Table</a>
   </div>
 </div>
 
@@ -86,6 +88,18 @@ table.group-table th .sort-ind { color: #adb5bd; font-size: 0.7rem; margin-left:
 <iframe class="plot-frame" src="{{ figure_paths.boxplot.src }}"
         style="height:{{ figure_paths.boxplot.h }}px"></iframe>
 {% endcall %}
+{% endif %}
+
+{% if windowed_panels %}
+<a id="windowed"></a>
+{% for p in windowed_panels %}
+{% set fp = figure_paths['window_' ~ p.key] %}
+{% if fp %}
+{% call card(p.title, hint="time &times; subject &bull; one column per window &bull; hover for value") %}
+<iframe class="plot-frame" src="{{ fp.src }}" style="height:{{ fp.h }}px"></iframe>
+{% endcall %}
+{% endif %}
+{% endfor %}
 {% endif %}
 
 <a id="outliers"></a>

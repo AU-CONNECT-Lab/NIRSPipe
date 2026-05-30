@@ -71,6 +71,50 @@ def build_heatmap(df: pd.DataFrame, metric_cols: list[str]) -> go.Figure | None:
     return fig
 
 
+def build_time_subject_heatmap(
+    rows: list[dict], metric_field: str, times_field: str, title: str,
+) -> go.Figure | None:
+    """Heatmap of one windowed metric across subjects and time.
+
+    `rows` is a list of dicts (one per subject) each containing the metric
+    array and matching `*_times_s` array. Rows missing the metric are skipped.
+    Different subjects may have different time bases; they are kept on the
+    union time axis (cells beyond a subject's recording = NaN).
+    """
+    series = []
+    for r in rows:
+        vals  = r.get(metric_field)
+        times = r.get(times_field)
+        if vals is None or times is None or not len(vals):
+            continue
+        series.append((r["bids_name"], np.asarray(times, dtype=float), np.asarray(vals, dtype=float)))
+    if not series:
+        return None
+
+    all_times = np.unique(np.concatenate([t for _, t, _ in series]))
+    z = np.full((len(series), len(all_times)), np.nan)
+    for i, (_, t, v) in enumerate(series):
+        idx = np.searchsorted(all_times, t)
+        z[i, idx] = v
+
+    subjects = [s for s, _, _ in series]
+    fig = go.Figure(go.Heatmap(
+        z=z, x=all_times.tolist(), y=subjects,
+        colorscale="RdYlGn", zauto=True,
+        hovertemplate="<b>%{y}</b><br>t=%{x:.0f}s<br>" + metric_field + "=%{z:.3f}<extra></extra>",
+        colorbar=dict(title=metric_field, thickness=12),
+    ))
+    fig.update_layout(
+        title=dict(text=title, x=0.02, xanchor="left", font=dict(size=13)),
+        height=max(320, 22 * len(subjects) + 160),
+        margin=dict(l=240, r=20, t=50, b=60),
+        plot_bgcolor="white",
+    )
+    fig.update_xaxes(title_text="Time (s)", gridcolor="#eeeeee", automargin=True)
+    fig.update_yaxes(automargin=True)
+    return fig
+
+
 def build_boxplot_per_metric(
     df: pd.DataFrame, metric_cols: list[str],
 ) -> go.Figure | None:

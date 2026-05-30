@@ -62,6 +62,10 @@ Page UI + command generator done in v0.7. Still missing:
 
 HTML report (iframe shell): subject × metric robust-z heatmap, per-metric boxplots with Tukey 1.5×IQR outlier highlighting, sortable table, outlier panel.
 
+prep-raw also persists `sci_per_window` / `psp_per_window` / `gvtd_per_window` into the IQM JSON; group-raw renders time × subject heatmaps for these so users can spot group-wide vs individual outlier windows.
+
+`fnirs-qc window-raw` crops each subject's raw recording to `[--tstart, --tend]` (`--align {none,trigger}`), recomputes IQM, and renders the same report layout into `group_nirs_{name}.{tsv,html}` — drill-down for "is this time window dropping for everyone?".
+
 ## v0.11 — AFNI-style Self-Contained QC Viewers `[x]`
 
 Rating Flask apps (`HyperRatingApp` / `RawRatingApp` / `FNIRSRatingApp`) refactored to AFNI style:

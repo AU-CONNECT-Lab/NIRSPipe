@@ -189,13 +189,13 @@ output/
 
 ## QC Report Output Layout
 
-`fnirs-qc prep-raw` and `fnirs-qc hyper-raw` follow a BIDS-derivatives layout
-(mirroring mriqc / fmriprep): main HTMLs at the root, per-entity subdirs hold
-figures and IQM data.
+The `fnirs-qc` commands follow a BIDS-derivatives layout (mirroring mriqc /
+fmriprep): main HTMLs at the root, per-entity subdirs hold figures and IQM
+data, group-level reports also sit at the root.
 
 ```
 output/qc/
-├── sub-01_task-tapping_desc-raw_nirs.html               # main viewer
+├── sub-01_task-tapping_desc-raw_nirs.html               # fnirs-qc prep-raw
 ├── sub-01_task-tapping_raw_channel_decisions.json       # rating sidecar
 ├── sub-01_task-tapping_raw_ratings.json
 ├── sub-01/
@@ -205,12 +205,34 @@ output/qc/
 │   │   └── ...
 │   └── [ses-XX/]nirs/
 │       └── sub-01[_ses-XX]_task-tapping_desc-iqm_nirs.json
-├── group-G1003_task-nohold_desc-hyperraw_nirs.html
+├── group-G1003_task-nohold_desc-hyperraw_nirs.html      # fnirs-qc hyper-raw
 └── group-G1003/
     ├── figures/
     └── [ses-XX/]nirs/
         └── group-G1003[_ses-XX]_task-nohold_desc-iqm_nirs.json
 ```
+
+Group-level reports (mriqc-style) at the same root, one per invocation:
+
+```
+output/qc/
+├── group_nirs.html / group_nirs.tsv                     # fnirs-qc group-raw
+├── group_nirs/                                          #   figures: heatmap / boxplot / time×subject
+│   ├── group_nirs_desc-heatmap_nirs.html
+│   ├── group_nirs_desc-boxplot_nirs.html
+│   └── group_nirs_desc-window{sci,psp,gvtd}_nirs.html
+├── group_hyper_nirs.html / group_hyper_nirs.tsv         # fnirs-qc group-hyper-raw
+├── group_hyper_nirs/
+├── group_nirs_window-<a>-<b>.html / .tsv                # fnirs-qc window-raw (per invocation)
+└── group_nirs_window-<a>-<b>/
+```
+
+- `group-raw` / `group-hyper-raw` aggregate existing per-subject / per-group
+  IQM JSONs into one report (heatmap + boxplots + sortable table + Tukey-IQR
+  outlier panel + time × subject heatmaps for SCI/PSP/GVTD).
+- `window-raw` crops each subject's raw recording to `[--tstart, --tend]`
+  (`--align {none,trigger}`), recomputes IQM, and renders the same layout —
+  useful for deciding whether to discard a specific time segment group-wide.
 
 ## Package Structure
 

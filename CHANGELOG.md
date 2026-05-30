@@ -12,6 +12,8 @@ All notable changes to this project will be documented in this file.
 - Boilerplate: paragraph-style Methods + HTML "Rendered" tab
 - Hyper raw report supports `--session-label`
 - `fnirs-qc group-raw` / `group-hyper-raw`: mriqc-style group reports (heatmap, boxplots, table, outlier panel)
+- prep-raw IQM JSON now stores `sci_per_window` / `psp_per_window` / `gvtd_per_window` + center times; group-raw renders time × subject heatmaps for these
+- `fnirs-qc window-raw <bids> <out> --task-label X --tstart S --tend S [--align trigger --trigger-name N]`: crop each subject to a time window, recompute IQM, render a windowed group report
 
 ### Changed
 - **QC reports use BIDS-derivatives layout** (mriqc-style: per-subject / per-group subdirs with `figures/` and `[ses-XX/]nirs/`)

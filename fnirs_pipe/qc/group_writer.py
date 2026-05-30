@@ -14,8 +14,16 @@ from fnirs_pipe.qc.figure_io import _save_figure_html
 from fnirs_pipe.qc.figures.group_figures import (
     build_boxplot_per_metric,
     build_heatmap,
+    build_time_subject_heatmap,
     detect_outliers,
 )
+
+# Per-window metrics that should produce a time × subject heatmap.
+_WINDOWED_METRICS = [
+    ("sci",  "sci_per_window",  "sci_window_times_s",  "SCI per window"),
+    ("psp",  "psp_per_window",  "psp_window_times_s",  "PSP per window"),
+    ("gvtd", "gvtd_per_window", "gvtd_window_times_s", "GVTD per window"),
+]
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("qc.group_writer")
@@ -35,38 +43,44 @@ def _bids_name_from_iqm_path(path: Path) -> str:
 
 def _collect_iqm(
     output_dir: Path, entity_glob: str,
-) -> pd.DataFrame:
+) -> tuple[pd.DataFrame, list[dict]]:
     """Glob IQM JSONs under output_dir matching entity prefix (e.g. 'sub-*' or 'group-*').
 
-    Each row has bids_name + all scalar IQM columns. Union schema across rows.
+    Returns (df, full_rows):
+      - df:        scalar IQM columns (bids_name + numeric scalars), for TSV/heatmap/boxplot
+      - full_rows: each row keeps the full IQM dict (incl. windowed list fields)
     """
-    rows: list[dict] = []
+    full_rows: list[dict] = []
     for iqm_path in sorted(output_dir.glob(f"{entity_glob}/**/nirs/*_desc-iqm_nirs.json")):
         try:
             iqm = json.loads(iqm_path.read_text(encoding="utf-8"))
         except Exception as exc:
             logger.warning("skip %s: %s", iqm_path, exc)
             continue
-        row = {"bids_name": _bids_name_from_iqm_path(iqm_path), **_scalars(iqm)}
-        rows.append(row)
-    if not rows:
-        return pd.DataFrame(columns=["bids_name"])
-    cols = ["bids_name"] + sorted({k for r in rows for k in r if k != "bids_name"})
-    return pd.DataFrame(rows, columns=cols)
+        full_rows.append({"bids_name": _bids_name_from_iqm_path(iqm_path), **iqm})
+
+    if not full_rows:
+        return pd.DataFrame(columns=["bids_name"]), []
+    scalar_rows = [{"bids_name": r["bids_name"], **_scalars(r)} for r in full_rows]
+    cols = ["bids_name"] + sorted({k for r in scalar_rows for k in r if k != "bids_name"})
+    return pd.DataFrame(scalar_rows, columns=cols), full_rows
 
 
-def _build_group(
+def _render_group(
     output_dir: Path,
-    entity_glob: str,
     out_stem: str,
     title: str,
+    df: pd.DataFrame,
+    full_rows: list[dict],
     template_name: str = "group_report.html.j2",
 ) -> Path:
-    """Write {out_stem}.tsv + {out_stem}.html into output_dir."""
+    """Render TSV + HTML for an already-collected group of IQM rows.
+
+    Shared by `_build_group` (globs IQM JSONs) and `window_writer` (recomputes IQM
+    after cropping). Empty df renders an empty report (logged as warning)."""
     output_dir.mkdir(parents=True, exist_ok=True)
-    df = _collect_iqm(output_dir, entity_glob)
     if df.empty:
-        logger.warning("no IQM JSON found under %s/%s", output_dir, entity_glob)
+        logger.warning("rendering empty group report: %s", out_stem)
 
     tsv_path = output_dir / f"{out_stem}.tsv"
     df.to_csv(tsv_path, sep="\t", index=False)
@@ -89,6 +103,16 @@ def _build_group(
         _save("heatmap", "heatmap", build_heatmap(df, metric_cols))
         _save("boxplot", "boxplot", build_boxplot_per_metric(df, metric_cols))
 
+    windowed_panels: list[dict] = []
+    for key, val_field, time_field, panel_title in _WINDOWED_METRICS:
+        if not any(val_field in r and r[val_field] for r in full_rows):
+            continue
+        fig = build_time_subject_heatmap(full_rows, val_field, time_field, panel_title)
+        if fig is None:
+            continue
+        _save(f"window_{key}", f"window{key}", fig)
+        windowed_panels.append({"key": key, "title": panel_title})
+
     outliers = detect_outliers(df, metric_cols) if metric_cols else {}
 
     env  = Environment(loader=FileSystemLoader(str(_TEMPLATE_DIR)), autoescape=False)
@@ -98,6 +122,7 @@ def _build_group(
         n_rows=len(df),
         n_metrics=len(metric_cols),
         figure_paths=figure_paths,
+        windowed_panels=windowed_panels,
         tsv_name=tsv_path.name,
         table_columns=list(df.columns),
         table_rows=df.values.tolist(),
@@ -107,6 +132,27 @@ def _build_group(
     html_path.write_text(html, encoding="utf-8")
     logger.info("group HTML -> %s", html_path)
     return html_path
+
+
+def _build_group(
+    output_dir: Path,
+    entity_glob: str,
+    out_stem: str,
+    title: str,
+    template_name: str = "group_report.html.j2",
+) -> Path:
+    """Glob IQM JSONs and render group report."""
+    df, full_rows = _collect_iqm(output_dir, entity_glob)
+    return _render_group(output_dir, out_stem, title, df, full_rows, template_name)
+
+
+def rows_to_dataframe(full_rows: list[dict]) -> pd.DataFrame:
+    """Public helper for callers (e.g. window_writer) that pre-compute IQM rows."""
+    if not full_rows:
+        return pd.DataFrame(columns=["bids_name"])
+    scalar_rows = [{"bids_name": r["bids_name"], **_scalars(r)} for r in full_rows]
+    cols = ["bids_name"] + sorted({k for r in scalar_rows for k in r if k != "bids_name"})
+    return pd.DataFrame(scalar_rows, columns=cols)
 
 
 def build_group_raw_report(output_dir: Path) -> Path:

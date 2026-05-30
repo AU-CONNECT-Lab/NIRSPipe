@@ -71,6 +71,24 @@ def compute_windowed_psp(
     )
     return scores, times
 
+def compute_windowed_gvtd(
+    raw_od: mne.io.Raw, window_s: float = 30.0,
+) -> "tuple[np.ndarray, np.ndarray]":
+    """Mean GVTD per non-overlapping window. Returns (gvtd_per_window, window_center_times)."""
+    import numpy as np
+    sfreq = float(raw_od.info["sfreq"])
+    diff_data = np.diff(raw_od.get_data(), axis=1)
+    gvtd_ts = np.sqrt(np.mean(diff_data ** 2, axis=0))
+    win_samples = max(1, int(round(window_s * sfreq)))
+    n_windows = len(gvtd_ts) // win_samples
+    if n_windows == 0:
+        return np.array([]), np.array([])
+    truncated = gvtd_ts[:n_windows * win_samples].reshape(n_windows, win_samples)
+    gvtd_per_window = truncated.mean(axis=1)
+    window_times = np.arange(n_windows) * window_s + window_s / 2
+    return gvtd_per_window, window_times
+
+
 def mark_bad_channels(
     raw_od: mne.io.Raw,
     threshold: float,

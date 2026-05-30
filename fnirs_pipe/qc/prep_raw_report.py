@@ -65,18 +65,39 @@ def _process_run(
     bad_channels: set[str] = {ch for ch, s in sci_scores.items() if s < sci_threshold}
 
     sci_matrix = sci_win_times = psp_matrix = psp_win_times = None
+    gvtd_per_window = gvtd_win_times = None
     try:
-        from fnirs_pipe.pipeline.prep_pipeline import compute_windowed_psp, compute_windowed_sci
+        from fnirs_pipe.pipeline.prep_pipeline import (
+            compute_windowed_gvtd, compute_windowed_psp, compute_windowed_sci,
+        )
         sci_matrix, sci_win_times = compute_windowed_sci(raw_od)
         psp_matrix, psp_win_times = compute_windowed_psp(raw_od)
+        gvtd_per_window, gvtd_win_times = compute_windowed_gvtd(raw_od)
     except Exception as exc:
-        logger.warning("Windowed SCI/PSP failed: %s", exc)
+        logger.warning("Windowed SCI/PSP/GVTD failed: %s", exc)
 
     try:
         iqm = compute_raw_iqm(raw, sci_scores, list(bad_channels))
     except Exception as exc:
         logger.warning("IQM failed: %s", exc)
         iqm = {}
+
+    # Persist windowed series so group_raw can build time × subject heatmaps.
+    # mne-nirs returns ndarray scores but list-of-[start,end] times → collapse to center.
+    import numpy as _np
+    def _center_times(t):
+        a = _np.asarray(t)
+        return (a.mean(axis=1) if a.ndim == 2 and a.shape[1] == 2 else a).tolist()
+
+    if sci_matrix is not None and sci_win_times is not None:
+        iqm["sci_per_window"]      = _np.asarray(sci_matrix).mean(axis=0).tolist()
+        iqm["sci_window_times_s"]  = _center_times(sci_win_times)
+    if psp_matrix is not None and psp_win_times is not None:
+        iqm["psp_per_window"]      = _np.asarray(psp_matrix).mean(axis=0).tolist()
+        iqm["psp_window_times_s"]  = _center_times(psp_win_times)
+    if gvtd_per_window is not None and len(gvtd_per_window):
+        iqm["gvtd_per_window"]     = _np.asarray(gvtd_per_window).tolist()
+        iqm["gvtd_window_times_s"] = _center_times(gvtd_win_times)
 
     raw_haemo = None
     try:
