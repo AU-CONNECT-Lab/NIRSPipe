@@ -315,4 +315,23 @@ def _run_post_for_subject(
 
 
 def run_group_level(args: dict[str, Any]) -> None:
-    raise NotImplementedError("Group-level analysis is not yet implemented.")
+    """BIDS Apps `group` entry point — aggregates per-subject (and per-group hyper,
+    if present) IQM JSONs into mriqc-style group reports under <output_dir>."""
+    from pathlib import Path
+
+    from fnirs_pipe.qc.group_writer import (
+        build_group_hyper_raw_report,
+        build_group_raw_report,
+    )
+
+    output_dir = Path(args["output_dir"])
+    qc_root    = output_dir / "qc" if (output_dir / "qc").exists() else output_dir
+
+    logger.info("fnirs-pipe group: aggregating individual IQMs from %s", qc_root)
+    ind_path = build_group_raw_report(qc_root)
+    logger.info("  -> %s", ind_path)
+
+    if any(qc_root.glob("group-*/nirs/*_desc-iqm_nirs.json")):
+        logger.info("fnirs-pipe group: also aggregating hyperscanning IQMs")
+        hyper_path = build_group_hyper_raw_report(qc_root)
+        logger.info("  -> %s", hyper_path)

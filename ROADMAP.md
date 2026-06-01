@@ -80,7 +80,7 @@ Rating Flask apps (`HyperRatingApp` / `RawRatingApp` / `FNIRSRatingApp`) refacto
 ## Pending decisions
 
 - **Short-channel regression** — `--short-channel {none,mean,pca}` flag wired in CLI; confirm/finish integration into prep pipeline ([pipeline/glm.py:41](fnirs_pipe/pipeline/glm.py#L41) PCA path)
-- **Group-level second-level GLM** — not started ([cli/workflows.py:318](fnirs_pipe/cli/workflows.py#L318) currently `NotImplementedError`)
+- **`fnirs-pipe ... group` BIDS Apps entry** — currently `NotImplementedError` ([cli/workflows.py:318](fnirs_pipe/cli/workflows.py#L318)). Group-level QC already lives at `fnirs-qc group-raw`; decide whether to make `fnirs-pipe ... group` a thin wrapper around it or just deprecate the `group` analysis level.
 - **hyper_post Methods section** — same boilerplate tabs as subject_report ([qc/templates/hyper_post_report.html.j2:130](fnirs_pipe/qc/templates/hyper_post_report.html.j2#L130))
 
 ---
@@ -107,8 +107,7 @@ Rating Flask apps (`HyperRatingApp` / `RawRatingApp` / `FNIRSRatingApp`) refacto
 ### Reports / viewer features (designed, not started)
 
 - **Per-step before/after comparison** — interactive channel-level signal comparison across preprocessing steps (OD → SCI → motion-corrected → haemo)
-- **Epoch/HRF preview** — stimulus-locked epoch average per channel (HbO/HbR mean ± std across trials), task data only
-- **Multi-run QC comparison** — aggregate and compare IQM scalars across runs within the same subject/session; BIDS `run-` entity already supported
+- **Multi-run QC comparison** — multi-row already present in `group_nirs.tsv`, but the report has no "group rows by subject" panel for within-subject reliability across runs ([qc/group_writer.py](fnirs_pipe/qc/group_writer.py))
 
 ### Infrastructure
 

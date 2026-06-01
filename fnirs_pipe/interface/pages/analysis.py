@@ -112,6 +112,8 @@ def _card(title, *children):
 
 
 layout = dbc.Container([
+    dcc.Store(id="an-subjects-store", storage_type="memory"),
+    dcc.Store(id="an-command-store",  storage_type="memory"),
     dbc.Row([dbc.Col([html.H3("Analysis"), html.Hr()])]),
 
     # ── Data source ───────────────────────────────────────────────────────────
