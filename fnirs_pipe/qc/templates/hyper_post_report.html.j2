@@ -36,6 +36,25 @@ select#ch-select-post {
 </div>
 {% endcall %}
 
+<!-- ROI grouping -->
+{% if roi_rows %}
+{% call card("ROI Grouping", hint="channel-to-region mapping from --roi-mapping") %}
+<div class="align-wrap">
+  <table id="roi-table">
+    <thead><tr><th>ROI</th><th>Channels</th></tr></thead>
+    <tbody>
+    {% for row in roi_rows %}
+      <tr>
+        <td><b>{{ row.roi }}</b></td>
+        <td>{{ row.channels | join(", ") }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endcall %}
+{% endif %}
+
 <!-- Per-channel WTC -->
 <div class="card">
   <div class="panel-title">

@@ -177,6 +177,15 @@ def build_hyper_post_report(
     isc_panel_hbo_b64 = _isc_panel("hbo")
     isc_panel_hbr_b64 = _isc_panel("hbr")
 
+    roi_rows: list[dict] = []
+    if roi_map:
+        assigned = {ch for chs in roi_map.values() for ch in chs}
+        for roi_name, chs in roi_map.items():
+            roi_rows.append({"roi": roi_name, "channels": chs})
+        unassigned = [c for c in ch_pairs_post if c not in assigned]
+        if unassigned:
+            roi_rows.append({"roi": "Unassigned", "channels": unassigned})
+
     output_path = output_dir / f"group-{group_id}_task-{task}_hyper-post.html"
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -194,6 +203,7 @@ def build_hyper_post_report(
         ch_pairs_post_json=json.dumps(ch_pairs_post),
         isc_panel_hbo_b64=isc_panel_hbo_b64,
         isc_panel_hbr_b64=isc_panel_hbr_b64,
+        roi_rows=roi_rows,
     )
     output_path.write_text(html, encoding="utf-8")
     logger.info("Hyper post report saved: %s", output_path)
