@@ -328,6 +328,8 @@ def hyper_post(
             typer.echo(f"[error] task_label {task_label} not found in CSV", err=True)
             raise typer.Exit(1)
 
+    # TODO: optionally auto-generate this roi.json from the montage via
+    # mne_nirs.io.fold_channel_specificity (needs fOLD Excel DB + MNE_NIRS_FOLD_PATH).
     roi_map: dict[str, list[str]] | None = None
     if roi_mapping is not None:
         try:

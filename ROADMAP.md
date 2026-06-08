@@ -101,6 +101,7 @@ Rating Flask apps (`HyperRatingApp` / `RawRatingApp` / `FNIRSRatingApp`) refacto
 - **Durbin-Watson per channel** in `compute_glm_iqm` ([qc/quantitative_metrics.py:299](fnirs_pipe/qc/quantitative_metrics.py#L299))
 - **ALFF/fALFF surface projection** — onto brain via mne_nirs ([qc/figures/rest_figures.py:6](fnirs_pipe/qc/figures/rest_figures.py#L6))
 - **ROI-to-ROI FC heatmap** — atlas parcellation ([qc/figures/rest_figures.py:7](fnirs_pipe/qc/figures/rest_figures.py#L7))
+- **Auto-generate roi.json from fOLD** — derive channel-to-region mapping from montage via `mne_nirs.io.fold_channel_specificity` (needs fOLD Excel DB), as an alternative to hand-written `--roi-mapping` ([cli/qc.py:331](fnirs_pipe/cli/qc.py#L331))
 - **Move `carpet_gvtd_figure`** to post-processing data path ([qc/figures/motion_panel.py:3](fnirs_pipe/qc/figures/motion_panel.py#L3))
 - **Verify `compute_haemo_iqm` raw_haemo is pre-bandpass** when called from pipeline ([qc/quantitative_metrics.py:163](fnirs_pipe/qc/quantitative_metrics.py#L163))
 
