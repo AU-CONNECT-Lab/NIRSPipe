@@ -31,11 +31,11 @@ citations = ["Fishburn2019"]
 
 [motion_wavelet]
 plain = "Motion artifacts were suppressed using wavelet-based filtering."
-citations = []
+citations = ["Molavi2012"]
 
 [motion_spline]
 plain = "Motion artifacts were suppressed using spline interpolation."
-citations = []
+citations = ["Scholkmann2010"]
 
 [beer_lambert]
 plain = "Haemoglobin concentration changes (HbO, HbR) were estimated from OD using the modified Beer-Lambert law {citations} with a differential path length factor (DPF) of {dpf}."
@@ -43,19 +43,19 @@ citations = ["Delpy1988", "Cope1988"]
 
 [bandpass]
 plain = "Data were bandpass filtered ({l_freq}–{h_freq} Hz) using a zero-phase FIR filter (Hamming window)."
-citations = []
+citations = ["Yucel2021"]
 
 [highpass]
 plain = "Data were high-pass filtered at {l_freq} Hz using a zero-phase FIR filter (Hamming window)."
-citations = []
+citations = ["Yucel2021"]
 
 [lowpass]
 plain = "Data were low-pass filtered at {h_freq} Hz using a zero-phase FIR filter (Hamming window)."
-citations = []
+citations = ["Yucel2021"]
 
 [resample]
 plain = "Data were resampled to {sfreq} Hz."
-citations = []
+citations = ["Pinti2018"]
 
 [glm]
 plain = "A first-level general linear model (GLM) was fitted to the haemodynamic time series using a {hrf_model} haemodynamic response function, a {noise_model} noise model, and a {drift_model} drift term (high-pass cutoff: {drift_high_pass} Hz) {citations}."
