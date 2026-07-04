@@ -12,6 +12,33 @@ def get_layout(bids_dir: Path, validate: bool = True) -> BIDSLayout:
     return BIDSLayout(str(bids_dir), validate=validate)
 
 
+def write_bids_from_snirf(
+    input_file: Path,
+    bids_dir: Path,
+    subject: str,
+    task: str,
+    session: str | None = None,
+    run: str | None = None,
+    overwrite: bool = False,
+) -> None:
+    """Convert one raw snirf file into a BIDS nirs entry."""
+    import mne
+    import mne_bids
+
+    raw = mne.io.read_raw_snirf(str(input_file), preload=False)
+    bids_path = mne_bids.BIDSPath(
+        subject=subject,
+        task=task,
+        session=session,
+        run=run,
+        root=bids_dir,
+        datatype="nirs",
+        suffix="nirs",
+        extension=".snirf",
+    )
+    mne_bids.write_raw_bids(raw, bids_path=bids_path, overwrite=overwrite, format="auto")
+
+
 def get_participant_age(
     layout: BIDSLayout,
     subject: str,

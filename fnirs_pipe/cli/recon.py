@@ -33,25 +33,14 @@ def main(
     Example:
       fnirs-recon sub01.snirf /data/bids --subject 01 --task tapping
     """
-    import mne
-    import mne_bids
+    from fnirs_pipe.io.bids import write_bids_from_snirf
 
     if not input_file.exists():
         typer.echo(f"ERROR: input file not found: {input_file}", err=True)
         raise typer.Exit(1)
 
-    raw = mne.io.read_raw_snirf(str(input_file), preload=False)
-
-    bids_path = mne_bids.BIDSPath(
-        subject=subject,
-        task=task,
-        session=session,
-        run=run,
-        root=bids_dir,
-        datatype="nirs",
-        suffix="nirs",
-        extension=".snirf",
+    write_bids_from_snirf(
+        input_file, bids_dir, subject=subject, task=task,
+        session=session, run=run, overwrite=overwrite,
     )
-
-    mne_bids.write_raw_bids(raw, bids_path=bids_path, overwrite=overwrite, format="auto")
     typer.echo(f"BIDS output written to: {bids_dir}")

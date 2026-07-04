@@ -55,6 +55,7 @@ def _sidebar() -> html.Div:
                 is_open=True,
                 children=dbc.Nav([
                     dbc.NavLink("Data Preparation", href="/",            active="exact", className="text-white"),
+                    dbc.NavLink("Recon",            href="/recon",      active="exact", className="text-white"),
                     dbc.NavLink("Batch Prep",       href="/batch-prep", active="exact", className="text-white"),
                     dbc.NavLink("Hyper Align",      href="/hyper-align",active="exact", className="text-white"),
                     dbc.NavLink("Analysis",         href="/analysis",   active="exact", className="text-white"),
@@ -91,6 +92,7 @@ def launch(port: int = 8050) -> None:
     )
 
     import fnirs_pipe.interface.callbacks.data_prep_callbacks
+    import fnirs_pipe.interface.callbacks.recon_callbacks
     import fnirs_pipe.interface.callbacks.batch_prep_callbacks
     import fnirs_pipe.interface.callbacks.hyper_align_callbacks
     import fnirs_pipe.interface.callbacks.analysis_callbacks

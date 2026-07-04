@@ -6,16 +6,25 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Known Issues
+- `compute_alff` numerical validation pending
+
+---
+
+## [0.12.0] - 2026-07-03
+
 ### Added
+- New GUI "Recon" page: detect raw snirf files in a folder, assign BIDS metadata per file in a table, preview the commands, and batch-convert to BIDS
+- Command preview (Analysis and Recon pages) has a shell selector so line-continuation matches bash / cmd / PowerShell
 - Pipeline auto-detects already-OD input, skips the OD-conversion step, and marks intensity-only QC metrics as unavailable
+
+### Changed
+- `fnirs-recon --subject` help clarifies that labels are alphanumeric and can encode group, e.g. `patient01`
 
 ### Fixed
 - GUI "generate command" emitted invalid multi-subject commands; participant/session/task labels now repeat the flag per value
 - QC no longer crashes on low sampling-rate data — PSD and cardiac-power frequency limits clamp to the Nyquist frequency
 - QC brain views no longer fail when the static-image export backend was missing (now a hard dependency)
-
-### Known Issues
-- `compute_alff` numerical validation pending
 
 ---
 
