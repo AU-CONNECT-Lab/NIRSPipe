@@ -222,6 +222,7 @@ def cmd_hyper_post(
     from fnirs_pipe.pipeline.hyperscanning import (
         align_recordings,
         load_group_haemo,
+        load_group_sqm,
         normalize_raws,
         parse_group_csv,
         trim_to_shortest,
@@ -269,6 +270,10 @@ def cmd_hyper_post(
                 aligned_raws, offsets = align_recordings(raws, task)
             if normalize:
                 aligned_raws = normalize_raws(aligned_raws)
+            bad_channels = {
+                sid: sqm.get("bad_channels", [])
+                for sid, sqm in load_group_sqm(output_dir, members).items()
+            }
             report_path = build_hyper_post_report(
                 group_id=gid,
                 task=task,
@@ -277,6 +282,7 @@ def cmd_hyper_post(
                 offsets=offsets,
                 output_dir=output_dir,
                 roi_map=roi_map,
+                bad_channels=bad_channels,
                 wtc_fmin=wtc_fmin,
                 wtc_fmax=wtc_fmax,
                 isc_threshold=isc_threshold,

@@ -288,6 +288,39 @@ class WTCResult:
     times: np.ndarray
 
 
+def _pairwise_wtc(
+    sig1: np.ndarray,
+    sig2: np.ndarray,
+    dt: float,
+    step: int,
+    fmin: float,
+    fmax: float,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Morlet WTC for one signal pair → (wtc_band, freqs_band, coi_dec).
+
+    Trims pycwt zero-padding, sorts frequencies ascending, band-filters and decimates.
+    """
+    import pycwt  # optional dependency; installed via pip install pycwt
+
+    WCT, _, coi, freqs, _ = pycwt.wct(
+        sig1, sig2, dt=dt,
+        dj=1.0 / 8,
+        sig=False, normalize=True,
+    )
+    n_sig = len(sig1)
+    WCT   = WCT[:, :n_sig]
+    coi   = coi[:n_sig]
+
+    order      = np.argsort(freqs)
+    freqs_s    = freqs[order]
+    WCT_s      = WCT[order]
+    band       = (freqs_s >= fmin) & (freqs_s <= fmax)
+    WCT_band   = WCT_s[band][:, ::step].astype(np.float32)
+    freqs_band = freqs_s[band]
+    coi_dec    = coi[::step].astype(np.float32)
+    return WCT_band, freqs_band, coi_dec
+
+
 def compute_wtc(
     raws: dict[str, mne.io.Raw],
     fmin: float = 0.004,
@@ -298,8 +331,6 @@ def compute_wtc(
     Time axis decimated to ≤4 Hz for display performance.
     Frequency axis filtered to [fmin, fmax] Hz and sorted ascending.
     """
-    import pycwt  # optional dependency; installed via pip install pycwt
-
     subject_ids = list(raws.keys())
     if len(subject_ids) < 2:
         raise ValueError("Need at least 2 subjects for WTC")
@@ -325,24 +356,9 @@ def compute_wtc(
             sig1 = raw1.get_data(picks=[picks1[i]])[0].astype(np.float64)
             sig2 = raw2.get_data(picks=[picks2[i]])[0].astype(np.float64)
             try:
-                WCT, _, coi, freqs, _ = pycwt.wct(
-                    sig1, sig2, dt=dt,
-                    dj=1.0 / 8,
-                    sig=False, normalize=True,
+                WCT_band, freqs_band, coi_dec = _pairwise_wtc(
+                    sig1, sig2, dt, step, fmin, fmax
                 )
-                # pycwt zero-pads to next power of 2 — trim back to signal length
-                n_sig = len(sig1)
-                WCT  = WCT[:, :n_sig]
-                coi  = coi[:n_sig]
-
-                # ascending freq order + band filter + decimate
-                order       = np.argsort(freqs)
-                freqs_s     = freqs[order]
-                WCT_s       = WCT[order]
-                band        = (freqs_s >= fmin) & (freqs_s <= fmax)
-                WCT_band    = WCT_s[band][:, ::step].astype(np.float32)
-                freqs_band  = freqs_s[band]
-                coi_dec     = coi[::step].astype(np.float32)
 
                 if shared_freqs is None:
                     shared_freqs = freqs_band
@@ -352,6 +368,95 @@ def compute_wtc(
             except Exception as exc:
                 logger.warning("WTC failed %s-%s ch %s: %s", sub1, sub2, ch, exc)
                 pair_data[ch] = None
+
+        result_pairs[(sub1, sub2)] = pair_data
+
+    return WTCResult(
+        pairs=result_pairs,
+        freqs=shared_freqs if shared_freqs is not None else np.array([]),
+        times=shared_times if shared_times is not None else np.array([]),
+    )
+
+
+def _roi_averaged_signals(
+    raw: mne.io.Raw,
+    roi_map: dict[str, list[str]],
+    bad_pairs: set[str] | None = None,
+) -> dict[str, np.ndarray]:
+    """Average HbO channels within each ROI → {roi_name: 1D signal}.
+
+    bad_pairs (S-D labels without suffix) are excluded from the average.
+    ROIs left with no usable channel are skipped.
+    """
+    bad_pairs = bad_pairs or set()
+    picks = mne.pick_types(raw.info, fnirs="hbo")
+    label_to_data = {
+        raw.ch_names[p].rsplit(" ", 1)[0]: raw.get_data(picks=[p])[0].astype(np.float64)
+        for p in picks
+    }
+    out: dict[str, np.ndarray] = {}
+    for roi, chs in roi_map.items():
+        rows = [label_to_data[c] for c in chs if c in label_to_data and c not in bad_pairs]
+        if rows:
+            out[roi] = np.mean(rows, axis=0)
+    return out
+
+
+def compute_wtc_roi(
+    raws: dict[str, mne.io.Raw],
+    roi_map: dict[str, list[str]],
+    bad_channels: dict[str, list[str]] | None = None,
+    fmin: float = 0.004,
+    fmax: float = 0.20,
+) -> WTCResult:
+    """Compute pairwise WTC on ROI-averaged HbO signals.
+
+    Averages each ROI's HbO channels into one representative signal per subject
+    (excluding each subject's own bad_channels), then runs the same Morlet WTC as
+    compute_wtc. Returned WTCResult.pairs is keyed by ROI name instead of channel.
+    """
+    subject_ids = list(raws.keys())
+    if len(subject_ids) < 2:
+        raise ValueError("Need at least 2 subjects for WTC")
+
+    ref_raw = raws[subject_ids[0]]
+    sfreq   = float(ref_raw.info["sfreq"])
+    dt      = 1.0 / sfreq
+    step    = max(1, int(round(sfreq)))
+
+    bad_channels = bad_channels or {}
+    bad_pairs_by_sub = {
+        sid: {ch.rsplit(" ", 1)[0] for ch in bad_channels.get(sid, [])}
+        for sid in subject_ids
+    }
+    roi_signals = {
+        sid: _roi_averaged_signals(raw, roi_map, bad_pairs_by_sub.get(sid))
+        for sid, raw in raws.items()
+    }
+
+    result_pairs: dict = {}
+    shared_freqs: np.ndarray | None = None
+    shared_times: np.ndarray | None = None
+
+    for sub1, sub2 in combinations(subject_ids, 2):
+        sig_map1, sig_map2 = roi_signals[sub1], roi_signals[sub2]
+        pair_data: dict[str, dict | None] = {}
+        for roi in roi_map:
+            sig1, sig2 = sig_map1.get(roi), sig_map2.get(roi)
+            if sig1 is None or sig2 is None:
+                pair_data[roi] = None
+                continue
+            try:
+                WCT_band, freqs_band, coi_dec = _pairwise_wtc(
+                    sig1, sig2, dt, step, fmin, fmax
+                )
+                if shared_freqs is None:
+                    shared_freqs = freqs_band
+                    shared_times = ref_raw.times[::step]
+                pair_data[roi] = {"wtc": WCT_band, "coi": coi_dec}
+            except Exception as exc:
+                logger.warning("ROI WTC failed %s-%s roi %s: %s", sub1, sub2, roi, exc)
+                pair_data[roi] = None
 
         result_pairs[(sub1, sub2)] = pair_data
 

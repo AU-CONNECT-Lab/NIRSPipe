@@ -71,8 +71,8 @@ Subject / session / task selection:
 Preprocessing:
   --motion-correction          {tddr,wavelet,spline,none}   [default: tddr]
                                wavelet / spline raise NotImplementedError.
-  --exclude-channels           Comma-separated channel names to exclude,
-                               e.g. "S1_D1 hbo,S1_D1 hbr"
+  --bad-channels               Comma-separated S-D labels to mark bad,
+                               e.g. "S1_D1,S2_D3" (unioned with SCI bads)
   --cardiac-l-freq FLOAT       Lower cardiac band bound in Hz.                        [default: 0.7]
   --cardiac-h-freq FLOAT       Upper cardiac band bound in Hz.                        [default: 1.5]
 

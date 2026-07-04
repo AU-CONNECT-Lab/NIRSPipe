@@ -22,7 +22,7 @@ def _build_script_text(
     mode: str | None,
     cardiac_l_freq: float | None = None,
     cardiac_h_freq: float | None = None,
-    exclude_channels: list[str] | None = None,
+    bad_channels: list[str] | None = None,
     high_pass: float | None = None,
     low_pass: float | None = None,
     resample_sfreq: float | None = None,
@@ -92,8 +92,8 @@ def _build_script_text(
         w(f'    cardiac_l_freq={cardiac_l_freq},')
     if cardiac_h_freq is not None:
         w(f'    cardiac_h_freq={cardiac_h_freq},')
-    if exclude_channels:
-        w(f'    exclude_channels={exclude_channels!r},')
+    if bad_channels:
+        w(f'    bad_channels={bad_channels!r},')
     w(f'    ignore={ignore!r},')
     w(')', '')
 
@@ -187,8 +187,8 @@ def write_run_script(
         tuple(int(x) for x in raw_fir.split(",")) if raw_fir else (0,)
     )
 
-    raw_excl = args.get("exclude_channels")
-    exclude_channels = [c.strip() for c in raw_excl.split(",")] if raw_excl else []
+    raw_bad = args.get("bad_channels")
+    bad_channels = [c.strip() for c in raw_bad.split(",")] if raw_bad else []
 
     def _fwd(p: Any) -> str | None:
         return str(p).replace("\\", "/") if p else None
@@ -212,7 +212,7 @@ def write_run_script(
         mode=mode,
         cardiac_l_freq=args.get("cardiac_l_freq"),
         cardiac_h_freq=args.get("cardiac_h_freq"),
-        exclude_channels=exclude_channels or None,
+        bad_channels=bad_channels or None,
         high_pass=args.get("high_pass"),
         low_pass=args.get("low_pass"),
         resample_sfreq=args.get("resample_sfreq"),

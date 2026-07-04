@@ -92,6 +92,7 @@ def build_hyper_post_report(
     offsets: dict[str, float],
     output_dir: Path,
     roi_map: dict[str, list[str]] | None = None,
+    bad_channels: dict[str, list[str]] | None = None,
     wtc_fmin: float = 0.004,
     wtc_fmax: float = 0.20,
     isc_threshold: float = 0.3,
@@ -100,11 +101,11 @@ def build_hyper_post_report(
 
     Sections:
       1. Per-channel WTC  — Morlet wavelet coherence, one heatmap per channel
-      2. ISC matrix       — inter-brain Pearson r heatmap (channel × channel)
-      3. ISC connectogram — inter-brain arcs filtered by isc_threshold
-      TODO: ROI-level WTC — WTC averaged within anatomical ROIs (requires roi_map)
+      2. Per-ROI WTC      — WTC on HbO averaged within each ROI (when roi_map given)
+      3. ISC matrix       — inter-brain Pearson r heatmap (channel × channel)
+      4. ISC connectogram — inter-brain arcs filtered by isc_threshold
     """
-    from fnirs_pipe.pipeline.hyperscanning import WTCResult, compute_wtc
+    from fnirs_pipe.pipeline.hyperscanning import WTCResult, compute_wtc, compute_wtc_roi
     from fnirs_pipe.qc.figures.hyper_post_figures import (
         build_isc_panel,
         build_wtc_channel,
@@ -163,7 +164,9 @@ def build_hyper_post_report(
     # Compute ISC panels (HbO and HbR)
     def _isc_panel(ch_type: str) -> str:
         try:
-            isc_mat, isc_ch_names = compute_isc(aligned_raws, subject_ids, ch_type)
+            isc_mat, isc_ch_names = compute_isc(
+                aligned_raws, subject_ids, ch_type, bad_channels=bad_channels
+            )
             if isc_mat is None:
                 return ""
             return build_isc_panel(
@@ -178,6 +181,8 @@ def build_hyper_post_report(
     isc_panel_hbr_b64 = _isc_panel("hbr")
 
     roi_rows: list[dict] = []
+    roi_labels: list[str] = []
+    per_roi_post: dict[str, dict] = {}
     if roi_map:
         assigned = {ch for chs in roi_map.values() for ch in chs}
         for roi_name, chs in roi_map.items():
@@ -185,6 +190,33 @@ def build_hyper_post_report(
         unassigned = [c for c in ch_pairs_post if c not in assigned]
         if unassigned:
             roi_rows.append({"roi": "Unassigned", "channels": unassigned})
+
+        roi_wtc: WTCResult | None = None
+        try:
+            roi_wtc = compute_wtc_roi(
+                aligned_raws, roi_map, bad_channels=bad_channels,
+                fmin=wtc_fmin, fmax=wtc_fmax,
+            )
+        except Exception as exc:
+            logger.warning("ROI WTC computation failed: %s", exc)
+
+        roi_pair_key = next(iter(roi_wtc.pairs)) if roi_wtc and roi_wtc.pairs else None
+        roi_labels   = list(roi_map.keys())
+        for roi_name in roi_labels:
+            roi_fig = None
+            if roi_wtc and roi_pair_key:
+                roi_data = roi_wtc.pairs.get(roi_pair_key, {}).get(roi_name)
+                roi_fig = _safe_post(
+                    "wtc-roi", build_wtc_channel,
+                    roi_data, roi_wtc.freqs, roi_wtc.times,
+                    pair_label, markers_list, cond_colors_,
+                )
+            per_roi_post[roi_name] = {"wtc": roi_fig}
+
+    bad_pairs_all: set[str] = set()
+    if bad_channels:
+        for chs in bad_channels.values():
+            bad_pairs_all |= {c.rsplit(" ", 1)[0] for c in chs}
 
     output_path = output_dir / f"group-{group_id}_task-{task}_hyper-post.html"
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -201,9 +233,12 @@ def build_hyper_post_report(
         alignment_json=json.dumps(alignment_rows),
         per_channel_post_json=json.dumps(per_channel_post),
         ch_pairs_post_json=json.dumps(ch_pairs_post),
+        bad_pairs_json=json.dumps(sorted(bad_pairs_all)),
         isc_panel_hbo_b64=isc_panel_hbo_b64,
         isc_panel_hbr_b64=isc_panel_hbr_b64,
         roi_rows=roi_rows,
+        roi_labels_json=json.dumps(roi_labels),
+        per_roi_post_json=json.dumps(per_roi_post),
     )
     output_path.write_text(html, encoding="utf-8")
     logger.info("Hyper post report saved: %s", output_path)

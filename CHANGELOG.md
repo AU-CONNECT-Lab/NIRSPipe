@@ -6,6 +6,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- ROI-level WTC in the hyperscanning post report: coherence on HbO averaged within each ROI from `--roi-mapping`, excluding each subject's bad channels
+- Hyper post report marks bad channels: ISC matrix blanks bad rows/columns and drops their connectogram arcs; per-channel WTC selector tags bad channels
+
+### Changed
+- `--exclude-channels` renamed to `--bad-channels`: channels are now marked bad (kept in the data, unioned with SCI-detected bads) instead of being dropped
+
 ### Known Issues
 - `compute_alff` numerical validation pending
 

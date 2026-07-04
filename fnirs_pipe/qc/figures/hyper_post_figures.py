@@ -94,25 +94,11 @@ def build_wtc_channel(
     return fig
 
 
-# TODO: ROI-level WTC — average HbO within each anatomical ROI
-# (roi_map: {"PFC_left": ["S1-D1", ...], ...}), then compute WTC on the
-# averaged signal. Requires roi_map passed from CLI --roi-mapping.
-def build_wtc_roi(
-    aligned_raws: dict[str, mne.io.Raw],
-    roi_map: dict[str, list[str]],
-    subject_ids: list[str],
-    markers_list: list[dict],
-    cond_colors: dict[str, str],
-    fmin: float = 0.004,
-    fmax: float = 0.20,
-) -> dict[str, go.Figure]:
-    raise NotImplementedError
-
-
 def compute_isc(
     aligned_raws: dict[str, mne.io.Raw],
     subject_ids: list[str],
     ch_type: str = "hbo",
+    bad_channels: dict[str, list[str]] | None = None,
 ) -> tuple[np.ndarray, list[str]] | tuple[None, None]:
     """Compute inter-brain Pearson r matrix (n_ch × n_ch).
 
@@ -121,6 +107,8 @@ def compute_isc(
 
     Args:
         ch_type: "hbo" or "hbr".
+        bad_channels: {subject_id: [bad channel names]}. sub1's bad channels blank
+            the matching rows, sub2's blank the columns (set to NaN).
     """
     if len(subject_ids) < 2:
         return None, None
@@ -149,6 +137,18 @@ def compute_isc(
     d2 = _zscore(data2)
     isc_mat = (d1 @ d2.T) / d1.shape[1]
     np.clip(isc_mat, -1.0, 1.0, out=isc_mat)
+
+    if bad_channels:
+        def _bad_idx(sub_id: str) -> list[int]:
+            bad_pairs = {c.rsplit(" ", 1)[0] for c in bad_channels.get(sub_id, [])}
+            return [i for i, ch in enumerate(ch_names) if ch in bad_pairs]
+        bad_rows = _bad_idx(subject_ids[0])
+        bad_cols = _bad_idx(subject_ids[1])
+        if bad_rows:
+            isc_mat[bad_rows, :] = np.nan
+        if bad_cols:
+            isc_mat[:, bad_cols] = np.nan
+
     return isc_mat, ch_names
 
 
@@ -187,8 +187,10 @@ def build_isc_panel(
     ax_matrix = fig.add_subplot(gs[0])
     ax_circle = fig.add_subplot(gs[1])
 
-    # left: channel × channel ISC heatmap
-    im = ax_matrix.imshow(isc_mat, cmap="RdBu_r", vmin=-1, vmax=1,
+    # left: channel × channel ISC heatmap (bad channels masked to grey)
+    cmap = plt.get_cmap("RdBu_r").copy()
+    cmap.set_bad("#d0d0d0")
+    im = ax_matrix.imshow(isc_mat, cmap=cmap, vmin=-1, vmax=1,
                            aspect="equal", interpolation="nearest")
     step = max(1, n // 20)
     idxs = list(range(0, n, step))
@@ -205,7 +207,7 @@ def build_isc_panel(
     # right: connectogram embedded as image
     try:
         b64 = _isc_conn(
-            isc_mat, ch_names,
+            np.nan_to_num(isc_mat, nan=0.0), ch_names,
             (sub1_label, sub2_label),
             threshold=isc_threshold,
             title=f"ISC {type_label}",

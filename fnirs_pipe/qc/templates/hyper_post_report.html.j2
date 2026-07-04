@@ -68,6 +68,20 @@ select#ch-select-post {
   <div id="wtc-plot"></div>
 </div>
 
+<!-- Per-ROI WTC -->
+{% if roi_rows %}
+<div class="card">
+  <div class="panel-title">
+    Wavelet Transform Coherence (per ROI)
+    <span class="panel-hint">
+      WTC on HbO averaged within each ROI (bad channels excluded) &bull; white dashed = COI boundary
+    </span>
+    <select id="roi-select-post"></select>
+  </div>
+  <div id="wtc-roi-plot"></div>
+</div>
+{% endif %}
+
 <!-- ISC panel — HbO -->
 {% if isc_panel_hbo_b64 %}
 <div class="card">
@@ -105,9 +119,12 @@ select#ch-select-post {
 {% endif %}
 
 <script>
-var _PER_CH   = {{ per_channel_post_json | safe }};
-var _CH_PAIRS = {{ ch_pairs_post_json | safe }};
-var _ALIGN    = {{ alignment_json | safe }};
+var _PER_CH     = {{ per_channel_post_json | safe }};
+var _CH_PAIRS   = {{ ch_pairs_post_json | safe }};
+var _BAD_PAIRS  = {{ bad_pairs_json | safe }};
+var _PER_ROI    = {{ per_roi_post_json | safe }};
+var _ROI_LABELS = {{ roi_labels_json | safe }};
+var _ALIGN      = {{ alignment_json | safe }};
 var _cfg = { responsive: true, displayModeBar: true };
 
 // alignment table
@@ -128,7 +145,8 @@ var _cfg = { responsive: true, displayModeBar: true };
   var sel = document.getElementById("ch-select-post");
   _CH_PAIRS.forEach(function(pair, i) {
     var opt = document.createElement("option");
-    opt.value = i; opt.textContent = pair;
+    opt.value = i;
+    opt.textContent = (_BAD_PAIRS.indexOf(pair) >= 0) ? pair + " (bad)" : pair;
     sel.appendChild(opt);
   });
   sel.addEventListener("change", function() { _selectCh(parseInt(this.value)); });
@@ -141,8 +159,28 @@ function _selectCh(idx) {
   else        Plotly.purge("wtc-plot");
 }
 
+// ROI selector
+(function() {
+  var sel = document.getElementById("roi-select-post");
+  if (!sel) return;
+  _ROI_LABELS.forEach(function(roi, i) {
+    var opt = document.createElement("option");
+    opt.value = i; opt.textContent = roi;
+    sel.appendChild(opt);
+  });
+  sel.addEventListener("change", function() { _selectRoi(parseInt(this.value)); });
+})();
+
+function _selectRoi(idx) {
+  var roi = _ROI_LABELS[idx];
+  var d   = _PER_ROI[roi] || {};
+  if (d.wtc) Plotly.react("wtc-roi-plot", d.wtc.data, d.wtc.layout, _cfg);
+  else       Plotly.purge("wtc-roi-plot");
+}
+
 window.addEventListener("DOMContentLoaded", function() {
-  if (_CH_PAIRS.length > 0) _selectCh(0);
+  if (_CH_PAIRS.length > 0)   _selectCh(0);
+  if (_ROI_LABELS.length > 0) _selectRoi(0);
 });
 </script>
 

@@ -203,14 +203,14 @@ def run_participant_level(args: dict[str, Any]) -> None:
 
 
 def _make_prep_config(subject: str, session: str | None, args: dict[str, Any]) -> "PrepConfig":
-    raw_excl = args.get("exclude_channels")
+    raw_bad = args.get("bad_channels")
     return PrepConfig(
         subject=subject,
         session=session,
         dpf=args["dpf"],
         sci_threshold=args["sci_threshold"],
         motion_correction=_v(args["motion_correction"]),
-        exclude_channels=[c.strip() for c in raw_excl.split(",")] if raw_excl else [],
+        bad_channels=[c.strip() for c in raw_bad.split(",")] if raw_bad else [],
         cardiac_l_freq=args["cardiac_l_freq"],
         cardiac_h_freq=args["cardiac_h_freq"],
         ignore=[_v(ig) for ig in (args.get("ignore") or [])],

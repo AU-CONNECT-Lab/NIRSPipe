@@ -90,6 +90,12 @@ def compute_windowed_gvtd(
     return gvtd_per_window, window_times
 
 
+def _expand_bad_pairs(raw: mne.io.Raw, labels: list[str]) -> list[str]:
+    """Match S-D pair labels (or full channel names) to channels present in raw."""
+    wanted = set(labels)
+    return [ch for ch in raw.ch_names if ch in wanted or ch.rsplit(" ", 1)[0] in wanted]
+
+
 def mark_bad_channels(
     raw_od: mne.io.Raw,
     threshold: float,
@@ -161,7 +167,7 @@ class PrepConfig:
     cardiac_h_freq: float
     session: str | None = None
     motion_correction: str | None = None
-    exclude_channels: list[str] = field(default_factory=list)
+    bad_channels: list[str] = field(default_factory=list)
     ignore: list[str] = field(default_factory=list)
 
 def run_prep(
@@ -212,14 +218,19 @@ def run_prep(
     else:
         logger.info("sub-%s | step 2: OD conversion (%d ch)", config.subject, len(raw.ch_names))
         raw_od = intensity_to_od(raw)
-    if config.exclude_channels:
-        logger.info("sub-%s | excluding channels: %s", config.subject, config.exclude_channels)
-        raw_od.drop_channels(config.exclude_channels)
     _save(raw_od, "od", "od_conversion")
 
     # step 3: SCI channel marking
     logger.info("sub-%s | step 3: SCI marking (threshold=%.2f, %d ch)", config.subject, config.sci_threshold, len(raw_od.ch_names))
     raw_od, bad_chs, sci_scores = mark_bad_channels(raw_od, threshold=config.sci_threshold)
+    if config.bad_channels:
+        manual = _expand_bad_pairs(raw_od, config.bad_channels)
+        if not manual:
+            logger.warning("sub-%s | --bad-channels matched no channels: %s", config.subject, config.bad_channels)
+        else:
+            logger.info("sub-%s | manual bad channels: %s", config.subject, manual)
+        bad_chs = sorted(set(bad_chs) | set(manual))
+        raw_od.info["bads"] = bad_chs
     n_bad, n_total = len(bad_chs), len(sci_scores)
     logger.info(
         "sub-%s | bad channels: %d/%d%s",
@@ -288,6 +299,6 @@ def _config_dict(config: PrepConfig) -> dict:
         "sci_threshold": config.sci_threshold,
         "cardiac_l_freq": config.cardiac_l_freq,
         "cardiac_h_freq": config.cardiac_h_freq,
-        "exclude_channels": config.exclude_channels,
+        "bad_channels": config.bad_channels,
         "ignore": config.ignore,
     }
