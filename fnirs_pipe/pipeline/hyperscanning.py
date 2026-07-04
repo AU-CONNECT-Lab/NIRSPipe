@@ -411,9 +411,10 @@ def compute_wtc_roi(
 ) -> WTCResult:
     """Compute pairwise WTC on ROI-averaged HbO signals.
 
-    Averages each ROI's HbO channels into one representative signal per subject
-    (excluding each subject's own bad_channels), then runs the same Morlet WTC as
-    compute_wtc. Returned WTCResult.pairs is keyed by ROI name instead of channel.
+    Averages each ROI's HbO channels into one representative signal per subject,
+    excluding the union of all subjects' bad_channels so every subject's ROI signal
+    is built from the same channel set. Then runs the same Morlet WTC as compute_wtc.
+    Returned WTCResult.pairs is keyed by ROI name instead of channel.
     """
     subject_ids = list(raws.keys())
     if len(subject_ids) < 2:
@@ -425,12 +426,13 @@ def compute_wtc_roi(
     step    = max(1, int(round(sfreq)))
 
     bad_channels = bad_channels or {}
-    bad_pairs_by_sub = {
-        sid: {ch.rsplit(" ", 1)[0] for ch in bad_channels.get(sid, [])}
+    bad_pairs_union = {
+        ch.rsplit(" ", 1)[0]
         for sid in subject_ids
+        for ch in bad_channels.get(sid, [])
     }
     roi_signals = {
-        sid: _roi_averaged_signals(raw, roi_map, bad_pairs_by_sub.get(sid))
+        sid: _roi_averaged_signals(raw, roi_map, bad_pairs_union)
         for sid, raw in raws.items()
     }
 
