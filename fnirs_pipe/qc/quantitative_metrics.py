@@ -123,7 +123,8 @@ def _cardiac_power_metrics(raw_intensity: mne.io.Raw) -> dict[str, Any]:
     fc = peak frequency in 0.83-2.5 Hz; CP = power(fc±0.2 Hz) / power(fc±0.5 Hz).
     """
     try:
-        psd = raw_intensity.compute_psd(fmin=0.5, fmax=3.0, verbose=False)
+        fmax = min(3.0, raw_intensity.info["sfreq"] / 2)
+        psd = raw_intensity.compute_psd(fmin=0.5, fmax=fmax, verbose=False)
         freqs = psd.freqs
         psd_data = psd.get_data()
         cardiac_mask = (freqs >= 0.83) & (freqs <= 2.5)

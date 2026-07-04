@@ -1,9 +1,13 @@
 """PSD before/after bandpass: side-by-side Plotly figure with band annotations."""
 
+import logging
+
 import mne
 import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+
+logger = logging.getLogger(__name__)
 
 from ._utils import HBO_COLOR as _HBO_COLOR, HBR_COLOR as _HBR_COLOR
 from ._utils import HBO_MEAN_COLOR as _HBO_MEAN_COLOR, HBR_MEAN_COLOR as _HBR_MEAN_COLOR
@@ -131,6 +135,11 @@ def psd_figure(
         fmax:               Maximum frequency to display (Hz).
         title:              Figure title.
     """
+    nyquist = raw_haemo.info["sfreq"] / 2
+    if fmax > nyquist:
+        logger.warning("fmax %.2f Hz exceeds Nyquist %.2f Hz; clamping to Nyquist", fmax, nyquist)
+        fmax = nyquist
+
     psd_before = raw_haemo.compute_psd(fmax=fmax, verbose=False)
 
     raw_filtered = raw_haemo.copy().filter(

@@ -127,12 +127,13 @@ def _build_cli_args(opts: dict) -> list[str]:
         opts["output_dir"],
         "participant",
     ]
-    if opts.get("subjects"):
-        args += ["--participant-label", *opts["subjects"]]
-    if opts.get("session_label"):
-        args += ["--session-label", *opts["session_label"].split()]
-    if opts.get("task_label"):
-        args += ["--task-label", *opts["task_label"].split()]
+    # list-typed options need the flag repeated per value (Typer/Click)
+    for sub in opts.get("subjects") or []:
+        args += ["--participant-label", sub]
+    for ses in (opts.get("session_label") or "").split():
+        args += ["--session-label", ses]
+    for task in (opts.get("task_label") or "").split():
+        args += ["--task-label", task]
     if opts.get("dpf") is not None:
         args += ["--dpf", str(opts["dpf"])]
     if opts.get("sci_thresh") is not None:
