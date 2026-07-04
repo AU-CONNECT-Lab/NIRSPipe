@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+import platform
+
 import dash
 import dash_bootstrap_components as dbc
 import dash_cytoscape as cyto
 from dash import dcc, html
 
 dash.register_page(__name__, path="/analysis", name="Analysis")
+
+_DEFAULT_SHELL = "cmd" if platform.system() == "Windows" else "bash"
 
 _DAG_COLOURS = {
     "prep": "#E67E22",
@@ -305,6 +309,19 @@ layout = dbc.Container([
 
     # ── Command preview ───────────────────────────────────────────────────────
     _card("Command Preview",
+        dbc.Row([
+            dbc.Col(dbc.Label("Shell (line-continuation style)"), width="auto"),
+            dbc.Col(dcc.Dropdown(
+                id="an-shell-select",
+                options=[
+                    {"label": "bash / zsh (macOS, Linux)", "value": "bash"},
+                    {"label": "cmd (Windows, Anaconda Prompt)", "value": "cmd"},
+                    {"label": "PowerShell (Windows)", "value": "powershell"},
+                ],
+                value=_DEFAULT_SHELL,
+                clearable=False,
+            ), width=4),
+        ], className="mb-2 align-items-center"),
         html.Pre(
             id="an-command-preview",
             style={

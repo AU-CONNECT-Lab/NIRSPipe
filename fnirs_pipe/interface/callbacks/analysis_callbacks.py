@@ -193,13 +193,14 @@ def _build_cli_args(opts: dict) -> list[str]:
     State("an-flags",             "value"),
     State("an-session-label",     "value"),
     State("an-task-label",        "value"),
+    State("an-shell-select",      "value"),
     prevent_initial_call=True,
 )
 def generate_command(n_clicks, bids_dir, output_dir, subjects, dpf, sci_thresh,
                      motion_correction, cardiac_l, cardiac_h,
                      post_mode, high_pass, low_pass, resample, n_jobs,
                      hrf_model, noise_model, short_channel, flags,
-                     session_label, task_label):
+                     session_label, task_label, shell):
     if not bids_dir or not output_dir:
         return "Error: BIDS and output directories are required.", {}
     if not subjects:
@@ -218,9 +219,10 @@ def generate_command(n_clicks, bids_dir, output_dir, subjects, dpf, sci_thresh,
         flags=flags,
     )
     argv = _build_cli_args(opts)
-    # Pretty-print: backslash-continuation per arg group for readability.
+    # Pretty-print: shell-specific line-continuation per arg group for readability.
+    cont = {"bash": "\\", "cmd": "^", "powershell": "`"}.get(shell, "\\")
     lines = [argv[0]] + [f"  {a}" for a in argv[1:]]
-    preview = " \\\n".join(lines)
+    preview = f" {cont}\n".join(lines)
     return preview, {"argv": argv}
 
 

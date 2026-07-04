@@ -18,7 +18,7 @@ def main(
     bids_dir:   Annotated[Path, typer.Argument(help="Output BIDS dataset directory.")],
 
     # required BIDS metadata
-    subject: Annotated[str, typer.Option("--subject", help="Subject label, e.g. 01.")],
+    subject: Annotated[str, typer.Option("--subject", help="Subject label, e.g. '01' or 'patient01'. BIDS has no group folders, so encode patient/control in the label if IDs overlap.")],
     task:    Annotated[str, typer.Option("--task",    help="Task label, e.g. tapping.")],
 
     # optional BIDS metadata
