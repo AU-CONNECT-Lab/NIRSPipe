@@ -1,23 +1,20 @@
-"""fnirs-gui CLI entry point."""
+"""fnirs-gui CLI entry point (argparse)."""
 
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Annotated, Optional
-
-import typer
-
-app = typer.Typer(
-    name="fnirs-gui",
-    help="Dash-based GUI for interactive fNIRS data inspection and rating.",
-    pretty_exceptions_show_locals=False,
-)
+import argparse
 
 
-@app.command()
-def launch(
-    port: Annotated[int, typer.Option("--port", help="Local server port.")] = 8050,
-) -> None:
-    """Launch the fnirs-gui Dash interface."""
+def _build_parser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(
+        prog="fnirs-gui",
+        description="Dash-based GUI for interactive fNIRS data inspection and rating.",
+    )
+    p.add_argument("--port", type=int, default=8050, help="Local server port.")
+    return p
+
+
+def main(argv: list[str] | None = None) -> None:
+    args = _build_parser().parse_args(argv)
     from fnirs_pipe.interface.app import launch as _launch
-    _launch(port=port)
+    _launch(port=args.port)

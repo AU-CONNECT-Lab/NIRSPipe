@@ -1,34 +1,22 @@
-"""fnirs-qc CLI — quality control for fNIRS data."""
+"""fnirs-qc CLI (argparse) — quality control for fNIRS data."""
 
 from __future__ import annotations
 
+import argparse
+import sys
 from pathlib import Path
-from typing import Annotated, Optional
-
-import typer
 
 from fnirs_pipe.utils.logging import get_logger, setup_logging
 
 setup_logging()
 
-app = typer.Typer(
-    name="fnirs-qc",
-    help="fNIRS quality control: interactive viewer and group-level reports.",
-    pretty_exceptions_show_locals=False,
-)
-
 logger = get_logger("cli.qc")
 
 
-@app.command()
-def prep_raw(
-    bids_dir: Annotated[Path, typer.Argument(help="BIDS dataset root")],
-    output_dir: Annotated[Path, typer.Argument(help="fnirs-pipe derivatives directory")],
-    participant_label: Annotated[str, typer.Argument(help="Subject ID to inspect, e.g. '01'")],
-    session_label: Annotated[Optional[list[str]], typer.Option("--session-label", help="Session label(s) to include.")] = None,
-    task_label: Annotated[Optional[list[str]], typer.Option("--task-label", help="Task label(s) to include.")] = None,
-    sci_threshold: Annotated[float, typer.Option("--sci-threshold", help="SCI pass/fail threshold for bad channel detection.")] = 0.8,
-    skip_bids_validation: Annotated[bool, typer.Option("--skip-bids-validation/--no-skip-bids-validation")] = False,
+def cmd_prep_raw(
+    bids_dir: Path, output_dir: Path, participant_label: str,
+    session_label: list[str] | None, task_label: list[str] | None,
+    sci_threshold: float, skip_bids_validation: bool,
 ) -> None:
     """Generate static raw QC report for a single participant."""
     from collections import defaultdict
@@ -72,57 +60,31 @@ def prep_raw(
                 groups[(actual_ses, actual_task)].append(run_dict)
 
     if not all_runs:
-        typer.echo(f"Error: no SNIRF files found for sub-{participant_label}.", err=True)
-        raise typer.Exit(1)
+        print(f"Error: no SNIRF files found for sub-{participant_label}.", file=sys.stderr)
+        raise SystemExit(1)
 
-    # Generate one HTML per (session, task) group before launching viewer
     for (ses, task), group_runs in groups.items():
         name_parts = [f"sub-{participant_label}"]
         if ses:  name_parts.append(f"ses-{ses}")
         if task: name_parts.append(f"task-{task}")
         html_path = output_dir / ("_".join(name_parts) + "_desc-raw_nirs.html")
-        typer.echo(f"Generating raw QC report: {html_path.name} ...")
+        print(f"Generating raw QC report: {html_path.name} ...")
         try:
             build_prep_raw_report(group_runs, html_path, sci_threshold=sci_threshold)
-            typer.echo(f"  -> {html_path}")
+            print(f"  -> {html_path}")
         except Exception as exc:
             logger.exception("Raw report generation failed for %s", html_path.name)
-            typer.echo(f"  [error] {exc}", err=True)
+            print(f"  [error] {exc}", file=sys.stderr)
 
-    typer.echo(f"Done. {len(all_runs)} run(s) processed.")
+    print(f"Done. {len(all_runs)} run(s) processed.")
 
 
-@app.command()
-def hyper_raw(
-    bids_dir: Annotated[Path, typer.Argument(help="BIDS dataset root")],
-    output_dir: Annotated[Path, typer.Argument(help="fnirs-pipe derivatives directory")],
-    pairs_csv: Annotated[Path, typer.Option("--pairs-csv", help=(
-        "CSV with columns: group_id, subject_id, task. "
-        "Each unique (group_id, task) pair is processed as one session."
-    ))],
-    group_id: Annotated[Optional[str], typer.Option("--group-id", help=(
-        "Process only this group_id. Omit to process all groups."
-    ))] = None,
-    sci_threshold: Annotated[float, typer.Option("--sci-threshold", help=(
-        "SCI pass/fail threshold for channel quality comparison."
-    ))] = 0.80,
-    coherence_fmin: Annotated[float, typer.Option("--fmin", help=(
-        "Lower bound (Hz) for coherence frequency band."
-    ))] = 0.01,
-    coherence_fmax: Annotated[float, typer.Option("--fmax", help=(
-        "Upper bound (Hz) for coherence frequency band."
-    ))] = 0.10,
-    normalize: Annotated[bool, typer.Option("--normalize/--no-normalize", help=(
-        "Z-score each channel per subject after alignment. "
-        "Useful when subjects have very different signal amplitudes."
-    ))] = False,
-    no_align: Annotated[bool, typer.Option("--no-align", help=(
-        "Skip trigger-based alignment; trim all recordings to the shortest duration. "
-        "Use for resting-state data without shared triggers."
-    ))] = False,
-    session_label: Annotated[Optional[list[str]], typer.Option("--session-label", help="Session label(s) to include.")] = None,
-    task_label: Annotated[Optional[list[str]], typer.Option("--task-label", help="Task label(s) to include.")] = None,
-    skip_bids_validation: Annotated[bool, typer.Option("--skip-bids-validation/--no-skip-bids-validation")] = False,
+def cmd_hyper_raw(
+    bids_dir: Path, output_dir: Path, pairs_csv: Path, group_id: str | None,
+    sci_threshold: float, coherence_fmin: float, coherence_fmax: float,
+    normalize: bool, no_align: bool,
+    session_label: list[str] | None, task_label: list[str] | None,
+    skip_bids_validation: bool,
 ) -> None:
     """Generate hyperscanning raw QC report from BIDS raw data."""
     from fnirs_pipe.exceptions import AlignmentError, GroupCSVError, MissingDerivativesError
@@ -141,30 +103,30 @@ def hyper_raw(
     try:
         groups = parse_group_csv(pairs_csv)
     except GroupCSVError as exc:
-        typer.echo(f"[error] {exc}", err=True)
-        raise typer.Exit(1)
+        print(f"[error] {exc}", file=sys.stderr)
+        raise SystemExit(1)
 
     if group_id is not None:
         groups = {k: v for k, v in groups.items() if k[0] == group_id}
         if not groups:
-            typer.echo(f"[error] group_id '{group_id}' not found in CSV", err=True)
-            raise typer.Exit(1)
+            print(f"[error] group_id '{group_id}' not found in CSV", file=sys.stderr)
+            raise SystemExit(1)
 
     if task_label is not None:
         groups = {k: v for k, v in groups.items() if k[1] in task_label}
         if not groups:
-            typer.echo(f"[error] task_label {task_label} not found in CSV", err=True)
-            raise typer.Exit(1)
+            print(f"[error] task_label {task_label} not found in CSV", file=sys.stderr)
+            raise SystemExit(1)
 
     ses = session_label[0] if session_label else None
 
     n_total = len(groups)
-    typer.echo(f"Processing {n_total} group session(s)...")
+    print(f"Processing {n_total} group session(s)...")
 
     n_ok = n_fail = 0
     for (gid, task), members in groups.items():
         label = f"{gid}/{task}"
-        typer.echo(f"  -> {label} ({len(members)} subjects)")
+        print(f"  -> {label} ({len(members)} subjects)")
         try:
             raws_cw = load_group_raw_bids(bids_dir, members)
             iqm_data = compute_group_iqm_raw(members, raws_cw, sci_threshold, output_dir)
@@ -193,60 +155,45 @@ def hyper_raw(
                 coherence_fmin=coherence_fmin,
                 coherence_fmax=coherence_fmax,
             )
-            typer.echo(f"     report -> {report_path}")
+            print(f"     report -> {report_path}")
             n_ok += 1
         except MissingDerivativesError as exc:
-            typer.echo(f"     [skip] {exc}", err=True)
+            print(f"     [skip] {exc}", file=sys.stderr)
             n_fail += 1
         except AlignmentError as exc:
-            typer.echo(f"     [skip] alignment failed: {exc}", err=True)
+            print(f"     [skip] alignment failed: {exc}", file=sys.stderr)
             n_fail += 1
         except Exception as exc:
             logger.exception("group %s task %s failed", gid, task)
-            typer.echo(f"     [error] unexpected error: {exc}", err=True)
+            print(f"     [error] unexpected error: {exc}", file=sys.stderr)
             n_fail += 1
 
-    typer.echo(f"\nDone: {n_ok} succeeded, {n_fail} failed.")
+    print(f"\nDone: {n_ok} succeeded, {n_fail} failed.")
     if n_fail > 0:
-        raise typer.Exit(1)
+        raise SystemExit(1)
 
 
-@app.command()
-def group_raw(
-    output_dir: Annotated[Path, typer.Argument(help="fnirs-pipe derivatives directory (contains sub-*/nirs/ IQM JSONs)")],
-) -> None:
+def cmd_group_raw(output_dir: Path) -> None:
     """Aggregate per-subject prep-raw IQMs into group_nirs.tsv + group_nirs.html."""
     from fnirs_pipe.qc.group_writer import build_group_raw_report
 
     path = build_group_raw_report(output_dir)
-    typer.echo(f"report -> {path}")
+    print(f"report -> {path}")
 
 
-@app.command()
-def group_hyper_raw(
-    output_dir: Annotated[Path, typer.Argument(help="fnirs-pipe derivatives directory (contains group-*/nirs/ IQM JSONs)")],
-) -> None:
+def cmd_group_hyper_raw(output_dir: Path) -> None:
     """Aggregate per-group hyper-raw IQMs into group_hyper_nirs.tsv + group_hyper_nirs.html."""
     from fnirs_pipe.qc.group_writer import build_group_hyper_raw_report
 
     path = build_group_hyper_raw_report(output_dir)
-    typer.echo(f"report -> {path}")
+    print(f"report -> {path}")
 
 
-@app.command()
-def window_raw(
-    bids_dir: Annotated[Path, typer.Argument(help="BIDS dataset root")],
-    output_dir: Annotated[Path, typer.Argument(help="QC output directory (where group_nirs.html lives)")],
-    task_label: Annotated[str, typer.Option("--task-label", help="BIDS task label (one task at a time).")],
-    tstart: Annotated[float, typer.Option("--tstart", help="Window start time (s)")],
-    tend: Annotated[float, typer.Option("--tend",   help="Window end time (s)")],
-    participant_label: Annotated[Optional[list[str]], typer.Option("--participant-label", help="Subject(s) to include (default: all).")] = None,
-    session_label: Annotated[Optional[list[str]], typer.Option("--session-label", help="Session label(s) to include.")] = None,
-    align: Annotated[str, typer.Option("--align", help="t=0 origin: 'none' = recording start, 'trigger' = first matching annotation.")] = "none",
-    trigger_name: Annotated[Optional[str], typer.Option("--trigger-name", help="Annotation description used when --align trigger.")] = None,
-    name: Annotated[Optional[str], typer.Option("--name", help="Output suffix (default: window-{tstart}-{tend}).")] = None,
-    sci_threshold: Annotated[float, typer.Option("--sci-threshold", help="SCI threshold for bad-channel detection.")] = 0.8,
-    skip_bids_validation: Annotated[bool, typer.Option("--skip-bids-validation/--no-skip-bids-validation")] = False,
+def cmd_window_raw(
+    bids_dir: Path, output_dir: Path, task_label: str, tstart: float, tend: float,
+    participant_label: list[str] | None, session_label: list[str] | None,
+    align: str, trigger_name: str | None, name: str | None,
+    sci_threshold: float, skip_bids_validation: bool,
 ) -> None:
     """Crop each subject's raw to [tstart, tend] + aggregate IQM into a windowed group report."""
     from fnirs_pipe.qc.window_writer import build_window_raw_report
@@ -258,44 +205,15 @@ def window_raw(
         align=align, trigger_name=trigger_name, name=name,
         sci_threshold=sci_threshold, skip_bids_validation=skip_bids_validation,
     )
-    typer.echo(f"report -> {path}")
+    print(f"report -> {path}")
 
 
-@app.command()
-def hyper_post(
-    bids_dir: Annotated[Path, typer.Argument(help="BIDS dataset root")],
-    output_dir: Annotated[Path, typer.Argument(help="fnirs-pipe derivatives directory")],
-    pairs_csv: Annotated[Path, typer.Option("--pairs-csv", help=(
-        "CSV with columns: group_id, subject_id, task. "
-        "Each unique (group_id, task) pair is processed as one session."
-    ))],
-    group_id: Annotated[Optional[str], typer.Option("--group-id", help=(
-        "Process only this group_id. Omit to process all groups."
-    ))] = None,
-    roi_mapping: Annotated[Optional[Path], typer.Option("--roi-mapping", help=(
-        "JSON file mapping ROI labels to lists of channel names. "
-        "Used for ROI-level WTC. Optional."
-    ))] = None,
-    wtc_fmin: Annotated[float, typer.Option("--wtc-fmin", help=(
-        "Lower bound (Hz) for WTC frequency axis."
-    ))] = 0.004,
-    wtc_fmax: Annotated[float, typer.Option("--wtc-fmax", help=(
-        "Upper bound (Hz) for WTC frequency axis."
-    ))] = 0.20,
-    isc_threshold: Annotated[float, typer.Option("--isc-threshold", help=(
-        "Minimum mean ISC to draw an arc in the connectivity circle."
-    ))] = 0.3,
-    normalize: Annotated[bool, typer.Option("--normalize/--no-normalize", help=(
-        "Z-score each channel per subject after alignment. "
-        "Useful when subjects have very different signal amplitudes."
-    ))] = False,
-    no_align: Annotated[bool, typer.Option("--no-align", help=(
-        "Skip trigger-based alignment; trim all recordings to the shortest duration. "
-        "Use for resting-state data without shared triggers."
-    ))] = False,
-    session_label: Annotated[Optional[list[str]], typer.Option("--session-label", help="Session label(s) to include.")] = None,
-    task_label: Annotated[Optional[list[str]], typer.Option("--task-label", help="Task label(s) to include.")] = None,
-    skip_bids_validation: Annotated[bool, typer.Option("--skip-bids-validation/--no-skip-bids-validation")] = False,
+def cmd_hyper_post(
+    bids_dir: Path, output_dir: Path, pairs_csv: Path, group_id: str | None,
+    roi_mapping: Path | None, wtc_fmin: float, wtc_fmax: float, isc_threshold: float,
+    normalize: bool, no_align: bool,
+    session_label: list[str] | None, task_label: list[str] | None,
+    skip_bids_validation: bool,
 ) -> None:
     """Generate hyperscanning post-processing QC report (WTC, ISC, connectivity)."""
     import json
@@ -313,38 +231,36 @@ def hyper_post(
     try:
         groups = parse_group_csv(pairs_csv)
     except GroupCSVError as exc:
-        typer.echo(f"[error] {exc}", err=True)
-        raise typer.Exit(1)
+        print(f"[error] {exc}", file=sys.stderr)
+        raise SystemExit(1)
 
     if group_id is not None:
         groups = {k: v for k, v in groups.items() if k[0] == group_id}
         if not groups:
-            typer.echo(f"[error] group_id '{group_id}' not found in CSV", err=True)
-            raise typer.Exit(1)
+            print(f"[error] group_id '{group_id}' not found in CSV", file=sys.stderr)
+            raise SystemExit(1)
 
     if task_label is not None:
         groups = {k: v for k, v in groups.items() if k[1] in task_label}
         if not groups:
-            typer.echo(f"[error] task_label {task_label} not found in CSV", err=True)
-            raise typer.Exit(1)
+            print(f"[error] task_label {task_label} not found in CSV", file=sys.stderr)
+            raise SystemExit(1)
 
-    # TODO: optionally auto-generate this roi.json from the montage via
-    # mne_nirs.io.fold_channel_specificity (needs fOLD Excel DB + MNE_NIRS_FOLD_PATH).
     roi_map: dict[str, list[str]] | None = None
     if roi_mapping is not None:
         try:
             roi_map = json.loads(roi_mapping.read_text())
         except Exception as exc:
-            typer.echo(f"[error] failed to load ROI mapping: {exc}", err=True)
-            raise typer.Exit(1)
+            print(f"[error] failed to load ROI mapping: {exc}", file=sys.stderr)
+            raise SystemExit(1)
 
     n_total = len(groups)
-    typer.echo(f"Processing {n_total} group session(s)...")
+    print(f"Processing {n_total} group session(s)...")
 
     n_ok = n_fail = 0
     for (gid, task), members in groups.items():
         label = f"{gid}/{task}"
-        typer.echo(f"  -> {label} ({len(members)} subjects)")
+        print(f"  -> {label} ({len(members)} subjects)")
         try:
             raws = load_group_haemo(output_dir, members)
             if no_align:
@@ -365,19 +281,120 @@ def hyper_post(
                 wtc_fmax=wtc_fmax,
                 isc_threshold=isc_threshold,
             )
-            typer.echo(f"     report -> {report_path}")
+            print(f"     report -> {report_path}")
             n_ok += 1
         except MissingDerivativesError as exc:
-            typer.echo(f"     [skip] {exc}", err=True)
+            print(f"     [skip] {exc}", file=sys.stderr)
             n_fail += 1
         except AlignmentError as exc:
-            typer.echo(f"     [skip] alignment failed: {exc}", err=True)
+            print(f"     [skip] alignment failed: {exc}", file=sys.stderr)
             n_fail += 1
         except Exception as exc:
             logger.exception("group %s task %s failed", gid, task)
-            typer.echo(f"     [error] unexpected error: {exc}", err=True)
+            print(f"     [error] unexpected error: {exc}", file=sys.stderr)
             n_fail += 1
 
-    typer.echo(f"\nDone: {n_ok} succeeded, {n_fail} failed.")
+    print(f"\nDone: {n_ok} succeeded, {n_fail} failed.")
     if n_fail > 0:
-        raise typer.Exit(1)
+        raise SystemExit(1)
+
+
+def _build_parser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(
+        prog="fnirs-qc",
+        description="fNIRS quality control: individual, hyperscanning and group-level reports.",
+    )
+    sub = p.add_subparsers(required=True)
+
+    pr = sub.add_parser("prep-raw", help="Static raw QC report for a single participant.")
+    pr.add_argument("bids_dir",   type=Path, help="BIDS dataset root")
+    pr.add_argument("output_dir", type=Path, help="fnirs-pipe derivatives directory")
+    pr.add_argument("participant_label", help="Subject ID to inspect, e.g. '01'")
+    pr.add_argument("--session-label", nargs="+", action="extend", help="Session label(s) to include.")
+    pr.add_argument("--task-label",    nargs="+", action="extend", help="Task label(s) to include.")
+    pr.add_argument("--sci-threshold", type=float, default=0.8,
+                    help="SCI pass/fail threshold for bad channel detection.")
+    pr.add_argument("--skip-bids-validation", action=argparse.BooleanOptionalAction, default=False)
+    pr.set_defaults(func=cmd_prep_raw)
+
+    hr = sub.add_parser("hyper-raw", help="Hyperscanning raw QC report from BIDS raw data.")
+    hr.add_argument("bids_dir",   type=Path, help="BIDS dataset root")
+    hr.add_argument("output_dir", type=Path, help="fnirs-pipe derivatives directory")
+    hr.add_argument("--pairs-csv", type=Path, required=True,
+                    help="CSV with columns: group_id, subject_id, task. "
+                         "Each unique (group_id, task) pair is processed as one session.")
+    hr.add_argument("--group-id", default=None,
+                    help="Process only this group_id. Omit to process all groups.")
+    hr.add_argument("--sci-threshold", type=float, default=0.80,
+                    help="SCI pass/fail threshold for channel quality comparison.")
+    hr.add_argument("--fmin", dest="coherence_fmin", type=float, default=0.01,
+                    help="Lower bound (Hz) for coherence frequency band.")
+    hr.add_argument("--fmax", dest="coherence_fmax", type=float, default=0.10,
+                    help="Upper bound (Hz) for coherence frequency band.")
+    hr.add_argument("--normalize", action=argparse.BooleanOptionalAction, default=False,
+                    help="Z-score each channel per subject after alignment.")
+    hr.add_argument("--no-align", action="store_true",
+                    help="Skip trigger-based alignment; trim all recordings to the shortest duration.")
+    hr.add_argument("--session-label", nargs="+", action="extend", help="Session label(s) to include.")
+    hr.add_argument("--task-label",    nargs="+", action="extend", help="Task label(s) to include.")
+    hr.add_argument("--skip-bids-validation", action=argparse.BooleanOptionalAction, default=False)
+    hr.set_defaults(func=cmd_hyper_raw)
+
+    gr = sub.add_parser("group-raw", help="Aggregate per-subject prep-raw IQMs.")
+    gr.add_argument("output_dir", type=Path,
+                    help="fnirs-pipe derivatives directory (contains sub-*/nirs/ IQM JSONs)")
+    gr.set_defaults(func=cmd_group_raw)
+
+    ghr = sub.add_parser("group-hyper-raw", help="Aggregate per-group hyper-raw IQMs.")
+    ghr.add_argument("output_dir", type=Path,
+                     help="fnirs-pipe derivatives directory (contains group-*/nirs/ IQM JSONs)")
+    ghr.set_defaults(func=cmd_group_hyper_raw)
+
+    wr = sub.add_parser("window-raw", help="Windowed group raw QC report over [tstart, tend].")
+    wr.add_argument("bids_dir",   type=Path, help="BIDS dataset root")
+    wr.add_argument("output_dir", type=Path, help="QC output directory (where group_nirs.html lives)")
+    wr.add_argument("--task-label", required=True, help="BIDS task label (one task at a time).")
+    wr.add_argument("--tstart", type=float, required=True, help="Window start time (s)")
+    wr.add_argument("--tend",   type=float, required=True, help="Window end time (s)")
+    wr.add_argument("--participant-label", nargs="+", action="extend",
+                    help="Subject(s) to include (default: all).")
+    wr.add_argument("--session-label", nargs="+", action="extend", help="Session label(s) to include.")
+    wr.add_argument("--align", default="none",
+                    help="t=0 origin: 'none' = recording start, 'trigger' = first matching annotation.")
+    wr.add_argument("--trigger-name", default=None,
+                    help="Annotation description used when --align trigger.")
+    wr.add_argument("--name", default=None, help="Output suffix (default: window-{tstart}-{tend}).")
+    wr.add_argument("--sci-threshold", type=float, default=0.8,
+                    help="SCI threshold for bad-channel detection.")
+    wr.add_argument("--skip-bids-validation", action=argparse.BooleanOptionalAction, default=False)
+    wr.set_defaults(func=cmd_window_raw)
+
+    hp = sub.add_parser("hyper-post", help="Hyperscanning post QC report (WTC, ISC, connectivity).")
+    hp.add_argument("bids_dir",   type=Path, help="BIDS dataset root")
+    hp.add_argument("output_dir", type=Path, help="fnirs-pipe derivatives directory")
+    hp.add_argument("--pairs-csv", type=Path, required=True,
+                    help="CSV with columns: group_id, subject_id, task. "
+                         "Each unique (group_id, task) pair is processed as one session.")
+    hp.add_argument("--group-id", default=None,
+                    help="Process only this group_id. Omit to process all groups.")
+    hp.add_argument("--roi-mapping", type=Path, default=None,
+                    help="JSON file mapping ROI labels to lists of channel names. For ROI-level WTC. Optional.")
+    hp.add_argument("--wtc-fmin", type=float, default=0.004, help="Lower bound (Hz) for WTC frequency axis.")
+    hp.add_argument("--wtc-fmax", type=float, default=0.20,  help="Upper bound (Hz) for WTC frequency axis.")
+    hp.add_argument("--isc-threshold", type=float, default=0.3,
+                    help="Minimum mean ISC to draw an arc in the connectivity circle.")
+    hp.add_argument("--normalize", action=argparse.BooleanOptionalAction, default=False,
+                    help="Z-score each channel per subject after alignment.")
+    hp.add_argument("--no-align", action="store_true",
+                    help="Skip trigger-based alignment; trim all recordings to the shortest duration.")
+    hp.add_argument("--session-label", nargs="+", action="extend", help="Session label(s) to include.")
+    hp.add_argument("--task-label",    nargs="+", action="extend", help="Task label(s) to include.")
+    hp.add_argument("--skip-bids-validation", action=argparse.BooleanOptionalAction, default=False)
+    hp.set_defaults(func=cmd_hyper_post)
+    return p
+
+
+def main(argv: list[str] | None = None) -> None:
+    args = _build_parser().parse_args(argv)
+    kw = {k: v for k, v in vars(args).items() if k != "func"}
+    args.func(**kw)

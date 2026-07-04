@@ -11,6 +11,14 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [0.13.0] - 2026-07-03
+
+### Changed
+- All CLIs reworked to follow the BIDS App convention: `--participant-label` and other list options now accept space-separated values (e.g. `--participant-label 01 02 03`) as well as repeated flags
+- `--help` output is grouped into labelled sections
+
+---
+
 ## [0.12.0] - 2026-07-03
 
 ### Added

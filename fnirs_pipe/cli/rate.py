@@ -1,17 +1,10 @@
-"""fnirs-rate CLI entry point."""
+"""fnirs-rate CLI entry point (argparse)."""
 
 from __future__ import annotations
 
+import argparse
+import sys
 from pathlib import Path
-from typing import Annotated, Optional
-
-import typer
-
-app = typer.Typer(
-    name="fnirs-rate",
-    help="Interactive QC review for fNIRS data: rating, individual viewer, hyperscanning viewer.",
-    pretty_exceptions_show_locals=False,
-)
 
 
 def _discover_subjects(output_dir: Path) -> list[str]:
@@ -21,34 +14,22 @@ def _discover_subjects(output_dir: Path) -> list[str]:
     )
 
 
-@app.command()
-def rate(
-    output_dir: Annotated[Path, typer.Argument(help="fnirs-pipe output directory.")],
-    participant_label: Annotated[
-        Optional[list[str]],
-        typer.Option("--participant-label", help="Subject ID(s) to open. Default: all found."),
-    ] = None,
-    port: Annotated[int, typer.Option("--port", help="Local server port.")] = 8765,
-) -> None:
+def cmd_rate(output_dir: Path, participant_label: list[str] | None, port: int) -> None:
     """Launch QC rating interface for fnirs-pipe reports."""
     from fnirs_pipe.qc.rating.app import FNIRSRatingApp
 
     subjects = participant_label or _discover_subjects(output_dir)
     if not subjects:
-        typer.echo("No subjects found in output directory.", err=True)
-        raise typer.Exit(1)
+        print("No subjects found in output directory.", file=sys.stderr)
+        raise SystemExit(1)
 
     FNIRSRatingApp(output_dir, subjects).run(port=port)
 
 
-@app.command()
-def raw(
-    output_dir: Annotated[Path, typer.Argument(help="fnirs-pipe output directory.")],
-    participant_label: Annotated[str, typer.Argument(help="Subject ID, e.g. '01'.")],
-    session_label: Annotated[Optional[str], typer.Option("--session-label", help="Session label.")] = None,
-    task_label: Annotated[Optional[str], typer.Option("--task-label", help="Task label.")] = None,
-    sci_threshold: Annotated[float, typer.Option("--sci-threshold", help="SCI threshold for pre-highlighting bad channels.")] = 0.8,
-    port: Annotated[int, typer.Option("--port", help="Local server port.")] = 5052,
+def cmd_raw(
+    output_dir: Path, participant_label: str,
+    session_label: str | None, task_label: str | None,
+    sci_threshold: float, port: int,
 ) -> None:
     """Launch interactive raw QC viewer with section ratings and channel decisions."""
     from fnirs_pipe.qc.rating.app import RawRatingApp
@@ -61,25 +42,16 @@ def raw(
     html_path = output_dir / ("_".join(name_parts) + "_desc-raw_nirs.html")
 
     if not html_path.exists():
-        typer.echo(f"Error: raw report not found: {html_path}", err=True)
-        raise typer.Exit(1)
+        print(f"Error: raw report not found: {html_path}", file=sys.stderr)
+        raise SystemExit(1)
 
-    typer.echo(f"Launching raw viewer: {html_path.name} ...")
+    print(f"Launching raw viewer: {html_path.name} ...")
     RawRatingApp(html_path, output_dir, sci_threshold).run(port=port)
 
 
-@app.command()
-def hyper(
-    output_dir: Annotated[Path, typer.Argument(help="fnirs-pipe output directory.")],
-    group_id: Annotated[str, typer.Argument(help="Group ID, e.g. 'A'.")],
-    task_label: Annotated[str, typer.Argument(help="Task label, e.g. 'tapping'.")],
-    pairs_csv: Annotated[Path, typer.Option("--pairs-csv", help=(
-        "CSV with columns: group_id, subject_id, task (same as fnirs-qc hyper-raw). "
-        "Used to look up subject IDs in this group."
-    ))],
-    session_label: Annotated[Optional[str], typer.Option("--session-label", help="Session label.")] = None,
-    sci_threshold: Annotated[float, typer.Option("--sci-threshold", help="SCI threshold.")] = 0.8,
-    port: Annotated[int, typer.Option("--port", help="Local server port.")] = 5053,
+def cmd_hyper(
+    output_dir: Path, group_id: str, task_label: str, pairs_csv: Path,
+    session_label: str | None, sci_threshold: float, port: int,
 ) -> None:
     """Launch interactive hyperscanning QC viewer with section ratings and channel decisions."""
     from fnirs_pipe.pipeline.hyperscanning import parse_group_csv
@@ -91,15 +63,59 @@ def hyper(
     name_parts.append(f"task-{task_label}")
     html_path = output_dir / ("_".join(name_parts) + "_desc-hyperraw_nirs.html")
     if not html_path.exists():
-        typer.echo(f"Error: hyper report not found: {html_path}", err=True)
-        raise typer.Exit(1)
+        print(f"Error: hyper report not found: {html_path}", file=sys.stderr)
+        raise SystemExit(1)
 
     groups = parse_group_csv(pairs_csv)
     members = groups.get((group_id, task_label))
     if not members:
-        typer.echo(f"Error: group_id '{group_id}' + task '{task_label}' not found in {pairs_csv}", err=True)
-        raise typer.Exit(1)
+        print(f"Error: group_id '{group_id}' + task '{task_label}' not found in {pairs_csv}", file=sys.stderr)
+        raise SystemExit(1)
     subject_ids = [e.subject_id for e in members]
 
-    typer.echo(f"Launching hyper viewer: {html_path.name} ...")
+    print(f"Launching hyper viewer: {html_path.name} ...")
     HyperRatingApp(html_path, output_dir, subject_ids, sci_threshold).run(port=port)
+
+
+def _build_parser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(
+        prog="fnirs-rate",
+        description="Interactive QC review for fNIRS data: rating, individual viewer, hyperscanning viewer.",
+    )
+    sub = p.add_subparsers(dest="command", required=True)
+
+    pr = sub.add_parser("rate", help="Launch QC rating interface.")
+    pr.add_argument("output_dir", type=Path, help="fnirs-pipe output directory.")
+    pr.add_argument("--participant-label", nargs="+", action="extend",
+                    help="Subject ID(s) to open. Default: all found.")
+    pr.add_argument("--port", type=int, default=8765, help="Local server port.")
+    pr.set_defaults(func=cmd_rate)
+
+    pw = sub.add_parser("raw", help="Launch interactive raw QC viewer.")
+    pw.add_argument("output_dir", type=Path, help="fnirs-pipe output directory.")
+    pw.add_argument("participant_label", help="Subject ID, e.g. '01'.")
+    pw.add_argument("--session-label", default=None, help="Session label.")
+    pw.add_argument("--task-label", default=None, help="Task label.")
+    pw.add_argument("--sci-threshold", type=float, default=0.8,
+                    help="SCI threshold for pre-highlighting bad channels.")
+    pw.add_argument("--port", type=int, default=5052, help="Local server port.")
+    pw.set_defaults(func=cmd_raw)
+
+    ph = sub.add_parser("hyper", help="Launch interactive hyperscanning QC viewer.")
+    ph.add_argument("output_dir", type=Path, help="fnirs-pipe output directory.")
+    ph.add_argument("group_id", help="Group ID, e.g. 'A'.")
+    ph.add_argument("task_label", help="Task label, e.g. 'tapping'.")
+    ph.add_argument("--pairs-csv", type=Path, required=True,
+                    help="CSV with columns: group_id, subject_id, task (same as fnirs-qc hyper-raw). "
+                         "Used to look up subject IDs in this group.")
+    ph.add_argument("--session-label", default=None, help="Session label.")
+    ph.add_argument("--sci-threshold", type=float, default=0.8, help="SCI threshold.")
+    ph.add_argument("--port", type=int, default=5053, help="Local server port.")
+    ph.set_defaults(func=cmd_hyper)
+    return p
+
+
+def main(argv: list[str] | None = None) -> None:
+    args = _build_parser().parse_args(argv)
+    kw = {k: v for k, v in vars(args).items() if k not in ("func", "command")}
+    args.func(**kw)

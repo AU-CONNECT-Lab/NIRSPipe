@@ -16,7 +16,7 @@ Outputs follow the [BIDS Derivatives](https://bids-specification.readthedocs.io/
 ## Requirements
 
 - Python ≥ 3.10
-- Dependencies (all required, resolved via `pip install .`): `mne`, `mne-nirs` (≥ 0.7), `nilearn`, `scipy`, `numpy`, `pybids`, `mne-bids`, `h5py`, `tables`, `pandas`, `jinja2`, `plotly`, `typer`, `joblib`, `flask`, `dash`, `dash-bootstrap-components`, `dash-cytoscape`, `pycwt`, `bibtexparser`, `tomli` (Python < 3.11 only)
+- Dependencies (all required, resolved via `pip install .`): `mne`, `mne-nirs` (≥ 0.7), `nilearn`, `scipy`, `numpy`, `pybids`, `mne-bids`, `h5py`, `tables`, `pandas`, `jinja2`, `plotly`, `kaleido`, `joblib`, `flask`, `dash`, `dash-bootstrap-components`, `dash-cytoscape`, `pycwt`, `bibtexparser`, `tomli` (Python < 3.11 only)
 
 ## Installation
 
@@ -32,7 +32,7 @@ Preprocessing only:
 
 ```bash
 fnirs-pipe /data/bids /data/derivatives participant \
-  --participant-label 01 --participant-label 02 \
+  --participant-label 01 02 \
   --dpf 6.0 --sci-threshold 0.8
 ```
 
@@ -63,9 +63,9 @@ Required:
   --sci-threshold FLOAT        SCI threshold for bad channel detection (e.g. 0.8).
 
 Subject / session / task selection:
-  --participant-label LABEL    Repeatable.
-  --session-label LABEL        Repeatable.
-  --task-label LABEL           Repeatable.
+  --participant-label LABEL [LABEL ...]   Space-separated or repeated.
+  --session-label LABEL [LABEL ...]       Space-separated or repeated.
+  --task-label LABEL [LABEL ...]          Space-separated or repeated.
   --bids-filter-file FILE      JSON file with extra pybids query filters.
 
 Preprocessing:

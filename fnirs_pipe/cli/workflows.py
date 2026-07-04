@@ -130,7 +130,7 @@ def run_participant_level(args: dict[str, Any]) -> None:
                 db_path, execution_id, subject,
                 sci_threshold=args["sci_threshold"],
                 dpf=args["dpf"],
-                motion_correction=args["motion_correction"].value,
+                motion_correction=_v(args["motion_correction"]),
                 mode=_v(args["mode"]) if args.get("mode") else None,
                 high_pass=args.get("high_pass"),
                 low_pass=args.get("low_pass"),
@@ -209,11 +209,11 @@ def _make_prep_config(subject: str, session: str | None, args: dict[str, Any]) -
         session=session,
         dpf=args["dpf"],
         sci_threshold=args["sci_threshold"],
-        motion_correction=args["motion_correction"].value,
+        motion_correction=_v(args["motion_correction"]),
         exclude_channels=[c.strip() for c in raw_excl.split(",")] if raw_excl else [],
         cardiac_l_freq=args["cardiac_l_freq"],
         cardiac_h_freq=args["cardiac_h_freq"],
-        ignore=[ig.value for ig in (args.get("ignore") or [])],
+        ignore=[_v(ig) for ig in (args.get("ignore") or [])],
     )
 
 
