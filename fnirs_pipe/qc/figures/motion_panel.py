@@ -27,51 +27,34 @@ def _decimate(arr: np.ndarray, times: np.ndarray, max_pts: int):
 _ZOOM_COLORS = ["#e74c3c", "#2980b9", "#27ae60"]
 
 
-def _first_wavelength_indices(ch_names: list[str]) -> list[int]:
-    """Return indices of channels belonging to the numerically smallest wavelength."""
-    wl_map: dict[int, list[int]] = {}
-    for i, ch in enumerate(ch_names):
-        token = ch.split()[-1]
-        try:
-            wl = int(float(token))
-            wl_map.setdefault(wl, []).append(i)
-        except ValueError:
-            pass
-    if not wl_map:
-        return list(range(0, len(ch_names), 2))
-    return wl_map[sorted(wl_map)[0]]
-
-
 def carpet_gvtd_figure(
     raw: mne.io.Raw,
     ch_names: list[str],
     segments: "dict | None" = None,
     z_threshold: float = 3.0,
 ) -> str:
-    """GVTD (top, all channels) + OD carpet heatmap (bottom, one wavelength), shared x-axis."""
+    """GVTD trace (top) + per-channel z-scored OD carpet (bottom, all channels), shared x-axis."""
     raw_od = mne.preprocessing.nirs.optical_density(raw.copy())
     od_data, times = raw_od.get_data(picks=ch_names, return_times=True)
 
-    MAX_PTS = 2000
-    n_pts = od_data.shape[1]
-    if n_pts > MAX_PTS:
-        step    = n_pts // MAX_PTS
-        od_data = od_data[:, ::step]
-        times   = times[::step]
-
+    # GVTD = sqrt(mean_ch(diff_t(OD)^2)), full-res (spikes are single samples, matches the metric); only carpet decimated
     gvtd   = np.sqrt(np.mean(np.diff(od_data, axis=1) ** 2, axis=0))
     t_gvtd = times[1:]
     p95    = float(np.percentile(gvtd, 95))
 
-    # carpet: one wavelength, OD space
-    wl_idx   = _first_wavelength_indices(ch_names)
-    carpet   = od_data[wl_idx, :]
+    # carpet: all channels (both wavelengths are positively correlated, safe in one z-scored image);
+    # matches GVTD's channel set. decimate columns for display only
+    carpet   = od_data
+    MAX_PTS = 2000
+    if carpet.shape[1] > MAX_PTS:
+        carpet = carpet[:, :: carpet.shape[1] // MAX_PTS]
+    # per-channel z-score: (OD - mean_t) / std_t, clipped to ±z_threshold
     mean     = carpet.mean(axis=1, keepdims=True)
     std      = carpet.std(axis=1, keepdims=True)
     std[std == 0] = 1.0
     data_z   = np.clip((carpet - mean) / std, -z_threshold, z_threshold)
 
-    n_ch     = len(wl_idx)
+    n_ch     = carpet.shape[0]
     carpet_h = max(1.5, n_ch * 0.09)
     fig = plt.figure(figsize=(12, carpet_h + 1.5))
     gs  = fig.add_gridspec(
@@ -228,13 +211,13 @@ def build_motion_detail_figure(
     od_data, od_times = _decimate(od_data, od_times, max_pts)
 
     diff_all = np.diff(od_data, axis=1)
-    gvtd     = np.sqrt(np.mean(diff_all ** 2, axis=0))
+    gvtd     = np.sqrt(np.mean(diff_all ** 2, axis=0))    # GVTD = sqrt(mean_ch(diff_t(OD)^2))
     t_gvtd   = od_times[1:].tolist()
     p95      = float(np.percentile(gvtd, 95))
 
     if ch_name in raw_od_before.ch_names:
         ch_idx = raw_od_before.ch_names.index(ch_name)
-        tvd = np.abs(diff_all[ch_idx]).tolist()
+        tvd = np.abs(diff_all[ch_idx]).tolist()    # TVD = |diff_t(OD)| for this channel
     else:
         tvd = np.zeros(len(t_gvtd)).tolist()
 

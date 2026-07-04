@@ -98,6 +98,10 @@ def run_participant_level(args: dict[str, Any]) -> None:
         toml = load_toml(args["config"])
         logger.debug("loaded post config: %s", args["config"])
 
+    # cutoffs may come from CLI or TOML; resolve like PostConfig so DB log + report match what post applies
+    cfg_high_pass = args.get("high_pass") if args.get("high_pass") is not None else toml.get("high_pass")
+    cfg_low_pass  = args.get("low_pass")  if args.get("low_pass")  is not None else toml.get("low_pass")
+
     tasks: list[str | None] = task_label if task_label else [None]
 
     from fnirs_pipe import __version__
@@ -132,9 +136,9 @@ def run_participant_level(args: dict[str, Any]) -> None:
                 dpf=args["dpf"],
                 motion_correction=_v(args["motion_correction"]),
                 mode=_v(args["mode"]) if args.get("mode") else None,
-                high_pass=args.get("high_pass"),
-                low_pass=args.get("low_pass"),
-                hrf_model=_v(args["hrf_model"]) if args.get("hrf_model") else None,
+                high_pass=cfg_high_pass,
+                low_pass=cfg_low_pass,
+                hrf_model=_v(args["hrf_model"]) if args.get("hrf_model") else toml.get("hrf_model"),
             )
 
             t0 = time.monotonic()
@@ -181,7 +185,7 @@ def run_participant_level(args: dict[str, Any]) -> None:
                     glm_est, dm, alff_df, fc_df = _run_post_for_subject(subject, sessions, args, toml, output_dir)
 
                 if not args.get("no_report") and last_result is not None:
-                    _emit_subject_report(subject, sub_dir, last_raw, last_result, prep_config, args, glm_est, dm, alff_df=alff_df, fc_df=fc_df)
+                    _emit_subject_report(subject, sub_dir, last_raw, last_result, prep_config, args, glm_est, dm, alff_df=alff_df, fc_df=fc_df, high_pass=cfg_high_pass, low_pass=cfg_low_pass)
 
             except Exception as exc:
                 subject_status = "FAILED"
@@ -217,7 +221,7 @@ def _make_prep_config(subject: str, session: str | None, args: dict[str, Any]) -
     )
 
 
-def _emit_subject_report(subject, sub_dir, last_raw, last_result, prep_config, args, glm_est, dm, alff_df=None, fc_df=None):
+def _emit_subject_report(subject, sub_dir, last_raw, last_result, prep_config, args, glm_est, dm, alff_df=None, fc_df=None, high_pass=None, low_pass=None):
     import mne
     import numpy as np
     from fnirs_pipe.qc.report import build_subject_report
@@ -259,8 +263,8 @@ def _emit_subject_report(subject, sub_dir, last_raw, last_result, prep_config, a
         raw_after_motion=last_result.raw_od_after_motion,
         design_matrix=dm,
         glm_est=glm_est,
-        l_freq=args.get("high_pass"),
-        h_freq=args.get("low_pass"),
+        l_freq=high_pass,
+        h_freq=low_pass,
         mode=_v(args.get("mode")) if args.get("mode") else None,
         alff_df=alff_df,
         fc_df=fc_df,
