@@ -1,4 +1,4 @@
-"""Hyperscanning raw QC: build figure files + IQM JSON for the iframe-based viewer."""
+"""Hyperscanning raw QC: build figure files + SQM JSON for the iframe-based viewer."""
 
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ from fnirs_pipe.qc.figures.hyper_figures import (
     build_psd,
     build_signal_overlay_pair,
     build_trigger_timeline,
-    compute_hyper_iqm,
+    compute_hyper_sqm,
     compute_windowed_coherence,
 )
 from fnirs_pipe.utils.logging import get_logger
@@ -36,7 +36,7 @@ def _process_hyper_raw_group(
     group_id: str,
     task: str,
     group: list[GroupEntry],
-    iqm_data: dict[str, dict],
+    sqm_data: dict[str, dict],
     aligned_raws: dict[str, mne.io.Raw],
     offsets: dict[str, float],
     coherence_df: pd.DataFrame,
@@ -51,7 +51,7 @@ def _process_hyper_raw_group(
     coherence_window_s: float = 30.0,
     coherence_step_s: float = 5.0,
 ) -> dict:
-    """Compute hyper raw figures, save each as a standalone HTML, write IQM JSON.
+    """Compute hyper raw figures, save each as a standalone HTML, write SQM JSON.
     Returns the metadata dict the main viewer HTML needs."""
 
     label_parts = [f"group-{group_id}"]
@@ -62,9 +62,9 @@ def _process_hyper_raw_group(
 
     group_dir = output_dir / f"group-{group_id}"
     fig_dir   = group_dir / "figures"
-    iqm_dir   = group_dir / (f"ses-{session}" if session else "") / "nirs"
+    sqm_dir   = group_dir / (f"ses-{session}" if session else "") / "nirs"
     fig_dir.mkdir(parents=True, exist_ok=True)
-    iqm_dir.mkdir(parents=True, exist_ok=True)
+    sqm_dir.mkdir(parents=True, exist_ok=True)
 
     subject_ids  = [e.subject_id for e in group]
     first_raw    = aligned_raws.get(subject_ids[0]) if subject_ids else None
@@ -112,11 +112,11 @@ def _process_hyper_raw_group(
     _safe_save("coherence_bar",  "cohbar", build_coherence_bar, coherence_df)
     _safe_save("coh_timeseries", "cohts",  build_coherence_timeseries, windowed_coh_df)
     _safe_save("layout_2d",      "layout2d",
-               build_layout_2d, aligned_raws, iqm_data, subject_ids, sci_threshold)
+               build_layout_2d, aligned_raws, sqm_data, subject_ids, sci_threshold)
     _safe_save("layout_3d",      "layout3d",
-               build_layout_3d, aligned_raws, iqm_data, subject_ids, sci_threshold)
+               build_layout_3d, aligned_raws, sqm_data, subject_ids, sci_threshold)
     _safe_save("ch_summary",     "chsummary",
-               build_channel_summary, iqm_data, subject_ids, sci_threshold)
+               build_channel_summary, sqm_data, subject_ids, sci_threshold)
 
     ch_pairs: list[str] = get_channel_pairs(first_raw) if first_raw else []
     for pair in ch_pairs:
@@ -140,17 +140,17 @@ def _process_hyper_raw_group(
             f"{group_dir.name}/figures/{label}_desc-ch{{pair}}_nirs.html"
         )
 
-    iqm = compute_hyper_iqm(
-        iqm_data, coherence_df, aligned_raws, offsets, subject_ids, sci_threshold,
+    sqm = compute_hyper_sqm(
+        sqm_data, coherence_df, aligned_raws, offsets, subject_ids, sci_threshold,
     )
-    iqm_path = iqm_dir / f"{label}_desc-iqm_nirs.json"
-    iqm_path.write_text(json.dumps(iqm, indent=2, default=str), encoding="utf-8")
-    logger.info("Hyper IQM JSON → %s", iqm_path)
+    sqm_path = sqm_dir / f"{label}_desc-sqm_nirs.json"
+    sqm_path.write_text(json.dumps(sqm, indent=2, default=str), encoding="utf-8")
+    logger.info("Hyper SQM JSON → %s", sqm_path)
 
     return {
         "subject_ids":   subject_ids,
         "alignment":     alignment_rows,
-        "iqm":           iqm,
+        "sqm":           sqm,
         "ch_pairs":      ch_pairs,
         "figure_paths":  figure_paths,
         "data_subdir":   group_dir.name,

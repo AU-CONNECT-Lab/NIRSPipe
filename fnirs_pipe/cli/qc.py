@@ -91,7 +91,7 @@ def cmd_hyper_raw(
     from fnirs_pipe.pipeline.hyperscanning import (
         _raw_to_haemo,
         align_recordings,
-        compute_group_iqm_raw,
+        compute_group_sqm_raw,
         compute_pairwise_coherence,
         load_group_raw_bids,
         normalize_raws,
@@ -129,7 +129,7 @@ def cmd_hyper_raw(
         print(f"  -> {label} ({len(members)} subjects)")
         try:
             raws_cw = load_group_raw_bids(bids_dir, members)
-            iqm_data = compute_group_iqm_raw(members, raws_cw, sci_threshold, output_dir)
+            sqm_data = compute_group_sqm_raw(members, raws_cw, sci_threshold, output_dir)
             raws_haemo = {sid: _raw_to_haemo(r) for sid, r in raws_cw.items()}
             if no_align:
                 aligned_raws, offsets = trim_to_shortest(raws_haemo)
@@ -144,7 +144,7 @@ def cmd_hyper_raw(
                 group_id=gid,
                 task=task,
                 group=members,
-                iqm_data=iqm_data,
+                sqm_data=sqm_data,
                 aligned_raws=aligned_raws,
                 offsets=offsets,
                 raw_raws=raws_haemo,
@@ -174,7 +174,7 @@ def cmd_hyper_raw(
 
 
 def cmd_group_raw(output_dir: Path) -> None:
-    """Aggregate per-subject prep-raw IQMs into group_nirs.tsv + group_nirs.html."""
+    """Aggregate per-subject prep-raw SQMs into group_nirs.tsv + group_nirs.html."""
     from fnirs_pipe.qc.group_writer import build_group_raw_report
 
     path = build_group_raw_report(output_dir)
@@ -182,7 +182,7 @@ def cmd_group_raw(output_dir: Path) -> None:
 
 
 def cmd_group_hyper_raw(output_dir: Path) -> None:
-    """Aggregate per-group hyper-raw IQMs into group_hyper_nirs.tsv + group_hyper_nirs.html."""
+    """Aggregate per-group hyper-raw SQMs into group_hyper_nirs.tsv + group_hyper_nirs.html."""
     from fnirs_pipe.qc.group_writer import build_group_hyper_raw_report
 
     path = build_group_hyper_raw_report(output_dir)
@@ -195,7 +195,7 @@ def cmd_window_raw(
     align: str, trigger_name: str | None, name: str | None,
     sci_threshold: float, skip_bids_validation: bool,
 ) -> None:
-    """Crop each subject's raw to [tstart, tend] + aggregate IQM into a windowed group report."""
+    """Crop each subject's raw to [tstart, tend] + aggregate SQM into a windowed group report."""
     from fnirs_pipe.qc.window_writer import build_window_raw_report
 
     path = build_window_raw_report(
@@ -340,14 +340,14 @@ def _build_parser() -> argparse.ArgumentParser:
     hr.add_argument("--skip-bids-validation", action=argparse.BooleanOptionalAction, default=False)
     hr.set_defaults(func=cmd_hyper_raw)
 
-    gr = sub.add_parser("group-raw", help="Aggregate per-subject prep-raw IQMs.")
+    gr = sub.add_parser("group-raw", help="Aggregate per-subject prep-raw SQMs.")
     gr.add_argument("output_dir", type=Path,
-                    help="fnirs-pipe derivatives directory (contains sub-*/nirs/ IQM JSONs)")
+                    help="fnirs-pipe derivatives directory (contains sub-*/nirs/ SQM JSONs)")
     gr.set_defaults(func=cmd_group_raw)
 
-    ghr = sub.add_parser("group-hyper-raw", help="Aggregate per-group hyper-raw IQMs.")
+    ghr = sub.add_parser("group-hyper-raw", help="Aggregate per-group hyper-raw SQMs.")
     ghr.add_argument("output_dir", type=Path,
-                     help="fnirs-pipe derivatives directory (contains group-*/nirs/ IQM JSONs)")
+                     help="fnirs-pipe derivatives directory (contains group-*/nirs/ SQM JSONs)")
     ghr.set_defaults(func=cmd_group_hyper_raw)
 
     wr = sub.add_parser("window-raw", help="Windowed group raw QC report over [tstart, tend].")

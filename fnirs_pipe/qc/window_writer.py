@@ -1,5 +1,5 @@
 """Time-windowed group QC: crop each subject's raw SNIRF to [tstart, tend],
-recompute IQM scalars, render the same heatmap/boxplot/outlier panels as
+recompute SQM scalars, render the same heatmap/boxplot/outlier panels as
 `fnirs-qc group-raw`. Output goes into `<output_dir>/group_nirs_{name}.{tsv,html}`."""
 
 from __future__ import annotations
@@ -48,14 +48,14 @@ def _crop_to_window(
     return cropped if cropped.times.size > 1 else None
 
 
-def _compute_iqm_for_window(snirf_path: Path, tstart: float, tend: float,
+def _compute_sqm_for_window(snirf_path: Path, tstart: float, tend: float,
                             align: str, trigger_name: str | None,
                             sci_threshold: float) -> dict | None:
-    """Crop SNIRF + recompute raw IQM (channel scalars + windowed metrics)."""
+    """Crop SNIRF + recompute raw SQM (channel scalars + windowed metrics)."""
     from fnirs_pipe.pipeline.prep_pipeline import (
         compute_windowed_gvtd, compute_windowed_psp, compute_windowed_sci,
     )
-    from fnirs_pipe.qc.quantitative_metrics import compute_raw_iqm
+    from fnirs_pipe.qc.quantitative_metrics import compute_raw_sqm
 
     raw = mne.io.read_raw_snirf(str(snirf_path), preload=True, verbose=False)
     cropped = _crop_to_window(raw, tstart, tend, align, trigger_name)
@@ -74,10 +74,10 @@ def _compute_iqm_for_window(snirf_path: Path, tstart: float, tend: float,
 
     bad_channels = [ch for ch, s in sci_scores.items() if s < sci_threshold]
     try:
-        iqm = compute_raw_iqm(cropped, sci_scores, bad_channels)
+        sqm = compute_raw_sqm(cropped, sci_scores, bad_channels)
     except Exception as exc:
-        logger.warning("compute_raw_iqm failed for %s: %s", snirf_path.name, exc)
-        iqm = {}
+        logger.warning("compute_raw_sqm failed for %s: %s", snirf_path.name, exc)
+        sqm = {}
 
     # Windowed series (same convention as prep_raw_report; center-time scalar list)
     import numpy as _np
@@ -89,18 +89,18 @@ def _compute_iqm_for_window(snirf_path: Path, tstart: float, tend: float,
         psp_matrix, psp_times   = compute_windowed_psp(raw_od)
         gvtd_per_window, gvtd_t = compute_windowed_gvtd(raw_od)
         if sci_matrix is not None:
-            iqm["sci_per_window"]      = _np.asarray(sci_matrix).mean(axis=0).tolist()
-            iqm["sci_window_times_s"]  = _center_times(sci_times)
+            sqm["sci_per_window"]      = _np.asarray(sci_matrix).mean(axis=0).tolist()
+            sqm["sci_window_times_s"]  = _center_times(sci_times)
         if psp_matrix is not None:
-            iqm["psp_per_window"]      = _np.asarray(psp_matrix).mean(axis=0).tolist()
-            iqm["psp_window_times_s"]  = _center_times(psp_times)
+            sqm["psp_per_window"]      = _np.asarray(psp_matrix).mean(axis=0).tolist()
+            sqm["psp_window_times_s"]  = _center_times(psp_times)
         if gvtd_per_window is not None and len(gvtd_per_window):
-            iqm["gvtd_per_window"]     = _np.asarray(gvtd_per_window).tolist()
-            iqm["gvtd_window_times_s"] = _center_times(gvtd_t)
+            sqm["gvtd_per_window"]     = _np.asarray(gvtd_per_window).tolist()
+            sqm["gvtd_window_times_s"] = _center_times(gvtd_t)
     except Exception as exc:
         logger.warning("windowed metrics failed for %s: %s", snirf_path.name, exc)
 
-    return iqm
+    return sqm
 
 
 def build_window_raw_report(
@@ -117,7 +117,7 @@ def build_window_raw_report(
     sci_threshold: float = 0.8,
     skip_bids_validation: bool = False,
 ) -> Path:
-    """Aggregate windowed IQM across subjects → group_nirs_{name}.{tsv,html}."""
+    """Aggregate windowed SQM across subjects → group_nirs_{name}.{tsv,html}."""
     layout = get_layout(bids_dir, validate=not skip_bids_validation)
     subjects = participant_label or sorted(layout.get_subjects())
     sessions = session_label or [None]
@@ -134,13 +134,13 @@ def build_window_raw_report(
                 if entities.get("run"):     parts.append(f"run-{entities['run']}")
                 bids_name = "_".join(parts)
 
-                iqm = _compute_iqm_for_window(
+                sqm = _compute_sqm_for_window(
                     Path(f), tstart, tend, align, trigger_name, sci_threshold,
                 )
-                if iqm is None:
+                if sqm is None:
                     continue
-                rows.append({"bids_name": bids_name, **iqm})
-                logger.info("computed window IQM for %s", bids_name)
+                rows.append({"bids_name": bids_name, **sqm})
+                logger.info("computed window SQM for %s", bids_name)
 
     if not rows:
         logger.warning("no SNIRF processed; report will be empty")

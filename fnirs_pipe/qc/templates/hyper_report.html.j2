@@ -22,8 +22,8 @@ select#ch-select {
 
 .plot-frame { width: 100%; border: none; display: block; }
 
-#iqm-panel { padding: 0.55rem 1rem 0.65rem; }
-#iqm-panel h3 { margin: 0 0 0.4rem; font-size: 0.88rem; }
+#sqm-panel { padding: 0.55rem 1rem 0.65rem; }
+#sqm-panel h3 { margin: 0 0 0.4rem; font-size: 0.88rem; }
 .qm-list { font-size: 0.88rem; column-count: 2; column-gap: 2.5rem;
            margin: 0; padding: 0; list-style: none; }
 .qm-list li { display: flex; justify-content: space-between; padding: 0.18rem 0;
@@ -150,20 +150,20 @@ window.addEventListener("message", function(e) {
 });
 </script>
 
-<!-- Hyper-level IQM -->
+<!-- Hyper-level SQM -->
 <div class="card" style="margin-bottom:0.5rem">
-  <div id="iqm-panel">
+  <div id="sqm-panel">
     <h3>Group-level Quality Metrics
       <span style="font-weight:400;font-size:0.78rem;color:#adb5bd">(hyperscanning)</span>
     </h3>
-    <ul id="iqm-list" class="qm-list"></ul>
+    <ul id="sqm-list" class="qm-list"></ul>
   </div>
 </div>
 
 <script>
 var _ALIGN          = {{ alignment_json | safe }};
 var _CH_PAIRS       = {{ ch_pairs_json | safe }};
-var _IQM            = {{ iqm_json | safe }};
+var _SQM            = {{ sqm_json | safe }};
 var _CH_DETAIL_TMPL = {{ ch_detail_template_json | safe }};
 
 window._SCI_PER_SUBJECT = {{ sci_per_subject_json | safe }};
@@ -205,15 +205,15 @@ function _pairFname(pair) {
   if (_CH_PAIRS.length > 0) _load(_CH_PAIRS[0]);
 })();
 
-// ── IQM panel ─────────────────────────────────────────────────────────────────
+// ── SQM panel ─────────────────────────────────────────────────────────────────
 (function() {
-  var q = _IQM;
+  var q = _SQM;
   function li(label, value, cls) {
     return "<li><span class='ql'>" + label + "</span>" +
            "<span class='qv" + (cls ? " " + cls : "") + "'>" + value + "</span></li>";
   }
   var pct = q.pct_all_good;
-  document.getElementById("iqm-list").innerHTML =
+  document.getElementById("sqm-list").innerHTML =
     li("Channels — all good",
        (q.n_all_good != null ? q.n_all_good : "—") +
          (q.n_total ? " / " + q.n_total : ""),

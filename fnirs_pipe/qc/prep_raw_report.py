@@ -29,7 +29,7 @@ def _process_run(
     sci_threshold: float,
     sub_dir: Path,
 ) -> dict:
-    """Compute all data, save figure HTMLs + IQM JSON. Returns inline dict for HTML."""
+    """Compute all data, save figure HTMLs + SQM JSON. Returns inline dict for HTML."""
     from fnirs_pipe.qc.figures import (
         build_channel_figure,
         build_evoked_topo_figure,
@@ -42,14 +42,14 @@ def _process_run(
         channel_quality_heatmap,
         condition_colors,
     )
-    from fnirs_pipe.qc.quantitative_metrics import compute_raw_iqm
+    from fnirs_pipe.qc.quantitative_metrics import compute_raw_sqm
 
     label   = run["label"]
     session = run.get("session")
     fig_dir = sub_dir / "figures"
-    iqm_dir = sub_dir / (f"ses-{session}" if session else "") / "nirs"
+    sqm_dir = sub_dir / (f"ses-{session}" if session else "") / "nirs"
     fig_dir.mkdir(parents=True, exist_ok=True)
-    iqm_dir.mkdir(parents=True, exist_ok=True)
+    sqm_dir.mkdir(parents=True, exist_ok=True)
 
     raw = mne.io.read_raw_snirf(run["snirf_path"], preload=True, verbose=False)
 
@@ -77,10 +77,10 @@ def _process_run(
         logger.warning("Windowed SCI/PSP/GVTD failed: %s", exc)
 
     try:
-        iqm = compute_raw_iqm(raw, sci_scores, list(bad_channels))
+        sqm = compute_raw_sqm(raw, sci_scores, list(bad_channels))
     except Exception as exc:
-        logger.warning("IQM failed: %s", exc)
-        iqm = {}
+        logger.warning("SQM failed: %s", exc)
+        sqm = {}
 
     # Persist windowed series so group_raw can build time × subject heatmaps.
     # mne-nirs returns ndarray scores but list-of-[start,end] times → collapse to center.
@@ -90,14 +90,14 @@ def _process_run(
         return (a.mean(axis=1) if a.ndim == 2 and a.shape[1] == 2 else a).tolist()
 
     if sci_matrix is not None and sci_win_times is not None:
-        iqm["sci_per_window"]      = _np.asarray(sci_matrix).mean(axis=0).tolist()
-        iqm["sci_window_times_s"]  = _center_times(sci_win_times)
+        sqm["sci_per_window"]      = _np.asarray(sci_matrix).mean(axis=0).tolist()
+        sqm["sci_window_times_s"]  = _center_times(sci_win_times)
     if psp_matrix is not None and psp_win_times is not None:
-        iqm["psp_per_window"]      = _np.asarray(psp_matrix).mean(axis=0).tolist()
-        iqm["psp_window_times_s"]  = _center_times(psp_win_times)
+        sqm["psp_per_window"]      = _np.asarray(psp_matrix).mean(axis=0).tolist()
+        sqm["psp_window_times_s"]  = _center_times(psp_win_times)
     if gvtd_per_window is not None and len(gvtd_per_window):
-        iqm["gvtd_per_window"]     = _np.asarray(gvtd_per_window).tolist()
-        iqm["gvtd_window_times_s"] = _center_times(gvtd_win_times)
+        sqm["gvtd_per_window"]     = _np.asarray(gvtd_per_window).tolist()
+        sqm["gvtd_window_times_s"] = _center_times(gvtd_win_times)
 
     raw_haemo = None
     try:
@@ -110,7 +110,7 @@ def _process_run(
     for m in markers:
         m["color"] = cond_colors_.get(m["description"], "#f39c12")
 
-    psp_per_ch    = iqm.get("psp_per_channel", {})
+    psp_per_ch    = sqm.get("psp_per_channel", {})
     figure_paths: dict = {}
 
     # ── inline: ts figure (kept in-memory for click interactivity) ─────────────
@@ -195,9 +195,9 @@ def _process_run(
         is_bad   = [ch in bad_channels for ch in ch_names]
         fig = channel_quality_heatmap(
             ch_names, is_bad,
-            sci_per_ch=iqm.get("sci_per_channel", sci_scores),
-            cv_per_ch=iqm.get("cv_per_channel", {}),
-            snr_per_ch=iqm.get("snr_per_channel", {}),
+            sci_per_ch=sqm.get("sci_per_channel", sci_scores),
+            cv_per_ch=sqm.get("cv_per_channel", {}),
+            snr_per_ch=sqm.get("snr_per_channel", {}),
             psp_per_ch=psp_per_ch,
             sci_thresh=sci_threshold,
         )
@@ -239,10 +239,10 @@ def _process_run(
                 f"{sub_dir.name}/figures/{label}_desc-ch{{pair}}_nirs.html"
             )
 
-    # ── file: IQM JSON ─────────────────────────────────────────────────────────
-    iqm_path = iqm_dir / f"{label}_desc-iqm_nirs.json"
-    iqm_path.write_text(json.dumps(iqm, indent=2, default=str), encoding="utf-8")
-    logger.info("IQM JSON → %s", iqm_path)
+    # ── file: SQM JSON ─────────────────────────────────────────────────────────
+    sqm_path = sqm_dir / f"{label}_desc-sqm_nirs.json"
+    sqm_path.write_text(json.dumps(sqm, indent=2, default=str), encoding="utf-8")
+    logger.info("SQM JSON → %s", sqm_path)
 
     return {
         "ts":           ts_inline,
@@ -252,9 +252,9 @@ def _process_run(
         "sci_psp":          sci_psp_inline,
         "ch_summary":       ch_summary_inline,
         "trigger_timeline": trigger_timeline_inline,
-        "iqm": {
-            "scalars":     {k: v for k, v in iqm.items() if not isinstance(v, (dict, list))},
-            "per_channel": {"sci_per_channel": iqm.get("sci_per_channel", {})},
+        "sqm": {
+            "scalars":     {k: v for k, v in sqm.items() if not isinstance(v, (dict, list))},
+            "per_channel": {"sci_per_channel": sqm.get("sci_per_channel", {})},
         },
         "channel_pairs": channel_pairs,
         "figure_paths":  figure_paths,
@@ -266,7 +266,7 @@ def build_prep_raw_report(
     output_path: Path,
     sci_threshold: float = 0.8,
 ) -> None:
-    """Generate raw QC report: lightweight HTML + per-run folders with figure HTMLs + IQM JSON."""
+    """Generate raw QC report: lightweight HTML + per-run folders with figure HTMLs + SQM JSON."""
     output_dir  = output_path.parent
     static_data = []
 

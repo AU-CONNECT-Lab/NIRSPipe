@@ -210,7 +210,7 @@ output/
 │   ├── json/                            # JSONL event stream per run
 │   │   ├── _pipeline/execution_*.jsonl
 │   │   ├── _runs/sub-*_*.jsonl
-│   │   ├── _iqm/sub-*_*.jsonl
+│   │   ├── _sqm/sub-*_*.jsonl
 │   │   └── _outputs/sub-*_*.jsonl
 │   └── fnirs_pipe.db                    # SQLite (after fnirs-log merge)
 ├── sub-01/
@@ -225,7 +225,7 @@ output/
 │       ├── sub-01_desc-filtered_nirs.snirf        # post: bandpass applied
 │       ├── sub-01_desc-resampled_nirs.snirf       # post: resample applied
 │       ├── sub-01_desc-errts_nirs.snirf           # post glm/rest: GLM residuals
-│       ├── sub-01_desc-iqm_nirs.json              # IQM (raw + final checkpoints)
+│       ├── sub-01_desc-sqm_nirs.json              # SQM (raw + final checkpoints)
 │       ├── design_matrix.csv                       # glm mode
 │       ├── glm_results.csv                         # glm mode
 │       ├── contrasts.csv                           # glm mode + --contrast-file

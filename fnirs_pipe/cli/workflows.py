@@ -171,10 +171,10 @@ def run_participant_level(args: dict[str, Any]) -> None:
                                 raise
 
                 if last_result is not None:
-                    if last_result.iqm_raw:
-                        _jdb.log_iqm(db_path, execution_id, subject, "raw", last_result.iqm_raw)
-                    if last_result.iqm_final:
-                        _jdb.log_iqm(db_path, execution_id, subject, "final", last_result.iqm_final)
+                    if last_result.sqm_raw:
+                        _jdb.log_sqm(db_path, execution_id, subject, "raw", last_result.sqm_raw)
+                    if last_result.sqm_final:
+                        _jdb.log_sqm(db_path, execution_id, subject, "final", last_result.sqm_final)
 
                 glm_est = dm = alff_df = fc_df = None
                 if args.get("mode") is not None:
@@ -316,7 +316,7 @@ def _run_post_for_subject(
 
 def run_group_level(args: dict[str, Any]) -> None:
     """BIDS Apps `group` entry point — aggregates per-subject (and per-group hyper,
-    if present) IQM JSONs into cohort HTML reports under <output_dir>."""
+    if present) SQM JSONs into cohort HTML reports under <output_dir>."""
     from pathlib import Path
 
     from fnirs_pipe.qc.group_writer import (
@@ -327,11 +327,11 @@ def run_group_level(args: dict[str, Any]) -> None:
     output_dir = Path(args["output_dir"])
     qc_root    = output_dir / "qc" if (output_dir / "qc").exists() else output_dir
 
-    logger.info("fnirs-pipe group: aggregating individual IQMs from %s", qc_root)
+    logger.info("fnirs-pipe group: aggregating individual SQMs from %s", qc_root)
     ind_path = build_group_raw_report(qc_root)
     logger.info("  -> %s", ind_path)
 
-    if any(qc_root.glob("group-*/nirs/*_desc-iqm_nirs.json")):
-        logger.info("fnirs-pipe group: also aggregating hyperscanning IQMs")
+    if any(qc_root.glob("group-*/nirs/*_desc-sqm_nirs.json")):
+        logger.info("fnirs-pipe group: also aggregating hyperscanning SQMs")
         hyper_path = build_group_hyper_raw_report(qc_root)
         logger.info("  -> %s", hyper_path)

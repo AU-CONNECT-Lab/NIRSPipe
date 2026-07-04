@@ -8,7 +8,7 @@ from dash import dash_table, dcc, html
 
 dash.register_page(__name__, path="/", name="Data Preparation")
 
-_IQM_COLS = [
+_SQM_COLS = [
     {"name": "Metric", "id": "metric"},
     {"name": "Value",  "id": "value"},
 ]
@@ -340,8 +340,8 @@ layout = dbc.Container([
 
                 _card("Image Quality Metrics",
                     dash_table.DataTable(
-                        id="dp-iqm-table",
-                        columns=_IQM_COLS,
+                        id="dp-sqm-table",
+                        columns=_SQM_COLS,
                         style_table={"overflowX": "auto"},
                     ),
                 ),

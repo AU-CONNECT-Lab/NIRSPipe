@@ -53,9 +53,9 @@ All notable changes to this project will be documented in this file.
 ## [0.10.0] - 2026-05-30
 
 ### Added
-- `fnirs-qc group-raw` and `group-hyper-raw` aggregate per-subject / per-dyad IQM into cohort HTML reports (heatmap, boxplots, outliers, sortable table)
+- `fnirs-qc group-raw` and `group-hyper-raw` aggregate per-subject / per-dyad SQM into cohort HTML reports (heatmap, boxplots, outliers, sortable table)
 - `fnirs-qc window-raw` crops each subject's raw to a time window and re-runs the group-raw layout — for "is this minute dropping for everyone?"
-- prep-raw IQM JSON now stores `sci_per_window` / `psp_per_window` / `gvtd_per_window`; group reports render time × subject heatmaps for these
+- prep-raw SQM JSON now stores `sci_per_window` / `psp_per_window` / `gvtd_per_window`; group reports render time × subject heatmaps for these
 
 ### Changed
 - QC output directory follows a BIDS-derivatives layout: per-subject / per-group `figures/` and `[ses-XX/]nirs/` subdirs
@@ -70,8 +70,8 @@ All notable changes to this project will be documented in this file.
 ## [0.8.0] - 2026-05-23
 
 ### Added
-- `fnirs-log merge` CLI + `utils/job_db.py`: JSONL run events consolidated into a SQLite database (`pipeline_executions`, `runs`, `iqm`, `command_outputs`)
-- `PrepResult` exposes `iqm_raw` and `iqm_final` for downstream use
+- `fnirs-log merge` CLI + `utils/job_db.py`: JSONL run events consolidated into a SQLite database (`pipeline_executions`, `runs`, `sqm`, `command_outputs`)
+- `PrepResult` exposes `sqm_raw` and `sqm_final` for downstream use
 - Paragraph-style Methods boilerplate with a "Rendered" tab in the HTML report
 
 ### Removed
@@ -85,7 +85,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 - `fnirs-gui` CLI entry point launches a Dash multi-page application
-- Data Preparation page: SNIRF file loader, editable stimulus marker table, per-subject IQM display
+- Data Preparation page: SNIRF file loader, editable stimulus marker table, per-subject SQM display
 - Analysis page skeleton wired into the sidebar router
 
 ---
@@ -121,7 +121,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 - `fnirs-qc` CLI (`cli/qc.py`) with `prep-raw` and hyperscanning subcommands
 - Interactive raw QC viewer: standalone HTML page with Plotly channel traces (`qc/app.py`)
-- IQM expansion: cardiac power band metrics and tSNR per channel (`qc/quantitative_metrics.py`)
+- SQM expansion: cardiac power band metrics and tSNR per channel (`qc/quantitative_metrics.py`)
 - Channel quality summary figure integrated into prep-raw report and templates
 
 ### Changed
@@ -151,8 +151,8 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 - Per-subject HTML QC report generated via Jinja2 + Plotly (`qc/prep_raw_report.py`)
-- Report sections: OD traces, SCI/PSP heatmaps, GVTD timeseries, motion carpet, HbO/HbR correlation panel, PSD, brain views, short-channel PSD, IQM table
-- IQM sidecar files: `sub-{id}_iqm.toml` + `sub-{id}_channel_metrics.csv`
+- Report sections: OD traces, SCI/PSP heatmaps, GVTD timeseries, motion carpet, HbO/HbR correlation panel, PSD, brain views, short-channel PSD, SQM table
+- SQM sidecar files: `sub-{id}_sqm.toml` + `sub-{id}_channel_metrics.csv`
 - `_guard` context manager for uniform per-section error handling; failed sections render a warning card rather than crashing the report
 
 ---

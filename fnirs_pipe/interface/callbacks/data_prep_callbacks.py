@@ -235,7 +235,7 @@ _SHOW = {}
     Output("dp-ch-summary-figure",      "figure"),
     Output("dp-marker-store",           "data",    allow_duplicate=True),
     Output("dp-channel-selector",       "options"),
-    Output("dp-iqm-table",              "data"),
+    Output("dp-sqm-table",              "data"),
     Output("dp-channel-selector",       "value",   allow_duplicate=True),
     Output("dp-evoked-topo",            "figure"),
     Output("dp-trigger-timeline",       "figure"),
@@ -290,10 +290,10 @@ def restore_from_store(store, _tick):
     ch_pairs = cached.get("channel_pairs", sorted(cached.get("channels", {}).keys()))
     ch_options = [{"label": p, "value": p} for p in ch_pairs] or no_update
 
-    iqm_scalars = cached.get("iqm", {}).get("scalars", {})
-    iqm_rows = [
+    sqm_scalars = cached.get("sqm", {}).get("scalars", {})
+    sqm_rows = [
         {"metric": k, "value": f"{v:.4f}" if isinstance(v, float) else str(v)}
-        for k, v in iqm_scalars.items()
+        for k, v in sqm_scalars.items()
     ] or no_update
 
     b64 = cached.get("carpet_gvtd", {}).get("b64")
@@ -311,7 +311,7 @@ def restore_from_store(store, _tick):
         ch_sum_out,
         marker_rows,
         ch_options,
-        iqm_rows,
+        sqm_rows,
         no_update,
         evoked_topo,
         trigger_tl,
@@ -1140,7 +1140,7 @@ def load_decisions(store, sci_thresh, output_dir):
         return no_update, no_update
     cached    = _RESULT_CACHE.get(store.get("cache_key"), {})
     pairs     = cached.get("channel_pairs", [])
-    sci_map   = (cached.get("iqm") or {}).get("per_channel", {}).get("sci_per_channel", {})
+    sci_map   = (cached.get("sqm") or {}).get("per_channel", {}).get("sci_per_channel", {})
     sci_thresh = float(sci_thresh or 0.8)
     if not pairs:
         return {}, html.Small("No channels found.", className="text-muted")
@@ -1198,7 +1198,7 @@ def click_cd(_, dec_state, run_store, sci_thresh):
 
     cached     = _RESULT_CACHE.get((run_store or {}).get("cache_key"), {})
     pairs      = cached.get("channel_pairs", [])
-    sci_map    = (cached.get("iqm") or {}).get("per_channel", {}).get("sci_per_channel", {})
+    sci_map    = (cached.get("sqm") or {}).get("per_channel", {}).get("sci_per_channel", {})
     sci_thresh = float(sci_thresh or 0.8)
     table = html.Div(
         _build_decisions_table(pairs, sci_map, run_decisions, sci_thresh),

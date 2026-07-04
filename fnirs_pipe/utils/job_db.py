@@ -144,29 +144,29 @@ def log_run_end(
     _write_jsonl(path, record)
 
 
-def log_iqm(
+def log_sqm(
     db_path: Path,
     execution_id: int,
     subject: str,
     checkpoint: str,
-    iqm: dict[str, Any],
+    sqm: dict[str, Any],
     *,
     session: str | None = None,
     bids_task: str | None = None,
 ) -> None:
-    """Log IQM scalars (dict values must be scalar, not nested dicts)."""
+    """Log SQM scalars (dict values must be scalar, not nested dicts)."""
     record = {
-        "event": "iqm",
+        "event": "sqm",
         "execution_id": execution_id,
         "subject": subject,
         "session": session,
         "bids_task": bids_task,
         "checkpoint": checkpoint,
         "timestamp": datetime.now().isoformat(),
-        **{k: v for k, v in iqm.items() if not isinstance(v, (dict, list))},
+        **{k: v for k, v in sqm.items() if not isinstance(v, (dict, list))},
     }
     ts = int(time.time() * 1000)
-    path = _json_dir(db_path) / "_iqm" / f"sub-{subject}_{checkpoint}_{ts}.jsonl"
+    path = _json_dir(db_path) / "_sqm" / f"sub-{subject}_{checkpoint}_{ts}.jsonl"
     _write_jsonl(path, record)
 
 
@@ -247,7 +247,7 @@ CREATE TABLE IF NOT EXISTS runs (
     hrf_model            TEXT
 );
 
-CREATE TABLE IF NOT EXISTS iqm (
+CREATE TABLE IF NOT EXISTS sqm (
     id                          INTEGER PRIMARY KEY,
     execution_id                INTEGER,
     subject                     TEXT,
@@ -289,11 +289,11 @@ CREATE TABLE IF NOT EXISTS command_outputs (
 );
 
 CREATE INDEX IF NOT EXISTS idx_runs_lookup  ON runs  (execution_id, subject);
-CREATE INDEX IF NOT EXISTS idx_iqm_lookup   ON iqm   (execution_id, subject, checkpoint);
+CREATE INDEX IF NOT EXISTS idx_sqm_lookup   ON sqm   (execution_id, subject, checkpoint);
 CREATE INDEX IF NOT EXISTS idx_out_lookup   ON command_outputs (execution_id, subject);
 """
 
-_IQM_COLS = [
+_SQM_COLS = [
     "sci_mean", "channel_retention_rate", "snr_mean", "cv_mean", "mean_amp_mean",
     "ch_dist_mean", "psp_mean", "cp_mean", "gvtd_mean", "gvtd_p95", "spike_count",
     "tsnr_hbo_mean", "tsnr_hbr_mean", "hbo_hbr_corr_mean",
@@ -413,12 +413,12 @@ def _dispatch(
         )
         return 1
 
-    elif event == "iqm":
-        vals = [rec.get(col) for col in _IQM_COLS]
-        placeholders = ", ".join(["?"] * (5 + len(_IQM_COLS)))
+    elif event == "sqm":
+        vals = [rec.get(col) for col in _SQM_COLS]
+        placeholders = ", ".join(["?"] * (5 + len(_SQM_COLS)))
         conn.execute(
-            f"INSERT INTO iqm (execution_id, subject, session, bids_task, checkpoint,"
-            f" {', '.join(_IQM_COLS)}) VALUES ({placeholders})",
+            f"INSERT INTO sqm (execution_id, subject, session, bids_task, checkpoint,"
+            f" {', '.join(_SQM_COLS)}) VALUES ({placeholders})",
             [eid, rec.get("subject"), rec.get("session"),
              rec.get("bids_task"), rec.get("checkpoint")] + vals,
         )

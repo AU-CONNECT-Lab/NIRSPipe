@@ -11,7 +11,7 @@ Pipeline reorganized into `pipeline/prep_pipeline.py`; intermediate SNIRF writte
 
 ## v0.2 — QC Preprocessing Report `[x]`
 
-Per-subject HTML report: SCI/PSP heatmaps, GVTD timeseries, motion carpet, HbO/HbR correlation panel, PSD, brain views, IQM sidecar.
+Per-subject HTML report: SCI/PSP heatmaps, GVTD timeseries, motion carpet, HbO/HbR correlation panel, PSD, brain views, SQM sidecar.
 
 ## v0.3 — Postprocessing & GLM `[x]`
 
@@ -21,7 +21,7 @@ GLM QC section added to report; raw residuals written as a separate SNIRF.
 ## v0.4 — Raw QC CLI `[x]`
 
 `fnirs-qc` CLI implemented with `prep-raw` subcommand and interactive HTML viewer.
-IQM expanded with cardiac power and tSNR metrics; channel quality summary figure added.
+SQM expanded with cardiac power and tSNR metrics; channel quality summary figure added.
 
 ## v0.5 — Hyperscanning Pipeline `[x]`
 
@@ -36,16 +36,16 @@ Resting-state mode added to hyperscanning pipeline: ALFF/fALFF computation, func
 ## v0.7 — GUI Interface `[x]`
 
 Dash-based `fnirs-gui` with sidebar router and 4 pages:
-- **Data Preparation** — SNIRF loader, editable marker table, IQM display
+- **Data Preparation** — SNIRF loader, editable marker table, SQM display
 - **Batch Prep** — multi-subject batch preprocessing trigger
 - **Hyper Align** — pairs CSV editor, alignment preview
 - **Analysis** — pipeline DAG visualization, command generator
 
-## v0.8 — Run Logging & IQM Database `[x]`
+## v0.8 — Run Logging & SQM Database `[x]`
 
 JSONL-based event logging wired into `fnirs-pipe` run flow.
-`fnirs-log merge` consolidates JSONL files into a SQLite database (`pipeline_executions`, `runs`, `iqm`, `command_outputs`).
-`PrepResult` now returns `iqm_raw` and `iqm_final` for downstream use.
+`fnirs-log merge` consolidates JSONL files into a SQLite database (`pipeline_executions`, `runs`, `sqm`, `command_outputs`).
+`PrepResult` now returns `sqm_raw` and `sqm_final` for downstream use.
 
 ## v0.9 — GUI Analysis Page & Pipeline Integration `[~]`
 
@@ -57,14 +57,14 @@ Page UI + command generator done in v0.7. Still missing:
 
 ## v0.10 — Group-Level QC Report `[x]`
 
-`fnirs-qc group-raw` aggregates `sub-*/nirs/*_desc-iqm_nirs.json` into `group_nirs.{tsv,html}`.
-`fnirs-qc group-hyper-raw` aggregates `group-*/nirs/*_desc-iqm_nirs.json` into `group_hyper_nirs.{tsv,html}`.
+`fnirs-qc group-raw` aggregates `sub-*/nirs/*_desc-sqm_nirs.json` into `group_nirs.{tsv,html}`.
+`fnirs-qc group-hyper-raw` aggregates `group-*/nirs/*_desc-sqm_nirs.json` into `group_hyper_nirs.{tsv,html}`.
 
 HTML report (iframe shell): subject × metric robust-z heatmap, per-metric boxplots with Tukey 1.5×IQR outlier highlighting, sortable table, outlier panel.
 
-prep-raw also persists `sci_per_window` / `psp_per_window` / `gvtd_per_window` into the IQM JSON; group-raw renders time × subject heatmaps for these so users can spot group-wide vs individual outlier windows.
+prep-raw also persists `sci_per_window` / `psp_per_window` / `gvtd_per_window` into the SQM JSON; group-raw renders time × subject heatmaps for these so users can spot group-wide vs individual outlier windows.
 
-`fnirs-qc window-raw` crops each subject's raw recording to `[--tstart, --tend]` (`--align {none,trigger}`), recomputes IQM, and renders the same report layout into `group_nirs_{name}.{tsv,html}` — drill-down for "is this time window dropping for everyone?".
+`fnirs-qc window-raw` crops each subject's raw recording to `[--tstart, --tend]` (`--align {none,trigger}`), recomputes SQM, and renders the same report layout into `group_nirs_{name}.{tsv,html}` — drill-down for "is this time window dropping for everyone?".
 
 ## v0.11 — Self-Contained QC Viewers `[x]`
 
@@ -98,12 +98,12 @@ Rating Flask apps (`HyperRatingApp` / `RawRatingApp` / `FNIRSRatingApp`) refacto
 
 - **ROI-level WTC** — average HbO within anatomical ROIs ([qc/figures/hyper_post_figures.py:97](fnirs_pipe/qc/figures/hyper_post_figures.py#L97))
 - **GVTD timeseries-derived metrics** — e.g. fraction of timepoints above threshold ([qc/quantitative_metrics.py:240](fnirs_pipe/qc/quantitative_metrics.py#L240))
-- **Durbin-Watson per channel** in `compute_glm_iqm` ([qc/quantitative_metrics.py:299](fnirs_pipe/qc/quantitative_metrics.py#L299))
+- **Durbin-Watson per channel** in `compute_glm_sqm` ([qc/quantitative_metrics.py:299](fnirs_pipe/qc/quantitative_metrics.py#L299))
 - **ALFF/fALFF surface projection** — onto brain via mne_nirs ([qc/figures/rest_figures.py:6](fnirs_pipe/qc/figures/rest_figures.py#L6))
 - **ROI-to-ROI FC heatmap** — atlas parcellation ([qc/figures/rest_figures.py:7](fnirs_pipe/qc/figures/rest_figures.py#L7))
 - **Auto-generate roi.json from fOLD** — derive channel-to-region mapping from montage via `mne_nirs.io.fold_channel_specificity` (needs fOLD Excel DB), as an alternative to hand-written `--roi-mapping` ([cli/qc.py:331](fnirs_pipe/cli/qc.py#L331))
 - **Move `carpet_gvtd_figure`** to post-processing data path ([qc/figures/motion_panel.py:3](fnirs_pipe/qc/figures/motion_panel.py#L3))
-- **Verify `compute_haemo_iqm` raw_haemo is pre-bandpass** when called from pipeline ([qc/quantitative_metrics.py:163](fnirs_pipe/qc/quantitative_metrics.py#L163))
+- **Verify `compute_haemo_sqm` raw_haemo is pre-bandpass** when called from pipeline ([qc/quantitative_metrics.py:163](fnirs_pipe/qc/quantitative_metrics.py#L163))
 
 ### Reports / viewer features (designed, not started)
 

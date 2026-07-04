@@ -86,10 +86,10 @@ def run_post(
 
     if last_snirf_path is not None:
         try:
-            from fnirs_pipe.qc.quantitative_metrics import compute_haemo_iqm, save_iqm_toml
-            save_iqm_toml(compute_haemo_iqm(result), config.subject, last_snirf_path.parent)
+            from fnirs_pipe.qc.quantitative_metrics import compute_haemo_sqm, save_sqm_toml
+            save_sqm_toml(compute_haemo_sqm(result), config.subject, last_snirf_path.parent)
         except Exception:
-            logger.warning("sub-%s | haemo IQM failed", config.subject, exc_info=True)
+            logger.warning("sub-%s | haemo SQM failed", config.subject, exc_info=True)
 
     glm_est = dm = alff_df = fc_df = None
     if mode == "glm":

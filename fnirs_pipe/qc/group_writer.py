@@ -1,4 +1,4 @@
-"""Group-level QC aggregation: glob per-subject (or per-group) IQM JSONs into
+"""Group-level QC aggregation: glob per-subject (or per-group) SQM JSONs into
 TSV + an HTML viewer with heatmap / boxplots / sortable table / outlier panel."""
 
 from __future__ import annotations
@@ -32,32 +32,32 @@ _TEMPLATE_DIR = Path(__file__).parent / "templates"
 _BASE_CSS     = (_TEMPLATE_DIR / "_base.css").read_text(encoding="utf-8")
 
 
-def _scalars(iqm: dict) -> dict:
+def _scalars(sqm: dict) -> dict:
     """Keep numeric scalar fields only (drop dicts/lists/strings)."""
-    return {k: v for k, v in iqm.items() if isinstance(v, (int, float))}
+    return {k: v for k, v in sqm.items() if isinstance(v, (int, float))}
 
 
-def _bids_name_from_iqm_path(path: Path) -> str:
-    return path.name.removesuffix("_desc-iqm_nirs.json")
+def _bids_name_from_sqm_path(path: Path) -> str:
+    return path.name.removesuffix("_desc-sqm_nirs.json")
 
 
-def _collect_iqm(
+def _collect_sqm(
     output_dir: Path, entity_glob: str,
 ) -> tuple[pd.DataFrame, list[dict]]:
-    """Glob IQM JSONs under output_dir matching entity prefix (e.g. 'sub-*' or 'group-*').
+    """Glob SQM JSONs under output_dir matching entity prefix (e.g. 'sub-*' or 'group-*').
 
     Returns (df, full_rows):
-      - df:        scalar IQM columns (bids_name + numeric scalars), for TSV/heatmap/boxplot
-      - full_rows: each row keeps the full IQM dict (incl. windowed list fields)
+      - df:        scalar SQM columns (bids_name + numeric scalars), for TSV/heatmap/boxplot
+      - full_rows: each row keeps the full SQM dict (incl. windowed list fields)
     """
     full_rows: list[dict] = []
-    for iqm_path in sorted(output_dir.glob(f"{entity_glob}/**/nirs/*_desc-iqm_nirs.json")):
+    for sqm_path in sorted(output_dir.glob(f"{entity_glob}/**/nirs/*_desc-sqm_nirs.json")):
         try:
-            iqm = json.loads(iqm_path.read_text(encoding="utf-8"))
+            sqm = json.loads(sqm_path.read_text(encoding="utf-8"))
         except Exception as exc:
-            logger.warning("skip %s: %s", iqm_path, exc)
+            logger.warning("skip %s: %s", sqm_path, exc)
             continue
-        full_rows.append({"bids_name": _bids_name_from_iqm_path(iqm_path), **iqm})
+        full_rows.append({"bids_name": _bids_name_from_sqm_path(sqm_path), **sqm})
 
     if not full_rows:
         return pd.DataFrame(columns=["bids_name"]), []
@@ -74,9 +74,9 @@ def _render_group(
     full_rows: list[dict],
     template_name: str = "group_report.html.j2",
 ) -> Path:
-    """Render TSV + HTML for an already-collected group of IQM rows.
+    """Render TSV + HTML for an already-collected group of SQM rows.
 
-    Shared by `_build_group` (globs IQM JSONs) and `window_writer` (recomputes IQM
+    Shared by `_build_group` (globs SQM JSONs) and `window_writer` (recomputes SQM
     after cropping). Empty df renders an empty report (logged as warning)."""
     output_dir.mkdir(parents=True, exist_ok=True)
     if df.empty:
@@ -141,13 +141,13 @@ def _build_group(
     title: str,
     template_name: str = "group_report.html.j2",
 ) -> Path:
-    """Glob IQM JSONs and render group report."""
-    df, full_rows = _collect_iqm(output_dir, entity_glob)
+    """Glob SQM JSONs and render group report."""
+    df, full_rows = _collect_sqm(output_dir, entity_glob)
     return _render_group(output_dir, out_stem, title, df, full_rows, template_name)
 
 
 def rows_to_dataframe(full_rows: list[dict]) -> pd.DataFrame:
-    """Public helper for callers (e.g. window_writer) that pre-compute IQM rows."""
+    """Public helper for callers (e.g. window_writer) that pre-compute SQM rows."""
     if not full_rows:
         return pd.DataFrame(columns=["bids_name"])
     scalar_rows = [{"bids_name": r["bids_name"], **_scalars(r)} for r in full_rows]
@@ -156,7 +156,7 @@ def rows_to_dataframe(full_rows: list[dict]) -> pd.DataFrame:
 
 
 def build_group_raw_report(output_dir: Path) -> Path:
-    """Aggregate all sub-XX/nirs/...desc-iqm_nirs.json into group_nirs.{tsv,html}."""
+    """Aggregate all sub-XX/nirs/...desc-sqm_nirs.json into group_nirs.{tsv,html}."""
     return _build_group(
         output_dir, entity_glob="sub-*",
         out_stem="group_nirs",
@@ -165,7 +165,7 @@ def build_group_raw_report(output_dir: Path) -> Path:
 
 
 def build_group_hyper_raw_report(output_dir: Path) -> Path:
-    """Aggregate all group-XX/nirs/...desc-iqm_nirs.json into group_hyper_nirs.{tsv,html}."""
+    """Aggregate all group-XX/nirs/...desc-sqm_nirs.json into group_hyper_nirs.{tsv,html}."""
     return _build_group(
         output_dir, entity_glob="group-*",
         out_stem="group_hyper_nirs",

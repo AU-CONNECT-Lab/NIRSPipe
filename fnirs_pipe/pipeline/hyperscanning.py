@@ -103,27 +103,27 @@ def _raw_to_haemo(raw: mne.io.Raw, dpf: float = 6.0) -> mne.io.Raw:
     return mne.preprocessing.nirs.beer_lambert_law(raw_od, ppf=dpf)
 
 
-def compute_group_iqm_raw(
+def compute_group_sqm_raw(
     group: list[GroupEntry],
     raws: dict[str, mne.io.Raw],
     sci_threshold: float,
     output_dir: Path,
 ) -> dict[str, dict]:
-    """Compute raw-level IQM (SCI, bad channels) for each group member.
+    """Compute raw-level SQM (SCI, bad channels) for each group member.
 
     Writes two TSVs to output_dir following BIDS-derivatives conventions:
-      group-{gid}_task-{task}_hyper-raw_iqm.tsv      — one row per subject (scalars)
+      group-{gid}_task-{task}_hyper-raw_sqm.tsv      — one row per subject (scalars)
       group-{gid}_task-{task}_hyper-raw_channels.tsv  — one row per subject × channel
 
-    Returns {subject_id: iqm_dict} for use in the HTML report.
+    Returns {subject_id: sqm_dict} for use in the HTML report.
     """
-    from fnirs_pipe.qc.quantitative_metrics import compute_raw_iqm
+    from fnirs_pipe.qc.quantitative_metrics import compute_raw_sqm
 
     gid  = group[0].group_id
     task = group[0].task
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    iqm_data: dict[str, dict] = {}
+    sqm_data: dict[str, dict] = {}
     scalar_rows: list[dict] = []
     channel_rows: list[dict] = []
 
@@ -148,21 +148,21 @@ def compute_group_iqm_raw(
         ]
 
         try:
-            iqm = compute_raw_iqm(raw, sci_cw, bad_channels)
+            sqm = compute_raw_sqm(raw, sci_cw, bad_channels)
         except Exception:
-            iqm = {}
+            sqm = {}
 
-        iqm["sci_per_channel"] = sci_scores
-        iqm["bad_channels"]    = bad_channels
-        iqm_data[entry.subject_id] = iqm
+        sqm["sci_per_channel"] = sci_scores
+        sqm["bad_channels"]    = bad_channels
+        sqm_data[entry.subject_id] = sqm
 
         scalar_rows.append({
             "group_id":               gid,
             "subject_id":             entry.subject_id,
             "task":                   task,
-            "sci_mean":               iqm.get("sci_mean"),
+            "sci_mean":               sqm.get("sci_mean"),
             "n_bad_channels":         len(bad_channels),
-            "channel_retention_rate": iqm.get("channel_retention_rate"),
+            "channel_retention_rate": sqm.get("channel_retention_rate"),
         })
 
         for ch, sci_val in sci_cw.items():
@@ -177,13 +177,13 @@ def compute_group_iqm_raw(
 
     stem = f"group-{gid}_task-{task}_hyper-raw"
     pd.DataFrame(scalar_rows).to_csv(
-        output_dir / f"{stem}_iqm.tsv", sep="\t", index=False
+        output_dir / f"{stem}_sqm.tsv", sep="\t", index=False
     )
     pd.DataFrame(channel_rows).to_csv(
         output_dir / f"{stem}_channels.tsv", sep="\t", index=False
     )
 
-    return iqm_data
+    return sqm_data
 
 
 def align_recordings(
@@ -406,36 +406,36 @@ def compute_pairwise_coherence(
     return pd.DataFrame(rows, columns=["ch_name", "sub1", "sub2", "coherence"])
 
 
-def load_group_iqm(output_dir: Path, group: list[GroupEntry]) -> dict[str, dict]:
-    """Load per-subject IQM scalars and channel metrics from derivatives.
+def load_group_sqm(output_dir: Path, group: list[GroupEntry]) -> dict[str, dict]:
+    """Load per-subject SQM scalars and channel metrics from derivatives.
 
-    Returns {subject_id: iqm_dict}.
+    Returns {subject_id: sqm_dict}.
     """
     result: dict[str, dict] = {}
     for entry in group:
         nirs_dir = output_dir / entry.subject_id / "nirs"
-        toml_path = nirs_dir / f"{entry.subject_id}_iqm.toml"
+        toml_path = nirs_dir / f"{entry.subject_id}_sqm.toml"
         csv_path  = nirs_dir / f"{entry.subject_id}_channel_metrics.csv"
 
-        iqm: dict = {}
+        sqm: dict = {}
         if toml_path.exists():
-            iqm.update(load_toml(toml_path))
+            sqm.update(load_toml(toml_path))
 
         if csv_path.exists():
             try:
                 ch_df = pd.read_csv(csv_path)
                 if {"name", "sci"}.issubset(ch_df.columns):
-                    iqm["sci_per_channel"] = dict(
+                    sqm["sci_per_channel"] = dict(
                         zip(ch_df["name"].astype(str),
                             pd.to_numeric(ch_df["sci"], errors="coerce"))
                     )
                 if "is_bad" in ch_df.columns:
-                    iqm["bad_channels"] = ch_df.loc[
+                    sqm["bad_channels"] = ch_df.loc[
                         ch_df["is_bad"].astype(str).str.lower().isin({"true", "1"}), "name"
                     ].tolist()
             except Exception:
                 pass
 
-        result[entry.subject_id] = iqm
+        result[entry.subject_id] = sqm
 
     return result

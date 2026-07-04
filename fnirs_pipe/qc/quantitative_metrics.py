@@ -1,7 +1,7 @@
-"""Compute and persist image quality metrics (IQM) for fNIRS data.
+"""Compute and persist image quality metrics (SQM) for fNIRS data.
 
-compute_iqm(): all metrics as a flat dict (no I/O).
-write_iqm_record(): append one JSONL line to a sidecar file.
+compute_sqm(): all metrics as a flat dict (no I/O).
+write_sqm_record(): append one JSONL line to a sidecar file.
 """
 
 import json
@@ -276,7 +276,7 @@ def _retention_metrics(raw_haemo: mne.io.Raw) -> dict[str, Any]:
         return {"pct_data_retained": None}
 
 
-def compute_raw_iqm(
+def compute_raw_sqm(
     raw_intensity: mne.io.Raw,
     sci_scores: dict[str, float],
     bad_channels: list[str],
@@ -288,7 +288,7 @@ def compute_raw_iqm(
     record.update(_psp_metrics(raw_intensity))
     if is_optical_density(raw_intensity):
         # intensity-value metrics are meaningless on already-OD data
-        logger.warning("input is already optical density; skipping intensity/cardiac/motion IQM")
+        logger.warning("input is already optical density; skipping intensity/cardiac/motion SQM")
         record.update({
             "cv_mean": None, "cv_per_channel": {},
             "snr_mean": None, "snr_per_channel": {},
@@ -304,8 +304,8 @@ def compute_raw_iqm(
     return record
 
 
-def compute_glm_iqm(residuals: np.ndarray) -> dict[str, Any]:
-    """IQM metrics requiring GLM residuals (post-GLM QC).
+def compute_glm_sqm(residuals: np.ndarray) -> dict[str, Any]:
+    """SQM metrics requiring GLM residuals (post-GLM QC).
 
     residuals: shape (n_channels, n_timepoints).
     TODO: implement Durbin-Watson per channel.
@@ -315,7 +315,7 @@ def compute_glm_iqm(residuals: np.ndarray) -> dict[str, Any]:
     }
 
 
-def compute_haemo_iqm(raw_haemo: mne.io.Raw) -> dict[str, Any]:
+def compute_haemo_sqm(raw_haemo: mne.io.Raw) -> dict[str, Any]:
     """Metrics computable from haemoglobin data (after Beer-Lambert)."""
     record: dict[str, Any] = {}
     record.update(_haemo_quality_metrics(raw_haemo))
@@ -325,19 +325,19 @@ def compute_haemo_iqm(raw_haemo: mne.io.Raw) -> dict[str, Any]:
     return record
 
 
-def compute_iqm(
+def compute_sqm(
     raw_intensity: mne.io.Raw,
     raw_haemo: mne.io.Raw,
     sci_scores: dict[str, float],
     bad_channels: list[str],
 ) -> dict[str, Any]:
-    record = compute_raw_iqm(raw_intensity, sci_scores, bad_channels)
-    record.update(compute_haemo_iqm(raw_haemo))
+    record = compute_raw_sqm(raw_intensity, sci_scores, bad_channels)
+    record.update(compute_haemo_sqm(raw_haemo))
     return record
 
 
-def save_iqm_toml(iqm: dict[str, Any], subject: str, out_dir: Path, suffix: str = "") -> None:
-    """Write scalar IQM fields to a TOML sidecar. suffix e.g. '_raw'."""
+def save_sqm_toml(sqm: dict[str, Any], subject: str, out_dir: Path, suffix: str = "") -> None:
+    """Write scalar SQM fields to a TOML sidecar. suffix e.g. '_raw'."""
     def _to_toml(data: dict) -> str:
         lines = []
         for k, v in data.items():
@@ -352,26 +352,26 @@ def save_iqm_toml(iqm: dict[str, Any], subject: str, out_dir: Path, suffix: str 
                 lines.append(f"{k} = {v}")
         return "\n".join(lines) + "\n"
 
-    scalars = {k: v for k, v in iqm.items() if not isinstance(v, (dict, list))}
-    out_path = out_dir / f"sub-{subject}_iqm{suffix}.toml"
+    scalars = {k: v for k, v in sqm.items() if not isinstance(v, (dict, list))}
+    out_path = out_dir / f"sub-{subject}_sqm{suffix}.toml"
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(_to_toml({"subject": subject, **scalars}), encoding="utf-8")
-    logger.info("sub-%s | IQM TOML → %s", subject, out_path)
+    logger.info("sub-%s | SQM TOML → %s", subject, out_path)
 
 
-def write_iqm_record(
+def write_sqm_record(
     subject: str,
     session: str | None,
-    iqm: dict[str, Any],
+    sqm: dict[str, Any],
     out_path: Path,
 ) -> None:
     record = {
         "subject": subject,
         "session": session,
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        **iqm,
+        **sqm,
     }
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with out_path.open("a", encoding="utf-8") as fh:
         fh.write(json.dumps(record) + "\n")
-    logger.info("sub-%s | IQM record appended: %s", subject, out_path)
+    logger.info("sub-%s | SQM record appended: %s", subject, out_path)

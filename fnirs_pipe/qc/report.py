@@ -32,7 +32,7 @@ Postprocessing (GLM mode)
   Design-matrix timeseries + heatmap; activation panel per condition.
 
 Quantitative Metrics
-  IQM scalar summary (channel retention, SCI, PSP, SNR, HbO–HbR corr, etc.)
+  SQM scalar summary (channel retention, SCI, PSP, SNR, HbO–HbR corr, etc.)
   + per-channel table; CSV sidecar saved to nirs/ output directory.
 
 Errors / Methods / Software Versions
@@ -78,7 +78,7 @@ from fnirs_pipe.qc.figures import (
     fc_matrix_figure,
     fc_connectogram,
 )
-from fnirs_pipe.qc.quantitative_metrics import compute_iqm
+from fnirs_pipe.qc.quantitative_metrics import compute_sqm
 from fnirs_pipe.utils.logging import get_logger
 
 if TYPE_CHECKING:
@@ -365,14 +365,14 @@ def _scalars_to_toml(data: dict) -> str:
     return "\n".join(lines) + "\n"
 
 
-# def _save_iqm_toml(iqm: dict, subject: str, out_dir: Path) -> None:
-#     scalars = {k: v for k, v in iqm.items() if not isinstance(v, (dict, list))}
-#     out_path = out_dir / f"sub-{subject}_iqm.toml"
+# def _save_sqm_toml(sqm: dict, subject: str, out_dir: Path) -> None:
+#     scalars = {k: v for k, v in sqm.items() if not isinstance(v, (dict, list))}
+#     out_path = out_dir / f"sub-{subject}_sqm.toml"
 #     out_path.parent.mkdir(parents=True, exist_ok=True)
 #     out_path.write_text(
 #         _scalars_to_toml({"subject": subject, **scalars}), encoding="utf-8"
 #     )
-#     logger.info("sub-%s | IQM sidecar saved: %s", subject, out_path)
+#     logger.info("sub-%s | SQM sidecar saved: %s", subject, out_path)
 
 
 def _save_channel_csv(channel_rows: list, subject: str, out_dir: Path) -> None:
@@ -388,7 +388,7 @@ def _save_channel_csv(channel_rows: list, subject: str, out_dir: Path) -> None:
     logger.info("sub-%s | channel metrics CSV saved: %s", subject, out_path)
 
 
-def _section_iqm(
+def _section_sqm(
     raw_long: mne.io.Raw,
     raw_haemo: mne.io.Raw,
     sci_scores: dict,
@@ -397,29 +397,29 @@ def _section_iqm(
     errors: list,
     out_dir: Path | None = None,
 ) -> dict:
-    iqm: dict = {}
-    with _guard("IQM computation", errors, subject):
-        iqm = compute_iqm(raw_long, raw_haemo, sci_scores, bad_channels)
+    sqm: dict = {}
+    with _guard("SQM computation", errors, subject):
+        sqm = compute_sqm(raw_long, raw_haemo, sci_scores, bad_channels)
     channel_rows = []
     for ch in sci_scores:
         pair_key = re.sub(r'\s+(\d+|hbo|hbr)$', '', ch, flags=re.IGNORECASE)
         channel_rows.append({
             "name":   ch,
-            "sci":    iqm.get("sci_per_channel", {}).get(ch),
-            "snr":    iqm.get("snr_per_channel", {}).get(ch),
-            "cv":     iqm.get("cv_per_channel", {}).get(ch),
-            "corr":   iqm.get("hbo_hbr_corr_per_channel", {}).get(pair_key),
+            "sci":    sqm.get("sci_per_channel", {}).get(ch),
+            "snr":    sqm.get("snr_per_channel", {}).get(ch),
+            "cv":     sqm.get("cv_per_channel", {}).get(ch),
+            "corr":   sqm.get("hbo_hbr_corr_per_channel", {}).get(pair_key),
             "is_bad": ch in bad_channels,
         })
-    if out_dir is not None and iqm:
+    if out_dir is not None and sqm:
         with _guard("Channel metrics CSV", errors, subject):
             _save_channel_csv(channel_rows, subject, out_dir)
-    return {"iqm": iqm, "channel_rows": channel_rows}
+    return {"sqm": sqm, "channel_rows": channel_rows}
 
 
 def _section_channel_summary(
     channel_rows: list,
-    iqm: dict,
+    sqm: dict,
     subject: str,
     errors: list,
     figures_dir: Path,
@@ -432,7 +432,7 @@ def _section_channel_summary(
         sci_pc   = {r["name"]: r["sci"] for r in channel_rows if r["sci"] is not None}
         cv_pc    = {r["name"]: r["cv"]  for r in channel_rows if r["cv"]  is not None}
         snr_pc   = {r["name"]: r["snr"] for r in channel_rows if r["snr"] is not None}
-        psp_pc   = iqm.get("psp_per_channel", {})
+        psp_pc   = sqm.get("psp_per_channel", {})
         fig = channel_quality_heatmap(
             ch_names, is_bad, sci_pc, cv_pc, snr_pc, psp_pc,
             sci_thresh=sci_thresh,
@@ -652,7 +652,7 @@ def build_subject_report(
     """Render a per-subject prep QC report and save as HTML."""
     errors: list[str] = []
     versions = collect_software_versions()
-    # raw_long: long-channel-only copy used for OD/motion/IQM figures
+    # raw_long: long-channel-only copy used for OD/motion/SQM figures
     # raw_intensity: full original (all channels) passed to SCI/brain sections
     raw_long = _prepare_long_raw(raw_intensity, subject)
 
@@ -678,10 +678,10 @@ def build_subject_report(
     epoch_vars        = _section_epoch_preview(raw_haemo, subject, errors, figures_dir)
     glm_vars          = _section_glm(design_matrix, glm_est, raw_haemo, subject, errors, figures_dir, segments=segments)
     rest_vars         = _section_rest(alff_df, fc_df, subject, errors, figures_dir)
-    iqm_vars          = _section_iqm(raw_long, raw_haemo, sci_scores, bad_channels, subject, errors,
+    sqm_vars          = _section_sqm(raw_long, raw_haemo, sci_scores, bad_channels, subject, errors,
                                      out_dir=out_path.parent / "nirs")
     ch_summary_vars   = _section_channel_summary(
-                            iqm_vars["channel_rows"], iqm_vars["iqm"], subject, errors, figures_dir,
+                            sqm_vars["channel_rows"], sqm_vars["sqm"], subject, errors, figures_dir,
                             sci_thresh=getattr(config, "sci_threshold", 0.75))
 
     n_bad    = len(bad_channels)
@@ -716,7 +716,7 @@ def build_subject_report(
         **haemo_vars,
         **channel_det_vars,
         **psd_det_vars,
-        **iqm_vars,
+        **sqm_vars,
         **brain_vars,
 
         **epoch_vars,

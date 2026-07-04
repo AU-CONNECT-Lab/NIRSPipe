@@ -82,13 +82,13 @@ def _psd_band_shapes() -> tuple[list[dict], list[dict]]:
 
 def _ch_sci_status(
     ch_pair: str,
-    iqm_data: dict[str, dict],
+    sqm_data: dict[str, dict],
     subject_ids: list[str],
     sci_threshold: float,
 ) -> list[bool | None]:
     result = []
     for sid in subject_ids:
-        sci_d = iqm_data.get(sid, {}).get("sci_per_channel", {})
+        sci_d = sqm_data.get(sid, {}).get("sci_per_channel", {})
         val = sci_d.get(f"{ch_pair} hbo") or sci_d.get(ch_pair)
         result.append(None if val is None else float(val) >= sci_threshold)
     return result
@@ -105,10 +105,10 @@ def _group_color(statuses: list[bool | None]) -> str:
     return _MIX_COLOR
 
 
-def _hover_sci(pair: str, iqm_data: dict, subject_ids: list[str]) -> str:
+def _hover_sci(pair: str, sqm_data: dict, subject_ids: list[str]) -> str:
     lines = [f"<b>{pair}</b>"]
     for sid in subject_ids:
-        sci_d = iqm_data.get(sid, {}).get("sci_per_channel", {})
+        sci_d = sqm_data.get(sid, {}).get("sci_per_channel", {})
         val = sci_d.get(f"{pair} hbo") or sci_d.get(pair)
         lines.append(f"{sid}: SCI = {val:.3f}" if val is not None else f"{sid}: N/A")
     return "<br>".join(lines)
@@ -462,7 +462,7 @@ def build_epoch(
 
 def build_layout_2d(
     aligned_raws: dict[str, mne.io.Raw],
-    iqm_data: dict[str, dict],
+    sqm_data: dict[str, dict],
     subject_ids: list[str],
     sci_threshold: float,
 ) -> go.Figure | None:
@@ -482,9 +482,9 @@ def build_layout_2d(
         return None
 
     pair_names  = [ch_names[p].rsplit(" ", 1)[0] for p in hbo_picks]
-    colors      = [_group_color(_ch_sci_status(p, iqm_data, subject_ids, sci_threshold))
+    colors      = [_group_color(_ch_sci_status(p, sqm_data, subject_ids, sci_threshold))
                    for p in pair_names]
-    hover_texts = [_hover_sci(p, iqm_data, subject_ids) for p in pair_names]
+    hover_texts = [_hover_sci(p, sqm_data, subject_ids) for p in pair_names]
     x_mm = (locs[:, 0] * 1000).tolist()
     y_mm = (locs[:, 1] * 1000).tolist()
 
@@ -541,7 +541,7 @@ def build_layout_2d(
 
 def build_layout_3d(
     aligned_raws: dict[str, mne.io.Raw],
-    iqm_data: dict[str, dict],
+    sqm_data: dict[str, dict],
     subject_ids: list[str],
     sci_threshold: float,
 ) -> go.Figure | None:
@@ -590,9 +590,9 @@ def build_layout_3d(
         ly += [float(src_m[1]), float(det_m[1]), None]
         lz += [float(src_m[2]), float(det_m[2]), None]
 
-    ch_colors   = [_group_color(_ch_sci_status(p, iqm_data, subject_ids, sci_threshold))
+    ch_colors   = [_group_color(_ch_sci_status(p, sqm_data, subject_ids, sci_threshold))
                    for p in pair_names]
-    hover_texts = [_hover_sci(p, iqm_data, subject_ids) for p in pair_names]
+    hover_texts = [_hover_sci(p, sqm_data, subject_ids) for p in pair_names]
 
     traces_3d: list[go.BaseTraceType] = []
     try:
@@ -813,13 +813,13 @@ def build_coherence_timeseries(windowed_df: pd.DataFrame) -> go.Figure | None:
 # ---------------------------------------------------------------------------
 
 def build_channel_summary(
-    iqm_data: dict[str, dict],
+    sqm_data: dict[str, dict],
     subject_ids: list[str],
     sci_threshold: float,
 ) -> go.Figure | None:
     ch_set: set[str] = set()
     for sid in subject_ids:
-        for k in iqm_data.get(sid, {}).get("sci_per_channel", {}):
+        for k in sqm_data.get(sid, {}).get("sci_per_channel", {}):
             ch_set.add(k.rsplit(" ", 1)[0] if " " in k else k)
 
     if not ch_set:
@@ -829,11 +829,11 @@ def build_channel_summary(
     colors, hover_texts = [], []
 
     for ch in ch_names:
-        statuses = _ch_sci_status(ch, iqm_data, subject_ids, sci_threshold)
+        statuses = _ch_sci_status(ch, sqm_data, subject_ids, sci_threshold)
         known    = [s for s in statuses if s is not None]
         sci_vals = []
         for sid in subject_ids:
-            sci_d = iqm_data.get(sid, {}).get("sci_per_channel", {})
+            sci_d = sqm_data.get(sid, {}).get("sci_per_channel", {})
             val   = sci_d.get(f"{ch} hbo") or sci_d.get(ch)
             sci_vals.append(f"{sid}: {val:.3f}" if val is not None else f"{sid}: N/A")
 
@@ -882,11 +882,11 @@ def build_channel_summary(
 
 
 # ---------------------------------------------------------------------------
-# Compute: group-level IQM scalars
+# Compute: group-level SQM scalars
 # ---------------------------------------------------------------------------
 
-def compute_hyper_iqm(
-    iqm_data: dict[str, dict],
+def compute_hyper_sqm(
+    sqm_data: dict[str, dict],
     coherence_df: pd.DataFrame,
     aligned_raws: dict[str, mne.io.Raw],
     offsets: dict[str, float],
@@ -895,12 +895,12 @@ def compute_hyper_iqm(
 ) -> dict:
     ch_set: set[str] = set()
     for sid in subject_ids:
-        for k in iqm_data.get(sid, {}).get("sci_per_channel", {}):
+        for k in sqm_data.get(sid, {}).get("sci_per_channel", {}):
             ch_set.add(k.rsplit(" ", 1)[0] if " " in k else k)
 
     n_all_good = n_mixed = n_all_bad = n_unknown = 0
     for ch in ch_set:
-        statuses = _ch_sci_status(ch, iqm_data, subject_ids, sci_threshold)
+        statuses = _ch_sci_status(ch, sqm_data, subject_ids, sci_threshold)
         known = [s for s in statuses if s is not None]
         if not known:
             n_unknown += 1

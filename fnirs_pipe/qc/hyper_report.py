@@ -25,7 +25,7 @@ def build_hyper_report(
     group_id: str,
     task: str,
     group: list[GroupEntry],
-    iqm_data: dict[str, dict],
+    sqm_data: dict[str, dict],
     aligned_raws: dict[str, mne.io.Raw],
     offsets: dict[str, float],
     coherence_df: pd.DataFrame,
@@ -44,7 +44,7 @@ def build_hyper_report(
 
     meta = _process_hyper_raw_group(
         group_id=group_id, task=task, group=group,
-        iqm_data=iqm_data, aligned_raws=aligned_raws, offsets=offsets,
+        sqm_data=sqm_data, aligned_raws=aligned_raws, offsets=offsets,
         coherence_df=coherence_df, output_dir=output_dir,
         raw_raws=raw_raws, session=session, sci_threshold=sci_threshold,
         coherence_fmin=coherence_fmin, coherence_fmax=coherence_fmax,
@@ -53,7 +53,7 @@ def build_hyper_report(
     )
 
     sci_per_subject = {
-        sid: iqm_data.get(sid, {}).get("sci_per_channel", {})
+        sid: sqm_data.get(sid, {}).get("sci_per_channel", {})
         for sid in meta["subject_ids"]
     }
 
@@ -74,7 +74,7 @@ def build_hyper_report(
         coherence_fmax=coherence_fmax,
         alignment_json=json.dumps(meta["alignment"]),
         ch_pairs_json=json.dumps(meta["ch_pairs"]),
-        iqm_json=json.dumps(meta["iqm"], default=str),
+        sqm_json=json.dumps(meta["sqm"], default=str),
         figure_paths=meta["figure_paths"],
         ch_detail_template_json=json.dumps(meta["figure_paths"].get("ch_detail_template")),
         sci_per_subject_json=json.dumps(sci_per_subject),

@@ -507,18 +507,18 @@
 <div class="qm-box">
   {% macro qv_class(v, ok_test, warn_test) %}{% if v is not none %}{% if ok_test %}qm-ok{% elif warn_test %}qm-warn{% else %}qm-bad{% endif %}{% endif %}{% endmacro %}
   <ul class="qm-list">
-    {% set ret  = iqm.get('channel_retention_rate') %}
-    {% set sci  = iqm.get('sci_mean') %}
-    {% set corr = iqm.get('hbo_hbr_corr_mean') %}
-    {% set ret_pct = iqm.get('pct_data_retained') %}
-    {% set snr  = iqm.get('snr_mean') %}
-    {% set spk  = iqm.get('spike_count') %}
+    {% set ret  = sqm.get('channel_retention_rate') %}
+    {% set sci  = sqm.get('sci_mean') %}
+    {% set corr = sqm.get('hbo_hbr_corr_mean') %}
+    {% set ret_pct = sqm.get('pct_data_retained') %}
+    {% set snr  = sqm.get('snr_mean') %}
+    {% set spk  = sqm.get('spike_count') %}
     <li><span class="ql">Channel retention</span>
         <span class="qv {{ qv_class(ret, ret >= 0.9, ret >= 0.7) }}">{{ pct(ret) }}</span></li>
     <li><span class="ql">Mean SCI</span>
         <span class="qv {{ qv_class(sci, sci >= 0.75, sci >= 0.5) }}">{{ qm_val(sci) }}</span></li>
     <li><span class="ql">Mean PSP</span>
-        <span class="qv">{{ qm_val(iqm.get('psp_mean')) }}</span></li>
+        <span class="qv">{{ qm_val(sqm.get('psp_mean')) }}</span></li>
     <li><span class="ql">Mean SNR (intensity)</span>
         <span class="qv {{ qv_class(snr, snr >= 100, snr >= 20) }}">{{ qm_val(snr, '.1f') }}</span></li>
     <li><span class="ql">Mean HbO–HbR corr</span>
@@ -526,13 +526,13 @@
     <li><span class="ql">% data retained</span>
         <span class="qv {{ qv_class(ret_pct, ret_pct >= 0.8, ret_pct >= 0.6) }}">{{ pct(ret_pct) }}</span></li>
     <li><span class="ql">GVTD mean</span>
-        <span class="qv">{{ qm_val(iqm.get('gvtd_mean'), '.3e') }}</span></li>
+        <span class="qv">{{ qm_val(sqm.get('gvtd_mean'), '.3e') }}</span></li>
     <li><span class="ql">Spike count</span>
         <span class="qv {{ qv_class(spk, spk == 0, spk < 10) }}">{% if spk is not none %}{{ spk }}{% else %}<span style="color:#aaa">n/a</span>{% endif %}</span></li>
     <li><span class="ql">Residual cardiac power</span>
-        <span class="qv">{{ qm_val(iqm.get('residual_cardiac_power'), '.3e') }}</span></li>
+        <span class="qv">{{ qm_val(sqm.get('residual_cardiac_power'), '.3e') }}</span></li>
     <li><span class="ql">Low-freq drift (HbO)</span>
-        <span class="qv">{{ qm_val(iqm.get('lowfreq_drift_amplitude'), '.3e') }}</span></li>
+        <span class="qv">{{ qm_val(sqm.get('lowfreq_drift_amplitude'), '.3e') }}</span></li>
   </ul>
 
   {% if channel_rows %}
