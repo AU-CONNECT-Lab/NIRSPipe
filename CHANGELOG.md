@@ -6,6 +6,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- Pipeline auto-detects already-OD input, skips the OD-conversion step, and marks intensity-only QC metrics as unavailable
+
+### Fixed
+- GUI "generate command" emitted invalid multi-subject commands; participant/session/task labels now repeat the flag per value
+- QC no longer crashes on low sampling-rate data — PSD and cardiac-power frequency limits clamp to the Nyquist frequency
+- QC brain views no longer fail when the static-image export backend was missing (now a hard dependency)
+
 ### Known Issues
 - `compute_alff` numerical validation pending
 

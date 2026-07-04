@@ -25,6 +25,7 @@ from bids import BIDSLayout
 from fnirs_pipe import __version__
 from fnirs_pipe.io.derivatives import build_output_path, write_sidecar_json
 from fnirs_pipe.io.snirf import write_snirf
+from fnirs_pipe.utils import is_optical_density
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("pipeline.prep")
@@ -201,9 +202,16 @@ def run_prep(
         })
         return path
 
-    # step 2: OD conversion
-    logger.info("sub-%s | step 2: OD conversion (%d ch)", config.subject, len(raw.ch_names))
-    raw_od = intensity_to_od(raw)
+    # step 2: OD conversion (skip if input is already optical density)
+    if is_optical_density(raw):
+        logger.warning(
+            "sub-%s | input is already optical density; skipping OD conversion "
+            "and raw-intensity QC", config.subject,
+        )
+        raw_od = raw.copy()
+    else:
+        logger.info("sub-%s | step 2: OD conversion (%d ch)", config.subject, len(raw.ch_names))
+        raw_od = intensity_to_od(raw)
     if config.exclude_channels:
         logger.info("sub-%s | excluding channels: %s", config.subject, config.exclude_channels)
         raw_od.drop_channels(config.exclude_channels)

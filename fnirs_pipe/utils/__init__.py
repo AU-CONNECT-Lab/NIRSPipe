@@ -10,6 +10,12 @@ def unwrap_enum(val: Any, default: Any = None) -> Any:
     return val.value if hasattr(val, "value") else val
 
 
+def is_optical_density(raw: Any) -> bool:
+    """True if the data is already optical density (OD conversion done upstream)."""
+    types = set(raw.get_channel_types())
+    return "fnirs_od" in types and "fnirs_cw_amplitude" not in types
+
+
 def load_toml(path: Path) -> dict[str, Any]:
     try:
         import tomllib

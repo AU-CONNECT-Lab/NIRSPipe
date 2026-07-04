@@ -12,6 +12,7 @@ from typing import Any
 import mne
 import numpy as np
 
+from fnirs_pipe.utils import is_optical_density
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("qc.quantitative_metrics")
@@ -283,11 +284,23 @@ def compute_raw_iqm(
     """Metrics computable from raw intensity data (no haemo required)."""
     record: dict[str, Any] = {}
     record.update(_sci_metrics(sci_scores, bad_channels))
-    record.update(_intensity_metrics(raw_intensity))
     record.update(_channel_distance_metrics(raw_intensity))
     record.update(_psp_metrics(raw_intensity))
-    record.update(_cardiac_power_metrics(raw_intensity))
-    record.update(_motion_metrics(raw_intensity))
+    if is_optical_density(raw_intensity):
+        # intensity-value metrics are meaningless on already-OD data
+        logger.warning("input is already optical density; skipping intensity/cardiac/motion IQM")
+        record.update({
+            "cv_mean": None, "cv_per_channel": {},
+            "snr_mean": None, "snr_per_channel": {},
+            "mean_amp_mean": None, "mean_amp_per_channel": {},
+            "cp_mean": None, "cp_per_channel": {},
+            "spike_count": None, "temporal_derivative_variance": {},
+            "gvtd_mean": None, "gvtd_p95": None,
+        })
+    else:
+        record.update(_intensity_metrics(raw_intensity))
+        record.update(_cardiac_power_metrics(raw_intensity))
+        record.update(_motion_metrics(raw_intensity))
     return record
 
 
