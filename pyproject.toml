@@ -5,11 +5,11 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "fnirs-pipe"
 version = "0.1.0.dev0"
-description = "A BIDS-compatible fNIRS preprocessing and postprocessing pipeline"
+description = "BIDS-native fNIRS preprocessing, postprocessing, hyperscanning, QC, and run-tracking pipeline"
 requires-python = ">=3.10"
 dependencies = [
     "mne>=1.6",
-    "mne-nirs>=0.6",
+    "mne-nirs>=0.7",      # 0.7 relocated scalp_coupling_index to mne.preprocessing.nirs
     "nilearn>=0.10",
     "scipy>=1.11",
     "numpy>=1.24",
@@ -21,8 +21,12 @@ dependencies = [
     "jinja2>=3.1",
     "plotly>=5.18",
     "typer>=0.12",
+    "joblib>=1.3",        # parallel dispatch (--n-jobs)
+    "flask>=3.0",         # fnirs-rate viewer
     "dash>=2.16",
     "dash-bootstrap-components>=1.6",
+    "dash-cytoscape>=1.0",   # GUI Analysis-page DAG
+    "pycwt>=0.4",         # hyperscanning WTC (fnirs-qc hyper-post)
     "tomli>=2.0; python_version < '3.11'",
     "bibtexparser>=2.0.0b1",
 ]

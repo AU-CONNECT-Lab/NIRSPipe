@@ -6,28 +6,53 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Known Issues
+- `compute_alff` numerical validation pending
+
+---
+
+## [0.11.0] - 2026-05-25
+
 ### Added
-- `fnirs-log merge` + `utils/job_db.py`: SQLite DB from JSONL run logs
-- `fnirs-gui` Data Preparation page (Analysis page stub)
-- Boilerplate: paragraph-style Methods + HTML "Rendered" tab
-- Hyper raw report supports `--session-label`
-- `fnirs-qc group-raw` / `group-hyper-raw`: mriqc-style group reports (heatmap, boxplots, table, outlier panel)
-- prep-raw IQM JSON now stores `sci_per_window` / `psp_per_window` / `gvtd_per_window` + center times; group-raw renders time × subject heatmaps for these
-- `fnirs-qc window-raw <bids> <out> --task-label X --tstart S --tend S [--align trigger --trigger-name N]`: crop each subject to a time window, recompute IQM, render a windowed group report
+- Self-contained rating viewers: rating bar inlined into the QC HTML template; static open works read-only, `fnirs-rate` open enables writes
+- Section ratings + channel decisions persist via `/save_*` REST endpoints only — HTML never modified
 
 ### Changed
-- **QC reports use BIDS-derivatives layout** (mriqc-style: per-subject / per-group subdirs with `figures/` and `[ses-XX/]nirs/`)
-- Filenames standardized to `_nirs.*` suffix; main HTMLs use BIDS desc (`..._desc-raw_nirs.html`, `..._desc-hyperraw_nirs.html`)
-- Hyper raw report now an iframe shell with auto-resize; Plotly loaded from CDN
-- Shared helpers extracted: `qc/figure_io.py`, `qc/hyper_raw_writer.py`, `_base.css`, `_macros.html.j2`
+- `HyperRatingApp` / `RawRatingApp` / `FNIRSRatingApp` refactored: no more regex reverse-parsing or string-concat injection
 
 ### Fixed
-- `HyperRatingApp` session-aware path for channel-decisions JSON
-- `fnirs-qc` CLI initializes logging
+- `HyperRatingApp` channel-decisions sidecar is now session-aware
 
-### Known Issues
-- Connectivity mode raises `NotImplementedError`
-- `compute_alff` numerical validation pending (see TODO)
+---
+
+## [0.10.0] - 2026-05-30
+
+### Added
+- `fnirs-qc group-raw` and `group-hyper-raw` aggregate per-subject / per-dyad IQM into cohort HTML reports (heatmap, boxplots, outliers, sortable table)
+- `fnirs-qc window-raw` crops each subject's raw to a time window and re-runs the group-raw layout — for "is this minute dropping for everyone?"
+- prep-raw IQM JSON now stores `sci_per_window` / `psp_per_window` / `gvtd_per_window`; group reports render time × subject heatmaps for these
+
+### Changed
+- QC output directory follows a BIDS-derivatives layout: per-subject / per-group `figures/` and `[ses-XX/]nirs/` subdirs
+- QC filenames standardised to `_nirs.*` suffix with BIDS `desc` entity
+- Hyper raw report converted to an iframe shell with auto-resize; Plotly loaded from CDN
+
+### Fixed
+- `fnirs-qc` CLI now initialises logging
+
+---
+
+## [0.8.0] - 2026-05-23
+
+### Added
+- `fnirs-log merge` CLI + `utils/job_db.py`: JSONL run events consolidated into a SQLite database (`pipeline_executions`, `runs`, `iqm`, `command_outputs`)
+- `PrepResult` exposes `iqm_raw` and `iqm_final` for downstream use
+- Paragraph-style Methods boilerplate with a "Rendered" tab in the HTML report
+
+### Removed
+- `--mode connectivity` (was never implemented)
+- `--ica` postprocessing flag (ICA for fNIRS is experimental; removed to simplify the post pipeline)
+- `--segments-path` / `--crop-tmin` / `--crop-tmax` on `fnirs-pipe` (superseded by `fnirs-prep crop`)
 
 ---
 

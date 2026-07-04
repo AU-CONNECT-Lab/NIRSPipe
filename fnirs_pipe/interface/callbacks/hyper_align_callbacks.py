@@ -352,10 +352,7 @@ def _write_ha_decisions(deriv_dir: str, task: str, decisions: dict) -> None:
 
 
 def _compute_sci_from_cw(raws: dict, subject_ids: list) -> dict:
-    try:
-        import mne_nirs
-    except ImportError:
-        return {sid: {} for sid in subject_ids}
+    import mne
 
     sci_by_sid: dict = {}
     for sid in subject_ids:
@@ -364,7 +361,8 @@ def _compute_sci_from_cw(raws: dict, subject_ids: list) -> dict:
             sci_by_sid[sid] = {}
             continue
         try:
-            sci_arr = mne_nirs.signal_enhancement.scalp_coupling_index(raw)
+            raw_od  = mne.preprocessing.nirs.optical_density(raw.copy(), verbose=False)
+            sci_arr = mne.preprocessing.nirs.scalp_coupling_index(raw_od, verbose=False)
             pair_sci: dict = {}
             for i, ch in enumerate(raw.ch_names):
                 pair = ch.rsplit(" ", 1)[0] if " " in ch else ch

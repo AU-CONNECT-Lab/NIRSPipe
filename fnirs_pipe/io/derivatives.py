@@ -18,7 +18,7 @@ def build_output_path(
 ) -> Path:
     """Construct a BIDS-Derivatives compliant output path.
 
-    All intermediate and final files land in output_dir (AFNI-style, no separate work_dir).
+    All intermediate and final files land in output_dir (no separate work_dir).
     The desc entity distinguishes processing steps, e.g.:
       desc-od, desc-sci, desc-motcorrected, desc-preproc
 

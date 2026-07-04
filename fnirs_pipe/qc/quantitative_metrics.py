@@ -294,7 +294,7 @@ def compute_glm_iqm(residuals: np.ndarray) -> dict[str, Any]:
     """IQM metrics requiring GLM residuals (post-GLM QC).
 
     residuals: shape (n_channels, n_timepoints).
-    TODO: implement Durbin-Watson per channel (cf. AFNI 3dREMLfit -Rwherr).
+    TODO: implement Durbin-Watson per channel.
     """
     return {
         "durbin_watson": None,  # TODO: statsmodels.stats.stattools.durbin_watson per channel

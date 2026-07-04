@@ -111,7 +111,7 @@ def compute_group_iqm_raw(
 ) -> dict[str, dict]:
     """Compute raw-level IQM (SCI, bad channels) for each group member.
 
-    Writes two TSVs to output_dir following BIDS/MRIQC conventions:
+    Writes two TSVs to output_dir following BIDS-derivatives conventions:
       group-{gid}_task-{task}_hyper-raw_iqm.tsv      — one row per subject (scalars)
       group-{gid}_task-{task}_hyper-raw_channels.tsv  — one row per subject × channel
 

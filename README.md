@@ -1,6 +1,6 @@
 # fnirs-pipe
 
-A BIDS-compatible fNIRS preprocessing and postprocessing pipeline.
+A BIDS-compatible fNIRS preprocessing, postprocessing, hyperscanning, and QC pipeline.
 
 ## Overview
 
@@ -8,15 +8,15 @@ A BIDS-compatible fNIRS preprocessing and postprocessing pipeline.
 
 | Stage | What it does |
 |-------|--------------|
-| `prep` | Fixed-order preprocessing: OD conversion → SCI pruning → motion detection/correction → Beer-Lambert |
-| `post` | Flexible postprocessing via modes: GLM, denoise, or custom YAML |
+| `prep` | Fixed-order preprocessing: OD conversion → SCI channel marking → motion correction (TDDR) → Beer-Lambert |
+| `post` | Mode-driven postprocessing: `denoise`, `glm`, or `rest` (bandpass + resample; GLM residuals or ALFF/FC) |
 
-Outputs follow the [BIDS Derivatives](https://bids-specification.readthedocs.io/en/stable/derivatives/introduction.html) spec. Each subject gets an HTML QC report with figures and an auto-generated Methods paragraph.
+Outputs follow the [BIDS Derivatives](https://bids-specification.readthedocs.io/en/stable/derivatives/introduction.html) spec. Each subject gets an HTML QC report with figures and an auto-generated Methods paragraph. Group-level QC, hyperscanning (dyad WTC/ISC), an interactive rating viewer, a Dash desktop GUI, and a JSONL→SQLite run-log database are all first-class features.
 
 ## Requirements
 
 - Python ≥ 3.10
-- Core dependencies: `mne`, `mne-nirs`, `nilearn`, `scipy`, `pybids`, `h5py`, `pandas`, `jinja2`, `plotly`, `rich`
+- Dependencies (all required, resolved via `pip install .`): `mne`, `mne-nirs` (≥ 0.7), `nilearn`, `scipy`, `numpy`, `pybids`, `mne-bids`, `h5py`, `tables`, `pandas`, `jinja2`, `plotly`, `typer`, `joblib`, `flask`, `dash`, `dash-bootstrap-components`, `dash-cytoscape`, `pycwt`, `bibtexparser`, `tomli` (Python < 3.11 only)
 
 ## Installation
 
@@ -28,124 +28,90 @@ pip install -e ".[dev]"
 
 ## Quick Start
 
-```bash
-# Preprocessing only
-fnirs-pipe /data/bids /data/derivatives participant \
-  --participant-label 01 02 \
-  --dpf 6.0 \
-  --sci-threshold 0.8
+Preprocessing only:
 
-# Preprocessing + GLM
+```bash
+fnirs-pipe /data/bids /data/derivatives participant \
+  --participant-label 01 --participant-label 02 \
+  --dpf 6.0 --sci-threshold 0.8
+```
+
+Preprocessing + first-level GLM (events from SNIRF annotations by default):
+
+```bash
 fnirs-pipe /data/bids /data/derivatives participant \
   --participant-label 01 \
   --dpf 6.0 --sci-threshold 0.8 \
   --mode glm \
   --hrf-model spm --noise-model ar1 \
+  --drift-model cosine --drift-high-pass 0.01 \
   --high-pass 0.01 --low-pass 0.5 \
-  --short-channel mean \
-  --events-path /data/bids/sub-01/func/sub-01_task-tapping_events.tsv
-
-# FIR GLM
-fnirs-pipe /data/bids /data/derivatives participant \
-  --participant-label 01 \
-  --dpf 6.0 --sci-threshold 0.8 \
-  --mode glm --hrf-model fir --fir-delays "0,1,2,3,4,5,6,7,8,9"
-
-# Children dataset (higher cardiac band)
-fnirs-pipe /data/bids /data/derivatives participant \
-  --participant-label 01 \
-  --dpf 5.5 --sci-threshold 0.8 \
-  --cardiac-l-freq 1.0 --cardiac-h-freq 2.5
-
-# Parallel subjects, custom TOML config for post
-fnirs-pipe /data/bids /data/derivatives participant \
-  --participant-label 01 02 03 \
-  --dpf 6.0 --sci-threshold 0.8 \
-  --mode glm --config glm_params.toml \
-  --n-jobs 4
+  --short-channel mean
 ```
 
-After preprocessing, launch the interactive QC rating interface:
-
-```bash
-fnirs-rate /data/derivatives --participant-label 01 02
-```
-
-Opens a local browser UI for rating each subject's QC report section by section. Ratings are saved to `sub-<id>/figures/sub-<id>_ratings.toml` and appended to `group_ratings.jsonl`.
-
-To merge run logs and IQM metrics into a queryable SQLite database:
-
-```bash
-fnirs-log merge /data/derivatives
-```
-
-Each `fnirs-pipe` run writes JSONL event files to `logs/json/`. `fnirs-log merge` consolidates them into `logs/fnirs_pipe.db` (tables: `pipeline_executions`, `runs`, `iqm`, `command_outputs`).
-
-To convert raw scanner files to BIDS format, use the separate conversion tool:
-
-```bash
-fnirs-recon /raw/sub-01.snirf /data/bids --participant-label 01 --task tapping
-```
-
+See [`docs/pipeline/common-scenarios.md`](docs/pipeline/common-scenarios.md) for resting-state, FIR GLM, paediatric, parallel, dry-run, and config-file examples. Per-command references live under [`docs/cli/`](docs/cli/) — one page per `fnirs-*` entry point.
 
 ## CLI Reference
 
+### `fnirs-pipe`
+
 ```
-fnirs-pipe bids_dir output_dir {participant,group} [OPTIONS]
+fnirs-pipe BIDS_DIR OUTPUT_DIR {participant,group} [OPTIONS]
 
 Required:
   --dpf FLOAT [FLOAT ...]      Differential pathlength factor. One value or one per wavelength.
   --sci-threshold FLOAT        SCI threshold for bad channel detection (e.g. 0.8).
 
 Subject / session / task selection:
-  --participant-label LABEL [LABEL ...]
-  --session-label     LABEL [LABEL ...]
-  --task-label        LABEL [LABEL ...]
-  --bids-filter-file  FILE     JSON file with extra pybids query filters.
+  --participant-label LABEL    Repeatable.
+  --session-label LABEL        Repeatable.
+  --task-label LABEL           Repeatable.
+  --bids-filter-file FILE      JSON file with extra pybids query filters.
 
 Preprocessing:
   --motion-correction          {tddr,wavelet,spline,none}   [default: tddr]
-  --exclude-channels           Comma-separated channel names to manually exclude,
+                               wavelet / spline raise NotImplementedError.
+  --exclude-channels           Comma-separated channel names to exclude,
                                e.g. "S1_D1 hbo,S1_D1 hbr"
-  --cardiac-l-freq FLOAT       Lower cardiac band bound in Hz. Increase for children.  [default: 0.7]
-  --cardiac-h-freq FLOAT       Upper cardiac band bound in Hz. Increase for children.  [default: 1.5]
+  --cardiac-l-freq FLOAT       Lower cardiac band bound in Hz.                        [default: 0.7]
+  --cardiac-h-freq FLOAT       Upper cardiac band bound in Hz.                        [default: 1.5]
 
 Postprocessing mode:
-  --mode                       {denoise,glm,connectivity}
+  --mode                       {denoise,glm,rest}
   --config FILE                TOML file for post parameters. CLI flags override TOML.
 
-Filtering / resampling:
+Filtering / resampling (all modes):
   --high-pass FLOAT            High-pass filter cutoff in Hz (e.g. 0.01).
   --low-pass  FLOAT            Low-pass filter cutoff in Hz (e.g. 0.5).
   --resample-sfreq FLOAT       Target sampling rate in Hz after filtering (e.g. 2.0).
+  --combine-runs               Concatenate runs before postprocessing.
 
-Cropping (applied after filtering, before GLM):
-  --segments-path FILE         TSV file (onset/duration columns) defining multiple segments to keep.
-  --crop-tmin FLOAT            Start time in seconds (single segment; ignored if --segments-path set).
-  --crop-tmax FLOAT            End time in seconds  (single segment; ignored if --segments-path set).
-
-GLM options (--mode glm):
+GLM (--mode glm):
   --hrf-model                  {spm,spm + derivative,spm + derivative + dispersion,
                                 glover,glover + derivative,glover + derivative + dispersion,fir}
-                               [default: spm]
-  --noise-model                {ols,ar1,ar2,ar3,ar4,ar5,auto}  [default: ar1]
-  --drift-model                {cosine,polynomial,none}         [default: cosine]
-  --drift-high-pass FLOAT      High-pass cutoff for cosine drift in Hz.  [default: 0.01]
-  --drift-order INT            Polynomial drift order (polynomial only).  [default: 1]
-  --fir-delays STR             FIR delay bins in scans, comma-separated.
-                               e.g. "0,1,2,3,4,5"  (only used when --hrf-model fir)
-  --short-channel              {none,mean,pca}  Short-channel confound regressor.  [default: none]
-  --events-path FILE           Path to *_events.tsv. Falls back to snirf annotations if omitted.
+  --noise-model                {ols,ar1,ar2,ar3,ar4,ar5}
+  --drift-model                {cosine,polynomial,none}
+  --drift-high-pass FLOAT      Cosine drift high-pass cutoff in Hz.
+  --drift-order INT            Polynomial drift order.                                [default: 1]
+  --fir-delays STR             FIR delay bins in scans, e.g. "0,1,2,3,4,5"
+  --short-channel              {none,mean,pca}                                        [default: none]
+  --events-path FILE           Optional. BIDS *_events.tsv overriding SNIRF annotations.
+                               Mutually exclusive with --stim-dur.
+  --stim-dur FLOAT             Optional. Fixed duration for SNIRF annotations without one.
+                               Mutually exclusive with --events-path.
   --contrast-file FILE         TOML file defining GLM contrasts.
+
+Rest (--mode rest):
+  Reuses GLM flags for confound regression (drift model, short-channel).
+  --high-pass + --low-pass required for ALFF (FC computed regardless).
 
 Output:
   --no-report                  Skip HTML QC report.
-  --output-space               {native,MNI152}  [default: native]
-  --n-jobs INT                 Parallel subject jobs.  [default: 1]
-  --work-dir DIR               Cache directory.
+  --n-jobs INT                 Parallel subject jobs.                                 [default: 1]
+  --work-dir DIR               Hash cache directory (not yet implemented).
 
 Escape hatches:
-  --ignore ASPECT [ASPECT ...]  Skip: events, short-channels, physio, bids-validation
+  --ignore ASPECT              Repeatable. Options: events, bids-validation.
   --skip-bids-validation
   --dry-run
 
@@ -154,96 +120,167 @@ Other:
   --version
 ```
 
+### `fnirs-recon` — raw SNIRF → BIDS
+
+```
+fnirs-recon INPUT_FILE BIDS_DIR --subject LABEL --task LABEL
+                                [--session LABEL] [--run INDEX]
+                                [--overwrite]
+```
+
+### `fnirs-prep` — headless data-preparation utilities
+
+```
+fnirs-prep crop BIDS_DIR DERIVATIVES_DIR --participant-label SUB ...
+                ( --tmin FLOAT [--tmax FLOAT] | --segments-path PATH [--combine] )
+                [--ses TEXT] [--task TEXT] [--run TEXT]
+                [--n-jobs INT] [--skip-bids-validation]
+
+fnirs-prep align BIDS_DIR DERIVATIVES_DIR --group-csv PATH
+                 [--skip-bids-validation]
+
+fnirs-prep edit-markers export BIDS_DIR OUT_DIR --participant-label SUB ...
+                               [--ses/--task/--run] [--n-jobs INT]
+
+fnirs-prep edit-markers apply BIDS_DIR DERIVATIVES_DIR --participant-label SUB ...
+                              ( --tsv PATH | --shift FLOAT | --set-duration FLOAT
+                                | --rename OLD:NEW ... )
+                              [--ses/--task/--run] [--n-jobs INT]
+```
+
+### `fnirs-qc` — QC reports
+
+```
+fnirs-qc prep-raw BIDS_DIR OUTPUT_DIR PARTICIPANT_LABEL
+                  [--session-label / --task-label]
+                  [--sci-threshold FLOAT] [--skip-bids-validation]
+
+fnirs-qc hyper-raw BIDS_DIR OUTPUT_DIR --pairs-csv PATH
+                   [--group-id / --task-label / --session-label]
+                   [--sci-threshold FLOAT] [--fmin/--fmax FLOAT]
+                   [--normalize] [--no-align]
+
+fnirs-qc hyper-post BIDS_DIR OUTPUT_DIR --pairs-csv PATH
+                    [--group-id / --task-label / --session-label]
+                    [--roi-mapping PATH]
+                    [--wtc-fmin/--wtc-fmax FLOAT] [--isc-threshold FLOAT]
+                    [--normalize] [--no-align]
+
+fnirs-qc group-raw       OUTPUT_DIR
+fnirs-qc group-hyper-raw OUTPUT_DIR
+
+fnirs-qc window-raw BIDS_DIR OUTPUT_DIR --task-label TEXT
+                    --tstart FLOAT --tend FLOAT
+                    [--participant-label ...] [--session-label ...]
+                    [--align none|trigger] [--trigger-name TEXT]
+                    [--name TEXT] [--sci-threshold FLOAT]
+```
+
+### `fnirs-rate` — Flask rating viewers
+
+```
+fnirs-rate rate  OUTPUT_DIR [--participant-label SUB ...] [--port INT]   # default 8765
+fnirs-rate raw   OUTPUT_DIR PARTICIPANT_LABEL
+                 [--session-label / --task-label] [--sci-threshold FLOAT] [--port INT]   # default 5052
+fnirs-rate hyper OUTPUT_DIR GROUP_ID TASK_LABEL --pairs-csv PATH
+                 [--session-label TEXT] [--sci-threshold FLOAT] [--port INT]             # default 5053
+```
+
+### `fnirs-gui` — Dash desktop interface
+
+```
+fnirs-gui [--port INT]        # default 8050
+```
+
+### `fnirs-log` — JSONL → SQLite merge
+
+```
+fnirs-log merge OUTPUT_DIR [--db-path PATH]
+```
+
+Full per-command references (parameter tables, examples, sidecar formats) live in [`docs/cli/`](docs/cli/).
+
 ## Output Structure
 
 ```
 output/
-  dataset_description.json
-  logs/
-    fnirs_pipe.db                       # SQLite DB (after fnirs-log merge)
-    json/                               # JSONL event files written per run
-  sub-01/
-    sub-01_qc.html                      # per-subject QC report
-    logs/
-      sub-01_TIMESTAMP.toml             # run record (parameters)
-      sub-01_TIMESTAMP_script.py        # reproducible run script
-    nirs/
-      sub-01_desc-od_nirs.snirf
-      sub-01_desc-sci_nirs.snirf
-      sub-01_desc-motcorrected_nirs.snirf
-      sub-01_desc-preproc_nirs.snirf
-      sub-01_iqm_raw.toml               # IQM at raw checkpoint
-      sub-01_iqm.toml                   # IQM at Beer-Lambert checkpoint
-      sub-01_channel_metrics.csv
-      sub-01_desc-denoised_nirs.snirf   # present when --mode denoise or glm
+├── dataset_description.json
+├── logs/
+│   ├── fnirs-pipe_{ts}.log             # text log
+│   ├── json/                            # JSONL event stream per run
+│   │   ├── _pipeline/execution_*.jsonl
+│   │   ├── _runs/sub-*_*.jsonl
+│   │   ├── _iqm/sub-*_*.jsonl
+│   │   └── _outputs/sub-*_*.jsonl
+│   └── fnirs_pipe.db                    # SQLite (after fnirs-log merge)
+├── sub-01/
+│   ├── sub-01_qc.html                   # per-subject QC report
+│   ├── logs/
+│   │   └── sub-01_{ts}.toml             # run record (env + params)
+│   └── nirs/
+│       ├── sub-01_desc-od_nirs.snirf              # prep step 2
+│       ├── sub-01_desc-sci_nirs.snirf             # prep step 3
+│       ├── sub-01_desc-motcorrected_nirs.snirf    # prep step 4
+│       ├── sub-01_desc-preproc_nirs.snirf         # prep step 5 (terminus)
+│       ├── sub-01_desc-filtered_nirs.snirf        # post: bandpass applied
+│       ├── sub-01_desc-resampled_nirs.snirf       # post: resample applied
+│       ├── sub-01_desc-errts_nirs.snirf           # post glm/rest: GLM residuals
+│       ├── sub-01_desc-iqm_nirs.json              # IQM (raw + final checkpoints)
+│       ├── design_matrix.csv                       # glm mode
+│       ├── glm_results.csv                         # glm mode
+│       ├── contrasts.csv                           # glm mode + --contrast-file
+│       ├── sub-01_alff.tsv                         # rest mode
+│       └── sub-01_fc.tsv                           # rest mode
+├── group_nirs.{tsv,html}                # fnirs-qc group-raw
+├── group_hyper_nirs.{tsv,html}          # fnirs-qc group-hyper-raw
+└── group_nirs_window-<a>-<b>.{tsv,html} # fnirs-qc window-raw (per invocation)
+```
+
+Standalone QC HTMLs from `fnirs-qc prep-raw` / `hyper-raw` / `hyper-post` sit at the derivatives root:
+
+```
+output/
+├── sub-01_task-tapping_desc-raw_nirs.html               # fnirs-qc prep-raw
+├── sub-01_task-tapping_raw_channel_decisions.json       # fnirs-rate raw sidecar
+├── sub-01_task-tapping_raw_ratings.json
+├── group-G1003_task-tapping_desc-hyperraw_nirs.html     # fnirs-qc hyper-raw
+├── group-G1003_task-tapping_desc-hyperpost_nirs.html    # fnirs-qc hyper-post
+└── group-G1003/
+    └── figures/
 ```
 
 ## QC Report Contents
 
-- SCI topography (good/bad channel map)
-- Carpet plot before/after motion correction
-- PSD before/after bandpass (with heartbeat peak annotation)
-- HbO/HbR negative correlation check
-- Bad channel rate indicator (green < 10% / yellow 10–30% / red > 30%)
-- Auto-generated Methods section + software versions + references
+- Executive summary with traffic-light badges (bad channel rate, mean SCI, HbO–HbR corr, GVTD p95)
+- SCI / PSP probe layout + windowed heatmap
+- Carpet plot before / after motion correction
+- Per-channel motion panel with SCI-coloured traces
+- PSD before / after bandpass (cardiac + Mayer wave peaks annotated)
+- HbO–HbR correlation panel
+- GLM section (design matrix + activation panel) when `--mode glm`
+- Rest section (ALFF table + FC heatmap) when `--mode rest`
+- Auto-generated Methods paragraph + software versions + references
 
-## QC Report Output Layout
-
-The `fnirs-qc` commands follow a BIDS-derivatives layout (mirroring mriqc /
-fmriprep): main HTMLs at the root, per-entity subdirs hold figures and IQM
-data, group-level reports also sit at the root.
-
-```
-output/qc/
-├── sub-01_task-tapping_desc-raw_nirs.html               # fnirs-qc prep-raw
-├── sub-01_task-tapping_raw_channel_decisions.json       # rating sidecar
-├── sub-01_task-tapping_raw_ratings.json
-├── sub-01/
-│   ├── figures/                                         # standalone Plotly HTMLs (iframe-loaded)
-│   │   ├── sub-01_task-tapping_desc-scipsp_nirs.html
-│   │   ├── sub-01_task-tapping_desc-chS1D1_nirs.html    # per-channel detail
-│   │   └── ...
-│   └── [ses-XX/]nirs/
-│       └── sub-01[_ses-XX]_task-tapping_desc-iqm_nirs.json
-├── group-G1003_task-nohold_desc-hyperraw_nirs.html      # fnirs-qc hyper-raw
-└── group-G1003/
-    ├── figures/
-    └── [ses-XX/]nirs/
-        └── group-G1003[_ses-XX]_task-nohold_desc-iqm_nirs.json
-```
-
-Group-level reports (mriqc-style) at the same root, one per invocation:
-
-```
-output/qc/
-├── group_nirs.html / group_nirs.tsv                     # fnirs-qc group-raw
-├── group_nirs/                                          #   figures: heatmap / boxplot / time×subject
-│   ├── group_nirs_desc-heatmap_nirs.html
-│   ├── group_nirs_desc-boxplot_nirs.html
-│   └── group_nirs_desc-window{sci,psp,gvtd}_nirs.html
-├── group_hyper_nirs.html / group_hyper_nirs.tsv         # fnirs-qc group-hyper-raw
-├── group_hyper_nirs/
-├── group_nirs_window-<a>-<b>.html / .tsv                # fnirs-qc window-raw (per invocation)
-└── group_nirs_window-<a>-<b>/
-```
-
-- `group-raw` / `group-hyper-raw` aggregate existing per-subject / per-group
-  IQM JSONs into one report (heatmap + boxplots + sortable table + Tukey-IQR
-  outlier panel + time × subject heatmaps for SCI/PSP/GVTD).
-- `window-raw` crops each subject's raw recording to `[--tstart, --tend]`
-  (`--align {none,trigger}`), recomputes IQM, and renders the same layout —
-  useful for deciding whether to discard a specific time segment group-wide.
+Group / window / dyad reports add subject × metric heatmaps, per-metric boxplots (Tukey 1.5 × IQR outliers), and sortable tables.
 
 ## Package Structure
 
 ```
 fnirs_pipe/
-  cli/          fnirs-pipe, fnirs-recon, fnirs-qc, fnirs-rate, fnirs-gui, fnirs-log
-  pipeline/     prep_pipeline, post_pipeline, glm, denoise, hyperscanning, restingstate
+  cli/          fnirs-pipe, fnirs-recon, fnirs-prep, fnirs-qc, fnirs-rate, fnirs-gui, fnirs-log
+  pipeline/     prep_pipeline, post_pipeline, glm, denoise, restingstate, hyperscanning,
+                crop, edit_markers, channel_registration
   io/           BIDS layout, snirf read/write, derivatives output
-  qc/           HTML report, Plotly figures, quantitative metrics, boilerplate text
+  qc/           HTML report, Plotly figures, quantitative metrics, boilerplate text,
+                group / hyper / window writers, rating apps
+  interface/    Dash GUI (4 pages + sidebar)
   utils/        logging, run_record, job_db
+  exceptions.py AlignmentError, GroupCSVError, MissingDerivativesError, ...
 ```
+
+## Documentation
+
+See [`docs/`](docs/) for the full handbook — installation, quickstart, configuration, per-command references, QC anatomy, hyperscanning, GUI, and the logging + database subsystem.
 
 ## Development
 

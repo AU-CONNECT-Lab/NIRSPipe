@@ -316,7 +316,7 @@ def _run_post_for_subject(
 
 def run_group_level(args: dict[str, Any]) -> None:
     """BIDS Apps `group` entry point — aggregates per-subject (and per-group hyper,
-    if present) IQM JSONs into mriqc-style group reports under <output_dir>."""
+    if present) IQM JSONs into cohort HTML reports under <output_dir>."""
     from pathlib import Path
 
     from fnirs_pipe.qc.group_writer import (
