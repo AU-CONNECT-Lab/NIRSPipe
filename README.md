@@ -107,6 +107,8 @@ Rest (--mode rest):
 
 Output:
   --no-report                  Skip HTML QC report.
+  --roi-mapping FILE           JSON mapping ROI labels → channel lists. Groups the denoising
+                               carpet by ROI and enables ROI-level FC (rest mode).
   --n-jobs INT                 Parallel subject jobs.                                 [default: 1]
   --work-dir DIR               Hash cache directory (not yet implemented).
 
@@ -230,7 +232,8 @@ output/
 │       ├── glm_results.csv                         # glm mode
 │       ├── contrasts.csv                           # glm mode + --contrast-file
 │       ├── sub-01_alff.tsv                         # rest mode
-│       └── sub-01_fc.tsv                           # rest mode
+│       ├── sub-01_fc.tsv                           # rest mode (channel × channel)
+│       └── sub-01_fcroi.tsv                        # rest mode + --roi-mapping (ROI × ROI)
 ├── group_nirs.{tsv,html}                # fnirs-qc group-raw
 ├── group_hyper_nirs.{tsv,html}          # fnirs-qc group-hyper-raw
 └── group_nirs_window-<a>-<b>.{tsv,html} # fnirs-qc window-raw (per invocation)
@@ -249,16 +252,30 @@ output/
     └── figures/
 ```
 
-## QC Report Contents
+## QC Reports
+
+`fnirs-pipe` writes a per-subject HTML report automatically; `fnirs-qc` adds standalone, group, and hyperscanning reports:
+
+| Report | Command | Level / stage |
+|--------|---------|---------------|
+| Per-subject | (pipeline, automatic) | individual — raw + post |
+| Raw pre-flight viewer | `fnirs-qc prep-raw` | individual — raw only |
+| Group | `fnirs-qc group-raw` / `group-hyper-raw` | group — raw |
+| Time-window group | `fnirs-qc window-raw` | group — raw, cropped window |
+| Dyad raw | `fnirs-qc hyper-raw` | hyperscanning — raw coherence |
+| Dyad post | `fnirs-qc hyper-post` | hyperscanning — post: WTC + ISC (ROI-level with `--roi-mapping`) |
+
+### Per-subject report contents
 
 - Executive summary with traffic-light badges (bad channel rate, mean SCI, HbO–HbR corr, GVTD p95)
 - SCI / PSP probe layout + windowed heatmap
-- Carpet plot before / after motion correction
+- Carpet plot before / after motion correction (GVTD trace over all channels)
 - Per-channel motion panel with SCI-coloured traces
 - PSD before / after bandpass (cardiac + Mayer wave peaks annotated)
 - HbO–HbR correlation panel
+- Denoising carpet — before / after, HbO and HbR separately, both scaled by the pre-denoising SD (grouped by ROI with `--roi-mapping`), when postprocessing runs
 - GLM section (design matrix + activation panel) when `--mode glm`
-- Rest section (ALFF table + FC heatmap) when `--mode rest`
+- Rest section (ALFF table + FC heatmap; ROI-level FC with `--roi-mapping`) when `--mode rest`
 - Auto-generated Methods paragraph + software versions + references
 
 Group / window / dyad reports add subject × metric heatmaps, per-metric boxplots (Tukey 1.5 × IQR outliers), and sortable tables.
