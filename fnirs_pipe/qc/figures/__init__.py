@@ -20,6 +20,7 @@ from .brain_views import quality_brain_views
 from .motion_panel import (
     carpet_gvtd_figure, bad_segment_zoom_figure, build_motion_detail_figure,
 )
+from .carpet_compare import carpet_compare_figure
 from .psd_plot import psd_figure
 from .glm_figures import (
     design_matrix_figure, design_matrix_static_figure,

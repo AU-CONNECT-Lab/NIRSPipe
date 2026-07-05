@@ -36,6 +36,8 @@ class PostConfig:
     high_pass: float | None = None
     low_pass:  float | None = None
 
+    roi_map: dict | None = None
+
     # resample
     resample_sfreq: float | None = None
 
@@ -145,7 +147,7 @@ def _write_rest_derivatives(
 ) -> tuple:
     """Write ALFF/fALFF and FC TSVs. Returns (alff_df | None, fc_df)."""
     from fnirs_pipe.io.derivatives import build_output_path
-    from fnirs_pipe.pipeline.restingstate import compute_alff, compute_fc
+    from fnirs_pipe.pipeline.restingstate import compute_alff, compute_fc, compute_fc_roi
 
     entities = {k: v for k, v in (source_entities or {}).items() if k in ("task", "run")}
 
@@ -168,6 +170,16 @@ def _write_rest_derivatives(
     )
     fc_df.to_csv(fc_path, sep="\t", index_label="channel")
     logger.info("sub-%s | fc → %s", config.subject, fc_path)
+
+    if config.roi_map:
+        fc_roi_df = compute_fc_roi(raw_resid, config.roi_map)
+        if not fc_roi_df.empty:
+            fc_roi_path = build_output_path(
+                output_dir=output_dir, subject=config.subject, session=config.session,
+                entities=entities, suffix="fcroi", extension=".tsv",
+            )
+            fc_roi_df.to_csv(fc_roi_path, sep="\t", index_label="roi")
+            logger.info("sub-%s | fc_roi → %s", config.subject, fc_roi_path)
 
     return alff_df, fc_df
 

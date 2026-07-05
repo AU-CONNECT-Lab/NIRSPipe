@@ -62,6 +62,7 @@ from fnirs_pipe.qc.figure_io import (
 )
 from fnirs_pipe.qc.figures import (
     carpet_gvtd_figure,
+    carpet_compare_figure,
     bad_segment_zoom_figure,
     hbo_hbr_correlation_panel,
     psd_figure,
@@ -648,6 +649,8 @@ def build_subject_report(
     mode: str | None = None,
     alff_df: "Any | None" = None,
     fc_df: "Any | None" = None,
+    after_haemo: mne.io.Raw | None = None,
+    roi_map: dict | None = None,
 ) -> None:
     """Render a per-subject prep QC report and save as HTML."""
     errors: list[str] = []
@@ -669,6 +672,12 @@ def build_subject_report(
     motion_det_vars   = _section_motion_detail(raw_before_motion, raw_after_motion, subject, errors, figures_dir, segments=segments)
     haemo_vars        = _section_haemo(raw_haemo, config, subject, errors, figures_dir,
                                        l_freq=l_freq, h_freq=h_freq)
+    denoise_carpet_path = None
+    if after_haemo is not None:
+        with _guard("Denoising carpet", errors, subject):
+            b64 = carpet_compare_figure(raw_haemo, after_haemo, roi_map=roi_map)
+            _save_b64_png(b64, figures_dir / "denoise_carpet.png")
+            denoise_carpet_path = "figures/denoise_carpet.png"
     channel_det_vars  = _section_channel_detail(raw_haemo, subject, errors, figures_dir)
     psd_det_vars      = _section_psd_detail(raw_haemo, subject, errors, figures_dir,
                                             l_freq=l_freq, h_freq=h_freq)
@@ -723,6 +732,7 @@ def build_subject_report(
         **glm_vars,
         **rest_vars,
         **ch_summary_vars,
+        denoise_carpet_path=denoise_carpet_path,
         mode=mode or "",
     )
     out_path.parent.mkdir(parents=True, exist_ok=True)

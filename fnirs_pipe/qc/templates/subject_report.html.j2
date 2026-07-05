@@ -370,6 +370,16 @@
     {% else %}
       <div class="placeholder">Figure generation failed — see Errors section.</div>
     {% endif %}
+
+    {% if denoise_carpet_path %}
+      <h3>Denoising carpet — before / after</h3>
+      <p class="step-desc">
+        Per-channel z-scored haemoglobin carpet, both stages scaled by the before SD:
+        reduced fluctuation after denoising renders paler. HbO and HbR shown separately.
+      </p>
+      <img class="responsive" src="{{ denoise_carpet_path }}" alt="Denoising before/after carpet" />
+      <p class="fig-path">{{ denoise_carpet_path }}</p>
+    {% endif %}
   </div>
 </details>
 

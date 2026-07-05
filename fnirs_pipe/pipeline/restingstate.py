@@ -55,3 +55,24 @@ def compute_fc(raw: mne.io.Raw) -> pd.DataFrame:
     from nilearn.connectome import ConnectivityMeasure
     fc = ConnectivityMeasure(kind="correlation", standardize=False).fit_transform([raw.get_data().T])[0]
     return pd.DataFrame(fc, index=raw.ch_names, columns=raw.ch_names)
+
+
+def compute_fc_roi(raw: mne.io.Raw, roi_map: dict[str, list[str]]) -> pd.DataFrame:
+    """ROI-level FC: average each ROI's HbO channels into one signal, then Pearson corr between ROIs.
+
+    Averages signals first (higher SNR) rather than averaging channel correlations; roi_map is
+    {ROI label: [channel names]}, names matched full ("S1_D1 hbo") or by S-D base ("S1_D1").
+    """
+    from nilearn.connectome import ConnectivityMeasure
+    hbo = {c for c in raw.ch_names if c.endswith(" hbo")}
+    names, signals = [], []
+    for roi, chans in roi_map.items():
+        picks = [c if c in hbo else f"{c} hbo" for c in chans]
+        picks = [c for c in picks if c in hbo]
+        if picks:
+            names.append(roi)
+            signals.append(raw.get_data(picks=picks).mean(axis=0))
+    if len(signals) < 2:
+        return pd.DataFrame()
+    fc = ConnectivityMeasure(kind="correlation", standardize=False).fit_transform([np.vstack(signals).T])[0]
+    return pd.DataFrame(fc, index=names, columns=names)
