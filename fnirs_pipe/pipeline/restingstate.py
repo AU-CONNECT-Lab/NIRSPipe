@@ -11,11 +11,9 @@ logger = get_logger("post.restingstate")
 
 
 def compute_alff(raw: mne.io.Raw, low_pass: float, high_pass: float) -> pd.DataFrame:
-    """Compute ALFF and fALFF per channel.
+    """Compute ALFF and fALFF per channel. Input is the denoised (errts) bandpassed time series.
 
-    Input should be the denoised (errts) time series, already bandpass-filtered.
-
-    TODO: revalidate computation of ALFF and fALFF
+    ALFF = mean band amplitude × SD (Zang 2007); fALFF = Σ band / Σ total amplitude (Zou 2008).
     """
     data = raw.get_data()  # (n_channels, n_times)
     fs = raw.info["sfreq"]
@@ -37,11 +35,11 @@ def compute_alff(raw: mne.io.Raw, low_pass: float, high_pass: float) -> pd.DataF
         low_idx  = np.argmin(np.abs(freqs - high_pass))
         high_idx = np.argmin(np.abs(freqs - low_pass))
 
-        band_amp  = np.nanmean(power_sqrt[low_idx:high_idx])
-        total_amp = np.nanmean(power_sqrt[1:])  # skip DC component
+        alff_vals[i] = np.nanmean(power_sqrt[low_idx:high_idx]) * sd_scale  # mean band amplitude × SD
 
-        alff_vals[i]  = band_amp * sd_scale
-        falff_vals[i] = band_amp / total_amp if total_amp > 0 else 0.0
+        # fALFF: fraction of total spectral amplitude in the low band (Zou 2008), sum/sum ∈ [0,1]
+        total_sum = np.nansum(power_sqrt[1:])  # skip DC
+        falff_vals[i] = np.nansum(power_sqrt[low_idx:high_idx]) / total_sum if total_sum > 0 else 0.0
 
     return pd.DataFrame({
         "channel": raw.ch_names,

@@ -9,6 +9,9 @@ All notable changes to this project will be documented in this file.
 ### Added
 - Wavelet motion correction (`--motion-correction wavelet`): zeroes outlier wavelet detail coefficients per channel in OD space
 
+### Fixed
+- fALFF is now the fraction of total spectral amplitude in the low band (sum/sum, in [0, 1]), matching its definition; was previously a ratio of mean amplitudes. ALFF unchanged (validated against a reference implementation).
+
 ---
 
 ## [0.14.0] - 2026-07-04
