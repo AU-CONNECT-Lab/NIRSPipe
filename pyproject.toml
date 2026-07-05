@@ -27,6 +27,7 @@ dependencies = [
     "dash-bootstrap-components>=1.6",
     "dash-cytoscape>=1.0",   # GUI Analysis-page DAG
     "pycwt>=0.4",         # hyperscanning WTC (fnirs-qc hyper-post)
+    "PyWavelets>=1.4",    # wavelet motion correction (--motion-correction wavelet)
     "tomli>=2.0; python_version < '3.11'",
     "bibtexparser>=2.0.0b1",
 ]

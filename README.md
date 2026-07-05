@@ -16,7 +16,7 @@ Outputs follow the [BIDS Derivatives](https://bids-specification.readthedocs.io/
 ## Requirements
 
 - Python ≥ 3.10
-- Dependencies (all required, resolved via `pip install .`): `mne`, `mne-nirs` (≥ 0.7), `nilearn`, `scipy`, `numpy`, `pybids`, `mne-bids`, `h5py`, `tables`, `pandas`, `jinja2`, `plotly`, `kaleido`, `joblib`, `flask`, `dash`, `dash-bootstrap-components`, `dash-cytoscape`, `pycwt`, `bibtexparser`, `tomli` (Python < 3.11 only)
+- Dependencies (all required, resolved via `pip install .`): `mne`, `mne-nirs` (≥ 0.7), `nilearn`, `scipy`, `numpy`, `pybids`, `mne-bids`, `h5py`, `tables`, `pandas`, `jinja2`, `plotly`, `kaleido`, `joblib`, `flask`, `dash`, `dash-bootstrap-components`, `dash-cytoscape`, `pycwt`, `PyWavelets`, `bibtexparser`, `tomli` (Python < 3.11 only)
 
 ## Installation
 
@@ -70,7 +70,7 @@ Subject / session / task selection:
 
 Preprocessing:
   --motion-correction          {tddr,wavelet,spline,none}   [default: tddr]
-                               wavelet / spline raise NotImplementedError.
+                               tddr + wavelet implemented; spline raises NotImplementedError.
   --bad-channels               Comma-separated S-D labels to mark bad,
                                e.g. "S1_D1,S2_D3" (unioned with SCI bads)
   --cardiac-l-freq FLOAT       Lower cardiac band bound in Hz.                        [default: 0.7]

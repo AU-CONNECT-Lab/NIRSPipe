@@ -8,8 +8,7 @@ Step outputs written to output_dir/sub-XX/[ses-YY/]nirs/:
 
 Each snirf is accompanied by a JSON provenance sidecar.
 
-motion correction methods other than tddr are not implemented yet (no MNE backend).
-considering adding detrending/dispike from NIRS-KIT toolbox
+motion correction: tddr and wavelet implemented; spline not yet.
 
 """
 
@@ -110,6 +109,56 @@ def mark_bad_channels(
     return raw_od, bad_chs, sci_scores
 
 
+def _wl_clip_iqr(block: np.ndarray, iqr_factor: float) -> None:
+    q25, q75 = np.percentile(block, [25, 75])
+    fence = iqr_factor * (q75 - q25)
+    block[:] = np.where((block > q75 + fence) | (block < q25 - fence), 0.0, block)
+
+
+def _wl_filter_coeffs(coeffs, iqr_factor: float, signal_length: int):
+    """Zero SWT detail-coefficient outliers per block per level (Homer3 hmrR_MotionCorrectWavelet)."""
+    n = len(coeffs[0][0])
+    n_levels = len(coeffs)
+    cAf = coeffs[0][0].copy()          # highest-level approximation
+    out = []
+    for i, (_, cD) in enumerate(coeffs):
+        n_blocks = 2 ** (n_levels - i - 1)
+        block_length = n // n_blocks
+        cDf = cD.copy()
+        for b in range(n_blocks):
+            start, end = b * block_length, min(signal_length, (b + 1) * block_length)
+            if end > start:
+                _wl_clip_iqr(cDf[start:end], iqr_factor)
+        out.append((cAf, cDf))
+    return out
+
+
+def _wavelet_motion_correct(raw_od: mne.io.Raw, wavelet: str = "db2", iqr_factor: float = 1.5, level: int = 4) -> mne.io.Raw:
+    """Wavelet motion correction (Molavi 2012), per channel in OD space.
+
+    Pad to 2^k → remove DC → MAD noise-normalize → SWT → zero detail-coefficient outliers beyond
+    Q1/Q3 ± iqr_factor·IQR (per block) → iSWT → denormalize → restore DC and length.
+    """
+    import pywt
+    raw = raw_od.copy()
+
+    def _corr(signal):
+        n0 = len(signal)
+        padded = np.zeros(2 ** int(np.ceil(np.log2(n0))))
+        padded[:n0] = signal
+        dc = padded.mean()
+        padded = padded - dc
+        mad_ds = np.median(np.abs(padded[::2] - np.median(padded[::2])))
+        norm_coef = 1.0 / (1.4826 * mad_ds) if mad_ds != 0 else 1.0
+        normed = padded * norm_coef
+        lvl = min(level, int(np.log2(len(normed))) - 1)
+        coeffs = _wl_filter_coeffs(pywt.swt(normed, wavelet, level=lvl), iqr_factor, n0)
+        return (pywt.iswt(coeffs, wavelet) / norm_coef)[:n0] + dc
+
+    raw.apply_function(_corr, channel_wise=True)
+    return raw
+
+
 # Step 4: Motion correction
 def correct_motion(raw_od: mne.io.Raw, method: MotionMethod | None = None) -> mne.io.Raw:
     """Apply motion artifact correction to the OD signal.
@@ -122,10 +171,7 @@ def correct_motion(raw_od: mne.io.Raw, method: MotionMethod | None = None) -> mn
     if method == "tddr":
         return mne.preprocessing.nirs.temporal_derivative_distribution_repair(raw_od)
     elif method == "wavelet":
-        raise NotImplementedError(
-            "Wavelet correction has no MNE backend yet. "
-            "Use --motion-correction tddr or none."
-        )
+        return _wavelet_motion_correct(raw_od)
     elif method == "spline":
         raise NotImplementedError(
             "Spline correction has no MNE backend yet. "
