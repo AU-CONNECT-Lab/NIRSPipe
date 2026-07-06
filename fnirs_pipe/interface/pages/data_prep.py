@@ -210,14 +210,27 @@ layout = dbc.Container([
     _card("Run",
         dbc.Row([
             dbc.Col([
+                dbc.Label("Run"),
                 dcc.Dropdown(id="dp-run-dropdown", options=[],
                              placeholder="Select run"),
-            ], width=7),
+            ], width=4),
             dbc.Col([
                 dbc.Label("SCI Threshold"),
                 dbc.Input(id="dp-sci-thresh", type="number", value=0.8,
                           min=0.0, max=1.0, step=0.01),
-            ], width=3),
+            ], width=2),
+            dbc.Col([
+                dbc.Label("Cardiac Band (Hz)"),
+                dbc.InputGroup([
+                    dbc.Input(id="dp-cardiac-l", type="number", step=0.1, placeholder="lo (adult ~0.7)"),
+                    dbc.InputGroupText("–"),
+                    dbc.Input(id="dp-cardiac-h", type="number", step=0.1, placeholder="hi (adult ~1.5)"),
+                ]),
+            ], width=4),
+            dbc.Col([
+                dbc.Label("DPF"),
+                dbc.Input(id="dp-dpf", type="number", step=0.1, placeholder="e.g. 6.0"),
+            ], width=2),
         ], className="g-3 align-items-end"),
         html.Div(id="dp-load-status", className="mt-2 small"),
     ),

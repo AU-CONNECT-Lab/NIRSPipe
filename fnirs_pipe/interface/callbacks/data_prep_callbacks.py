@@ -35,9 +35,11 @@ def _snirf_options(subject: str, bids_dir: str) -> list[dict]:
     return options
 
 
-def _make_cache_key(snirf_path: str, sci_thresh: float) -> str:
+def _make_cache_key(snirf_path: str, sci_thresh: float,
+                    cardiac_l: float, cardiac_h: float, dpf: float) -> str:
     import hashlib
-    return hashlib.md5(f"{snirf_path}|{sci_thresh}".encode()).hexdigest()[:16]
+    payload = f"{snirf_path}|{sci_thresh}|{cardiac_l}|{cardiac_h}|{dpf}"
+    return hashlib.md5(payload.encode()).hexdigest()[:16]
 
 
 # ── Directory sync: page → shared Store ──────────────────────────────────────
@@ -131,20 +133,27 @@ def populate_runs(subject, bids_dir):
     Output("dp-load-status", "children"),
     Input("dp-run-dropdown", "value"),
     State("dp-sci-thresh",   "value"),
+    State("dp-cardiac-l",    "value"),
+    State("dp-cardiac-h",    "value"),
+    State("dp-dpf",          "value"),
     State("app-output-dir",  "data"),
     prevent_initial_call=True,
 )
-def load_run(run_path, sci_thresh, output_dir):
+def load_run(run_path, sci_thresh, cardiac_l, cardiac_h, dpf, output_dir):
     import pickle
 
     if not run_path:
         return no_update, no_update
     if not output_dir or not Path(output_dir).is_dir():
         return no_update, dbc.Alert("Set Output Directory first.", color="warning")
+    if cardiac_l is None or cardiac_h is None or dpf is None:
+        return no_update, dbc.Alert(
+            "Set Cardiac Band (lo/hi) and DPF before loading a run.", color="warning")
 
     sci_threshold = float(sci_thresh if sci_thresh is not None else 0.8)
+    cardiac_l, cardiac_h, dpf = float(cardiac_l), float(cardiac_h), float(dpf)
     snirf_path    = run_path
-    cache_key     = _make_cache_key(snirf_path, sci_threshold)
+    cache_key     = _make_cache_key(snirf_path, sci_threshold, cardiac_l, cardiac_h, dpf)
     disk_path     = Path(output_dir) / ".fnirs_cache" / f"{cache_key}.pkl"
 
     if cache_key in _RESULT_CACHE:
@@ -173,6 +182,9 @@ def load_run(run_path, sci_thresh, output_dir):
                 {"snirf_path": snirf_path, "label": run_label},
                 sci_threshold,
                 run_dir,
+                cardiac_l,
+                cardiac_h,
+                [dpf],
             )
             raw_haemo = result.pop("_raw_haemo", None)
             if raw_haemo is not None:
