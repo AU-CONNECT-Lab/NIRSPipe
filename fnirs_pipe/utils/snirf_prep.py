@@ -71,7 +71,7 @@ def ensure_dataset_description(deriv_root: Path, name: str, generated_by: str) -
     deriv_root.mkdir(parents=True, exist_ok=True)
     desc_path.write_text(json.dumps({
         "Name": name,
-        "BIDSVersion": "1.7.0",
+        "BIDSVersion": "1.8.0",
         "DatasetType": "derivative",
         "GeneratedBy": [{"Name": generated_by}],
     }, indent=2))

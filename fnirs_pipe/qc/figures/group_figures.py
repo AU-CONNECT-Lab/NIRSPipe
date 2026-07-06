@@ -31,7 +31,6 @@ _METRIC_GROUPS: list[tuple[str, list[str]]] = [
     ("Coefficient of variation", ["cv_mean", "cv_mean_760", "cv_mean_850"]),
     ("Intensity SNR", ["snr_mean"]),
     ("Mean amplitude", ["mean_amp_mean"]),
-    ("Haemo tSNR", ["tsnr_hbo_mean", "tsnr_hbr_mean"]),
     ("HbO-HbR correlation", ["hbo_hbr_corr_mean"]),
     ("Low-freq drift", ["lowfreq_drift_amplitude_hbo", "lowfreq_drift_amplitude_hbr"]),
     ("Residual physiology power", ["residual_cardiac_power", "residual_resp_power"]),

@@ -29,9 +29,7 @@ def _build_script_text(
     high_pass: float | None = None,
     low_pass: float | None = None,
     resample_sfreq: float | None = None,
-    segments_path: str | None = None,
-    crop_tmin: float | None = None,
-    crop_tmax: float | None = None,
+    stim_dur: float | None = None,
     hrf_model: str = "spm",
     noise_model: str = "ar1",
     drift_model: str = "cosine",
@@ -124,12 +122,8 @@ def _build_script_text(
         w(f'    high_pass={_q(high_pass)},')
         w(f'    low_pass={_q(low_pass)},')
         w(f'    resample_sfreq={_q(resample_sfreq)},')
-        if segments_path is not None:
-            w(f'    segments_path="{segments_path}",')
-        if crop_tmin is not None:
-            w(f'    crop_tmin={crop_tmin},')
-        if crop_tmax is not None:
-            w(f'    crop_tmax={crop_tmax},')
+        if stim_dur is not None:
+            w(f'    stim_dur={stim_dur},')
         w(f'    hrf_model="{hrf_model}",')
         w(f'    noise_model="{noise_model}",')
         w(f'    drift_model="{drift_model}",')
@@ -231,9 +225,7 @@ def write_run_script(
         high_pass=args.get("high_pass"),
         low_pass=args.get("low_pass"),
         resample_sfreq=args.get("resample_sfreq"),
-        segments_path=_fwd(args.get("segments_path")),
-        crop_tmin=args.get("crop_tmin"),
-        crop_tmax=args.get("crop_tmax"),
+        stim_dur=args.get("stim_dur"),
         hrf_model=_unwrap(args.get("hrf_model"), "spm"),
         noise_model=_unwrap(args.get("noise_model"), "ar1"),
         drift_model=_unwrap(args.get("drift_model"), "cosine"),

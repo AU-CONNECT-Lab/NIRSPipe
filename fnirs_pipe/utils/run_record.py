@@ -10,6 +10,11 @@ from typing import Any
 from fnirs_pipe.utils import unwrap_enum as _unwrap
 
 
+def _fwd(p: Any) -> str | None:
+    """Forward-slash-normalized string of a path, or None if falsy."""
+    return str(p).replace("\\", "/") if p else None
+
+
 def _toml_scalar(v: Any) -> str:
     if isinstance(v, bool):
         return "true" if v else "false"
@@ -95,17 +100,14 @@ def write_run_record(
         "run_uuid": timestamp,
         "run_timestamp": datetime.strptime(timestamp, "%Y%m%d_%H%M%S").isoformat(),
         "run_command": " ".join(sys.argv).replace("\\", "/"),
-        "bids_dir": str(args["bids_dir"]).replace("\\", "/"),
-        "output_dir": str(output_dir).replace("\\", "/"),
-        "work_dir": str(args["work_dir"]).replace("\\", "/") if args.get("work_dir") else None,
-        "log_dir": str(output_dir / "logs").replace("\\", "/"),
+        "bids_dir": _fwd(args["bids_dir"]),
+        "output_dir": _fwd(output_dir),
+        "work_dir": _fwd(args.get("work_dir")),
+        "log_dir": _fwd(output_dir / "logs"),
         "participant_label": [subject],
         "session_label": args.get("session_label"),
         "task_label": args.get("task_label"),
-        "bids_filter_file": (
-            str(args["bids_filter_file"]).replace("\\", "/")
-            if args.get("bids_filter_file") else None
-        ),
+        "bids_filter_file": _fwd(args.get("bids_filter_file")),
         "analysis_level": _unwrap(args.get("analysis_level"), "participant"),
         "n_jobs": args.get("n_jobs", 1),
         "skip_bids_validation": args.get("skip_bids_validation", False),
@@ -119,6 +121,11 @@ def write_run_record(
         "dpf": args["dpf"],
         "sci_threshold": args["sci_threshold"],
         "motion_correction": _unwrap(args.get("motion_correction"), "tddr"),
+        "cardiac_l_freq": args.get("cardiac_l_freq"),
+        "cardiac_h_freq": args.get("cardiac_h_freq"),
+        "resp_l_freq": args.get("resp_l_freq"),
+        "resp_h_freq": args.get("resp_h_freq"),
+        "window_length": args.get("window_length"),
     }
 
     sections = [
@@ -131,29 +138,20 @@ def write_run_record(
     if mode is not None:
         post: dict[str, Any] = {
             "mode": _unwrap(mode),
-            "atlas": _unwrap(args.get("atlas")),
             "high_pass": args.get("high_pass"),
             "low_pass": args.get("low_pass"),
-            "detrend": args.get("detrend", True),
-            "short_channel_regression": _unwrap(
-                args.get("short_channel_regression"), "none"
-            ),
+            "resample_sfreq": args.get("resample_sfreq"),
             "combine_runs": args.get("combine_runs", False),
-            "hrf_model": _unwrap(args.get("hrf_model"), "canonical"),
-            "glm_solver": _unwrap(args.get("glm_solver"), "ar-irls"),
-            "contrast_file": (
-                str(args["contrast_file"]).replace("\\", "/")
-                if args.get("contrast_file") else None
-            ),
-            "connectivity_measure": _unwrap(
-                args.get("connectivity_measure"), "correlation"
-            ),
-            "parcellate": args.get("parcellate", False),
-            "min_coverage": args.get("min_coverage", 0.5),
-            "custom_config": (
-                str(args["custom_config"]).replace("\\", "/")
-                if args.get("custom_config") else None
-            ),
+            "stim_dur": args.get("stim_dur"),
+            "hrf_model": _unwrap(args.get("hrf_model")),
+            "noise_model": _unwrap(args.get("noise_model")),
+            "drift_model": _unwrap(args.get("drift_model")),
+            "drift_high_pass": args.get("drift_high_pass"),
+            "drift_order": args.get("drift_order"),
+            "fir_delays": args.get("fir_delays"),
+            "short_channel": _unwrap(args.get("short_channel")),
+            "events_path": _fwd(args.get("events_path")),
+            "contrast_file": _fwd(args.get("contrast_file")),
         }
         sections.append(_section("post", post))
 

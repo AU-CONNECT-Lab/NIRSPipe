@@ -6,6 +6,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+- Windowed SCI/PSP/GVTD now share one sliding-window length (default 10 s, previously a mix of 30 s / 10 s), exposed as `--window-length` on `fnirs-prep`, `fnirs-qc prep-raw`, and `fnirs-qc window-raw`
+
+### Removed
+- tSNR (haemoglobin mean/std): ΔHbO/ΔHbR has no stable baseline, so its mean/std is not a meaningful signal-to-noise ratio; raw-intensity SNR already covers channel signal stability
+
 ## [0.15.0] - 2026-07-06
 
 ### Added

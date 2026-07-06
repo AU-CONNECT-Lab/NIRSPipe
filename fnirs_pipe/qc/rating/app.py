@@ -16,6 +16,32 @@ logger = get_logger("qc.rating")
 _SECTIONS        = ["Signal", "Motion", "HbO_HbR", "GLM", "Final"]
 _SECTIONS_NO_GLM = ["Signal", "Motion", "HbO_HbR", "Final"]
 
+
+def _utc_now_iso() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
+
+
+def _serve_forever(app, port: int, log_name: str, ready_delay: float = 1.0, on_ready=None) -> None:
+    """Run a Flask app on a daemon thread, fire on_ready, then block until Ctrl+C."""
+    import logging as _logging
+    _logging.getLogger("werkzeug").setLevel(_logging.ERROR)
+
+    def _serve():
+        app.run(host="127.0.0.1", port=port, debug=False, use_reloader=False)
+
+    threading.Thread(target=_serve, daemon=True).start()
+    time.sleep(ready_delay)
+    if on_ready is not None:
+        on_ready()
+
+    logger.info("%s on http://localhost:%d — Ctrl+C to stop", log_name, port)
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        logger.info("shutting down")
+
+
 class FNIRSRatingApp:
     def __init__(self, output_dir: Path, subjects: list[str]):
         self.output_dir = output_dir
@@ -108,7 +134,7 @@ class FNIRSRatingApp:
         out_dir = self.output_dir / f"sub-{subject}" / "figures"
         out_dir.mkdir(parents=True, exist_ok=True)
         out = out_dir / f"sub-{subject}_ratings.toml"
-        ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
+        ts = _utc_now_iso()
         lines = [f'subject = "{subject}"', f'rated_at = "{ts}"', ""]
         for k, v in ratings.items():
             lines.append(f'{k} = "{v}"')
@@ -123,7 +149,7 @@ class FNIRSRatingApp:
         out = self.output_dir / "group_ratings.jsonl"
         record = {
             "subject": subject,
-            "rated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S"),
+            "rated_at": _utc_now_iso(),
             **ratings,
             "notes": notes,
         }
@@ -131,27 +157,15 @@ class FNIRSRatingApp:
             fh.write(json.dumps(record, ensure_ascii=False) + "\n")
 
     def run(self, port: int = 8765, open_browser: bool = True) -> None:
-        import logging as _logging
-        _logging.getLogger("werkzeug").setLevel(_logging.ERROR)
-
-        def _serve():
-            self.app.run(host="127.0.0.1", port=port, debug=False, use_reloader=False)
-
-        threading.Thread(target=_serve, daemon=True).start()
-        time.sleep(1.5)
-
-        if open_browser:
+        def _on_ready():
+            if not open_browser:
+                return
             for subject in self.subjects:
                 url = f"http://localhost:{port}/sub-{subject}"
                 logger.info("opening %s", url)
                 webbrowser.open(url)
 
-        logger.info("fnirs-rate on http://localhost:%d — Ctrl+C to stop", port)
-        try:
-            while True:
-                time.sleep(1)
-        except KeyboardInterrupt:
-            logger.info("shutting down")
+        _serve_forever(self.app, port, "fnirs-rate", ready_delay=1.5, on_ready=_on_ready)
 
 
 class RawRatingApp:
@@ -223,7 +237,7 @@ class RawRatingApp:
         try:
             record = {
                 "stem":     self.stem,
-                "rated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S"),
+                "rated_at": _utc_now_iso(),
                 "ratings":  data.get("ratings", {}),
                 "notes":    data.get("notes", {}),
             }
@@ -249,25 +263,12 @@ class RawRatingApp:
             return jsonify({"status": "fail", "message": str(exc)}), 500
 
     def run(self, port: int = 5052) -> None:
-        import logging as _logging
-        _logging.getLogger("werkzeug").setLevel(_logging.ERROR)
+        def _on_ready():
+            url = f"http://localhost:{port}/"
+            logger.info("raw viewer → %s", url)
+            webbrowser.open(url)
 
-        def _serve():
-            self.app.run(host="127.0.0.1", port=port, debug=False, use_reloader=False)
-
-        threading.Thread(target=_serve, daemon=True).start()
-        time.sleep(1.0)
-
-        url = f"http://localhost:{port}/"
-        logger.info("raw viewer → %s", url)
-        webbrowser.open(url)
-
-        logger.info("fnirs-rate raw on http://localhost:%d — Ctrl+C to stop", port)
-        try:
-            while True:
-                time.sleep(1)
-        except KeyboardInterrupt:
-            logger.info("shutting down")
+        _serve_forever(self.app, port, "fnirs-rate raw", on_ready=_on_ready)
 
 
 class HyperRatingApp:
@@ -367,7 +368,7 @@ class HyperRatingApp:
         try:
             record = {
                 "stem":     self.html_path.stem,
-                "rated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S"),
+                "rated_at": _utc_now_iso(),
                 "ratings":  data.get("ratings", {}),
                 "notes":    data.get("notes", {}),
             }
@@ -409,22 +410,9 @@ class HyperRatingApp:
             return jsonify({"status": "fail", "message": str(exc)}), 500
 
     def run(self, port: int = 5053) -> None:
-        import logging as _logging
-        _logging.getLogger("werkzeug").setLevel(_logging.ERROR)
+        def _on_ready():
+            url = f"http://localhost:{port}/"
+            logger.info("hyper viewer → %s", url)
+            webbrowser.open(url)
 
-        def _serve():
-            self.app.run(host="127.0.0.1", port=port, debug=False, use_reloader=False)
-
-        threading.Thread(target=_serve, daemon=True).start()
-        time.sleep(1.0)
-
-        url = f"http://localhost:{port}/"
-        logger.info("hyper viewer → %s", url)
-        webbrowser.open(url)
-
-        logger.info("fnirs-rate hyper on http://localhost:%d — Ctrl+C to stop", port)
-        try:
-            while True:
-                time.sleep(1)
-        except KeyboardInterrupt:
-            logger.info("shutting down")
+        _serve_forever(self.app, port, "fnirs-rate hyper", on_ready=_on_ready)
