@@ -63,47 +63,22 @@ def build_design_matrix(
     oversampling: int = 50,
     events: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
+    """Build a GLM design matrix, wrapping nilearn's make_first_level_design_matrix.
+
+    Modified from mne_nirs.experimental_design.make_first_level_design_matrix to accept
+    external events and confounds, and to fall back to snirf annotations when events is None.
+
+    Conditional/non-obvious parameters:
+      stim_dur     required when events is None (annotation fallback)
+      high_pass    only used when drift_model='cosine'
+      drift_order  only used when drift_model='polynomial'
+      events       columns 'onset', 'duration', 'trial_type'; None → read from snirf annotations
+
+    Refs:
+      https://mne.tools/mne-nirs/dev/_modules/mne_nirs/experimental_design/_experimental_design.html#make_first_level_design_matrix
+      https://nilearn.github.io/dev/modules/generated/nilearn.glm.first_level.make_first_level_design_matrix.html
     """
-    Build a design matrix for GLM analysis.
-    Modified from mne_nirs.experimental_design.make_first_level_design_matrix to accept external events and confounds,
-    and to handle the case where no events are present (read from snirf annotations instead).
 
-    Parameters
-    ----------
-    raw : mne.io.Raw
-        The raw fNIRS data.
-    stim_dur : float | None
-        Stimulus duration in seconds. Required when events is None (annotation fallback).
-    hrf_model : HRFModel
-        The HRF model to use.
-    drift_model : DriftModel
-        The drift model to use.
-    high_pass : float | None
-        High-pass cutoff for cosine drift (Hz). Only used when drift_model='cosine'.
-    drift_order : int | None
-        Polynomial drift order. Only used when drift_model='polynomial'.
-    fir_delays : tuple[int, ...], optional
-        FIR delay bins in scans, by default (0,).
-    add_regs : pd.DataFrame | None, optional
-        Additional regressors to include in the design matrix, by default None.
-    add_reg_names : list[str] | None, optional
-        Names for the additional regressors, by default None.
-    min_onset : float, optional
-        The minimum onset time, by default -24.
-    oversampling : int, optional
-        The oversampling factor, by default 50.
-    events : pd.DataFrame | None, optional
-        Events DataFrame with columns 'onset', 'duration', 'trial_type'. If None, reads from snirf annotations.
-
-    Returns
-    -------
-    pd.DataFrame
-        The design matrix.
-
-    # https://mne.tools/mne-nirs/dev/_modules/mne_nirs/experimental_design/_experimental_design.html#make_first_level_design_matrix
-    # https://nilearn.github.io/dev/modules/generated/nilearn.glm.first_level.make_first_level_design_matrix.html
-    """
-    
     from nilearn.glm.first_level import make_first_level_design_matrix
 
     frame_times = raw.times
@@ -161,7 +136,7 @@ def run_glm_pipeline(
     short_channel: bool | SCRStrategy | None = None,
     contrast_def: dict[str, Any] | None = None,
     output_dir: str | None = None,
-) -> mne.io.Raw:
+) -> tuple:
     # explicit events take precedence; then external TSV; then snirf annotations
     if events is None:
         events = pd.read_csv(events_path, sep="\t") if events_path else None

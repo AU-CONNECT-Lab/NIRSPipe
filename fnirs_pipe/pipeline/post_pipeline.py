@@ -167,10 +167,10 @@ def _write_rest_derivatives(
     source_entities: dict[str, str] | None = None,
 ) -> tuple:
     """Write ALFF/fALFF and FC TSVs. Returns (alff_df | None, fc_df)."""
-    from fnirs_pipe.io.derivatives import build_output_path
+    from fnirs_pipe.io.derivatives import build_output_path, carry_entities
     from fnirs_pipe.pipeline.restingstate import compute_alff, compute_fc, compute_fc_roi
 
-    entities = {k: v for k, v in (source_entities or {}).items() if k in ("task", "run")}
+    entities = carry_entities(source_entities)
 
     alff_df = None
     if config.low_pass is not None and config.high_pass is not None:
@@ -205,12 +205,12 @@ def _write_rest_derivatives(
     return alff_df, fc_df
 
 
-def _write_step_snirf(haemo: mne.io.Raw, config: PostConfig, output_dir: Path, desc: str, source_entities: dict[str, str] | None = None) -> None:
+def _write_step_snirf(haemo: mne.io.Raw, config: PostConfig, output_dir: Path, desc: str, source_entities: dict[str, str] | None = None) -> Path:
     from fnirs_pipe import __version__
-    from fnirs_pipe.io.derivatives import build_output_path, write_sidecar_json
+    from fnirs_pipe.io.derivatives import build_output_path, carry_entities, write_sidecar_json
     from fnirs_pipe.io.snirf import write_snirf
 
-    entities = {k: v for k, v in (source_entities or {}).items() if k in ("task", "run")}
+    entities = carry_entities(source_entities)
     entities["desc"] = desc
     out_path = build_output_path(
         output_dir=output_dir,

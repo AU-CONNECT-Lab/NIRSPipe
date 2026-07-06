@@ -21,7 +21,7 @@ import mne.io
 import numpy as np
 
 from fnirs_pipe import __version__
-from fnirs_pipe.io.derivatives import build_output_path, write_sidecar_json
+from fnirs_pipe.io.derivatives import build_output_path, carry_entities, write_sidecar_json
 from fnirs_pipe.io.snirf import write_snirf
 from fnirs_pipe.utils import is_optical_density
 from fnirs_pipe.utils.logging import get_logger
@@ -240,18 +240,16 @@ def run_prep(
 ) -> PrepResult:
     """Run the full preprocessing pipeline in locked step order.
 
-    Steps (order is fixed):
-      1. BIDS validation   -> handled upstream before this call
-      2. OD conversion     -> desc-od_nirs.snirf
-      3. SCI channel marking -> desc-sci_nirs.snirf
-      4. Motion correction -> desc-motcorrected_nirs.snirf
-      5. Beer-Lambert      -> desc-preproc_nirs.snirf
+    Steps (order is fixed; BIDS validation handled upstream before this call):
+      1. OD conversion     -> desc-od_nirs.snirf
+      2. SCI channel marking -> desc-sci_nirs.snirf
+      3. Motion correction -> desc-motcorrected_nirs.snirf
+      4. Beer-Lambert      -> desc-preproc_nirs.snirf
     """
-    # Propagate task/run from source file so output filenames mirror input entities.
-    entities_base = {k: v for k, v in (source_entities or {}).items() if k in ("task", "run")}
+    entities_base = carry_entities(source_entities)
     ses = config.session
 
-    def _save(raw_step: mne.io.Raw, desc: str, step: str, extra_provenance: dict = {}) -> Path:
+    def _save(raw_step: mne.io.Raw, desc: str, step: str, extra_provenance: dict | None = None) -> Path:
         path = build_output_path(
             output_dir=output_dir,
             subject=config.subject,
@@ -265,7 +263,7 @@ def run_prep(
             "pipeline_version": __version__,
             "step": step,
             "parameters": _config_dict(config),
-            **extra_provenance,
+            **(extra_provenance or {}),
         })
         return path
 
@@ -277,12 +275,12 @@ def run_prep(
         )
         raw_od = raw.copy()
     else:
-        logger.info("sub-%s | step 2: OD conversion (%d ch)", config.subject, len(raw.ch_names))
+        logger.info("sub-%s | step 1: OD conversion (%d ch)", config.subject, len(raw.ch_names))
         raw_od = intensity_to_od(raw)
     _save(raw_od, "od", "od_conversion")
 
     # step 2: SCI channel marking
-    logger.info("sub-%s | step 3: SCI marking (threshold=%.2f, %d ch)", config.subject, config.sci_threshold, len(raw_od.ch_names))
+    logger.info("sub-%s | step 2: SCI marking (threshold=%.2f, %d ch)", config.subject, config.sci_threshold, len(raw_od.ch_names))
     raw_od, bad_chs, sci_scores = mark_bad_channels(
         raw_od, threshold=config.sci_threshold,
         cardiac_l_freq=config.cardiac_l_freq, cardiac_h_freq=config.cardiac_h_freq)
@@ -312,13 +310,13 @@ def run_prep(
         logger.warning("sub-%s | raw SQM failed", config.subject, exc_info=True)
 
     # step 3: motion correction (spike/step artifact repair)
-    logger.info("sub-%s | step 4: motion correction (%s)", config.subject, config.motion_correction)
+    logger.info("sub-%s | step 3: motion correction (%s)", config.subject, config.motion_correction)
     raw_od_before_motion = raw_od.copy()
     raw_od = correct_motion(raw_od, method=config.motion_correction)
     _save(raw_od, "motcorrected", "motion_correction")
 
     # step 4: Beer-Lambert
-    logger.info("sub-%s | step 5: Beer-Lambert (dpf=%s)", config.subject, config.dpf)
+    logger.info("sub-%s | step 4: Beer-Lambert (dpf=%s)", config.subject, config.dpf)
     raw_haemo = od_to_haemo(raw_od, dpf=config.dpf)
     preproc_path = _save(raw_haemo, "preproc", "beer_lambert")
 

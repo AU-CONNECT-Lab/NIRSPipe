@@ -293,11 +293,12 @@ output/
 - PSD before / after bandpass (cardiac + Mayer wave peaks annotated)
 - HbO–HbR correlation panel
 - Denoising carpet — before / after, HbO and HbR separately, both scaled by the pre-denoising SD (grouped by ROI with `--roi-mapping`), when postprocessing runs
-- GLM section (design matrix + activation panel) when `--mode glm`
+- Global correlation (`gcor`) before → after denoising when postprocessing runs
+- GLM section (design matrix + activation panel + Durbin–Watson on residuals) when `--mode glm`
 - Rest section (ALFF table + FC heatmap; ROI-level FC with `--roi-mapping`) when `--mode rest`
 - Auto-generated Methods paragraph + software versions + references
 
-Group / window / dyad reports add subject × metric heatmaps, per-metric boxplots (Tukey 1.5 × IQR outliers), and sortable tables.
+Group / window / dyad reports add subject × metric heatmaps, per-scale grouped boxplots with clickable strip points (Tukey 1.5 × IQR outliers), and sortable tables.
 
 ## Package Structure
 

@@ -8,6 +8,11 @@ from typing import Any
 from fnirs_pipe.exceptions import MissingDerivativesError
 
 
+def carry_entities(source_entities: dict[str, str] | None) -> dict[str, str]:
+    """Keep only task/run from source entities so output filenames mirror the input."""
+    return {k: v for k, v in (source_entities or {}).items() if k in ("task", "run")}
+
+
 def build_output_path(
     output_dir: Path,
     subject: str,

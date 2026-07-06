@@ -111,17 +111,16 @@ def _build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> None:
     args = _build_parser().parse_args(argv)
 
-    if args.dpf is None:
-        print("Error: Missing option '--dpf'.", file=sys.stderr)
-        raise SystemExit(1)
-    if args.sci_threshold is None:
-        print("Error: Missing option '--sci-threshold'.", file=sys.stderr)
-        raise SystemExit(1)
-
     from fnirs_pipe.cli.workflows import run_group_level, run_participant_level
 
     opts = vars(args)
     if args.analysis_level == "participant":
+        if args.dpf is None:
+            print("Error: Missing option '--dpf'.", file=sys.stderr)
+            raise SystemExit(1)
+        if args.sci_threshold is None:
+            print("Error: Missing option '--sci-threshold'.", file=sys.stderr)
+            raise SystemExit(1)
         run_participant_level(opts)
     else:
         run_group_level(opts)

@@ -13,6 +13,60 @@ setup_logging()
 logger = get_logger("cli.qc")
 
 
+def _select_groups(pairs_csv: Path, group_id: str | None, task_label: list[str] | None) -> dict:
+    """Parse the group CSV and filter by group_id / task_label. Exits non-zero on empty selection."""
+    from fnirs_pipe.exceptions import GroupCSVError
+    from fnirs_pipe.pipeline.hyperscanning import parse_group_csv
+
+    try:
+        groups = parse_group_csv(pairs_csv)
+    except GroupCSVError as exc:
+        print(f"[error] {exc}", file=sys.stderr)
+        raise SystemExit(1)
+
+    if group_id is not None:
+        groups = {k: v for k, v in groups.items() if k[0] == group_id}
+        if not groups:
+            print(f"[error] group_id '{group_id}' not found in CSV", file=sys.stderr)
+            raise SystemExit(1)
+
+    if task_label is not None:
+        groups = {k: v for k, v in groups.items() if k[1] in task_label}
+        if not groups:
+            print(f"[error] task_label {task_label} not found in CSV", file=sys.stderr)
+            raise SystemExit(1)
+
+    return groups
+
+
+def _run_groups(groups: dict, process) -> None:
+    """Run process(gid, task, members) -> report_path per group, tally ok/fail, exit non-zero on failure."""
+    from fnirs_pipe.exceptions import AlignmentError, MissingDerivativesError
+
+    print(f"Processing {len(groups)} group session(s)...")
+    n_ok = n_fail = 0
+    for (gid, task), members in groups.items():
+        print(f"  -> {gid}/{task} ({len(members)} subjects)")
+        try:
+            report_path = process(gid, task, members)
+            print(f"     report -> {report_path}")
+            n_ok += 1
+        except MissingDerivativesError as exc:
+            print(f"     [skip] {exc}", file=sys.stderr)
+            n_fail += 1
+        except AlignmentError as exc:
+            print(f"     [skip] alignment failed: {exc}", file=sys.stderr)
+            n_fail += 1
+        except Exception as exc:
+            logger.exception("group %s task %s failed", gid, task)
+            print(f"     [error] unexpected error: {exc}", file=sys.stderr)
+            n_fail += 1
+
+    print(f"\nDone: {n_ok} succeeded, {n_fail} failed.")
+    if n_fail > 0:
+        raise SystemExit(1)
+
+
 def cmd_prep_raw(
     bids_dir: Path, output_dir: Path, participant_label: str,
     session_label: list[str] | None, task_label: list[str] | None,
@@ -90,7 +144,6 @@ def cmd_hyper_raw(
     skip_bids_validation: bool,
 ) -> None:
     """Generate hyperscanning raw QC report from BIDS raw data."""
-    from fnirs_pipe.exceptions import AlignmentError, GroupCSVError, MissingDerivativesError
     from fnirs_pipe.pipeline.hyperscanning import (
         _raw_to_haemo,
         align_recordings,
@@ -98,83 +151,44 @@ def cmd_hyper_raw(
         compute_pairwise_coherence,
         load_group_raw_bids,
         normalize_raws,
-        parse_group_csv,
         trim_to_shortest,
     )
     from fnirs_pipe.qc.hyper_report import build_hyper_report
 
-    try:
-        groups = parse_group_csv(pairs_csv)
-    except GroupCSVError as exc:
-        print(f"[error] {exc}", file=sys.stderr)
-        raise SystemExit(1)
-
-    if group_id is not None:
-        groups = {k: v for k, v in groups.items() if k[0] == group_id}
-        if not groups:
-            print(f"[error] group_id '{group_id}' not found in CSV", file=sys.stderr)
-            raise SystemExit(1)
-
-    if task_label is not None:
-        groups = {k: v for k, v in groups.items() if k[1] in task_label}
-        if not groups:
-            print(f"[error] task_label {task_label} not found in CSV", file=sys.stderr)
-            raise SystemExit(1)
-
+    groups = _select_groups(pairs_csv, group_id, task_label)
     ses = session_label[0] if session_label else None
 
-    n_total = len(groups)
-    print(f"Processing {n_total} group session(s)...")
+    def _process(gid, task, members):
+        raws_cw = load_group_raw_bids(bids_dir, members)
+        sqm_data = compute_group_sqm_raw(members, raws_cw, sci_threshold, output_dir,
+                                         cardiac_l_freq, cardiac_h_freq)
+        raws_haemo = {sid: _raw_to_haemo(r) for sid, r in raws_cw.items()}
+        if no_align:
+            aligned_raws, offsets = trim_to_shortest(raws_haemo)
+        else:
+            aligned_raws, offsets = align_recordings(raws_haemo, task)
+        if normalize:
+            aligned_raws = normalize_raws(aligned_raws)
+        coherence_df = compute_pairwise_coherence(
+            aligned_raws, fmin=coherence_fmin, fmax=coherence_fmax
+        )
+        return build_hyper_report(
+            group_id=gid,
+            task=task,
+            group=members,
+            sqm_data=sqm_data,
+            aligned_raws=aligned_raws,
+            offsets=offsets,
+            raw_raws=raws_haemo,
+            coherence_df=coherence_df,
+            output_dir=output_dir,
+            session=ses,
+            sci_threshold=sci_threshold,
+            coherence_fmin=coherence_fmin,
+            coherence_fmax=coherence_fmax,
+        )
 
-    n_ok = n_fail = 0
-    for (gid, task), members in groups.items():
-        label = f"{gid}/{task}"
-        print(f"  -> {label} ({len(members)} subjects)")
-        try:
-            raws_cw = load_group_raw_bids(bids_dir, members)
-            sqm_data = compute_group_sqm_raw(members, raws_cw, sci_threshold, output_dir,
-                                             cardiac_l_freq, cardiac_h_freq)
-            raws_haemo = {sid: _raw_to_haemo(r) for sid, r in raws_cw.items()}
-            if no_align:
-                aligned_raws, offsets = trim_to_shortest(raws_haemo)
-            else:
-                aligned_raws, offsets = align_recordings(raws_haemo, task)
-            if normalize:
-                aligned_raws = normalize_raws(aligned_raws)
-            coherence_df = compute_pairwise_coherence(
-                aligned_raws, fmin=coherence_fmin, fmax=coherence_fmax
-            )
-            report_path = build_hyper_report(
-                group_id=gid,
-                task=task,
-                group=members,
-                sqm_data=sqm_data,
-                aligned_raws=aligned_raws,
-                offsets=offsets,
-                raw_raws=raws_haemo,
-                coherence_df=coherence_df,
-                output_dir=output_dir,
-                session=ses,
-                sci_threshold=sci_threshold,
-                coherence_fmin=coherence_fmin,
-                coherence_fmax=coherence_fmax,
-            )
-            print(f"     report -> {report_path}")
-            n_ok += 1
-        except MissingDerivativesError as exc:
-            print(f"     [skip] {exc}", file=sys.stderr)
-            n_fail += 1
-        except AlignmentError as exc:
-            print(f"     [skip] alignment failed: {exc}", file=sys.stderr)
-            n_fail += 1
-        except Exception as exc:
-            logger.exception("group %s task %s failed", gid, task)
-            print(f"     [error] unexpected error: {exc}", file=sys.stderr)
-            n_fail += 1
-
-    print(f"\nDone: {n_ok} succeeded, {n_fail} failed.")
-    if n_fail > 0:
-        raise SystemExit(1)
+    _run_groups(groups, _process)
 
 
 def cmd_group_raw(output_dir: Path) -> None:
@@ -253,34 +267,16 @@ def cmd_hyper_post(
     """Generate hyperscanning post-processing QC report (WTC, ISC, connectivity)."""
     import json
 
-    from fnirs_pipe.exceptions import AlignmentError, GroupCSVError, MissingDerivativesError
     from fnirs_pipe.pipeline.hyperscanning import (
         align_recordings,
         load_group_haemo,
         load_group_sqm,
         normalize_raws,
-        parse_group_csv,
         trim_to_shortest,
     )
     from fnirs_pipe.qc.hyper_report import build_hyper_post_report
 
-    try:
-        groups = parse_group_csv(pairs_csv)
-    except GroupCSVError as exc:
-        print(f"[error] {exc}", file=sys.stderr)
-        raise SystemExit(1)
-
-    if group_id is not None:
-        groups = {k: v for k, v in groups.items() if k[0] == group_id}
-        if not groups:
-            print(f"[error] group_id '{group_id}' not found in CSV", file=sys.stderr)
-            raise SystemExit(1)
-
-    if task_label is not None:
-        groups = {k: v for k, v in groups.items() if k[1] in task_label}
-        if not groups:
-            print(f"[error] task_label {task_label} not found in CSV", file=sys.stderr)
-            raise SystemExit(1)
+    groups = _select_groups(pairs_csv, group_id, task_label)
 
     roi_map: dict[str, list[str]] | None = None
     if roi_mapping is not None:
@@ -290,54 +286,33 @@ def cmd_hyper_post(
             print(f"[error] failed to load ROI mapping: {exc}", file=sys.stderr)
             raise SystemExit(1)
 
-    n_total = len(groups)
-    print(f"Processing {n_total} group session(s)...")
+    def _process(gid, task, members):
+        raws = load_group_haemo(output_dir, members)
+        if no_align:
+            aligned_raws, offsets = trim_to_shortest(raws)
+        else:
+            aligned_raws, offsets = align_recordings(raws, task)
+        if normalize:
+            aligned_raws = normalize_raws(aligned_raws)
+        bad_channels = {
+            sid: sqm.get("bad_channels", [])
+            for sid, sqm in load_group_sqm(output_dir, members).items()
+        }
+        return build_hyper_post_report(
+            group_id=gid,
+            task=task,
+            group=members,
+            aligned_raws=aligned_raws,
+            offsets=offsets,
+            output_dir=output_dir,
+            roi_map=roi_map,
+            bad_channels=bad_channels,
+            wtc_fmin=wtc_fmin,
+            wtc_fmax=wtc_fmax,
+            isc_threshold=isc_threshold,
+        )
 
-    n_ok = n_fail = 0
-    for (gid, task), members in groups.items():
-        label = f"{gid}/{task}"
-        print(f"  -> {label} ({len(members)} subjects)")
-        try:
-            raws = load_group_haemo(output_dir, members)
-            if no_align:
-                aligned_raws, offsets = trim_to_shortest(raws)
-            else:
-                aligned_raws, offsets = align_recordings(raws, task)
-            if normalize:
-                aligned_raws = normalize_raws(aligned_raws)
-            bad_channels = {
-                sid: sqm.get("bad_channels", [])
-                for sid, sqm in load_group_sqm(output_dir, members).items()
-            }
-            report_path = build_hyper_post_report(
-                group_id=gid,
-                task=task,
-                group=members,
-                aligned_raws=aligned_raws,
-                offsets=offsets,
-                output_dir=output_dir,
-                roi_map=roi_map,
-                bad_channels=bad_channels,
-                wtc_fmin=wtc_fmin,
-                wtc_fmax=wtc_fmax,
-                isc_threshold=isc_threshold,
-            )
-            print(f"     report -> {report_path}")
-            n_ok += 1
-        except MissingDerivativesError as exc:
-            print(f"     [skip] {exc}", file=sys.stderr)
-            n_fail += 1
-        except AlignmentError as exc:
-            print(f"     [skip] alignment failed: {exc}", file=sys.stderr)
-            n_fail += 1
-        except Exception as exc:
-            logger.exception("group %s task %s failed", gid, task)
-            print(f"     [error] unexpected error: {exc}", file=sys.stderr)
-            n_fail += 1
-
-    print(f"\nDone: {n_ok} succeeded, {n_fail} failed.")
-    if n_fail > 0:
-        raise SystemExit(1)
+    _run_groups(groups, _process)
 
 
 def _build_parser() -> argparse.ArgumentParser:
