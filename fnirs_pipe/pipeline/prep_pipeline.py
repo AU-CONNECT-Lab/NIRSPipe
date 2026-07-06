@@ -19,7 +19,6 @@ from typing import Literal
 import mne
 import mne.io
 import numpy as np
-from bids import BIDSLayout
 
 from fnirs_pipe import __version__
 from fnirs_pipe.io.derivatives import build_output_path, write_sidecar_json
@@ -31,28 +30,23 @@ logger = get_logger("pipeline.prep")
 
 MotionMethod = Literal["tddr", "wavelet", "spline", "none"]
 
-# Step 1: BIDS validation
-def validate(bids_dir: Path) -> None:
-    """Validate BIDS dataset structure; raise BIDSValidationError on critical errors."""
-    BIDSLayout(str(bids_dir), validate=True)
-
-# Step 2: OD conversion
+# Step 1: OD conversion
 def intensity_to_od(raw: mne.io.Raw) -> mne.io.Raw:
     """Convert raw intensity signal to optical density."""
     return mne.preprocessing.nirs.optical_density(raw)
 
-# Step 3: SCI / bad channel pruning
-def compute_sci(raw_od: mne.io.Raw) -> dict[str, float]:
+# Step 2: SCI / bad channel pruning
+def compute_sci(raw_od: mne.io.Raw, cardiac_l_freq: float, cardiac_h_freq: float) -> dict[str, float]:
     """Return SCI score per channel name."""
     from mne.preprocessing.nirs import scalp_coupling_index
-    scores = scalp_coupling_index(raw_od)
+    scores = scalp_coupling_index(raw_od, l_freq=cardiac_l_freq, h_freq=cardiac_h_freq)
     return dict(zip(raw_od.ch_names, scores))
 
 # For QC reporting, sliding window
 def compute_windowed_sci(
     raw_od: mne.io.Raw,
-    cardiac_l_freq: float = 0.7,
-    cardiac_h_freq: float = 1.5,
+    cardiac_l_freq: float,
+    cardiac_h_freq: float,
 ) -> "tuple[np.ndarray, np.ndarray]":
     from mne_nirs.preprocessing import scalp_coupling_index_windowed
     _, scores, times = scalp_coupling_index_windowed(
@@ -62,8 +56,8 @@ def compute_windowed_sci(
 
 def compute_windowed_psp(
     raw_od: mne.io.Raw,
-    cardiac_l_freq: float = 0.7,
-    cardiac_h_freq: float = 1.5,
+    cardiac_l_freq: float,
+    cardiac_h_freq: float,
 ) -> "tuple[np.ndarray, np.ndarray]":
     from mne_nirs.preprocessing import peak_power
     _, scores, times = peak_power(
@@ -98,12 +92,14 @@ def _expand_bad_pairs(raw: mne.io.Raw, labels: list[str]) -> list[str]:
 def mark_bad_channels(
     raw_od: mne.io.Raw,
     threshold: float,
+    cardiac_l_freq: float,
+    cardiac_h_freq: float,
 ) -> tuple[mne.io.Raw, list[str], dict[str, float]]:
     """Mark channels below SCI threshold into raw.info['bads'].
 
     Returns raw (modified in-place), list of bad channel names, and SCI scores dict.
     """
-    sci_scores = compute_sci(raw_od)
+    sci_scores = compute_sci(raw_od, cardiac_l_freq, cardiac_h_freq)
     bad_chs = [ch for ch, score in sci_scores.items() if score < threshold]
     raw_od.info["bads"] = bad_chs
     return raw_od, bad_chs, sci_scores
@@ -159,7 +155,7 @@ def _wavelet_motion_correct(raw_od: mne.io.Raw, wavelet: str = "db2", iqr_factor
     return raw
 
 
-# Step 4: Motion correction
+# Step 3: Motion correction
 def correct_motion(raw_od: mne.io.Raw, method: MotionMethod | None = None) -> mne.io.Raw:
     """Apply motion artifact correction to the OD signal.
 
@@ -181,7 +177,7 @@ def correct_motion(raw_od: mne.io.Raw, method: MotionMethod | None = None) -> mn
         return raw_od
     raise ValueError(f"Unknown motion correction method: {method}")
 
-# Step 5: Beer-Lambert
+# Step 4: Beer-Lambert
 def od_to_haemo(raw_od: mne.io.Raw, dpf: list[float]) -> mne.io.Raw:
     """Convert OD to haemoglobin concentration via Beer-Lambert law."""
     from mne.preprocessing.nirs import beer_lambert_law
@@ -254,7 +250,7 @@ def run_prep(
         })
         return path
 
-    # step 2: OD conversion (skip if input is already optical density)
+    # step 1: OD conversion (skip if input is already optical density)
     if is_optical_density(raw):
         logger.warning(
             "sub-%s | input is already optical density; skipping OD conversion "
@@ -266,9 +262,11 @@ def run_prep(
         raw_od = intensity_to_od(raw)
     _save(raw_od, "od", "od_conversion")
 
-    # step 3: SCI channel marking
+    # step 2: SCI channel marking
     logger.info("sub-%s | step 3: SCI marking (threshold=%.2f, %d ch)", config.subject, config.sci_threshold, len(raw_od.ch_names))
-    raw_od, bad_chs, sci_scores = mark_bad_channels(raw_od, threshold=config.sci_threshold)
+    raw_od, bad_chs, sci_scores = mark_bad_channels(
+        raw_od, threshold=config.sci_threshold,
+        cardiac_l_freq=config.cardiac_l_freq, cardiac_h_freq=config.cardiac_h_freq)
     if config.bad_channels:
         manual = _expand_bad_pairs(raw_od, config.bad_channels)
         if not manual:
@@ -289,18 +287,18 @@ def run_prep(
     sqm_raw: dict | None = None
     try:
         from fnirs_pipe.qc.quantitative_metrics import compute_raw_sqm, save_sqm_toml
-        sqm_raw = compute_raw_sqm(raw, sci_scores, bad_chs)
+        sqm_raw = compute_raw_sqm(raw, sci_scores, bad_chs, config.cardiac_l_freq, config.cardiac_h_freq)
         save_sqm_toml(sqm_raw, config.subject, sci_path.parent, suffix="_raw")
     except Exception:
         logger.warning("sub-%s | raw SQM failed", config.subject, exc_info=True)
 
-    # step 4: motion correction (spike/step artifact repair)
+    # step 3: motion correction (spike/step artifact repair)
     logger.info("sub-%s | step 4: motion correction (%s)", config.subject, config.motion_correction)
     raw_od_before_motion = raw_od.copy()
     raw_od = correct_motion(raw_od, method=config.motion_correction)
     _save(raw_od, "motcorrected", "motion_correction")
 
-    # step 5: Beer-Lambert
+    # step 4: Beer-Lambert
     logger.info("sub-%s | step 5: Beer-Lambert (dpf=%s)", config.subject, config.dpf)
     raw_haemo = od_to_haemo(raw_od, dpf=config.dpf)
     preproc_path = _save(raw_haemo, "preproc", "beer_lambert")

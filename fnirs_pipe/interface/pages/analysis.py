@@ -186,9 +186,9 @@ layout = dbc.Container([
             dbc.Col([
                 dbc.Label("Cardiac Band (Hz)"),
                 dbc.InputGroup([
-                    dbc.Input(id="an-cardiac-l", type="number", value=0.7, step=0.1),
+                    dbc.Input(id="an-cardiac-l", type="number", step=0.1, placeholder="lo (adult ~0.7)"),
                     dbc.InputGroupText("–"),
-                    dbc.Input(id="an-cardiac-h", type="number", value=1.5, step=0.1),
+                    dbc.Input(id="an-cardiac-h", type="number", step=0.1, placeholder="hi (adult ~1.5)"),
                 ]),
             ], width=3),
         ], className="g-3"),

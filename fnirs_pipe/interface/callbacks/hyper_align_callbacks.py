@@ -351,8 +351,11 @@ def _write_ha_decisions(deriv_dir: str, task: str, decisions: dict) -> None:
         path.write_text(json.dumps(existing, indent=2), encoding="utf-8")
 
 
-def _compute_sci_from_cw(raws: dict, subject_ids: list) -> dict:
+def _compute_sci_from_cw(raws: dict, subject_ids: list, cardiac_l_freq, cardiac_h_freq) -> dict:
     import mne
+
+    if cardiac_l_freq is None or cardiac_h_freq is None:
+        return {sid: {} for sid in subject_ids}
 
     sci_by_sid: dict = {}
     for sid in subject_ids:
@@ -362,7 +365,8 @@ def _compute_sci_from_cw(raws: dict, subject_ids: list) -> dict:
             continue
         try:
             raw_od  = mne.preprocessing.nirs.optical_density(raw.copy(), verbose=False)
-            sci_arr = mne.preprocessing.nirs.scalp_coupling_index(raw_od, verbose=False)
+            sci_arr = mne.preprocessing.nirs.scalp_coupling_index(
+                raw_od, l_freq=cardiac_l_freq, h_freq=cardiac_h_freq, verbose=False)
             pair_sci: dict = {}
             for i, ch in enumerate(raw.ch_names):
                 pair = ch.rsplit(" ", 1)[0] if " " in ch else ch
@@ -444,9 +448,11 @@ def _ha_ch_pairs_from_haemo(aligned_raws: dict, subject_ids: list) -> list:
     State("ha-bids-dir",          "value"),
     State("ha-group-csv",         "value"),
     State("ha-deriv-dir",         "value"),
+    State("ha-cardiac-l",         "value"),
+    State("ha-cardiac-h",         "value"),
     prevent_initial_call=True,
 )
-def load_ha_decisions(group_val, bids_dir, group_csv, deriv_dir):
+def load_ha_decisions(group_val, bids_dir, group_csv, deriv_dir, cardiac_l, cardiac_h):
     if not group_val or not bids_dir or not group_csv:
         return no_update, no_update
 
@@ -468,7 +474,7 @@ def load_ha_decisions(group_val, bids_dir, group_csv, deriv_dir):
     aligned_raws = info["aligned_raws"]
 
     ch_pairs   = _ha_ch_pairs_from_haemo(aligned_raws, subject_ids)
-    sci_by_sid = _compute_sci_from_cw(aligned_raws, subject_ids)
+    sci_by_sid = _compute_sci_from_cw(aligned_raws, subject_ids, cardiac_l, cardiac_h)
     decisions  = (
         _read_ha_decisions(deriv_dir, subject_ids, task)
         if deriv_dir else {s: {} for s in subject_ids}
@@ -487,9 +493,11 @@ def load_ha_decisions(group_val, bids_dir, group_csv, deriv_dir):
     State("ha-bids-dir",     "value"),
     State("ha-group-csv",    "value"),
     State("ha-deriv-dir",    "value"),
+    State("ha-cardiac-l",    "value"),
+    State("ha-cardiac-h",    "value"),
     prevent_initial_call=True,
 )
-def click_ha_cd(n_clicks_list, group_val, bids_dir, group_csv, deriv_dir):
+def click_ha_cd(n_clicks_list, group_val, bids_dir, group_csv, deriv_dir, cardiac_l, cardiac_h):
     if not ctx.triggered_id or not isinstance(ctx.triggered_id, dict):
         return no_update, no_update
     if not any(n for n in n_clicks_list if n):
@@ -532,7 +540,7 @@ def click_ha_cd(n_clicks_list, group_val, bids_dir, group_csv, deriv_dir):
     _write_ha_decisions(deriv_dir, task, decisions)
 
     ch_pairs   = _ha_ch_pairs_from_haemo(aligned_raws, subject_ids)
-    sci_by_sid = _compute_sci_from_cw(aligned_raws, subject_ids)
+    sci_by_sid = _compute_sci_from_cw(aligned_raws, subject_ids, cardiac_l, cardiac_h)
     table  = _build_ha_decisions_table(subject_ids, ch_pairs, sci_by_sid, decisions)
     status = f"Saved · {len(ch_pairs)} channel pair(s)"
     return table, status

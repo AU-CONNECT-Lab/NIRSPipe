@@ -28,6 +28,8 @@ def _process_run(
     run: dict,
     sci_threshold: float,
     sub_dir: Path,
+    cardiac_l_freq: float,
+    cardiac_h_freq: float,
 ) -> dict:
     """Compute all data, save figure HTMLs + SQM JSON. Returns inline dict for HTML."""
     from fnirs_pipe.qc.figures import (
@@ -55,7 +57,8 @@ def _process_run(
 
     try:
         raw_od  = mne.preprocessing.nirs.optical_density(raw.copy(), verbose=False)
-        sci_arr = mne.preprocessing.nirs.scalp_coupling_index(raw_od, verbose=False)
+        sci_arr = mne.preprocessing.nirs.scalp_coupling_index(
+            raw_od, l_freq=cardiac_l_freq, h_freq=cardiac_h_freq, verbose=False)
         sci_scores = {ch: float(sci_arr[i]) for i, ch in enumerate(raw.ch_names)}
     except Exception as exc:
         logger.warning("SCI failed: %s", exc)
@@ -70,14 +73,14 @@ def _process_run(
         from fnirs_pipe.pipeline.prep_pipeline import (
             compute_windowed_gvtd, compute_windowed_psp, compute_windowed_sci,
         )
-        sci_matrix, sci_win_times = compute_windowed_sci(raw_od)
-        psp_matrix, psp_win_times = compute_windowed_psp(raw_od)
+        sci_matrix, sci_win_times = compute_windowed_sci(raw_od, cardiac_l_freq, cardiac_h_freq)
+        psp_matrix, psp_win_times = compute_windowed_psp(raw_od, cardiac_l_freq, cardiac_h_freq)
         gvtd_per_window, gvtd_win_times = compute_windowed_gvtd(raw_od)
     except Exception as exc:
         logger.warning("Windowed SCI/PSP/GVTD failed: %s", exc)
 
     try:
-        sqm = compute_raw_sqm(raw, sci_scores, list(bad_channels))
+        sqm = compute_raw_sqm(raw, sci_scores, list(bad_channels), cardiac_l_freq, cardiac_h_freq)
     except Exception as exc:
         logger.warning("SQM failed: %s", exc)
         sqm = {}
@@ -264,6 +267,8 @@ def _process_run(
 def build_prep_raw_report(
     runs: list[dict],
     output_path: Path,
+    cardiac_l_freq: float,
+    cardiac_h_freq: float,
     sci_threshold: float = 0.8,
 ) -> None:
     """Generate raw QC report: lightweight HTML + per-run folders with figure HTMLs + SQM JSON."""
@@ -275,7 +280,7 @@ def build_prep_raw_report(
         sub_dir = output_dir / f"sub-{run['subject_id']}"
         logger.info("[%d/%d] processing %s ...", i + 1, len(runs), label)
         try:
-            d = _process_run(run, sci_threshold, sub_dir)
+            d = _process_run(run, sci_threshold, sub_dir, cardiac_l_freq, cardiac_h_freq)
             static_data.append(d)
         except Exception as exc:
             logger.error("Failed to process run %s: %s", label, exc)

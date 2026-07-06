@@ -90,6 +90,16 @@ layout = dbc.Container([
         _card("Channel Decisions",
             html.Small("per-subject good/bad decisions · click chip to cycle · auto-saves",
                        className="text-muted d-block mb-2"),
+            dbc.Row([
+                dbc.Col([
+                    dbc.Label("Cardiac Band (Hz)", className="small"),
+                    dbc.InputGroup([
+                        dbc.Input(id="ha-cardiac-l", type="number", step=0.1, placeholder="lo (adult ~0.7)"),
+                        dbc.InputGroupText("–"),
+                        dbc.Input(id="ha-cardiac-h", type="number", step=0.1, placeholder="hi (adult ~1.5)"),
+                    ]),
+                ], width=4),
+            ], className="mb-2"),
             html.Div(id="ha-decisions-table",
                      children=html.Small("Select a group to rate channels.",
                                          className="text-muted")),

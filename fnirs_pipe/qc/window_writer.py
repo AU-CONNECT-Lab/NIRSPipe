@@ -50,7 +50,8 @@ def _crop_to_window(
 
 def _compute_sqm_for_window(snirf_path: Path, tstart: float, tend: float,
                             align: str, trigger_name: str | None,
-                            sci_threshold: float) -> dict | None:
+                            sci_threshold: float,
+                            cardiac_l_freq: float, cardiac_h_freq: float) -> dict | None:
     """Crop SNIRF + recompute raw SQM (channel scalars + windowed metrics)."""
     from fnirs_pipe.pipeline.prep_pipeline import (
         compute_windowed_gvtd, compute_windowed_psp, compute_windowed_sci,
@@ -65,7 +66,8 @@ def _compute_sqm_for_window(snirf_path: Path, tstart: float, tend: float,
 
     try:
         raw_od     = mne.preprocessing.nirs.optical_density(cropped.copy(), verbose=False)
-        sci_arr    = mne.preprocessing.nirs.scalp_coupling_index(raw_od, verbose=False)
+        sci_arr    = mne.preprocessing.nirs.scalp_coupling_index(
+            raw_od, l_freq=cardiac_l_freq, h_freq=cardiac_h_freq, verbose=False)
         sci_scores = {ch: float(sci_arr[i]) for i, ch in enumerate(cropped.ch_names)}
     except Exception as exc:
         logger.warning("SCI failed for %s: %s", snirf_path.name, exc)
@@ -74,7 +76,7 @@ def _compute_sqm_for_window(snirf_path: Path, tstart: float, tend: float,
 
     bad_channels = [ch for ch, s in sci_scores.items() if s < sci_threshold]
     try:
-        sqm = compute_raw_sqm(cropped, sci_scores, bad_channels)
+        sqm = compute_raw_sqm(cropped, sci_scores, bad_channels, cardiac_l_freq, cardiac_h_freq)
     except Exception as exc:
         logger.warning("compute_raw_sqm failed for %s: %s", snirf_path.name, exc)
         sqm = {}
@@ -85,8 +87,8 @@ def _compute_sqm_for_window(snirf_path: Path, tstart: float, tend: float,
         a = _np.asarray(t)
         return (a.mean(axis=1) if a.ndim == 2 and a.shape[1] == 2 else a).tolist()
     try:
-        sci_matrix, sci_times   = compute_windowed_sci(raw_od)
-        psp_matrix, psp_times   = compute_windowed_psp(raw_od)
+        sci_matrix, sci_times   = compute_windowed_sci(raw_od, cardiac_l_freq, cardiac_h_freq)
+        psp_matrix, psp_times   = compute_windowed_psp(raw_od, cardiac_l_freq, cardiac_h_freq)
         gvtd_per_window, gvtd_t = compute_windowed_gvtd(raw_od)
         if sci_matrix is not None:
             sqm["sci_per_window"]      = _np.asarray(sci_matrix).mean(axis=0).tolist()
@@ -115,6 +117,9 @@ def build_window_raw_report(
     trigger_name: str | None = None,
     name: str | None = None,
     sci_threshold: float = 0.8,
+    *,
+    cardiac_l_freq: float,
+    cardiac_h_freq: float,
     skip_bids_validation: bool = False,
 ) -> Path:
     """Aggregate windowed SQM across subjects → group_nirs_{name}.{tsv,html}."""
@@ -136,6 +141,7 @@ def build_window_raw_report(
 
                 sqm = _compute_sqm_for_window(
                     Path(f), tstart, tend, align, trigger_name, sci_threshold,
+                    cardiac_l_freq, cardiac_h_freq,
                 )
                 if sqm is None:
                     continue

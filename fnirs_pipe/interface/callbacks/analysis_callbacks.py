@@ -207,6 +207,8 @@ def generate_command(n_clicks, bids_dir, output_dir, subjects, dpf, sci_thresh,
         return "Error: detect and select subjects first.", {}
     if dpf is None or sci_thresh is None:
         return "Error: DPF and SCI threshold are required.", {}
+    if cardiac_l is None or cardiac_h is None:
+        return "Error: cardiac band lower/upper frequency is required (population-dependent).", {}
 
     opts = dict(
         bids_dir=bids_dir, output_dir=output_dir, subjects=subjects,

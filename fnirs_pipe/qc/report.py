@@ -397,10 +397,14 @@ def _section_sqm(
     subject: str,
     errors: list,
     out_dir: Path | None = None,
+    *,
+    cardiac_l_freq: float,
+    cardiac_h_freq: float,
 ) -> dict:
     sqm: dict = {}
     with _guard("SQM computation", errors, subject):
-        sqm = compute_sqm(raw_long, raw_haemo, sci_scores, bad_channels)
+        sqm = compute_sqm(raw_long, raw_haemo, sci_scores, bad_channels,
+                          cardiac_l_freq, cardiac_h_freq)
     channel_rows = []
     for ch in sci_scores:
         pair_key = re.sub(r'\s+(\d+|hbo|hbr)$', '', ch, flags=re.IGNORECASE)
@@ -688,7 +692,9 @@ def build_subject_report(
     glm_vars          = _section_glm(design_matrix, glm_est, raw_haemo, subject, errors, figures_dir, segments=segments)
     rest_vars         = _section_rest(alff_df, fc_df, subject, errors, figures_dir)
     sqm_vars          = _section_sqm(raw_long, raw_haemo, sci_scores, bad_channels, subject, errors,
-                                     out_dir=out_path.parent / "nirs")
+                                     out_dir=out_path.parent / "nirs",
+                                     cardiac_l_freq=config.cardiac_l_freq,
+                                     cardiac_h_freq=config.cardiac_h_freq)
     ch_summary_vars   = _section_channel_summary(
                             sqm_vars["channel_rows"], sqm_vars["sqm"], subject, errors, figures_dir,
                             sci_thresh=getattr(config, "sci_threshold", 0.75))

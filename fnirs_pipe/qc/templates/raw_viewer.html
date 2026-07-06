@@ -674,7 +674,7 @@ function renderSqm(d) {
     li("Channel retention", retPct,      cls(ret, ret >= 0.9, ret >= 0.7)) +
     li("Mean SCI",   fmt(sci, 3),        cls(sci, sci >= 0.75, sci >= 0.5)) +
     li("Mean SNR",   fmt(snr, 1),        cls(snr, snr >= 100,  snr >= 20)) +
-    li("Mean CP",    fmt(s.cp_mean, 3)) +
+    li("Mean CP (exp.)", fmt(s.cp_mean, 3)) +
     li("Spike count", spk !== null && spk !== undefined ? spk : "—",
                       cls(spk, spk === 0, spk < 10));
   var tsDiv = document.getElementById("ts-plot");

@@ -49,10 +49,12 @@ def _build_parser() -> argparse.ArgumentParser:
     prep_opt.add_argument("--bad-channels",
                           help="Comma-separated source-detector labels to mark as bad, e.g. 'S1_D1,S2_D3'. "
                                "Kept in the data, unioned with SCI-detected bad channels.")
-    prep_opt.add_argument("--cardiac-l-freq", type=float, default=0.7,
-                          help="Lower bound of cardiac band in Hz. Increase for children (e.g. 1.0).")
-    prep_opt.add_argument("--cardiac-h-freq", type=float, default=1.5,
-                          help="Upper bound of cardiac band in Hz. Increase for children (e.g. 2.5).")
+    prep_opt.add_argument("--cardiac-l-freq", type=float, required=True,
+                          help="Lower bound of cardiac band in Hz (required; population-dependent). "
+                               "Adult resting ~0.7; children/infants higher (e.g. 1.0-1.7).")
+    prep_opt.add_argument("--cardiac-h-freq", type=float, required=True,
+                          help="Upper bound of cardiac band in Hz (required; population-dependent). "
+                               "Adult resting ~1.5; children/infants higher (e.g. 2.5-3.0).")
 
     post = p.add_argument_group("postprocessing (requires --mode)")
     post.add_argument("--mode", choices=_MODE_CHOICES, help="Postprocessing mode: denoise, glm or rest.")

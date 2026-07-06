@@ -9,8 +9,13 @@ All notable changes to this project will be documented in this file.
 ### Added
 - Wavelet motion correction (`--motion-correction wavelet`): zeroes outlier wavelet detail coefficients per channel in OD space
 
+### Changed
+- The cardiac band (`--cardiac-l-freq` / `--cardiac-h-freq`) is now required, with no default: it is population-dependent (adult vs infant heart rate) and now consistently sets the band for channel SCI, PSP, and Cardiac Power, so a non-adult band is no longer silently ignored by some metrics
+- Cardiac Power is marked experimental (overlaps PSP; may be removed); SCI and PSP remain the primary channel-quality metrics
+
 ### Fixed
 - fALFF is now the fraction of total spectral amplitude in the low band (sum/sum, in [0, 1]), matching its definition; was previously a ratio of mean amplitudes. ALFF unchanged (validated against a reference implementation).
+- Cardiac Power now sums band power (was averaging) and is computed on optical density, so it lies in [0, 1] and matches the CP ≥ 0.5 quality gate
 
 ---
 

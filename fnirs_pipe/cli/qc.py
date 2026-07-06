@@ -16,7 +16,8 @@ logger = get_logger("cli.qc")
 def cmd_prep_raw(
     bids_dir: Path, output_dir: Path, participant_label: str,
     session_label: list[str] | None, task_label: list[str] | None,
-    sci_threshold: float, skip_bids_validation: bool,
+    sci_threshold: float, cardiac_l_freq: float, cardiac_h_freq: float,
+    skip_bids_validation: bool,
 ) -> None:
     """Generate static raw QC report for a single participant."""
     from collections import defaultdict
@@ -70,7 +71,8 @@ def cmd_prep_raw(
         html_path = output_dir / ("_".join(name_parts) + "_desc-raw_nirs.html")
         print(f"Generating raw QC report: {html_path.name} ...")
         try:
-            build_prep_raw_report(group_runs, html_path, sci_threshold=sci_threshold)
+            build_prep_raw_report(group_runs, html_path, sci_threshold=sci_threshold,
+                                  cardiac_l_freq=cardiac_l_freq, cardiac_h_freq=cardiac_h_freq)
             print(f"  -> {html_path}")
         except Exception as exc:
             logger.exception("Raw report generation failed for %s", html_path.name)
@@ -81,7 +83,8 @@ def cmd_prep_raw(
 
 def cmd_hyper_raw(
     bids_dir: Path, output_dir: Path, pairs_csv: Path, group_id: str | None,
-    sci_threshold: float, coherence_fmin: float, coherence_fmax: float,
+    sci_threshold: float, cardiac_l_freq: float, cardiac_h_freq: float,
+    coherence_fmin: float, coherence_fmax: float,
     normalize: bool, no_align: bool,
     session_label: list[str] | None, task_label: list[str] | None,
     skip_bids_validation: bool,
@@ -129,7 +132,8 @@ def cmd_hyper_raw(
         print(f"  -> {label} ({len(members)} subjects)")
         try:
             raws_cw = load_group_raw_bids(bids_dir, members)
-            sqm_data = compute_group_sqm_raw(members, raws_cw, sci_threshold, output_dir)
+            sqm_data = compute_group_sqm_raw(members, raws_cw, sci_threshold, output_dir,
+                                             cardiac_l_freq, cardiac_h_freq)
             raws_haemo = {sid: _raw_to_haemo(r) for sid, r in raws_cw.items()}
             if no_align:
                 aligned_raws, offsets = trim_to_shortest(raws_haemo)
@@ -193,7 +197,8 @@ def cmd_window_raw(
     bids_dir: Path, output_dir: Path, task_label: str, tstart: float, tend: float,
     participant_label: list[str] | None, session_label: list[str] | None,
     align: str, trigger_name: str | None, name: str | None,
-    sci_threshold: float, skip_bids_validation: bool,
+    sci_threshold: float, cardiac_l_freq: float, cardiac_h_freq: float,
+    skip_bids_validation: bool,
 ) -> None:
     """Crop each subject's raw to [tstart, tend] + aggregate SQM into a windowed group report."""
     from fnirs_pipe.qc.window_writer import build_window_raw_report
@@ -203,7 +208,9 @@ def cmd_window_raw(
         task=task_label, tstart=tstart, tend=tend,
         participant_label=participant_label, session_label=session_label,
         align=align, trigger_name=trigger_name, name=name,
-        sci_threshold=sci_threshold, skip_bids_validation=skip_bids_validation,
+        sci_threshold=sci_threshold,
+        cardiac_l_freq=cardiac_l_freq, cardiac_h_freq=cardiac_h_freq,
+        skip_bids_validation=skip_bids_validation,
     )
     print(f"report -> {path}")
 
@@ -320,6 +327,10 @@ def _build_parser() -> argparse.ArgumentParser:
     pr.add_argument("--task-label",    nargs="+", action="extend", help="Task label(s) to include.")
     pr.add_argument("--sci-threshold", type=float, default=0.8,
                     help="SCI pass/fail threshold for bad channel detection.")
+    pr.add_argument("--cardiac-l-freq", type=float, required=True,
+                    help="Lower bound of cardiac band in Hz (required; population-dependent).")
+    pr.add_argument("--cardiac-h-freq", type=float, required=True,
+                    help="Upper bound of cardiac band in Hz (required; population-dependent).")
     pr.add_argument("--skip-bids-validation", action=argparse.BooleanOptionalAction, default=False)
     pr.set_defaults(func=cmd_prep_raw)
 
@@ -333,6 +344,10 @@ def _build_parser() -> argparse.ArgumentParser:
                     help="Process only this group_id. Omit to process all groups.")
     hr.add_argument("--sci-threshold", type=float, default=0.80,
                     help="SCI pass/fail threshold for channel quality comparison.")
+    hr.add_argument("--cardiac-l-freq", type=float, required=True,
+                    help="Lower bound of cardiac band in Hz (required; population-dependent).")
+    hr.add_argument("--cardiac-h-freq", type=float, required=True,
+                    help="Upper bound of cardiac band in Hz (required; population-dependent).")
     hr.add_argument("--fmin", dest="coherence_fmin", type=float, default=0.01,
                     help="Lower bound (Hz) for coherence frequency band.")
     hr.add_argument("--fmax", dest="coherence_fmax", type=float, default=0.10,
@@ -372,6 +387,10 @@ def _build_parser() -> argparse.ArgumentParser:
     wr.add_argument("--name", default=None, help="Output suffix (default: window-{tstart}-{tend}).")
     wr.add_argument("--sci-threshold", type=float, default=0.8,
                     help="SCI threshold for bad-channel detection.")
+    wr.add_argument("--cardiac-l-freq", type=float, required=True,
+                    help="Lower bound of cardiac band in Hz (required; population-dependent).")
+    wr.add_argument("--cardiac-h-freq", type=float, required=True,
+                    help="Upper bound of cardiac band in Hz (required; population-dependent).")
     wr.add_argument("--skip-bids-validation", action=argparse.BooleanOptionalAction, default=False)
     wr.set_defaults(func=cmd_window_raw)
 

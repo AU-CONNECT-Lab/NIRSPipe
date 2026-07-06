@@ -108,6 +108,8 @@ def compute_group_sqm_raw(
     raws: dict[str, mne.io.Raw],
     sci_threshold: float,
     output_dir: Path,
+    cardiac_l_freq: float,
+    cardiac_h_freq: float,
 ) -> dict[str, dict]:
     """Compute raw-level SQM (SCI, bad channels) for each group member.
 
@@ -132,7 +134,8 @@ def compute_group_sqm_raw(
 
         try:
             raw_od  = mne.preprocessing.nirs.optical_density(raw.copy(), verbose=False)
-            sci_arr = mne.preprocessing.nirs.scalp_coupling_index(raw_od, verbose=False)
+            sci_arr = mne.preprocessing.nirs.scalp_coupling_index(
+                raw_od, l_freq=cardiac_l_freq, h_freq=cardiac_h_freq, verbose=False)
             sci_cw  = {ch: float(sci_arr[i]) for i, ch in enumerate(raw.ch_names)}
         except Exception:
             sci_cw = {ch: float("nan") for ch in raw.ch_names}
@@ -148,7 +151,7 @@ def compute_group_sqm_raw(
         ]
 
         try:
-            sqm = compute_raw_sqm(raw, sci_cw, bad_channels)
+            sqm = compute_raw_sqm(raw, sci_cw, bad_channels, cardiac_l_freq, cardiac_h_freq)
         except Exception:
             sqm = {}
 

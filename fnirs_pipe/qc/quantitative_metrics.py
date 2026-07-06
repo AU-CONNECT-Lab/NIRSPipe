@@ -100,10 +100,11 @@ def _channel_distance_metrics(raw_intensity: mne.io.Raw) -> dict[str, Any]:
         }
 
 
-def _psp_metrics(raw_intensity: mne.io.Raw) -> dict[str, Any]:
+def _psp_metrics(raw_intensity: mne.io.Raw, cardiac_l_freq: float, cardiac_h_freq: float) -> dict[str, Any]:
     try:
         import mne_nirs.preprocessing as nirs_prep
-        _, psp_scores, _ = nirs_prep.peak_power(raw_intensity.copy(), verbose=False)
+        _, psp_scores, _ = nirs_prep.peak_power(
+            raw_intensity.copy(), l_freq=cardiac_l_freq, h_freq=cardiac_h_freq, verbose=False)
         psp_per_ch = {
             ch: float(np.mean(psp_scores[i]))
             for i, ch in enumerate(raw_intensity.ch_names)
@@ -117,41 +118,56 @@ def _psp_metrics(raw_intensity: mne.io.Raw) -> dict[str, Any]:
         return {"psp_mean": None, "psp_per_channel": {}}
 
 
-def _cardiac_power_metrics(raw_intensity: mne.io.Raw) -> dict[str, Any]:
-    """Cardiac Power (CP): narrow/wide band power ratio at per-channel cardiac peak.
+def _cardiac_power_metrics(
+    raw: mne.io.Raw,
+    cardiac_l_freq: float,
+    cardiac_h_freq: float,
+    cp_threshold: float = 0.5,
+) -> dict[str, Any]:
+    """Cardiac Power (CP): within-band power concentrated at the per-channel cardiac peak.
+
+    Experimental: overlaps PSP and its 0.5 gate is calibrated on Bizzego's 0.83-2.5 band;
+    may be removed. SCI + PSP are the primary cardiac quality metrics.
 
     Bizzego et al. 2022 (IEEE TNSRE 30:2292-2300).
-    fc = peak frequency in 0.83-2.5 Hz; CP = power(fc±0.2 Hz) / power(fc±0.5 Hz).
+    fc = peak frequency in [cardiac_l_freq, cardiac_h_freq]; CP = P(fc±0.2 Hz) / P(fc±0.5 Hz).
+    cp_threshold: good-quality gate (Bizzego CP>=0.5; calibrated on their 0.83-2.5 band).
     """
     try:
-        fmax = min(3.0, raw_intensity.info["sfreq"] / 2)
-        psd = raw_intensity.compute_psd(fmin=0.5, fmax=fmax, verbose=False)
+        # CP is defined in the OD domain (aligns with SCI/PSP); convert unless input is already OD
+        raw_od = raw if is_optical_density(raw) else mne.preprocessing.nirs.optical_density(raw.copy())
+        fmax = min(cardiac_h_freq, raw_od.info["sfreq"] / 2)
+        # PSD restricted to the cardiac band, so the ±0.2/±0.5 windows below are auto-clipped to it
+        # (equivalent to Bizzego's pre-bandpass; keeps respiration/Mayer power out of the ratio)
+        psd = raw_od.compute_psd(fmin=cardiac_l_freq, fmax=fmax, verbose=False)
         freqs = psd.freqs
         psd_data = psd.get_data()
-        cardiac_mask = (freqs >= 0.83) & (freqs <= 2.5)
-        if not cardiac_mask.any():
+        if freqs.size == 0:
             raise ValueError("no frequencies in cardiac band")
-        cardiac_freqs = freqs[cardiac_mask]
         cp_per_ch: dict[str, float | None] = {}
-        for i, ch in enumerate(raw_intensity.ch_names):
+        for i, ch in enumerate(raw_od.ch_names):
             ch_psd = psd_data[i]
-            fc = cardiac_freqs[np.argmax(ch_psd[cardiac_mask])]
+            fc = freqs[np.argmax(ch_psd)]
             narrow = ch_psd[(freqs >= fc - 0.2) & (freqs <= fc + 0.2)]
             wide = ch_psd[(freqs >= fc - 0.5) & (freqs <= fc + 0.5)]
-            wide_mean = float(wide.mean()) if wide.size > 0 else 0.0
+            # sum = integrated band power (not mean); narrow ⊂ wide gives CP ∈ [0,1], matching the CP≥0.5 gate
+            wide_p = float(wide.sum())
             cp_per_ch[ch] = (
-                float(narrow.mean() / wide_mean)
-                if narrow.size > 0 and wide_mean > 0
+                float(narrow.sum() / wide_p)
+                if narrow.size > 0 and wide_p > 0
                 else None
             )
         valid = [v for v in cp_per_ch.values() if v is not None]
         return {
             "cp_mean": float(np.mean(valid)) if valid else None,
             "cp_per_channel": cp_per_ch,
+            "cp_pass_rate": (
+                float(np.mean([v >= cp_threshold for v in valid])) if valid else None
+            ),
         }
     except Exception as e:
         logger.warning("Cardiac Power failed: %s", e)
-        return {"cp_mean": None, "cp_per_channel": {}}
+        return {"cp_mean": None, "cp_per_channel": {}, "cp_pass_rate": None}
 
 
 def _haemo_quality_metrics(raw_haemo: mne.io.Raw) -> dict[str, Any]:
@@ -280,26 +296,28 @@ def compute_raw_sqm(
     raw_intensity: mne.io.Raw,
     sci_scores: dict[str, float],
     bad_channels: list[str],
+    cardiac_l_freq: float,
+    cardiac_h_freq: float,
 ) -> dict[str, Any]:
     """Metrics computable from raw intensity data (no haemo required)."""
     record: dict[str, Any] = {}
     record.update(_sci_metrics(sci_scores, bad_channels))
     record.update(_channel_distance_metrics(raw_intensity))
-    record.update(_psp_metrics(raw_intensity))
+    record.update(_psp_metrics(raw_intensity, cardiac_l_freq, cardiac_h_freq))
+    # CP works in the OD domain, so it runs for both intensity and already-OD input
+    record.update(_cardiac_power_metrics(raw_intensity, cardiac_l_freq, cardiac_h_freq))
     if is_optical_density(raw_intensity):
         # intensity-value metrics are meaningless on already-OD data
-        logger.warning("input is already optical density; skipping intensity/cardiac/motion SQM")
+        logger.warning("input is already optical density; skipping intensity/motion SQM")
         record.update({
             "cv_mean": None, "cv_per_channel": {},
             "snr_mean": None, "snr_per_channel": {},
             "mean_amp_mean": None, "mean_amp_per_channel": {},
-            "cp_mean": None, "cp_per_channel": {},
             "spike_count": None, "temporal_derivative_variance": {},
             "gvtd_mean": None, "gvtd_p95": None,
         })
     else:
         record.update(_intensity_metrics(raw_intensity))
-        record.update(_cardiac_power_metrics(raw_intensity))
         record.update(_motion_metrics(raw_intensity))
     return record
 
@@ -330,8 +348,10 @@ def compute_sqm(
     raw_haemo: mne.io.Raw,
     sci_scores: dict[str, float],
     bad_channels: list[str],
+    cardiac_l_freq: float,
+    cardiac_h_freq: float,
 ) -> dict[str, Any]:
-    record = compute_raw_sqm(raw_intensity, sci_scores, bad_channels)
+    record = compute_raw_sqm(raw_intensity, sci_scores, bad_channels, cardiac_l_freq, cardiac_h_freq)
     record.update(compute_haemo_sqm(raw_haemo))
     return record
 
