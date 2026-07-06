@@ -42,63 +42,6 @@ def compute_sci(raw_od: mne.io.Raw, cardiac_l_freq: float, cardiac_h_freq: float
     scores = scalp_coupling_index(raw_od, l_freq=cardiac_l_freq, h_freq=cardiac_h_freq)
     return dict(zip(raw_od.ch_names, scores))
 
-# For QC reporting, sliding window
-def compute_windowed_sci(
-    raw_od: mne.io.Raw,
-    cardiac_l_freq: float,
-    cardiac_h_freq: float,
-) -> "tuple[np.ndarray, np.ndarray]":
-    from mne_nirs.preprocessing import scalp_coupling_index_windowed
-    _, scores, times = scalp_coupling_index_windowed(
-        raw_od, time_window=30, l_freq=cardiac_l_freq, h_freq=cardiac_h_freq
-    )
-    return scores, times
-
-def compute_windowed_psp(
-    raw_od: mne.io.Raw,
-    cardiac_l_freq: float,
-    cardiac_h_freq: float,
-) -> "tuple[np.ndarray, np.ndarray]":
-    from mne_nirs.preprocessing import peak_power
-    _, scores, times = peak_power(
-        raw_od, time_window=10, l_freq=cardiac_l_freq, h_freq=cardiac_h_freq
-    )
-    return scores, times
-
-def _windowed_gvtd(
-    raw_od: mne.io.Raw, window_s: float, l_freq: float | None, h_freq: float | None,
-) -> "tuple[np.ndarray, np.ndarray, np.ndarray]":
-    import numpy as np
-
-    from fnirs_pipe.qc.quantitative_metrics import gvtd_timetrace
-    sfreq = float(raw_od.info["sfreq"])
-    gvtd_ts = gvtd_timetrace(raw_od.get_data(), sfreq, l_freq=l_freq, h_freq=h_freq)
-    win_samples = max(1, int(round(window_s * sfreq)))
-    n_windows = len(gvtd_ts) // win_samples
-    if n_windows == 0:
-        return np.array([]), np.array([]), np.array([])
-    truncated = gvtd_ts[:n_windows * win_samples].reshape(n_windows, win_samples)
-    # mean = average motion level; p95 = worst-moment, so transient motion survives averaging
-    gvtd_mean = truncated.mean(axis=1)
-    gvtd_p95 = np.percentile(truncated, 95, axis=1)
-    window_times = np.arange(n_windows) * window_s + window_s / 2
-    return gvtd_mean, gvtd_p95, window_times
-
-
-def compute_windowed_gvtd(
-    raw_od: mne.io.Raw, window_s: float = 30.0,
-) -> "tuple[np.ndarray, np.ndarray, np.ndarray]":
-    """Mean & p95 GVTD per non-overlapping window (unfiltered). Returns (mean, p95, center_times)."""
-    return _windowed_gvtd(raw_od, window_s, None, None)
-
-
-def compute_windowed_filtered_gvtd(
-    raw_od: mne.io.Raw, window_s: float = 30.0,
-) -> "tuple[np.ndarray, np.ndarray, np.ndarray]":
-    """Mean & p95 GVTD per window on the motion-band bandpassed OD. Returns (mean, p95, center_times)."""
-    from fnirs_pipe.qc.quantitative_metrics import GVTD_MOTION_BAND
-    return _windowed_gvtd(raw_od, window_s, *GVTD_MOTION_BAND)
-
 
 def _expand_bad_pairs(raw: mne.io.Raw, labels: list[str]) -> list[str]:
     """Match S-D pair labels (or full channel names) to channels present in raw."""
@@ -333,6 +276,7 @@ def run_prep(
 
     sci_matrix = sci_times = psp_matrix = psp_times = None
     try:
+        from fnirs_pipe.qc.quantitative_metrics import compute_windowed_psp, compute_windowed_sci
         sci_matrix, sci_times = compute_windowed_sci(raw_od, config.cardiac_l_freq, config.cardiac_h_freq)
         psp_matrix, psp_times = compute_windowed_psp(raw_od, config.cardiac_l_freq, config.cardiac_h_freq)
     except Exception:

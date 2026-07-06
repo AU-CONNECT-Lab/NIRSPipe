@@ -18,6 +18,7 @@ from fnirs_pipe.qc.figures.group_figures import (
     detect_outliers,
     group_metrics,
 )
+from fnirs_pipe.utils.logging import get_logger
 
 # Click a strip point -> open that subject's raw report (sibling of the group HTML,
 # one dir up from this figure iframe). Multi-run viewers open at their first run.
@@ -38,7 +39,6 @@ _WINDOWED_METRICS = [
     ("gvtd_filt", "gvtd_filt_per_window", "gvtd_window_times_s", "GVTD filtered (0.01-0.5 Hz) mean per window"),
     ("gvtd_filt_p95", "gvtd_filt_p95_per_window", "gvtd_window_times_s", "GVTD filtered (0.01-0.5 Hz) p95 per window"),
 ]
-from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("qc.group_writer")
 
@@ -73,11 +73,7 @@ def _collect_sqm(
             continue
         full_rows.append({"bids_name": _bids_name_from_sqm_path(sqm_path), **sqm})
 
-    if not full_rows:
-        return pd.DataFrame(columns=["bids_name"]), []
-    scalar_rows = [{"bids_name": r["bids_name"], **_scalars(r)} for r in full_rows]
-    cols = ["bids_name"] + sorted({k for r in scalar_rows for k in r if k != "bids_name"})
-    return pd.DataFrame(scalar_rows, columns=cols), full_rows
+    return rows_to_dataframe(full_rows), full_rows
 
 
 def _render_group(
@@ -117,12 +113,12 @@ def _render_group(
     if not df.empty and metric_cols:
         _, ordered_cols = group_metrics(metric_cols)
         _save("heatmap", "heatmap", build_heatmap(df, ordered_cols))
-        for i, (title, fig) in enumerate(build_grouped_boxes(df, ordered_cols)):
+        for i, (box_title, fig) in enumerate(build_grouped_boxes(df, ordered_cols)):
             fname = f"{out_stem}_desc-box{i}_nirs.html"
             h = _save_figure_html(fig, fig_dir / fname, extra_js=_STRIP_CLICK_JS)
             box_panels.append({
                 "src": f"{out_stem}/{fname}", "h": h,
-                "w": int(getattr(fig.layout, "width", None) or 300), "title": title,
+                "w": int(getattr(fig.layout, "width", None) or 300), "title": box_title,
             })
 
     windowed_panels: list[dict] = []
