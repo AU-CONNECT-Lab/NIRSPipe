@@ -33,7 +33,9 @@ Preprocessing only:
 ```bash
 fnirs-pipe /data/bids /data/derivatives participant \
   --participant-label 01 02 \
-  --dpf 6.0 --sci-threshold 0.8
+  --dpf 6.0 --sci-threshold 0.8 \
+  --cardiac-l-freq 0.7 --cardiac-h-freq 1.5 \
+  --resp-l-freq 0.1 --resp-h-freq 0.5
 ```
 
 Preprocessing + first-level GLM (events from SNIRF annotations by default):
@@ -42,6 +44,8 @@ Preprocessing + first-level GLM (events from SNIRF annotations by default):
 fnirs-pipe /data/bids /data/derivatives participant \
   --participant-label 01 \
   --dpf 6.0 --sci-threshold 0.8 \
+  --cardiac-l-freq 0.7 --cardiac-h-freq 1.5 \
+  --resp-l-freq 0.1 --resp-h-freq 0.5 \
   --mode glm \
   --hrf-model spm --noise-model ar1 \
   --drift-model cosine --drift-high-pass 0.01 \
@@ -61,6 +65,10 @@ fnirs-pipe BIDS_DIR OUTPUT_DIR {participant,group} [OPTIONS]
 Required:
   --dpf FLOAT [FLOAT ...]      Differential pathlength factor. One value or one per wavelength.
   --sci-threshold FLOAT        SCI threshold for bad channel detection (e.g. 0.8).
+  --cardiac-l-freq FLOAT       Lower cardiac band bound in Hz (population-dependent, no default).
+  --cardiac-h-freq FLOAT       Upper cardiac band bound in Hz.
+  --resp-l-freq FLOAT          Lower respiration band bound in Hz (population-dependent, no default).
+  --resp-h-freq FLOAT          Upper respiration band bound in Hz.
 
 Subject / session / task selection:
   --participant-label LABEL [LABEL ...]   Space-separated or repeated.
@@ -73,8 +81,6 @@ Preprocessing:
                                tddr + wavelet implemented; spline raises NotImplementedError.
   --bad-channels               Comma-separated S-D labels to mark bad,
                                e.g. "S1_D1,S2_D3" (unioned with SCI bads)
-  --cardiac-l-freq FLOAT       Lower cardiac band bound in Hz.                        [default: 0.7]
-  --cardiac-h-freq FLOAT       Upper cardiac band bound in Hz.                        [default: 1.5]
 
 Postprocessing mode:
   --mode                       {denoise,glm,rest}
@@ -153,11 +159,15 @@ fnirs-prep edit-markers apply BIDS_DIR DERIVATIVES_DIR --participant-label SUB .
 ### `fnirs-qc` — QC reports
 
 ```
+# prep-raw / hyper-raw / window-raw / epoch require --cardiac-l-freq/--cardiac-h-freq (no default)
+
 fnirs-qc prep-raw BIDS_DIR OUTPUT_DIR PARTICIPANT_LABEL
+                  --cardiac-l-freq FLOAT --cardiac-h-freq FLOAT
                   [--session-label / --task-label]
                   [--sci-threshold FLOAT] [--skip-bids-validation]
 
 fnirs-qc hyper-raw BIDS_DIR OUTPUT_DIR --pairs-csv PATH
+                   --cardiac-l-freq FLOAT --cardiac-h-freq FLOAT
                    [--group-id / --task-label / --session-label]
                    [--sci-threshold FLOAT] [--fmin/--fmax FLOAT]
                    [--normalize] [--no-align]
@@ -173,9 +183,17 @@ fnirs-qc group-hyper-raw OUTPUT_DIR
 
 fnirs-qc window-raw BIDS_DIR OUTPUT_DIR --task-label TEXT
                     --tstart FLOAT --tend FLOAT
+                    --cardiac-l-freq FLOAT --cardiac-h-freq FLOAT
                     [--participant-label ...] [--session-label ...]
                     [--align none|trigger] [--trigger-name TEXT]
                     [--name TEXT] [--sci-threshold FLOAT]
+
+fnirs-qc epoch BIDS_DIR OUTPUT_DIR --task-label TEXT
+               --mode epoch|duration
+               --cardiac-l-freq FLOAT --cardiac-h-freq FLOAT
+               [--tmin/--tmax FLOAT] [--events-csv PATH]
+               [--participant-label ...] [--session-label ...]
+               [--sci-threshold FLOAT]
 ```
 
 ### `fnirs-rate` — Flask rating viewers
@@ -262,6 +280,7 @@ output/
 | Raw pre-flight viewer | `fnirs-qc prep-raw` | individual — raw only |
 | Group | `fnirs-qc group-raw` / `group-hyper-raw` | group — raw |
 | Time-window group | `fnirs-qc window-raw` | group — raw, cropped window |
+| Per-trial | `fnirs-qc epoch` | individual — SQM per task event |
 | Dyad raw | `fnirs-qc hyper-raw` | hyperscanning — raw coherence |
 | Dyad post | `fnirs-qc hyper-post` | hyperscanning — post: WTC + ISC (ROI-level with `--roi-mapping`) |
 

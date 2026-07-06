@@ -6,6 +6,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-07-06
+
 ### Added
 - Wavelet motion correction (`--motion-correction wavelet`): zeroes outlier wavelet detail coefficients per channel in OD space
 - Filtered GVTD (0.01–0.5 Hz motion band) reported alongside the raw GVTD, plus per-run motion summaries above an adaptive (histogram-mode) threshold: number of motion frames, percent of run, and the threshold value
