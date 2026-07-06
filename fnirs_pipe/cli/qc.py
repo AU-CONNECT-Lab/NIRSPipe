@@ -70,13 +70,13 @@ def _run_groups(groups: dict, process) -> None:
 def cmd_prep_raw(
     bids_dir: Path, output_dir: Path, participant_label: str,
     session_label: list[str] | None, task_label: list[str] | None,
-    sci_threshold: float, cardiac_l_freq: float, cardiac_h_freq: float,
+    dpf: list[float], sci_threshold: float, cardiac_l_freq: float, cardiac_h_freq: float,
     skip_bids_validation: bool,
 ) -> None:
     """Generate static raw QC report for a single participant."""
     from collections import defaultdict
 
-    from fnirs_pipe.io.bids import get_layout, get_nirs_files
+    from fnirs_pipe.io.bids import bids_label, get_layout, get_nirs_files
     from fnirs_pipe.qc.prep_raw_report import build_prep_raw_report
 
     layout = get_layout(bids_dir, validate=not skip_bids_validation)
@@ -93,13 +93,7 @@ def cmd_prep_raw(
                 entities = layout.parse_file_entities(str(f))
                 actual_ses = entities.get("session")
                 actual_task = entities.get("task")
-                actual_run = entities.get("run")
-
-                parts = [f"sub-{participant_label}"]
-                if actual_ses:  parts.append(f"ses-{actual_ses}")
-                if actual_task: parts.append(f"task-{actual_task}")
-                if actual_run:  parts.append(f"run-{actual_run}")
-                label = "_".join(parts)
+                label = bids_label(participant_label, entities)
 
                 snirf_p = Path(f)
                 events_p = snirf_p.parent / (snirf_p.name.replace("_nirs.snirf", "_events.tsv"))
@@ -125,7 +119,7 @@ def cmd_prep_raw(
         html_path = output_dir / ("_".join(name_parts) + "_desc-raw_nirs.html")
         print(f"Generating raw QC report: {html_path.name} ...")
         try:
-            build_prep_raw_report(group_runs, html_path, sci_threshold=sci_threshold,
+            build_prep_raw_report(group_runs, html_path, dpf=dpf, sci_threshold=sci_threshold,
                                   cardiac_l_freq=cardiac_l_freq, cardiac_h_freq=cardiac_h_freq)
             print(f"  -> {html_path}")
         except Exception as exc:
@@ -137,7 +131,7 @@ def cmd_prep_raw(
 
 def cmd_hyper_raw(
     bids_dir: Path, output_dir: Path, pairs_csv: Path, group_id: str | None,
-    sci_threshold: float, cardiac_l_freq: float, cardiac_h_freq: float,
+    dpf: list[float], sci_threshold: float, cardiac_l_freq: float, cardiac_h_freq: float,
     coherence_fmin: float, coherence_fmax: float,
     normalize: bool, no_align: bool,
     session_label: list[str] | None, task_label: list[str] | None,
@@ -162,7 +156,7 @@ def cmd_hyper_raw(
         raws_cw = load_group_raw_bids(bids_dir, members)
         sqm_data = compute_group_sqm_raw(members, raws_cw, sci_threshold, output_dir,
                                          cardiac_l_freq, cardiac_h_freq)
-        raws_haemo = {sid: _raw_to_haemo(r) for sid, r in raws_cw.items()}
+        raws_haemo = {sid: _raw_to_haemo(r, dpf) for sid, r in raws_cw.items()}
         if no_align:
             aligned_raws, offsets = trim_to_shortest(raws_haemo)
         else:
@@ -328,6 +322,8 @@ def _build_parser() -> argparse.ArgumentParser:
     pr.add_argument("participant_label", help="Subject ID to inspect, e.g. '01'")
     pr.add_argument("--session-label", nargs="+", action="extend", help="Session label(s) to include.")
     pr.add_argument("--task-label",    nargs="+", action="extend", help="Task label(s) to include.")
+    pr.add_argument("--dpf", nargs="+", type=float, action="extend", required=True,
+                    help="Differential pathlength factor. One value or one per wavelength.")
     pr.add_argument("--sci-threshold", type=float, default=0.8,
                     help="SCI pass/fail threshold for bad channel detection.")
     pr.add_argument("--cardiac-l-freq", type=float, required=True,
@@ -345,6 +341,8 @@ def _build_parser() -> argparse.ArgumentParser:
                          "Each unique (group_id, task) pair is processed as one session.")
     hr.add_argument("--group-id", default=None,
                     help="Process only this group_id. Omit to process all groups.")
+    hr.add_argument("--dpf", nargs="+", type=float, action="extend", required=True,
+                    help="Differential pathlength factor. One value or one per wavelength.")
     hr.add_argument("--sci-threshold", type=float, default=0.80,
                     help="SCI pass/fail threshold for channel quality comparison.")
     hr.add_argument("--cardiac-l-freq", type=float, required=True,

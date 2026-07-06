@@ -20,6 +20,68 @@ logger = get_logger("qc.quantitative_metrics")
 GVTD_MOTION_BAND = (0.01, 0.5)  # Hz — bandpass for the filtered (motion-specific) GVTD
 
 
+def compute_sci_scores(
+    raw: mne.io.Raw, cardiac_l_freq: float, cardiac_h_freq: float,
+) -> tuple[dict[str, float], mne.io.Raw]:
+    """Return ({channel: SCI score}, raw_od). SCI defaults to 1.0 for all channels on failure."""
+    raw_od = mne.preprocessing.nirs.optical_density(raw.copy(), verbose=False)
+    try:
+        sci_arr = mne.preprocessing.nirs.scalp_coupling_index(
+            raw_od, l_freq=cardiac_l_freq, h_freq=cardiac_h_freq, verbose=False)
+        sci_scores = {ch: float(sci_arr[i]) for i, ch in enumerate(raw.ch_names)}
+    except Exception as exc:
+        logger.warning("SCI failed: %s", exc)
+        sci_scores = {ch: 1.0 for ch in raw.ch_names}
+    return sci_scores, raw_od
+
+
+def attach_windowed_series(
+    sqm: dict, raw_od: mne.io.Raw, cardiac_l_freq: float, cardiac_h_freq: float,
+) -> dict:
+    """Compute sliding-window SCI/PSP/GVTD series, attach summaries to sqm, return raw series.
+
+    Returned dict carries sci_matrix/sci_times/psp_matrix/psp_times for callers that also plot
+    them. On failure everything is None and sqm is left unchanged. Center times collapse the
+    mne-nirs [start, end] window pairs to their midpoint.
+    """
+    from fnirs_pipe.pipeline.prep_pipeline import (
+        compute_windowed_filtered_gvtd, compute_windowed_gvtd,
+        compute_windowed_psp, compute_windowed_sci,
+    )
+
+    def _center_times(t):
+        a = np.asarray(t)
+        return (a.mean(axis=1) if a.ndim == 2 and a.shape[1] == 2 else a).tolist()
+
+    series = {"sci_matrix": None, "sci_times": None, "psp_matrix": None, "psp_times": None}
+    try:
+        sci_matrix, sci_times = compute_windowed_sci(raw_od, cardiac_l_freq, cardiac_h_freq)
+        psp_matrix, psp_times = compute_windowed_psp(raw_od, cardiac_l_freq, cardiac_h_freq)
+        gvtd_per_window, gvtd_p95_per_window, gvtd_t = compute_windowed_gvtd(raw_od)
+        gvtd_filt_per_window, gvtd_filt_p95_per_window, _ = compute_windowed_filtered_gvtd(raw_od)
+    except Exception as exc:
+        logger.warning("windowed metrics failed: %s", exc)
+        return series
+
+    if sci_matrix is not None and sci_times is not None:
+        sqm["sci_per_window"]      = np.asarray(sci_matrix).mean(axis=0).tolist()
+        sqm["sci_window_times_s"]  = _center_times(sci_times)
+    if psp_matrix is not None and psp_times is not None:
+        sqm["psp_per_window"]      = np.asarray(psp_matrix).mean(axis=0).tolist()
+        sqm["psp_window_times_s"]  = _center_times(psp_times)
+    if gvtd_per_window is not None and len(gvtd_per_window):
+        sqm["gvtd_per_window"]     = np.asarray(gvtd_per_window).tolist()
+        sqm["gvtd_p95_per_window"] = np.asarray(gvtd_p95_per_window).tolist()
+        sqm["gvtd_window_times_s"] = _center_times(gvtd_t)
+    if gvtd_filt_per_window is not None and len(gvtd_filt_per_window):
+        sqm["gvtd_filt_per_window"]     = np.asarray(gvtd_filt_per_window).tolist()
+        sqm["gvtd_filt_p95_per_window"] = np.asarray(gvtd_filt_p95_per_window).tolist()
+
+    series.update(sci_matrix=sci_matrix, sci_times=sci_times,
+                  psp_matrix=psp_matrix, psp_times=psp_times)
+    return series
+
+
 def _sci_metrics(
     sci_scores: dict[str, float],
     bad_channels: list[str],

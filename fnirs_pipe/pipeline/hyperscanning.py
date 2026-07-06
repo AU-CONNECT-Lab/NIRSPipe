@@ -98,9 +98,10 @@ def load_group_raw_bids(bids_dir: Path, group: list[GroupEntry]) -> dict[str, mn
     return result
 
 
-def _raw_to_haemo(raw: mne.io.Raw, dpf: float = 6.0) -> mne.io.Raw:
+def _raw_to_haemo(raw: mne.io.Raw, dpf: list[float]) -> mne.io.Raw:
     raw_od = mne.preprocessing.nirs.optical_density(raw.copy(), verbose=False)
-    return mne.preprocessing.nirs.beer_lambert_law(raw_od, ppf=dpf)
+    ppf = dpf[0] if len(dpf) == 1 else dpf
+    return mne.preprocessing.nirs.beer_lambert_law(raw_od, ppf=ppf)
 
 
 def compute_group_sqm_raw(
@@ -324,54 +325,45 @@ def _pairwise_wtc(
     return WCT_band, freqs_band, coi_dec
 
 
-def compute_wtc(
+def _wtc_over_pairs(
     raws: dict[str, mne.io.Raw],
-    fmin: float = 0.004,
-    fmax: float = 0.20,
+    signals: dict[str, dict[str, np.ndarray]],
+    labels: list[str],
+    fmin: float,
+    fmax: float,
 ) -> WTCResult:
-    """Compute pairwise WTC per HbO channel using pycwt Morlet wavelet.
+    """Run pairwise Morlet WTC over precomputed per-subject {label: signal} maps.
 
-    Time axis decimated to ≤4 Hz for display performance.
-    Frequency axis filtered to [fmin, fmax] Hz and sorted ascending.
+    Signals are matched by label; a label absent for either subject yields None for that pair.
+    Time axis decimated to ~1 Hz for display; frequency axis filtered to [fmin, fmax] Hz.
     """
     subject_ids = list(raws.keys())
-    if len(subject_ids) < 2:
-        raise ValueError("Need at least 2 subjects for WTC")
-
     ref_raw = raws[subject_ids[0]]
     sfreq   = float(ref_raw.info["sfreq"])
     dt      = 1.0 / sfreq
-    step    = max(1, int(round(sfreq)))  # decimate to ~1 Hz for display
+    step    = max(1, int(round(sfreq)))
 
     result_pairs: dict = {}
     shared_freqs: np.ndarray | None = None
     shared_times: np.ndarray | None = None
 
     for sub1, sub2 in combinations(subject_ids, 2):
-        raw1, raw2 = raws[sub1], raws[sub2]
-        picks1     = mne.pick_types(raw1.info, fnirs="hbo")
-        picks2     = mne.pick_types(raw2.info, fnirs="hbo")
-        ch_names   = [raw1.ch_names[p].rsplit(" ", 1)[0] for p in picks1]
-
+        sig_map1, sig_map2 = signals[sub1], signals[sub2]
         pair_data: dict[str, dict | None] = {}
-        for i in range(min(len(picks1), len(picks2))):
-            ch   = ch_names[i]
-            sig1 = raw1.get_data(picks=[picks1[i]])[0].astype(np.float64)
-            sig2 = raw2.get_data(picks=[picks2[i]])[0].astype(np.float64)
+        for label in labels:
+            sig1, sig2 = sig_map1.get(label), sig_map2.get(label)
+            if sig1 is None or sig2 is None:
+                pair_data[label] = None
+                continue
             try:
-                WCT_band, freqs_band, coi_dec = _pairwise_wtc(
-                    sig1, sig2, dt, step, fmin, fmax
-                )
-
+                WCT_band, freqs_band, coi_dec = _pairwise_wtc(sig1, sig2, dt, step, fmin, fmax)
                 if shared_freqs is None:
                     shared_freqs = freqs_band
                     shared_times = ref_raw.times[::step]
-
-                pair_data[ch] = {"wtc": WCT_band, "coi": coi_dec}
+                pair_data[label] = {"wtc": WCT_band, "coi": coi_dec}
             except Exception as exc:
-                logger.warning("WTC failed %s-%s ch %s: %s", sub1, sub2, ch, exc)
-                pair_data[ch] = None
-
+                logger.warning("WTC failed %s-%s label %s: %s", sub1, sub2, label, exc)
+                pair_data[label] = None
         result_pairs[(sub1, sub2)] = pair_data
 
     return WTCResult(
@@ -379,6 +371,30 @@ def compute_wtc(
         freqs=shared_freqs if shared_freqs is not None else np.array([]),
         times=shared_times if shared_times is not None else np.array([]),
     )
+
+
+def compute_wtc(
+    raws: dict[str, mne.io.Raw],
+    fmin: float = 0.004,
+    fmax: float = 0.20,
+) -> WTCResult:
+    """Compute pairwise WTC per HbO channel using pycwt Morlet wavelet.
+
+    Channels are matched by S-D label across subjects; time axis decimated to ~1 Hz.
+    """
+    subject_ids = list(raws.keys())
+    if len(subject_ids) < 2:
+        raise ValueError("Need at least 2 subjects for WTC")
+
+    signals: dict[str, dict[str, np.ndarray]] = {}
+    for sid, raw in raws.items():
+        picks = mne.pick_types(raw.info, fnirs="hbo")
+        signals[sid] = {
+            raw.ch_names[p].rsplit(" ", 1)[0]: raw.get_data(picks=[p])[0].astype(np.float64)
+            for p in picks
+        }
+
+    return _wtc_over_pairs(raws, signals, list(signals[subject_ids[0]]), fmin, fmax)
 
 
 def _roi_averaged_signals(
@@ -423,53 +439,18 @@ def compute_wtc_roi(
     if len(subject_ids) < 2:
         raise ValueError("Need at least 2 subjects for WTC")
 
-    ref_raw = raws[subject_ids[0]]
-    sfreq   = float(ref_raw.info["sfreq"])
-    dt      = 1.0 / sfreq
-    step    = max(1, int(round(sfreq)))
-
     bad_channels = bad_channels or {}
     bad_pairs_union = {
         ch.rsplit(" ", 1)[0]
         for sid in subject_ids
         for ch in bad_channels.get(sid, [])
     }
-    roi_signals = {
+    signals = {
         sid: _roi_averaged_signals(raw, roi_map, bad_pairs_union)
         for sid, raw in raws.items()
     }
 
-    result_pairs: dict = {}
-    shared_freqs: np.ndarray | None = None
-    shared_times: np.ndarray | None = None
-
-    for sub1, sub2 in combinations(subject_ids, 2):
-        sig_map1, sig_map2 = roi_signals[sub1], roi_signals[sub2]
-        pair_data: dict[str, dict | None] = {}
-        for roi in roi_map:
-            sig1, sig2 = sig_map1.get(roi), sig_map2.get(roi)
-            if sig1 is None or sig2 is None:
-                pair_data[roi] = None
-                continue
-            try:
-                WCT_band, freqs_band, coi_dec = _pairwise_wtc(
-                    sig1, sig2, dt, step, fmin, fmax
-                )
-                if shared_freqs is None:
-                    shared_freqs = freqs_band
-                    shared_times = ref_raw.times[::step]
-                pair_data[roi] = {"wtc": WCT_band, "coi": coi_dec}
-            except Exception as exc:
-                logger.warning("ROI WTC failed %s-%s roi %s: %s", sub1, sub2, roi, exc)
-                pair_data[roi] = None
-
-        result_pairs[(sub1, sub2)] = pair_data
-
-    return WTCResult(
-        pairs=result_pairs,
-        freqs=shared_freqs if shared_freqs is not None else np.array([]),
-        times=shared_times if shared_times is not None else np.array([]),
-    )
+    return _wtc_over_pairs(raws, signals, list(roi_map), fmin, fmax)
 
 
 # TODO (optional): extend with PLI / wPLI via mne-connectivity.

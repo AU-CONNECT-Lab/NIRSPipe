@@ -30,6 +30,7 @@ def _process_run(
     sub_dir: Path,
     cardiac_l_freq: float,
     cardiac_h_freq: float,
+    dpf: list[float],
 ) -> dict:
     """Compute all data, save figure HTMLs + SQM JSON. Returns inline dict for HTML."""
     from fnirs_pipe.qc.figures import (
@@ -44,7 +45,9 @@ def _process_run(
         channel_quality_heatmap,
         condition_colors,
     )
-    from fnirs_pipe.qc.quantitative_metrics import compute_raw_sqm
+    from fnirs_pipe.qc.quantitative_metrics import (
+        attach_windowed_series, compute_raw_sqm, compute_sci_scores,
+    )
 
     label   = run["label"]
     session = run.get("session")
@@ -55,32 +58,8 @@ def _process_run(
 
     raw = mne.io.read_raw_snirf(run["snirf_path"], preload=True, verbose=False)
 
-    try:
-        raw_od  = mne.preprocessing.nirs.optical_density(raw.copy(), verbose=False)
-        sci_arr = mne.preprocessing.nirs.scalp_coupling_index(
-            raw_od, l_freq=cardiac_l_freq, h_freq=cardiac_h_freq, verbose=False)
-        sci_scores = {ch: float(sci_arr[i]) for i, ch in enumerate(raw.ch_names)}
-    except Exception as exc:
-        logger.warning("SCI failed: %s", exc)
-        sci_scores = {ch: 1.0 for ch in raw.ch_names}
-        raw_od = mne.preprocessing.nirs.optical_density(raw.copy(), verbose=False)
-
+    sci_scores, raw_od = compute_sci_scores(raw, cardiac_l_freq, cardiac_h_freq)
     bad_channels: set[str] = {ch for ch, s in sci_scores.items() if s < sci_threshold}
-
-    sci_matrix = sci_win_times = psp_matrix = psp_win_times = None
-    gvtd_per_window = gvtd_p95_per_window = gvtd_win_times = None
-    gvtd_filt_per_window = gvtd_filt_p95_per_window = None
-    try:
-        from fnirs_pipe.pipeline.prep_pipeline import (
-            compute_windowed_filtered_gvtd, compute_windowed_gvtd,
-            compute_windowed_psp, compute_windowed_sci,
-        )
-        sci_matrix, sci_win_times = compute_windowed_sci(raw_od, cardiac_l_freq, cardiac_h_freq)
-        psp_matrix, psp_win_times = compute_windowed_psp(raw_od, cardiac_l_freq, cardiac_h_freq)
-        gvtd_per_window, gvtd_p95_per_window, gvtd_win_times = compute_windowed_gvtd(raw_od)
-        gvtd_filt_per_window, gvtd_filt_p95_per_window, _ = compute_windowed_filtered_gvtd(raw_od)
-    except Exception as exc:
-        logger.warning("Windowed SCI/PSP/GVTD failed: %s", exc)
 
     try:
         sqm = compute_raw_sqm(raw, sci_scores, list(bad_channels), cardiac_l_freq, cardiac_h_freq)
@@ -89,29 +68,14 @@ def _process_run(
         sqm = {}
 
     # Persist windowed series so group_raw can build time × subject heatmaps.
-    # mne-nirs returns ndarray scores but list-of-[start,end] times → collapse to center.
-    import numpy as _np
-    def _center_times(t):
-        a = _np.asarray(t)
-        return (a.mean(axis=1) if a.ndim == 2 and a.shape[1] == 2 else a).tolist()
-
-    if sci_matrix is not None and sci_win_times is not None:
-        sqm["sci_per_window"]      = _np.asarray(sci_matrix).mean(axis=0).tolist()
-        sqm["sci_window_times_s"]  = _center_times(sci_win_times)
-    if psp_matrix is not None and psp_win_times is not None:
-        sqm["psp_per_window"]      = _np.asarray(psp_matrix).mean(axis=0).tolist()
-        sqm["psp_window_times_s"]  = _center_times(psp_win_times)
-    if gvtd_per_window is not None and len(gvtd_per_window):
-        sqm["gvtd_per_window"]     = _np.asarray(gvtd_per_window).tolist()
-        sqm["gvtd_p95_per_window"] = _np.asarray(gvtd_p95_per_window).tolist()
-        sqm["gvtd_window_times_s"] = _center_times(gvtd_win_times)
-    if gvtd_filt_per_window is not None and len(gvtd_filt_per_window):
-        sqm["gvtd_filt_per_window"]     = _np.asarray(gvtd_filt_per_window).tolist()
-        sqm["gvtd_filt_p95_per_window"] = _np.asarray(gvtd_filt_p95_per_window).tolist()
+    series = attach_windowed_series(sqm, raw_od, cardiac_l_freq, cardiac_h_freq)
+    sci_matrix, sci_win_times = series["sci_matrix"], series["sci_times"]
+    psp_matrix, psp_win_times = series["psp_matrix"], series["psp_times"]
 
     raw_haemo = None
     try:
-        raw_haemo = mne.preprocessing.nirs.beer_lambert_law(raw_od.copy(), ppf=6.0)
+        ppf = dpf[0] if len(dpf) == 1 else dpf
+        raw_haemo = mne.preprocessing.nirs.beer_lambert_law(raw_od.copy(), ppf=ppf)
     except Exception as exc:
         logger.warning("Beer-Lambert failed: %s", exc)
 
@@ -276,6 +240,7 @@ def build_prep_raw_report(
     output_path: Path,
     cardiac_l_freq: float,
     cardiac_h_freq: float,
+    dpf: list[float],
     sci_threshold: float = 0.8,
 ) -> None:
     """Generate raw QC report: lightweight HTML + per-run folders with figure HTMLs + SQM JSON."""
@@ -287,7 +252,7 @@ def build_prep_raw_report(
         sub_dir = output_dir / f"sub-{run['subject_id']}"
         logger.info("[%d/%d] processing %s ...", i + 1, len(runs), label)
         try:
-            d = _process_run(run, sci_threshold, sub_dir, cardiac_l_freq, cardiac_h_freq)
+            d = _process_run(run, sci_threshold, sub_dir, cardiac_l_freq, cardiac_h_freq, dpf)
             static_data.append(d)
         except Exception as exc:
             logger.error("Failed to process run %s: %s", label, exc)

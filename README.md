@@ -159,14 +159,17 @@ fnirs-prep edit-markers apply BIDS_DIR DERIVATIVES_DIR --participant-label SUB .
 ### `fnirs-qc` — QC reports
 
 ```
-# prep-raw / hyper-raw / window-raw / epoch require --cardiac-l-freq/--cardiac-h-freq (no default)
+# prep-raw / hyper-raw / window-raw / epoch require --cardiac-l-freq/--cardiac-h-freq (no default);
+# prep-raw and hyper-raw additionally require --dpf (they convert to haemoglobin internally)
 
 fnirs-qc prep-raw BIDS_DIR OUTPUT_DIR PARTICIPANT_LABEL
+                  --dpf FLOAT [FLOAT ...]
                   --cardiac-l-freq FLOAT --cardiac-h-freq FLOAT
                   [--session-label / --task-label]
                   [--sci-threshold FLOAT] [--skip-bids-validation]
 
 fnirs-qc hyper-raw BIDS_DIR OUTPUT_DIR --pairs-csv PATH
+                   --dpf FLOAT [FLOAT ...]
                    --cardiac-l-freq FLOAT --cardiac-h-freq FLOAT
                    [--group-id / --task-label / --session-label]
                    [--sci-threshold FLOAT] [--fmin/--fmax FLOAT]

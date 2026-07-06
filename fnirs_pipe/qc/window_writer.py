@@ -8,7 +8,7 @@ from pathlib import Path
 
 import mne
 
-from fnirs_pipe.io.bids import get_layout, get_nirs_files
+from fnirs_pipe.io.bids import get_layout, iter_run_files
 from fnirs_pipe.qc.group_writer import _render_group, rows_to_dataframe
 from fnirs_pipe.utils.logging import get_logger
 
@@ -56,22 +56,11 @@ def _sqm_for_cropped(cropped: mne.io.Raw, sci_threshold: float,
     Shared by window-raw (one fixed window) and epoch QC (one window per trial).
     windowed=False skips the sliding-window series (meaningless on short trial windows).
     """
-    from fnirs_pipe.pipeline.prep_pipeline import (
-        compute_windowed_filtered_gvtd,
-        compute_windowed_gvtd, compute_windowed_psp, compute_windowed_sci,
+    from fnirs_pipe.qc.quantitative_metrics import (
+        attach_windowed_series, compute_raw_sqm, compute_sci_scores,
     )
-    from fnirs_pipe.qc.quantitative_metrics import compute_raw_sqm
 
-    try:
-        raw_od     = mne.preprocessing.nirs.optical_density(cropped.copy(), verbose=False)
-        sci_arr    = mne.preprocessing.nirs.scalp_coupling_index(
-            raw_od, l_freq=cardiac_l_freq, h_freq=cardiac_h_freq, verbose=False)
-        sci_scores = {ch: float(sci_arr[i]) for i, ch in enumerate(cropped.ch_names)}
-    except Exception as exc:
-        logger.warning("SCI failed: %s", exc)
-        sci_scores = {ch: 1.0 for ch in cropped.ch_names}
-        raw_od     = mne.preprocessing.nirs.optical_density(cropped.copy(), verbose=False)
-
+    sci_scores, raw_od = compute_sci_scores(cropped, cardiac_l_freq, cardiac_h_freq)
     bad_channels = [ch for ch, s in sci_scores.items() if s < sci_threshold]
     try:
         sqm = compute_raw_sqm(cropped, sci_scores, bad_channels, cardiac_l_freq, cardiac_h_freq)
@@ -79,35 +68,8 @@ def _sqm_for_cropped(cropped: mne.io.Raw, sci_threshold: float,
         logger.warning("compute_raw_sqm failed: %s", exc)
         sqm = {}
 
-    if not windowed:
-        return sqm
-
-    # Windowed series (same convention as prep_raw_report; center-time scalar list)
-    import numpy as _np
-    def _center_times(t):
-        a = _np.asarray(t)
-        return (a.mean(axis=1) if a.ndim == 2 and a.shape[1] == 2 else a).tolist()
-    try:
-        sci_matrix, sci_times   = compute_windowed_sci(raw_od, cardiac_l_freq, cardiac_h_freq)
-        psp_matrix, psp_times   = compute_windowed_psp(raw_od, cardiac_l_freq, cardiac_h_freq)
-        gvtd_per_window, gvtd_p95_per_window, gvtd_t = compute_windowed_gvtd(raw_od)
-        gvtd_filt_per_window, gvtd_filt_p95_per_window, _ = compute_windowed_filtered_gvtd(raw_od)
-        if sci_matrix is not None:
-            sqm["sci_per_window"]      = _np.asarray(sci_matrix).mean(axis=0).tolist()
-            sqm["sci_window_times_s"]  = _center_times(sci_times)
-        if psp_matrix is not None:
-            sqm["psp_per_window"]      = _np.asarray(psp_matrix).mean(axis=0).tolist()
-            sqm["psp_window_times_s"]  = _center_times(psp_times)
-        if gvtd_per_window is not None and len(gvtd_per_window):
-            sqm["gvtd_per_window"]     = _np.asarray(gvtd_per_window).tolist()
-            sqm["gvtd_p95_per_window"] = _np.asarray(gvtd_p95_per_window).tolist()
-            sqm["gvtd_window_times_s"] = _center_times(gvtd_t)
-        if gvtd_filt_per_window is not None and len(gvtd_filt_per_window):
-            sqm["gvtd_filt_per_window"]     = _np.asarray(gvtd_filt_per_window).tolist()
-            sqm["gvtd_filt_p95_per_window"] = _np.asarray(gvtd_filt_p95_per_window).tolist()
-    except Exception as exc:
-        logger.warning("windowed metrics failed: %s", exc)
-
+    if windowed:
+        attach_windowed_series(sqm, raw_od, cardiac_l_freq, cardiac_h_freq)
     return sqm
 
 
@@ -147,25 +109,15 @@ def build_window_raw_report(
     sessions = session_label or [None]
 
     rows: list[dict] = []
-    for sub in subjects:
-        for ses in sessions:
-            files = get_nirs_files(layout, subject=sub, session=ses, task=task)
-            for f in files:
-                entities = layout.parse_file_entities(str(f))
-                parts = [f"sub-{sub}"]
-                if entities.get("session"): parts.append(f"ses-{entities['session']}")
-                parts.append(f"task-{entities['task']}")
-                if entities.get("run"):     parts.append(f"run-{entities['run']}")
-                bids_name = "_".join(parts)
-
-                sqm = _compute_sqm_for_window(
-                    Path(f), tstart, tend, align, trigger_name, sci_threshold,
-                    cardiac_l_freq, cardiac_h_freq,
-                )
-                if sqm is None:
-                    continue
-                rows.append({"bids_name": bids_name, **sqm})
-                logger.info("computed window SQM for %s", bids_name)
+    for snirf_path, bids_name in iter_run_files(layout, subjects, sessions, task):
+        sqm = _compute_sqm_for_window(
+            snirf_path, tstart, tend, align, trigger_name, sci_threshold,
+            cardiac_l_freq, cardiac_h_freq,
+        )
+        if sqm is None:
+            continue
+        rows.append({"bids_name": bids_name, **sqm})
+        logger.info("computed window SQM for %s", bids_name)
 
     if not rows:
         logger.warning("no SNIRF processed; report will be empty")

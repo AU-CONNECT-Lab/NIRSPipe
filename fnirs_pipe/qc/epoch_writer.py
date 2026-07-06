@@ -10,7 +10,7 @@ from pathlib import Path
 
 import mne
 
-from fnirs_pipe.io.bids import get_layout, get_nirs_files
+from fnirs_pipe.io.bids import get_layout, iter_run_files
 from fnirs_pipe.qc.group_writer import _render_group, rows_to_dataframe
 from fnirs_pipe.qc.window_writer import _crop_to_window, _sqm_for_cropped
 from fnirs_pipe.utils.logging import get_logger
@@ -99,22 +99,14 @@ def build_epoch_qc_report(
     sessions = session_label or [None]
 
     out_paths: list[Path] = []
-    for sub in subjects:
-        for ses in sessions:
-            for f in get_nirs_files(layout, subject=sub, session=ses, task=task):
-                entities = layout.parse_file_entities(str(f))
-                parts = [f"sub-{sub}"]
-                if entities.get("session"): parts.append(f"ses-{entities['session']}")
-                parts.append(f"task-{entities['task']}")
-                if entities.get("run"):     parts.append(f"run-{entities['run']}")
-                bids_name = "_".join(parts)
-                try:
-                    p = _epoch_qc_one(
-                        Path(f), bids_name, mode, tmin, tmax, events_csv,
-                        sci_threshold, cardiac_l_freq, cardiac_h_freq, output_dir,
-                    )
-                    if p is not None:
-                        out_paths.append(p)
-                except Exception:
-                    logger.exception("epoch QC failed for %s", bids_name)
+    for snirf_path, bids_name in iter_run_files(layout, subjects, sessions, task):
+        try:
+            p = _epoch_qc_one(
+                snirf_path, bids_name, mode, tmin, tmax, events_csv,
+                sci_threshold, cardiac_l_freq, cardiac_h_freq, output_dir,
+            )
+            if p is not None:
+                out_paths.append(p)
+        except Exception:
+            logger.exception("epoch QC failed for %s", bids_name)
     return out_paths

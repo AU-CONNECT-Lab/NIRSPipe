@@ -121,19 +121,19 @@ def _process_hyper_raw_group(
     ch_pairs: list[str] = get_channel_pairs(first_raw) if first_raw else []
     for pair in ch_pairs:
         try:
-                trace_fig = build_signal_overlay_pair(
-                    aligned_raws, subject_ids, pair, markers_list, cond_colors_,
-                )
-                psd_fig   = build_psd(aligned_raws, pair, subject_ids)
-                epoch_fig = build_epoch(
-                    aligned_raws, pair, subject_ids, epoch_tmin, epoch_tmax,
-                )
-                fname = f"{label}_desc-ch{_pair_fname(pair)}_nirs.html"
-                _save_multi_fig_html(
-                    [trace_fig, psd_fig, epoch_fig], fig_dir / fname,
-                )
-            except Exception as exc:
-                logger.warning("channel %s figure failed: %s", pair, exc)
+            trace_fig = build_signal_overlay_pair(
+                aligned_raws, subject_ids, pair, markers_list, cond_colors_,
+            )
+            psd_fig   = build_psd(aligned_raws, pair, subject_ids)
+            epoch_fig = build_epoch(
+                aligned_raws, pair, subject_ids, epoch_tmin, epoch_tmax,
+            )
+            fname = f"{label}_desc-ch{_pair_fname(pair)}_nirs.html"
+            _save_multi_fig_html(
+                [trace_fig, psd_fig, epoch_fig], fig_dir / fname,
+            )
+        except Exception as exc:
+            logger.warning("channel %s figure failed: %s", pair, exc)
 
     if ch_pairs:
         figure_paths["ch_detail_template"] = (

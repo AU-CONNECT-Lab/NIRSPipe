@@ -1,6 +1,7 @@
 """BIDS dataset querying and participants.tsv helpers."""
 
 import json
+from collections.abc import Iterator
 from pathlib import Path
 
 import pandas as pd
@@ -90,3 +91,27 @@ def get_nirs_files(
         kwargs.update(extra)
 
     return [Path(f.path) for f in layout.get(**kwargs)]
+
+
+def bids_label(subject: str, entities: dict) -> str:
+    """Build a BIDS filename stem (sub-.._ses-.._task-.._run-..) from parsed entities."""
+    parts = [f"sub-{subject}"]
+    for key, prefix in (("session", "ses"), ("task", "task"), ("run", "run")):
+        val = entities.get(key)
+        if val:
+            parts.append(f"{prefix}-{val}")
+    return "_".join(parts)
+
+
+def iter_run_files(
+    layout: BIDSLayout,
+    subjects: list[str],
+    sessions: list[str | None],
+    task: str | None,
+) -> Iterator[tuple[Path, str]]:
+    """Yield (snirf_path, bids_label) for each subject × session run matching task."""
+    for sub in subjects:
+        for ses in sessions:
+            for f in get_nirs_files(layout, subject=sub, session=ses, task=task):
+                entities = layout.parse_file_entities(str(f))
+                yield f, bids_label(sub, entities)
