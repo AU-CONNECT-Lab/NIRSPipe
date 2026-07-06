@@ -14,6 +14,8 @@ import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
+from fnirs_pipe.qc.quantitative_metrics import gvtd_threshold, gvtd_timetrace
+
 _MAX_PTS = 4000
 
 
@@ -36,10 +38,13 @@ def carpet_gvtd_figure(
     raw_od = mne.preprocessing.nirs.optical_density(raw.copy())
     od_data, times = raw_od.get_data(picks=ch_names, return_times=True)
 
-    # GVTD = sqrt(mean_ch(diff_t(OD)^2)), full-res (spikes are single samples, matches the metric); only carpet decimated
-    gvtd   = np.sqrt(np.mean(np.diff(od_data, axis=1) ** 2, axis=0))
-    t_gvtd = times[1:]
-    p95    = float(np.percentile(gvtd, 95))
+    # GVTD full-res (spikes are single samples, matches the metric); only carpet decimated.
+    # raw = canonical Sherafati; filt = 0.01-0.5 Hz band (motion-specific, used for the threshold)
+    sfreq     = float(raw_od.info["sfreq"])
+    gvtd      = gvtd_timetrace(od_data, sfreq)
+    gvtd_filt = gvtd_timetrace(od_data, sfreq, l_freq=0.01, h_freq=0.5)
+    t_gvtd    = times[1:]
+    motion_thresh = gvtd_threshold(gvtd_filt, n_std=3.0)
 
     # carpet: all channels (both wavelengths are positively correlated, safe in one z-scored image);
     # matches GVTD's channel set. decimate columns for display only
@@ -66,9 +71,12 @@ def carpet_gvtd_figure(
     ax_c = fig.add_subplot(gs[1, 0], sharex=ax_g)
     cax  = fig.add_subplot(gs[1, 1])
 
-    ax_g.plot(t_gvtd, gvtd, lw=1.0, color="#2c3e50")
+    ax_g.plot(t_gvtd, gvtd, lw=0.7, color="#b0b0b0", label="raw")
+    ax_g.plot(t_gvtd, gvtd_filt, lw=1.0, color="#2c3e50", label="0.01–0.5 Hz")
     ax_g.set_xlim(times[0], times[-1])
-    ax_g.axhline(p95, ls="--", lw=0.8, color="#e74c3c", label=f"p95={p95:.4f}")
+    if motion_thresh is not None:
+        ax_g.axhline(motion_thresh, ls="--", lw=0.8, color="#e74c3c",
+                     label=f"thresh={motion_thresh:.4f}")
     ax_g.set_ylabel("GVTD", fontsize=8)
     ax_g.legend(fontsize=7, loc="upper right", framealpha=0.6)
     ax_g.tick_params(labelsize=7)
@@ -210,9 +218,11 @@ def build_motion_detail_figure(
     od_data, od_times = _decimate(od_data, od_times, max_pts)
 
     diff_all = np.diff(od_data, axis=1)
-    gvtd     = np.sqrt(np.mean(diff_all ** 2, axis=0))    # GVTD = sqrt(mean_ch(diff_t(OD)^2))
-    t_gvtd   = od_times[1:].tolist()
-    p95      = float(np.percentile(gvtd, 95))
+    dec_sfreq = 1.0 / (od_times[1] - od_times[0]) if len(od_times) > 1 else float(raw_od_before.info["sfreq"])
+    gvtd      = gvtd_timetrace(od_data, dec_sfreq)                            # canonical (unfiltered)
+    gvtd_filt = gvtd_timetrace(od_data, dec_sfreq, l_freq=0.01, h_freq=0.5)   # motion-band
+    t_gvtd    = od_times[1:].tolist()
+    motion_thresh = gvtd_threshold(gvtd_filt, n_std=3.0)
 
     if ch_name in raw_od_before.ch_names:
         ch_idx = raw_od_before.ch_names.index(ch_name)
@@ -239,20 +249,25 @@ def build_motion_detail_figure(
 
     fig.add_trace(go.Scatter(
         x=t_gvtd, y=gvtd.tolist(), mode="lines",
-        line=dict(color="#2c3e50", width=1.0), name="GVTD",
+        line=dict(color="#b0b0b0", width=0.7), name="GVTD raw",
     ), row=1, col=1)
-    fig.add_shape(
-        type="line", x0=0, x1=1, xref="x domain",
-        y0=p95, y1=p95, yref="y",
-        line=dict(dash="dash", color="#e74c3c", width=0.8),
-        row=1, col=1,
-    )
-    fig.add_annotation(
-        x=1, xref="x domain", y=p95, yref="y",
-        text=f"p95={p95:.4f}", showarrow=False,
-        font=dict(size=7), xanchor="right", yanchor="bottom",
-        row=1, col=1,
-    )
+    fig.add_trace(go.Scatter(
+        x=t_gvtd, y=gvtd_filt.tolist(), mode="lines",
+        line=dict(color="#2c3e50", width=1.0), name="GVTD 0.01–0.5 Hz",
+    ), row=1, col=1)
+    if motion_thresh is not None:
+        fig.add_shape(
+            type="line", x0=0, x1=1, xref="x domain",
+            y0=motion_thresh, y1=motion_thresh, yref="y",
+            line=dict(dash="dash", color="#e74c3c", width=0.8),
+            row=1, col=1,
+        )
+        fig.add_annotation(
+            x=1, xref="x domain", y=motion_thresh, yref="y",
+            text=f"thresh={motion_thresh:.4f}", showarrow=False,
+            font=dict(size=7), xanchor="right", yanchor="bottom",
+            row=1, col=1,
+        )
 
     fig.add_trace(go.Scatter(
         x=t_gvtd, y=tvd, mode="lines",

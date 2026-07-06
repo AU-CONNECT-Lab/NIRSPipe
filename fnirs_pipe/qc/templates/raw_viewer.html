@@ -675,6 +675,10 @@ function renderSqm(d) {
     li("Mean SCI",   fmt(sci, 3),        cls(sci, sci >= 0.75, sci >= 0.5)) +
     li("Mean SNR",   fmt(snr, 1),        cls(snr, snr >= 100,  snr >= 20)) +
     li("Mean CP (exp.)", fmt(s.cp_mean, 3)) +
+    li("GVTD mean", fmt(s.gvtd_mean, 4)) +
+    li("GVTD % motion", s.gvtd_pct_above_thresh != null ? (s.gvtd_pct_above_thresh * 100).toFixed(1) + "%" : "—") +
+    li("GVTD motion frames", s.gvtd_num_above_thresh != null ? s.gvtd_num_above_thresh : "—") +
+    li("GVTD threshold", fmt(s.gvtd_thresh, 4)) +
     li("Spike count", spk !== null && spk !== undefined ? spk : "—",
                       cls(spk, spk === 0, spk < 10));
   var tsDiv = document.getElementById("ts-plot");

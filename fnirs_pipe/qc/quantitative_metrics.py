@@ -248,23 +248,81 @@ def _drift_metrics(raw_haemo: mne.io.Raw) -> dict[str, Any]:
         return {"lowfreq_drift_amplitude_hbo": None, "lowfreq_drift_amplitude_hbr": None}
 
 
+def gvtd_timetrace(
+    data: np.ndarray,
+    sfreq: float,
+    l_freq: float | None = None,
+    h_freq: float | None = None,
+) -> np.ndarray:
+    """GVTD time trace (Sherafati 2020): RMS across channels of the temporal derivative.
+
+    gvtd[i] = sqrt(mean_ch (x[:,i] - x[:,i-1])^2); l_freq/h_freq apply an optional
+    Butterworth (order 4) bandpass before differencing (isolates the motion band).
+    """
+    d = np.nan_to_num(data, nan=0.0, posinf=0.0, neginf=0.0)
+    if h_freq is not None and h_freq >= sfreq / 2:
+        h_freq = None
+    if l_freq is not None or h_freq is not None:
+        d = mne.filter.filter_data(
+            d, sfreq, l_freq, h_freq, method="iir",
+            iir_params=dict(order=4, ftype="butter"), verbose=False,
+        )
+    diff = np.diff(d, axis=1)
+    return np.sqrt(np.mean(diff ** 2, axis=0))
+
+
+def gvtd_threshold(gvtd: np.ndarray, n_std: float = 3.0) -> float | None:
+    """GVTD motion threshold (Sherafati 2020, histogram-mode): mode + n_std * left-tail std.
+
+    Mode = center of the tallest histogram bin (bins ~ n/5); left std = RMS of points below it.
+    """
+    g = gvtd[np.isfinite(gvtd)]
+    gmax = float(g.max()) if g.size else 0.0
+    if gmax <= 0:
+        return None
+    n_bins = max(1, int(round(g.size / 5)))
+    bin_w = gmax / n_bins
+    counts, edges = np.histogram(g, bins=np.arange(0.0, gmax + bin_w, bin_w))
+    if counts.size == 0:
+        return None
+    run_mode = float(edges[int(np.argmax(counts))] + bin_w / 2)
+    below = g[g < run_mode]
+    if below.size == 0:
+        return run_mode
+    left_std = float(np.sqrt(np.sum((below - run_mode) ** 2) / below.size))
+    return run_mode + n_std * left_std
+
+
 def _motion_metrics(raw_intensity: mne.io.Raw) -> dict[str, Any]:
     try:
         raw_od = mne.preprocessing.nirs.optical_density(raw_intensity.copy())
-        od_data = raw_od.get_data()
+        sfreq = float(raw_od.info["sfreq"])
+        od_data = np.nan_to_num(raw_od.get_data(), nan=0.0, posinf=0.0, neginf=0.0)
         diff_data = np.diff(od_data, axis=1)
         # per-channel threshold avoids high-dynamic-range channels dominating spike count
-        thresh = 3.0 * diff_data.std(axis=1, keepdims=True)
-        gvtd_ts = np.sqrt(np.mean(diff_data ** 2, axis=0))
-        # TODO: add gvtd timeseries-derived metrics (e.g. fraction of timepoints above threshold)
+        spike_thresh = 3.0 * diff_data.std(axis=1, keepdims=True)
+        gvtd_ts = gvtd_timetrace(od_data, sfreq)                           # canonical (unfiltered)
+        gvtd_filt = gvtd_timetrace(od_data, sfreq, l_freq=0.01, h_freq=0.5)  # motion-band
+        motion_thresh = gvtd_threshold(gvtd_filt, n_std=3.0)
+        if motion_thresh is not None:
+            above = gvtd_filt > motion_thresh
+            pct_above = float(np.mean(above))
+            num_above = int(np.sum(above))
+        else:
+            pct_above = num_above = None
         return {
-            "spike_count": int((np.abs(diff_data) > thresh).sum()),
+            "spike_count": int((np.abs(diff_data) > spike_thresh).sum()),
             "temporal_derivative_variance": {
                 raw_od.ch_names[i]: float(np.var(diff_data[i]))
                 for i in range(len(raw_od.ch_names))
             },
             "gvtd_mean": float(gvtd_ts.mean()),
             "gvtd_p95": float(np.percentile(gvtd_ts, 95)),
+            "gvtd_filt_mean": float(gvtd_filt.mean()),
+            "gvtd_filt_p95": float(np.percentile(gvtd_filt, 95)),
+            "gvtd_thresh": motion_thresh,
+            "gvtd_num_above_thresh": num_above,
+            "gvtd_pct_above_thresh": pct_above,
         }
     except Exception as e:
         logger.warning("Derivative metrics failed: %s", e)
@@ -273,6 +331,11 @@ def _motion_metrics(raw_intensity: mne.io.Raw) -> dict[str, Any]:
             "temporal_derivative_variance": {},
             "gvtd_mean": None,
             "gvtd_p95": None,
+            "gvtd_filt_mean": None,
+            "gvtd_filt_p95": None,
+            "gvtd_thresh": None,
+            "gvtd_num_above_thresh": None,
+            "gvtd_pct_above_thresh": None,
         }
 
 
@@ -315,6 +378,9 @@ def compute_raw_sqm(
             "mean_amp_mean": None, "mean_amp_per_channel": {},
             "spike_count": None, "temporal_derivative_variance": {},
             "gvtd_mean": None, "gvtd_p95": None,
+            "gvtd_filt_mean": None, "gvtd_filt_p95": None,
+            "gvtd_thresh": None, "gvtd_num_above_thresh": None,
+            "gvtd_pct_above_thresh": None,
         })
     else:
         record.update(_intensity_metrics(raw_intensity))

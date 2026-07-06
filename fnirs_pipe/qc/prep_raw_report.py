@@ -68,14 +68,16 @@ def _process_run(
     bad_channels: set[str] = {ch for ch, s in sci_scores.items() if s < sci_threshold}
 
     sci_matrix = sci_win_times = psp_matrix = psp_win_times = None
-    gvtd_per_window = gvtd_win_times = None
+    gvtd_per_window = gvtd_win_times = gvtd_filt_per_window = None
     try:
         from fnirs_pipe.pipeline.prep_pipeline import (
-            compute_windowed_gvtd, compute_windowed_psp, compute_windowed_sci,
+            compute_windowed_filtered_gvtd, compute_windowed_gvtd,
+            compute_windowed_psp, compute_windowed_sci,
         )
         sci_matrix, sci_win_times = compute_windowed_sci(raw_od, cardiac_l_freq, cardiac_h_freq)
         psp_matrix, psp_win_times = compute_windowed_psp(raw_od, cardiac_l_freq, cardiac_h_freq)
         gvtd_per_window, gvtd_win_times = compute_windowed_gvtd(raw_od)
+        gvtd_filt_per_window, _ = compute_windowed_filtered_gvtd(raw_od)
     except Exception as exc:
         logger.warning("Windowed SCI/PSP/GVTD failed: %s", exc)
 
@@ -101,6 +103,8 @@ def _process_run(
     if gvtd_per_window is not None and len(gvtd_per_window):
         sqm["gvtd_per_window"]     = _np.asarray(gvtd_per_window).tolist()
         sqm["gvtd_window_times_s"] = _center_times(gvtd_win_times)
+    if gvtd_filt_per_window is not None and len(gvtd_filt_per_window):
+        sqm["gvtd_filt_per_window"] = _np.asarray(gvtd_filt_per_window).tolist()
 
     raw_haemo = None
     try:

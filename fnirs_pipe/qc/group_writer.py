@@ -23,6 +23,7 @@ _WINDOWED_METRICS = [
     ("sci",  "sci_per_window",  "sci_window_times_s",  "SCI per window"),
     ("psp",  "psp_per_window",  "psp_window_times_s",  "PSP per window"),
     ("gvtd", "gvtd_per_window", "gvtd_window_times_s", "GVTD per window"),
+    ("gvtd_filt", "gvtd_filt_per_window", "gvtd_window_times_s", "GVTD filtered (0.01-0.5 Hz) per window"),
 ]
 from fnirs_pipe.utils.logging import get_logger
 

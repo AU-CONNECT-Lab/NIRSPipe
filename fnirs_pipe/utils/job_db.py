@@ -264,6 +264,11 @@ CREATE TABLE IF NOT EXISTS sqm (
     cp_mean                     REAL,
     gvtd_mean                   REAL,
     gvtd_p95                    REAL,
+    gvtd_filt_mean              REAL,
+    gvtd_filt_p95               REAL,
+    gvtd_thresh                 REAL,
+    gvtd_num_above_thresh       INTEGER,
+    gvtd_pct_above_thresh       REAL,
     spike_count                 INTEGER,
     tsnr_hbo_mean               REAL,
     tsnr_hbr_mean               REAL,
@@ -295,7 +300,9 @@ CREATE INDEX IF NOT EXISTS idx_out_lookup   ON command_outputs (execution_id, su
 
 _SQM_COLS = [
     "sci_mean", "channel_retention_rate", "snr_mean", "cv_mean", "mean_amp_mean",
-    "ch_dist_mean", "psp_mean", "cp_mean", "gvtd_mean", "gvtd_p95", "spike_count",
+    "ch_dist_mean", "psp_mean", "cp_mean", "gvtd_mean", "gvtd_p95",
+    "gvtd_filt_mean", "gvtd_filt_p95", "gvtd_thresh", "gvtd_num_above_thresh",
+    "gvtd_pct_above_thresh", "spike_count",
     "tsnr_hbo_mean", "tsnr_hbr_mean", "hbo_hbr_corr_mean",
     "residual_cardiac_power", "residual_resp_power",
     "lowfreq_drift_amplitude_hbo", "lowfreq_drift_amplitude_hbr",

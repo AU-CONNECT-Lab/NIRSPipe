@@ -537,6 +537,12 @@
         <span class="qv {{ qv_class(ret_pct, ret_pct >= 0.8, ret_pct >= 0.6) }}">{{ pct(ret_pct) }}</span></li>
     <li><span class="ql">GVTD mean</span>
         <span class="qv">{{ qm_val(sqm.get('gvtd_mean'), '.3e') }}</span></li>
+    <li><span class="ql">GVTD % motion</span>
+        <span class="qv">{{ pct(sqm.get('gvtd_pct_above_thresh')) }}</span></li>
+    <li><span class="ql">GVTD motion frames</span>
+        <span class="qv">{{ qm_val(sqm.get('gvtd_num_above_thresh'), 'd') }}</span></li>
+    <li><span class="ql">GVTD threshold</span>
+        <span class="qv">{{ qm_val(sqm.get('gvtd_thresh'), '.3e') }}</span></li>
     <li><span class="ql">Spike count</span>
         <span class="qv {{ qv_class(spk, spk == 0, spk < 10) }}">{% if spk is not none %}{{ spk }}{% else %}<span style="color:#aaa">n/a</span>{% endif %}</span></li>
     <li><span class="ql">Residual cardiac power</span>

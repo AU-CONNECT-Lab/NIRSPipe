@@ -65,14 +65,14 @@ def compute_windowed_psp(
     )
     return scores, times
 
-def compute_windowed_gvtd(
-    raw_od: mne.io.Raw, window_s: float = 30.0,
+def _windowed_gvtd(
+    raw_od: mne.io.Raw, window_s: float, l_freq: float | None, h_freq: float | None,
 ) -> "tuple[np.ndarray, np.ndarray]":
-    """Mean GVTD per non-overlapping window. Returns (gvtd_per_window, window_center_times)."""
     import numpy as np
+
+    from fnirs_pipe.qc.quantitative_metrics import gvtd_timetrace
     sfreq = float(raw_od.info["sfreq"])
-    diff_data = np.diff(raw_od.get_data(), axis=1)
-    gvtd_ts = np.sqrt(np.mean(diff_data ** 2, axis=0))
+    gvtd_ts = gvtd_timetrace(raw_od.get_data(), sfreq, l_freq=l_freq, h_freq=h_freq)
     win_samples = max(1, int(round(window_s * sfreq)))
     n_windows = len(gvtd_ts) // win_samples
     if n_windows == 0:
@@ -81,6 +81,20 @@ def compute_windowed_gvtd(
     gvtd_per_window = truncated.mean(axis=1)
     window_times = np.arange(n_windows) * window_s + window_s / 2
     return gvtd_per_window, window_times
+
+
+def compute_windowed_gvtd(
+    raw_od: mne.io.Raw, window_s: float = 30.0,
+) -> "tuple[np.ndarray, np.ndarray]":
+    """Mean GVTD per non-overlapping window (unfiltered). Returns (per_window, center_times)."""
+    return _windowed_gvtd(raw_od, window_s, None, None)
+
+
+def compute_windowed_filtered_gvtd(
+    raw_od: mne.io.Raw, window_s: float = 30.0,
+) -> "tuple[np.ndarray, np.ndarray]":
+    """Mean GVTD per window on 0.01-0.5 Hz bandpassed OD (motion band)."""
+    return _windowed_gvtd(raw_od, window_s, 0.01, 0.5)
 
 
 def _expand_bad_pairs(raw: mne.io.Raw, labels: list[str]) -> list[str]:

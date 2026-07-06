@@ -54,6 +54,7 @@ def _compute_sqm_for_window(snirf_path: Path, tstart: float, tend: float,
                             cardiac_l_freq: float, cardiac_h_freq: float) -> dict | None:
     """Crop SNIRF + recompute raw SQM (channel scalars + windowed metrics)."""
     from fnirs_pipe.pipeline.prep_pipeline import (
+        compute_windowed_filtered_gvtd,
         compute_windowed_gvtd, compute_windowed_psp, compute_windowed_sci,
     )
     from fnirs_pipe.qc.quantitative_metrics import compute_raw_sqm
@@ -90,6 +91,7 @@ def _compute_sqm_for_window(snirf_path: Path, tstart: float, tend: float,
         sci_matrix, sci_times   = compute_windowed_sci(raw_od, cardiac_l_freq, cardiac_h_freq)
         psp_matrix, psp_times   = compute_windowed_psp(raw_od, cardiac_l_freq, cardiac_h_freq)
         gvtd_per_window, gvtd_t = compute_windowed_gvtd(raw_od)
+        gvtd_filt_per_window, _ = compute_windowed_filtered_gvtd(raw_od)
         if sci_matrix is not None:
             sqm["sci_per_window"]      = _np.asarray(sci_matrix).mean(axis=0).tolist()
             sqm["sci_window_times_s"]  = _center_times(sci_times)
@@ -99,6 +101,8 @@ def _compute_sqm_for_window(snirf_path: Path, tstart: float, tend: float,
         if gvtd_per_window is not None and len(gvtd_per_window):
             sqm["gvtd_per_window"]     = _np.asarray(gvtd_per_window).tolist()
             sqm["gvtd_window_times_s"] = _center_times(gvtd_t)
+        if gvtd_filt_per_window is not None and len(gvtd_filt_per_window):
+            sqm["gvtd_filt_per_window"] = _np.asarray(gvtd_filt_per_window).tolist()
     except Exception as exc:
         logger.warning("windowed metrics failed for %s: %s", snirf_path.name, exc)
 
