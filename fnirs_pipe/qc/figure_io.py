@@ -33,7 +33,7 @@ def _figure_height(fig, default: int = 500) -> int:
     return default
 
 
-def _save_figure_html(fig, path: Path) -> int:
+def _save_figure_html(fig, path: Path, extra_js: str = "") -> int:
     """Save a single Plotly figure as standalone iframe-ready HTML. Returns height px."""
     h = _figure_height(fig)
     fig.update_layout(height=h)
@@ -46,6 +46,8 @@ def _save_figure_html(fig, path: Path) -> int:
         f'<head>\n<style>{_IFRAME_CSS}</style>\n<script src="{PLOTLY_CDN_URL}"></script>\n{_RESIZE_JS}',
         1,
     )
+    if extra_js:
+        html = html.replace("</body>", f"{extra_js}\n</body>", 1)
     path.write_text(html, encoding="utf-8")
     return h
 

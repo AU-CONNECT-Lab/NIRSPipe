@@ -18,6 +18,44 @@ def _tukey_fences(values: np.ndarray, k: float = 1.5) -> tuple[float, float]:
     return (q1 - k * iqr, q3 + k * iqr)
 
 
+# Only scale-homogeneous metrics share a chart, so the y-axis stays in real units.
+# Each metric in a group gets its own colour (subgroup).
+_METRIC_GROUPS: list[tuple[str, list[str]]] = [
+    ("Coupling & cardiac (0-1)",
+     ["sci_mean", "psp_mean", "cp_mean", "cp_pass_rate",
+      "channel_retention_rate", "pct_data_retained"]),
+    ("GVTD amplitude",
+     ["gvtd_mean", "gvtd_p95", "gvtd_filt_mean", "gvtd_filt_p95", "gvtd_thresh"]),
+    ("Motion fraction", ["gvtd_pct_above_thresh"]),
+    ("Spike / motion counts", ["gvtd_num_above_thresh", "spike_count"]),
+    ("Coefficient of variation", ["cv_mean", "cv_mean_760", "cv_mean_850"]),
+    ("Intensity SNR", ["snr_mean"]),
+    ("Mean amplitude", ["mean_amp_mean"]),
+    ("Haemo tSNR", ["tsnr_hbo_mean", "tsnr_hbr_mean"]),
+    ("HbO-HbR correlation", ["hbo_hbr_corr_mean"]),
+    ("Low-freq drift", ["lowfreq_drift_amplitude_hbo", "lowfreq_drift_amplitude_hbr"]),
+    ("Residual physiology power", ["residual_cardiac_power", "residual_resp_power"]),
+    ("Channel distance (m)", ["ch_dist_mean", "ch_dist_min", "ch_dist_max"]),
+]
+
+
+def group_metrics(metric_cols: list[str]) -> tuple[list[tuple[str, list[str]]], list[str]]:
+    """Split metric_cols into (groups, ordered_flat) following _METRIC_GROUPS; leftovers -> 'Other'."""
+    cols = set(metric_cols)
+    groups: list[tuple[str, list[str]]] = []
+    assigned: set[str] = set()
+    for title, keys in _METRIC_GROUPS:
+        present = [k for k in keys if k in cols]
+        if present:
+            groups.append((title, present))
+            assigned.update(present)
+    leftover = [c for c in metric_cols if c not in assigned]
+    if leftover:
+        groups.append(("Other", leftover))
+    ordered = [c for _, ks in groups for c in ks]
+    return groups, ordered
+
+
 def detect_outliers(
     df: pd.DataFrame, metric_cols: list[str], k: float = 1.5,
 ) -> dict[str, list[str]]:
@@ -115,59 +153,69 @@ def build_time_subject_heatmap(
     return fig
 
 
-def build_boxplot_per_metric(
-    df: pd.DataFrame, metric_cols: list[str],
-) -> go.Figure | None:
-    """One subplot per metric: boxplot + all-subject scatter; outliers labelled."""
-    if not metric_cols or df.empty:
+_PALETTE = [
+    "#3498db", "#e67e22", "#2ecc71", "#9b59b6",
+    "#e74c3c", "#1abc9c", "#f1c40f", "#34495e",
+]
+
+
+def _group_box(title: str, keys: list[str], df: pd.DataFrame, rows: list[str]) -> go.Figure | None:
+    """One chart: real-value box + jittered strip per metric, coloured per metric."""
+    k = len(keys)
+    fig = go.Figure()
+    drawn = 0
+    for xi, col in enumerate(keys):
+        vals = pd.to_numeric(df[col], errors="coerce").to_numpy()
+        finite = np.isfinite(vals)
+        if not finite.any():
+            continue
+        color = _PALETTE[xi % len(_PALETTE)]
+        fig.add_trace(go.Box(
+            x=[xi] * int(finite.sum()), y=vals[finite], name=col, width=0.5,
+            boxpoints=False, line=dict(color=color, width=1.2),
+            fillcolor="rgba(0,0,0,0)", hoverinfo="skip", showlegend=False,
+        ))
+        rng = np.random.default_rng(seed=abs(hash(col)) % (2**32))
+        fig.add_trace(go.Scatter(
+            x=xi + rng.uniform(-0.16, 0.16, size=len(rows)), y=vals,
+            mode="markers",
+            marker=dict(color=color, size=7, opacity=0.85,
+                        line=dict(width=0.5, color="#2c3e50")),
+            customdata=rows,
+            hovertemplate="<b>%{customdata}</b><br>" + col + "=%{y:.4g}<extra></extra>",
+            showlegend=False,
+        ))
+        drawn += 1
+    if drawn == 0:
         return None
 
-    from plotly.subplots import make_subplots
-
-    n = len(metric_cols)
-    ncols = min(3, n)
-    nrows = (n + ncols - 1) // ncols
-    fig = make_subplots(
-        rows=nrows, cols=ncols,
-        subplot_titles=metric_cols,
-        vertical_spacing=0.08, horizontal_spacing=0.08,
+    fig.update_xaxes(
+        tickvals=list(range(k)), ticktext=keys, range=[-0.6, k - 0.4],
+        tickangle=-30 if k > 1 else 0, gridcolor="#f2f2f2",
     )
-
-    rows = df.iloc[:, 0].astype(str).tolist()
-    for idx, col in enumerate(metric_cols):
-        r = idx // ncols + 1
-        c = idx % ncols + 1
-        vals = pd.to_numeric(df[col], errors="coerce").to_numpy()
-        finite_mask = np.isfinite(vals)
-        finite_vals = vals[finite_mask]
-        if finite_vals.size == 0:
-            continue
-
-        lo, hi = _tukey_fences(finite_vals, k=1.5)
-        is_out = (vals < lo) | (vals > hi)
-        colors = ["#c0392b" if (o and f) else "#3498db"
-                  for o, f in zip(is_out, finite_mask)]
-
-        fig.add_trace(go.Box(
-            y=finite_vals, name="", boxpoints=False,
-            line=dict(color="#7f8c8d"), fillcolor="rgba(189,195,199,0.3)",
-            hoverinfo="skip", showlegend=False,
-        ), row=r, col=c)
-        rng = np.random.default_rng(seed=idx)
-        fig.add_trace(go.Scatter(
-            x=rng.uniform(-0.18, 0.18, size=len(rows)),
-            y=vals, mode="markers",
-            marker=dict(color=colors, size=7,
-                        line=dict(width=0.5, color="#2c3e50")),
-            text=rows, hovertemplate="<b>%{text}</b><br>%{y}<extra></extra>",
-            showlegend=False,
-        ), row=r, col=c)
-
+    fig.update_yaxes(gridcolor="#eeeeee", zeroline=False)
     fig.update_layout(
-        height=max(280 * nrows, 320),
-        margin=dict(l=40, r=20, t=40, b=20),
-        plot_bgcolor="white",
+        title=dict(text=title, x=0.02, xanchor="left", font=dict(size=12)),
+        width=150 + 78 * k, height=320,
+        margin=dict(l=58, r=14, t=34, b=70),
+        boxmode="overlay", plot_bgcolor="white",
     )
-    fig.update_xaxes(showticklabels=False, zeroline=False)
-    fig.update_yaxes(gridcolor="#eeeeee")
     return fig
+
+
+def build_grouped_boxes(
+    df: pd.DataFrame, metric_cols: list[str],
+) -> list[tuple[str, go.Figure]]:
+    """Flow of small real-value charts, one per scale-homogeneous group.
+
+    Each point carries its bids_name (customdata) so the report can link to it."""
+    if not metric_cols or df.empty:
+        return []
+    groups, _ = group_metrics(metric_cols)
+    rows = df.iloc[:, 0].astype(str).tolist()
+    out: list[tuple[str, go.Figure]] = []
+    for title, keys in groups:
+        fig = _group_box(title, keys, df, rows)
+        if fig is not None:
+            out.append((title, fig))
+    return out

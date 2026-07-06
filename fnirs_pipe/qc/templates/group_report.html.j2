@@ -9,6 +9,12 @@
 
 .plot-frame { width: 100%; border: none; display: block; }
 
+#box-flow {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  padding: 0.4rem; align-items: flex-start;
+}
+.box-frame { border: none; display: block; }
+
 #qc-nav .nav-meta b { color: #2c3e50; }
 
 #summary-bar {
@@ -83,10 +89,14 @@ table.group-table th .sort-ind { color: #adb5bd; font-size: 0.7rem; margin-left:
 {% endif %}
 
 <a id="boxplots"></a>
-{% if figure_paths.boxplot %}
-{% call card("Boxplot per metric", hint="distribution + per-subject scatter &bull; red dots = Tukey 1.5&times;IQR outliers") %}
-<iframe class="plot-frame" src="{{ figure_paths.boxplot.src }}"
-        style="height:{{ figure_paths.boxplot.h }}px"></iframe>
+{% if box_panels %}
+{% call card("Distributions by group", hint="real values &bull; each chart groups same-scale metrics, one colour per metric &bull; click a point to open its report") %}
+<div id="box-flow">
+  {% for p in box_panels %}
+  <iframe class="box-frame" src="{{ p.src }}"
+          style="width:{{ p.w }}px;height:{{ p.h }}px"></iframe>
+  {% endfor %}
+</div>
 {% endcall %}
 {% endif %}
 

@@ -12,10 +12,21 @@ from jinja2 import Environment, FileSystemLoader
 
 from fnirs_pipe.qc.figure_io import _save_figure_html
 from fnirs_pipe.qc.figures.group_figures import (
-    build_boxplot_per_metric,
+    build_grouped_boxes,
     build_heatmap,
     build_time_subject_heatmap,
     detect_outliers,
+    group_metrics,
+)
+
+# Click a strip point -> open that subject's raw report (sibling of the group HTML,
+# one dir up from this figure iframe). Multi-run viewers open at their first run.
+_STRIP_CLICK_JS = (
+    "<script>(function(){function bind(){var gd=document.querySelector('.plotly-graph-div');"
+    "if(!gd||!gd.on){return setTimeout(bind,150);}"
+    "gd.on('plotly_click',function(e){var p=e.points&&e.points[0];if(!p||p.customdata==null)return;"
+    "var b=Array.isArray(p.customdata)?p.customdata[0]:p.customdata;"
+    "if(b)window.open('../'+b+'_desc-raw_nirs.html','_blank');});}bind();})();</script>"
 )
 
 # Per-window metrics that should produce a time × subject heatmap.
@@ -93,16 +104,24 @@ def _render_group(
 
     figure_paths: dict = {}
 
-    def _save(name: str, desc: str, fig) -> None:
+    def _save(name: str, desc: str, fig, extra_js: str = "") -> None:
         if fig is None:
             return
         fname = f"{out_stem}_desc-{desc}_nirs.html"
-        h = _save_figure_html(fig, fig_dir / fname)
+        h = _save_figure_html(fig, fig_dir / fname, extra_js=extra_js)
         figure_paths[name] = {"src": f"{out_stem}/{fname}", "h": h}
 
+    box_panels: list[dict] = []
     if not df.empty and metric_cols:
-        _save("heatmap", "heatmap", build_heatmap(df, metric_cols))
-        _save("boxplot", "boxplot", build_boxplot_per_metric(df, metric_cols))
+        _, ordered_cols = group_metrics(metric_cols)
+        _save("heatmap", "heatmap", build_heatmap(df, ordered_cols))
+        for i, (title, fig) in enumerate(build_grouped_boxes(df, ordered_cols)):
+            fname = f"{out_stem}_desc-box{i}_nirs.html"
+            h = _save_figure_html(fig, fig_dir / fname, extra_js=_STRIP_CLICK_JS)
+            box_panels.append({
+                "src": f"{out_stem}/{fname}", "h": h,
+                "w": int(getattr(fig.layout, "width", None) or 300), "title": title,
+            })
 
     windowed_panels: list[dict] = []
     for key, val_field, time_field, panel_title in _WINDOWED_METRICS:
@@ -123,6 +142,7 @@ def _render_group(
         n_rows=len(df),
         n_metrics=len(metric_cols),
         figure_paths=figure_paths,
+        box_panels=box_panels,
         windowed_panels=windowed_panels,
         tsv_name=tsv_path.name,
         table_columns=list(df.columns),
