@@ -50,7 +50,7 @@ def _crop_to_window(
 
 def _sqm_for_cropped(cropped: mne.io.Raw, sci_threshold: float,
                      cardiac_l_freq: float, cardiac_h_freq: float,
-                     windowed: bool = True) -> dict:
+                     windowed: bool = True, window_s: float = 10.0) -> dict:
     """Raw SQM (SCI + scalars, + optional windowed series) for an already-cropped raw.
 
     Shared by window-raw (one fixed window) and epoch QC (one window per trial).
@@ -69,21 +69,23 @@ def _sqm_for_cropped(cropped: mne.io.Raw, sci_threshold: float,
         sqm = {}
 
     if windowed:
-        attach_windowed_series(sqm, raw_od, cardiac_l_freq, cardiac_h_freq)
+        attach_windowed_series(sqm, raw_od, cardiac_l_freq, cardiac_h_freq, window_s)
     return sqm
 
 
 def _compute_sqm_for_window(snirf_path: Path, tstart: float, tend: float,
                             align: str, trigger_name: str | None,
                             sci_threshold: float,
-                            cardiac_l_freq: float, cardiac_h_freq: float) -> dict | None:
+                            cardiac_l_freq: float, cardiac_h_freq: float,
+                            window_s: float = 10.0) -> dict | None:
     """Crop SNIRF to one fixed window + recompute raw SQM (scalars + windowed metrics)."""
     raw = mne.io.read_raw_snirf(str(snirf_path), preload=True, verbose=False)
     cropped = _crop_to_window(raw, tstart, tend, align, trigger_name)
     if cropped is None:
         logger.warning("skip %s: window [%g, %g] out of range", snirf_path.name, tstart, tend)
         return None
-    return _sqm_for_cropped(cropped, sci_threshold, cardiac_l_freq, cardiac_h_freq, windowed=True)
+    return _sqm_for_cropped(cropped, sci_threshold, cardiac_l_freq, cardiac_h_freq,
+                            windowed=True, window_s=window_s)
 
 
 def build_window_raw_report(
@@ -101,6 +103,7 @@ def build_window_raw_report(
     *,
     cardiac_l_freq: float,
     cardiac_h_freq: float,
+    window_s: float = 10.0,
     skip_bids_validation: bool = False,
 ) -> Path:
     """Aggregate windowed SQM across subjects → group_nirs_{name}.{tsv,html}."""
@@ -112,7 +115,7 @@ def build_window_raw_report(
     for snirf_path, bids_name in iter_run_files(layout, subjects, sessions, task):
         sqm = _compute_sqm_for_window(
             snirf_path, tstart, tend, align, trigger_name, sci_threshold,
-            cardiac_l_freq, cardiac_h_freq,
+            cardiac_l_freq, cardiac_h_freq, window_s,
         )
         if sqm is None:
             continue

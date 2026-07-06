@@ -11,6 +11,8 @@ from plotly.subplots import make_subplots
 
 from fnirs_pipe.utils.logging import get_logger
 
+from ._utils import CONDITION_PALETTE, HBO_COLOR, HBR_COLOR
+
 logger = get_logger("qc.figures")
 
 _PSD_BANDS = [
@@ -70,12 +72,8 @@ def sci_color(sci: float | None) -> str:
 
 
 def condition_colors(markers: list[dict]) -> dict[str, str]:
-    palette = [
-        "#e74c3c", "#3498db", "#2ecc71", "#f39c12",
-        "#9b59b6", "#1abc9c", "#e67e22", "#34495e",
-    ]
     descs = list(dict.fromkeys(m["description"] for m in markers))
-    return {d: palette[i % len(palette)] for i, d in enumerate(descs)}
+    return {d: CONDITION_PALETTE[i % len(CONDITION_PALETTE)] for i, d in enumerate(descs)}
 
 
 def build_ts_figure(
@@ -188,10 +186,10 @@ def build_channel_figure(
     detail_fig = go.Figure(
         data=[
             go.Scatter(x=times_list, y=hbo, name="HbO", mode="lines",
-                       line=dict(color="#e74c3c", width=1.5),
+                       line=dict(color=HBO_COLOR, width=1.5),
                        fill="tozeroy", fillcolor="rgba(231,76,60,0.06)"),
             go.Scatter(x=times_list, y=hbr, name="HbR", mode="lines",
-                       line=dict(color="#3498db", width=1.5),
+                       line=dict(color=HBR_COLOR, width=1.5),
                        fill="tozeroy", fillcolor="rgba(52,152,219,0.06)"),
         ],
         layout=go.Layout(
@@ -217,9 +215,9 @@ def build_channel_figure(
         psd_fig = go.Figure(
             data=[
                 go.Scatter(x=freqs[mask].tolist(), y=psd_hbo[mask].tolist(),
-                           name="HbO", mode="lines", line=dict(color="#e74c3c", width=2)),
+                           name="HbO", mode="lines", line=dict(color=HBO_COLOR, width=2)),
                 go.Scatter(x=freqs[mask].tolist(), y=psd_hbr[mask].tolist(),
-                           name="HbR", mode="lines", line=dict(color="#3498db", width=2)),
+                           name="HbR", mode="lines", line=dict(color=HBR_COLOR, width=2)),
             ],
             layout=go.Layout(**psd_layout()),
         )
@@ -229,8 +227,7 @@ def build_channel_figure(
     epoch_fig = None
     if markers:
         try:
-            colors10 = ["#e74c3c", "#3498db", "#2ecc71", "#f39c12",
-                        "#9b59b6", "#1abc9c", "#e67e22", "#34495e"]
+            colors10 = CONDITION_PALETTE
             anns = mne.Annotations(
                 onset=[m["onset"] for m in markers],
                 duration=[m["duration"] for m in markers],
@@ -618,8 +615,7 @@ def build_epoch_preview_figure(
         return None
 
     cond_colors_ = condition_colors(markers)
-    colors10 = ["#e74c3c", "#3498db", "#2ecc71", "#f39c12",
-                "#9b59b6", "#1abc9c", "#e67e22", "#34495e"]
+    colors10 = CONDITION_PALETTE
     try:
         events_mne, event_id = mne.events_from_annotations(raw_haemo, verbose=False)
         if len(events_mne) == 0:
@@ -778,8 +774,8 @@ def build_evoked_topo_figure(
             for i in range(n)
         ])
 
-    _HBO_COLOR = "#e74c3c"
-    _HBR_COLOR = "#3498db"
+    _HBO_COLOR = HBO_COLOR
+    _HBR_COLOR = HBR_COLOR
 
     picks = [i for i, _ in hbo_entries] + [
         raw_haemo.ch_names.index(f"{p} hbr")

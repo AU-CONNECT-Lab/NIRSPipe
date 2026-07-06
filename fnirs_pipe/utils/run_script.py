@@ -24,6 +24,7 @@ def _build_script_text(
     cardiac_h_freq: float | None = None,
     resp_l_freq: float | None = None,
     resp_h_freq: float | None = None,
+    qc_window_s: float = 10.0,
     bad_channels: list[str] | None = None,
     high_pass: float | None = None,
     low_pass: float | None = None,
@@ -98,6 +99,7 @@ def _build_script_text(
         w(f'    resp_l_freq={resp_l_freq},')
     if resp_h_freq is not None:
         w(f'    resp_h_freq={resp_h_freq},')
+    w(f'    qc_window_s={qc_window_s},')
     if bad_channels:
         w(f'    bad_channels={bad_channels!r},')
     w(f'    ignore={ignore!r},')
@@ -224,6 +226,7 @@ def write_run_script(
         cardiac_h_freq=args.get("cardiac_h_freq"),
         resp_l_freq=args.get("resp_l_freq"),
         resp_h_freq=args.get("resp_h_freq"),
+        qc_window_s=args.get("window_length", 10.0),
         bad_channels=bad_channels or None,
         high_pass=args.get("high_pass"),
         low_pass=args.get("low_pass"),

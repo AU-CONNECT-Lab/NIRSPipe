@@ -20,10 +20,12 @@ import pandas as pd
 
 from fnirs_pipe.utils.logging import get_logger
 
+from ._utils import HBO_COLOR, HBR_COLOR
+
 logger = get_logger("qc.figures.rest")
 
-_HBO_COLOR = "#c0392b"
-_HBR_COLOR = "#2471a3"
+_HBO_COLOR = HBO_COLOR
+_HBR_COLOR = HBR_COLOR
 _MEAN_LINE_COLOR = "#555555"
 
 

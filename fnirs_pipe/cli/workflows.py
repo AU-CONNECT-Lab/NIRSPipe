@@ -233,6 +233,7 @@ def _make_prep_config(subject: str, session: str | None, args: dict[str, Any]) -
         cardiac_h_freq=args["cardiac_h_freq"],
         resp_l_freq=args["resp_l_freq"],
         resp_h_freq=args["resp_h_freq"],
+        qc_window_s=args.get("window_length", 10.0),
         ignore=[_v(ig) for ig in (args.get("ignore") or [])],
     )
 

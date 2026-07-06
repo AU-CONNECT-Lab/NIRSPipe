@@ -25,10 +25,11 @@ def compute_windowed_sci(
     raw_od: mne.io.Raw,
     cardiac_l_freq: float,
     cardiac_h_freq: float,
+    window_s: float = 10.0,
 ) -> "tuple[np.ndarray, np.ndarray]":
     from mne_nirs.preprocessing import scalp_coupling_index_windowed
     _, scores, times = scalp_coupling_index_windowed(
-        raw_od, time_window=30, l_freq=cardiac_l_freq, h_freq=cardiac_h_freq
+        raw_od, time_window=window_s, l_freq=cardiac_l_freq, h_freq=cardiac_h_freq
     )
     return scores, times
 
@@ -37,10 +38,11 @@ def compute_windowed_psp(
     raw_od: mne.io.Raw,
     cardiac_l_freq: float,
     cardiac_h_freq: float,
+    window_s: float = 10.0,
 ) -> "tuple[np.ndarray, np.ndarray]":
     from mne_nirs.preprocessing import peak_power
     _, scores, times = peak_power(
-        raw_od, time_window=10, l_freq=cardiac_l_freq, h_freq=cardiac_h_freq
+        raw_od, time_window=window_s, l_freq=cardiac_l_freq, h_freq=cardiac_h_freq
     )
     return scores, times
 
@@ -63,14 +65,14 @@ def _windowed_gvtd(
 
 
 def compute_windowed_gvtd(
-    raw_od: mne.io.Raw, window_s: float = 30.0,
+    raw_od: mne.io.Raw, window_s: float = 10.0,
 ) -> "tuple[np.ndarray, np.ndarray, np.ndarray]":
     """Mean & p95 GVTD per non-overlapping window (unfiltered). Returns (mean, p95, center_times)."""
     return _windowed_gvtd(raw_od, window_s, None, None)
 
 
 def compute_windowed_filtered_gvtd(
-    raw_od: mne.io.Raw, window_s: float = 30.0,
+    raw_od: mne.io.Raw, window_s: float = 10.0,
 ) -> "tuple[np.ndarray, np.ndarray, np.ndarray]":
     """Mean & p95 GVTD per window on the motion-band bandpassed OD. Returns (mean, p95, center_times)."""
     return _windowed_gvtd(raw_od, window_s, *GVTD_MOTION_BAND)
@@ -93,6 +95,7 @@ def compute_sci_scores(
 
 def attach_windowed_series(
     sqm: dict, raw_od: mne.io.Raw, cardiac_l_freq: float, cardiac_h_freq: float,
+    window_s: float = 10.0,
 ) -> dict:
     """Compute sliding-window SCI/PSP/GVTD series, attach summaries to sqm, return raw series.
 
@@ -106,10 +109,10 @@ def attach_windowed_series(
 
     series = {"sci_matrix": None, "sci_times": None, "psp_matrix": None, "psp_times": None}
     try:
-        sci_matrix, sci_times = compute_windowed_sci(raw_od, cardiac_l_freq, cardiac_h_freq)
-        psp_matrix, psp_times = compute_windowed_psp(raw_od, cardiac_l_freq, cardiac_h_freq)
-        gvtd_per_window, gvtd_p95_per_window, gvtd_t = compute_windowed_gvtd(raw_od)
-        gvtd_filt_per_window, gvtd_filt_p95_per_window, _ = compute_windowed_filtered_gvtd(raw_od)
+        sci_matrix, sci_times = compute_windowed_sci(raw_od, cardiac_l_freq, cardiac_h_freq, window_s)
+        psp_matrix, psp_times = compute_windowed_psp(raw_od, cardiac_l_freq, cardiac_h_freq, window_s)
+        gvtd_per_window, gvtd_p95_per_window, gvtd_t = compute_windowed_gvtd(raw_od, window_s)
+        gvtd_filt_per_window, gvtd_filt_p95_per_window, _ = compute_windowed_filtered_gvtd(raw_od, window_s)
     except Exception as exc:
         logger.warning("windowed metrics failed: %s", exc)
         return series

@@ -71,6 +71,7 @@ def cmd_prep_raw(
     bids_dir: Path, output_dir: Path, participant_label: str,
     session_label: list[str] | None, task_label: list[str] | None,
     dpf: list[float], sci_threshold: float, cardiac_l_freq: float, cardiac_h_freq: float,
+    window_length: float,
     skip_bids_validation: bool,
 ) -> None:
     """Generate static raw QC report for a single participant."""
@@ -120,7 +121,8 @@ def cmd_prep_raw(
         print(f"Generating raw QC report: {html_path.name} ...")
         try:
             build_prep_raw_report(group_runs, html_path, dpf=dpf, sci_threshold=sci_threshold,
-                                  cardiac_l_freq=cardiac_l_freq, cardiac_h_freq=cardiac_h_freq)
+                                  cardiac_l_freq=cardiac_l_freq, cardiac_h_freq=cardiac_h_freq,
+                                  window_s=window_length)
             print(f"  -> {html_path}")
         except Exception as exc:
             logger.exception("Raw report generation failed for %s", html_path.name)
@@ -206,6 +208,7 @@ def cmd_window_raw(
     participant_label: list[str] | None, session_label: list[str] | None,
     align: str, trigger_name: str | None, name: str | None,
     sci_threshold: float, cardiac_l_freq: float, cardiac_h_freq: float,
+    window_length: float,
     skip_bids_validation: bool,
 ) -> None:
     """Crop each subject's raw to [tstart, tend] + aggregate SQM into a windowed group report."""
@@ -218,6 +221,7 @@ def cmd_window_raw(
         align=align, trigger_name=trigger_name, name=name,
         sci_threshold=sci_threshold,
         cardiac_l_freq=cardiac_l_freq, cardiac_h_freq=cardiac_h_freq,
+        window_s=window_length,
         skip_bids_validation=skip_bids_validation,
     )
     print(f"report -> {path}")
@@ -330,6 +334,8 @@ def _build_parser() -> argparse.ArgumentParser:
                     help="Lower bound of cardiac band in Hz (required; population-dependent).")
     pr.add_argument("--cardiac-h-freq", type=float, required=True,
                     help="Upper bound of cardiac band in Hz (required; population-dependent).")
+    pr.add_argument("--window-length", type=float, default=10.0,
+                    help="Sliding-window length (s) for windowed SCI/PSP/GVTD series.")
     pr.add_argument("--skip-bids-validation", action=argparse.BooleanOptionalAction, default=False)
     pr.set_defaults(func=cmd_prep_raw)
 
@@ -392,6 +398,8 @@ def _build_parser() -> argparse.ArgumentParser:
                     help="Lower bound of cardiac band in Hz (required; population-dependent).")
     wr.add_argument("--cardiac-h-freq", type=float, required=True,
                     help="Upper bound of cardiac band in Hz (required; population-dependent).")
+    wr.add_argument("--window-length", type=float, default=10.0,
+                    help="Sliding-window length (s) for windowed SCI/PSP/GVTD series.")
     wr.add_argument("--skip-bids-validation", action=argparse.BooleanOptionalAction, default=False)
     wr.set_defaults(func=cmd_window_raw)
 

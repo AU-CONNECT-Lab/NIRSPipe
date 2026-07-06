@@ -170,6 +170,7 @@ class PrepConfig:
     resp_l_freq: float
     resp_h_freq: float
     session: str | None = None
+    qc_window_s: float = 10.0               # sliding-window length (s) for windowed SCI/PSP/GVTD
     motion_correction: str | None = None
     bad_channels: list[str] = field(default_factory=list)
     ignore: list[str] = field(default_factory=list)
@@ -277,8 +278,8 @@ def run_prep(
     sci_matrix = sci_times = psp_matrix = psp_times = None
     try:
         from fnirs_pipe.qc.quantitative_metrics import compute_windowed_psp, compute_windowed_sci
-        sci_matrix, sci_times = compute_windowed_sci(raw_od, config.cardiac_l_freq, config.cardiac_h_freq)
-        psp_matrix, psp_times = compute_windowed_psp(raw_od, config.cardiac_l_freq, config.cardiac_h_freq)
+        sci_matrix, sci_times = compute_windowed_sci(raw_od, config.cardiac_l_freq, config.cardiac_h_freq, config.qc_window_s)
+        psp_matrix, psp_times = compute_windowed_psp(raw_od, config.cardiac_l_freq, config.cardiac_h_freq, config.qc_window_s)
     except Exception:
         logger.warning("sub-%s | windowed SCI/PSP computation failed", config.subject, exc_info=True)
 

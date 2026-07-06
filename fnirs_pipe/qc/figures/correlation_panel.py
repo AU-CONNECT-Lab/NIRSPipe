@@ -13,6 +13,8 @@ import matplotlib.pyplot as plt
 import mne
 import numpy as np
 
+from ._utils import HBO_COLOR, HBR_COLOR
+
 
 def hbo_hbr_correlation_panel(
     raw_haemo: mne.io.Raw,
@@ -76,10 +78,10 @@ def hbo_hbr_correlation_panel(
     # block type labels on y-axis
     ax_c.text(-n_ch * 0.04, n_hbo / 2 - 0.5, "HbO",
               ha="right", va="center", fontsize=8, fontweight="bold",
-              color="#c0392b", clip_on=False)
+              color=HBO_COLOR, clip_on=False)
     ax_c.text(-n_ch * 0.04, n_hbo + len(hbr_names) / 2 - 0.5, "HbR",
               ha="right", va="center", fontsize=8, fontweight="bold",
-              color="#2471a3", clip_on=False)
+              color=HBR_COLOR, clip_on=False)
 
     for spine in ax_c.spines.values():
         spine.set_visible(False)

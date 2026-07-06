@@ -61,6 +61,8 @@ def _build_parser() -> argparse.ArgumentParser:
     prep_opt.add_argument("--resp-h-freq", type=float, required=True,
                           help="Upper bound of respiration band in Hz (required; population-dependent). "
                                "Adult ~0.5; infants higher.")
+    prep_opt.add_argument("--window-length", type=float, default=10.0,
+                          help="Sliding-window length (s) for windowed SCI/PSP/GVTD QC series.")
 
     post = p.add_argument_group("postprocessing (requires --mode)")
     post.add_argument("--mode", choices=_MODE_CHOICES, help="Postprocessing mode: denoise, glm or rest.")

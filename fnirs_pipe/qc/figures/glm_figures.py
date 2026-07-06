@@ -18,6 +18,8 @@ from plotly.subplots import make_subplots
 
 from fnirs_pipe.utils.logging import get_logger
 
+from ._utils import HBO_COLOR, HBR_COLOR
+
 logger = get_logger("qc.figures.glm")
 
 _COND_COLORS = [
@@ -391,8 +393,8 @@ def per_channel_hrf_figure(
     for ann in fig.layout.annotations:
         ann.font = dict(size=7)
 
-    hbo_color = "#c0392b"
-    hbr_color = "#2980b9"
+    hbo_color = HBO_COLOR
+    hbr_color = HBR_COLOR
     ctrl_hbo_color = "#e8a0a0"
     ctrl_hbr_color = "#a0c4e8"
 
@@ -605,7 +607,7 @@ def glm_betas_figure(
     if hbo_pv is None and hbr_pv is None:
         return None
 
-    panels = [(hbo_pv, "HbO", "#c0392b"), (hbr_pv, "HbR", "#2471a3")]
+    panels = [(hbo_pv, "HbO", HBO_COLOR), (hbr_pv, "HbR", HBR_COLOR)]
     panels = [(p, lbl, c) for p, lbl, c in panels if p is not None]
     n_panels = len(panels)
 

@@ -13,6 +13,7 @@ from plotly.subplots import make_subplots
 from scipy.signal import coherence, welch
 
 from fnirs_pipe.qc.figure_io import extract_markers as _extract_markers
+from fnirs_pipe.qc.figures._utils import CONDITION_PALETTE
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("qc.figures.hyper")
@@ -21,8 +22,7 @@ _MAX_TS_PTS = 4000
 
 _SUB_COLORS   = ["#8e44ad", "#e67e22", "#16a085", "#f39c12",
                   "#2c3e50", "#1abc9c", "#c0392b", "#34495e"]
-_COND_PALETTE = ["#e74c3c", "#3498db", "#2ecc71", "#f39c12",
-                  "#9b59b6", "#1abc9c", "#e67e22", "#34495e"]
+_COND_PALETTE = CONDITION_PALETTE
 _COND_DASHES  = ["solid", "dash", "dot", "dashdot", "longdash"]
 
 _GOOD_COLOR = "#C5E0B3"

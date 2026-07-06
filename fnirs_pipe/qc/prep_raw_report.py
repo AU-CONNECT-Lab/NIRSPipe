@@ -31,6 +31,7 @@ def _process_run(
     cardiac_l_freq: float,
     cardiac_h_freq: float,
     dpf: list[float],
+    window_s: float = 10.0,
 ) -> dict:
     """Compute all data, save figure HTMLs + SQM JSON. Returns inline dict for HTML."""
     from fnirs_pipe.qc.figures import (
@@ -68,7 +69,7 @@ def _process_run(
         sqm = {}
 
     # Persist windowed series so group_raw can build time × subject heatmaps.
-    series = attach_windowed_series(sqm, raw_od, cardiac_l_freq, cardiac_h_freq)
+    series = attach_windowed_series(sqm, raw_od, cardiac_l_freq, cardiac_h_freq, window_s)
     sci_matrix, sci_win_times = series["sci_matrix"], series["sci_times"]
     psp_matrix, psp_win_times = series["psp_matrix"], series["psp_times"]
 
@@ -242,6 +243,7 @@ def build_prep_raw_report(
     cardiac_h_freq: float,
     dpf: list[float],
     sci_threshold: float = 0.8,
+    window_s: float = 10.0,
 ) -> None:
     """Generate raw QC report: lightweight HTML + per-run folders with figure HTMLs + SQM JSON."""
     output_dir  = output_path.parent
@@ -252,7 +254,7 @@ def build_prep_raw_report(
         sub_dir = output_dir / f"sub-{run['subject_id']}"
         logger.info("[%d/%d] processing %s ...", i + 1, len(runs), label)
         try:
-            d = _process_run(run, sci_threshold, sub_dir, cardiac_l_freq, cardiac_h_freq, dpf)
+            d = _process_run(run, sci_threshold, sub_dir, cardiac_l_freq, cardiac_h_freq, dpf, window_s)
             static_data.append(d)
         except Exception as exc:
             logger.error("Failed to process run %s: %s", label, exc)
