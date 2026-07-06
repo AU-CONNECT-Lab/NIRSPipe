@@ -90,8 +90,8 @@ def _sqm_for_cropped(cropped: mne.io.Raw, sci_threshold: float,
     try:
         sci_matrix, sci_times   = compute_windowed_sci(raw_od, cardiac_l_freq, cardiac_h_freq)
         psp_matrix, psp_times   = compute_windowed_psp(raw_od, cardiac_l_freq, cardiac_h_freq)
-        gvtd_per_window, gvtd_t = compute_windowed_gvtd(raw_od)
-        gvtd_filt_per_window, _ = compute_windowed_filtered_gvtd(raw_od)
+        gvtd_per_window, gvtd_p95_per_window, gvtd_t = compute_windowed_gvtd(raw_od)
+        gvtd_filt_per_window, gvtd_filt_p95_per_window, _ = compute_windowed_filtered_gvtd(raw_od)
         if sci_matrix is not None:
             sqm["sci_per_window"]      = _np.asarray(sci_matrix).mean(axis=0).tolist()
             sqm["sci_window_times_s"]  = _center_times(sci_times)
@@ -100,9 +100,11 @@ def _sqm_for_cropped(cropped: mne.io.Raw, sci_threshold: float,
             sqm["psp_window_times_s"]  = _center_times(psp_times)
         if gvtd_per_window is not None and len(gvtd_per_window):
             sqm["gvtd_per_window"]     = _np.asarray(gvtd_per_window).tolist()
+            sqm["gvtd_p95_per_window"] = _np.asarray(gvtd_p95_per_window).tolist()
             sqm["gvtd_window_times_s"] = _center_times(gvtd_t)
         if gvtd_filt_per_window is not None and len(gvtd_filt_per_window):
-            sqm["gvtd_filt_per_window"] = _np.asarray(gvtd_filt_per_window).tolist()
+            sqm["gvtd_filt_per_window"]     = _np.asarray(gvtd_filt_per_window).tolist()
+            sqm["gvtd_filt_p95_per_window"] = _np.asarray(gvtd_filt_p95_per_window).tolist()
     except Exception as exc:
         logger.warning("windowed metrics failed: %s", exc)
 

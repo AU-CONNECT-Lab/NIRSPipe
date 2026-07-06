@@ -15,6 +15,7 @@ All notable changes to this project will be documented in this file.
 - Channel-standardized GVTD (`gvtd_vstd_*`): each channel's temporal derivative is divided by its own SD before the cross-channel RMS, so high-dynamic-range channels no longer dominate the motion index
 - Global correlation per chromophore (`gcor_hbo` / `gcor_hbr`): mean pairwise channel correlation; the subject report shows it before → after denoising (a drop means systemic/global signal was removed)
 - Durbin–Watson on GLM residuals (`durbin_watson_mean`): residual autocorrelation check (~2 = white residuals); shown in the GLM report section and saved with the post-processing SQM
+- Per-window GVTD now reports p95 (worst-moment) alongside the mean, so a brief motion burst is not averaged away; group reports gain p95 time × subject heatmaps and the subject report shows the GVTD p95 scalar
 
 ### Changed
 - The cardiac band (`--cardiac-l-freq` / `--cardiac-h-freq`) is now required, with no default: it is population-dependent (adult vs infant heart rate) and now consistently sets the band for channel SCI, PSP, Cardiac Power, and cardiac band power, so a non-adult band is no longer silently ignored by some metrics
@@ -22,6 +23,7 @@ All notable changes to this project will be documented in this file.
 - Spectral confound metrics renamed `residual_cardiac_power` / `residual_resp_power` → `cardiac_band_power` / `resp_band_power` (they measure band power present, not a post-filter residual)
 - Spike count now uses a robust (MAD-based) threshold, so a few large spikes no longer inflate the threshold and hide themselves
 - Cardiac Power is marked experimental (overlaps PSP; may be removed); SCI and PSP remain the primary channel-quality metrics
+- Group report distributions are now split into per-scale charts (coupling, GVTD amplitude, counts, drift, etc.) showing real values with one colour per metric; clicking a point opens that subject's report
 
 ### Fixed
 - fALFF is now the fraction of total spectral amplitude in the low band (sum/sum, in [0, 1]), matching its definition; was previously a ratio of mean amplitudes. ALFF unchanged (validated against a reference implementation).

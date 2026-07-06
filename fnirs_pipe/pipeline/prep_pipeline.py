@@ -67,7 +67,7 @@ def compute_windowed_psp(
 
 def _windowed_gvtd(
     raw_od: mne.io.Raw, window_s: float, l_freq: float | None, h_freq: float | None,
-) -> "tuple[np.ndarray, np.ndarray]":
+) -> "tuple[np.ndarray, np.ndarray, np.ndarray]":
     import numpy as np
 
     from fnirs_pipe.qc.quantitative_metrics import gvtd_timetrace
@@ -76,24 +76,26 @@ def _windowed_gvtd(
     win_samples = max(1, int(round(window_s * sfreq)))
     n_windows = len(gvtd_ts) // win_samples
     if n_windows == 0:
-        return np.array([]), np.array([])
+        return np.array([]), np.array([]), np.array([])
     truncated = gvtd_ts[:n_windows * win_samples].reshape(n_windows, win_samples)
-    gvtd_per_window = truncated.mean(axis=1)
+    # mean = average motion level; p95 = worst-moment, so transient motion survives averaging
+    gvtd_mean = truncated.mean(axis=1)
+    gvtd_p95 = np.percentile(truncated, 95, axis=1)
     window_times = np.arange(n_windows) * window_s + window_s / 2
-    return gvtd_per_window, window_times
+    return gvtd_mean, gvtd_p95, window_times
 
 
 def compute_windowed_gvtd(
     raw_od: mne.io.Raw, window_s: float = 30.0,
-) -> "tuple[np.ndarray, np.ndarray]":
-    """Mean GVTD per non-overlapping window (unfiltered). Returns (per_window, center_times)."""
+) -> "tuple[np.ndarray, np.ndarray, np.ndarray]":
+    """Mean & p95 GVTD per non-overlapping window (unfiltered). Returns (mean, p95, center_times)."""
     return _windowed_gvtd(raw_od, window_s, None, None)
 
 
 def compute_windowed_filtered_gvtd(
     raw_od: mne.io.Raw, window_s: float = 30.0,
-) -> "tuple[np.ndarray, np.ndarray]":
-    """Mean GVTD per window on the motion-band bandpassed OD."""
+) -> "tuple[np.ndarray, np.ndarray, np.ndarray]":
+    """Mean & p95 GVTD per window on the motion-band bandpassed OD. Returns (mean, p95, center_times)."""
     from fnirs_pipe.qc.quantitative_metrics import GVTD_MOTION_BAND
     return _windowed_gvtd(raw_od, window_s, *GVTD_MOTION_BAND)
 
