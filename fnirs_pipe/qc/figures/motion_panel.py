@@ -14,16 +14,10 @@ import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
+from fnirs_pipe.qc.figures._utils import decimate as _decimate
 from fnirs_pipe.qc.quantitative_metrics import GVTD_MOTION_BAND, gvtd_threshold, gvtd_timetrace
 
 _MAX_PTS = 4000
-
-
-def _decimate(arr: np.ndarray, times: np.ndarray, max_pts: int):
-    if len(times) <= max_pts:
-        return arr, times
-    step = max(1, len(times) // max_pts)
-    return arr[:, ::step], times[::step]
 
 _ZOOM_COLORS = ["#e74c3c", "#2980b9", "#27ae60"]
 

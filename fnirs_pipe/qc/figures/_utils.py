@@ -1,4 +1,6 @@
-"""Shared color constants used across QC figure modules."""
+"""Shared color constants and helpers used across QC figure modules."""
+
+import numpy as np
 
 HBO_COLOR      = "#e74c3c"
 HBR_COLOR      = "#3498db"
@@ -10,3 +12,11 @@ CONDITION_PALETTE = [
     "#e74c3c", "#3498db", "#2ecc71", "#f39c12",
     "#9b59b6", "#1abc9c", "#e67e22", "#34495e",
 ]
+
+
+def decimate(arr: np.ndarray, times: np.ndarray, max_pts: int):
+    """Uniformly subsample columns of arr (and times) to at most max_pts for display."""
+    if len(times) <= max_pts:
+        return arr, times
+    step = max(1, len(times) // max_pts)
+    return arr[:, ::step], times[::step]

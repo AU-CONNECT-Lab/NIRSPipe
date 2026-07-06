@@ -13,7 +13,7 @@ from plotly.subplots import make_subplots
 from scipy.signal import coherence, welch
 
 from fnirs_pipe.qc.figure_io import extract_markers as _extract_markers
-from fnirs_pipe.qc.figures._utils import CONDITION_PALETTE
+from fnirs_pipe.qc.figures._utils import CONDITION_PALETTE, decimate as _decimate
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("qc.figures.hyper")
@@ -55,15 +55,6 @@ def _lighter(hex_color: str, factor: float = 0.45) -> str:
         int(g + (255 - g) * factor),
         int(b + (255 - b) * factor),
     )
-
-
-def _decimate(arr: np.ndarray, times: np.ndarray, max_pts: int):
-    if len(times) <= max_pts:
-        return arr, times
-    step = max(1, len(times) // max_pts)
-    return arr[:, ::step], times[::step]
-
-
 
 
 def _cond_colors(descriptions: list[str]) -> dict[str, str]:

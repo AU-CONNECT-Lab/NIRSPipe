@@ -11,7 +11,7 @@ from plotly.subplots import make_subplots
 
 from fnirs_pipe.utils.logging import get_logger
 
-from ._utils import CONDITION_PALETTE, HBO_COLOR, HBR_COLOR
+from ._utils import CONDITION_PALETTE, HBO_COLOR, HBR_COLOR, decimate as _decimate
 
 logger = get_logger("qc.figures")
 
@@ -35,13 +35,6 @@ def _ch_colors(raw: mne.io.Raw, short_thresh: float) -> list[str]:
         return ["#78b1f2" if d <= short_thresh else "rgba(243,125,125,0.78)" for d in dists]
     except Exception:
         return ["rgba(243,125,125,0.78)"] * len(raw.ch_names)
-
-
-def _decimate(arr: np.ndarray, times: np.ndarray, max_pts: int):
-    if len(times) <= max_pts:
-        return arr, times
-    step = max(1, len(times) // max_pts)
-    return arr[:, ::step], times[::step]
 
 
 def psd_layout(height: int = 220) -> dict:
