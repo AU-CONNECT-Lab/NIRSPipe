@@ -215,6 +215,34 @@ def cmd_window_raw(
     print(f"report -> {path}")
 
 
+def cmd_epoch(
+    bids_dir: Path, output_dir: Path, task_label: str, mode: str,
+    tmin: float | None, tmax: float | None, events_csv: Path | None,
+    participant_label: list[str] | None, session_label: list[str] | None,
+    sci_threshold: float, cardiac_l_freq: float, cardiac_h_freq: float,
+    skip_bids_validation: bool,
+) -> None:
+    """Per-trial (epoch) QC: one window per event, recompute SQM, render trial x metric report."""
+    from fnirs_pipe.qc.epoch_writer import build_epoch_qc_report
+
+    if mode == "epoch" and (tmin is None or tmax is None):
+        print("Error: --mode epoch requires --tmin and --tmax.", file=sys.stderr)
+        raise SystemExit(1)
+
+    paths = build_epoch_qc_report(
+        bids_dir=bids_dir, output_dir=output_dir, task=task_label,
+        mode=mode, tmin=tmin, tmax=tmax, events_csv=events_csv,
+        participant_label=participant_label, session_label=session_label,
+        sci_threshold=sci_threshold,
+        cardiac_l_freq=cardiac_l_freq, cardiac_h_freq=cardiac_h_freq,
+        skip_bids_validation=skip_bids_validation,
+    )
+    for p in paths:
+        print(f"report -> {p}")
+    if not paths:
+        print("No epoch QC reports produced (no events / no matching files).", file=sys.stderr)
+
+
 def cmd_hyper_post(
     bids_dir: Path, output_dir: Path, pairs_csv: Path, group_id: str | None,
     roi_mapping: Path | None, wtc_fmin: float, wtc_fmax: float, isc_threshold: float,
@@ -393,6 +421,30 @@ def _build_parser() -> argparse.ArgumentParser:
                     help="Upper bound of cardiac band in Hz (required; population-dependent).")
     wr.add_argument("--skip-bids-validation", action=argparse.BooleanOptionalAction, default=False)
     wr.set_defaults(func=cmd_window_raw)
+
+    ep = sub.add_parser("epoch", help="Per-trial (epoch) QC report from task events.")
+    ep.add_argument("bids_dir",   type=Path, help="BIDS dataset root")
+    ep.add_argument("output_dir", type=Path, help="QC output directory")
+    ep.add_argument("--task-label", required=True, help="BIDS task label (one task at a time).")
+    ep.add_argument("--mode", choices=["epoch", "duration"], required=True,
+                    help="epoch: fixed [onset+tmin, onset+tmax] window; duration: [onset, onset+event duration].")
+    ep.add_argument("--tmin", type=float, default=None,
+                    help="Epoch start relative to event onset in s (required for --mode epoch).")
+    ep.add_argument("--tmax", type=float, default=None,
+                    help="Epoch end relative to event onset in s (required for --mode epoch).")
+    ep.add_argument("--events-csv", type=Path, default=None,
+                    help="CSV with columns onset[,duration,trial_type]. Default: read events from the SNIRF.")
+    ep.add_argument("--participant-label", nargs="+", action="extend",
+                    help="Subject(s) to include (default: all).")
+    ep.add_argument("--session-label", nargs="+", action="extend", help="Session label(s) to include.")
+    ep.add_argument("--sci-threshold", type=float, default=0.8,
+                    help="SCI threshold for bad-channel detection.")
+    ep.add_argument("--cardiac-l-freq", type=float, required=True,
+                    help="Lower bound of cardiac band in Hz (required; population-dependent).")
+    ep.add_argument("--cardiac-h-freq", type=float, required=True,
+                    help="Upper bound of cardiac band in Hz (required; population-dependent).")
+    ep.add_argument("--skip-bids-validation", action=argparse.BooleanOptionalAction, default=False)
+    ep.set_defaults(func=cmd_epoch)
 
     hp = sub.add_parser("hyper-post", help="Hyperscanning post QC report (WTC, ISC, connectivity).")
     hp.add_argument("bids_dir",   type=Path, help="BIDS dataset root")

@@ -256,7 +256,34 @@ def _spectral_metrics(
         }
 
 
+def _gcor(data: np.ndarray) -> "float | None":
+    """Global correlation (Saad 2013): mean of all pairwise channel correlations.
+
+    Demean + unit-L2-normalise each channel, average into g, then gcor = g.g = ||g||^2.
+    High = channels move together (global artifact / systemic physiology).
+    """
+    if data.shape[0] < 2:
+        return None
+    x = data - data.mean(axis=1, keepdims=True)
+    norm = np.linalg.norm(x, axis=1, keepdims=True)
+    x = np.divide(x, norm, out=np.zeros_like(x), where=norm > 0)
+    g = x.mean(axis=0)
+    return float(g @ g)
+
+
+def _gcor_metrics(raw_haemo: mne.io.Raw) -> dict[str, Any]:
+    # Per chromophore: HbO and HbR anti-correlate, so a mixed gcor would cancel to ~0.
+    try:
+        hbo = raw_haemo.get_data(picks=mne.pick_types(raw_haemo.info, fnirs="hbo"))
+        hbr = raw_haemo.get_data(picks=mne.pick_types(raw_haemo.info, fnirs="hbr"))
+        return {"gcor_hbo": _gcor(hbo), "gcor_hbr": _gcor(hbr)}
+    except Exception as e:
+        logger.warning("gcor failed: %s", e)
+        return {"gcor_hbo": None, "gcor_hbr": None}
+
+
 def _drift_metrics(raw_haemo: mne.io.Raw) -> dict[str, Any]:
+    # NOTE: non-standard homegrown metric; may remove.
     try:
         hbo_picks = mne.pick_types(raw_haemo.info, fnirs="hbo")
         hbr_picks = mne.pick_types(raw_haemo.info, fnirs="hbr")
@@ -292,11 +319,15 @@ def gvtd_timetrace(
     sfreq: float,
     l_freq: float | None = None,
     h_freq: float | None = None,
+    standardize_channels: bool = False,
 ) -> np.ndarray:
     """GVTD time trace (Sherafati 2020): RMS across channels of the temporal derivative.
 
     gvtd[i] = sqrt(mean_ch (x[:,i] - x[:,i-1])^2); l_freq/h_freq apply an optional
     Butterworth (order 4) bandpass before differencing (isolates the motion band).
+    standardize_channels: DVARS-vstd analog (Nichols 2013) — divide each channel's
+    derivative by its own SD before the RMS, so high-dynamic-range channels don't
+    dominate the global value.
     """
     d = np.nan_to_num(data, nan=0.0, posinf=0.0, neginf=0.0)
     if h_freq is not None and h_freq >= sfreq / 2:
@@ -307,6 +338,9 @@ def gvtd_timetrace(
             iir_params=dict(order=4, ftype="butter"), verbose=False,
         )
     diff = np.diff(d, axis=1)
+    if standardize_channels:
+        sd = diff.std(axis=1, keepdims=True)
+        diff = np.divide(diff, sd, out=np.zeros_like(diff), where=sd > 0)
     return np.sqrt(np.mean(diff ** 2, axis=0))
 
 
@@ -350,6 +384,7 @@ def _motion_metrics(raw_intensity: mne.io.Raw) -> dict[str, Any]:
         spike_thresh = 3.0 * 1.4826 * mad
         gvtd_ts = gvtd_timetrace(od_data, sfreq)                           # canonical (unfiltered)
         gvtd_filt = gvtd_timetrace(od_data, sfreq, *GVTD_MOTION_BAND)  # motion-band
+        gvtd_vstd = gvtd_timetrace(od_data, sfreq, standardize_channels=True)  # channel-equalized
         motion_thresh = gvtd_threshold(gvtd_filt, n_std=3.0)
         if motion_thresh is not None:
             above = gvtd_filt > motion_thresh
@@ -367,6 +402,8 @@ def _motion_metrics(raw_intensity: mne.io.Raw) -> dict[str, Any]:
             "gvtd_p95": float(np.percentile(gvtd_ts, 95)),
             "gvtd_filt_mean": float(gvtd_filt.mean()),
             "gvtd_filt_p95": float(np.percentile(gvtd_filt, 95)),
+            "gvtd_vstd_mean": float(gvtd_vstd.mean()),
+            "gvtd_vstd_p95": float(np.percentile(gvtd_vstd, 95)),
             "gvtd_thresh": motion_thresh,
             "gvtd_num_above_thresh": num_above,
             "gvtd_pct_above_thresh": pct_above,
@@ -380,6 +417,8 @@ def _motion_metrics(raw_intensity: mne.io.Raw) -> dict[str, Any]:
             "gvtd_p95": None,
             "gvtd_filt_mean": None,
             "gvtd_filt_p95": None,
+            "gvtd_vstd_mean": None,
+            "gvtd_vstd_p95": None,
             "gvtd_thresh": None,
             "gvtd_num_above_thresh": None,
             "gvtd_pct_above_thresh": None,
@@ -439,6 +478,7 @@ def compute_raw_sqm(
             "spike_count": None, "temporal_derivative_variance": {},
             "gvtd_mean": None, "gvtd_p95": None,
             "gvtd_filt_mean": None, "gvtd_filt_p95": None,
+            "gvtd_vstd_mean": None, "gvtd_vstd_p95": None,
             "gvtd_thresh": None, "gvtd_num_above_thresh": None,
             "gvtd_pct_above_thresh": None,
         })
@@ -467,6 +507,7 @@ def compute_haemo_sqm(
     """Metrics computable from haemoglobin data (after Beer-Lambert)."""
     record: dict[str, Any] = {}
     record.update(_haemo_quality_metrics(raw_haemo))
+    record.update(_gcor_metrics(raw_haemo))
     record.update(_spectral_metrics(raw_haemo, cardiac_l_freq, cardiac_h_freq, resp_l_freq, resp_h_freq))
     record.update(_drift_metrics(raw_haemo))
     record.update(_retention_metrics(raw_haemo))

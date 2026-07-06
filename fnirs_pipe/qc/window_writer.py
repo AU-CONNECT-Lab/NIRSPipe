@@ -48,22 +48,19 @@ def _crop_to_window(
     return cropped if cropped.times.size > 1 else None
 
 
-def _compute_sqm_for_window(snirf_path: Path, tstart: float, tend: float,
-                            align: str, trigger_name: str | None,
-                            sci_threshold: float,
-                            cardiac_l_freq: float, cardiac_h_freq: float) -> dict | None:
-    """Crop SNIRF + recompute raw SQM (channel scalars + windowed metrics)."""
+def _sqm_for_cropped(cropped: mne.io.Raw, sci_threshold: float,
+                     cardiac_l_freq: float, cardiac_h_freq: float,
+                     windowed: bool = True) -> dict:
+    """Raw SQM (SCI + scalars, + optional windowed series) for an already-cropped raw.
+
+    Shared by window-raw (one fixed window) and epoch QC (one window per trial).
+    windowed=False skips the sliding-window series (meaningless on short trial windows).
+    """
     from fnirs_pipe.pipeline.prep_pipeline import (
         compute_windowed_filtered_gvtd,
         compute_windowed_gvtd, compute_windowed_psp, compute_windowed_sci,
     )
     from fnirs_pipe.qc.quantitative_metrics import compute_raw_sqm
-
-    raw = mne.io.read_raw_snirf(str(snirf_path), preload=True, verbose=False)
-    cropped = _crop_to_window(raw, tstart, tend, align, trigger_name)
-    if cropped is None:
-        logger.warning("skip %s: window [%g, %g] out of range", snirf_path.name, tstart, tend)
-        return None
 
     try:
         raw_od     = mne.preprocessing.nirs.optical_density(cropped.copy(), verbose=False)
@@ -71,7 +68,7 @@ def _compute_sqm_for_window(snirf_path: Path, tstart: float, tend: float,
             raw_od, l_freq=cardiac_l_freq, h_freq=cardiac_h_freq, verbose=False)
         sci_scores = {ch: float(sci_arr[i]) for i, ch in enumerate(cropped.ch_names)}
     except Exception as exc:
-        logger.warning("SCI failed for %s: %s", snirf_path.name, exc)
+        logger.warning("SCI failed: %s", exc)
         sci_scores = {ch: 1.0 for ch in cropped.ch_names}
         raw_od     = mne.preprocessing.nirs.optical_density(cropped.copy(), verbose=False)
 
@@ -79,8 +76,11 @@ def _compute_sqm_for_window(snirf_path: Path, tstart: float, tend: float,
     try:
         sqm = compute_raw_sqm(cropped, sci_scores, bad_channels, cardiac_l_freq, cardiac_h_freq)
     except Exception as exc:
-        logger.warning("compute_raw_sqm failed for %s: %s", snirf_path.name, exc)
+        logger.warning("compute_raw_sqm failed: %s", exc)
         sqm = {}
+
+    if not windowed:
+        return sqm
 
     # Windowed series (same convention as prep_raw_report; center-time scalar list)
     import numpy as _np
@@ -104,9 +104,22 @@ def _compute_sqm_for_window(snirf_path: Path, tstart: float, tend: float,
         if gvtd_filt_per_window is not None and len(gvtd_filt_per_window):
             sqm["gvtd_filt_per_window"] = _np.asarray(gvtd_filt_per_window).tolist()
     except Exception as exc:
-        logger.warning("windowed metrics failed for %s: %s", snirf_path.name, exc)
+        logger.warning("windowed metrics failed: %s", exc)
 
     return sqm
+
+
+def _compute_sqm_for_window(snirf_path: Path, tstart: float, tend: float,
+                            align: str, trigger_name: str | None,
+                            sci_threshold: float,
+                            cardiac_l_freq: float, cardiac_h_freq: float) -> dict | None:
+    """Crop SNIRF to one fixed window + recompute raw SQM (scalars + windowed metrics)."""
+    raw = mne.io.read_raw_snirf(str(snirf_path), preload=True, verbose=False)
+    cropped = _crop_to_window(raw, tstart, tend, align, trigger_name)
+    if cropped is None:
+        logger.warning("skip %s: window [%g, %g] out of range", snirf_path.name, tstart, tend)
+        return None
+    return _sqm_for_cropped(cropped, sci_threshold, cardiac_l_freq, cardiac_h_freq, windowed=True)
 
 
 def build_window_raw_report(

@@ -533,6 +533,10 @@
         <span class="qv {{ qv_class(snr, snr >= 100, snr >= 20) }}">{{ qm_val(snr, '.1f') }}</span></li>
     <li><span class="ql">Mean HbO–HbR corr</span>
         <span class="qv {{ qv_class(corr, corr < -0.3, corr < 0) }}">{{ qm_val(corr) }}</span></li>
+    <li><span class="ql">Global corr HbO{% if sqm.get('gcor_hbo_after') is not none %} (before→after){% endif %}</span>
+        <span class="qv">{{ qm_val(sqm.get('gcor_hbo')) }}{% if sqm.get('gcor_hbo_after') is not none %} → {{ qm_val(sqm.get('gcor_hbo_after')) }}{% endif %}</span></li>
+    <li><span class="ql">Global corr HbR{% if sqm.get('gcor_hbr_after') is not none %} (before→after){% endif %}</span>
+        <span class="qv">{{ qm_val(sqm.get('gcor_hbr')) }}{% if sqm.get('gcor_hbr_after') is not none %} → {{ qm_val(sqm.get('gcor_hbr_after')) }}{% endif %}</span></li>
     <li><span class="ql">% data retained</span>
         <span class="qv {{ qv_class(ret_pct, ret_pct >= 0.8, ret_pct >= 0.6) }}">{{ pct(ret_pct) }}</span></li>
     <li><span class="ql">GVTD mean</span>

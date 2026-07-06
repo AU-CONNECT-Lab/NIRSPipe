@@ -699,6 +699,13 @@ def build_subject_report(
                                      cardiac_h_freq=config.cardiac_h_freq,
                                      resp_l_freq=config.resp_l_freq,
                                      resp_h_freq=config.resp_h_freq)
+    # gcor before (already in sqm, computed on raw_haemo) vs after denoising, for side-by-side display
+    if after_haemo is not None and sqm_vars.get("sqm") is not None:
+        with _guard("gcor after denoising", errors, subject):
+            from fnirs_pipe.qc.quantitative_metrics import _gcor_metrics
+            after_gcor = _gcor_metrics(after_haemo)
+            sqm_vars["sqm"]["gcor_hbo_after"] = after_gcor["gcor_hbo"]
+            sqm_vars["sqm"]["gcor_hbr_after"] = after_gcor["gcor_hbr"]
     ch_summary_vars   = _section_channel_summary(
                             sqm_vars["channel_rows"], sqm_vars["sqm"], subject, errors, figures_dir,
                             sci_thresh=getattr(config, "sci_threshold", 0.75))
