@@ -14,7 +14,7 @@ import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from fnirs_pipe.qc.quantitative_metrics import gvtd_threshold, gvtd_timetrace
+from fnirs_pipe.qc.quantitative_metrics import GVTD_MOTION_BAND, gvtd_threshold, gvtd_timetrace
 
 _MAX_PTS = 4000
 
@@ -42,7 +42,7 @@ def carpet_gvtd_figure(
     # raw = canonical Sherafati; filt = 0.01-0.5 Hz band (motion-specific, used for the threshold)
     sfreq     = float(raw_od.info["sfreq"])
     gvtd      = gvtd_timetrace(od_data, sfreq)
-    gvtd_filt = gvtd_timetrace(od_data, sfreq, l_freq=0.01, h_freq=0.5)
+    gvtd_filt = gvtd_timetrace(od_data, sfreq, *GVTD_MOTION_BAND)
     t_gvtd    = times[1:]
     motion_thresh = gvtd_threshold(gvtd_filt, n_std=3.0)
 
@@ -220,7 +220,7 @@ def build_motion_detail_figure(
     diff_all = np.diff(od_data, axis=1)
     dec_sfreq = 1.0 / (od_times[1] - od_times[0]) if len(od_times) > 1 else float(raw_od_before.info["sfreq"])
     gvtd      = gvtd_timetrace(od_data, dec_sfreq)                            # canonical (unfiltered)
-    gvtd_filt = gvtd_timetrace(od_data, dec_sfreq, l_freq=0.01, h_freq=0.5)   # motion-band
+    gvtd_filt = gvtd_timetrace(od_data, dec_sfreq, *GVTD_MOTION_BAND)   # motion-band
     t_gvtd    = od_times[1:].tolist()
     motion_thresh = gvtd_threshold(gvtd_filt, n_std=3.0)
 

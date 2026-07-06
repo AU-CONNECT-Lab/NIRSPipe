@@ -55,6 +55,12 @@ def _build_parser() -> argparse.ArgumentParser:
     prep_opt.add_argument("--cardiac-h-freq", type=float, required=True,
                           help="Upper bound of cardiac band in Hz (required; population-dependent). "
                                "Adult resting ~1.5; children/infants higher (e.g. 2.5-3.0).")
+    prep_opt.add_argument("--resp-l-freq", type=float, required=True,
+                          help="Lower bound of respiration band in Hz (required; population-dependent). "
+                               "Adult ~0.1; infants higher.")
+    prep_opt.add_argument("--resp-h-freq", type=float, required=True,
+                          help="Upper bound of respiration band in Hz (required; population-dependent). "
+                               "Adult ~0.5; infants higher.")
 
     post = p.add_argument_group("postprocessing (requires --mode)")
     post.add_argument("--mode", choices=_MODE_CHOICES, help="Postprocessing mode: denoise, glm or rest.")

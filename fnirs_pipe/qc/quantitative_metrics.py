@@ -17,6 +17,8 @@ from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("qc.quantitative_metrics")
 
+GVTD_MOTION_BAND = (0.01, 0.5)  # Hz — bandpass for the filtered (motion-specific) GVTD
+
 
 def _sci_metrics(
     sci_scores: dict[str, float],
@@ -213,35 +215,72 @@ def _haemo_quality_metrics(raw_haemo: mne.io.Raw) -> dict[str, Any]:
     }
 
 
-def _spectral_metrics(raw_haemo: mne.io.Raw) -> dict[str, Any]:
+def _spectral_metrics(
+    raw_haemo: mne.io.Raw,
+    cardiac_l_freq: float, cardiac_h_freq: float,
+    resp_l_freq: float, resp_h_freq: float,
+) -> dict[str, Any]:
+    """Cardiac/respiration power in the haemoglobin PSD — absolute and as a fraction of total.
+
+    *_band_power = mean PSD in the band (absolute; scales with overall signal amplitude).
+    *_band_frac  = band power / total spectral power (fALFF-style fraction in [0,1],
+                   so it is comparable across subjects/channels regardless of amplitude).
+    """
     try:
         psd = raw_haemo.compute_psd(verbose=False)
         freqs = psd.freqs
         psd_data = psd.get_data()
+        total = float(psd_data.sum())  # total spectral power over all channels and freqs
 
         def _band_power(fmin: float, fmax: float) -> float | None:
+            # absolute: mean PSD density inside the band
             mask = (freqs >= fmin) & (freqs <= fmax)
             return float(psd_data[:, mask].mean()) if mask.any() else None
 
+        def _band_frac(fmin: float, fmax: float) -> float | None:
+            # relative: fraction of total power falling in the band (sum/sum, in [0,1])
+            mask = (freqs >= fmin) & (freqs <= fmax)
+            return float(psd_data[:, mask].sum() / total) if (mask.any() and total > 0) else None
+
         return {
-            "residual_cardiac_power": _band_power(0.7, 1.5),
-            "residual_resp_power": _band_power(0.1, 0.5),
+            "cardiac_band_power": _band_power(cardiac_l_freq, cardiac_h_freq),
+            "cardiac_band_frac":  _band_frac(cardiac_l_freq, cardiac_h_freq),
+            "resp_band_power":    _band_power(resp_l_freq, resp_h_freq),
+            "resp_band_frac":     _band_frac(resp_l_freq, resp_h_freq),
         }
     except Exception as e:
         logger.warning("PSD metrics failed: %s", e)
-        return {"residual_cardiac_power": None, "residual_resp_power": None}
+        return {
+            "cardiac_band_power": None, "cardiac_band_frac": None,
+            "resp_band_power": None, "resp_band_frac": None,
+        }
 
 
 def _drift_metrics(raw_haemo: mne.io.Raw) -> dict[str, Any]:
     try:
         hbo_picks = mne.pick_types(raw_haemo.info, fnirs="hbo")
         hbr_picks = mne.pick_types(raw_haemo.info, fnirs="hbr")
-        raw_filt = raw_haemo.copy().filter(None, 0.01, verbose=False)
-        drift_hbo = raw_filt.get_data(picks=hbo_picks)
-        drift_hbr = raw_filt.get_data(picks=hbr_picks)
+        n = len(raw_haemo.times)
+        # Low-frequency drift amplitude = peak-to-peak of a slow trend fitted per channel.
+        # We fit a low-order (cubic) polynomial rather than low-passing at 0.01 Hz: an
+        # 0.01 Hz FIR needs a filter ~hundreds of seconds long (roughly several / 0.01),
+        # which exceeds most recordings -> MNE errors, or leaves heavy edge ringing that
+        # corrupts the ptp. The polynomial captures the same slow drift with no filter.
+        #   trend = V @ lstsq(V, x),  V = [t^3 t^2 t 1] ;  drift = ptp(trend) mean over channels
+        t = np.linspace(-1.0, 1.0, n)
+        vander = np.vander(t, 4)
+
+        def _drift_ptp(picks) -> "float | None":
+            if not len(picks):
+                return None
+            data = raw_haemo.get_data(picks=picks)
+            coef, *_ = np.linalg.lstsq(vander, data.T, rcond=None)
+            trend = (vander @ coef).T
+            return float(np.ptp(trend, axis=1).mean())
+
         return {
-            "lowfreq_drift_amplitude_hbo": float(np.ptp(drift_hbo, axis=1).mean()) if len(hbo_picks) else None,
-            "lowfreq_drift_amplitude_hbr": float(np.ptp(drift_hbr, axis=1).mean()) if len(hbr_picks) else None,
+            "lowfreq_drift_amplitude_hbo": _drift_ptp(hbo_picks),
+            "lowfreq_drift_amplitude_hbr": _drift_ptp(hbr_picks),
         }
     except Exception as e:
         logger.warning("Drift amplitude failed: %s", e)
@@ -299,10 +338,18 @@ def _motion_metrics(raw_intensity: mne.io.Raw) -> dict[str, Any]:
         sfreq = float(raw_od.info["sfreq"])
         od_data = np.nan_to_num(raw_od.get_data(), nan=0.0, posinf=0.0, neginf=0.0)
         diff_data = np.diff(od_data, axis=1)
-        # per-channel threshold avoids high-dynamic-range channels dominating spike count
-        spike_thresh = 3.0 * diff_data.std(axis=1, keepdims=True)
+        # Spike count = per-channel timepoints whose OD temporal derivative is an outlier.
+        # Threshold uses MAD, not std: std is taken over the whole derivative *including the
+        # spikes*, so a few large spikes inflate std -> threshold too high -> real spikes fall
+        # under it (non-robust). MAD (median abs deviation) resists those outliers.
+        #   thresh = median + 3 * 1.4826 * MAD ;  count where |diff - median| > thresh
+        # (1.4826*MAD ~= sigma for Gaussian data, so this is a robust 3-sigma). Per-channel
+        # scale also stops high-dynamic-range channels from dominating the total count.
+        med = np.median(diff_data, axis=1, keepdims=True)
+        mad = np.median(np.abs(diff_data - med), axis=1, keepdims=True)
+        spike_thresh = 3.0 * 1.4826 * mad
         gvtd_ts = gvtd_timetrace(od_data, sfreq)                           # canonical (unfiltered)
-        gvtd_filt = gvtd_timetrace(od_data, sfreq, l_freq=0.01, h_freq=0.5)  # motion-band
+        gvtd_filt = gvtd_timetrace(od_data, sfreq, *GVTD_MOTION_BAND)  # motion-band
         motion_thresh = gvtd_threshold(gvtd_filt, n_std=3.0)
         if motion_thresh is not None:
             above = gvtd_filt > motion_thresh
@@ -311,7 +358,7 @@ def _motion_metrics(raw_intensity: mne.io.Raw) -> dict[str, Any]:
         else:
             pct_above = num_above = None
         return {
-            "spike_count": int((np.abs(diff_data) > spike_thresh).sum()),
+            "spike_count": int((np.abs(diff_data - med) > spike_thresh).sum()),
             "temporal_derivative_variance": {
                 raw_od.ch_names[i]: float(np.var(diff_data[i]))
                 for i in range(len(raw_od.ch_names))
@@ -342,11 +389,24 @@ def _motion_metrics(raw_intensity: mne.io.Raw) -> dict[str, Any]:
 def _retention_metrics(raw_haemo: mne.io.Raw) -> dict[str, Any]:
     try:
         total_dur = raw_haemo.times[-1] - raw_haemo.times[0]
-        bad_dur = sum(
-            ann["duration"]
+        bad_spans = sorted(
+            (ann["onset"], ann["onset"] + ann["duration"])
             for ann in raw_haemo.annotations
             if ann["description"].upper().startswith("BAD")
         )
+        # merge overlapping BAD spans so overlap is not double-counted
+        bad_dur = 0.0
+        cur_start = cur_end = None
+        for start, end in bad_spans:
+            if cur_end is None or start > cur_end:
+                if cur_end is not None:
+                    bad_dur += cur_end - cur_start
+                cur_start, cur_end = start, end
+            else:
+                cur_end = max(cur_end, end)
+        if cur_end is not None:
+            bad_dur += cur_end - cur_start
+        bad_dur = min(bad_dur, total_dur)
         return {
             "pct_data_retained": float(1.0 - bad_dur / total_dur) if total_dur > 0 else None
         }
@@ -399,11 +459,15 @@ def compute_glm_sqm(residuals: np.ndarray) -> dict[str, Any]:
     }
 
 
-def compute_haemo_sqm(raw_haemo: mne.io.Raw) -> dict[str, Any]:
+def compute_haemo_sqm(
+    raw_haemo: mne.io.Raw,
+    cardiac_l_freq: float, cardiac_h_freq: float,
+    resp_l_freq: float, resp_h_freq: float,
+) -> dict[str, Any]:
     """Metrics computable from haemoglobin data (after Beer-Lambert)."""
     record: dict[str, Any] = {}
     record.update(_haemo_quality_metrics(raw_haemo))
-    record.update(_spectral_metrics(raw_haemo))
+    record.update(_spectral_metrics(raw_haemo, cardiac_l_freq, cardiac_h_freq, resp_l_freq, resp_h_freq))
     record.update(_drift_metrics(raw_haemo))
     record.update(_retention_metrics(raw_haemo))
     return record
@@ -416,9 +480,11 @@ def compute_sqm(
     bad_channels: list[str],
     cardiac_l_freq: float,
     cardiac_h_freq: float,
+    resp_l_freq: float,
+    resp_h_freq: float,
 ) -> dict[str, Any]:
     record = compute_raw_sqm(raw_intensity, sci_scores, bad_channels, cardiac_l_freq, cardiac_h_freq)
-    record.update(compute_haemo_sqm(raw_haemo))
+    record.update(compute_haemo_sqm(raw_haemo, cardiac_l_freq, cardiac_h_freq, resp_l_freq, resp_h_freq))
     return record
 
 

@@ -273,8 +273,10 @@ CREATE TABLE IF NOT EXISTS sqm (
     tsnr_hbo_mean               REAL,
     tsnr_hbr_mean               REAL,
     hbo_hbr_corr_mean           REAL,
-    residual_cardiac_power      REAL,
-    residual_resp_power         REAL,
+    cardiac_band_power          REAL,
+    cardiac_band_frac           REAL,
+    resp_band_power             REAL,
+    resp_band_frac              REAL,
     lowfreq_drift_amplitude_hbo REAL,
     lowfreq_drift_amplitude_hbr REAL,
     pct_data_retained           REAL
@@ -304,7 +306,7 @@ _SQM_COLS = [
     "gvtd_filt_mean", "gvtd_filt_p95", "gvtd_thresh", "gvtd_num_above_thresh",
     "gvtd_pct_above_thresh", "spike_count",
     "tsnr_hbo_mean", "tsnr_hbr_mean", "hbo_hbr_corr_mean",
-    "residual_cardiac_power", "residual_resp_power",
+    "cardiac_band_power", "cardiac_band_frac", "resp_band_power", "resp_band_frac",
     "lowfreq_drift_amplitude_hbo", "lowfreq_drift_amplitude_hbr",
     "pct_data_retained",
 ]

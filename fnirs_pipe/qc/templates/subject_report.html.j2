@@ -545,8 +545,10 @@
         <span class="qv">{{ qm_val(sqm.get('gvtd_thresh'), '.3e') }}</span></li>
     <li><span class="ql">Spike count</span>
         <span class="qv {{ qv_class(spk, spk == 0, spk < 10) }}">{% if spk is not none %}{{ spk }}{% else %}<span style="color:#aaa">n/a</span>{% endif %}</span></li>
-    <li><span class="ql">Residual cardiac power</span>
-        <span class="qv">{{ qm_val(sqm.get('residual_cardiac_power'), '.3e') }}</span></li>
+    <li><span class="ql">Cardiac band power</span>
+        <span class="qv">{{ qm_val(sqm.get('cardiac_band_power'), '.3e') }}</span></li>
+    <li><span class="ql">Cardiac band fraction</span>
+        <span class="qv">{{ pct(sqm.get('cardiac_band_frac')) }}</span></li>
     <li><span class="ql">Low-freq drift (HbO)</span>
         <span class="qv">{{ qm_val(sqm.get('lowfreq_drift_amplitude'), '.3e') }}</span></li>
   </ul>

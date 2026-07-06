@@ -29,6 +29,10 @@ Mode = Literal["denoise", "glm", "rest"]
 @dataclass
 class PostConfig:
     subject: str
+    cardiac_l_freq: float
+    cardiac_h_freq: float
+    resp_l_freq: float
+    resp_h_freq: float
     session: str | None = None
     dry_run: bool = False
 
@@ -89,7 +93,11 @@ def run_post(
     if last_snirf_path is not None:
         try:
             from fnirs_pipe.qc.quantitative_metrics import compute_haemo_sqm, save_sqm_toml
-            save_sqm_toml(compute_haemo_sqm(result), config.subject, last_snirf_path.parent)
+            save_sqm_toml(
+                compute_haemo_sqm(
+                    result, config.cardiac_l_freq, config.cardiac_h_freq,
+                    config.resp_l_freq, config.resp_h_freq),
+                config.subject, last_snirf_path.parent)
         except Exception:
             logger.warning("sub-%s | haemo SQM failed", config.subject, exc_info=True)
 

@@ -144,6 +144,10 @@ def _build_cli_args(opts: dict) -> list[str]:
         args += ["--cardiac-l-freq", str(opts["cardiac_l"])]
     if opts.get("cardiac_h") is not None:
         args += ["--cardiac-h-freq", str(opts["cardiac_h"])]
+    if opts.get("resp_l") is not None:
+        args += ["--resp-l-freq", str(opts["resp_l"])]
+    if opts.get("resp_h") is not None:
+        args += ["--resp-h-freq", str(opts["resp_h"])]
 
     mode = opts.get("post_mode")
     if mode and mode != "none":
@@ -182,6 +186,8 @@ def _build_cli_args(opts: dict) -> list[str]:
     State("an-motion-correction", "value"),
     State("an-cardiac-l",         "value"),
     State("an-cardiac-h",         "value"),
+    State("an-resp-l",            "value"),
+    State("an-resp-h",            "value"),
     State("an-post-mode",         "value"),
     State("an-high-pass",         "value"),
     State("an-low-pass",          "value"),
@@ -197,7 +203,7 @@ def _build_cli_args(opts: dict) -> list[str]:
     prevent_initial_call=True,
 )
 def generate_command(n_clicks, bids_dir, output_dir, subjects, dpf, sci_thresh,
-                     motion_correction, cardiac_l, cardiac_h,
+                     motion_correction, cardiac_l, cardiac_h, resp_l, resp_h,
                      post_mode, high_pass, low_pass, resample, n_jobs,
                      hrf_model, noise_model, short_channel, flags,
                      session_label, task_label, shell):
@@ -209,12 +215,15 @@ def generate_command(n_clicks, bids_dir, output_dir, subjects, dpf, sci_thresh,
         return "Error: DPF and SCI threshold are required.", {}
     if cardiac_l is None or cardiac_h is None:
         return "Error: cardiac band lower/upper frequency is required (population-dependent).", {}
+    if resp_l is None or resp_h is None:
+        return "Error: respiration band lower/upper frequency is required (population-dependent).", {}
 
     opts = dict(
         bids_dir=bids_dir, output_dir=output_dir, subjects=subjects,
         session_label=session_label, task_label=task_label,
         dpf=dpf, sci_thresh=sci_thresh,
         motion_correction=motion_correction, cardiac_l=cardiac_l, cardiac_h=cardiac_h,
+        resp_l=resp_l, resp_h=resp_h,
         post_mode=post_mode, high_pass=high_pass, low_pass=low_pass,
         resample=resample, n_jobs=n_jobs,
         hrf_model=hrf_model, noise_model=noise_model, short_channel=short_channel,

@@ -22,6 +22,8 @@ def _build_script_text(
     mode: str | None,
     cardiac_l_freq: float | None = None,
     cardiac_h_freq: float | None = None,
+    resp_l_freq: float | None = None,
+    resp_h_freq: float | None = None,
     bad_channels: list[str] | None = None,
     high_pass: float | None = None,
     low_pass: float | None = None,
@@ -92,6 +94,10 @@ def _build_script_text(
         w(f'    cardiac_l_freq={cardiac_l_freq},')
     if cardiac_h_freq is not None:
         w(f'    cardiac_h_freq={cardiac_h_freq},')
+    if resp_l_freq is not None:
+        w(f'    resp_l_freq={resp_l_freq},')
+    if resp_h_freq is not None:
+        w(f'    resp_h_freq={resp_h_freq},')
     if bad_channels:
         w(f'    bad_channels={bad_channels!r},')
     w(f'    ignore={ignore!r},')
@@ -109,6 +115,10 @@ def _build_script_text(
     if mode:
         w('post_config = PostConfig(')
         w(f'    subject="{subject}",')
+        w(f'    cardiac_l_freq={cardiac_l_freq},')
+        w(f'    cardiac_h_freq={cardiac_h_freq},')
+        w(f'    resp_l_freq={resp_l_freq},')
+        w(f'    resp_h_freq={resp_h_freq},')
         w(f'    high_pass={_q(high_pass)},')
         w(f'    low_pass={_q(low_pass)},')
         w(f'    resample_sfreq={_q(resample_sfreq)},')
@@ -212,6 +222,8 @@ def write_run_script(
         mode=mode,
         cardiac_l_freq=args.get("cardiac_l_freq"),
         cardiac_h_freq=args.get("cardiac_h_freq"),
+        resp_l_freq=args.get("resp_l_freq"),
+        resp_h_freq=args.get("resp_h_freq"),
         bad_channels=bad_channels or None,
         high_pass=args.get("high_pass"),
         low_pass=args.get("low_pass"),

@@ -191,6 +191,14 @@ layout = dbc.Container([
                     dbc.Input(id="an-cardiac-h", type="number", step=0.1, placeholder="hi (adult ~1.5)"),
                 ]),
             ], width=3),
+            dbc.Col([
+                dbc.Label("Respiration Band (Hz)"),
+                dbc.InputGroup([
+                    dbc.Input(id="an-resp-l", type="number", step=0.1, placeholder="lo (adult ~0.1)"),
+                    dbc.InputGroupText("–"),
+                    dbc.Input(id="an-resp-h", type="number", step=0.1, placeholder="hi (adult ~0.5)"),
+                ]),
+            ], width=3),
         ], className="g-3"),
     ),
 

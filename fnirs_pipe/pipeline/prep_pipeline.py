@@ -93,8 +93,9 @@ def compute_windowed_gvtd(
 def compute_windowed_filtered_gvtd(
     raw_od: mne.io.Raw, window_s: float = 30.0,
 ) -> "tuple[np.ndarray, np.ndarray]":
-    """Mean GVTD per window on 0.01-0.5 Hz bandpassed OD (motion band)."""
-    return _windowed_gvtd(raw_od, window_s, 0.01, 0.5)
+    """Mean GVTD per window on the motion-band bandpassed OD."""
+    from fnirs_pipe.qc.quantitative_metrics import GVTD_MOTION_BAND
+    return _windowed_gvtd(raw_od, window_s, *GVTD_MOTION_BAND)
 
 
 def _expand_bad_pairs(raw: mne.io.Raw, labels: list[str]) -> list[str]:
@@ -221,6 +222,8 @@ class PrepConfig:
     sci_threshold: float                    # required; e.g. 0.8
     cardiac_l_freq: float
     cardiac_h_freq: float
+    resp_l_freq: float
+    resp_h_freq: float
     session: str | None = None
     motion_correction: str | None = None
     bad_channels: list[str] = field(default_factory=list)
@@ -321,7 +324,9 @@ def run_prep(
     sqm_final: dict | None = None
     try:
         from fnirs_pipe.qc.quantitative_metrics import compute_haemo_sqm, save_sqm_toml
-        sqm_final = compute_haemo_sqm(raw_haemo)
+        sqm_final = compute_haemo_sqm(
+            raw_haemo, config.cardiac_l_freq, config.cardiac_h_freq,
+            config.resp_l_freq, config.resp_h_freq)
         save_sqm_toml(sqm_final, config.subject, preproc_path.parent)
     except Exception:
         logger.warning("sub-%s | haemo SQM failed", config.subject, exc_info=True)

@@ -49,6 +49,10 @@ def _build_post_config(subject: str, session: str | None, args: dict[str, Any], 
 
     return PostConfig(
         subject=subject,
+        cardiac_l_freq=pick("cardiac_l_freq"),
+        cardiac_h_freq=pick("cardiac_h_freq"),
+        resp_l_freq=pick("resp_l_freq"),
+        resp_h_freq=pick("resp_h_freq"),
         session=session,
         dry_run=args.get("dry_run", False),
         high_pass=pick("high_pass"),
@@ -227,6 +231,8 @@ def _make_prep_config(subject: str, session: str | None, args: dict[str, Any]) -
         bad_channels=[c.strip() for c in raw_bad.split(",")] if raw_bad else [],
         cardiac_l_freq=args["cardiac_l_freq"],
         cardiac_h_freq=args["cardiac_h_freq"],
+        resp_l_freq=args["resp_l_freq"],
+        resp_h_freq=args["resp_h_freq"],
         ignore=[_v(ig) for ig in (args.get("ignore") or [])],
     )
 
