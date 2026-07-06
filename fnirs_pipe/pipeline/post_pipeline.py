@@ -90,14 +90,14 @@ def run_post(
         if mode in ("denoise", "glm"):
             last_snirf_path = _write_step_snirf(result, config, output_dir, desc="resampled", source_entities=source_entities)
 
+    haemo_sqm = None
     if last_snirf_path is not None:
         try:
             from fnirs_pipe.qc.quantitative_metrics import compute_haemo_sqm, save_sqm_toml
-            save_sqm_toml(
-                compute_haemo_sqm(
-                    result, config.cardiac_l_freq, config.cardiac_h_freq,
-                    config.resp_l_freq, config.resp_h_freq),
-                config.subject, last_snirf_path.parent)
+            haemo_sqm = compute_haemo_sqm(
+                result, config.cardiac_l_freq, config.cardiac_h_freq,
+                config.resp_l_freq, config.resp_h_freq)
+            save_sqm_toml(haemo_sqm, config.subject, last_snirf_path.parent)
         except Exception:
             logger.warning("sub-%s | haemo SQM failed", config.subject, exc_info=True)
 
@@ -124,6 +124,14 @@ def run_post(
             output_dir=str(output_dir / f"sub-{config.subject}" / "nirs"),
         )
         _write_step_snirf(raw_resid, config, output_dir, desc="errts", source_entities=source_entities)
+        # Durbin-Watson (GLM residual autocorrelation) merged into the final SQM toml
+        if haemo_sqm is not None and last_snirf_path is not None:
+            try:
+                from fnirs_pipe.qc.quantitative_metrics import compute_glm_sqm, save_sqm_toml
+                haemo_sqm.update(compute_glm_sqm(raw_resid.get_data()))
+                save_sqm_toml(haemo_sqm, config.subject, last_snirf_path.parent)
+            except Exception:
+                logger.warning("sub-%s | GLM SQM failed", config.subject, exc_info=True)
 
     elif mode == "rest":
         if config.drift_model is None:
@@ -142,7 +150,12 @@ def run_post(
             events=pd.DataFrame({"trial_type": [], "onset": [], "duration": []}),
             output_dir=str(output_dir / f"sub-{config.subject}" / "nirs"),
         )
-        _write_step_snirf(raw_resid, config, output_dir, desc="errts", source_entities=source_entities)
+        errts_path = _write_step_snirf(raw_resid, config, output_dir, desc="errts", source_entities=source_entities)
+        try:
+            from fnirs_pipe.qc.quantitative_metrics import compute_glm_sqm, save_sqm_toml
+            save_sqm_toml(compute_glm_sqm(raw_resid.get_data()), config.subject, errts_path.parent)
+        except Exception:
+            logger.warning("sub-%s | rest GLM SQM failed", config.subject, exc_info=True)
         alff_df, fc_df = _write_rest_derivatives(raw_resid, config, output_dir, source_entities=source_entities)
 
     return result, glm_est, dm, alff_df, fc_df

@@ -481,7 +481,7 @@
 </details>
 
 {% else %}
-<details id="GLM" {% if glm_design_path or glm_betas_html or glm_activation_path %}open{% endif %}>
+<details id="GLM" {% if glm_design_path or glm_betas_html or glm_activation_path or durbin_watson_mean is not none %}open{% endif %}>
   <summary>GLM</summary>
   <div class="details-body">
     {% if glm_design_path or glm_design_heatmap_path %}
@@ -502,6 +502,12 @@
       <h3>Activation by condition</h3>
       <img src="{{ glm_activation_path }}" alt="Activation by condition" style="max-width:100%;" />
       <p class="fig-path">{{ glm_activation_path }}</p>
+    {% endif %}
+
+    {% if durbin_watson_mean is not none %}
+      <h3>Residual autocorrelation</h3>
+      <p>Durbin–Watson (mean): <b>{{ "%.2f"|format(durbin_watson_mean) }}</b>
+         <span style="font-weight:400;color:#888">(~2 = white residuals / trustworthy GLM stats; &lt;2 = positive autocorrelation)</span></p>
     {% endif %}
 
   </div>

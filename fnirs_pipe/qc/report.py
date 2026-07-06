@@ -541,10 +541,22 @@ def _section_glm(
                 _save_b64_png(b64, figures_dir / "glm_activation.png")
                 glm_activation_path = "figures/glm_activation.png"
 
+    durbin_watson_mean = None
+    if glm_est is not None:
+        with _guard("Durbin-Watson", errors, subject):
+            import numpy as np
+
+            from fnirs_pipe.qc.quantitative_metrics import compute_glm_sqm
+            resid = np.array(
+                [glm_est.data[ch].residuals for ch in glm_est.ch_names]
+            ).squeeze(-1)
+            durbin_watson_mean = compute_glm_sqm(resid).get("durbin_watson_mean")
+
     return {
         "glm_design_path": glm_design_path,
         "glm_design_heatmap_path": glm_design_heatmap_path,
         "glm_activation_path": glm_activation_path,
+        "durbin_watson_mean": durbin_watson_mean,
     }
 
 

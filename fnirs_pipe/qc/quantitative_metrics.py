@@ -489,14 +489,27 @@ def compute_raw_sqm(
 
 
 def compute_glm_sqm(residuals: np.ndarray) -> dict[str, Any]:
-    """SQM metrics requiring GLM residuals (post-GLM QC).
+    """Post-GLM QC from the residual time series (n_channels, n_timepoints).
 
-    residuals: shape (n_channels, n_timepoints).
-    TODO: implement Durbin-Watson per channel.
+    Durbin-Watson per channel: DW = sum((e_t - e_{t-1})^2) / sum(e_t^2), in [0, 4];
+    ~2 = white residuals (GLM t/p values trustworthy), <2 = positive autocorrelation
+    (hemodynamic signals are autocorrelated; DW checks whether prewhitening worked).
     """
-    return {
-        "durbin_watson": None,  # TODO: statsmodels.stats.stattools.durbin_watson per channel
-    }
+    try:
+        e = np.asarray(residuals, dtype=float)
+        denom = np.sum(e ** 2, axis=1)
+        num = np.sum(np.diff(e, axis=1) ** 2, axis=1)
+        dw = np.divide(num, denom, out=np.full_like(denom, np.nan), where=denom > 0)
+        valid = dw[np.isfinite(dw)]
+        return {
+            "durbin_watson_mean": float(valid.mean()) if valid.size else None,
+            "durbin_watson_per_channel": {
+                str(i): float(v) for i, v in enumerate(dw) if np.isfinite(v)
+            },
+        }
+    except Exception as exc:
+        logger.warning("Durbin-Watson failed: %s", exc)
+        return {"durbin_watson_mean": None, "durbin_watson_per_channel": {}}
 
 
 def compute_haemo_sqm(

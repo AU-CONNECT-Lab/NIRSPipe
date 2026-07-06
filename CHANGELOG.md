@@ -11,6 +11,10 @@ All notable changes to this project will be documented in this file.
 - Filtered GVTD (0.01–0.5 Hz motion band) reported alongside the raw GVTD, plus per-run motion summaries above an adaptive (histogram-mode) threshold: number of motion frames, percent of run, and the threshold value
 - Motion figures (carpet + per-channel detail) overlay the raw and filtered GVTD traces and draw the motion threshold; group reports gain a filtered-GVTD time × subject heatmap
 - Cardiac and respiration band power are also reported as a fraction of total spectral power (`cardiac_band_frac` / `resp_band_frac`), comparable across subjects regardless of overall amplitude
+- `fnirs-qc epoch`: per-trial QC — one window per task event (read from the SNIRF or a `--events-csv`), recomputes SQM per trial and renders a trial × metric TSV + HTML. `--mode epoch|duration` is required (epoch mode needs `--tmin`/`--tmax`); SQM values are reported per trial without a good/bad label
+- Channel-standardized GVTD (`gvtd_vstd_*`): each channel's temporal derivative is divided by its own SD before the cross-channel RMS, so high-dynamic-range channels no longer dominate the motion index
+- Global correlation per chromophore (`gcor_hbo` / `gcor_hbr`): mean pairwise channel correlation; the subject report shows it before → after denoising (a drop means systemic/global signal was removed)
+- Durbin–Watson on GLM residuals (`durbin_watson_mean`): residual autocorrelation check (~2 = white residuals); shown in the GLM report section and saved with the post-processing SQM
 
 ### Changed
 - The cardiac band (`--cardiac-l-freq` / `--cardiac-h-freq`) is now required, with no default: it is population-dependent (adult vs infant heart rate) and now consistently sets the band for channel SCI, PSP, Cardiac Power, and cardiac band power, so a non-adult band is no longer silently ignored by some metrics
