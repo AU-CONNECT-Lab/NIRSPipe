@@ -6,8 +6,21 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-07-08
+
+### Added
+- Motion-correction footprint (experimental): which timepoints a motion correction actually repaired, summarised like framewise motion (`motion_corrected_pct` / `_num` / `_n_segments`) and drawn as a coloured band beneath the carpet and per-channel motion figures
+- Spike frame metrics: fraction of all channel-samples flagged (`spike_pct`) and fraction of timepoints where many channels spike together (`spike_pct_frames`), alongside the existing spike count; spikes are also drawn as a band on the motion figures
+- erpimage in the subject report for task data: single-trial HbO heatmaps per channel and per ROI (each stimulus repetition is a row, with a trial-average trace below), computed on the denoised signal and smoothed across trials
+- Fisher z-transformed functional connectivity output (`*_fcz.tsv`, ROI `*_fcroiz.tsv`) for group-level statistics, alongside the raw correlation matrices
+
 ### Changed
 - Windowed SCI/PSP/GVTD now share one sliding-window length (default 10 s, previously a mix of 30 s / 10 s), exposed as `--window-length` on `fnirs-prep`, `fnirs-qc prep-raw`, and `fnirs-qc window-raw`
+- Spike detection now runs on the motion-band-filtered optical density (cardiac removed first), so the count reflects motion rather than cardiac pulsation
+- Global correlation is now reported before → after the short-channel regression (the step that removes global/systemic signal) instead of before/after the bandpass, which inflated it; a single value is shown when no short-channel regression ran
+- The GVTD carpet figure splits the raw and filtered traces into separate panels, with the plotted GVTD downsampled by max-pooling so it stays readable (metric values unchanged)
+- Global correlation and spike metrics are now marked experimental
+- QC figures render at ≥300 dpi, and the before/after denoising carpet no longer has heavy panel borders
 
 ### Removed
 - tSNR (haemoglobin mean/std): ΔHbO/ΔHbR has no stable baseline, so its mean/std is not a meaningful signal-to-noise ratio; raw-intensity SNR already covers channel signal stability

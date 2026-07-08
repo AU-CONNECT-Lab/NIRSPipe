@@ -592,47 +592,44 @@ def build_sci_psp_figure(
 
 
 
-def build_erpimage_figure(
-    raw_haemo: mne.io.Raw,
-    ch_name: str,
-    epoch_tmin: float = -5.0,
-    epoch_tmax: float = 25.0,
-) -> "go.Figure | None":
-    """erpimage: one channel's HbO epochs stacked as a trial x time heatmap + trial average.
-
-    Rows = stimulus repetitions (chronological), x = time from onset, colour = baseline-
-    corrected HbO. The un-averaged companion to the block average. Returns None if the
-    recording has no (non-BAD) events or the channel is absent.
-    """
-    anns = raw_haemo.annotations
-    if not any(not str(a["description"]).upper().startswith("BAD") for a in anns):
+def _erpimage_data(
+    raw_haemo: mne.io.Raw, picks: "list[int]", epoch_tmin: float, epoch_tmax: float,
+) -> "tuple[np.ndarray, np.ndarray] | None":
+    """Epoch on (non-BAD) events, average over picks → (n_trials, n_times) in µM, plus times."""
+    if not any(not str(a["description"]).upper().startswith("BAD") for a in raw_haemo.annotations):
         return None
-    if ch_name not in raw_haemo.ch_names:
+    if not picks:
         return None
     try:
         events, event_id = mne.events_from_annotations(raw_haemo, verbose=False)
         event_id = {k: v for k, v in event_id.items() if not k.upper().startswith("BAD")}
         if len(events) == 0 or not event_id:
             return None
-        ch_idx = raw_haemo.ch_names.index(ch_name)
         epochs = mne.Epochs(
             raw_haemo, events, event_id, tmin=epoch_tmin, tmax=epoch_tmax,
-            picks=[ch_idx], baseline=(epoch_tmin, 0), preload=True, verbose=False,
+            picks=picks, baseline=(epoch_tmin, 0), preload=True, verbose=False,
         )
-        data = epochs.get_data()[:, 0, :] * 1e6  # (n_trials, n_times) in µM
+        data = epochs.get_data()  # (n_trials, n_picks, n_times)
         if data.shape[0] == 0:
             return None
-        times = epochs.times
+        return data.mean(axis=1) * 1e6, epochs.times  # average over channels → (n_trials, n_times)
     except Exception:
         return None
 
-    zmax = float(np.nanpercentile(np.abs(data), 98)) or 1.0
+
+def _erpimage_plot(data: np.ndarray, times: np.ndarray, title: str, trial_smooth: int) -> "go.Figure":
+    """Trial x time heatmap (optionally smoothed across adjacent trials) + trial average."""
+    if trial_smooth > 1 and data.shape[0] > 2 * trial_smooth:
+        from scipy.ndimage import uniform_filter1d  # moving average across trials, EEGLAB-style
+        data = uniform_filter1d(data, size=trial_smooth, axis=0, mode="nearest")
+    zmax = float(np.nanpercentile(np.abs(data), 97)) or 1.0
     fig = make_subplots(
         rows=2, cols=1, shared_xaxes=True, row_heights=[0.75, 0.25], vertical_spacing=0.06,
-        subplot_titles=[f"erpimage — {ch_name} ({data.shape[0]} trials)", "trial average"],
+        subplot_titles=[title, "trial average"],
     )
     fig.add_trace(go.Heatmap(
         z=data, x=times.tolist(), colorscale="RdBu_r", zmid=0, zmin=-zmax, zmax=zmax,
+        zsmooth="best",  # bilinear interpolation → continuous look (fNIRS has few, wide time cells)
         colorbar=dict(title="µM", len=0.7, y=0.62),
     ), row=1, col=1)
     fig.add_trace(go.Scatter(
@@ -648,6 +645,59 @@ def build_erpimage_figure(
         margin=dict(l=60, r=20, t=50, b=40),
     )
     return fig
+
+
+def _auto_trial_smooth(n_trials: int) -> int:
+    return max(1, n_trials // 15)
+
+
+def build_erpimage_figure(
+    raw_haemo: mne.io.Raw,
+    ch_name: str,
+    epoch_tmin: float = -5.0,
+    epoch_tmax: float = 25.0,
+    trial_smooth: "int | None" = None,
+) -> "go.Figure | None":
+    """erpimage: one HbO channel's epochs stacked as a trial x time heatmap + trial average.
+
+    Rows = stimulus repetitions, x = time from onset, colour = baseline-corrected HbO,
+    optionally smoothed across adjacent trials (EEGLAB-style) to reveal the slow response.
+    The un-averaged companion to the block average. None if no (non-BAD) events / channel absent.
+    """
+    if ch_name not in raw_haemo.ch_names:
+        return None
+    res = _erpimage_data(raw_haemo, [raw_haemo.ch_names.index(ch_name)], epoch_tmin, epoch_tmax)
+    if res is None:
+        return None
+    data, times = res
+    sm = trial_smooth if trial_smooth is not None else _auto_trial_smooth(data.shape[0])
+    return _erpimage_plot(data, times, f"erpimage — {ch_name} ({data.shape[0]} trials)", sm)
+
+
+def build_roi_erpimage_figure(
+    raw_haemo: mne.io.Raw,
+    roi_name: str,
+    channels: "list[str]",
+    epoch_tmin: float = -5.0,
+    epoch_tmax: float = 25.0,
+    trial_smooth: "int | None" = None,
+) -> "go.Figure | None":
+    """ROI erpimage: average the ROI's HbO channels first (higher SNR), then stack trials.
+
+    ``channels`` are channel names or S-D pair labels; matched to their HbO channels.
+    """
+    hbo = {c for c in raw_haemo.ch_names if c.endswith(" hbo")}
+    picks = [raw_haemo.ch_names.index(c if c in hbo else f"{c} hbo")
+             for c in channels if (c in hbo or f"{c} hbo" in hbo)]
+    if not picks:
+        return None
+    res = _erpimage_data(raw_haemo, picks, epoch_tmin, epoch_tmax)
+    if res is None:
+        return None
+    data, times = res
+    sm = trial_smooth if trial_smooth is not None else _auto_trial_smooth(data.shape[0])
+    return _erpimage_plot(
+        data, times, f"erpimage — ROI {roi_name} ({len(picks)} ch, {data.shape[0]} trials)", sm)
 
 
 def build_epoch_preview_figure(

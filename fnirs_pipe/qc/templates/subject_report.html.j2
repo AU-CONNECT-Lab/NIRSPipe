@@ -434,11 +434,28 @@
       <div class="placeholder">No stimulus events found — epoch preview not available.</div>
     {% endif %}
 
+    {% if erpimage_roi_pairs %}
+    <h3>erpimage — ROI (channel-averaged)</h3>
+    <p style="font-size:0.82rem;color:#666;margin:0 0 0.3rem;">
+      Per ROI, HbO channels averaged first (higher SNR), then each trial stacked as a row.
+      Denoised signal; smoothed across adjacent trials. Select an ROI.
+    </p>
+    <select class="ch-select"
+            onchange="document.getElementById('erpimg-roi-frame').src=this.value">
+      {% for roi in erpimage_roi_pairs %}
+      <option value="{{ roi.path }}">{{ roi.pair }}</option>
+      {% endfor %}
+    </select>
+    <iframe id="erpimg-roi-frame" class="plotly-frame"
+            src="{{ erpimage_roi_pairs[0].path }}"
+            style="height:{{ erpimage_roi_pairs[0].h + 20 }}px;"></iframe>
+    {% endif %}
+
     {% if erpimage_pairs %}
     <h3>erpimage — single-channel trials</h3>
     <p style="font-size:0.82rem;color:#666;margin:0 0 0.3rem;">
       Each stimulus repetition is a row (trial × time from onset), coloured by HbO — the
-      un-averaged view of the response. Select a channel.
+      un-averaged view of the response (denoised, trial-smoothed). Select a channel.
     </p>
     <select class="ch-select"
             onchange="document.getElementById('erpimg-frame').src=this.value">

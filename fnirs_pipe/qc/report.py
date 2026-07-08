@@ -72,6 +72,7 @@ from fnirs_pipe.qc.figures import (
     design_matrix_heatmap,
     build_epoch_preview_figure,
     build_erpimage_figure,
+    build_roi_erpimage_figure,
     build_sci_psp_figure,
     build_channel_figure,
     build_motion_detail_figure,
@@ -385,12 +386,24 @@ def _section_erpimage(
     subject: str,
     errors: list,
     figures_dir: Path,
+    roi_map: dict | None = None,
     epoch_tmin: float = -5.0,
     epoch_tmax: float = 25.0,
 ) -> dict:
-    # only for task data with (non-BAD) events; skip early to avoid per-channel work otherwise
+    # raw_haemo here is the denoised (bandpassed, pre-regression) signal, not preproc.
+    # only for task data with (non-BAD) events; skip early otherwise
     if not any(not str(a["description"]).upper().startswith("BAD") for a in raw_haemo.annotations):
-        return {"erpimage_pairs": []}
+        return {"erpimage_pairs": [], "erpimage_roi_pairs": []}
+
+    roi_saved = []
+    for roi_name, chans in (roi_map or {}).items():
+        with _guard(f"erpimage ROI {roi_name}", errors, subject):
+            fig = build_roi_erpimage_figure(raw_haemo, str(roi_name), chans, epoch_tmin, epoch_tmax)
+            if fig is not None:
+                fname = f"erpimage_roi_{_pair_fname(str(roi_name))}.html"
+                h = _save_multi_fig_html([fig], figures_dir / fname)
+                roi_saved.append({"pair": str(roi_name), "path": f"figures/{fname}", "h": h})
+
     saved = []
     for ch in [c for c in raw_haemo.ch_names if c.endswith(" hbo")]:
         with _guard(f"erpimage {ch}", errors, subject):
@@ -399,7 +412,7 @@ def _section_erpimage(
                 fname = f"erpimage_{_pair_fname(ch)}.html"
                 h = _save_multi_fig_html([fig], figures_dir / fname)
                 saved.append({"pair": ch, "path": f"figures/{fname}", "h": h})
-    return {"erpimage_pairs": saved}
+    return {"erpimage_pairs": saved, "erpimage_roi_pairs": roi_saved}
 
 
 def _scalars_to_toml(data: dict) -> str:
@@ -760,7 +773,10 @@ def build_subject_report(
                             sci_scores, bad_channels, coords_head, good_mask, raw_intensity,
                             subject, errors, figures_dir, ch_names_brain=ch_names_brain)
     epoch_vars        = _section_epoch_preview(raw_haemo, subject, errors, figures_dir)
-    erpimage_vars     = _section_erpimage(raw_haemo, subject, errors, figures_dir)
+    # erpimage on the denoised (bandpassed, pre-regression) haemo so drift/noise is gone and the
+    # task response is intact; fall back to preproc only if no post-processing ran.
+    erpimage_vars     = _section_erpimage(after_haemo if after_haemo is not None else raw_haemo,
+                                          subject, errors, figures_dir, roi_map=roi_map)
     glm_vars          = _section_glm(design_matrix, glm_est, raw_haemo, subject, errors, figures_dir, segments=segments)
     rest_vars         = _section_rest(alff_df, fc_df, subject, errors, figures_dir)
     sqm_vars          = _section_sqm(raw_long, raw_haemo, sci_scores, bad_channels, subject, errors,
