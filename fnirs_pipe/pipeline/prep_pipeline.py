@@ -275,6 +275,18 @@ def run_prep(
     except Exception:
         logger.warning("sub-%s | haemo SQM failed", config.subject, exc_info=True)
 
+    # experimental: motion-correction footprint (which timepoints the correction repaired)
+    # TODO: generalise this corrected-timepoint QC across motion-correction methods.
+    #       Works for any method that yields before/after OD (tddr here); revisit once
+    #       wavelet/spline paths are wired so the metric is reported for them too. Add to 
+    #       the final SQM output and figures.
+    if config.motion_correction not in (None, "none"):
+        try:
+            from fnirs_pipe.qc.quantitative_metrics import motion_correction_metrics
+            sqm_final = {**(sqm_final or {}), **motion_correction_metrics(raw_od_before_motion, raw_od)}
+        except Exception:
+            logger.warning("sub-%s | motion correction footprint failed", config.subject, exc_info=True)
+
     sci_matrix = sci_times = psp_matrix = psp_times = None
     try:
         from fnirs_pipe.qc.quantitative_metrics import compute_windowed_psp, compute_windowed_sci

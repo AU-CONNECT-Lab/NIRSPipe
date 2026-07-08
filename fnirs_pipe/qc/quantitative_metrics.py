@@ -401,6 +401,15 @@ def _spike_metrics(raw_intensity: mne.io.Raw) -> dict[str, Any]:
     dict
         spike_count (total OD-derivative outliers across all channels) and
         temporal_derivative_variance (per channel).
+
+    Notes
+    -----
+    Both outputs are experimental homegrown diagnostics and may be removed.
+    spike_count is a per-channel MAD-based derivative-outlier count (local single-
+    channel glitches), distinct from the global GVTD motion threshold (whole-head
+    motion). temporal_derivative_variance is the per-channel derivative energy (the
+    squared DVARS-vstd normaliser) for flagging noisy channels, not a standard
+    named metric and not motion detection.
     """
     try:
         raw_od = mne.preprocessing.nirs.optical_density(raw_intensity.copy())
@@ -480,6 +489,58 @@ def _motion_metrics(raw_intensity: mne.io.Raw) -> dict[str, Any]:
             "gvtd_num_above_thresh": None,
             "gvtd_pct_above_thresh": None,
         }
+
+
+def motion_correction_metrics(
+    raw_before: mne.io.Raw,
+    raw_after: mne.io.Raw,
+    rel_thresh: float = 3.0,
+) -> dict[str, Any]:
+    """Experimental: motion-correction footprint — which timepoints a correction repaired.
+
+    Per channel, the correction signal ``delta = after - before`` is thresholded at
+    ``rel_thresh`` robust SDs (MAD) of its own scale; a sample above that was materially
+    repaired. Reports the corrected-sample fraction per channel and overall, a
+    correction-burden / motion-severity proxy analogous to an fMRI scrubbing fraction.
+
+    Parameters
+    ----------
+    raw_before, raw_after : mne.io.Raw
+        Optical density immediately before and after the motion-correction step.
+    rel_thresh : float, optional
+        Robust-SD multiple above which a sample counts as corrected.
+
+    Returns
+    -------
+    dict
+        motion_corrected_frac_mean and motion_corrected_frac_per_channel.
+
+    Notes
+    -----
+    Experimental and correction-agnostic: it measures the footprint of whatever
+    correction ran (e.g. TDDR repairs only the < 0.5 Hz component), not a new
+    correction. Overlaps GVTD (both track motion); frame it as correction burden.
+    """
+    try:
+        before = np.nan_to_num(raw_before.get_data())
+        after = np.nan_to_num(raw_after.get_data(picks=raw_before.ch_names))
+        delta = after - before
+        med = np.median(delta, axis=1, keepdims=True)
+        scale = 1.4826 * np.median(np.abs(delta - med), axis=1, keepdims=True)  # robust per-channel SD
+        corrected = np.abs(delta - med) > (rel_thresh * scale)
+        corrected[scale[:, 0] == 0] = False  # channel never touched → no correction
+        frac_per_ch = {
+            ch: float(corrected[i].mean()) for i, ch in enumerate(raw_before.ch_names)
+        }
+        return {
+            "motion_corrected_frac_mean": (
+                float(np.mean(list(frac_per_ch.values()))) if frac_per_ch else None
+            ),
+            "motion_corrected_frac_per_channel": frac_per_ch,
+        }
+    except Exception as e:
+        logger.warning("motion correction footprint failed: %s", e)
+        return {"motion_corrected_frac_mean": None, "motion_corrected_frac_per_channel": {}}
 
 
 # Haemoglobin metrics
@@ -612,6 +673,11 @@ def _gcor(data: np.ndarray) -> "float | None":
     -------
     float or None
         GCOR, or None if fewer than two channels.
+
+    Notes
+    -----
+    The GCOR statistic itself is standard, but using it per chromophore as an fNIRS
+    QC metric is experimental and may be removed.
 
     References
     ----------
