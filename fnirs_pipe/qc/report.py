@@ -71,6 +71,7 @@ from fnirs_pipe.qc.figures import (
     design_matrix_static_figure,
     design_matrix_heatmap,
     build_epoch_preview_figure,
+    build_erpimage_figure,
     build_sci_psp_figure,
     build_channel_figure,
     build_motion_detail_figure,
@@ -228,6 +229,8 @@ def _section_motion_detail(
     figures_dir: Path,
     segments: dict | None = None,
     max_pts: int = 4000,
+    corrected_segments: list | None = None,
+    spike_segments: list | None = None,
 ) -> dict:
     if raw_od_before is None or raw_od_after is None:
         return {"motion_detail_pairs": []}
@@ -235,7 +238,9 @@ def _section_motion_detail(
     saved = []
     for ch in shared_chs:
         with _guard(f"Motion detail {ch}", errors, subject):
-            fig = build_motion_detail_figure(raw_od_before, raw_od_after, ch, segments, max_pts)
+            fig = build_motion_detail_figure(raw_od_before, raw_od_after, ch, segments, max_pts,
+                                             corrected_segments=corrected_segments,
+                                             spike_segments=spike_segments)
             fname = f"motion_detail_{_pair_fname(ch)}.html"
             h = _save_multi_fig_html([fig], figures_dir / fname)
             saved.append({"pair": ch, "path": f"figures/{fname}", "h": h})
@@ -275,12 +280,33 @@ def _section_motion(
     errors: list,
     figures_dir: Path,
     raw_before_motion: mne.io.Raw | None = None,
+    raw_after_motion: mne.io.Raw | None = None,
 ) -> dict:
     carpet_gvtd_path = None
     bad_segment_zoom_path = None
 
+    corrected_segments = None
+    motion_corr_sqm: dict = {}
+    if raw_before_motion is not None and raw_after_motion is not None:
+        with _guard("Motion-correction footprint", errors, subject):
+            from fnirs_pipe.qc.quantitative_metrics import (
+                motion_corrected_segments, motion_correction_metrics,
+            )
+            corrected_segments = motion_corrected_segments(raw_before_motion, raw_after_motion)
+            motion_corr_sqm = {
+                k: v for k, v in motion_correction_metrics(raw_before_motion, raw_after_motion).items()
+                if not isinstance(v, dict)  # scalars only for the metrics panel
+            }
+
+    spike_spans = None
+    with _guard("Spike segments", errors, subject):
+        from fnirs_pipe.qc.quantitative_metrics import spike_segments
+        spike_spans = spike_segments(raw_long)
+
     with _guard("Carpet + GVTD", errors, subject):
-        b64 = carpet_gvtd_figure(raw_long, raw_long.ch_names, segments)
+        b64 = carpet_gvtd_figure(raw_long, raw_long.ch_names, segments,
+                                 corrected_segments=corrected_segments,
+                                 spike_segments=spike_spans)
         _save_b64_png(b64, figures_dir / "carpet_gvtd.png")
         carpet_gvtd_path = "figures/carpet_gvtd.png"
 
@@ -305,6 +331,9 @@ def _section_motion(
     return {
         "carpet_gvtd_path": carpet_gvtd_path,
         "bad_segment_zoom_path": bad_segment_zoom_path,
+        "motion_corrected_sqm": motion_corr_sqm,
+        "corrected_segments": corrected_segments,
+        "spike_spans": spike_spans,
     }
 
 
@@ -349,6 +378,28 @@ def _section_epoch_preview(
                 fig, figures_dir / "epoch_preview.html"
             )
     return {"epoch_preview_path": epoch_preview_path, "epoch_preview_h": epoch_preview_h}
+
+
+def _section_erpimage(
+    raw_haemo: mne.io.Raw,
+    subject: str,
+    errors: list,
+    figures_dir: Path,
+    epoch_tmin: float = -5.0,
+    epoch_tmax: float = 25.0,
+) -> dict:
+    # only for task data with (non-BAD) events; skip early to avoid per-channel work otherwise
+    if not any(not str(a["description"]).upper().startswith("BAD") for a in raw_haemo.annotations):
+        return {"erpimage_pairs": []}
+    saved = []
+    for ch in [c for c in raw_haemo.ch_names if c.endswith(" hbo")]:
+        with _guard(f"erpimage {ch}", errors, subject):
+            fig = build_erpimage_figure(raw_haemo, ch, epoch_tmin, epoch_tmax)
+            if fig is not None:
+                fname = f"erpimage_{_pair_fname(ch)}.html"
+                h = _save_multi_fig_html([fig], figures_dir / fname)
+                saved.append({"pair": ch, "path": f"figures/{fname}", "h": h})
+    return {"erpimage_pairs": saved}
 
 
 def _scalars_to_toml(data: dict) -> str:
@@ -668,6 +719,7 @@ def build_subject_report(
     alff_df: "Any | None" = None,
     fc_df: "Any | None" = None,
     after_haemo: mne.io.Raw | None = None,
+    gcor_reg: dict | None = None,
     roi_map: dict | None = None,
 ) -> None:
     """Render a per-subject prep QC report and save as HTML."""
@@ -686,8 +738,13 @@ def build_subject_report(
                             subject, errors, figures_dir)
     motion_vars       = _section_motion(
                             raw_long, sci_scores, config, segments, subject, errors,
-                            figures_dir, raw_before_motion=raw_before_motion)
-    motion_det_vars   = _section_motion_detail(raw_before_motion, raw_after_motion, subject, errors, figures_dir, segments=segments)
+                            figures_dir, raw_before_motion=raw_before_motion,
+                            raw_after_motion=raw_after_motion)
+    motion_det_vars   = _section_motion_detail(
+                            raw_before_motion, raw_after_motion, subject, errors, figures_dir,
+                            segments=segments,
+                            corrected_segments=motion_vars.get("corrected_segments"),
+                            spike_segments=motion_vars.get("spike_spans"))
     haemo_vars        = _section_haemo(raw_haemo, config, subject, errors, figures_dir,
                                        l_freq=l_freq, h_freq=h_freq)
     denoise_carpet_path = None
@@ -703,6 +760,7 @@ def build_subject_report(
                             sci_scores, bad_channels, coords_head, good_mask, raw_intensity,
                             subject, errors, figures_dir, ch_names_brain=ch_names_brain)
     epoch_vars        = _section_epoch_preview(raw_haemo, subject, errors, figures_dir)
+    erpimage_vars     = _section_erpimage(raw_haemo, subject, errors, figures_dir)
     glm_vars          = _section_glm(design_matrix, glm_est, raw_haemo, subject, errors, figures_dir, segments=segments)
     rest_vars         = _section_rest(alff_df, fc_df, subject, errors, figures_dir)
     sqm_vars          = _section_sqm(raw_long, raw_haemo, sci_scores, bad_channels, subject, errors,
@@ -711,13 +769,13 @@ def build_subject_report(
                                      cardiac_h_freq=config.cardiac_h_freq,
                                      resp_l_freq=config.resp_l_freq,
                                      resp_h_freq=config.resp_h_freq)
-    # gcor before (already in sqm, computed on raw_haemo) vs after denoising, for side-by-side display
-    if after_haemo is not None and sqm_vars.get("sqm") is not None:
-        with _guard("gcor after denoising", errors, subject):
-            from fnirs_pipe.qc.quantitative_metrics import _gcor_metrics
-            after_gcor = _gcor_metrics(after_haemo)
-            sqm_vars["sqm"]["gcor_hbo_after"] = after_gcor["gcor_hbo"]
-            sqm_vars["sqm"]["gcor_hbr_after"] = after_gcor["gcor_hbr"]
+    # GCOR before→after the short-channel regression (fNIRS GSR analog): the meaningful
+    # comparison (expected to drop). Bandpass alone raises GCOR, so we do not compare that.
+    if gcor_reg and sqm_vars.get("sqm") is not None:
+        sqm_vars["sqm"].update(gcor_reg)
+    # motion-correction footprint scalars (computed in _section_motion) into the metrics panel
+    if sqm_vars.get("sqm") is not None:
+        sqm_vars["sqm"].update(motion_vars.get("motion_corrected_sqm") or {})
     ch_summary_vars   = _section_channel_summary(
                             sqm_vars["channel_rows"], sqm_vars["sqm"], subject, errors, figures_dir,
                             sci_thresh=getattr(config, "sci_threshold", 0.75))
@@ -751,6 +809,7 @@ def build_subject_report(
         **sci_vars,
         **motion_vars,
         **motion_det_vars,
+        **erpimage_vars,
         **haemo_vars,
         **channel_det_vars,
         **psd_det_vars,

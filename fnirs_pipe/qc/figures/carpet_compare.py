@@ -98,6 +98,8 @@ def carpet_compare_figure(
             ax_s.set_yticks(locs)
             ax_s.set_yticklabels([roi_names[c] for c in np.unique(roi_codes)], fontsize=6)
             ax_s.tick_params(length=0)
+            for sp in ax_s.spines.values():
+                sp.set_visible(False)
         for c in range(2):
             ax = fig.add_subplot(gs[r, col0 + c])
             data = panels[(r, c)]
@@ -106,6 +108,8 @@ def carpet_compare_figure(
                                vmin=-z_threshold, vmax=z_threshold, interpolation="nearest")
             ax.set_xticks([])
             ax.set_yticks([])
+            for sp in ax.spines.values():
+                sp.set_visible(False)
             if r == 0:
                 ax.set_title(col_titles[c], fontsize=10)
             if c == 0:
@@ -118,7 +122,7 @@ def carpet_compare_figure(
                      label="z (scaled by before SD)")
 
     buf = io.BytesIO()
-    fig.savefig(buf, format="png", dpi=200, bbox_inches="tight")
+    fig.savefig(buf, format="png", dpi=300, bbox_inches="tight")
     plt.close(fig)
     buf.seek(0)
     return base64.b64encode(buf.read()).decode()

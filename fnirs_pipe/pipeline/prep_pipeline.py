@@ -72,7 +72,7 @@ def _wl_clip_iqr(block: np.ndarray, iqr_factor: float) -> None:
 
 
 def _wl_filter_coeffs(coeffs, iqr_factor: float, signal_length: int):
-    """Zero SWT detail-coefficient outliers per block per level (Homer3 hmrR_MotionCorrectWavelet)."""
+    """Zero SWT detail-coefficient outliers per block per level."""
     n = len(coeffs[0][0])
     n_levels = len(coeffs)
     cAf = coeffs[0][0].copy()          # highest-level approximation

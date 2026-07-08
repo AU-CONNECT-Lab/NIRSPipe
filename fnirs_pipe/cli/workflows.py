@@ -194,12 +194,12 @@ def run_participant_level(args: dict[str, Any]) -> None:
                     if last_result.sqm_final:
                         _jdb.log_sqm(db_path, execution_id, subject, "final", last_result.sqm_final)
 
-                glm_est = dm = alff_df = fc_df = last_denoised = None
+                glm_est = dm = alff_df = fc_df = last_denoised = gcor_reg = None
                 if args.get("mode") is not None:
-                    glm_est, dm, alff_df, fc_df, last_denoised = _run_post_for_subject(subject, sessions, args, toml, output_dir, roi_map=roi_map)
+                    glm_est, dm, alff_df, fc_df, last_denoised, gcor_reg = _run_post_for_subject(subject, sessions, args, toml, output_dir, roi_map=roi_map)
 
                 if not args.get("no_report") and last_result is not None:
-                    _emit_subject_report(subject, sub_dir, last_raw, last_result, prep_config, args, glm_est, dm, alff_df=alff_df, fc_df=fc_df, high_pass=cfg_high_pass, low_pass=cfg_low_pass, after_haemo=last_denoised, roi_map=roi_map)
+                    _emit_subject_report(subject, sub_dir, last_raw, last_result, prep_config, args, glm_est, dm, alff_df=alff_df, fc_df=fc_df, high_pass=cfg_high_pass, low_pass=cfg_low_pass, after_haemo=last_denoised, gcor_reg=gcor_reg, roi_map=roi_map)
 
             except Exception as exc:
                 subject_status = "FAILED"
@@ -238,7 +238,7 @@ def _make_prep_config(subject: str, session: str | None, args: dict[str, Any]) -
     )
 
 
-def _emit_subject_report(subject, sub_dir, last_raw, last_result, prep_config, args, glm_est, dm, alff_df=None, fc_df=None, high_pass=None, low_pass=None, after_haemo=None, roi_map=None):
+def _emit_subject_report(subject, sub_dir, last_raw, last_result, prep_config, args, glm_est, dm, alff_df=None, fc_df=None, high_pass=None, low_pass=None, after_haemo=None, gcor_reg=None, roi_map=None):
     import mne
     import numpy as np
     from fnirs_pipe.qc.report import build_subject_report
@@ -286,6 +286,7 @@ def _emit_subject_report(subject, sub_dir, last_raw, last_result, prep_config, a
         alff_df=alff_df,
         fc_df=fc_df,
         after_haemo=after_haemo,
+        gcor_reg=gcor_reg,
         roi_map=roi_map,
     )
 
@@ -306,7 +307,7 @@ def _run_post_for_subject(
     tasks: list[str | None] = task_label if task_label else [None]
 
     post_layout = get_layout(output_dir, validate=False)
-    last_glm_est = last_dm = last_alff_df = last_fc_df = last_denoised = None
+    last_glm_est = last_dm = last_alff_df = last_fc_df = last_denoised = last_gcor_reg = None
     for session in sessions:
         post_config = _build_post_config(subject, session, args, toml, roi_map=roi_map)
         for task in tasks:
@@ -326,16 +327,18 @@ def _run_post_for_subject(
                 logger.info("post (%s): %s", mode, snirf_path.name)
                 try:
                     raw_haemo = mne.io.read_raw_snirf(str(snirf_path), preload=True)
-                    last_denoised, glm_est, dm, alff_df, fc_df = run_post(raw_haemo, post_config, output_dir=output_dir, mode=mode, source_entities=src_entities)
+                    last_denoised, glm_est, dm, alff_df, fc_df, gcor_reg = run_post(raw_haemo, post_config, output_dir=output_dir, mode=mode, source_entities=src_entities)
                     if glm_est is not None:
                         last_glm_est, last_dm = glm_est, dm
                     if fc_df is not None:
                         last_alff_df, last_fc_df = alff_df, fc_df
+                    if gcor_reg is not None:
+                        last_gcor_reg = gcor_reg
                 except Exception:
                     logger.exception("post failed for %s", snirf_path)
                     raise
 
-    return last_glm_est, last_dm, last_alff_df, last_fc_df, last_denoised
+    return last_glm_est, last_dm, last_alff_df, last_fc_df, last_denoised, last_gcor_reg
 
 
 def run_group_level(args: dict[str, Any]) -> None:

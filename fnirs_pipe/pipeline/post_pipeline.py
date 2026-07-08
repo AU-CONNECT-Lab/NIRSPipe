@@ -70,9 +70,10 @@ def run_post(
 ) -> tuple:
     """Run post-processing pipeline.
 
-    Returns (result, glm_est, design_matrix, alff_df, fc_df).
+    Returns (result, glm_est, design_matrix, alff_df, fc_df, gcor_reg).
     glm_est / design_matrix are None for non-GLM modes.
     alff_df / fc_df are None for non-rest modes.
+    gcor_reg (pre/post short-channel regression GCOR) is None unless short_channel ran.
     """
 
     result = raw_haemo.copy()
@@ -102,6 +103,7 @@ def run_post(
             logger.warning("sub-%s | haemo SQM failed", config.subject, exc_info=True)
 
     glm_est = dm = alff_df = fc_df = None
+    raw_resid = None  # set by the glm/rest branches
     if mode == "glm":
         missing = [f for f in ("hrf_model", "noise_model", "drift_model") if getattr(config, f) is None]
         if missing:
@@ -158,7 +160,21 @@ def run_post(
             logger.warning("sub-%s | rest GLM SQM failed", config.subject, exc_info=True)
         alff_df, fc_df = _write_rest_derivatives(raw_resid, config, output_dir, source_entities=source_entities)
 
-    return result, glm_est, dm, alff_df, fc_df
+    # GCOR around the short-channel regression (the fNIRS GSR analog): pre-regression vs
+    # residuals. Expected to drop if the regression removed global/systemic signal.
+    gcor_reg = None
+    if raw_resid is not None and config.short_channel:
+        try:
+            from fnirs_pipe.qc.quantitative_metrics import _gcor_metrics
+            pre, post = _gcor_metrics(result), _gcor_metrics(raw_resid)
+            gcor_reg = {
+                "gcor_hbo_prereg": pre["gcor_hbo"], "gcor_hbr_prereg": pre["gcor_hbr"],
+                "gcor_hbo_postreg": post["gcor_hbo"], "gcor_hbr_postreg": post["gcor_hbr"],
+            }
+        except Exception:
+            logger.warning("sub-%s | regression GCOR failed", config.subject, exc_info=True)
+
+    return result, glm_est, dm, alff_df, fc_df, gcor_reg
 
 def _write_rest_derivatives(
     raw_resid: mne.io.Raw,

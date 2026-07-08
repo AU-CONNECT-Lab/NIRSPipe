@@ -371,6 +371,7 @@
       <div class="placeholder">Figure generation failed — see Errors section.</div>
     {% endif %}
 
+
     {% if denoise_carpet_path %}
       <h3>Denoising carpet — before / after</h3>
       <p class="step-desc">
@@ -431,6 +432,23 @@
       <p class="fig-path">{{ epoch_preview_path }}</p>
     {% else %}
       <div class="placeholder">No stimulus events found — epoch preview not available.</div>
+    {% endif %}
+
+    {% if erpimage_pairs %}
+    <h3>erpimage — single-channel trials</h3>
+    <p style="font-size:0.82rem;color:#666;margin:0 0 0.3rem;">
+      Each stimulus repetition is a row (trial × time from onset), coloured by HbO — the
+      un-averaged view of the response. Select a channel.
+    </p>
+    <select class="ch-select"
+            onchange="document.getElementById('erpimg-frame').src=this.value">
+      {% for ch in erpimage_pairs %}
+      <option value="{{ ch.path }}">{{ ch.pair }}</option>
+      {% endfor %}
+    </select>
+    <iframe id="erpimg-frame" class="plotly-frame"
+            src="{{ erpimage_pairs[0].path }}"
+            style="height:{{ erpimage_pairs[0].h + 20 }}px;"></iframe>
     {% endif %}
   </div>
 </details>
@@ -539,10 +557,10 @@
         <span class="qv {{ qv_class(snr, snr >= 100, snr >= 20) }}">{{ qm_val(snr, '.1f') }}</span></li>
     <li><span class="ql">Mean HbO–HbR corr</span>
         <span class="qv {{ qv_class(corr, corr < -0.3, corr < 0) }}">{{ qm_val(corr) }}</span></li>
-    <li><span class="ql">Global corr HbO{% if sqm.get('gcor_hbo_after') is not none %} (before→after){% endif %}</span>
-        <span class="qv">{{ qm_val(sqm.get('gcor_hbo')) }}{% if sqm.get('gcor_hbo_after') is not none %} → {{ qm_val(sqm.get('gcor_hbo_after')) }}{% endif %}</span></li>
-    <li><span class="ql">Global corr HbR{% if sqm.get('gcor_hbr_after') is not none %} (before→after){% endif %}</span>
-        <span class="qv">{{ qm_val(sqm.get('gcor_hbr')) }}{% if sqm.get('gcor_hbr_after') is not none %} → {{ qm_val(sqm.get('gcor_hbr_after')) }}{% endif %}</span></li>
+    <li><span class="ql">Global corr HbO{% if sqm.get('gcor_hbo_postreg') is not none %} (reg before→after){% endif %}</span>
+        <span class="qv">{% if sqm.get('gcor_hbo_postreg') is not none %}{{ qm_val(sqm.get('gcor_hbo_prereg')) }} → {{ qm_val(sqm.get('gcor_hbo_postreg')) }}{% else %}{{ qm_val(sqm.get('gcor_hbo')) }}{% endif %}</span></li>
+    <li><span class="ql">Global corr HbR{% if sqm.get('gcor_hbr_postreg') is not none %} (reg before→after){% endif %}</span>
+        <span class="qv">{% if sqm.get('gcor_hbr_postreg') is not none %}{{ qm_val(sqm.get('gcor_hbr_prereg')) }} → {{ qm_val(sqm.get('gcor_hbr_postreg')) }}{% else %}{{ qm_val(sqm.get('gcor_hbr')) }}{% endif %}</span></li>
     <li><span class="ql">% data retained</span>
         <span class="qv {{ qv_class(ret_pct, ret_pct >= 0.8, ret_pct >= 0.6) }}">{{ pct(ret_pct) }}</span></li>
     <li><span class="ql">GVTD mean</span>
@@ -555,8 +573,22 @@
         <span class="qv">{{ qm_val(sqm.get('gvtd_num_above_thresh'), 'd') }}</span></li>
     <li><span class="ql">GVTD threshold</span>
         <span class="qv">{{ qm_val(sqm.get('gvtd_thresh'), '.3e') }}</span></li>
+    {% if sqm.get('motion_corrected_pct') is not none %}
+    <li><span class="ql">Motion corrected % (exp.)</span>
+        <span class="qv">{{ pct(sqm.get('motion_corrected_pct')) }}</span></li>
+    <li><span class="ql">Motion corrected frames</span>
+        <span class="qv">{{ qm_val(sqm.get('motion_corrected_num'), 'd') }}</span></li>
+    <li><span class="ql">Motion corrected segments</span>
+        <span class="qv">{{ qm_val(sqm.get('motion_corrected_n_segments'), 'd') }}</span></li>
+    {% endif %}
     <li><span class="ql">Spike count</span>
         <span class="qv {{ qv_class(spk, spk == 0, spk < 10) }}">{% if spk is not none %}{{ spk }}{% else %}<span style="color:#aaa">n/a</span>{% endif %}</span></li>
+    {% if sqm.get('spike_pct') is not none %}
+    <li><span class="ql">Spike % (exp.)</span>
+        <span class="qv">{{ pct(sqm.get('spike_pct')) }}</span></li>
+    <li><span class="ql">Spike % frames</span>
+        <span class="qv">{{ pct(sqm.get('spike_pct_frames')) }}</span></li>
+    {% endif %}
     <li><span class="ql">Cardiac band power</span>
         <span class="qv">{{ qm_val(sqm.get('cardiac_band_power'), '.3e') }}</span></li>
     <li><span class="ql">Cardiac band fraction</span>

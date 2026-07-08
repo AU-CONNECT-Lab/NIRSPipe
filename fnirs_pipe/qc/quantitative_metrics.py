@@ -388,53 +388,88 @@ def _cardiac_power_metrics(
         return {"cp_mean": None, "cp_per_channel": {}, "cp_pass_rate": None}
 
 
-def _spike_metrics(raw_intensity: mne.io.Raw) -> dict[str, Any]:
-    """Per-channel spike count and temporal-derivative variance from the OD derivative.
+def _spike_mask(diff_data: np.ndarray) -> np.ndarray:
+    """Per-channel robust outlier mask of a temporal-derivative array.
+
+    Threshold uses MAD, not std: std is taken over the whole derivative *including the
+    spikes*, so a few large spikes inflate std -> threshold too high -> real spikes fall
+    under it (non-robust). MAD (median abs deviation) resists those outliers.
+      thresh = median + 3 * 1.4826 * MAD ;  flag where |diff - median| > thresh
+    (1.4826*MAD ~= sigma for Gaussian data, so this is a robust 3-sigma). Per-channel
+    scale also stops high-dynamic-range channels from dominating.
+    """
+    med = np.median(diff_data, axis=1, keepdims=True)
+    mad = np.median(np.abs(diff_data - med), axis=1, keepdims=True)
+    return np.abs(diff_data - med) > (3.0 * 1.4826 * mad)
+
+
+def _motion_band_diff(od_data: np.ndarray, sfreq: float) -> np.ndarray:
+    """Temporal derivative of OD band-limited to the motion band (cardiac removed first).
+
+    EEG detects spikes on band-limited data (line-noise/muscle filtered out first); the
+    fNIRS analog filters out the ~1 Hz cardiac band so the derivative reflects motion,
+    not pulsation. Uses the same GVTD motion band.
+    """
+    d = np.nan_to_num(od_data, nan=0.0, posinf=0.0, neginf=0.0)
+    h_freq = GVTD_MOTION_BAND[1]
+    if h_freq >= sfreq / 2:  # not a valid IIR cutoff at/above Nyquist
+        h_freq = None
+    d = mne.filter.filter_data(
+        d, sfreq, GVTD_MOTION_BAND[0], h_freq, method="iir",
+        iir_params=dict(order=4, ftype="butter"), verbose=False)
+    return np.diff(d, axis=1)
+
+
+def _spike_metrics(raw_intensity: mne.io.Raw, ch_frac: float = 0.1) -> dict[str, Any]:
+    """Spike diagnostics and temporal-derivative variance from the OD derivative.
 
     Parameters
     ----------
     raw_intensity : mne.io.Raw
         Raw intensity recording.
+    ch_frac : float, optional
+        Fraction of channels that must spike at a timepoint for it to count as a spike
+        frame (the frame-level / FD-style aggregation).
 
     Returns
     -------
     dict
-        spike_count (total OD-derivative outliers across all channels) and
-        temporal_derivative_variance (per channel).
+        spike_count (total outliers), spike_pct (fraction of all channel-samples that are
+        outliers, an outlier-ratio), spike_num_frames / spike_pct_frames (timepoints with
+        >= ch_frac of channels spiking), and temporal_derivative_variance (per channel).
 
     Notes
     -----
-    Both outputs are experimental homegrown diagnostics and may be removed.
-    spike_count is a per-channel MAD-based derivative-outlier count (local single-
-    channel glitches), distinct from the global GVTD motion threshold (whole-head
-    motion). temporal_derivative_variance is the per-channel derivative energy (the
-    squared DVARS-vstd normaliser) for flagging noisy channels, not a standard
-    named metric and not motion detection.
+    Experimental. Spikes are detected on the motion-band-filtered OD derivative (cardiac
+    removed first, EEG-style filter-then-detect), so they reflect motion rather than
+    pulsation; a per-channel MAD 3-sigma outlier count, distinct from the global GVTD
+    threshold. temporal_derivative_variance uses the *unfiltered* derivative (per-channel
+    derivative energy, the squared DVARS-vstd normaliser) for flagging noisy channels,
+    not a standard named metric and not motion detection.
     """
     try:
         raw_od = mne.preprocessing.nirs.optical_density(raw_intensity.copy())
         od_data = np.nan_to_num(raw_od.get_data(), nan=0.0, posinf=0.0, neginf=0.0)
-        diff_data = np.diff(od_data, axis=1)
-        # Spike count = per-channel timepoints whose OD temporal derivative is an outlier.
-        # Threshold uses MAD, not std: std is taken over the whole derivative *including the
-        # spikes*, so a few large spikes inflate std -> threshold too high -> real spikes fall
-        # under it (non-robust). MAD (median abs deviation) resists those outliers.
-        #   thresh = median + 3 * 1.4826 * MAD ;  count where |diff - median| > thresh
-        # (1.4826*MAD ~= sigma for Gaussian data, so this is a robust 3-sigma). Per-channel
-        # scale also stops high-dynamic-range channels from dominating the total count.
-        med = np.median(diff_data, axis=1, keepdims=True)
-        mad = np.median(np.abs(diff_data - med), axis=1, keepdims=True)
-        spike_thresh = 3.0 * 1.4826 * mad
+        diff_raw = np.diff(od_data, axis=1)  # unfiltered: for the derivative-energy TVD
+        spikes = _spike_mask(_motion_band_diff(od_data, float(raw_od.info["sfreq"])))
+        flagged = spikes.mean(axis=0) >= ch_frac  # timepoints with >= ch_frac channels spiking
         return {
-            "spike_count": int((np.abs(diff_data - med) > spike_thresh).sum()),
+            "spike_count": int(spikes.sum()),
+            "spike_pct": float(spikes.mean()) if spikes.size else None,
+            "spike_num_frames": int(flagged.sum()),
+            "spike_pct_frames": float(flagged.mean()) if flagged.size else None,
             "temporal_derivative_variance": {
-                raw_od.ch_names[i]: float(np.var(diff_data[i]))
+                raw_od.ch_names[i]: float(np.var(diff_raw[i]))
                 for i in range(len(raw_od.ch_names))
             },
         }
     except Exception as e:
         logger.warning("Spike metrics failed: %s", e)
-        return {"spike_count": None, "temporal_derivative_variance": {}}
+        return {
+            "spike_count": None, "spike_pct": None,
+            "spike_num_frames": None, "spike_pct_frames": None,
+            "temporal_derivative_variance": {},
+        }
 
 
 def _motion_metrics(raw_intensity: mne.io.Raw) -> dict[str, Any]:
@@ -491,29 +526,75 @@ def _motion_metrics(raw_intensity: mne.io.Raw) -> dict[str, Any]:
         }
 
 
+def _correction_footprint(
+    raw_before: mne.io.Raw,
+    raw_after: mne.io.Raw,
+    rel_thresh: float,
+) -> "tuple[np.ndarray, np.ndarray]":
+    """Per-channel bool mask of correction *events*, plus times.
+
+    Flags where the correction changes abruptly, i.e. the frame-to-frame rate of
+    correction ``|diff(after - before)|`` exceeds ``rel_thresh`` times the channel's
+    sample-to-sample noise (1.4826*MAD of ``diff(before)``). This is the FD/censoring
+    analog (mark the moments a repair happens), so a continuous corrector like TDDR
+    flags the motion events rather than the whole recording. Flat channels contribute
+    nothing.
+    """
+    before = np.nan_to_num(raw_before.get_data())
+    after = np.nan_to_num(raw_after.get_data(picks=raw_before.ch_names))
+    d_corr = np.diff(after - before, axis=1)  # rate of correction (frame-to-frame)
+    d_before = np.diff(before, axis=1)
+    med = np.median(d_corr, axis=1, keepdims=True)
+    noise = 1.4826 * np.median(  # channel's sample-to-sample noise
+        np.abs(d_before - np.median(d_before, axis=1, keepdims=True)), axis=1, keepdims=True)
+    corrected = np.abs(d_corr - med) > (rel_thresh * noise)
+    corrected[noise[:, 0] == 0] = False  # flat channel → no reference scale
+    return corrected, raw_before.times[1:]
+
+
+def _mask_to_segments(flagged: np.ndarray, times: np.ndarray) -> "list[tuple[float, float]]":
+    """Contiguous True runs of a per-sample bool mask as (onset, duration) time spans."""
+    if not flagged.any():
+        return []
+    edges = np.diff(flagged.astype(np.int8))
+    starts = list(np.where(edges == 1)[0] + 1)
+    ends = list(np.where(edges == -1)[0] + 1)
+    if flagged[0]:
+        starts.insert(0, 0)
+    if flagged[-1]:
+        ends.append(len(flagged) - 1)
+    return [(float(times[s]), max(float(times[e]) - float(times[s]), 0.0)) for s, e in zip(starts, ends)]
+
+
 def motion_correction_metrics(
     raw_before: mne.io.Raw,
     raw_after: mne.io.Raw,
-    rel_thresh: float = 3.0,
+    rel_thresh: float = 1.0,
+    ch_frac: float = 0.1,
 ) -> dict[str, Any]:
     """Experimental: motion-correction footprint — which timepoints a correction repaired.
 
-    Per channel, the correction signal ``delta = after - before`` is thresholded at
-    ``rel_thresh`` robust SDs (MAD) of its own scale; a sample above that was materially
-    repaired. Reports the corrected-sample fraction per channel and overall, a
-    correction-burden / motion-severity proxy analogous to an fMRI scrubbing fraction.
+    Per channel a sample is a correction event when the frame-to-frame rate of correction
+    exceeds ``rel_thresh`` times the channel's sample-to-sample noise. A timepoint is
+    flagged globally when at least ``ch_frac`` of channels have an event there, giving
+    FD-style scrubbing scalars (num/pct/segments) on top of the per-channel fractions.
 
     Parameters
     ----------
     raw_before, raw_after : mne.io.Raw
         Optical density immediately before and after the motion-correction step.
     rel_thresh : float, optional
-        Robust-SD multiple above which a sample counts as corrected.
+        Correction rate, as a multiple of the channel's sample-to-sample noise, above
+        which a sample counts as a correction event.
+    ch_frac : float, optional
+        Fraction of channels that must be corrected at a timepoint for it to count as a
+        globally corrected (scrubbed) timepoint.
 
     Returns
     -------
     dict
-        motion_corrected_frac_mean and motion_corrected_frac_per_channel.
+        motion_corrected_frac_mean / _frac_per_channel (per-channel burden) and the
+        FD-analog global scalars motion_corrected_num / _pct / _n_segments.
 
     Notes
     -----
@@ -522,25 +603,45 @@ def motion_correction_metrics(
     correction. Overlaps GVTD (both track motion); frame it as correction burden.
     """
     try:
-        before = np.nan_to_num(raw_before.get_data())
-        after = np.nan_to_num(raw_after.get_data(picks=raw_before.ch_names))
-        delta = after - before
-        med = np.median(delta, axis=1, keepdims=True)
-        scale = 1.4826 * np.median(np.abs(delta - med), axis=1, keepdims=True)  # robust per-channel SD
-        corrected = np.abs(delta - med) > (rel_thresh * scale)
-        corrected[scale[:, 0] == 0] = False  # channel never touched → no correction
-        frac_per_ch = {
-            ch: float(corrected[i].mean()) for i, ch in enumerate(raw_before.ch_names)
-        }
+        corrected, times = _correction_footprint(raw_before, raw_after, rel_thresh)
+        frac_per_ch = {ch: float(corrected[i].mean()) for i, ch in enumerate(raw_before.ch_names)}
+        flagged = corrected.mean(axis=0) >= ch_frac  # timepoint corrected across >= ch_frac of channels
         return {
             "motion_corrected_frac_mean": (
                 float(np.mean(list(frac_per_ch.values()))) if frac_per_ch else None
             ),
             "motion_corrected_frac_per_channel": frac_per_ch,
+            "motion_corrected_num": int(flagged.sum()),
+            "motion_corrected_pct": float(flagged.mean()) if flagged.size else None,
+            "motion_corrected_n_segments": len(_mask_to_segments(flagged, times)),
         }
     except Exception as e:
         logger.warning("motion correction footprint failed: %s", e)
-        return {"motion_corrected_frac_mean": None, "motion_corrected_frac_per_channel": {}}
+        return {
+            "motion_corrected_frac_mean": None, "motion_corrected_frac_per_channel": {},
+            "motion_corrected_num": None, "motion_corrected_pct": None,
+            "motion_corrected_n_segments": None,
+        }
+
+
+def motion_corrected_segments(
+    raw_before: mne.io.Raw,
+    raw_after: mne.io.Raw,
+    rel_thresh: float = 1.0,
+    ch_frac: float = 0.1,
+) -> "list[tuple[float, float]]":
+    """Time spans where motion correction touched >= ch_frac of channels (for plotting)."""
+    corrected, times = _correction_footprint(raw_before, raw_after, rel_thresh)
+    flagged = corrected.mean(axis=0) >= ch_frac
+    return _mask_to_segments(flagged, times)
+
+
+def spike_segments(raw_intensity: mne.io.Raw, ch_frac: float = 0.1) -> "list[tuple[float, float]]":
+    """Time spans where >= ch_frac of channels show a motion-band OD spike (for plotting)."""
+    raw_od = mne.preprocessing.nirs.optical_density(raw_intensity.copy())
+    diff_data = _motion_band_diff(raw_od.get_data(), float(raw_od.info["sfreq"]))
+    flagged = _spike_mask(diff_data).mean(axis=0) >= ch_frac
+    return _mask_to_segments(flagged, raw_od.times[1:])
 
 
 # Haemoglobin metrics
@@ -1035,7 +1136,9 @@ def compute_raw_sqm(
             "cv_mean": None, "cv_per_channel": {},
             "snr_mean": None, "snr_per_channel": {},
             "mean_amp_mean": None, "mean_amp_per_channel": {},
-            "spike_count": None, "temporal_derivative_variance": {},
+            "spike_count": None, "spike_pct": None,
+            "spike_num_frames": None, "spike_pct_frames": None,
+            "temporal_derivative_variance": {},
             "gvtd_mean": None, "gvtd_p95": None,
             "gvtd_filt_mean": None, "gvtd_filt_p95": None,
             "gvtd_vstd_mean": None, "gvtd_vstd_p95": None,

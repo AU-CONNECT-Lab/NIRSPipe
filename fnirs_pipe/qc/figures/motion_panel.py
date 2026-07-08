@@ -22,23 +22,48 @@ _MAX_PTS = 4000
 _ZOOM_COLORS = ["#e74c3c", "#2980b9", "#27ae60"]
 
 
+def _maxpool_xy(t: np.ndarray, y: np.ndarray, max_pts: int = 2000):
+    """Downsample a trace to <= max_pts by taking the max in each bin (keeps spike heights).
+
+    Display only: reported GVTD scalars are computed full-res elsewhere and are unaffected.
+    """
+    n = len(y)
+    if n <= max_pts:
+        return t, y
+    step = n // max_pts
+    m = (n // step) * step
+    y_ds = y[:m].reshape(-1, step).max(axis=1)
+    t_ds = t[:m].reshape(-1, step)[:, 0]
+    return t_ds, y_ds
+
+
 def carpet_gvtd_figure(
     raw: mne.io.Raw,
     ch_names: list[str],
     segments: "dict | None" = None,
     z_threshold: float = 3.0,
+    corrected_segments: "list[tuple[float, float]] | None" = None,
+    spike_segments: "list[tuple[float, float]] | None" = None,
 ) -> str:
-    """GVTD trace (top) + per-channel z-scored OD carpet (bottom, all channels), shared x-axis."""
+    """Raw GVTD + filtered GVTD + per-channel z-scored OD carpet, shared x-axis.
+
+    The two GVTD traces sit in separate stacked panels (they overlap badly on one axis).
+    ``corrected_segments`` (motion-correction footprint) and ``spike_segments`` are drawn
+    as short bands along the carpet's bottom edge, distinct from the full-height red
+    ``segments`` windows.
+    """
     raw_od = mne.preprocessing.nirs.optical_density(raw.copy())
     od_data, times = raw_od.get_data(picks=ch_names, return_times=True)
 
-    # GVTD full-res (spikes are single samples, matches the metric); only carpet decimated.
-    # raw = canonical Sherafati; filt = 0.01-0.5 Hz band (motion-specific, used for the threshold)
+    # GVTD full-res for the threshold/metric; plotted trace is max-pooled for display only.
+    # filt = 0.01-0.5 Hz motion band (used for the threshold).
     sfreq     = float(raw_od.info["sfreq"])
     gvtd      = gvtd_timetrace(od_data, sfreq)
     gvtd_filt = gvtd_timetrace(od_data, sfreq, *GVTD_MOTION_BAND)
     t_gvtd    = times[1:]
     motion_thresh = gvtd_threshold(gvtd_filt, n_std=3.0)
+    t_raw_ds,  gvtd_ds      = _maxpool_xy(t_gvtd, gvtd)
+    t_filt_ds, gvtd_filt_ds = _maxpool_xy(t_gvtd, gvtd_filt)
 
     # carpet: all channels (both wavelengths are positively correlated, safe in one z-scored image);
     # matches GVTD's channel set. decimate columns for display only
@@ -54,28 +79,34 @@ def carpet_gvtd_figure(
 
     n_ch     = carpet.shape[0]
     carpet_h = max(1.5, n_ch * 0.09)
-    fig = plt.figure(figsize=(12, carpet_h + 1.5))
+    fig = plt.figure(figsize=(12, carpet_h + 3.0))
     gs  = fig.add_gridspec(
-        2, 2,
-        height_ratios=[1.5, carpet_h],
+        4, 2,
+        height_ratios=[1.0, 1.0, carpet_h, 0.5],
         width_ratios=[1, 0.025],
         hspace=0.0, wspace=0.05,
     )
-    ax_g = fig.add_subplot(gs[0, 0])
-    ax_c = fig.add_subplot(gs[1, 0], sharex=ax_g)
-    cax  = fig.add_subplot(gs[1, 1])
+    ax_graw  = fig.add_subplot(gs[0, 0])
+    ax_gfilt = fig.add_subplot(gs[1, 0], sharex=ax_graw)
+    ax_c     = fig.add_subplot(gs[2, 0], sharex=ax_graw)
+    ax_b     = fig.add_subplot(gs[3, 0], sharex=ax_graw)  # dedicated band strip, never overlaps carpet
+    cax      = fig.add_subplot(gs[2, 1])
 
-    ax_g.plot(t_gvtd, gvtd, lw=0.7, color="#b0b0b0", label="raw")
-    ax_g.plot(t_gvtd, gvtd_filt, lw=1.0, color="#2c3e50", label="0.01–0.5 Hz")
-    ax_g.set_xlim(times[0], times[-1])
+    ax_graw.plot(t_raw_ds, gvtd_ds, lw=0.5, color="#b0b0b0")
+    ax_graw.set_xlim(times[0], times[-1])
+    ax_graw.set_ylabel("GVTD\nraw", fontsize=8)
+    ax_graw.tick_params(labelsize=7, labelbottom=False)
+
+    ax_gfilt.plot(t_filt_ds, gvtd_filt_ds, lw=0.6, color="#2c3e50")
     if motion_thresh is not None:
-        ax_g.axhline(motion_thresh, ls="--", lw=0.8, color="#e74c3c",
-                     label=f"thresh={motion_thresh:.4f}")
-    ax_g.set_ylabel("GVTD", fontsize=8)
-    ax_g.legend(fontsize=7, loc="upper right", framealpha=0.6)
-    ax_g.tick_params(labelsize=7)
-    for sp in ax_g.spines.values():
-        sp.set_visible(False)
+        ax_gfilt.axhline(motion_thresh, ls="--", lw=0.8, color="#e74c3c",
+                         label=f"thresh={motion_thresh:.4f}")
+        ax_gfilt.legend(fontsize=7, loc="upper right", framealpha=0.6)
+    ax_gfilt.set_ylabel("GVTD\n0.01–0.5 Hz", fontsize=8)
+    ax_gfilt.tick_params(labelsize=7, labelbottom=False)
+    for ax in (ax_graw, ax_gfilt):
+        for sp in ax.spines.values():
+            sp.set_visible(False)
 
     im = ax_c.imshow(
         data_z, aspect="auto", cmap="gray_r",
@@ -84,7 +115,7 @@ def carpet_gvtd_figure(
         interpolation="nearest",
     )
     ax_c.set_yticks([])
-    ax_c.set_xlabel("Time (s)", fontsize=9)
+    ax_c.tick_params(labelbottom=False)  # x-axis lives on the band strip below
     for sp in ax_c.spines.values():
         sp.set_visible(False)
     fig.colorbar(im, cax=cax, label="Z-score")
@@ -92,15 +123,32 @@ def carpet_gvtd_figure(
     if segments:
         for k, (label, spans) in enumerate(segments.items()):
             for j, (onset, duration) in enumerate(spans):
-                for ax in (ax_g, ax_c):
+                for ax in (ax_graw, ax_gfilt, ax_c):
                     ax.axvspan(onset, onset + duration,
                                color="#e74c3c", alpha=0.15, zorder=2)
                 if j == 0:
-                    ax_g.text(
+                    ax_graw.text(
                         onset + duration / 2, 1.02, label,
                         ha="center", va="bottom", fontsize=6, color="#e74c3c",
-                        transform=ax_g.get_xaxis_transform(),
+                        transform=ax_graw.get_xaxis_transform(),
                     )
+
+    # dedicated strip below the carpet: motion-correction footprint + spike timepoints
+    ax_b.set_ylim(0, 1)
+    ax_b.set_yticks([])
+    ax_b.set_xlabel("Time (s)", fontsize=9)
+    ax_b.tick_params(labelsize=7)
+    for sp in ax_b.spines.values():
+        sp.set_visible(False)
+
+    def _band(spans, ymin, ymax, color, label):
+        for onset, duration in (spans or []):
+            ax_b.axvspan(onset, onset + duration, ymin=ymin, ymax=ymax, color=color, alpha=0.9)
+        ax_b.text(-0.006, (ymin + ymax) / 2, label, transform=ax_b.transAxes,
+                  fontsize=6, color=color, va="center", ha="right")
+
+    _band(corrected_segments, 0.05, 0.45, "#16a085", "corrected")
+    _band(spike_segments, 0.55, 0.95, "#e67e22", "spikes")
 
     buf = io.BytesIO()
     fig.savefig(buf, format="png", dpi=300, bbox_inches="tight")
@@ -191,7 +239,7 @@ def bad_segment_zoom_figure(
     )
 
     buf = io.BytesIO()
-    fig.savefig(buf, format="png", dpi=110, bbox_inches="tight")
+    fig.savefig(buf, format="png", dpi=300, bbox_inches="tight")
     plt.close(fig)
     buf.seek(0)
     return base64.b64encode(buf.read()).decode()
@@ -203,10 +251,13 @@ def build_motion_detail_figure(
     ch_name: str,
     segments: "dict | None" = None,
     max_pts: int = 4000,
+    corrected_segments: "list[tuple[float, float]] | None" = None,
+    spike_segments: "list[tuple[float, float]] | None" = None,
 ) -> go.Figure:
-    """3-row per-channel motion figure: GVTD (global) + TVD + before/after OD overlaid.
+    """4-row per-channel motion figure: GVTD (global) + TVD + before/after OD + band strip.
 
-    Both inputs must be in OD space (output of optical_density()).
+    Both inputs must be in OD space (output of optical_density()). The bottom strip shows
+    the (global) motion-correction footprint and spike timepoints, never overlapping the traces.
     """
     od_data, od_times = raw_od_before.get_data(return_times=True)
     od_data, od_times = _decimate(od_data, od_times, max_pts)
@@ -234,20 +285,20 @@ def build_motion_detail_figure(
     t_a, y_a = _get_ch(raw_od_after,  ch_name)
 
     fig = make_subplots(
-        rows=3, cols=1,
+        rows=4, cols=1,
         shared_xaxes=True,
-        row_heights=[0.2, 0.2, 0.6],
+        row_heights=[0.19, 0.19, 0.5, 0.12],
         vertical_spacing=0.04,
-        subplot_titles=["GVTD (global)", f"TVD — {ch_name}", f"{ch_name}  before / after"],
+        subplot_titles=["GVTD (global)", f"TVD — {ch_name}", f"{ch_name}  before / after", "motion bands"],
     )
 
     fig.add_trace(go.Scatter(
         x=t_gvtd, y=gvtd.tolist(), mode="lines",
-        line=dict(color="#b0b0b0", width=0.7), name="GVTD raw",
+        line=dict(color="#b0b0b0", width=0.4), name="GVTD raw",
     ), row=1, col=1)
     fig.add_trace(go.Scatter(
         x=t_gvtd, y=gvtd_filt.tolist(), mode="lines",
-        line=dict(color="#2c3e50", width=1.0), name="GVTD 0.01–0.5 Hz",
+        line=dict(color="#2c3e50", width=0.6), name="GVTD 0.01–0.5 Hz",
     ), row=1, col=1)
     if motion_thresh is not None:
         fig.add_shape(
@@ -295,12 +346,21 @@ def build_motion_detail_figure(
                         **(ann if row == 1 else {}),
                     )
 
+    # bottom strip: motion-correction footprint (teal) + spike timepoints (orange)
+    def _detail_band(spans, y0, y1, color):
+        for onset, dur in (spans or []):
+            fig.add_shape(type="rect", x0=onset, x1=onset + dur, y0=y0, y1=y1,
+                          fillcolor=color, line_width=0, layer="above", row=4, col=1)
+    _detail_band(corrected_segments, 0.05, 0.45, "#16a085")
+    _detail_band(spike_segments, 0.55, 0.95, "#e67e22")
+
     fig.update_yaxes(title_text="GVTD",   tickfont=dict(size=7), row=1, col=1)
     fig.update_yaxes(title_text="TVD",    tickfont=dict(size=7), row=2, col=1)
     fig.update_yaxes(title_text="OD",     tickfont=dict(size=7), row=3, col=1)
-    fig.update_xaxes(title_text="Time (s)", gridcolor="#eee", row=3, col=1)
+    fig.update_yaxes(range=[0, 1], showticklabels=False, row=4, col=1)
+    fig.update_xaxes(title_text="Time (s)", gridcolor="#eee", row=4, col=1)
     fig.update_layout(
-        title_text=ch_name, height=520,
+        title_text=ch_name, height=560,
         plot_bgcolor="white", paper_bgcolor="white",
         margin=dict(l=60, r=20, t=60, b=40),
         legend=dict(font=dict(size=9)),
