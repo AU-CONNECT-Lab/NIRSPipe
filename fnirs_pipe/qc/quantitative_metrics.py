@@ -388,11 +388,22 @@ def _cardiac_power_metrics(
         return {"cp_mean": None, "cp_per_channel": {}, "cp_pass_rate": None}
 
 
-def _motion_metrics(raw_intensity: mne.io.Raw) -> dict[str, Any]:
-    """Spike count, per-channel derivative variance, and GVTD motion metrics from OD."""
+def _spike_metrics(raw_intensity: mne.io.Raw) -> dict[str, Any]:
+    """Per-channel spike count and temporal-derivative variance from the OD derivative.
+
+    Parameters
+    ----------
+    raw_intensity : mne.io.Raw
+        Raw intensity recording.
+
+    Returns
+    -------
+    dict
+        spike_count (total OD-derivative outliers across all channels) and
+        temporal_derivative_variance (per channel).
+    """
     try:
         raw_od = mne.preprocessing.nirs.optical_density(raw_intensity.copy())
-        sfreq = float(raw_od.info["sfreq"])
         od_data = np.nan_to_num(raw_od.get_data(), nan=0.0, posinf=0.0, neginf=0.0)
         diff_data = np.diff(od_data, axis=1)
         # Spike count = per-channel timepoints whose OD temporal derivative is an outlier.
@@ -405,6 +416,36 @@ def _motion_metrics(raw_intensity: mne.io.Raw) -> dict[str, Any]:
         med = np.median(diff_data, axis=1, keepdims=True)
         mad = np.median(np.abs(diff_data - med), axis=1, keepdims=True)
         spike_thresh = 3.0 * 1.4826 * mad
+        return {
+            "spike_count": int((np.abs(diff_data - med) > spike_thresh).sum()),
+            "temporal_derivative_variance": {
+                raw_od.ch_names[i]: float(np.var(diff_data[i]))
+                for i in range(len(raw_od.ch_names))
+            },
+        }
+    except Exception as e:
+        logger.warning("Spike metrics failed: %s", e)
+        return {"spike_count": None, "temporal_derivative_variance": {}}
+
+
+def _motion_metrics(raw_intensity: mne.io.Raw) -> dict[str, Any]:
+    """GVTD motion metrics from OD: mean/p95, motion-band and vstd variants, and threshold.
+
+    Parameters
+    ----------
+    raw_intensity : mne.io.Raw
+        Raw intensity recording.
+
+    Returns
+    -------
+    dict
+        gvtd_mean/p95 (canonical), gvtd_filt_* (motion-band), gvtd_vstd_*
+        (channel-standardized), gvtd_thresh, and the num/pct of timepoints above it.
+    """
+    try:
+        raw_od = mne.preprocessing.nirs.optical_density(raw_intensity.copy())
+        sfreq = float(raw_od.info["sfreq"])
+        od_data = np.nan_to_num(raw_od.get_data(), nan=0.0, posinf=0.0, neginf=0.0)
         gvtd_ts = gvtd_timetrace(od_data, sfreq)                           # canonical (unfiltered)
         gvtd_filt = gvtd_timetrace(od_data, sfreq, *GVTD_MOTION_BAND)  # motion-band
         gvtd_vstd = gvtd_timetrace(od_data, sfreq, standardize_channels=True)  # channel-equalized
@@ -416,11 +457,6 @@ def _motion_metrics(raw_intensity: mne.io.Raw) -> dict[str, Any]:
         else:
             pct_above = num_above = None
         return {
-            "spike_count": int((np.abs(diff_data - med) > spike_thresh).sum()),
-            "temporal_derivative_variance": {
-                raw_od.ch_names[i]: float(np.var(diff_data[i]))
-                for i in range(len(raw_od.ch_names))
-            },
             "gvtd_mean": float(gvtd_ts.mean()),
             "gvtd_p95": float(np.percentile(gvtd_ts, 95)),
             "gvtd_filt_mean": float(gvtd_filt.mean()),
@@ -432,10 +468,8 @@ def _motion_metrics(raw_intensity: mne.io.Raw) -> dict[str, Any]:
             "gvtd_pct_above_thresh": pct_above,
         }
     except Exception as e:
-        logger.warning("Derivative metrics failed: %s", e)
+        logger.warning("GVTD metrics failed: %s", e)
         return {
-            "spike_count": None,
-            "temporal_derivative_variance": {},
             "gvtd_mean": None,
             "gvtd_p95": None,
             "gvtd_filt_mean": None,
@@ -449,8 +483,35 @@ def _motion_metrics(raw_intensity: mne.io.Raw) -> dict[str, Any]:
 
 
 # Haemoglobin metrics
-def _haemo_quality_metrics(raw_haemo: mne.io.Raw) -> dict[str, Any]:
-    """HbO-HbR correlation per source-detector pair, with mean (genuine responses anti-correlate)."""
+def haemo_quality_metrics(raw_haemo: mne.io.Raw) -> dict[str, Any]:
+    r"""HbO-HbR correlation per source-detector pair (genuine responses anti-correlate).
+
+    Each HbO channel is paired with the HbR channel of the same source-detector
+    pair, and their Pearson correlation is taken:
+
+    .. math::
+
+        \rho = \operatorname{corr}(\text{HbO}, \text{HbR}), \qquad \rho \in [-1, 1].
+
+    A real haemodynamic response drives HbO up and HbR down, so a strongly
+    negative correlation (near -1) is expected; values near 0 or positive indicate
+    a shared artifact (motion, systemic scalp signal) rather than brain activity.
+
+    Parameters
+    ----------
+    raw_haemo : mne.io.Raw
+        Haemoglobin recording (HbO/HbR).
+
+    Returns
+    -------
+    dict
+        hbo_hbr_corr_mean and hbo_hbr_corr_per_channel (keyed by source-detector pair).
+
+    Notes
+    -----
+    The HbO-HbR anti-correlation is well-established physiology; using it as a QC
+    metric is a reasonable heuristic rather than a standardized threshold.
+    """
     hbo_picks = mne.pick_types(raw_haemo.info, fnirs="hbo")
     hbr_picks = mne.pick_types(raw_haemo.info, fnirs="hbr")
     hbo_data = raw_haemo.get_data(picks=hbo_picks)
@@ -665,7 +726,28 @@ def compute_windowed_sci(
     cardiac_h_freq: float,
     window_s: float = 10.0,
 ) -> "tuple[np.ndarray, np.ndarray]":
-    """SCI per channel in each non-overlapping window (channel × window). Returns (scores, times)."""
+    """SCI per channel in each non-overlapping window.
+
+    Parameters
+    ----------
+    raw_od : mne.io.Raw
+        Optical-density recording.
+    cardiac_l_freq, cardiac_h_freq : float
+        Cardiac band edges in Hz.
+    window_s : float, optional
+        Non-overlapping window length in seconds.
+
+    Returns
+    -------
+    tuple[np.ndarray, np.ndarray]
+        (scores, times): SCI per channel per window (channel x window), and each
+        window's [start, end] times.
+
+    Notes
+    -----
+    Wrapper over mne_nirs ``scalp_coupling_index_windowed``; used to see how
+    coupling drifts over the recording rather than as a single whole-run value.
+    """
     from mne_nirs.preprocessing import scalp_coupling_index_windowed
     _, scores, times = scalp_coupling_index_windowed(
         raw_od, time_window=window_s, l_freq=cardiac_l_freq, h_freq=cardiac_h_freq
@@ -679,7 +761,28 @@ def compute_windowed_psp(
     cardiac_h_freq: float,
     window_s: float = 10.0,
 ) -> "tuple[np.ndarray, np.ndarray]":
-    """Peak spectral power per channel in each non-overlapping window. Returns (scores, times)."""
+    """Peak spectral power per channel in each non-overlapping window.
+
+    Parameters
+    ----------
+    raw_od : mne.io.Raw
+        Optical-density recording.
+    cardiac_l_freq, cardiac_h_freq : float
+        Cardiac band edges in Hz.
+    window_s : float, optional
+        Non-overlapping window length in seconds.
+
+    Returns
+    -------
+    tuple[np.ndarray, np.ndarray]
+        (scores, times): PSP per channel per window, and each window's
+        [start, end] times.
+
+    Notes
+    -----
+    Wrapper over mne_nirs ``peak_power``; the windowed companion to the whole-run
+    PSP, showing how the cardiac peak strength varies over time.
+    """
     from mne_nirs.preprocessing import peak_power
     _, scores, times = peak_power(
         raw_od, time_window=window_s, l_freq=cardiac_l_freq, h_freq=cardiac_h_freq
@@ -714,7 +817,21 @@ def compute_windowed_gvtd(
     raw_od: mne.io.Raw,
     window_s: float = 10.0,
 ) -> "tuple[np.ndarray, np.ndarray, np.ndarray]":
-    """Mean & p95 GVTD per non-overlapping window (unfiltered). Returns (mean, p95, center_times)."""
+    """Mean and p95 GVTD per non-overlapping window, unfiltered.
+
+    Parameters
+    ----------
+    raw_od : mne.io.Raw
+        Optical-density recording.
+    window_s : float, optional
+        Non-overlapping window length in seconds.
+
+    Returns
+    -------
+    tuple[np.ndarray, np.ndarray, np.ndarray]
+        (mean, p95, center_times) per window: average and 95th-percentile GVTD in
+        each window, and the window center times.
+    """
     return _windowed_gvtd(raw_od, window_s, None, None)
 
 
@@ -722,7 +839,23 @@ def compute_windowed_filtered_gvtd(
     raw_od: mne.io.Raw,
     window_s: float = 10.0,
 ) -> "tuple[np.ndarray, np.ndarray, np.ndarray]":
-    """Mean & p95 GVTD per window on the motion-band bandpassed OD. Returns (mean, p95, center_times)."""
+    """Mean and p95 GVTD per window on the motion-band bandpassed OD.
+
+    Same as :func:`compute_windowed_gvtd`, but the OD is first bandpassed to the
+    motion band (``GVTD_MOTION_BAND``) to isolate head-motion frequencies.
+
+    Parameters
+    ----------
+    raw_od : mne.io.Raw
+        Optical-density recording.
+    window_s : float, optional
+        Non-overlapping window length in seconds.
+
+    Returns
+    -------
+    tuple[np.ndarray, np.ndarray, np.ndarray]
+        (mean, p95, center_times) per window.
+    """
     return _windowed_gvtd(raw_od, window_s, *GVTD_MOTION_BAND)
 
 
@@ -735,9 +868,27 @@ def attach_windowed_series(
 ) -> dict:
     """Compute sliding-window SCI/PSP/GVTD series, attach summaries to sqm, return raw series.
 
-    Returned dict carries sci_matrix/sci_times/psp_matrix/psp_times for callers that also plot
-    them. On failure everything is None and sqm is left unchanged. Center times collapse the
-    mne-nirs [start, end] window pairs to their midpoint.
+    Parameters
+    ----------
+    sqm : dict
+        Metric dict; per-window summaries are attached to it in place.
+    raw_od : mne.io.Raw
+        Optical-density recording.
+    cardiac_l_freq, cardiac_h_freq : float
+        Cardiac band edges in Hz.
+    window_s : float, optional
+        Non-overlapping window length in seconds.
+
+    Returns
+    -------
+    dict
+        Raw series (sci_matrix/sci_times/psp_matrix/psp_times) for callers that
+        also plot them; all None on failure.
+
+    Notes
+    -----
+    On failure sqm is left unchanged and every returned series is None. Center
+    times collapse the mne-nirs [start, end] window pairs to their midpoint.
     """
     def _center_times(t):
         a = np.asarray(t)
@@ -781,7 +932,30 @@ def compute_raw_sqm(
     cardiac_l_freq: float,
     cardiac_h_freq: float,
 ) -> dict[str, Any]:
-    """Metrics computable from raw intensity data (no haemo required)."""
+    """Metrics computable from raw intensity data (no haemo required).
+
+    Parameters
+    ----------
+    raw_intensity : mne.io.Raw
+        Raw intensity, or already-OD, recording.
+    sci_scores : dict[str, float]
+        Per-channel SCI, as returned by :func:`compute_sci_scores`.
+    bad_channels : list[str]
+        Channel names marked bad.
+    cardiac_l_freq, cardiac_h_freq : float
+        Cardiac band edges in Hz.
+
+    Returns
+    -------
+    dict
+        Flat dict of SCI, channel distance, PSP, CP, and (intensity input only)
+        CV/SNR/amplitude plus motion metrics.
+
+    Notes
+    -----
+    If the input is already optical density, the intensity-value and motion
+    metrics are meaningless and set to None; SCI, distance, PSP and CP still run.
+    """
     record: dict[str, Any] = {}
     record.update(_sci_metrics(sci_scores, bad_channels))
     record.update(_channel_distance_metrics(raw_intensity))
@@ -804,6 +978,7 @@ def compute_raw_sqm(
         })
     else:
         record.update(_intensity_metrics(raw_intensity))
+        record.update(_spike_metrics(raw_intensity))
         record.update(_motion_metrics(raw_intensity))
     return record
 
@@ -853,9 +1028,25 @@ def compute_haemo_sqm(
     resp_l_freq: float,
     resp_h_freq: float,
 ) -> dict[str, Any]:
-    """Metrics computable from haemoglobin data (after Beer-Lambert)."""
+    """Metrics computable from haemoglobin data, after Beer-Lambert.
+
+    Parameters
+    ----------
+    raw_haemo : mne.io.Raw
+        Haemoglobin recording (HbO/HbR).
+    cardiac_l_freq, cardiac_h_freq : float
+        Cardiac band edges in Hz.
+    resp_l_freq, resp_h_freq : float
+        Respiration band edges in Hz.
+
+    Returns
+    -------
+    dict
+        Flat dict of HbO-HbR correlation, gcor, spectral band power/fraction,
+        drift, and data retention.
+    """
     record: dict[str, Any] = {}
-    record.update(_haemo_quality_metrics(raw_haemo))
+    record.update(haemo_quality_metrics(raw_haemo))
     record.update(_gcor_metrics(raw_haemo))
     record.update(_spectral_metrics(raw_haemo, cardiac_l_freq, cardiac_h_freq, resp_l_freq, resp_h_freq))
     record.update(_drift_metrics(raw_haemo))
@@ -873,7 +1064,28 @@ def compute_sqm(
     resp_l_freq: float,
     resp_h_freq: float,
 ) -> dict[str, Any]:
-    """All SQM: raw-intensity and haemoglobin metrics merged into one flat dict."""
+    """All SQM: raw-intensity and haemoglobin metrics merged into one flat dict.
+
+    Parameters
+    ----------
+    raw_intensity : mne.io.Raw
+        Raw intensity, or already-OD, recording.
+    raw_haemo : mne.io.Raw
+        Haemoglobin recording (HbO/HbR).
+    sci_scores : dict[str, float]
+        Per-channel SCI, as returned by :func:`compute_sci_scores`.
+    bad_channels : list[str]
+        Channel names marked bad.
+    cardiac_l_freq, cardiac_h_freq : float
+        Cardiac band edges in Hz.
+    resp_l_freq, resp_h_freq : float
+        Respiration band edges in Hz.
+
+    Returns
+    -------
+    dict
+        The raw-intensity and haemoglobin metric dicts merged into one.
+    """
     record = compute_raw_sqm(raw_intensity, sci_scores, bad_channels, cardiac_l_freq, cardiac_h_freq)
     record.update(compute_haemo_sqm(raw_haemo, cardiac_l_freq, cardiac_h_freq, resp_l_freq, resp_h_freq))
     return record
@@ -881,7 +1093,21 @@ def compute_sqm(
 
 # Persistence
 def save_sqm_toml(sqm: dict[str, Any], subject: str, out_dir: Path, suffix: str = "") -> None:
-    """Write scalar SQM fields to a TOML sidecar. suffix e.g. '_raw'."""
+    """Write scalar SQM fields to a TOML sidecar.
+
+    Only scalar fields are written; per-channel dicts and lists are skipped.
+
+    Parameters
+    ----------
+    sqm : dict[str, Any]
+        Metric dict; non-scalar entries are ignored.
+    subject : str
+        BIDS subject label.
+    out_dir : Path
+        Output directory (created if missing).
+    suffix : str, optional
+        Filename suffix, e.g. ``'_raw'``.
+    """
     def _to_toml(data: dict) -> str:
         lines = []
         for k, v in data.items():
@@ -909,7 +1135,19 @@ def write_sqm_record(
     sqm: dict[str, Any],
     out_path: Path,
 ) -> None:
-    """Append one SQM record (subject/session/timestamp + metrics) as a JSONL line."""
+    """Append one SQM record (subject/session/timestamp + metrics) as a JSONL line.
+
+    Parameters
+    ----------
+    subject : str
+        BIDS subject label.
+    session : str or None
+        BIDS session label, or None.
+    sqm : dict[str, Any]
+        Metric dict to record.
+    out_path : Path
+        JSONL file to append to (created if missing).
+    """
     record = {
         "subject": subject,
         "session": session,

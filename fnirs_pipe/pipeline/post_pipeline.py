@@ -168,7 +168,7 @@ def _write_rest_derivatives(
 ) -> tuple:
     """Write ALFF/fALFF and FC TSVs. Returns (alff_df | None, fc_df)."""
     from fnirs_pipe.io.derivatives import build_output_path, carry_entities
-    from fnirs_pipe.pipeline.restingstate import compute_alff, compute_fc, compute_fc_roi
+    from fnirs_pipe.pipeline.restingstate import compute_alff, compute_fc, compute_fc_roi, fisher_z
 
     entities = carry_entities(source_entities)
 
@@ -192,6 +192,13 @@ def _write_rest_derivatives(
     fc_df.to_csv(fc_path, sep="\t", index_label="channel")
     logger.info("sub-%s | fc → %s", config.subject, fc_path)
 
+    fcz_path = build_output_path(
+        output_dir=output_dir, subject=config.subject, session=config.session,
+        entities=entities, suffix="fcz", extension=".tsv",
+    )
+    fisher_z(fc_df).to_csv(fcz_path, sep="\t", index_label="channel")
+    logger.info("sub-%s | fcz → %s", config.subject, fcz_path)
+
     if config.roi_map:
         fc_roi_df = compute_fc_roi(raw_resid, config.roi_map)
         if not fc_roi_df.empty:
@@ -201,6 +208,13 @@ def _write_rest_derivatives(
             )
             fc_roi_df.to_csv(fc_roi_path, sep="\t", index_label="roi")
             logger.info("sub-%s | fc_roi → %s", config.subject, fc_roi_path)
+
+            fcroiz_path = build_output_path(
+                output_dir=output_dir, subject=config.subject, session=config.session,
+                entities=entities, suffix="fcroiz", extension=".tsv",
+            )
+            fisher_z(fc_roi_df).to_csv(fcroiz_path, sep="\t", index_label="roi")
+            logger.info("sub-%s | fc_roiz → %s", config.subject, fcroiz_path)
 
     return alff_df, fc_df
 

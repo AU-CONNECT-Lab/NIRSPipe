@@ -13,7 +13,7 @@ logger = get_logger("post.restingstate")
 def compute_alff(raw: mne.io.Raw, low_pass: float, high_pass: float) -> pd.DataFrame:
     """Compute ALFF and fALFF per channel. Input is the denoised (errts) bandpassed time series.
 
-    ALFF = mean band amplitude × SD (Zang 2007); fALFF = Σ band / Σ total amplitude (Zou 2008).
+    ALFF = mean band amplitude (Zang 2007); fALFF = Σ band / Σ total amplitude (Zou 2008).
     """
     data = raw.get_data()  # (n_channels, n_times)
     fs = raw.info["sfreq"]
@@ -25,17 +25,16 @@ def compute_alff(raw: mne.io.Raw, low_pass: float, high_pass: float) -> pd.DataF
         if np.nanstd(ch_data) == 0:
             continue
 
-        sd_scale = np.nanstd(ch_data)
-        ch_norm  = (ch_data - np.nanmean(ch_data)) / sd_scale
+        ch_demeaned = ch_data - np.nanmean(ch_data)
 
-        freqs, power = signal.periodogram(ch_norm, fs, scaling="spectrum")
+        freqs, power = signal.periodogram(ch_demeaned, fs, scaling="spectrum")
         power_sqrt   = np.sqrt(power)
 
         # high_pass is the lower freq bound; low_pass is the upper freq bound
         low_idx  = np.argmin(np.abs(freqs - high_pass))
         high_idx = np.argmin(np.abs(freqs - low_pass))
 
-        alff_vals[i] = np.nanmean(power_sqrt[low_idx:high_idx]) * sd_scale  # mean band amplitude × SD
+        alff_vals[i] = np.nanmean(power_sqrt[low_idx:high_idx])  # mean band amplitude
 
         # fALFF: fraction of total spectral amplitude in the low band (Zou 2008), sum/sum ∈ [0,1]
         total_sum = np.nansum(power_sqrt[1:])  # skip DC
@@ -53,6 +52,14 @@ def compute_fc(raw: mne.io.Raw) -> pd.DataFrame:
     from nilearn.connectome import ConnectivityMeasure
     fc = ConnectivityMeasure(kind="correlation", standardize=False).fit_transform([raw.get_data().T])[0]
     return pd.DataFrame(fc, index=raw.ch_names, columns=raw.ch_names)
+
+
+def fisher_z(fc: pd.DataFrame) -> pd.DataFrame:
+    """Fisher r-to-z of an FC matrix (diagonal set to 0), for group-level stats."""
+    r = fc.to_numpy().clip(-0.999999, 0.999999)  # clip to keep perfect corr from → inf
+    z = np.arctanh(r)
+    np.fill_diagonal(z, 0.0)
+    return pd.DataFrame(z, index=fc.index, columns=fc.columns)
 
 
 def compute_fc_roi(raw: mne.io.Raw, roi_map: dict[str, list[str]]) -> pd.DataFrame:
