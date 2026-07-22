@@ -4,6 +4,7 @@ compute_sqm(): all metrics as a flat dict (no I/O).
 write_sqm_record(): append one JSONL line to a sidecar file.
 """
 
+import functools
 import json
 from datetime import datetime, timezone
 from pathlib import Path
@@ -18,6 +19,32 @@ from fnirs_pipe.utils.logging import get_logger
 logger = get_logger("qc.quantitative_metrics")
 
 GVTD_MOTION_BAND = (0.01, 0.5)  # Hz, bandpass for the filtered (motion-specific) GVTD
+
+
+def _mean_or_none(values) -> "float | None":
+    """Mean of a collection of values, or None if it is empty."""
+    vals = list(values)
+    return float(np.mean(vals)) if vals else None
+
+
+def _safe_metrics(label: str, keys):
+    """Wrap a metric function so it always returns a dict keyed by ``keys``.
+
+    ``keys`` declares the output schema once: the wrapped function starts from that
+    schema (all None) and overlays whatever it computes, so a failure logs and leaves
+    every key None instead of each function hand-writing an all-None fallback.
+    """
+    def deco(fn):
+        @functools.wraps(fn)
+        def wrap(*args, **kwargs):
+            base = dict.fromkeys(keys)
+            try:
+                base.update(fn(*args, **kwargs) or {})
+            except Exception as exc:
+                logger.warning("%s failed: %s", label, exc)
+            return base
+        return wrap
+    return deco
 
 
 def gvtd_timetrace(
@@ -213,10 +240,9 @@ def _sci_metrics(
     bad_channels: list[str],
 ) -> dict[str, Any]:
     """SCI mean and per-channel scores, plus the fraction of channels retained."""
-    sci_vals = list(sci_scores.values())
     n_total = len(sci_scores)
     return {
-        "sci_mean": float(np.mean(sci_vals)) if sci_vals else None,
+        "sci_mean": _mean_or_none(sci_scores.values()),
         "sci_per_channel": {k: float(v) for k, v in sci_scores.items()},
         "channel_retention_rate": (
             float((n_total - len(bad_channels)) / n_total) if n_total > 0 else None
@@ -224,99 +250,111 @@ def _sci_metrics(
     }
 
 
-def _intensity_metrics(raw_intensity: mne.io.Raw) -> dict[str, Any]:
-    """Per-channel CV, SNR and mean amplitude from raw intensity (with means; CV also per wavelength)."""
-    try:
-        int_data = raw_intensity.get_data()
-        ch_means = int_data.mean(axis=1)
-        ch_stds  = int_data.std(axis=1)
-        cv_per_ch = {
-            ch: float(ch_stds[i] / ch_means[i])
-            for i, ch in enumerate(raw_intensity.ch_names)
-            if ch_means[i] != 0
-        }
-        # SNR = mean/std on raw intensity per channel
-        snr_per_ch = {
-            ch: float(ch_means[i] / ch_stds[i])
-            for i, ch in enumerate(raw_intensity.ch_names)
-            if ch_stds[i] > 0
-        }
-        mean_amp_per_ch = {
-            ch: float(ch_means[i])
-            for i, ch in enumerate(raw_intensity.ch_names)
-        }
-        # group per-channel CV by wavelength (last token of the channel name)
-        wl_groups: dict[str, list[float]] = {}
-        for ch, cv in cv_per_ch.items():
-            wl = ch.split()[-1]
-            wl_groups.setdefault(wl, []).append(cv)
-        cv_mean_per_wl = {
-            f"cv_mean_{wl}": float(np.mean(vals))
-            for wl, vals in sorted(wl_groups.items())
-        }
-        return {
-            "cv_mean": float(np.mean(list(cv_per_ch.values()))) if cv_per_ch else None,
-            **cv_mean_per_wl,
-            "cv_per_channel": cv_per_ch,
-            "snr_mean": float(np.mean(list(snr_per_ch.values()))) if snr_per_ch else None,
-            "snr_per_channel": snr_per_ch,
-            "mean_amp_mean": float(np.mean(list(mean_amp_per_ch.values()))) if mean_amp_per_ch else None,
-            "mean_amp_per_channel": mean_amp_per_ch,
-        }
-    except Exception as e:
-        logger.warning("CV/SNR failed: %s", e)
-        return {
-            "cv_mean": None, "cv_per_channel": {},
-            "snr_mean": None, "snr_per_channel": {},
-            "mean_amp_mean": None, "mean_amp_per_channel": {},
-        }
+def channel_cv(data: np.ndarray) -> np.ndarray:
+    r"""Coefficient of variation per channel: relative noise level (lower = cleaner).
+
+    .. math::
+
+        \mathrm{CV} = \frac{\sigma}{\mu}
+
+    NaN for channels whose mean is 0.
+    """
+    mu = data.mean(axis=1)
+    sigma = data.std(axis=1)
+    return np.divide(sigma, mu, out=np.full_like(sigma, np.nan), where=mu != 0)
 
 
+def channel_snr(data: np.ndarray) -> np.ndarray:
+    r"""Signal-to-noise ratio per channel, the reciprocal of CV (higher = better).
+
+    .. math::
+
+        \mathrm{SNR} = \frac{\mu}{\sigma}
+
+    NaN for channels whose std is 0.
+    """
+    mu = data.mean(axis=1)
+    sigma = data.std(axis=1)
+    return np.divide(mu, sigma, out=np.full_like(mu, np.nan), where=sigma > 0)
+
+
+@_safe_metrics("CV/SNR", (
+    "cv_mean", "cv_per_channel", "snr_mean", "snr_per_channel", "snr_pass_rate",
+    "mean_amp_mean", "mean_amp_per_channel",
+))
+def _intensity_metrics(raw_intensity: mne.io.Raw, snr_threshold: float = 2.0) -> dict[str, Any]:
+    """Per-channel CV, SNR and mean amplitude from raw intensity (with means; CV also per wavelength).
+
+    snr_pass_rate is the fraction of channels with SNR > snr_threshold (default 2.0,
+    the Homer3 channel-pruning cutoff; SNR = mean/std, higher is better).
+    """
+    int_data = raw_intensity.get_data()
+    names = raw_intensity.ch_names
+    cv = channel_cv(int_data)
+    snr = channel_snr(int_data)
+    mean_amp = int_data.mean(axis=1)
+    cv_per_ch = {ch: float(cv[i]) for i, ch in enumerate(names) if np.isfinite(cv[i])}
+    snr_per_ch = {ch: float(snr[i]) for i, ch in enumerate(names) if np.isfinite(snr[i])}
+    mean_amp_per_ch = {ch: float(mean_amp[i]) for i, ch in enumerate(names)}
+    # group per-channel CV by wavelength (last token of the channel name)
+    wl_groups: dict[str, list[float]] = {}
+    for ch, cv_val in cv_per_ch.items():
+        wl_groups.setdefault(ch.split()[-1], []).append(cv_val)
+    cv_mean_per_wl = {
+        f"cv_mean_{wl}": float(np.mean(vals))
+        for wl, vals in sorted(wl_groups.items())
+    }
+    return {
+        "cv_mean": _mean_or_none(cv_per_ch.values()),
+        **cv_mean_per_wl,
+        "cv_per_channel": cv_per_ch,
+        "snr_mean": _mean_or_none(snr_per_ch.values()),
+        "snr_per_channel": snr_per_ch,
+        "snr_pass_rate": _mean_or_none([v > snr_threshold for v in snr_per_ch.values()]),
+        "mean_amp_mean": _mean_or_none(mean_amp_per_ch.values()),
+        "mean_amp_per_channel": mean_amp_per_ch,
+    }
+
+
+@_safe_metrics("Channel distance", (
+    "ch_dist_mean", "ch_dist_min", "ch_dist_max", "ch_dist_per_channel",
+))
 def _channel_distance_metrics(raw_intensity: mne.io.Raw) -> dict[str, Any]:
     """Source-detector separation per channel, with mean/min/max (metres)."""
-    try:
-        dists = mne.preprocessing.nirs.source_detector_distances(raw_intensity.info)
-        dist_per_ch = {
-            ch: float(dists[i])
-            for i, ch in enumerate(raw_intensity.ch_names)
-        }
-        return {
-            "ch_dist_mean": float(np.mean(dists)),
-            "ch_dist_min": float(np.min(dists)),
-            "ch_dist_max": float(np.max(dists)),
-            "ch_dist_per_channel": dist_per_ch,
-        }
-    except Exception as e:
-        logger.warning("Channel distance failed: %s", e)
-        return {
-            "ch_dist_mean": None, "ch_dist_min": None,
-            "ch_dist_max": None, "ch_dist_per_channel": {},
-        }
+    dists = mne.preprocessing.nirs.source_detector_distances(raw_intensity.info)
+    dist_per_ch = {
+        ch: float(dists[i])
+        for i, ch in enumerate(raw_intensity.ch_names)
+    }
+    return {
+        "ch_dist_mean": float(np.mean(dists)),
+        "ch_dist_min": float(np.min(dists)),
+        "ch_dist_max": float(np.max(dists)),
+        "ch_dist_per_channel": dist_per_ch,
+    }
 
 
+@_safe_metrics("PSP", ("psp_mean", "psp_per_channel"))
 def _psp_metrics(
     raw_intensity: mne.io.Raw,
     cardiac_l_freq: float,
     cardiac_h_freq: float,
 ) -> dict[str, Any]:
     """Peak spectral power per channel over the whole recording, with mean."""
-    try:
-        import mne_nirs.preprocessing as nirs_prep
-        _, psp_scores, _ = nirs_prep.peak_power(
-            raw_intensity.copy(), l_freq=cardiac_l_freq, h_freq=cardiac_h_freq, verbose=False)
-        psp_per_ch = {
-            ch: float(np.mean(psp_scores[i]))
-            for i, ch in enumerate(raw_intensity.ch_names)
-        }
-        return {
-            "psp_mean": float(np.mean(list(psp_per_ch.values()))),
-            "psp_per_channel": psp_per_ch,
-        }
-    except Exception as e:
-        logger.warning("PSP failed: %s", e)
-        return {"psp_mean": None, "psp_per_channel": {}}
+    import mne_nirs.preprocessing as nirs_prep
+    _, psp_scores, _ = nirs_prep.peak_power(
+        raw_intensity.copy(), l_freq=cardiac_l_freq, h_freq=cardiac_h_freq, verbose=False)
+    psp_per_ch = {
+        ch: float(np.mean(psp_scores[i]))
+        for i, ch in enumerate(raw_intensity.ch_names)
+    }
+    return {
+        "psp_mean": _mean_or_none(psp_per_ch.values()),
+        "psp_per_channel": psp_per_ch,
+    }
 
 
+@_safe_metrics("Cardiac Power", ("cp_mean", "cp_per_channel", "cp_pass_rate"))
 def _cardiac_power_metrics(
     raw: mne.io.Raw,
     cardiac_l_freq: float,
@@ -351,41 +389,35 @@ def _cardiac_power_metrics(
     ----------
     .. footbibliography::
     """
-    try:
-        # CP is defined in the OD domain (aligns with SCI/PSP); convert unless input is already OD
-        raw_od = raw if is_optical_density(raw) else mne.preprocessing.nirs.optical_density(raw.copy())
-        fmax = min(cardiac_h_freq, raw_od.info["sfreq"] / 2)
-        # PSD restricted to the cardiac band, so the ±0.2/±0.5 windows below are auto-clipped to it
-        # (equivalent to Bizzego's pre-bandpass; keeps respiration/Mayer power out of the ratio)
-        psd = raw_od.compute_psd(fmin=cardiac_l_freq, fmax=fmax, verbose=False)
-        freqs = psd.freqs
-        psd_data = psd.get_data()
-        if freqs.size == 0:
-            raise ValueError("no frequencies in cardiac band")
-        cp_per_ch: dict[str, float | None] = {}
-        for i, ch in enumerate(raw_od.ch_names):
-            ch_psd = psd_data[i]
-            fc = freqs[np.argmax(ch_psd)]
-            narrow = ch_psd[(freqs >= fc - 0.2) & (freqs <= fc + 0.2)]
-            wide = ch_psd[(freqs >= fc - 0.5) & (freqs <= fc + 0.5)]
-            # sum = integrated band power (not mean); narrow ⊂ wide gives CP ∈ [0,1], matching the CP≥0.5 gate
-            wide_p = float(wide.sum())
-            cp_per_ch[ch] = (
-                float(narrow.sum() / wide_p)
-                if narrow.size > 0 and wide_p > 0
-                else None
-            )
-        valid = [v for v in cp_per_ch.values() if v is not None]
-        return {
-            "cp_mean": float(np.mean(valid)) if valid else None,
-            "cp_per_channel": cp_per_ch,
-            "cp_pass_rate": (
-                float(np.mean([v >= cp_threshold for v in valid])) if valid else None
-            ),
-        }
-    except Exception as e:
-        logger.warning("Cardiac Power failed: %s", e)
-        return {"cp_mean": None, "cp_per_channel": {}, "cp_pass_rate": None}
+    # CP is defined in the OD domain (aligns with SCI/PSP); convert unless input is already OD
+    raw_od = raw if is_optical_density(raw) else mne.preprocessing.nirs.optical_density(raw.copy())
+    fmax = min(cardiac_h_freq, raw_od.info["sfreq"] / 2)
+    # PSD restricted to the cardiac band, so the ±0.2/±0.5 windows below are auto-clipped to it
+    # (equivalent to Bizzego's pre-bandpass; keeps respiration/Mayer power out of the ratio)
+    psd = raw_od.compute_psd(fmin=cardiac_l_freq, fmax=fmax, verbose=False)
+    freqs = psd.freqs
+    psd_data = psd.get_data()
+    if freqs.size == 0:
+        raise ValueError("no frequencies in cardiac band")
+    cp_per_ch: dict[str, float | None] = {}
+    for i, ch in enumerate(raw_od.ch_names):
+        ch_psd = psd_data[i]
+        fc = freqs[np.argmax(ch_psd)]
+        narrow = ch_psd[(freqs >= fc - 0.2) & (freqs <= fc + 0.2)]
+        wide = ch_psd[(freqs >= fc - 0.5) & (freqs <= fc + 0.5)]
+        # sum = integrated band power (not mean); narrow ⊂ wide gives CP ∈ [0,1], matching the CP≥0.5 gate
+        wide_p = float(wide.sum())
+        cp_per_ch[ch] = (
+            float(narrow.sum() / wide_p)
+            if narrow.size > 0 and wide_p > 0
+            else None
+        )
+    valid = [v for v in cp_per_ch.values() if v is not None]
+    return {
+        "cp_mean": _mean_or_none(valid),
+        "cp_per_channel": cp_per_ch,
+        "cp_pass_rate": _mean_or_none([v >= cp_threshold for v in valid]),
+    }
 
 
 def _spike_mask(diff_data: np.ndarray) -> np.ndarray:
@@ -420,6 +452,10 @@ def _motion_band_diff(od_data: np.ndarray, sfreq: float) -> np.ndarray:
     return np.diff(d, axis=1)
 
 
+@_safe_metrics("Spike metrics", (
+    "spike_count", "spike_pct", "spike_num_frames", "spike_pct_frames",
+    "temporal_derivative_variance",
+))
 def _spike_metrics(raw_intensity: mne.io.Raw, ch_frac: float = 0.1) -> dict[str, Any]:
     """Spike diagnostics and temporal-derivative variance from the OD derivative.
 
@@ -447,31 +483,28 @@ def _spike_metrics(raw_intensity: mne.io.Raw, ch_frac: float = 0.1) -> dict[str,
     derivative energy, the squared DVARS-vstd normaliser) for flagging noisy channels,
     not a standard named metric and not motion detection.
     """
-    try:
-        raw_od = mne.preprocessing.nirs.optical_density(raw_intensity.copy())
-        od_data = np.nan_to_num(raw_od.get_data(), nan=0.0, posinf=0.0, neginf=0.0)
-        diff_raw = np.diff(od_data, axis=1)  # unfiltered: for the derivative-energy TVD
-        spikes = _spike_mask(_motion_band_diff(od_data, float(raw_od.info["sfreq"])))
-        flagged = spikes.mean(axis=0) >= ch_frac  # timepoints with >= ch_frac channels spiking
-        return {
-            "spike_count": int(spikes.sum()),
-            "spike_pct": float(spikes.mean()) if spikes.size else None,
-            "spike_num_frames": int(flagged.sum()),
-            "spike_pct_frames": float(flagged.mean()) if flagged.size else None,
-            "temporal_derivative_variance": {
-                raw_od.ch_names[i]: float(np.var(diff_raw[i]))
-                for i in range(len(raw_od.ch_names))
-            },
-        }
-    except Exception as e:
-        logger.warning("Spike metrics failed: %s", e)
-        return {
-            "spike_count": None, "spike_pct": None,
-            "spike_num_frames": None, "spike_pct_frames": None,
-            "temporal_derivative_variance": {},
-        }
+    raw_od = mne.preprocessing.nirs.optical_density(raw_intensity.copy())
+    od_data = np.nan_to_num(raw_od.get_data(), nan=0.0, posinf=0.0, neginf=0.0)
+    diff_raw = np.diff(od_data, axis=1)  # unfiltered: for the derivative-energy TVD
+    spikes = _spike_mask(_motion_band_diff(od_data, float(raw_od.info["sfreq"])))
+    flagged = spikes.mean(axis=0) >= ch_frac  # timepoints with >= ch_frac channels spiking
+    return {
+        "spike_count": int(spikes.sum()),
+        "spike_pct": float(spikes.mean()) if spikes.size else None,
+        "spike_num_frames": int(flagged.sum()),
+        "spike_pct_frames": float(flagged.mean()) if flagged.size else None,
+        "temporal_derivative_variance": {
+            raw_od.ch_names[i]: float(np.var(diff_raw[i]))
+            for i in range(len(raw_od.ch_names))
+        },
+    }
 
 
+@_safe_metrics("GVTD metrics", (
+    "gvtd_mean", "gvtd_p95", "gvtd_filt_mean", "gvtd_filt_p95",
+    "gvtd_vstd_mean", "gvtd_vstd_p95",
+    "gvtd_thresh", "gvtd_num_above_thresh", "gvtd_pct_above_thresh",
+))
 def _motion_metrics(raw_intensity: mne.io.Raw) -> dict[str, Any]:
     """GVTD motion metrics from OD: mean/p95, motion-band and vstd variants, and threshold.
 
@@ -486,44 +519,30 @@ def _motion_metrics(raw_intensity: mne.io.Raw) -> dict[str, Any]:
         gvtd_mean/p95 (canonical), gvtd_filt_* (motion-band), gvtd_vstd_*
         (channel-standardized), gvtd_thresh, and the num/pct of timepoints above it.
     """
-    try:
-        raw_od = mne.preprocessing.nirs.optical_density(raw_intensity.copy())
-        sfreq = float(raw_od.info["sfreq"])
-        od_data = np.nan_to_num(raw_od.get_data(), nan=0.0, posinf=0.0, neginf=0.0)
-        gvtd_ts = gvtd_timetrace(od_data, sfreq)                           # canonical (unfiltered)
-        gvtd_filt = gvtd_timetrace(od_data, sfreq, *GVTD_MOTION_BAND)  # motion-band
-        gvtd_vstd = gvtd_timetrace(od_data, sfreq, standardize_channels=True)  # channel-equalized
-        motion_thresh = gvtd_threshold(gvtd_filt, n_std=3.0)
-        if motion_thresh is not None:
-            above = gvtd_filt > motion_thresh
-            pct_above = float(np.mean(above))
-            num_above = int(np.sum(above))
-        else:
-            pct_above = num_above = None
-        return {
-            "gvtd_mean": float(gvtd_ts.mean()),
-            "gvtd_p95": float(np.percentile(gvtd_ts, 95)),
-            "gvtd_filt_mean": float(gvtd_filt.mean()),
-            "gvtd_filt_p95": float(np.percentile(gvtd_filt, 95)),
-            "gvtd_vstd_mean": float(gvtd_vstd.mean()),
-            "gvtd_vstd_p95": float(np.percentile(gvtd_vstd, 95)),
-            "gvtd_thresh": motion_thresh,
-            "gvtd_num_above_thresh": num_above,
-            "gvtd_pct_above_thresh": pct_above,
-        }
-    except Exception as e:
-        logger.warning("GVTD metrics failed: %s", e)
-        return {
-            "gvtd_mean": None,
-            "gvtd_p95": None,
-            "gvtd_filt_mean": None,
-            "gvtd_filt_p95": None,
-            "gvtd_vstd_mean": None,
-            "gvtd_vstd_p95": None,
-            "gvtd_thresh": None,
-            "gvtd_num_above_thresh": None,
-            "gvtd_pct_above_thresh": None,
-        }
+    raw_od = mne.preprocessing.nirs.optical_density(raw_intensity.copy())
+    sfreq = float(raw_od.info["sfreq"])
+    od_data = np.nan_to_num(raw_od.get_data(), nan=0.0, posinf=0.0, neginf=0.0)
+    gvtd_ts = gvtd_timetrace(od_data, sfreq)                           # canonical (unfiltered)
+    gvtd_filt = gvtd_timetrace(od_data, sfreq, *GVTD_MOTION_BAND)  # motion-band
+    gvtd_vstd = gvtd_timetrace(od_data, sfreq, standardize_channels=True)  # channel-equalized
+    motion_thresh = gvtd_threshold(gvtd_filt, n_std=3.0)
+    if motion_thresh is not None:
+        above = gvtd_filt > motion_thresh
+        pct_above = float(np.mean(above))
+        num_above = int(np.sum(above))
+    else:
+        pct_above = num_above = None
+    return {
+        "gvtd_mean": float(gvtd_ts.mean()),
+        "gvtd_p95": float(np.percentile(gvtd_ts, 95)),
+        "gvtd_filt_mean": float(gvtd_filt.mean()),
+        "gvtd_filt_p95": float(np.percentile(gvtd_filt, 95)),
+        "gvtd_vstd_mean": float(gvtd_vstd.mean()),
+        "gvtd_vstd_p95": float(np.percentile(gvtd_vstd, 95)),
+        "gvtd_thresh": motion_thresh,
+        "gvtd_num_above_thresh": num_above,
+        "gvtd_pct_above_thresh": pct_above,
+    }
 
 
 def _correction_footprint(
@@ -531,14 +550,15 @@ def _correction_footprint(
     raw_after: mne.io.Raw,
     rel_thresh: float,
 ) -> "tuple[np.ndarray, np.ndarray]":
-    """Per-channel bool mask of correction *events*, plus times.
+    """Find which timepoints a motion correction actually touched, per channel.
 
-    Flags where the correction changes abruptly, i.e. the frame-to-frame rate of
-    correction ``|diff(after - before)|`` exceeds ``rel_thresh`` times the channel's
-    sample-to-sample noise (1.4826*MAD of ``diff(before)``). This is the FD/censoring
-    analog (mark the moments a repair happens), so a continuous corrector like TDDR
-    flags the motion events rather than the whole recording. Flat channels contribute
-    nothing.
+    Returns a (channels x times) bool mask (True = this channel was corrected at that
+    sample) plus the matching time axis. Flags where the correction changes abruptly,
+    i.e. the frame-to-frame rate of correction ``|diff(after - before)|`` exceeds
+    ``rel_thresh`` times the channel's sample-to-sample noise (1.4826*MAD of
+    ``diff(before)``). This is the FD/censoring analog (mark the moments a repair
+    happens), so a continuous corrector like TDDR flags the motion events rather than
+    the whole recording. Flat channels contribute nothing.
     """
     before = np.nan_to_num(raw_before.get_data())
     after = np.nan_to_num(raw_after.get_data(picks=raw_before.ch_names))
@@ -553,12 +573,20 @@ def _correction_footprint(
 
 
 def _mask_to_segments(flagged: np.ndarray, times: np.ndarray) -> "list[tuple[float, float]]":
-    """Contiguous True runs of a per-sample bool mask as (onset, duration) time spans."""
+    """Collapse a per-sample bool mask into (onset, duration) time spans.
+
+    Given which timepoints are flagged (motion / corrected / spike), return each
+    contiguous run of True as a time interval, used to draw shaded bands on figures.
+
+    Example: mask [F,T,T,F,T] at 1 Hz -> [(1.0, 2.0), (4.0, 0.0)].
+    """
     if not flagged.any():
         return []
+    # diff marks the edges: a 0->1 step opens a run, a 1->0 step closes it
     edges = np.diff(flagged.astype(np.int8))
-    starts = list(np.where(edges == 1)[0] + 1)
+    starts = list(np.where(edges == 1)[0] + 1)   # +1 undoes the one-sample offset diff introduces
     ends = list(np.where(edges == -1)[0] + 1)
+    # a run touching the very start / end has no edge to detect, so add that boundary by hand
     if flagged[0]:
         starts.insert(0, 0)
     if flagged[-1]:
@@ -566,6 +594,10 @@ def _mask_to_segments(flagged: np.ndarray, times: np.ndarray) -> "list[tuple[flo
     return [(float(times[s]), max(float(times[e]) - float(times[s]), 0.0)) for s, e in zip(starts, ends)]
 
 
+@_safe_metrics("motion correction footprint", (
+    "motion_corrected_frac_mean", "motion_corrected_frac_per_channel",
+    "motion_corrected_num", "motion_corrected_pct", "motion_corrected_n_segments",
+))
 def motion_correction_metrics(
     raw_before: mne.io.Raw,
     raw_after: mne.io.Raw,
@@ -602,26 +634,16 @@ def motion_correction_metrics(
     correction ran (e.g. TDDR repairs only the < 0.5 Hz component), not a new
     correction. Overlaps GVTD (both track motion); frame it as correction burden.
     """
-    try:
-        corrected, times = _correction_footprint(raw_before, raw_after, rel_thresh)
-        frac_per_ch = {ch: float(corrected[i].mean()) for i, ch in enumerate(raw_before.ch_names)}
-        flagged = corrected.mean(axis=0) >= ch_frac  # timepoint corrected across >= ch_frac of channels
-        return {
-            "motion_corrected_frac_mean": (
-                float(np.mean(list(frac_per_ch.values()))) if frac_per_ch else None
-            ),
-            "motion_corrected_frac_per_channel": frac_per_ch,
-            "motion_corrected_num": int(flagged.sum()),
-            "motion_corrected_pct": float(flagged.mean()) if flagged.size else None,
-            "motion_corrected_n_segments": len(_mask_to_segments(flagged, times)),
-        }
-    except Exception as e:
-        logger.warning("motion correction footprint failed: %s", e)
-        return {
-            "motion_corrected_frac_mean": None, "motion_corrected_frac_per_channel": {},
-            "motion_corrected_num": None, "motion_corrected_pct": None,
-            "motion_corrected_n_segments": None,
-        }
+    corrected, times = _correction_footprint(raw_before, raw_after, rel_thresh)
+    frac_per_ch = {ch: float(corrected[i].mean()) for i, ch in enumerate(raw_before.ch_names)}
+    flagged = corrected.mean(axis=0) >= ch_frac  # timepoint corrected across >= ch_frac of channels
+    return {
+        "motion_corrected_frac_mean": _mean_or_none(frac_per_ch.values()),
+        "motion_corrected_frac_per_channel": frac_per_ch,
+        "motion_corrected_num": int(flagged.sum()),
+        "motion_corrected_pct": float(flagged.mean()) if flagged.size else None,
+        "motion_corrected_n_segments": len(_mask_to_segments(flagged, times)),
+    }
 
 
 def motion_corrected_segments(
@@ -689,13 +711,14 @@ def haemo_quality_metrics(raw_haemo: mne.io.Raw) -> dict[str, Any]:
         for key in hbo_map if key in hbr_map
     }
     return {
-        "hbo_hbr_corr_mean": (
-            float(np.mean(list(corr_per_ch.values()))) if corr_per_ch else None
-        ),
+        "hbo_hbr_corr_mean": _mean_or_none(corr_per_ch.values()),
         "hbo_hbr_corr_per_channel": corr_per_ch,
     }
 
 
+@_safe_metrics("PSD metrics", (
+    "cardiac_band_power", "cardiac_band_frac", "resp_band_power", "resp_band_frac",
+))
 def _spectral_metrics(
     raw_haemo: mne.io.Raw,
     cardiac_l_freq: float,
@@ -724,34 +747,27 @@ def _spectral_metrics(
     dict
         cardiac/resp band_power and band_frac.
     """
-    try:
-        psd = raw_haemo.compute_psd(verbose=False)
-        freqs = psd.freqs
-        psd_data = psd.get_data()
-        total = float(psd_data.sum())  # total spectral power over all channels and freqs
+    psd = raw_haemo.compute_psd(verbose=False)
+    freqs = psd.freqs
+    psd_data = psd.get_data()
+    total = float(psd_data.sum())  # total spectral power over all channels and freqs
 
-        def _band_power(fmin: float, fmax: float) -> float | None:
-            # absolute: mean PSD density inside the band
-            mask = (freqs >= fmin) & (freqs <= fmax)
-            return float(psd_data[:, mask].mean()) if mask.any() else None
+    def _band_power(fmin: float, fmax: float) -> float | None:
+        # absolute: mean PSD density inside the band
+        mask = (freqs >= fmin) & (freqs <= fmax)
+        return float(psd_data[:, mask].mean()) if mask.any() else None
 
-        def _band_frac(fmin: float, fmax: float) -> float | None:
-            # relative: fraction of total power falling in the band (sum/sum, in [0,1])
-            mask = (freqs >= fmin) & (freqs <= fmax)
-            return float(psd_data[:, mask].sum() / total) if (mask.any() and total > 0) else None
+    def _band_frac(fmin: float, fmax: float) -> float | None:
+        # relative: fraction of total power falling in the band (sum/sum, in [0,1])
+        mask = (freqs >= fmin) & (freqs <= fmax)
+        return float(psd_data[:, mask].sum() / total) if (mask.any() and total > 0) else None
 
-        return {
-            "cardiac_band_power": _band_power(cardiac_l_freq, cardiac_h_freq),
-            "cardiac_band_frac":  _band_frac(cardiac_l_freq, cardiac_h_freq),
-            "resp_band_power":    _band_power(resp_l_freq, resp_h_freq),
-            "resp_band_frac":     _band_frac(resp_l_freq, resp_h_freq),
-        }
-    except Exception as e:
-        logger.warning("PSD metrics failed: %s", e)
-        return {
-            "cardiac_band_power": None, "cardiac_band_frac": None,
-            "resp_band_power": None, "resp_band_frac": None,
-        }
+    return {
+        "cardiac_band_power": _band_power(cardiac_l_freq, cardiac_h_freq),
+        "cardiac_band_frac":  _band_frac(cardiac_l_freq, cardiac_h_freq),
+        "resp_band_power":    _band_power(resp_l_freq, resp_h_freq),
+        "resp_band_frac":     _band_frac(resp_l_freq, resp_h_freq),
+    }
 
 
 def _gcor(data: np.ndarray) -> "float | None":
@@ -793,17 +809,15 @@ def _gcor(data: np.ndarray) -> "float | None":
     return float(g @ g)
 
 
-def _gcor_metrics(raw_haemo: mne.io.Raw) -> dict[str, Any]:
+@_safe_metrics("gcor", ("gcor_hbo", "gcor_hbr"))
+def gcor_metrics(raw_haemo: mne.io.Raw) -> dict[str, Any]:
     # Per chromophore: HbO and HbR anti-correlate, so a mixed gcor would cancel to ~0.
-    try:
-        hbo = raw_haemo.get_data(picks=mne.pick_types(raw_haemo.info, fnirs="hbo"))
-        hbr = raw_haemo.get_data(picks=mne.pick_types(raw_haemo.info, fnirs="hbr"))
-        return {"gcor_hbo": _gcor(hbo), "gcor_hbr": _gcor(hbr)}
-    except Exception as e:
-        logger.warning("gcor failed: %s", e)
-        return {"gcor_hbo": None, "gcor_hbr": None}
+    hbo = raw_haemo.get_data(picks=mne.pick_types(raw_haemo.info, fnirs="hbo"))
+    hbr = raw_haemo.get_data(picks=mne.pick_types(raw_haemo.info, fnirs="hbr"))
+    return {"gcor_hbo": _gcor(hbo), "gcor_hbr": _gcor(hbr)}
 
 
+@_safe_metrics("Drift amplitude", ("lowfreq_drift_amplitude_hbo", "lowfreq_drift_amplitude_hbr"))
 def _drift_metrics(raw_haemo: mne.io.Raw) -> dict[str, Any]:
     r"""Low-frequency baseline drift amplitude per chromophore (peak-to-peak of a slow trend).
 
@@ -826,64 +840,57 @@ def _drift_metrics(raw_haemo: mne.io.Raw) -> dict[str, Any]:
     a 0.01 Hz low-pass, whose FIR length would exceed most recordings.
     """
     # NOTE: non-standard homegrown metric; may remove.
-    try:
-        hbo_picks = mne.pick_types(raw_haemo.info, fnirs="hbo")
-        hbr_picks = mne.pick_types(raw_haemo.info, fnirs="hbr")
-        n = len(raw_haemo.times)
-        # Low-frequency drift amplitude = peak-to-peak of a slow trend fitted per channel.
-        # We fit a low-order (cubic) polynomial rather than low-passing at 0.01 Hz: an
-        # 0.01 Hz FIR needs a filter ~hundreds of seconds long (roughly several / 0.01),
-        # which exceeds most recordings -> MNE errors, or leaves heavy edge ringing that
-        # corrupts the ptp. The polynomial captures the same slow drift with no filter.
-        #   trend = V @ lstsq(V, x),  V = [t^3 t^2 t 1] ;  drift = ptp(trend) mean over channels
-        t = np.linspace(-1.0, 1.0, n)
-        vander = np.vander(t, 4)
+    hbo_picks = mne.pick_types(raw_haemo.info, fnirs="hbo")
+    hbr_picks = mne.pick_types(raw_haemo.info, fnirs="hbr")
+    n = len(raw_haemo.times)
+    # Low-frequency drift amplitude = peak-to-peak of a slow trend fitted per channel.
+    # We fit a low-order (cubic) polynomial rather than low-passing at 0.01 Hz: an
+    # 0.01 Hz FIR needs a filter ~hundreds of seconds long (roughly several / 0.01),
+    # which exceeds most recordings -> MNE errors, or leaves heavy edge ringing that
+    # corrupts the ptp. The polynomial captures the same slow drift with no filter.
+    #   trend = V @ lstsq(V, x),  V = [t^3 t^2 t 1] ;  drift = ptp(trend) mean over channels
+    t = np.linspace(-1.0, 1.0, n)
+    vander = np.vander(t, 4)
 
-        def _drift_ptp(picks) -> "float | None":
-            if not len(picks):
-                return None
-            data = raw_haemo.get_data(picks=picks)
-            coef, *_ = np.linalg.lstsq(vander, data.T, rcond=None)
-            trend = (vander @ coef).T
-            return float(np.ptp(trend, axis=1).mean())
+    def _drift_ptp(picks) -> "float | None":
+        if not len(picks):
+            return None
+        data = raw_haemo.get_data(picks=picks)
+        coef, *_ = np.linalg.lstsq(vander, data.T, rcond=None)
+        trend = (vander @ coef).T
+        return float(np.ptp(trend, axis=1).mean())
 
-        return {
-            "lowfreq_drift_amplitude_hbo": _drift_ptp(hbo_picks),
-            "lowfreq_drift_amplitude_hbr": _drift_ptp(hbr_picks),
-        }
-    except Exception as e:
-        logger.warning("Drift amplitude failed: %s", e)
-        return {"lowfreq_drift_amplitude_hbo": None, "lowfreq_drift_amplitude_hbr": None}
+    return {
+        "lowfreq_drift_amplitude_hbo": _drift_ptp(hbo_picks),
+        "lowfreq_drift_amplitude_hbr": _drift_ptp(hbr_picks),
+    }
 
 
+@_safe_metrics("pct_data_retained", ("pct_data_retained",))
 def _retention_metrics(raw_haemo: mne.io.Raw) -> dict[str, Any]:
     """Fraction of the recording not covered by BAD annotations (overlaps merged)."""
-    try:
-        total_dur = raw_haemo.times[-1] - raw_haemo.times[0]
-        bad_spans = sorted(
-            (ann["onset"], ann["onset"] + ann["duration"])
-            for ann in raw_haemo.annotations
-            if ann["description"].upper().startswith("BAD")
-        )
-        # merge overlapping BAD spans so overlap is not double-counted
-        bad_dur = 0.0
-        cur_start = cur_end = None
-        for start, end in bad_spans:
-            if cur_end is None or start > cur_end:
-                if cur_end is not None:
-                    bad_dur += cur_end - cur_start
-                cur_start, cur_end = start, end
-            else:
-                cur_end = max(cur_end, end)
-        if cur_end is not None:
-            bad_dur += cur_end - cur_start
-        bad_dur = min(bad_dur, total_dur)
-        return {
-            "pct_data_retained": float(1.0 - bad_dur / total_dur) if total_dur > 0 else None
-        }
-    except Exception as e:
-        logger.warning("pct_data_retained failed: %s", e)
-        return {"pct_data_retained": None}
+    total_dur = raw_haemo.times[-1] - raw_haemo.times[0]
+    bad_spans = sorted(
+        (ann["onset"], ann["onset"] + ann["duration"])
+        for ann in raw_haemo.annotations
+        if ann["description"].upper().startswith("BAD")
+    )
+    # merge overlapping BAD spans so overlap is not double-counted
+    bad_dur = 0.0
+    cur_start = cur_end = None
+    for start, end in bad_spans:
+        if cur_end is None or start > cur_end:
+            if cur_end is not None:
+                bad_dur += cur_end - cur_start
+            cur_start, cur_end = start, end
+        else:
+            cur_end = max(cur_end, end)
+    if cur_end is not None:
+        bad_dur += cur_end - cur_start
+    bad_dur = min(bad_dur, total_dur)
+    return {
+        "pct_data_retained": float(1.0 - bad_dur / total_dur) if total_dur > 0 else None
+    }
 
 
 # Sliding-window series
@@ -1134,7 +1141,7 @@ def compute_raw_sqm(
         logger.warning("input is already optical density; skipping intensity/motion SQM")
         record.update({
             "cv_mean": None, "cv_per_channel": {},
-            "snr_mean": None, "snr_per_channel": {},
+            "snr_mean": None, "snr_per_channel": {}, "snr_pass_rate": None,
             "mean_amp_mean": None, "mean_amp_per_channel": {},
             "spike_count": None, "spike_pct": None,
             "spike_num_frames": None, "spike_pct_frames": None,
@@ -1152,6 +1159,7 @@ def compute_raw_sqm(
     return record
 
 
+@_safe_metrics("Durbin-Watson", ("durbin_watson_mean", "durbin_watson_per_channel"))
 def compute_glm_sqm(residuals: np.ndarray) -> dict[str, Any]:
     r"""Post-GLM QC from the residual time series.
 
@@ -1173,21 +1181,17 @@ def compute_glm_sqm(residuals: np.ndarray) -> dict[str, Any]:
     dict
         durbin_watson_mean and durbin_watson_per_channel.
     """
-    try:
-        e = np.asarray(residuals, dtype=float)
-        denom = np.sum(e ** 2, axis=1)
-        num = np.sum(np.diff(e, axis=1) ** 2, axis=1)
-        dw = np.divide(num, denom, out=np.full_like(denom, np.nan), where=denom > 0)
-        valid = dw[np.isfinite(dw)]
-        return {
-            "durbin_watson_mean": float(valid.mean()) if valid.size else None,
-            "durbin_watson_per_channel": {
-                str(i): float(v) for i, v in enumerate(dw) if np.isfinite(v)
-            },
-        }
-    except Exception as exc:
-        logger.warning("Durbin-Watson failed: %s", exc)
-        return {"durbin_watson_mean": None, "durbin_watson_per_channel": {}}
+    e = np.asarray(residuals, dtype=float)
+    denom = np.sum(e ** 2, axis=1)
+    num = np.sum(np.diff(e, axis=1) ** 2, axis=1)
+    dw = np.divide(num, denom, out=np.full_like(denom, np.nan), where=denom > 0)
+    valid = dw[np.isfinite(dw)]
+    return {
+        "durbin_watson_mean": _mean_or_none(valid),
+        "durbin_watson_per_channel": {
+            str(i): float(v) for i, v in enumerate(dw) if np.isfinite(v)
+        },
+    }
 
 
 def compute_haemo_sqm(
@@ -1216,7 +1220,7 @@ def compute_haemo_sqm(
     """
     record: dict[str, Any] = {}
     record.update(haemo_quality_metrics(raw_haemo))
-    record.update(_gcor_metrics(raw_haemo))
+    record.update(gcor_metrics(raw_haemo))
     record.update(_spectral_metrics(raw_haemo, cardiac_l_freq, cardiac_h_freq, resp_l_freq, resp_h_freq))
     record.update(_drift_metrics(raw_haemo))
     record.update(_retention_metrics(raw_haemo))

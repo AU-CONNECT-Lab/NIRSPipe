@@ -180,6 +180,8 @@ def cmd_hyper_raw(
             output_dir=output_dir,
             session=ses,
             sci_threshold=sci_threshold,
+            cardiac_l_freq=cardiac_l_freq,
+            cardiac_h_freq=cardiac_h_freq,
             coherence_fmin=coherence_fmin,
             coherence_fmax=coherence_fmax,
         )

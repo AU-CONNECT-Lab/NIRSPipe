@@ -197,12 +197,12 @@ def build_channel_figure(
 
     psd_fig = None
     try:
-        from scipy.signal import welch
+        from mne.time_frequency import psd_array_welch
         raw_arr = raw_haemo.get_data(picks=[hbo_pick, hbr_pick])
         sfreq = raw_haemo.info["sfreq"]
-        nperseg = min(512, max(64, raw_arr.shape[1] // 4))
-        freqs, psd_hbo = welch(raw_arr[0], fs=sfreq, nperseg=nperseg)
-        _, psd_hbr     = welch(raw_arr[1], fs=sfreq, nperseg=nperseg)
+        # match the metric-side PSD (MNE compute_psd default Welch, n_fft=256)
+        psds, freqs = psd_array_welch(raw_arr, sfreq, n_fft=min(256, raw_arr.shape[1]), verbose=False)
+        psd_hbo, psd_hbr = psds[0], psds[1]
         fmax = min(2.0, sfreq / 2)
         mask = freqs <= fmax
         psd_fig = go.Figure(
@@ -425,15 +425,15 @@ def build_layout_figure(
 
 def build_psd_mean_figure(raw: mne.io.Raw) -> go.Figure | None:
     try:
-        from scipy.signal import welch
+        from mne.time_frequency import psd_array_welch
         picks = mne.pick_types(raw.info, meg=False, fnirs=True)
         if len(picks) == 0:
             picks = list(range(len(raw.ch_names)))
         raw_od = mne.preprocessing.nirs.optical_density(raw.copy(), verbose=False)
         data = raw_od.get_data(picks=picks)
         sfreq = raw_od.info["sfreq"]
-        nperseg = min(512, max(64, data.shape[1] // 4))
-        freqs, psds = welch(data, fs=sfreq, nperseg=nperseg)
+        # match the metric-side PSD (MNE compute_psd default Welch, n_fft=256)
+        psds, freqs = psd_array_welch(data, sfreq, n_fft=min(256, data.shape[1]), verbose=False)
         fmax = min(2.0, sfreq / 2)
         mask = freqs <= fmax
         freqs_list = freqs[mask].tolist()

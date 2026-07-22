@@ -165,8 +165,8 @@ def run_post(
     gcor_reg = None
     if raw_resid is not None and config.short_channel:
         try:
-            from fnirs_pipe.qc.quantitative_metrics import _gcor_metrics
-            pre, post = _gcor_metrics(result), _gcor_metrics(raw_resid)
+            from fnirs_pipe.qc.quantitative_metrics import gcor_metrics
+            pre, post = gcor_metrics(result), gcor_metrics(raw_resid)
             gcor_reg = {
                 "gcor_hbo_prereg": pre["gcor_hbo"], "gcor_hbr_prereg": pre["gcor_hbr"],
                 "gcor_hbo_postreg": post["gcor_hbo"], "gcor_hbr_postreg": post["gcor_hbr"],

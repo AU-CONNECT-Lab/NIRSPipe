@@ -11,13 +11,14 @@ logger = logging.getLogger(__name__)
 
 from ._utils import HBO_COLOR as _HBO_COLOR, HBR_COLOR as _HBR_COLOR
 from ._utils import HBO_MEAN_COLOR as _HBO_MEAN_COLOR, HBR_MEAN_COLOR as _HBR_MEAN_COLOR
+from ._utils import physio_bands as _physio_bands
 
-# frequency band annotations
-_BANDS = [
-    dict(x0=0.08,  x1=0.12,  color="rgba(46,204,113,0.12)",  label="Mayer",      label_x=0.10),
-    dict(x0=0.12,  x1=0.50,  color="rgba(241,196,15,0.10)",  label="Respiration", label_x=0.31),
-    dict(x0=0.70,  x1=1.50,  color="rgba(231,76,60,0.10)",   label="Cardiac",    label_x=1.10),
-]
+# colors for the physiological band annotations (band frequencies come from _physio_bands)
+_BAND_COLORS = {
+    "Mayer":   "rgba(46,204,113,0.12)",
+    "Resp":    "rgba(241,196,15,0.10)",
+    "Cardiac": "rgba(231,76,60,0.10)",
+}
 
 
 def _filter_response_trace(
@@ -54,26 +55,27 @@ def _filter_response_trace(
     )
 
 
-def _add_band_annotations(fig: go.Figure, fmax: float) -> None:
-    for band in _BANDS:
-        if band["x0"] > fmax:
+def _add_band_annotations(fig: go.Figure, fmax: float, bands: list) -> None:
+    for name, x0, x1 in bands:
+        if x0 > fmax:
             continue
         for row in (1, 2):
             fig.add_vrect(
-                x0=band["x0"], x1=min(band["x1"], fmax),
-                fillcolor=band["color"], line_width=0, layer="below",
-                row=row, col=1,
+                x0=x0, x1=min(x1, fmax),
+                fillcolor=_BAND_COLORS.get(name, "rgba(120,120,120,0.10)"),
+                line_width=0, layer="below", row=row, col=1,
             )
 
-    for band in _BANDS:
-        if band["label_x"] > fmax:
+    for name, x0, x1 in bands:
+        label_x = (x0 + min(x1, fmax)) / 2
+        if label_x > fmax:
             continue
         for row in (1, 2):
             ax = "" if row == 1 else "2"
             fig.add_annotation(
-                x=band["label_x"], y=1.0,
+                x=label_x, y=1.0,
                 xref=f"x{ax}", yref=f"y{ax} domain",
-                text=band["label"], showarrow=False,
+                text=name, showarrow=False,
                 font=dict(size=8, color="#555"),
                 textangle=-90, xanchor="center", yanchor="top",
             )
@@ -120,6 +122,8 @@ def psd_figure(
     h_trans_bandwidth: float = 0.1,
     fmax: float = 2.0,
     title: str = "Power Spectral Density — before / after bandpass",
+    cardiac: "tuple[float, float] | None" = None,
+    resp: "tuple[float, float] | None" = None,
 ) -> go.Figure:
     """Side-by-side PSD figure: before (left) and after (right) bandpass filter.
 
@@ -180,7 +184,7 @@ def psd_figure(
     for trace in _psd_traces(freqs, data_a_hbr, "hbr", _HBR_COLOR, _HBR_MEAN_COLOR, False):
         fig.add_trace(trace, row=2, col=1)
 
-    _add_band_annotations(fig, fmax=fmax)
+    _add_band_annotations(fig, fmax=fmax, bands=_physio_bands(cardiac, resp))
 
     fr_trace = _filter_response_trace(l_freq, h_freq, h_trans_bandwidth,
                                       raw_haemo.info["sfreq"], fmax)

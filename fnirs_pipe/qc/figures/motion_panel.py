@@ -259,21 +259,28 @@ def build_motion_detail_figure(
     Both inputs must be in OD space (output of optical_density()). The bottom strip shows
     the (global) motion-correction footprint and spike timepoints, never overlapping the traces.
     """
-    od_data, od_times = raw_od_before.get_data(return_times=True)
-    od_data, od_times = _decimate(od_data, od_times, max_pts)
+    # GVTD + threshold on full-res OD so they match the reported gvtd_* metrics; the plotted
+    # GVTD traces are decimated afterwards (display only), like the carpet figure.
+    od_full, t_full = raw_od_before.get_data(return_times=True)
+    full_sfreq = float(raw_od_before.info["sfreq"])
+    gvtd_full      = gvtd_timetrace(od_full, full_sfreq)                     # canonical (unfiltered)
+    gvtd_filt_full = gvtd_timetrace(od_full, full_sfreq, *GVTD_MOTION_BAND)  # motion-band
+    motion_thresh  = gvtd_threshold(gvtd_filt_full, n_std=3.0)
+    gvtd_arr, t_gvtd_arr = _decimate(gvtd_full[np.newaxis], t_full[1:], max_pts)
+    gvtd_filt_arr, _     = _decimate(gvtd_filt_full[np.newaxis], t_full[1:], max_pts)
+    gvtd, gvtd_filt = gvtd_arr[0], gvtd_filt_arr[0]
+    t_gvtd = t_gvtd_arr.tolist()
 
+    # decimated OD (display resolution) for this channel's TVD and before/after traces
+    od_data, od_times = _decimate(od_full, t_full, max_pts)
     diff_all = np.diff(od_data, axis=1)
-    dec_sfreq = 1.0 / (od_times[1] - od_times[0]) if len(od_times) > 1 else float(raw_od_before.info["sfreq"])
-    gvtd      = gvtd_timetrace(od_data, dec_sfreq)                            # canonical (unfiltered)
-    gvtd_filt = gvtd_timetrace(od_data, dec_sfreq, *GVTD_MOTION_BAND)   # motion-band
-    t_gvtd    = od_times[1:].tolist()
-    motion_thresh = gvtd_threshold(gvtd_filt, n_std=3.0)
+    t_tvd = od_times[1:].tolist()
 
     if ch_name in raw_od_before.ch_names:
         ch_idx = raw_od_before.ch_names.index(ch_name)
         tvd = np.abs(diff_all[ch_idx]).tolist()    # TVD = |diff_t(OD)| for this channel
     else:
-        tvd = np.zeros(len(t_gvtd)).tolist()
+        tvd = np.zeros(len(t_tvd)).tolist()
 
     def _get_ch(raw, ch):
         idx = raw.ch_names.index(ch)
@@ -315,7 +322,7 @@ def build_motion_detail_figure(
         )
 
     fig.add_trace(go.Scatter(
-        x=t_gvtd, y=tvd, mode="lines",
+        x=t_tvd, y=tvd, mode="lines",
         line=dict(color="#8e44ad", width=1.0), name="TVD",
     ), row=2, col=1)
 

@@ -44,6 +44,8 @@ def _process_hyper_raw_group(
     raw_raws: dict[str, mne.io.Raw] | None = None,
     session: str | None = None,
     sci_threshold: float = 0.8,
+    cardiac_l_freq: float | None = None,
+    cardiac_h_freq: float | None = None,
     coherence_fmin: float = 0.01,
     coherence_fmax: float = 0.10,
     epoch_tmin: float = -5.0,
@@ -124,7 +126,10 @@ def _process_hyper_raw_group(
             trace_fig = build_signal_overlay_pair(
                 aligned_raws, subject_ids, pair, markers_list, cond_colors_,
             )
-            psd_fig   = build_psd(aligned_raws, pair, subject_ids)
+            psd_fig   = build_psd(
+                aligned_raws, pair, subject_ids,
+                cardiac=(cardiac_l_freq, cardiac_h_freq) if cardiac_l_freq is not None else None,
+            )
             epoch_fig = build_epoch(
                 aligned_raws, pair, subject_ids, epoch_tmin, epoch_tmax,
             )

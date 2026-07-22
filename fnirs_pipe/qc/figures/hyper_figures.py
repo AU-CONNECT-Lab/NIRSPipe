@@ -10,10 +10,10 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-from scipy.signal import coherence, welch
+from scipy.signal import coherence
 
 from fnirs_pipe.qc.figure_io import extract_markers as _extract_markers
-from fnirs_pipe.qc.figures._utils import CONDITION_PALETTE, decimate as _decimate
+from fnirs_pipe.qc.figures._utils import CONDITION_PALETTE, decimate as _decimate, physio_bands
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("qc.figures.hyper")
@@ -30,11 +30,12 @@ _MIX_COLOR  = "#FFD966"
 _NA_COLOR   = "#D3D3D3"
 _BAD_COLOR  = "#F8786E"
 
-_PSD_BANDS = [
-    {"name": "Mayer",   "x0": 0.07, "x1": 0.13, "color": "rgba(52,152,219,0.10)"},
-    {"name": "Resp",    "x0": 0.15, "x1": 0.40, "color": "rgba(39,174,96,0.08)"},
-    {"name": "Cardiac", "x0": 0.70, "x1": 1.50, "color": "rgba(231,76,60,0.08)"},
-]
+# colors for the physiological band annotations (frequencies come from physio_bands)
+_PSD_BAND_COLORS = {
+    "Mayer":   "rgba(52,152,219,0.10)",
+    "Resp":    "rgba(39,174,96,0.08)",
+    "Cardiac": "rgba(231,76,60,0.08)",
+}
 
 
 # ---------------------------------------------------------------------------
@@ -61,13 +62,16 @@ def _cond_colors(descriptions: list[str]) -> dict[str, str]:
     return {d: _COND_PALETTE[i % len(_COND_PALETTE)] for i, d in enumerate(descriptions)}
 
 
-def _psd_band_shapes() -> tuple[list[dict], list[dict]]:
+def _psd_band_shapes(cardiac=None) -> tuple[list[dict], list[dict]]:
+    # resp omitted: the hyper raw pipeline has no respiration band input
+    bands = physio_bands(cardiac=cardiac, resp=None)
     shapes = [dict(type="rect", xref="x", yref="paper",
-                   x0=b["x0"], x1=b["x1"], y0=0, y1=1,
-                   fillcolor=b["color"], line=dict(width=0)) for b in _PSD_BANDS]
-    annots = [dict(x=(b["x0"] + b["x1"]) / 2, y=0.97, xref="x", yref="paper",
-                   text=b["name"], showarrow=False,
-                   font=dict(size=8, color="#666")) for b in _PSD_BANDS]
+                   x0=x0, x1=x1, y0=0, y1=1,
+                   fillcolor=_PSD_BAND_COLORS.get(name, "rgba(120,120,120,0.08)"),
+                   line=dict(width=0)) for name, x0, x1 in bands]
+    annots = [dict(x=(x0 + x1) / 2, y=0.97, xref="x", yref="paper",
+                   text=name, showarrow=False,
+                   font=dict(size=8, color="#666")) for name, x0, x1 in bands]
     return shapes, annots
 
 
@@ -323,6 +327,7 @@ def build_psd(
     aligned_raws: dict[str, mne.io.Raw],
     ch_pair: str,
     subject_ids: list[str],
+    cardiac: "tuple[float, float] | None" = None,
 ) -> go.Figure | None:
     hbo_name = f"{ch_pair} hbo"
     traces: list[go.BaseTraceType] = []
@@ -332,10 +337,12 @@ def build_psd(
         if raw is None or hbo_name not in raw.ch_names:
             continue
         pick = raw.ch_names.index(hbo_name)
-        arr = raw.get_data(picks=[pick])[0]
+        arr = raw.get_data(picks=[pick])
         sfreq = raw.info["sfreq"]
-        nperseg = min(512, max(64, len(arr) // 4))
-        freqs, psd = welch(arr, fs=sfreq, nperseg=nperseg)
+        # match the metric-side PSD (MNE compute_psd default Welch, n_fft=256)
+        psds, freqs = mne.time_frequency.psd_array_welch(
+            arr, sfreq, n_fft=min(256, arr.shape[1]), verbose=False)
+        psd = psds[0]
         fmax = min(2.0, float(sfreq / 2))
         mask = freqs <= fmax
         traces.append(go.Scatter(
@@ -347,7 +354,7 @@ def build_psd(
     if not traces:
         return None
 
-    shapes, annots = _psd_band_shapes()
+    shapes, annots = _psd_band_shapes(cardiac)
     return go.Figure(
         data=traces,
         layout=go.Layout(

@@ -255,6 +255,8 @@ def _section_psd_detail(
     figures_dir: Path,
     l_freq: float | None = None,
     h_freq: float | None = 0.4,
+    cardiac: "tuple[float, float] | None" = None,
+    resp: "tuple[float, float] | None" = None,
 ) -> dict:
     pairs = get_channel_pairs(raw_haemo)
     saved = []
@@ -265,7 +267,7 @@ def _section_psd_detail(
                 continue
             raw_sub = raw_haemo.copy().pick(picks)
             fig = psd_figure(raw_sub, l_freq=l_freq, h_freq=h_freq, fmax=2.0,
-                             title=f"PSD — {pair}")
+                             title=f"PSD — {pair}", cardiac=cardiac, resp=resp)
             fname = f"psd_detail_{_pair_fname(pair)}.html"
             path, h = _save_plotly_html(fig, figures_dir / fname)
             saved.append({"pair": pair, "path": path, "h": h})
@@ -354,7 +356,10 @@ def _section_haemo(
         _save_b64_png(b64, figures_dir / "hbo_hbr_corr.png")
         hbo_hbr_path = "figures/hbo_hbr_corr.png"
     with _guard("PSD figure", errors, subject):
-        fig_psd_custom = psd_figure(raw_haemo, l_freq=l_freq, h_freq=h_freq, fmax=2.0)
+        fig_psd_custom = psd_figure(
+            raw_haemo, l_freq=l_freq, h_freq=h_freq, fmax=2.0,
+            cardiac=(config.cardiac_l_freq, config.cardiac_h_freq),
+            resp=(config.resp_l_freq, config.resp_h_freq))
         psd_panel_path, psd_panel_h = _save_plotly_html(fig_psd_custom, figures_dir / "psd_panel.html")
     return {
         "hbo_hbr_path":   hbo_hbr_path,
@@ -768,7 +773,9 @@ def build_subject_report(
             denoise_carpet_path = "figures/denoise_carpet.png"
     channel_det_vars  = _section_channel_detail(raw_haemo, subject, errors, figures_dir)
     psd_det_vars      = _section_psd_detail(raw_haemo, subject, errors, figures_dir,
-                                            l_freq=l_freq, h_freq=h_freq)
+                                            l_freq=l_freq, h_freq=h_freq,
+                                            cardiac=(config.cardiac_l_freq, config.cardiac_h_freq),
+                                            resp=(config.resp_l_freq, config.resp_h_freq))
     brain_vars        = _section_brain(
                             sci_scores, bad_channels, coords_head, good_mask, raw_intensity,
                             subject, errors, figures_dir, ch_names_brain=ch_names_brain)
