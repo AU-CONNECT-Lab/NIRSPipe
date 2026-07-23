@@ -33,14 +33,18 @@ def build_wtc_channel(
 ) -> go.Figure | None:
     """WTC heatmap for one channel pair: time × log-frequency, colour = coherence [0–1].
 
-    wtc_data: {"wtc": ndarray(n_freqs, n_times), "coi": ndarray(n_times)}
+    wtc_data: {"wtc": ndarray(n_freqs, n_times), "coi": ndarray(n_times),
+               "sig": ndarray(n_freqs) | None}
     COI boundary drawn as a white dashed line; regions below it may be edge-affected.
+    When "sig" is present, a black contour outlines where coherence exceeds the
+    Monte Carlo significance level (WTC / sig > 1).
     """
     if wtc_data is None or len(freqs) == 0 or len(times) == 0:
         return None
 
     wtc_arr = wtc_data["wtc"]   # (n_freqs, n_times)
     coi     = wtc_data["coi"]   # (n_times) — max reliable period in seconds
+    sig     = wtc_data.get("sig")  # (n_freqs) per-frequency significance level, or None
 
     # COI → minimum reliable frequency at each time point
     with np.errstate(divide="ignore", invalid="ignore"):
@@ -68,6 +72,23 @@ def build_wtc_channel(
         showlegend=True,
         hoverinfo="skip",
     ))
+
+    # Significance contour: outline where coherence beats the Monte Carlo level (WTC / sig > 1).
+    if sig is not None and len(sig) == wtc_arr.shape[0]:
+        with np.errstate(divide="ignore", invalid="ignore"):
+            ratio = wtc_arr / np.asarray(sig, dtype=float)[:, None]
+        fig.add_trace(go.Contour(
+            x=times.tolist(),
+            y=freqs.tolist(),
+            z=ratio.tolist(),
+            contours=dict(type="constraint", operation=">", value=1.0),
+            line=dict(color="black", width=1.2),
+            fillcolor="rgba(0,0,0,0)",
+            showscale=False,
+            name="p<0.05",
+            showlegend=True,
+            hoverinfo="skip",
+        ))
 
     shapes = []
     for m in markers_list:

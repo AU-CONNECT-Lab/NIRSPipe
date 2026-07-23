@@ -259,8 +259,8 @@ def cmd_epoch(
 
 def cmd_hyper_post(
     bids_dir: Path, output_dir: Path, pairs_csv: Path, group_id: str | None,
-    roi_mapping: Path | None, wtc_fmin: float, wtc_fmax: float, isc_threshold: float,
-    normalize: bool, no_align: bool,
+    roi_mapping: Path | None, wtc_fmin: float, wtc_fmax: float, wtc_significance: bool,
+    isc_threshold: float, normalize: bool, no_align: bool,
     session_label: list[str] | None, task_label: list[str] | None,
     skip_bids_validation: bool,
 ) -> None:
@@ -309,6 +309,7 @@ def cmd_hyper_post(
             bad_channels=bad_channels,
             wtc_fmin=wtc_fmin,
             wtc_fmax=wtc_fmax,
+            wtc_significance=wtc_significance,
             isc_threshold=isc_threshold,
         )
 
@@ -441,6 +442,9 @@ def _build_parser() -> argparse.ArgumentParser:
                     help="JSON file mapping ROI labels to lists of channel names. For ROI-level WTC. Optional.")
     hp.add_argument("--wtc-fmin", type=float, default=0.004, help="Lower bound (Hz) for WTC frequency axis.")
     hp.add_argument("--wtc-fmax", type=float, default=0.20,  help="Upper bound (Hz) for WTC frequency axis.")
+    hp.add_argument("--wtc-significance", action="store_true",
+                    help="Overlay a Monte Carlo significance contour on WTC "
+                         "(slow: ~300 surrogate runs per channel pair).")
     hp.add_argument("--isc-threshold", type=float, default=0.3,
                     help="Minimum mean ISC to draw an arc in the connectivity circle.")
     hp.add_argument("--normalize", action=argparse.BooleanOptionalAction, default=False,

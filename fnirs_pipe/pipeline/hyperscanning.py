@@ -19,6 +19,9 @@ from fnirs_pipe.utils.logging import get_logger
 logger = get_logger("pipeline.hyperscanning")
 
 
+# ---- Data management: group definition & IO ----
+
+
 @dataclass
 class GroupEntry:
     group_id: str
@@ -102,6 +105,9 @@ def _raw_to_haemo(raw: mne.io.Raw, dpf: list[float]) -> mne.io.Raw:
     raw_od = mne.preprocessing.nirs.optical_density(raw.copy(), verbose=False)
     ppf = dpf[0] if len(dpf) == 1 else dpf
     return mne.preprocessing.nirs.beer_lambert_law(raw_od, ppf=ppf)
+
+
+# ---- Computation: raw-level QC ----
 
 
 def compute_group_sqm_raw(
@@ -190,6 +196,9 @@ def compute_group_sqm_raw(
     return sqm_data
 
 
+# ---- Data management: alignment & signal preprocessing ----
+
+
 def align_recordings(
     raws: dict[str, mne.io.Raw],
     task: str,
@@ -202,6 +211,7 @@ def align_recordings(
     Returns (aligned_raws, {subject_id: crop_offset_seconds}).
     Raises AlignmentError if no shared trigger exists across all subjects.
     """
+    # Collect each subject's trigger descriptions, dropping BAD_* motion annotations.
     desc_sets: dict[str, set[str]] = {}
     for sub_id, raw in raws.items():
         desc_sets[sub_id] = {
@@ -216,6 +226,7 @@ def align_recordings(
             "Cannot align without shared trigger events."
         )
 
+    # A trigger usable for alignment must be present in every subject.
     common: set[str] = set.intersection(*desc_sets.values()) if desc_sets else set()
     if not common:
         all_descs = {sub: sorted(d) for sub, d in desc_sets.items()}
@@ -225,6 +236,7 @@ def align_recordings(
             "Note: alignment requires a shared hardware trigger."
         )
 
+    # Offset = onset of each subject's earliest common trigger (sort by onset).
     offsets: dict[str, float] = {}
     for sub_id, raw in raws.items():
         for ann in sorted(raw.annotations, key=lambda a: float(a["onset"])):
@@ -234,6 +246,7 @@ def align_recordings(
         if sub_id not in offsets:
             raise AlignmentError(f"Subject {sub_id}: no common trigger found (unexpected state)")
 
+    # Crop each recording to start at its trigger, then clip all to a shared length.
     aligned: dict[str, mne.io.Raw] = {}
     for sub_id, raw in raws.items():
         aligned[sub_id] = raw.copy().crop(tmin=offsets[sub_id])
@@ -253,6 +266,7 @@ def trim_to_shortest(
     Use for resting-state data where no shared trigger exists.
     Returns (trimmed_raws, {subject_id: 0.0}).
     """
+    # Clip every recording to the shortest one's length; no start offset (all zero).
     min_duration = min(r.times[-1] for r in raws.values())
     trimmed = {sid: raw.copy().crop(tmax=min_duration) for sid, raw in raws.items()}
     offsets = {sid: 0.0 for sid in raws}
@@ -279,6 +293,9 @@ def normalize_raws(raws: dict[str, mne.io.Raw]) -> dict[str, mne.io.Raw]:
     return result
 
 
+# ---- Computation: synchrony metrics (WTC / coherence) ----
+
+
 @dataclass
 class WTCResult:
     """Pairwise wavelet transform coherence per HbO channel.
@@ -299,17 +316,28 @@ def _pairwise_wtc(
     step: int,
     fmin: float,
     fmax: float,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Morlet WTC for one signal pair → (wtc_band, freqs_band, coi_dec).
+    significance: bool = False,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray | None]:
+    r"""Morlet wavelet transform coherence for one signal pair (0 = independent, 1 = locked).
 
-    Trims pycwt zero-padding, sorts frequencies ascending, band-filters and decimates.
+    .. math::
+
+        R^2(f, t) = \frac{\left| S(W_{xy}) \right|^2}{S(|W_x|^2)\, S(|W_y|^2)}
+
+    :math:`W_x, W_y` are the continuous wavelet transforms, :math:`W_{xy} = W_x W_y^{*}`
+    the cross-wavelet spectrum, and :math:`S` a smoothing operator in time and scale.
+    Output is trimmed of pycwt zero-padding, sorted to ascending frequency, then
+    band-limited to ``[fmin, fmax]`` and decimated by ``step``. With ``significance``
+    the fourth return is the per-frequency Monte Carlo significance level (else None).
+
+    Backend: `pycwt.wct <https://pycwt.readthedocs.io/en/development/reference/#pycwt.wct>`_.
     """
-    import pycwt  # optional dependency; installed via pip install pycwt
+    import pycwt
 
-    WCT, _, coi, freqs, _ = pycwt.wct(
+    WCT, _, coi, freqs, signif = pycwt.wct(
         sig1, sig2, dt=dt,
-        dj=1.0 / 8,
-        sig=False, normalize=True,
+        dj=1.0 / 12,  # 12 sub-octaves per octave (pycwt default; frequency-axis resolution)
+        sig=significance, normalize=True,
     )
     n_sig = len(sig1)
     WCT   = WCT[:, :n_sig]
@@ -322,7 +350,12 @@ def _pairwise_wtc(
     WCT_band   = WCT_s[band][:, ::step].astype(np.float32)
     freqs_band = freqs_s[band]
     coi_dec    = coi[::step].astype(np.float32)
-    return WCT_band, freqs_band, coi_dec
+
+    # Per-frequency significance is constant over time: reorder + band-limit only, no decimation.
+    sig_band = None
+    if significance and np.ndim(signif) == 1 and len(signif) == len(freqs):
+        sig_band = np.asarray(signif)[order][band].astype(np.float32)
+    return WCT_band, freqs_band, coi_dec, sig_band
 
 
 def _wtc_over_pairs(
@@ -331,11 +364,13 @@ def _wtc_over_pairs(
     labels: list[str],
     fmin: float,
     fmax: float,
+    significance: bool = False,
 ) -> WTCResult:
     """Run pairwise Morlet WTC over precomputed per-subject {label: signal} maps.
 
     Signals are matched by label; a label absent for either subject yields None for that pair.
     Time axis decimated to ~1 Hz for display; frequency axis filtered to [fmin, fmax] Hz.
+    significance adds a per-frequency Monte Carlo level to each pair (slow; ~300 surrogate runs).
     """
     subject_ids = list(raws.keys())
     ref_raw = raws[subject_ids[0]]
@@ -356,11 +391,12 @@ def _wtc_over_pairs(
                 pair_data[label] = None
                 continue
             try:
-                WCT_band, freqs_band, coi_dec = _pairwise_wtc(sig1, sig2, dt, step, fmin, fmax)
+                WCT_band, freqs_band, coi_dec, sig_band = _pairwise_wtc(
+                    sig1, sig2, dt, step, fmin, fmax, significance)
                 if shared_freqs is None:
                     shared_freqs = freqs_band
                     shared_times = ref_raw.times[::step]
-                pair_data[label] = {"wtc": WCT_band, "coi": coi_dec}
+                pair_data[label] = {"wtc": WCT_band, "coi": coi_dec, "sig": sig_band}
             except Exception as exc:
                 logger.warning("WTC failed %s-%s label %s: %s", sub1, sub2, label, exc)
                 pair_data[label] = None
@@ -377,10 +413,12 @@ def compute_wtc(
     raws: dict[str, mne.io.Raw],
     fmin: float = 0.004,
     fmax: float = 0.20,
+    significance: bool = False,
 ) -> WTCResult:
     """Compute pairwise WTC per HbO channel using pycwt Morlet wavelet.
 
     Channels are matched by S-D label across subjects; time axis decimated to ~1 Hz.
+    significance adds a Monte Carlo significance level per pair (slow; see _wtc_over_pairs).
     """
     subject_ids = list(raws.keys())
     if len(subject_ids) < 2:
@@ -394,7 +432,8 @@ def compute_wtc(
             for p in picks
         }
 
-    return _wtc_over_pairs(raws, signals, list(signals[subject_ids[0]]), fmin, fmax)
+    return _wtc_over_pairs(
+        raws, signals, list(signals[subject_ids[0]]), fmin, fmax, significance)
 
 
 def _roi_averaged_signals(
@@ -427,6 +466,7 @@ def compute_wtc_roi(
     bad_channels: dict[str, list[str]] | None = None,
     fmin: float = 0.004,
     fmax: float = 0.20,
+    significance: bool = False,
 ) -> WTCResult:
     """Compute pairwise WTC on ROI-averaged HbO signals.
 
@@ -450,24 +490,24 @@ def compute_wtc_roi(
         for sid, raw in raws.items()
     }
 
-    return _wtc_over_pairs(raws, signals, list(roi_map), fmin, fmax)
+    return _wtc_over_pairs(raws, signals, list(roi_map), fmin, fmax, significance)
 
 
-# TODO (optional): extend with PLI / wPLI via mne-connectivity.
-# Merge both subjects' channels into one Epochs object, then call
-# spectral_connectivity_epochs(method=["pli", "wpli"]).
-# PLI/wPLI resist zero-lag volume conduction — less critical for fNIRS
-# (sensors are physically separate across brains) but useful if shared
-# environmental noise (e.g. respiration) inflates coherence.
 def compute_pairwise_coherence(
     raws: dict[str, mne.io.Raw],
     fmin: float = 0.01,
     fmax: float = 0.10,
 ) -> pd.DataFrame:
-    """Compute pairwise spectral coherence per HbO channel in [fmin, fmax] Hz.
+    r"""Magnitude-squared coherence per HbO channel, averaged over [fmin, fmax] Hz.
 
-    Returns DataFrame with columns: ch_name, sub1, sub2, coherence.
+    .. math::
+
+        C_{xy}(f) = \frac{|P_{xy}(f)|^2}{P_{xx}(f)\, P_{yy}(f)}
+
+    :math:`P_{xy}` is the cross-spectral density and :math:`P_{xx}, P_{yy}` the auto-spectra
+    (Welch). The scalar per channel pair is :math:`C_{xy}` averaged over the band.
     Channels are matched by index; all subjects must share the same channel layout.
+    Returns a DataFrame with columns: ch_name, sub1, sub2, coherence.
     """
     subject_ids = list(raws.keys())
     if len(subject_ids) < 2:
@@ -495,6 +535,9 @@ def compute_pairwise_coherence(
             rows.append({"ch_name": ch_label, "sub1": sub1, "sub2": sub2, "coherence": mean_coh})
 
     return pd.DataFrame(rows, columns=["ch_name", "sub1", "sub2", "coherence"])
+
+
+# ---- Data management: derivatives IO ----
 
 
 def load_group_sqm(output_dir: Path, group: list[GroupEntry]) -> dict[str, dict]:
