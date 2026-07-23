@@ -69,10 +69,20 @@ def compute_alff(raw: mne.io.Raw, low_pass: float, high_pass: float) -> pd.DataF
         total_sum = np.nansum(power_sqrt[1:])  # skip DC
         falff_vals[i] = np.nansum(power_sqrt[low_idx:high_idx]) / total_sum if total_sum > 0 else 0.0
 
-    alff_mean = np.nanmean(alff_vals)
-    alff_std  = np.nanstd(alff_vals)
-    malff_vals = alff_vals / alff_mean if alff_mean != 0 else np.zeros_like(alff_vals)
-    zalff_vals = (alff_vals - alff_mean) / alff_std if alff_std != 0 else np.zeros_like(alff_vals)
+    # mALFF/zALFF standardize within each chromophore: HbO and HbR sit on different amplitude
+    # scales, so a pooled mean/std would distort both; each chromophore is normalized on its own.
+    malff_vals = np.zeros_like(alff_vals)
+    zalff_vals = np.zeros_like(alff_vals)
+    for suffix in (" hbo", " hbr"):
+        idx = np.array([c.endswith(suffix) for c in raw.ch_names])
+        if not idx.any():
+            continue
+        grp_mean = np.nanmean(alff_vals[idx])
+        grp_std  = np.nanstd(alff_vals[idx])
+        if grp_mean != 0:
+            malff_vals[idx] = alff_vals[idx] / grp_mean
+        if grp_std != 0:
+            zalff_vals[idx] = (alff_vals[idx] - grp_mean) / grp_std
 
     return pd.DataFrame({
         "channel": raw.ch_names,
@@ -83,18 +93,24 @@ def compute_alff(raw: mne.io.Raw, low_pass: float, high_pass: float) -> pd.DataF
     })
 
 
-def compute_fc(raw: mne.io.Raw) -> pd.DataFrame:
-    r"""Functional connectivity: full channel-by-channel Pearson correlation matrix.
+def compute_fc(raw: mne.io.Raw, chromophore: str) -> pd.DataFrame:
+    r"""Functional connectivity for one chromophore: channel-by-channel Pearson matrix.
 
     .. math::
 
         \rho_{ij} = \operatorname{corr}(x_i, x_j)
 
-    for every channel pair (diagonal 1). Uses nilearn ConnectivityMeasure.
+    over the channels of a single chromophore (``chromophore`` is "hbo" or "hbr"); HbO and HbR
+    anti-correlate, so a mixed matrix has no clean meaning and the two are kept separate. Diagonal
+    is 1. Empty frame if the chromophore has < 2 channels.
     """
     from nilearn.connectome import ConnectivityMeasure
-    fc = ConnectivityMeasure(kind="correlation", standardize=False).fit_transform([raw.get_data().T])[0]
-    return pd.DataFrame(fc, index=raw.ch_names, columns=raw.ch_names)
+    picks = [c for c in raw.ch_names if c.endswith(f" {chromophore}")]
+    if len(picks) < 2:
+        return pd.DataFrame()
+    data = raw.get_data(picks=picks)
+    fc = ConnectivityMeasure(kind="correlation", standardize=False).fit_transform([data.T])[0]
+    return pd.DataFrame(fc, index=picks, columns=picks)
 
 
 def fisher_z(fc: pd.DataFrame) -> pd.DataFrame:
@@ -113,8 +129,8 @@ def fisher_z(fc: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(z, index=fc.index, columns=fc.columns)
 
 
-def compute_fc_roi(raw: mne.io.Raw, roi_map: dict[str, list[str]]) -> pd.DataFrame:
-    r"""ROI-level FC: average each ROI's HbO channels into one signal, then Pearson corr between ROIs.
+def compute_fc_roi(raw: mne.io.Raw, roi_map: dict[str, list[str]], chromophore: str = "hbo") -> pd.DataFrame:
+    r"""ROI-level FC for one chromophore: average each ROI's channels, then Pearson corr between ROIs.
 
     .. math::
 
@@ -122,14 +138,20 @@ def compute_fc_roi(raw: mne.io.Raw, roi_map: dict[str, list[str]]) -> pd.DataFra
         \bar{x}_A = \frac{1}{|A|} \sum_{c \in A} x_c
 
     Averages signals first (higher SNR) rather than averaging channel correlations; roi_map is
-    {ROI label: [channel names]}, names matched full ("S1_D1 hbo") or by S-D base ("S1_D1").
+    {ROI label: [channel names]}, matched by S-D base ("S1_D1"), with any chromophore suffix on
+    the map entry replaced by the requested one so the same map serves hbo and hbr.
     """
     from nilearn.connectome import ConnectivityMeasure
-    hbo = {c for c in raw.ch_names if c.endswith(" hbo")}
+    suffix = f" {chromophore}"
+    chan_set = {c for c in raw.ch_names if c.endswith(suffix)}
     names, signals = [], []
     for roi, chans in roi_map.items():
-        picks = [c if c in hbo else f"{c} hbo" for c in chans]
-        picks = [c for c in picks if c in hbo]
+        picks = []
+        for c in chans:
+            base = c[:-4] if (c.endswith(" hbo") or c.endswith(" hbr")) else c
+            name = f"{base}{suffix}"
+            if name in chan_set:
+                picks.append(name)
         if picks:
             names.append(roi)
             signals.append(raw.get_data(picks=picks).mean(axis=0))

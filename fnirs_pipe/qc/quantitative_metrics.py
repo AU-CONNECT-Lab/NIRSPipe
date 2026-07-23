@@ -290,7 +290,7 @@ def _intensity_metrics(raw_intensity: mne.io.Raw, snr_threshold: float = 2.0) ->
     """Per-channel CV, SNR and mean amplitude from raw intensity (with means; CV also per wavelength).
 
     snr_pass_rate is the fraction of channels with SNR > snr_threshold (default 2.0,
-    the Homer3 channel-pruning cutoff; SNR = mean/std, higher is better).
+    a common channel-pruning cutoff; SNR = mean/std, higher is better).
     """
     int_data = raw_intensity.get_data()
     names = raw_intensity.ch_names
@@ -721,7 +721,10 @@ def haemo_quality_metrics(raw_haemo: mne.io.Raw) -> dict[str, Any]:
 
 
 @_safe_metrics("PSD metrics", (
-    "cardiac_band_power", "cardiac_band_frac", "resp_band_power", "resp_band_frac",
+    "cardiac_band_power_hbo", "cardiac_band_power_hbr",
+    "cardiac_band_frac_hbo", "cardiac_band_frac_hbr",
+    "resp_band_power_hbo", "resp_band_power_hbr",
+    "resp_band_frac_hbo", "resp_band_frac_hbr",
 ))
 def _spectral_metrics(
     raw_haemo: mne.io.Raw,
@@ -730,12 +733,13 @@ def _spectral_metrics(
     resp_l_freq: float,
     resp_h_freq: float,
 ) -> dict[str, Any]:
-    r"""Cardiac/respiration power in the haemoglobin PSD, both absolute and as a fraction of total.
+    r"""Cardiac/respiration power in the haemoglobin PSD, per chromophore, absolute and fractional.
 
     ``*_band_power`` = mean PSD in the band (absolute; scales with overall signal
     amplitude). ``*_band_frac`` = band power / total spectral power, an fALFF-style
     fraction in :math:`[0, 1]` comparable across subjects/channels regardless of
-    amplitude.
+    amplitude. HbO and HbR sit on different amplitude scales, so each is summarised on its
+    own (a pooled band_power would be HbO-dominated and a pooled total would skew band_frac).
 
     Parameters
     ----------
@@ -749,28 +753,42 @@ def _spectral_metrics(
     Returns
     -------
     dict
-        cardiac/resp band_power and band_frac.
+        cardiac/resp band_power and band_frac, each split into _hbo and _hbr.
     """
     psd = raw_haemo.compute_psd(verbose=False)
     freqs = psd.freqs
     psd_data = psd.get_data()
-    total = float(psd_data.sum())  # total spectral power over all channels and freqs
 
-    def _band_power(fmin: float, fmax: float) -> float | None:
-        # absolute: mean PSD density inside the band
-        mask = (freqs >= fmin) & (freqs <= fmax)
-        return float(psd_data[:, mask].mean()) if mask.any() else None
+    def _bands(picks) -> dict[str, float | None]:
+        if not len(picks):
+            return {"cp": None, "cf": None, "rp": None, "rf": None}
+        chrom = psd_data[picks]
+        total = float(chrom.sum())  # total power over this chromophore's channels and freqs
 
-    def _band_frac(fmin: float, fmax: float) -> float | None:
-        # relative: fraction of total power falling in the band (sum/sum, in [0,1])
-        mask = (freqs >= fmin) & (freqs <= fmax)
-        return float(psd_data[:, mask].sum() / total) if (mask.any() and total > 0) else None
+        def _power(fmin: float, fmax: float) -> float | None:
+            # absolute: mean PSD density inside the band
+            mask = (freqs >= fmin) & (freqs <= fmax)
+            return float(chrom[:, mask].mean()) if mask.any() else None
 
+        def _frac(fmin: float, fmax: float) -> float | None:
+            # relative: fraction of this chromophore's total power in the band (sum/sum, in [0,1])
+            mask = (freqs >= fmin) & (freqs <= fmax)
+            return float(chrom[:, mask].sum() / total) if (mask.any() and total > 0) else None
+
+        return {
+            "cp": _power(cardiac_l_freq, cardiac_h_freq),
+            "cf": _frac(cardiac_l_freq, cardiac_h_freq),
+            "rp": _power(resp_l_freq, resp_h_freq),
+            "rf": _frac(resp_l_freq, resp_h_freq),
+        }
+
+    hbo = _bands(mne.pick_types(raw_haemo.info, fnirs="hbo"))
+    hbr = _bands(mne.pick_types(raw_haemo.info, fnirs="hbr"))
     return {
-        "cardiac_band_power": _band_power(cardiac_l_freq, cardiac_h_freq),
-        "cardiac_band_frac":  _band_frac(cardiac_l_freq, cardiac_h_freq),
-        "resp_band_power":    _band_power(resp_l_freq, resp_h_freq),
-        "resp_band_frac":     _band_frac(resp_l_freq, resp_h_freq),
+        "cardiac_band_power_hbo": hbo["cp"], "cardiac_band_power_hbr": hbr["cp"],
+        "cardiac_band_frac_hbo":  hbo["cf"], "cardiac_band_frac_hbr":  hbr["cf"],
+        "resp_band_power_hbo":    hbo["rp"], "resp_band_power_hbr":    hbr["rp"],
+        "resp_band_frac_hbo":     hbo["rf"], "resp_band_frac_hbr":     hbr["rf"],
     }
 
 

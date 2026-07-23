@@ -606,12 +606,12 @@
     <li><span class="ql">Spike % frames</span>
         <span class="qv">{{ pct(sqm.get('spike_pct_frames')) }}</span></li>
     {% endif %}
-    <li><span class="ql">Cardiac band power</span>
-        <span class="qv">{{ qm_val(sqm.get('cardiac_band_power'), '.3e') }}</span></li>
-    <li><span class="ql">Cardiac band fraction</span>
-        <span class="qv">{{ pct(sqm.get('cardiac_band_frac')) }}</span></li>
+    <li><span class="ql">Cardiac band power (HbO)</span>
+        <span class="qv">{{ qm_val(sqm.get('cardiac_band_power_hbo'), '.3e') }}</span></li>
+    <li><span class="ql">Cardiac band fraction (HbO)</span>
+        <span class="qv">{{ pct(sqm.get('cardiac_band_frac_hbo')) }}</span></li>
     <li><span class="ql">Low-freq drift (HbO)</span>
-        <span class="qv">{{ qm_val(sqm.get('lowfreq_drift_amplitude'), '.3e') }}</span></li>
+        <span class="qv">{{ qm_val(sqm.get('lowfreq_drift_amplitude_hbo'), '.3e') }}</span></li>
   </ul>
 
   {% if channel_rows %}

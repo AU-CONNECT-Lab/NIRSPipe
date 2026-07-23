@@ -232,39 +232,49 @@ def _write_rest_derivatives(
     else:
         logger.warning("sub-%s | skipping ALFF: --high-pass and --low-pass required", config.subject)
 
-    fc_df = compute_fc(raw_resid)
-    fc_path = build_output_path(
-        output_dir=output_dir, subject=config.subject, session=config.session,
-        entities=entities, suffix="fc", extension=".tsv",
-    )
-    fc_df.to_csv(fc_path, sep="\t", index_label="channel")
-    logger.info("sub-%s | fc → %s", config.subject, fc_path)
+    # FC per chromophore: HbO and HbR anti-correlate, so they never share a matrix. Both are
+    # written; the report consumes the HbO matrix.
+    fc_hbo_df = None
+    for chromo in ("hbo", "hbr"):
+        fc_df = compute_fc(raw_resid, chromo)
+        if fc_df.empty:
+            continue
+        chromo_entities = {**entities, "desc": chromo}
+        fc_path = build_output_path(
+            output_dir=output_dir, subject=config.subject, session=config.session,
+            entities=chromo_entities, suffix="fc", extension=".tsv",
+        )
+        fc_df.to_csv(fc_path, sep="\t", index_label="channel")
+        logger.info("sub-%s | fc (%s) → %s", config.subject, chromo, fc_path)
 
-    fcz_path = build_output_path(
-        output_dir=output_dir, subject=config.subject, session=config.session,
-        entities=entities, suffix="fcz", extension=".tsv",
-    )
-    fisher_z(fc_df).to_csv(fcz_path, sep="\t", index_label="channel")
-    logger.info("sub-%s | fcz → %s", config.subject, fcz_path)
+        fcz_path = build_output_path(
+            output_dir=output_dir, subject=config.subject, session=config.session,
+            entities=chromo_entities, suffix="fcz", extension=".tsv",
+        )
+        fisher_z(fc_df).to_csv(fcz_path, sep="\t", index_label="channel")
+        logger.info("sub-%s | fcz (%s) → %s", config.subject, chromo, fcz_path)
 
-    if config.roi_map:
-        fc_roi_df = compute_fc_roi(raw_resid, config.roi_map)
-        if not fc_roi_df.empty:
-            fc_roi_path = build_output_path(
-                output_dir=output_dir, subject=config.subject, session=config.session,
-                entities=entities, suffix="fcroi", extension=".tsv",
-            )
-            fc_roi_df.to_csv(fc_roi_path, sep="\t", index_label="roi")
-            logger.info("sub-%s | fc_roi → %s", config.subject, fc_roi_path)
+        if config.roi_map:
+            fc_roi_df = compute_fc_roi(raw_resid, config.roi_map, chromo)
+            if not fc_roi_df.empty:
+                fc_roi_path = build_output_path(
+                    output_dir=output_dir, subject=config.subject, session=config.session,
+                    entities=chromo_entities, suffix="fcroi", extension=".tsv",
+                )
+                fc_roi_df.to_csv(fc_roi_path, sep="\t", index_label="roi")
+                logger.info("sub-%s | fc_roi (%s) → %s", config.subject, chromo, fc_roi_path)
 
-            fcroiz_path = build_output_path(
-                output_dir=output_dir, subject=config.subject, session=config.session,
-                entities=entities, suffix="fcroiz", extension=".tsv",
-            )
-            fisher_z(fc_roi_df).to_csv(fcroiz_path, sep="\t", index_label="roi")
-            logger.info("sub-%s | fc_roiz → %s", config.subject, fcroiz_path)
+                fcroiz_path = build_output_path(
+                    output_dir=output_dir, subject=config.subject, session=config.session,
+                    entities=chromo_entities, suffix="fcroiz", extension=".tsv",
+                )
+                fisher_z(fc_roi_df).to_csv(fcroiz_path, sep="\t", index_label="roi")
+                logger.info("sub-%s | fc_roiz (%s) → %s", config.subject, chromo, fcroiz_path)
 
-    return alff_df, fc_df
+        if chromo == "hbo":
+            fc_hbo_df = fc_df
+
+    return alff_df, fc_hbo_df
 
 
 def _write_step_snirf(haemo: mne.io.Raw, config: PostConfig, output_dir: Path, desc: str, source_entities: dict[str, str] | None = None) -> Path:
