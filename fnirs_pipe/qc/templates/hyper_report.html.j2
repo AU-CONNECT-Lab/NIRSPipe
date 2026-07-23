@@ -117,13 +117,13 @@ select#ch-select {
 <!-- Coherence: bar chart + windowed heatmap -->
 <div class="row row-coh" style="margin-bottom:0.5rem">
   {% if figure_paths.coherence_bar %}
-  {% call card("Inter-subject Coherence (mean)", hint="sorted by mean ISC") %}
+  {% call card("Inter-subject Coherence (mean)", hint="sorted by mean coherence") %}
   <iframe class="plot-frame" src="{{ figure_paths.coherence_bar.src }}"
           style="height:{{ figure_paths.coherence_bar.h }}px"></iframe>
   {% endcall %}
   {% endif %}
   {% if figure_paths.coh_timeseries %}
-  {% call card("Windowed ISC (time &times; channel)", hint="sliding window in coherence band") %}
+  {% call card("Windowed Coherence (time &times; channel)", hint="sliding window in coherence band") %}
   <iframe class="plot-frame" src="{{ figure_paths.coh_timeseries.src }}"
           style="height:{{ figure_paths.coh_timeseries.h }}px"></iframe>
   {% endcall %}
@@ -221,13 +221,13 @@ function _pairFname(pair) {
     li("Channels — mixed",   q.n_mixed   != null ? q.n_mixed   : "—") +
     li("Channels — all bad", q.n_all_bad != null ? q.n_all_bad : "—",
        q.n_all_bad > 0 ? "qm-bad" : "") +
-    li("Mean ISC",
-       q.mean_isc != null ? q.mean_isc.toFixed(3) : "—",
-       q.mean_isc != null ?
-         (q.mean_isc >= 0.3 ? "qm-ok" : q.mean_isc >= 0.1 ? "qm-warn" : "qm-bad") : "") +
-    li("Peak ISC channel",
-       q.peak_isc_channel
-         ? q.peak_isc_channel + " (" + (q.peak_isc != null ? q.peak_isc.toFixed(3) : "—") + ")"
+    li("Mean Coherence",
+       q.mean_coherence != null ? q.mean_coherence.toFixed(3) : "—",
+       q.mean_coherence != null ?
+         (q.mean_coherence >= 0.3 ? "qm-ok" : q.mean_coherence >= 0.1 ? "qm-warn" : "qm-bad") : "") +
+    li("Peak Coherence channel",
+       q.peak_coherence_channel
+         ? q.peak_coherence_channel + " (" + (q.peak_coherence != null ? q.peak_coherence.toFixed(3) : "—") + ")"
          : "—") +
     li("Aligned duration",    q.aligned_duration_s != null ? q.aligned_duration_s + " s" : "—") +
     li("Max alignment offset",q.max_offset_s       != null ? q.max_offset_s + " s"       : "—");

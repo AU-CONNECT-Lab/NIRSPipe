@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 - Standardized ALFF outputs `malff` (channel value over the chromophore mean) and `zalff` (per-chromophore z-score) in `*_alff.tsv`, for group-level comparison
 
 ### Changed
+- The per-subject reproducible script (`sub-XX/logs/*_script.py`) is now a step-by-step transcript of the run: one block per processing stage (OD, SCI, motion, Beer-Lambert, filter, GLM/rest) with its parameters and outputs, instead of an opaque call into the pipeline
 - ALFF/fALFF are now computed on a broadband residual (drift removed, not band-pass filtered) so fALFF spans the full spectrum as defined; functional connectivity keeps the band-pass filtered residual
 - Functional connectivity (channel `*_fc.tsv`, ROI `*_fcroi.tsv`, and their Fisher-z variants) is now written per chromophore as separate HbO/HbR matrices (`desc-hbo` / `desc-hbr`) instead of one matrix mixing both; HbO and HbR anti-correlate, so a mixed matrix was not meaningful
 - Cardiac and respiration band power/fraction are now reported per chromophore (`*_hbo` / `*_hbr`)

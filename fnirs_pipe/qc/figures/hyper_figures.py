@@ -778,14 +778,14 @@ def build_coherence_timeseries(windowed_df: pd.DataFrame) -> go.Figure | None:
             y=pivot.index.tolist(),
             z=pivot.values.tolist(),
             colorscale="Blues", zmin=0, zmax=1,
-            colorbar=dict(title="ISC", tickformat=".2f", len=0.8),
-            hovertemplate="Ch: %{y}<br>Time: %{x:.1f} s<br>ISC: %{z:.3f}<extra></extra>",
+            colorbar=dict(title="Coherence", tickformat=".2f", len=0.8),
+            hovertemplate="Ch: %{y}<br>Time: %{x:.1f} s<br>Coherence: %{z:.3f}<extra></extra>",
             visible=(pi == 0),
         ))
         buttons.append(dict(
             label=f"{sub1}–{sub2}", method="update",
             args=[{"visible": [j == pi for j in range(len(pairs))]},
-                  {"title.text": f"Windowed ISC: {sub1}–{sub2}"}],
+                  {"title.text": f"Windowed Coherence: {sub1}–{sub2}"}],
         ))
 
     layout_kwargs: dict = dict(
@@ -912,12 +912,12 @@ def compute_hyper_sqm(
     n_total  = len(ch_set)
     pct_good = round(n_all_good / n_total * 100, 1) if n_total > 0 else None
 
-    mean_isc = peak_isc = peak_isc_channel = None
+    mean_coherence = peak_coherence = peak_coherence_channel = None
     if not coherence_df.empty:
-        mean_isc         = round(float(coherence_df["coherence"].mean()), 3)
-        ch_mean          = coherence_df.groupby("ch_name")["coherence"].mean()
-        peak_isc_channel = str(ch_mean.idxmax())
-        peak_isc         = round(float(ch_mean.max()), 3)
+        mean_coherence         = round(float(coherence_df["coherence"].mean()), 3)
+        ch_mean                = coherence_df.groupby("ch_name")["coherence"].mean()
+        peak_coherence_channel = str(ch_mean.idxmax())
+        peak_coherence         = round(float(ch_mean.max()), 3)
 
     aligned_duration_s = None
     if aligned_raws:
@@ -929,6 +929,7 @@ def compute_hyper_sqm(
         n_all_good=n_all_good, n_mixed=n_mixed,
         n_all_bad=n_all_bad, n_unknown=n_unknown, n_total=n_total,
         pct_all_good=pct_good,
-        mean_isc=mean_isc, peak_isc=peak_isc, peak_isc_channel=peak_isc_channel,
+        mean_coherence=mean_coherence, peak_coherence=peak_coherence,
+        peak_coherence_channel=peak_coherence_channel,
         aligned_duration_s=aligned_duration_s, max_offset_s=max_offset_s,
     )
