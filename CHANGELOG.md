@@ -6,6 +6,18 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- Standardized ALFF outputs `malff` (channel value over the chromophore mean) and `zalff` (per-chromophore z-score) in `*_alff.tsv`, for group-level comparison
+
+### Changed
+- ALFF/fALFF are now computed on a broadband residual (drift removed, not band-pass filtered) so fALFF spans the full spectrum as defined; functional connectivity keeps the band-pass filtered residual
+- Functional connectivity (channel `*_fc.tsv`, ROI `*_fcroi.tsv`, and their Fisher-z variants) is now written per chromophore as separate HbO/HbR matrices (`desc-hbo` / `desc-hbr`) instead of one matrix mixing both; HbO and HbR anti-correlate, so a mixed matrix was not meaningful
+- Cardiac and respiration band power/fraction are now reported per chromophore (`*_hbo` / `*_hbr`)
+
+### Fixed
+- fALFF was close to 1 on nearly every channel because it was computed on band-pass filtered data, leaving no out-of-band power in its denominator; it is now valid
+- Subject report showed a blank low-frequency drift (HbO) value due to a stale metric key
+
 ## [0.16.0] - 2026-07-08
 
 ### Added

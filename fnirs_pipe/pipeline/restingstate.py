@@ -59,15 +59,15 @@ def compute_alff(raw: mne.io.Raw, low_pass: float, high_pass: float) -> pd.DataF
         freqs, power = signal.periodogram(ch_demeaned, fs, scaling="spectrum")
         power_sqrt   = np.sqrt(power)
 
-        # high_pass is the lower freq bound; low_pass is the upper freq bound
-        low_idx  = np.argmin(np.abs(freqs - high_pass))
-        high_idx = np.argmin(np.abs(freqs - low_pass))
+        # high_pass is the lower bound, low_pass the upper; inclusive mask keeps both edge bins
+        band_mask = (freqs >= high_pass) & (freqs <= low_pass)
+        band_amp  = power_sqrt[band_mask]
 
-        alff_vals[i] = np.nanmean(power_sqrt[low_idx:high_idx])  # mean band amplitude
+        alff_vals[i] = np.nanmean(band_amp) if band_amp.size else 0.0  # mean band amplitude
 
         # fALFF: fraction of total spectral amplitude in the low band (Zou 2008), sum/sum ∈ [0,1]
         total_sum = np.nansum(power_sqrt[1:])  # skip DC
-        falff_vals[i] = np.nansum(power_sqrt[low_idx:high_idx]) / total_sum if total_sum > 0 else 0.0
+        falff_vals[i] = np.nansum(band_amp) / total_sum if total_sum > 0 else 0.0
 
     # mALFF/zALFF standardize within each chromophore: HbO and HbR sit on different amplitude
     # scales, so a pooled mean/std would distort both; each chromophore is normalized on its own.
