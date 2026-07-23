@@ -1,5 +1,9 @@
 """Compute and persist image quality metrics (SQM) for fNIRS data.
 
+Established metrics: SCI, PSP, CV, SNR, GVTD, Durbin-Watson.
+Experimental (may change or be removed): Cardiac Power (CP), per-chromophore gcor,
+spike and motion-correction footprint, low-frequency drift.
+
 compute_sqm(): all metrics as a flat dict (no I/O).
 write_sqm_record(): append one JSONL line to a sidecar file.
 """

@@ -130,7 +130,20 @@ def run_post(
         if haemo_sqm is not None and last_snirf_path is not None:
             try:
                 from fnirs_pipe.qc.quantitative_metrics import compute_glm_sqm, save_sqm_toml
-                haemo_sqm.update(compute_glm_sqm(raw_resid.get_data()))
+                _dw = compute_glm_sqm(raw_resid.get_data())
+                # Experimental: tells us whether DW runs on whitened residuals
+                # (~2 = prewhitening worked, keep the metric) or raw residuals (clustered
+                # well below ~1.5 despite noise_model=ar1 = misleading, drop the metric).
+                _dwv = sorted(_dw.get("durbin_watson_per_channel", {}).values())
+                if _dwv:
+                    _n = len(_dwv)
+                    logger.info(
+                        "sub-%s | DW diag (noise_model=%s): mean=%.2f median=%.2f "
+                        "min=%.2f max=%.2f frac<1.5=%.2f",
+                        config.subject, config.noise_model,
+                        sum(_dwv) / _n, _dwv[_n // 2], _dwv[0], _dwv[-1],
+                        sum(1 for v in _dwv if v < 1.5) / _n)
+                haemo_sqm.update(_dw)
                 save_sqm_toml(haemo_sqm, config.subject, last_snirf_path.parent)
             except Exception:
                 logger.warning("sub-%s | GLM SQM failed", config.subject, exc_info=True)

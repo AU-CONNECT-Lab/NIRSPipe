@@ -11,9 +11,19 @@ logger = get_logger("post.restingstate")
 
 
 def compute_alff(raw: mne.io.Raw, low_pass: float, high_pass: float) -> pd.DataFrame:
-    """Compute ALFF and fALFF per channel. Input is the denoised (errts) bandpassed time series.
+    r"""ALFF and fALFF per channel from the denoised (errts) bandpassed time series.
 
-    ALFF = mean band amplitude (Zang 2007); fALFF = Σ band / Σ total amplitude (Zou 2008).
+    ALFF is the mean spectral amplitude in the low band (Zang 2007); fALFF is that
+    band's share of the total spectral amplitude (Zou 2008):
+
+    .. math::
+
+        \text{ALFF} = \frac{1}{|B|} \sum_{f \in B} \sqrt{P(f)}, \qquad
+        \text{fALFF} = \frac{\sum_{f \in B} \sqrt{P(f)}}{\sum_{f > 0} \sqrt{P(f)}},
+
+    where :math:`B = [\text{high\_pass}, \text{low\_pass}]` is the low-frequency band and
+    :math:`P(f)` is the periodogram power (amplitude is :math:`\sqrt{P}`). fALFF is in
+    :math:`[0, 1]`; the DC bin is dropped from the denominator.
     """
     data = raw.get_data()  # (n_channels, n_times)
     fs = raw.info["sfreq"]
@@ -48,14 +58,29 @@ def compute_alff(raw: mne.io.Raw, low_pass: float, high_pass: float) -> pd.DataF
 
 
 def compute_fc(raw: mne.io.Raw) -> pd.DataFrame:
-    # uses nilearn.connectome.ConnectivityMeasure
+    r"""Functional connectivity: full channel-by-channel Pearson correlation matrix.
+
+    .. math::
+
+        \rho_{ij} = \operatorname{corr}(x_i, x_j)
+
+    for every channel pair (diagonal 1). Uses nilearn ConnectivityMeasure.
+    """
     from nilearn.connectome import ConnectivityMeasure
     fc = ConnectivityMeasure(kind="correlation", standardize=False).fit_transform([raw.get_data().T])[0]
     return pd.DataFrame(fc, index=raw.ch_names, columns=raw.ch_names)
 
 
 def fisher_z(fc: pd.DataFrame) -> pd.DataFrame:
-    """Fisher r-to-z of an FC matrix (diagonal set to 0), for group-level stats."""
+    r"""Fisher r-to-z of an FC matrix (diagonal set to 0), for group-level stats.
+
+    .. math::
+
+        z = \operatorname{arctanh}(r) = \tfrac{1}{2} \ln \frac{1 + r}{1 - r}
+
+    Variance-stabilises correlations so they can be averaged / tested across subjects;
+    r is clipped just below :math:`\pm 1` to keep perfect correlations from diverging.
+    """
     r = fc.to_numpy().clip(-0.999999, 0.999999)  # clip to keep perfect corr from → inf
     z = np.arctanh(r)
     np.fill_diagonal(z, 0.0)
@@ -63,7 +88,12 @@ def fisher_z(fc: pd.DataFrame) -> pd.DataFrame:
 
 
 def compute_fc_roi(raw: mne.io.Raw, roi_map: dict[str, list[str]]) -> pd.DataFrame:
-    """ROI-level FC: average each ROI's HbO channels into one signal, then Pearson corr between ROIs.
+    r"""ROI-level FC: average each ROI's HbO channels into one signal, then Pearson corr between ROIs.
+
+    .. math::
+
+        \rho_{AB} = \operatorname{corr}(\bar{x}_A, \bar{x}_B), \qquad
+        \bar{x}_A = \frac{1}{|A|} \sum_{c \in A} x_c
 
     Averages signals first (higher SNR) rather than averaging channel correlations; roi_map is
     {ROI label: [channel names]}, names matched full ("S1_D1 hbo") or by S-D base ("S1_D1").
