@@ -141,6 +141,14 @@ def run_glm_pipeline(
     if events is None:
         events = pd.read_csv(events_path, sep="\t") if events_path else None
 
+    # Short-channel confounds are pulled from `haemo`, the same data the design matrix is fit
+    # against. When that data has been bandpass-filtered upstream, the short channels ride
+    # through the same filter, so regressors and data live in the same frequency band. That
+    # is what keeps the regression from re-injecting out-of-band variance the filter removed
+    # (the spectral-misspecification problem of Hallquist 2013; the accepted fix is to filter
+    # data and confounds with the same filter before regressing, which holds here implicitly
+    # because both derive from one filtered recording). If external, unfiltered confounds are
+    # ever added, they must be filtered to the same band first.
     confound_cols = _short_channel_regressors(haemo, short_channel) if short_channel else {}
     confounds = pd.DataFrame(confound_cols) if confound_cols else None
 

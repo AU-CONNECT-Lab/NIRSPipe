@@ -152,8 +152,7 @@ def run_post(
         if config.drift_model is None:
             raise ValueError("rest mode requires --drift-model")
         logger.info("sub-%s | rest confound regression", config.subject)
-        _, glm_est, dm, raw_resid = run_glm_pipeline(
-            result,
+        rest_glm_kwargs = dict(
             stim_dur=None,
             hrf_model="spm",
             noise_model="ols",
@@ -163,7 +162,11 @@ def run_post(
             fir_delays=None,
             short_channel=config.short_channel,
             events=pd.DataFrame({"trial_type": [], "onset": [], "duration": []}),
+        )
+        _, glm_est, dm, raw_resid = run_glm_pipeline(
+            result,
             output_dir=str(output_dir / f"sub-{config.subject}" / "nirs"),
+            **rest_glm_kwargs,
         )
         errts_path = _write_step_snirf(raw_resid, config, output_dir, desc="errts", source_entities=source_entities)
         try:
@@ -171,7 +174,19 @@ def run_post(
             save_sqm_toml(compute_glm_sqm(raw_resid.get_data()), config.subject, errts_path.parent)
         except Exception:
             logger.warning("sub-%s | rest GLM SQM failed", config.subject, exc_info=True)
-        alff_df, fc_df = _write_rest_derivatives(raw_resid, config, output_dir, source_entities=source_entities)
+
+        # ALFF/fALFF need a broadband residual: fALFF's denominator spans the full spectrum,
+        # so its input must not be low-passed. Re-run the same confound regression on the
+        # un-bandpassed data (the drift model supplies the detrend). FC keeps raw_resid above.
+        raw_resid_bb = None
+        if config.low_pass is not None and config.high_pass is not None:
+            result_bb = raw_haemo.copy()
+            if config.resample_sfreq is not None:
+                result_bb = resample(result_bb, config.resample_sfreq)
+            _, _, _, raw_resid_bb = run_glm_pipeline(result_bb, **rest_glm_kwargs)
+
+        alff_df, fc_df = _write_rest_derivatives(
+            raw_resid, raw_resid_bb, config, output_dir, source_entities=source_entities)
 
     # GCOR around the short-channel regression (the fNIRS GSR analog): pre-regression vs
     # residuals. Expected to drop if the regression removed global/systemic signal.
@@ -191,19 +206,23 @@ def run_post(
 
 def _write_rest_derivatives(
     raw_resid: mne.io.Raw,
+    raw_resid_bb: mne.io.Raw | None,
     config: PostConfig,
     output_dir: Path,
     source_entities: dict[str, str] | None = None,
 ) -> tuple:
-    """Write ALFF/fALFF and FC TSVs. Returns (alff_df | None, fc_df)."""
+    """Write ALFF/fALFF and FC TSVs. Returns (alff_df | None, fc_df).
+
+    ALFF/fALFF use the broadband residual (raw_resid_bb); FC/FC-ROI use the bandpassed one.
+    """
     from fnirs_pipe.io.derivatives import build_output_path, carry_entities
     from fnirs_pipe.pipeline.restingstate import compute_alff, compute_fc, compute_fc_roi, fisher_z
 
     entities = carry_entities(source_entities)
 
     alff_df = None
-    if config.low_pass is not None and config.high_pass is not None:
-        alff_df = compute_alff(raw_resid, low_pass=config.low_pass, high_pass=config.high_pass)
+    if raw_resid_bb is not None:
+        alff_df = compute_alff(raw_resid_bb, low_pass=config.low_pass, high_pass=config.high_pass)
         alff_path = build_output_path(
             output_dir=output_dir, subject=config.subject, session=config.session,
             entities=entities, suffix="alff", extension=".tsv",
