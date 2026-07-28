@@ -6,36 +6,38 @@ list — the rest of the report still renders.
 
 Report sections
 ---------------
-Summary
-  Subject metadata, bad-channel badge, run command.
+::
 
-a. Raw Signal
-  Per-channel HbO/HbR timeseries + PSD + epoch preview (dropdown selector).
+  Summary
+    Subject metadata, bad-channel badge, run command.
 
-b. Raw Signal Quality (SCI / PSP)
-  Windowed SCI/PSP heatmap + lollipop summary (build_sci_psp_figure).
-  Brain-surface quality map + optode flat map (if head coordinates available).
+  a. Raw Signal
+    Per-channel HbO/HbR timeseries + PSD + epoch preview (dropdown selector).
 
-c. Motion Correction
-  GVTD + carpet plot; bad-segment zoom; per-channel before/after OD traces.
+  b. Raw Signal Quality (SCI / PSP)
+    Windowed SCI/PSP heatmap + lollipop summary (build_sci_psp_figure).
+    Brain-surface quality map + optode flat map (if head coordinates available).
 
-d. HbO / HbR (Beer-Lambert)
-  HbO–HbR correlation panel.
+  c. Motion Correction
+    GVTD + carpet plot; bad-segment zoom; per-channel before/after OD traces.
 
-e. PSD (before / after bandpass)
-  Full-dataset PSD panel + per-channel PSD detail (dropdown selector).
+  d. HbO / HbR (Beer-Lambert)
+    HbO–HbR correlation panel.
 
-f. Epoch / HRF Preview
-  Grand-mean HbO/HbR averaged across good channels, baseline-corrected.
+  e. PSD (before / after bandpass)
+    Full-dataset PSD panel + per-channel PSD detail (dropdown selector).
 
-Postprocessing (GLM mode)
-  Design-matrix timeseries + heatmap; activation panel per condition.
+  f. Epoch / HRF Preview
+    Grand-mean HbO/HbR averaged across good channels, baseline-corrected.
 
-Quantitative Metrics
-  SQM scalar summary (channel retention, SCI, PSP, SNR, HbO–HbR corr, etc.)
-  + per-channel table; CSV sidecar saved to nirs/ output directory.
+  Postprocessing (GLM mode)
+    Design-matrix timeseries + heatmap; activation panel per condition.
 
-Errors / Methods / Software Versions
+  Quantitative Metrics
+    SQM scalar summary (channel retention, SCI, PSP, SNR, HbO–HbR corr, etc.)
+    + per-channel table; CSV sidecar saved to nirs/ output directory.
+
+  Errors / Methods / Software Versions
 """
 
 import base64

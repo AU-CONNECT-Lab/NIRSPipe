@@ -49,9 +49,11 @@ def design_matrix_figure(
 ) -> go.Figure:
     """Design matrix figure.
 
-    Layout: (n_conditions + 1) rows × 2 columns.
+    Layout: (n_conditions + 1) rows × 2 columns::
+
       Col 1 (85%): regressor time series; top row = sum of all regressors.
       Col 2 (15%): BC / AC bar chart per row.
+
     Censored spans are shaded gray; individual annotation types can be
     distinguished by passing them in `segments`.
 

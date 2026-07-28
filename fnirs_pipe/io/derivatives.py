@@ -24,10 +24,12 @@ def build_output_path(
     """Construct a BIDS-Derivatives compliant output path.
 
     All intermediate and final files land in output_dir (no separate work_dir).
-    The desc entity distinguishes processing steps, e.g.:
+    The desc entity distinguishes processing steps, e.g.::
+
       desc-od, desc-sci, desc-motcorrected, desc-preproc
 
-    Examples:
+    Examples::
+
       sub-01/nirs/sub-01_desc-od_nirs.snirf              (no session)
       sub-01/ses-wave1/nirs/sub-01_ses-wave1_desc-od_nirs.snirf
     """

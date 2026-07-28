@@ -1,8 +1,10 @@
 """Circular connectivity (connectogram) figure.
 
-fc_connectogram():    within-subject FC connectogram from a channel × channel DataFrame.
-                      HbO and HbR are drawn as separate circles and stacked vertically.
-isc_connectogram():   inter-brain connectogram, Sub1 on left semicircle, Sub2 on right.
+::
+
+  fc_connectogram():    within-subject FC connectogram from a channel × channel DataFrame.
+                        HbO and HbR are drawn as separate circles and stacked vertically.
+  isc_connectogram():   inter-brain connectogram, Sub1 on left semicircle, Sub2 on right.
 """
 
 from __future__ import annotations
@@ -123,7 +125,7 @@ def fc_connectogram(
         fc_df:      Square channel × channel Pearson r DataFrame (from compute_fc).
         groups:     Optional mapping channel → group label for colour-coding nodes.
                     Defaults to grouping by source label (S1, S2, …).
-        threshold:  Minimum |r| to draw a connection. Weaker edges are hidden.
+        threshold:  Minimum ``|r|`` to draw a connection. Weaker edges are hidden.
         n_lines:    If set, draw only the top-N strongest connections (overrides threshold).
         title:      Base title; " — HbO" / " — HbR" is appended automatically.
     """
@@ -185,7 +187,7 @@ def isc_connectogram(
         isc_mat:       n × n ISC matrix from compute_isc().
         ch_names:      Channel labels (n,), without HbO/HbR type suffix.
         subject_ids:   (sub1_id, sub2_id) used as group colour labels.
-        threshold:     Minimum |ISC| to draw an arc (ignored when n_lines set).
+        threshold:     Minimum ``|ISC|`` to draw an arc (ignored when n_lines set).
         n_lines:       Draw only the top-N strongest arcs.
         diagonal_only: If True (default), draw only same-channel arcs
                        (sub1_ch_i ↔ sub2_ch_i). Keeps the plot readable.

@@ -13,6 +13,7 @@ from typing import Any
 
 from fnirs_pipe.io.bids import get_layout, get_nirs_files
 from fnirs_pipe.io.derivatives import write_dataset_description
+from fnirs_pipe.io.snirf import read_snirf
 import mne
 from fnirs_pipe.pipeline.prep_pipeline import PrepConfig, run_prep
 from fnirs_pipe.utils import unwrap_enum as _v
@@ -180,7 +181,7 @@ def run_participant_level(args: dict[str, Any]) -> None:
                             prep_config = _make_prep_config(subject, session, args)
                             logger.info("processing: %s", snirf_path)
                             try:
-                                raw = mne.io.read_raw_snirf(str(snirf_path), preload=True)
+                                raw = read_snirf(snirf_path)
                                 result = run_prep(raw, prep_config, output_dir=output_dir, source_entities=src_entities, work_dir=work_dir)
                                 logger.info("finished prep: %s", snirf_path.name)
                                 last_raw, last_result = raw, result
@@ -326,7 +327,7 @@ def _run_post_for_subject(
                 src_entities = post_layout.parse_file_entities(str(snirf_path))
                 logger.info("post (%s): %s", mode, snirf_path.name)
                 try:
-                    raw_haemo = mne.io.read_raw_snirf(str(snirf_path), preload=True)
+                    raw_haemo = read_snirf(snirf_path)
                     last_denoised, glm_est, dm, alff_df, fc_df, gcor_reg = run_post(raw_haemo, post_config, output_dir=output_dir, mode=mode, source_entities=src_entities)
                     if glm_est is not None:
                         last_glm_est, last_dm = glm_est, dm

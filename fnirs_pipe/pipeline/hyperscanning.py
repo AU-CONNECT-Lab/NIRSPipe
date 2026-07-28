@@ -13,6 +13,7 @@ from scipy.signal import coherence
 
 from fnirs_pipe.exceptions import AlignmentError, GroupCSVError, MissingDerivativesError
 from fnirs_pipe.io.derivatives import find_preproc_snirf
+from fnirs_pipe.io.snirf import read_snirf
 from fnirs_pipe.utils import load_toml
 from fnirs_pipe.utils.logging import get_logger
 
@@ -72,9 +73,7 @@ def load_group_haemo(output_dir: Path, group: list[GroupEntry]) -> dict[str, mne
     result: dict[str, mne.io.Raw] = {}
     for entry in group:
         snirf_path = find_preproc_snirf(output_dir, entry.subject_id, entry.task)
-        result[entry.subject_id] = mne.io.read_raw_snirf(
-            str(snirf_path), preload=True, verbose=False
-        )
+        result[entry.subject_id] = read_snirf(snirf_path, verbose=False)
     return result
 
 
@@ -95,9 +94,7 @@ def load_group_raw_bids(bids_dir: Path, group: list[GroupEntry]) -> dict[str, mn
             raise MissingDerivativesError(
                 f"No SNIRF found in BIDS for {entry.subject_id} task-{entry.task}"
             )
-        result[entry.subject_id] = mne.io.read_raw_snirf(
-            str(files[0]), preload=True, verbose=False
-        )
+        result[entry.subject_id] = read_snirf(files[0], verbose=False)
     return result
 
 
@@ -300,8 +297,11 @@ def normalize_raws(raws: dict[str, mne.io.Raw]) -> dict[str, mne.io.Raw]:
 class WTCResult:
     """Pairwise wavelet transform coherence per HbO channel.
 
-    pairs[(sub1, sub2)][ch_name] = {"wtc": ndarray(n_freqs, n_times),
-                                     "coi": ndarray(n_times)}
+    ::
+
+      pairs[(sub1, sub2)][ch_name] = {"wtc": ndarray(n_freqs, n_times),
+                                       "coi": ndarray(n_times)}
+
     freqs: ascending Hz.  times: decimated aligned time axis (seconds).
     """
     pairs: dict

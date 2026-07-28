@@ -33,8 +33,11 @@ def build_wtc_channel(
 ) -> go.Figure | None:
     """WTC heatmap for one channel pair: time × log-frequency, colour = coherence [0–1].
 
-    wtc_data: {"wtc": ndarray(n_freqs, n_times), "coi": ndarray(n_times),
-               "sig": ndarray(n_freqs) | None}
+    ::
+
+      wtc_data: {"wtc": ndarray(n_freqs, n_times), "coi": ndarray(n_times),
+                 "sig": ndarray(n_freqs) | None}
+
     COI boundary drawn as a white dashed line; regions below it may be edge-affected.
     When "sig" is present, a black contour outlines where coherence exceeds the
     Monte Carlo significance level (WTC / sig > 1).
@@ -187,7 +190,7 @@ def build_isc_panel(
         ch_names:      Channel labels (n,), without type suffix.
         subject_ids:   [sub1_id, sub2_id, ...].
         ch_type:       "hbo" or "hbr", shown in titles.
-        isc_threshold: Minimum |ISC| arc threshold forwarded to connectogram.
+        isc_threshold: Minimum ``|ISC|`` arc threshold forwarded to connectogram.
     """
     from PIL import Image
     from fnirs_pipe.qc.figures.connectogram import isc_connectogram as _isc_conn

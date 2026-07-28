@@ -6,15 +6,36 @@ https://mne.tools/stable/auto_tutorials/io/30_reading_fnirs_data.html
 """
 
 
+import re
 from pathlib import Path
+from typing import Any
 
 import mne
 from mne_nirs.io.snirf import write_raw_snirf
+
+from fnirs_pipe.utils.lineage import stamp
+
+_DESC_RE = re.compile(r"_desc-([A-Za-z0-9]+)[_.]")
 
 
 def write_snirf(raw: mne.io.Raw, out_path: Path) -> None:
     out_path.parent.mkdir(parents=True, exist_ok=True)
     write_raw_snirf(_patch_haemo_wavelengths(raw), str(out_path))
+
+
+def read_snirf(path: Path | str, **kwargs: Any) -> mne.io.Raw:
+    """Read a SNIRF and restore its pipeline stage from the desc- entity.
+
+    The lineage stamp lives in info["temp"] and does not survive the SNIRF round
+    trip, so the filename carries it instead: the writer derived desc- from the
+    stamp, this reads the same string back. Files with no desc- entity are BIDS
+    inputs and stamp as "raw".
+    """
+    kwargs.setdefault("preload", True)
+    path = Path(path)
+    raw = mne.io.read_raw_snirf(str(path), **kwargs)
+    desc = _DESC_RE.search(path.name)
+    return stamp(raw, stage=desc.group(1) if desc else "raw", step="load")
 
 
 def _patch_haemo_wavelengths(raw: mne.io.Raw) -> mne.io.Raw:
