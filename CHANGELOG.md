@@ -6,6 +6,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+- Writing two different files under one pipeline stage now fails instead of silently crediting an output to the wrong source
+- Postprocessing now rejects a `desc-` that disagrees with the stage stamped on the data, matching the check preprocessing already had
+
 ## [0.18.0] - 2026-07-28
 
 ### Added

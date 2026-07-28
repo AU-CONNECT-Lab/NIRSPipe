@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "fnirs-pipe"
-version = "0.16.0"
+dynamic = ["version"]
 description = "BIDS-native fNIRS preprocessing, postprocessing, hyperscanning, QC, and run-tracking pipeline"
 requires-python = ">=3.10"
 dependencies = [
@@ -48,6 +48,9 @@ fnirs-rate  = "fnirs_pipe.cli.rate:main"
 fnirs-qc    = "fnirs_pipe.cli.qc:main"
 fnirs-gui   = "fnirs_pipe.cli.gui:main"
 fnirs-log   = "fnirs_pipe.cli.db:main"
+
+[tool.setuptools.dynamic]
+version = {attr = "fnirs_pipe.__version__"}
 
 [tool.setuptools.packages.find]
 where = ["."]

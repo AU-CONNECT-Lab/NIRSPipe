@@ -62,7 +62,7 @@ def write_sidecar_json(out_path: Path, provenance: dict[str, Any]) -> None:
       - pipeline_version
       - step (e.g. 'od_conversion')
       - parameters (dict of relevant config values)
-      - input_files (list of source paths as strings)
+      - Sources (BIDS field: list of source paths as strings)
       - timestamp (ISO-8601, auto-added if missing)
     """
     provenance.setdefault(

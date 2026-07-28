@@ -120,6 +120,11 @@ class Recorder:
 
     def written(self, path: Path, raw: mne.io.Raw) -> Path:
         lin = lineage_of(raw)
+        if lin and lin.stage in self._stage_paths:
+            raise StageError(
+                f"stage {lin.stage!r} already written to {self._stage_paths[lin.stage]}; "
+                f"a second file cannot share it without breaking source resolution"
+            )
         self.entries.append({
             "path": Path(path).as_posix(),
             "stage": lin.stage if lin else None,

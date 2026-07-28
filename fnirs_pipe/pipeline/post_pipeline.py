@@ -19,7 +19,8 @@ import pandas as pd
 
 from fnirs_pipe.pipeline.denoise import bandpass_filter, resample
 from fnirs_pipe.pipeline.glm import run_glm_pipeline
-from fnirs_pipe.utils.lineage import Recorder, lineage_of, stamp
+from fnirs_pipe.exceptions import StageError
+from fnirs_pipe.utils.lineage import Recorder, lineage_of, stage_of, stamp
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("post.pipeline")
@@ -286,6 +287,9 @@ def _write_step_snirf(haemo: mne.io.Raw, config: PostConfig, output_dir: Path, d
 
     entities = carry_entities(source_entities)
     entities["desc"] = desc
+    lin = lineage_of(haemo)
+    if lin is None or lin.stage != desc:
+        raise StageError(f"_write_step_snirf({desc!r}) got an object stamped {stage_of(haemo)!r}")
     out_path = build_output_path(
         output_dir=output_dir,
         subject=config.subject,
@@ -295,7 +299,6 @@ def _write_step_snirf(haemo: mne.io.Raw, config: PostConfig, output_dir: Path, d
         extension=".snirf",
     )
     write_snirf(haemo, out_path)
-    lin = lineage_of(haemo)
     write_sidecar_json(out_path, {
         "pipeline_version": __version__,
         "step": lin.step if lin else None,
