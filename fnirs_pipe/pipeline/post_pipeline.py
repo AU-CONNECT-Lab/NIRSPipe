@@ -19,7 +19,7 @@ import pandas as pd
 
 from fnirs_pipe.pipeline.denoise import bandpass_filter, resample
 from fnirs_pipe.pipeline.glm import run_glm_pipeline
-from fnirs_pipe.utils.lineage import Recorder, lineage_of
+from fnirs_pipe.utils.lineage import Recorder, lineage_of, stamp
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("post.pipeline")
@@ -88,14 +88,12 @@ def run_post(
     if config.high_pass is not None or config.low_pass is not None:
         logger.info("sub-%s | bandpass: l_freq=%s h_freq=%s", config.subject, config.high_pass, config.low_pass)
         result = bandpass_filter(result, l_freq=config.high_pass, h_freq=config.low_pass)
-        if mode in ("denoise", "glm"):
-            last_snirf_path = _write_step_snirf(result, config, output_dir, desc="filtered", rec=rec, source_entities=source_entities)
+        last_snirf_path = _write_step_snirf(result, config, output_dir, desc="filtered", rec=rec, source_entities=source_entities)
 
     if config.resample_sfreq is not None:
         logger.info("sub-%s | resample → %.1f Hz", config.subject, config.resample_sfreq)
         result = resample(result, config.resample_sfreq)
-        if mode in ("denoise", "glm"):
-            last_snirf_path = _write_step_snirf(result, config, output_dir, desc="resampled", rec=rec, source_entities=source_entities)
+        last_snirf_path = _write_step_snirf(result, config, output_dir, desc="resampled", rec=rec, source_entities=source_entities)
 
     haemo_sqm = None
     if last_snirf_path is not None:
@@ -128,6 +126,7 @@ def run_post(
             events_path=config.events_path,
             contrast_def=config.contrast_def,
             output_dir=str(output_dir / f"sub-{config.subject}" / "nirs"),
+            source_path=rec.path_of(result),
         )
         _write_step_snirf(raw_resid, config, output_dir, desc="errts", rec=rec, source_entities=source_entities)
         # Durbin-Watson (GLM residual autocorrelation) merged into the final SQM toml
@@ -170,12 +169,14 @@ def run_post(
         _, glm_est, dm, raw_resid = run_glm_pipeline(
             result,
             output_dir=str(output_dir / f"sub-{config.subject}" / "nirs"),
+            source_path=rec.path_of(result),
             **rest_glm_kwargs,
         )
         errts_path = _write_step_snirf(raw_resid, config, output_dir, desc="errts", rec=rec, source_entities=source_entities)
         try:
             from fnirs_pipe.qc.quantitative_metrics import compute_glm_sqm, save_sqm_toml
-            save_sqm_toml(compute_glm_sqm(raw_resid.get_data()), config.subject, errts_path.parent)
+            haemo_sqm = {**(haemo_sqm or {}), **compute_glm_sqm(raw_resid.get_data())}
+            save_sqm_toml(haemo_sqm, config.subject, errts_path.parent)
         except Exception:
             logger.warning("sub-%s | rest GLM SQM failed", config.subject, exc_info=True)
 
@@ -188,9 +189,15 @@ def run_post(
             if config.resample_sfreq is not None:
                 result_bb = resample(result_bb, config.resample_sfreq)
             _, _, _, raw_resid_bb = run_glm_pipeline(result_bb, **rest_glm_kwargs)
+            # Same regression, un-bandpassed input. Re-stamp so it stops sharing the "errts"
+            # stage with the bandpassed residual, whose file it would otherwise be credited to.
+            stamp(raw_resid_bb, stage="errtsbroad", step="glm_residuals_broadband",
+                  source=raw_haemo, resample_sfreq=config.resample_sfreq)
+            _write_step_snirf(raw_resid_bb, config, output_dir, desc="errtsbroad",
+                              rec=rec, source_entities=source_entities)
 
         alff_df, fc_df = _write_rest_derivatives(
-            raw_resid, raw_resid_bb, config, output_dir, source_entities=source_entities)
+            raw_resid, raw_resid_bb, config, output_dir, rec, source_entities=source_entities)
 
     # GCOR around the short-channel regression (the fNIRS GSR analog): pre-regression vs
     # residuals. Expected to drop if the regression removed global/systemic signal.
@@ -213,16 +220,29 @@ def _write_rest_derivatives(
     raw_resid_bb: mne.io.Raw | None,
     config: PostConfig,
     output_dir: Path,
+    rec: Recorder,
     source_entities: dict[str, str] | None = None,
 ) -> tuple:
     """Write ALFF/fALFF and FC TSVs. Returns (alff_df | None, fc_df).
 
     ALFF/fALFF use the broadband residual (raw_resid_bb); FC/FC-ROI use the bandpassed one.
     """
-    from fnirs_pipe.io.derivatives import build_output_path, carry_entities
+    from fnirs_pipe import __version__
+    from fnirs_pipe.io.derivatives import build_output_path, carry_entities, write_sidecar_json
     from fnirs_pipe.pipeline.restingstate import compute_alff, compute_fc, compute_fc_roi, fisher_z
 
     entities = carry_entities(source_entities)
+
+    def _sidecar(path: Path, step: str, source: str | None, **params) -> None:
+        write_sidecar_json(path, {
+            "pipeline_version": __version__,
+            "step": step,
+            "Sources": [source] if source else [],
+            "parameters": params,
+        })
+
+    src_bp = rec.path_of(raw_resid)                                        # bandpassed residual
+    src_bb = rec.path_of(raw_resid_bb) if raw_resid_bb is not None else None
 
     alff_df = None
     if raw_resid_bb is not None:
@@ -232,6 +252,7 @@ def _write_rest_derivatives(
             entities=entities, suffix="alff", extension=".tsv",
         )
         alff_df.to_csv(alff_path, sep="\t", index=False)
+        _sidecar(alff_path, "alff", src_bb, low_pass=config.low_pass, high_pass=config.high_pass)
         logger.info("sub-%s | alff → %s", config.subject, alff_path)
     else:
         logger.warning("sub-%s | skipping ALFF: --high-pass and --low-pass required", config.subject)
@@ -249,6 +270,7 @@ def _write_rest_derivatives(
             entities=chromo_entities, suffix="fc", extension=".tsv",
         )
         fc_df.to_csv(fc_path, sep="\t", index_label="channel")
+        _sidecar(fc_path, "fc", src_bp, chromophore=chromo)
         logger.info("sub-%s | fc (%s) → %s", config.subject, chromo, fc_path)
 
         fcz_path = build_output_path(
@@ -256,6 +278,7 @@ def _write_rest_derivatives(
             entities=chromo_entities, suffix="fcz", extension=".tsv",
         )
         fisher_z(fc_df).to_csv(fcz_path, sep="\t", index_label="channel")
+        _sidecar(fcz_path, "fisher_z", src_bp, chromophore=chromo)
         logger.info("sub-%s | fcz (%s) → %s", config.subject, chromo, fcz_path)
 
         if config.roi_map:
@@ -266,6 +289,7 @@ def _write_rest_derivatives(
                     entities=chromo_entities, suffix="fcroi", extension=".tsv",
                 )
                 fc_roi_df.to_csv(fc_roi_path, sep="\t", index_label="roi")
+                _sidecar(fc_roi_path, "fc_roi", src_bp, chromophore=chromo)
                 logger.info("sub-%s | fc_roi (%s) → %s", config.subject, chromo, fc_roi_path)
 
                 fcroiz_path = build_output_path(
@@ -273,6 +297,7 @@ def _write_rest_derivatives(
                     entities=chromo_entities, suffix="fcroiz", extension=".tsv",
                 )
                 fisher_z(fc_roi_df).to_csv(fcroiz_path, sep="\t", index_label="roi")
+                _sidecar(fcroiz_path, "fisher_z", src_bp, chromophore=chromo)
                 logger.info("sub-%s | fc_roiz (%s) → %s", config.subject, chromo, fcroiz_path)
 
         if chromo == "hbo":

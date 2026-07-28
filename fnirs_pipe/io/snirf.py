@@ -35,7 +35,7 @@ def read_snirf(path: Path | str, **kwargs: Any) -> mne.io.Raw:
     path = Path(path)
     raw = mne.io.read_raw_snirf(str(path), **kwargs)
     desc = _DESC_RE.search(path.name)
-    return stamp(raw, stage=desc.group(1) if desc else "raw", step="load")
+    return stamp(raw, stage=desc.group(1) if desc else "raw", step="load", path=path.as_posix())
 
 
 def _patch_haemo_wavelengths(raw: mne.io.Raw) -> mne.io.Raw:

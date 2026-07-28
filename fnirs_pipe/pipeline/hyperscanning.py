@@ -15,9 +15,21 @@ from fnirs_pipe.exceptions import AlignmentError, GroupCSVError, MissingDerivati
 from fnirs_pipe.io.derivatives import find_preproc_snirf
 from fnirs_pipe.io.snirf import read_snirf
 from fnirs_pipe.utils import load_toml
+from fnirs_pipe.utils.lineage import path_from
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("pipeline.hyperscanning")
+
+
+def _hyper_sidecar(path: Path, step: str, sources: list[str], **params) -> None:
+    from fnirs_pipe import __version__
+    from fnirs_pipe.io.derivatives import write_sidecar_json
+    write_sidecar_json(path, {
+        "pipeline_version": __version__,
+        "step": step,
+        "Sources": sources,
+        "parameters": params,
+    })
 
 
 # ---- Data management: group definition & IO ----
@@ -184,12 +196,19 @@ def compute_group_sqm_raw(
             })
 
     stem = f"group-{gid}_task-{task}_hyper-raw"
-    pd.DataFrame(scalar_rows).to_csv(
-        output_dir / f"{stem}_sqm.tsv", sep="\t", index=False
-    )
-    pd.DataFrame(channel_rows).to_csv(
-        output_dir / f"{stem}_channels.tsv", sep="\t", index=False
-    )
+    sources = [p for p in (path_from(raws[e.subject_id]) for e in group) if p]
+
+    scalar_path = output_dir / f"{stem}_sqm.tsv"
+    pd.DataFrame(scalar_rows).to_csv(scalar_path, sep="\t", index=False)
+    _hyper_sidecar(scalar_path, "group_sqm_raw", sources,
+                   sci_threshold=sci_threshold,
+                   cardiac_l_freq=cardiac_l_freq, cardiac_h_freq=cardiac_h_freq)
+
+    channel_path = output_dir / f"{stem}_channels.tsv"
+    pd.DataFrame(channel_rows).to_csv(channel_path, sep="\t", index=False)
+    _hyper_sidecar(channel_path, "group_sqm_raw_channels", sources,
+                   sci_threshold=sci_threshold,
+                   cardiac_l_freq=cardiac_l_freq, cardiac_h_freq=cardiac_h_freq)
 
     return sqm_data
 

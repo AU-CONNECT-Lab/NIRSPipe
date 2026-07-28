@@ -137,6 +137,7 @@ def run_glm_pipeline(
     short_channel: bool | SCRStrategy | None = None,
     contrast_def: dict[str, Any] | None = None,
     output_dir: str | None = None,
+    source_path: str | None = None,
 ) -> tuple:
     # explicit events take precedence; then external TSV; then snirf annotations
     if events is None:
@@ -178,7 +179,11 @@ def run_glm_pipeline(
     contrasts = compute_contrasts(glm_est, contrast_def) if contrast_def else None
 
     if output_dir:
-        _save_glm_outputs(glm_est, dm, Path(output_dir), contrasts=contrasts)
+        _save_glm_outputs(glm_est, dm, Path(output_dir), contrasts=contrasts,
+                          source_path=source_path, hrf_model=hrf_model,
+                          noise_model=noise_model, drift_model=drift_model,
+                          drift_high_pass=high_pass, drift_order=drift_order,
+                          short_channel=short_channel)
 
     return haemo, glm_est, dm, raw_resid
 
@@ -188,11 +193,28 @@ def _save_glm_outputs(
     design_matrix: pd.DataFrame,
     output_dir: Path,
     contrasts: dict[str, Any] | None = None,
+    source_path: str | None = None,
+    **params: Any,
 ) -> None:
-    output_dir.mkdir(parents=True, exist_ok=True)
-    design_matrix.to_csv(output_dir / "design_matrix.csv", index=False)
+    from fnirs_pipe import __version__
+    from fnirs_pipe.io.derivatives import write_sidecar_json
 
-    glm_est.to_dataframe().to_csv(output_dir / "glm_results.csv", index=False)
+    def _sidecar(path: Path, step: str) -> None:
+        write_sidecar_json(path, {
+            "pipeline_version": __version__,
+            "step": step,
+            "Sources": [source_path] if source_path else [],
+            "parameters": params,
+        })
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    dm_path = output_dir / "design_matrix.csv"
+    design_matrix.to_csv(dm_path, index=False)
+    _sidecar(dm_path, "design_matrix")
+
+    res_path = output_dir / "glm_results.csv"
+    glm_est.to_dataframe().to_csv(res_path, index=False)
+    _sidecar(res_path, "glm_fit")
     # glm_est.save(str(output_dir / "glm.h5"), overwrite=True)
 
     if contrasts:
@@ -201,6 +223,8 @@ def _save_glm_outputs(
             df = result.to_dataframe()
             df.insert(0, "contrast", name)
             frames.append(df)
-        pd.concat(frames, ignore_index=True).to_csv(output_dir / "contrasts.csv", index=False)
+        con_path = output_dir / "contrasts.csv"
+        pd.concat(frames, ignore_index=True).to_csv(con_path, index=False)
+        _sidecar(con_path, "contrasts")
 
     logger.info("GLM outputs written to %s", output_dir)

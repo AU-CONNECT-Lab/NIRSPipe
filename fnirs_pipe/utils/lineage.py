@@ -32,6 +32,7 @@ class Lineage:
     step: str                         # transformation that produced it, e.g. "beer_lambert"
     source: str | None = None         # stage of the input, "raw" if the input was unstamped
     params: dict[str, Any] = field(default_factory=dict)
+    path: str | None = None           # file this was read from, when it came off disk
 
 
 def stamp(
@@ -39,6 +40,7 @@ def stamp(
     stage: str,
     step: str,
     source: mne.io.Raw | None = None,
+    path: str | None = None,
     **params: Any,
 ) -> mne.io.Raw:
     """Record the producing stage on raw. Returns raw so calls can be chained.
@@ -51,8 +53,17 @@ def stamp(
     else:
         prev = lineage_of(source)
         src = prev.stage if prev else "raw"
-    raw.info["temp"] = {**(raw.info.get("temp") or {}), _KEY: Lineage(stage, step, src, params)}
+    raw.info["temp"] = {
+        **(raw.info.get("temp") or {}),
+        _KEY: Lineage(stage, step, src, params, path),
+    }
     return raw
+
+
+def path_from(raw: mne.io.Raw) -> str | None:
+    """File this object was read from, or None if it was produced in memory."""
+    lin = lineage_of(raw)
+    return lin.path if lin else None
 
 
 def lineage_of(raw: mne.io.Raw) -> Lineage | None:
@@ -85,11 +96,27 @@ class Recorder:
         if (st := stage_of(raw)) is not None:
             self._stage_paths[st] = Path(path).as_posix()
 
+    def _nearest(self) -> str | None:
+        """Most recent file this run knows about.
+
+        Not every stage reaches disk: rest mode filters in memory and never writes
+        desc-filtered, so an output whose source stage has no file still needs an
+        ancestor to point at. Stage paths are inserted in pipeline order, so the
+        last one is the nearest persisted ancestor.
+        """
+        return next(reversed(self._stage_paths.values()), None)
+
     def sources_of(self, raw: mne.io.Raw) -> list[str]:
-        """Paths this object's input stage was written to, for the BIDS Sources field."""
+        """Nearest persisted ancestor of raw, for the BIDS Sources field."""
         lin = lineage_of(raw)
         src = self._stage_paths.get(lin.source) if lin and lin.source else None
+        src = src or self._nearest()
         return [src] if src else []
+
+    def path_of(self, raw: mne.io.Raw) -> str | None:
+        """File raw itself was written to, or its nearest persisted ancestor."""
+        st = stage_of(raw)
+        return (self._stage_paths.get(st) if st else None) or self._nearest()
 
     def written(self, path: Path, raw: mne.io.Raw) -> Path:
         lin = lineage_of(raw)
