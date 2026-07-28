@@ -98,7 +98,6 @@ Rating Flask apps (`HyperRatingApp` / `RawRatingApp` / `FNIRSRatingApp`) refacto
 
 - **ROI-level WTC** — average HbO within anatomical ROIs ([qc/figures/hyper_post_figures.py:97](fnirs_pipe/qc/figures/hyper_post_figures.py#L97))
 - **GVTD timeseries-derived metrics** — e.g. fraction of timepoints above threshold ([qc/quantitative_metrics.py:240](fnirs_pipe/qc/quantitative_metrics.py#L240))
-- **Durbin-Watson per channel** in `compute_glm_sqm` ([qc/quantitative_metrics.py:299](fnirs_pipe/qc/quantitative_metrics.py#L299))
 - **ALFF/fALFF surface projection** — onto brain via mne_nirs ([qc/figures/rest_figures.py:6](fnirs_pipe/qc/figures/rest_figures.py#L6))
 - **ROI-to-ROI FC heatmap** — atlas parcellation ([qc/figures/rest_figures.py:7](fnirs_pipe/qc/figures/rest_figures.py#L7))
 - **Auto-generate roi.json from fOLD** — derive channel-to-region mapping from montage via `mne_nirs.io.fold_channel_specificity` (needs fOLD Excel DB), as an alternative to hand-written `--roi-mapping` ([cli/qc.py:331](fnirs_pipe/cli/qc.py#L331))

@@ -1,6 +1,6 @@
 """Compute and persist image quality metrics (SQM) for fNIRS data.
 
-Established metrics: SCI, PSP, CV, SNR, GVTD, Durbin-Watson.
+Established metrics: SCI, PSP, CV, SNR, GVTD.
 Experimental (may change or be removed): Cardiac Power (CP), per-chromophore gcor,
 spike and motion-correction footprint, low-frequency drift.
 
@@ -1188,39 +1188,6 @@ def compute_raw_sqm(
     return record
 
 
-@_safe_metrics("Durbin-Watson", ("durbin_watson_mean", "durbin_watson_per_channel"))
-def compute_glm_sqm(residuals: np.ndarray) -> dict[str, Any]:
-    r"""Post-GLM QC from the residual time series.
-
-    .. math::
-
-        \text{DW} = \frac{\sum_t (e_t - e_{t-1})^2}{\sum_t e_t^2} \in [0, 4],
-
-    per channel; ~2 = white residuals (GLM t/p values trustworthy), <2 = positive
-    autocorrelation (hemodynamic signals are autocorrelated; DW checks whether
-    prewhitening worked).
-
-    Parameters
-    ----------
-    residuals : np.ndarray
-        Residual time series, shape (n_channels, n_timepoints).
-
-    Returns
-    -------
-    dict
-        durbin_watson_mean and durbin_watson_per_channel.
-    """
-    e = np.asarray(residuals, dtype=float)
-    denom = np.sum(e ** 2, axis=1)
-    num = np.sum(np.diff(e, axis=1) ** 2, axis=1)
-    dw = np.divide(num, denom, out=np.full_like(denom, np.nan), where=denom > 0)
-    valid = dw[np.isfinite(dw)]
-    return {
-        "durbin_watson_mean": _mean_or_none(valid),
-        "durbin_watson_per_channel": {
-            str(i): float(v) for i, v in enumerate(dw) if np.isfinite(v)
-        },
-    }
 
 
 def compute_haemo_sqm(raw_haemo: mne.io.Raw) -> dict[str, Any]:

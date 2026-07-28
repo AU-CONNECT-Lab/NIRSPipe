@@ -261,7 +261,6 @@ def _build_script_text(
                 '    output_dir=str(OUTPUT_DIR / f"sub-{SUBJECT}" / "nirs"),',
                 ')',
                 'save_step(raw_resid, "errts", "glm_residual", session=session)',
-                '# QC (not run here): compute_glm_sqm (Durbin-Watson) on the residuals.',
             )
 
         if mode == "rest":

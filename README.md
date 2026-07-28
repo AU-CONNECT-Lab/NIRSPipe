@@ -297,7 +297,7 @@ output/
 - HbO–HbR correlation panel
 - Denoising carpet — before / after, HbO and HbR separately, both scaled by the pre-denoising SD (grouped by ROI with `--roi-mapping`), when postprocessing runs
 - Global correlation (`gcor`) before → after denoising when postprocessing runs
-- GLM section (design matrix + activation panel + Durbin–Watson on residuals) when `--mode glm`
+- GLM section (design matrix + activation panel) when `--mode glm`
 - Rest section (ALFF table + FC heatmap; ROI-level FC with `--roi-mapping`) when `--mode rest`
 - Auto-generated Methods paragraph + software versions + references
 

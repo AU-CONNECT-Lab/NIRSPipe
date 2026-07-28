@@ -285,7 +285,6 @@ CREATE TABLE IF NOT EXISTS sqm (
     resp_band_frac_hbr          REAL,
     lowfreq_drift_amplitude_hbo REAL,
     lowfreq_drift_amplitude_hbr REAL,
-    durbin_watson_mean          REAL,
     pct_data_retained           REAL
 );
 
@@ -319,7 +318,7 @@ _SQM_COLS = [
     "resp_band_power_hbo", "resp_band_power_hbr",
     "resp_band_frac_hbo", "resp_band_frac_hbr",
     "lowfreq_drift_amplitude_hbo", "lowfreq_drift_amplitude_hbr",
-    "durbin_watson_mean", "pct_data_retained",
+    "pct_data_retained",
 ]
 
 

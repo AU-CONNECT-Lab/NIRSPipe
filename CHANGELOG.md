@@ -6,6 +6,25 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-07-28
+
+### Added
+- Sidecars now record the file each output came from (`Sources`) and the step that produced it
+- ALFF, connectivity, GLM and hyperscanning outputs now have sidecars
+- Rest mode writes `desc-filtered` and `desc-errtsbroad`, previously discarded
+
+### Changed
+- Cardiac/respiration band power and low-frequency drift are now written only to the preprocessing checkpoint; on filtered data they describe the filter, not the recording
+
+### Removed
+- Durbin–Watson on GLM residuals: ~2 by construction once prewhitening runs
+
+### Fixed
+- Cardiac/respiration band power was silently missing on recordings with bad channels
+- Rest mode overwrote its SQM file, losing the metrics computed earlier in the run
+
+## [0.17.0] - 2026-07-28
+
 ### Added
 - Standardized ALFF outputs `malff` (channel value over the chromophore mean) and `zalff` (per-chromophore z-score) in `*_alff.tsv`, for group-level comparison
 
