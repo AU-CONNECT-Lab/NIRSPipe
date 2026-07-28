@@ -103,6 +103,7 @@ def load_group_raw_bids(bids_dir: Path, group: list[GroupEntry]) -> dict[str, mn
 
 def _raw_to_haemo(raw: mne.io.Raw, dpf: list[float]) -> mne.io.Raw:
     raw_od = mne.preprocessing.nirs.optical_density(raw.copy(), verbose=False)
+    # Single value applies to both wavelengths; a list gives one PPF per wavelength.
     ppf = dpf[0] if len(dpf) == 1 else dpf
     return mne.preprocessing.nirs.beer_lambert_law(raw_od, ppf=ppf)
 
@@ -266,7 +267,6 @@ def trim_to_shortest(
     Use for resting-state data where no shared trigger exists.
     Returns (trimmed_raws, {subject_id: 0.0}).
     """
-    # Clip every recording to the shortest one's length; no start offset (all zero).
     min_duration = min(r.times[-1] for r in raws.values())
     trimmed = {sid: raw.copy().crop(tmax=min_duration) for sid, raw in raws.items()}
     offsets = {sid: 0.0 for sid in raws}

@@ -25,6 +25,7 @@ logger = get_logger("qc.quantitative_metrics")
 GVTD_MOTION_BAND = (0.01, 0.5)  # Hz, bandpass for the filtered (motion-specific) GVTD
 
 
+# ------------------------------------ Shared helpers ------------------------------------
 def _mean_or_none(values) -> "float | None":
     """Mean of a collection of values, or None if it is empty."""
     vals = list(values)
@@ -51,6 +52,7 @@ def _safe_metrics(label: str, keys):
     return deco
 
 
+# ------------------------------- Motion primitives (GVTD) -------------------------------
 def gvtd_timetrace(
     data: np.ndarray,
     sfreq: float,
@@ -192,7 +194,7 @@ def gvtd_threshold(gvtd: np.ndarray, n_std: float = 3.0) -> float | None:
     return run_mode + n_std * left_std
 
 
-# Raw-intensity / OD metrics
+# ------------------------------ Raw-intensity / OD metrics ------------------------------
 def compute_sci_scores(
     raw: mne.io.Raw,
     cardiac_l_freq: float,
@@ -670,7 +672,7 @@ def spike_segments(raw_intensity: mne.io.Raw, ch_frac: float = 0.1) -> "list[tup
     return _mask_to_segments(flagged, raw_od.times[1:])
 
 
-# Haemoglobin metrics
+# --------------------------------- Haemoglobin metrics ----------------------------------
 def haemo_quality_metrics(raw_haemo: mne.io.Raw) -> dict[str, Any]:
     r"""HbO-HbR correlation per source-detector pair (genuine responses anti-correlate).
 
@@ -757,12 +759,16 @@ def _spectral_metrics(
     """
     psd = raw_haemo.compute_psd(verbose=False)
     freqs = psd.freqs
-    psd_data = psd.get_data()
 
-    def _bands(picks) -> dict[str, float | None]:
-        if not len(picks):
-            return {"cp": None, "cf": None, "rp": None, "rf": None}
-        chrom = psd_data[picks]
+    def _bands(chroma: str) -> dict[str, float | None]:
+        empty = {"cp": None, "cf": None, "rp": None, "rf": None}
+        if chroma not in raw_haemo.get_channel_types():
+            return empty
+        # pick from the spectrum, not via raw_haemo.info: get_data() drops bad channels,
+        # so info-derived indices address a longer list and run off the end
+        chrom = psd.get_data(picks=chroma)
+        if not chrom.size:
+            return empty
         total = float(chrom.sum())  # total power over this chromophore's channels and freqs
 
         def _power(fmin: float, fmax: float) -> float | None:
@@ -782,8 +788,8 @@ def _spectral_metrics(
             "rf": _frac(resp_l_freq, resp_h_freq),
         }
 
-    hbo = _bands(mne.pick_types(raw_haemo.info, fnirs="hbo"))
-    hbr = _bands(mne.pick_types(raw_haemo.info, fnirs="hbr"))
+    hbo = _bands("hbo")
+    hbr = _bands("hbr")
     return {
         "cardiac_band_power_hbo": hbo["cp"], "cardiac_band_power_hbr": hbr["cp"],
         "cardiac_band_frac_hbo":  hbo["cf"], "cardiac_band_frac_hbr":  hbr["cf"],
@@ -915,7 +921,7 @@ def _retention_metrics(raw_haemo: mne.io.Raw) -> dict[str, Any]:
     }
 
 
-# Sliding-window series
+# -------------------------------- Sliding-window series ---------------------------------
 def compute_windowed_sci(
     raw_od: mne.io.Raw,
     cardiac_l_freq: float,
@@ -1120,7 +1126,7 @@ def attach_windowed_series(
     return series
 
 
-# SQM aggregators
+# ----------------------------------- SQM aggregators ------------------------------------
 def compute_raw_sqm(
     raw_intensity: mne.io.Raw,
     sci_scores: dict[str, float],
@@ -1286,7 +1292,7 @@ def compute_sqm(
     return record
 
 
-# Persistence
+# ------------------------------------- Persistence --------------------------------------
 def save_sqm_toml(sqm: dict[str, Any], subject: str, out_dir: Path, suffix: str = "") -> None:
     """Write scalar SQM fields to a TOML sidecar.
 

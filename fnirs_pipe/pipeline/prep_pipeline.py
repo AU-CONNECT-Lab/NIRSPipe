@@ -23,7 +23,9 @@ import numpy as np
 from fnirs_pipe import __version__
 from fnirs_pipe.io.derivatives import build_output_path, carry_entities, write_sidecar_json
 from fnirs_pipe.io.snirf import write_snirf
+from fnirs_pipe.exceptions import StageError
 from fnirs_pipe.utils import is_optical_density
+from fnirs_pipe.utils.lineage import lineage_of, stage_of, stamp
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("pipeline.prep")
@@ -33,7 +35,8 @@ MotionMethod = Literal["tddr", "wavelet", "spline", "none"]
 # Step 1: OD conversion
 def intensity_to_od(raw: mne.io.Raw) -> mne.io.Raw:
     """Convert raw intensity signal to optical density."""
-    return mne.preprocessing.nirs.optical_density(raw)
+    od = mne.preprocessing.nirs.optical_density(raw)
+    return stamp(od, stage="od", step="od_conversion", source=raw)
 
 # Step 2: SCI / bad channel pruning
 def compute_sci(raw_od: mne.io.Raw, cardiac_l_freq: float, cardiac_h_freq: float) -> dict[str, float]:
@@ -62,6 +65,7 @@ def mark_bad_channels(
     sci_scores = compute_sci(raw_od, cardiac_l_freq, cardiac_h_freq)
     bad_chs = [ch for ch, score in sci_scores.items() if score < threshold]
     raw_od.info["bads"] = bad_chs
+    stamp(raw_od, stage="sci", step="sci_pruning", source=raw_od, threshold=threshold)
     return raw_od, bad_chs, sci_scores
 
 
@@ -125,24 +129,28 @@ def correct_motion(raw_od: mne.io.Raw, method: MotionMethod | None = None) -> mn
     if method is None:
         raise ValueError("--motion-correction is required.")
     if method == "tddr":
-        return mne.preprocessing.nirs.temporal_derivative_distribution_repair(raw_od)
+        corrected = mne.preprocessing.nirs.temporal_derivative_distribution_repair(raw_od)
     elif method == "wavelet":
-        return _wavelet_motion_correct(raw_od)
+        corrected = _wavelet_motion_correct(raw_od)
     elif method == "spline":
         raise NotImplementedError(
             "Spline correction has no MNE backend yet. "
             "Use --motion-correction tddr or none."
         )
     elif method == "none":
-        return raw_od
-    raise ValueError(f"Unknown motion correction method: {method}")
+        corrected = raw_od
+    else:
+        raise ValueError(f"Unknown motion correction method: {method}")
+    return stamp(corrected, stage="motcorrected", step="motion_correction",
+                 source=raw_od, method=method)
 
 # Step 4: Beer-Lambert
 def od_to_haemo(raw_od: mne.io.Raw, dpf: list[float]) -> mne.io.Raw:
     """Convert OD to haemoglobin concentration via Beer-Lambert law."""
     from mne.preprocessing.nirs import beer_lambert_law
     ppf = dpf[0] if len(dpf) == 1 else dpf
-    return beer_lambert_law(raw_od, ppf=ppf)
+    haemo = beer_lambert_law(raw_od, ppf=ppf)
+    return stamp(haemo, stage="preproc", step="beer_lambert", source=raw_od, dpf=dpf)
 
 # Pipeline orchestration
 @dataclass
@@ -193,7 +201,10 @@ def run_prep(
     entities_base = carry_entities(source_entities)
     ses = config.session
 
-    def _save(raw_step: mne.io.Raw, desc: str, step: str, extra_provenance: dict | None = None) -> Path:
+    def _save(raw_step: mne.io.Raw, desc: str, extra_provenance: dict | None = None) -> Path:
+        lin = lineage_of(raw_step)
+        if lin is None or lin.stage != desc:
+            raise StageError(f"_save({desc!r}) got an object stamped {stage_of(raw_step)!r}")
         path = build_output_path(
             output_dir=output_dir,
             subject=config.subject,
@@ -205,7 +216,7 @@ def run_prep(
         write_snirf(raw_step, path)
         write_sidecar_json(path, {
             "pipeline_version": __version__,
-            "step": step,
+            "step": lin.step,
             "parameters": _config_dict(config),
             **(extra_provenance or {}),
         })
@@ -217,11 +228,11 @@ def run_prep(
             "sub-%s | input is already optical density; skipping OD conversion "
             "and raw-intensity QC", config.subject,
         )
-        raw_od = raw.copy()
+        raw_od = stamp(raw.copy(), stage="od", step="od_passthrough", source=raw)
     else:
         logger.info("sub-%s | step 1: OD conversion (%d ch)", config.subject, len(raw.ch_names))
         raw_od = intensity_to_od(raw)
-    _save(raw_od, "od", "od_conversion")
+    _save(raw_od, "od")
 
     # step 2: SCI channel marking
     logger.info("sub-%s | step 2: SCI marking (threshold=%.2f, %d ch)", config.subject, config.sci_threshold, len(raw_od.ch_names))
@@ -242,7 +253,7 @@ def run_prep(
         config.subject, n_bad, n_total,
         f" — {bad_chs}" if bad_chs else "",
     )
-    sci_path = _save(raw_od, "sci", "sci_pruning", extra_provenance={"bad_channels": bad_chs})
+    sci_path = _save(raw_od, "sci", extra_provenance={"bad_channels": bad_chs})
 
     # raw SQM checkpoint — intensity metrics on original signal before any correction
     sqm_raw: dict | None = None
@@ -257,12 +268,12 @@ def run_prep(
     logger.info("sub-%s | step 3: motion correction (%s)", config.subject, config.motion_correction)
     raw_od_before_motion = raw_od.copy()
     raw_od = correct_motion(raw_od, method=config.motion_correction)
-    _save(raw_od, "motcorrected", "motion_correction")
+    _save(raw_od, "motcorrected")
 
     # step 4: Beer-Lambert
     logger.info("sub-%s | step 4: Beer-Lambert (dpf=%s)", config.subject, config.dpf)
     raw_haemo = od_to_haemo(raw_od, dpf=config.dpf)
-    preproc_path = _save(raw_haemo, "preproc", "beer_lambert")
+    preproc_path = _save(raw_haemo, "preproc")
 
     # haemo SQM checkpoint — baseline, overwritten by post-pipeline if filter/resample runs
     sqm_final: dict | None = None
