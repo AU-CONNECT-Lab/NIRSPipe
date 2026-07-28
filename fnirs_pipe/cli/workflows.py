@@ -142,7 +142,14 @@ def run_participant_level(args: dict[str, Any]) -> None:
             log_file = sub_dir / "logs" / f"sub-{subject}_{sub_timestamp}.log"
             setup_logging(verbose=verbose, log_file=log_file)
             logger.info("sub-%s | starting", subject)
-            write_run_record(args, subject, sub_timestamp, output_dir, sub_dir=sub_dir)
+            # built here purely to record what will be used; the loops below build their own
+            # per-session copies. Resolving now keeps the record even if the run then fails.
+            write_run_record(
+                args, subject, sub_timestamp, output_dir, sub_dir=sub_dir,
+                prep_config=_make_prep_config(subject, None, args),
+                post_config=(_build_post_config(subject, None, args, toml, roi_map=roi_map)
+                             if args.get("mode") else None),
+            )
             write_run_script(args, subject, sub_timestamp, output_dir, sub_dir=sub_dir)
 
             _jdb.log_run_start(

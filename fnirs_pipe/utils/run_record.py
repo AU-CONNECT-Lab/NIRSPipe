@@ -47,12 +47,36 @@ def _section(name: str, data: dict[str, Any]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _config_section(config: Any) -> dict[str, Any]:
+    """Scalar fields of a config dataclass, minus what [execution] already carries.
+
+    Reading the config rather than the CLI args is what makes the record true: values
+    supplied by --config TOML never appear in argv, so an args-derived record would
+    show them as absent. Iterating fields also means new config options are recorded
+    without touching this file.
+    """
+    from dataclasses import fields
+
+    skip = {"subject", "session", "dry_run"}
+    out: dict[str, Any] = {}
+    for f in fields(config):
+        if f.name in skip:
+            continue
+        value = getattr(config, f.name)
+        if isinstance(value, dict):      # roi_map / contrast_def are structures, not settings
+            continue
+        out[f.name] = list(value) if isinstance(value, tuple) else value
+    return out
+
+
 def write_run_record(
     args: dict[str, Any],
     subject: str,
     timestamp: str,
     output_dir: Path,
     sub_dir: Path | None = None,
+    prep_config: Any = None,
+    post_config: Any = None,
 ) -> None:
     """Write a TOML run record for one subject.
 
@@ -60,9 +84,12 @@ def write_run_record(
 
     Sections:
       [environment]  — software versions + system info
-      [execution]    — all CLI parameters (paths, filters, switches)
-      [prep]         — preprocessing parameters
-      [post]         — postprocessing parameters (only when --mode is set)
+      [execution]    — invocation: the verbatim command, paths, selection filters
+      [prep]         — preprocessing parameters as resolved, from PrepConfig
+      [post]         — postprocessing parameters as resolved, from PostConfig (only with --mode)
+
+    [execution] answers "what was run" and stays copy-pasteable; [prep]/[post] answer
+    "what was used" and come from the config objects the pipeline actually received.
 
     # NOTE: a [qc] section with per-subject results (bad channels, SCI
     # distribution, motion summary) will be added here once the QC text
@@ -117,43 +144,18 @@ def write_run_record(
         "no_report": args.get("no_report", False),
     }
 
-    prep: dict[str, Any] = {
-        "dpf": args["dpf"],
-        "sci_threshold": args["sci_threshold"],
-        "motion_correction": _unwrap(args.get("motion_correction"), "tddr"),
-        "cardiac_l_freq": args.get("cardiac_l_freq"),
-        "cardiac_h_freq": args.get("cardiac_h_freq"),
-        "resp_l_freq": args.get("resp_l_freq"),
-        "resp_h_freq": args.get("resp_h_freq"),
-        "window_length": args.get("window_length"),
-    }
-
     sections = [
         _section("environment", env),
         _section("execution", execution),
-        _section("prep", prep),
     ]
 
+    if prep_config is not None:
+        sections.append(_section("prep", _config_section(prep_config)))
+
     mode = args.get("mode")
-    if mode is not None:
-        post: dict[str, Any] = {
-            "mode": _unwrap(mode),
-            "high_pass": args.get("high_pass"),
-            "low_pass": args.get("low_pass"),
-            "resample_sfreq": args.get("resample_sfreq"),
-            "combine_runs": args.get("combine_runs", False),
-            "stim_dur": args.get("stim_dur"),
-            "hrf_model": _unwrap(args.get("hrf_model")),
-            "noise_model": _unwrap(args.get("noise_model")),
-            "drift_model": _unwrap(args.get("drift_model")),
-            "drift_high_pass": args.get("drift_high_pass"),
-            "drift_order": args.get("drift_order"),
-            "fir_delays": args.get("fir_delays"),
-            "short_channel": _unwrap(args.get("short_channel")),
-            "events_path": _fwd(args.get("events_path")),
-            "contrast_file": _fwd(args.get("contrast_file")),
-        }
-        sections.append(_section("post", post))
+    if mode is not None and post_config is not None:
+        # mode is not a PostConfig field; it selects which branch run_post takes
+        sections.append(_section("post", {"mode": _unwrap(mode), **_config_section(post_config)}))
 
     base = sub_dir if sub_dir is not None else output_dir
     out = base / "logs" / f"sub-{subject}_{timestamp}.toml"
