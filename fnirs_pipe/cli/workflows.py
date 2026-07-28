@@ -209,6 +209,19 @@ def run_participant_level(args: dict[str, Any]) -> None:
                 if not args.get("no_report") and last_result is not None:
                     _emit_subject_report(subject, sub_dir, last_raw, last_result, prep_config, args, glm_est, dm, alff_df=alff_df, fc_df=fc_df, high_pass=cfg_high_pass, low_pass=cfg_low_pass, after_haemo=last_denoised, gcor_reg=gcor_reg, roi_map=roi_map)
 
+                # provenance graph belongs with the run record, not in the QC report:
+                # it documents what the run produced, not the quality of the data
+                try:
+                    from fnirs_pipe.qc.provenance import write_provenance
+                    for path in write_provenance(
+                        sub_dir / "nirs", sub_dir / "logs",
+                        stem=f"sub-{subject}_{sub_timestamp}_provenance",
+                        title=f"sub-{subject}" + (f"  |  mode: {args['mode']}" if args.get("mode") else ""),
+                    ):
+                        logger.info("sub-%s | provenance → %s", subject, path)
+                except Exception:
+                    logger.warning("sub-%s | provenance graph failed", subject, exc_info=True)
+
             except Exception as exc:
                 subject_status = "FAILED"
                 subject_error = str(exc)

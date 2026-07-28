@@ -205,6 +205,33 @@ def cmd_group_hyper_raw(output_dir: Path) -> None:
     print(f"report -> {path}")
 
 
+def cmd_provenance(output_dir: Path) -> None:
+    """Render the file provenance graph for every subject / group in a derivatives tree.
+
+    Reads the JSON sidecars already on disk, so it works on any past run.
+    """
+    from fnirs_pipe.qc.provenance import write_provenance
+
+    # the root is always searched too: hyper-raw writes its group TSVs there, not under nirs/
+    targets = [
+        *sorted(output_dir.glob("sub-*/nirs")),
+        *sorted(output_dir.glob("group-*/nirs")),
+        output_dir,
+    ]
+
+    total = 0
+    for nirs_dir in targets:
+        dest = nirs_dir.parent if nirs_dir.name == "nirs" else nirs_dir
+        label = dest.name
+        written = write_provenance(nirs_dir, dest, stem=f"{label}_provenance", title=label)
+        for path in written:
+            print(f"{path}")
+        total += bool(written)
+
+    if not total:
+        print("no provenance sidecars found — run the pipeline first")
+
+
 def cmd_window_raw(
     bids_dir: Path, output_dir: Path, task_label: str, tstart: float, tend: float,
     participant_label: list[str] | None, session_label: list[str] | None,
@@ -380,6 +407,10 @@ def _build_parser() -> argparse.ArgumentParser:
     ghr.add_argument("output_dir", type=Path,
                      help="fnirs-pipe derivatives directory (contains group-*/nirs/ SQM JSONs)")
     ghr.set_defaults(func=cmd_group_hyper_raw)
+
+    pv = sub.add_parser("provenance", help="Render the file provenance graph from existing sidecars.")
+    pv.add_argument("output_dir", type=Path, help="fnirs-pipe derivatives directory")
+    pv.set_defaults(func=cmd_provenance)
 
     wr = sub.add_parser("window-raw", help="Windowed group raw QC report over [tstart, tend].")
     wr.add_argument("bids_dir",   type=Path, help="BIDS dataset root")

@@ -12,6 +12,8 @@ All notable changes to this project will be documented in this file.
 - Sidecars now record the file each output came from (`Sources`) and the step that produced it
 - ALFF, connectivity, GLM and hyperscanning outputs now have sidecars
 - Rest mode writes `desc-filtered` and `desc-errtsbroad`, previously discarded
+- Each run writes a provenance flow diagram (PNG + mermaid) to `sub-XX/logs/`, showing which file every output came from and via which step
+- `fnirs-qc provenance <output_dir>` renders that diagram for any past run, reading only the sidecars already on disk
 
 ### Changed
 - Cardiac/respiration band power and low-frequency drift are now written only to the preprocessing checkpoint; on filtered data they describe the filter, not the recording
