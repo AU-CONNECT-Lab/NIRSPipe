@@ -95,9 +95,7 @@ def run_post(
     if last_snirf_path is not None:
         try:
             from fnirs_pipe.qc.quantitative_metrics import compute_haemo_sqm, save_sqm_toml
-            haemo_sqm = compute_haemo_sqm(
-                result, config.cardiac_l_freq, config.cardiac_h_freq,
-                config.resp_l_freq, config.resp_h_freq)
+            haemo_sqm = compute_haemo_sqm(result)
             save_sqm_toml(haemo_sqm, config.subject, last_snirf_path.parent)
         except Exception:
             logger.warning("sub-%s | haemo SQM failed", config.subject, exc_info=True)

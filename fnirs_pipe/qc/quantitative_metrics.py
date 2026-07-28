@@ -18,6 +18,7 @@ import mne
 import numpy as np
 
 from fnirs_pipe.utils import is_optical_density
+from fnirs_pipe.utils.lineage import require_stage
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("qc.quantitative_metrics")
@@ -1222,30 +1223,35 @@ def compute_glm_sqm(residuals: np.ndarray) -> dict[str, Any]:
     }
 
 
-def compute_haemo_sqm(
+def compute_haemo_sqm(raw_haemo: mne.io.Raw) -> dict[str, Any]:
+    """Haemoglobin metrics that stay valid after bandpass and resampling.
+
+    For the final checkpoint, where the signal has usually been filtered and
+    downsampled. Returns HbO-HbR correlation, gcor, and data retention.
+    """
+    record: dict[str, Any] = {}
+    record.update(haemo_quality_metrics(raw_haemo))
+    record.update(gcor_metrics(raw_haemo))
+    record.update(_retention_metrics(raw_haemo))
+    return record
+
+
+def compute_prep_haemo_sqm(
     raw_haemo: mne.io.Raw,
     cardiac_l_freq: float,
     cardiac_h_freq: float,
     resp_l_freq: float,
     resp_h_freq: float,
 ) -> dict[str, Any]:
-    """Metrics computable from haemoglobin data, after Beer-Lambert.
+    """The above plus spectral band power and drift, which need unfiltered input.
 
-    Parameters
-    ----------
-    raw_haemo : mne.io.Raw
-        Haemoglobin recording (HbO/HbR).
-    cardiac_l_freq, cardiac_h_freq : float
-        Cardiac band edges in Hz.
-    resp_l_freq, resp_h_freq : float
-        Respiration band edges in Hz.
-
-    Returns
-    -------
-    dict
-        Flat dict of HbO-HbR correlation, gcor, spectral band power/fraction,
-        drift, and data retention.
+    Band power and drift amplitude describe how much cardiac, respiration, and
+    low-frequency content the recording carries. Once a bandpass has removed
+    those bands they measure the filter rather than the recording, and above the
+    resampled Nyquist they are undefined, so this is restricted to the
+    Beer-Lambert output. Band edges are in Hz.
     """
+    require_stage(raw_haemo, "preproc")
     record: dict[str, Any] = {}
     record.update(haemo_quality_metrics(raw_haemo))
     record.update(gcor_metrics(raw_haemo))
@@ -1288,7 +1294,7 @@ def compute_sqm(
         The raw-intensity and haemoglobin metric dicts merged into one.
     """
     record = compute_raw_sqm(raw_intensity, sci_scores, bad_channels, cardiac_l_freq, cardiac_h_freq)
-    record.update(compute_haemo_sqm(raw_haemo, cardiac_l_freq, cardiac_h_freq, resp_l_freq, resp_h_freq))
+    record.update(compute_prep_haemo_sqm(raw_haemo, cardiac_l_freq, cardiac_h_freq, resp_l_freq, resp_h_freq))
     return record
 
 

@@ -278,8 +278,8 @@ def run_prep(
     # haemo SQM checkpoint — baseline, overwritten by post-pipeline if filter/resample runs
     sqm_final: dict | None = None
     try:
-        from fnirs_pipe.qc.quantitative_metrics import compute_haemo_sqm, save_sqm_toml
-        sqm_final = compute_haemo_sqm(
+        from fnirs_pipe.qc.quantitative_metrics import compute_prep_haemo_sqm, save_sqm_toml
+        sqm_final = compute_prep_haemo_sqm(
             raw_haemo, config.cardiac_l_freq, config.cardiac_h_freq,
             config.resp_l_freq, config.resp_h_freq)
         save_sqm_toml(sqm_final, config.subject, preproc_path.parent)
