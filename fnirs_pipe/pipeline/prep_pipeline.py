@@ -25,7 +25,7 @@ from fnirs_pipe.io.derivatives import build_output_path, carry_entities, write_s
 from fnirs_pipe.io.snirf import write_snirf
 from fnirs_pipe.exceptions import StageError
 from fnirs_pipe.utils import is_optical_density
-from fnirs_pipe.utils.lineage import lineage_of, stage_of, stamp
+from fnirs_pipe.utils.lineage import Recorder, lineage_of, stage_of, stamp
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("pipeline.prep")
@@ -189,6 +189,7 @@ def run_prep(
     output_dir: Path,
     source_entities: dict[str, str] | None = None,
     work_dir: Path | None = None,
+    source_path: Path | None = None,
 ) -> PrepResult:
     """Run the full preprocessing pipeline in locked step order.
 
@@ -197,9 +198,16 @@ def run_prep(
       2. SCI channel marking -> desc-sci_nirs.snirf
       3. Motion correction -> desc-motcorrected_nirs.snirf
       4. Beer-Lambert      -> desc-preproc_nirs.snirf
+
+    source_path is the BIDS file *raw* was read from; it becomes the Sources
+    entry of the first output.
     """
     entities_base = carry_entities(source_entities)
     ses = config.session
+
+    rec = Recorder()
+    if source_path is not None:
+        rec.register_input(source_path, raw)
 
     def _save(raw_step: mne.io.Raw, desc: str, extra_provenance: dict | None = None) -> Path:
         lin = lineage_of(raw_step)
@@ -217,10 +225,11 @@ def run_prep(
         write_sidecar_json(path, {
             "pipeline_version": __version__,
             "step": lin.step,
+            "Sources": rec.sources_of(raw_step),
             "parameters": _config_dict(config),
             **(extra_provenance or {}),
         })
-        return path
+        return rec.written(path, raw_step)
 
     # step 1: OD conversion (skip if input is already optical density)
     if is_optical_density(raw):

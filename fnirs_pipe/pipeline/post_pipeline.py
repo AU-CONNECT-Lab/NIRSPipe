@@ -19,6 +19,7 @@ import pandas as pd
 
 from fnirs_pipe.pipeline.denoise import bandpass_filter, resample
 from fnirs_pipe.pipeline.glm import run_glm_pipeline
+from fnirs_pipe.utils.lineage import Recorder, lineage_of
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("post.pipeline")
@@ -67,6 +68,7 @@ def run_post(
     output_dir: Path,
     mode: Mode = "denoise",
     source_entities: dict[str, str] | None = None,
+    source_path: Path | None = None,
 ) -> tuple:
     """Run post-processing pipeline.
 
@@ -76,6 +78,10 @@ def run_post(
     gcor_reg (pre/post short-channel regression GCOR) is None unless short_channel ran.
     """
 
+    rec = Recorder()
+    if source_path is not None:
+        rec.register_input(source_path, raw_haemo)
+
     result = raw_haemo.copy()
     last_snirf_path: Path | None = None
 
@@ -83,13 +89,13 @@ def run_post(
         logger.info("sub-%s | bandpass: l_freq=%s h_freq=%s", config.subject, config.high_pass, config.low_pass)
         result = bandpass_filter(result, l_freq=config.high_pass, h_freq=config.low_pass)
         if mode in ("denoise", "glm"):
-            last_snirf_path = _write_step_snirf(result, config, output_dir, desc="filtered", source_entities=source_entities)
+            last_snirf_path = _write_step_snirf(result, config, output_dir, desc="filtered", rec=rec, source_entities=source_entities)
 
     if config.resample_sfreq is not None:
         logger.info("sub-%s | resample → %.1f Hz", config.subject, config.resample_sfreq)
         result = resample(result, config.resample_sfreq)
         if mode in ("denoise", "glm"):
-            last_snirf_path = _write_step_snirf(result, config, output_dir, desc="resampled", source_entities=source_entities)
+            last_snirf_path = _write_step_snirf(result, config, output_dir, desc="resampled", rec=rec, source_entities=source_entities)
 
     haemo_sqm = None
     if last_snirf_path is not None:
@@ -123,7 +129,7 @@ def run_post(
             contrast_def=config.contrast_def,
             output_dir=str(output_dir / f"sub-{config.subject}" / "nirs"),
         )
-        _write_step_snirf(raw_resid, config, output_dir, desc="errts", source_entities=source_entities)
+        _write_step_snirf(raw_resid, config, output_dir, desc="errts", rec=rec, source_entities=source_entities)
         # Durbin-Watson (GLM residual autocorrelation) merged into the final SQM toml
         if haemo_sqm is not None and last_snirf_path is not None:
             try:
@@ -166,7 +172,7 @@ def run_post(
             output_dir=str(output_dir / f"sub-{config.subject}" / "nirs"),
             **rest_glm_kwargs,
         )
-        errts_path = _write_step_snirf(raw_resid, config, output_dir, desc="errts", source_entities=source_entities)
+        errts_path = _write_step_snirf(raw_resid, config, output_dir, desc="errts", rec=rec, source_entities=source_entities)
         try:
             from fnirs_pipe.qc.quantitative_metrics import compute_glm_sqm, save_sqm_toml
             save_sqm_toml(compute_glm_sqm(raw_resid.get_data()), config.subject, errts_path.parent)
@@ -275,7 +281,7 @@ def _write_rest_derivatives(
     return alff_df, fc_hbo_df
 
 
-def _write_step_snirf(haemo: mne.io.Raw, config: PostConfig, output_dir: Path, desc: str, source_entities: dict[str, str] | None = None) -> Path:
+def _write_step_snirf(haemo: mne.io.Raw, config: PostConfig, output_dir: Path, desc: str, rec: Recorder, source_entities: dict[str, str] | None = None) -> Path:
     from fnirs_pipe import __version__
     from fnirs_pipe.io.derivatives import build_output_path, carry_entities, write_sidecar_json
     from fnirs_pipe.io.snirf import write_snirf
@@ -291,11 +297,14 @@ def _write_step_snirf(haemo: mne.io.Raw, config: PostConfig, output_dir: Path, d
         extension=".snirf",
     )
     write_snirf(haemo, out_path)
+    lin = lineage_of(haemo)
     write_sidecar_json(out_path, {
         "pipeline_version": __version__,
+        "step": lin.step if lin else None,
+        "Sources": rec.sources_of(haemo),
         "high_pass": config.high_pass,
         "low_pass": config.low_pass,
         "resample_sfreq": config.resample_sfreq,
     })
     logger.info("sub-%s | %s snirf → %s", config.subject, desc, out_path)
-    return out_path
+    return rec.written(out_path, haemo)

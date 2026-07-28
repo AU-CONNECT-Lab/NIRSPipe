@@ -221,7 +221,7 @@ def _build_script_text(
         '# ===== block: beer_lambert | OD -> HbO/HbR (Beer-Lambert, dpf=DPF) =====',
         'raw_haemo = od_to_haemo(raw_od, dpf=DPF)',
         'save_step(raw_haemo, "preproc", "beer_lambert", session=session)',
-        '# QC (not run here): compute_haemo_sqm baseline + motion-correction footprint.',
+        '# QC (not run here): compute_prep_haemo_sqm baseline + motion-correction footprint.',
     )
 
     if mode:

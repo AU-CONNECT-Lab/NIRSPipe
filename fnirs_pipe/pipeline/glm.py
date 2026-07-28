@@ -7,6 +7,7 @@ import pandas as pd
 import mne
 import mne.io
 
+from fnirs_pipe.utils.lineage import stamp
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("post.glm")
@@ -171,6 +172,8 @@ def run_glm_pipeline(
     resid_data = np.array([glm_est.data[ch].residuals for ch in glm_est.ch_names]).squeeze(-1)
     raw_resid = haemo.copy()
     raw_resid._data[:] = resid_data
+    stamp(raw_resid, stage="errts", step="glm_residuals", source=haemo,
+          noise_model=noise_model, drift_model=drift_model)
 
     contrasts = compute_contrasts(glm_est, contrast_def) if contrast_def else None
 

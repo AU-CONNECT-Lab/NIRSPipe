@@ -182,7 +182,7 @@ def run_participant_level(args: dict[str, Any]) -> None:
                             logger.info("processing: %s", snirf_path)
                             try:
                                 raw = read_snirf(snirf_path)
-                                result = run_prep(raw, prep_config, output_dir=output_dir, source_entities=src_entities, work_dir=work_dir)
+                                result = run_prep(raw, prep_config, output_dir=output_dir, source_entities=src_entities, work_dir=work_dir, source_path=snirf_path)
                                 logger.info("finished prep: %s", snirf_path.name)
                                 last_raw, last_result = raw, result
                             except Exception:
@@ -328,7 +328,7 @@ def _run_post_for_subject(
                 logger.info("post (%s): %s", mode, snirf_path.name)
                 try:
                     raw_haemo = read_snirf(snirf_path)
-                    last_denoised, glm_est, dm, alff_df, fc_df, gcor_reg = run_post(raw_haemo, post_config, output_dir=output_dir, mode=mode, source_entities=src_entities)
+                    last_denoised, glm_est, dm, alff_df, fc_df, gcor_reg = run_post(raw_haemo, post_config, output_dir=output_dir, mode=mode, source_entities=src_entities, source_path=snirf_path)
                     if glm_est is not None:
                         last_glm_est, last_dm = glm_est, dm
                     if fc_df is not None:
