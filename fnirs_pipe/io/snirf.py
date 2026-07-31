@@ -19,6 +19,12 @@ _DESC_RE = re.compile(r"_desc-([A-Za-z0-9]+)[_.]")
 
 
 def write_snirf(raw: mne.io.Raw, out_path: Path) -> None:
+    # Recordings always carry both, but an object built in memory may not, and the
+    # failure then lands inside mne_nirs with an error that names neither field.
+    if raw.info["meas_date"] is None:
+        raise ValueError("write_snirf needs info['meas_date']: SNIRF stores a measurement date")
+    if not raw.info["subject_info"]:
+        raise ValueError("write_snirf needs info['subject_info']: SNIRF derives its subject id from it")
     out_path.parent.mkdir(parents=True, exist_ok=True)
     write_raw_snirf(_patch_haemo_wavelengths(raw), str(out_path))
 
