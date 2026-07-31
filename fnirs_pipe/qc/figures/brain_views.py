@@ -24,11 +24,14 @@ from ._brain_utils import CAMERAS, VIEW_LABELS, load_mesh_traces, to_mni
 
 logger = get_logger("qc.figures.brain_views")
 
-_GOOD_COLOR   = "#27ae60"
-_MID_COLOR    = "#f39c12"
-_BAD_COLOR    = "#e74c3c"
-_NA_COLOR     = "#95a5a6"
-_OPTODE_COLOR = "#7f8c8d"
+_GOOD_COLOR = "#27ae60"
+_MID_COLOR  = "#f39c12"
+_BAD_COLOR  = "#e74c3c"
+_NA_COLOR   = "#95a5a6"
+# red source / blue detector is the field convention, and matches the 2-D flat map;
+# it re-uses the quality colours, but optodes are dots and channels are lines
+_SRC_COLOR, _SRC_EDGE = "#e74c3c", "#922b21"
+_DET_COLOR, _DET_EDGE = "#2980b9", "#1a5276"
 
 _CH_RE = re.compile(r"(S\d+)[_\s]+(D\d+)", re.IGNORECASE)
 
@@ -111,7 +114,8 @@ def _link_traces(raw: mne.io.Raw, sci_scores: dict, good_by_base: dict) -> list[
     mni  = to_mni(flat)
 
     groups: dict[str, dict[str, list]] = {}
-    optodes: dict[str, np.ndarray] = {}
+    sources: dict[str, np.ndarray] = {}
+    detectors: dict[str, np.ndarray] = {}
     for i, pair_id in enumerate(pair_ids):
         s, d = mni[2 * i], mni[2 * i + 1]
         vals = scis.get(pair_id)
@@ -125,8 +129,8 @@ def _link_traces(raw: mne.io.Raw, sci_scores: dict, good_by_base: dict) -> list[
         g["t"] += [label, label, None]
 
         src_id, det_id = pair_id.split("_")
-        optodes.setdefault(src_id, s)
-        optodes.setdefault(det_id, d)
+        sources.setdefault(src_id, s)
+        detectors.setdefault(det_id, d)
 
     traces = [
         go.Scatter3d(
@@ -136,13 +140,21 @@ def _link_traces(raw: mne.io.Raw, sci_scores: dict, good_by_base: dict) -> list[
         )
         for color, g in groups.items()
     ]
-    pos = np.vstack(list(optodes.values()))
-    traces.append(go.Scatter3d(
-        x=pos[:, 0].tolist(), y=pos[:, 1].tolist(), z=pos[:, 2].tolist(),
-        mode="markers",
-        marker=dict(size=3, color=_OPTODE_COLOR, opacity=0.9),
-        text=list(optodes), hoverinfo="text", showlegend=False,
-    ))
+    optode_specs = (
+        (sources,   _SRC_COLOR, _SRC_EDGE, 5),
+        (detectors, _DET_COLOR, _DET_EDGE, 4),
+    )
+    for optodes, color, edge, size in optode_specs:
+        if not optodes:
+            continue
+        pos = np.vstack(list(optodes.values()))
+        traces.append(go.Scatter3d(
+            x=pos[:, 0].tolist(), y=pos[:, 1].tolist(), z=pos[:, 2].tolist(),
+            mode="markers",
+            marker=dict(size=size, color=color, opacity=1.0,
+                        line=dict(width=1.0, color=edge)),
+            text=list(optodes), hoverinfo="text", showlegend=False,
+        ))
     return traces
 
 

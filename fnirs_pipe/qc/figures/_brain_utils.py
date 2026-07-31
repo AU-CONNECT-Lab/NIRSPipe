@@ -18,8 +18,12 @@ CAMERAS = [
 VIEW_LABELS = ["Frontal", "Left Lateral", "Superior"]
 
 
-def load_mesh_traces() -> list[go.Mesh3d]:
-    """Load fsaverage5 pial surface as glass-style Mesh3d traces."""
+def load_mesh_traces(opacity: float = 1.0) -> list[go.Mesh3d]:
+    """Load fsaverage5 pial surface as Mesh3d traces, opaque by default.
+
+    An opaque surface hides whatever sits behind it, which is the point: optodes on
+    the far side of the head no longer show through and crowd the near-side ones.
+    """
     try:
         from nilearn import datasets, surface as surf
         fsavg5 = datasets.fetch_surf_fsaverage(mesh="fsaverage5")
@@ -29,8 +33,8 @@ def load_mesh_traces() -> list[go.Mesh3d]:
             traces.append(go.Mesh3d(
                 x=verts[:, 0].tolist(), y=verts[:, 1].tolist(), z=verts[:, 2].tolist(),
                 i=faces[:, 0].tolist(), j=faces[:, 1].tolist(), k=faces[:, 2].tolist(),
-                color="#e3e3e3", opacity=0.45, flatshading=False,
-                lighting=dict(ambient=0.85, diffuse=0.5, specular=0.3, fresnel=0.5),
+                color="#d9d9d9", opacity=opacity, flatshading=False,
+                lighting=dict(ambient=0.6, diffuse=0.65, specular=0.12, fresnel=0.15),
                 lightposition=dict(x=100, y=200, z=300),
                 hoverinfo="skip", showlegend=False,
             ))

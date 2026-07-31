@@ -83,7 +83,7 @@ def _build_script_text(
         '',
         'from fnirs_pipe import __version__',
         'from fnirs_pipe.io.bids import get_layout, get_nirs_files',
-        'from fnirs_pipe.io.derivatives import build_output_path, carry_entities, write_sidecar_json',
+        'from fnirs_pipe.io.derivatives import build_output_path, carry_entities, data_state, write_sidecar_json',
         'from fnirs_pipe.io.snirf import write_snirf',
         'from fnirs_pipe.utils import is_optical_density',
         'from fnirs_pipe.pipeline.prep_pipeline import (',
@@ -167,7 +167,10 @@ def _build_script_text(
         '        suffix="nirs", extension=".snirf", session=session)',
         '    write_snirf(raw_step, path)',
         '    write_sidecar_json(path, {"pipeline_version": __version__, "step": step,',
-        '        "parameters": {**PREP_PARAMS, "session": session}, **(extra or {})})',
+        '        "parameters": {**PREP_PARAMS, "session": session},',
+        '        "data": data_state(raw_step),',
+        '        # read back by read_snirf: SNIRF itself cannot carry the marks',
+        '        "bad_channels": list(raw_step.info["bads"]), **(extra or {})})',
         '    return path',
     )
 

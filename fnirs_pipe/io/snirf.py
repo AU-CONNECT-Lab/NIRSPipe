@@ -6,6 +6,7 @@ https://mne.tools/stable/auto_tutorials/io/30_reading_fnirs_data.html
 """
 
 
+import json
 import re
 from pathlib import Path
 from typing import Any
@@ -29,17 +30,35 @@ def write_snirf(raw: mne.io.Raw, out_path: Path) -> None:
     write_raw_snirf(_patch_haemo_wavelengths(raw), str(out_path))
 
 
+def _restore_bads(raw: mne.io.Raw, path: Path) -> None:
+    """SNIRF has no bad-channel field, so the sidecar carries the marks across the disk.
+
+    Each sidecar lists the bads of its own file, so the names always match that file's
+    channels; the filter only guards against a hand-edited sidecar.
+    """
+    sidecar = path.with_suffix(".json")
+    if not sidecar.exists():
+        return
+    try:
+        bads = json.loads(sidecar.read_text()).get("bad_channels") or []
+    except (OSError, json.JSONDecodeError):
+        return
+    raw.info["bads"] = [ch for ch in bads if ch in raw.ch_names]
+
+
 def read_snirf(path: Path | str, **kwargs: Any) -> mne.io.Raw:
     """Read a SNIRF and restore its pipeline stage from the desc- entity.
 
     The lineage stamp lives in info["temp"] and does not survive the SNIRF round
     trip, so the filename carries it instead: the writer derived desc- from the
     stamp, this reads the same string back. Files with no desc- entity are BIDS
-    inputs and stamp as "raw".
+    inputs and stamp as "raw". Bad-channel marks are restored from the sidecar
+    for the same reason.
     """
     kwargs.setdefault("preload", True)
     path = Path(path)
     raw = mne.io.read_raw_snirf(str(path), **kwargs)
+    _restore_bads(raw, path)
     desc = _DESC_RE.search(path.name)
     return stamp(raw, stage=desc.group(1) if desc else "raw", step="load", path=path.as_posix())
 

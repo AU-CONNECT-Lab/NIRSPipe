@@ -310,6 +310,8 @@ def _write_step_snirf(haemo: mne.io.Raw, config: PostConfig, output_dir: Path, d
             **(lin.params if lin else {}),
         },
         "data": data_state(haemo),
+        # read back by read_snirf: SNIRF itself cannot carry the marks
+        "bad_channels": list(haemo.info["bads"]),
     })
     logger.info("sub-%s | %s snirf → %s", config.subject, desc, out_path)
     return rec.written(out_path, haemo)

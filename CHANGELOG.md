@@ -12,12 +12,13 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 - Per-subject log, run record, script and provenance diagram lose the timestamp in their names (`sub-01.log`, `sub-01.toml`); a re-run overwrites them
-- The 3-view brain figure colours the source-detector links by SCI, like the flat map beside it, instead of spheres at channel midpoints
+- The 3-view brain figure colours the source-detector links by SCI, like the flat map beside it, instead of spheres at channel midpoints; the surface is opaque so the far side of the head no longer shows through, and optodes are red (source) / blue (detector)
 - Writing two different files under one pipeline stage now fails instead of silently crediting an output to the wrong source
 - Postprocessing now rejects a `desc-` that disagrees with the stage stamped on the data, matching the check preprocessing already had
 - GLM outputs carry the subject and task of their input: `sub-01_task-tapping_design_matrix.csv`, and likewise for `glm_results.csv` and `contrasts.csv`
 
 ### Fixed
+- Channels marked bad during preprocessing were unmarked again as soon as postprocessing reloaded the data, so filtering, resampling and the GLM all treated SCI-rejected channels as good; the marks now travel with the file
 - Brain figure drew each channel from its midpoint to its source instead of source to detector
 - Design matrix labels overlapped when regressors were numerous
 - Postprocessing ran once per matching subject found anywhere under the output directory, so a nested output tree from an earlier run was silently reprocessed and its results overwrote the real ones

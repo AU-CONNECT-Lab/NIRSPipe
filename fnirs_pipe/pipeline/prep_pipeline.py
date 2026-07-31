@@ -228,6 +228,8 @@ def run_prep(
             "Sources": rec.sources_of(raw_step),
             "parameters": _config_dict(config),
             "data": data_state(raw_step),
+            # read back by read_snirf: SNIRF itself cannot carry the marks
+            "bad_channels": list(raw_step.info["bads"]),
             **(extra_provenance or {}),
         })
         return rec.written(path, raw_step)
