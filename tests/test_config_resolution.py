@@ -45,7 +45,8 @@ def test_cli_override_does_not_discard_the_rest_of_the_toml():
     # run record used to show only the flag.
     cfg = _post(
         {"noise_model": "ar2"},
-        {"hrf_model": "spm", "drift_model": "cosine", "drift_order": 2},
+        {"hrf_model": "spm", "drift_model": "cosine", "drift_high_pass": 0.01,
+         "drift_order": 2},
     )
     assert cfg.noise_model == "ar2"
     assert cfg.hrf_model == "spm"

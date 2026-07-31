@@ -38,11 +38,15 @@ def _short_channel_regressors(haemo: mne.io.Raw, strategy: SCRStrategy) -> dict[
         return {}
     # a rejected short channel would otherwise enter the regressor, and the regressor
     # is in the design matrix, so one bad channel would reach every channel's fit
-    hbo_data = short.copy().pick(picks="hbo", exclude="bads").get_data()  # (n_channels, n_times)
-    hbr_data = short.copy().pick(picks="hbr", exclude="bads").get_data()
-    if not len(hbo_data) or not len(hbr_data):
+    good_hbo = mne.pick_types(short.info, fnirs="hbo", exclude="bads")
+    good_hbr = mne.pick_types(short.info, fnirs="hbr", exclude="bads")
+    # picking an empty selection raises rather than returning nothing, so the emptiness
+    # has to be caught here or a subject whose short channels were all rejected kills the run
+    if not len(good_hbo) or not len(good_hbr):
         logger.warning("every short channel of a chromophore is bad — skipping short-channel regressors")
         return {}
+    hbo_data = short.get_data(picks=good_hbo)  # (n_channels, n_times)
+    hbr_data = short.get_data(picks=good_hbr)
     n_dropped = len(short.ch_names) - len(hbo_data) - len(hbr_data)
     if n_dropped:
         logger.info("short-channel regressors: %d of %d short channels excluded as bad",

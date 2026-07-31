@@ -26,6 +26,7 @@ All notable changes to this project will be documented in this file.
 - GLM outputs carry the subject and task of their input: `sub-01_task-tapping_design_matrix.csv`, and likewise for `glm_results.csv` and `contrasts.csv`
 
 ### Fixed
+- A subject whose short channels were all rejected for one chromophore crashed the GLM instead of continuing without short-channel regressors
 - `--drift-model cosine` without `--drift-high-pass` now says so before the run starts, instead of failing minutes later inside nilearn with a `NoneType` multiplication error
 - The Methods paragraph stopped after the Beer-Lambert sentence: filtering, resampling and the GLM were never described, because the report built the text without the post-processing configuration
 - Channels marked bad during preprocessing were unmarked again as soon as postprocessing reloaded the data, so filtering, resampling and the GLM all treated SCI-rejected channels as good; the marks now travel with the file
