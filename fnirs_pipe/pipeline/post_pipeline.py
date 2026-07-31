@@ -207,12 +207,17 @@ def _write_rest_derivatives(
 
     entities = carry_entities(source_entities)
 
+    # the FC matrices keep their bad rows and columns so the shape stays predictable;
+    # the sidecar names them so a consumer can drop or ignore them
+    bads = list(raw_resid.info["bads"])
+
     def _sidecar(path: Path, step: str, source: str | None, **params) -> None:
         write_sidecar_json(path, {
             "pipeline_version": __version__,
             "step": step,
             "Sources": [source] if source else [],
             "parameters": params,
+            "bad_channels": bads,
         })
 
     src_bp = rec.path_of(raw_resid)                                        # bandpassed residual

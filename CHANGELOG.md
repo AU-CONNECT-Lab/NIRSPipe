@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 - Sidecars record the shape of the data each step left behind: channel count, how many were marked bad, sampling rate and duration
 - The provenance diagram shows the settings each step used (filter band, dpf, motion-correction method, GLM models) and the data shape at every node, instead of the step name alone
+- `*_alff.tsv` and `*_glm_results.csv` gain a `bad` column, and connectivity, ALFF and GLM sidecars list the rejected channels: results for rejected channels are kept and flagged rather than dropped, so the table shape stays predictable for group analysis
 
 ### Changed
 - Per-subject log, run record, script and provenance diagram lose the timestamp in their names (`sub-01.log`, `sub-01.toml`); a re-run overwrites them
@@ -19,6 +20,9 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 - Channels marked bad during preprocessing were unmarked again as soon as postprocessing reloaded the data, so filtering, resampling and the GLM all treated SCI-rejected channels as good; the marks now travel with the file
+- A short channel rejected by SCI was still averaged into the short-channel regressor, and that regressor sits in the design matrix, so one bad channel shifted the fit of every channel
+- mALFF and zALFF were standardized against a mean and standard deviation taken over all channels, rejected ones included, distorting the value of every good channel
+- ROI connectivity averaged rejected channels into their ROI signal, carrying them into every correlation that ROI took part in
 - Brain figure drew each channel from its midpoint to its source instead of source to detector
 - Design matrix labels overlapped when regressors were numerous
 - Postprocessing ran once per matching subject found anywhere under the output directory, so a nested output tree from an earlier run was silently reprocessed and its results overwrote the real ones

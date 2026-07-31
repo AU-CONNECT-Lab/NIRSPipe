@@ -36,8 +36,17 @@ def _short_channel_regressors(haemo: mne.io.Raw, strategy: SCRStrategy) -> dict[
     except ValueError:
         logger.warning("no short channels found — skipping short-channel regressors")
         return {}
-    hbo_data = short.copy().pick(picks="hbo").get_data()  # (n_channels, n_times)
-    hbr_data = short.copy().pick(picks="hbr").get_data()
+    # a rejected short channel would otherwise enter the regressor, and the regressor
+    # is in the design matrix, so one bad channel would reach every channel's fit
+    hbo_data = short.copy().pick(picks="hbo", exclude="bads").get_data()  # (n_channels, n_times)
+    hbr_data = short.copy().pick(picks="hbr", exclude="bads").get_data()
+    if not len(hbo_data) or not len(hbr_data):
+        logger.warning("every short channel of a chromophore is bad — skipping short-channel regressors")
+        return {}
+    n_dropped = len(short.ch_names) - len(hbo_data) - len(hbr_data)
+    if n_dropped:
+        logger.info("short-channel regressors: %d of %d short channels excluded as bad",
+                    n_dropped, len(short.ch_names))
     if strategy == "pca":
         # TODO: check PCA
         from sklearn.decomposition import PCA
@@ -180,7 +189,8 @@ def run_glm_pipeline(
 
     if output_dir:
         _save_glm_outputs(glm_est, dm, Path(output_dir), contrasts=contrasts,
-                          source_path=source_path, hrf_model=hrf_model,
+                          source_path=source_path, bads=list(haemo.info["bads"]),
+                          hrf_model=hrf_model,
                           noise_model=noise_model, drift_model=drift_model,
                           drift_high_pass=high_pass, drift_order=drift_order,
                           short_channel=short_channel)
@@ -208,10 +218,13 @@ def _save_glm_outputs(
     output_dir: Path,
     contrasts: dict[str, Any] | None = None,
     source_path: str | None = None,
+    bads: list[str] | None = None,
     **params: Any,
 ) -> None:
     from fnirs_pipe import __version__
     from fnirs_pipe.io.derivatives import write_sidecar_json
+
+    bads = bads or []
 
     def _sidecar(path: Path, step: str) -> None:
         write_sidecar_json(path, {
@@ -219,7 +232,15 @@ def _save_glm_outputs(
             "step": step,
             "Sources": [source_path] if source_path else [],
             "parameters": params,
+            "bad_channels": bads,
         })
+
+    def _mark_bads(df: pd.DataFrame) -> pd.DataFrame:
+        # the fit runs on every channel, so the rejected ones are kept and flagged rather
+        # than dropped: removing rows would change the shape group analysis expects
+        if "ch_name" in df.columns:
+            df["bad"] = df["ch_name"].isin(bads)
+        return df
 
     output_dir.mkdir(parents=True, exist_ok=True)
     prefix = _entity_prefix(source_path)
@@ -228,14 +249,14 @@ def _save_glm_outputs(
     _sidecar(dm_path, "design_matrix")
 
     res_path = output_dir / f"{prefix}glm_results.csv"
-    glm_est.to_dataframe().to_csv(res_path, index=False)
+    _mark_bads(glm_est.to_dataframe()).to_csv(res_path, index=False)
     _sidecar(res_path, "glm_fit")
     # glm_est.save(str(output_dir / "glm.h5"), overwrite=True)
 
     if contrasts:
         frames = []
         for name, result in contrasts.items():
-            df = result.to_dataframe()
+            df = _mark_bads(result.to_dataframe())
             df.insert(0, "contrast", name)
             frames.append(df)
         con_path = output_dir / f"{prefix}contrasts.csv"

@@ -33,8 +33,8 @@ def load_mesh_traces(opacity: float = 1.0) -> list[go.Mesh3d]:
             traces.append(go.Mesh3d(
                 x=verts[:, 0].tolist(), y=verts[:, 1].tolist(), z=verts[:, 2].tolist(),
                 i=faces[:, 0].tolist(), j=faces[:, 1].tolist(), k=faces[:, 2].tolist(),
-                color="#d9d9d9", opacity=opacity, flatshading=False,
-                lighting=dict(ambient=0.6, diffuse=0.65, specular=0.12, fresnel=0.15),
+                color="#e8e8e8", opacity=opacity, flatshading=False,
+                lighting=dict(ambient=0.5, diffuse=0.75, specular=0.12, fresnel=0.15),
                 lightposition=dict(x=100, y=200, z=300),
                 hoverinfo="skip", showlegend=False,
             ))

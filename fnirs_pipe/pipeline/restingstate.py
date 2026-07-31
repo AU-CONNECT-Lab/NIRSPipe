@@ -73,12 +73,19 @@ def compute_alff(raw: mne.io.Raw, low_pass: float, high_pass: float) -> pd.DataF
     # scales, so a pooled mean/std would distort both; each chromophore is normalized on its own.
     malff_vals = np.zeros_like(alff_vals)
     zalff_vals = np.zeros_like(alff_vals)
+    bads = set(raw.info["bads"])
+    is_bad = np.array([c in bads for c in raw.ch_names])
     for suffix in (" hbo", " hbr"):
         idx = np.array([c.endswith(suffix) for c in raw.ch_names])
         if not idx.any():
             continue
-        grp_mean = np.nanmean(alff_vals[idx])
-        grp_std  = np.nanstd(alff_vals[idx])
+        # bad channels are still standardized, but they do not define the reference:
+        # their ALFF would shift the mean and SD that every good channel is scaled by
+        ref = idx & ~is_bad
+        if not ref.any():
+            ref = idx
+        grp_mean = np.nanmean(alff_vals[ref])
+        grp_std  = np.nanstd(alff_vals[ref])
         if grp_mean != 0:
             malff_vals[idx] = alff_vals[idx] / grp_mean
         if grp_std != 0:
@@ -90,6 +97,7 @@ def compute_alff(raw: mne.io.Raw, low_pass: float, high_pass: float) -> pd.DataF
         "falff":   falff_vals,
         "malff":   malff_vals,
         "zalff":   zalff_vals,
+        "bad":     is_bad,
     })
 
 
@@ -143,7 +151,9 @@ def compute_fc_roi(raw: mne.io.Raw, roi_map: dict[str, list[str]], chromophore: 
     """
     from nilearn.connectome import ConnectivityMeasure
     suffix = f" {chromophore}"
-    chan_set = {c for c in raw.ch_names if c.endswith(suffix)}
+    # a bad channel in the average would travel into every correlation this ROI takes part in
+    bads = set(raw.info["bads"])
+    chan_set = {c for c in raw.ch_names if c.endswith(suffix) and c not in bads}
     names, signals = [], []
     for roi, chans in roi_map.items():
         picks = []
@@ -155,6 +165,8 @@ def compute_fc_roi(raw: mne.io.Raw, roi_map: dict[str, list[str]], chromophore: 
         if picks:
             names.append(roi)
             signals.append(raw.get_data(picks=picks).mean(axis=0))
+        else:
+            logger.warning("ROI %s has no good %s channel — excluded from ROI connectivity", roi, chromophore)
     if len(signals) < 2:
         return pd.DataFrame()
     fc = ConnectivityMeasure(kind="correlation", standardize=False).fit_transform([np.vstack(signals).T])[0]
