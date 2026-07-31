@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 - Sidecars record the shape of the data each step left behind: channel count, how many were marked bad, sampling rate and duration
 - The provenance diagram shows the settings each step used (filter band, dpf, motion-correction method, GLM models) and the data shape at every node, instead of the step name alone
 - `*_alff.tsv` and `*_glm_results.csv` gain a `bad` column, and connectivity, ALFF and GLM sidecars list the rejected channels: results for rejected channels are kept and flagged rather than dropped, so the table shape stays predictable for group analysis
+- The SQM checkpoints appear in the provenance diagram; the raw one points back at the original recording it measured, not at the file it happens to sit beside
 
 ### Changed
 - Per-subject log, run record, script and provenance diagram lose the timestamp in their names (`sub-01.log`, `sub-01.toml`); a re-run overwrites them

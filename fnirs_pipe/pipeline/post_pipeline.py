@@ -101,7 +101,7 @@ def run_post(
         try:
             from fnirs_pipe.qc.quantitative_metrics import compute_haemo_sqm, save_sqm_toml
             haemo_sqm = compute_haemo_sqm(result)
-            save_sqm_toml(haemo_sqm, config.subject, last_snirf_path.parent)
+            save_sqm_toml(haemo_sqm, config.subject, last_snirf_path.parent, source=last_snirf_path)
         except Exception:
             logger.warning("sub-%s | haemo SQM failed", config.subject, exc_info=True)
 

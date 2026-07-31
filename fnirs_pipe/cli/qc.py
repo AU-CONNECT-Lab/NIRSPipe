@@ -379,7 +379,7 @@ def _build_parser() -> argparse.ArgumentParser:
                     help="Process only this group_id. Omit to process all groups.")
     hr.add_argument("--dpf", nargs="+", type=float, action="extend", required=True,
                     help="Differential pathlength factor. One value or one per wavelength.")
-    hr.add_argument("--sci-threshold", type=float, default=0.80,
+    hr.add_argument("--sci-threshold", type=float, default=0.8,
                     help="SCI pass/fail threshold for channel quality comparison.")
     hr.add_argument("--cardiac-l-freq", type=float, required=True,
                     help="Lower bound of cardiac band in Hz (required; population-dependent).")

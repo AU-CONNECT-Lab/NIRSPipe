@@ -1266,7 +1266,14 @@ def compute_sqm(
 
 
 # ------------------------------------- Persistence --------------------------------------
-def save_sqm_toml(sqm: dict[str, Any], subject: str, out_dir: Path, suffix: str = "") -> None:
+def save_sqm_toml(
+    sqm: dict[str, Any],
+    subject: str,
+    out_dir: Path,
+    suffix: str = "",
+    source: Path | str | None = None,
+    step: str = "sqm",
+) -> None:
     """Write scalar SQM fields to a TOML sidecar.
 
     Only scalar fields are written; per-channel dicts and lists are skipped.
@@ -1281,6 +1288,11 @@ def save_sqm_toml(sqm: dict[str, Any], subject: str, out_dir: Path, suffix: str 
         Output directory (created if missing).
     suffix : str, optional
         Filename suffix, e.g. ``'_raw'``.
+    source : Path or str, optional
+        File these metrics were measured on. Given, a JSON provenance sidecar is written
+        beside the TOML so the checkpoint appears in the run's provenance graph.
+    step : str, optional
+        Step name recorded in that sidecar.
     """
     def _to_toml(data: dict) -> str:
         lines = []
@@ -1300,6 +1312,14 @@ def save_sqm_toml(sqm: dict[str, Any], subject: str, out_dir: Path, suffix: str 
     out_path = out_dir / f"sub-{subject}_sqm{suffix}.toml"
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(_to_toml({"subject": subject, **scalars}), encoding="utf-8")
+    if source is not None:
+        from fnirs_pipe import __version__
+        from fnirs_pipe.io.derivatives import write_sidecar_json
+        write_sidecar_json(out_path, {
+            "pipeline_version": __version__,
+            "step": step,
+            "Sources": [Path(source).as_posix()],
+        })
     logger.info("sub-%s | SQM TOML → %s", subject, out_path)
 
 

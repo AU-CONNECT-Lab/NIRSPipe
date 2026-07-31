@@ -272,7 +272,10 @@ def run_prep(
     try:
         from fnirs_pipe.qc.quantitative_metrics import compute_raw_sqm, save_sqm_toml
         sqm_raw = compute_raw_sqm(raw, sci_scores, bad_chs, config.cardiac_l_freq, config.cardiac_h_freq)
-        save_sqm_toml(sqm_raw, config.subject, sci_path.parent, suffix="_raw")
+        # measured on the original intensity, so the graph must point back to the input,
+        # not to the sci file this happens to be written beside
+        save_sqm_toml(sqm_raw, config.subject, sci_path.parent, suffix="_raw",
+                      source=rec.path_of(raw) or source_path, step="sqm_raw")
     except Exception:
         logger.warning("sub-%s | raw SQM failed", config.subject, exc_info=True)
 
@@ -294,7 +297,7 @@ def run_prep(
         sqm_final = compute_prep_haemo_sqm(
             raw_haemo, config.cardiac_l_freq, config.cardiac_h_freq,
             config.resp_l_freq, config.resp_h_freq)
-        save_sqm_toml(sqm_final, config.subject, preproc_path.parent)
+        save_sqm_toml(sqm_final, config.subject, preproc_path.parent, source=preproc_path)
     except Exception:
         logger.warning("sub-%s | haemo SQM failed", config.subject, exc_info=True)
 
