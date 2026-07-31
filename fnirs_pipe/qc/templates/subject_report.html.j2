@@ -221,6 +221,7 @@
   <a href="#Metrics">Metrics</a>
   {% if channel_summary_path %}<a href="#ChannelSummary">Ch. Summary</a>{% endif %}
   <a href="#Errors">Errors</a>
+  <a href="#Provenance">Provenance</a>
   <a href="#Methods">Methods</a>
 </nav>
 
@@ -663,6 +664,22 @@
   </ul>
 {% else %}
   <p class="no-errors">No errors or warnings.</p>
+{% endif %}
+
+<!-- ========================================================== provenance -->
+<h2 id="Provenance">Provenance</h2>
+<p style="font-size:0.85rem; color:#666;">
+  Every file this run wrote, the step that produced it, the settings that step used, and
+  the channels / sampling rate / duration left behind at each point. Rebuilt from the JSON
+  sidecars in <code>nirs/</code>, so it reports what ran, not what was requested.
+</p>
+{% if provenance_path %}
+  <img class="responsive" src="{{ provenance_path }}" alt="File provenance graph" />
+  <p class="fig-path">{{ provenance_path }} &bull; mermaid source: figures/provenance.mmd</p>
+{% else %}
+  <div class="placeholder">
+    Diagram not rendered. Regenerate with <code>fnirs-qc provenance OUTPUT_DIR</code>.
+  </div>
 {% endif %}
 
 <!-- ============================================================= methods -->

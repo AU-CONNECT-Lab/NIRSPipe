@@ -195,6 +195,22 @@ def test_write_provenance_writes_nothing_without_sidecars(tmp_path):
     assert write_provenance(tmp_path, out, stem="sub-01_provenance") == []
 
 
+def test_cmd_provenance_writes_where_the_report_looks_for_it(tmp_path, capsys):
+    # the QC report embeds figures/provenance.png by relative path, so re-rendering has
+    # to land on that exact name or an existing report keeps showing the old diagram
+    from fnirs_pipe.cli.qc import cmd_provenance
+
+    nirs = tmp_path / "sub-01" / "nirs"
+    nirs.mkdir(parents=True)
+    _sidecar(nirs, "sub-01_desc-od_nirs", step="od_conversion", sources=["/bids/in.snirf"])
+
+    cmd_provenance(tmp_path)
+
+    figures = tmp_path / "sub-01" / "figures"
+    assert (figures / "provenance.png").exists()
+    assert (figures / "provenance.mmd").exists()
+
+
 def test_write_provenance_writes_png_and_mermaid(tmp_path):
     nirs = tmp_path / "nirs"
     nirs.mkdir()

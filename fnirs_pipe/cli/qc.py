@@ -223,7 +223,9 @@ def cmd_provenance(output_dir: Path) -> None:
     for nirs_dir in targets:
         dest = nirs_dir.parent if nirs_dir.name == "nirs" else nirs_dir
         label = dest.name
-        written = write_provenance(nirs_dir, dest, stem=f"{label}_provenance", title=label)
+        # same destination and stem the run itself uses, so re-rendering refreshes the
+        # image an already-written QC report points at
+        written = write_provenance(nirs_dir, dest / "figures", stem="provenance", title=label)
         for path in written:
             print(f"{path}")
         total += bool(written)

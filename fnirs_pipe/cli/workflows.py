@@ -206,21 +206,24 @@ def run_participant_level(args: dict[str, Any]) -> None:
                 if args.get("mode") is not None:
                     glm_est, dm, alff_df, fc_df, last_denoised, gcor_reg = _run_post_for_subject(subject, sessions, args, toml, output_dir, roi_map=roi_map)
 
-                if not args.get("no_report") and last_result is not None:
-                    _emit_subject_report(subject, sub_dir, last_raw, last_result, prep_config, args, glm_est, dm, alff_df=alff_df, fc_df=fc_df, high_pass=cfg_high_pass, low_pass=cfg_low_pass, after_haemo=last_denoised, gcor_reg=gcor_reg, roi_map=roi_map)
-
-                # provenance graph belongs with the run record, not in the QC report:
-                # it documents what the run produced, not the quality of the data
+                # rendered before the report, which embeds it: every sidecar it scans is
+                # on disk by now, and --no-report still leaves the diagram behind
+                provenance_path = None
                 try:
                     from fnirs_pipe.qc.provenance import write_provenance
                     for path in write_provenance(
-                        sub_dir / "nirs", sub_dir / "logs",
-                        stem=f"sub-{subject}_provenance",
+                        sub_dir / "nirs", sub_dir / "figures",
+                        stem="provenance",
                         title=f"sub-{subject}" + (f"  |  mode: {args['mode']}" if args.get("mode") else ""),
                     ):
                         logger.info("sub-%s | provenance → %s", subject, path)
+                        if path.suffix == ".png":
+                            provenance_path = f"figures/{path.name}"
                 except Exception:
                     logger.warning("sub-%s | provenance graph failed", subject, exc_info=True)
+
+                if not args.get("no_report") and last_result is not None:
+                    _emit_subject_report(subject, sub_dir, last_raw, last_result, prep_config, args, glm_est, dm, alff_df=alff_df, fc_df=fc_df, high_pass=cfg_high_pass, low_pass=cfg_low_pass, after_haemo=last_denoised, gcor_reg=gcor_reg, roi_map=roi_map, provenance_path=provenance_path)
 
             except Exception as exc:
                 subject_status = "FAILED"
@@ -259,7 +262,7 @@ def _make_prep_config(subject: str, session: str | None, args: dict[str, Any]) -
     )
 
 
-def _emit_subject_report(subject, sub_dir, last_raw, last_result, prep_config, args, glm_est, dm, alff_df=None, fc_df=None, high_pass=None, low_pass=None, after_haemo=None, gcor_reg=None, roi_map=None):
+def _emit_subject_report(subject, sub_dir, last_raw, last_result, prep_config, args, glm_est, dm, alff_df=None, fc_df=None, high_pass=None, low_pass=None, after_haemo=None, gcor_reg=None, roi_map=None, provenance_path=None):
     import mne
     import numpy as np
     from fnirs_pipe.qc.report import build_subject_report
@@ -309,6 +312,7 @@ def _emit_subject_report(subject, sub_dir, last_raw, last_result, prep_config, a
         after_haemo=after_haemo,
         gcor_reg=gcor_reg,
         roi_map=roi_map,
+        provenance_path=provenance_path,
     )
 
 

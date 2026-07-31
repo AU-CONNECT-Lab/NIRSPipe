@@ -238,6 +238,9 @@ output/
 │   └── fnirs_pipe.db                    # SQLite (after fnirs-log merge)
 ├── sub-01/
 │   ├── sub-01_qc.html                   # per-subject QC report
+│   ├── figures/
+│   │   ├── provenance.png               # provenance graph (embedded in the report)
+│   │   └── provenance.mmd               # same graph, mermaid source
 │   ├── logs/
 │   │   └── sub-01_{ts}.toml             # run record (env + params)
 │   └── nirs/

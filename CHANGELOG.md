@@ -13,6 +13,7 @@ All notable changes to this project will be documented in this file.
 - The SQM checkpoints appear in the provenance diagram; the raw one points back at the original recording it measured, not at the file it happens to sit beside
 
 ### Changed
+- The provenance diagram moves from `sub-XX/logs/` to `sub-XX/figures/provenance.png` and is shown in the QC report; `fnirs-qc provenance` writes to the same place, so re-rendering refreshes the diagram an existing report displays
 - Per-subject log, run record, script and provenance diagram lose the timestamp in their names (`sub-01.log`, `sub-01.toml`); a re-run overwrites them
 - The 3-view brain figure colours the source-detector links by SCI, like the flat map beside it, instead of spheres at channel midpoints; the surface is opaque so the far side of the head no longer shows through, and optodes are red (source) / blue (detector)
 - Writing two different files under one pipeline stage now fails instead of silently crediting an output to the wrong source

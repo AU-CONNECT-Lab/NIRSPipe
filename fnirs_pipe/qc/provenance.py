@@ -211,7 +211,7 @@ def write_provenance(
     fig = provenance_figure(nodes, title=title)
     if fig is not None:
         png = out_dir / f"{stem}.png"
-        fig.savefig(png, dpi=200, bbox_inches="tight")
+        fig.savefig(png, dpi=300, bbox_inches="tight")
         import matplotlib.pyplot as plt
         plt.close(fig)
         written.append(png)

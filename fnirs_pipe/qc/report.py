@@ -730,8 +730,13 @@ def build_subject_report(
     after_haemo: mne.io.Raw | None = None,
     gcor_reg: dict | None = None,
     roi_map: dict | None = None,
+    provenance_path: str | None = None,
 ) -> None:
-    """Render a per-subject prep QC report and save as HTML."""
+    """Render a per-subject prep QC report and save as HTML.
+
+    provenance_path is the already-rendered flow diagram, relative to out_path
+    (the caller renders it: the report embeds, it does not draw).
+    """
     errors: list[str] = []
     versions = collect_software_versions()
     # raw_long: long-channel-only copy used for OD/motion/SQM figures
@@ -835,6 +840,7 @@ def build_subject_report(
         **rest_vars,
         **ch_summary_vars,
         denoise_carpet_path=denoise_carpet_path,
+        provenance_path=provenance_path,
         mode=mode or "",
     )
     out_path.parent.mkdir(parents=True, exist_ok=True)
