@@ -61,6 +61,15 @@ class PostConfig:
 
     combine_runs: bool | None = None
 
+    def __post_init__(self) -> None:
+        # nilearn multiplies the cutoff by the frame times, so a missing one dies deep
+        # inside it as "unsupported operand type(s) for *: 'NoneType' and 'float'"
+        if self.drift_model == "cosine" and self.drift_high_pass is None:
+            raise ValueError(
+                "--drift-model cosine needs --drift-high-pass: the cosine drift basis is "
+                "defined by its cutoff frequency, and there is no sensible default"
+            )
+
 
 
 def run_post(

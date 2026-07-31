@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 ## [0.19.0] - 2026-07-31
 
 ### Added
+- `fnirs-qc hyper-post --wtc-seed` makes the wavelet-coherence significance contour reproducible; without it the Monte Carlo surrogates, and pycwt's on-disk cache of them, made two runs on the same data disagree
 - Sidecars record the shape of the data each step left behind: channel count, how many were marked bad, sampling rate and duration
 - The provenance diagram shows the settings each step used (filter band, dpf, motion-correction method, GLM models) and the data shape at every node, instead of the step name alone
 - `*_alff.tsv` and `*_glm_results.csv` gain a `bad` column, and connectivity, ALFF and GLM sidecars list the rejected channels: results for rejected channels are kept and flagged rather than dropped, so the table shape stays predictable for group analysis
@@ -25,6 +26,7 @@ All notable changes to this project will be documented in this file.
 - GLM outputs carry the subject and task of their input: `sub-01_task-tapping_design_matrix.csv`, and likewise for `glm_results.csv` and `contrasts.csv`
 
 ### Fixed
+- `--drift-model cosine` without `--drift-high-pass` now says so before the run starts, instead of failing minutes later inside nilearn with a `NoneType` multiplication error
 - The Methods paragraph stopped after the Beer-Lambert sentence: filtering, resampling and the GLM were never described, because the report built the text without the post-processing configuration
 - Channels marked bad during preprocessing were unmarked again as soon as postprocessing reloaded the data, so filtering, resampling and the GLM all treated SCI-rejected channels as good; the marks now travel with the file
 - A short channel rejected by SCI was still averaged into the short-channel regressor, and that regressor sits in the design matrix, so one bad channel shifted the fit of every channel

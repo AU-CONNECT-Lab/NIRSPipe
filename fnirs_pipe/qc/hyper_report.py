@@ -99,6 +99,7 @@ def build_hyper_post_report(
     wtc_fmin: float = 0.004,
     wtc_fmax: float = 0.20,
     wtc_significance: bool = False,
+    wtc_seed: int | None = None,
     isc_threshold: float = 0.3,
 ) -> Path:
     """Build hyperscanning post-QC report.
@@ -147,7 +148,8 @@ def build_hyper_post_report(
             logger.warning("WTC significance on: Monte Carlo surrogates per channel pair, this is slow.")
         logger.info("Computing WTC for %d channels...", len(subject_ids))
         wtc_result = compute_wtc(
-            aligned_raws, fmin=wtc_fmin, fmax=wtc_fmax, significance=wtc_significance)
+            aligned_raws, fmin=wtc_fmin, fmax=wtc_fmax, significance=wtc_significance,
+            seed=wtc_seed)
     except Exception as exc:
         logger.warning("WTC computation failed: %s", exc)
 
@@ -203,6 +205,7 @@ def build_hyper_post_report(
             roi_wtc = compute_wtc_roi(
                 aligned_raws, roi_map, bad_channels=bad_channels,
                 fmin=wtc_fmin, fmax=wtc_fmax, significance=wtc_significance,
+                seed=wtc_seed,
             )
         except Exception as exc:
             logger.warning("ROI WTC computation failed: %s", exc)

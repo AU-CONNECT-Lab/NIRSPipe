@@ -146,3 +146,24 @@ def test_ignore_absent_is_empty_list():
 
 def test_motion_correction_enum_is_unwrapped():
     assert _prep(motion_correction=_Model.spm).motion_correction == "spm"
+
+
+# ---- drift model needs its cutoff ----
+
+def test_cosine_drift_without_a_cutoff_is_rejected():
+    # nilearn multiplies the cutoff by the frame times, so without this the run dies
+    # several minutes in with "unsupported operand type(s) for *: 'NoneType' and 'float'"
+    from fnirs_pipe.pipeline.post_pipeline import PostConfig
+
+    with pytest.raises(ValueError, match="drift-high-pass"):
+        PostConfig(subject="01", cardiac_l_freq=0.7, cardiac_h_freq=1.5,
+                   resp_l_freq=0.1, resp_h_freq=0.5, drift_model="cosine")
+
+
+def test_the_other_drift_models_need_no_cutoff():
+    from fnirs_pipe.pipeline.post_pipeline import PostConfig
+
+    bands = dict(subject="01", cardiac_l_freq=0.7, cardiac_h_freq=1.5,
+                 resp_l_freq=0.1, resp_h_freq=0.5)
+    assert PostConfig(**bands, drift_model="polynomial", drift_order=3).drift_order == 3
+    assert PostConfig(**bands).drift_model is None

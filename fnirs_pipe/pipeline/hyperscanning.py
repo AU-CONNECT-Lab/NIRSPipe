@@ -336,6 +336,7 @@ def _pairwise_wtc(
     fmin: float,
     fmax: float,
     significance: bool = False,
+    cache: bool = True,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray | None]:
     r"""Morlet wavelet transform coherence for one signal pair (0 = independent, 1 = locked).
 
@@ -349,14 +350,21 @@ def _pairwise_wtc(
     band-limited to ``[fmin, fmax]`` and decimated by ``step``. With ``significance``
     the fourth return is the per-frequency Monte Carlo significance level (else None).
 
+    ``cache`` is pycwt's on-disk store of significance curves. It is keyed on the AR1
+    coefficients and the wavelet grid but not on the seed or the surrogate count, and lives
+    in the user's home directory, so a seeded run has to switch it off or a curve computed
+    under unknown settings can stand in for the one that was asked for. Seeding itself
+    happens once per run in the caller, not here.
+
     Backend: `pycwt.wct <https://pycwt.readthedocs.io/en/development/reference/#pycwt.wct>`_.
     """
     import pycwt
 
+    kwargs: dict = {} if cache else {"cache": False}
     WCT, _, coi, freqs, signif = pycwt.wct(
         sig1, sig2, dt=dt,
         dj=1.0 / 12,  # 12 sub-octaves per octave (pycwt default; frequency-axis resolution)
-        sig=significance, normalize=True,
+        sig=significance, normalize=True, **kwargs,
     )
     n_sig = len(sig1)
     WCT   = WCT[:, :n_sig]
@@ -384,12 +392,21 @@ def _wtc_over_pairs(
     fmin: float,
     fmax: float,
     significance: bool = False,
+    seed: int | None = None,
 ) -> WTCResult:
     """Run pairwise Morlet WTC over precomputed per-subject {label: signal} maps.
 
     Signals are matched by label; a label absent for either subject yields None for that pair.
     Time axis decimated to ~1 Hz for display; frequency axis filtered to [fmin, fmax] Hz.
     significance adds a per-frequency Monte Carlo level to each pair (slow; ~300 surrogate runs).
+
+    ``seed`` makes those levels reproducible. It is applied once here rather than per pair:
+    the surrogates come from numpy's global legacy RNG inside pycwt, which takes no seed
+    argument, and seeding every pair with one number would hand nearly identical surrogates
+    to channels with similar autocorrelation, turning the Monte Carlo error into a bias
+    shared by the whole montage. Seeding once lets the stream advance, so each pair draws
+    fresh numbers. The cost is that a pair's level depends on how many ran before it, so
+    changing the channel set moves the levels of everything after it.
     """
     subject_ids = list(raws.keys())
     ref_raw = raws[subject_ids[0]]
@@ -401,25 +418,33 @@ def _wtc_over_pairs(
     shared_freqs: np.ndarray | None = None
     shared_times: np.ndarray | None = None
 
-    for sub1, sub2 in combinations(subject_ids, 2):
-        sig_map1, sig_map2 = signals[sub1], signals[sub2]
-        pair_data: dict[str, dict | None] = {}
-        for label in labels:
-            sig1, sig2 = sig_map1.get(label), sig_map2.get(label)
-            if sig1 is None or sig2 is None:
-                pair_data[label] = None
-                continue
-            try:
-                WCT_band, freqs_band, coi_dec, sig_band = _pairwise_wtc(
-                    sig1, sig2, dt, step, fmin, fmax, significance)
-                if shared_freqs is None:
-                    shared_freqs = freqs_band
-                    shared_times = ref_raw.times[::step]
-                pair_data[label] = {"wtc": WCT_band, "coi": coi_dec, "sig": sig_band}
-            except Exception as exc:
-                logger.warning("WTC failed %s-%s label %s: %s", sub1, sub2, label, exc)
-                pair_data[label] = None
-        result_pairs[(sub1, sub2)] = pair_data
+    rng_state = np.random.get_state() if seed is not None else None
+    if seed is not None:
+        np.random.seed(seed)
+    try:
+        for sub1, sub2 in combinations(subject_ids, 2):
+            sig_map1, sig_map2 = signals[sub1], signals[sub2]
+            pair_data: dict[str, dict | None] = {}
+            for label in labels:
+                sig1, sig2 = sig_map1.get(label), sig_map2.get(label)
+                if sig1 is None or sig2 is None:
+                    pair_data[label] = None
+                    continue
+                try:
+                    WCT_band, freqs_band, coi_dec, sig_band = _pairwise_wtc(
+                        sig1, sig2, dt, step, fmin, fmax, significance,
+                        cache=seed is None)
+                    if shared_freqs is None:
+                        shared_freqs = freqs_band
+                        shared_times = ref_raw.times[::step]
+                    pair_data[label] = {"wtc": WCT_band, "coi": coi_dec, "sig": sig_band}
+                except Exception as exc:
+                    logger.warning("WTC failed %s-%s label %s: %s", sub1, sub2, label, exc)
+                    pair_data[label] = None
+            result_pairs[(sub1, sub2)] = pair_data
+    finally:
+        if rng_state is not None:
+            np.random.set_state(rng_state)
 
     return WTCResult(
         pairs=result_pairs,
@@ -433,11 +458,13 @@ def compute_wtc(
     fmin: float = 0.004,
     fmax: float = 0.20,
     significance: bool = False,
+    seed: int | None = None,
 ) -> WTCResult:
     """Compute pairwise WTC per HbO channel using pycwt Morlet wavelet.
 
     Channels are matched by S-D label across subjects; time axis decimated to ~1 Hz.
-    significance adds a Monte Carlo significance level per pair (slow; see _wtc_over_pairs).
+    significance adds a Monte Carlo significance level per pair (slow; see _wtc_over_pairs),
+    and seed makes it reproducible.
     """
     subject_ids = list(raws.keys())
     if len(subject_ids) < 2:
@@ -452,7 +479,7 @@ def compute_wtc(
         }
 
     return _wtc_over_pairs(
-        raws, signals, list(signals[subject_ids[0]]), fmin, fmax, significance)
+        raws, signals, list(signals[subject_ids[0]]), fmin, fmax, significance, seed)
 
 
 def _roi_averaged_signals(
@@ -486,6 +513,7 @@ def compute_wtc_roi(
     fmin: float = 0.004,
     fmax: float = 0.20,
     significance: bool = False,
+    seed: int | None = None,
 ) -> WTCResult:
     """Compute pairwise WTC on ROI-averaged HbO signals.
 
@@ -509,7 +537,7 @@ def compute_wtc_roi(
         for sid, raw in raws.items()
     }
 
-    return _wtc_over_pairs(raws, signals, list(roi_map), fmin, fmax, significance)
+    return _wtc_over_pairs(raws, signals, list(roi_map), fmin, fmax, significance, seed)
 
 
 def compute_pairwise_coherence(

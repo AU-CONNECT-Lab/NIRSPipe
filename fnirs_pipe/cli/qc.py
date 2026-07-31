@@ -289,6 +289,7 @@ def cmd_epoch(
 def cmd_hyper_post(
     bids_dir: Path, output_dir: Path, pairs_csv: Path, group_id: str | None,
     roi_mapping: Path | None, wtc_fmin: float, wtc_fmax: float, wtc_significance: bool,
+    wtc_seed: int | None,
     isc_threshold: float, normalize: bool, no_align: bool,
     session_label: list[str] | None, task_label: list[str] | None,
     skip_bids_validation: bool,
@@ -339,6 +340,7 @@ def cmd_hyper_post(
             wtc_fmin=wtc_fmin,
             wtc_fmax=wtc_fmax,
             wtc_significance=wtc_significance,
+            wtc_seed=wtc_seed,
             isc_threshold=isc_threshold,
         )
 
@@ -478,6 +480,10 @@ def _build_parser() -> argparse.ArgumentParser:
     hp.add_argument("--wtc-significance", action="store_true",
                     help="Overlay a Monte Carlo significance contour on WTC "
                          "(slow: ~300 surrogate runs per channel pair).")
+    hp.add_argument("--wtc-seed", type=int, default=None,
+                    help="Seed the Monte Carlo surrogates so --wtc-significance is "
+                         "reproducible. Also bypasses pycwt's on-disk cache, which is not "
+                         "keyed on the seed. Omit for the previous behaviour.")
     hp.add_argument("--isc-threshold", type=float, default=0.3,
                     help="Minimum mean ISC to draw an arc in the connectivity circle.")
     hp.add_argument("--normalize", action=argparse.BooleanOptionalAction, default=False,
