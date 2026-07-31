@@ -66,7 +66,42 @@ def _label(key: str) -> str:
     return f"{suffix} ({desc})" if desc else suffix
 
 
-def _step_detail(step: str | None, params: dict[str, Any]) -> str:
+# Metric family shown on an SQM node. A key whose leading token says nothing on its own
+# gets an explicit name here; every other key falls back to the token before the first "_".
+_SQM_FAMILIES = {
+    "channel_retention": "retention",
+    "pct_data": "retention",
+    "ch_dist": "distance",
+    "mean_amp": "amplitude",
+    "hbo_hbr": "hbo/hbr",
+}
+
+
+def _sqm_detail(metrics: list[str], width: int = 24, max_lines: int = 3) -> str:
+    """The metric families a checkpoint computed, wrapped to fit inside a node box.
+
+    ["sci_mean", "ch_dist_min", "gvtd_p95"] -> "sci distance gvtd"
+
+    The full key list stays in the sidecar; only the families are drawn, or a 27-metric
+    checkpoint would need a paragraph.
+    """
+    import textwrap
+
+    families: list[str] = []
+    for key in metrics:
+        name = next((v for k, v in _SQM_FAMILIES.items() if key.startswith(k)),
+                    key.split("_")[0])
+        if name not in families:
+            families.append(name)
+
+    lines = textwrap.wrap(" ".join(families), width=width) or [""]
+    if len(lines) > max_lines:
+        lines = lines[:max_lines]
+        lines[-1] += " …"
+    return "\n".join(lines)
+
+
+def _step_detail(step: str | None, params: dict[str, Any], data: dict[str, Any] | None = None) -> str:
     """The settings a step actually used, short enough to sit under the node label.
 
     bandpass     + {high_pass: 0.01, low_pass: 0.5} -> "0.01-0.5 Hz"
@@ -106,6 +141,9 @@ def _step_detail(step: str | None, params: dict[str, Any]) -> str:
     if step == "motion_correction":
         return str(pick("motion_correction") or "")
 
+    if step in ("sqm", "sqm_raw"):
+        return _sqm_detail((data or {}).get("metrics") or [])
+
     if step in ("glm_residuals", "glm_fit", "design_matrix"):
         bits = [pick("hrf_model"), pick("noise_model")]
         if (drift := pick("drift_model")) is not None:
@@ -119,6 +157,8 @@ def _state_line(data: dict[str, Any]) -> str:
     """Shape of the data at this node: "40/56 ch · 2 Hz · 595 s". Empty for older sidecars."""
     if not data:
         return ""
+    if (n_metrics := data.get("n_metrics")) is not None:
+        return f"{n_metrics} metrics"          # a QC checkpoint holds numbers, not signal
     bits: list[str] = []
     n, bad = data.get("n_channels"), data.get("n_bad") or 0
     if n is not None:
@@ -149,14 +189,15 @@ def scan(nirs_dir: Path) -> dict[str, Node]:
             continue
         key = _key(sidecar)
         params = meta.get("parameters") or {}
+        data = meta.get("data") or {}
         nodes[key] = Node(
             key=key,
             label=_label(key),
             step=meta.get("step"),
             params=params,
             sources=[_key(s) for s in (meta.get("Sources") or [])],
-            detail=_step_detail(meta.get("step"), params),
-            state=_state_line(meta.get("data") or {}),
+            detail=_step_detail(meta.get("step"), params, data),
+            state=_state_line(data),
         )
 
     # Sources may name files outside nirs_dir (the BIDS input); add them as roots.
@@ -234,7 +275,9 @@ def to_mermaid(nodes: dict[str, Node]) -> str:
         lines.append(f'    {ident(n.key)}["{text}"]')
     for node in ordered:
         for src in node.sources:
-            edge = " ".join(p for p in (node.step, node.detail) if p)
+            # a wrapped detail is drawn on several lines in the PNG; a mermaid edge label
+            # is one line, and a raw newline would break the arrow
+            edge = " ".join(p for p in (node.step, node.detail.replace("\n", " ")) if p)
             arrow = f"-- {edge} -->" if edge else "-->"
             lines.append(f"    {ident(src)} {arrow} {ident(node.key)}")
     return "\n".join(lines)

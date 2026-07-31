@@ -163,6 +163,64 @@ def test_the_settings_reach_the_mermaid_edge(tmp_path):
     assert "-- bandpass 0.01-0.5 Hz -->" in to_mermaid(scan(tmp_path))
 
 
+# ---- SQM checkpoints ----
+#
+# Both checkpoints are named after their step, so before this they read "sqm" and nothing
+# else, and the graph could not tell a 27-metric raw checkpoint from a 4-metric final one.
+
+_RAW_METRICS = ["sci_mean", "channel_retention_rate", "ch_dist_mean", "psp_mean",
+                "cp_mean", "cv_mean_760", "snr_mean", "mean_amp_mean",
+                "spike_count", "gvtd_p95"]
+
+
+def test_an_sqm_node_names_the_metric_families(tmp_path):
+    _sidecar(tmp_path, "sub-01_sqm_raw", step="sqm_raw", sources=["/out/in.snirf"],
+             data={"n_metrics": len(_RAW_METRICS), "metrics": _RAW_METRICS})
+
+    node = scan(tmp_path)["sub-01_sqm_raw"]
+    assert node.detail.replace("\n", " ") == (
+        "sci retention distance psp cp cv snr amplitude spike gvtd")
+    assert node.state == "10 metrics"
+
+
+def test_the_two_checkpoints_read_differently(tmp_path):
+    # the point of the whole field: post replaces the prep checkpoint with a thinner one
+    _sidecar(tmp_path, "sub-01_sqm_raw", step="sqm_raw", sources=["/out/in.snirf"],
+             data={"n_metrics": len(_RAW_METRICS), "metrics": _RAW_METRICS})
+    _sidecar(tmp_path, "sub-01_sqm", step="sqm", sources=["/out/in.snirf"],
+             data={"n_metrics": 4, "metrics": ["hbo_hbr_corr_mean", "gcor_hbo",
+                                               "gcor_hbr", "pct_data_retained"]})
+
+    nodes = scan(tmp_path)
+    assert nodes["sub-01_sqm"].detail == "hbo/hbr gcor retention"
+    assert nodes["sub-01_sqm"].detail != nodes["sub-01_sqm_raw"].detail
+
+
+def test_a_long_family_list_is_wrapped_not_run_on(tmp_path):
+    # the figure shrinks the font to the longest line, so an unwrapped list would render
+    # every node's text at a size chosen by the worst one
+    _sidecar(tmp_path, "sub-01_sqm_raw", step="sqm_raw", sources=["/out/in.snirf"],
+             data={"n_metrics": len(_RAW_METRICS), "metrics": _RAW_METRICS})
+
+    lines = scan(tmp_path)["sub-01_sqm_raw"].detail.split("\n")
+    assert len(lines) > 1
+    assert all(len(line) <= 24 for line in lines)
+
+
+def test_the_wrapped_detail_stays_on_one_mermaid_line(tmp_path):
+    _sidecar(tmp_path, "sub-01_sqm_raw", step="sqm_raw", sources=["/out/in.snirf"],
+             data={"n_metrics": len(_RAW_METRICS), "metrics": _RAW_METRICS})
+
+    text = to_mermaid(scan(tmp_path))
+    assert "\n" not in text.split("-- sqm_raw ")[1].split("-->")[0]
+
+
+def test_an_sqm_sidecar_without_metrics_says_nothing(tmp_path):
+    # sidecars written before the field existed
+    _sidecar(tmp_path, "sub-01_sqm", step="sqm", sources=["/out/in.snirf"])
+    assert scan(tmp_path)["sub-01_sqm"].detail == ""
+
+
 # ---- data shape on the node ----
 
 @pytest.mark.parametrize("data, expected", [

@@ -21,8 +21,12 @@ _X_GAP, _Y_GAP = 3.6, 1.5
 
 
 def _fit(text: str, base: float, max_chars: int) -> float:
-    """Shrink the font rather than let a long line run outside the box."""
-    return base if len(text) <= max_chars else base * max_chars / len(text)
+    """Shrink the font rather than let a long line run outside the box.
+
+    Measured on the longest line, so wrapped text is not shrunk for its total length.
+    """
+    longest = max((len(line) for line in text.split("\n")), default=0)
+    return base if longest <= max_chars else base * max_chars / longest
 
 
 def provenance_figure(nodes: dict[str, Node], title: str | None = None):
@@ -79,8 +83,11 @@ def provenance_figure(nodes: dict[str, Node], title: str | None = None):
         # three lines: what it is, how it was made, and the shape of the data left behind
         ax.text(x, y + 0.28, node.label, ha="center", va="center",
                 fontsize=9, fontweight="bold", color="#2c3e50", zorder=3)
-        if node.step:
-            made = " ".join(p for p in (node.step, node.detail) if p)
+        # the SQM checkpoints are named after their step, so printing it again under the
+        # label would spend the line on a word already there
+        step = node.step if node.step != node.label else ""
+        made = " ".join(p for p in (step, node.detail) if p)
+        if made:
             ax.text(x, y + 0.02, made, ha="center", va="center",
                     fontsize=_fit(made, 6.5, 24), color="#7f8c8d", zorder=3)
         if node.state:

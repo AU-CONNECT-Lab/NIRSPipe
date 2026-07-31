@@ -1319,6 +1319,9 @@ def save_sqm_toml(
             "pipeline_version": __version__,
             "step": step,
             "Sources": [Path(source).as_posix()],
+            # which metrics this checkpoint actually computed: the two checkpoints measure
+            # different things, and without the list the graph shows both as just "sqm"
+            "data": {"n_metrics": len(scalars), "metrics": list(scalars)},
         })
     logger.info("sub-%s | SQM TOML → %s", subject, out_path)
 
