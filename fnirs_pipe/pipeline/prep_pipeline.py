@@ -21,7 +21,7 @@ import mne.io
 import numpy as np
 
 from fnirs_pipe import __version__
-from fnirs_pipe.io.derivatives import build_output_path, carry_entities, write_sidecar_json
+from fnirs_pipe.io.derivatives import build_output_path, carry_entities, data_state, write_sidecar_json
 from fnirs_pipe.io.snirf import write_snirf
 from fnirs_pipe.exceptions import StageError
 from fnirs_pipe.utils import is_optical_density
@@ -227,6 +227,7 @@ def run_prep(
             "step": lin.step,
             "Sources": rec.sources_of(raw_step),
             "parameters": _config_dict(config),
+            "data": data_state(raw_step),
             **(extra_provenance or {}),
         })
         return rec.written(path, raw_step)

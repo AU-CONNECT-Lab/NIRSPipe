@@ -16,15 +16,21 @@ _COLORS = {
     "derivative": ("#d6eaf8", "#2874a6"),
 }
 
-_BOX_W, _BOX_H = 2.4, 0.78
-_X_GAP, _Y_GAP = 3.6, 1.25
+_BOX_W, _BOX_H = 2.4, 1.02
+_X_GAP, _Y_GAP = 3.6, 1.5
+
+
+def _fit(text: str, base: float, max_chars: int) -> float:
+    """Shrink the font rather than let a long line run outside the box."""
+    return base if len(text) <= max_chars else base * max_chars / len(text)
 
 
 def provenance_figure(nodes: dict[str, Node], title: str | None = None):
     """Layered left-to-right DAG of the run's outputs. Returns a matplotlib Figure.
 
     Nodes are placed by depth (longest path from a root), so an arrow never points
-    backwards. Each box shows the output name and the step that produced it.
+    backwards. Each box shows the output name, the step and settings that produced it,
+    and the shape of the data at that point.
     """
     import matplotlib
     matplotlib.use("Agg")
@@ -47,7 +53,7 @@ def provenance_figure(nodes: dict[str, Node], title: str | None = None):
 
     n_cols = max(columns) + 1
     height = max(len(c) for c in columns.values())
-    fig, ax = plt.subplots(figsize=(2.0 + n_cols * 1.55, 1.4 + height * 0.85))
+    fig, ax = plt.subplots(figsize=(2.0 + n_cols * 1.55, 1.4 + height * 1.05))
 
     for node in nodes.values():
         x, y = pos[node.key]
@@ -70,13 +76,16 @@ def provenance_figure(nodes: dict[str, Node], title: str | None = None):
             boxstyle="round,pad=0.02,rounding_size=0.12",
             facecolor=fill, edgecolor=edge, linewidth=1.3, zorder=2,
         ))
-        ax.text(x, y + 0.11, node.label, ha="center", va="center",
+        # three lines: what it is, how it was made, and the shape of the data left behind
+        ax.text(x, y + 0.28, node.label, ha="center", va="center",
                 fontsize=9, fontweight="bold", color="#2c3e50", zorder=3)
         if node.step:
-            # shrink long step names rather than let them run outside the box
-            size = 6.5 if len(node.step) <= 17 else 6.5 * 17 / len(node.step)
-            ax.text(x, y - 0.17, node.step, ha="center", va="center",
-                    fontsize=size, color="#7f8c8d", zorder=3)
+            made = " ".join(p for p in (node.step, node.detail) if p)
+            ax.text(x, y + 0.02, made, ha="center", va="center",
+                    fontsize=_fit(made, 6.5, 24), color="#7f8c8d", zorder=3)
+        if node.state:
+            ax.text(x, y - 0.26, node.state, ha="center", va="center",
+                    fontsize=_fit(node.state, 6.0, 26), color="#95a5a6", zorder=3)
 
     xs = [p[0] for p in pos.values()]
     ys = [p[1] for p in pos.values()]

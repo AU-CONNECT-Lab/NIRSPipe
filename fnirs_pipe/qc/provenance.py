@@ -32,6 +32,8 @@ class Node:
     sources: list[str] = field(default_factory=list)   # keys of parent nodes
     domain: str = "derivative"
     depth: int = 0
+    detail: str = ""                           # settings the step used, e.g. "0.01-0.5 Hz"
+    state: str = ""                            # shape of the data here, e.g. "40/56 ch · 2 Hz"
 
 
 def _key(path: str | Path) -> str:
@@ -64,6 +66,70 @@ def _label(key: str) -> str:
     return f"{suffix} ({desc})" if desc else suffix
 
 
+def _step_detail(step: str | None, params: dict[str, Any]) -> str:
+    """The settings a step actually used, short enough to sit under the node label.
+
+    bandpass     + {high_pass: 0.01, low_pass: 0.5} -> "0.01-0.5 Hz"
+    beer_lambert + {dpf: [6.0]}                     -> "dpf 6.0"
+    unknown step, or the keys are absent            -> ""
+
+    Sidecars carry the whole config, so each step names only the keys that describe it.
+    """
+    def pick(*keys: str) -> Any:
+        for k in keys:
+            if (v := params.get(k)) is not None:
+                return v
+        return None
+
+    if step == "bandpass":
+        lo, hi = pick("high_pass", "l_freq"), pick("low_pass", "h_freq")
+        if lo is not None and hi is not None:
+            return f"{lo:g}-{hi:g} Hz"
+        if hi is not None:
+            return f"<{hi:g} Hz"
+        return f">{lo:g} Hz" if lo is not None else ""
+
+    if step in ("resample", "glm_residuals_broadband"):
+        v = pick("sfreq", "resample_sfreq")
+        return f"{v:g} Hz" if v is not None else ""
+
+    if step == "beer_lambert":
+        dpf = pick("dpf")
+        if isinstance(dpf, (list, tuple)):
+            dpf = ", ".join(f"{d:g}" for d in dpf)
+        return f"dpf {dpf}" if dpf is not None else ""
+
+    if step == "sci_pruning":
+        thr = pick("sci_threshold")
+        return f"thr {thr:g}" if thr is not None else ""
+
+    if step == "motion_correction":
+        return str(pick("motion_correction") or "")
+
+    if step in ("glm_residuals", "glm_fit", "design_matrix"):
+        bits = [pick("hrf_model"), pick("noise_model")]
+        if (drift := pick("drift_model")) is not None:
+            bits.append(f"{drift} drift")
+        return " / ".join(str(b) for b in bits if b)
+
+    return ""
+
+
+def _state_line(data: dict[str, Any]) -> str:
+    """Shape of the data at this node: "40/56 ch · 2 Hz · 595 s". Empty for older sidecars."""
+    if not data:
+        return ""
+    bits: list[str] = []
+    n, bad = data.get("n_channels"), data.get("n_bad") or 0
+    if n is not None:
+        bits.append(f"{n - bad}/{n} ch" if bad else f"{n} ch")
+    if (sfreq := data.get("sfreq")) is not None:
+        bits.append(f"{sfreq:g} Hz")
+    if (dur := data.get("duration_s")) is not None:
+        bits.append(f"{dur:g} s")
+    return " · ".join(bits)
+
+
 def _domain_of(label: str, is_root: bool) -> str:
     if is_root:
         return "input"
@@ -82,12 +148,15 @@ def scan(nirs_dir: Path) -> dict[str, Node]:
         if "step" not in meta:                 # not a provenance sidecar
             continue
         key = _key(sidecar)
+        params = meta.get("parameters") or {}
         nodes[key] = Node(
             key=key,
             label=_label(key),
             step=meta.get("step"),
-            params=meta.get("parameters") or {},
+            params=params,
             sources=[_key(s) for s in (meta.get("Sources") or [])],
+            detail=_step_detail(meta.get("step"), params),
+            state=_state_line(meta.get("data") or {}),
         )
 
     # Sources may name files outside nirs_dir (the BIDS input); add them as roots.
@@ -160,9 +229,12 @@ def to_mermaid(nodes: dict[str, Node]) -> str:
 
     ordered = sorted(nodes.values(), key=lambda n: (n.depth, n.label))
     lines = ["flowchart LR"]
-    lines += [f'    {ident(n.key)}["{n.label}"]' for n in ordered]
+    for n in ordered:
+        text = f"{n.label}<br/><small>{n.state}</small>" if n.state else n.label
+        lines.append(f'    {ident(n.key)}["{text}"]')
     for node in ordered:
         for src in node.sources:
-            arrow = f"-- {node.step} -->" if node.step else "-->"
+            edge = " ".join(p for p in (node.step, node.detail) if p)
+            arrow = f"-- {edge} -->" if edge else "-->"
             lines.append(f"    {ident(src)} {arrow} {ident(node.key)}")
     return "\n".join(lines)

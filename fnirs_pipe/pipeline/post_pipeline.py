@@ -282,7 +282,7 @@ def _write_rest_derivatives(
 
 def _write_step_snirf(haemo: mne.io.Raw, config: PostConfig, output_dir: Path, desc: str, rec: Recorder, source_entities: dict[str, str] | None = None) -> Path:
     from fnirs_pipe import __version__
-    from fnirs_pipe.io.derivatives import build_output_path, carry_entities, write_sidecar_json
+    from fnirs_pipe.io.derivatives import build_output_path, carry_entities, data_state, write_sidecar_json
     from fnirs_pipe.io.snirf import write_snirf
 
     entities = carry_entities(source_entities)
@@ -303,9 +303,13 @@ def _write_step_snirf(haemo: mne.io.Raw, config: PostConfig, output_dir: Path, d
         "pipeline_version": __version__,
         "step": lin.step if lin else None,
         "Sources": rec.sources_of(haemo),
-        "high_pass": config.high_pass,
-        "low_pass": config.low_pass,
-        "resample_sfreq": config.resample_sfreq,
+        "parameters": {
+            "high_pass": config.high_pass,
+            "low_pass": config.low_pass,
+            "resample_sfreq": config.resample_sfreq,
+            **(lin.params if lin else {}),
+        },
+        "data": data_state(haemo),
     })
     logger.info("sub-%s | %s snirf → %s", config.subject, desc, out_path)
     return rec.written(out_path, haemo)

@@ -6,6 +6,10 @@ All notable changes to this project will be documented in this file.
 
 ## [0.19.0] - 2026-07-31
 
+### Added
+- Sidecars record the shape of the data each step left behind: channel count, how many were marked bad, sampling rate and duration
+- The provenance diagram shows the settings each step used (filter band, dpf, motion-correction method, GLM models) and the data shape at every node, instead of the step name alone
+
 ### Changed
 - Per-subject log, run record, script and provenance diagram lose the timestamp in their names (`sub-01.log`, `sub-01.toml`); a re-run overwrites them
 - The 3-view brain figure colours the source-detector links by SCI, like the flat map beside it, instead of spheres at channel midpoints
