@@ -15,6 +15,8 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - The provenance diagram moves from `sub-XX/logs/` to `sub-XX/figures/provenance.png` and is shown in the QC report; `fnirs-qc provenance` writes to the same place, so re-rendering refreshes the diagram an existing report displays
 - The two SQM checkpoints name the metric families they computed, so the diagram distinguishes the raw checkpoint from the thinner one post-processing leaves behind, instead of showing both as `sqm`
+- The QC report's Provenance section lists every output with the step that made it and a line saying what that step did
+- The Methods paragraph is built from the sidecars the run wrote rather than from the configuration, so it describes what actually ran
 - The provenance diagram renders at 300 dpi, matching the other report figures
 - Per-subject log, run record, script and provenance diagram lose the timestamp in their names (`sub-01.log`, `sub-01.toml`); a re-run overwrites them
 - The 3-view brain figure colours the source-detector links by SCI, like the flat map beside it, instead of spheres at channel midpoints; the surface is opaque so the far side of the head no longer shows through, and optodes are red (source) / blue (detector)
@@ -23,6 +25,7 @@ All notable changes to this project will be documented in this file.
 - GLM outputs carry the subject and task of their input: `sub-01_task-tapping_design_matrix.csv`, and likewise for `glm_results.csv` and `contrasts.csv`
 
 ### Fixed
+- The Methods paragraph stopped after the Beer-Lambert sentence: filtering, resampling and the GLM were never described, because the report built the text without the post-processing configuration
 - Channels marked bad during preprocessing were unmarked again as soon as postprocessing reloaded the data, so filtering, resampling and the GLM all treated SCI-rejected channels as good; the marks now travel with the file
 - A short channel rejected by SCI was still averaged into the short-channel regressor, and that regressor sits in the design matrix, so one bad channel shifted the fit of every channel
 - mALFF and zALFF were standardized against a mean and standard deviation taken over all channels, rejected ones included, distorting the value of every good channel

@@ -682,6 +682,20 @@
   </div>
 {% endif %}
 
+{% if provenance_rows %}
+<table>
+  <tr><th>Output</th><th>Step</th><th>What it did</th><th>Settings</th></tr>
+  {% for row in provenance_rows %}
+  <tr>
+    <td><code>{{ row.name }}</code></td>
+    <td><code>{{ row.step }}</code></td>
+    <td>{{ row.what }}</td>
+    <td>{{ row.settings }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% endif %}
+
 <!-- ============================================================= methods -->
 <h2 id="Methods">Methods</h2>
 <p style="font-size:0.85rem; color:#666;">

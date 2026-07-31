@@ -245,11 +245,24 @@ def generate_methods_text(
     post_config: Any = None,
     mode: str | None = None,
     versions: dict[str, str] | None = None,
+    nirs_dir: Any = None,
 ) -> dict[str, str]:
+    """Methods prose for one run.
+
+    Given nirs_dir, the steps are read from the sidecars that run wrote, so the text
+    describes what actually happened; the config is the fallback for a tree with no
+    sidecars, and it can only describe what was requested.
+    """
     steps = _load_steps()
     refs = _load_refs()
     ver = (versions or {}).get("fnirs-pipe", "unknown")
-    active = _active_steps(prep_config, post_config, mode)
+
+    active = []
+    if nirs_dir is not None:
+        from fnirs_pipe.qc.boilerplate.vocabulary import steps_from_sidecars
+        active = steps_from_sidecars(nirs_dir, mode)
+    if not active:
+        active = _active_steps(prep_config, post_config, mode)
 
     prose_plain = _with_connectives(_collect_prose(active, steps, refs, "plain"))
     prose_md    = _with_connectives(_collect_prose(active, steps, refs, "markdown"))
@@ -282,6 +295,23 @@ def generate_methods_text(
     html = _build_html(header_plain, refs, active, steps)
 
     return {"plain": plain, "markdown": markdown, "latex": latex, "html": html}
+
+
+def step_sentence(step: str | None, params: dict, mode: str | None = None) -> str:
+    """One line saying what a step did, for a table rather than a paragraph.
+
+    The Methods sentence where there is one, without its citations; otherwise the plain
+    description of a bookkeeping step. Empty for a step this module has never heard of.
+    """
+    from fnirs_pipe.qc.boilerplate.vocabulary import (
+        boilerplate_key, step_summary, template_slots,
+    )
+
+    key = boilerplate_key(step, params, mode)
+    section = _load_steps().get(key) if key else None
+    if not section:
+        return step_summary(step)
+    return _render_step(section["plain"], template_slots(key, params), "")
 
 
 def collect_software_versions() -> dict[str, str]:

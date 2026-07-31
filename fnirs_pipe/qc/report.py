@@ -110,6 +110,33 @@ def _guard(label: str, errors: list, subject: str):
 # Serialisation helpers
 # ---------------------------------------------------------------------------
 
+def _section_provenance(nirs_dir: Path, mode: str | None, subject: str, errors: list) -> dict:
+    """One row per output: what it is, what made it, and what that step did.
+
+    The diagram carries the topology; this carries the narrative, which does not fit in a
+    node box. Both come from the same sidecars.
+    """
+    rows: list[dict] = []
+    with _guard("Provenance table", errors, subject):
+        from fnirs_pipe.qc.boilerplate.generate import step_sentence
+        from fnirs_pipe.qc.provenance import scan
+
+        seen: set[tuple] = set()
+        for node in sorted(scan(nirs_dir).values(), key=lambda n: (n.depth, n.label)):
+            if not node.step:
+                continue
+            row = (node.label, node.step,
+                   step_sentence(node.step, node.params, mode),
+                   node.detail.replace("\n", " "))
+            # several tasks of one subject repeat every step with the same settings, and
+            # the table is a narrative of the steps rather than a listing of the files
+            if row in seen:
+                continue
+            seen.add(row)
+            rows.append(dict(zip(("name", "step", "what", "settings"), row)))
+    return {"provenance_rows": rows}
+
+
 def _save_mpl_fig(fig, path: Path) -> None:
     import matplotlib.figure
     if not isinstance(fig, matplotlib.figure.Figure):
@@ -795,6 +822,7 @@ def build_subject_report(
     # motion-correction footprint scalars (computed in _section_motion) into the metrics panel
     if sqm_vars.get("sqm") is not None:
         sqm_vars["sqm"].update(motion_vars.get("motion_corrected_sqm") or {})
+    provenance_vars   = _section_provenance(out_path.parent / "nirs", mode, subject, errors)
     ch_summary_vars   = _section_channel_summary(
                             sqm_vars["channel_rows"], sqm_vars["sqm"], subject, errors, figures_dir,
                             sci_thresh=getattr(config, "sci_threshold", 0.75))
@@ -823,7 +851,8 @@ def build_subject_report(
         sci_scores=sci_scores,
         config=config,
         errors=errors,
-        methods=generate_methods_text(config, versions=versions),
+        methods=generate_methods_text(config, versions=versions, mode=mode,
+                                      nirs_dir=out_path.parent / "nirs"),
 
         **sci_vars,
         **motion_vars,
@@ -839,6 +868,7 @@ def build_subject_report(
         **glm_vars,
         **rest_vars,
         **ch_summary_vars,
+        **provenance_vars,
         denoise_carpet_path=denoise_carpet_path,
         provenance_path=provenance_path,
         mode=mode or "",
