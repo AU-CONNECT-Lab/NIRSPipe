@@ -215,6 +215,15 @@ def test_the_wrapped_detail_stays_on_one_mermaid_line(tmp_path):
     assert "\n" not in text.split("-- sqm_raw ")[1].split("-->")[0]
 
 
+def test_the_node_keeps_the_data_it_was_given(tmp_path):
+    # the report's table shows the full metric names, which only the raw dict has: state
+    # is already compressed to a count and detail to the families
+    _sidecar(tmp_path, "sub-01_sqm_raw", step="sqm_raw", sources=["/out/in.snirf"],
+             data={"n_metrics": len(_RAW_METRICS), "metrics": _RAW_METRICS})
+
+    assert scan(tmp_path)["sub-01_sqm_raw"].data["metrics"] == _RAW_METRICS
+
+
 def test_an_sqm_sidecar_without_metrics_says_nothing(tmp_path):
     # sidecars written before the field existed
     _sidecar(tmp_path, "sub-01_sqm", step="sqm", sources=["/out/in.snirf"])

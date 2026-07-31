@@ -15,7 +15,7 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - The provenance diagram moves from `sub-XX/logs/` to `sub-XX/figures/provenance.png` and is shown in the QC report; `fnirs-qc provenance` writes to the same place, so re-rendering refreshes the diagram an existing report displays
 - The two SQM checkpoints name the metric families they computed, so the diagram distinguishes the raw checkpoint from the thinner one post-processing leaves behind, instead of showing both as `sqm`
-- The QC report's Provenance section lists every output with the step that made it and a line saying what that step did
+- The QC report's Provenance section lists every output with the step that made it and a line saying what that step did; the SQM rows expand to the full list of metric names each checkpoint recorded
 - The Methods paragraph is built from the sidecars the run wrote rather than from the configuration, so it describes what actually ran
 - The provenance diagram renders at 300 dpi, matching the other report figures
 - Per-subject log, run record, script and provenance diagram lose the timestamp in their names (`sub-01.log`, `sub-01.toml`); a re-run overwrites them

@@ -29,6 +29,7 @@ class Node:
     label: str                                 # short name shown in the diagram
     step: str | None = None                    # transformation that produced it
     params: dict[str, Any] = field(default_factory=dict)
+    data: dict[str, Any] = field(default_factory=dict)  # as recorded, before _state_line
     sources: list[str] = field(default_factory=list)   # keys of parent nodes
     domain: str = "derivative"
     depth: int = 0
@@ -195,6 +196,7 @@ def scan(nirs_dir: Path) -> dict[str, Node]:
             label=_label(key),
             step=meta.get("step"),
             params=params,
+            data=data,
             sources=[_key(s) for s in (meta.get("Sources") or [])],
             detail=_step_detail(meta.get("step"), params, data),
             state=_state_line(data),

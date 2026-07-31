@@ -133,7 +133,12 @@ def _section_provenance(nirs_dir: Path, mode: str | None, subject: str, errors: 
             if row in seen:
                 continue
             seen.add(row)
-            rows.append(dict(zip(("name", "step", "what", "settings"), row)))
+            rows.append({
+                **dict(zip(("name", "step", "what", "settings"), row)),
+                # a checkpoint's full metric names: the node box only had room for the
+                # families, a table cell has room for all of them
+                "metrics": list(node.data.get("metrics") or []),
+            })
     return {"provenance_rows": rows}
 
 

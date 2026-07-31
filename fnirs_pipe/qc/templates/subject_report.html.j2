@@ -690,7 +690,7 @@
     <td><code>{{ row.name }}</code></td>
     <td><code>{{ row.step }}</code></td>
     <td>{{ row.what }}</td>
-    <td>{{ row.settings }}</td>
+    <td>{% if row.metrics %}{{ row.metrics | join(', ') }}{% else %}{{ row.settings }}{% endif %}</td>
   </tr>
   {% endfor %}
 </table>
