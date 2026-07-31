@@ -1,0 +1,260 @@
+"""CLI parsing tests — framework-agnostic safety net for the argparse migration.
+
+These assert user-facing behaviour (option names, defaults, nargs, choices,
+required args, dispatch), so they survive the Typer -> argparse switch.
+"""
+
+import shutil
+import subprocess
+import sys
+import types
+from pathlib import Path
+
+import pytest
+
+from fnirs_pipe.cli import run as run_cli
+
+
+def _parse(argv):
+    return run_cli._build_parser().parse_args(argv)
+
+
+# The four bands carry no default on purpose (population-dependent), so every
+# invocation has to supply them.
+_BANDS = ["--cardiac-l-freq", "0.7", "--cardiac-h-freq", "1.5",
+          "--resp-l-freq", "0.2", "--resp-h-freq", "0.5"]
+
+_MIN = ["bids", "out", "participant", "--dpf", "6.0", "--sci-threshold", "0.8", *_BANDS]
+
+
+def test_help_exits_zero():
+    with pytest.raises(SystemExit) as e:
+        _parse(["--help"])
+    assert e.value.code == 0
+
+
+def test_version(capsys):
+    with pytest.raises(SystemExit) as e:
+        _parse(["--version"])
+    assert e.value.code == 0
+    assert "fnirs-pipe" in capsys.readouterr().out
+
+
+def test_missing_positionals_errors():
+    with pytest.raises(SystemExit) as e:
+        _parse([])
+    assert e.value.code == 2
+
+
+def test_analysis_level_choice_enforced():
+    with pytest.raises(SystemExit):
+        _parse(["bids", "out", "bogus"])
+
+
+def test_participant_label_space_separated():
+    # BIDS App convention: space-separated values under one flag.
+    args = _parse(_MIN + ["--participant-label", "01", "02", "03"])
+    assert args.participant_label == ["01", "02", "03"]
+
+
+def test_participant_label_repeated_flag():
+    # GUI-generated form: flag repeated per value, must accumulate (not overwrite).
+    args = _parse(_MIN + ["--participant-label", "01",
+                          "--participant-label", "02", "--participant-label", "03"])
+    assert args.participant_label == ["01", "02", "03"]
+
+
+def test_dpf_accepts_multiple_values():
+    args = _parse(["bids", "out", "participant", "--dpf", "6.0", "6.0",
+                   "--sci-threshold", "0.8", *_BANDS])
+    assert args.dpf == [6.0, 6.0]
+
+
+def test_defaults_preserved():
+    args = _parse(_MIN)
+    assert args.motion_correction == "tddr"
+    assert args.drift_order == 1
+    assert args.n_jobs == 1
+    assert args.combine_runs is False
+    assert args.no_report is False
+    assert args.participant_label is None
+
+
+@pytest.mark.parametrize("flag", ["--cardiac-l-freq", "--cardiac-h-freq",
+                                  "--resp-l-freq", "--resp-h-freq"])
+def test_bands_have_no_default(flag, capsys):
+    # Dropping any one of them must be refused rather than filled in: the bands are
+    # population-dependent and a wrong band silently corrupts SCI, PSP and band power.
+    argv = list(_MIN)
+    i = argv.index(flag)
+    del argv[i:i + 2]
+
+    with pytest.raises(SystemExit):
+        _parse(argv)
+    assert flag in capsys.readouterr().err
+
+
+def test_motion_correction_choice_rejected():
+    with pytest.raises(SystemExit):
+        _parse(_MIN + ["--motion-correction", "bogus"])
+
+
+def test_combine_runs_negatable():
+    assert _parse(_MIN + ["--combine-runs"]).combine_runs is True
+    assert _parse(_MIN + ["--no-combine-runs"]).combine_runs is False
+
+
+def test_dest_names_match_workflow_keys():
+    args = _parse(_MIN + ["--sci-threshold", "0.8", "--resample-sfreq", "2.0"])
+    d = vars(args)
+    for key in ("bids_dir", "output_dir", "analysis_level", "sci_threshold",
+                "participant_label", "motion_correction", "resample_sfreq"):
+        assert key in d
+
+
+def test_missing_dpf_exits_one(capsys):
+    # --dpf is checked in main() rather than by argparse, so it exits 1, not 2.
+    with pytest.raises(SystemExit) as e:
+        run_cli.main(["bids", "out", "participant", "--sci-threshold", "0.8", *_BANDS])
+    assert e.value.code == 1
+    assert "--dpf" in capsys.readouterr().err
+
+
+def test_dispatch_participant(monkeypatch):
+    called = {}
+    fake = types.ModuleType("fnirs_pipe.cli.workflows")
+    fake.run_participant_level = lambda opts: called.setdefault("participant", opts)
+    fake.run_group_level = lambda opts: called.setdefault("group", opts)
+    monkeypatch.setitem(sys.modules, "fnirs_pipe.cli.workflows", fake)
+
+    run_cli.main(_MIN + ["--participant-label", "01"])
+    assert called["participant"]["participant_label"] == ["01"]
+
+
+def test_dispatch_group(monkeypatch):
+    called = {}
+    fake = types.ModuleType("fnirs_pipe.cli.workflows")
+    fake.run_participant_level = lambda opts: called.setdefault("participant", opts)
+    fake.run_group_level = lambda opts: called.setdefault("group", opts)
+    monkeypatch.setitem(sys.modules, "fnirs_pipe.cli.workflows", fake)
+
+    # group still requires --dpf/--sci-threshold in current behaviour
+    run_cli.main(["bids", "out", "group", "--dpf", "6.0", "--sci-threshold", "0.8", *_BANDS])
+    assert "group" in called
+
+
+@pytest.mark.skipif(shutil.which("fnirs-pipe") is None, reason="console script not installed")
+def test_console_script_entry_point():
+    r = subprocess.run(["fnirs-pipe", "--help"], capture_output=True, text=True)
+    assert r.returncode == 0
+    assert "participant" in r.stdout
+
+
+# ── other commands: parser smoke + dispatch ──────────────────────────────────
+
+from fnirs_pipe.cli import db as db_cli
+from fnirs_pipe.cli import gui as gui_cli
+from fnirs_pipe.cli import prep as prep_cli
+from fnirs_pipe.cli import qc as qc_cli
+from fnirs_pipe.cli import rate as rate_cli
+from fnirs_pipe.cli import recon as recon_cli
+
+
+@pytest.mark.parametrize("mod", [db_cli, gui_cli, prep_cli, qc_cli, rate_cli, recon_cli])
+def test_help_exits_zero_all(mod):
+    with pytest.raises(SystemExit) as e:
+        mod._build_parser().parse_args(["--help"])
+    assert e.value.code == 0
+
+
+def test_gui_default_port():
+    assert gui_cli._build_parser().parse_args([]).port == 8050
+
+
+def test_db_merge_subcommand():
+    args = db_cli._build_parser().parse_args(["merge", "/out"])
+    assert args.func is db_cli.cmd_merge
+    assert args.db_path is None
+
+
+def test_recon_requires_subject_and_task():
+    with pytest.raises(SystemExit):
+        recon_cli._build_parser().parse_args(["in.snirf", "/bids"])  # missing --subject/--task
+    args = recon_cli._build_parser().parse_args(["in.snirf", "/bids", "--subject", "01", "--task", "tap"])
+    assert (args.subject, args.task, args.overwrite) == ("01", "tap", False)
+
+
+def test_prep_subcommands_dispatch():
+    assert prep_cli._build_parser().parse_args(
+        ["crop", "/b", "/d", "--participant-label", "01", "02", "--tmin", "5"]
+    ).func is prep_cli.cmd_crop
+    assert prep_cli._build_parser().parse_args(
+        ["edit-markers", "export", "/b", "/o", "--participant-label", "01"]
+    ).func is prep_cli.cmd_markers_export
+
+
+def test_prep_participant_label_required():
+    with pytest.raises(SystemExit):
+        prep_cli._build_parser().parse_args(["crop", "/b", "/d", "--tmin", "5"])
+
+
+def test_qc_subcommands_and_fmin_dest():
+    args = qc_cli._build_parser().parse_args(
+        ["hyper-raw", "/b", "/o", "--pairs-csv", "p.csv", "--dpf", "6.0",
+         "--cardiac-l-freq", "0.7", "--cardiac-h-freq", "1.5",
+         "--fmin", "0.02", "--fmax", "0.2"]
+    )
+    assert args.func is qc_cli.cmd_hyper_raw
+    assert args.coherence_fmin == 0.02
+    assert args.coherence_fmax == 0.2
+
+
+def test_qc_window_raw_required_opts():
+    with pytest.raises(SystemExit):
+        qc_cli._build_parser().parse_args(["window-raw", "/b", "/o"])  # missing required --task-label/--tstart/--tend
+
+
+def test_rate_subcommands():
+    assert rate_cli._build_parser().parse_args(["rate", "/out"]).func is rate_cli.cmd_rate
+    assert rate_cli._build_parser().parse_args(
+        ["hyper", "/out", "A", "tap", "--pairs-csv", "p.csv"]
+    ).func is rate_cli.cmd_hyper
+
+
+def test_missing_subcommand_errors():
+    for mod in (prep_cli, qc_cli, rate_cli, db_cli):
+        with pytest.raises(SystemExit):
+            mod._build_parser().parse_args([])
+
+
+def test_qc_provenance_dispatch():
+    args = qc_cli._build_parser().parse_args(["provenance", "/out"])
+    assert args.func is qc_cli.cmd_provenance
+    assert args.output_dir == Path("/out")
+
+
+def test_qc_provenance_requires_output_dir():
+    with pytest.raises(SystemExit):
+        qc_cli._build_parser().parse_args(["provenance"])
+
+
+def test_qc_provenance_accepts_no_options():
+    # it rebuilds the graph from sidecars alone; an option here would mean the picture
+    # depends on something the run did not record
+    with pytest.raises(SystemExit):
+        qc_cli._build_parser().parse_args(["provenance", "/out", "--cardiac-l-freq", "0.7"])
+
+
+@pytest.mark.parametrize("argv", [
+    pytest.param(["prep-raw", "/b", "/o", "01", "--dpf", "6.0"], id="prep-raw"),
+    pytest.param(["hyper-raw", "/b", "/o", "--pairs-csv", "p.csv", "--dpf", "6.0"], id="hyper-raw"),
+    pytest.param(["window-raw", "/b", "/o", "--task-label", "tap",
+                  "--tstart", "0", "--tend", "30"], id="window-raw"),
+    pytest.param(["epoch", "/b", "/o", "--task-label", "tap", "--mode", "duration"], id="epoch"),
+])
+def test_cardiac_band_stays_required(argv, capsys):
+    # The band is population-dependent and drives SCI, PSP and Cardiac Power. A default
+    # would compute all three against the wrong band instead of asking.
+    with pytest.raises(SystemExit):
+        qc_cli._build_parser().parse_args(argv)
+    assert "--cardiac-l-freq" in capsys.readouterr().err

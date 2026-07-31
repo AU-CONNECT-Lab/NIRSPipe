@@ -3,7 +3,7 @@
 # Edit at https://www.toptal.com/developers/gitignore?templates=windows,visualstudiocode,java,linux,python
 
 scripts/
-tests/
+
 docs/
 ### Java ###
 # Compiled class file
