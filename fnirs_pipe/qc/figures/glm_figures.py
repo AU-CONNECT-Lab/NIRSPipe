@@ -561,6 +561,8 @@ def design_matrix_heatmap(
 
     fig, ax = plt.subplots(figsize=(10, 4), constrained_layout=True)
     _plot_dm(design_matrix, axes=ax)
+    ax.tick_params(axis="x", labelsize=5)
+    ax.tick_params(axis="y", labelsize=7)
     buf = io.BytesIO()
     fig.savefig(buf, format="png", dpi=300, bbox_inches="tight")
     plt.close(fig)

@@ -537,7 +537,8 @@ def _section_brain(
             from PIL import Image as _PILImage
 
             ch_names = ch_names_brain if ch_names_brain is not None else list(sci_scores.keys())
-            brain_b64 = quality_brain_views(ch_names, coords_head, good_mask, raw=raw_intensity)
+            brain_b64 = quality_brain_views(ch_names, coords_head, good_mask,
+                                            raw=raw_intensity, sci_scores=sci_scores)
 
             optode_b64 = None
             with _guard("Optode flat map", errors, subject):

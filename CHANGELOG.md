@@ -4,14 +4,18 @@ All notable changes to this project will be documented in this file.
 
 <!-- Format: Keep a Changelog (https://keepachangelog.com/en/1.0.0/) -->
 
-## [Unreleased]
+## [0.19.0] - 2026-07-31
 
 ### Changed
+- Per-subject log, run record, script and provenance diagram lose the timestamp in their names (`sub-01.log`, `sub-01.toml`); a re-run overwrites them
+- The 3-view brain figure colours the source-detector links by SCI, like the flat map beside it, instead of spheres at channel midpoints
 - Writing two different files under one pipeline stage now fails instead of silently crediting an output to the wrong source
 - Postprocessing now rejects a `desc-` that disagrees with the stage stamped on the data, matching the check preprocessing already had
 - GLM outputs carry the subject and task of their input: `sub-01_task-tapping_design_matrix.csv`, and likewise for `glm_results.csv` and `contrasts.csv`
 
 ### Fixed
+- Brain figure drew each channel from its midpoint to its source instead of source to detector
+- Design matrix labels overlapped when regressors were numerous
 - Postprocessing ran once per matching subject found anywhere under the output directory, so a nested output tree from an earlier run was silently reprocessed and its results overwrote the real ones
 - With more than one task per subject, every task wrote the same `design_matrix.csv` and `glm_results.csv`, leaving only the last
 

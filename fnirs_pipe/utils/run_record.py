@@ -80,7 +80,7 @@ def write_run_record(
 ) -> None:
     """Write a TOML run record for one subject.
 
-    Output: sub_dir/logs/sub-{subject}_{timestamp}.toml  (sub_dir defaults to output_dir)
+    Output: sub_dir/logs/sub-{subject}.toml  (sub_dir defaults to output_dir)
 
     Sections:
       [environment]  — software versions + system info
@@ -158,6 +158,6 @@ def write_run_record(
         sections.append(_section("post", {"mode": _unwrap(mode), **_config_section(post_config)}))
 
     base = sub_dir if sub_dir is not None else output_dir
-    out = base / "logs" / f"sub-{subject}_{timestamp}.toml"
+    out = base / "logs" / f"sub-{subject}.toml"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text("\n".join(sections), encoding="utf-8")

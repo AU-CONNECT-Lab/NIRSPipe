@@ -75,7 +75,7 @@ def _build_script_text(
         'noted in comments, not re-run here.',
         '',
         'Reproduce:',
-        f'    python sub-{subject}_{timestamp}_script.py',
+        f'    python sub-{subject}_script.py',
         '"""',
         'from pathlib import Path',
         '',
@@ -357,6 +357,6 @@ def write_run_script(
     )
 
     base = sub_dir if sub_dir is not None else output_dir
-    out  = base / "logs" / f"sub-{subject}_{timestamp}_script.py"
+    out  = base / "logs" / f"sub-{subject}_script.py"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(text, encoding="utf-8")

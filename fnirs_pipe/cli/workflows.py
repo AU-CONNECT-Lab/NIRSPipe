@@ -139,7 +139,7 @@ def run_participant_level(args: dict[str, Any]) -> None:
         for subject in participant_label:
             sub_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             sub_dir = output_dir / f"sub-{subject}"
-            log_file = sub_dir / "logs" / f"sub-{subject}_{sub_timestamp}.log"
+            log_file = sub_dir / "logs" / f"sub-{subject}.log"
             setup_logging(verbose=verbose, log_file=log_file)
             logger.info("sub-%s | starting", subject)
             # built here purely to record what will be used; the loops below build their own
@@ -215,7 +215,7 @@ def run_participant_level(args: dict[str, Any]) -> None:
                     from fnirs_pipe.qc.provenance import write_provenance
                     for path in write_provenance(
                         sub_dir / "nirs", sub_dir / "logs",
-                        stem=f"sub-{subject}_{sub_timestamp}_provenance",
+                        stem=f"sub-{subject}_provenance",
                         title=f"sub-{subject}" + (f"  |  mode: {args['mode']}" if args.get("mode") else ""),
                     ):
                         logger.info("sub-%s | provenance → %s", subject, path)
