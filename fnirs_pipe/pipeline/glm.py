@@ -188,6 +188,20 @@ def run_glm_pipeline(
     return haemo, glm_est, dm, raw_resid
 
 
+def _entity_prefix(source_path: str | None) -> str:
+    """BIDS entity prefix carried over from the input file, so per-task outputs do not collide.
+
+    .../sub-01_task-tapping_desc-resampled_nirs.snirf -> "sub-01_task-tapping_"
+    unknown source                                    -> ""
+    """
+    if not source_path:
+        return ""
+    stem = Path(source_path).name.split(".")[0]
+    # drop the desc- entity (it describes the input, not these outputs) and the suffix
+    tokens = [t for t in stem.split("_") if not t.startswith("desc-")][:-1]
+    return "_".join(tokens) + "_" if tokens else ""
+
+
 def _save_glm_outputs(
     glm_est: Any,
     design_matrix: pd.DataFrame,
@@ -208,11 +222,12 @@ def _save_glm_outputs(
         })
 
     output_dir.mkdir(parents=True, exist_ok=True)
-    dm_path = output_dir / "design_matrix.csv"
+    prefix = _entity_prefix(source_path)
+    dm_path = output_dir / f"{prefix}design_matrix.csv"
     design_matrix.to_csv(dm_path, index=False)
     _sidecar(dm_path, "design_matrix")
 
-    res_path = output_dir / "glm_results.csv"
+    res_path = output_dir / f"{prefix}glm_results.csv"
     glm_est.to_dataframe().to_csv(res_path, index=False)
     _sidecar(res_path, "glm_fit")
     # glm_est.save(str(output_dir / "glm.h5"), overwrite=True)
@@ -223,7 +238,7 @@ def _save_glm_outputs(
             df = result.to_dataframe()
             df.insert(0, "contrast", name)
             frames.append(df)
-        con_path = output_dir / "contrasts.csv"
+        con_path = output_dir / f"{prefix}contrasts.csv"
         pd.concat(frames, ignore_index=True).to_csv(con_path, index=False)
         _sidecar(con_path, "contrasts")
 

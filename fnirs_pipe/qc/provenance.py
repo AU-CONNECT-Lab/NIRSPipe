@@ -44,6 +44,7 @@ def _label(key: str) -> str:
     sub-01_task-tapping_desc-preproc_nirs -> "preproc"   (generic 'nirs' suffix, desc wins)
     sub-01_task-tapping_desc-hbo_fc       -> "fc (hbo)"  (both informative)
     sub-01_task-tapping_alff              -> "alff"      (no desc)
+    sub-01_task-tapping_design_matrix     -> "design_matrix"  (multi-token suffix)
     design_matrix                         -> "design_matrix"  (no BIDS entities at all)
     """
     entities: dict[str, str] = {}
@@ -56,7 +57,7 @@ def _label(key: str) -> str:
 
     if not entities:
         return key
-    suffix = rest[-1] if rest else ""
+    suffix = "_".join(rest)
     desc = entities.get("desc")
     if suffix in ("", "nirs"):
         return desc or suffix or key

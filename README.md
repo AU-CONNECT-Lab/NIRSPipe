@@ -249,9 +249,9 @@ output/
 │       ├── sub-01_desc-resampled_nirs.snirf       # post: resample applied
 │       ├── sub-01_desc-errts_nirs.snirf           # post glm/rest: GLM residuals
 │       ├── sub-01_desc-sqm_nirs.json              # SQM (raw + final checkpoints)
-│       ├── design_matrix.csv                       # glm mode
-│       ├── glm_results.csv                         # glm mode
-│       ├── contrasts.csv                           # glm mode + --contrast-file
+│       ├── sub-01_design_matrix.csv                # glm mode
+│       ├── sub-01_glm_results.csv                  # glm mode
+│       ├── sub-01_contrasts.csv                    # glm mode + --contrast-file
 │       ├── sub-01_alff.tsv                         # rest mode
 │       ├── sub-01_fc.tsv                           # rest mode (channel × channel)
 │       └── sub-01_fcroi.tsv                        # rest mode + --roi-mapping (ROI × ROI)

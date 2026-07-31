@@ -19,4 +19,4 @@ def detect_sessions(output_dir: Path, subject: str) -> list[str | None]:
 
 def detect_glm(output_dir: Path, subject: str) -> bool:
     nirs_dir = output_dir / f"sub-{subject}" / "nirs"
-    return nirs_dir.exists() and any(nirs_dir.glob("glm_results.csv"))
+    return nirs_dir.exists() and any(nirs_dir.glob("*glm_results.csv"))

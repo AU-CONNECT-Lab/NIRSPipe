@@ -328,6 +328,10 @@ def _run_post_for_subject(
     tasks: list[str | None] = task_label if task_label else [None]
 
     post_layout = get_layout(output_dir, validate=False)
+    # the layout indexes every nested derivative tree under output_dir, so an unrelated
+    # sub-01 in a sibling output tree would be picked up and post-processed as if it
+    # were ours. Only this run's own subject directory counts.
+    subject_root = (output_dir / f"sub-{subject}").resolve()
     last_glm_est = last_dm = last_alff_df = last_fc_df = last_denoised = last_gcor_reg = None
     for session in sessions:
         post_config = _build_post_config(subject, session, args, toml, roi_map=roi_map)
@@ -336,7 +340,7 @@ def _run_post_for_subject(
                 p for p in get_nirs_files(
                     post_layout, subject=subject, session=session, task=task,
                 )
-                if "desc-preproc" in p.name
+                if "desc-preproc" in p.name and subject_root in Path(p).resolve().parents
             ]
 
             if not preproc_files:

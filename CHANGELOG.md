@@ -9,6 +9,11 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - Writing two different files under one pipeline stage now fails instead of silently crediting an output to the wrong source
 - Postprocessing now rejects a `desc-` that disagrees with the stage stamped on the data, matching the check preprocessing already had
+- GLM outputs carry the subject and task of their input: `sub-01_task-tapping_design_matrix.csv`, and likewise for `glm_results.csv` and `contrasts.csv`
+
+### Fixed
+- Postprocessing ran once per matching subject found anywhere under the output directory, so a nested output tree from an earlier run was silently reprocessed and its results overwrote the real ones
+- With more than one task per subject, every task wrote the same `design_matrix.csv` and `glm_results.csv`, leaving only the last
 
 ## [0.18.0] - 2026-07-28
 
