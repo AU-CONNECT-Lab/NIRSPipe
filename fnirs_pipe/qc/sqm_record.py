@@ -54,6 +54,18 @@ def scan_runs(nirs_dir: Path) -> dict[str, dict[str, Path]]:
     return runs
 
 
+def entities_of(label: str) -> dict[str, str | None]:
+    """Pull the BIDS entities back out of a run label, for the columns a database wants."""
+    return {
+        key: (m.group(1) if (m := re.search(rf"_{key}-([A-Za-z0-9]+)", label)) else None)
+        for key in ("ses", "task", "run")
+    }
+
+
+def record_path(nirs_dir: Path, label: str) -> Path:
+    return Path(nirs_dir) / f"{label}_desc-sqm_nirs.json"
+
+
 def _sidecar(path: Path) -> dict[str, Any]:
     try:
         return json.loads(path.with_suffix(".json").read_text(encoding="utf-8"))
@@ -246,7 +258,7 @@ def write_run_sqm(
         "data": {"sections": [s for s in SECTIONS if s in sections]},
         **sections,
     }
-    out_path = Path(nirs_dir) / f"{label}_desc-sqm_nirs.json"
+    out_path = record_path(nirs_dir, label)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(record, indent=2, default=str), encoding="utf-8")
     logger.info("SQM record → %s", out_path)

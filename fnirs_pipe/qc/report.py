@@ -42,6 +42,7 @@ Report sections
 
 import base64
 import csv
+import json
 import re
 from contextlib import contextmanager
 import matplotlib
@@ -83,7 +84,7 @@ from fnirs_pipe.qc.figures import (
     fc_matrix_figure,
     fc_connectogram,
 )
-from fnirs_pipe.qc.quantitative_metrics import compute_sqm
+from fnirs_pipe.qc.sqm_record import record_path as _sqm_record_path
 from fnirs_pipe.utils.logging import get_logger
 
 if TYPE_CHECKING:
@@ -495,23 +496,30 @@ def _save_channel_csv(channel_rows: list, subject: str, out_dir: Path) -> None:
 
 
 def _section_sqm(
-    raw_long: mne.io.Raw,
-    raw_haemo: mne.io.Raw,
     sci_scores: dict,
     bad_channels: list,
     subject: str,
     errors: list,
     out_dir: Path | None = None,
     *,
-    cardiac_l_freq: float,
-    cardiac_h_freq: float,
-    resp_l_freq: float,
-    resp_h_freq: float,
+    sqm_label: str | None = None,
 ) -> dict:
+    """Read this run's SQM record; the report displays, it does not compute.
+
+    The panel judges data quality, so it shows the long-channel sections; ``raw`` stands
+    in when the montage has no short channels to exclude. Nothing recomputes here: a
+    missing record is reported as an error rather than silently measured a second time.
+    """
     sqm: dict = {}
-    with _guard("SQM computation", errors, subject):
-        sqm = compute_sqm(raw_long, raw_haemo, sci_scores, bad_channels,
-                          cardiac_l_freq, cardiac_h_freq, resp_l_freq, resp_h_freq)
+    with _guard("SQM record", errors, subject):
+        if out_dir is None or sqm_label is None:
+            raise FileNotFoundError("no SQM record location for this run")
+        record = json.loads(_sqm_record_path(out_dir, sqm_label).read_text(encoding="utf-8"))
+        per_channel = record.get("per_channel") or {}
+        raw_key = "raw_long" if "raw_long" in record else "raw"
+        for key in (raw_key, "preproc"):
+            sqm.update(record.get(key) or {})
+            sqm.update(per_channel.get(key) or {})
     channel_rows = []
     for ch in sci_scores:
         pair_key = re.sub(r'\s+(\d+|hbo|hbr)$', '', ch, flags=re.IGNORECASE)
@@ -767,8 +775,13 @@ def build_subject_report(
     gcor_reg: dict | None = None,
     roi_map: dict | None = None,
     provenance_path: str | None = None,
+    sqm_label: str | None = None,
 ) -> None:
     """Render a per-subject prep QC report and save as HTML.
+
+    sqm_label names the run whose SQM record the metrics panel displays. The report is per
+    subject while the record is per run, so a subject with several tasks shows the last one
+    processed, which is already what every other section of this report shows.
 
     provenance_path is the already-rendered flow diagram, relative to out_path
     (the caller renders it: the report embeds, it does not draw).
@@ -818,12 +831,9 @@ def build_subject_report(
                                           subject, errors, figures_dir, roi_map=roi_map)
     glm_vars          = _section_glm(design_matrix, glm_est, raw_haemo, subject, errors, figures_dir, segments=segments)
     rest_vars         = _section_rest(alff_df, fc_df, subject, errors, figures_dir, fc_hbr_df=fc_hbr_df)
-    sqm_vars          = _section_sqm(raw_long, raw_haemo, sci_scores, bad_channels, subject, errors,
+    sqm_vars          = _section_sqm(sci_scores, bad_channels, subject, errors,
                                      out_dir=out_path.parent / "nirs",
-                                     cardiac_l_freq=config.cardiac_l_freq,
-                                     cardiac_h_freq=config.cardiac_h_freq,
-                                     resp_l_freq=config.resp_l_freq,
-                                     resp_h_freq=config.resp_h_freq)
+                                     sqm_label=sqm_label)
     # GCOR before→after the short-channel regression (fNIRS GSR analog): the meaningful
     # comparison (expected to drop). Bandpass alone raises GCOR, so we do not compare that.
     if gcor_reg and sqm_vars.get("sqm") is not None:

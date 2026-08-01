@@ -11,7 +11,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from fnirs_pipe.io.bids import get_layout, get_nirs_files
+from fnirs_pipe.io.bids import bids_label, get_layout, get_nirs_files
 from fnirs_pipe.io.derivatives import write_dataset_description
 from fnirs_pipe.io.snirf import read_snirf
 import mne
@@ -166,7 +166,7 @@ def run_participant_level(args: dict[str, Any]) -> None:
             t0 = time.monotonic()
             subject_status = "SUCCESS"
             subject_error: str | None = None
-            last_raw = last_result = None
+            last_raw = last_result = last_label = None
             prep_config = None
             try:
                 sessions: list[str | None] = session_label if session_label else [None]
@@ -192,26 +192,31 @@ def run_participant_level(args: dict[str, Any]) -> None:
                                 result = run_prep(raw, prep_config, output_dir=output_dir, source_entities=src_entities, work_dir=work_dir, source_path=snirf_path)
                                 logger.info("finished prep: %s", snirf_path.name)
                                 last_raw, last_result = raw, result
+                                last_label = bids_label(subject, src_entities)
                             except Exception:
                                 logger.exception("prep failed for %s", snirf_path)
                                 raise
-
-                if last_result is not None:
-                    if last_result.sqm_raw:
-                        _jdb.log_sqm(db_path, execution_id, subject, "raw", last_result.sqm_raw)
-                    if last_result.sqm_final:
-                        _jdb.log_sqm(db_path, execution_id, subject, "final", last_result.sqm_final)
 
                 glm_est = dm = alff_df = fc_df = fc_hbr_df = last_denoised = gcor_reg = None
                 if args.get("mode") is not None:
                     glm_est, dm, alff_df, fc_df, fc_hbr_df, last_denoised, gcor_reg = _run_post_for_subject(subject, sessions, args, toml, output_dir, roi_map=roi_map)
 
                 # one SQM record per run, written once both passes have finished so the
-                # final section can measure the last file post actually produced
+                # final section can measure the last file post actually produced. The
+                # database takes one row per section, which is what its checkpoint column
+                # has always been for.
                 try:
-                    from fnirs_pipe.qc.sqm_record import build_sqm_records
+                    import json as _json
+                    from fnirs_pipe.qc.sqm_record import SECTIONS, build_sqm_records, entities_of
                     for path in build_sqm_records(sub_dir / "nirs"):
                         logger.info("sub-%s | SQM record → %s", subject, path.name)
+                        record = _json.loads(path.read_text(encoding="utf-8"))
+                        ents = entities_of(path.stem)
+                        for section in SECTIONS:
+                            if record.get(section):
+                                _jdb.log_sqm(db_path, execution_id, subject, section,
+                                             record[section], session=ents["ses"],
+                                             bids_task=ents["task"])
                 except Exception:
                     logger.warning("sub-%s | SQM records failed", subject, exc_info=True)
 
