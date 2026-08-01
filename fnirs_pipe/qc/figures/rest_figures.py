@@ -104,44 +104,44 @@ def alff_falff_figure(
 
 def fc_matrix_figure(
     fc_df: pd.DataFrame,
+    fc_hbr_df: pd.DataFrame | None = None,
     title: str = "Functional Connectivity (Pearson r)",
 ) -> str:
-    """Return base64 PNG of FC heatmaps, HbO and HbR as separate subplots.
+    """Return base64 PNG of FC heatmaps, one panel per chromophore present.
 
-    fc_df is a square channel × channel correlation DataFrame (from compute_fc).
+    compute_fc returns one matrix per chromophore, so HbO arrives in fc_df and HbR in
+    fc_hbr_df. A single matrix holding both is also accepted and split by channel suffix.
     Diagonal is set to NaN so self-correlations are not shown.
     """
-    ch_names = fc_df.columns.tolist()
-    fc_mat = fc_df.to_numpy(dtype=float).copy()
-    np.fill_diagonal(fc_mat, np.nan)
+    panels: list[tuple[list[str], np.ndarray, str]] = []
+    for frame in (fc_df, fc_hbr_df):
+        if frame is None or frame.empty:
+            continue
+        names = frame.columns.tolist()
+        mat = frame.to_numpy(dtype=float).copy()
+        np.fill_diagonal(mat, np.nan)
+        for suffix, label in ((" hbo", "HbO"), (" hbr", "HbR")):
+            idx = [i for i, c in enumerate(names) if c.endswith(suffix)]
+            if idx:
+                panels.append(([names[i] for i in idx], mat[np.ix_(idx, idx)], label))
 
-    hbo_idx = [i for i, c in enumerate(ch_names) if c.endswith(" hbo")]
-    hbr_idx = [i for i, c in enumerate(ch_names) if c.endswith(" hbr")]
-
-    hbo_names = [ch_names[i] for i in hbo_idx]
-    hbr_names = [ch_names[i] for i in hbr_idx]
-    hbo_mat = fc_mat[np.ix_(hbo_idx, hbo_idx)]
-    hbr_mat = fc_mat[np.ix_(hbr_idx, hbr_idx)]
+    if not panels:
+        raise ValueError("fc_df has no recognised HbO/HbR channels")
 
     def _square_size(n: int) -> float:
         return max(3.0, min(n * 0.14, 8.0))
 
-    sq_hbo = _square_size(len(hbo_names))
-    sq_hbr = _square_size(len(hbr_names))
-    fig_w = sq_hbo + sq_hbr + 2.0
-    fig_h = max(sq_hbo, sq_hbr)
+    sizes = [_square_size(len(names)) for names, _, _ in panels]
 
-    fig, (ax_o, ax_r) = plt.subplots(
-        1, 2,
-        figsize=(fig_w, fig_h),
-        gridspec_kw={"width_ratios": [sq_hbo, sq_hbr]},
+    fig, axes = plt.subplots(
+        1, len(panels),
+        figsize=(sum(sizes) + 2.0, max(sizes)),
+        gridspec_kw={"width_ratios": sizes},
+        squeeze=False,
     )
     fig.subplots_adjust(wspace=0.4)
 
-    for ax, mat, names, label, sq in (
-        (ax_o, hbo_mat, hbo_names, "HbO", sq_hbo),
-        (ax_r, hbr_mat, hbr_names, "HbR", sq_hbr),
-    ):
+    for ax, (names, mat, label) in zip(axes[0], panels):
         im = ax.imshow(mat, aspect="equal", cmap="RdBu_r", vmin=-1, vmax=1,
                        interpolation="nearest")
         n = len(names)

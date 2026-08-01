@@ -82,9 +82,9 @@ def run_post(
 ) -> tuple:
     """Run post-processing pipeline.
 
-    Returns (result, glm_est, design_matrix, alff_df, fc_df, gcor_reg).
+    Returns (result, glm_est, design_matrix, alff_df, fc_df, fc_hbr_df, gcor_reg).
     glm_est / design_matrix are None for non-GLM modes.
-    alff_df / fc_df are None for non-rest modes.
+    alff_df / fc_df / fc_hbr_df are None for non-rest modes; fc_df holds the HbO matrix.
     gcor_reg (pre/post short-channel regression GCOR) is None unless short_channel ran.
     """
 
@@ -114,7 +114,7 @@ def run_post(
         except Exception:
             logger.warning("sub-%s | haemo SQM failed", config.subject, exc_info=True)
 
-    glm_est = dm = alff_df = fc_df = None
+    glm_est = dm = alff_df = fc_df = fc_hbr_df = None
     raw_resid = None  # set by the glm/rest branches
     if mode == "glm":
         missing = [f for f in ("hrf_model", "noise_model", "drift_model") if getattr(config, f) is None]
@@ -179,7 +179,7 @@ def run_post(
             _write_step_snirf(raw_resid_bb, config, output_dir, desc="errtsbroad",
                               rec=rec, source_entities=source_entities)
 
-        alff_df, fc_df = _write_rest_derivatives(
+        alff_df, fc_df, fc_hbr_df = _write_rest_derivatives(
             raw_resid, raw_resid_bb, config, output_dir, rec, source_entities=source_entities)
 
     # GCOR around the short-channel regression (the fNIRS GSR analog): pre-regression vs
@@ -196,7 +196,7 @@ def run_post(
         except Exception:
             logger.warning("sub-%s | regression GCOR failed", config.subject, exc_info=True)
 
-    return result, glm_est, dm, alff_df, fc_df, gcor_reg
+    return result, glm_est, dm, alff_df, fc_df, fc_hbr_df, gcor_reg
 
 def _write_rest_derivatives(
     raw_resid: mne.io.Raw,
@@ -206,7 +206,7 @@ def _write_rest_derivatives(
     rec: Recorder,
     source_entities: dict[str, str] | None = None,
 ) -> tuple:
-    """Write ALFF/fALFF and FC TSVs. Returns (alff_df | None, fc_df).
+    """Write ALFF/fALFF and FC TSVs. Returns (alff_df | None, fc_hbo_df, fc_hbr_df).
 
     ALFF/fALFF use the broadband residual (raw_resid_bb); FC/FC-ROI use the bandpassed one.
     """
@@ -246,8 +246,8 @@ def _write_rest_derivatives(
         logger.warning("sub-%s | skipping ALFF: --high-pass and --low-pass required", config.subject)
 
     # FC per chromophore: HbO and HbR anti-correlate, so they never share a matrix. Both are
-    # written; the report consumes the HbO matrix.
-    fc_hbo_df = None
+    # written and both reach the report.
+    fc_hbo_df = fc_hbr_df = None
     for chromo in ("hbo", "hbr"):
         fc_df = compute_fc(raw_resid, chromo)
         if fc_df.empty:
@@ -290,8 +290,10 @@ def _write_rest_derivatives(
 
         if chromo == "hbo":
             fc_hbo_df = fc_df
+        else:
+            fc_hbr_df = fc_df
 
-    return alff_df, fc_hbo_df
+    return alff_df, fc_hbo_df, fc_hbr_df
 
 
 def _write_step_snirf(haemo: mne.io.Raw, config: PostConfig, output_dir: Path, desc: str, rec: Recorder, source_entities: dict[str, str] | None = None) -> Path:

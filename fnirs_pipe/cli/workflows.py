@@ -202,9 +202,9 @@ def run_participant_level(args: dict[str, Any]) -> None:
                     if last_result.sqm_final:
                         _jdb.log_sqm(db_path, execution_id, subject, "final", last_result.sqm_final)
 
-                glm_est = dm = alff_df = fc_df = last_denoised = gcor_reg = None
+                glm_est = dm = alff_df = fc_df = fc_hbr_df = last_denoised = gcor_reg = None
                 if args.get("mode") is not None:
-                    glm_est, dm, alff_df, fc_df, last_denoised, gcor_reg = _run_post_for_subject(subject, sessions, args, toml, output_dir, roi_map=roi_map)
+                    glm_est, dm, alff_df, fc_df, fc_hbr_df, last_denoised, gcor_reg = _run_post_for_subject(subject, sessions, args, toml, output_dir, roi_map=roi_map)
 
                 # rendered before the report, which embeds it: every sidecar it scans is
                 # on disk by now, and --no-report still leaves the diagram behind
@@ -223,7 +223,7 @@ def run_participant_level(args: dict[str, Any]) -> None:
                     logger.warning("sub-%s | provenance graph failed", subject, exc_info=True)
 
                 if not args.get("no_report") and last_result is not None:
-                    _emit_subject_report(subject, sub_dir, last_raw, last_result, prep_config, args, glm_est, dm, alff_df=alff_df, fc_df=fc_df, high_pass=cfg_high_pass, low_pass=cfg_low_pass, after_haemo=last_denoised, gcor_reg=gcor_reg, roi_map=roi_map, provenance_path=provenance_path)
+                    _emit_subject_report(subject, sub_dir, last_raw, last_result, prep_config, args, glm_est, dm, alff_df=alff_df, fc_df=fc_df, fc_hbr_df=fc_hbr_df, high_pass=cfg_high_pass, low_pass=cfg_low_pass, after_haemo=last_denoised, gcor_reg=gcor_reg, roi_map=roi_map, provenance_path=provenance_path)
 
             except Exception as exc:
                 subject_status = "FAILED"
@@ -262,7 +262,7 @@ def _make_prep_config(subject: str, session: str | None, args: dict[str, Any]) -
     )
 
 
-def _emit_subject_report(subject, sub_dir, last_raw, last_result, prep_config, args, glm_est, dm, alff_df=None, fc_df=None, high_pass=None, low_pass=None, after_haemo=None, gcor_reg=None, roi_map=None, provenance_path=None):
+def _emit_subject_report(subject, sub_dir, last_raw, last_result, prep_config, args, glm_est, dm, alff_df=None, fc_df=None, fc_hbr_df=None, high_pass=None, low_pass=None, after_haemo=None, gcor_reg=None, roi_map=None, provenance_path=None):
     import mne
     import numpy as np
     from fnirs_pipe.qc.report import build_subject_report
@@ -309,6 +309,7 @@ def _emit_subject_report(subject, sub_dir, last_raw, last_result, prep_config, a
         mode=_v(args.get("mode")) if args.get("mode") else None,
         alff_df=alff_df,
         fc_df=fc_df,
+        fc_hbr_df=fc_hbr_df,
         after_haemo=after_haemo,
         gcor_reg=gcor_reg,
         roi_map=roi_map,
@@ -336,7 +337,7 @@ def _run_post_for_subject(
     # sub-01 in a sibling output tree would be picked up and post-processed as if it
     # were ours. Only this run's own subject directory counts.
     subject_root = (output_dir / f"sub-{subject}").resolve()
-    last_glm_est = last_dm = last_alff_df = last_fc_df = last_denoised = last_gcor_reg = None
+    last_glm_est = last_dm = last_alff_df = last_fc_df = last_fc_hbr_df = last_denoised = last_gcor_reg = None
     for session in sessions:
         post_config = _build_post_config(subject, session, args, toml, roi_map=roi_map)
         for task in tasks:
@@ -356,18 +357,18 @@ def _run_post_for_subject(
                 logger.info("post (%s): %s", mode, snirf_path.name)
                 try:
                     raw_haemo = read_snirf(snirf_path)
-                    last_denoised, glm_est, dm, alff_df, fc_df, gcor_reg = run_post(raw_haemo, post_config, output_dir=output_dir, mode=mode, source_entities=src_entities, source_path=snirf_path)
+                    last_denoised, glm_est, dm, alff_df, fc_df, fc_hbr_df, gcor_reg = run_post(raw_haemo, post_config, output_dir=output_dir, mode=mode, source_entities=src_entities, source_path=snirf_path)
                     if glm_est is not None:
                         last_glm_est, last_dm = glm_est, dm
                     if fc_df is not None:
-                        last_alff_df, last_fc_df = alff_df, fc_df
+                        last_alff_df, last_fc_df, last_fc_hbr_df = alff_df, fc_df, fc_hbr_df
                     if gcor_reg is not None:
                         last_gcor_reg = gcor_reg
                 except Exception:
                     logger.exception("post failed for %s", snirf_path)
                     raise
 
-    return last_glm_est, last_dm, last_alff_df, last_fc_df, last_denoised, last_gcor_reg
+    return last_glm_est, last_dm, last_alff_df, last_fc_df, last_fc_hbr_df, last_denoised, last_gcor_reg
 
 
 def run_group_level(args: dict[str, Any]) -> None:

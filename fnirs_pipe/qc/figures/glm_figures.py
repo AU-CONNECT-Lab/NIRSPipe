@@ -171,6 +171,8 @@ def _save_glm_brain(
     ]
 
     try:
+        # HbO only, the surface-projection convention; the HbR betas are reported by the
+        # beta heatmap and the beta table, which are both per chromophore
         ch_col = next((c for c in ("ch_name", "Channel", "channel") if c in results_df.columns), None)
         raw_hbo = raw_haemo.copy().pick("hbo")
 

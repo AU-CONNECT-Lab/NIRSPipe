@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 <!-- Format: Keep a Changelog (https://keepachangelog.com/en/1.0.0/) -->
 
+## [Unreleased]
+
+### Fixed
+- The resting-state FC heatmap and connectogram lost their HbR half, or failed to render at all: connectivity is now computed as one matrix per chromophore, and the two figures still expected a single matrix holding both
+
 ## [0.19.0] - 2026-07-31
 
 ### Added

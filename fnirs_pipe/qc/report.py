@@ -444,6 +444,8 @@ def _section_erpimage(
                 roi_saved.append({"pair": str(roi_name), "path": f"figures/{fname}", "h": h})
 
     saved = []
+    # HbO only: single-trial HbR is too low-amplitude to read as an image, and the HbO/HbR
+    # relation is already reported by hbo_hbr_corr and the per-channel detail figure
     for ch in [c for c in raw_haemo.ch_names if c.endswith(" hbo")]:
         with _guard(f"erpimage {ch}", errors, subject):
             fig = build_erpimage_figure(raw_haemo, ch, epoch_tmin, epoch_tmax)
@@ -658,6 +660,7 @@ def _section_rest(
     subject: str,
     errors: list,
     figures_dir: Path,
+    fc_hbr_df: "Any | None" = None,
 ) -> dict:
     alff_path = fc_path = fc_circle_path = None
     with _guard("ALFF/fALFF figure", errors, subject):
@@ -667,12 +670,12 @@ def _section_rest(
             alff_path = "figures/rest_alff.png"
     with _guard("FC matrix figure", errors, subject):
         if fc_df is not None:
-            b64 = fc_matrix_figure(fc_df)
+            b64 = fc_matrix_figure(fc_df, fc_hbr_df)
             _save_b64_png(b64, figures_dir / "rest_fc.png")
             fc_path = "figures/rest_fc.png"
     with _guard("FC connectogram", errors, subject):
         if fc_df is not None:
-            b64 = fc_connectogram(fc_df)
+            b64 = fc_connectogram(fc_df, fc_hbr_df)
             _save_b64_png(b64, figures_dir / "rest_fc_circle.png")
             fc_circle_path = "figures/rest_fc_circle.png"
     return {"rest_alff_path": alff_path, "rest_fc_path": fc_path, "rest_fc_circle_path": fc_circle_path}
@@ -759,6 +762,7 @@ def build_subject_report(
     mode: str | None = None,
     alff_df: "Any | None" = None,
     fc_df: "Any | None" = None,
+    fc_hbr_df: "Any | None" = None,
     after_haemo: mne.io.Raw | None = None,
     gcor_reg: dict | None = None,
     roi_map: dict | None = None,
@@ -813,7 +817,7 @@ def build_subject_report(
     erpimage_vars     = _section_erpimage(after_haemo if after_haemo is not None else raw_haemo,
                                           subject, errors, figures_dir, roi_map=roi_map)
     glm_vars          = _section_glm(design_matrix, glm_est, raw_haemo, subject, errors, figures_dir, segments=segments)
-    rest_vars         = _section_rest(alff_df, fc_df, subject, errors, figures_dir)
+    rest_vars         = _section_rest(alff_df, fc_df, subject, errors, figures_dir, fc_hbr_df=fc_hbr_df)
     sqm_vars          = _section_sqm(raw_long, raw_haemo, sci_scores, bad_channels, subject, errors,
                                      out_dir=out_path.parent / "nirs",
                                      cardiac_l_freq=config.cardiac_l_freq,

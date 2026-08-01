@@ -114,15 +114,19 @@ def _single_circle(
 
 def fc_connectogram(
     fc_df: pd.DataFrame,
+    fc_hbr_df: pd.DataFrame | None = None,
     groups: dict[str, str] | None = None,
     threshold: float = 0.3,
     n_lines: int | None = None,
     title: str = "FC Connectogram",
 ) -> str:
-    """Return base64 PNG with HbO (top) and HbR (bottom) connectograms stacked vertically.
+    """Return base64 PNG with one connectogram per chromophore present, side by side.
 
     Args:
         fc_df:      Square channel × channel Pearson r DataFrame (from compute_fc).
+                    compute_fc returns one matrix per chromophore, so this is the HbO one;
+                    a single matrix holding both is also accepted and split by suffix.
+        fc_hbr_df:  The HbR matrix, when the two are supplied separately.
         groups:     Optional mapping channel → group label for colour-coding nodes.
                     Defaults to grouping by source label (S1, S2, …).
         threshold:  Minimum ``|r|`` to draw a connection. Weaker edges are hidden.
@@ -131,26 +135,29 @@ def fc_connectogram(
     """
     from PIL import Image
 
-    all_ch = fc_df.columns.tolist()
-    hbo_ch = [c for c in all_ch if c.endswith(" hbo")]
-    hbr_ch = [c for c in all_ch if c.endswith(" hbr")]
+    subsets: list[tuple[list[str], np.ndarray, str]] = []
+    for frame in (fc_df, fc_hbr_df):
+        if frame is None or frame.empty:
+            continue
+        all_ch = frame.columns.tolist()
+        fc_mat = frame.to_numpy(dtype=float).copy()
+        np.fill_diagonal(fc_mat, 0.0)
+        for suffix, label in ((" hbo", "HbO"), (" hbr", "HbR")):
+            names = [c for c in all_ch if c.endswith(suffix)]
+            if not names:
+                continue
+            idx = [all_ch.index(c) for c in names]
+            subsets.append((names, fc_mat[np.ix_(idx, idx)], label))
 
-    if not hbo_ch and not hbr_ch:
+    if not subsets:
         raise ValueError("fc_df has no recognised HbO/HbR channels")
 
     if groups is None:
-        groups = _source_groups(all_ch)
-
-    fc_mat = fc_df.to_numpy(dtype=float).copy()
-    np.fill_diagonal(fc_mat, 0.0)
+        groups = _source_groups([c for names, _, _ in subsets for c in names])
 
     pngs: list[bytes] = []
-    for subset, label in ((hbo_ch, "HbO"), (hbr_ch, "HbR")):
-        if not subset:
-            continue
-        idx = [all_ch.index(c) for c in subset]
-        sub_mat = fc_mat[np.ix_(idx, idx)]
-        pngs.append(_single_circle(sub_mat, subset, groups, threshold, n_lines,
+    for names, sub_mat, label in subsets:
+        pngs.append(_single_circle(sub_mat, names, groups, threshold, n_lines,
                                    f"{title} — {label}"))
 
     if len(pngs) == 1:
