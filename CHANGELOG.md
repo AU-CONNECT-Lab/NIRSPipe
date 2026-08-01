@@ -6,6 +6,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- One signal-quality record per BIDS run, `<sub>_<task>_desc-sqm_nirs.json`, assembled from the files on disk after processing finishes. Metrics are grouped by the channel set and stage they were measured on: all channels, long channels only, short channels only, the Beer-Lambert output, and the final signal. A subject with several tasks now gets one record per task instead of keeping only the last
+- Sidecars record the per-channel SCI scores and the respiration band, so a past run's quality record can be rebuilt from its output directory alone
+
 ### Fixed
 - The resting-state FC heatmap and connectogram lost their HbR half, or failed to render at all: connectivity is now computed as one matrix per chromophore, and the two figures still expected a single matrix holding both
 

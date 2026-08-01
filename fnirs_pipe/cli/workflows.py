@@ -206,6 +206,15 @@ def run_participant_level(args: dict[str, Any]) -> None:
                 if args.get("mode") is not None:
                     glm_est, dm, alff_df, fc_df, fc_hbr_df, last_denoised, gcor_reg = _run_post_for_subject(subject, sessions, args, toml, output_dir, roi_map=roi_map)
 
+                # one SQM record per run, written once both passes have finished so the
+                # final section can measure the last file post actually produced
+                try:
+                    from fnirs_pipe.qc.sqm_record import build_sqm_records
+                    for path in build_sqm_records(sub_dir / "nirs"):
+                        logger.info("sub-%s | SQM record → %s", subject, path.name)
+                except Exception:
+                    logger.warning("sub-%s | SQM records failed", subject, exc_info=True)
+
                 # rendered before the report, which embeds it: every sidecar it scans is
                 # on disk by now, and --no-report still leaves the diagram behind
                 provenance_path = None

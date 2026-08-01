@@ -265,7 +265,12 @@ def run_prep(
         config.subject, n_bad, n_total,
         f" — {bad_chs}" if bad_chs else "",
     )
-    sci_path = _save(raw_od, "sci", extra_provenance={"bad_channels": bad_chs})
+    # sci_scores go in the sidecar because the SQM record is assembled from disk after the
+    # run, and SCI is the one input to it that no output file carries
+    sci_path = _save(raw_od, "sci", extra_provenance={
+        "bad_channels": bad_chs,
+        "sci_scores": {k: float(v) for k, v in sci_scores.items()},
+    })
 
     # raw SQM checkpoint — intensity metrics on original signal before any correction
     sqm_raw: dict | None = None
@@ -345,6 +350,8 @@ def _config_dict(config: PrepConfig) -> dict:
         "sci_threshold": config.sci_threshold,
         "cardiac_l_freq": config.cardiac_l_freq,
         "cardiac_h_freq": config.cardiac_h_freq,
+        "resp_l_freq": config.resp_l_freq,
+        "resp_h_freq": config.resp_h_freq,
         "bad_channels": config.bad_channels,
         "ignore": config.ignore,
     }

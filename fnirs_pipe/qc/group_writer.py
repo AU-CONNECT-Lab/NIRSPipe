@@ -18,6 +18,7 @@ from fnirs_pipe.qc.figures.group_figures import (
     detect_outliers,
     group_metrics,
 )
+from fnirs_pipe.qc.sqm_record import SECTIONS
 from fnirs_pipe.utils.logging import get_logger
 
 # Click a strip point -> open that subject's raw report (sibling of the group HTML,
@@ -47,8 +48,20 @@ _BASE_CSS     = (_TEMPLATE_DIR / "_base.css").read_text(encoding="utf-8")
 
 
 def _scalars(sqm: dict) -> dict:
-    """Keep numeric scalar fields only (drop dicts/lists/strings)."""
-    return {k: v for k, v in sqm.items() if isinstance(v, (int, float))}
+    """Keep numeric scalar fields only (drop dicts/lists/strings).
+
+    A sectioned record keeps its metrics one level down, so the known sections flatten to
+    ``section_metric`` for the group table, where column names have to be unique. Only
+    those sections are descended into: per_channel would explode into one column per
+    channel.
+    """
+    flat = {k: v for k, v in sqm.items() if isinstance(v, (int, float))}
+    for section in SECTIONS:
+        values = sqm.get(section)
+        if isinstance(values, dict):
+            flat.update({f"{section}_{k}": v for k, v in values.items()
+                         if isinstance(v, (int, float))})
+    return flat
 
 
 def _bids_name_from_sqm_path(path: Path) -> str:

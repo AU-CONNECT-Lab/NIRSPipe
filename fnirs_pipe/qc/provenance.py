@@ -78,6 +78,17 @@ _SQM_FAMILIES = {
 }
 
 
+def _wrap_terms(terms: list[str], width: int = 24, max_lines: int = 3) -> str:
+    """Join terms onto at most max_lines lines of width, eliding the rest with an ellipsis."""
+    import textwrap
+
+    lines = textwrap.wrap(" ".join(terms), width=width) or [""]
+    if len(lines) > max_lines:
+        lines = lines[:max_lines]
+        lines[-1] += " …"
+    return "\n".join(lines)
+
+
 def _sqm_detail(metrics: list[str], width: int = 24, max_lines: int = 3) -> str:
     """The metric families a checkpoint computed, wrapped to fit inside a node box.
 
@@ -86,8 +97,6 @@ def _sqm_detail(metrics: list[str], width: int = 24, max_lines: int = 3) -> str:
     The full key list stays in the sidecar; only the families are drawn, or a 27-metric
     checkpoint would need a paragraph.
     """
-    import textwrap
-
     families: list[str] = []
     for key in metrics:
         name = next((v for k, v in _SQM_FAMILIES.items() if key.startswith(k)),
@@ -95,11 +104,7 @@ def _sqm_detail(metrics: list[str], width: int = 24, max_lines: int = 3) -> str:
         if name not in families:
             families.append(name)
 
-    lines = textwrap.wrap(" ".join(families), width=width) or [""]
-    if len(lines) > max_lines:
-        lines = lines[:max_lines]
-        lines[-1] += " …"
-    return "\n".join(lines)
+    return _wrap_terms(families, width, max_lines)
 
 
 def _step_detail(step: str | None, params: dict[str, Any], data: dict[str, Any] | None = None) -> str:
@@ -143,7 +148,12 @@ def _step_detail(step: str | None, params: dict[str, Any], data: dict[str, Any] 
         return str(pick("motion_correction") or "")
 
     if step in ("sqm", "sqm_raw"):
-        return _sqm_detail((data or {}).get("metrics") or [])
+        # the sectioned record names the stages it measured; the older per-checkpoint
+        # sidecars name the metrics they computed
+        data = data or {}
+        if data.get("sections"):
+            return _wrap_terms(list(data["sections"]))
+        return _sqm_detail(data.get("metrics") or [])
 
     if step in ("glm_residuals", "glm_fit", "design_matrix"):
         bits = [pick("hrf_model"), pick("noise_model")]
