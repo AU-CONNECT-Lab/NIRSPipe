@@ -6,9 +6,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-08-11
+
 ### Added
 - `<sub>_<task>_desc-sqm_nirs.json`: one quality record per run, grouped into sections by what each metric was measured on (`raw`, `raw_long`, `raw_short`, `motion`, `preproc`, `final`). A subject with several tasks gets one record per task. The `raw*` sections include rejected channels, the rest exclude them
 - Sidecars record per-channel SCI and the respiration band, so a record can be rebuilt from an output directory alone
+- The QC report's metrics panel explains itself: hover any metric for what it is and which way is good, and the five that decide whether a run is usable are marked. The explanations used to live only in a separate guide
 
 ### Changed
 - Quality metrics are measured once and written once. They used to be computed three to four times per subject, and the number shown in the report did not match the number on disk

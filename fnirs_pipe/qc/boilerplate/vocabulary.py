@@ -108,6 +108,101 @@ def step_summary(step: str | None) -> str:
     return STEP_SUMMARY.get(step or "", "")
 
 
+# ---- what each metric means ----
+
+# STEP_SUMMARY above describes steps; this describes the numbers those steps produced. The
+# report used to print them bare, so a reader who did not already know the vocabulary got
+# "GVTD p95  1.001e-02" and no way to act on it.
+#
+# Each line says what the number is and which way is good, because a value with no
+# direction is not actionable. Where the answer is "it depends", say so rather than
+# inventing a threshold: several of these are relative measures with no absolute cutoff,
+# and GVTD in particular is judged against gvtd_thresh, which is computed per recording.
+#
+# Per-channel keys are not listed; they are the same quantity as their scalar sibling.
+METRIC_SUMMARY = {
+    # coupling
+    "sci_mean": "Scalp coupling: how well the two wavelengths share a pulse. Near 1 is good; low means poor optode contact.",
+    "channel_retention_rate": "Fraction of channels that survived screening. Higher is better.",
+    "psp_mean": "Strength of the shared cardiac peak across the two wavelengths, averaged over 10 s windows and then over channels. Higher is a more clearly detected heartbeat.",
+    "cp_mean": "How sharply cardiac power concentrates at the pulse frequency, 0 to 1. Closer to 1 is a cleaner peak. Experimental, overlaps PSP.",
+    "cp_pass_rate": "Fraction of channels with cardiac power at or above 0.5. Higher is better. Experimental.",
+
+    # raw intensity
+    "cv_mean": "Noise relative to a channel's own brightness (SD / mean). Lower is cleaner.",
+    "snr_mean": "Signal size relative to its fluctuation (mean / SD), the reciprocal of CV. Higher is better.",
+    "snr_pass_rate": "Fraction of channels with SNR above 2. Higher is better.",
+    "mean_amp_mean": "Average light level reaching the detectors. No universal good value; use it to spot channels far dimmer than their neighbours.",
+
+    # geometry
+    "ch_dist_mean": "Average source-detector separation in metres. Descriptive, not a quality judgement.",
+    "ch_dist_min": "Shortest source-detector separation in metres.",
+    "ch_dist_max": "Longest source-detector separation in metres.",
+
+    # haemoglobin
+    "hbo_hbr_corr_mean": "Correlation between HbO and HbR. Strongly negative is physiologically expected; near zero or positive suggests artifact.",
+    "gcor_hbo": "How much every HbO channel moves together. Higher means a stronger shared systemic or global component rather than localised activity.",
+    "gcor_hbr": "The same for HbR.",
+    "lowfreq_drift_amplitude_hbo": "Peak-to-peak size of the slow HbO baseline wander. Lower is a more stable baseline. Non-standard, may be removed.",
+    "lowfreq_drift_amplitude_hbr": "The same for HbR.",
+
+    # spectral. Power is a mean PSD level inside the band, fraction is a sum over the band
+    # against the sum over the whole spectrum; they are not the same quantity rescaled.
+    "cardiac_band_power_hbo": "Average HbO spectral density inside the cardiac band. Scales with signal amplitude, so it does not compare across subjects.",
+    "cardiac_band_power_hbr": "The same for HbR.",
+    "cardiac_band_frac_hbo": "Share of this chromophore's total HbO power that sits in the cardiac band, 0 to 1, comparable across subjects. Visible cardiac content confirms real physiology.",
+    "cardiac_band_frac_hbr": "The same for HbR.",
+    "resp_band_power_hbo": "Average HbO spectral density inside the respiration band.",
+    "resp_band_power_hbr": "The same for HbR.",
+    "resp_band_frac_hbo": "Share of total HbO power that sits in the respiration band, 0 to 1.",
+    "resp_band_frac_hbr": "The same for HbR.",
+
+    # motion and spikes, all measured on optical density.
+    # Note which trace gvtd_thresh belongs to: it is computed from the band-passed trace
+    # and compared against it, so it is not a cutoff for the unfiltered gvtd_mean/p95.
+    "gvtd_mean": "Average whole-montage movement over the run, unfiltered. Lower is less motion. No absolute cutoff, and gvtd_thresh does not apply to it.",
+    "gvtd_p95": "The same at the worst moments, the 95th percentile.",
+    "gvtd_filt_mean": "Average movement after band-passing to 0.01-0.5 Hz, where head motion lives. This is the trace gvtd_thresh applies to.",
+    "gvtd_filt_p95": "The same at the worst moments. Above gvtd_thresh means motion.",
+    "gvtd_vstd_mean": "Average movement with each channel scaled by its own SD first, so a few loud channels cannot dominate.",
+    "gvtd_vstd_p95": "The same at the worst moments.",
+    "gvtd_thresh": "Motion cutoff for this recording, set from the mode of its own band-passed GVTD histogram. Compare it with gvtd_filt_p95, not with gvtd_mean.",
+    "gvtd_num_above_thresh": "Timepoints whose band-passed GVTD exceeds that cutoff.",
+    "gvtd_pct_above_thresh": "Those timepoints as a fraction of the recording, roughly how much is motion-contaminated. Lower is cleaner.",
+    "spike_count": "Sudden jumps across all channels, counted on the motion-band-filtered derivative so they reflect movement rather than pulse. Lower is better.",
+    "spike_pct": "Those jumps as a fraction of all channel-samples. Experimental.",
+    "spike_num_frames": "Timepoints where at least a tenth of channels jumped together. Experimental.",
+    "spike_pct_frames": "Those timepoints as a fraction of the recording. Experimental.",
+    "motion_corrected_frac_mean": "Average fraction of each channel the motion correction actually altered. Experimental.",
+    "motion_corrected_num": "Timepoints the correction altered on at least a tenth of channels at once. Experimental.",
+    "motion_corrected_pct": "Those timepoints as a fraction of the recording. Experimental.",
+    "motion_corrected_n_segments": "How many separate stretches those timepoints form. Experimental.",
+
+    # time
+    "pct_data_retained": "Fraction of the recording not covered by BAD annotations. Higher is more usable data.",
+}
+
+# The few that decide whether a subject is usable at all. Everything else is context for
+# why. Three questions: are enough channels left, is enough time left, and is the signal
+# physiological. The report marks these so a reader knows where to look first.
+KEY_METRICS = frozenset({
+    "channel_retention_rate",   # enough channels
+    "pct_data_retained",        # enough time
+    "gvtd_pct_above_thresh",    # ... and how much of it is motion
+    "sci_mean",                 # the optodes were coupled
+    "hbo_hbr_corr_mean",        # what came out looks like haemodynamics
+})
+
+
+def metric_summary(metric: str) -> str:
+    """One line saying what a metric is and which way is good, or '' if undescribed."""
+    return METRIC_SUMMARY.get(metric, "")
+
+
+def is_key_metric(metric: str) -> bool:
+    return metric in KEY_METRICS
+
+
 # ---- what a run actually did ----
 
 def steps_from_sidecars(nirs_dir: Path, mode: str | None = None) -> list[tuple[str, dict[str, str]]]:

@@ -828,9 +828,13 @@ def build_subject_report(
         else "badge-red"
     )
 
+    from fnirs_pipe.qc.boilerplate.vocabulary import is_key_metric, metric_summary
+
     env      = Environment(loader=FileSystemLoader(str(_TEMPLATE_DIR)), autoescape=False)
     template = env.get_template("subject_report.html.j2")
     html = template.render(
+        metric_summary=metric_summary,
+        is_key_metric=is_key_metric,
         subject=subject,
         run_date=date.today().isoformat(),
         run_command=run_command,

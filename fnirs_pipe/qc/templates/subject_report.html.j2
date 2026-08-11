@@ -154,6 +154,11 @@
     .qm-list li { display: flex; justify-content: space-between; padding: 0.18rem 0;
                   border-bottom: 1px solid #eef0f3; break-inside: avoid; gap: 1rem; }
     .qm-list .ql { color: #666; white-space: nowrap; }
+    /* dotted underline is the only cue that a native title tooltip is there */
+    .qm-list .ql[title]:not([title=""]) { cursor: help; border-bottom: 1px dotted #b8c2cc; }
+    .qm-list .ql-key { color: #34495e; font-weight: 600; }
+    .ql-dot { color: #2980b9; font-size: 0.62em; vertical-align: 0.35em; margin-left: 0.3rem; }
+    .qm-note { font-size: 0.78rem; color: #8a949e; margin: 0 0 0.55rem; }
     .qm-list .qv { font-weight: 600; white-space: nowrap; }
     .qm-ok   { color: #27ae60; }
     .qm-warn { color: #e67e22; }
@@ -552,6 +557,11 @@
 <h2 id="Metrics">Quantitative Metrics</h2>
 <div class="qm-box">
   {% macro qv_class(v, ok_test, warn_test) %}{% if v is not none %}{% if ok_test %}qm-ok{% elif warn_test %}qm-warn{% else %}qm-bad{% endif %}{% endif %}{% endmacro %}
+  {#- label + hover text from the metric registry; a marker on the ones that decide usability -#}
+  {% macro ql(key, text) %}<span class="ql{% if is_key_metric(key) %} ql-key{% endif %}"
+        title="{{ metric_summary(key) }}">{{ text }}{% if is_key_metric(key) %}<span class="ql-dot" aria-hidden="true">&#9679;</span>{% endif %}</span>{% endmacro %}
+  <p class="qm-note">Hover a metric for what it means and which way is good.
+     <span class="ql-dot" aria-hidden="true">&#9679;</span> marks the ones that decide whether the run is usable.</p>
   <ul class="qm-list">
     {% set ret  = sqm.get('channel_retention_rate') %}
     {% set sci  = sqm.get('sci_mean') %}
@@ -559,53 +569,53 @@
     {% set ret_pct = sqm.get('pct_data_retained') %}
     {% set snr  = sqm.get('snr_mean') %}
     {% set spk  = sqm.get('spike_count') %}
-    <li><span class="ql">Channel retention</span>
+    <li>{{ ql('channel_retention_rate', 'Channel retention') }}
         <span class="qv {{ qv_class(ret, ret >= 0.9, ret >= 0.7) }}">{{ pct(ret) }}</span></li>
-    <li><span class="ql">Mean SCI</span>
+    <li>{{ ql('sci_mean', 'Mean SCI') }}
         <span class="qv {{ qv_class(sci, sci >= 0.75, sci >= 0.5) }}">{{ qm_val(sci) }}</span></li>
-    <li><span class="ql">Mean PSP</span>
+    <li>{{ ql('psp_mean', 'Mean PSP') }}
         <span class="qv">{{ qm_val(sqm.get('psp_mean')) }}</span></li>
-    <li><span class="ql">Mean SNR (intensity)</span>
+    <li>{{ ql('snr_mean', 'Mean SNR (intensity)') }}
         <span class="qv {{ qv_class(snr, snr >= 100, snr >= 20) }}">{{ qm_val(snr, '.1f') }}</span></li>
-    <li><span class="ql">Mean HbO–HbR corr</span>
+    <li>{{ ql('hbo_hbr_corr_mean', 'Mean HbO–HbR corr') }}
         <span class="qv {{ qv_class(corr, corr < -0.3, corr < 0) }}">{{ qm_val(corr) }}</span></li>
-    <li><span class="ql">Global corr HbO{% if sqm.get('gcor_hbo_postreg') is not none %} (reg before→after){% endif %}</span>
+    <li>{{ ql('gcor_hbo', 'Global corr HbO' ~ (' (reg before→after)' if sqm.get('gcor_hbo_postreg') is not none else '')) }}
         <span class="qv">{% if sqm.get('gcor_hbo_postreg') is not none %}{{ qm_val(sqm.get('gcor_hbo_prereg')) }} → {{ qm_val(sqm.get('gcor_hbo_postreg')) }}{% else %}{{ qm_val(sqm.get('gcor_hbo')) }}{% endif %}</span></li>
-    <li><span class="ql">Global corr HbR{% if sqm.get('gcor_hbr_postreg') is not none %} (reg before→after){% endif %}</span>
+    <li>{{ ql('gcor_hbr', 'Global corr HbR' ~ (' (reg before→after)' if sqm.get('gcor_hbr_postreg') is not none else '')) }}
         <span class="qv">{% if sqm.get('gcor_hbr_postreg') is not none %}{{ qm_val(sqm.get('gcor_hbr_prereg')) }} → {{ qm_val(sqm.get('gcor_hbr_postreg')) }}{% else %}{{ qm_val(sqm.get('gcor_hbr')) }}{% endif %}</span></li>
-    <li><span class="ql">% data retained</span>
+    <li>{{ ql('pct_data_retained', '% data retained') }}
         <span class="qv {{ qv_class(ret_pct, ret_pct >= 0.8, ret_pct >= 0.6) }}">{{ pct(ret_pct) }}</span></li>
-    <li><span class="ql">GVTD mean</span>
+    <li>{{ ql('gvtd_mean', 'GVTD mean') }}
         <span class="qv">{{ qm_val(sqm.get('gvtd_mean'), '.3e') }}</span></li>
-    <li><span class="ql">GVTD p95</span>
+    <li>{{ ql('gvtd_p95', 'GVTD p95') }}
         <span class="qv">{{ qm_val(sqm.get('gvtd_p95'), '.3e') }}</span></li>
-    <li><span class="ql">GVTD % motion</span>
+    <li>{{ ql('gvtd_pct_above_thresh', 'GVTD % motion') }}
         <span class="qv">{{ pct(sqm.get('gvtd_pct_above_thresh')) }}</span></li>
-    <li><span class="ql">GVTD motion frames</span>
+    <li>{{ ql('gvtd_num_above_thresh', 'GVTD motion frames') }}
         <span class="qv">{{ qm_val(sqm.get('gvtd_num_above_thresh'), 'd') }}</span></li>
-    <li><span class="ql">GVTD threshold</span>
+    <li>{{ ql('gvtd_thresh', 'GVTD threshold') }}
         <span class="qv">{{ qm_val(sqm.get('gvtd_thresh'), '.3e') }}</span></li>
     {% if sqm.get('motion_corrected_pct') is not none %}
-    <li><span class="ql">Motion corrected % (exp.)</span>
+    <li>{{ ql('motion_corrected_pct', 'Motion corrected % (exp.)') }}
         <span class="qv">{{ pct(sqm.get('motion_corrected_pct')) }}</span></li>
-    <li><span class="ql">Motion corrected frames</span>
+    <li>{{ ql('motion_corrected_num', 'Motion corrected frames') }}
         <span class="qv">{{ qm_val(sqm.get('motion_corrected_num'), 'd') }}</span></li>
-    <li><span class="ql">Motion corrected segments</span>
+    <li>{{ ql('motion_corrected_n_segments', 'Motion corrected segments') }}
         <span class="qv">{{ qm_val(sqm.get('motion_corrected_n_segments'), 'd') }}</span></li>
     {% endif %}
-    <li><span class="ql">Spike count</span>
+    <li>{{ ql('spike_count', 'Spike count') }}
         <span class="qv {{ qv_class(spk, spk == 0, spk < 10) }}">{% if spk is not none %}{{ spk }}{% else %}<span style="color:#aaa">n/a</span>{% endif %}</span></li>
     {% if sqm.get('spike_pct') is not none %}
-    <li><span class="ql">Spike % (exp.)</span>
+    <li>{{ ql('spike_pct', 'Spike % (exp.)') }}
         <span class="qv">{{ pct(sqm.get('spike_pct')) }}</span></li>
-    <li><span class="ql">Spike % frames</span>
+    <li>{{ ql('spike_pct_frames', 'Spike % frames') }}
         <span class="qv">{{ pct(sqm.get('spike_pct_frames')) }}</span></li>
     {% endif %}
-    <li><span class="ql">Cardiac band power (HbO)</span>
+    <li>{{ ql('cardiac_band_power_hbo', 'Cardiac band power (HbO)') }}
         <span class="qv">{{ qm_val(sqm.get('cardiac_band_power_hbo'), '.3e') }}</span></li>
-    <li><span class="ql">Cardiac band fraction (HbO)</span>
+    <li>{{ ql('cardiac_band_frac_hbo', 'Cardiac band fraction (HbO)') }}
         <span class="qv">{{ pct(sqm.get('cardiac_band_frac_hbo')) }}</span></li>
-    <li><span class="ql">Low-freq drift (HbO)</span>
+    <li>{{ ql('lowfreq_drift_amplitude_hbo', 'Low-freq drift (HbO)') }}
         <span class="qv">{{ qm_val(sqm.get('lowfreq_drift_amplitude_hbo'), '.3e') }}</span></li>
   </ul>
 
