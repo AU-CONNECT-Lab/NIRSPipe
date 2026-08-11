@@ -10,6 +10,7 @@ section are the same names the metric functions have always returned:
     raw       every channel of the original recording, the archival view
     raw_long  long channels only, the view a quality judgement should use
     short     the short-channel regressors: are they trustworthy
+    motion    what the motion correction repaired, from the OD either side of it
     preproc   Beer-Lambert output, before any filtering
     final     the last haemo file the run produced (resampled > filtered > preproc)
 
@@ -34,7 +35,7 @@ _DESC_RE = re.compile(r"_desc-([A-Za-z0-9]+)_nirs\.snirf$")
 # the haemo file the "final" section measures, best first
 _FINAL_ORDER = ("resampled", "filtered", "preproc")
 
-SECTIONS = ("raw", "raw_long", "short", "preproc", "final")
+SECTIONS = ("raw", "raw_long", "short", "motion", "preproc", "final")
 
 
 def scan_runs(nirs_dir: Path) -> dict[str, dict[str, Path]]:
@@ -212,6 +213,15 @@ def compute_run_sections(
             per_channel["short"] = nested
     else:
         logger.warning("no BIDS input resolvable from the od sidecar; raw sections skipped")
+
+    # the OD either side of the motion step is on disk as desc-sci and desc-motcorrected,
+    # so the correction's footprint is measurable here rather than only in memory
+    if "sci" in stages and "motcorrected" in stages:
+        from fnirs_pipe.qc.quantitative_metrics import motion_correction_metrics
+        scalars, nested = _split_scalars(motion_correction_metrics(
+            read_snirf(stages["sci"]), read_snirf(stages["motcorrected"])))
+        sections["motion"] = scalars
+        per_channel["motion"] = nested
 
     if "preproc" in stages:
         raw_preproc = read_snirf(stages["preproc"])

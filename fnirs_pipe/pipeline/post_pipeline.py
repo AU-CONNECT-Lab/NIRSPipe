@@ -93,26 +93,19 @@ def run_post(
         rec.register_input(source_path, raw_haemo)
 
     result = raw_haemo.copy()
-    last_snirf_path: Path | None = None
 
     if config.high_pass is not None or config.low_pass is not None:
         logger.info("sub-%s | bandpass: l_freq=%s h_freq=%s", config.subject, config.high_pass, config.low_pass)
         result = bandpass_filter(result, l_freq=config.high_pass, h_freq=config.low_pass)
-        last_snirf_path = _write_step_snirf(result, config, output_dir, desc="filtered", rec=rec, source_entities=source_entities)
+        _write_step_snirf(result, config, output_dir, desc="filtered", rec=rec, source_entities=source_entities)
 
     if config.resample_sfreq is not None:
         logger.info("sub-%s | resample → %.1f Hz", config.subject, config.resample_sfreq)
         result = resample(result, config.resample_sfreq)
-        last_snirf_path = _write_step_snirf(result, config, output_dir, desc="resampled", rec=rec, source_entities=source_entities)
+        _write_step_snirf(result, config, output_dir, desc="resampled", rec=rec, source_entities=source_entities)
 
-    haemo_sqm = None
-    if last_snirf_path is not None:
-        try:
-            from fnirs_pipe.qc.quantitative_metrics import compute_haemo_sqm, save_sqm_toml
-            haemo_sqm = compute_haemo_sqm(result)
-            save_sqm_toml(haemo_sqm, config.subject, last_snirf_path.parent, source=last_snirf_path)
-        except Exception:
-            logger.warning("sub-%s | haemo SQM failed", config.subject, exc_info=True)
+    # SQM is not computed here either; the record is assembled from disk after this
+    # pipeline returns, which is what lets one writer own the whole file.
 
     glm_est = dm = alff_df = fc_df = fc_hbr_df = None
     raw_resid = None  # set by the glm/rest branches

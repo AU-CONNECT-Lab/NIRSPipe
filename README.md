@@ -251,7 +251,7 @@ output/
 │       ├── sub-01_desc-filtered_nirs.snirf        # post: bandpass applied
 │       ├── sub-01_desc-resampled_nirs.snirf       # post: resample applied
 │       ├── sub-01_desc-errts_nirs.snirf           # post glm/rest: GLM residuals
-│       ├── sub-01_desc-sqm_nirs.json              # SQM (raw + final checkpoints)
+│       ├── sub-01_task-<t>_desc-sqm_nirs.json     # SQM record, one per run
 │       ├── sub-01_design_matrix.csv                # glm mode
 │       ├── sub-01_glm_results.csv                  # glm mode
 │       ├── sub-01_contrasts.csv                    # glm mode + --contrast-file

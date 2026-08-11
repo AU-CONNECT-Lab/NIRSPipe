@@ -1,11 +1,11 @@
-"""Compute and persist image quality metrics (SQM) for fNIRS data.
+"""Compute signal quality metrics (SQM) for fNIRS data.
 
 Established metrics: SCI, PSP, CV, SNR, GVTD.
 Experimental (may change or be removed): Cardiac Power (CP), per-chromophore gcor,
 spike and motion-correction footprint, low-frequency drift.
 
-compute_sqm(): all metrics as a flat dict (no I/O).
-write_sqm_record(): append one JSONL line to a sidecar file.
+Each compute_* function returns a flat dict and does no I/O. Assembling them into a
+per-run record on disk is qc/sqm_record.py's job, not this module's.
 """
 
 import functools
@@ -1228,104 +1228,7 @@ def compute_prep_haemo_sqm(
     return record
 
 
-def compute_sqm(
-    raw_intensity: mne.io.Raw,
-    raw_haemo: mne.io.Raw,
-    sci_scores: dict[str, float],
-    bad_channels: list[str],
-    cardiac_l_freq: float,
-    cardiac_h_freq: float,
-    resp_l_freq: float,
-    resp_h_freq: float,
-) -> dict[str, Any]:
-    """All SQM: raw-intensity and haemoglobin metrics merged into one flat dict.
-
-    Parameters
-    ----------
-    raw_intensity : mne.io.Raw
-        Raw intensity, or already-OD, recording.
-    raw_haemo : mne.io.Raw
-        Haemoglobin recording (HbO/HbR).
-    sci_scores : dict[str, float]
-        Per-channel SCI, as returned by :func:`compute_sci_scores`.
-    bad_channels : list[str]
-        Channel names marked bad.
-    cardiac_l_freq, cardiac_h_freq : float
-        Cardiac band edges in Hz.
-    resp_l_freq, resp_h_freq : float
-        Respiration band edges in Hz.
-
-    Returns
-    -------
-    dict
-        The raw-intensity and haemoglobin metric dicts merged into one.
-    """
-    record = compute_raw_sqm(raw_intensity, sci_scores, bad_channels, cardiac_l_freq, cardiac_h_freq)
-    record.update(compute_prep_haemo_sqm(raw_haemo, cardiac_l_freq, cardiac_h_freq, resp_l_freq, resp_h_freq))
-    return record
-
-
 # ------------------------------------- Persistence --------------------------------------
-def save_sqm_toml(
-    sqm: dict[str, Any],
-    subject: str,
-    out_dir: Path,
-    suffix: str = "",
-    source: Path | str | None = None,
-    step: str = "sqm",
-) -> None:
-    """Write scalar SQM fields to a TOML sidecar.
-
-    Only scalar fields are written; per-channel dicts and lists are skipped.
-
-    Parameters
-    ----------
-    sqm : dict[str, Any]
-        Metric dict; non-scalar entries are ignored.
-    subject : str
-        BIDS subject label.
-    out_dir : Path
-        Output directory (created if missing).
-    suffix : str, optional
-        Filename suffix, e.g. ``'_raw'``.
-    source : Path or str, optional
-        File these metrics were measured on. Given, a JSON provenance sidecar is written
-        beside the TOML so the checkpoint appears in the run's provenance graph.
-    step : str, optional
-        Step name recorded in that sidecar.
-    """
-    def _to_toml(data: dict) -> str:
-        lines = []
-        for k, v in data.items():
-            if v is None:
-                lines.append(f"# {k} = null")
-            elif isinstance(v, bool):
-                lines.append(f"{k} = {str(v).lower()}")
-            elif isinstance(v, str):
-                escaped = v.replace("\\", "\\\\").replace('"', '\\"')
-                lines.append(f'{k} = "{escaped}"')
-            elif isinstance(v, (int, float)):
-                lines.append(f"{k} = {v}")
-        return "\n".join(lines) + "\n"
-
-    scalars = {k: v for k, v in sqm.items() if not isinstance(v, (dict, list))}
-    out_path = out_dir / f"sub-{subject}_sqm{suffix}.toml"
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(_to_toml({"subject": subject, **scalars}), encoding="utf-8")
-    if source is not None:
-        from fnirs_pipe import __version__
-        from fnirs_pipe.io.derivatives import write_sidecar_json
-        write_sidecar_json(out_path, {
-            "pipeline_version": __version__,
-            "step": step,
-            "Sources": [Path(source).as_posix()],
-            # which metrics this checkpoint actually computed: the two checkpoints measure
-            # different things, and without the list the graph shows both as just "sqm"
-            "data": {"n_metrics": len(scalars), "metrics": list(scalars)},
-        })
-    logger.info("sub-%s | SQM TOML → %s", subject, out_path)
-
-
 def write_sqm_record(
     subject: str,
     session: str | None,

@@ -165,8 +165,6 @@ class PrepResult:
     psp_win_times: "np.ndarray | None" = None
     raw_od_before_motion: "mne.io.Raw | None" = None
     raw_od_after_motion: "mne.io.Raw | None" = None
-    sqm_raw: "dict | None" = None
-    sqm_final: "dict | None" = None
 
 @dataclass
 class PrepConfig:
@@ -272,18 +270,6 @@ def run_prep(
         "sci_scores": {k: float(v) for k, v in sci_scores.items()},
     })
 
-    # raw SQM checkpoint — intensity metrics on original signal before any correction
-    sqm_raw: dict | None = None
-    try:
-        from fnirs_pipe.qc.quantitative_metrics import compute_raw_sqm, save_sqm_toml
-        sqm_raw = compute_raw_sqm(raw, sci_scores, bad_chs, config.cardiac_l_freq, config.cardiac_h_freq)
-        # measured on the original intensity, so the graph must point back to the input,
-        # not to the sci file this happens to be written beside
-        save_sqm_toml(sqm_raw, config.subject, sci_path.parent, suffix="_raw",
-                      source=rec.path_of(raw) or source_path, step="sqm_raw")
-    except Exception:
-        logger.warning("sub-%s | raw SQM failed", config.subject, exc_info=True)
-
     # step 3: motion correction (spike/step artifact repair)
     logger.info("sub-%s | step 3: motion correction (%s)", config.subject, config.motion_correction)
     raw_od_before_motion = raw_od.copy()
@@ -293,30 +279,10 @@ def run_prep(
     # step 4: Beer-Lambert
     logger.info("sub-%s | step 4: Beer-Lambert (dpf=%s)", config.subject, config.dpf)
     raw_haemo = od_to_haemo(raw_od, dpf=config.dpf)
-    preproc_path = _save(raw_haemo, "preproc")
+    _save(raw_haemo, "preproc")
 
-    # haemo SQM checkpoint — baseline, overwritten by post-pipeline if filter/resample runs
-    sqm_final: dict | None = None
-    try:
-        from fnirs_pipe.qc.quantitative_metrics import compute_prep_haemo_sqm, save_sqm_toml
-        sqm_final = compute_prep_haemo_sqm(
-            raw_haemo, config.cardiac_l_freq, config.cardiac_h_freq,
-            config.resp_l_freq, config.resp_h_freq)
-        save_sqm_toml(sqm_final, config.subject, preproc_path.parent, source=preproc_path)
-    except Exception:
-        logger.warning("sub-%s | haemo SQM failed", config.subject, exc_info=True)
-
-    # experimental: motion-correction footprint (which timepoints the correction repaired)
-    # TODO: generalise this corrected-timepoint QC across motion-correction methods.
-    #       Works for any method that yields before/after OD (tddr here); revisit once
-    #       wavelet/spline paths are wired so the metric is reported for them too. Add to 
-    #       the final SQM output and figures.
-    if config.motion_correction not in (None, "none"):
-        try:
-            from fnirs_pipe.qc.quantitative_metrics import motion_correction_metrics
-            sqm_final = {**(sqm_final or {}), **motion_correction_metrics(raw_od_before_motion, raw_od)}
-        except Exception:
-            logger.warning("sub-%s | motion correction footprint failed", config.subject, exc_info=True)
+    # SQM is not computed here. It is assembled per run from the files this pipeline left
+    # on disk, once post-processing has also finished; see qc/sqm_record.py.
 
     sci_matrix = sci_times = psp_matrix = psp_times = None
     try:
@@ -336,8 +302,6 @@ def run_prep(
         psp_win_times=psp_times,
         raw_od_before_motion=raw_od_before_motion,
         raw_od_after_motion=raw_od,
-        sqm_raw=sqm_raw,
-        sqm_final=sqm_final,
     )
 
 

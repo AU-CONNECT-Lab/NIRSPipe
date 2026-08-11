@@ -7,11 +7,16 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
-- One signal-quality record per BIDS run, `<sub>_<task>_desc-sqm_nirs.json`, assembled from the files on disk after processing finishes. Metrics are grouped by the channel set and stage they were measured on: all channels, long channels only, short channels only, the Beer-Lambert output, and the final signal. A subject with several tasks now gets one record per task instead of keeping only the last
-- Sidecars record the per-channel SCI scores and the respiration band, so a past run's quality record can be rebuilt from its output directory alone
+- `<sub>_<task>_desc-sqm_nirs.json`: one quality record per run, grouped into sections by what each metric was measured on (all channels, long only, short only, motion-correction footprint, Beer-Lambert output, final signal). A subject with several tasks gets one record per task
+- Sidecars record per-channel SCI and the respiration band, so a record can be rebuilt from an output directory alone
+
+### Changed
+- Quality metrics are measured once and written once. They used to be computed three to four times per subject, and the number shown in the report did not match the number on disk
+- `sub-XX_sqm.toml` and `sub-XX_sqm_raw.toml` are gone, replaced by the per-run JSON. Group aggregation now sees pipeline runs, not only `fnirs-qc prep-raw` output
+- The metrics database stores one row per section and fills in the task
 
 ### Fixed
-- The resting-state FC heatmap and connectogram lost their HbR half, or failed to render at all: connectivity is now computed as one matrix per chromophore, and the two figures still expected a single matrix holding both
+- The resting-state FC heatmap and connectogram lost their HbR half, or failed to render at all
 
 ## [0.19.0] - 2026-07-31
 

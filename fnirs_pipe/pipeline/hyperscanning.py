@@ -14,7 +14,6 @@ from scipy.signal import coherence
 from fnirs_pipe.exceptions import AlignmentError, GroupCSVError, MissingDerivativesError
 from fnirs_pipe.io.derivatives import find_preproc_snirf
 from fnirs_pipe.io.snirf import read_snirf
-from fnirs_pipe.utils import load_toml
 from fnirs_pipe.utils.lineage import path_from
 from fnirs_pipe.utils.logging import get_logger
 
@@ -592,15 +591,24 @@ def load_group_sqm(output_dir: Path, group: list[GroupEntry]) -> dict[str, dict]
 
     Returns {subject_id: sqm_dict}.
     """
+    import json
+
     result: dict[str, dict] = {}
     for entry in group:
         nirs_dir = output_dir / entry.subject_id / "nirs"
-        toml_path = nirs_dir / f"{entry.subject_id}_sqm.toml"
         csv_path  = nirs_dir / f"{entry.subject_id}_channel_metrics.csv"
 
         sqm: dict = {}
-        if toml_path.exists():
-            sqm.update(load_toml(toml_path))
+        # one record per run, so a subject with several tasks has several; the long-channel
+        # view is the one a quality judgement wants, with raw standing in when the montage
+        # has no short channels to exclude
+        for record_path in sorted(nirs_dir.glob(f"{entry.subject_id}*_desc-sqm_nirs.json")):
+            try:
+                record = json.loads(record_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                continue
+            sqm.update(record.get("raw_long") or record.get("raw") or {})
+            sqm.update(record.get("preproc") or {})
 
         if csv_path.exists():
             try:

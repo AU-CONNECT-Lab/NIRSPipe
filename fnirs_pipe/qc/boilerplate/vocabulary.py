@@ -89,7 +89,7 @@ STEP_SUMMARY = {
     "od_passthrough": "Input was already optical density, so the conversion was skipped.",
     "motion_correction": "Motion correction, using the method named in the settings.",
     "sqm_raw": "Quality metrics measured on the original intensity recording.",
-    "sqm": "Quality metrics measured on the haemoglobin signal at this point.",
+    "sqm": "Quality metrics for this run, grouped by the stage each was measured on.",
     "design_matrix": "Regressors assembled for the fit: conditions, drift and confounds.",
     "glm_fit": "Per-channel model fit; rejected channels are flagged, not dropped.",
     "contrasts": "Contrast estimates derived from the fitted model.",

@@ -324,17 +324,10 @@ def _section_motion(
     bad_segment_zoom_path = None
 
     corrected_segments = None
-    motion_corr_sqm: dict = {}
     if raw_before_motion is not None and raw_after_motion is not None:
         with _guard("Motion-correction footprint", errors, subject):
-            from fnirs_pipe.qc.quantitative_metrics import (
-                motion_corrected_segments, motion_correction_metrics,
-            )
+            from fnirs_pipe.qc.quantitative_metrics import motion_corrected_segments
             corrected_segments = motion_corrected_segments(raw_before_motion, raw_after_motion)
-            motion_corr_sqm = {
-                k: v for k, v in motion_correction_metrics(raw_before_motion, raw_after_motion).items()
-                if not isinstance(v, dict)  # scalars only for the metrics panel
-            }
 
     spike_spans = None
     with _guard("Spike segments", errors, subject):
@@ -369,7 +362,6 @@ def _section_motion(
     return {
         "carpet_gvtd_path": carpet_gvtd_path,
         "bad_segment_zoom_path": bad_segment_zoom_path,
-        "motion_corrected_sqm": motion_corr_sqm,
         "corrected_segments": corrected_segments,
         "spike_spans": spike_spans,
     }
@@ -457,31 +449,6 @@ def _section_erpimage(
     return {"erpimage_pairs": saved, "erpimage_roi_pairs": roi_saved}
 
 
-def _scalars_to_toml(data: dict) -> str:
-    lines = []
-    for k, v in data.items():
-        if v is None:
-            lines.append(f"# {k} = null")
-        elif isinstance(v, bool):
-            lines.append(f"{k} = {str(v).lower()}")
-        elif isinstance(v, str):
-            escaped = v.replace("\\", "\\\\").replace('"', '\\"')
-            lines.append(f'{k} = "{escaped}"')
-        elif isinstance(v, (int, float)):
-            lines.append(f"{k} = {v}")
-    return "\n".join(lines) + "\n"
-
-
-# def _save_sqm_toml(sqm: dict, subject: str, out_dir: Path) -> None:
-#     scalars = {k: v for k, v in sqm.items() if not isinstance(v, (dict, list))}
-#     out_path = out_dir / f"sub-{subject}_sqm.toml"
-#     out_path.parent.mkdir(parents=True, exist_ok=True)
-#     out_path.write_text(
-#         _scalars_to_toml({"subject": subject, **scalars}), encoding="utf-8"
-#     )
-#     logger.info("sub-%s | SQM sidecar saved: %s", subject, out_path)
-
-
 def _save_channel_csv(channel_rows: list, subject: str, out_dir: Path) -> None:
     if not channel_rows:
         return
@@ -517,7 +484,7 @@ def _section_sqm(
         record = json.loads(_sqm_record_path(out_dir, sqm_label).read_text(encoding="utf-8"))
         per_channel = record.get("per_channel") or {}
         raw_key = "raw_long" if "raw_long" in record else "raw"
-        for key in (raw_key, "preproc"):
+        for key in (raw_key, "motion", "preproc"):
             sqm.update(record.get(key) or {})
             sqm.update(per_channel.get(key) or {})
     channel_rows = []
@@ -838,9 +805,6 @@ def build_subject_report(
     # comparison (expected to drop). Bandpass alone raises GCOR, so we do not compare that.
     if gcor_reg and sqm_vars.get("sqm") is not None:
         sqm_vars["sqm"].update(gcor_reg)
-    # motion-correction footprint scalars (computed in _section_motion) into the metrics panel
-    if sqm_vars.get("sqm") is not None:
-        sqm_vars["sqm"].update(motion_vars.get("motion_corrected_sqm") or {})
     provenance_vars   = _section_provenance(out_path.parent / "nirs", mode, subject, errors)
     ch_summary_vars   = _section_channel_summary(
                             sqm_vars["channel_rows"], sqm_vars["sqm"], subject, errors, figures_dir,
