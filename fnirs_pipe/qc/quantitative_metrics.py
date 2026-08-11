@@ -6,6 +6,22 @@ spike and motion-correction footprint, low-frequency drift.
 
 Each compute_* function returns a flat dict and does no I/O. Assembling them into a
 per-run record on disk is qc/sqm_record.py's job, not this module's.
+
+Bad channels are handled by signal domain, not per function. The Beer-Lambert conversion
+is the line:
+
+    intensity / OD (compute_raw_sqm and its helpers, motion_correction_metrics)
+        aggregates cover every channel, rejected ones included. A rejected channel is
+        still part of what the machine recorded, and this is the archival view.
+    haemoglobin (compute_haemo_sqm, compute_prep_haemo_sqm)
+        aggregates exclude them, which is what mne.pick_types does by default. By this
+        stage the channel is out of the analysis.
+
+Do not "fix" an intensity/OD function to exclude bads. Doing so to _sci_metrics in
+particular makes sci_mean an average over channels chosen for having good SCI, which
+cannot fall below the threshold no matter how bad the recording is.
+
+Per-channel dicts always list every channel, in both domains.
 """
 
 import functools
@@ -436,11 +452,15 @@ def _cardiac_power_metrics(
     # (equivalent to Bizzego's pre-bandpass; keeps respiration/Mayer power out of the ratio)
     psd = raw_od.compute_psd(fmin=cardiac_l_freq, fmax=fmax, verbose=False)
     freqs = psd.freqs
-    psd_data = psd.get_data()
+    # exclude=() keeps the bad channels: this is a raw-domain metric, so it describes the
+    # recording as it arrived. It also keeps get_data() aligned with ch_names, which the
+    # default does not: get_data() drops bads while ch_names keeps them, and indexing one
+    # by the other reads the wrong channel and then runs off the end
+    psd_data = psd.get_data(exclude=())
     if freqs.size == 0:
         raise ValueError("no frequencies in cardiac band")
     cp_per_ch: dict[str, float | None] = {}
-    for i, ch in enumerate(raw_od.ch_names):
+    for i, ch in enumerate(psd.ch_names):
         ch_psd = psd_data[i]
         fc = freqs[np.argmax(ch_psd)]
         narrow = ch_psd[(freqs >= fc - 0.2) & (freqs <= fc + 0.2)]

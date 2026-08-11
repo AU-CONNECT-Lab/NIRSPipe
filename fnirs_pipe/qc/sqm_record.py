@@ -7,14 +7,30 @@ checkpoints from overwriting each other, and it works on any tree a past run lef
 Sections name the input a metric family was measured on. The metric names inside a
 section are the same names the metric functions have always returned:
 
-    raw       every channel of the original recording, the archival view
-    raw_long  long channels only, the view a quality judgement should use
-    short     the short-channel regressors: are they trustworthy
-    motion    what the motion correction repaired, from the OD either side of it
-    preproc   Beer-Lambert output, before any filtering
-    final     the last haemo file the run produced (resampled > filtered > preproc)
+    raw        every channel of the original recording, the archival view
+    raw_long   the same recording, long channels only
+    raw_short  the same recording, short channels only: are the regressors trustworthy
+    motion     what the motion correction repaired, from the OD either side of it
+    preproc    Beer-Lambert output, before any filtering
+    final      the last haemo file the run produced (resampled > filtered > preproc)
 
-Per-channel values live under ``per_channel`` so the sections stay scalar.
+The three ``raw*`` sections are one file seen through three channel sets, so the only
+thing that differs between them is source-detector separation.
+
+Bad channels: the Beer-Lambert conversion is the dividing line, never the section.
+
+    raw / raw_long / raw_short / motion   intensity and OD, include them
+    preproc / final                       haemoglobin, exclude them
+
+A rejected channel is still part of what the machine recorded, so everything measured
+before Beer-Lambert describes the recording as it arrived; after it the channel is out of
+the analysis, and those metrics go through ``mne.pick_types``, which drops bads by
+default. Reading it the other way round gives ``sci_mean`` over channels that were
+selected for having good SCI, which is circular and can never fall below the threshold.
+``channel_retention_rate`` is what says how many were dropped.
+
+Per-channel values live under ``per_channel`` so the sections stay scalar. Those are
+always complete, every channel, whichever section they sit under.
 """
 
 from __future__ import annotations
@@ -35,7 +51,7 @@ _DESC_RE = re.compile(r"_desc-([A-Za-z0-9]+)_nirs\.snirf$")
 # the haemo file the "final" section measures, best first
 _FINAL_ORDER = ("resampled", "filtered", "preproc")
 
-SECTIONS = ("raw", "raw_long", "short", "motion", "preproc", "final")
+SECTIONS = ("raw", "raw_long", "raw_short", "motion", "preproc", "final")
 
 
 def scan_runs(nirs_dir: Path) -> dict[str, dict[str, Path]]:
@@ -215,11 +231,11 @@ def compute_run_sections(
         if short_names:
             # already returns the (scalars, nested) split, so it bypasses `section`
             try:
-                sections["short"], per_channel["short"] = _short_section(
+                sections["raw_short"], per_channel["raw_short"] = _short_section(
                     raw_intensity, short_names, sci_scores, bad_channels,
                     cardiac_l_freq, cardiac_h_freq)
             except Exception:
-                logger.warning("short: section failed", exc_info=True)
+                logger.warning("raw_short: section failed", exc_info=True)
 
     # the OD either side of the motion step is on disk as desc-sci and desc-motcorrected,
     # so the correction's footprint is measurable here rather than only in memory

@@ -7,7 +7,7 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
-- `<sub>_<task>_desc-sqm_nirs.json`: one quality record per run, grouped into sections by what each metric was measured on (all channels, long only, short only, motion-correction footprint, Beer-Lambert output, final signal). A subject with several tasks gets one record per task
+- `<sub>_<task>_desc-sqm_nirs.json`: one quality record per run, grouped into sections by what each metric was measured on (`raw`, `raw_long`, `raw_short`, `motion`, `preproc`, `final`). A subject with several tasks gets one record per task. The `raw*` sections include rejected channels, the rest exclude them
 - Sidecars record per-channel SCI and the respiration band, so a record can be rebuilt from an output directory alone
 
 ### Changed
@@ -23,6 +23,7 @@ All notable changes to this project will be documented in this file.
 - The provenance table lists the metric names again for the quality record
 - `<sub>_channel_metrics.csv` gains the run's task and session, so a subject with several tasks keeps one file per task instead of only the last
 - Short and long channels are decided the same way everywhere. The QC report, the `prep-raw` figures and the quality record each used a different separation cutoff, so the same channel could be short in one and long in another
+- Cardiac Power was silently unavailable on any recording with a rejected channel: `cp_mean`, `cp_per_channel` and `cp_pass_rate` all came back empty
 
 ## [0.19.0] - 2026-07-31
 
