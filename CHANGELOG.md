@@ -21,6 +21,7 @@ All notable changes to this project will be documented in this file.
 - A single failing metric no longer discards a run's whole quality record; only the section it belongs to is lost
 - The QC report says so when a run's quality record is unreadable, instead of showing an empty metrics panel
 - The provenance table lists the metric names again for the quality record
+- `<sub>_channel_metrics.csv` gains the run's task and session, so a subject with several tasks keeps one file per task instead of only the last
 
 ## [0.19.0] - 2026-07-31
 

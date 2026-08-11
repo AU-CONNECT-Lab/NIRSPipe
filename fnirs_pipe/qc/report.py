@@ -449,17 +449,19 @@ def _section_erpimage(
     return {"erpimage_pairs": saved, "erpimage_roi_pairs": roi_saved}
 
 
-def _save_channel_csv(channel_rows: list, subject: str, out_dir: Path) -> None:
+def _save_channel_csv(channel_rows: list, label: str, out_dir: Path) -> None:
+    """Per-channel metrics for one run. The name carries the run's entities, or a subject
+    with several tasks would keep only whichever ran last."""
     if not channel_rows:
         return
-    out_path = out_dir / f"sub-{subject}_channel_metrics.csv"
+    out_path = out_dir / f"{label}_channel_metrics.csv"
     out_path.parent.mkdir(parents=True, exist_ok=True)
     fieldnames = ["name", "sci", "snr", "cv", "corr", "is_bad"]
     with out_path.open("w", newline="", encoding="utf-8") as fh:
         writer = csv.DictWriter(fh, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows(channel_rows)
-    logger.info("sub-%s | channel metrics CSV saved: %s", subject, out_path)
+    logger.info("%s | channel metrics CSV saved: %s", label, out_path)
 
 
 def _section_sqm(
@@ -507,7 +509,7 @@ def _section_sqm(
         })
     if out_dir is not None and sqm:
         with _guard("Channel metrics CSV", errors, subject):
-            _save_channel_csv(channel_rows, subject, out_dir)
+            _save_channel_csv(channel_rows, sqm_label or f"sub-{subject}", out_dir)
     return {"sqm": sqm, "channel_rows": channel_rows}
 
 

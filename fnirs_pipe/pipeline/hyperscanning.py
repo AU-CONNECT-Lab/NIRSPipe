@@ -596,7 +596,6 @@ def load_group_sqm(output_dir: Path, group: list[GroupEntry]) -> dict[str, dict]
     result: dict[str, dict] = {}
     for entry in group:
         nirs_dir = output_dir / entry.subject_id / "nirs"
-        csv_path  = nirs_dir / f"{entry.subject_id}_channel_metrics.csv"
 
         sqm: dict = {}
         # one record per run, so a subject with several tasks has several; the long-channel
@@ -610,7 +609,9 @@ def load_group_sqm(output_dir: Path, group: list[GroupEntry]) -> dict[str, dict]
             sqm.update(record.get("raw_long") or record.get("raw") or {})
             sqm.update(record.get("preproc") or {})
 
-        if csv_path.exists():
+        # one CSV per run since the name gained the run's entities, merged the same way
+        # the records above are: a subject with several tasks keeps the last one read
+        for csv_path in sorted(nirs_dir.glob(f"{entry.subject_id}*_channel_metrics.csv")):
             try:
                 ch_df = pd.read_csv(csv_path)
                 if {"name", "sci"}.issubset(ch_df.columns):

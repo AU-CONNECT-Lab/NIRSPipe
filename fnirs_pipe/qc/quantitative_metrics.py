@@ -9,9 +9,6 @@ per-run record on disk is qc/sqm_record.py's job, not this module's.
 """
 
 import functools
-import json
-from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any
 
 import mne
@@ -1228,33 +1225,3 @@ def compute_prep_haemo_sqm(
     return record
 
 
-# ------------------------------------- Persistence --------------------------------------
-def write_sqm_record(
-    subject: str,
-    session: str | None,
-    sqm: dict[str, Any],
-    out_path: Path,
-) -> None:
-    """Append one SQM record (subject/session/timestamp + metrics) as a JSONL line.
-
-    Parameters
-    ----------
-    subject : str
-        BIDS subject label.
-    session : str or None
-        BIDS session label, or None.
-    sqm : dict[str, Any]
-        Metric dict to record.
-    out_path : Path
-        JSONL file to append to (created if missing).
-    """
-    record = {
-        "subject": subject,
-        "session": session,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        **sqm,
-    }
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    with out_path.open("a", encoding="utf-8") as fh:
-        fh.write(json.dumps(record) + "\n")
-    logger.info("sub-%s | SQM record appended: %s", subject, out_path)
