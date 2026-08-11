@@ -90,15 +90,31 @@ def _sidecar(path: Path) -> dict[str, Any]:
         return {}
 
 
-def _bids_input(stages: dict[str, Path]) -> Path | None:
-    """The original recording: the OD file is the only derivative whose source is it."""
+def _bids_input(stages: dict[str, Path], bids_root: Path | None = None) -> Path | None:
+    """The original recording: the OD file is the only derivative whose source is it.
+
+    ``Sources`` holds the absolute path the run saw, so a tree that has been copied to
+    another machine, or whose input has moved, names a file that is no longer there. The
+    name is still right, so fall back to finding it under ``bids_root``. Without that
+    fallback the three ``raw*`` sections vanish from every rebuilt record, with one
+    warning to say why.
+    """
     if "od" not in stages:
         return None
     sources = _sidecar(stages["od"]).get("Sources") or []
     if not sources:
         return None
     src = Path(sources[0])
-    return src if src.exists() else None
+    if src.exists():
+        return src
+    if bids_root is not None:
+        # BIDS names are unique within a dataset, so the first hit is the right one
+        if (found := next(Path(bids_root).rglob(src.name), None)) is not None:
+            logger.info("%s moved; using %s", src.name, found)
+            return found
+    logger.warning("the recorded input %s is gone%s", src,
+                   "" if bids_root else " and no bids_root was given to search")
+    return None
 
 
 def _bands(stages: dict[str, Path]) -> dict[str, float] | None:
@@ -175,8 +191,13 @@ def compute_run_sections(
     cardiac_h_freq: float,
     resp_l_freq: float,
     resp_h_freq: float,
+    bids_root: Path | None = None,
 ) -> dict[str, Any]:
-    """Every SQM section for one run, keyed by section name, plus ``per_channel``."""
+    """Every SQM section for one run, keyed by section name, plus ``per_channel``.
+
+    ``bids_root`` is where to look for the original recording when the path its sidecar
+    recorded no longer resolves; without it a moved tree loses the ``raw*`` sections.
+    """
     from fnirs_pipe.io.snirf import read_snirf
     from fnirs_pipe.qc.quantitative_metrics import (
         compute_haemo_sqm, compute_prep_haemo_sqm, compute_raw_sqm, long_short_channels,
@@ -202,7 +223,7 @@ def compute_run_sections(
         sci_scores = {}
 
     raw_intensity = None
-    bids_input = _bids_input(stages)
+    bids_input = _bids_input(stages, bids_root)
     if bids_input is None:
         logger.warning("no BIDS input resolvable from the od sidecar; raw sections skipped")
     else:
@@ -264,6 +285,7 @@ def write_run_sqm(
     label: str,
     stages: dict[str, Path],
     sections: dict[str, Any],
+    bids_root: Path | None = None,
 ) -> Path:
     """Write ``<label>_desc-sqm_nirs.json``, provenance keys included.
 
@@ -274,7 +296,7 @@ def write_run_sqm(
     from fnirs_pipe import __version__
 
     sources = [p.as_posix() for p in stages.values()]
-    bids_input = _bids_input(stages)
+    bids_input = _bids_input(stages, bids_root)
     if bids_input is not None:
         sources.insert(0, bids_input.as_posix())
 
@@ -307,9 +329,14 @@ def build_sqm_records(
     cardiac_h_freq: float | None = None,
     resp_l_freq: float | None = None,
     resp_h_freq: float | None = None,
+    bids_root: Path | None = None,
 ) -> list[Path]:
     """Write one SQM record per run found under nirs_dir. Band edges default to the
-    values the run's own sidecars recorded, so a past tree needs no arguments."""
+    values the run's own sidecars recorded, so a past tree needs no arguments.
+
+    ``bids_root`` rescues the ``raw*`` sections when the tree has been moved since the run:
+    the sidecars name the original recording by an absolute path that no longer resolves,
+    but the filename is still correct, so it is searched for there."""
     written: list[Path] = []
     for label, stages in scan_runs(Path(nirs_dir)).items():
         bands = {
@@ -325,8 +352,9 @@ def build_sqm_records(
         # each section guards itself, so what reaches here is fatal for this run only;
         # the remaining runs still get their records
         try:
-            sections = compute_run_sections(stages, **bands)
-            written.append(write_run_sqm(Path(nirs_dir), label, stages, sections))
+            sections = compute_run_sections(stages, **bands, bids_root=bids_root)
+            written.append(
+                write_run_sqm(Path(nirs_dir), label, stages, sections, bids_root))
         except Exception:
             logger.error("%s: SQM record could not be written", label, exc_info=True)
     return written

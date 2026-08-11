@@ -208,7 +208,7 @@ def run_participant_level(args: dict[str, Any]) -> None:
                 import json as _json
                 from fnirs_pipe.qc.sqm_record import SECTIONS, build_sqm_records, entities_of
                 try:
-                    sqm_paths = build_sqm_records(sub_dir / "nirs")
+                    sqm_paths = build_sqm_records(sub_dir / "nirs", bids_root=bids_dir)
                 except Exception:
                     logger.error("sub-%s | SQM records failed", subject, exc_info=True)
                     sqm_paths = []

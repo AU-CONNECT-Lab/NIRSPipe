@@ -28,6 +28,7 @@ All notable changes to this project will be documented in this file.
 - Rebuilding a quality record from an existing derivatives tree lost every SCI metric when the sidecar carried no stored per-channel scores
 - The group report's boxplots grouped every metric under "Other". Grouping matched bare metric names and the columns had gained their section prefix
 - Per-wavelength CV (`cv_mean_760` and the like) vanished from a record whenever the CV/SNR step failed, instead of being reported as missing like every other metric
+- A derivatives tree that has been moved, or is read on another machine, keeps its raw-signal quality metrics. They were silently skipped because the sidecars name the original recording by an absolute path that no longer resolved
 
 ## [0.19.0] - 2026-07-31
 
