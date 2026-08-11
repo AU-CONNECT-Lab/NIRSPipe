@@ -258,7 +258,7 @@ def compute_sci_scores(
     Parameters
     ----------
     raw : mne.io.Raw
-        Raw intensity recording.
+        Raw intensity recording, or one already in optical density.
     cardiac_l_freq, cardiac_h_freq : float
         Cardiac band edges in Hz.
 
@@ -276,11 +276,16 @@ def compute_sci_scores(
     dict, and is crash-safe: on failure every channel defaults to 1.0 (so no
     channel is wrongly dropped) instead of raising and aborting the whole run.
 
+    Already-OD input is passed through rather than converted: recomputing scores from a
+    tree on disk reads ``desc-sci`` or ``desc-od``, and ``optical_density`` raises on
+    anything that is not continuous-wave amplitude.
+
     References
     ----------
     .. footbibliography::
     """
-    raw_od = mne.preprocessing.nirs.optical_density(raw.copy(), verbose=False)
+    raw_od = (raw if is_optical_density(raw)
+              else mne.preprocessing.nirs.optical_density(raw.copy(), verbose=False))
     try:
         sci_arr = mne.preprocessing.nirs.scalp_coupling_index(
             raw_od, l_freq=cardiac_l_freq, h_freq=cardiac_h_freq, verbose=False)
@@ -396,13 +401,22 @@ def _psp_metrics(
     cardiac_l_freq: float,
     cardiac_h_freq: float,
 ) -> dict[str, Any]:
-    """Peak spectral power per channel over the whole recording, with mean."""
+    """Peak spectral power per channel over the whole recording, with mean.
+
+    Measured on optical density, which is what ``peak_power`` is meant for: the metric
+    cross-correlates the two wavelengths, so it has no meaning after Beer-Lambert, and
+    mne_nirs' own test converts to OD before calling it. Its docstring saying
+    "haemoglobin data" is a copy-paste slip shared with ``scalp_coupling_index_windowed``.
+    Converting here keeps this agreeing with the windowed PSP series, which is handed OD.
+    """
     import mne_nirs.preprocessing as nirs_prep
+    raw_od = (raw_intensity if is_optical_density(raw_intensity)
+              else mne.preprocessing.nirs.optical_density(raw_intensity.copy()))
     _, psp_scores, _ = nirs_prep.peak_power(
-        raw_intensity.copy(), l_freq=cardiac_l_freq, h_freq=cardiac_h_freq, verbose=False)
+        raw_od.copy(), l_freq=cardiac_l_freq, h_freq=cardiac_h_freq, verbose=False)
     psp_per_ch = {
         ch: float(np.mean(psp_scores[i]))
-        for i, ch in enumerate(raw_intensity.ch_names)
+        for i, ch in enumerate(raw_od.ch_names)
     }
     return {
         "psp_mean": _mean_or_none(psp_per_ch.values()),

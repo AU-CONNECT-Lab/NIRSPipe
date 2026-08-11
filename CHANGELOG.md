@@ -24,6 +24,8 @@ All notable changes to this project will be documented in this file.
 - `<sub>_channel_metrics.csv` gains the run's task and session, so a subject with several tasks keeps one file per task instead of only the last
 - Short and long channels are decided the same way everywhere. The QC report, the `prep-raw` figures and the quality record each used a different separation cutoff, so the same channel could be short in one and long in another
 - Cardiac Power was silently unavailable on any recording with a rejected channel: `cp_mean`, `cp_per_channel` and `cp_pass_rate` all came back empty
+- Peak spectral power is measured on optical density, matching the windowed PSP series shown beside it in the report. The two were measured on different signals; values shift in the fourth decimal
+- Rebuilding a quality record from an existing derivatives tree lost every SCI metric when the sidecar carried no stored per-channel scores
 
 ## [0.19.0] - 2026-07-31
 
