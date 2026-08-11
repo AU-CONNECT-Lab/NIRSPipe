@@ -88,15 +88,33 @@ def _safe_metrics(label: str, keys):
     ``keys`` declares the output schema once: the wrapped function starts from that
     schema (all None) and overlays whatever it computes, so a failure logs and leaves
     every key None instead of each function hand-writing an all-None fallback.
+
+    A key ending in ``*`` declares a family whose members are only known at runtime, one
+    per wavelength for instance. Those cannot be pre-filled — on failure there is no way
+    to know which members would have existed — so the wildcard documents them and keeps
+    them from reading as an undeclared key. Anything else the function returns that the
+    schema does not mention is logged, because it is present on success and absent on
+    failure, which is exactly what this decorator exists to prevent.
     """
+    fixed = tuple(k for k in keys if not k.endswith("*"))
+    families = tuple(k[:-1] for k in keys if k.endswith("*"))
+
     def deco(fn):
         @functools.wraps(fn)
         def wrap(*args, **kwargs):
-            base = dict.fromkeys(keys)
+            base = dict.fromkeys(fixed)
             try:
-                base.update(fn(*args, **kwargs) or {})
+                computed = fn(*args, **kwargs) or {}
             except Exception as exc:
                 logger.warning("%s failed: %s", label, exc)
+                return base
+            undeclared = [k for k in computed
+                          if k not in base and not k.startswith(families)]
+            if undeclared:
+                logger.warning("%s returned undeclared keys %s; they disappear when it "
+                               "fails, so declare them (a '*' suffix marks a family)",
+                               label, undeclared)
+            base.update(computed)
             return base
         return wrap
     return deco
@@ -340,7 +358,8 @@ def channel_snr(data: np.ndarray) -> np.ndarray:
 
 
 @_safe_metrics("CV/SNR", (
-    "cv_mean", "cv_per_channel", "snr_mean", "snr_per_channel", "snr_pass_rate",
+    "cv_mean", "cv_mean_*", "cv_per_channel",     # cv_mean_* is one key per wavelength
+    "snr_mean", "snr_per_channel", "snr_pass_rate",
     "mean_amp_mean", "mean_amp_per_channel",
 ))
 def _intensity_metrics(raw_intensity: mne.io.Raw, snr_threshold: float = 2.0) -> dict[str, Any]:

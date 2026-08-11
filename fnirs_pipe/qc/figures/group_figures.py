@@ -32,19 +32,42 @@ _METRIC_GROUPS: list[tuple[str, list[str]]] = [
     ("Intensity SNR", ["snr_mean"]),
     ("Mean amplitude", ["mean_amp_mean"]),
     ("HbO-HbR correlation", ["hbo_hbr_corr_mean"]),
+    ("Global correlation", ["gcor_hbo", "gcor_hbr"]),
     ("Low-freq drift", ["lowfreq_drift_amplitude_hbo", "lowfreq_drift_amplitude_hbr"]),
     ("Residual physiology power", ["residual_cardiac_power", "residual_resp_power"]),
     ("Channel distance (m)", ["ch_dist_mean", "ch_dist_min", "ch_dist_max"]),
 ]
 
 
+def _bare_metric(col: str) -> str:
+    """Column name without its section prefix: ``raw_long_snr_mean`` -> ``snr_mean``.
+
+    Quality records are sectioned, so the group table's columns are ``section_metric``
+    while _METRIC_GROUPS above names bare metrics. Longest section first, or ``raw``
+    would match a ``raw_long_`` column and leave ``long_snr_mean`` behind.
+    """
+    from fnirs_pipe.qc.sqm_record import SECTIONS
+
+    for section in sorted(SECTIONS, key=len, reverse=True):
+        if col.startswith(f"{section}_"):
+            return col[len(section) + 1:]
+    return col
+
+
 def group_metrics(metric_cols: list[str]) -> tuple[list[tuple[str, list[str]]], list[str]]:
-    """Split metric_cols into (groups, ordered_flat) following _METRIC_GROUPS; leftovers -> 'Other'."""
-    cols = set(metric_cols)
+    """Split metric_cols into (groups, ordered_flat) following _METRIC_GROUPS; leftovers -> 'Other'.
+
+    Matching ignores the section prefix, so ``raw_sci_mean`` and ``raw_long_sci_mean``
+    both land in the coupling group while staying separate columns.
+    """
+    by_metric: dict[str, list[str]] = {}
+    for col in metric_cols:
+        by_metric.setdefault(_bare_metric(col), []).append(col)
+
     groups: list[tuple[str, list[str]]] = []
     assigned: set[str] = set()
     for title, keys in _METRIC_GROUPS:
-        present = [k for k in keys if k in cols]
+        present = [col for k in keys for col in by_metric.get(k, [])]
         if present:
             groups.append((title, present))
             assigned.update(present)

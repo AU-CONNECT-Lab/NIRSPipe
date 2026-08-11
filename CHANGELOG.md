@@ -26,6 +26,8 @@ All notable changes to this project will be documented in this file.
 - Cardiac Power was silently unavailable on any recording with a rejected channel: `cp_mean`, `cp_per_channel` and `cp_pass_rate` all came back empty
 - Peak spectral power is measured on optical density, matching the windowed PSP series shown beside it in the report. The two were measured on different signals; values shift in the fourth decimal
 - Rebuilding a quality record from an existing derivatives tree lost every SCI metric when the sidecar carried no stored per-channel scores
+- The group report's boxplots grouped every metric under "Other". Grouping matched bare metric names and the columns had gained their section prefix
+- Per-wavelength CV (`cv_mean_760` and the like) vanished from a record whenever the CV/SNR step failed, instead of being reported as missing like every other metric
 
 ## [0.19.0] - 2026-07-31
 
