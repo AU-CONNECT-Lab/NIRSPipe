@@ -205,11 +205,17 @@ def run_participant_level(args: dict[str, Any]) -> None:
                 # final section can measure the last file post actually produced. The
                 # database takes one row per section, which is what its checkpoint column
                 # has always been for.
+                import json as _json
+                from fnirs_pipe.qc.sqm_record import SECTIONS, build_sqm_records, entities_of
                 try:
-                    import json as _json
-                    from fnirs_pipe.qc.sqm_record import SECTIONS, build_sqm_records, entities_of
-                    for path in build_sqm_records(sub_dir / "nirs"):
-                        logger.info("sub-%s | SQM record → %s", subject, path.name)
+                    sqm_paths = build_sqm_records(sub_dir / "nirs")
+                except Exception:
+                    logger.error("sub-%s | SQM records failed", subject, exc_info=True)
+                    sqm_paths = []
+                for path in sqm_paths:
+                    logger.info("sub-%s | SQM record → %s", subject, path.name)
+                    # the record is on disk either way; only the database rows are at risk here
+                    try:
                         record = _json.loads(path.read_text(encoding="utf-8"))
                         ents = entities_of(path.stem)
                         for section in SECTIONS:
@@ -217,8 +223,9 @@ def run_participant_level(args: dict[str, Any]) -> None:
                                 _jdb.log_sqm(db_path, execution_id, subject, section,
                                              record[section], session=ents["ses"],
                                              bids_task=ents["task"])
-                except Exception:
-                    logger.warning("sub-%s | SQM records failed", subject, exc_info=True)
+                    except Exception:
+                        logger.warning("sub-%s | SQM database rows failed for %s",
+                                       subject, path.name, exc_info=True)
 
                 # rendered before the report, which embeds it: every sidecar it scans is
                 # on disk by now, and --no-report still leaves the diagram behind

@@ -475,16 +475,23 @@ def _section_sqm(
 
     The panel judges data quality, so it shows the long-channel sections; ``raw`` stands
     in when the montage has no short channels to exclude. Nothing recomputes here: a
-    missing record is reported as an error rather than silently measured a second time.
+    missing record is reported as an error rather than silently measured a second time,
+    and so is a record that carries none of the sections the panel reads, which is what a
+    foreign file at this path looks like.
     """
     sqm: dict = {}
     with _guard("SQM record", errors, subject):
         if out_dir is None or sqm_label is None:
             raise FileNotFoundError("no SQM record location for this run")
-        record = json.loads(_sqm_record_path(out_dir, sqm_label).read_text(encoding="utf-8"))
+        record_file = _sqm_record_path(out_dir, sqm_label)
+        record = json.loads(record_file.read_text(encoding="utf-8"))
         per_channel = record.get("per_channel") or {}
         raw_key = "raw_long" if "raw_long" in record else "raw"
-        for key in (raw_key, "motion", "preproc"):
+        keys = (raw_key, "motion", "preproc")
+        if not any(record.get(k) for k in keys):
+            raise ValueError(
+                f"{record_file.name} holds none of {keys}; not a sectioned SQM record")
+        for key in keys:
             sqm.update(record.get(key) or {})
             sqm.update(per_channel.get(key) or {})
     channel_rows = []

@@ -14,9 +14,13 @@ All notable changes to this project will be documented in this file.
 - Quality metrics are measured once and written once. They used to be computed three to four times per subject, and the number shown in the report did not match the number on disk
 - `sub-XX_sqm.toml` and `sub-XX_sqm_raw.toml` are gone, replaced by the per-run JSON. Group aggregation now sees pipeline runs, not only `fnirs-qc prep-raw` output
 - The metrics database stores one row per section and fills in the task
+- `fnirs-qc prep-raw` writes `<sub>_<task>_desc-sqmraw_nirs.json`. It used to write `desc-sqm`, the same name the pipeline uses, so running both into one output directory left whichever finished last. The group report reads both and prefers the pipeline's record for a run that has both
 
 ### Fixed
 - The resting-state FC heatmap and connectogram lost their HbR half, or failed to render at all
+- A single failing metric no longer discards a run's whole quality record; only the section it belongs to is lost
+- The QC report says so when a run's quality record is unreadable, instead of showing an empty metrics panel
+- The provenance table lists the metric names again for the quality record
 
 ## [0.19.0] - 2026-07-31
 

@@ -64,8 +64,34 @@ def _scalars(sqm: dict) -> dict:
     return flat
 
 
+# The two records a run can leave behind, best first. `sqm` is the pipeline's sectioned
+# record; `sqmraw` is what `fnirs-qc prep-raw` writes, measuring the original recording
+# only. A run that saw both commands has both files.
+_SQM_DESCS = ("sqm", "sqmraw")
+_PREP_RAW_DESC = "sqmraw"
+
+
 def _bids_name_from_sqm_path(path: Path) -> str:
-    return path.name.removesuffix("_desc-sqm_nirs.json")
+    for desc in _SQM_DESCS:
+        if (name := path.name.removesuffix(f"_desc-{desc}_nirs.json")) != path.name:
+            return name
+    return path.stem
+
+
+def _sqm_row(bids_name: str, sqm: dict, desc: str) -> dict:
+    """One group-table row, in the sectioned record's column vocabulary.
+
+    prep-raw measures the original recording over every channel, which is exactly the
+    sectioned record's ``raw`` view, so its scalars take the same ``raw_`` prefix and a
+    cohort holding both kinds compares in one set of columns. Windowed series keep the
+    names prep-raw writes: the time x subject heatmaps look them up by those.
+    """
+    if desc != _PREP_RAW_DESC:
+        return {"bids_name": bids_name, **sqm}
+    return {
+        "bids_name": bids_name,
+        **{(f"raw_{k}" if isinstance(v, (int, float)) else k): v for k, v in sqm.items()},
+    }
 
 
 def _collect_sqm(
@@ -73,18 +99,26 @@ def _collect_sqm(
 ) -> tuple[pd.DataFrame, list[dict]]:
     """Glob SQM JSONs under output_dir matching entity prefix (e.g. 'sub-*' or 'group-*').
 
+    One row per run, never one per file: a run that was processed by both the pipeline and
+    `prep-raw` has two records, and the sectioned one wins because it is a superset.
+
     Returns (df, full_rows):
       - df:        scalar SQM columns (bids_name + numeric scalars), for TSV/heatmap/boxplot
       - full_rows: each row keeps the full SQM dict (incl. windowed list fields)
     """
+    by_run: dict[str, tuple[Path, str]] = {}
+    for desc in _SQM_DESCS:
+        for sqm_path in sorted(output_dir.glob(f"{entity_glob}/**/nirs/*_desc-{desc}_nirs.json")):
+            by_run.setdefault(_bids_name_from_sqm_path(sqm_path), (sqm_path, desc))
+
     full_rows: list[dict] = []
-    for sqm_path in sorted(output_dir.glob(f"{entity_glob}/**/nirs/*_desc-sqm_nirs.json")):
+    for bids_name, (sqm_path, desc) in sorted(by_run.items()):
         try:
             sqm = json.loads(sqm_path.read_text(encoding="utf-8"))
         except Exception as exc:
             logger.warning("skip %s: %s", sqm_path, exc)
             continue
-        full_rows.append({"bids_name": _bids_name_from_sqm_path(sqm_path), **sqm})
+        full_rows.append(_sqm_row(bids_name, sqm, desc))
 
     return rows_to_dataframe(full_rows), full_rows
 

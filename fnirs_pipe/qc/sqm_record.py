@@ -182,61 +182,76 @@ def compute_run_sections(
 
     sections: dict[str, Any] = {}
     per_channel: dict[str, Any] = {}
-    sci_scores = _sci_scores(stages)
 
+    def section(name: str, compute) -> None:
+        """Run one section. A failure costs that section alone, never the whole record."""
+        try:
+            scalars, nested = _split_scalars(compute())
+        except Exception:
+            logger.warning("%s: section failed", name, exc_info=True)
+            return
+        sections[name] = scalars
+        per_channel[name] = nested
+
+    try:
+        sci_scores = _sci_scores(stages)
+    except Exception:
+        logger.warning("sci scores unavailable; sci metrics will be empty", exc_info=True)
+        sci_scores = {}
+
+    raw_intensity = None
     bids_input = _bids_input(stages)
-    if bids_input is not None:
-        raw_intensity = read_snirf(bids_input)
+    if bids_input is None:
+        logger.warning("no BIDS input resolvable from the od sidecar; raw sections skipped")
+    else:
+        try:
+            raw_intensity = read_snirf(bids_input)
+        except Exception:
+            logger.warning("%s unreadable; raw sections skipped", bids_input, exc_info=True)
+
+    if raw_intensity is not None:
         # the input carries no marks of its own; the run's rejections come from the sci file
         bad_channels = list(_sidecar(stages["sci"]).get("bad_channels") or []) if "sci" in stages else []
         raw_intensity.info["bads"] = [c for c in bad_channels if c in raw_intensity.ch_names]
 
-        scalars, nested = _split_scalars(compute_raw_sqm(
+        section("raw", lambda: compute_raw_sqm(
             raw_intensity, sci_scores, bad_channels, cardiac_l_freq, cardiac_h_freq))
-        sections["raw"] = scalars
-        per_channel["raw"] = nested
 
         long_names, short_names = _long_short(raw_intensity)
         if long_names and len(long_names) < len(raw_intensity.ch_names):
-            raw_long = raw_intensity.copy().pick(long_names)
-            long_sci = {k: v for k, v in sci_scores.items() if k in set(long_names)}
-            long_bad = [c for c in bad_channels if c in set(long_names)]
-            scalars, nested = _split_scalars(compute_raw_sqm(
-                raw_long, long_sci, long_bad, cardiac_l_freq, cardiac_h_freq))
-            sections["raw_long"] = scalars
-            per_channel["raw_long"] = nested
+            def raw_long_section():
+                raw_long = raw_intensity.copy().pick(long_names)
+                long_sci = {k: v for k, v in sci_scores.items() if k in set(long_names)}
+                long_bad = [c for c in bad_channels if c in set(long_names)]
+                return compute_raw_sqm(
+                    raw_long, long_sci, long_bad, cardiac_l_freq, cardiac_h_freq)
+            section("raw_long", raw_long_section)
         if short_names:
-            scalars, nested = _short_section(
-                raw_intensity, short_names, sci_scores, bad_channels,
-                cardiac_l_freq, cardiac_h_freq)
-            sections["short"] = scalars
-            per_channel["short"] = nested
-    else:
-        logger.warning("no BIDS input resolvable from the od sidecar; raw sections skipped")
+            # already returns the (scalars, nested) split, so it bypasses `section`
+            try:
+                sections["short"], per_channel["short"] = _short_section(
+                    raw_intensity, short_names, sci_scores, bad_channels,
+                    cardiac_l_freq, cardiac_h_freq)
+            except Exception:
+                logger.warning("short: section failed", exc_info=True)
 
     # the OD either side of the motion step is on disk as desc-sci and desc-motcorrected,
     # so the correction's footprint is measurable here rather than only in memory
     if "sci" in stages and "motcorrected" in stages:
         from fnirs_pipe.qc.quantitative_metrics import motion_correction_metrics
-        scalars, nested = _split_scalars(motion_correction_metrics(
+        section("motion", lambda: motion_correction_metrics(
             read_snirf(stages["sci"]), read_snirf(stages["motcorrected"])))
-        sections["motion"] = scalars
-        per_channel["motion"] = nested
 
     if "preproc" in stages:
-        raw_preproc = read_snirf(stages["preproc"])
-        scalars, nested = _split_scalars(compute_prep_haemo_sqm(
-            raw_preproc, cardiac_l_freq, cardiac_h_freq, resp_l_freq, resp_h_freq))
-        sections["preproc"] = scalars
-        per_channel["preproc"] = nested
+        section("preproc", lambda: compute_prep_haemo_sqm(
+            read_snirf(stages["preproc"]), cardiac_l_freq, cardiac_h_freq,
+            resp_l_freq, resp_h_freq))
 
     final_desc = next((d for d in _FINAL_ORDER if d in stages), None)
     if final_desc is not None:
-        raw_final = read_snirf(stages[final_desc])
-        scalars, nested = _split_scalars(compute_haemo_sqm(raw_final))
-        sections["final"] = scalars
-        sections["final"]["stage"] = final_desc
-        per_channel["final"] = nested
+        section("final", lambda: compute_haemo_sqm(read_snirf(stages[final_desc])))
+        if "final" in sections:
+            sections["final"]["stage"] = final_desc
 
     sections["per_channel"] = per_channel
     return sections
@@ -261,11 +276,19 @@ def write_run_sqm(
     if bids_input is not None:
         sources.insert(0, bids_input.as_posix())
 
+    # the provenance table lists a checkpoint's metric names; prefixed the way the group
+    # table names its columns, so the two read as one vocabulary
+    metrics = [f"{s}_{k}" for s in SECTIONS if isinstance(sections.get(s), dict)
+               for k in sections[s]]
     record = {
         "pipeline_version": __version__,
         "step": "sqm",
         "Sources": sources,
-        "data": {"sections": [s for s in SECTIONS if s in sections]},
+        "data": {
+            "sections": [s for s in SECTIONS if s in sections],
+            "metrics": metrics,
+            "n_metrics": len(metrics),
+        },
         **sections,
     }
     out_path = record_path(nirs_dir, label)
@@ -297,9 +320,11 @@ def build_sqm_records(
                 logger.warning("%s: no band edges in the sidecars and none supplied; skipped", label)
                 continue
             bands = {k: (v if v is not None else recorded[k]) for k, v in bands.items()}
+        # each section guards itself, so what reaches here is fatal for this run only;
+        # the remaining runs still get their records
         try:
             sections = compute_run_sections(stages, **bands)
             written.append(write_run_sqm(Path(nirs_dir), label, stages, sections))
         except Exception:
-            logger.warning("%s: SQM record failed", label, exc_info=True)
+            logger.error("%s: SQM record could not be written", label, exc_info=True)
     return written

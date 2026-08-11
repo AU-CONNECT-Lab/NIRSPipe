@@ -215,7 +215,9 @@ def _process_run(
             )
 
     # ── file: SQM JSON ─────────────────────────────────────────────────────────
-    sqm_path = sqm_dir / f"{label}_desc-sqm_nirs.json"
+    # desc-sqmraw, not desc-sqm: the pipeline writes a sectioned record at the latter path
+    # for the same run, and one silently overwriting the other loses whichever ran first
+    sqm_path = sqm_dir / f"{label}_desc-sqmraw_nirs.json"
     sqm_path.write_text(json.dumps(sqm, indent=2, default=str), encoding="utf-8")
     logger.info("SQM JSON → %s", sqm_path)
 
