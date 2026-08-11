@@ -182,14 +182,14 @@ def _save_plotly_html(fig, path: Path, div_id: str | None = None) -> tuple[str, 
 # ---------------------------------------------------------------------------
 
 def _prepare_long_raw(raw_intensity: mne.io.Raw, subject: str) -> mne.io.Raw:
+    from fnirs_pipe.qc.quantitative_metrics import long_short_channels
+
     raw = raw_intensity.copy()
-    picks = mne.pick_types(raw.info, meg=False, fnirs=True)
-    dists = mne.preprocessing.nirs.source_detector_distances(raw.info, picks=picks)
-    long_picks = picks[dists > 0.01]
-    if len(long_picks) == 0:
-        logger.warning("sub-%s | no channels with dist > 1 cm; using all", subject)
-        long_picks = picks
-    raw.pick(long_picks)
+    long_names, _ = long_short_channels(raw)
+    if not long_names:
+        logger.warning("sub-%s | no long channels by separation; using all", subject)
+        return raw
+    raw.pick(long_names)
     return raw
 
 

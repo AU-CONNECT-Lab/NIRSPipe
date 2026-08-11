@@ -22,8 +22,44 @@ logger = get_logger("qc.quantitative_metrics")
 
 GVTD_MOTION_BAND = (0.01, 0.5)  # Hz, bandpass for the filtered (motion-specific) GVTD
 
+# ---- Source-detector separation, mne_nirs' convention ----
+# These are the defaults of mne_nirs.channels.get_short_channels(max_dist=) and
+# get_long_channels(min_dist=, max_dist=). Note they do not meet: 10-15 mm is neither
+# short nor long. That gap is deliberate upstream. A 10-15 mm channel is too far to be
+# reading scalp alone and too near to be reading cortex, so it belongs to neither view
+# rather than being forced into one. 45 mm is the far edge: beyond it too little light
+# returns for the channel to be worth averaging in.
+# Consequence worth knowing: on a montage carrying either kind, the long and short
+# channel sets do not add up to every channel, by design.
+SHORT_MAX_DIST = 0.01   # m, <= this is a short channel
+LONG_MIN_DIST  = 0.015  # m, >= this and <= LONG_MAX_DIST is a long channel
+LONG_MAX_DIST  = 0.045  # m
+
 
 # ------------------------------------ Shared helpers ------------------------------------
+def long_short_channels(raw: mne.io.Raw) -> "tuple[list[str], list[str]]":
+    """Split channel names by source-detector separation, returning ``(long, short)``.
+
+    One definition for the whole package, so the report, the prep-raw figures and the SQM
+    record agree on which channels are which. Because the two ranges do not meet (see
+    SHORT_MAX_DIST / LONG_MIN_DIST), the two lists need not cover every channel::
+
+        distances 8, 12, 30, 50 mm  ->  long ["30mm"], short ["8mm"]
+
+    A montage with no registered optode positions reports every distance as zero, which
+    would make every channel short; that case is logged and yields no split at all.
+    """
+    picks = mne.pick_types(raw.info, meg=False, fnirs=True)
+    dists = mne.preprocessing.nirs.source_detector_distances(raw.info, picks=picks)
+    names = [raw.ch_names[i] for i in picks]
+    long_names  = [ch for ch, d in zip(names, dists) if LONG_MIN_DIST <= d <= LONG_MAX_DIST]
+    short_names = [ch for ch, d in zip(names, dists) if 0 < d <= SHORT_MAX_DIST]
+    if not long_names and not short_names:
+        logger.warning("no channel falls in either separation range; optode positions "
+                       "are probably missing")
+    return long_names, short_names
+
+
 def _mean_or_none(values) -> "float | None":
     """Mean of a collection of values, or None if it is empty."""
     vals = list(values)

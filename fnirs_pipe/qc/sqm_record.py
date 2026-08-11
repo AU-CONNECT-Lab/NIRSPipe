@@ -123,20 +123,6 @@ def _split_scalars(record: dict[str, Any]) -> tuple[dict[str, Any], dict[str, An
     return scalars, nested
 
 
-def _long_short(raw: mne.io.Raw) -> tuple[list[str], list[str]]:
-    """Channel names split by source-detector separation, using mne_nirs' definition."""
-    from mne_nirs.channels import get_long_channels, get_short_channels
-    try:
-        long_names = list(get_long_channels(raw.copy()).ch_names)
-    except Exception:
-        long_names = list(raw.ch_names)
-    try:
-        short_names = list(get_short_channels(raw.copy()).ch_names)
-    except Exception:
-        short_names = []
-    return long_names, short_names
-
-
 def _short_section(
     raw_intensity: mne.io.Raw,
     short_names: list[str],
@@ -177,7 +163,7 @@ def compute_run_sections(
     """Every SQM section for one run, keyed by section name, plus ``per_channel``."""
     from fnirs_pipe.io.snirf import read_snirf
     from fnirs_pipe.qc.quantitative_metrics import (
-        compute_haemo_sqm, compute_prep_haemo_sqm, compute_raw_sqm,
+        compute_haemo_sqm, compute_prep_haemo_sqm, compute_raw_sqm, long_short_channels,
     )
 
     sections: dict[str, Any] = {}
@@ -217,7 +203,7 @@ def compute_run_sections(
         section("raw", lambda: compute_raw_sqm(
             raw_intensity, sci_scores, bad_channels, cardiac_l_freq, cardiac_h_freq))
 
-        long_names, short_names = _long_short(raw_intensity)
+        long_names, short_names = long_short_channels(raw_intensity)
         if long_names and len(long_names) < len(raw_intensity.ch_names):
             def raw_long_section():
                 raw_long = raw_intensity.copy().pick(long_names)

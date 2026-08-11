@@ -13,13 +13,15 @@ from fnirs_pipe.qc.figure_io import (
     _pair_fname, _save_figure_html, _save_multi_fig_html,
     extract_markers, get_channel_pairs,
 )
+from fnirs_pipe.qc.quantitative_metrics import SHORT_MAX_DIST
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("qc.prep_raw_report")
 
 _TEMPLATE_DIR = Path(__file__).parent / "templates"
 _MAX_TS_PTS   = 4000
-_SHORT_THRESH = 0.015
+# the figures colour a channel short or not short, so only the short edge applies here
+_SHORT_THRESH = SHORT_MAX_DIST
 _EPOCH_TMIN   = -5.0
 _EPOCH_TMAX   = 25.0
 

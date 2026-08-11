@@ -22,6 +22,7 @@ All notable changes to this project will be documented in this file.
 - The QC report says so when a run's quality record is unreadable, instead of showing an empty metrics panel
 - The provenance table lists the metric names again for the quality record
 - `<sub>_channel_metrics.csv` gains the run's task and session, so a subject with several tasks keeps one file per task instead of only the last
+- Short and long channels are decided the same way everywhere. The QC report, the `prep-raw` figures and the quality record each used a different separation cutoff, so the same channel could be short in one and long in another
 
 ## [0.19.0] - 2026-07-31
 
