@@ -159,18 +159,34 @@ def run_post(
         # ALFF/fALFF need a broadband residual: fALFF's denominator spans the full spectrum,
         # so its input must not be low-passed. Re-run the same confound regression on the
         # un-bandpassed data (the drift model supplies the detrend). FC keeps raw_resid above.
+        # This is the only path without a bandpass, so the drift model is its sole detrend.
+        # "none" and an order-0 polynomial leave the drift in, and a linear ramp's leakage
+        # lands inside the ALFF band, so ALFF is skipped rather than written wrong.
+        drift_detrends = (
+            config.drift_model == "cosine"
+            or (config.drift_model == "polynomial"
+                and (config.drift_order is None or config.drift_order >= 1))
+        )
+
         raw_resid_bb = None
         if config.low_pass is not None and config.high_pass is not None:
-            result_bb = raw_haemo.copy()
-            if config.resample_sfreq is not None:
-                result_bb = resample(result_bb, config.resample_sfreq)
-            _, _, _, raw_resid_bb = run_glm_pipeline(result_bb, **rest_glm_kwargs)
-            # Same regression, un-bandpassed input. Re-stamp so it stops sharing the "errts"
-            # stage with the bandpassed residual, whose file it would otherwise be credited to.
-            stamp(raw_resid_bb, stage="errtsbroad", step="glm_residuals_broadband",
-                  source=raw_haemo, resample_sfreq=config.resample_sfreq)
-            _write_step_snirf(raw_resid_bb, config, output_dir, desc="errtsbroad",
-                              rec=rec, source_entities=source_entities)
+            if not drift_detrends:
+                logger.warning(
+                    "sub-%s | skipping ALFF/fALFF: --drift-model %s (order %s) does not remove "
+                    "linear drift, and the broadband residual has no bandpass to remove it",
+                    config.subject, config.drift_model, config.drift_order,
+                )
+            else:
+                result_bb = raw_haemo.copy()
+                if config.resample_sfreq is not None:
+                    result_bb = resample(result_bb, config.resample_sfreq)
+                _, _, _, raw_resid_bb = run_glm_pipeline(result_bb, **rest_glm_kwargs)
+                # Same regression, un-bandpassed input. Re-stamp so it stops sharing the "errts"
+                # stage with the bandpassed residual, whose file it would otherwise be credited to.
+                stamp(raw_resid_bb, stage="errtsbroad", step="glm_residuals_broadband",
+                      source=raw_haemo, resample_sfreq=config.resample_sfreq)
+                _write_step_snirf(raw_resid_bb, config, output_dir, desc="errtsbroad",
+                                  rec=rec, source_entities=source_entities)
 
         alff_df, fc_df, fc_hbr_df = _write_rest_derivatives(
             raw_resid, raw_resid_bb, config, output_dir, rec, source_entities=source_entities)

@@ -11,8 +11,10 @@ All notable changes to this project will be documented in this file.
 - Provenance is no longer empty when the pipeline is handed a recording it did not read from disk
 - A run where no channel passes the SCI threshold now stops there and says so, instead of failing later inside Beer-Lambert
 - `--motion-correction wavelet` sets its outlier threshold per wavelet scale over the whole recording, not per time window
+- Rest mode no longer writes ALFF/fALFF when the drift model leaves linear drift in the data (`--drift-model none`, or `polynomial` with `--drift-order 0`). Their input is the only one without a bandpass, so the drift model is its only detrend, and the drift's leakage falls inside the ALFF band
 
 ### Changed
+- zALFF standardizes by the sample standard deviation, matching the convention it is compared against. Values shift by a factor of sqrt(n/(n-1)) over the standardized channels, about 2.6% at 20 channels
 - `--motion-correction wavelet` reaches artifacts up to about 25 s long; it used to stop at about 1.6 s
 
 ## [0.20.0] - 2026-08-11

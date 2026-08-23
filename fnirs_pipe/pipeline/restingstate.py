@@ -85,10 +85,12 @@ def compute_alff(raw: mne.io.Raw, low_pass: float, high_pass: float) -> pd.DataF
         if not ref.any():
             ref = idx
         grp_mean = np.nanmean(alff_vals[ref])
-        grp_std  = np.nanstd(alff_vals[ref])
+        # sample SD (ddof=1), the convention zALFF is compared against. It is undefined for a
+        # single reference channel, which the finiteness check below leaves at zALFF = 0.
+        grp_std  = np.nanstd(alff_vals[ref], ddof=1) if ref.sum() > 1 else 0.0
         if grp_mean != 0:
             malff_vals[idx] = alff_vals[idx] / grp_mean
-        if grp_std != 0:
+        if grp_std != 0 and np.isfinite(grp_std):
             zalff_vals[idx] = (alff_vals[idx] - grp_mean) / grp_std
 
     return pd.DataFrame({
