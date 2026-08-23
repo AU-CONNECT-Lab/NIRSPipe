@@ -107,6 +107,17 @@ def test_sources_of_resolves_through_the_registered_input(fake_raw, make_raw, tm
     assert rec.sources_of(od) == [bids.as_posix()]
 
 
+def test_register_input_records_an_input_that_carries_no_stamp(make_raw, tmp_path):
+    # stamp() calls an unstamped source "raw"; the recorder has to agree, or the path is
+    # dropped and every output of the run comes back with an empty Sources.
+    bids = tmp_path / "sub-01_nirs.snirf"
+    rec = Recorder()
+    rec.register_input(bids, make_raw())                       # never stamped
+
+    od = stamp(make_raw(), stage="od", step="od_conversion", source=make_raw())
+    assert rec.sources_of(od) == [bids.as_posix()]
+
+
 def test_sources_of_resolves_to_the_file_its_source_stage_was_written_to(make_raw, tmp_path):
     rec = Recorder()
     od = stamp(make_raw(), stage="od", step="od_conversion")

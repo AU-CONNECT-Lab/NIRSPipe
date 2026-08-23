@@ -64,8 +64,12 @@ def long_short_channels(raw: mne.io.Raw) -> "tuple[list[str], list[str]]":
 
     A montage with no registered optode positions reports every distance as zero, which
     would make every channel short; that case is logged and yields no split at all.
+
+    Bad channels stay in both lists. Separation is the only thing being asked about, and
+    pick_types drops bads by default, which would leave every metric computed from these
+    lists averaging over channels that were selected for being good.
     """
-    picks = mne.pick_types(raw.info, meg=False, fnirs=True)
+    picks = mne.pick_types(raw.info, meg=False, fnirs=True, exclude=[])
     dists = mne.preprocessing.nirs.source_detector_distances(raw.info, picks=picks)
     names = [raw.ch_names[i] for i in picks]
     long_names  = [ch for ch, d in zip(names, dists) if LONG_MIN_DIST <= d <= LONG_MAX_DIST]

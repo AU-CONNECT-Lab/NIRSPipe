@@ -7,9 +7,13 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Fixed
-- A run where no channel passes the SCI threshold now stops at the pruning step and says which threshold rejected everything and what the best channel scored. It used to continue and fail four steps later inside Beer-Lambert, reporting only that it found no optical density data
-- `--motion-correction wavelet` estimates its outlier threshold once per wavelet scale over the whole recording. It used to split each scale into time windows, so a window crowded with artifacts widened its own threshold until those artifacts stopped counting as outliers
-- `--motion-correction wavelet` decomposes as deep as the recording allows, reaching artifacts up to about 25 s long. It used to stop at the four finest scales, about 1.6 s, so a baseline shift passed through untouched
+- The `raw_long` and `raw_short` quality sections no longer drop rejected channels, which made their mean SCI and channel retention rate read better than the run was. The QC report's long-channel view likewise stops hiding them
+- Provenance is no longer empty when the pipeline is handed a recording it did not read from disk
+- A run where no channel passes the SCI threshold now stops there and says so, instead of failing later inside Beer-Lambert
+- `--motion-correction wavelet` sets its outlier threshold per wavelet scale over the whole recording, not per time window
+
+### Changed
+- `--motion-correction wavelet` reaches artifacts up to about 25 s long; it used to stop at about 1.6 s
 
 ## [0.20.0] - 2026-08-11
 

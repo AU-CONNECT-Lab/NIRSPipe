@@ -93,8 +93,9 @@ class Recorder:
         self._stage_paths: dict[str, str] = {}
 
     def register_input(self, path: Path | str, raw: mne.io.Raw) -> None:
-        if (st := stage_of(raw)) is not None:
-            self._stage_paths[st] = Path(path).as_posix()
+        # stamp() calls an unstamped source "raw", so key it the same way: dropping the
+        # path instead leaves every output of the run with an empty Sources
+        self._stage_paths[stage_of(raw) or "raw"] = Path(path).as_posix()
 
     def _nearest(self) -> str | None:
         """Most recent file this run knows about.
