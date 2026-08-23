@@ -59,9 +59,19 @@ def mark_bad_channels(
     """Mark channels below SCI threshold into raw.info['bads'].
 
     Returns raw (modified in-place), list of bad channel names, and SCI scores dict.
+    Raises StageError if the threshold leaves no usable channel.
     """
     sci_scores = compute_sci(raw_od, cardiac_l_freq, cardiac_h_freq)
     bad_chs = [ch for ch, score in sci_scores.items() if score < threshold]
+    # without this the run dies four steps later inside Beer-Lambert, which reports only
+    # that it found no optical density data and never mentions the threshold
+    if sci_scores and len(bad_chs) == len(sci_scores):
+        best = max(sci_scores.values())
+        raise StageError(
+            f"every channel scored below the SCI threshold {threshold}; the best channel "
+            f"scored {best:.3f}. Lower --sci-threshold, or check the recording for "
+            f"scalp coupling."
+        )
     raw_od.info["bads"] = bad_chs
     stamp(raw_od, stage="sci", step="sci_pruning", source=raw_od, threshold=threshold)
     return raw_od, bad_chs, sci_scores
@@ -178,6 +188,10 @@ def run_prep(
         else:
             logger.info("sub-%s | manual bad channels: %s", config.subject, manual)
         bad_chs = sorted(set(bad_chs) | set(manual))
+        if len(bad_chs) == len(sci_scores):
+            raise StageError(
+                f"--bad-channels leaves no usable channel: all {len(bad_chs)} are marked bad."
+            )
         raw_od.info["bads"] = bad_chs
     n_bad, n_total = len(bad_chs), len(sci_scores)
     logger.info(
