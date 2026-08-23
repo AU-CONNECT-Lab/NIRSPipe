@@ -65,9 +65,11 @@ def _pairwise_wtc(
 
     :math:`W_x, W_y` are the continuous wavelet transforms, :math:`W_{xy} = W_x W_y^{*}`
     the cross-wavelet spectrum, and :math:`S` a smoothing operator in time and scale.
-    Output is trimmed of pycwt zero-padding, sorted to ascending frequency, then
-    band-limited to ``[fmin, fmax]`` and decimated by ``step``. With ``significance``
-    the fourth return is the per-frequency Monte Carlo significance level (else None).
+    Output is sorted to ascending frequency, band-limited to ``[fmin, fmax]`` and
+    decimated by ``step``. The leading slice to ``len(sig1)`` is defensive: this pycwt
+    pads internally for the FFT but unpads before returning, so the slice is a no-op
+    until a version does not. With ``significance`` the fourth return is the
+    per-frequency Monte Carlo significance level (else None).
 
     ``cache`` is pycwt's on-disk store of significance curves. It is keyed on the AR1
     coefficients and the wavelet grid but not on the seed or the surrogate count, and lives
