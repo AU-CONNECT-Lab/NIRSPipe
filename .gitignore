@@ -2,7 +2,7 @@
 # Created by https://www.toptal.com/developers/gitignore/api/windows,visualstudiocode,java,linux,python
 # Edit at https://www.toptal.com/developers/gitignore?templates=windows,visualstudiocode,java,linux,python
 
-scripts/
+
 
 docs/
 ### Java ###
