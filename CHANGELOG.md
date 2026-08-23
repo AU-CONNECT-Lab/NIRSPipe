@@ -6,6 +6,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- `--motion-correction wavelet` estimates its outlier threshold once per wavelet scale over the whole recording. It used to split each scale into time windows, so a window crowded with artifacts widened its own threshold until those artifacts stopped counting as outliers
+- `--motion-correction wavelet` decomposes as deep as the recording allows, reaching artifacts up to about 25 s long. It used to stop at the four finest scales, about 1.6 s, so a baseline shift passed through untouched
+
 ## [0.20.0] - 2026-08-11
 
 ### Added

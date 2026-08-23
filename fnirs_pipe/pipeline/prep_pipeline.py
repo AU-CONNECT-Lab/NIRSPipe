@@ -8,13 +8,12 @@ Step outputs written to output_dir/sub-XX/[ses-YY/]nirs/:
 
 Each snirf is accompanied by a JSON provenance sidecar.
 
-motion correction: tddr and wavelet implemented; spline not yet.
+motion correction lives in pipeline/motion.py.
 
 """
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Literal
 
 import mne
 import mne.io
@@ -23,14 +22,13 @@ import numpy as np
 from fnirs_pipe import __version__
 from fnirs_pipe.io.derivatives import build_output_path, carry_entities, data_state, write_sidecar_json
 from fnirs_pipe.io.snirf import write_snirf
+from fnirs_pipe.pipeline.motion import MotionMethod, correct_motion  # noqa: F401  re-exported
 from fnirs_pipe.exceptions import StageError
 from fnirs_pipe.utils import is_optical_density
 from fnirs_pipe.utils.lineage import Recorder, lineage_of, stage_of, stamp
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("pipeline.prep")
-
-MotionMethod = Literal["tddr", "wavelet", "spline", "none"]
 
 # Step 1: OD conversion
 def intensity_to_od(raw: mne.io.Raw) -> mne.io.Raw:
@@ -67,82 +65,6 @@ def mark_bad_channels(
     raw_od.info["bads"] = bad_chs
     stamp(raw_od, stage="sci", step="sci_pruning", source=raw_od, threshold=threshold)
     return raw_od, bad_chs, sci_scores
-
-
-def _wl_clip_iqr(block: np.ndarray, iqr_factor: float) -> None:
-    q25, q75 = np.percentile(block, [25, 75])
-    fence = iqr_factor * (q75 - q25)
-    block[:] = np.where((block > q75 + fence) | (block < q25 - fence), 0.0, block)
-
-
-def _wl_filter_coeffs(coeffs, iqr_factor: float, signal_length: int):
-    """Zero SWT detail-coefficient outliers per block per level."""
-    n = len(coeffs[0][0])
-    n_levels = len(coeffs)
-    cAf = coeffs[0][0].copy()          # highest-level approximation
-    out = []
-    for i, (_, cD) in enumerate(coeffs):
-        n_blocks = 2 ** (n_levels - i - 1)
-        block_length = n // n_blocks
-        cDf = cD.copy()
-        for b in range(n_blocks):
-            start, end = b * block_length, min(signal_length, (b + 1) * block_length)
-            if end > start:
-                _wl_clip_iqr(cDf[start:end], iqr_factor)
-        out.append((cAf, cDf))
-    return out
-
-
-def _wavelet_motion_correct(raw_od: mne.io.Raw, wavelet: str = "db2", iqr_factor: float = 1.5, level: int = 4) -> mne.io.Raw:
-    """Wavelet motion correction (Molavi 2012), per channel in OD space.
-
-    Pad to 2^k → remove DC → MAD noise-normalize → SWT → zero detail-coefficient outliers beyond
-    Q1/Q3 ± iqr_factor·IQR (per block) → iSWT → denormalize → restore DC and length.
-    """
-    import pywt
-    raw = raw_od.copy()
-
-    def _corr(signal):
-        n0 = len(signal)
-        padded = np.zeros(2 ** int(np.ceil(np.log2(n0))))
-        padded[:n0] = signal
-        dc = padded.mean()
-        padded = padded - dc
-        mad_ds = np.median(np.abs(padded[::2] - np.median(padded[::2])))
-        norm_coef = 1.0 / (1.4826 * mad_ds) if mad_ds != 0 else 1.0
-        normed = padded * norm_coef
-        lvl = min(level, int(np.log2(len(normed))) - 1)
-        coeffs = _wl_filter_coeffs(pywt.swt(normed, wavelet, level=lvl), iqr_factor, n0)
-        return (pywt.iswt(coeffs, wavelet) / norm_coef)[:n0] + dc
-
-    raw.apply_function(_corr, channel_wise=True)
-    return raw
-
-
-# Step 3: Motion correction
-def correct_motion(raw_od: mne.io.Raw, method: MotionMethod | None = None) -> mne.io.Raw:
-    """Apply motion artifact correction to the OD signal.
-
-    Returns corrected raw (modified in-place for tddr).
-    Raises NotImplementedError for wavelet and spline (no MNE backend yet).
-    """
-    if method is None:
-        raise ValueError("--motion-correction is required.")
-    if method == "tddr":
-        corrected = mne.preprocessing.nirs.temporal_derivative_distribution_repair(raw_od)
-    elif method == "wavelet":
-        corrected = _wavelet_motion_correct(raw_od)
-    elif method == "spline":
-        raise NotImplementedError(
-            "Spline correction has no MNE backend yet. "
-            "Use --motion-correction tddr or none."
-        )
-    elif method == "none":
-        corrected = raw_od
-    else:
-        raise ValueError(f"Unknown motion correction method: {method}")
-    return stamp(corrected, stage="motcorrected", step="motion_correction",
-                 source=raw_od, method=method)
 
 # Step 4: Beer-Lambert
 def od_to_haemo(raw_od: mne.io.Raw, dpf: list[float]) -> mne.io.Raw:
