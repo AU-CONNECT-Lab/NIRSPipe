@@ -14,7 +14,7 @@ All notable changes to this project will be documented in this file.
 - Rest mode no longer writes ALFF/fALFF when the drift model leaves linear drift in the data (`--drift-model none`, or `polynomial` with `--drift-order 0`). Their input is the only one without a bandpass, so the drift model is its only detrend, and the drift's leakage falls inside the ALFF band
 
 ### Changed
-- zALFF standardizes by the sample standard deviation, matching the convention it is compared against. Values shift by a factor of sqrt(n/(n-1)) over the standardized channels, about 2.6% at 20 channels
+- zALFF standardizes by the sample standard deviation, matching the convention it is compared against. Values shrink by sqrt((n-1)/n), where n counts the channels of one chromophore: 5.1% at 10 per chromophore, 2.6% at 20, 1.3% at 40
 - `--motion-correction wavelet` reaches artifacts up to about 25 s long; it used to stop at about 1.6 s
 
 ## [0.20.0] - 2026-08-11
