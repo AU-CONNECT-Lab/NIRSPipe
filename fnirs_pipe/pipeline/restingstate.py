@@ -113,14 +113,16 @@ def compute_fc(raw: mne.io.Raw, chromophore: str) -> pd.DataFrame:
     over the channels of a single chromophore (``chromophore`` is "hbo" or "hbr"); HbO and HbR
     anti-correlate, so a mixed matrix has no clean meaning and the two are kept separate. Diagonal
     is 1. Empty frame if the chromophore has < 2 channels.
+
+    Plain Pearson, and deliberately so: a shrinkage estimator is more accurate per edge on weak
+    connections, but shrinks by an amount that tracks the channel-to-sample ratio, so subjects
+    with shorter runs or more rejected channels are pulled toward zero harder than others and
+    ``fisher_z`` carries that into the group statistics. Every FC product here uses the same one.
     """
-    from nilearn.connectome import ConnectivityMeasure
     picks = [c for c in raw.ch_names if c.endswith(f" {chromophore}")]
     if len(picks) < 2:
         return pd.DataFrame()
-    data = raw.get_data(picks=picks)
-    fc = ConnectivityMeasure(kind="correlation", standardize=False).fit_transform([data.T])[0]
-    return pd.DataFrame(fc, index=picks, columns=picks)
+    return pd.DataFrame(np.corrcoef(raw.get_data(picks=picks)), index=picks, columns=picks)
 
 
 def fisher_z(fc: pd.DataFrame) -> pd.DataFrame:
@@ -135,7 +137,10 @@ def fisher_z(fc: pd.DataFrame) -> pd.DataFrame:
     """
     r = fc.to_numpy().clip(-0.999999, 0.999999)  # clip to keep perfect corr from → inf
     z = np.arctanh(r)
-    np.fill_diagonal(z, 0.0)
+    # only a square matrix has a self-correlation diagonal; a seed map is ROI x channel, where
+    # position (i, i) is an ordinary pair and zeroing it would delete a real value
+    if z.ndim == 2 and z.shape[0] == z.shape[1]:
+        np.fill_diagonal(z, 0.0)
     return pd.DataFrame(z, index=fc.index, columns=fc.columns)
 
 
@@ -151,12 +156,29 @@ def compute_fc_roi(raw: mne.io.Raw, roi_map: dict[str, list[str]], chromophore: 
     {ROI label: [channel names]}, matched by S-D base ("S1_D1"), with any chromophore suffix on
     the map entry replaced by the requested one so the same map serves hbo and hbr.
     """
-    from nilearn.connectome import ConnectivityMeasure
+    members = _roi_members(raw, roi_map, chromophore)
+    if len(members) < 2:
+        return pd.DataFrame()
+    names = list(members)
+    signals = [raw.get_data(picks=picks).mean(axis=0) for picks in members.values()]
+    return pd.DataFrame(np.corrcoef(np.vstack(signals)), index=names, columns=names)
+
+
+def _roi_members(
+    raw: mne.io.Raw, roi_map: dict[str, list[str]], chromophore: str,
+) -> "dict[str, list[str]]":
+    """{ROI: its good channel names} for one chromophore, in roi_map order.
+
+    e.g. roi_map {"L-PFC": ["S1_D1 hbo", "S2_D2 hbo"]} with chromophore "hbr" and S2_D2 bad
+    gives {"L-PFC": ["S1_D1 hbr"]}. Map entries are matched by S-D base, so any chromophore
+    suffix on them is replaced rather than required, and the same map serves hbo and hbr.
+    An ROI with no good channel is dropped with a warning rather than kept empty.
+    """
     suffix = f" {chromophore}"
     # a bad channel in the average would travel into every correlation this ROI takes part in
     bads = set(raw.info["bads"])
     chan_set = {c for c in raw.ch_names if c.endswith(suffix) and c not in bads}
-    names, signals = [], []
+    members: dict[str, list[str]] = {}
     for roi, chans in roi_map.items():
         picks = []
         for c in chans:
@@ -165,11 +187,59 @@ def compute_fc_roi(raw: mne.io.Raw, roi_map: dict[str, list[str]], chromophore: 
             if name in chan_set:
                 picks.append(name)
         if picks:
-            names.append(roi)
-            signals.append(raw.get_data(picks=picks).mean(axis=0))
+            members[roi] = picks
         else:
             logger.warning("ROI %s has no good %s channel — excluded from ROI connectivity", roi, chromophore)
-    if len(signals) < 2:
+    return members
+
+
+def compute_fc_seed(raw: mne.io.Raw, roi_map: dict[str, list[str]], chromophore: str = "hbo") -> pd.DataFrame:
+    r"""Seed-to-whole-brain FC: each ROI's mean signal against every channel.
+
+    .. math::
+
+        \rho_{Ac} = \operatorname{corr}(\bar{x}_A, x_c), \qquad
+        \bar{x}_A = \frac{1}{|A|} \sum_{k \in A} x_k
+
+    Parameters
+    ----------
+    raw : mne.io.Raw
+        Recording to correlate, one row per channel.
+    roi_map : dict[str, list[str]]
+        {ROI label: [channel names]}; every ROI becomes one seed, i.e. one row.
+    chromophore : str, optional
+        "hbo" or "hbr". HbO and HbR anti-correlate, so they never share a map.
+
+    Returns
+    -------
+    pd.DataFrame
+        ROI x channel correlations. Empty frame if no ROI resolves to a good channel.
+
+    Notes
+    -----
+    Averaging happens on one side only, which makes this a third product rather than a view
+    of the other two: it is neither a slice of :func:`compute_fc` (no averaging) nor of
+    :func:`compute_fc_roi` (both sides averaged). Averaging first cancels each channel's
+    independent noise, so the same pair of regions reads higher through an ROI mean than
+    through the mean of its channel-pair correlations.
+
+    A seed's own channels are set to NaN, identified by **membership, not by a correlation
+    near 1**: they sit inside the average, so their correlation is inflated by construction
+    and says nothing about connectivity. Recognising them by value instead would also erase
+    a channel that genuinely tracks the seed, turning the strongest real connection in the
+    map into an apparent absence.
+    """
+    members = _roi_members(raw, roi_map, chromophore)
+    cols = [c for c in raw.ch_names if c.endswith(f" {chromophore}")]
+    if not members or len(cols) < 2:
         return pd.DataFrame()
-    fc = ConnectivityMeasure(kind="correlation", standardize=False).fit_transform([np.vstack(signals).T])[0]
-    return pd.DataFrame(fc, index=names, columns=names)
+
+    data = raw.get_data(picks=cols)
+    col_index = {c: i for i, c in enumerate(cols)}
+    rows = []
+    for picks in members.values():
+        seed = raw.get_data(picks=picks).mean(axis=0)
+        r = np.corrcoef(np.vstack([seed, data]))[0, 1:]   # row 0 is the seed against every column
+        r[[col_index[c] for c in picks]] = np.nan
+        rows.append(r)
+    return pd.DataFrame(np.vstack(rows), index=list(members), columns=cols)

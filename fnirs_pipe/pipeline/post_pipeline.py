@@ -221,7 +221,9 @@ def _write_rest_derivatives(
     """
     from fnirs_pipe import __version__
     from fnirs_pipe.io.derivatives import build_output_path, carry_entities, write_sidecar_json
-    from fnirs_pipe.pipeline.restingstate import compute_alff, compute_fc, compute_fc_roi, fisher_z
+    from fnirs_pipe.pipeline.restingstate import (
+        compute_alff, compute_fc, compute_fc_roi, compute_fc_seed, fisher_z,
+    )
 
     entities = carry_entities(source_entities)
 
@@ -296,6 +298,27 @@ def _write_rest_derivatives(
                 fisher_z(fc_roi_df).to_csv(fcroiz_path, sep="\t", index_label="roi")
                 _sidecar(fcroiz_path, "fisher_z", src_bp, chromophore=chromo)
                 logger.info("sub-%s | fc_roiz (%s) → %s", config.subject, chromo, fcroiz_path)
+
+            # seed map: one side averaged, so it is a third product rather than a view of the
+            # two above. Cells for a seed's own channels are NaN, not zero.
+            fc_seed_df = compute_fc_seed(raw_resid, config.roi_map, chromo)
+            if not fc_seed_df.empty:
+                fcseed_path = build_output_path(
+                    output_dir=output_dir, subject=config.subject, session=config.session,
+                    entities=chromo_entities, suffix="fcseed", extension=".tsv",
+                )
+                fc_seed_df.to_csv(fcseed_path, sep="\t", index_label="roi")
+                _sidecar(fcseed_path, "fc_seed", src_bp, chromophore=chromo,
+                         seed_channels={roi: list(chans) for roi, chans in config.roi_map.items()})
+                logger.info("sub-%s | fc_seed (%s) → %s", config.subject, chromo, fcseed_path)
+
+                fcseedz_path = build_output_path(
+                    output_dir=output_dir, subject=config.subject, session=config.session,
+                    entities=chromo_entities, suffix="fcseedz", extension=".tsv",
+                )
+                fisher_z(fc_seed_df).to_csv(fcseedz_path, sep="\t", index_label="roi")
+                _sidecar(fcseedz_path, "fisher_z", src_bp, chromophore=chromo)
+                logger.info("sub-%s | fc_seedz (%s) → %s", config.subject, chromo, fcseedz_path)
 
         if chromo == "hbo":
             fc_hbo_df = fc_df
