@@ -22,6 +22,17 @@ _PSD_BANDS = [
 ]
 
 
+def _window_centers(win_times) -> np.ndarray:
+    """[start, end] window pairs -> one centre per window; already-1-D input passes through.
+
+    e.g. [(0.0, 10.1), (10.1, 20.2)] -> [5.05, 15.15]. Flattening instead would hand a
+    heatmap twice as many x values as it has columns, and the extras are silently dropped,
+    which compresses the plotted time axis to half the recording.
+    """
+    a = np.asarray(win_times, dtype=float)
+    return a.mean(axis=1) if a.ndim == 2 and a.shape[1] == 2 else a.ravel()
+
+
 def _hex_to_rgba(hex_color: str, alpha: float) -> str:
     h = hex_color.lstrip("#")
     r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
@@ -508,8 +519,8 @@ def build_sci_psp_figure(
     psp_sorted = psp_arr
     sci_mat_s  = sci_matrix
     psp_mat_s  = psp_matrix
-    wt_sci     = np.asarray(sci_win_times).ravel()
-    wt_psp     = np.asarray(psp_win_times).ravel()
+    wt_sci     = _window_centers(sci_win_times)
+    wt_psp     = _window_centers(psp_win_times)
 
     sci_colors = [
         "#e74c3c" if ch in bad_channels
@@ -529,7 +540,7 @@ def build_sci_psp_figure(
         row_heights=[0.5, 0.5],
         vertical_spacing=0.06,
         horizontal_spacing=0.02,
-        subplot_titles=["SCI (windowed)", "Mean SCI", "PSP (windowed)", "Mean PSP"],
+        subplot_titles=["SCI (windowed)", "Mean SCI", "PSP (windowed)", "Mean PSP (10 s)"],
     )
 
     fig.add_trace(go.Heatmap(

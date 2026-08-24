@@ -38,6 +38,14 @@ logger = get_logger("qc.quantitative_metrics")
 
 GVTD_MOTION_BAND = (0.01, 0.5)  # Hz, bandpass for the filtered (motion-specific) GVTD
 
+# The window is part of what PSP measures, not a smoothing setting, so it is pinned here
+# rather than following the QC window. Lengthening it raises the score on a channel with a
+# coherent cardiac component and lowers it on one without: measured over 10 s to 80 s, a
+# well-coupled pair grew 8x while an uncoupled pair fell to a fifth. So it changes the
+# spread between good and bad channels, and therefore what any fixed threshold selects.
+# psp_mean averages over both kinds, so no factor converts one window's value to another's.
+PSP_WINDOW_S = 10.0
+
 # ---- Source-detector separation, mne_nirs' convention ----
 # These are the defaults of mne_nirs.channels.get_short_channels(max_dist=) and
 # get_long_channels(min_dist=, max_dist=). Note they do not meet: 10-15 mm is neither
@@ -424,19 +432,24 @@ def _psp_metrics(
     cardiac_l_freq: float,
     cardiac_h_freq: float,
 ) -> dict[str, Any]:
-    """Peak spectral power per channel over the whole recording, with mean.
+    """Peak spectral power per channel, averaged over ``PSP_WINDOW_S`` windows, with mean.
 
     Measured on optical density, which is what ``peak_power`` is meant for: the metric
     cross-correlates the two wavelengths, so it has no meaning after Beer-Lambert, and
     mne_nirs' own test converts to OD before calling it. Its docstring saying
     "haemoglobin data" is a copy-paste slip shared with ``scalp_coupling_index_windowed``.
     Converting here keeps this agreeing with the windowed PSP series, which is handed OD.
+
+    The window is pinned to ``PSP_WINDOW_S`` rather than following the QC window length; see
+    the constant for what changes when it moves. The windowed PSP series is a separate view
+    and does follow the QC window, so its colour scale is not on this scalar's scale.
     """
     import mne_nirs.preprocessing as nirs_prep
     raw_od = (raw_intensity if is_optical_density(raw_intensity)
               else mne.preprocessing.nirs.optical_density(raw_intensity.copy()))
     _, psp_scores, _ = nirs_prep.peak_power(
-        raw_od.copy(), l_freq=cardiac_l_freq, h_freq=cardiac_h_freq, verbose=False)
+        raw_od.copy(), time_window=PSP_WINDOW_S,
+        l_freq=cardiac_l_freq, h_freq=cardiac_h_freq, verbose=False)
     psp_per_ch = {
         ch: float(np.mean(psp_scores[i]))
         for i, ch in enumerate(raw_od.ch_names)
@@ -1089,20 +1102,37 @@ def _windowed_gvtd(
     l_freq: float | None,
     h_freq: float | None,
 ) -> "tuple[np.ndarray, np.ndarray, np.ndarray]":
-    """GVTD trace binned into non-overlapping windows. Returns (mean, p95, center_times)."""
+    """GVTD trace binned into non-overlapping windows. Returns (mean, p95, center_times).
+
+    The window grid is the one the windowed SCI/PSP use, so all four series land on the same
+    time axis: ``ceil`` samples per window, whole windows only, centres read off the real
+    sample times. Deriving it independently drifts, because ``window_s * sfreq`` is rarely an
+    integer and the rounding difference accumulates over the recording.
+    """
     sfreq = float(raw_od.info["sfreq"])
-    # per-sample GVTD trace (one value per timepoint)
+    # per-sample GVTD trace, one value shorter than the recording (it is a difference)
     gvtd_ts = gvtd_timetrace(raw_od.get_data(), sfreq, l_freq=l_freq, h_freq=h_freq)
-    win_samples = max(1, int(round(window_s * sfreq)))  # window length in samples
-    n_windows = len(gvtd_ts) // win_samples             # whole windows that fit (leftover tail dropped)
-    if n_windows == 0:
+    n_times = len(raw_od.times)
+    win_samples = max(1, int(np.ceil(window_s * sfreq)))
+    # whole windows only, leftover tail dropped; capped so no window falls past the trace,
+    # which only bites at a window of one sample and would otherwise give an all-NaN row
+    n_windows = min(n_times // win_samples, -(-len(gvtd_ts) // win_samples))
+    if n_windows == 0 or len(gvtd_ts) == 0:
         return np.array([]), np.array([]), np.array([])
-    # trim to a whole number of windows, then fold the 1-D trace into (window × sample-in-window)
-    truncated = gvtd_ts[:n_windows * win_samples].reshape(n_windows, win_samples)
+
+    # NaN-pad rather than truncate: the last window is short by the sample GVTD does not have,
+    # and dropping the whole window instead would put us back on a different grid
+    padded = np.full(n_windows * win_samples, np.nan)
+    usable = gvtd_ts[:n_windows * win_samples]
+    padded[:len(usable)] = usable
+    grid = padded.reshape(n_windows, win_samples)       # (window x sample-in-window)
     # mean = average motion level; p95 = worst-moment, so transient motion survives averaging
-    gvtd_mean = truncated.mean(axis=1)               # axis=1: reduce across samples within each window
-    gvtd_p95 = np.percentile(truncated, 95, axis=1)
-    window_times = np.arange(n_windows) * window_s + window_s / 2  # center time of each window
+    gvtd_mean = np.nanmean(grid, axis=1)
+    gvtd_p95 = np.nanpercentile(grid, 95, axis=1)
+
+    starts = np.arange(n_windows) * win_samples
+    ends = np.minimum(starts + win_samples, n_times - 1)
+    window_times = (raw_od.times[starts] + raw_od.times[ends]) / 2.0
     return gvtd_mean, gvtd_p95, window_times
 
 
@@ -1180,7 +1210,7 @@ def attach_windowed_series(
 
     Notes
     -----
-    On failure sqm is left unchanged and every returned series is None. Center
+    SCI/PSP and GVTD fail independently; whichever survives is still attached. Center
     times collapse the mne-nirs [start, end] window pairs to their midpoint.
     """
     def _center_times(t):
@@ -1188,14 +1218,23 @@ def attach_windowed_series(
         return (a.mean(axis=1) if a.ndim == 2 and a.shape[1] == 2 else a).tolist()
 
     series = {"sci_matrix": None, "sci_times": None, "psp_matrix": None, "psp_times": None}
+
+    # two try blocks, not one: SCI/PSP filter to the cardiac band and GVTD does not, so a band
+    # that the filter rejects must not take the motion series down with it
+    sci_matrix = sci_times = psp_matrix = psp_times = None
     try:
         sci_matrix, sci_times = compute_windowed_sci(raw_od, cardiac_l_freq, cardiac_h_freq, window_s)
         psp_matrix, psp_times = compute_windowed_psp(raw_od, cardiac_l_freq, cardiac_h_freq, window_s)
+    except Exception as exc:
+        logger.warning("windowed SCI/PSP failed: %s", exc)
+
+    gvtd_per_window = gvtd_p95_per_window = gvtd_t = None
+    gvtd_filt_per_window = gvtd_filt_p95_per_window = None
+    try:
         gvtd_per_window, gvtd_p95_per_window, gvtd_t = compute_windowed_gvtd(raw_od, window_s)
         gvtd_filt_per_window, gvtd_filt_p95_per_window, _ = compute_windowed_filtered_gvtd(raw_od, window_s)
     except Exception as exc:
-        logger.warning("windowed metrics failed: %s", exc)
-        return series
+        logger.warning("windowed GVTD failed: %s", exc)
 
     # SCI/PSP matrices are channel × window; collapse to a per-window mean over channels
     if sci_matrix is not None and sci_times is not None:

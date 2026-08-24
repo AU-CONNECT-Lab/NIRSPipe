@@ -12,8 +12,12 @@ All notable changes to this project will be documented in this file.
 - A run where no channel passes the SCI threshold now stops there and says so, instead of failing later inside Beer-Lambert
 - `--motion-correction wavelet` sets its outlier threshold per wavelet scale over the whole recording, not per time window
 - Rest mode no longer writes ALFF/fALFF when the drift model leaves linear drift in the data (`--drift-model none`, or `polynomial` with `--drift-order 0`). Their input is the only one without a bandpass, so the drift model is its only detrend, and the drift's leakage falls inside the ALFF band
+- The windowed SCI and PSP heatmaps plotted each window at roughly half its true time, so the QC report's time axis covered only the first half of the recording
+- GVTD per-window series now share the time axis of the windowed SCI and PSP. They were binned on their own grid, which drifts apart from it whenever the window length is not a whole number of samples: 6.6 s by the end of a 600 s run at 7.8 Hz, and one window more or fewer in total
+- A cardiac band the filter cannot use no longer takes the GVTD per-window series down with the SCI and PSP ones
 
 ### Changed
+- `Mean PSP` is labelled with its 10 s window in the report. The window changes what the score measures rather than only its scale, so it is pinned there and does not follow `--window-length`, which still sets the windowed PSP heatmap
 - zALFF standardizes by the sample standard deviation, matching the convention it is compared against. Values shrink by sqrt((n-1)/n), where n counts the channels of one chromophore: 5.1% at 10 per chromophore, 2.6% at 20, 1.3% at 40
 - `--motion-correction wavelet` reaches artifacts up to about 25 s long; it used to stop at about 1.6 s
 

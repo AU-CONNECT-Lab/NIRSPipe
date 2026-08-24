@@ -573,7 +573,7 @@
         <span class="qv {{ qv_class(ret, ret >= 0.9, ret >= 0.7) }}">{{ pct(ret) }}</span></li>
     <li>{{ ql('sci_mean', 'Mean SCI') }}
         <span class="qv {{ qv_class(sci, sci >= 0.75, sci >= 0.5) }}">{{ qm_val(sci) }}</span></li>
-    <li>{{ ql('psp_mean', 'Mean PSP') }}
+    <li>{{ ql('psp_mean', 'Mean PSP (10 s windows)') }}
         <span class="qv">{{ qm_val(sqm.get('psp_mean')) }}</span></li>
     <li>{{ ql('snr_mean', 'Mean SNR (intensity)') }}
         <span class="qv {{ qv_class(snr, snr >= 100, snr >= 20) }}">{{ qm_val(snr, '.1f') }}</span></li>
