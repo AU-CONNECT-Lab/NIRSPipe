@@ -47,6 +47,23 @@ _TEMPLATE_DIR = Path(__file__).parent / "templates"
 _BASE_CSS     = (_TEMPLATE_DIR / "_base.css").read_text(encoding="utf-8")
 
 
+def _warn_on_mixed_windows(rows: list) -> None:
+    """A time x subject heatmap only reads straight if every subject was binned the same way.
+
+    prep-raw rows carry the scalar under a ``raw_`` prefix and pipeline rows do not, so both
+    names are checked. Silence means either one window length across the cohort or records
+    written before the length was stored.
+    """
+    lengths = {r.get("qc_window_s", r.get("raw_qc_window_s")) for r in rows}
+    lengths.discard(None)
+    if len(lengths) > 1:
+        logger.warning(
+            "cohort mixes QC window lengths %s; the per-window heatmaps put subjects with "
+            "different window grids in one column",
+            sorted(lengths),
+        )
+
+
 def _scalars(sqm: dict) -> dict:
     """Keep numeric scalar fields only (drop dicts/lists/strings).
 
@@ -169,6 +186,7 @@ def _render_group(
             })
 
     windowed_panels: list[dict] = []
+    _warn_on_mixed_windows(full_rows)
     for key, val_field, time_field, panel_title in _WINDOWED_METRICS:
         if not any(val_field in r and r[val_field] for r in full_rows):
             continue

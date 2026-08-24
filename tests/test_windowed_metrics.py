@@ -103,6 +103,42 @@ def test_gvtd_series_survives_an_unusable_cardiac_band(od_raw):
     assert len(sqm["gvtd_window_times_s"]) == len(sqm["gvtd_per_window"])
 
 
+# ---- provenance: a record says which grid its series were binned on ----
+def test_the_record_carries_the_window_the_series_were_binned_on(od_raw):
+    sqm: dict = {}
+    attach_windowed_series(sqm, od_raw, *CARDIAC, 20.0)
+
+    assert sqm["qc_window_s"] == 20.0
+    assert len(sqm["sci_per_window"]) == len(sqm["sci_window_times_s"])
+
+
+def test_the_window_is_recorded_even_when_every_series_fails(od_raw):
+    sqm: dict = {}
+    attach_windowed_series(sqm, od_raw, 0.7, SFREQ / 2 + 1.0, 0.0)
+
+    assert sqm["qc_window_s"] == 0.0
+    assert "sci_per_window" not in sqm
+
+
+def test_an_older_database_gains_the_columns_it_is_missing(tmp_path):
+    import sqlite3
+
+    from fnirs_pipe.utils import job_db
+
+    db = tmp_path / "runs.db"
+    # the schema as the previous version left it: everything but the newest column
+    previous = job_db._SCHEMA.replace("    qc_window_s                 REAL,\n", "")
+    assert previous != job_db._SCHEMA
+    with sqlite3.connect(db) as old:
+        old.executescript(previous)
+
+    conn = job_db._get_conn(db)
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(sqm)")}
+    conn.close()
+
+    assert set(job_db._SQM_COLS) <= cols
+
+
 # ---- F6: the heatmap gets one x value per column ----
 def test_window_centers_collapses_start_end_pairs():
     from fnirs_pipe.qc.figures.raw_figures import _window_centers

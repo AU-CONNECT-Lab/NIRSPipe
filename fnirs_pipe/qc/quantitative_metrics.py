@@ -1211,13 +1211,18 @@ def attach_windowed_series(
     Notes
     -----
     SCI/PSP and GVTD fail independently; whichever survives is still attached. Center
-    times collapse the mne-nirs [start, end] window pairs to their midpoint.
+    times collapse the mne-nirs [start, end] window pairs to their midpoint. ``window_s``
+    is stored as ``qc_window_s`` so a record says which grid its series were binned on;
+    ``psp_mean`` is deliberately not on that grid, see :data:`PSP_WINDOW_S`.
     """
     def _center_times(t):
         a = np.asarray(t)
         return (a.mean(axis=1) if a.ndim == 2 and a.shape[1] == 2 else a).tolist()
 
     series = {"sci_matrix": None, "sci_times": None, "psp_matrix": None, "psp_times": None}
+    # recorded even when every series below fails: it describes the request, not the result,
+    # and without it a stored series cannot be told apart from one binned at another length
+    sqm["qc_window_s"] = float(window_s)
 
     # two try blocks, not one: SCI/PSP filter to the cardiac band and GVTD does not, so a band
     # that the filter rejects must not take the motion series down with it

@@ -261,6 +261,7 @@ CREATE TABLE IF NOT EXISTS sqm (
     mean_amp_mean               REAL,
     ch_dist_mean                REAL,
     psp_mean                    REAL,
+    qc_window_s                 REAL,
     cp_mean                     REAL,
     gvtd_mean                   REAL,
     gvtd_p95                    REAL,
@@ -308,7 +309,7 @@ CREATE INDEX IF NOT EXISTS idx_out_lookup   ON command_outputs (execution_id, su
 
 _SQM_COLS = [
     "sci_mean", "channel_retention_rate", "snr_mean", "cv_mean", "mean_amp_mean",
-    "ch_dist_mean", "psp_mean", "cp_mean", "gvtd_mean", "gvtd_p95",
+    "ch_dist_mean", "psp_mean", "qc_window_s", "cp_mean", "gvtd_mean", "gvtd_p95",
     "gvtd_filt_mean", "gvtd_filt_p95", "gvtd_vstd_mean", "gvtd_vstd_p95",
     "gvtd_thresh", "gvtd_num_above_thresh",
     "gvtd_pct_above_thresh", "spike_count",
@@ -322,10 +323,28 @@ _SQM_COLS = [
 ]
 
 
+_SQM_INT_COLS = {"gvtd_num_above_thresh", "spike_count"}
+
+
+def _add_missing_sqm_columns(conn: sqlite3.Connection) -> None:
+    """Bring an sqm table built by an older version up to the current column list.
+
+    ``CREATE TABLE IF NOT EXISTS`` leaves an existing table alone, so a database written
+    before a metric was added has no column for it and every later insert fails on that
+    name. Adding the columns is the whole migration: SQLite fills them with NULL.
+    """
+    have = {row[1] for row in conn.execute("PRAGMA table_info(sqm)")}
+    for col in _SQM_COLS:
+        if col not in have:
+            kind = "INTEGER" if col in _SQM_INT_COLS else "REAL"
+            conn.execute(f"ALTER TABLE sqm ADD COLUMN {col} {kind}")
+
+
 def _get_conn(db_path: Path) -> sqlite3.Connection:
     db_path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(db_path)
     conn.executescript(_SCHEMA)
+    _add_missing_sqm_columns(conn)
     return conn
 
 

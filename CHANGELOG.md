@@ -15,8 +15,10 @@ All notable changes to this project will be documented in this file.
 - The windowed SCI and PSP heatmaps plotted each window at roughly half its true time, so the QC report's time axis covered only the first half of the recording
 - GVTD per-window series now share the time axis of the windowed SCI and PSP. They were binned on their own grid, which drifts apart from it whenever the window length is not a whole number of samples: 6.6 s by the end of a 600 s run at 7.8 Hz, and one window more or fewer in total
 - A cardiac band the filter cannot use no longer takes the GVTD per-window series down with the SCI and PSP ones
+- A metrics database written by an older version gains any column it is missing instead of failing every insert on the new name
 
 ### Changed
+- Quality records store `qc_window_s`, the window length their per-window SCI/PSP/GVTD series were binned on. A group report whose subjects were run at different `--window-length` values now says so, instead of stacking incompatible rows in one heatmap
 - `Mean PSP` is labelled with its 10 s window in the report. The window changes what the score measures rather than only its scale, so it is pinned there and does not follow `--window-length`, which still sets the windowed PSP heatmap
 - zALFF standardizes by the sample standard deviation, matching the convention it is compared against. Values shrink by sqrt((n-1)/n), where n counts the channels of one chromophore: 5.1% at 10 per chromophore, 2.6% at 20, 1.3% at 40
 - `--motion-correction wavelet` reaches artifacts up to about 25 s long; it used to stop at about 1.6 s
