@@ -50,11 +50,11 @@ def inputs(make_raw):
     return raws, signals
 
 
-def _run(inputs, seed, significance=True):
+def _run(inputs, seed, significance=True, mc_count=300):
     raws, signals = inputs
     return synchrony._wtc_over_pairs(
         raws, signals, LABELS, fmin=0.004, fmax=0.2,
-        significance=significance, seed=seed,
+        significance=significance, seed=seed, mc_count=mc_count,
     )
 
 
@@ -124,3 +124,24 @@ def test_without_a_seed_the_cache_is_left_alone(calls, inputs):
     # unseeded runs keep the previous behaviour, including the speed the cache buys
     _run(inputs, seed=None)
     assert all("cache" not in c["kwargs"] for c in calls)
+
+
+# ---- the surrogate count ----
+
+def test_the_surrogate_count_reaches_pycwt(calls, inputs):
+    # it drives the whole runtime, so a value that silently failed to arrive would look
+    # like the flag doing nothing rather than like an error
+    _run(inputs, seed=42, mc_count=17)
+    assert all(c["kwargs"]["mc_count"] == 17 for c in calls)
+
+
+def test_the_surrogate_count_defaults_to_pycwts_own(calls, inputs):
+    _run(inputs, seed=42)
+    assert all(c["kwargs"]["mc_count"] == 300 for c in calls)
+
+
+def test_no_surrogate_count_without_significance(calls, inputs):
+    # pycwt takes it through **kwargs and never looks at it when sig is off; passing it
+    # anyway would suggest a cost that is not being paid
+    _run(inputs, seed=None, significance=False, mc_count=17)
+    assert all("mc_count" not in c["kwargs"] for c in calls)

@@ -291,7 +291,7 @@ def cmd_hyper_post(
     desc: str,
     roi_mapping: Path | None, wtc_fmin: float, wtc_fmax: float,
     wtc_band_fmin: float | None, wtc_band_fmax: float | None, wtc_significance: bool,
-    wtc_seed: int | None,
+    wtc_seed: int | None, wtc_mc_count: int,
     isc_threshold: float, normalize: bool, no_align: bool,
     session_label: list[str] | None, task_label: list[str] | None,
     skip_bids_validation: bool,
@@ -345,6 +345,7 @@ def cmd_hyper_post(
             wtc_band_fmax=wtc_band_fmax,
             wtc_significance=wtc_significance,
             wtc_seed=wtc_seed,
+            wtc_mc_count=wtc_mc_count,
             isc_threshold=isc_threshold,
         )
 
@@ -493,7 +494,12 @@ def _build_parser() -> argparse.ArgumentParser:
                     help="Upper bound (Hz) of that band. Defaults to --wtc-fmax.")
     hp.add_argument("--wtc-significance", action="store_true",
                     help="Overlay a Monte Carlo significance contour on WTC "
-                         "(slow: ~300 surrogate runs per channel pair).")
+                         "(slow: see --wtc-mc-count for how slow).")
+    hp.add_argument("--wtc-mc-count", type=int, default=300,
+                    help="Surrogate series behind each --wtc-significance contour "
+                         "(default 300). This is what the runtime is spent on and it "
+                         "scales linearly; lower it to preview a run, raise it to settle "
+                         "a contour. Ignored without --wtc-significance.")
     hp.add_argument("--wtc-seed", type=int, default=None,
                     help="Seed the Monte Carlo surrogates so --wtc-significance is "
                          "reproducible. Also bypasses pycwt's on-disk cache, which is not "

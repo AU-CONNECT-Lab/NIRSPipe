@@ -98,6 +98,7 @@ def _pairwise_wtc(
     fmax: float,
     significance: bool = False,
     cache: bool = True,
+    mc_count: int = 300,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray | None]:
     r"""Morlet wavelet transform coherence for one signal pair (0 = independent, 1 = locked).
 
@@ -119,11 +120,17 @@ def _pairwise_wtc(
     under unknown settings can stand in for the one that was asked for. Seeding itself
     happens once per run in the caller, not here.
 
+    ``mc_count`` is the number of surrogate series behind each significance level and is
+    what the runtime is spent on. It reaches pycwt through ``**kwargs``, so it is ignored
+    unless ``significance`` is set.
+
     Backend: `pycwt.wct <https://pycwt.readthedocs.io/en/development/reference/#pycwt.wct>`_.
     """
     import pycwt
 
     kwargs: dict = {} if cache else {"cache": False}
+    if significance:
+        kwargs["mc_count"] = mc_count
     WCT, _, coi, freqs, signif = pycwt.wct(
         sig1, sig2, dt=dt,
         dj=1.0 / 12,  # 12 sub-octaves per octave (pycwt default; frequency-axis resolution)
@@ -156,6 +163,7 @@ def _wtc_over_pairs(
     fmax: float,
     significance: bool = False,
     seed: int | None = None,
+    mc_count: int = 300,
 ) -> WTCResult:
     """Run pairwise Morlet WTC over precomputed per-subject {label: signal} maps.
 
@@ -196,7 +204,7 @@ def _wtc_over_pairs(
                 try:
                     WCT_band, freqs_band, coi_dec, sig_band = _pairwise_wtc(
                         sig1, sig2, dt, step, fmin, fmax, significance,
-                        cache=seed is None)
+                        cache=seed is None, mc_count=mc_count)
                     if shared_freqs is None:
                         shared_freqs = freqs_band
                         shared_times = ref_raw.times[::step]
@@ -222,6 +230,7 @@ def compute_wtc(
     fmax: float = 0.20,
     significance: bool = False,
     seed: int | None = None,
+    mc_count: int = 300,
 ) -> WTCResult:
     """Compute pairwise WTC per long HbO channel using pycwt Morlet wavelet.
 
@@ -237,7 +246,7 @@ def compute_wtc(
     signals = {sid: _long_hbo_signals(raw) for sid, raw in raws.items()}
 
     return _wtc_over_pairs(
-        raws, signals, list(signals[subject_ids[0]]), fmin, fmax, significance, seed)
+        raws, signals, list(signals[subject_ids[0]]), fmin, fmax, significance, seed, mc_count)
 
 
 def _roi_averaged_signals(
@@ -268,6 +277,7 @@ def compute_wtc_roi(
     fmax: float = 0.20,
     significance: bool = False,
     seed: int | None = None,
+    mc_count: int = 300,
 ) -> WTCResult:
     """Compute pairwise WTC on ROI-averaged HbO signals.
 
@@ -291,7 +301,7 @@ def compute_wtc_roi(
         for sid, raw in raws.items()
     }
 
-    return _wtc_over_pairs(raws, signals, list(roi_map), fmin, fmax, significance, seed)
+    return _wtc_over_pairs(raws, signals, list(roi_map), fmin, fmax, significance, seed, mc_count)
 
 
 def compute_pairwise_coherence(

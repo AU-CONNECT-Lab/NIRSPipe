@@ -177,9 +177,17 @@ fnirs-qc hyper-raw BIDS_DIR OUTPUT_DIR --pairs-csv PATH
 
 fnirs-qc hyper-post BIDS_DIR OUTPUT_DIR --pairs-csv PATH
                     [--group-id / --task-label / --session-label]
-                    [--roi-mapping PATH]
-                    [--wtc-fmin/--wtc-fmax FLOAT] [--isc-threshold FLOAT]
+                    [--desc TEXT] [--roi-mapping PATH]
+                    [--wtc-fmin/--wtc-fmax FLOAT]
+                    [--wtc-band-fmin/--wtc-band-fmax FLOAT]
+                    [--wtc-significance] [--wtc-seed INT] [--wtc-mc-count INT]
+                    [--isc-threshold FLOAT]
                     [--normalize] [--no-align]
+
+# --desc picks the per-subject stage the inter-brain metrics read (default preproc).
+# --wtc-significance is slow: --wtc-mc-count surrogate series per channel pair, 300 by
+# default, and the runtime scales with it. --wtc-seed makes those contours reproducible
+# and switches off pycwt's on-disk cache, which is not keyed on the seed.
 
 fnirs-qc group-raw       OUTPUT_DIR
 fnirs-qc group-hyper-raw OUTPUT_DIR
@@ -251,13 +259,18 @@ output/
 │       ├── sub-01_desc-filtered_nirs.snirf        # post: bandpass applied
 │       ├── sub-01_desc-resampled_nirs.snirf       # post: resample applied
 │       ├── sub-01_desc-errts_nirs.snirf           # post glm/rest: GLM residuals
+│       ├── sub-01_desc-errtsbroad_nirs.snirf      # rest: un-bandpassed residual, ALFF input
 │       ├── sub-01_task-<t>_desc-sqm_nirs.json     # SQM record, one per run
 │       ├── sub-01_design_matrix.csv                # glm mode
 │       ├── sub-01_glm_results.csv                  # glm mode
 │       ├── sub-01_contrasts.csv                    # glm mode + --contrast-file
 │       ├── sub-01_alff.tsv                         # rest mode
-│       ├── sub-01_fc.tsv                           # rest mode (channel × channel)
-│       └── sub-01_fcroi.tsv                        # rest mode + --roi-mapping (ROI × ROI)
+│       ├── sub-01_desc-hbo_fc.tsv                  # rest mode (channel × channel, per chromophore)
+│       ├── sub-01_desc-hbo_fcz.tsv                 # rest mode (Fisher z of the above)
+│       ├── sub-01_desc-hbo_fcroi.tsv               # rest + --roi-mapping (ROI × ROI)
+│       ├── sub-01_desc-hbo_fcroiz.tsv              # rest + --roi-mapping
+│       ├── sub-01_desc-hbo_fcseed.tsv              # rest + --roi-mapping (ROI × channel)
+│       └── sub-01_desc-hbo_fcseedz.tsv             # rest + --roi-mapping
 ├── group_nirs.{tsv,html}                # fnirs-qc group-raw
 ├── group_hyper_nirs.{tsv,html}          # fnirs-qc group-hyper-raw
 └── group_nirs_window-<a>-<b>.{tsv,html} # fnirs-qc window-raw (per invocation)
@@ -301,7 +314,7 @@ output/
 - Denoising carpet — before / after, HbO and HbR separately, both scaled by the pre-denoising SD (grouped by ROI with `--roi-mapping`), when postprocessing runs
 - Global correlation (`gcor`) before → after denoising when postprocessing runs
 - GLM section (design matrix + activation panel) when `--mode glm`
-- Rest section (ALFF table + FC heatmap; ROI-level FC with `--roi-mapping`) when `--mode rest`
+- Rest section (ALFF table + FC heatmap + connectogram; ROI-level FC and seed topography with `--roi-mapping`) when `--mode rest`
 - Auto-generated Methods paragraph + software versions + references
 
 Group / window / dyad reports add subject × metric heatmaps, per-scale grouped boxplots with clickable strip points (Tukey 1.5 × IQR outliers), and sortable tables.

@@ -7,10 +7,16 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- `fnirs-qc hyper-post --wtc-mc-count` sets how many surrogate series stand behind each significance contour (default 300, unchanged). It is what the runtime is spent on and it scales with the value, so a run can be previewed cheaply and settled expensively
+
+## [0.21.0] - 2026-08-24
+
+### Added
 - Topographic maps of the condition-averaged response in the subject report, at time points after onset, one row per condition and chromophore. The first spatial view of activity that does not wait for the GLM
 - `fnirs-qc hyper-post --desc` picks which per-subject stage the inter-brain metrics read (default `preproc`; `errts` reads the confound-regression residual, so short-channel regression can precede a coherence analysis). Optical-density stages are refused
 - `fnirs-qc hyper-post` writes `group-<id>_task-<task>_hyper-wtc.tsv` (and `hyper-wtc-roi.tsv` with `--roi-mapping`): one coherence value per pair and channel, averaged over the requested band inside the cone of influence. The figures and a group analysis now read the same numbers
 - Rest mode writes `desc-<chromo>_fcseed.tsv` and `_fcseedz.tsv` when `--roi-mapping` is given: each ROI's mean signal against every channel. Cells for a seed's own channels are blank
+- The subject report draws the seed maps as flat maps, one per seed ROI and chromophore, each channel coloured by its correlation with that seed. Channels inside the seed are grey rather than zero-coloured, rejected channels are faded, and short channels are left out
 
 ### Fixed
 - ISC, band coherence and windowed coherence pair channels by S-D label instead of by position, so a dyad whose members had different channels rejected is no longer compared off-by-one. **These values change for any such dyad**

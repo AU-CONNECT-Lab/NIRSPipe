@@ -103,6 +103,7 @@ def build_hyper_post_report(
     wtc_band_fmax: float | None = None,
     wtc_significance: bool = False,
     wtc_seed: int | None = None,
+    wtc_mc_count: int = 300,
     isc_threshold: float = 0.3,
 ) -> Path:
     """Build hyperscanning post-QC report.
@@ -184,11 +185,12 @@ def build_hyper_post_report(
     wtc_result: WTCResult | None = None
     try:
         if wtc_significance:
-            logger.warning("WTC significance on: Monte Carlo surrogates per channel pair, this is slow.")
+            logger.warning("WTC significance on: %d Monte Carlo surrogates per channel pair, "
+                           "this is slow.", wtc_mc_count)
         logger.info("Computing WTC for %d channels...", len(subject_ids))
         wtc_result = compute_wtc(
             aligned_raws, fmin=wtc_fmin, fmax=wtc_fmax, significance=wtc_significance,
-            seed=wtc_seed)
+            seed=wtc_seed, mc_count=wtc_mc_count)
     except Exception as exc:
         logger.warning("WTC computation failed: %s", exc)
 
@@ -246,7 +248,7 @@ def build_hyper_post_report(
             roi_wtc = compute_wtc_roi(
                 aligned_raws, roi_map, bad_channels=bad_channels,
                 fmin=wtc_fmin, fmax=wtc_fmax, significance=wtc_significance,
-                seed=wtc_seed,
+                seed=wtc_seed, mc_count=wtc_mc_count,
             )
         except Exception as exc:
             logger.warning("ROI WTC computation failed: %s", exc)
