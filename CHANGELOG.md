@@ -12,7 +12,7 @@ All notable changes to this project will be documented in this file.
 - Rest mode writes `desc-<chromo>_fcseed.tsv` and `_fcseedz.tsv` when `--roi-mapping` is given: each ROI's mean signal against every channel, the seed-to-whole-brain view. Cells for a seed's own channels are blank, since they sit inside the average and say nothing about connectivity
 
 ### Fixed
-- The inter-brain ISC matrix pairs channels by S-D label instead of by position. When the two members of a dyad had different channels rejected, every channel after the first rejection was compared against a different pair than its label claimed, and the blanking of rejected channels then blanked the wrong row or column. **ISC values change for any dyad whose members do not share the same rejected channels**
+- ISC, band coherence and windowed coherence pair channels by S-D label instead of by position. When the two members of a dyad had different channels rejected, every channel after the first rejection was compared against a different pair than its label claimed, and ISC's blanking of rejected channels then blanked the wrong row or column. A label only one of them has now keeps its place, blank. **These values change for any dyad whose members do not share the same rejected channels**
 - The `raw_long` and `raw_short` quality sections no longer drop rejected channels, which made their mean SCI and channel retention rate read better than the run was. The QC report's long-channel view likewise stops hiding them
 - Provenance is no longer empty when the pipeline is handed a recording it did not read from disk
 - A run where no channel passes the SCI threshold now stops there and says so, instead of failing later inside Beer-Lambert

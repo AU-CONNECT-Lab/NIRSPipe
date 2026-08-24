@@ -51,16 +51,25 @@ def _shared_sfreq(raws: dict[str, mne.io.Raw]) -> float:
     return next(iter(rates.values()))
 
 
-def _long_hbo_signals(raw: mne.io.Raw) -> dict[str, np.ndarray]:
-    """{S-D label: HbO time course} over long channels only, bads already dropped."""
+def _long_hbo_by_label(raw: mne.io.Raw) -> dict[str, int]:
+    """{S-D label: channel index} over long HbO channels only, bads already dropped.
+
+    The label is the key every inter-brain metric matches on. Position cannot be: two
+    participants with different channels rejected no longer agree on what index 3 is.
+    """
     picks = long_channel_picks(raw, "hbo")
     if not picks:
         raise ValueError(
             "no usable long HbO channel: every one is either short-distance or marked bad"
         )
+    return {raw.ch_names[p].rsplit(" ", 1)[0]: p for p in picks}
+
+
+def _long_hbo_signals(raw: mne.io.Raw) -> dict[str, np.ndarray]:
+    """{S-D label: HbO time course} over long channels only, bads already dropped."""
     return {
-        raw.ch_names[p].rsplit(" ", 1)[0]: raw.get_data(picks=[p])[0].astype(np.float64)
-        for p in picks
+        label: raw.get_data(picks=[p])[0].astype(np.float64)
+        for label, p in _long_hbo_by_label(raw).items()
     }
 
 
@@ -298,7 +307,8 @@ def compute_pairwise_coherence(
 
     :math:`P_{xy}` is the cross-spectral density and :math:`P_{xx}, P_{yy}` the auto-spectra
     (Welch). The scalar per channel pair is :math:`C_{xy}` averaged over the band.
-    Long channels only; matched by index, so all subjects must share the same layout.
+    Long channels only, matched across participants by S-D label; a label one of them lacks
+    keeps its row with a NaN coherence.
     Returns a DataFrame with columns: ch_name, sub1, sub2, coherence.
     """
     subject_ids = list(raws.keys())
@@ -312,19 +322,22 @@ def compute_pairwise_coherence(
     rows: list[dict] = []
     for sub1, sub2 in combinations(subject_ids, 2):
         raw1, raw2 = raws[sub1], raws[sub2]
-        picks1 = long_channel_picks(raw1, "hbo")
-        picks2 = long_channel_picks(raw2, "hbo")
-        data1 = raw1.get_data(picks=picks1)
-        data2 = raw2.get_data(picks=picks2)
-        ch_names1 = [raw1.ch_names[p] for p in picks1]
-        ch_names2 = [raw2.ch_names[p] for p in picks2]
+        map1, map2 = _long_hbo_by_label(raw1), _long_hbo_by_label(raw2)
+        data1 = raw1.get_data(picks=list(map1.values()))
+        data2 = raw2.get_data(picks=list(map2.values()))
+        row_of = {label: i for i, label in enumerate(map2)}
 
-        for i in range(min(len(picks1), len(picks2))):
-            ch_label = ch_names1[i].rsplit(" ", 1)[0] if " " in ch_names1[i] else ch_names1[i]
-            freqs, coh = coherence(data1[i], data2[i], fs=sfreq, nperseg=nperseg)
+        for i, label in enumerate(map1):
+            j = row_of.get(label)
+            if j is None:
+                logger.warning("coherence: %s has no %s, leaving the pair blank", sub2, label)
+                rows.append({"ch_name": label, "sub1": sub1, "sub2": sub2,
+                             "coherence": float("nan")})
+                continue
+            freqs, coh = coherence(data1[i], data2[j], fs=sfreq, nperseg=nperseg)
             mask = (freqs >= fmin) & (freqs <= fmax)
             mean_coh = float(np.mean(coh[mask])) if mask.any() else float("nan")
-            rows.append({"ch_name": ch_label, "sub1": sub1, "sub2": sub2, "coherence": mean_coh})
+            rows.append({"ch_name": label, "sub1": sub1, "sub2": sub2, "coherence": mean_coh})
 
     return pd.DataFrame(rows, columns=["ch_name", "sub1", "sub2", "coherence"])
 

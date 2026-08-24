@@ -76,7 +76,7 @@ def test_isc_reads_the_same_channels_as_wtc():
     assert SHORT_PAIR not in ch_names
 
 
-# ---- ISC channel matching ----
+# ---- channel matching across a pair ----
 
 def _tagged(subject: str, drop: str | None = None) -> mne.io.Raw:
     """One haemo recording whose HbO channels each carry their own frequency.
@@ -116,6 +116,29 @@ def test_the_blanked_column_is_the_one_that_was_named():
                                     bad_channels={"sub-B": ["S3_D3 hbo"]})
     assert np.isnan(isc_mat[:, ch_names.index("S3_D3")]).all()
     assert not np.isnan(isc_mat[:, ch_names.index("S2_D2")]).any()
+
+
+def test_coherence_matches_channels_by_label():
+    from fnirs_pipe.pipeline.synchrony import compute_pairwise_coherence
+
+    raws = {"sub-A": _tagged("10031"), "sub-B": _tagged("10032", drop="S2_D2")}
+    df = compute_pairwise_coherence(raws, fmin=0.05, fmax=0.15).set_index("ch_name")
+
+    assert list(df.index) == ["S1_D1", "S2_D2", "S3_D3", "S4_D4"]
+    assert np.isnan(df.loc["S2_D2", "coherence"])
+    assert df.loc[["S1_D1", "S3_D3", "S4_D4"], "coherence"].to_numpy() == pytest.approx(1.0)
+
+
+def test_windowed_coherence_keeps_a_blank_row_rather_than_shifting():
+    from fnirs_pipe.qc.figures.hyper_figures import compute_windowed_coherence
+
+    raws = {"sub-A": _tagged("10031"), "sub-B": _tagged("10032", drop="S2_D2")}
+    df = compute_windowed_coherence(raws, 0.05, 0.15, window_s=20.0, step_s=10.0)
+
+    assert set(df["ch_name"]) == {"S1_D1", "S2_D2", "S3_D3", "S4_D4"}
+    blank = df[df["ch_name"] == "S2_D2"]
+    assert len(blank) == df["t_center"].nunique() and blank["coherence"].isna().all()
+    assert df[df["ch_name"] == "S3_D3"]["coherence"].to_numpy() == pytest.approx(1.0)
 
 
 def test_a_sampling_rate_mismatch_is_refused():

@@ -695,25 +695,28 @@ def compute_windowed_coherence(
     window_s: float = 30.0,
     step_s: float = 5.0,
 ) -> pd.DataFrame:
-    """Sliding-window pairwise coherence per HbO channel.
+    """Sliding-window pairwise coherence per long HbO channel.
+
+    Channels are matched across participants by S-D label, the way the whole-record
+    coherence and WTC match them; a label one participant lacks keeps its row with NaN
+    coherence, so the heatmap shows the gap rather than shifting its neighbours into it.
 
     Returns DataFrame with columns: t_center, ch_name, sub1, sub2, coherence.
     """
+    from fnirs_pipe.pipeline.synchrony import _long_hbo_by_label, _shared_sfreq
+
     subject_ids = list(aligned_raws.keys())
     if len(subject_ids) < 2:
         return pd.DataFrame()
 
-    ref_raw   = aligned_raws[subject_ids[0]]
-    sfreq     = ref_raw.info["sfreq"]
+    sfreq     = _shared_sfreq(aligned_raws)
     win_samp  = int(window_s * sfreq)
     step_samp = int(step_s * sfreq)
-    n_times   = ref_raw.n_times
+    n_times   = min(raw.n_times for raw in aligned_raws.values())
     if win_samp >= n_times:
         return pd.DataFrame()
 
-    hbo_picks  = mne.pick_types(ref_raw.info, fnirs="hbo")
-    pair_names = [ref_raw.ch_names[p].rsplit(" ", 1)[0] for p in hbo_picks]
-    starts     = list(range(0, n_times - win_samp + 1, step_samp))
+    starts = list(range(0, n_times - win_samp + 1, step_samp))
     # freq_req: minimum nperseg so that at least one bin falls within [fmin, fmax]
     # capped at win_samp//2 so scipy coherence has >=2 segments per window
     freq_req = max(32, int(np.ceil(sfreq / fmax)))
@@ -722,23 +725,32 @@ def compute_windowed_coherence(
     rows: list[dict] = []
     for sub1, sub2 in combinations(subject_ids, 2):
         raw1, raw2 = aligned_raws[sub1], aligned_raws[sub2]
-        picks1 = mne.pick_types(raw1.info, fnirs="hbo")
-        picks2 = mne.pick_types(raw2.info, fnirs="hbo")
-        data1  = raw1.get_data(picks=picks1)
-        data2  = raw2.get_data(picks=picks2)
+        map1, map2 = _long_hbo_by_label(raw1), _long_hbo_by_label(raw2)
+        data1  = raw1.get_data(picks=list(map1.values()))
+        data2  = raw2.get_data(picks=list(map2.values()))
+        row_of = {label: i for i, label in enumerate(map2)}
+        # (row in data1, row in data2 or None, label), resolved once for every window
+        matched = [(i, row_of.get(label), label) for i, label in enumerate(map1)]
+        for label in (lbl for _, j, lbl in matched if j is None):
+            logger.warning("windowed coherence: %s has no %s, leaving that row blank",
+                           sub2, label)
+
         for start in starts:
             end      = start + win_samp
             t_center = round((start + win_samp / 2) / sfreq, 2)
-            for ci in range(min(len(picks1), len(picks2))):
-                freqs, coh = coherence(
-                    data1[ci, start:end], data2[ci, start:end],
-                    fs=sfreq, nperseg=nperseg,
-                )
-                mask     = (freqs >= fmin) & (freqs <= fmax)
-                mean_coh = float(np.mean(coh[mask])) if mask.any() else float("nan")
+            for i, j, label in matched:
+                if j is None:
+                    mean_coh = float("nan")
+                else:
+                    freqs, coh = coherence(
+                        data1[i, start:end], data2[j, start:end],
+                        fs=sfreq, nperseg=nperseg,
+                    )
+                    mask     = (freqs >= fmin) & (freqs <= fmax)
+                    mean_coh = float(np.mean(coh[mask])) if mask.any() else float("nan")
                 rows.append(dict(
                     t_center=t_center,
-                    ch_name=pair_names[ci] if ci < len(pair_names) else str(ci),
+                    ch_name=label,
                     sub1=sub1, sub2=sub2,
                     coherence=mean_coh,
                 ))
