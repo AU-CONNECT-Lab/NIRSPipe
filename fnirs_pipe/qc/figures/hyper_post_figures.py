@@ -130,6 +130,12 @@ def compute_isc(
     matrix[i, j] = Pearson r between sub1_ch_i and sub2_ch_j.
     Diagonal = same-channel ISC.
 
+    Both axes carry sub1's S-D labels and sub2's channels are looked up by label, the way
+    WTC matches them. Position is not a safe key here: a participant with one more rejected
+    channel than the other shifts every channel after it, so column j would hold a different
+    pair than its own label claims, and the blanking below would then blank the wrong one.
+    A label sub2 does not have leaves a blank column.
+
     Args:
         ch_type: "hbo" or "hbr".
         bad_channels: {subject_id: [bad channel names]}. sub1's bad channels blank
@@ -142,15 +148,27 @@ def compute_isc(
     if raw1 is None or raw2 is None:
         return None, None
 
-    picks1 = long_channel_picks(raw1, ch_type)
-    picks2 = long_channel_picks(raw2, ch_type)
-    n = min(len(picks1), len(picks2))
-    if n == 0:
+    def _by_label(raw: mne.io.Raw) -> dict[str, int]:
+        return {raw.ch_names[p].rsplit(" ", 1)[0]: p for p in long_channel_picks(raw, ch_type)}
+
+    map1, map2 = _by_label(raw1), _by_label(raw2)
+    ch_names = list(map1)
+    if not ch_names:
         return None, None
 
-    data1 = raw1.get_data(picks=picks1[:n])
-    data2 = raw2.get_data(picks=picks2[:n])
-    ch_names = [raw1.ch_names[picks1[i]].rsplit(" ", 1)[0] for i in range(n)]
+    # alignment trims the pair to a common length, but nothing here depends on that having run
+    n_times = min(raw1.n_times, raw2.n_times)
+    data1   = raw1.get_data(picks=[map1[c] for c in ch_names])[:, :n_times]
+
+    shared  = [c for c in ch_names if c in map2]
+    missing = [c for c in ch_names if c not in map2]
+    if missing:
+        logger.warning("ISC (%s): %s has no %s, leaving those columns blank",
+                       ch_type, subject_ids[1], ", ".join(missing))
+    data2 = np.full_like(data1, np.nan)
+    if shared:
+        data2[[ch_names.index(c) for c in shared]] = \
+            raw2.get_data(picks=[map2[c] for c in shared])[:, :n_times]
 
     def _zscore(x: np.ndarray) -> np.ndarray:
         mu  = x.mean(axis=1, keepdims=True)

@@ -76,6 +76,48 @@ def test_isc_reads_the_same_channels_as_wtc():
     assert SHORT_PAIR not in ch_names
 
 
+# ---- ISC channel matching ----
+
+def _tagged(subject: str, drop: str | None = None) -> mne.io.Raw:
+    """One haemo recording whose HbO channels each carry their own frequency.
+
+    Whole numbers of cycles over the record, so two different channels correlate at 0 and
+    the same channel at 1. That is what makes a mismatched pairing visible at all: with
+    ordinary data every pair correlates a little and no assertion can tell them apart.
+    """
+    raw = _haemo(subject)
+    for k, p in enumerate(long_channel_picks(raw, "hbo")):
+        raw._data[p] = np.sin(2 * np.pi * (0.1 * (k + 1)) * raw.times)
+    if drop:
+        raw.info["bads"] = [c for c in raw.ch_names if c.startswith(drop)]
+    return raw
+
+
+def test_isc_matches_channels_by_label_not_position():
+    from fnirs_pipe.qc.figures.hyper_post_figures import compute_isc
+
+    # sub-B rejected S2_D2, so its remaining channels sit one position earlier than sub-A's
+    subject_ids = ["sub-A", "sub-B"]
+    raws = {"sub-A": _tagged("10031"), "sub-B": _tagged("10032", drop="S2_D2")}
+    isc_mat, ch_names = compute_isc(raws, subject_ids, "hbo")
+
+    assert ch_names == ["S1_D1", "S2_D2", "S3_D3", "S4_D4"]
+    diag = np.diag(isc_mat)
+    assert np.isnan(diag[1])                                   # sub-B has no S2_D2 to pair
+    assert diag[[0, 2, 3]] == pytest.approx(1.0, abs=1e-6)     # the rest still line up
+
+
+def test_the_blanked_column_is_the_one_that_was_named():
+    from fnirs_pipe.qc.figures.hyper_post_figures import compute_isc
+
+    subject_ids = ["sub-A", "sub-B"]
+    raws = {"sub-A": _tagged("10031"), "sub-B": _tagged("10032")}
+    isc_mat, ch_names = compute_isc(raws, subject_ids, "hbo",
+                                    bad_channels={"sub-B": ["S3_D3 hbo"]})
+    assert np.isnan(isc_mat[:, ch_names.index("S3_D3")]).all()
+    assert not np.isnan(isc_mat[:, ch_names.index("S2_D2")]).any()
+
+
 def test_a_sampling_rate_mismatch_is_refused():
     # alignment equalises duration, not rate, and every metric here takes the rate off one
     # participant, so a mismatch would mislabel the other's frequency axis
