@@ -75,8 +75,8 @@ from fnirs_pipe.qc.figures import (
     design_matrix_static_figure,
     design_matrix_heatmap,
     build_epoch_preview_figure,
-    build_erpimage_figure,
-    build_roi_erpimage_figure,
+    build_trial_image_figure,
+    build_roi_trial_image_figure,
     build_sci_psp_figure,
     build_channel_figure,
     build_motion_detail_figure,
@@ -432,7 +432,7 @@ def _section_evoked_topomap(
     return {"evoked_topomap_path": path}
 
 
-def _section_erpimage(
+def _section_trial_image(
     raw_haemo: mne.io.Raw,
     subject: str,
     errors: list,
@@ -444,14 +444,14 @@ def _section_erpimage(
     # raw_haemo here is the denoised (bandpassed, pre-regression) signal, not preproc.
     # only for task data with (non-BAD) events; skip early otherwise
     if not any(not str(a["description"]).upper().startswith("BAD") for a in raw_haemo.annotations):
-        return {"erpimage_pairs": [], "erpimage_roi_pairs": []}
+        return {"trial_image_pairs": [], "trial_image_roi_pairs": []}
 
     roi_saved = []
     for roi_name, chans in (roi_map or {}).items():
-        with _guard(f"erpimage ROI {roi_name}", errors, subject):
-            figs = build_roi_erpimage_figure(raw_haemo, str(roi_name), chans, epoch_tmin, epoch_tmax)
+        with _guard(f"trial image ROI {roi_name}", errors, subject):
+            figs = build_roi_trial_image_figure(raw_haemo, str(roi_name), chans, epoch_tmin, epoch_tmax)
             if figs:
-                fname = f"erpimage_roi_{_pair_fname(str(roi_name))}.html"
+                fname = f"trialimage_roi_{_pair_fname(str(roi_name))}.html"
                 h = _save_multi_fig_html(figs, figures_dir / fname)
                 roi_saved.append({"pair": str(roi_name), "path": f"figures/{fname}", "h": h})
 
@@ -459,13 +459,13 @@ def _section_erpimage(
     # HbO only: single-trial HbR is too low-amplitude to read as an image, and the HbO/HbR
     # relation is already reported by hbo_hbr_corr and the per-channel detail figure
     for ch in [c for c in raw_haemo.ch_names if c.endswith(" hbo")]:
-        with _guard(f"erpimage {ch}", errors, subject):
-            figs = build_erpimage_figure(raw_haemo, ch, epoch_tmin, epoch_tmax)
+        with _guard(f"trial image {ch}", errors, subject):
+            figs = build_trial_image_figure(raw_haemo, ch, epoch_tmin, epoch_tmax)
             if figs:
-                fname = f"erpimage_{_pair_fname(ch)}.html"
+                fname = f"trialimage_{_pair_fname(ch)}.html"
                 h = _save_multi_fig_html(figs, figures_dir / fname)
                 saved.append({"pair": ch, "path": f"figures/{fname}", "h": h})
-    return {"erpimage_pairs": saved, "erpimage_roi_pairs": roi_saved}
+    return {"trial_image_pairs": saved, "trial_image_roi_pairs": roi_saved}
 
 
 def _save_channel_csv(channel_rows: list, label: str, out_dir: Path) -> None:
@@ -830,10 +830,10 @@ def build_subject_report(
                             sci_scores, bad_channels, coords_head, good_mask, raw_intensity,
                             subject, errors, figures_dir, ch_names_brain=ch_names_brain)
     epoch_vars        = _section_epoch_preview(raw_haemo, subject, errors, figures_dir)
-    # erpimage on the denoised (bandpassed, pre-regression) haemo so drift/noise is gone and the
+    # trial image on the denoised (bandpassed, pre-regression) haemo so drift/noise is gone and the
     # task response is intact; fall back to preproc only if no post-processing ran.
-    erpimage_vars     = _section_erpimage(after_haemo if after_haemo is not None else raw_haemo,
-                                          subject, errors, figures_dir, roi_map=roi_map)
+    trial_image_vars  = _section_trial_image(after_haemo if after_haemo is not None else raw_haemo,
+                                             subject, errors, figures_dir, roi_map=roi_map)
     topomap_vars      = _section_evoked_topomap(after_haemo if after_haemo is not None else raw_haemo,
                                                 subject, errors, figures_dir)
     glm_vars          = _section_glm(design_matrix, glm_est, raw_haemo, subject, errors, figures_dir, segments=segments)
@@ -885,7 +885,7 @@ def build_subject_report(
         **sci_vars,
         **motion_vars,
         **motion_det_vars,
-        **erpimage_vars,
+        **trial_image_vars,
         **topomap_vars,
         **haemo_vars,
         **channel_det_vars,

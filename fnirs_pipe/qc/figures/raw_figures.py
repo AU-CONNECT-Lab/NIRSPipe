@@ -603,7 +603,7 @@ def build_sci_psp_figure(
 
 
 
-def _erpimage_data(
+def _trial_image_data(
     raw_haemo: mne.io.Raw, picks: "list[int]", epoch_tmin: float, epoch_tmax: float,
 ) -> "list[tuple[str, np.ndarray, np.ndarray]] | None":
     """Epoch on (non-BAD) events, average over picks -> [(label, (n_trials, n_times) µM, times)].
@@ -647,12 +647,12 @@ def _erpimage_data(
 
 def _smooth_trials(data: np.ndarray, trial_smooth: int) -> np.ndarray:
     if trial_smooth > 1 and data.shape[0] > 2 * trial_smooth:
-        from scipy.ndimage import uniform_filter1d  # moving average across trials, EEGLAB-style
+        from scipy.ndimage import uniform_filter1d  # moving average across adjacent trials
         return uniform_filter1d(data, size=trial_smooth, axis=0, mode="nearest")
     return data
 
 
-def _erpimage_plot(data: np.ndarray, times: np.ndarray, title: str, zmax: float) -> "go.Figure":
+def _trial_image_plot(data: np.ndarray, times: np.ndarray, title: str, zmax: float) -> "go.Figure":
     """Trial x time heatmap + trial average. ``data`` is already trial-smoothed."""
     fig = make_subplots(
         rows=2, cols=1, shared_xaxes=True, row_heights=[0.75, 0.25], vertical_spacing=0.06,
@@ -682,7 +682,7 @@ def _auto_trial_smooth(n_trials: int) -> int:
     return max(1, n_trials // 15)
 
 
-def _erpimage_figures(
+def _trial_image_figures(
     res: "list[tuple[str, np.ndarray, np.ndarray]]",
     title_for: "callable",
     trial_smooth: "int | None",
@@ -701,35 +701,35 @@ def _erpimage_figures(
         default=0.0,
     ) or 1.0
     return [
-        _erpimage_plot(data, times, title_for(label, data.shape[0]), zmax)
+        _trial_image_plot(data, times, title_for(label, data.shape[0]), zmax)
         for label, data, times in panels
     ]
 
 
-def build_erpimage_figure(
+def build_trial_image_figure(
     raw_haemo: mne.io.Raw,
     ch_name: str,
     epoch_tmin: float = -5.0,
     epoch_tmax: float = 25.0,
     trial_smooth: "int | None" = None,
 ) -> "list[go.Figure] | None":
-    """erpimage: one HbO channel's epochs stacked as a trial x time heatmap + trial average.
+    """Trial image: one HbO channel's epochs stacked as a trial x time heatmap + trial average.
 
     Rows = stimulus repetitions, x = time from onset, colour = baseline-corrected HbO,
-    optionally smoothed across adjacent trials (EEGLAB-style) to reveal the slow response.
+    optionally smoothed across adjacent trials to reveal the slow response.
     The un-averaged companion to the block average. One figure per condition, pooled panel
     first. None if no (non-BAD) events / channel absent.
     """
     if ch_name not in raw_haemo.ch_names:
         return None
-    res = _erpimage_data(raw_haemo, [raw_haemo.ch_names.index(ch_name)], epoch_tmin, epoch_tmax)
+    res = _trial_image_data(raw_haemo, [raw_haemo.ch_names.index(ch_name)], epoch_tmin, epoch_tmax)
     if res is None:
         return None
-    return _erpimage_figures(
-        res, lambda label, n: f"erpimage — {ch_name} / {label} ({n} trials)", trial_smooth)
+    return _trial_image_figures(
+        res, lambda label, n: f"Trial image — {ch_name} / {label} ({n} trials)", trial_smooth)
 
 
-def build_roi_erpimage_figure(
+def build_roi_trial_image_figure(
     raw_haemo: mne.io.Raw,
     roi_name: str,
     channels: "list[str]",
@@ -737,7 +737,7 @@ def build_roi_erpimage_figure(
     epoch_tmax: float = 25.0,
     trial_smooth: "int | None" = None,
 ) -> "list[go.Figure] | None":
-    """ROI erpimage: average the ROI's HbO channels first (higher SNR), then stack trials.
+    """ROI trial image: average the ROI's HbO channels first (higher SNR), then stack trials.
 
     ``channels`` are channel names or S-D pair labels; matched to their HbO channels.
     One figure per condition, pooled panel first.
@@ -747,12 +747,12 @@ def build_roi_erpimage_figure(
              for c in channels if (c in hbo or f"{c} hbo" in hbo)]
     if not picks:
         return None
-    res = _erpimage_data(raw_haemo, picks, epoch_tmin, epoch_tmax)
+    res = _trial_image_data(raw_haemo, picks, epoch_tmin, epoch_tmax)
     if res is None:
         return None
-    return _erpimage_figures(
+    return _trial_image_figures(
         res,
-        lambda label, n: f"erpimage — ROI {roi_name} / {label} ({len(picks)} ch, {n} trials)",
+        lambda label, n: f"Trial image — ROI {roi_name} / {label} ({len(picks)} ch, {n} trials)",
         trial_smooth,
     )
 

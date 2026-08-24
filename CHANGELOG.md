@@ -7,31 +7,34 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
-- `fnirs-qc hyper-post --desc` picks which per-subject stage the inter-brain metrics read. It defaults to `preproc` as before; `errts` reads the confound-regression residual, so short-channel regression can precede a coherence analysis. Optical-density stages are refused
-- `fnirs-qc hyper-post` writes `group-<id>_task-<task>_hyper-wtc.tsv` (and `hyper-wtc-roi.tsv` with `--roi-mapping`): one coherence value per pair and channel, averaged over `--wtc-band-fmin`/`--wtc-band-fmax` inside the cone of influence, with the share of cells that survived it. The figures and a group analysis now read the same numbers
-- Rest mode writes `desc-<chromo>_fcseed.tsv` and `_fcseedz.tsv` when `--roi-mapping` is given: each ROI's mean signal against every channel, the seed-to-whole-brain view. Cells for a seed's own channels are blank, since they sit inside the average and say nothing about connectivity
+- Topographic maps of the condition-averaged response in the subject report, at time points after onset, one row per condition and chromophore. The first spatial view of activity that does not wait for the GLM
+- `fnirs-qc hyper-post --desc` picks which per-subject stage the inter-brain metrics read (default `preproc`; `errts` reads the confound-regression residual, so short-channel regression can precede a coherence analysis). Optical-density stages are refused
+- `fnirs-qc hyper-post` writes `group-<id>_task-<task>_hyper-wtc.tsv` (and `hyper-wtc-roi.tsv` with `--roi-mapping`): one coherence value per pair and channel, averaged over the requested band inside the cone of influence. The figures and a group analysis now read the same numbers
+- Rest mode writes `desc-<chromo>_fcseed.tsv` and `_fcseedz.tsv` when `--roi-mapping` is given: each ROI's mean signal against every channel. Cells for a seed's own channels are blank
 
 ### Fixed
-- ISC, band coherence and windowed coherence pair channels by S-D label instead of by position. When the two members of a dyad had different channels rejected, every channel after the first rejection was compared against a different pair than its label claimed, and ISC's blanking of rejected channels then blanked the wrong row or column. A label only one of them has now keeps its place, blank. **These values change for any dyad whose members do not share the same rejected channels**
-- The `raw_long` and `raw_short` quality sections no longer drop rejected channels, which made their mean SCI and channel retention rate read better than the run was. The QC report's long-channel view likewise stops hiding them
+- ISC, band coherence and windowed coherence pair channels by S-D label instead of by position, so a dyad whose members had different channels rejected is no longer compared off-by-one. **These values change for any such dyad**
+- The `raw_long` and `raw_short` quality sections keep rejected channels, which used to make their mean SCI and channel retention read better than the run was
 - Provenance is no longer empty when the pipeline is handed a recording it did not read from disk
 - A run where no channel passes the SCI threshold now stops there and says so, instead of failing later inside Beer-Lambert
 - `--motion-correction wavelet` sets its outlier threshold per wavelet scale over the whole recording, not per time window
-- Rest mode no longer writes ALFF/fALFF when the drift model leaves linear drift in the data (`--drift-model none`, or `polynomial` with `--drift-order 0`). Their input is the only one without a bandpass, so the drift model is its only detrend, and the drift's leakage falls inside the ALFF band
-- The windowed SCI and PSP heatmaps plotted each window at roughly half its true time, so the QC report's time axis covered only the first half of the recording
-- GVTD per-window series now share the time axis of the windowed SCI and PSP. They were binned on their own grid, which drifts apart from it whenever the window length is not a whole number of samples: 6.6 s by the end of a 600 s run at 7.8 Hz, and one window more or fewer in total
+- Rest mode no longer writes ALFF/fALFF when the drift model leaves linear drift in the data (`--drift-model none`, or `polynomial` with `--drift-order 0`); that drift's leakage falls inside the ALFF band
+- The windowed SCI and PSP heatmaps plotted each window at roughly half its true time, so the report's time axis covered only the first half of the recording
+- GVTD per-window series share the time axis of the windowed SCI and PSP instead of drifting apart from it over a run
 - A cardiac band the filter cannot use no longer takes the GVTD per-window series down with the SCI and PSP ones
-- A metrics database written by an older version gains any column it is missing instead of failing every insert on the new name
-- Fisher z no longer zeroes cells along the leading diagonal of a non-square matrix, where they are ordinary values rather than self-correlations
-- The seed-map sidecar lists the channels each seed was built from, not the ones the ROI mapping asked for. The two differ whenever a listed channel was rejected, and only the first explains why a cell inside a listed ROI holds a value instead of being blank
+- A metrics database written by an older version gains any column it is missing instead of failing every insert
+- Fisher z no longer zeroes the leading diagonal of a non-square matrix, where the cells are ordinary values rather than self-correlations
+- The seed-map sidecar lists the channels each seed was built from, not the ones the ROI mapping asked for
 
 ### Changed
-- The hyperscanning WTC, coherence and ISC read long channels only. Short channels sample scalp haemodynamics, which two people in one room share whatever their brains are doing, so including them measured that shared physiology as inter-brain coupling. **Any montage with short channels loses those rows from its hyper figures**
+- The subject report's trial images are split by condition, with the pooled image kept first. Stacking every condition's trials together hides a response only one condition drives. They were called erpimages; the figure files are now `trialimage_*.html`
+- The per-channel layout figure shows the condition-averaged response, not the continuous signal. Runs without events keep the continuous view
+- The hyperscanning WTC, coherence and ISC read long channels only. Short channels carry scalp physiology that two people in one room share whatever their brains are doing. **Any montage with short channels loses those rows from its hyper figures**
 - Inter-brain metrics stop when the members of a group were sampled at different rates, instead of applying the first member's rate to everyone
-- Functional connectivity is plain Pearson. It was a shrinkage estimate inherited from a library default, which pulls correlations toward zero by an amount that grows as channels rise against samples, so subjects with shorter runs or more rejected channels shrank harder than others and the Fisher z values carried that into group statistics. **Every FC and FCZ value changes; weak connections change most**
-- Quality records store `qc_window_s`, the window length their per-window SCI/PSP/GVTD series were binned on. A group report whose subjects were run at different `--window-length` values now says so, instead of stacking incompatible rows in one heatmap
-- `Mean PSP` is labelled with its 10 s window in the report. The window changes what the score measures rather than only its scale, so it is pinned there and does not follow `--window-length`, which still sets the windowed PSP heatmap
-- zALFF standardizes by the sample standard deviation, matching the convention it is compared against. Values shrink by sqrt((n-1)/n), where n counts the channels of one chromophore: 5.1% at 10 per chromophore, 2.6% at 20, 1.3% at 40
+- Functional connectivity is plain Pearson, not the shrinkage estimate inherited from a library default, which shrank hardest for subjects with shorter runs or more rejected channels. **Every FC and FCZ value changes; weak connections change most**
+- Quality records store `qc_window_s`, so a group report whose subjects were run at different `--window-length` values says so instead of stacking incompatible rows in one heatmap
+- `Mean PSP` is labelled with its 10 s window in the report. The window is pinned there and does not follow `--window-length`, which still sets the windowed PSP heatmap
+- zALFF standardizes by the sample standard deviation. Values shrink by sqrt((n-1)/n), where n counts the channels of one chromophore: 5.1% at 10 per chromophore, 2.6% at 20
 - `--motion-correction wavelet` reaches artifacts up to about 25 s long; it used to stop at about 1.6 s
 
 ## [0.20.0] - 2026-08-11

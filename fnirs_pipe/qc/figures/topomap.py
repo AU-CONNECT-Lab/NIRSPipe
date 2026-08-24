@@ -112,11 +112,20 @@ def evoked_topomap_static(
         gridspec_kw={"width_ratios": [1] * n_cols + [_CBAR_WIDTH_RATIO]},
         squeeze=False,
     )
+    # one colourbar per chromophore, on its last row: every row of a chromophore shares
+    # the same scale, so repeating it once per condition says nothing
+    cbar_rows = {max(i for i, (_, c) in enumerate(rows) if c == chromo)
+                 for chromo in {c for _, c in rows}}
+
     try:
         for ri, (cond, chromo) in enumerate(rows):
             row = list(axes[ri])
+            want_cbar = ri in cbar_rows
+            if not want_cbar:
+                row[n_cols].axis("off")
             evokeds[cond].plot_topomap(
-                times=t, ch_type=chromo, axes=row, colorbar=True,
+                times=t, ch_type=chromo,
+                axes=row if want_cbar else row[:n_cols], colorbar=want_cbar,
                 extrapolate="local",  # optodes cover part of the head; do not paint the rest
                 vlim=vlim[chromo], cmap="RdBu_r", contours=6, sensors=True,
                 time_unit="s", show=False,
