@@ -29,7 +29,7 @@ SHORT_PAIR = "S5_D5"      # the one pair _channel_layout places below 1 cm
 def _haemo(subject: str, task: str = "hold", bad_pair: int | None = None) -> mne.io.Raw:
     raw = synth_raw(subject, task, duration=40.0, motion_onset=None, bad_pair=bad_pair)
     od = mne.preprocessing.nirs.optical_density(raw, verbose="error")
-    return mne.preprocessing.nirs.beer_lambert_law(od, ppf=6.0, verbose="error")
+    return mne.preprocessing.nirs.beer_lambert_law(od, ppf=6.0)
 
 
 def _labels(raw: mne.io.Raw, ch_type: str = "hbo") -> set[str]:
@@ -55,7 +55,7 @@ def test_a_montage_with_no_short_channel_loses_nothing():
     raw = synth_raw("10031", "hold", duration=40.0, motion_onset=None,
                     bad_pair=None, short_channels=False)
     od = mne.preprocessing.nirs.optical_density(raw, verbose="error")
-    haemo = mne.preprocessing.nirs.beer_lambert_law(od, ppf=6.0, verbose="error")
+    haemo = mne.preprocessing.nirs.beer_lambert_law(od, ppf=6.0)
     assert len(long_channel_picks(haemo, "hbo")) == len(mne.pick_types(haemo.info, fnirs="hbo"))
 
 
