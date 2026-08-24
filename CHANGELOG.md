@@ -20,6 +20,7 @@ All notable changes to this project will be documented in this file.
 - A cardiac band the filter cannot use no longer takes the GVTD per-window series down with the SCI and PSP ones
 - A metrics database written by an older version gains any column it is missing instead of failing every insert on the new name
 - Fisher z no longer zeroes cells along the leading diagonal of a non-square matrix, where they are ordinary values rather than self-correlations
+- The seed-map sidecar lists the channels each seed was built from, not the ones the ROI mapping asked for. The two differ whenever a listed channel was rejected, and only the first explains why a cell inside a listed ROI holds a value instead of being blank
 
 ### Changed
 - Functional connectivity is plain Pearson. It was a shrinkage estimate inherited from a library default, which pulls correlations toward zero by an amount that grows as channels rise against samples, so subjects with shorter runs or more rejected channels shrank harder than others and the Fisher z values carried that into group statistics. **Every FC and FCZ value changes; weak connections change most**

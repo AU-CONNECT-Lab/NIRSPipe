@@ -228,6 +228,9 @@ def compute_fc_seed(raw: mne.io.Raw, roi_map: dict[str, list[str]], chromophore:
     and says nothing about connectivity. Recognising them by value instead would also erase
     a channel that genuinely tracks the seed, turning the strongest real connection in the
     map into an apparent absence.
+
+    Membership means the channels actually averaged, so a rejected one listed in ``roi_map``
+    keeps its value. Columns span every channel, rejected included, as in :func:`compute_fc`.
     """
     members = _roi_members(raw, roi_map, chromophore)
     cols = [c for c in raw.ch_names if c.endswith(f" {chromophore}")]

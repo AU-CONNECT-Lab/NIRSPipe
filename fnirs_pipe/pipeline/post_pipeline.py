@@ -222,7 +222,7 @@ def _write_rest_derivatives(
     from fnirs_pipe import __version__
     from fnirs_pipe.io.derivatives import build_output_path, carry_entities, write_sidecar_json
     from fnirs_pipe.pipeline.restingstate import (
-        compute_alff, compute_fc, compute_fc_roi, compute_fc_seed, fisher_z,
+        _roi_members, compute_alff, compute_fc, compute_fc_roi, compute_fc_seed, fisher_z,
     )
 
     entities = carry_entities(source_entities)
@@ -308,8 +308,11 @@ def _write_rest_derivatives(
                     entities=chromo_entities, suffix="fcseed", extension=".tsv",
                 )
                 fc_seed_df.to_csv(fcseed_path, sep="\t", index_label="roi")
+                # the channels each seed was actually built from, which is the requested map
+                # minus whatever was rejected; without it a reader cannot tell why a cell
+                # inside a listed ROI holds a value instead of being blank
                 _sidecar(fcseed_path, "fc_seed", src_bp, chromophore=chromo,
-                         seed_channels={roi: list(chans) for roi, chans in config.roi_map.items()})
+                         seed_channels=_roi_members(raw_resid, config.roi_map, chromo))
                 logger.info("sub-%s | fc_seed (%s) → %s", config.subject, chromo, fcseed_path)
 
                 fcseedz_path = build_output_path(
