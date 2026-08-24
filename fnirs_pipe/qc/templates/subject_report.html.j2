@@ -440,11 +440,24 @@
       <div class="placeholder">No stimulus events found — epoch preview not available.</div>
     {% endif %}
 
+    {% if evoked_topomap_path %}
+    <h3>Topographic maps</h3>
+    <p style="font-size:0.82rem;color:#666;margin:0 0 0.3rem;">
+      The condition-averaged response interpolated across the montage, at time points after
+      onset. One row per condition and chromophore; the colour scale is shared across the
+      conditions of a chromophore. Interpolation stays inside the optode coverage, so bare
+      scalp is left blank rather than painted.
+    </p>
+    <img src="{{ evoked_topomap_path }}" alt="Evoked topomaps" style="max-width:100%;" />
+    <p class="fig-path">{{ evoked_topomap_path }}</p>
+    {% endif %}
+
     {% if erpimage_roi_pairs %}
     <h3>erpimage — ROI (channel-averaged)</h3>
     <p style="font-size:0.82rem;color:#666;margin:0 0 0.3rem;">
       Per ROI, HbO channels averaged first (higher SNR), then each trial stacked as a row.
-      Denoised signal; smoothed across adjacent trials. Select an ROI.
+      Denoised signal; smoothed across adjacent trials. One panel per condition, pooled
+      panel first. Select an ROI.
     </p>
     <select class="ch-select"
             onchange="document.getElementById('erpimg-roi-frame').src=this.value">
@@ -461,7 +474,8 @@
     <h3>erpimage — single-channel trials</h3>
     <p style="font-size:0.82rem;color:#666;margin:0 0 0.3rem;">
       Each stimulus repetition is a row (trial × time from onset), coloured by HbO — the
-      un-averaged view of the response (denoised, trial-smoothed). Select a channel.
+      un-averaged view of the response (denoised, trial-smoothed). One panel per condition,
+      pooled panel first. Select a channel.
     </p>
     <select class="ch-select"
             onchange="document.getElementById('erpimg-frame').src=this.value">
@@ -517,6 +531,16 @@
       <p class="step-desc">HbO and HbR channels together, nodes colour-coded by source. Only connections above threshold are drawn.</p>
       <img class="responsive" src="{{ rest_fc_circle_path }}" alt="FC connectogram" />
       <p class="fig-path">{{ rest_fc_circle_path }}</p>
+    {% endif %}
+    {% if rest_fc_seed_path %}
+      <h3>Seed topography</h3>
+      <p class="step-desc">
+        One flat map per seed ROI, each channel coloured by its correlation with that seed's mean
+        signal, on the same scale as the matrix above. Grey channels are inside the seed: their
+        value is undefined, not zero. Faded channels were rejected. Short channels are not drawn.
+      </p>
+      <img class="responsive" src="{{ rest_fc_seed_path }}" alt="Seed-to-whole-brain topography" />
+      <p class="fig-path">{{ rest_fc_seed_path }}</p>
     {% endif %}
   </div>
 </details>

@@ -605,8 +605,13 @@ def build_sci_psp_figure(
 
 def _erpimage_data(
     raw_haemo: mne.io.Raw, picks: "list[int]", epoch_tmin: float, epoch_tmax: float,
-) -> "tuple[np.ndarray, np.ndarray] | None":
-    """Epoch on (non-BAD) events, average over picks → (n_trials, n_times) in µM, plus times."""
+) -> "list[tuple[str, np.ndarray, np.ndarray]] | None":
+    """Epoch on (non-BAD) events, average over picks -> [(label, (n_trials, n_times) µM, times)].
+
+    One entry per condition, e.g. two conditions with 20 trials each give
+    [("all conditions", (40, n_times)), ("rest", (20, ...)), ("task", (20, ...))].
+    The pooled entry leads so a condition with few trials can be read against it.
+    """
     if not any(not str(a["description"]).upper().startswith("BAD") for a in raw_haemo.annotations):
         return None
     if not picks:
@@ -623,17 +628,32 @@ def _erpimage_data(
         data = epochs.get_data()  # (n_trials, n_picks, n_times)
         if data.shape[0] == 0:
             return None
-        return data.mean(axis=1) * 1e6, epochs.times  # average over channels → (n_trials, n_times)
+        out: "list[tuple[str, np.ndarray, np.ndarray]]" = []
+        if len(event_id) > 1:
+            # average over channels → (n_trials, n_times)
+            out.append(("all conditions", data.mean(axis=1) * 1e6, epochs.times))
+        for cond in event_id:
+            try:
+                cond_data = epochs[cond].get_data()
+            except Exception:
+                continue
+            if cond_data.shape[0] == 0:
+                continue
+            out.append((str(cond), cond_data.mean(axis=1) * 1e6, epochs.times))
+        return out or None
     except Exception:
         return None
 
 
-def _erpimage_plot(data: np.ndarray, times: np.ndarray, title: str, trial_smooth: int) -> "go.Figure":
-    """Trial x time heatmap (optionally smoothed across adjacent trials) + trial average."""
+def _smooth_trials(data: np.ndarray, trial_smooth: int) -> np.ndarray:
     if trial_smooth > 1 and data.shape[0] > 2 * trial_smooth:
         from scipy.ndimage import uniform_filter1d  # moving average across trials, EEGLAB-style
-        data = uniform_filter1d(data, size=trial_smooth, axis=0, mode="nearest")
-    zmax = float(np.nanpercentile(np.abs(data), 97)) or 1.0
+        return uniform_filter1d(data, size=trial_smooth, axis=0, mode="nearest")
+    return data
+
+
+def _erpimage_plot(data: np.ndarray, times: np.ndarray, title: str, zmax: float) -> "go.Figure":
+    """Trial x time heatmap + trial average. ``data`` is already trial-smoothed."""
     fig = make_subplots(
         rows=2, cols=1, shared_xaxes=True, row_heights=[0.75, 0.25], vertical_spacing=0.06,
         subplot_titles=[title, "trial average"],
@@ -662,27 +682,51 @@ def _auto_trial_smooth(n_trials: int) -> int:
     return max(1, n_trials // 15)
 
 
+def _erpimage_figures(
+    res: "list[tuple[str, np.ndarray, np.ndarray]]",
+    title_for: "callable",
+    trial_smooth: "int | None",
+) -> "list[go.Figure]":
+    """One figure per condition, on a colour scale shared across them so panels compare.
+
+    Smoothing runs first: the scale is taken from what is actually drawn, and an unsmoothed
+    single-trial spike would otherwise wash out every panel.
+    """
+    panels = []
+    for label, data, times in res:
+        sm = trial_smooth if trial_smooth is not None else _auto_trial_smooth(data.shape[0])
+        panels.append((label, _smooth_trials(data, sm), times))
+    zmax = max(
+        (float(np.nanpercentile(np.abs(d), 97)) for _, d, _ in panels),
+        default=0.0,
+    ) or 1.0
+    return [
+        _erpimage_plot(data, times, title_for(label, data.shape[0]), zmax)
+        for label, data, times in panels
+    ]
+
+
 def build_erpimage_figure(
     raw_haemo: mne.io.Raw,
     ch_name: str,
     epoch_tmin: float = -5.0,
     epoch_tmax: float = 25.0,
     trial_smooth: "int | None" = None,
-) -> "go.Figure | None":
+) -> "list[go.Figure] | None":
     """erpimage: one HbO channel's epochs stacked as a trial x time heatmap + trial average.
 
     Rows = stimulus repetitions, x = time from onset, colour = baseline-corrected HbO,
     optionally smoothed across adjacent trials (EEGLAB-style) to reveal the slow response.
-    The un-averaged companion to the block average. None if no (non-BAD) events / channel absent.
+    The un-averaged companion to the block average. One figure per condition, pooled panel
+    first. None if no (non-BAD) events / channel absent.
     """
     if ch_name not in raw_haemo.ch_names:
         return None
     res = _erpimage_data(raw_haemo, [raw_haemo.ch_names.index(ch_name)], epoch_tmin, epoch_tmax)
     if res is None:
         return None
-    data, times = res
-    sm = trial_smooth if trial_smooth is not None else _auto_trial_smooth(data.shape[0])
-    return _erpimage_plot(data, times, f"erpimage — {ch_name} ({data.shape[0]} trials)", sm)
+    return _erpimage_figures(
+        res, lambda label, n: f"erpimage — {ch_name} / {label} ({n} trials)", trial_smooth)
 
 
 def build_roi_erpimage_figure(
@@ -692,10 +736,11 @@ def build_roi_erpimage_figure(
     epoch_tmin: float = -5.0,
     epoch_tmax: float = 25.0,
     trial_smooth: "int | None" = None,
-) -> "go.Figure | None":
+) -> "list[go.Figure] | None":
     """ROI erpimage: average the ROI's HbO channels first (higher SNR), then stack trials.
 
     ``channels`` are channel names or S-D pair labels; matched to their HbO channels.
+    One figure per condition, pooled panel first.
     """
     hbo = {c for c in raw_haemo.ch_names if c.endswith(" hbo")}
     picks = [raw_haemo.ch_names.index(c if c in hbo else f"{c} hbo")
@@ -705,10 +750,11 @@ def build_roi_erpimage_figure(
     res = _erpimage_data(raw_haemo, picks, epoch_tmin, epoch_tmax)
     if res is None:
         return None
-    data, times = res
-    sm = trial_smooth if trial_smooth is not None else _auto_trial_smooth(data.shape[0])
-    return _erpimage_plot(
-        data, times, f"erpimage — ROI {roi_name} ({len(picks)} ch, {data.shape[0]} trials)", sm)
+    return _erpimage_figures(
+        res,
+        lambda label, n: f"erpimage — ROI {roi_name} / {label} ({len(picks)} ch, {n} trials)",
+        trial_smooth,
+    )
 
 
 def build_epoch_preview_figure(
@@ -857,11 +903,85 @@ def build_trigger_timeline_single(
     )
 
 
+def _topo_layers(
+    raw_haemo: mne.io.Raw,
+    markers: list[dict],
+    picks: "list[int]",
+    max_ts_pts: int,
+    epoch_tmin: float,
+    epoch_tmax: float,
+) -> "list[dict]":
+    """One drawing layer per condition, each holding that condition's evoked trace per channel.
+
+    e.g. two conditions -> [{"label": "rest", "times": [...], "by_ch": {"S1_D1 hbo": [...], ...}},
+    {"label": "task", ...}]. Falls back to a single layer of the continuous (decimated) signal
+    when the run has no usable events, which is what a resting-state run gets.
+    """
+    usable = [m for m in markers if not str(m["description"]).upper().startswith("BAD")]
+    if usable:
+        try:
+            anns = mne.Annotations(
+                onset=[m["onset"] for m in usable],
+                duration=[m["duration"] for m in usable],
+                description=[m["description"] for m in usable],
+            )
+            raw_copy = raw_haemo.copy().set_annotations(anns)
+            events, event_id = mne.events_from_annotations(raw_copy, verbose=False)
+            if len(events) > 0 and event_id:
+                epochs = mne.Epochs(
+                    raw_copy, events, event_id, tmin=epoch_tmin, tmax=epoch_tmax,
+                    picks=picks, baseline=(epoch_tmin, 0), preload=True, verbose=False,
+                )
+                cond_colors_ = condition_colors(usable)
+                single = len(event_id) == 1
+                layers = []
+                for ci, cond in enumerate(event_id):
+                    try:
+                        ev = epochs[cond].average()
+                    except Exception:
+                        continue
+                    base = cond_colors_.get(cond, CONDITION_PALETTE[ci % len(CONDITION_PALETTE)])
+                    layers.append({
+                        "label": str(cond),
+                        "n": len(epochs[cond]),
+                        "times": ev.times.tolist(),
+                        "by_ch": {name: (row * 1e6).tolist()
+                                  for name, row in zip(ev.ch_names, ev.data)},
+                        # a single condition keeps the familiar HbO/HbR colours; several are
+                        # told apart by condition instead, or the cells become unreadable
+                        "hbo_color": HBO_COLOR if single else base,
+                        "hbr_color": HBR_COLOR if single else base,
+                    })
+                if layers:
+                    return layers
+        except Exception as exc:
+            logger.warning("evoked topo epoching failed, falling back to continuous: %s", exc)
+
+    data, times = raw_haemo.get_data(picks=picks, return_times=True)
+    data, times = _decimate(data, times, max_ts_pts)
+    names = [raw_haemo.ch_names[i] for i in picks]
+    return [{
+        "label": "",
+        "n": 0,
+        "times": times.tolist(),
+        "by_ch": {name: (row * 1e6).tolist() for name, row in zip(names, data)},
+        "hbo_color": HBO_COLOR,
+        "hbr_color": HBR_COLOR,
+    }]
+
+
 def build_evoked_topo_figure(
     raw_haemo: mne.io.Raw,
     markers: list[dict],
     max_ts_pts: int = 2000,
+    epoch_tmin: float = -5.0,
+    epoch_tmax: float = 25.0,
 ) -> go.Figure | None:
+    """Per-channel evoked HbO/HbR laid out at the channel's position on the head.
+
+    One cell per S-D pair, one trace pair per condition. Without usable events the cells
+    show the continuous signal instead, so a resting-state run still gets the layout view.
+    """
     hbo_entries = sorted(
         [(i, ch) for i, ch in enumerate(raw_haemo.ch_names) if ch.endswith(" hbo")],
         key=lambda x: x[1].rsplit(" ", 1)[0],
@@ -886,23 +1006,20 @@ def build_evoked_topo_figure(
             for i in range(n)
         ])
 
-    _HBO_COLOR = HBO_COLOR
-    _HBR_COLOR = HBR_COLOR
-
     picks = [i for i, _ in hbo_entries] + [
         raw_haemo.ch_names.index(f"{p} hbr")
         for p in pairs
         if f"{p} hbr" in raw_haemo.ch_names
     ]
-    data, times = raw_haemo.get_data(picks=picks, return_times=True)
-    data, times = _decimate(data, times, max_ts_pts)
-    times_list = times.tolist()
-    ch_names_picked = [raw_haemo.ch_names[i] for i in picks]
+    layers = _topo_layers(raw_haemo, markers, picks, max_ts_pts, epoch_tmin, epoch_tmax)
+    evoked_mode = bool(layers[0]["label"])
+    x_title = "Time from onset (s)" if evoked_mode else "Time (s)"
 
     _H, _ML, _MR, _MT, _MB = 700, 10, 10, 12, 8
 
     hw, hh = 0.050, 0.025
     box_shapes = []
+    onset_shapes = []
     fig = go.Figure()
 
     for pi, pair in enumerate(pairs):
@@ -928,36 +1045,38 @@ def build_evoked_topo_figure(
             layer="below",
         ))
 
-        first = (pi == 0)
-        try:
-            hbo_row = ch_names_picked.index(f"{pair} hbo")
-            hbo_y = (data[hbo_row] * 1e6).tolist()
-            fig.add_trace(go.Scatter(
-                x=times_list, y=hbo_y,
-                name="HbO", mode="lines",
-                line=dict(color=_HBO_COLOR, width=1.0),
-                xaxis=xr, yaxis=yr,
-                customdata=[pair] * len(times_list),
-                legendgroup="hbo", showlegend=first,
-                hovertemplate=f"<b>{pair}</b> %{{x:.1f}}s %{{y:.2f}} µM<extra>HbO</extra>",
+        if evoked_mode:
+            onset_shapes.append(dict(
+                type="line", xref=xr, yref=f"{yr} domain",
+                x0=0, x1=0, y0=0, y1=1,
+                line=dict(color="#999", width=0.8, dash="dash"),
             ))
-        except (ValueError, IndexError):
-            pass
 
-        try:
-            hbr_row = ch_names_picked.index(f"{pair} hbr")
-            hbr_y = (data[hbr_row] * 1e6).tolist()
-            fig.add_trace(go.Scatter(
-                x=times_list, y=hbr_y,
-                name="HbR", mode="lines",
-                line=dict(color=_HBR_COLOR, width=1.0),
-                xaxis=xr, yaxis=yr,
-                customdata=[pair] * len(times_list),
-                legendgroup="hbr", showlegend=first,
-                hovertemplate=f"<b>{pair}</b> %{{x:.1f}}s %{{y:.2f}} µM<extra>HbR</extra>",
-            ))
-        except (ValueError, IndexError):
-            pass
+        first = (pi == 0)
+        for layer in layers:
+            label, times_list = layer["label"], layer["times"]
+            suffix = f" {label}" if label else ""
+            n_txt = f" (n={layer['n']})" if layer["n"] else ""
+            for chromo, color, dash in (
+                ("hbo", layer["hbo_color"], "solid"),
+                ("hbr", layer["hbr_color"], "dot"),
+            ):
+                y = layer["by_ch"].get(f"{pair} {chromo}")
+                if y is None:
+                    continue
+                fig.add_trace(go.Scatter(
+                    x=times_list, y=y,
+                    name=f"{chromo.upper()}{suffix}{n_txt}" if first else None,
+                    mode="lines",
+                    line=dict(color=color, width=1.0, dash=dash),
+                    xaxis=xr, yaxis=yr,
+                    customdata=[pair] * len(times_list),
+                    legendgroup=f"{chromo}{suffix}", showlegend=first,
+                    hovertemplate=(
+                        f"<b>{pair}</b> %{{x:.1f}}s %{{y:.2f}} µM"
+                        f"<extra>{chromo.upper()}{suffix}</extra>"
+                    ),
+                ))
 
         fig.add_annotation(
             x=(x0 + x1) / 2, y=y1 + 0.003,
@@ -998,9 +1117,17 @@ def build_evoked_topo_figure(
         plot_bgcolor="rgba(0,0,0,0)",
         paper_bgcolor="white",
         margin=dict(l=_ML, r=_MR, t=_MT, b=_MB),
-        shapes=box_shapes + head_shapes,
+        shapes=box_shapes + onset_shapes + head_shapes,
         legend=dict(x=0.99, y=0.99, xanchor="right",
                     font=dict(size=9), bgcolor="rgba(255,255,255,0.75)",
                     title=dict(text="HbO / HbR", font=dict(size=9))),
     )
+    span = layers[0]["times"]
+    if span:
+        fig.add_annotation(
+            x=0.01, y=0.0, xref="paper", yref="paper",
+            text=f"{x_title}: {span[0]:.0f} to {span[-1]:.0f}",
+            showarrow=False, font=dict(size=9, color="#666"),
+            xanchor="left", yanchor="bottom",
+        )
     return fig

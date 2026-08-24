@@ -166,7 +166,7 @@ def test_the_regression_gcor_actually_ran(baseline, tmp_path_factory):
                         drift_model="cosine", drift_high_pass=0.01, drift_order=1, **_BANDS)
     gcor_reg = run_post(baseline[0].raw_haemo.copy(), config,
                         output_dir=tmp_path_factory.mktemp("gcor"), mode="rest",
-                        source_entities={"task": "tapping"})[-1]
+                        source_entities={"task": "tapping"})[6]
     assert gcor_reg is not None
     assert set(gcor_reg) == {"gcor_hbo_prereg", "gcor_hbr_prereg",
                              "gcor_hbo_postreg", "gcor_hbr_postreg"}

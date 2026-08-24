@@ -20,7 +20,7 @@ from ._synth import synth_raw
 
 _BANDS = dict(cardiac_l_freq=0.7, cardiac_h_freq=1.5, resp_l_freq=0.2, resp_h_freq=0.5)
 
-_ALFF_DF, _FC_DF = 3, 4  # run_post returns (result, glm_est, dm, alff_df, fc_df, fc_hbr_df, gcor_reg)
+_ALFF_DF, _FC_DF = 3, 4  # (result, glm_est, dm, alff_df, fc_df, fc_hbr_df, gcor_reg, fc_seed)
 
 
 @pytest.fixture(scope="module")

@@ -1,7 +1,8 @@
 """Resting-state QC figures.
 
-alff_falff_figure():  per-channel ALFF and fALFF bar charts (HbO / HbR colour-coded).
-fc_matrix_figure():   functional connectivity heatmaps, HbO and HbR as separate subplots.
+alff_falff_figure():    per-channel ALFF and fALFF bar charts (HbO / HbR colour-coded).
+fc_matrix_figure():     functional connectivity heatmaps, HbO and HbR as separate subplots.
+fc_seed_topo_figure():  seed-to-whole-brain correlations drawn on the optode flat map.
 
 # TODO: project ALFF/fALFF onto brain surface via mne_nirs when montage/head coords available.
 # TODO: add ROI-to-ROI FC heatmap (atlas parcellation, e.g. via nilearn NiftiLabelsMasker analog).
@@ -14,13 +15,15 @@ import io
 
 import matplotlib
 matplotlib.use("Agg")
+import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
+import mne
 import numpy as np
 import pandas as pd
 
 from fnirs_pipe.utils.logging import get_logger
 
-from ._utils import HBO_COLOR, HBR_COLOR
+from ._utils import HBO_COLOR, HBR_COLOR, head_outline
 
 logger = get_logger("qc.figures.rest")
 
@@ -158,6 +161,124 @@ def fc_matrix_figure(
         ax.set_title(f"FC — {label}", fontsize=10, pad=6)
 
     fig.suptitle(title, fontsize=11, y=1.01)
+
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=300, bbox_inches="tight")
+    plt.close(fig)
+    buf.seek(0)
+    return base64.b64encode(buf.read()).decode()
+
+
+def _channel_endpoints(raw: mne.io.Raw) -> "dict[str, tuple[tuple[float, float], tuple[float, float]]]":
+    """{channel name: ((source x, y), (detector x, y))} for every channel with usable positions.
+
+    e.g. "S1_D1 hbo" -> ((-0.031, 0.088), (-0.012, 0.093)). Channels whose montage carries no
+    optode coordinates report all-zero or NaN locations and are left out, which is what makes
+    an empty return the signal that no flat map can be drawn at all.
+    """
+    ends: dict[str, tuple[tuple[float, float], tuple[float, float]]] = {}
+    for idx in mne.pick_types(raw.info, fnirs=True, exclude=[]):
+        loc = raw.info["chs"][idx]["loc"]
+        src, det = loc[3:6], loc[6:9]
+        if np.any(np.isnan(src)) or np.any(np.isnan(det)):
+            continue
+        if np.allclose(src, 0) and np.allclose(det, 0):
+            continue
+        ends[raw.info["ch_names"][idx]] = (
+            (float(src[0]), float(src[1])), (float(det[0]), float(det[1])),
+        )
+    return ends
+
+
+def fc_seed_topo_figure(
+    raw: mne.io.Raw,
+    seed_df: pd.DataFrame,
+    seed_hbr_df: pd.DataFrame | None = None,
+    title: str = "Seed-to-whole-brain connectivity (Pearson r)",
+) -> str | None:
+    """Return base64 PNG of one flat map per seed ROI, or None if the montage has no positions.
+
+    compute_fc_seed returns an ROI x channel frame per chromophore, so HbO arrives in seed_df
+    and HbR in seed_hbr_df. Each channel is drawn as its source-to-detector segment on the
+    optode flat map, coloured by that seed's correlation with it, on the same RdBu_r / +-1
+    scale fc_matrix_figure uses so the two figures can be read against each other.
+
+    Three states are distinguishable on purpose, because confusing them is the mistake this
+    figure exists to avoid:
+
+    - an ordinary channel, coloured by r;
+    - a channel **inside the seed**, grey and thicker. Its value is NaN rather than zero, and
+      grey says "no claim made here" where a blue line would say "no connection";
+    - a **rejected** channel, drawn at low alpha. It still carries a real correlation, but the
+      channel was excluded upstream.
+
+    Short channels are not drawn: they measure extracerebral signal, so a correlation with
+    them is not a connectivity claim. Channels are drawn weakest first, so strong connections
+    are never hidden under weak ones.
+    """
+    from fnirs_pipe.qc.quantitative_metrics import long_short_channels
+
+    panels = [(f, lab) for f, lab in ((seed_df, "HbO"), (seed_hbr_df, "HbR"))
+              if f is not None and not f.empty]
+    if not panels:
+        return None
+
+    ends = _channel_endpoints(raw)
+    if not ends:
+        logger.warning("seed topography skipped: montage carries no optode positions")
+        return None
+
+    long_names, _ = long_short_channels(raw)
+    drawable = set(ends) & (set(long_names) or set(ends))   # no split at all -> draw everything
+    bads = set(raw.info["bads"])
+
+    rois = list(dict.fromkeys([r for frame, _ in panels for r in frame.index]))
+    cmap = plt.get_cmap("RdBu_r").copy()
+    cmap.set_bad("#aaa")
+    norm = mcolors.Normalize(vmin=-1, vmax=1)
+
+    # one head for every panel, sized from all drawable channels rather than from whichever
+    # subset a given panel happens to draw
+    head_x = [c for ch in drawable for c in (ends[ch][0][0], ends[ch][1][0])]
+    head_y = [c for ch in drawable for c in (ends[ch][0][1], ends[ch][1][1])]
+
+    n_rows, n_cols = len(rois), len(panels)
+    fig, axes = plt.subplots(
+        n_rows, n_cols, figsize=(n_cols * 3.0 + 1.4, n_rows * 3.0), squeeze=False,
+    )
+
+    for i, roi in enumerate(rois):
+        for j, (frame, label) in enumerate(panels):
+            ax = axes[i][j]
+            ax.set_aspect("equal")
+            ax.axis("off")
+            ax.set_title(f"{roi} — {label}", fontsize=9, pad=4)
+            head_outline(ax, head_x, head_y)
+            if roi not in frame.index:
+                ax.text(0.5, 0.5, "no good channel", transform=ax.transAxes,
+                        ha="center", va="center", fontsize=8, color="#888")
+                continue
+
+            row = frame.loc[roi]
+            cells = [(ch, float(row[ch])) for ch in row.index if ch in drawable]
+            # weakest first so a strong connection is never hidden under a weak one; the
+            # seed's own NaN channels sort last and sit on top, which is where they belong
+            cells.sort(key=lambda c: (np.isnan(c[1]), abs(c[1]) if not np.isnan(c[1]) else 0.0))
+
+            for ch, v in cells:
+                (sx, sy), (dx, dy) = ends[ch]
+                in_seed = np.isnan(v)
+                ax.plot([sx, dx], [sy, dy],
+                        color=cmap(norm(np.ma.masked_invalid([v])))[0],
+                        lw=2.5 if in_seed else 2.0,
+                        alpha=0.35 if ch in bads else 1.0, zorder=1,
+                        solid_capstyle="round")
+
+    fig.colorbar(
+        plt.cm.ScalarMappable(norm=norm, cmap=cmap), ax=axes, shrink=0.6,
+        label="Pearson r", pad=0.02,
+    )
+    fig.suptitle(title, fontsize=11)
 
     buf = io.BytesIO()
     fig.savefig(buf, format="png", dpi=300, bbox_inches="tight")

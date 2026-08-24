@@ -189,7 +189,9 @@ def _process_run(
     evoked_topo_inline: dict = {}
     if raw_haemo is not None:
         try:
-            fig = build_evoked_topo_figure(raw_haemo, markers)
+            fig = build_evoked_topo_figure(
+                raw_haemo, markers, _MAX_TS_PTS, _EPOCH_TMIN, _EPOCH_TMAX,
+            )
             if fig:
                 fname = f"{label}_desc-evokedtopo_nirs.html"
                 h     = _save_figure_html(fig, fig_dir / fname)

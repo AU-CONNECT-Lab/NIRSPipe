@@ -82,9 +82,10 @@ def run_post(
 ) -> tuple:
     """Run post-processing pipeline.
 
-    Returns (result, glm_est, design_matrix, alff_df, fc_df, fc_hbr_df, gcor_reg).
+    Returns (result, glm_est, design_matrix, alff_df, fc_df, fc_hbr_df, gcor_reg, fc_seed).
     glm_est / design_matrix are None for non-GLM modes.
     alff_df / fc_df / fc_hbr_df are None for non-rest modes; fc_df holds the HbO matrix.
+    fc_seed is {chromophore: ROI x channel seed map}, empty without --roi-mapping.
     gcor_reg (pre/post short-channel regression GCOR) is None unless short_channel ran.
     """
 
@@ -108,6 +109,7 @@ def run_post(
     # pipeline returns, which is what lets one writer own the whole file.
 
     glm_est = dm = alff_df = fc_df = fc_hbr_df = None
+    fc_seed: dict = {}
     raw_resid = None  # set by the glm/rest branches
     if mode == "glm":
         missing = [f for f in ("hrf_model", "noise_model", "drift_model") if getattr(config, f) is None]
@@ -188,7 +190,7 @@ def run_post(
                 _write_step_snirf(raw_resid_bb, config, output_dir, desc="errtsbroad",
                                   rec=rec, source_entities=source_entities)
 
-        alff_df, fc_df, fc_hbr_df = _write_rest_derivatives(
+        alff_df, fc_df, fc_hbr_df, fc_seed = _write_rest_derivatives(
             raw_resid, raw_resid_bb, config, output_dir, rec, source_entities=source_entities)
 
     # GCOR around the short-channel regression (the fNIRS GSR analog): pre-regression vs
@@ -205,7 +207,7 @@ def run_post(
         except Exception:
             logger.warning("sub-%s | regression GCOR failed", config.subject, exc_info=True)
 
-    return result, glm_est, dm, alff_df, fc_df, fc_hbr_df, gcor_reg
+    return result, glm_est, dm, alff_df, fc_df, fc_hbr_df, gcor_reg, fc_seed
 
 def _write_rest_derivatives(
     raw_resid: mne.io.Raw,
@@ -215,9 +217,10 @@ def _write_rest_derivatives(
     rec: Recorder,
     source_entities: dict[str, str] | None = None,
 ) -> tuple:
-    """Write ALFF/fALFF and FC TSVs. Returns (alff_df | None, fc_hbo_df, fc_hbr_df).
+    """Write ALFF/fALFF and FC TSVs. Returns (alff_df | None, fc_hbo_df, fc_hbr_df, fc_seed).
 
     ALFF/fALFF use the broadband residual (raw_resid_bb); FC/FC-ROI use the bandpassed one.
+    fc_seed is {chromophore: ROI x channel frame}, empty unless a roi_map was given.
     """
     from fnirs_pipe import __version__
     from fnirs_pipe.io.derivatives import build_output_path, carry_entities, write_sidecar_json
@@ -259,6 +262,7 @@ def _write_rest_derivatives(
     # FC per chromophore: HbO and HbR anti-correlate, so they never share a matrix. Both are
     # written and both reach the report.
     fc_hbo_df = fc_hbr_df = None
+    fc_seed: dict[str, pd.DataFrame] = {}
     for chromo in ("hbo", "hbr"):
         fc_df = compute_fc(raw_resid, chromo)
         if fc_df.empty:
@@ -323,12 +327,14 @@ def _write_rest_derivatives(
                 _sidecar(fcseedz_path, "fisher_z", src_bp, chromophore=chromo)
                 logger.info("sub-%s | fc_seedz (%s) → %s", config.subject, chromo, fcseedz_path)
 
+                fc_seed[chromo] = fc_seed_df
+
         if chromo == "hbo":
             fc_hbo_df = fc_df
         else:
             fc_hbr_df = fc_df
 
-    return alff_df, fc_hbo_df, fc_hbr_df
+    return alff_df, fc_hbo_df, fc_hbr_df, fc_seed
 
 
 def _write_step_snirf(haemo: mne.io.Raw, config: PostConfig, output_dir: Path, desc: str, rec: Recorder, source_entities: dict[str, str] | None = None) -> Path:

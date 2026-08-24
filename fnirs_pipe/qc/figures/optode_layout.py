@@ -6,6 +6,8 @@ import mne
 import numpy as np
 import plotly.graph_objects as go
 
+from ._utils import head_outline
+
 
 def optode_layout_static(
     raw: mne.io.Raw,
@@ -15,7 +17,6 @@ def optode_layout_static(
     """Matplotlib static optode flat map. Returns base64 PNG or None."""
     import base64
     import io
-    import matplotlib.patches as mpatches
     import matplotlib.pyplot as plt
 
     picks = mne.pick_types(raw.info, fnirs=True)
@@ -76,18 +77,7 @@ def optode_layout_static(
 
     all_xs = [v[0] for v in list(sources.values()) + list(detectors.values())]
     all_ys = [v[1] for v in list(sources.values()) + list(detectors.values())]
-    cx = (max(all_xs) + min(all_xs)) / 2
-    cy = (max(all_ys) + min(all_ys)) / 2
-    r = max(max(abs(x - cx) for x in all_xs), max(abs(y - cy) for y in all_ys)) * 1.18
-
-    ax.add_patch(mpatches.Circle((cx, cy), r, fill=False, edgecolor="#aaa", lw=1.5, zorder=0))
-    nw, nh = r * 0.06, r * 0.10
-    ax.fill([cx - nw, cx, cx + nw, cx - nw],
-            [cy + r - nh * 0.3, cy + r + nh, cy + r - nh * 0.3, cy + r - nh * 0.3],
-            color="#ddd", edgecolor="#aaa", lw=1, zorder=0)
-    for ex in (cx - r, cx + r):
-        ax.add_patch(mpatches.Ellipse((ex, cy), r * 0.14, r * 0.24,
-                                       fc="#ddd", ec="#aaa", lw=1, zorder=0))
+    head_outline(ax, all_xs, all_ys)
 
     if sources:
         sx_v, sy_v = zip(*sources.values())
@@ -102,10 +92,6 @@ def optode_layout_static(
 
     ax.legend(fontsize=8, loc="upper right", framealpha=0.7)
     ax.set_title("Optode flat map — SCI (green≥0.75 / yellow≥0.5 / red<0.5)", fontsize=8)
-    # bounds relative to head circle so ears/nose are never clipped
-    pad = r * 0.25
-    ax.set_xlim(cx - r - r * 0.14 - pad, cx + r + r * 0.14 + pad)
-    ax.set_ylim(cy - r - pad, cy + r + r * 0.12 + pad)
 
     buf = io.BytesIO()
     fig.savefig(buf, format="png", dpi=300, bbox_inches="tight")

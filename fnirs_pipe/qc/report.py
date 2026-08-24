@@ -71,6 +71,7 @@ from fnirs_pipe.qc.figures import (
     psd_figure,
     quality_brain_views,
     optode_layout_static,
+    evoked_topomap_static,
     design_matrix_static_figure,
     design_matrix_heatmap,
     build_epoch_preview_figure,
@@ -82,6 +83,7 @@ from fnirs_pipe.qc.figures import (
     channel_quality_heatmap,
     alff_falff_figure,
     fc_matrix_figure,
+    fc_seed_topo_figure,
     fc_connectogram,
 )
 from fnirs_pipe.qc.sqm_record import record_path as _sqm_record_path
@@ -413,6 +415,23 @@ def _section_epoch_preview(
     return {"epoch_preview_path": epoch_preview_path, "epoch_preview_h": epoch_preview_h}
 
 
+def _section_evoked_topomap(
+    raw_haemo: mne.io.Raw,
+    subject: str,
+    errors: list,
+    figures_dir: Path,
+    epoch_tmin: float = -5.0,
+    epoch_tmax: float = 25.0,
+) -> dict:
+    path = None
+    with _guard("Evoked topomap", errors, subject):
+        b64 = evoked_topomap_static(raw_haemo, epoch_tmin=epoch_tmin, epoch_tmax=epoch_tmax)
+        if b64:
+            _save_b64_png(b64, figures_dir / "evoked_topomap.png")
+            path = "figures/evoked_topomap.png"
+    return {"evoked_topomap_path": path}
+
+
 def _section_erpimage(
     raw_haemo: mne.io.Raw,
     subject: str,
@@ -430,10 +449,10 @@ def _section_erpimage(
     roi_saved = []
     for roi_name, chans in (roi_map or {}).items():
         with _guard(f"erpimage ROI {roi_name}", errors, subject):
-            fig = build_roi_erpimage_figure(raw_haemo, str(roi_name), chans, epoch_tmin, epoch_tmax)
-            if fig is not None:
+            figs = build_roi_erpimage_figure(raw_haemo, str(roi_name), chans, epoch_tmin, epoch_tmax)
+            if figs:
                 fname = f"erpimage_roi_{_pair_fname(str(roi_name))}.html"
-                h = _save_multi_fig_html([fig], figures_dir / fname)
+                h = _save_multi_fig_html(figs, figures_dir / fname)
                 roi_saved.append({"pair": str(roi_name), "path": f"figures/{fname}", "h": h})
 
     saved = []
@@ -441,10 +460,10 @@ def _section_erpimage(
     # relation is already reported by hbo_hbr_corr and the per-channel detail figure
     for ch in [c for c in raw_haemo.ch_names if c.endswith(" hbo")]:
         with _guard(f"erpimage {ch}", errors, subject):
-            fig = build_erpimage_figure(raw_haemo, ch, epoch_tmin, epoch_tmax)
-            if fig is not None:
+            figs = build_erpimage_figure(raw_haemo, ch, epoch_tmin, epoch_tmax)
+            if figs:
                 fname = f"erpimage_{_pair_fname(ch)}.html"
-                h = _save_multi_fig_html([fig], figures_dir / fname)
+                h = _save_multi_fig_html(figs, figures_dir / fname)
                 saved.append({"pair": ch, "path": f"figures/{fname}", "h": h})
     return {"erpimage_pairs": saved, "erpimage_roi_pairs": roi_saved}
 
@@ -645,8 +664,10 @@ def _section_rest(
     errors: list,
     figures_dir: Path,
     fc_hbr_df: "Any | None" = None,
+    fc_seed: dict | None = None,
+    raw_haemo: "mne.io.Raw | None" = None,
 ) -> dict:
-    alff_path = fc_path = fc_circle_path = None
+    alff_path = fc_path = fc_circle_path = fc_seed_path = None
     with _guard("ALFF/fALFF figure", errors, subject):
         if alff_df is not None:
             b64 = alff_falff_figure(alff_df)
@@ -662,7 +683,14 @@ def _section_rest(
             b64 = fc_connectogram(fc_df, fc_hbr_df)
             _save_b64_png(b64, figures_dir / "rest_fc_circle.png")
             fc_circle_path = "figures/rest_fc_circle.png"
-    return {"rest_alff_path": alff_path, "rest_fc_path": fc_path, "rest_fc_circle_path": fc_circle_path}
+    with _guard("FC seed topography", errors, subject):
+        if fc_seed and raw_haemo is not None:
+            b64 = fc_seed_topo_figure(raw_haemo, fc_seed.get("hbo"), fc_seed.get("hbr"))
+            if b64 is not None:   # None means the montage carries no optode positions
+                _save_b64_png(b64, figures_dir / "rest_fc_seed.png")
+                fc_seed_path = "figures/rest_fc_seed.png"
+    return {"rest_alff_path": alff_path, "rest_fc_path": fc_path,
+            "rest_fc_circle_path": fc_circle_path, "rest_fc_seed_path": fc_seed_path}
 
 
 def _glm_betas_table(df: "Any", conditions: list[str]) -> str:
@@ -747,6 +775,7 @@ def build_subject_report(
     alff_df: "Any | None" = None,
     fc_df: "Any | None" = None,
     fc_hbr_df: "Any | None" = None,
+    fc_seed: dict | None = None,
     after_haemo: mne.io.Raw | None = None,
     gcor_reg: dict | None = None,
     roi_map: dict | None = None,
@@ -805,8 +834,11 @@ def build_subject_report(
     # task response is intact; fall back to preproc only if no post-processing ran.
     erpimage_vars     = _section_erpimage(after_haemo if after_haemo is not None else raw_haemo,
                                           subject, errors, figures_dir, roi_map=roi_map)
+    topomap_vars      = _section_evoked_topomap(after_haemo if after_haemo is not None else raw_haemo,
+                                                subject, errors, figures_dir)
     glm_vars          = _section_glm(design_matrix, glm_est, raw_haemo, subject, errors, figures_dir, segments=segments)
-    rest_vars         = _section_rest(alff_df, fc_df, subject, errors, figures_dir, fc_hbr_df=fc_hbr_df)
+    rest_vars         = _section_rest(alff_df, fc_df, subject, errors, figures_dir, fc_hbr_df=fc_hbr_df,
+                                      fc_seed=fc_seed, raw_haemo=raw_haemo)
     sqm_vars          = _section_sqm(sci_scores, bad_channels, subject, errors,
                                      out_dir=out_path.parent / "nirs",
                                      sqm_label=sqm_label)
@@ -854,6 +886,7 @@ def build_subject_report(
         **motion_vars,
         **motion_det_vars,
         **erpimage_vars,
+        **topomap_vars,
         **haemo_vars,
         **channel_det_vars,
         **psd_det_vars,
