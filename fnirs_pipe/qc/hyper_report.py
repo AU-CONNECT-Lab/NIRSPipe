@@ -13,6 +13,7 @@ from fnirs_pipe.pipeline.hyperscanning import GroupEntry
 from fnirs_pipe.qc.figure_io import extract_markers, get_channel_pairs
 from fnirs_pipe.qc.figures.hyper_figures import _cond_colors
 from fnirs_pipe.qc.hyper_raw_writer import _process_hyper_raw_group
+from fnirs_pipe.utils.lineage import path_from
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("qc.hyper_report")
@@ -98,6 +99,8 @@ def build_hyper_post_report(
     bad_channels: dict[str, list[str]] | None = None,
     wtc_fmin: float = 0.004,
     wtc_fmax: float = 0.20,
+    wtc_band_fmin: float | None = None,
+    wtc_band_fmax: float | None = None,
     wtc_significance: bool = False,
     wtc_seed: int | None = None,
     isc_threshold: float = 0.3,
@@ -109,8 +112,18 @@ def build_hyper_post_report(
       2. Per-ROI WTC      — WTC on HbO averaged within each ROI (when roi_map given)
       3. ISC matrix       — inter-brain Pearson r heatmap (channel × channel)
       4. ISC connectogram — inter-brain arcs filtered by isc_threshold
+
+    Each WTC map is also collapsed to one number per channel over
+    [wtc_band_fmin, wtc_band_fmax] and written as a TSV beside the HTML, so a group
+    analysis reads the same values the figures were drawn from.
     """
-    from fnirs_pipe.pipeline.hyperscanning import WTCResult, compute_wtc, compute_wtc_roi
+    from fnirs_pipe.pipeline.hyperscanning import (
+        WTCResult,
+        _hyper_sidecar,
+        compute_wtc,
+        compute_wtc_roi,
+        wtc_band_mean,
+    )
     from fnirs_pipe.qc.figures.hyper_post_figures import (
         build_isc_panel,
         build_wtc_channel,
@@ -133,6 +146,32 @@ def build_hyper_post_report(
         for sid in subject_ids
     ]
 
+    band_fmin = wtc_band_fmin if wtc_band_fmin is not None else wtc_fmin
+    band_fmax = wtc_band_fmax if wtc_band_fmax is not None else wtc_fmax
+    if wtc_band_fmin is None or wtc_band_fmax is None:
+        logger.info(
+            "WTC band mean taken over the whole %.4f-%.4f Hz axis; name a narrower band "
+            "to average over the frequencies the task lives in", band_fmin, band_fmax)
+
+    def _write_band_tsv(result: "WTCResult | None", kind: str, step: str) -> None:
+        if result is None or not result.pairs:
+            return
+        try:
+            df = wtc_band_mean(result, band_fmin, band_fmax)
+        except Exception as exc:
+            logger.warning("WTC band mean (%s) failed: %s", kind, exc)
+            return
+        tsv_path = output_dir / f"group-{group_id}_task-{task}_hyper-{kind}.tsv"
+        tsv_path.parent.mkdir(parents=True, exist_ok=True)
+        df.to_csv(tsv_path, sep="\t", index=False)
+        _hyper_sidecar(
+            tsv_path, step,
+            [p for p in (path_from(r) for r in aligned_raws.values()) if p],
+            band_fmin=band_fmin, band_fmax=band_fmax, mask_coi=True,
+            wtc_fmin=wtc_fmin, wtc_fmax=wtc_fmax,
+        )
+        logger.info("WTC band means saved: %s", tsv_path)
+
     def _safe_post(name: str, fn, *args):
         try:
             fig = fn(*args)
@@ -152,6 +191,8 @@ def build_hyper_post_report(
             seed=wtc_seed)
     except Exception as exc:
         logger.warning("WTC computation failed: %s", exc)
+
+    _write_band_tsv(wtc_result, "wtc", "hyper_wtc")
 
     pair_key   = next(iter(wtc_result.pairs)) if wtc_result and wtc_result.pairs else None
     pair_label = f"{pair_key[0]} × {pair_key[1]}" if pair_key else ""
@@ -209,6 +250,8 @@ def build_hyper_post_report(
             )
         except Exception as exc:
             logger.warning("ROI WTC computation failed: %s", exc)
+
+        _write_band_tsv(roi_wtc, "wtc-roi", "hyper_wtc_roi")
 
         roi_pair_key = next(iter(roi_wtc.pairs)) if roi_wtc and roi_wtc.pairs else None
         roi_labels   = list(roi_map.keys())

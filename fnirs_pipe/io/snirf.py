@@ -83,3 +83,22 @@ def has_short_channels(raw: mne.io.Raw) -> bool:
     """Return True if the recording contains short-distance reference channels."""
     from mne_nirs.channels import get_short_channels
     return len(get_short_channels(raw)) > 0
+
+
+def long_channel_picks(raw: mne.io.Raw, ch_type: str = "hbo") -> list[int]:
+    """Picks for one chromophore with short-distance reference channels dropped.
+
+    A 6-channel montage whose last pair is short ->
+        long_channel_picks(raw, "hbo") == [0, 1]   (the third hbo pick is gone)
+
+    Short channels sample scalp haemodynamics, so an inter-brain metric computed on them
+    measures systemic physiology two people share by sitting in the same room rather than
+    any brain coupling. Bad channels are already excluded: that is pick_types' default.
+    Montages with no short channels lose nothing.
+    """
+    from mne_nirs.channels import get_short_channels
+    try:
+        short = set(get_short_channels(raw).ch_names)
+    except Exception:  # no short channel in the montage: mne_nirs picks an empty selection
+        short = set()
+    return [p for p in mne.pick_types(raw.info, fnirs=ch_type) if raw.ch_names[p] not in short]

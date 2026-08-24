@@ -7,6 +7,8 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- `fnirs-qc hyper-post --desc` picks which per-subject stage the inter-brain metrics read. It defaults to `preproc` as before; `errts` reads the confound-regression residual, so short-channel regression can precede a coherence analysis. Optical-density stages are refused
+- `fnirs-qc hyper-post` writes `group-<id>_task-<task>_hyper-wtc.tsv` (and `hyper-wtc-roi.tsv` with `--roi-mapping`): one coherence value per pair and channel, averaged over `--wtc-band-fmin`/`--wtc-band-fmax` inside the cone of influence, with the share of cells that survived it. The figures and a group analysis now read the same numbers
 - Rest mode writes `desc-<chromo>_fcseed.tsv` and `_fcseedz.tsv` when `--roi-mapping` is given: each ROI's mean signal against every channel, the seed-to-whole-brain view. Cells for a seed's own channels are blank, since they sit inside the average and say nothing about connectivity
 
 ### Fixed
@@ -23,6 +25,8 @@ All notable changes to this project will be documented in this file.
 - The seed-map sidecar lists the channels each seed was built from, not the ones the ROI mapping asked for. The two differ whenever a listed channel was rejected, and only the first explains why a cell inside a listed ROI holds a value instead of being blank
 
 ### Changed
+- The hyperscanning WTC, coherence and ISC read long channels only. Short channels sample scalp haemodynamics, which two people in one room share whatever their brains are doing, so including them measured that shared physiology as inter-brain coupling. **Any montage with short channels loses those rows from its hyper figures**
+- Inter-brain metrics stop when the members of a group were sampled at different rates, instead of applying the first member's rate to everyone
 - Functional connectivity is plain Pearson. It was a shrinkage estimate inherited from a library default, which pulls correlations toward zero by an amount that grows as channels rise against samples, so subjects with shorter runs or more rejected channels shrank harder than others and the Fisher z values carried that into group statistics. **Every FC and FCZ value changes; weak connections change most**
 - Quality records store `qc_window_s`, the window length their per-window SCI/PSP/GVTD series were binned on. A group report whose subjects were run at different `--window-length` values now says so, instead of stacking incompatible rows in one heatmap
 - `Mean PSP` is labelled with its 10 s window in the report. The window changes what the score measures rather than only its scale, so it is pinned there and does not follow `--window-length`, which still sets the windowed PSP heatmap

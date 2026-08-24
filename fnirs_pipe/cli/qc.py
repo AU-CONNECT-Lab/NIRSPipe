@@ -288,7 +288,9 @@ def cmd_epoch(
 
 def cmd_hyper_post(
     bids_dir: Path, output_dir: Path, pairs_csv: Path, group_id: str | None,
-    roi_mapping: Path | None, wtc_fmin: float, wtc_fmax: float, wtc_significance: bool,
+    desc: str,
+    roi_mapping: Path | None, wtc_fmin: float, wtc_fmax: float,
+    wtc_band_fmin: float | None, wtc_band_fmax: float | None, wtc_significance: bool,
     wtc_seed: int | None,
     isc_threshold: float, normalize: bool, no_align: bool,
     session_label: list[str] | None, task_label: list[str] | None,
@@ -317,7 +319,7 @@ def cmd_hyper_post(
             raise SystemExit(1)
 
     def _process(gid, task, members):
-        raws = load_group_haemo(output_dir, members)
+        raws = load_group_haemo(output_dir, members, desc=desc)
         if no_align:
             aligned_raws, offsets = trim_to_shortest(raws)
         else:
@@ -339,6 +341,8 @@ def cmd_hyper_post(
             bad_channels=bad_channels,
             wtc_fmin=wtc_fmin,
             wtc_fmax=wtc_fmax,
+            wtc_band_fmin=wtc_band_fmin,
+            wtc_band_fmax=wtc_band_fmax,
             wtc_significance=wtc_significance,
             wtc_seed=wtc_seed,
             isc_threshold=isc_threshold,
@@ -473,10 +477,20 @@ def _build_parser() -> argparse.ArgumentParser:
                          "Each unique (group_id, task) pair is processed as one session.")
     hp.add_argument("--group-id", default=None,
                     help="Process only this group_id. Omit to process all groups.")
+    hp.add_argument("--desc", default="preproc",
+                    help="desc entity of the per-subject stage to read, e.g. 'preproc' "
+                         "(Beer-Lambert output) or 'errts' (confound-regression residual, "
+                         "which is what short-channel regression leaves behind). Must be a "
+                         "haemoglobin stage, not an optical-density one.")
     hp.add_argument("--roi-mapping", type=Path, default=None,
                     help="JSON file mapping ROI labels to lists of channel names. For ROI-level WTC. Optional.")
     hp.add_argument("--wtc-fmin", type=float, default=0.004, help="Lower bound (Hz) for WTC frequency axis.")
     hp.add_argument("--wtc-fmax", type=float, default=0.20,  help="Upper bound (Hz) for WTC frequency axis.")
+    hp.add_argument("--wtc-band-fmin", type=float, default=None,
+                    help="Lower bound (Hz) of the band the per-channel WTC TSV averages over. "
+                         "Defaults to --wtc-fmin, i.e. the whole computed axis.")
+    hp.add_argument("--wtc-band-fmax", type=float, default=None,
+                    help="Upper bound (Hz) of that band. Defaults to --wtc-fmax.")
     hp.add_argument("--wtc-significance", action="store_true",
                     help="Overlay a Monte Carlo significance contour on WTC "
                          "(slow: ~300 surrogate runs per channel pair).")

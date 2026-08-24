@@ -101,6 +101,8 @@ STEP_SUMMARY = {
     "fc_roi": "Connectivity between ROI-averaged signals.",
     "group_sqm_raw": "Quality metrics pooled across the members of a dyad.",
     "group_sqm_raw_channels": "The same pooling, kept per channel.",
+    "hyper_wtc": "Wavelet coherence between a pair, averaged over a band and one value per channel.",
+    "hyper_wtc_roi": "The same average, over ROI-averaged signals.",
 }
 
 

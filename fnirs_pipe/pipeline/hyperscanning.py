@@ -9,7 +9,7 @@ import mne
 import numpy as np
 import pandas as pd
 
-from fnirs_pipe.exceptions import AlignmentError, GroupCSVError, MissingDerivativesError
+from fnirs_pipe.exceptions import AlignmentError, GroupCSVError, MissingDerivativesError, StageError
 from fnirs_pipe.io.derivatives import find_preproc_snirf
 from fnirs_pipe.io.snirf import read_snirf
 from fnirs_pipe.pipeline.synchrony import (  # noqa: F401  re-exported
@@ -17,7 +17,9 @@ from fnirs_pipe.pipeline.synchrony import (  # noqa: F401  re-exported
     compute_pairwise_coherence,
     compute_wtc,
     compute_wtc_roi,
+    wtc_band_mean,
 )
+from fnirs_pipe.utils import is_optical_density
 from fnirs_pipe.utils.lineage import path_from
 from fnirs_pipe.utils.logging import get_logger
 
@@ -79,16 +81,33 @@ def parse_group_csv(csv_path: Path) -> dict[tuple[str, str], list[GroupEntry]]:
     return result
 
 
-def load_group_haemo(output_dir: Path, group: list[GroupEntry]) -> dict[str, mne.io.Raw]:
-    """Load desc-preproc haemo SNIRF for each subject.
+def load_group_haemo(
+    output_dir: Path,
+    group: list[GroupEntry],
+    desc: str = "preproc",
+) -> dict[str, mne.io.Raw]:
+    """Load one haemoglobin stage per subject, selected by its desc entity.
+
+    "preproc" is Beer-Lambert output, the stage every montage has. Anything the post
+    pipeline wrote is equally valid input here: "filtered", "resampled", "errts" (the
+    confound-regression residual, which is what an inter-brain metric usually wants, since
+    short-channel regression removes the systemic physiology two people in one room share).
 
     Returns {subject_id: raw_haemo}.
-    Raises MissingDerivativesError if any SNIRF is absent.
+    Raises MissingDerivativesError if any SNIRF is absent, StageError if one holds optical
+    density rather than concentration.
     """
     result: dict[str, mne.io.Raw] = {}
     for entry in group:
-        snirf_path = find_preproc_snirf(output_dir, entry.subject_id, entry.task)
-        result[entry.subject_id] = read_snirf(snirf_path, verbose=False)
+        snirf_path = find_preproc_snirf(output_dir, entry.subject_id, entry.task, desc=desc)
+        raw = read_snirf(snirf_path, verbose=False)
+        if is_optical_density(raw):
+            raise StageError(
+                f"{snirf_path.name} holds optical density, not haemoglobin concentration. "
+                f"desc-{desc} is a pre-Beer-Lambert stage; pick one at or after it "
+                "(preproc, filtered, resampled, errts, errtsbroad)."
+            )
+        result[entry.subject_id] = raw
     return result
 
 

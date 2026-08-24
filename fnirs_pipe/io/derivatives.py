@@ -1,11 +1,15 @@
 """Write BIDS Derivatives output structure."""
 
 import json
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from fnirs_pipe.exceptions import MissingDerivativesError
+
+# same entity pattern read_snirf parses the stage back out of
+_DESC_RE = re.compile(r"_desc-([A-Za-z0-9]+)[_.]")
 
 
 def carry_entities(source_entities: dict[str, str] | None) -> dict[str, str]:
@@ -90,21 +94,26 @@ def write_sidecar_json(out_path: Path, provenance: dict[str, Any]) -> None:
 
 
 
-def find_preproc_snirf(output_dir: Path, subject_id: str, task: str) -> Path:
-    """Locate the desc-preproc snirf for *subject_id* under *output_dir*.
+def find_preproc_snirf(output_dir: Path, subject_id: str, task: str, desc: str = "preproc") -> Path:
+    """Locate the desc-{desc} snirf for *subject_id* under *output_dir*.
 
-    Raises MissingDerivativesError if the derivatives directory or file is absent.
+    Every pipeline step writes one snirf per desc, so desc is what selects a stage:
+    "preproc" is Beer-Lambert output, "filtered" the bandpassed one, "errts" the GLM
+    residual. Raises MissingDerivativesError if the directory or the file is absent.
     """
     nirs_dir = output_dir / subject_id / "nirs"
     if not nirs_dir.exists():
         raise MissingDerivativesError(f"Derivatives directory not found: {nirs_dir}")
 
-    candidates = sorted(nirs_dir.glob(f"{subject_id}_task-{task}_*desc-preproc_nirs.snirf"))
+    candidates = sorted(nirs_dir.glob(f"{subject_id}_task-{task}_*desc-{desc}_nirs.snirf"))
     if not candidates:
-        candidates = sorted(nirs_dir.glob(f"{subject_id}_*desc-preproc_nirs.snirf"))
+        candidates = sorted(nirs_dir.glob(f"{subject_id}_*desc-{desc}_nirs.snirf"))
     if not candidates:
+        available = sorted({m.group(1) for p in nirs_dir.glob(f"{subject_id}_*_nirs.snirf")
+                            if (m := _DESC_RE.search(p.name))})
         raise MissingDerivativesError(
-            f"No desc-preproc snirf found for {subject_id} (task={task}) in {nirs_dir}. "
+            f"No desc-{desc} snirf found for {subject_id} (task={task}) in {nirs_dir}. "
+            f"Available: {', '.join(available) if available else 'none'}. "
             "Run fnirs-pipe preprocessing first."
         )
     return candidates[0]

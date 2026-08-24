@@ -12,6 +12,7 @@ import numpy as np
 import mne
 import plotly.graph_objects as go
 
+from fnirs_pipe.io.snirf import long_channel_picks
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("qc.figures.hyper_post")
@@ -124,7 +125,7 @@ def compute_isc(
     ch_type: str = "hbo",
     bad_channels: dict[str, list[str]] | None = None,
 ) -> tuple[np.ndarray, list[str]] | tuple[None, None]:
-    """Compute inter-brain Pearson r matrix (n_ch × n_ch).
+    """Compute inter-brain Pearson r matrix (n_ch × n_ch) over long channels.
 
     matrix[i, j] = Pearson r between sub1_ch_i and sub2_ch_j.
     Diagonal = same-channel ISC.
@@ -141,8 +142,8 @@ def compute_isc(
     if raw1 is None or raw2 is None:
         return None, None
 
-    picks1 = mne.pick_types(raw1.info, fnirs=ch_type)
-    picks2 = mne.pick_types(raw2.info, fnirs=ch_type)
+    picks1 = long_channel_picks(raw1, ch_type)
+    picks2 = long_channel_picks(raw2, ch_type)
     n = min(len(picks1), len(picks2))
     if n == 0:
         return None, None

@@ -209,6 +209,22 @@ def test_qc_subcommands_and_fmin_dest():
     assert args.coherence_fmax == 0.2
 
 
+def test_qc_hyper_post_stage_and_band_flags():
+    args = qc_cli._build_parser().parse_args(
+        ["hyper-post", "/b", "/o", "--pairs-csv", "p.csv", "--desc", "errts",
+         "--wtc-band-fmin", "0.03", "--wtc-band-fmax", "0.10"]
+    )
+    assert args.func is qc_cli.cmd_hyper_post
+    assert (args.desc, args.wtc_band_fmin, args.wtc_band_fmax) == ("errts", 0.03, 0.10)
+
+
+def test_qc_hyper_post_reads_preproc_unless_told_otherwise():
+    # the band bounds stay None so the report can say it averaged the whole axis
+    args = qc_cli._build_parser().parse_args(["hyper-post", "/b", "/o", "--pairs-csv", "p.csv"])
+    assert args.desc == "preproc"
+    assert (args.wtc_band_fmin, args.wtc_band_fmax) == (None, None)
+
+
 def test_qc_window_raw_required_opts():
     with pytest.raises(SystemExit):
         qc_cli._build_parser().parse_args(["window-raw", "/b", "/o"])  # missing required --task-label/--tstart/--tend
