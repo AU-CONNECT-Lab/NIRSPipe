@@ -119,21 +119,20 @@ def test_malff_and_zalff_standardize_within_each_chromophore():
         grp = df[df.channel.str.endswith(f" {chromo}")]
         assert grp.malff.mean() == pytest.approx(1.0, rel=1e-9)
         assert grp.zalff.mean() == pytest.approx(0.0, abs=1e-9)
-        assert grp.zalff.std(ddof=1) == pytest.approx(1.0, rel=1e-9)
+        assert grp.zalff.std(ddof=0) == pytest.approx(1.0, rel=1e-9)
 
 
-def test_zalff_standardizes_by_the_sample_standard_deviation():
-    # ddof=1, the convention zALFF is compared against. numpy's nanstd defaults to ddof=0,
-    # which would make these z-scores larger by sqrt(n/(n-1)).
+def test_zalff_standardizes_by_the_population_standard_deviation():
+    # ddof=0: the channels are the whole set being rescaled, not a sample of a larger one
     amps = (1.0, 2.0, 3.0, 5.0)
     df = compute_alff(_raw(np.vstack([_sine(F_IN, amp=a) for a in amps])),
                       low_pass=LOW_PASS, high_pass=HIGH_PASS)
-    expected = (df.alff - df.alff.mean()) / df.alff.std(ddof=1)
+    expected = (df.alff - df.alff.mean()) / df.alff.std(ddof=0)
     assert df.zalff.tolist() == pytest.approx(expected.tolist())
 
 
 def test_a_single_channel_chromophore_yields_zero_zalff_rather_than_nan():
-    # the sample SD is undefined for one observation; the old population SD returned 0 here
+    # one observation has zero spread, and the grp_std != 0 guard leaves zALFF at 0
     df = compute_alff(_mixed_raw(_sine(F_IN, amp=2.0),
                                  np.vstack([_sine(F_IN, amp=a) for a in (1.0, 2.0, 3.0)])),
                       low_pass=LOW_PASS, high_pass=HIGH_PASS)

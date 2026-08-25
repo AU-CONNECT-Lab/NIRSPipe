@@ -9,6 +9,9 @@ All notable changes to this project will be documented in this file.
 ### Added
 - `fnirs-qc hyper-post --wtc-mc-count` sets how many surrogate series stand behind each significance contour (default 300, unchanged). It is what the runtime is spent on and it scales with the value, so a run can be previewed cheaply and settled expensively
 
+### Changed
+- zALFF standardizes by the population SD (n) instead of the sample SD (n-1). Values grow by `sqrt(n/(n-1))`.
+
 ## [0.21.0] - 2026-08-24
 
 ### Added
