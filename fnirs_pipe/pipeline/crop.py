@@ -13,6 +13,7 @@ from fnirs_pipe.utils.logging import get_logger
 from fnirs_pipe.utils.snirf_prep import (
     annotations_to_df,
     bids_stem,
+    copy_dataset_root,
     copy_sidecars,
     deriv_nirs_dir,
     ensure_dataset_description,
@@ -29,15 +30,6 @@ def _write_segment(raw_seg, out_snirf: Path) -> None:
     write_snirf(raw_seg, out_snirf)
     events_path = out_snirf.parent / out_snirf.name.replace("_nirs.snirf", "_events.tsv")
     annotations_to_df(raw_seg).to_csv(events_path, sep="\t", index=False)
-
-
-def _copy_dataset_root(bids_dir: Path, deriv_root: Path) -> None:
-    """Carry the dataset-level files across so the output stands on its own as BIDS."""
-    import shutil
-    for name in ("participants.tsv", "participants.json", "README"):
-        src = bids_dir / name
-        if src.exists():
-            shutil.copy2(src, deriv_root / name)
 
 
 def _setup_deriv_dir(derivatives_dir: Path, sub: str, ses: str | None) -> Path:
@@ -142,7 +134,7 @@ def crop_snirf(
     snirf_path = find_snirf(bids_dir, sub, ses, task, run, validate=validate)
     stem = bids_stem(snirf_path)
     out_nirs_dir = _setup_deriv_dir(derivatives_dir, sub, ses)
-    _copy_dataset_root(bids_dir, derivatives_dir / _DERIV_NAME)
+    copy_dataset_root(bids_dir, derivatives_dir / _DERIV_NAME)
     raw = read_raw_snirf(snirf_path)
 
     segments_df = read_table(segments_path) if segments_path is not None else None

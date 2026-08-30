@@ -91,10 +91,6 @@ class PrepResult:
     raw_haemo: mne.io.Raw
     sci_scores: dict[str, float]
     bad_channels: list[str]
-    sci_scores_matrix: "np.ndarray | None" = None
-    sci_win_times: "np.ndarray | None" = None
-    psp_scores_matrix: "np.ndarray | None" = None
-    psp_win_times: "np.ndarray | None" = None
     raw_od_before_motion: "mne.io.Raw | None" = None
     raw_od_after_motion: "mne.io.Raw | None" = None
 
@@ -220,22 +216,13 @@ def run_prep(
     # SQM is not computed here. It is assembled per run from the files this pipeline left
     # on disk, once post-processing has also finished; see qc/sqm_record.py.
 
-    sci_matrix = sci_times = psp_matrix = psp_times = None
-    try:
-        from fnirs_pipe.qc.quantitative_metrics import compute_windowed_psp, compute_windowed_sci
-        sci_matrix, sci_times = compute_windowed_sci(raw_od, config.cardiac_l_freq, config.cardiac_h_freq, config.qc_window_s)
-        psp_matrix, psp_times = compute_windowed_psp(raw_od, config.cardiac_l_freq, config.cardiac_h_freq, config.qc_window_s)
-    except Exception:
-        logger.warning("sub-%s | windowed SCI/PSP computation failed", config.subject, exc_info=True)
-
+    # The windowed series are not computed here either. They are assembled from
+    # desc-motcorrected once both passes have finished, and the report reads them back from
+    # the record; see qc/sqm_record.py.
     return PrepResult(
         raw_haemo=raw_haemo,
         sci_scores=sci_scores,
         bad_channels=bad_chs,
-        sci_scores_matrix=sci_matrix,
-        sci_win_times=sci_times,
-        psp_scores_matrix=psp_matrix,
-        psp_win_times=psp_times,
         raw_od_before_motion=raw_od_before_motion,
         raw_od_after_motion=raw_od,
     )

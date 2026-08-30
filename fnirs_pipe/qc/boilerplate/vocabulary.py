@@ -134,6 +134,7 @@ METRIC_SUMMARY = {
     "cv_mean": "Noise relative to a channel's own brightness (SD / mean). Lower is cleaner.",
     "snr_mean": "Signal size relative to its fluctuation (mean / SD), the reciprocal of CV. Higher is better.",
     "snr_pass_rate": "Fraction of channels with SNR above 2. Higher is better.",
+    "n_flat_channels": "How many channels carry no variation at all, flat or saturated. Zero is what you want; these are counted as failures in snr_pass_rate but cannot enter the SNR and CV means.",
     "mean_amp_mean": "Average light level reaching the detectors. No universal good value; use it to spot channels far dimmer than their neighbours.",
 
     # geometry
@@ -221,7 +222,7 @@ _STAGE_RAW_AND_CORRECTED = (
 )
 
 _RAW_METRICS = (
-    "channel_retention_rate", "cp_mean", "cp_pass_rate",
+    "channel_retention_rate", "cp_mean", "cp_pass_rate", "n_flat_channels",
     "cv_mean", "snr_mean", "snr_pass_rate", "mean_amp_mean",
     "ch_dist_mean", "ch_dist_min", "ch_dist_max",
 )

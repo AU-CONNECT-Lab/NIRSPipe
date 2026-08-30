@@ -16,6 +16,8 @@ downstream fails when they trip, the report just loses a panel, so only a test t
 demands success will ever notice.
 """
 
+import json
+
 import numpy as np
 import pytest
 
@@ -23,6 +25,7 @@ from fnirs_pipe.exceptions import StageError
 from fnirs_pipe.io.snirf import read_snirf
 from fnirs_pipe.pipeline.post_pipeline import PostConfig, run_post
 from fnirs_pipe.pipeline.prep_pipeline import PrepConfig, compute_sci, run_prep
+from fnirs_pipe.qc.sqm_record import build_sqm_records
 from fnirs_pipe.utils import is_optical_density
 from fnirs_pipe.utils.lineage import stage_of
 
@@ -151,13 +154,20 @@ def test_marking_every_channel_by_hand_says_so(tmp_path_factory):
 # ---- The paths that degrade quietly ----
 
 def test_the_windowed_metrics_actually_ran(baseline):
-    """prep_pipeline swallows any failure here and returns None, leaving the report empty."""
-    result, _ = baseline
-    for name in ("sci_scores_matrix", "sci_win_times", "psp_scores_matrix", "psp_win_times"):
-        assert getattr(result, name) is not None, name
+    """sqm_record swallows any failure here, leaving the report's per-window panel empty.
+
+    Prep stopped computing these on 2026-08-29; the record is the only place they exist, and
+    the report reads them back from it.
+    """
+    result, nirs_dir = baseline
+    written = build_sqm_records(nirs_dir)
+    record = json.loads(written[0].read_text(encoding="utf-8"))
+    windowed = record.get("windowed") or {}
+    for name in ("sci_matrix", "sci_times", "psp_matrix", "psp_times", "qc_window_s"):
+        assert windowed.get(name) is not None, name
     n_ch = len(result.raw_od_before_motion.ch_names)
-    assert result.sci_scores_matrix.shape[0] == n_ch
-    assert result.sci_scores_matrix.shape[1] == len(result.sci_win_times)
+    assert len(windowed["sci_matrix"]) == n_ch
+    assert len(windowed["sci_matrix"][0]) == len(windowed["sci_times"])
 
 
 def test_the_regression_gcor_actually_ran(baseline, tmp_path_factory):

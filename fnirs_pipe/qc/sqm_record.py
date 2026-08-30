@@ -41,6 +41,7 @@ from pathlib import Path
 from typing import Any
 
 import mne
+import numpy as np
 
 from fnirs_pipe.utils.logging import get_logger
 
@@ -304,14 +305,24 @@ def compute_run_sections(
 
     # SCI, PSP and GVTD per window, all three on the same grid. Their own section rather
     # than keys on `raw`: they are time series, and `_split_scalars` files any list under
-    # `per_channel`, which these are not. Read off `desc-sci` so the series describe the
-    # channel set the run actually kept.
-    od_source = stages.get("sci") or stages.get("od")
+    # `per_channel`, which these are not.
+    #
+    # Read off the corrected OD when there is one. That is the signal Beer-Lambert actually
+    # received, and it is what the subject report draws, so record and report cannot drift.
+    od_source = stages.get("motcorrected") or stages.get("sci") or stages.get("od")
     if od_source is not None:
         try:
             windowed: dict[str, Any] = {}
-            attach_windowed_series(
+            series = attach_windowed_series(
                 windowed, read_snirf(od_source), cardiac_l_freq, cardiac_h_freq, qc_window_s)
+            # the channel by window matrices as well as the channel-averaged series: the
+            # report's per-channel heatmap needs them, and it must not recompute
+            for key in ("sci_matrix", "psp_matrix"):
+                if series.get(key) is not None:
+                    windowed[key] = np.asarray(series[key]).tolist()
+            for key in ("sci_times", "psp_times"):
+                if series.get(key) is not None:
+                    windowed[key] = np.asarray(series[key]).tolist()
             sections["windowed"] = windowed
         except Exception:
             logger.warning("windowed: section failed", exc_info=True)

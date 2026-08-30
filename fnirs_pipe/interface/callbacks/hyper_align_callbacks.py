@@ -233,6 +233,7 @@ def export_snirfs(n_clicks, bids_dir, deriv_dir, group_csv):
     import mne
     import pandas as pd
 
+    from fnirs_pipe.io.snirf import write_snirf
     from fnirs_pipe.utils.snirf_prep import (
         annotations_to_df, bids_stem, copy_sidecars,
         deriv_nirs_dir, ensure_dataset_description, find_snirf,

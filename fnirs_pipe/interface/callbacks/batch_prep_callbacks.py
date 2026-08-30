@@ -218,6 +218,7 @@ def run_batch(
         from fnirs_pipe.pipeline.hyperscanning import (
             align_recordings, load_group_raw_bids, parse_group_csv,
         )
+        from fnirs_pipe.io.snirf import write_snirf
         from fnirs_pipe.utils.snirf_prep import (
             annotations_to_df, bids_stem, copy_sidecars,
             deriv_nirs_dir, ensure_dataset_description, find_snirf,

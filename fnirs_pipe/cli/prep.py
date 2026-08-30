@@ -82,9 +82,10 @@ def cmd_align(
     from fnirs_pipe.pipeline.hyperscanning import (
         align_recordings, load_group_raw_bids, parse_group_csv,
     )
+    from fnirs_pipe.io.snirf import write_snirf
     from fnirs_pipe.utils.snirf_prep import (
         annotations_to_df, bids_stem, copy_sidecars, deriv_nirs_dir,
-        ensure_dataset_description, find_snirf,
+        copy_dataset_root, ensure_dataset_description, find_snirf,
     )
 
     _DERIV_NAME = "aligned"
@@ -116,6 +117,7 @@ def cmd_align(
         ensure_dataset_description(
             derivatives_dir / _DERIV_NAME, _DERIV_NAME, "fnirs-prep align"
         )
+        copy_dataset_root(bids_dir, derivatives_dir / _DERIV_NAME)
 
         offset_rows: list[dict] = []
         for entry in group:

@@ -371,14 +371,19 @@ def channel_snr(data: np.ndarray) -> np.ndarray:
 
 @_safe_metrics("CV/SNR", (
     "cv_mean", "cv_mean_*", "cv_per_channel",     # cv_mean_* is one key per wavelength
-    "snr_mean", "snr_per_channel", "snr_pass_rate",
+    "snr_mean", "snr_per_channel", "snr_pass_rate", "n_flat_channels",
     "mean_amp_mean", "mean_amp_per_channel",
 ))
 def _intensity_metrics(raw_intensity: mne.io.Raw, snr_threshold: float = 2.0) -> dict[str, Any]:
     """Per-channel CV, SNR and mean amplitude from raw intensity (with means; CV also per wavelength).
 
     snr_pass_rate is the fraction of channels with SNR > snr_threshold (default 2.0,
-    a common channel-pruning cutoff; SNR = mean/std, higher is better).
+    a common channel-pruning cutoff; SNR = mean/std, higher is better). Its denominator is
+    every channel, not every channel with a finite SNR: a flat or saturated channel has
+    std 0 and no finite SNR at all, and letting it drop out of the denominator would mean a
+    recording whose channels are dying reads as a recording whose channels are passing.
+    n_flat_channels is how many those were. The means are still taken over the finite
+    values, since an average cannot carry a NaN.
     """
     int_data = raw_intensity.get_data()
     names = raw_intensity.ch_names
@@ -402,7 +407,11 @@ def _intensity_metrics(raw_intensity: mne.io.Raw, snr_threshold: float = 2.0) ->
         "cv_per_channel": cv_per_ch,
         "snr_mean": _mean_or_none(snr_per_ch.values()),
         "snr_per_channel": snr_per_ch,
-        "snr_pass_rate": _mean_or_none([v > snr_threshold for v in snr_per_ch.values()]),
+        "snr_pass_rate": (
+            float(sum(v > snr_threshold for v in snr_per_ch.values()) / len(names))
+            if names else None
+        ),
+        "n_flat_channels": len(names) - len(snr_per_ch),
         "mean_amp_mean": _mean_or_none(mean_amp_per_ch.values()),
         "mean_amp_per_channel": mean_amp_per_ch,
     }

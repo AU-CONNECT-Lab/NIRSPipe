@@ -204,14 +204,25 @@ def _section_sci(
     sci_scores: dict,
     bad_channels: list,
     config: Any,
-    sci_scores_matrix: np.ndarray | None,
-    sci_win_times: np.ndarray | None,
-    psp_scores_matrix: np.ndarray | None,
-    psp_win_times: np.ndarray | None,
+    windowed: dict | None,
     subject: str,
     errors: list,
     figures_dir: Path,
 ) -> dict:
+    """The SCI/PSP panel, per channel and per window.
+
+    ``windowed`` is the record's section of that name; the series are read from it rather
+    than recomputed, so the panel and the stored numbers cannot disagree. An absent section
+    leaves the per-window half of the panel out and the per-channel half intact.
+    """
+    def _series(key: str) -> "np.ndarray | None":
+        value = (windowed or {}).get(key)
+        return None if value is None else np.asarray(value)
+
+    sci_scores_matrix = _series("sci_matrix")
+    sci_win_times     = _series("sci_times")
+    psp_scores_matrix = _series("psp_matrix")
+    psp_win_times     = _series("psp_times")
     ch_names = list(sci_scores.keys())
     sci_psp_panel_path = None
     sci_psp_panel_h = 0
@@ -481,6 +492,26 @@ def _save_channel_csv(channel_rows: list, label: str, out_dir: Path) -> None:
         writer.writeheader()
         writer.writerows(channel_rows)
     logger.info("%s | channel metrics CSV saved: %s", label, out_path)
+
+
+def _load_windowed_section(
+    out_dir: Path | None,
+    sqm_label: str | None,
+    subject: str,
+    errors: list,
+) -> dict | None:
+    """The record's ``windowed`` section, or None if there is no record to read it from.
+
+    Separate from :func:`_section_sqm` because the panel it feeds is drawn long before the
+    metrics table, and because a run whose record failed should still get the per-channel
+    half of that panel.
+    """
+    if out_dir is None or sqm_label is None:
+        return None
+    with _guard("Windowed series", errors, subject):
+        record = json.loads(_sqm_record_path(out_dir, sqm_label).read_text(encoding="utf-8"))
+        return record.get("windowed") or None
+    return None
 
 
 def _section_sqm(
@@ -756,10 +787,6 @@ def build_subject_report(
     config: "PrepConfig",
     run_command: str,
     out_path: Path,
-    sci_scores_matrix: np.ndarray | None = None,
-    sci_win_times: np.ndarray | None = None,
-    psp_scores_matrix: np.ndarray | None = None,
-    psp_win_times: np.ndarray | None = None,
     motion_spans: list[tuple[float, float]] | None = None,
     segments: dict | None = None,
     coords_head: np.ndarray | None = None,
@@ -799,11 +826,10 @@ def build_subject_report(
 
     figures_dir = out_path.parent / "figures"
 
+    windowed_section = _load_windowed_section(out_path.parent / "nirs", sqm_label, subject, errors)
     sci_vars          = _section_sci(
                             raw_intensity, sci_scores, bad_channels, config,
-                            sci_scores_matrix, sci_win_times,
-                            psp_scores_matrix, psp_win_times,
-                            subject, errors, figures_dir)
+                            windowed_section, subject, errors, figures_dir)
     motion_vars       = _section_motion(
                             raw_long, sci_scores, config, segments, subject, errors,
                             figures_dir, raw_before_motion=raw_before_motion,

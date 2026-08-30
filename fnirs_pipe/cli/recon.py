@@ -21,6 +21,11 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--task", required=True, help="Task label, e.g. tapping.")
     p.add_argument("--session", default=None, help="Session label. Omit if dataset has no session layer.")
     p.add_argument("--run", default=None, help="Run index, e.g. 01.")
+    p.add_argument("--optode-frame", choices=["unknown", "head", "mri"], default="unknown",
+                   help="Space the SNIRF's optode coordinates were measured in. SNIRF does "
+                        "not record it, and without it no _optodes.tsv or _coordsystem.json "
+                        "is written, both of which BIDS requires. Use 'head' for positions "
+                        "digitised against the nasion and preauricular points.")
     p.add_argument("--overwrite", action=argparse.BooleanOptionalAction, default=False)
     return p
 
@@ -37,5 +42,6 @@ def main(argv: list[str] | None = None) -> None:
     write_bids_from_snirf(
         args.input_file, args.bids_dir, subject=args.subject, task=args.task,
         session=args.session, run=args.run, overwrite=args.overwrite,
+        optode_frame=args.optode_frame,
     )
     print(f"BIDS output written to: {args.bids_dir}")

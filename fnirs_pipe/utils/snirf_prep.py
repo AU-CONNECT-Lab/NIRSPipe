@@ -8,7 +8,8 @@ from pathlib import Path
 
 import pandas as pd
 
-NIRS_SIDECAR_SUFFIXES = ["_nirs.json", "_channels.tsv", "_optodes.tsv", "_coordsystem.json"]
+NIRS_SIDECAR_SUFFIXES = ["_nirs.json", "_channels.tsv"]
+NIRS_MONTAGE_SUFFIXES = ["_optodes.tsv", "_coordsystem.json"]
 
 
 def find_snirf(
@@ -77,14 +78,29 @@ def ensure_dataset_description(deriv_root: Path, name: str, generated_by: str) -
     }, indent=2))
 
 
+def copy_dataset_root(bids_dir: Path, deriv_root: Path) -> None:
+    """Carry participants.tsv and README across so a derivative stands on its own as BIDS."""
+    for name in ("participants.tsv", "participants.json", "README"):
+        src = bids_dir / name
+        if src.exists():
+            shutil.copy2(src, deriv_root / name)
+
+
 def copy_sidecars(snirf_path: Path, stem: str, dest_dir: Path, dest_stem: str | None = None) -> None:
     """Copy a run's sidecars, optionally renaming them onto dest_stem.
 
     A sidecar belongs to the file whose name it shares, so an output written under a
     different stem than its source needs its sidecars renamed to match or they describe
-    a file that is not there.
+    a file that is not there. The montage pair is the exception: it describes the cap
+    rather than the run, carries no task entity, and keeps its name.
     """
     for suffix in NIRS_SIDECAR_SUFFIXES:
         src = snirf_path.parent / f"{stem}{suffix}"
         if src.exists():
             shutil.copy2(src, dest_dir / f"{dest_stem or stem}{suffix}")
+
+    subject_stem = "_".join(p for p in stem.split("_") if p.startswith(("sub-", "ses-")))
+    for suffix in NIRS_MONTAGE_SUFFIXES:
+        src = snirf_path.parent / f"{subject_stem}{suffix}"
+        if src.exists():
+            shutil.copy2(src, dest_dir / src.name)

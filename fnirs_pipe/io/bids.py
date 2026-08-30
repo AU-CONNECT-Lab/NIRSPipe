@@ -21,12 +21,21 @@ def write_bids_from_snirf(
     session: str | None = None,
     run: str | None = None,
     overwrite: bool = False,
+    optode_frame: str = "unknown",
 ) -> None:
-    """Convert one raw snirf file into a BIDS nirs entry."""
+    """Convert one raw snirf file into a BIDS nirs entry.
+
+    `optode_frame` names the space the SNIRF's optode coordinates live in. SNIRF does not
+    record it, so MNE reads them as "unknown" and mne-bids then writes no `_optodes.tsv` or
+    `_coordsystem.json`, both of which BIDS requires: it will not guess a frame on the
+    author's behalf. Pass "head" when the positions were digitised against the nasion and
+    the two preauricular points, "mri" when they are in a subject's MRI space. Leave it
+    unknown rather than asserting a frame the positions were never measured in.
+    """
     import mne
     import mne_bids
 
-    raw = mne.io.read_raw_snirf(str(input_file), preload=False)
+    raw = mne.io.read_raw_snirf(str(input_file), optode_frame=optode_frame, preload=False)
     bids_path = mne_bids.BIDSPath(
         subject=subject,
         task=task,

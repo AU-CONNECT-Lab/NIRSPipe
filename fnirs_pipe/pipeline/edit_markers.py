@@ -13,6 +13,7 @@ from fnirs_pipe.utils.logging import get_logger
 from fnirs_pipe.utils.snirf_prep import (
     annotations_to_df,
     bids_stem,
+    copy_dataset_root,
     copy_sidecars,
     deriv_nirs_dir,
     ensure_dataset_description,
@@ -145,4 +146,5 @@ def apply_markers(
                 "trial_type": [rename_map.get(d, d) for d in a.description],
             })
 
+    copy_dataset_root(bids_dir, derivatives_dir / _DERIV_NAME)
     return apply_markers_from_df(snirf_path, derivatives_dir, sub, ses, df)

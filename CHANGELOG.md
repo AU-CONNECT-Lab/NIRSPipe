@@ -15,6 +15,8 @@ All notable changes to this project will be documented in this file.
 - `fnirs-qc hyper-post --wtc-mc-count` sets how many surrogate series stand behind each significance contour (default 300, unchanged). It is what the runtime is spent on and it scales with the value, so a run can be previewed cheaply and settled expensively
 
 ### Changed
+- `snr_pass_rate` counts every channel, not only the ones with a finite SNR. A flat or saturated channel has no SNR at all and used to drop out of the fraction entirely, so a recording whose channels were dying read as one whose channels were passing. The new `n_flat_channels` says how many those are. **`snr_pass_rate` falls for any run that has them**
+- The subject report's per-window SCI and PSP panel reads the quality record instead of values passed from prep, and the series are measured on the motion-corrected file. Prep no longer computes them
 - Tables you hand the package read by extension: `.tsv` tab-separated, `.csv` comma-separated, anything else sniffed. Applies to events, segments, the pairs file and `participants.tsv`. What the package writes stays tab-separated
 - zALFF standardizes by the population SD (n) instead of the sample SD (n-1). Values grow by `sqrt(n/(n-1))`.
 
