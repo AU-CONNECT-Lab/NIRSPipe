@@ -71,6 +71,16 @@ class PostConfig:
             )
 
 
+def _has_confounds(config: PostConfig) -> bool:
+    """Whether denoise mode has anything to regress out.
+
+    Unlike rest mode, denoise does not force a drift model: it has no ALFF branch whose
+    input skips the bandpass, so the bandpass is already the detrend. Either flag on its
+    own is enough to make the regression worth running.
+    """
+    return bool(config.short_channel) or config.drift_model not in (None, "none")
+
+
 
 def run_post(
     raw_haemo: mne.io.Raw,
@@ -110,7 +120,7 @@ def run_post(
 
     glm_est = dm = alff_df = fc_df = fc_hbr_df = None
     fc_seed: dict = {}
-    raw_resid = None  # set by the glm/rest branches
+    raw_resid = None  # set by the glm/rest/denoise branches
     if mode == "glm":
         missing = [f for f in ("hrf_model", "noise_model", "drift_model") if getattr(config, f) is None]
         if missing:
@@ -192,6 +202,27 @@ def run_post(
 
         alff_df, fc_df, fc_hbr_df, fc_seed = _write_rest_derivatives(
             raw_resid, raw_resid_bb, config, output_dir, rec, source_entities=source_entities)
+
+    elif mode == "denoise" and _has_confounds(config):
+        # The same empty-events confound regression rest runs, and nothing else: no
+        # broadband residual, no ALFF, no FC. Task data whose systemic physiology has to go
+        # without the task being modelled (hyperscanning, seed connectivity) ends here.
+        logger.info("sub-%s | denoise confound regression", config.subject)
+        _, glm_est, dm, raw_resid = run_glm_pipeline(
+            result,
+            stim_dur=None,
+            hrf_model="spm",
+            noise_model="ols",
+            drift_model=config.drift_model or "none",
+            high_pass=config.drift_high_pass,
+            drift_order=config.drift_order,
+            fir_delays=None,
+            short_channel=config.short_channel,
+            events=pd.DataFrame({"trial_type": [], "onset": [], "duration": []}),
+            output_dir=str(output_dir / f"sub-{config.subject}" / "nirs"),
+            source_path=rec.path_of(result),
+        )
+        _write_step_snirf(raw_resid, config, output_dir, desc="errts", rec=rec, source_entities=source_entities)
 
     # GCOR around the short-channel regression (the fNIRS GSR analog): pre-regression vs
     # residuals. Expected to drop if the regression removed global/systemic signal.

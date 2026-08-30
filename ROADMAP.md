@@ -49,10 +49,11 @@ JSONL-based event logging wired into `fnirs-pipe` run flow.
 
 ## v0.9 — GUI Analysis Page & Pipeline Integration `[~]`
 
-Page UI + command generator done in v0.7. Still missing:
+Page UI + command generator done in v0.7. The run button executes the generated command
+([interface/callbacks/analysis_callbacks.py](fnirs_pipe/interface/callbacks/analysis_callbacks.py)),
+blocking until it finishes and then showing the last 30 lines of output. Still missing:
 
-- Actually execute the pipeline from the GUI (`run_pipeline` callback is currently a stub)
-- Live progress / log streaming during the run
+- Live progress / log streaming during the run, instead of one block of output at the end
 - Show report preview or figure output after run completes
 
 ## v0.10 — Group-Level QC Report `[x]`
@@ -75,13 +76,26 @@ Rating Flask apps (`HyperRatingApp` / `RawRatingApp` / `FNIRSRatingApp`) refacto
 - No more `_extract_*` regex reverse-parsing or string-concat injection
 - Static-open HTML shows rating bar greyed out + "static mode" banner
 
+## v0.12 — Quality Record & Provenance `[x]`
+
+One quality record per run (`<sub>_<task>_desc-sqm_nirs.json`), sectioned by the file each
+metric was measured on and assembled from the derivatives on disk rather than from what a
+run happened to hold in memory. Every stage SNIRF carries a lineage stamp and a sidecar
+naming its sources. The subject report reads the record instead of recomputing, so a number
+in a figure and the same number in the metrics table cannot disagree.
+
+## v0.13 — Numerical Cross-Validation `[x]`
+
+GVTD, channel SNR, ALFF/fALFF and the functional-connectivity products checked against
+external implementations of the same algorithms, and the CLI checked stage by stage against
+a bare-MNE run of the same chain. Reports are kept with the project notes outside the repo.
+
 ---
 
 ## Pending decisions
 
-- **Short-channel regression** — `--short-channel {none,mean,pca}` flag wired in CLI; confirm/finish integration into prep pipeline ([pipeline/glm.py:41](fnirs_pipe/pipeline/glm.py#L41) PCA path)
-- **`fnirs-pipe ... group` BIDS Apps entry** — currently `NotImplementedError` ([cli/workflows.py:318](fnirs_pipe/cli/workflows.py#L318)). Group-level QC already lives at `fnirs-qc group-raw`; decide whether to make `fnirs-pipe ... group` a thin wrapper around it or just deprecate the `group` analysis level.
-- **hyper_post Methods section** — same boilerplate tabs as subject_report ([qc/templates/hyper_post_report.html.j2:130](fnirs_pipe/qc/templates/hyper_post_report.html.j2#L130))
+- **Short-channel PCA path unverified** — `--short-channel {none,mean,pca}` is wired end to end and `mean` is in use; the `pca` branch has never been checked against anything ([pipeline/glm.py](fnirs_pipe/pipeline/glm.py), `_short_channel_regressors`)
+- **hyper_post Methods section** — same boilerplate tabs as subject_report ([qc/templates/hyper_post_report.html.j2](fnirs_pipe/qc/templates/hyper_post_report.html.j2))
 
 ---
 
@@ -89,29 +103,24 @@ Rating Flask apps (`HyperRatingApp` / `RawRatingApp` / `FNIRSRatingApp`) refacto
 
 ### Algorithms / numerical validation
 
-- **ALFF/fALFF revalidation** — x2 single-sided-spectrum scaling, fALFF denominator band ([pipeline/restingstate.py:18](fnirs_pipe/pipeline/restingstate.py#L18))
-- **Wavelet / spline motion correction** — currently raise `NotImplementedError` ([pipeline/prep_pipeline.py:100-105](fnirs_pipe/pipeline/prep_pipeline.py#L100-L105))
+- **Spline motion correction** — still raises `NotImplementedError`; TDDR and wavelet are implemented ([pipeline/motion.py](fnirs_pipe/pipeline/motion.py))
 - **Functional connectivity for task data** — `--mode connectivity` not implemented (only resting-state mode has FC)
-- **PLI / wPLI connectivity** — extend hyperscanning via mne-connectivity ([pipeline/hyperscanning.py:365](fnirs_pipe/pipeline/hyperscanning.py#L365))
+- **PLI / wPLI connectivity** — extend hyperscanning via mne-connectivity ([pipeline/hyperscanning.py](fnirs_pipe/pipeline/hyperscanning.py))
 - **External regressors in confound regression** — accept extra nuisance regressors alongside the short-channel ones, e.g. accelerometer traces from the SNIRF `aux` group. Head motion is a different confound from scalp physiology and short channels do not carry it ([pipeline/glm.py](fnirs_pipe/pipeline/glm.py))
 
 ### QC enhancements
 
-- **ROI-level WTC** — average HbO within anatomical ROIs ([qc/figures/hyper_post_figures.py:97](fnirs_pipe/qc/figures/hyper_post_figures.py#L97))
-- **Aggregate WTC across groups** — a sibling of `group-hyper-raw` that merges every `group-*_hyper-wtc.tsv` and `group-*_hyper-wtc-roi.tsv` into one long table with `group_id` and `task` columns, so a study with many dyads or many conditions has a single file to take into stats ([qc/hyper_report.py:165](fnirs_pipe/qc/hyper_report.py#L165))
-- **Persist the ISC matrix** — `compute_isc` builds a full n_ch × n_ch inter-brain Pearson matrix per chromophore and it only ever becomes a base64 figure. WTC writes its band means to TSV; ISC writes nothing, so nobody can take those numbers into stats ([qc/hyper_report.py:217](fnirs_pipe/qc/hyper_report.py#L217))
-- **GVTD timeseries-derived metrics** — e.g. fraction of timepoints above threshold ([qc/quantitative_metrics.py:240](fnirs_pipe/qc/quantitative_metrics.py#L240))
-- **ALFF/fALFF surface projection** — onto brain via mne_nirs ([qc/figures/rest_figures.py:6](fnirs_pipe/qc/figures/rest_figures.py#L6))
-- **ROI-to-ROI FC heatmap** — atlas parcellation ([qc/figures/rest_figures.py:7](fnirs_pipe/qc/figures/rest_figures.py#L7))
-- **Auto-generate roi.json from fOLD** — derive channel-to-region mapping from montage via `mne_nirs.io.fold_channel_specificity` (needs fOLD Excel DB), as an alternative to hand-written `--roi-mapping` ([cli/qc.py:331](fnirs_pipe/cli/qc.py#L331))
-- **Move `carpet_gvtd_figure`** to post-processing data path ([qc/figures/motion_panel.py:3](fnirs_pipe/qc/figures/motion_panel.py#L3))
+- **Aggregate WTC across groups** — a sibling of `group-hyper-raw` that merges every `group-*_hyper-wtc.tsv` and `group-*_hyper-wtc-roi.tsv` into one long table with `group_id` and `task` columns, so a study with many dyads or many conditions has a single file to take into stats ([qc/hyper_report.py](fnirs_pipe/qc/hyper_report.py))
+- **Persist the ISC matrix** — `compute_isc` builds a full n_ch × n_ch inter-brain Pearson matrix per chromophore and it only ever becomes a base64 figure. WTC writes its band means to TSV; ISC writes nothing, so nobody can take those numbers into stats ([qc/hyper_report.py](fnirs_pipe/qc/hyper_report.py), `_isc_panel`)
+- **ALFF/fALFF surface projection** — onto brain via mne_nirs ([qc/figures/rest_figures.py](fnirs_pipe/qc/figures/rest_figures.py))
+- **ROI-to-ROI FC heatmap** — atlas parcellation ([qc/figures/rest_figures.py](fnirs_pipe/qc/figures/rest_figures.py))
+- **Auto-generate roi.json from fOLD** — derive channel-to-region mapping from montage via `mne_nirs.io.fold_channel_specificity` (needs fOLD Excel DB), as an alternative to hand-written `--roi-mapping`
 
 ### Reports / viewer features (designed, not started)
 
-- **Per-step before/after comparison** — interactive channel-level signal comparison across preprocessing steps (OD → SCI → motion-corrected → haemo)
+- **Per-step before/after comparison** — interactive channel-level signal comparison across preprocessing steps (OD → SCI → motion-corrected → haemo). Two steps have it: the motion step (per-channel detail, before against after) and denoising (`carpet_compare_figure`). The rest of the chain has nothing
 - **Multi-run QC comparison** — multi-row already present in `group_nirs.tsv`, but the report has no "group rows by subject" panel for within-subject reliability across runs ([qc/group_writer.py](fnirs_pipe/qc/group_writer.py))
 
 ### Infrastructure
 
-- **Switch SNIRF IO to pysnirf2** when it supports NumPy 2.x ([io/snirf.py:23](fnirs_pipe/io/snirf.py#L23))
-- **Automated pytest coverage** — currently only `tests/sh/*.sh` manual scripts + `tests/gen_hyper_dummy.py`
+- **Switch SNIRF IO to pysnirf2** when it supports NumPy 2.x ([io/snirf.py](fnirs_pipe/io/snirf.py))

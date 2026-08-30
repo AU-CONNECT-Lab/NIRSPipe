@@ -65,7 +65,9 @@ def _build_parser() -> argparse.ArgumentParser:
                           help="Sliding-window length (s) for windowed SCI/PSP/GVTD QC series.")
 
     post = p.add_argument_group("postprocessing (requires --mode)")
-    post.add_argument("--mode", choices=_MODE_CHOICES, help="Postprocessing mode: denoise, glm or rest.")
+    post.add_argument("--mode", choices=_MODE_CHOICES,
+                      help="Postprocessing mode: denoise (bandpass, plus confound regression "
+                           "when --short-channel or --drift-model is given), glm or rest.")
     post.add_argument("--config", type=Path,
                       help="TOML file providing post parameter values. CLI flags override TOML.")
     post.add_argument("--high-pass", type=float, help="High-pass filter cutoff in Hz, e.g. 0.01.")
@@ -75,21 +77,23 @@ def _build_parser() -> argparse.ArgumentParser:
     post.add_argument("--combine-runs", action=argparse.BooleanOptionalAction, default=False,
                       help="Concatenate multiple runs before postprocessing.")
 
-    glm = p.add_argument_group("postprocessing: GLM (--mode glm)")
+    glm = p.add_argument_group("postprocessing: GLM and confound regression")
     glm.add_argument("--stim-dur", type=float,
                      help="Stimulus duration (s) for annotation-based events. Mutually exclusive with --events-path.")
     glm.add_argument("--hrf-model",   choices=_HRF_CHOICES,
                      help="HRF basis. 'spm + derivative' adds temporal derivative column.")
     glm.add_argument("--noise-model", choices=_NOISE_CHOICES, help="Residual autocorrelation model.")
     glm.add_argument("--drift-model", choices=_DRIFT_CHOICES,
-                     help="Low-frequency drift regressors in design matrix.")
+                     help="Low-frequency drift regressors in design matrix. Required by "
+                          "--mode glm and rest; optional in denoise, where the bandpass detrends.")
     glm.add_argument("--drift-high-pass", type=float, help="High-pass cutoff for cosine drift in Hz.")
     glm.add_argument("--drift-order", type=int, default=1,
                      help="Polynomial drift order (polynomial drift model only).")
     glm.add_argument("--fir-delays",
                      help="FIR delay bins in scans, comma-separated, e.g. '0,1,2,3,4,5' (only used when --hrf-model fir).")
     glm.add_argument("--short-channel", choices=_SHORT_CHANNEL_CHOICES,
-                     help="Short-channel confound regressor strategy.")
+                     help="Short-channel confound regressor strategy. Honoured by every mode: "
+                          "glm fits it alongside the task, denoise and rest on its own.")
     glm.add_argument("--events-path", type=Path,
                      help="Path to *_events.tsv. If omitted, extracted from snirf annotations.")
     glm.add_argument("--contrast-file", type=Path, help="TOML file defining GLM contrasts.")

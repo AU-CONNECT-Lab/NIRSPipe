@@ -46,7 +46,7 @@ def _build_script_text(
     stim_dur: float | None = None,
     hrf_model: str = "spm",
     noise_model: str = "ar1",
-    drift_model: str = "cosine",
+    drift_model: str = "none",
     drift_high_pass: float = 0.01,
     drift_order: int = 1,
     fir_delays: tuple[int, ...] = (0,),
@@ -56,6 +56,9 @@ def _build_script_text(
     combine_runs: bool = False,
 ) -> str:
     dt_str = datetime.strptime(timestamp, "%Y%m%d_%H%M%S").strftime("%Y-%m-%d %H:%M:%S")
+    # mirrors post_pipeline._has_confounds: denoise regresses only when asked to
+    denoise_regress = mode == "denoise" and (
+        bool(short_channel) or drift_model not in (None, "none"))
     sessions_repr = repr(session_label if session_label else [None])
     tasks_repr    = repr(task_label    if task_label    else [None])
     bad_channels  = bad_channels or []
@@ -92,9 +95,9 @@ def _build_script_text(
     )
     if mode:
         w('from fnirs_pipe.pipeline.denoise import bandpass_filter, resample')
-    if mode in ("glm", "rest"):
+    if mode in ("glm", "rest") or denoise_regress:
         w('from fnirs_pipe.pipeline.glm import run_glm_pipeline')
-    if mode == "rest":
+    if mode == "rest" or denoise_regress:
         w('import pandas as pd')
     if mode and contrast_file:
         w(
@@ -141,7 +144,7 @@ def _build_script_text(
             f'SHORT_CHANNEL  = {short_channel!r}',
             f'EVENTS_PATH    = {events_path!r}',
         )
-    elif mode == "rest":
+    elif mode == "rest" or denoise_regress:
         w(
             f'DRIFT_MODEL    = {drift_model!r}',
             f'DRIFT_HIGH_PASS= {drift_high_pass!r}',
@@ -250,6 +253,21 @@ def _build_script_text(
             if mode in ("denoise", "glm"):
                 b('save_step(result, "resampled", "resample", session=session)')
 
+        if denoise_regress:
+            b(
+                '',
+                '# ----- block: denoise | confound regression (no task model) -----',
+                '_, glm_est, design_matrix, raw_resid = run_glm_pipeline(',
+                '    result,',
+                '    stim_dur=None, hrf_model="spm", noise_model="ols",',
+                '    drift_model=DRIFT_MODEL, high_pass=DRIFT_HIGH_PASS, drift_order=DRIFT_ORDER,',
+                '    fir_delays=None, short_channel=SHORT_CHANNEL,',
+                '    events=pd.DataFrame({"trial_type": [], "onset": [], "duration": []}),',
+                '    output_dir=str(OUTPUT_DIR / f"sub-{SUBJECT}" / "nirs"),',
+                ')',
+                'save_step(raw_resid, "errts", "denoise_residual", session=session)',
+            )
+
         if mode == "denoise":
             b('# QC (not run here): the `final` section is read back from the last file written.')
 
@@ -351,7 +369,7 @@ def write_run_script(
         stim_dur=args.get("stim_dur"),
         hrf_model=_unwrap(args.get("hrf_model"), "spm"),
         noise_model=_unwrap(args.get("noise_model"), "ar1"),
-        drift_model=_unwrap(args.get("drift_model"), "cosine"),
+        drift_model=_unwrap(args.get("drift_model"), "none"),
         drift_high_pass=_pick("drift_high_pass", 0.01),
         drift_order=_pick("drift_order", 1),
         fir_delays=fir_delays,

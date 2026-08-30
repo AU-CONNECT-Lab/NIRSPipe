@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- `--mode denoise` honours `--short-channel` (and `--drift-model`): the confound regression runs after the bandpass and the residual is written as `desc-errts`. No task model, no ALFF, no FC, no second broadband regression. Task data whose systemic physiology has to go without the task being modelled no longer has to borrow `--mode rest` and throw half its output away. `--drift-model` stays optional here, unlike in `rest`
 - The quality record gains a `motion_post` section: GVTD, spikes, SCI and PSP measured again on the motion-corrected file. Set against the same keys in `raw`, it says whether the correction reduced motion and whether it cost any cardiac signal
 - The quality record gains a `windowed` section: the per-window SCI, PSP and GVTD series, with the window length they were binned on. They used to exist only in what `fnirs-qc prep-raw` wrote
 - Metric tooltips in the subject report now say which processing stage the number was measured on, which matters for the keys that appear in two sections

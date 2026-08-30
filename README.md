@@ -9,7 +9,7 @@ A BIDS-compatible fNIRS preprocessing, postprocessing, hyperscanning, and QC pip
 | Stage | What it does |
 |-------|--------------|
 | `prep` | Fixed-order preprocessing: OD conversion → SCI channel marking → motion correction (TDDR) → Beer-Lambert |
-| `post` | Mode-driven postprocessing: `denoise`, `glm`, or `rest` (bandpass + resample; GLM residuals or ALFF/FC) |
+| `post` | Mode-driven postprocessing: `denoise`, `glm`, or `rest` (bandpass + resample; confound regression; GLM residuals or ALFF/FC) |
 
 Outputs follow the [BIDS Derivatives](https://bids-specification.readthedocs.io/en/stable/derivatives/introduction.html) spec. Each subject gets an HTML QC report with figures and an auto-generated Methods paragraph. Group-level QC, hyperscanning (dyad WTC/ISC), an interactive rating viewer, a Dash desktop GUI, and a JSONL→SQLite run-log database are all first-class features.
 
@@ -108,6 +108,10 @@ GLM (--mode glm):
   --stim-dur FLOAT             Optional. Fixed duration for SNIRF annotations without one.
                                Mutually exclusive with --events-path.
   --contrast-file FILE         TOML file defining GLM contrasts.
+
+Denoise (--mode denoise):
+  Reuses GLM flags for confound regression (drift model, short-channel).
+  Either one writes desc-errts; no task model, no resting-state derivatives.
 
 Rest (--mode rest):
   Reuses GLM flags for confound regression (drift model, short-channel).
@@ -266,7 +270,7 @@ output/
 │       ├── sub-01_desc-preproc_nirs.snirf         # prep step 5 (terminus)
 │       ├── sub-01_desc-filtered_nirs.snirf        # post: bandpass applied
 │       ├── sub-01_desc-resampled_nirs.snirf       # post: resample applied
-│       ├── sub-01_desc-errts_nirs.snirf           # post glm/rest: GLM residuals
+│       ├── sub-01_desc-errts_nirs.snirf           # post glm/rest/denoise: GLM residuals
 │       ├── sub-01_desc-errtsbroad_nirs.snirf      # rest: un-bandpassed residual, ALFF input
 │       ├── sub-01_task-<t>_desc-sqm_nirs.json     # SQM record, one per run
 │       ├── sub-01_design_matrix.csv                # glm mode
