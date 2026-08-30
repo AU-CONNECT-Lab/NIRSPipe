@@ -7,6 +7,9 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- The quality record gains a `motion_post` section: GVTD, spikes, SCI and PSP measured again on the motion-corrected file. Set against the same keys in `raw`, it says whether the correction reduced motion and whether it cost any cardiac signal
+- The quality record gains a `windowed` section: the per-window SCI, PSP and GVTD series, with the window length they were binned on. They used to exist only in what `fnirs-qc prep-raw` wrote
+- Metric tooltips in the subject report now say which processing stage the number was measured on, which matters for the keys that appear in two sections
 - `fnirs-prep crop` accepts a `task` column in the segments table: each segment is written under that task entity instead of `_seg-NN`, so a recording holding several conditions becomes a BIDS dataset the pipeline can read back one condition at a time
 - `fnirs-qc hyper-post --wtc-roi-cross` crosses the two brains' ROIs instead of pairing each with its counterpart, so one person's PFC can be tested against the other's TPJ. `hyper-wtc-roi.tsv` gains a `label2` column, the report an ROI × ROI matrix. Needs `--roi-mapping`
 - `fnirs-qc hyper-post --wtc-mc-count` sets how many surrogate series stand behind each significance contour (default 300, unchanged). It is what the runtime is spent on and it scales with the value, so a run can be previewed cheaply and settled expensively

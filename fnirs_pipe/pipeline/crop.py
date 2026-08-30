@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from fnirs_pipe.io.snirf import write_snirf
 from fnirs_pipe.io.tables import read_table
 from fnirs_pipe.utils.logging import get_logger
 from fnirs_pipe.utils.snirf_prep import (
@@ -25,10 +26,18 @@ _DERIV_NAME = "cropped"
 
 
 def _write_segment(raw_seg, out_snirf: Path) -> None:
-    import mne
-    mne.export.export_raw(str(out_snirf), raw_seg, fmt="snirf", overwrite=True, verbose=False)
+    write_snirf(raw_seg, out_snirf)
     events_path = out_snirf.parent / out_snirf.name.replace("_nirs.snirf", "_events.tsv")
     annotations_to_df(raw_seg).to_csv(events_path, sep="\t", index=False)
+
+
+def _copy_dataset_root(bids_dir: Path, deriv_root: Path) -> None:
+    """Carry the dataset-level files across so the output stands on its own as BIDS."""
+    import shutil
+    for name in ("participants.tsv", "participants.json", "README"):
+        src = bids_dir / name
+        if src.exists():
+            shutil.copy2(src, deriv_root / name)
 
 
 def _setup_deriv_dir(derivatives_dir: Path, sub: str, ses: str | None) -> Path:
@@ -40,6 +49,7 @@ def _setup_deriv_dir(derivatives_dir: Path, sub: str, ses: str | None) -> Path:
 
 def _crop_raw(
     raw,
+    snirf_path: Path,
     out_nirs_dir: Path,
     stem: str,
     *,
@@ -50,14 +60,19 @@ def _crop_raw(
 ) -> list[Path]:
     import mne
 
+    def _write(seg, name: str) -> Path:
+        out = out_nirs_dir / f"{name}_nirs.snirf"
+        _write_segment(seg, out)
+        copy_sidecars(snirf_path, stem, out_nirs_dir, name)
+        return out
+
     if segments_df is not None:
         segs = [
             raw.copy().crop(tmin=row.onset, tmax=row.onset + row.duration)
             for _, row in segments_df.iterrows()
         ]
         if combine:
-            out = out_nirs_dir / f"{stem}_nirs.snirf"
-            _write_segment(mne.concatenate_raws(segs), out)
+            out = _write(mne.concatenate_raws(segs), stem)
             logger.info("Written combined: %s", out)
             return [out]
         tasks = segments_df["task"] if "task" in segments_df.columns else None
@@ -67,15 +82,12 @@ def _crop_raw(
                 name = f"{stem}_seg-{i:02d}"
             else:
                 name = re.sub(r"task-[^_]+", f"task-{tasks.iloc[i - 1]}", stem)
-            out = out_nirs_dir / f"{name}_nirs.snirf"
-            _write_segment(seg, out)
+            out = _write(seg, name)
             logger.info("Written segment %d: %s", i, out)
             out_paths.append(out)
         return out_paths
 
-    cropped = raw.copy().crop(tmin=tmin, tmax=tmax)
-    out = out_nirs_dir / f"{stem}_nirs.snirf"
-    _write_segment(cropped, out)
+    out = _write(raw.copy().crop(tmin=tmin, tmax=tmax), stem)
     logger.info("Written: %s", out)
     return [out]
 
@@ -97,9 +109,8 @@ def crop_snirf_from_path(
     """
     stem = bids_stem(snirf_path)
     out_nirs_dir = _setup_deriv_dir(derivatives_dir, sub, ses)
-    copy_sidecars(snirf_path, stem, out_nirs_dir)
     raw = read_raw_snirf(snirf_path)
-    return _crop_raw(raw, out_nirs_dir, stem,
+    return _crop_raw(raw, snirf_path, out_nirs_dir, stem,
                      tmin=tmin, tmax=tmax, segments_df=segments_df, combine=combine)
 
 
@@ -131,9 +142,9 @@ def crop_snirf(
     snirf_path = find_snirf(bids_dir, sub, ses, task, run, validate=validate)
     stem = bids_stem(snirf_path)
     out_nirs_dir = _setup_deriv_dir(derivatives_dir, sub, ses)
-    copy_sidecars(snirf_path, stem, out_nirs_dir)
+    _copy_dataset_root(bids_dir, derivatives_dir / _DERIV_NAME)
     raw = read_raw_snirf(snirf_path)
 
     segments_df = read_table(segments_path) if segments_path is not None else None
-    return _crop_raw(raw, out_nirs_dir, stem,
+    return _crop_raw(raw, snirf_path, out_nirs_dir, stem,
                      tmin=tmin, tmax=tmax, segments_df=segments_df, combine=combine)

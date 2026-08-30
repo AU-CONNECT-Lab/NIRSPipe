@@ -7,6 +7,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from fnirs_pipe.io.snirf import write_snirf
 from fnirs_pipe.io.tables import read_table
 from fnirs_pipe.utils.logging import get_logger
 from fnirs_pipe.utils.snirf_prep import (
@@ -45,8 +46,6 @@ def apply_markers_from_df(
     Public entry point shared by the CLI (via apply_markers) and the interface callbacks.
     Returns the path to the written SNIRF.
     """
-    import mne
-
     stem = bids_stem(snirf_path)
     out_nirs_dir = deriv_nirs_dir(derivatives_dir, _DERIV_NAME, sub, ses)
     ensure_dataset_description(
@@ -59,7 +58,7 @@ def apply_markers_from_df(
     raw.set_annotations(_df_to_annotations(df))
 
     out_snirf = out_nirs_dir / f"{stem}_nirs.snirf"
-    mne.export.export_raw(str(out_snirf), raw, fmt="snirf", overwrite=True, verbose=False)
+    write_snirf(raw, out_snirf)
     annotations_to_df(raw).to_csv(out_nirs_dir / f"{stem}_events.tsv", sep="\t", index=False)
 
     logger.info("Written to %s", out_nirs_dir)

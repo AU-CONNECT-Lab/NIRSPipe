@@ -77,8 +77,14 @@ def ensure_dataset_description(deriv_root: Path, name: str, generated_by: str) -
     }, indent=2))
 
 
-def copy_sidecars(snirf_path: Path, stem: str, dest_dir: Path) -> None:
+def copy_sidecars(snirf_path: Path, stem: str, dest_dir: Path, dest_stem: str | None = None) -> None:
+    """Copy a run's sidecars, optionally renaming them onto dest_stem.
+
+    A sidecar belongs to the file whose name it shares, so an output written under a
+    different stem than its source needs its sidecars renamed to match or they describe
+    a file that is not there.
+    """
     for suffix in NIRS_SIDECAR_SUFFIXES:
         src = snirf_path.parent / f"{stem}{suffix}"
         if src.exists():
-            shutil.copy2(src, dest_dir / src.name)
+            shutil.copy2(src, dest_dir / f"{dest_stem or stem}{suffix}")

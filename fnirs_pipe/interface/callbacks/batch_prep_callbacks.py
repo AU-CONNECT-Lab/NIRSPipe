@@ -267,10 +267,7 @@ def run_batch(
                     copy_sidecars(snirf_path, stem, out_dir)
                     out_snirf   = out_dir / f"{stem}_nirs.snirf"
                     raw_aligned = aligned_raws[sid]
-                    _mne.export.export_raw(
-                        str(out_snirf), raw_aligned, fmt="snirf",
-                        overwrite=True, verbose=False,
-                    )
+                    write_snirf(raw_aligned, out_snirf)
                     annotations_to_df(raw_aligned).to_csv(
                         out_dir / f"{stem}_events.tsv", sep="\t", index=False,
                     )
