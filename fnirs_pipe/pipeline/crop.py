@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from fnirs_pipe.io.tables import read_table
 from fnirs_pipe.utils.logging import get_logger
 from fnirs_pipe.utils.snirf_prep import (
     annotations_to_df,
@@ -124,6 +125,6 @@ def crop_snirf(
     copy_sidecars(snirf_path, stem, out_nirs_dir)
     raw = read_raw_snirf(snirf_path)
 
-    segments_df = pd.read_csv(segments_path, sep="\t") if segments_path is not None else None
+    segments_df = read_table(segments_path) if segments_path is not None else None
     return _crop_raw(raw, out_nirs_dir, stem,
                      tmin=tmin, tmax=tmax, segments_df=segments_df, combine=combine)

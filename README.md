@@ -57,6 +57,8 @@ See [`docs/pipeline/common-scenarios.md`](docs/pipeline/common-scenarios.md) for
 
 ## CLI Reference
 
+Wherever a command takes a table from you (events, segments, the pairs file, `participants.tsv`), the extension decides the delimiter: `.tsv` is tab-separated, `.csv` comma-separated, and any other extension has its delimiter sniffed from the header. Option names such as `--pairs-csv` and `--events-path` say nothing about which format you must supply. Files the package writes back are always tab-separated, as BIDS requires.
+
 ### `fnirs-pipe`
 
 ```

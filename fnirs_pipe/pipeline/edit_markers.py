@@ -7,6 +7,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from fnirs_pipe.io.tables import read_table
 from fnirs_pipe.utils.logging import get_logger
 from fnirs_pipe.utils.snirf_prep import (
     annotations_to_df,
@@ -120,7 +121,7 @@ def apply_markers(
     snirf_path = find_snirf(bids_dir, sub, ses, task, run, validate=validate)
 
     if tsv is not None:
-        df = pd.read_csv(tsv, sep="\t")
+        df = read_table(tsv)
     else:
         raw = read_raw_snirf(snirf_path)
         a = raw.annotations

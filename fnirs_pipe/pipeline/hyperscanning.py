@@ -12,6 +12,7 @@ import pandas as pd
 from fnirs_pipe.exceptions import AlignmentError, GroupCSVError, MissingDerivativesError, StageError
 from fnirs_pipe.io.derivatives import find_preproc_snirf
 from fnirs_pipe.io.snirf import read_snirf
+from fnirs_pipe.io.tables import read_table
 from fnirs_pipe.pipeline.synchrony import (  # noqa: F401  re-exported
     WTCResult,
     compute_pairwise_coherence,
@@ -50,7 +51,7 @@ class GroupEntry:
 def parse_group_csv(csv_path: Path) -> dict[tuple[str, str], list[GroupEntry]]:
     """Parse group CSV into {(group_id, task): [GroupEntry, ...]}."""
     try:
-        df = pd.read_csv(csv_path, dtype=str)
+        df = read_table(csv_path, dtype=str)
     except Exception as exc:
         raise GroupCSVError(f"Cannot read CSV {csv_path}: {exc}") from exc
 

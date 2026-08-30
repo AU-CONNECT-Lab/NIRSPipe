@@ -49,11 +49,11 @@ def get_participant_age(
 
     Raises ValueError if age is not found and no fallback is provided.
     """
-    import pandas as pd
+    from fnirs_pipe.io.tables import read_table
 
     tsv_path = Path(layout.root) / "participants.tsv"
     if tsv_path.exists():
-        df = pd.read_csv(tsv_path, sep="\t")
+        df = read_table(tsv_path)
         row = df[df["participant_id"] == f"sub-{subject}"]
         if not row.empty and "age" in df.columns:
             return float(row["age"].iloc[0])

@@ -7,6 +7,7 @@ import pandas as pd
 import mne
 import mne.io
 
+from fnirs_pipe.io.tables import read_table
 from fnirs_pipe.utils.lineage import stamp
 from fnirs_pipe.utils.logging import get_logger
 
@@ -154,7 +155,7 @@ def run_glm_pipeline(
 ) -> tuple:
     # explicit events take precedence; then external TSV; then snirf annotations
     if events is None:
-        events = pd.read_csv(events_path, sep="\t") if events_path else None
+        events = read_table(events_path) if events_path else None
 
     # Short-channel confounds are pulled from `haemo`, the same data the design matrix is fit
     # against. When that data has been bandpass-filtered upstream, the short channels ride

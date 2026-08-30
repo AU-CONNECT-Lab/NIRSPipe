@@ -93,10 +93,13 @@ Rating Flask apps (`HyperRatingApp` / `RawRatingApp` / `FNIRSRatingApp`) refacto
 - **Wavelet / spline motion correction** — currently raise `NotImplementedError` ([pipeline/prep_pipeline.py:100-105](fnirs_pipe/pipeline/prep_pipeline.py#L100-L105))
 - **Functional connectivity for task data** — `--mode connectivity` not implemented (only resting-state mode has FC)
 - **PLI / wPLI connectivity** — extend hyperscanning via mne-connectivity ([pipeline/hyperscanning.py:365](fnirs_pipe/pipeline/hyperscanning.py#L365))
+- **External regressors in confound regression** — accept extra nuisance regressors alongside the short-channel ones, e.g. accelerometer traces from the SNIRF `aux` group. Head motion is a different confound from scalp physiology and short channels do not carry it ([pipeline/glm.py](fnirs_pipe/pipeline/glm.py))
 
 ### QC enhancements
 
 - **ROI-level WTC** — average HbO within anatomical ROIs ([qc/figures/hyper_post_figures.py:97](fnirs_pipe/qc/figures/hyper_post_figures.py#L97))
+- **Aggregate WTC across groups** — a sibling of `group-hyper-raw` that merges every `group-*_hyper-wtc.tsv` and `group-*_hyper-wtc-roi.tsv` into one long table with `group_id` and `task` columns, so a study with many dyads or many conditions has a single file to take into stats ([qc/hyper_report.py:165](fnirs_pipe/qc/hyper_report.py#L165))
+- **Persist the ISC matrix** — `compute_isc` builds a full n_ch × n_ch inter-brain Pearson matrix per chromophore and it only ever becomes a base64 figure. WTC writes its band means to TSV; ISC writes nothing, so nobody can take those numbers into stats ([qc/hyper_report.py:217](fnirs_pipe/qc/hyper_report.py#L217))
 - **GVTD timeseries-derived metrics** — e.g. fraction of timepoints above threshold ([qc/quantitative_metrics.py:240](fnirs_pipe/qc/quantitative_metrics.py#L240))
 - **ALFF/fALFF surface projection** — onto brain via mne_nirs ([qc/figures/rest_figures.py:6](fnirs_pipe/qc/figures/rest_figures.py#L6))
 - **ROI-to-ROI FC heatmap** — atlas parcellation ([qc/figures/rest_figures.py:7](fnirs_pipe/qc/figures/rest_figures.py#L7))

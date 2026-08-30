@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 - `fnirs-qc hyper-post --wtc-mc-count` sets how many surrogate series stand behind each significance contour (default 300, unchanged). It is what the runtime is spent on and it scales with the value, so a run can be previewed cheaply and settled expensively
 
 ### Changed
+- Every table you hand the package reads the same way, whatever its extension: `.tsv` is tab-separated, `.csv` comma-separated, and anything else has its delimiter sniffed. Applies to events, segments, the pairs file and `participants.tsv`, so a `.csv` of events no longer has to be converted first. Files the package writes are unchanged and stay tab-separated
 - zALFF standardizes by the population SD (n) instead of the sample SD (n-1). Values grow by `sqrt(n/(n-1))`.
 
 ## [0.21.0] - 2026-08-24

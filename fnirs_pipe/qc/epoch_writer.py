@@ -21,8 +21,8 @@ logger = get_logger("qc.epoch_writer")
 def _read_trials(raw: mne.io.Raw, events_csv: Path | None) -> list[tuple[float, float, str]]:
     """Return (onset_s, duration_s, condition) per trial — from CSV if given, else SNIRF events."""
     if events_csv is not None:
-        import pandas as pd
-        df = pd.read_csv(events_csv, sep=None, engine="python")
+        from fnirs_pipe.io.tables import read_table
+        df = read_table(events_csv)
         cols = {c.lower(): c for c in df.columns}
         if "onset" not in cols:
             raise ValueError("events CSV must have an 'onset' column")
