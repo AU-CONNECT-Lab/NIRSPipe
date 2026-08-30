@@ -572,7 +572,7 @@ def _spike_metrics(raw_intensity: mne.io.Raw, ch_frac: float = 0.1) -> dict[str,
     Parameters
     ----------
     raw_intensity : mne.io.Raw
-        Raw intensity recording.
+        Raw intensity recording, or one already in optical density.
     ch_frac : float, optional
         Fraction of channels that must spike at a timepoint for it to count as a spike
         frame (the frame-level / FD-style aggregation).
@@ -593,7 +593,8 @@ def _spike_metrics(raw_intensity: mne.io.Raw, ch_frac: float = 0.1) -> dict[str,
     derivative energy, the squared DVARS-vstd normaliser) for flagging noisy channels,
     not a standard named metric and not motion detection.
     """
-    raw_od = mne.preprocessing.nirs.optical_density(raw_intensity.copy())
+    raw_od = (raw_intensity if is_optical_density(raw_intensity)
+              else mne.preprocessing.nirs.optical_density(raw_intensity.copy()))
     od_data = np.nan_to_num(raw_od.get_data(), nan=0.0, posinf=0.0, neginf=0.0)
     diff_raw = np.diff(od_data, axis=1)  # unfiltered: for the derivative-energy TVD
     spikes = _spike_mask(_motion_band_diff(od_data, float(raw_od.info["sfreq"])))
@@ -621,15 +622,23 @@ def _motion_metrics(raw_intensity: mne.io.Raw) -> dict[str, Any]:
     Parameters
     ----------
     raw_intensity : mne.io.Raw
-        Raw intensity recording.
+        Raw intensity recording, or one already in optical density.
 
     Returns
     -------
     dict
         gvtd_mean/p95 (canonical), gvtd_filt_* (motion-band), gvtd_vstd_*
         (channel-standardized), gvtd_thresh, and the num/pct of timepoints above it.
+
+    Notes
+    -----
+    Already-OD input is passed through rather than converted, so the same metrics can be
+    measured on the motion-corrected file and compared against the ones taken on the
+    original recording. ``optical_density`` raises on anything that is not continuous-wave
+    amplitude, so the guard is what makes that second call possible at all.
     """
-    raw_od = mne.preprocessing.nirs.optical_density(raw_intensity.copy())
+    raw_od = (raw_intensity if is_optical_density(raw_intensity)
+              else mne.preprocessing.nirs.optical_density(raw_intensity.copy()))
     sfreq = float(raw_od.info["sfreq"])
     od_data = np.nan_to_num(raw_od.get_data(), nan=0.0, posinf=0.0, neginf=0.0)
     gvtd_ts = gvtd_timetrace(od_data, sfreq)                           # canonical (unfiltered)
@@ -770,7 +779,8 @@ def motion_corrected_segments(
 
 def spike_segments(raw_intensity: mne.io.Raw, ch_frac: float = 0.1) -> "list[tuple[float, float]]":
     """Time spans where >= ch_frac of channels show a motion-band OD spike (for plotting)."""
-    raw_od = mne.preprocessing.nirs.optical_density(raw_intensity.copy())
+    raw_od = (raw_intensity if is_optical_density(raw_intensity)
+              else mne.preprocessing.nirs.optical_density(raw_intensity.copy()))
     diff_data = _motion_band_diff(raw_od.get_data(), float(raw_od.info["sfreq"]))
     flagged = _spike_mask(diff_data).mean(axis=0) >= ch_frac
     return _mask_to_segments(flagged, raw_od.times[1:])

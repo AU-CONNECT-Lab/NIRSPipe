@@ -51,7 +51,8 @@ _DESC_RE = re.compile(r"_desc-([A-Za-z0-9]+)_nirs\.snirf$")
 # the haemo file the "final" section measures, best first
 _FINAL_ORDER = ("resampled", "filtered", "preproc")
 
-SECTIONS = ("raw", "raw_long", "raw_short", "motion", "windowed", "preproc", "final")
+SECTIONS = ("raw", "raw_long", "raw_short", "motion", "motion_post", "windowed",
+            "preproc", "final")
 
 
 def scan_runs(nirs_dir: Path) -> dict[str, dict[str, Path]]:
@@ -193,6 +194,38 @@ def _short_section(
     return _split_scalars(record)
 
 
+def _motion_post_section(
+    raw_od: mne.io.Raw,
+    cardiac_l_freq: float,
+    cardiac_h_freq: float,
+) -> dict[str, Any]:
+    """Did the correction work, and did it cost anything.
+
+    Two questions, not one. GVTD and the spike counts answer the first: both measure what
+    the correction is there to remove, so a run that improved shows them fall against the
+    same keys in ``raw``. SCI and PSP answer the second: they live in the cardiac band,
+    above the frequencies motion correction touches, so they should come back unchanged. A
+    drop means the correction ate physiology along with the artifact, which is the failure
+    mode wavelet correction has and TDDR largely does not.
+
+    Hand-picked rather than ``compute_raw_sqm``: this file is optical density, so that
+    would set the whole intensity family to None and add CP and channel distance on top,
+    twenty-odd keys of which half would be empty.
+    """
+    from fnirs_pipe.qc.quantitative_metrics import (
+        _mean_or_none, _motion_metrics, _psp_metrics, _spike_metrics, compute_sci_scores,
+    )
+
+    record: dict[str, Any] = {}
+    record.update(_motion_metrics(raw_od))
+    record.update(_spike_metrics(raw_od))
+    # the mean over every channel, bads included, so it is comparable with `raw`
+    scores, _ = compute_sci_scores(raw_od, cardiac_l_freq, cardiac_h_freq)
+    record["sci_mean"] = _mean_or_none(scores.values())
+    record.update(_psp_metrics(raw_od, cardiac_l_freq, cardiac_h_freq))
+    return record
+
+
 def compute_run_sections(
     stages: dict[str, Path],
     *,
@@ -289,6 +322,12 @@ def compute_run_sections(
         from fnirs_pipe.qc.quantitative_metrics import motion_correction_metrics
         section("motion", lambda: motion_correction_metrics(
             read_snirf(stages["sci"]), read_snirf(stages["motcorrected"])))
+
+    # the same OD-domain metrics as `raw`, measured on the corrected file. Same domain and
+    # same units, so these subtract against `raw`; nothing across Beer-Lambert does
+    if "motcorrected" in stages:
+        section("motion_post", lambda: _motion_post_section(
+            read_snirf(stages["motcorrected"]), cardiac_l_freq, cardiac_h_freq))
 
     if "preproc" in stages:
         section("preproc", lambda: compute_prep_haemo_sqm(

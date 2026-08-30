@@ -215,11 +215,19 @@ _STAGE_BOTH = (
     "Measured twice: before filtering and again after filtering and resampling. Which one "
     "you are reading is the section it sits in."
 )
+_STAGE_RAW_AND_CORRECTED = (
+    "Measured on the recording as it arrived, and again on the motion-corrected file. "
+    "Which one you are reading is the section it sits in."
+)
 
 _RAW_METRICS = (
-    "sci_mean", "channel_retention_rate", "psp_mean", "cp_mean", "cp_pass_rate",
+    "channel_retention_rate", "cp_mean", "cp_pass_rate",
     "cv_mean", "snr_mean", "snr_pass_rate", "mean_amp_mean",
     "ch_dist_mean", "ch_dist_min", "ch_dist_max",
+)
+# the OD-domain families, measured again on the corrected file so the pair subtracts
+_RAW_AND_CORRECTED_METRICS = (
+    "sci_mean", "psp_mean",
     "gvtd_mean", "gvtd_p95", "gvtd_filt_mean", "gvtd_filt_p95",
     "gvtd_vstd_mean", "gvtd_vstd_p95", "gvtd_thresh",
     "gvtd_num_above_thresh", "gvtd_pct_above_thresh",
@@ -240,6 +248,7 @@ _BOTH_METRICS = ("hbo_hbr_corr_mean", "gcor_hbo", "gcor_hbr", "pct_data_retained
 
 METRIC_STAGE = {
     **{k: _STAGE_RAW for k in _RAW_METRICS},
+    **{k: _STAGE_RAW_AND_CORRECTED for k in _RAW_AND_CORRECTED_METRICS},
     **{k: _STAGE_MOTION for k in _MOTION_METRICS},
     **{k: _STAGE_PREPROC for k in _PREPROC_METRICS},
     **{k: _STAGE_BOTH for k in _BOTH_METRICS},
