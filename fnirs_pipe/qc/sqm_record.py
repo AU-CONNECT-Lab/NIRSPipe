@@ -299,15 +299,6 @@ def compute_run_sections(
                 return compute_raw_sqm(
                     raw_long, long_sci, long_bad, cardiac_l_freq, cardiac_h_freq)
             section("raw_long", raw_long_section)
-        # the spans the report draws on the carpet, on the channel set it draws them for,
-        # so the figure reads them back instead of running the same detection again
-        try:
-            from fnirs_pipe.qc.quantitative_metrics import spike_segments
-            spike_source = raw_intensity.copy().pick(long_names) if long_names else raw_intensity
-            windowed["spike_spans_s"] = [list(span) for span in spike_segments(spike_source)]
-        except Exception:
-            logger.warning("windowed: spike spans failed", exc_info=True)
-
         if short_names:
             # already returns the (scalars, nested) split, so it bypasses `section`
             try:
@@ -316,6 +307,22 @@ def compute_run_sections(
                     cardiac_l_freq, cardiac_h_freq)
             except Exception:
                 logger.warning("raw_short: section failed", exc_info=True)
+
+    # the spans the report draws on the carpet, on the channel set it draws them for, so the
+    # figure reads them back instead of running the same detection again. Pre-correction by
+    # definition, since the carpet is the uncorrected recording: the chain stops before
+    # `desc-motcorrected`, whose spikes are the ones the correction failed to remove.
+    spike_stage = stages.get("sci") or stages.get("od")
+    if raw_intensity is not None or spike_stage is not None:
+        try:
+            from fnirs_pipe.qc.quantitative_metrics import spike_segments
+            spike_source = raw_intensity if raw_intensity is not None else read_snirf(spike_stage)
+            spike_long, _ = long_short_channels(spike_source)
+            if spike_long:
+                spike_source = spike_source.copy().pick(spike_long)
+            windowed["spike_spans_s"] = [list(span) for span in spike_segments(spike_source)]
+        except Exception:
+            logger.warning("windowed: spike spans failed", exc_info=True)
 
     # SCI, PSP and GVTD per window, all three on the same grid.
     #
