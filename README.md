@@ -143,6 +143,8 @@ fnirs-recon INPUT_FILE BIDS_DIR --subject LABEL --task LABEL
 ```
 fnirs-prep crop BIDS_DIR DERIVATIVES_DIR --participant-label SUB ...
                 ( --tmin FLOAT [--tmax FLOAT] | --segments-path PATH [--combine] )
+                # segments table: onset, duration, and an optional task column that
+                # names each segment's output task entity instead of _seg-NN
                 [--ses TEXT] [--task TEXT] [--run TEXT]
                 [--n-jobs INT] [--skip-bids-validation]
 

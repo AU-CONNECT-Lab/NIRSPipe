@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pandas as pd
@@ -59,9 +60,14 @@ def _crop_raw(
             _write_segment(mne.concatenate_raws(segs), out)
             logger.info("Written combined: %s", out)
             return [out]
+        tasks = segments_df["task"] if "task" in segments_df.columns else None
         out_paths: list[Path] = []
         for i, seg in enumerate(segs, start=1):
-            out = out_nirs_dir / f"{stem}_seg-{i:02d}_nirs.snirf"
+            if tasks is None:
+                name = f"{stem}_seg-{i:02d}"
+            else:
+                name = re.sub(r"task-[^_]+", f"task-{tasks.iloc[i - 1]}", stem)
+            out = out_nirs_dir / f"{name}_nirs.snirf"
             _write_segment(seg, out)
             logger.info("Written segment %d: %s", i, out)
             out_paths.append(out)
@@ -114,7 +120,10 @@ def crop_snirf(
     """Crop a raw SNIRF via BIDS layout lookup and write to derivatives/cropped/.
 
     Single segment: use tmin/tmax.
-    Multi-segment: use segments_path (TSV with onset/duration columns).
+    Multi-segment: use segments_path (table with onset/duration columns).
+    An optional `task` column names each segment, and its output takes that task entity
+    instead of `_seg-NN`, which makes the segments separate tasks of a valid BIDS dataset
+    rather than one task the pipeline cannot tell apart.
     combine=True concatenates multi-segment output into one file.
 
     Returns list of written SNIRF paths.

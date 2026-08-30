@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- `fnirs-prep crop` accepts a `task` column in the segments table: each segment is written under that task entity instead of `_seg-NN`, so a recording holding several conditions becomes a BIDS dataset the pipeline can read back one condition at a time
 - `fnirs-qc hyper-post --wtc-roi-cross` crosses the two brains' ROIs instead of pairing each with its counterpart, so one person's PFC can be tested against the other's TPJ. `hyper-wtc-roi.tsv` gains a `label2` column, the report an ROI × ROI matrix. Needs `--roi-mapping`
 - `fnirs-qc hyper-post --wtc-mc-count` sets how many surrogate series stand behind each significance contour (default 300, unchanged). It is what the runtime is spent on and it scales with the value, so a run can be previewed cheaply and settled expensively
 
