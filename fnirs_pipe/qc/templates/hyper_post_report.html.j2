@@ -80,6 +80,17 @@ select#ch-select-post {
   </div>
   <div id="wtc-roi-plot"></div>
 </div>
+
+<div class="card" id="wtc-roi-matrix-card" style="display:none">
+  <div class="panel-title">
+    Wavelet Transform Coherence (ROI &times; ROI)
+    <span class="panel-hint">
+      band mean per ROI pair, inside the COI &bull; diagonal = homologous ROIs, the ones
+      plotted above &bull; same numbers as <code>hyper-wtc-roi.tsv</code>
+    </span>
+  </div>
+  <div id="wtc-roi-matrix-plot"></div>
+</div>
 {% endif %}
 
 <!-- ISC panel — HbO -->
@@ -124,6 +135,7 @@ var _CH_PAIRS   = {{ ch_pairs_post_json | safe }};
 var _BAD_PAIRS  = {{ bad_pairs_json | safe }};
 var _PER_ROI    = {{ per_roi_post_json | safe }};
 var _ROI_LABELS = {{ roi_labels_json | safe }};
+var _ROI_MATRIX = {{ wtc_roi_matrix_json | safe }};
 var _ALIGN      = {{ alignment_json | safe }};
 var _cfg = { responsive: true, displayModeBar: true };
 
@@ -177,6 +189,14 @@ function _selectRoi(idx) {
   if (d.wtc) Plotly.react("wtc-roi-plot", d.wtc.data, d.wtc.layout, _cfg);
   else       Plotly.purge("wtc-roi-plot");
 }
+
+// The ROI x ROI matrix only exists when the ROIs were crossed; its card stays hidden otherwise.
+(function() {
+  var card = document.getElementById("wtc-roi-matrix-card");
+  if (!card || !_ROI_MATRIX) return;
+  card.style.display = "";
+  Plotly.react("wtc-roi-matrix-plot", _ROI_MATRIX.data, _ROI_MATRIX.layout, _cfg);
+})();
 
 window.addEventListener("DOMContentLoaded", function() {
   if (_CH_PAIRS.length > 0)   _selectCh(0);

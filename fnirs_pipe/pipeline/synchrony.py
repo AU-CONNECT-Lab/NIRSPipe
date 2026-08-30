@@ -164,10 +164,16 @@ def _wtc_over_pairs(
     significance: bool = False,
     seed: int | None = None,
     mc_count: int = 300,
+    cross: bool = False,
 ) -> WTCResult:
     """Run pairwise Morlet WTC over precomputed per-subject {label: signal} maps.
 
-    Signals are matched by label; a label absent for either subject yields None for that pair.
+    Signals are matched by label: the first subject's ``S1_D1`` against the second's
+    ``S1_D1``, and nothing else, so ``n`` labels give ``n`` results keyed by the label
+    string. ``cross`` instead crosses every label with every other, ``n**2`` results keyed
+    by the ``(label_sub1, label_sub2)`` tuple, of which the homologous ones are the
+    diagonal. A label absent for either subject yields None for that pair.
+
     Time axis decimated to ~1 Hz for display; frequency axis filtered to [fmin, fmax] Hz.
     significance adds a per-frequency Monte Carlo level to each pair (slow; ~300 surrogate runs).
 
@@ -189,17 +195,20 @@ def _wtc_over_pairs(
     shared_freqs: np.ndarray | None = None
     shared_times: np.ndarray | None = None
 
+    label_pairs = [(a, b) for a in labels for b in labels] if cross else [(a, a) for a in labels]
+
     rng_state = np.random.get_state() if seed is not None else None
     if seed is not None:
         np.random.seed(seed)
     try:
         for sub1, sub2 in combinations(subject_ids, 2):
             sig_map1, sig_map2 = signals[sub1], signals[sub2]
-            pair_data: dict[str, dict | None] = {}
-            for label in labels:
-                sig1, sig2 = sig_map1.get(label), sig_map2.get(label)
+            pair_data: dict[str | tuple[str, str], dict | None] = {}
+            for label1, label2 in label_pairs:
+                key = (label1, label2) if cross else label1
+                sig1, sig2 = sig_map1.get(label1), sig_map2.get(label2)
                 if sig1 is None or sig2 is None:
-                    pair_data[label] = None
+                    pair_data[key] = None
                     continue
                 try:
                     WCT_band, freqs_band, coi_dec, sig_band = _pairwise_wtc(
@@ -208,10 +217,10 @@ def _wtc_over_pairs(
                     if shared_freqs is None:
                         shared_freqs = freqs_band
                         shared_times = ref_raw.times[::step]
-                    pair_data[label] = {"wtc": WCT_band, "coi": coi_dec, "sig": sig_band}
+                    pair_data[key] = {"wtc": WCT_band, "coi": coi_dec, "sig": sig_band}
                 except Exception as exc:
-                    logger.warning("WTC failed %s-%s label %s: %s", sub1, sub2, label, exc)
-                    pair_data[label] = None
+                    logger.warning("WTC failed %s-%s label %s: %s", sub1, sub2, key, exc)
+                    pair_data[key] = None
             result_pairs[(sub1, sub2)] = pair_data
     finally:
         if rng_state is not None:
@@ -278,6 +287,7 @@ def compute_wtc_roi(
     significance: bool = False,
     seed: int | None = None,
     mc_count: int = 300,
+    cross: bool = False,
 ) -> WTCResult:
     """Compute pairwise WTC on ROI-averaged HbO signals.
 
@@ -285,6 +295,12 @@ def compute_wtc_roi(
     excluding the union of all subjects' bad_channels so every subject's ROI signal
     is built from the same channel set. Then runs the same Morlet WTC as compute_wtc.
     Returned WTCResult.pairs is keyed by ROI name instead of channel.
+
+    ``cross`` crosses each subject's ROIs with the other's rather than pairing like with
+    like, so four ROIs give sixteen results keyed by ``(roi_sub1, roi_sub2)`` instead of
+    four keyed by ROI name. Off-diagonal entries are what tells you whether one person's
+    PFC couples to the other's TPJ. Averaging within an ROI first is what makes this
+    affordable: the same crossing over raw channels is quadratic in a much larger number.
     """
     subject_ids = list(raws.keys())
     if len(subject_ids) < 2:
@@ -301,7 +317,8 @@ def compute_wtc_roi(
         for sid, raw in raws.items()
     }
 
-    return _wtc_over_pairs(raws, signals, list(roi_map), fmin, fmax, significance, seed, mc_count)
+    return _wtc_over_pairs(
+        raws, signals, list(roi_map), fmin, fmax, significance, seed, mc_count, cross)
 
 
 def compute_pairwise_coherence(
@@ -378,6 +395,9 @@ def wtc_band_mean(
     a handful of time points is visible instead of implied. It is 1.0 when ``mask_coi`` is off.
 
     Returns one row per (pair, label) with columns sub1, sub2, label, coherence, n_valid_frac.
+    A crossed result (see ``compute_wtc_roi``) is keyed by a label pair rather than one label,
+    and gains a ``label2`` column after ``label``: ``label`` is what sub1 contributed, ``label2``
+    what sub2 did, and the homologous rows are the ones where they agree.
     Labels that failed to compute keep their row, with NaN coherence and n_valid_frac 0.
     """
     freqs = np.asarray(result.freqs, dtype=float)
@@ -390,12 +410,18 @@ def wtc_band_mean(
         )
     band_freqs = freqs[band]
 
+    crossed = any(isinstance(k, tuple)
+                  for labels in result.pairs.values() for k in labels)
+
     rows: list[dict] = []
     for (sub1, sub2), labels in result.pairs.items():
         for label, data in labels.items():
+            label1, label2 = label if isinstance(label, tuple) else (label, label)
+            head = {"sub1": sub1, "sub2": sub2, "label": label1}
+            if crossed:
+                head["label2"] = label2
             if data is None:
-                rows.append({"sub1": sub1, "sub2": sub2, "label": label,
-                             "coherence": float("nan"), "n_valid_frac": 0.0})
+                rows.append({**head, "coherence": float("nan"), "n_valid_frac": 0.0})
                 continue
 
             wtc = np.asarray(data["wtc"], dtype=float)[band]
@@ -410,9 +436,10 @@ def wtc_band_mean(
             valid = np.isfinite(wtc)
             n_valid_frac = float(valid.mean()) if valid.size else 0.0
             rows.append({
-                "sub1": sub1, "sub2": sub2, "label": label,
+                **head,
                 "coherence": float(wtc[valid].mean()) if valid.any() else float("nan"),
                 "n_valid_frac": n_valid_frac,
             })
 
-    return pd.DataFrame(rows, columns=["sub1", "sub2", "label", "coherence", "n_valid_frac"])
+    columns = ["sub1", "sub2", "label"] + (["label2"] if crossed else [])
+    return pd.DataFrame(rows, columns=columns + ["coherence", "n_valid_frac"])

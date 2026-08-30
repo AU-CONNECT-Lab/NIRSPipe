@@ -183,6 +183,7 @@ fnirs-qc hyper-post BIDS_DIR OUTPUT_DIR --pairs-csv PATH
                     [--wtc-fmin/--wtc-fmax FLOAT]
                     [--wtc-band-fmin/--wtc-band-fmax FLOAT]
                     [--wtc-significance] [--wtc-seed INT] [--wtc-mc-count INT]
+                    [--wtc-roi-cross]
                     [--isc-threshold FLOAT]
                     [--normalize] [--no-align]
 
@@ -190,6 +191,9 @@ fnirs-qc hyper-post BIDS_DIR OUTPUT_DIR --pairs-csv PATH
 # --wtc-significance is slow: --wtc-mc-count surrogate series per channel pair, 300 by
 # default, and the runtime scales with it. --wtc-seed makes those contours reproducible
 # and switches off pycwt's on-disk cache, which is not keyed on the seed.
+# --wtc-roi-cross pairs every ROI with every other across the two brains (needs
+# --roi-mapping): four ROIs give sixteen values instead of four. The extra pairs
+# reach the TSV and an ROI x ROI matrix; the heatmaps stay on the homologous pairs.
 
 fnirs-qc group-raw       OUTPUT_DIR
 fnirs-qc group-hyper-raw OUTPUT_DIR

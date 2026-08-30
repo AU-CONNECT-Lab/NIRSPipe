@@ -291,7 +291,7 @@ def cmd_hyper_post(
     desc: str,
     roi_mapping: Path | None, wtc_fmin: float, wtc_fmax: float,
     wtc_band_fmin: float | None, wtc_band_fmax: float | None, wtc_significance: bool,
-    wtc_seed: int | None, wtc_mc_count: int,
+    wtc_seed: int | None, wtc_mc_count: int, wtc_roi_cross: bool,
     isc_threshold: float, normalize: bool, no_align: bool,
     session_label: list[str] | None, task_label: list[str] | None,
     skip_bids_validation: bool,
@@ -307,6 +307,11 @@ def cmd_hyper_post(
         trim_to_shortest,
     )
     from fnirs_pipe.qc.hyper_report import build_hyper_post_report
+
+    if wtc_roi_cross and roi_mapping is None:
+        print("[error] --wtc-roi-cross needs --roi-mapping: it crosses ROIs, and without a "
+              "mapping there are none.", file=sys.stderr)
+        raise SystemExit(1)
 
     groups = _select_groups(pairs_csv, group_id, task_label)
 
@@ -346,6 +351,7 @@ def cmd_hyper_post(
             wtc_significance=wtc_significance,
             wtc_seed=wtc_seed,
             wtc_mc_count=wtc_mc_count,
+            wtc_roi_cross=wtc_roi_cross,
             isc_threshold=isc_threshold,
         )
 
@@ -504,6 +510,12 @@ def _build_parser() -> argparse.ArgumentParser:
                     help="Seed the Monte Carlo surrogates so --wtc-significance is "
                          "reproducible. Also bypasses pycwt's on-disk cache, which is not "
                          "keyed on the seed. Omit for the previous behaviour.")
+    hp.add_argument("--wtc-roi-cross", action="store_true",
+                    help="Cross every ROI with every other across the two brains instead of "
+                         "pairing each ROI with its counterpart, so four ROIs give sixteen "
+                         "coherence values rather than four. Needs --roi-mapping. The extra "
+                         "pairs reach the TSV and an ROI x ROI matrix in the report; the "
+                         "time-frequency heatmaps stay on the homologous pairs.")
     hp.add_argument("--isc-threshold", type=float, default=0.3,
                     help="Minimum mean ISC to draw an arc in the connectivity circle.")
     hp.add_argument("--normalize", action=argparse.BooleanOptionalAction, default=False,

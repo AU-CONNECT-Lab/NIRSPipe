@@ -104,6 +104,7 @@ def build_hyper_post_report(
     wtc_significance: bool = False,
     wtc_seed: int | None = None,
     wtc_mc_count: int = 300,
+    wtc_roi_cross: bool = False,
     isc_threshold: float = 0.3,
 ) -> Path:
     """Build hyperscanning post-QC report.
@@ -117,6 +118,12 @@ def build_hyper_post_report(
     Each WTC map is also collapsed to one number per channel over
     [wtc_band_fmin, wtc_band_fmax] and written as a TSV beside the HTML, so a group
     analysis reads the same values the figures were drawn from.
+
+    ``wtc_roi_cross`` crosses each subject's ROIs with the other's, so the TSV gains the
+    off-diagonal pairs. Those extra pairs stay out of the time-frequency selector, which
+    keeps showing the homologous ones: every map carried in the page is a full
+    frequency × time array, and a report that embedded all of them would be too large to
+    open. They arrive instead as one ROI × ROI matrix of band means, one cell per pair.
     """
     from fnirs_pipe.pipeline.hyperscanning import (
         WTCResult,
@@ -128,6 +135,7 @@ def build_hyper_post_report(
     from fnirs_pipe.qc.figures.hyper_post_figures import (
         build_isc_panel,
         build_wtc_channel,
+        build_wtc_roi_matrix,
         compute_isc,
     )
 
@@ -154,14 +162,14 @@ def build_hyper_post_report(
             "WTC band mean taken over the whole %.4f-%.4f Hz axis; name a narrower band "
             "to average over the frequencies the task lives in", band_fmin, band_fmax)
 
-    def _write_band_tsv(result: "WTCResult | None", kind: str, step: str) -> None:
+    def _write_band_tsv(result: "WTCResult | None", kind: str, step: str):
         if result is None or not result.pairs:
-            return
+            return None
         try:
             df = wtc_band_mean(result, band_fmin, band_fmax)
         except Exception as exc:
             logger.warning("WTC band mean (%s) failed: %s", kind, exc)
-            return
+            return None
         tsv_path = output_dir / f"group-{group_id}_task-{task}_hyper-{kind}.tsv"
         tsv_path.parent.mkdir(parents=True, exist_ok=True)
         df.to_csv(tsv_path, sep="\t", index=False)
@@ -172,6 +180,7 @@ def build_hyper_post_report(
             wtc_fmin=wtc_fmin, wtc_fmax=wtc_fmax,
         )
         logger.info("WTC band means saved: %s", tsv_path)
+        return df
 
     def _safe_post(name: str, fn, *args):
         try:
@@ -235,6 +244,7 @@ def build_hyper_post_report(
     roi_rows: list[dict] = []
     roi_labels: list[str] = []
     per_roi_post: dict[str, dict] = {}
+    roi_matrix_fig = None
     if roi_map:
         assigned = {ch for chs in roi_map.values() for ch in chs}
         for roi_name, chs in roi_map.items():
@@ -248,19 +258,26 @@ def build_hyper_post_report(
             roi_wtc = compute_wtc_roi(
                 aligned_raws, roi_map, bad_channels=bad_channels,
                 fmin=wtc_fmin, fmax=wtc_fmax, significance=wtc_significance,
-                seed=wtc_seed, mc_count=wtc_mc_count,
+                seed=wtc_seed, mc_count=wtc_mc_count, cross=wtc_roi_cross,
             )
         except Exception as exc:
             logger.warning("ROI WTC computation failed: %s", exc)
 
-        _write_band_tsv(roi_wtc, "wtc-roi", "hyper_wtc_roi")
+        roi_band_df = _write_band_tsv(roi_wtc, "wtc-roi", "hyper_wtc_roi")
 
         roi_pair_key = next(iter(roi_wtc.pairs)) if roi_wtc and roi_wtc.pairs else None
         roi_labels   = list(roi_map.keys())
+        if roi_band_df is not None and wtc_roi_cross:
+            roi_matrix_fig = _safe_post(
+                "wtc-roi-matrix", build_wtc_roi_matrix,
+                roi_band_df, roi_labels, subject_ids, band_fmin, band_fmax,
+            )
         for roi_name in roi_labels:
             roi_fig = None
             if roi_wtc and roi_pair_key:
-                roi_data = roi_wtc.pairs.get(roi_pair_key, {}).get(roi_name)
+                # crossing keys every pair, so the homologous one is the (roi, roi) cell
+                roi_key  = (roi_name, roi_name) if wtc_roi_cross else roi_name
+                roi_data = roi_wtc.pairs.get(roi_pair_key, {}).get(roi_key)
                 roi_fig = _safe_post(
                     "wtc-roi", build_wtc_channel,
                     roi_data, roi_wtc.freqs, roi_wtc.times,
@@ -294,6 +311,7 @@ def build_hyper_post_report(
         roi_rows=roi_rows,
         roi_labels_json=json.dumps(roi_labels),
         per_roi_post_json=json.dumps(per_roi_post),
+        wtc_roi_matrix_json=json.dumps(roi_matrix_fig),
     )
     output_path.write_text(html, encoding="utf-8")
     logger.info("Hyper post report saved: %s", output_path)

@@ -119,6 +119,49 @@ def build_wtc_channel(
     return fig
 
 
+def build_wtc_roi_matrix(
+    band_df,
+    roi_labels: list[str],
+    subject_ids: list[str],
+    band_fmin: float,
+    band_fmax: float,
+) -> go.Figure | None:
+    """ROI x ROI heatmap of band-mean coherence, rows sub1's ROIs, columns sub2's.
+
+    The crossed ROI result is n**2 time-frequency maps and only n of them reach the page as
+    heatmaps. This carries the rest: one cell per pair holding the number already written to
+    `hyper-wtc-roi.tsv`, so the off-diagonal pairs are visible without embedding their maps.
+    Reads the `label` / `label2` columns, so it needs a crossed frame; an uncrossed one has
+    no `label2` and returns None.
+    """
+    if band_df is None or "label2" not in getattr(band_df, "columns", []):
+        return None
+
+    lookup = {(r.label, r.label2): r.coherence for r in band_df.itertuples()}
+    z = [[lookup.get((row, col)) for col in roi_labels] for row in roi_labels]
+    if all(v is None for line in z for v in line):
+        return None
+
+    sub1 = subject_ids[0] if subject_ids else "sub1"
+    sub2 = subject_ids[1] if len(subject_ids) > 1 else "sub2"
+
+    fig = go.Figure(go.Heatmap(
+        z=z, x=roi_labels, y=roi_labels,
+        colorscale="Viridis", zmin=0, zmax=1,
+        colorbar=dict(title="coherence"),
+        hovertemplate=f"{sub1} %{{y}} × {sub2} %{{x}}<br>coherence %{{z:.3f}}<extra></extra>",
+    ))
+    fig.update_layout(
+        xaxis=dict(title=f"{sub2} ROI", side="top"),
+        yaxis=dict(title=f"{sub1} ROI", autorange="reversed"),
+        title=dict(text=f"Band mean {band_fmin:.3g}-{band_fmax:.3g} Hz", font=dict(size=12)),
+        height=380,
+        margin=dict(l=90, r=40, t=70, b=40),
+        paper_bgcolor="white",
+    )
+    return fig
+
+
 def compute_isc(
     aligned_raws: dict[str, mne.io.Raw],
     subject_ids: list[str],
