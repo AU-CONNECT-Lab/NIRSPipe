@@ -51,7 +51,7 @@ _DESC_RE = re.compile(r"_desc-([A-Za-z0-9]+)_nirs\.snirf$")
 # the haemo file the "final" section measures, best first
 _FINAL_ORDER = ("resampled", "filtered", "preproc")
 
-SECTIONS = ("raw", "raw_long", "raw_short", "motion", "preproc", "final")
+SECTIONS = ("raw", "raw_long", "raw_short", "motion", "windowed", "preproc", "final")
 
 
 def scan_runs(nirs_dir: Path) -> dict[str, dict[str, Path]]:
@@ -127,6 +127,15 @@ def _bands(stages: dict[str, Path]) -> dict[str, float] | None:
     return None
 
 
+def _window_s(stages: dict[str, Path]) -> float | None:
+    """QC window length the run used, read back from any sidecar that recorded it."""
+    for path in stages.values():
+        value = (_sidecar(path).get("parameters") or {}).get("qc_window_s")
+        if value is not None:
+            return float(value)
+    return None
+
+
 def _sci_scores(stages: dict[str, Path]) -> dict[str, float]:
     """Per-channel SCI from the sci sidecar, recomputed from the OD file if absent."""
     if "sci" in stages:
@@ -191,6 +200,7 @@ def compute_run_sections(
     cardiac_h_freq: float,
     resp_l_freq: float,
     resp_h_freq: float,
+    qc_window_s: float = 10.0,
     bids_root: Path | None = None,
 ) -> dict[str, Any]:
     """Every SQM section for one run, keyed by section name, plus ``per_channel``.
@@ -200,7 +210,8 @@ def compute_run_sections(
     """
     from fnirs_pipe.io.snirf import read_snirf
     from fnirs_pipe.qc.quantitative_metrics import (
-        compute_haemo_sqm, compute_prep_haemo_sqm, compute_raw_sqm, long_short_channels,
+        attach_windowed_series, compute_haemo_sqm, compute_prep_haemo_sqm, compute_raw_sqm,
+        long_short_channels,
     )
 
     sections: dict[str, Any] = {}
@@ -257,6 +268,20 @@ def compute_run_sections(
                     cardiac_l_freq, cardiac_h_freq)
             except Exception:
                 logger.warning("raw_short: section failed", exc_info=True)
+
+    # SCI, PSP and GVTD per window, all three on the same grid. Their own section rather
+    # than keys on `raw`: they are time series, and `_split_scalars` files any list under
+    # `per_channel`, which these are not. Read off `desc-sci` so the series describe the
+    # channel set the run actually kept.
+    od_source = stages.get("sci") or stages.get("od")
+    if od_source is not None:
+        try:
+            windowed: dict[str, Any] = {}
+            attach_windowed_series(
+                windowed, read_snirf(od_source), cardiac_l_freq, cardiac_h_freq, qc_window_s)
+            sections["windowed"] = windowed
+        except Exception:
+            logger.warning("windowed: section failed", exc_info=True)
 
     # the OD either side of the motion step is on disk as desc-sci and desc-motcorrected,
     # so the correction's footprint is measurable here rather than only in memory
@@ -329,6 +354,7 @@ def build_sqm_records(
     cardiac_h_freq: float | None = None,
     resp_l_freq: float | None = None,
     resp_h_freq: float | None = None,
+    qc_window_s: float | None = None,
     bids_root: Path | None = None,
 ) -> list[Path]:
     """Write one SQM record per run found under nirs_dir. Band edges default to the
@@ -349,10 +375,14 @@ def build_sqm_records(
                 logger.warning("%s: no band edges in the sidecars and none supplied; skipped", label)
                 continue
             bands = {k: (v if v is not None else recorded[k]) for k, v in bands.items()}
+        # a tree written before the length was stored falls back to the default the
+        # pipeline has always used, so its series are still binned on a known grid
+        window_s = qc_window_s if qc_window_s is not None else (_window_s(stages) or 10.0)
         # each section guards itself, so what reaches here is fatal for this run only;
         # the remaining runs still get their records
         try:
-            sections = compute_run_sections(stages, **bands, bids_root=bids_root)
+            sections = compute_run_sections(
+                stages, **bands, qc_window_s=window_s, bids_root=bids_root)
             written.append(
                 write_run_sqm(Path(nirs_dir), label, stages, sections, bids_root))
         except Exception:

@@ -196,9 +196,67 @@ KEY_METRICS = frozenset({
 })
 
 
+# ---- which stage each number was measured on ----
+#
+# Kept apart from METRIC_SUMMARY because this is a property of *where* the metric is
+# computed, not of what it means. Four of these keys are measured at two stages on data
+# separated by a bandpass and a resample; without this line a tooltip cannot say which of
+# the two the reader is looking at, and the section name is not visible from inside a
+# panel. The section-to-stage mapping this follows lives in the SQM record.
+_STAGE_RAW = "Measured on the recording as it arrived, before any processing."
+_STAGE_MOTION = (
+    "Measured across the motion-correction step, on the optical density either side of it."
+)
+_STAGE_PREPROC = (
+    "Measured after Beer-Lambert and before filtering, since a bandpass would otherwise be "
+    "measuring itself."
+)
+_STAGE_BOTH = (
+    "Measured twice: before filtering and again after filtering and resampling. Which one "
+    "you are reading is the section it sits in."
+)
+
+_RAW_METRICS = (
+    "sci_mean", "channel_retention_rate", "psp_mean", "cp_mean", "cp_pass_rate",
+    "cv_mean", "snr_mean", "snr_pass_rate", "mean_amp_mean",
+    "ch_dist_mean", "ch_dist_min", "ch_dist_max",
+    "gvtd_mean", "gvtd_p95", "gvtd_filt_mean", "gvtd_filt_p95",
+    "gvtd_vstd_mean", "gvtd_vstd_p95", "gvtd_thresh",
+    "gvtd_num_above_thresh", "gvtd_pct_above_thresh",
+    "spike_count", "spike_pct", "spike_num_frames", "spike_pct_frames",
+)
+_MOTION_METRICS = (
+    "motion_corrected_frac_mean", "motion_corrected_num",
+    "motion_corrected_pct", "motion_corrected_n_segments",
+)
+_PREPROC_METRICS = (
+    "lowfreq_drift_amplitude_hbo", "lowfreq_drift_amplitude_hbr",
+    "cardiac_band_power_hbo", "cardiac_band_power_hbr",
+    "cardiac_band_frac_hbo", "cardiac_band_frac_hbr",
+    "resp_band_power_hbo", "resp_band_power_hbr",
+    "resp_band_frac_hbo", "resp_band_frac_hbr",
+)
+_BOTH_METRICS = ("hbo_hbr_corr_mean", "gcor_hbo", "gcor_hbr", "pct_data_retained")
+
+METRIC_STAGE = {
+    **{k: _STAGE_RAW for k in _RAW_METRICS},
+    **{k: _STAGE_MOTION for k in _MOTION_METRICS},
+    **{k: _STAGE_PREPROC for k in _PREPROC_METRICS},
+    **{k: _STAGE_BOTH for k in _BOTH_METRICS},
+}
+
+
 def metric_summary(metric: str) -> str:
-    """One line saying what a metric is and which way is good, or '' if undescribed."""
-    return METRIC_SUMMARY.get(metric, "")
+    """What a metric is, which way is good, and what stage it was measured on.
+
+    Returns '' for an undescribed metric, so the report renders a bare number rather than
+    an empty tooltip.
+    """
+    text = METRIC_SUMMARY.get(metric, "")
+    if not text:
+        return ""
+    stage = METRIC_STAGE.get(metric, "")
+    return f"{text} {stage}".rstrip()
 
 
 def is_key_metric(metric: str) -> bool:

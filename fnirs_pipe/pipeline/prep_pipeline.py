@@ -252,6 +252,7 @@ def _config_dict(config: PrepConfig) -> dict:
         "cardiac_h_freq": config.cardiac_h_freq,
         "resp_l_freq": config.resp_l_freq,
         "resp_h_freq": config.resp_h_freq,
+        "qc_window_s": config.qc_window_s,
         "bad_channels": config.bad_channels,
         "ignore": config.ignore,
     }

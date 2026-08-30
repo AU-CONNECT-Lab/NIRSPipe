@@ -89,8 +89,9 @@ def test_every_section_carries_metrics(run):
 
 
 def test_the_per_channel_maps_cover_every_section(run):
+    # `windowed` holds per-window series, not per-channel values, and `final` is scalars only
     _, _, _, sections = run
-    assert set(sections["per_channel"]) >= set(SECTIONS) - {"final"}
+    assert set(sections["per_channel"]) >= set(SECTIONS) - {"final", "windowed"}
 
 
 # ---- SCI: the one value no output file carries ----

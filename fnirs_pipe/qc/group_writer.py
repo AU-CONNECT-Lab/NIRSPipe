@@ -104,7 +104,14 @@ def _sqm_row(bids_name: str, sqm: dict, desc: str) -> dict:
     names prep-raw writes: the time x subject heatmaps look them up by those.
     """
     if desc != _PREP_RAW_DESC:
-        return {"bids_name": bids_name, **sqm}
+        row = {"bids_name": bids_name, **sqm}
+        # the sectioned record keeps the series in a `windowed` section, prep-raw writes
+        # them flat, and the heatmaps below look them up by the flat names. Lifting here
+        # means one shape reaches the panels; the section stays as written on disk
+        windowed = row.pop("windowed", None)
+        if isinstance(windowed, dict):
+            row.update(windowed)
+        return row
     return {
         "bids_name": bids_name,
         **{(f"raw_{k}" if isinstance(v, (int, float)) else k): v for k, v in sqm.items()},
