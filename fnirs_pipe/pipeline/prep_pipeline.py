@@ -91,8 +91,6 @@ class PrepResult:
     raw_haemo: mne.io.Raw
     sci_scores: dict[str, float]
     bad_channels: list[str]
-    raw_od_before_motion: "mne.io.Raw | None" = None
-    raw_od_after_motion: "mne.io.Raw | None" = None
 
 @dataclass
 class PrepConfig:
@@ -204,7 +202,8 @@ def run_prep(
 
     # step 3: motion correction (spike/step artifact repair)
     logger.info("sub-%s | step 3: motion correction (%s)", config.subject, config.motion_correction)
-    raw_od_before_motion = raw_od.copy()
+    # no copy kept: desc-sci on disk is this same object, and the report and the record
+    # both read the correction's two sides from there
     raw_od = correct_motion(raw_od, method=config.motion_correction)
     _save(raw_od, "motcorrected")
 
@@ -223,8 +222,6 @@ def run_prep(
         raw_haemo=raw_haemo,
         sci_scores=sci_scores,
         bad_channels=bad_chs,
-        raw_od_before_motion=raw_od_before_motion,
-        raw_od_after_motion=raw_od,
     )
 
 

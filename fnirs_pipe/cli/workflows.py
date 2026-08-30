@@ -320,8 +320,6 @@ def _emit_subject_report(subject, sub_dir, last_raw, last_result, prep_config, a
         good_mask=good_mask,
         ch_names_brain=hbo_names,
         segments=bad_annots or None,
-        raw_before_motion=last_result.raw_od_before_motion,
-        raw_after_motion=last_result.raw_od_after_motion,
         design_matrix=dm,
         glm_est=glm_est,
         l_freq=high_pass,

@@ -16,6 +16,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 - `snr_pass_rate` counts every channel, not only the ones with a finite SNR. A flat or saturated channel has no SNR at all and used to drop out of the fraction entirely, so a recording whose channels were dying read as one whose channels were passing. The new `n_flat_channels` says how many those are. **`snr_pass_rate` falls for any run that has them**
+- The subject report reads the spike and motion-correction spans from the quality record instead of detecting them a second time, and reads the optical density either side of the correction back from disk. Prep no longer keeps a copy of it in memory
 - The subject report's per-window SCI and PSP panel reads the quality record instead of values passed from prep, and the series are measured on the motion-corrected file. Prep no longer computes them
 - Tables you hand the package read by extension: `.tsv` tab-separated, `.csv` comma-separated, anything else sniffed. Applies to events, segments, the pairs file and `participants.tsv`. What the package writes stays tab-separated
 - zALFF standardizes by the population SD (n) instead of the sample SD (n-1). Values grow by `sqrt(n/(n-1))`.

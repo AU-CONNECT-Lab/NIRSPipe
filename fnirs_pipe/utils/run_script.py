@@ -214,8 +214,9 @@ def _build_script_text(
         '    raw_od.info["bads"] = bad_chs',
         'save_step(raw_od, "sci", "sci_pruning", session=session,',
         '          extra={"bad_channels": bad_chs})',
-        '# QC (not run here): run_prep also computes raw SQM (compute_raw_sqm) and',
-        '#   windowed SCI/PSP (compute_windowed_sci / compute_windowed_psp) here.',
+        '# QC (not run here): none of these steps measures anything. The quality record is',
+        '#   assembled from the files they leave on disk, once both passes have finished',
+        '#   (qc.sqm_record.build_sqm_records).',
         '',
         '# ===== block: motion | MOTION_METHOD artifact correction =====',
         'raw_od = correct_motion(raw_od, method=MOTION_METHOD)',
@@ -224,7 +225,8 @@ def _build_script_text(
         '# ===== block: beer_lambert | OD -> HbO/HbR (Beer-Lambert, dpf=DPF) =====',
         'raw_haemo = od_to_haemo(raw_od, dpf=DPF)',
         'save_step(raw_haemo, "preproc", "beer_lambert", session=session)',
-        '# QC (not run here): compute_prep_haemo_sqm baseline + motion-correction footprint.',
+        '# QC (not run here): the `preproc`, `motion` and `motion_post` sections are read',
+        '#   back from desc-preproc, desc-sci and desc-motcorrected.',
     )
 
     if mode:
@@ -249,7 +251,7 @@ def _build_script_text(
                 b('save_step(result, "resampled", "resample", session=session)')
 
         if mode == "denoise":
-            b('# QC (not run here): compute_haemo_sqm on the filtered/resampled signal.')
+            b('# QC (not run here): the `final` section is read back from the last file written.')
 
         if mode == "glm":
             b(

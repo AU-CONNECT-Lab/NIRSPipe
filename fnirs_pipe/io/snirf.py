@@ -19,6 +19,21 @@ from fnirs_pipe.utils.lineage import stamp
 _DESC_RE = re.compile(r"_desc-([A-Za-z0-9]+)[_.]")
 
 
+def _zero_first_time(raw: mne.io.Raw) -> mne.io.Raw:
+    """Rebuild a cropped recording on a time axis that starts at zero.
+
+    A cropped Raw keeps its annotations on the original recording's axis and holds the
+    offset in first_time, so a marker at second 0 of a segment taken from 543 s in still
+    reads 543. SNIRF has nowhere to put that offset: its axis always starts at zero, and
+    the marker would be written at 543 s of a 900 s segment, or past the end of a segment
+    cropped from later still, where the reader silently drops it.
+    """
+    a = raw.annotations
+    out = mne.io.RawArray(raw.get_data(), raw.info.copy(), verbose="error")
+    out.set_annotations(mne.Annotations(a.onset - raw.first_time, a.duration, a.description))
+    return out
+
+
 def write_snirf(raw: mne.io.Raw, out_path: Path) -> None:
     # Recordings always carry both, but an object built in memory may not, and the
     # failure then lands inside mne_nirs with an error that names neither field.
@@ -26,6 +41,8 @@ def write_snirf(raw: mne.io.Raw, out_path: Path) -> None:
         raise ValueError("write_snirf needs info['meas_date']: SNIRF stores a measurement date")
     if not raw.info["subject_info"]:
         raise ValueError("write_snirf needs info['subject_info']: SNIRF derives its subject id from it")
+    if raw.first_time:
+        raw = _zero_first_time(raw)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     write_raw_snirf(_patch_haemo_wavelengths(raw), str(out_path))
 

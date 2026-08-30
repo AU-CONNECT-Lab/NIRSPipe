@@ -330,22 +330,25 @@ def _section_motion(
     subject: str,
     errors: list,
     figures_dir: Path,
+    windowed: dict | None = None,
     raw_before_motion: mne.io.Raw | None = None,
-    raw_after_motion: mne.io.Raw | None = None,
 ) -> dict:
+    """The carpet and GVTD panel, with the flagged spans drawn over it.
+
+    Both span lists come from the record's ``windowed`` section rather than being detected
+    here. They were measured on the same channel set this panel draws, so reading them back
+    is not a shortcut: it is what keeps the stripes on the carpet and the counts in the
+    metrics table describing one event each.
+    """
     carpet_gvtd_path = None
     bad_segment_zoom_path = None
 
-    corrected_segments = None
-    if raw_before_motion is not None and raw_after_motion is not None:
-        with _guard("Motion-correction footprint", errors, subject):
-            from fnirs_pipe.qc.quantitative_metrics import motion_corrected_segments
-            corrected_segments = motion_corrected_segments(raw_before_motion, raw_after_motion)
+    def _spans(key: str) -> "list | None":
+        value = (windowed or {}).get(key)
+        return [tuple(span) for span in value] if value else None
 
-    spike_spans = None
-    with _guard("Spike segments", errors, subject):
-        from fnirs_pipe.qc.quantitative_metrics import spike_segments
-        spike_spans = spike_segments(raw_long)
+    corrected_segments = _spans("motion_corrected_spans_s")
+    spike_spans = _spans("spike_spans_s")
 
     with _guard("Carpet + GVTD", errors, subject):
         b64 = carpet_gvtd_figure(raw_long, raw_long.ch_names, segments,
@@ -511,6 +514,30 @@ def _load_windowed_section(
     with _guard("Windowed series", errors, subject):
         record = json.loads(_sqm_record_path(out_dir, sqm_label).read_text(encoding="utf-8"))
         return record.get("windowed") or None
+    return None
+
+
+def _load_stage_raw(
+    out_dir: Path | None,
+    sqm_label: str | None,
+    desc: str,
+    subject: str,
+    errors: list,
+) -> "mne.io.Raw | None":
+    """One of the run's stage files, read back off disk.
+
+    The optical density either side of the motion step used to travel here in memory on
+    ``PrepResult``, two full recordings held for the length of a run to draw two figures.
+    They are on disk as ``desc-sci`` and ``desc-motcorrected``, which is where the quality
+    record reads them from, so the report reads the same files rather than a copy.
+    """
+    if out_dir is None or sqm_label is None:
+        return None
+    with _guard(f"Reading desc-{desc}", errors, subject):
+        from fnirs_pipe.io.snirf import read_snirf
+        from fnirs_pipe.qc.sqm_record import scan_runs
+        path = (scan_runs(out_dir).get(sqm_label) or {}).get(desc)
+        return None if path is None else read_snirf(path)
     return None
 
 
@@ -792,8 +819,6 @@ def build_subject_report(
     coords_head: np.ndarray | None = None,
     good_mask: np.ndarray | None = None,
     ch_names_brain: list[str] | None = None,
-    raw_before_motion: mne.io.Raw | None = None,
-    raw_after_motion: mne.io.Raw | None = None,
     design_matrix: "Any | None" = None,
     glm_est: "Any | None" = None,
     l_freq: float | None = None,
@@ -826,14 +851,17 @@ def build_subject_report(
 
     figures_dir = out_path.parent / "figures"
 
-    windowed_section = _load_windowed_section(out_path.parent / "nirs", sqm_label, subject, errors)
+    nirs_dir = out_path.parent / "nirs"
+    windowed_section  = _load_windowed_section(nirs_dir, sqm_label, subject, errors)
+    raw_before_motion = _load_stage_raw(nirs_dir, sqm_label, "sci", subject, errors)
+    raw_after_motion  = _load_stage_raw(nirs_dir, sqm_label, "motcorrected", subject, errors)
     sci_vars          = _section_sci(
                             raw_intensity, sci_scores, bad_channels, config,
                             windowed_section, subject, errors, figures_dir)
     motion_vars       = _section_motion(
                             raw_long, sci_scores, config, segments, subject, errors,
-                            figures_dir, raw_before_motion=raw_before_motion,
-                            raw_after_motion=raw_after_motion)
+                            figures_dir, windowed=windowed_section,
+                            raw_before_motion=raw_before_motion)
     motion_det_vars   = _section_motion_detail(
                             raw_before_motion, raw_after_motion, subject, errors, figures_dir,
                             segments=segments,

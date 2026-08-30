@@ -277,6 +277,11 @@ def compute_run_sections(
         except Exception:
             logger.warning("%s unreadable; raw sections skipped", bids_input, exc_info=True)
 
+    # Everything time-indexed rather than channel-indexed: the per-window series and the
+    # flagged spans. Its own section because `_split_scalars` files any list under
+    # `per_channel`, which none of these are. Filled from several places below.
+    windowed: dict[str, Any] = {}
+
     if raw_intensity is not None:
         # the input carries no marks of its own; the run's rejections come from the sci file
         bad_channels = list(_sidecar(stages["sci"]).get("bad_channels") or []) if "sci" in stages else []
@@ -294,6 +299,15 @@ def compute_run_sections(
                 return compute_raw_sqm(
                     raw_long, long_sci, long_bad, cardiac_l_freq, cardiac_h_freq)
             section("raw_long", raw_long_section)
+        # the spans the report draws on the carpet, on the channel set it draws them for,
+        # so the figure reads them back instead of running the same detection again
+        try:
+            from fnirs_pipe.qc.quantitative_metrics import spike_segments
+            spike_source = raw_intensity.copy().pick(long_names) if long_names else raw_intensity
+            windowed["spike_spans_s"] = [list(span) for span in spike_segments(spike_source)]
+        except Exception:
+            logger.warning("windowed: spike spans failed", exc_info=True)
+
         if short_names:
             # already returns the (scalars, nested) split, so it bypasses `section`
             try:
@@ -303,16 +317,13 @@ def compute_run_sections(
             except Exception:
                 logger.warning("raw_short: section failed", exc_info=True)
 
-    # SCI, PSP and GVTD per window, all three on the same grid. Their own section rather
-    # than keys on `raw`: they are time series, and `_split_scalars` files any list under
-    # `per_channel`, which these are not.
+    # SCI, PSP and GVTD per window, all three on the same grid.
     #
     # Read off the corrected OD when there is one. That is the signal Beer-Lambert actually
     # received, and it is what the subject report draws, so record and report cannot drift.
     od_source = stages.get("motcorrected") or stages.get("sci") or stages.get("od")
     if od_source is not None:
         try:
-            windowed: dict[str, Any] = {}
             series = attach_windowed_series(
                 windowed, read_snirf(od_source), cardiac_l_freq, cardiac_h_freq, qc_window_s)
             # the channel by window matrices as well as the channel-averaged series: the
@@ -323,16 +334,25 @@ def compute_run_sections(
             for key in ("sci_times", "psp_times"):
                 if series.get(key) is not None:
                     windowed[key] = np.asarray(series[key]).tolist()
-            sections["windowed"] = windowed
         except Exception:
-            logger.warning("windowed: section failed", exc_info=True)
+            logger.warning("windowed: series failed", exc_info=True)
 
     # the OD either side of the motion step is on disk as desc-sci and desc-motcorrected,
     # so the correction's footprint is measurable here rather than only in memory
     if "sci" in stages and "motcorrected" in stages:
-        from fnirs_pipe.qc.quantitative_metrics import motion_correction_metrics
+        from fnirs_pipe.qc.quantitative_metrics import (
+            motion_corrected_segments, motion_correction_metrics,
+        )
         section("motion", lambda: motion_correction_metrics(
             read_snirf(stages["sci"]), read_snirf(stages["motcorrected"])))
+        # `motion` counts the spans; this is where they are, for the figures that draw them
+        try:
+            windowed["motion_corrected_spans_s"] = [
+                list(span) for span in motion_corrected_segments(
+                    read_snirf(stages["sci"]), read_snirf(stages["motcorrected"]))
+            ]
+        except Exception:
+            logger.warning("windowed: correction spans failed", exc_info=True)
 
     # the same OD-domain metrics as `raw`, measured on the corrected file. Same domain and
     # same units, so these subtract against `raw`; nothing across Beer-Lambert does
@@ -350,6 +370,9 @@ def compute_run_sections(
         section("final", lambda: compute_haemo_sqm(read_snirf(stages[final_desc])))
         if "final" in sections:
             sections["final"]["stage"] = final_desc
+
+    if windowed:
+        sections["windowed"] = windowed
 
     sections["per_channel"] = per_channel
     return sections

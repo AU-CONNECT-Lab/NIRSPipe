@@ -43,6 +43,11 @@ def _prep(tmp_dir, **overrides):
     return result, tmp_dir / "sub-01" / "nirs"
 
 
+def _stage(nirs_dir, desc):
+    """One of the run's stage files. Prep stopped carrying these in memory on 2026-08-29."""
+    return read_snirf(next(nirs_dir.glob(f"*_desc-{desc}_nirs.snirf")))
+
+
 @pytest.fixture(scope="module")
 def baseline(tmp_path_factory):
     return _prep(tmp_path_factory.mktemp("wiring_base"))
@@ -71,18 +76,18 @@ def test_sci_threshold_reaches_the_comparison(tmp_path_factory):
 
 def test_the_cardiac_band_reaches_the_sci_computation(baseline):
     """SCI measured off the cardiac peak must collapse; the good pairs only share cardiac."""
-    raw_od = baseline[0].raw_od_before_motion
+    raw_od = _stage(baseline[1], "sci")
     in_band = list(compute_sci(raw_od, 0.7, 1.5).values())
     off_band = list(compute_sci(raw_od, 2.0, 3.0).values())
     assert np.median(in_band) > np.median(off_band) + 0.3
 
 
 def test_the_motion_method_reaches_the_signal(tmp_path_factory):
-    none, _ = _prep(tmp_path_factory.mktemp("mot_none"), motion_correction="none")
-    tddr, _ = _prep(tmp_path_factory.mktemp("mot_tddr"), motion_correction="tddr")
-    before = none.raw_od_before_motion.get_data()
-    assert np.array_equal(none.raw_od_after_motion.get_data(), before)
-    assert not np.allclose(tddr.raw_od_after_motion.get_data(), before)
+    _, none_dir = _prep(tmp_path_factory.mktemp("mot_none"), motion_correction="none")
+    _, tddr_dir = _prep(tmp_path_factory.mktemp("mot_tddr"), motion_correction="tddr")
+    before = _stage(none_dir, "sci").get_data()
+    assert np.array_equal(_stage(none_dir, "motcorrected").get_data(), before)
+    assert not np.allclose(_stage(tddr_dir, "motcorrected").get_data(), before)
 
 
 def test_the_bandpass_cutoffs_reach_the_filter(baseline, tmp_path_factory):
@@ -159,13 +164,14 @@ def test_the_windowed_metrics_actually_ran(baseline):
     Prep stopped computing these on 2026-08-29; the record is the only place they exist, and
     the report reads them back from it.
     """
-    result, nirs_dir = baseline
+    _, nirs_dir = baseline
     written = build_sqm_records(nirs_dir)
     record = json.loads(written[0].read_text(encoding="utf-8"))
     windowed = record.get("windowed") or {}
-    for name in ("sci_matrix", "sci_times", "psp_matrix", "psp_times", "qc_window_s"):
-        assert windowed.get(name) is not None, name
-    n_ch = len(result.raw_od_before_motion.ch_names)
+    for name in ("sci_matrix", "sci_times", "psp_matrix", "psp_times", "qc_window_s",
+                 "spike_spans_s", "motion_corrected_spans_s"):
+        assert name in windowed, name
+    n_ch = len(_stage(nirs_dir, "motcorrected").ch_names)
     assert len(windowed["sci_matrix"]) == n_ch
     assert len(windowed["sci_matrix"][0]) == len(windowed["sci_times"])
 

@@ -49,9 +49,11 @@ def read_raw_snirf(snirf_path: Path):
 
 
 def annotations_to_df(raw) -> pd.DataFrame:
+    # first_time is nonzero only for a cropped recording, whose annotations still sit on
+    # the original axis. BIDS wants onsets relative to the start of the data either way.
     a = raw.annotations
     return pd.DataFrame({
-        "onset": a.onset,
+        "onset": a.onset - raw.first_time,
         "duration": a.duration,
         "trial_type": a.description,
     })
