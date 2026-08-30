@@ -44,7 +44,7 @@ def _prep(tmp_dir, **overrides):
 
 
 def _stage(nirs_dir, desc):
-    """One of the run's stage files. Prep stopped carrying these in memory on 2026-08-29."""
+    """One of the run's stage files. Prep stopped carrying these in memory on 2026-08-30."""
     return read_snirf(next(nirs_dir.glob(f"*_desc-{desc}_nirs.snirf")))
 
 
@@ -161,7 +161,7 @@ def test_marking_every_channel_by_hand_says_so(tmp_path_factory):
 def test_the_windowed_metrics_actually_ran(baseline):
     """sqm_record swallows any failure here, leaving the report's per-window panel empty.
 
-    Prep stopped computing these on 2026-08-29; the record is the only place they exist, and
+    Prep stopped computing these on 2026-08-30; the record is the only place they exist, and
     the report reads them back from it.
     """
     _, nirs_dir = baseline

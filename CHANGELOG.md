@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 - The quality record gains a `motion_post` section: GVTD, spikes, SCI and PSP measured again on the motion-corrected file. Set against the same keys in `raw`, it says whether the correction reduced motion and whether it cost any cardiac signal
 - The quality record gains a `windowed` section: the per-window SCI, PSP and GVTD series, with the window length they were binned on. They used to exist only in what `fnirs-qc prep-raw` wrote
 - Metric tooltips in the subject report now say which processing stage the number was measured on, which matters for the keys that appear in two sections
+- `fnirs-recon --optode-frame` names the space the SNIRF's optode coordinates were measured in. SNIRF does not record it, and without it mne-bids writes no `_optodes.tsv` or `_coordsystem.json`, both of which BIDS requires
 - `fnirs-prep crop` accepts a `task` column in the segments table: each segment is written under that task entity instead of `_seg-NN`, so a recording holding several conditions becomes a BIDS dataset the pipeline can read back one condition at a time
 - `fnirs-qc hyper-post --wtc-roi-cross` crosses the two brains' ROIs instead of pairing each with its counterpart, so one person's PFC can be tested against the other's TPJ. `hyper-wtc-roi.tsv` gains a `label2` column, the report an ROI × ROI matrix. Needs `--roi-mapping`
 - `fnirs-qc hyper-post --wtc-mc-count` sets how many surrogate series stand behind each significance contour (default 300, unchanged). It is what the runtime is spent on and it scales with the value, so a run can be previewed cheaply and settled expensively
@@ -20,6 +21,12 @@ All notable changes to this project will be documented in this file.
 - The subject report's per-window SCI and PSP panel reads the quality record instead of values passed from prep, and the series are measured on the motion-corrected file. Prep no longer computes them
 - Tables you hand the package read by extension: `.tsv` tab-separated, `.csv` comma-separated, anything else sniffed. Applies to events, segments, the pairs file and `participants.tsv`. What the package writes stays tab-separated
 - zALFF standardizes by the population SD (n) instead of the sample SD (n-1). Values grow by `sqrt(n/(n-1))`.
+
+### Fixed
+- `fnirs-prep crop`, `fnirs-prep edit-markers apply`, `fnirs-prep align` and their two GUI equivalents wrote SNIRF through an MNE export format that does not exist, so **none of them ever produced a file**. They now use the same writer as the pipeline
+- Writing a cropped recording put its markers at their position in the original recording, so a segment taken from late in a run lost every marker to the reader's range check. Markers now start where the segment does, in the SNIRF and in the `_events.tsv` beside it
+- `crop` names each segment's sidecars after the segment, not after the file it was cut from, and finds `_optodes.tsv` / `_coordsystem.json`, which sit at subject level and were never matched
+- `crop`, `edit-markers` and `align` carry `participants.tsv` and `README` into their output, which is what makes those directories readable as BIDS datasets on their own
 
 ## [0.21.0] - 2026-08-24
 
