@@ -565,8 +565,8 @@ def _build_parser() -> argparse.ArgumentParser:
                          "time-frequency heatmaps stay on the homologous pairs.")
     hp.add_argument("--wtc-channel-cross", action="store_true",
                     help="Cross every long channel with every other across the two brains "
-                         "instead of pairing each channel with its counterpart, so 14 "
-                         "channels give 196 coherence values rather than 14. The extra "
+                         "instead of pairing each channel with its counterpart, so n "
+                         "channels give n^2 coherence values rather than n. The extra "
                          "pairs reach the channel TSV with a label2 column; the "
                          "time-frequency heatmaps stay on the homologous pairs. Single "
                          "channels are noisier than ROI averages, so treat the off-diagonal "
@@ -581,11 +581,12 @@ def _build_parser() -> argparse.ArgumentParser:
     hp.add_argument("--wtc-limit-scales", action=argparse.BooleanOptionalAction, default=True,
                     help="Compute only the wavelet scales inside --wtc-fmin/--wtc-fmax "
                          "plus margin, instead of every scale the record length allows "
-                         "(default on). A 900 s recording at 10 Hz drops from 147 scales to "
-                         "79 and runs 1.8x faster. They land on pycwt's own scale grid and "
-                         "the margin is wider than its scale-smoothing window, so the "
-                         "coherences match the unrestricted ones bit for bit. "
-                         "--no-wtc-limit-scales restores the old behaviour.")
+                         "(default on). A narrow band over a long record leaves most of the "
+                         "default scale range unused, and the saving is proportional. The "
+                         "kept scales land on pycwt's own grid and the margin is wider than "
+                         "its scale-smoothing window, so the coherences match the "
+                         "unrestricted ones bit for bit. --no-wtc-limit-scales restores the "
+                         "old behaviour.")
     hp.add_argument("--wtc-save-maps", action="store_true",
                     help="Save the full time-frequency coherence maps beside each TSV as "
                          "npz, so a different band can be averaged later with `fnirs-qc "

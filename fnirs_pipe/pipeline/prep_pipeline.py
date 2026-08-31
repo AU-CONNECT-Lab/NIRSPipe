@@ -5,6 +5,7 @@ Step outputs written to output_dir/sub-XX/[ses-YY/]nirs/:
   desc-sci           SCI-pruned OD
   desc-motcorrected  motion-corrected OD
   desc-preproc       final HbO/HbR  (Beer-Lambert output)
+  desc-aux           the recording's auxiliary channels, if it has any (tsv.gz)
 
 Each snirf is accompanied by a JSON provenance sidecar.
 
@@ -19,6 +20,7 @@ import mne
 import mne.io
 
 from fnirs_pipe import __version__
+from fnirs_pipe.io.auxiliary import aux_table_path, write_aux_table
 from fnirs_pipe.io.derivatives import build_output_path, carry_entities, data_state, write_sidecar_json
 from fnirs_pipe.io.snirf import write_snirf
 from fnirs_pipe.pipeline.motion import MotionMethod, correct_motion  # noqa: F401  re-exported
@@ -121,9 +123,10 @@ def run_prep(
       2. SCI channel marking -> desc-sci_nirs.snirf
       3. Motion correction -> desc-motcorrected_nirs.snirf
       4. Beer-Lambert      -> desc-preproc_nirs.snirf
+      5. Aux extraction    -> desc-aux_timeseries.tsv.gz  (only if the recording has aux)
 
     source_path is the BIDS file *raw* was read from; it becomes the Sources
-    entry of the first output.
+    entry of the first output, and step 5 reads the aux channels back out of it.
     """
     entities_base = carry_entities(source_entities)
     ses = config.session
@@ -209,7 +212,11 @@ def run_prep(
     # step 4: Beer-Lambert
     logger.info("sub-%s | step 4: Beer-Lambert (dpf=%s)", config.subject, config.dpf)
     raw_haemo = od_to_haemo(raw_od, dpf=config.dpf)
-    _save(raw_haemo, "preproc")
+    preproc_path = _save(raw_haemo, "preproc")
+
+    # step 5: the aux channels, if the recording has any. They never enter an mne object, so
+    # this is the only chance to carry them forward: the derivative snirfs do not hold them.
+    _save_aux_table(source_path, preproc_path, config)
 
     # SQM is not computed here. It is assembled per run from the files this pipeline left
     # on disk, once post-processing has also finished; see qc/sqm_record.py.
@@ -222,6 +229,42 @@ def run_prep(
         sci_scores=sci_scores,
         bad_channels=bad_chs,
     )
+
+
+def _save_aux_table(source_path: Path | None, preproc_path: Path, config: PrepConfig) -> Path | None:
+    """Copy the recording's aux channels out of the source snirf, beside the preproc output.
+
+    Nothing downstream can recover them otherwise: MNE never reads them, so they are not in
+    the Raw the pipeline carries, and `write_snirf` therefore cannot put them in any
+    derivative. Failure is logged and swallowed, since a missing confound table is not a
+    reason to lose a finished preprocessing run.
+    """
+    if source_path is None:
+        logger.debug("sub-%s | no source path, skipping aux extraction", config.subject)
+        return None
+
+    out_path = aux_table_path(preproc_path)
+    try:
+        written = write_aux_table(Path(source_path), out_path)
+    except Exception:
+        logger.exception("sub-%s | aux extraction failed", config.subject)
+        return None
+
+    if written is None:
+        logger.info("sub-%s | recording carries no aux channels", config.subject)
+        return None
+
+    table, facts = written
+    logger.info("sub-%s | step 5: aux table (%d channels at %.2f Hz)",
+                config.subject, len(table.columns) - 1, facts["SamplingFrequency"])
+    write_sidecar_json(out_path, {
+        "pipeline_version": __version__,
+        "step": "aux_extract",
+        "Sources": [Path(source_path).as_posix()],
+        "parameters": _config_dict(config),
+        **facts,
+    })
+    return out_path
 
 
 def _config_dict(config: PrepConfig) -> dict:

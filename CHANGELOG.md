@@ -17,6 +17,8 @@ All notable changes to this project will be documented in this file.
 - `fnirs-qc hyper-post` writes `hyper-bads.tsv`: which channels the inter-brain metrics excluded, and which run rejected each
 - The group CSV accepts optional `session` and `run` columns, for a subject with more than one recording of a task
 - The QC Reports page offers `wtc-band`, the saved WTC maps and the two new `hyper-post` options, so nothing added this release is command line only
+- **`--aux-regressors` puts the recording's auxiliary channels into the confound regression**, in every mode that regresses. Accelerometers, gyroscopes, a pulse trace, whatever the device wrote to the snirf `aux` group. MNE never reads that group, so preprocessing now extracts it to `desc-aux_timeseries.tsv.gz` first, at the rate it was recorded and with the recorded timestamps. The regression resamples it onto the data's time axis with an anti-alias filter and band-limits it to the same bandpass the data went through, so regressors and data sit in one frequency band
+- `--aux-channels` picks individual aux channels by name, for an aux group that also holds something that is not a confound
 
 ### Fixed
 - **`hyper-post` excluded the wrong run's bad channels.** A subject with five tasks had four of them analysed with a fifth task's rejections
@@ -26,6 +28,7 @@ All notable changes to this project will be documented in this file.
 - A `--task-label` run no longer rewrites the quality records of the tasks it did not process
 - `fnirs-qc group-hyper-wtc` refuses to merge crossed and homologous channel tables, as it already did for ROI tables
 - The provenance diagram is drawn per run. A subject with five tasks got five identical-looking chains in one figure
+- `--mode glm` warns when the data is high-passed but the drift model does not span that band. Task betas were underestimated with nothing saying so, mildly for short blocks and severely for long ones
 
 ## [0.23.0] - 2026-08-30
 

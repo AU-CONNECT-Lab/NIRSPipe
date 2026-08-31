@@ -51,6 +51,8 @@ def _build_script_text(
     drift_order: int = 1,
     fir_delays: tuple[int, ...] = (0,),
     short_channel: bool | str = False,
+    aux: bool = False,
+    aux_channels: list[str] | None = None,
     fc: bool = False,
     events_path: str | None = None,
     contrast_file: str | None = None,
@@ -59,7 +61,12 @@ def _build_script_text(
     dt_str = datetime.strptime(timestamp, "%Y%m%d_%H%M%S").strftime("%Y-%m-%d %H:%M:%S")
     # mirrors post_pipeline._has_confounds: denoise regresses only when asked to
     denoise_regress = mode == "denoise" and (
-        bool(short_channel) or drift_model not in (None, "none"))
+        bool(short_channel) or bool(aux) or drift_model not in (None, "none"))
+    # the aux table sits beside the stage on disk; the script resolves it the way run_post does
+    _aux_lines = ([
+        '    aux_path=find_aux_table(preproc_path), aux_channels=AUX_CHANNELS,',
+        '    data_band=(HIGH_PASS, LOW_PASS),',
+    ] if aux else [])
     sessions_repr = repr(session_label if session_label else [None])
     tasks_repr    = repr(task_label    if task_label    else [None])
     bad_channels  = bad_channels or []
@@ -86,6 +93,7 @@ def _build_script_text(
         'import mne',
         '',
         'from fnirs_pipe import __version__',
+        'from fnirs_pipe.io.auxiliary import aux_table_path, find_aux_table, write_aux_table',
         'from fnirs_pipe.io.bids import get_layout, get_nirs_files',
         'from fnirs_pipe.io.derivatives import build_output_path, carry_entities, data_state, write_sidecar_json',
         'from fnirs_pipe.io.snirf import write_snirf',
@@ -143,6 +151,7 @@ def _build_script_text(
             f'DRIFT_ORDER    = {drift_order!r}',
             f'FIR_DELAYS     = {fir_delays!r}',
             f'SHORT_CHANNEL  = {short_channel!r}',
+            f'AUX_CHANNELS   = {aux_channels!r}',
             f'EVENTS_PATH    = {events_path!r}',
         )
     elif mode == "rest" or denoise_regress:
@@ -151,6 +160,7 @@ def _build_script_text(
             f'DRIFT_HIGH_PASS= {drift_high_pass!r}',
             f'DRIFT_ORDER    = {drift_order!r}',
             f'SHORT_CHANNEL  = {short_channel!r}',
+            f'AUX_CHANNELS   = {aux_channels!r}',
         )
 
     # ---- sidecar params + save helper ----
@@ -228,9 +238,19 @@ def _build_script_text(
         '',
         '# ===== block: beer_lambert | OD -> HbO/HbR (Beer-Lambert, dpf=DPF) =====',
         'raw_haemo = od_to_haemo(raw_od, dpf=DPF)',
-        'save_step(raw_haemo, "preproc", "beer_lambert", session=session)',
+        'preproc_path = save_step(raw_haemo, "preproc", "beer_lambert", session=session)',
         '# QC (not run here): the `preproc`, `motion` and `motion_post` sections are read',
         '#   back from desc-preproc, desc-sci and desc-motcorrected.',
+        '',
+        '# ===== block: aux | snirf aux group -> desc-aux table (only if the file has one) =====',
+        '#   MNE never reads aux, so this is the only point at which it can be carried forward',
+        'aux_path = aux_table_path(preproc_path)',
+        '_aux = write_aux_table(Path(snirf_path), aux_path)',
+        'if _aux is not None:',
+        '    write_sidecar_json(aux_path, {',
+        '        "pipeline_version": __version__, "step": "aux_extract",',
+        '        "Sources": [Path(snirf_path).as_posix()],',
+        '        "parameters": {**PREP_PARAMS, "session": session}, **_aux[1]})',
     )
 
     if mode:
@@ -263,6 +283,7 @@ def _build_script_text(
                 '    stim_dur=None, hrf_model="spm", noise_model="ols",',
                 '    drift_model=DRIFT_MODEL, high_pass=DRIFT_HIGH_PASS, drift_order=DRIFT_ORDER,',
                 '    fir_delays=None, short_channel=SHORT_CHANNEL,',
+                *_aux_lines,
                 '    events=pd.DataFrame({"trial_type": [], "onset": [], "duration": []}),',
                 '    output_dir=str(OUTPUT_DIR / f"sub-{SUBJECT}" / "nirs"),',
                 ')',
@@ -289,6 +310,7 @@ def _build_script_text(
                 '    stim_dur=STIM_DUR, hrf_model=HRF_MODEL, noise_model=NOISE_MODEL,',
                 '    drift_model=DRIFT_MODEL, high_pass=DRIFT_HIGH_PASS, drift_order=DRIFT_ORDER,',
                 '    fir_delays=FIR_DELAYS, short_channel=SHORT_CHANNEL, events_path=EVENTS_PATH,',
+                *_aux_lines,
                 ('    contrast_def=_contrast_def,' if contrast_file else '    contrast_def=None,'),
                 '    output_dir=str(OUTPUT_DIR / f"sub-{SUBJECT}" / "nirs"),',
                 ')',
@@ -308,6 +330,7 @@ def _build_script_text(
                 '    stim_dur=None, hrf_model="spm", noise_model="ols",',
                 '    drift_model=DRIFT_MODEL, high_pass=DRIFT_HIGH_PASS, drift_order=DRIFT_ORDER,',
                 '    fir_delays=None, short_channel=SHORT_CHANNEL,',
+                *_aux_lines,
                 '    events=pd.DataFrame({"trial_type": [], "onset": [], "duration": []}),',
                 '    output_dir=str(OUTPUT_DIR / f"sub-{SUBJECT}" / "nirs"),',
                 ')',
@@ -387,6 +410,8 @@ def write_run_script(
         drift_order=_pick("drift_order", 1),
         fir_delays=fir_delays,
         short_channel=False if (sc is None or sc == "none") else sc,
+        aux=bool(args.get("aux_regressors")),
+        aux_channels=args.get("aux_channels"),
         fc=bool(args.get("fc")),
         events_path=_fwd(args.get("events_path")),
         contrast_file=_fwd(args.get("contrast_file")),

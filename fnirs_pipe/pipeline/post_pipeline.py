@@ -16,6 +16,7 @@ import mne
 import mne.io
 import pandas as pd
 
+from fnirs_pipe.io.auxiliary import find_aux_table
 from fnirs_pipe.pipeline.denoise import bandpass_filter, resample
 from fnirs_pipe.pipeline.glm import run_glm_pipeline
 from fnirs_pipe.exceptions import StageError
@@ -55,6 +56,8 @@ class PostConfig:
     drift_order:     int | None            = None
     fir_delays:      tuple[int, ...] | None = None
     short_channel:   bool | str | None     = None
+    aux:             bool                  = False
+    aux_channels:    list[str] | None      = None
     events_path:     str | None            = None
     contrast_def:    dict[str, Any] | None = None
     fc:              bool                  = False
@@ -81,10 +84,42 @@ def _has_confounds(config: PostConfig) -> bool:
     """Whether denoise mode has anything to regress out.
 
     Unlike rest mode, denoise does not force a drift model: it has no ALFF branch whose
-    input skips the bandpass, so the bandpass is already the detrend. Either flag on its
-    own is enough to make the regression worth running.
+    input skips the bandpass, so the bandpass is already the detrend. Any one of the three
+    on its own is enough to make the regression worth running.
     """
-    return bool(config.short_channel) or config.drift_model not in (None, "none")
+    return (bool(config.short_channel) or bool(config.aux)
+            or config.drift_model not in (None, "none"))
+
+
+def _warn_unmatched_design_band(config: PostConfig) -> None:
+    """A task model fitted to bandpassed data needs a drift basis that covers the cutoff.
+
+    The data reaches the GLM high-passed; the HRF-convolved task columns do not, so they
+    carry variance below the cutoff that the data no longer has. That inflates the
+    denominator of the task beta and biases it toward zero. A cosine drift basis at the same
+    cutoff fixes it exactly, because projecting a regressor onto the complement of a basis
+    spanning everything below the cutoff *is* a high-pass. A low-order polynomial does not
+    span it and neither does no drift model at all.
+
+    How much it costs depends on block length against the cutoff: a design whose blocks sit
+    well inside the passband loses a couple of percent, while one whose fundamental falls
+    below the cutoff can lose most of the effect. A warning rather than an error for that
+    reason, since only the caller knows their design.
+    """
+    if config.high_pass is None:
+        return
+    covered = (config.drift_model == "cosine"
+               and config.drift_high_pass is not None
+               and config.drift_high_pass >= config.high_pass)
+    if covered:
+        return
+    logger.warning(
+        "sub-%s | the data is high-passed at %g Hz but the task regressors are not, and "
+        "--drift-model %s does not span that band. Task betas will be underestimated, "
+        "mildly for short blocks and severely for long ones. Use --drift-model cosine with "
+        "--drift-high-pass %g to match.",
+        config.subject, config.high_pass, config.drift_model or "none", config.high_pass,
+    )
 
 
 
@@ -113,6 +148,17 @@ def run_post(
 
     result = raw_haemo.copy()
 
+    aux_path = None
+    if config.aux:
+        aux_path = find_aux_table(Path(source_path)) if source_path else None
+        if aux_path is None:
+            logger.warning("sub-%s | --aux-regressors asked for but no aux table beside %s; "
+                           "the recording may carry no aux channels, or prep predates them",
+                           config.subject, Path(source_path).name if source_path else "the input")
+    # every regression below takes the same three, so they travel together
+    aux_kwargs = dict(aux_path=aux_path, aux_channels=config.aux_channels,
+                      data_band=(config.high_pass, config.low_pass))
+
     if config.high_pass is not None or config.low_pass is not None:
         logger.info("sub-%s | bandpass: l_freq=%s h_freq=%s", config.subject, config.high_pass, config.low_pass)
         result = bandpass_filter(result, l_freq=config.high_pass, h_freq=config.low_pass)
@@ -137,6 +183,7 @@ def run_post(
         if config.events_path is not None and config.stim_dur is not None:
             raise ValueError("--events-path and --stim-dur are mutually exclusive")
         logger.info("sub-%s | GLM (%s / %s)", config.subject, config.hrf_model, config.noise_model)
+        _warn_unmatched_design_band(config)
         _, glm_est, dm, raw_resid = run_glm_pipeline(
             result,
             stim_dur=config.stim_dur,
@@ -147,6 +194,7 @@ def run_post(
             drift_order=config.drift_order,
             fir_delays=config.fir_delays,
             short_channel=config.short_channel,
+            **aux_kwargs,
             events_path=config.events_path,
             contrast_def=config.contrast_def,
             output_dir=str(output_dir / f"sub-{config.subject}" / "nirs"),
@@ -175,6 +223,7 @@ def run_post(
             drift_order=config.drift_order,
             fir_delays=None,
             short_channel=config.short_channel,
+            **aux_kwargs,
             events=pd.DataFrame({"trial_type": [], "onset": [], "duration": []}),
         )
         _, glm_est, dm, raw_resid = run_glm_pipeline(
@@ -209,7 +258,10 @@ def run_post(
                 result_bb = raw_haemo.copy()
                 if config.resample_sfreq is not None:
                     result_bb = resample(result_bb, config.resample_sfreq)
-                _, _, _, raw_resid_bb = run_glm_pipeline(result_bb, **rest_glm_kwargs)
+                # its input skipped the bandpass, so band-matching the aux to one would
+                # put the regressors in a narrower band than the data they explain
+                _, _, _, raw_resid_bb = run_glm_pipeline(
+                    result_bb, **{**rest_glm_kwargs, "data_band": None})
                 # Same regression, un-bandpassed input. Re-stamp so it stops sharing the "errts"
                 # stage with the bandpassed residual, whose file it would otherwise be credited to.
                 stamp(raw_resid_bb, stage="errtsbroad", step="glm_residuals_broadband",
@@ -239,6 +291,7 @@ def run_post(
                 drift_order=config.drift_order,
                 fir_delays=None,
                 short_channel=config.short_channel,
+                **aux_kwargs,
                 events=pd.DataFrame({"trial_type": [], "onset": [], "duration": []}),
                 output_dir=str(output_dir / f"sub-{config.subject}" / "nirs"),
                 source_path=rec.path_of(result),

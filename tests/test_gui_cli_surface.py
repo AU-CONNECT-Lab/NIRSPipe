@@ -42,6 +42,7 @@ _FULL_OPTS = dict(
     cardiac_l=0.7, cardiac_h=1.5, resp_l=0.1, resp_h=0.5,
     high_pass=0.01, low_pass=0.1, resample=2.0, n_jobs=1,
     hrf_model="spm", noise_model="ar1", short_channel="mean",
+    aux=True, aux_channels="AUX1 AUX2",
     drift_model="cosine", drift_high_pass=0.01, drift_order=1,
     stim_dur=5.0, roi_mapping="/roi.json", fc=True,
     flags=["dry_run", "skip_bids_validation", "no_report", "combine_runs"],

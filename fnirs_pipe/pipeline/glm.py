@@ -64,6 +64,81 @@ def _short_channel_regressors(haemo: mne.io.Raw, strategy: SCRStrategy) -> dict[
         "short_ch_hbr_mean": hbr_data.mean(axis=0),
     }
 
+def _aux_regressors(
+    haemo: mne.io.Raw,
+    aux_path: Path | str,
+    channels: list[str] | None,
+    data_band: tuple[float | None, float | None] | None,
+) -> dict[str, np.ndarray]:
+    """External confound columns from the aux table preprocessing wrote.
+
+    Three steps, and the order is the whole point:
+
+      1. onto the data's own time axis, anti-aliased (`io.auxiliary.resample_to_grid`)
+      2. through the same bandpass the data went through
+      3. z-scored
+
+    Step 2 is what short channels get for free. They are channels of the same recording, so
+    they ride through the filter with everything else and regressor and target end up in one
+    frequency band. Aux comes from outside that recording and gets none of it, so it would
+    otherwise arrive carrying variance the data no longer has anywhere. That inflates the
+    denominator of every beta it appears in, under-correcting inside the band, and puts the
+    same out-of-band variance back into the residual the filter had just cleaned.
+
+    The drift columns of the design matrix cover the equivalent mismatch below the high-pass
+    cutoff, since they span exactly the frequencies the high-pass removed. Nothing in the
+    design matrix spans what sits above the low-pass, which for a motion sensor is most of
+    its power, so this filter is not optional.
+    """
+    from fnirs_pipe.io.auxiliary import TIME_COLUMN, read_aux_table, resample_to_grid
+
+    table = read_aux_table(Path(aux_path))
+    available = [c for c in table.columns if c != TIME_COLUMN]
+    if channels:
+        wanted = [c for c in channels if c in available]
+        missing = sorted(set(channels) - set(available))
+        if missing:
+            logger.warning("aux channels not in %s: %s (have %s)",
+                           Path(aux_path).name, missing, available)
+        available = wanted
+    if not available:
+        logger.warning("no usable aux channels in %s, skipping aux regressors", Path(aux_path).name)
+        return {}
+
+    t_aux = table[TIME_COLUMN].to_numpy(dtype=float)
+    t_dst = haemo.times
+    # np.interp holds the end values rather than extrapolating, so a short aux record would
+    # silently contribute a constant tail instead of failing
+    if t_aux[-1] < t_dst[-1] - 1.0:
+        logger.warning("aux table ends at %.1f s but the data runs to %.1f s; "
+                       "the last %.1f s of every aux regressor is held constant",
+                       t_aux[-1], t_dst[-1], t_dst[-1] - t_aux[-1])
+
+    l_freq, h_freq = data_band or (None, None)
+    out: dict[str, np.ndarray] = {}
+    for name in available:
+        column = resample_to_grid(t_aux, table[name].to_numpy(dtype=float), t_dst)
+        if l_freq is not None or h_freq is not None:
+            wideband = column.var()
+            # the settings bandpass_filter uses, so regressor and data see one filter
+            column = mne.filter.filter_data(
+                column[None, :], haemo.info["sfreq"], l_freq, h_freq,
+                method="fir", fir_window="hamming", verbose="error",
+            )[0]
+            # the z-score below rescales whatever survives to unit variance, so a channel
+            # with nothing inside the band would arrive as a unit-variance regressor made
+            # of filter residue and cost a degree of freedom for it
+            if wideband > 0 and column.var() < 0.01 * wideband:
+                logger.warning("aux channel %s keeps %.1f%% of its variance inside "
+                               "%s-%s Hz; it contributes little but a lost degree of freedom",
+                               name, 100 * column.var() / wideband, l_freq, h_freq)
+        sd = column.std()
+        out[f"aux_{name}"] = (column - column.mean()) / sd if sd > 0 else column - column.mean()
+
+    logger.info("aux regressors: %s", ", ".join(out))
+    return out
+
+
 def build_design_matrix(
     raw: mne.io.Raw,
     stim_dur: float | None,
@@ -149,6 +224,11 @@ def run_glm_pipeline(
     events_path: str | None = None,
     events: pd.DataFrame | None = None,
     short_channel: bool | SCRStrategy | None = None,
+    aux_path: str | Path | None = None,
+    aux_channels: list[str] | None = None,
+    # the bandpass applied to `haemo`, not the drift cutoff `high_pass` above. Only the aux
+    # regressors need it, and only to be filtered to the same band as the data.
+    data_band: tuple[float | None, float | None] | None = None,
     contrast_def: dict[str, Any] | None = None,
     output_dir: str | None = None,
     source_path: str | None = None,
@@ -163,9 +243,11 @@ def run_glm_pipeline(
     # is what keeps the regression from re-injecting out-of-band variance the filter removed
     # (the spectral-misspecification problem of Hallquist 2013; the accepted fix is to filter
     # data and confounds with the same filter before regressing, which holds here implicitly
-    # because both derive from one filtered recording). If external, unfiltered confounds are
-    # ever added, they must be filtered to the same band first.
+    # because both derive from one filtered recording). External confounds do not get that
+    # for free, which is what `_aux_regressors` filters them for.
     confound_cols = _short_channel_regressors(haemo, short_channel) if short_channel else {}
+    if aux_path:
+        confound_cols.update(_aux_regressors(haemo, aux_path, aux_channels, data_band))
     confounds = pd.DataFrame(confound_cols) if confound_cols else None
 
     dm = build_design_matrix(
@@ -198,7 +280,8 @@ def run_glm_pipeline(
                           hrf_model=hrf_model,
                           noise_model=noise_model, drift_model=drift_model,
                           drift_high_pass=high_pass, drift_order=drift_order,
-                          short_channel=short_channel)
+                          short_channel=short_channel,
+                          aux_regressors=sorted(k for k in confound_cols if k.startswith("aux_")))
 
     return haemo, glm_est, dm, raw_resid
 

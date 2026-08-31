@@ -162,8 +162,9 @@ def _pairwise_wtc(
 
     ``limit_scales`` computes only the scales the ``[fmin, fmax]`` filter is going to keep,
     plus margin, instead of pycwt's default range from ``2 * dt`` down to whatever the record
-    length allows. Without it a 900 s recording at 10 Hz has about 147 scales computed and 56
-    kept. See :func:`_scale_range` for why the retained numbers do not change.
+    length allows. A narrow band over a long record leaves most of the default range unused,
+    and the saving is proportional. See :func:`_scale_range` for why the retained numbers do
+    not change.
 
     Backend: `pycwt.wct <https://pycwt.readthedocs.io/en/development/reference/#pycwt.wct>`_.
     """
@@ -296,7 +297,7 @@ def compute_wtc(
     and seed makes it reproducible.
 
     ``cross`` crosses every channel with every other rather than pairing like with like, so
-    14 channels give 196 results keyed by ``(label_sub1, label_sub2)`` instead of 14 keyed by
+    n channels give n**2 results keyed by ``(label_sub1, label_sub2)`` instead of n keyed by
     the label. It tests whether one person's channel couples to a different site on the
     other's head. The cost is quadratic in the channel count and single channels are noisier
     than the ROI averages ``compute_wtc_roi`` crosses, so the off-diagonal is exploratory.

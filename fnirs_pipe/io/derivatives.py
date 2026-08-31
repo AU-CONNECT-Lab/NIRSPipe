@@ -92,7 +92,11 @@ def write_sidecar_json(out_path: Path, provenance: dict[str, Any]) -> None:
     provenance.setdefault(
         "timestamp", datetime.now(timezone.utc).isoformat()
     )
-    sidecar_path = out_path.with_suffix(".json")
+    # a .tsv.gz would otherwise get a .tsv.json sidecar, which nothing would find
+    name = out_path.name
+    if name.endswith(".gz"):
+        name = name[:-3]
+    sidecar_path = out_path.with_name(name).with_suffix(".json")
     sidecar_path.write_text(json.dumps(provenance, indent=2))
 
 
