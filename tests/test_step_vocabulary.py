@@ -25,6 +25,7 @@ ALL_STEPS = [
     "glm_residuals", "glm_residuals_broadband", "sqm", "sqm_raw", "alff", "fc",
     "fisher_z", "fc_roi", "fc_seed", "group_sqm_raw", "group_sqm_raw_channels",
     "hyper_wtc", "hyper_wtc_roi", "hyper_isc",
+    "group_hyper_wtc", "group_hyper_wtc_roi",
 ]
 
 

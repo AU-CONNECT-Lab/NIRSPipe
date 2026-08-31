@@ -110,7 +110,6 @@ a bare-MNE run of the same chain. Reports are kept with the project notes outsid
 
 ### QC enhancements
 
-- **Aggregate WTC across groups** — a sibling of `group-hyper-raw` that merges every `group-*_hyper-wtc.tsv` and `group-*_hyper-wtc-roi.tsv` into one long table with `group_id` and `task` columns, so a study with many dyads or many conditions has a single file to take into stats ([qc/hyper_report.py](fnirs_pipe/qc/hyper_report.py))
 - **ALFF/fALFF on a brain surface** — the flat map is drawn; projecting onto a surface needs head coordinates and mne_nirs ([qc/figures/rest_figures.py](fnirs_pipe/qc/figures/rest_figures.py))
 - **Auto-generate roi.json from fOLD** — derive channel-to-region mapping from montage via `mne_nirs.io.fold_channel_specificity` (needs fOLD Excel DB), as an alternative to hand-written `--roi-mapping`
 

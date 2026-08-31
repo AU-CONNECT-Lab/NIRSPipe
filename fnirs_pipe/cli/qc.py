@@ -205,6 +205,20 @@ def cmd_group_hyper_raw(output_dir: Path) -> None:
     print(f"report -> {path}")
 
 
+def cmd_group_hyper_wtc(output_dir: Path) -> None:
+    """Merge every per-dyad WTC band-mean table into one long table per kind."""
+    from fnirs_pipe.qc.wtc_aggregate import write_aggregate_wtc
+
+    wrote = False
+    for kind in ("wtc", "wtc-roi"):
+        path = write_aggregate_wtc(output_dir, kind=kind)
+        if path is not None:
+            print(f"{kind} -> {path}")
+            wrote = True
+    if not wrote:
+        print(f"no hyper-wtc tables under {output_dir}; run `fnirs-qc hyper-post` first")
+
+
 def cmd_provenance(output_dir: Path) -> None:
     """Render the file provenance graph for every subject / group in a derivatives tree.
 
@@ -422,6 +436,12 @@ def _build_parser() -> argparse.ArgumentParser:
     ghr.add_argument("output_dir", type=Path,
                      help="fnirs-pipe derivatives directory (contains group-*/nirs/ SQM JSONs)")
     ghr.set_defaults(func=cmd_group_hyper_raw)
+
+    ghw = sub.add_parser("group-hyper-wtc",
+                         help="Merge per-dyad WTC band-mean tables into one long table.")
+    ghw.add_argument("output_dir", type=Path,
+                     help="Directory holding group-*_task-*_hyper-wtc.tsv (searched recursively)")
+    ghw.set_defaults(func=cmd_group_hyper_wtc)
 
     pv = sub.add_parser("provenance", help="Render the file provenance graph from existing sidecars.")
     pv.add_argument("output_dir", type=Path, help="fnirs-pipe derivatives directory")

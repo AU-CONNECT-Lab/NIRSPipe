@@ -105,6 +105,8 @@ STEP_SUMMARY = {
     "hyper_wtc": "Wavelet coherence between a pair, averaged over a band and one value per channel.",
     "hyper_wtc_roi": "The same average, over ROI-averaged signals.",
     "hyper_isc": "Correlation of each channel of one brain with each channel of the other.",
+    "group_hyper_wtc": "Every dyad's channel-level coherence, merged into one table.",
+    "group_hyper_wtc_roi": "The same merge, over ROI-averaged signals.",
 }
 
 
