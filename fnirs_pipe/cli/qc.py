@@ -314,6 +314,7 @@ def cmd_hyper_post(
     roi_mapping: Path | None, wtc_fmin: float, wtc_fmax: float,
     wtc_band_fmin: float | None, wtc_band_fmax: float | None, wtc_significance: bool,
     wtc_seed: int | None, wtc_mc_count: int, wtc_roi_cross: bool,
+    wtc_channel_cross: bool, bads_scope: str,
     isc_threshold: float, normalize: bool, no_align: bool,
     session_label: list[str] | None, task_label: list[str] | None,
     skip_bids_validation: bool,
@@ -355,7 +356,7 @@ def cmd_hyper_post(
             aligned_raws = normalize_raws(aligned_raws)
         bad_channels = {
             sid: sqm.get("bad_channels", [])
-            for sid, sqm in load_group_sqm(output_dir, members).items()
+            for sid, sqm in load_group_sqm(output_dir, members, bads_scope=bads_scope).items()
         }
         return build_hyper_post_report(
             group_id=gid,
@@ -374,6 +375,7 @@ def cmd_hyper_post(
             wtc_seed=wtc_seed,
             wtc_mc_count=wtc_mc_count,
             wtc_roi_cross=wtc_roi_cross,
+            wtc_channel_cross=wtc_channel_cross,
             isc_threshold=isc_threshold,
         )
 
@@ -544,6 +546,21 @@ def _build_parser() -> argparse.ArgumentParser:
                          "coherence values rather than four. Needs --roi-mapping. The extra "
                          "pairs reach the TSV and an ROI x ROI matrix in the report; the "
                          "time-frequency heatmaps stay on the homologous pairs.")
+    hp.add_argument("--wtc-channel-cross", action="store_true",
+                    help="Cross every long channel with every other across the two brains "
+                         "instead of pairing each channel with its counterpart, so 14 "
+                         "channels give 196 coherence values rather than 14. The extra "
+                         "pairs reach the channel TSV with a label2 column; the "
+                         "time-frequency heatmaps stay on the homologous pairs. Single "
+                         "channels are noisier than ROI averages, so treat the off-diagonal "
+                         "as exploratory and correct for the number of tests.")
+    hp.add_argument("--bads-scope", choices=("run", "subject"), default="run",
+                    help="Which rejected channels are excluded from the inter-brain "
+                         "metrics. 'run' (default) uses this task's own rejections. "
+                         "'subject' unions them over every run of the subject, so all "
+                         "conditions rest on the same channel set, which is what comparing "
+                         "conditions needs; the cost is losing a channel everywhere because "
+                         "one segment was bad.")
     hp.add_argument("--isc-threshold", type=float, default=0.3,
                     help="Minimum mean ISC to draw an arc in the connectivity circle.")
     hp.add_argument("--normalize", action=argparse.BooleanOptionalAction, default=False,

@@ -137,6 +137,9 @@ def _hyper_post():
                 options=[
                     {"label": "Significance testing (slow)", "value": "wtc_significance"},
                     {"label": "Cross ROIs between brains",   "value": "wtc_roi_cross"},
+                    {"label": "Cross channels between brains (slow)",
+                                                             "value": "wtc_channel_cross"},
+                    {"label": "Bad channels: union over runs", "value": "bads_subject"},
                     {"label": "Skip alignment",              "value": "no_align"},
                     {"label": "Normalize recordings",        "value": "normalize"},
                 ],

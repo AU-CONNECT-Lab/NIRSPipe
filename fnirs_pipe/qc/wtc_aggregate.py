@@ -68,17 +68,18 @@ def _refuse_mixed_bands(seen: dict[str, dict]) -> None:
 
 
 def _refuse_mixed_shapes(frames: dict[str, pd.DataFrame]) -> None:
-    """Raise if some ROI tables are crossed and some are not.
+    """Raise if some tables are crossed and some are not.
 
     A crossed table carries ``label2``; a homologous one does not. Concatenating the two
     leaves half a column empty, and an empty ``label2`` is indistinguishable from a genuinely
-    missing value.
+    missing value. Applies to both levels: ``--wtc-roi-cross`` crosses the ROI tables and
+    ``--wtc-channel-cross`` the channel ones, and either can be on for some dyads only.
     """
     crossed = {name for name, df in frames.items() if "label2" in df.columns}
     if crossed and len(crossed) != len(frames):
         plain = sorted(set(frames) - crossed)
         raise ValueError(
-            f"some ROI tables are crossed (they carry label2) and some are not: "
+            f"some tables are crossed (they carry label2) and some are not: "
             f"crossed={sorted(crossed)}, homologous={plain}. Merging them would leave "
             f"label2 half empty, which reads as missing data rather than as a different "
             f"analysis. Aggregate the two sets separately."
@@ -118,8 +119,7 @@ def aggregate_wtc(output_dir: Path, kind: str = "wtc") -> pd.DataFrame:
         return pd.DataFrame()
 
     _refuse_mixed_bands(params)
-    if kind == "wtc-roi":
-        _refuse_mixed_shapes(frames)
+    _refuse_mixed_shapes(frames)
 
     merged = pd.concat(frames.values(), ignore_index=True)
     sort_cols = [c for c in ("group_id", "task", "sub1", "sub2", "label", "label2")

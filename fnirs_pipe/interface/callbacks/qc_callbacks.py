@@ -78,6 +78,10 @@ def build_qc_args(command: str, opts: dict) -> list[str]:
             args.append("--wtc-significance")
         if "wtc_roi_cross" in flags:
             args.append("--wtc-roi-cross")
+        if "wtc_channel_cross" in flags:
+            args.append("--wtc-channel-cross")
+        if "bads_subject" in flags:
+            args += ["--bads-scope", "subject"]
         if "no_align" in flags:
             args.append("--no-align")
         if "normalize" in flags:

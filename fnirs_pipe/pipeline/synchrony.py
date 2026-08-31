@@ -240,6 +240,7 @@ def compute_wtc(
     significance: bool = False,
     seed: int | None = None,
     mc_count: int = 300,
+    cross: bool = False,
 ) -> WTCResult:
     """Compute pairwise WTC per long HbO channel using pycwt Morlet wavelet.
 
@@ -247,6 +248,12 @@ def compute_wtc(
     Short-distance channels are excluded (see long_channel_picks), as are bads.
     significance adds a Monte Carlo significance level per pair (slow; see _wtc_over_pairs),
     and seed makes it reproducible.
+
+    ``cross`` crosses every channel with every other rather than pairing like with like, so
+    14 channels give 196 results keyed by ``(label_sub1, label_sub2)`` instead of 14 keyed by
+    the label. It tests whether one person's channel couples to a different site on the
+    other's head. The cost is quadratic in the channel count and single channels are noisier
+    than the ROI averages ``compute_wtc_roi`` crosses, so the off-diagonal is exploratory.
     """
     subject_ids = list(raws.keys())
     if len(subject_ids) < 2:
@@ -255,7 +262,8 @@ def compute_wtc(
     signals = {sid: _long_hbo_signals(raw) for sid, raw in raws.items()}
 
     return _wtc_over_pairs(
-        raws, signals, list(signals[subject_ids[0]]), fmin, fmax, significance, seed, mc_count)
+        raws, signals, list(signals[subject_ids[0]]), fmin, fmax, significance, seed,
+        mc_count, cross)
 
 
 def _roi_averaged_signals(

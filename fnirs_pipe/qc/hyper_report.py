@@ -135,6 +135,7 @@ def build_hyper_post_report(
     wtc_seed: int | None = None,
     wtc_mc_count: int = 300,
     wtc_roi_cross: bool = False,
+    wtc_channel_cross: bool = False,
     isc_threshold: float = 0.3,
 ) -> Path:
     """Build hyperscanning post-QC report.
@@ -154,6 +155,10 @@ def build_hyper_post_report(
     keeps showing the homologous ones: every map carried in the page is a full
     frequency × time array, and a report that embedded all of them would be too large to
     open. They arrive instead as one ROI × ROI matrix of band means, one cell per pair.
+
+    ``wtc_channel_cross`` does the same at channel level, 14 channels giving 196 rows in
+    ``hyper-wtc.tsv`` instead of 14. Same treatment: the extra pairs reach the TSV, the
+    heatmap selector keeps the homologous ones.
     """
     from fnirs_pipe.pipeline.hyperscanning import (
         WTCResult,
@@ -226,10 +231,13 @@ def build_hyper_post_report(
         if wtc_significance:
             logger.warning("WTC significance on: %d Monte Carlo surrogates per channel pair, "
                            "this is slow.", wtc_mc_count)
-        logger.info("Computing WTC for %d channels...", len(subject_ids))
+        if wtc_channel_cross:
+            logger.warning("WTC channel crossing on: every long channel against every "
+                           "other, so the pair count is squared and so is the runtime.")
+        logger.info("Computing WTC for %d subjects...", len(subject_ids))
         wtc_result = compute_wtc(
             aligned_raws, fmin=wtc_fmin, fmax=wtc_fmax, significance=wtc_significance,
-            seed=wtc_seed, mc_count=wtc_mc_count)
+            seed=wtc_seed, mc_count=wtc_mc_count, cross=wtc_channel_cross)
     except Exception as exc:
         logger.warning("WTC computation failed: %s", exc)
 
@@ -244,7 +252,9 @@ def build_hyper_post_report(
     for pair in ch_pairs_post:
         wtc_fig = None
         if wtc_result and pair_key:
-            ch_data = wtc_result.pairs.get(pair_key, {}).get(pair)
+            # crossing keys every pair, so the homologous one is the (ch, ch) cell
+            ch_key  = (pair, pair) if wtc_channel_cross else pair
+            ch_data = wtc_result.pairs.get(pair_key, {}).get(ch_key)
             wtc_fig = _safe_post(
                 "wtc", build_wtc_channel,
                 ch_data, wtc_result.freqs, wtc_result.times,

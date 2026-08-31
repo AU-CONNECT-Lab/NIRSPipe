@@ -335,22 +335,69 @@ def normalize_raws(raws: dict[str, mne.io.Raw]) -> dict[str, mne.io.Raw]:
 # ---- Data management: derivatives IO ----
 
 
-def load_group_sqm(output_dir: Path, group: list[GroupEntry]) -> dict[str, dict]:
+def _for_task(paths: list[Path], task: str) -> list[Path]:
+    """The subset of paths belonging to one task.
+
+    ``[sub-01_task-rest_x, sub-01_task-game_x], "rest"`` -> the rest one
+    ``[sub-01_x], "rest"``                               -> that one (nothing is labelled)
+    ``[sub-01_task-game_x], "rest"``                     -> nothing
+
+    The second case covers derivatives with no task entity at all, where the single
+    unlabelled file is the right answer. The third returns empty on purpose: substituting
+    another task's file is the failure this function exists to prevent.
+    """
+    matched = [p for p in paths if f"_task-{task}_" in p.name]
+    if matched or any("_task-" in p.name for p in paths):
+        return matched
+    return paths
+
+
+def _bad_from_csv(csv_path: Path) -> list[str]:
+    try:
+        ch_df = pd.read_csv(csv_path)
+    except Exception:
+        return []
+    if "is_bad" not in ch_df.columns:
+        return []
+    return ch_df.loc[
+        ch_df["is_bad"].astype(str).str.lower().isin({"true", "1"}), "name"
+    ].tolist()
+
+
+def load_group_sqm(
+    output_dir: Path, group: list[GroupEntry], bads_scope: str = "run",
+) -> dict[str, dict]:
     """Load per-subject SQM scalars and channel metrics from derivatives.
+
+    A subject has one record and one channel-metrics CSV per run, and every entry names the
+    task it belongs to, so the run's own files are the ones read. Reading all of them and
+    letting the last win, as this used to, meant a five-task subject had four tasks quietly
+    analysed with a fifth task's rejected channels.
+
+    ``bads_scope`` decides what counts as a bad channel:
+
+    - ``"run"``: this task's own rejections, matching the rest of the metrics returned here.
+    - ``"subject"``: the union over every run of the subject, so a channel rejected in any
+      condition is rejected in all of them. Conditions then rest on the same channel set,
+      which is what a comparison between them needs; the cost is losing a channel everywhere
+      because one segment was bad.
 
     Returns {subject_id: sqm_dict}.
     """
     import json
+
+    if bads_scope not in ("run", "subject"):
+        raise ValueError(f"bads_scope must be 'run' or 'subject', got {bads_scope!r}")
 
     result: dict[str, dict] = {}
     for entry in group:
         nirs_dir = output_dir / entry.subject_id / "nirs"
 
         sqm: dict = {}
-        # one record per run, so a subject with several tasks has several; the long-channel
-        # view is the one a quality judgement wants, with raw standing in when the montage
-        # has no short channels to exclude
-        for record_path in sorted(nirs_dir.glob(f"{entry.subject_id}*_desc-sqm_nirs.json")):
+        # the long-channel view is the one a quality judgement wants, with raw standing in
+        # when the montage has no short channels to exclude
+        records = sorted(nirs_dir.glob(f"{entry.subject_id}*_desc-sqm_nirs.json"))
+        for record_path in _for_task(records, entry.task):
             try:
                 record = json.loads(record_path.read_text(encoding="utf-8"))
             except (OSError, json.JSONDecodeError):
@@ -358,9 +405,14 @@ def load_group_sqm(output_dir: Path, group: list[GroupEntry]) -> dict[str, dict]
             sqm.update(record.get("raw_long") or record.get("raw") or {})
             sqm.update(record.get("preproc") or {})
 
-        # one CSV per run since the name gained the run's entities, merged the same way
-        # the records above are: a subject with several tasks keeps the last one read
-        for csv_path in sorted(nirs_dir.glob(f"{entry.subject_id}*_channel_metrics.csv")):
+        csvs = sorted(nirs_dir.glob(f"{entry.subject_id}*_channel_metrics.csv"))
+        run_csvs = _for_task(csvs, entry.task)
+        if csvs and not run_csvs:
+            logger.warning(
+                "%s has channel metrics but none for task-%s, so no channel is rejected "
+                "for it. Rerun fnirs-pipe on this task to write them.",
+                entry.subject_id, entry.task)
+        for csv_path in run_csvs:
             try:
                 ch_df = pd.read_csv(csv_path)
                 if {"name", "sci"}.issubset(ch_df.columns):
@@ -368,12 +420,15 @@ def load_group_sqm(output_dir: Path, group: list[GroupEntry]) -> dict[str, dict]
                         zip(ch_df["name"].astype(str),
                             pd.to_numeric(ch_df["sci"], errors="coerce"))
                     )
-                if "is_bad" in ch_df.columns:
-                    sqm["bad_channels"] = ch_df.loc[
-                        ch_df["is_bad"].astype(str).str.lower().isin({"true", "1"}), "name"
-                    ].tolist()
             except Exception:
                 pass
+            sqm["bad_channels"] = _bad_from_csv(csv_path)
+
+        if bads_scope == "subject":
+            union: set[str] = set(sqm.get("bad_channels") or [])
+            for csv_path in csvs:
+                union |= set(_bad_from_csv(csv_path))
+            sqm["bad_channels"] = sorted(union)
 
         result[entry.subject_id] = sqm
 
