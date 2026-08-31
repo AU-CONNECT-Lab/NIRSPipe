@@ -140,12 +140,40 @@ def _hyper_post():
                     {"label": "Cross channels between brains (slow)",
                                                              "value": "wtc_channel_cross"},
                     {"label": "Bad channels: union over runs", "value": "bads_subject"},
+                    {"label": "Save WTC maps (large)",         "value": "wtc_save_maps"},
                     {"label": "Skip alignment",              "value": "no_align"},
                     {"label": "Normalize recordings",        "value": "normalize"},
                 ],
                 value=[], inline=True, switch=True,
             )),
         ], className="g-3 mt-1"),
+    ))
+
+
+def _wtc_band():
+    return html.Div(id="qc-wtc-band-section", children=_card(
+        "Re-average saved WTC maps",
+        dbc.Row([
+            dbc.Col([
+                dbc.Label("New Band (Hz)"),
+                dbc.InputGroup([
+                    dbc.Input(id="qc-band-fmin", type="number", step=0.001,
+                              placeholder="lo"),
+                    dbc.InputGroupText("–"),
+                    dbc.Input(id="qc-band-fmax", type="number", step=0.01,
+                              placeholder="hi"),
+                ]),
+                dbc.FormText("Both required. Must lie inside the axis the maps were computed on."),
+            ], width=4),
+            dbc.Col([
+                dbc.Label("Suffix"),
+                dbc.Input(id="qc-band-suffix", type="text", placeholder="e.g. band0p05-0p2"),
+                dbc.FormText("Names the new tables so they sit beside the originals. "
+                             "Defaults to the band."),
+            ], width=4),
+        ], className="g-3"),
+        subtitle="Reads the npz written by hyper-post with Save WTC maps on. "
+                 "Writes tables, not a report.",
     ))
 
 
@@ -238,6 +266,8 @@ layout = dbc.Container([
                         {"label": "Hyperscanning post-analysis (hyper-post)",
                          "value": "hyper-post"},
                         {"label": "Windowed group QC (window-raw)", "value": "window-raw"},
+                        {"label": "Re-average saved WTC maps (wtc-band)",
+                         "value": "wtc-band"},
                         *_AGGREGATE_COMMANDS,
                     ],
                     value="hyper-post",
@@ -257,6 +287,7 @@ layout = dbc.Container([
 
     _dirs(),
     _hyper_post(),
+    _wtc_band(),
     _window_raw(),
 
     _card(

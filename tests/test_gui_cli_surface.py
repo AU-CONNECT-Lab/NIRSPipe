@@ -235,10 +235,14 @@ QC_COMMANDS_NOT_OFFERED = {
     "epoch": "needs an events CSV and a file picker the page does not have",
 }
 
-# per-command flags the page leaves out. Both entries are the negative half of a paired
-# BooleanOptionalAction, where the switch emits the positive.
+# per-command flags the page leaves out. Most are the negative half of a paired
+# BooleanOptionalAction, where the switch emits the positive. --wtc-limit-scales is the
+# exception and goes the other way: it defaults to on, and the CLI's own help says the
+# restricted and unrestricted coherences match bit for bit, so neither half is a choice
+# worth putting on screen. It is an escape hatch for comparing against old output.
 QC_NOT_EXPOSED = {
-    "hyper-post": {"--no-normalize", "--no-skip-bids-validation"},
+    "hyper-post": {"--no-normalize", "--no-skip-bids-validation",
+                   "--wtc-limit-scales", "--no-wtc-limit-scales"},
     "window-raw": {"--no-skip-bids-validation"},
 }
 
@@ -248,14 +252,16 @@ _QC_FULL_OPTS = dict(
     wtc_fmin=0.004, wtc_fmax=0.2, wtc_band_fmin=0.01, wtc_band_fmax=0.1,
     wtc_mc_count=300, wtc_seed=42, isc_threshold=0.3,
     hyper_session="ses-1", hyper_task="rest",
-    hyper_flags=["wtc_significance", "wtc_roi_cross", "no_align", "normalize"],
+    hyper_flags=["wtc_significance", "wtc_roi_cross", "wtc_channel_cross", "bads_subject",
+                 "wtc_save_maps", "no_align", "normalize"],
+    band_fmin=0.05, band_fmax=0.2, band_suffix="band0p05-0p2",
     task_label="rest", tstart=0.0, tend=60.0, window_name="early", align="trigger",
     cardiac_l=0.7, cardiac_h=1.5, sci_thresh=0.8, window_length=10.0,
     trigger_name="start", participant_label="01 02", window_session="ses-1",
     run_flags=["skip_bids_validation"],
 )
 
-_QC_OFFERED = ["hyper-post", "window-raw", *_AGGREGATE]
+_QC_OFFERED = ["hyper-post", "wtc-band", "window-raw", *_AGGREGATE]
 
 
 def _qc_subparsers():

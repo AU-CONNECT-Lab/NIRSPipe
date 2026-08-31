@@ -19,8 +19,11 @@ _AGGREGATE = ("group-raw", "group-hyper-raw", "group-hyper-wtc", "provenance")
 # which form sections each command needs; anything not listed here is hidden
 _SECTIONS = {
     "hyper-post":  {"qc-hyper-post-section"},
+    "wtc-band":    {"qc-wtc-band-section"},
     "window-raw":  {"qc-window-section"},
 }
+
+_ALL_SECTIONS = ("qc-hyper-post-section", "qc-wtc-band-section", "qc-window-section")
 
 # report each command writes, relative to output_dir, best match first. hyper-post names its
 # file after the group, so it is found by glob rather than named here.
@@ -57,6 +60,14 @@ def build_qc_args(command: str, opts: dict) -> list[str]:
     if command in _AGGREGATE:
         return args + [opts["output_dir"]]
 
+    # also output_dir only, but with a band to re-average over
+    if command == "wtc-band":
+        args += [opts["output_dir"]]
+        args += _num("--band-fmin", opts.get("band_fmin"))
+        args += _num("--band-fmax", opts.get("band_fmax"))
+        args += _text("--suffix", opts.get("band_suffix"))
+        return args
+
     args += [opts["bids_dir"], opts["output_dir"]]
 
     if command == "hyper-post":
@@ -82,6 +93,8 @@ def build_qc_args(command: str, opts: dict) -> list[str]:
             args.append("--wtc-channel-cross")
         if "bads_subject" in flags:
             args += ["--bads-scope", "subject"]
+        if "wtc_save_maps" in flags:
+            args.append("--wtc-save-maps")
         if "no_align" in flags:
             args.append("--no-align")
         if "normalize" in flags:
@@ -113,6 +126,10 @@ def _missing(command: str, opts: dict) -> str | None:
         return "Output directory is required."
     if command in _AGGREGATE:
         return None
+    if command == "wtc-band":
+        if opts.get("band_fmin") is None or opts.get("band_fmax") is None:
+            return "wtc-band needs both a band start and end."
+        return None
     if not opts.get("bids_dir"):
         return "BIDS directory is required."
     if command == "hyper-post" and not opts.get("pairs_csv"):
@@ -128,14 +145,13 @@ def _missing(command: str, opts: dict) -> str | None:
 
 
 @callback(
-    Output("qc-hyper-post-section", "style"),
-    Output("qc-window-section", "style"),
+    *[Output(section, "style") for section in _ALL_SECTIONS],
     Input("qc-command", "value"),
 )
 def toggle_sections(command):
     needed = _SECTIONS.get(command, set())
     return tuple({"display": "block"} if section in needed else {"display": "none"}
-                 for section in ("qc-hyper-post-section", "qc-window-section"))
+                 for section in _ALL_SECTIONS)
 
 
 _STATES = [
@@ -148,6 +164,8 @@ _STATES = [
     State("qc-isc-threshold", "value"),
     State("qc-hyper-session", "value"), State("qc-hyper-task", "value"),
     State("qc-hyper-flags", "value"),
+    State("qc-band-fmin", "value"), State("qc-band-fmax", "value"),
+    State("qc-band-suffix", "value"),
     State("qc-task-label", "value"), State("qc-tstart", "value"), State("qc-tend", "value"),
     State("qc-window-name", "value"), State("qc-align", "value"),
     State("qc-cardiac-l", "value"), State("qc-cardiac-h", "value"),
@@ -161,6 +179,7 @@ def _opts(values) -> dict:
     keys = ["bids_dir", "output_dir", "pairs_csv", "group_id", "desc", "roi_mapping",
             "wtc_fmin", "wtc_fmax", "wtc_band_fmin", "wtc_band_fmax", "wtc_mc_count",
             "wtc_seed", "isc_threshold", "hyper_session", "hyper_task", "hyper_flags",
+            "band_fmin", "band_fmax", "band_suffix",
             "task_label", "tstart", "tend", "window_name",
             "align", "cardiac_l", "cardiac_h", "sci_thresh", "window_length",
             "trigger_name", "participant_label", "window_session", "run_flags"]

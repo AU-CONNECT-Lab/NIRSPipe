@@ -231,7 +231,7 @@ def test_a_missing_stage_names_the_ones_on_disk(tmp_path):
     nirs.mkdir(parents=True)
     (nirs / "sub-01_task-hold_desc-preproc_nirs.snirf").touch()
 
-    with pytest.raises(MissingDerivativesError, match="Available: preproc"):
+    with pytest.raises(MissingDerivativesError, match="Available desc: preproc"):
         find_preproc_snirf(tmp_path, "sub-01", "hold", desc="errts")
 
 

@@ -16,6 +16,7 @@ All notable changes to this project will be documented in this file.
 - `fnirs-qc hyper-post --bads-scope subject` unions each subject's rejected channels over their runs, so conditions are compared on one channel set
 - `fnirs-qc hyper-post` writes `hyper-bads.tsv`: which channels the inter-brain metrics excluded, and which run rejected each
 - The group CSV accepts optional `session` and `run` columns, for a subject with more than one recording of a task
+- The QC Reports page offers `wtc-band`, the saved WTC maps and the two new `hyper-post` options, so nothing added this release is command line only
 
 ### Fixed
 - **`hyper-post` excluded the wrong run's bad channels.** A subject with five tasks had four of them analysed with a fifth task's rejections
