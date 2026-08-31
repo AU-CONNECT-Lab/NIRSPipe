@@ -57,6 +57,10 @@ citations = ["Yucel2021"]
 plain = "Data were resampled to {sfreq} Hz."
 citations = ["Pinti2018"]
 
+[confound_regression]
+plain = "Systemic physiology was removed by regressing {regressors} out of the haemodynamic time series in an ordinary least-squares model containing no condition regressors; all subsequent analysis used the residuals {citations}."
+citations = ["Yucel2021"]
+
 [glm]
 plain = "A first-level general linear model (GLM) was fitted to the haemodynamic time series using a {hrf_model} haemodynamic response function, a {noise_model} noise model, and a {drift_model} drift term (high-pass cutoff: {drift_high_pass} Hz) {citations}."
 citations = ["Santosa2018"]

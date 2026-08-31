@@ -2,6 +2,7 @@
 
 import importlib.metadata
 import re
+import unicodedata
 import sys
 from importlib.resources import files
 from typing import Any
@@ -97,12 +98,42 @@ def _load_steps() -> dict:
     return tomllib.loads(data.decode())
 
 
+# BibTeX stores accented letters as LaTeX commands, so Yucel is written Y{\"u}cel. Left
+# alone it reaches the Methods paragraph a user copies into a manuscript.
+_ACCENTS = {
+    '"': "\u0308", "'": "\u0301", "`": "\u0300", "^": "\u0302", "~": "\u0303",
+    ".": "\u0307", "=": "\u0304", "c": "\u0327", "v": "\u030c", "u": "\u0306",
+    "H": "\u030b",
+}
+_ACCENT_BARE = re.compile(r'\{?\\(["\'`^~.=])\s*\{?([A-Za-z])\}?\}?')
+# letter accents need the braces, otherwise \url would match as a breve
+_ACCENT_BRACED = re.compile(r'\{?\\([cvuH])\{([A-Za-z])\}\}?')
+_LIGATURES = (("ss", "\u00df"), ("aa", "\u00e5"), ("AA", "\u00c5"),
+              ("o", "\u00f8"), ("O", "\u00d8"), ("ae", "\u00e6"), ("AE", "\u00c6"))
+
+
+def _delatex(value: str) -> str:
+    """LaTeX-escaped BibTeX field to plain Unicode.
+
+    'Y{\\"u}cel' -> 'Yucel' with an umlaut; '{fNIRS} review' -> 'fNIRS review'
+    """
+    def _apply(m: "re.Match") -> str:
+        return unicodedata.normalize("NFC", m.group(2) + _ACCENTS[m.group(1)])
+
+    value = _ACCENT_BARE.sub(_apply, value)
+    value = _ACCENT_BRACED.sub(_apply, value)
+    for cmd, ch in _LIGATURES:
+        value = re.sub(r"\\" + cmd + r"(?![A-Za-z])", ch, value)
+    # what is left is BibTeX case protection, e.g. {fNIRS} or {van der Berg}
+    return value.replace("{", "").replace("}", "")
+
+
 def _load_refs() -> dict[str, dict]:
     import bibtexparser
     text = files("fnirs_pipe.qc.boilerplate").joinpath("references.bib").read_text(encoding="utf-8")
     lib = bibtexparser.parse_string(text)
     return {
-        entry.key: {name: field.value for name, field in entry.fields_dict.items()}
+        entry.key: {name: _delatex(field.value) for name, field in entry.fields_dict.items()}
         for entry in lib.entries
     }
 
@@ -146,6 +177,15 @@ def _active_steps(prep_config: Any, post_config: Any, mode: str | None) -> list[
                 "drift_model": post_config.drift_model,
                 "drift_high_pass": str(post_config.drift_high_pass),
             }))
+        elif mode in ("rest", "denoise") and (
+                post_config.short_channel or post_config.drift_model not in (None, "none")):
+            from fnirs_pipe.qc.boilerplate.vocabulary import template_slots
+            result.append(("confound_regression", template_slots("confound_regression", {
+                "short_channel": post_config.short_channel,
+                "drift_model": post_config.drift_model,
+                "drift_high_pass": post_config.drift_high_pass,
+                "drift_order": post_config.drift_order,
+            })))
 
     return result
 

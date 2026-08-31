@@ -36,6 +36,7 @@ All notable changes to this project will be documented in this file.
 - `fnirs-recon --optode-frame` names the space the SNIRF's optode coordinates were measured in. SNIRF does not record it, and without it mne-bids writes no `_optodes.tsv` or `_coordsystem.json`, both of which BIDS requires
 - `fnirs-prep crop` accepts a `task` column in the segments table: each segment is written under that task entity instead of `_seg-NN`, so a recording holding several conditions becomes a BIDS dataset the pipeline can read back one condition at a time
 - `fnirs-qc hyper-post --wtc-roi-cross` crosses the two brains' ROIs instead of pairing each with its counterpart, so one person's PFC can be tested against the other's TPJ. `hyper-wtc-roi.tsv` gains a `label2` column, the report an ROI × ROI matrix. Needs `--roi-mapping`
+- The Methods paragraph now describes the confound regression, naming the short-channel strategy and the drift basis it actually used. `rest` and `denoise` runs used to skip straight from the filter sentence to the references
 - `fnirs-qc hyper-post --wtc-mc-count` sets how many surrogate series stand behind each significance contour (default 300, unchanged). It is what the runtime is spent on and it scales with the value, so a run can be previewed cheaply and settled expensively
 
 ### Changed
@@ -46,6 +47,8 @@ All notable changes to this project will be documented in this file.
 - zALFF standardizes by the population SD (n) instead of the sample SD (n-1). Values grow by `sqrt(n/(n-1))`.
 
 ### Fixed
+- Accented author names reach the Methods text as letters rather than LaTeX, so the reference list reads `Yücel` instead of `Y{\"u}cel`
+- `--config` takes flat top-level keys, and that is now what the reference and the presets show. `configs/presets/denoise_standard.toml` used `[workflow]` / `[denoising]` sections, which the loader never reads, so the whole file was silently ignored. The contrast file is flat too: a `[contrasts]` section hid every contrast in it
 - `fnirs-prep crop`, `fnirs-prep edit-markers apply`, `fnirs-prep align` and their two GUI equivalents wrote SNIRF through an MNE export format that does not exist, so **none of them ever produced a file**. They now use the same writer as the pipeline
 - Writing a cropped recording put its markers at their position in the original recording, so a segment taken from late in a run lost every marker to the reader's range check. Markers now start where the segment does, in the SNIRF and in the `_events.tsv` beside it
 - `crop` names each segment's sidecars after the segment, not after the file it was cut from, and finds `_optodes.tsv` / `_coordsystem.json`, which sit at subject level and were never matched

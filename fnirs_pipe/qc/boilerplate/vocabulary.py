@@ -44,10 +44,36 @@ def boilerplate_key(step: str | None, params: dict[str, Any], mode: str | None =
             return "highpass"
         return "lowpass" if high_edge else None
     if step == "glm_fit":
-        # rest mode runs this same code to regress confounds out; only a task run is a
+        # rest and denoise run this same code to regress confounds out; only a task run is a
         # first-level GLM, and nothing in the sidecar separates the two
-        return "glm" if mode == "glm" else None
+        return "glm" if mode == "glm" else "confound_regression"
     return None
+
+
+def _regressor_phrase(params: dict[str, Any]) -> str:
+    """Name the nuisance columns a confound regression actually carried.
+
+    {"short_channel": "mean", "drift_model": "cosine", "drift_high_pass": 0.01}
+      -> "the mean short-channel time course of each chromophore and a discrete cosine
+          drift basis (high-pass cutoff: 0.01 Hz)"
+    """
+    parts = []
+    sc = params.get("short_channel")
+    if sc == "mean":
+        parts.append("the mean short-channel time course of each chromophore")
+    elif sc == "pca":
+        parts.append("the first principal component of the short channels of each chromophore")
+
+    drift = params.get("drift_model")
+    if drift == "cosine":
+        parts.append("a discrete cosine drift basis "
+                     f"(high-pass cutoff: {params.get('drift_high_pass')} Hz)")
+    elif drift == "polynomial":
+        parts.append(f"an order-{params.get('drift_order')} polynomial drift basis")
+
+    # the design matrix always holds an intercept, so there is something to say even when
+    # neither flag was given, and the sentence stays true rather than naming absent columns
+    return " and ".join(parts) if parts else "a constant term only"
 
 
 def template_slots(key: str, params: dict[str, Any]) -> dict[str, str]:
@@ -72,6 +98,8 @@ def template_slots(key: str, params: dict[str, Any]) -> dict[str, str]:
         return {"h_freq": str(params.get("low_pass"))}
     if key == "resample":
         return {"sfreq": str(params.get("sfreq") or params.get("resample_sfreq", ""))}
+    if key == "confound_regression":
+        return {"regressors": _regressor_phrase(params)}
     if key == "glm":
         return {
             "hrf_model": str(params.get("hrf_model", "")),
