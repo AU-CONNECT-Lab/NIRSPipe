@@ -328,6 +328,7 @@ def cmd_hyper_post(
         load_group_sqm,
         normalize_raws,
         trim_to_shortest,
+        write_group_bads,
     )
     from fnirs_pipe.qc.hyper_report import build_hyper_post_report
 
@@ -354,10 +355,9 @@ def cmd_hyper_post(
             aligned_raws, offsets = align_recordings(raws, task)
         if normalize:
             aligned_raws = normalize_raws(aligned_raws)
-        bad_channels = {
-            sid: sqm.get("bad_channels", [])
-            for sid, sqm in load_group_sqm(output_dir, members, bads_scope=bads_scope).items()
-        }
+        group_sqm = load_group_sqm(output_dir, members, bads_scope=bads_scope)
+        bad_channels = {sid: sqm.get("bad_channels", []) for sid, sqm in group_sqm.items()}
+        write_group_bads(output_dir, members, group_sqm, bads_scope)
         return build_hyper_post_report(
             group_id=gid,
             task=task,

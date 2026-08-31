@@ -11,10 +11,12 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 - `fnirs-qc hyper-post --wtc-channel-cross` crosses every long channel with every other across the two brains, so 14 channels give 196 rows in `hyper-wtc.tsv` instead of 14. Single channels are noisier than the ROI averages `--wtc-roi-cross` crosses, so the off-diagonal is exploratory and the pair count is squared
+- `fnirs-qc hyper-post` writes `group-<id>_task-<task>_hyper-bads.tsv`, the channels the inter-brain metrics actually excluded, with a `rejected_in` column naming the runs whose quality metrics rejected each one. The channel set changes every coherence value and used to be visible only in the log
 - `fnirs-qc hyper-post --bads-scope subject` unions each subject's rejected channels over all their runs, so every condition rests on the same channel set. Comparing conditions needs that; the default `run` scope keeps each task's own rejections
 
 ### Fixed
 - **`hyper-post` excluded the wrong run's bad channels.** `load_group_sqm` read every run of a subject and let the last one win, ignoring the task each group entry names, so a subject with five tasks had four of them analysed with a fifth task's rejections. It now reads the run's own record and channel metrics
+- **`find_preproc_snirf` could load a different task's recording.** When the requested task had no file for the stage, it fell back to any task of that subject and returned the alphabetically first, so a missing condition was silently analysed as another one. It now falls back only when the stage carries no task entity anywhere, and warns when several files still match
 - Per-channel metrics CSVs are written for every run. They were named per run but produced from the subject report, which only ran once, so a subject with five tasks left one CSV carrying the last task's numbers
 - `fnirs-qc group-hyper-wtc` refuses to merge crossed and homologous tables at channel level as it already did at ROI level, rather than concatenating them into a half-empty `label2` column
 - The provenance diagram is drawn per run. It scanned the whole `nirs/` directory, so a subject with five tasks got five disjoint chains of identically named nodes in one figure with nothing to tell them apart. The provenance table in the report had the same problem

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -80,6 +81,41 @@ def parse_group_csv(csv_path: Path) -> dict[tuple[str, str], list[GroupEntry]]:
             )
 
     return result
+
+
+def write_group_bads(
+    output_dir: Path,
+    group: list[GroupEntry],
+    sqm_by_subject: dict[str, dict],
+    bads_scope: str,
+) -> Path:
+    """Write the rejected channels the inter-brain metrics actually excluded, one row each.
+
+    The channel set is a decision that changes every coherence value, and until now it was
+    only visible in the log. Columns: group_id, task, subject_id, channel, bads_scope,
+    rejected_in. ``rejected_in`` lists the runs whose quality metrics rejected the channel,
+    which under ``--bads-scope subject`` is how a condition that was clean on its own comes
+    to lose a channel.
+    """
+    gid, task = group[0].group_id, group[0].task
+    rows: list[dict] = []
+    for entry in group:
+        sqm = sqm_by_subject.get(entry.subject_id, {})
+        sources = sqm.get("bad_channel_sources") or {}
+        for channel in sqm.get("bad_channels") or []:
+            rows.append({
+                "group_id": gid, "task": task, "subject_id": entry.subject_id,
+                "channel": channel, "bads_scope": bads_scope,
+                "rejected_in": ";".join(sources.get(channel) or [task]),
+            })
+
+    out_path = output_dir / f"group-{gid}_task-{task}_hyper-bads.tsv"
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    columns = ["group_id", "task", "subject_id", "channel", "bads_scope", "rejected_in"]
+    pd.DataFrame(rows, columns=columns).to_csv(out_path, sep="	", index=False)
+    _hyper_sidecar(out_path, "hyper_bads", [], bads_scope=bads_scope)
+    logger.info("excluded channels saved: %s (%d rows)", out_path, len(rows))
+    return out_path
 
 
 def load_group_haemo(
@@ -424,11 +460,19 @@ def load_group_sqm(
                 pass
             sqm["bad_channels"] = _bad_from_csv(csv_path)
 
+        # which run each rejection came from, so the union is reviewable rather than a
+        # channel list with no explanation of why a clean condition lost a channel
+        sources: dict[str, list[str]] = {
+            ch: [entry.task] for ch in (sqm.get("bad_channels") or [])
+        }
         if bads_scope == "subject":
-            union: set[str] = set(sqm.get("bad_channels") or [])
             for csv_path in csvs:
-                union |= set(_bad_from_csv(csv_path))
-            sqm["bad_channels"] = sorted(union)
+                from_task = m.group(1) if (m := re.search(r"_task-([A-Za-z0-9]+)", csv_path.name)) else entry.task
+                for ch in _bad_from_csv(csv_path):
+                    if from_task not in sources.setdefault(ch, []):
+                        sources[ch].append(from_task)
+            sqm["bad_channels"] = sorted(sources)
+        sqm["bad_channel_sources"] = {ch: sorted(t) for ch, t in sources.items()}
 
         result[entry.subject_id] = sqm
 

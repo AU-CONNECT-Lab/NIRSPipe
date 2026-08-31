@@ -7,6 +7,9 @@ from pathlib import Path
 from typing import Any
 
 from fnirs_pipe.exceptions import MissingDerivativesError
+from fnirs_pipe.utils.logging import get_logger
+
+logger = get_logger("io.derivatives")
 
 # same entity pattern read_snirf parses the stage back out of
 _DESC_RE = re.compile(r"_desc-([A-Za-z0-9]+)[_.]")
@@ -107,15 +110,29 @@ def find_preproc_snirf(output_dir: Path, subject_id: str, task: str, desc: str =
 
     candidates = sorted(nirs_dir.glob(f"{subject_id}_task-{task}_*desc-{desc}_nirs.snirf"))
     if not candidates:
-        candidates = sorted(nirs_dir.glob(f"{subject_id}_*desc-{desc}_nirs.snirf"))
+        # only when this stage carries no task entity anywhere: a subject who has the stage
+        # for other tasks but not this one is missing data, and handing back another task's
+        # recording would analyse the wrong condition without saying so
+        untasked = sorted(nirs_dir.glob(f"{subject_id}_*desc-{desc}_nirs.snirf"))
+        if untasked and not any("_task-" in p.name for p in untasked):
+            candidates = untasked
     if not candidates:
         available = sorted({m.group(1) for p in nirs_dir.glob(f"{subject_id}_*_nirs.snirf")
                             if (m := _DESC_RE.search(p.name))})
+        tasks = sorted({m.group(1) for p in nirs_dir.glob(f"{subject_id}_*desc-{desc}_nirs.snirf")
+                        if (m := re.search(r"_task-([A-Za-z0-9]+)", p.name))})
         raise MissingDerivativesError(
             f"No desc-{desc} snirf found for {subject_id} (task={task}) in {nirs_dir}. "
-            f"Available: {', '.join(available) if available else 'none'}. "
-            "Run fnirs-pipe preprocessing first."
+            f"Available desc: {', '.join(available) if available else 'none'}. "
+            + (f"desc-{desc} exists for task: {', '.join(tasks)}. " if tasks else "")
+            + "Run fnirs-pipe preprocessing first."
         )
+    if len(candidates) > 1:
+        logger.warning(
+            "%s task-%s desc-%s matches %d files (%s); reading %s. Narrow it with a run or "
+            "session entity if that is not the one you meant.",
+            subject_id, task, desc, len(candidates),
+            ", ".join(p.name for p in candidates), candidates[0].name)
     return candidates[0]
 
 
