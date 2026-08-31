@@ -64,6 +64,32 @@ def _short_channel_regressors(haemo: mne.io.Raw, strategy: SCRStrategy) -> dict[
         "short_ch_hbr_mean": hbr_data.mean(axis=0),
     }
 
+def _band_fraction(x: np.ndarray, sfreq: float,
+                   l_freq: float | None, h_freq: float | None) -> float:
+    """Share of a signal's variance sitting inside ``l_freq``-``h_freq``, from its spectrum.
+
+    Measured on the signal rather than on the filter's output, because the two disagree on
+    a short recording. A 0.01 Hz cutoff at 10 Hz builds a 3301-tap FIR, so on anything under
+    an hour most of the filtered series is edge transient: a 2 Hz tone put through a
+    0.01-0.2 Hz band keeps 21% of its variance over 120 s and 8.7% over 400 s, none of it
+    signal. The spectrum returns ~0 at every length.
+
+        sin(2 pi 0.05 t) over 0.01-0.2 Hz -> 1.0
+        sin(2 pi 2.0  t) over 0.01-0.2 Hz -> 0.0
+    """
+    spectrum = np.abs(np.fft.rfft(x - x.mean())) ** 2
+    total = spectrum.sum()
+    if total <= 0:
+        return 0.0
+    freqs = np.fft.rfftfreq(len(x), 1.0 / sfreq)
+    inside = np.ones(len(freqs), dtype=bool)
+    if l_freq is not None:
+        inside &= freqs >= l_freq
+    if h_freq is not None:
+        inside &= freqs <= h_freq
+    return float(spectrum[inside].sum() / total)
+
+
 def _aux_regressors(
     haemo: mne.io.Raw,
     aux_path: Path | str,
@@ -119,7 +145,7 @@ def _aux_regressors(
     for name in available:
         column = resample_to_grid(t_aux, table[name].to_numpy(dtype=float), t_dst)
         if l_freq is not None or h_freq is not None:
-            wideband = column.var()
+            kept = _band_fraction(column, haemo.info["sfreq"], l_freq, h_freq)
             # the settings bandpass_filter uses, so regressor and data see one filter
             column = mne.filter.filter_data(
                 column[None, :], haemo.info["sfreq"], l_freq, h_freq,
@@ -128,10 +154,10 @@ def _aux_regressors(
             # the z-score below rescales whatever survives to unit variance, so a channel
             # with nothing inside the band would arrive as a unit-variance regressor made
             # of filter residue and cost a degree of freedom for it
-            if wideband > 0 and column.var() < 0.01 * wideband:
+            if kept < 0.01:
                 logger.warning("aux channel %s keeps %.1f%% of its variance inside "
                                "%s-%s Hz; it contributes little but a lost degree of freedom",
-                               name, 100 * column.var() / wideband, l_freq, h_freq)
+                               name, 100 * kept, l_freq, h_freq)
         sd = column.std()
         out[f"aux_{name}"] = (column - column.mean()) / sd if sd > 0 else column - column.mean()
 

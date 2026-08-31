@@ -143,7 +143,8 @@ def test_a_tone_inside_the_target_band_survives():
 
 def test_going_up_in_rate_is_interpolation_alone():
     t_src = np.arange(0, 10.0, 1 / DATA_FS)
-    t_dst = np.arange(0, 10.0, 1 / AUX_FS)
+    # inside the source span: past its last stamp np.interp holds rather than extrapolates
+    t_dst = np.arange(0, t_src[-1], 1 / AUX_FS)
     ramp = t_src.copy()
     assert resample_to_grid(t_src, ramp, t_dst) == pytest.approx(t_dst, abs=1e-6)
 
