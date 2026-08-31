@@ -7,6 +7,15 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- `--mode denoise --fc` writes the connectivity products rest mode writes, taken from the confound residual, or from the bandpassed data itself when no regression was asked for. Bandpass then correlate had no route through the package that did not also run a GLM and write an ALFF nobody asked for
+
+### Fixed
+- The subject report's navigation bar links to the FC and GLM panels whatever mode drew them. A `--mode glm --fc` run drew the connectivity panel with no way to reach it from the top of the page
+- The reproduction script written to `logs/sub-<id>_script.py` named the residual step differently from the pipeline it mirrors, so the sidecars it produced had no method prose and their provenance went unrecognised
+
+## [0.22.0] - 2026-08-30
+
+### Added
 - `--mode glm --fc` writes the same connectivity products rest mode writes, from the GLM residual. The task sits in the design matrix, so what correlates is what the model did not explain, which is what makes it connectivity rather than a map of who responded to the same stimulus
 - The subject report draws the ROI-to-ROI connectivity matrix. Those numbers were already written to `_fcroi.tsv` and nothing displayed them
 - The subject report draws ALFF and fALFF on the optode layout, next to the per-channel bars. Low-frequency amplitude is a spatial claim, and a bar chart ordered by channel name cannot be read as one

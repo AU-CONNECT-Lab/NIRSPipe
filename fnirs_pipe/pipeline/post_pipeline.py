@@ -72,6 +72,12 @@ class PostConfig:
             )
 
 
+def _warn_fc_without_bandpass(config: PostConfig) -> None:
+    if config.high_pass is None and config.low_pass is None:
+        logger.warning("sub-%s | --fc without a bandpass: the correlations will be "
+                       "dominated by drift", config.subject)
+
+
 def _has_confounds(config: PostConfig) -> bool:
     """Whether denoise mode has anything to regress out.
 
@@ -96,8 +102,8 @@ def run_post(
     Returns (result, glm_est, design_matrix, alff_df, fc_df, fc_hbr_df, gcor_reg, fc_seed,
     fc_roi).
     glm_est / design_matrix are None for non-GLM modes.
-    alff_df is None outside rest mode. The FC products are written by rest mode and by glm
-    mode under ``config.fc``; fc_df holds the HbO matrix.
+    alff_df is None outside rest mode. The FC products are written by rest mode, and by glm
+    and denoise mode under ``config.fc``; fc_df holds the HbO matrix.
     fc_seed and fc_roi are {chromophore: frame}, both empty without --roi-mapping.
     gcor_reg (pre/post short-channel regression GCOR) is None unless short_channel ran.
     """
@@ -153,9 +159,7 @@ def run_post(
         # than a map of who responded to the same stimulus: the task is in the design
         # matrix, so what correlates here is what the model did not explain.
         if config.fc:
-            if config.high_pass is None and config.low_pass is None:
-                logger.warning("sub-%s | --fc without a bandpass: the correlations will be "
-                               "dominated by drift", config.subject)
+            _warn_fc_without_bandpass(config)
             fc_df, fc_hbr_df, fc_roi, fc_seed = _write_fc_derivatives(
                 raw_resid, config, output_dir, rec, source_entities=source_entities)
 
@@ -217,26 +221,38 @@ def run_post(
         alff_df, fc_df, fc_hbr_df, fc_roi, fc_seed = _write_rest_derivatives(
             raw_resid, raw_resid_bb, config, output_dir, rec, source_entities=source_entities)
 
-    elif mode == "denoise" and _has_confounds(config):
-        # The same empty-events confound regression rest runs, and nothing else: no
-        # broadband residual, no ALFF, no FC. Task data whose systemic physiology has to go
-        # without the task being modelled (hyperscanning, seed connectivity) ends here.
-        logger.info("sub-%s | denoise confound regression", config.subject)
-        _, glm_est, dm, raw_resid = run_glm_pipeline(
-            result,
-            stim_dur=None,
-            hrf_model="spm",
-            noise_model="ols",
-            drift_model=config.drift_model or "none",
-            high_pass=config.drift_high_pass,
-            drift_order=config.drift_order,
-            fir_delays=None,
-            short_channel=config.short_channel,
-            events=pd.DataFrame({"trial_type": [], "onset": [], "duration": []}),
-            output_dir=str(output_dir / f"sub-{config.subject}" / "nirs"),
-            source_path=rec.path_of(result),
-        )
-        _write_step_snirf(raw_resid, config, output_dir, desc="errts", rec=rec, source_entities=source_entities)
+    elif mode == "denoise":
+        # The regression and the FC are independent here. Either can run without the other,
+        # which is what separates this mode from rest: rest forces a drift model and always
+        # writes ALFF, so bandpass-then-correlate has no route through it.
+        if _has_confounds(config):
+            # The same empty-events confound regression rest runs, and no task model. Task
+            # data whose systemic physiology has to go without the task being modelled
+            # (hyperscanning, seed connectivity) ends here.
+            logger.info("sub-%s | denoise confound regression", config.subject)
+            _, glm_est, dm, raw_resid = run_glm_pipeline(
+                result,
+                stim_dur=None,
+                hrf_model="spm",
+                noise_model="ols",
+                drift_model=config.drift_model or "none",
+                high_pass=config.drift_high_pass,
+                drift_order=config.drift_order,
+                fir_delays=None,
+                short_channel=config.short_channel,
+                events=pd.DataFrame({"trial_type": [], "onset": [], "duration": []}),
+                output_dir=str(output_dir / f"sub-{config.subject}" / "nirs"),
+                source_path=rec.path_of(result),
+            )
+            _write_step_snirf(raw_resid, config, output_dir, desc="errts", rec=rec, source_entities=source_entities)
+
+        # No ALFF, for glm's reason: the source is bandpassed and fALFF's denominator spans
+        # the full spectrum, so the number would be ~1 by construction.
+        if config.fc:
+            _warn_fc_without_bandpass(config)
+            fc_df, fc_hbr_df, fc_roi, fc_seed = _write_fc_derivatives(
+                raw_resid if raw_resid is not None else result,
+                config, output_dir, rec, source_entities=source_entities)
 
     # GCOR around the short-channel regression (the fNIRS GSR analog): pre-regression vs
     # residuals. Expected to drop if the regression removed global/systemic signal.
@@ -279,8 +295,9 @@ def _write_fc_derivatives(
     Returns (fc_hbo_df, fc_hbr_df, fc_roi, fc_seed). The last two are
     {chromophore: frame} and stay empty without a roi_map.
 
-    rest mode and glm mode's ``--fc`` both land here, and the only thing that differs is
-    which residual arrives: rest regresses confounds alone, glm regresses the task as well.
+    All three modes land here, and the only thing that differs is what arrives: rest
+    regresses confounds alone, glm regresses the task as well, and denoise passes either its
+    own confound residual or, when no regression ran, the bandpassed data itself.
     Correlating a task residual is what makes the result connectivity rather than a map of
     who responded to the same stimulus, so the distinction lives in the caller, not here.
     """

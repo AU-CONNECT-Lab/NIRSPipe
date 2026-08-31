@@ -218,10 +218,11 @@
   <a href="#Motion">Motion</a>
   <a href="#HbO_HbR">HbO/HbR</a>
   {% if mode != 'rest' %}<a href="#Epoch">Epoch</a>{% endif %}
-  {% if mode == 'rest' %}
+  {# three independent conditions, matching the body: glm --fc and denoise --fc draw the
+     FC panel too, and used to reach it with no nav entry #}
   {% if rest_alff_path %}<a href="#RestALFF">ALFF/fALFF</a>{% endif %}
   {% if rest_fc_path %}<a href="#RestFC">FC</a>{% endif %}
-  {% elif glm_design_path or glm_activation_path %}<a href="#GLM">GLM</a>{% endif %}
+  {% if glm_design_path or glm_activation_path %}<a href="#GLM">GLM</a>{% endif %}
   <span class="nav-sep">|</span>
   <a href="#Metrics">Metrics</a>
   {% if channel_summary_path %}<a href="#ChannelSummary">Ch. Summary</a>{% endif %}

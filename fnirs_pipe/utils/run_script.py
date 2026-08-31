@@ -51,6 +51,7 @@ def _build_script_text(
     drift_order: int = 1,
     fir_delays: tuple[int, ...] = (0,),
     short_channel: bool | str = False,
+    fc: bool = False,
     events_path: str | None = None,
     contrast_file: str | None = None,
     combine_runs: bool = False,
@@ -265,11 +266,19 @@ def _build_script_text(
                 '    events=pd.DataFrame({"trial_type": [], "onset": [], "duration": []}),',
                 '    output_dir=str(OUTPUT_DIR / f"sub-{SUBJECT}" / "nirs"),',
                 ')',
-                'save_step(raw_resid, "errts", "denoise_residual", session=session)',
+                'save_step(raw_resid, "errts", "glm_residuals", session=session)',
             )
 
         if mode == "denoise":
-            b('# QC (not run here): the `final` section is read back from the last file written.')
+            if fc:
+                b('# Derivatives (not run here): FC, ROI-FC and the seed maps are written by'
+                  ' run_post',
+                  '#   (_write_fc_derivatives) from the residual above, or from `result` when no'
+                  ' regression ran.')
+            b('# QC (not run here): the `final` section is read back from the last bandpassed or'
+              ' resampled file,',
+              '#   not from desc-errts. It pairs with `preproc` across the bandpass, and a residual'
+              ' does not.')
 
         if mode == "glm":
             b(
@@ -283,8 +292,12 @@ def _build_script_text(
                 ('    contrast_def=_contrast_def,' if contrast_file else '    contrast_def=None,'),
                 '    output_dir=str(OUTPUT_DIR / f"sub-{SUBJECT}" / "nirs"),',
                 ')',
-                'save_step(raw_resid, "errts", "glm_residual", session=session)',
+                'save_step(raw_resid, "errts", "glm_residuals", session=session)',
             )
+            if fc:
+                b('# Derivatives (not run here): FC, ROI-FC and the seed maps are written by'
+                  ' run_post',
+                  '#   (_write_fc_derivatives) from the task residual above.')
 
         if mode == "rest":
             b(
@@ -298,7 +311,7 @@ def _build_script_text(
                 '    events=pd.DataFrame({"trial_type": [], "onset": [], "duration": []}),',
                 '    output_dir=str(OUTPUT_DIR / f"sub-{SUBJECT}" / "nirs"),',
                 ')',
-                'save_step(raw_resid, "errts", "rest_residual", session=session)',
+                'save_step(raw_resid, "errts", "glm_residuals", session=session)',
                 '# Derivatives/QC (not run here): ALFF/fALFF, FC, ROI-FC and regression',
                 '#   GCOR are written by run_post (_write_rest_derivatives / gcor_metrics).',
             )
@@ -374,6 +387,7 @@ def write_run_script(
         drift_order=_pick("drift_order", 1),
         fir_delays=fir_delays,
         short_channel=False if (sc is None or sc == "none") else sc,
+        fc=bool(args.get("fc")),
         events_path=_fwd(args.get("events_path")),
         contrast_file=_fwd(args.get("contrast_file")),
         combine_runs=args.get("combine_runs", False),
