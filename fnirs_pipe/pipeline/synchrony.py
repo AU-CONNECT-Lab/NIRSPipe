@@ -89,6 +89,41 @@ class WTCResult:
     times: np.ndarray
 
 
+# Morlet (w0 = 6) Fourier factor: period = _FLAMBDA * scale, so frequency = 1 / period.
+_FLAMBDA = 4 * np.pi / (6 + np.sqrt(2 + 6 ** 2))
+
+# Scales of margin kept on each side of the requested band when limiting the scale range.
+# pycwt smooths the coherence across neighbouring scales with a boxcar of round(2 * 0.6 / dj)
+# points, 14 at the default dj, so the outermost 7 scales of whatever range is computed are
+# convolved against the zero padding at the edge. Keeping more margin than that leaves every
+# scale inside the band with the same neighbours it would have had.
+_SCALE_MARGIN = 12
+
+
+def _scale_range(dt: float, dj: float, fmin: float, fmax: float, n: int) -> tuple[float, int]:
+    """(s0, J) covering [fmin, fmax] plus margin, on pycwt's own default scale grid.
+
+    pycwt starts its scales at ``2 * dt / flambda`` and steps them by ``2 ** dj``, which puts
+    grid frequency ``j`` at ``1 / (2 * dt) * 2 ** (-j * dj)``: the Nyquist frequency halved
+    once per octave. Choosing s0 at one of those grid points rather than exactly at the band
+    edge keeps the computed scales a subset of the default ones, so the frequencies that
+    survive the band filter are the same numbers either way.
+    """
+    s0_default = 2 * dt / _FLAMBDA
+    nyquist_ratio = 1.0 / (2 * dt)
+
+    # first grid index whose frequency is at or below fmax, then margin above it
+    k = int(np.ceil(np.log2(nyquist_ratio / fmax) / dj)) - _SCALE_MARGIN
+    k = max(k, 0)
+    s0 = s0_default * 2 ** (k * dj)
+
+    # last grid index whose frequency is at or above fmin, then margin below it
+    j_band = int(np.floor(np.log2(nyquist_ratio / fmin) / dj)) + _SCALE_MARGIN
+    # never past what the record length supports, which is where pycwt's own default stops
+    j_max = int(round(np.log2(n * dt / s0) / dj))
+    return s0, max(min(j_band - k, j_max), 1)
+
+
 def _pairwise_wtc(
     sig1: np.ndarray,
     sig2: np.ndarray,
@@ -99,6 +134,7 @@ def _pairwise_wtc(
     significance: bool = False,
     cache: bool = True,
     mc_count: int = 300,
+    limit_scales: bool = True,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray | None]:
     r"""Morlet wavelet transform coherence for one signal pair (0 = independent, 1 = locked).
 
@@ -124,17 +160,24 @@ def _pairwise_wtc(
     what the runtime is spent on. It reaches pycwt through ``**kwargs``, so it is ignored
     unless ``significance`` is set.
 
+    ``limit_scales`` computes only the scales the ``[fmin, fmax]`` filter is going to keep,
+    plus margin, instead of pycwt's default range from ``2 * dt`` down to whatever the record
+    length allows. Without it a 900 s recording at 10 Hz has about 147 scales computed and 56
+    kept. See :func:`_scale_range` for why the retained numbers do not change.
+
     Backend: `pycwt.wct <https://pycwt.readthedocs.io/en/development/reference/#pycwt.wct>`_.
     """
     import pycwt
 
+    dj = 1.0 / 12  # 12 sub-octaves per octave (pycwt default; frequency-axis resolution)
     kwargs: dict = {} if cache else {"cache": False}
     if significance:
         kwargs["mc_count"] = mc_count
+    if limit_scales:
+        s0, J = _scale_range(dt, dj, fmin, fmax, len(sig1))
+        kwargs.update(s0=s0, J=J)
     WCT, _, coi, freqs, signif = pycwt.wct(
-        sig1, sig2, dt=dt,
-        dj=1.0 / 12,  # 12 sub-octaves per octave (pycwt default; frequency-axis resolution)
-        sig=significance, normalize=True, **kwargs,
+        sig1, sig2, dt=dt, dj=dj, sig=significance, normalize=True, **kwargs,
     )
     n_sig = len(sig1)
     WCT   = WCT[:, :n_sig]
@@ -165,6 +208,7 @@ def _wtc_over_pairs(
     seed: int | None = None,
     mc_count: int = 300,
     cross: bool = False,
+    limit_scales: bool = True,
 ) -> WTCResult:
     """Run pairwise Morlet WTC over precomputed per-subject {label: signal} maps.
 
@@ -213,7 +257,8 @@ def _wtc_over_pairs(
                 try:
                     WCT_band, freqs_band, coi_dec, sig_band = _pairwise_wtc(
                         sig1, sig2, dt, step, fmin, fmax, significance,
-                        cache=seed is None, mc_count=mc_count)
+                        cache=seed is None, mc_count=mc_count,
+                        limit_scales=limit_scales)
                     if shared_freqs is None:
                         shared_freqs = freqs_band
                         shared_times = ref_raw.times[::step]
@@ -241,6 +286,7 @@ def compute_wtc(
     seed: int | None = None,
     mc_count: int = 300,
     cross: bool = False,
+    limit_scales: bool = True,
 ) -> WTCResult:
     """Compute pairwise WTC per long HbO channel using pycwt Morlet wavelet.
 
@@ -263,7 +309,7 @@ def compute_wtc(
 
     return _wtc_over_pairs(
         raws, signals, list(signals[subject_ids[0]]), fmin, fmax, significance, seed,
-        mc_count, cross)
+        mc_count, cross, limit_scales)
 
 
 def _roi_averaged_signals(
@@ -296,6 +342,7 @@ def compute_wtc_roi(
     seed: int | None = None,
     mc_count: int = 300,
     cross: bool = False,
+    limit_scales: bool = True,
 ) -> WTCResult:
     """Compute pairwise WTC on ROI-averaged HbO signals.
 
@@ -326,7 +373,8 @@ def compute_wtc_roi(
     }
 
     return _wtc_over_pairs(
-        raws, signals, list(roi_map), fmin, fmax, significance, seed, mc_count, cross)
+        raws, signals, list(roi_map), fmin, fmax, significance, seed, mc_count, cross,
+        limit_scales)
 
 
 def compute_pairwise_coherence(

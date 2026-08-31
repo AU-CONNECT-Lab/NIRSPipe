@@ -210,7 +210,8 @@ def run_participant_level(args: dict[str, Any]) -> None:
                 try:
                     sqm_paths = build_sqm_records(
                         sub_dir / "nirs", bids_root=bids_dir,
-                        qc_window_s=args.get("window_length", 10.0))
+                        qc_window_s=args.get("window_length", 10.0),
+                        labels=set(prep_runs))
                 except Exception:
                     logger.error("sub-%s | SQM records failed", subject, exc_info=True)
                     sqm_paths = []

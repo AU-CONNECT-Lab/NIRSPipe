@@ -7,19 +7,24 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Changed
-- **The subject QC report is now one report per run.** A subject holding several tasks or runs used to get a single `sub-<id>_qc.html` built from whichever file finished last, with no sign on the page of which one that was, while every other output was already per run. Each run now writes `sub-<id>_task-<task>_qc.html` with its own `figures/<run>/` directory, and `sub-<id>_qc.html` becomes an index over them: one row per run with channel retention, SCI, GVTD, motion correction and HbO-HbR correlation, read back from the run's own quality record
+- **The subject QC report is now one report per run.** A subject with several tasks used to get one `sub-<id>_qc.html` built from whichever run finished last, with nothing on the page saying which. Each run now writes `sub-<id>_task-<task>_qc.html` with its own figures, and `sub-<id>_qc.html` becomes an index over them
+- WTC computes only the wavelet scales its frequency range keeps, 1.8x faster on a 900 s recording. The coherences are unchanged bit for bit; `--no-wtc-limit-scales` restores the old behaviour
 
 ### Added
-- `fnirs-qc hyper-post --wtc-channel-cross` crosses every long channel with every other across the two brains, so 14 channels give 196 rows in `hyper-wtc.tsv` instead of 14. Single channels are noisier than the ROI averages `--wtc-roi-cross` crosses, so the off-diagonal is exploratory and the pair count is squared
-- `fnirs-qc hyper-post` writes `group-<id>_task-<task>_hyper-bads.tsv`, the channels the inter-brain metrics actually excluded, with a `rejected_in` column naming the runs whose quality metrics rejected each one. The channel set changes every coherence value and used to be visible only in the log
-- `fnirs-qc hyper-post --bads-scope subject` unions each subject's rejected channels over all their runs, so every condition rests on the same channel set. Comparing conditions needs that; the default `run` scope keeps each task's own rejections
+- `fnirs-qc hyper-post --wtc-channel-cross` crosses every long channel with every other across the two brains: 196 values instead of 14. Single channels are noisy, so the off-diagonal is exploratory
+- `fnirs-qc hyper-post --wtc-save-maps` keeps the full time-frequency maps, and `fnirs-qc wtc-band` re-averages them over another band without a second wavelet transform
+- `fnirs-qc hyper-post --bads-scope subject` unions each subject's rejected channels over their runs, so conditions are compared on one channel set
+- `fnirs-qc hyper-post` writes `hyper-bads.tsv`: which channels the inter-brain metrics excluded, and which run rejected each
+- The group CSV accepts optional `session` and `run` columns, for a subject with more than one recording of a task
 
 ### Fixed
-- **`hyper-post` excluded the wrong run's bad channels.** `load_group_sqm` read every run of a subject and let the last one win, ignoring the task each group entry names, so a subject with five tasks had four of them analysed with a fifth task's rejections. It now reads the run's own record and channel metrics
-- **`find_preproc_snirf` could load a different task's recording.** When the requested task had no file for the stage, it fell back to any task of that subject and returned the alphabetically first, so a missing condition was silently analysed as another one. It now falls back only when the stage carries no task entity anywhere, and warns when several files still match
-- Per-channel metrics CSVs are written for every run. They were named per run but produced from the subject report, which only ran once, so a subject with five tasks left one CSV carrying the last task's numbers
-- `fnirs-qc group-hyper-wtc` refuses to merge crossed and homologous tables at channel level as it already did at ROI level, rather than concatenating them into a half-empty `label2` column
-- The provenance diagram is drawn per run. It scanned the whole `nirs/` directory, so a subject with five tasks got five disjoint chains of identically named nodes in one figure with nothing to tell them apart. The provenance table in the report had the same problem
+- **`hyper-post` excluded the wrong run's bad channels.** A subject with five tasks had four of them analysed with a fifth task's rejections
+- **A group member with two sessions, or two runs of one task, had one silently analysed and the other dropped.** The ambiguity is refused now, naming the CSV column that resolves it
+- **A missing task could be analysed as a different one.** Looking up a processing stage fell back to any task of that subject when the requested one had no file
+- Per-channel metrics CSVs are written for every run, not only the last one processed
+- A `--task-label` run no longer rewrites the quality records of the tasks it did not process
+- `fnirs-qc group-hyper-wtc` refuses to merge crossed and homologous channel tables, as it already did for ROI tables
+- The provenance diagram is drawn per run. A subject with five tasks got five identical-looking chains in one figure
 
 ## [0.23.0] - 2026-08-30
 

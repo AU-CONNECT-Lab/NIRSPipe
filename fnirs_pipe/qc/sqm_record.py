@@ -436,15 +436,22 @@ def build_sqm_records(
     resp_h_freq: float | None = None,
     qc_window_s: float | None = None,
     bids_root: Path | None = None,
+    labels: "set[str] | None" = None,
 ) -> list[Path]:
     """Write one SQM record per run found under nirs_dir. Band edges default to the
     values the run's own sidecars recorded, so a past tree needs no arguments.
+
+    ``labels`` restricts the work to those BIDS run stems, which is what a `--task-label`
+    run wants: the tasks it did not touch keep the records they already had, computed with
+    the settings they were computed under. Omit it to rebuild every run in the directory.
 
     ``bids_root`` rescues the ``raw*`` sections when the tree has been moved since the run:
     the sidecars name the original recording by an absolute path that no longer resolves,
     but the filename is still correct, so it is searched for there."""
     written: list[Path] = []
     for label, stages in scan_runs(Path(nirs_dir)).items():
+        if labels is not None and label not in labels:
+            continue
         bands = {
             "cardiac_l_freq": cardiac_l_freq, "cardiac_h_freq": cardiac_h_freq,
             "resp_l_freq": resp_l_freq, "resp_h_freq": resp_h_freq,

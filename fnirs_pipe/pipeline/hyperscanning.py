@@ -10,7 +10,7 @@ import mne
 import numpy as np
 import pandas as pd
 
-from fnirs_pipe.exceptions import AlignmentError, GroupCSVError, MissingDerivativesError, StageError
+from fnirs_pipe.exceptions import AlignmentError, GroupCSVError, StageError
 from fnirs_pipe.io.derivatives import find_preproc_snirf
 from fnirs_pipe.io.snirf import read_snirf
 from fnirs_pipe.io.tables import read_table
@@ -47,6 +47,10 @@ class GroupEntry:
     group_id: str
     subject_id: str
     task: str
+    # optional CSV columns, present when (group_id, subject_id, task) alone does not name
+    # one recording: a subject recorded over several sessions, or several runs of one task
+    session: str | None = None
+    run: str | None = None
 
 
 def parse_group_csv(csv_path: Path) -> dict[tuple[str, str], list[GroupEntry]]:
@@ -64,6 +68,13 @@ def parse_group_csv(csv_path: Path) -> dict[tuple[str, str], list[GroupEntry]]:
     if df.empty:
         raise GroupCSVError("CSV contains no valid rows after dropping NaN values")
 
+    def optional(row, column: str) -> str | None:
+        """A session or run label if the CSV carries one for this row, else None."""
+        if column not in df.columns:
+            return None
+        value = str(row[column]).strip()
+        return value or None if value.lower() not in ("nan", "none", "") else None
+
     result: dict[tuple[str, str], list[GroupEntry]] = {}
     for _, row in df.iterrows():
         key = (str(row["group_id"]).strip(), str(row["task"]).strip())
@@ -71,6 +82,8 @@ def parse_group_csv(csv_path: Path) -> dict[tuple[str, str], list[GroupEntry]]:
             group_id=str(row["group_id"]).strip(),
             subject_id=str(row["subject_id"]).strip(),
             task=str(row["task"]).strip(),
+            session=optional(row, "session"),
+            run=optional(row, "run"),
         )
         result.setdefault(key, []).append(entry)
 
@@ -136,7 +149,8 @@ def load_group_haemo(
     """
     result: dict[str, mne.io.Raw] = {}
     for entry in group:
-        snirf_path = find_preproc_snirf(output_dir, entry.subject_id, entry.task, desc=desc)
+        snirf_path = find_preproc_snirf(output_dir, entry.subject_id, entry.task, desc=desc,
+                                        session=entry.session, run=entry.run)
         raw = read_snirf(snirf_path, verbose=False)
         if is_optical_density(raw):
             raise StageError(
@@ -156,16 +170,19 @@ def load_group_raw_bids(bids_dir: Path, group: list[GroupEntry]) -> dict[str, mn
     """
     from fnirs_pipe.io.bids import get_layout, get_nirs_files
 
+    from fnirs_pipe.io.derivatives import select_one_run
+
     layout = get_layout(bids_dir, validate=False)
     result: dict[str, mne.io.Raw] = {}
     for entry in group:
         sub_label = entry.subject_id.removeprefix("sub-")
-        files = get_nirs_files(layout, subject=sub_label, task=entry.task)
-        if not files:
-            raise MissingDerivativesError(
-                f"No SNIRF found in BIDS for {entry.subject_id} task-{entry.task}"
-            )
-        result[entry.subject_id] = read_snirf(files[0], verbose=False)
+        files = get_nirs_files(layout, subject=sub_label, session=entry.session,
+                               task=entry.task)
+        path = select_one_run(
+            sorted(files), what="raw SNIRF in BIDS", subject_id=entry.subject_id,
+            task=entry.task, session=entry.session, run=entry.run,
+        )
+        result[entry.subject_id] = read_snirf(path, verbose=False)
     return result
 
 

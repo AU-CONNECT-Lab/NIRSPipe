@@ -97,7 +97,61 @@ def write_sidecar_json(out_path: Path, provenance: dict[str, Any]) -> None:
 
 
 
-def find_preproc_snirf(output_dir: Path, subject_id: str, task: str, desc: str = "preproc") -> Path:
+def _entity(name: str, path: Path) -> str | None:
+    m = re.search(rf"_{name}-([A-Za-z0-9]+)", path.name)
+    return m.group(1) if m else None
+
+
+def select_one_run(
+    candidates: list[Path],
+    *,
+    what: str,
+    subject_id: str,
+    task: str,
+    session: str | None = None,
+    run: str | None = None,
+) -> Path:
+    """Narrow a list of candidate recordings to exactly one, or say why it cannot.
+
+    ``[sub-01_ses-a_x, sub-01_ses-b_x], session="a"`` -> the ses-a one
+    ``[sub-01_ses-a_x, sub-01_ses-b_x], session=None`` -> raises, naming a and b
+
+    One recording per group member is what every inter-brain metric assumes, and the two
+    places that used to pick one both took the first match in sorted order. A subject with
+    two sessions or two runs of the same task then had one of them silently analysed and the
+    other silently dropped, with nothing in the output saying which. Ambiguity is refused
+    here instead: naming the session or the run is a decision only the caller can make.
+    """
+    for name, value in (("ses", session), ("run", run)):
+        if value is not None:
+            candidates = [p for p in candidates if _entity(name, p) == value]
+
+    if not candidates:
+        raise MissingDerivativesError(
+            f"No {what} for {subject_id} task-{task}"
+            + (f" ses-{session}" if session else "") + (f" run-{run}" if run else "") + "."
+        )
+    if len(candidates) == 1:
+        return candidates[0]
+
+    def _spread(name: str) -> str:
+        found = sorted({v for p in candidates if (v := _entity(name, p))})
+        return f"{name}: {', '.join(found)}" if len(found) > 1 else ""
+
+    varies = ", ".join(x for x in (_spread("ses"), _spread("run")) if x)
+    raise MissingDerivativesError(
+        f"{len(candidates)} candidates for {subject_id} task-{task} {what}: "
+        f"{', '.join(p.name for p in candidates)}. "
+        + (f"They differ by {varies}. Add a session or run column to the group CSV to say "
+           "which one to use." if varies
+           else "They cannot be told apart by session or run; remove the duplicates.")
+    )
+
+
+def find_preproc_snirf(
+    output_dir: Path, subject_id: str, task: str, desc: str = "preproc",
+    session: str | None = None, run: str | None = None,
+) -> Path:
     """Locate the desc-{desc} snirf for *subject_id* under *output_dir*.
 
     Every pipeline step writes one snirf per desc, so desc is what selects a stage:
@@ -127,13 +181,8 @@ def find_preproc_snirf(output_dir: Path, subject_id: str, task: str, desc: str =
             + (f"desc-{desc} exists for task: {', '.join(tasks)}. " if tasks else "")
             + "Run fnirs-pipe preprocessing first."
         )
-    if len(candidates) > 1:
-        logger.warning(
-            "%s task-%s desc-%s matches %d files (%s); reading %s. Narrow it with a run or "
-            "session entity if that is not the one you meant.",
-            subject_id, task, desc, len(candidates),
-            ", ".join(p.name for p in candidates), candidates[0].name)
-    return candidates[0]
+    return select_one_run(candidates, what=f"desc-{desc} snirf", subject_id=subject_id,
+                          task=task, session=session, run=run)
 
 
 def write_dataset_description(output_dir: Path) -> None:

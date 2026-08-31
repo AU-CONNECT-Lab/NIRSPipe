@@ -308,6 +308,20 @@ def cmd_epoch(
         print("No epoch QC reports produced (no events / no matching files).", file=sys.stderr)
 
 
+def cmd_wtc_band(
+    output_dir: Path, band_fmin: float, band_fmax: float, suffix: str | None,
+) -> None:
+    """Re-average every saved WTC map over a new band, without recomputing the transform."""
+    from fnirs_pipe.qc.wtc_store import reband_tree
+
+    written = reband_tree(output_dir, band_fmin, band_fmax, suffix=suffix)
+    for path in written:
+        print(f"reband -> {path}")
+    if not written:
+        print(f"no *_hyper-wtc*.npz under {output_dir}; rerun `fnirs-qc hyper-post "
+              "--wtc-save-maps` to write them", file=sys.stderr)
+
+
 def cmd_hyper_post(
     bids_dir: Path, output_dir: Path, pairs_csv: Path, group_id: str | None,
     desc: str,
@@ -315,6 +329,7 @@ def cmd_hyper_post(
     wtc_band_fmin: float | None, wtc_band_fmax: float | None, wtc_significance: bool,
     wtc_seed: int | None, wtc_mc_count: int, wtc_roi_cross: bool,
     wtc_channel_cross: bool, bads_scope: str,
+    wtc_limit_scales: bool, wtc_save_maps: bool,
     isc_threshold: float, normalize: bool, no_align: bool,
     session_label: list[str] | None, task_label: list[str] | None,
     skip_bids_validation: bool,
@@ -376,6 +391,8 @@ def cmd_hyper_post(
             wtc_mc_count=wtc_mc_count,
             wtc_roi_cross=wtc_roi_cross,
             wtc_channel_cross=wtc_channel_cross,
+            wtc_limit_scales=wtc_limit_scales,
+            wtc_save_maps=wtc_save_maps,
             isc_threshold=isc_threshold,
         )
 
@@ -561,6 +578,19 @@ def _build_parser() -> argparse.ArgumentParser:
                          "conditions rest on the same channel set, which is what comparing "
                          "conditions needs; the cost is losing a channel everywhere because "
                          "one segment was bad.")
+    hp.add_argument("--wtc-limit-scales", action=argparse.BooleanOptionalAction, default=True,
+                    help="Compute only the wavelet scales inside --wtc-fmin/--wtc-fmax "
+                         "plus margin, instead of every scale the record length allows "
+                         "(default on). A 900 s recording at 10 Hz drops from 147 scales to "
+                         "79 and runs 1.8x faster. They land on pycwt's own scale grid and "
+                         "the margin is wider than its scale-smoothing window, so the "
+                         "coherences match the unrestricted ones bit for bit. "
+                         "--no-wtc-limit-scales restores the old behaviour.")
+    hp.add_argument("--wtc-save-maps", action="store_true",
+                    help="Save the full time-frequency coherence maps beside each TSV as "
+                         "npz, so a different band can be averaged later with `fnirs-qc "
+                         "wtc-band` instead of a second wavelet transform. Large: one array "
+                         "per pair per dyad per task.")
     hp.add_argument("--isc-threshold", type=float, default=0.3,
                     help="Minimum mean ISC to draw an arc in the connectivity circle.")
     hp.add_argument("--normalize", action=argparse.BooleanOptionalAction, default=False,
@@ -571,6 +601,21 @@ def _build_parser() -> argparse.ArgumentParser:
     hp.add_argument("--task-label",    nargs="+", action="extend", help="Task label(s) to include.")
     hp.add_argument("--skip-bids-validation", action=argparse.BooleanOptionalAction, default=False)
     hp.set_defaults(func=cmd_hyper_post)
+
+    wb = sub.add_parser("wtc-band",
+                        help="Re-average saved WTC maps over a different frequency band.")
+    wb.add_argument("output_dir", type=Path,
+                    help="Derivatives directory holding the *_hyper-wtc*.npz written by "
+                         "`hyper-post --wtc-save-maps`.")
+    wb.add_argument("--band-fmin", type=float, required=True,
+                    help="Lower bound (Hz) of the new band.")
+    wb.add_argument("--band-fmax", type=float, required=True,
+                    help="Upper bound (Hz) of the new band.")
+    wb.add_argument("--suffix", default=None,
+                    help="Name added to each output TSV. Defaults to the band, e.g. "
+                         "'band0p05-0p2', so the new tables sit beside the originals "
+                         "rather than replacing them.")
+    wb.set_defaults(func=cmd_wtc_band)
     return p
 
 

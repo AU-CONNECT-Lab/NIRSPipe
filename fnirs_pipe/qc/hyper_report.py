@@ -136,6 +136,8 @@ def build_hyper_post_report(
     wtc_mc_count: int = 300,
     wtc_roi_cross: bool = False,
     wtc_channel_cross: bool = False,
+    wtc_limit_scales: bool = True,
+    wtc_save_maps: bool = False,
     isc_threshold: float = 0.3,
 ) -> Path:
     """Build hyperscanning post-QC report.
@@ -159,6 +161,13 @@ def build_hyper_post_report(
     ``wtc_channel_cross`` does the same at channel level, 14 channels giving 196 rows in
     ``hyper-wtc.tsv`` instead of 14. Same treatment: the extra pairs reach the TSV, the
     heatmap selector keeps the homologous ones.
+
+    ``wtc_save_maps`` writes the full time-frequency maps beside each TSV as ``.npz``, so a
+    different band can be averaged later without a second wavelet transform. See
+    :mod:`fnirs_pipe.qc.wtc_store`. ``wtc_limit_scales`` computes only the scales inside
+    ``[wtc_fmin, wtc_fmax]`` plus margin, which is most of the runtime and, given that the
+    scales land on pycwt's own grid and the margin exceeds its scale-smoothing window,
+    reproduces the unrestricted coherences bit for bit.
     """
     from fnirs_pipe.pipeline.hyperscanning import (
         WTCResult,
@@ -208,6 +217,12 @@ def build_hyper_post_report(
         tsv_path = output_dir / f"group-{group_id}_task-{task}_hyper-{kind}.tsv"
         tsv_path.parent.mkdir(parents=True, exist_ok=True)
         df.to_csv(tsv_path, sep="\t", index=False)
+        if wtc_save_maps:
+            from fnirs_pipe.qc.wtc_store import save_wtc
+            try:
+                save_wtc(result, tsv_path.with_suffix(".npz"))
+            except Exception as exc:
+                logger.warning("saving WTC maps (%s) failed: %s", kind, exc)
         _hyper_sidecar(
             tsv_path, step,
             [p for p in (path_from(r) for r in aligned_raws.values()) if p],
@@ -237,7 +252,8 @@ def build_hyper_post_report(
         logger.info("Computing WTC for %d subjects...", len(subject_ids))
         wtc_result = compute_wtc(
             aligned_raws, fmin=wtc_fmin, fmax=wtc_fmax, significance=wtc_significance,
-            seed=wtc_seed, mc_count=wtc_mc_count, cross=wtc_channel_cross)
+            seed=wtc_seed, mc_count=wtc_mc_count, cross=wtc_channel_cross,
+            limit_scales=wtc_limit_scales)
     except Exception as exc:
         logger.warning("WTC computation failed: %s", exc)
 
@@ -305,6 +321,7 @@ def build_hyper_post_report(
                 aligned_raws, roi_map, bad_channels=bad_channels,
                 fmin=wtc_fmin, fmax=wtc_fmax, significance=wtc_significance,
                 seed=wtc_seed, mc_count=wtc_mc_count, cross=wtc_roi_cross,
+                limit_scales=wtc_limit_scales,
             )
         except Exception as exc:
             logger.warning("ROI WTC computation failed: %s", exc)
