@@ -58,12 +58,14 @@ def test_a_step_resolves_to_its_prose_section(step, params, expected):
 
 
 def test_only_a_task_run_claims_a_first_level_glm():
-    # rest mode runs the same fitting code to regress out confounds; calling that a
-    # first-level GLM in the Methods would be wrong, and the sidecar cannot tell them apart
+    # rest and denoise run the same fitting code to regress out confounds; calling that a
+    # first-level GLM in the Methods would be wrong, so it gets its own paragraph. The
+    # sidecar cannot tell the two apart, which is why the mode decides
     params = {"hrf_model": "spm", "noise_model": "ar1"}
     assert boilerplate_key("glm_fit", params, mode="glm") == "glm"
-    assert boilerplate_key("glm_fit", params, mode="rest") is None
-    assert boilerplate_key("glm_fit", params) is None
+    assert boilerplate_key("glm_fit", params, mode="rest") == "confound_regression"
+    assert boilerplate_key("glm_fit", params, mode="denoise") == "confound_regression"
+    assert boilerplate_key("glm_fit", params) == "confound_regression"
 
 
 def test_every_step_the_pipeline_writes_can_be_described():
@@ -146,3 +148,30 @@ def test_a_bookkeeping_step_falls_back_to_its_summary():
 
 def test_an_unknown_step_says_nothing():
     assert step_sentence("something_new", {}) == ""
+
+
+# ---- the confound-regression sentence names its own columns ----
+
+@pytest.mark.parametrize("params, expected", [
+    ({"short_channel": "mean"}, "the mean short-channel time course of each chromophore"),
+    ({"short_channel": "pca"}, "the first principal component of the short channels"),
+    ({"drift_model": "cosine", "drift_high_pass": 0.01}, "cosine drift basis (high-pass cutoff: 0.01 Hz)"),
+    ({"drift_model": "polynomial", "drift_order": 3}, "an order-3 polynomial drift basis"),
+])
+def test_the_regressors_named_are_the_ones_that_ran(params, expected):
+    assert expected in template_slots("confound_regression", params)["regressors"]
+
+
+def test_a_regression_with_neither_flag_still_says_something_true():
+    # the design matrix always holds an intercept, so the sentence names that rather than
+    # claiming columns the model did not carry
+    assert template_slots("confound_regression", {})["regressors"] == "a constant term only"
+    assert template_slots("confound_regression", {"drift_model": "none"})["regressors"] == (
+        "a constant term only")
+
+
+def test_both_regressor_families_are_named_when_both_ran():
+    phrase = template_slots("confound_regression", {
+        "short_channel": "mean", "drift_model": "polynomial", "drift_order": 1,
+    })["regressors"]
+    assert "short-channel" in phrase and "polynomial" in phrase

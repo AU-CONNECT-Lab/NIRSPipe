@@ -4,7 +4,6 @@ TSV + an HTML viewer with heatmap / boxplots / sortable table / outlier panel.""
 from __future__ import annotations
 
 import json
-import re
 from pathlib import Path
 
 import pandas as pd

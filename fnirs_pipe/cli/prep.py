@@ -75,7 +75,6 @@ def cmd_align(
     bids_dir: Path, derivatives_dir: Path, group_csv: Path, skip_bids_validation: bool,
 ) -> None:
     """Align multi-subject recordings by shared trigger and write SNIRF files."""
-    import mne
     import pandas as pd
 
     from fnirs_pipe.exceptions import AlignmentError

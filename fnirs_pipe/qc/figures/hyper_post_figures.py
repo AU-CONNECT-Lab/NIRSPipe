@@ -261,7 +261,6 @@ def build_isc_panel(
         return ""
 
     n          = len(ch_names)
-    isc_diag   = np.diag(isc_mat)
     sub1_label = subject_ids[0] if subject_ids else "Sub1"
     sub2_label = subject_ids[1] if len(subject_ids) > 1 else "Sub2"
     type_label = ch_type.upper()

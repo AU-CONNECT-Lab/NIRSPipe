@@ -1,7 +1,5 @@
-import mne
 import numpy as np
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 
 _GOOD_COLOR = "#C5E0B3"
 _BAD_COLOR  = "#F8786E"

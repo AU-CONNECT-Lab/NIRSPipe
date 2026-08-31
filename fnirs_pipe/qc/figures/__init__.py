@@ -62,6 +62,7 @@ __all__ = [
     "carpet_gvtd_figure",
     "bad_segment_zoom_figure",
     "build_motion_detail_figure",
+    "carpet_compare_figure",
     "psd_figure",
     "design_matrix_figure",
     "design_matrix_static_figure",

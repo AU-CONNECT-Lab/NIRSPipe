@@ -14,7 +14,6 @@ from typing import Any
 from fnirs_pipe.io.bids import bids_label, get_layout, get_nirs_files
 from fnirs_pipe.io.derivatives import write_dataset_description
 from fnirs_pipe.io.snirf import read_snirf
-import mne
 from fnirs_pipe.pipeline.prep_pipeline import PrepConfig, run_prep
 from fnirs_pipe.utils import unwrap_enum as _v
 from fnirs_pipe.utils import job_db as _jdb
@@ -167,8 +166,9 @@ def run_participant_level(args: dict[str, Any]) -> None:
             t0 = time.monotonic()
             subject_status = "SUCCESS"
             subject_error: str | None = None
-            last_raw = last_result = last_label = None
-            prep_config = None
+            # keyed by BIDS run stem: every QC figure is per run, so the report loop below
+            # needs each run's own prep output rather than whichever finished last
+            prep_runs: dict[str, tuple] = {}
             try:
                 sessions: list[str | None] = session_label if session_label else [None]
 
@@ -192,17 +192,14 @@ def run_participant_level(args: dict[str, Any]) -> None:
                                 raw = read_snirf(snirf_path)
                                 result = run_prep(raw, prep_config, output_dir=output_dir, source_entities=src_entities, work_dir=work_dir, source_path=snirf_path)
                                 logger.info("finished prep: %s", snirf_path.name)
-                                last_raw, last_result = raw, result
-                                last_label = bids_label(subject, src_entities)
+                                prep_runs[bids_label(subject, src_entities)] = (raw, result, prep_config)
                             except Exception:
                                 logger.exception("prep failed for %s", snirf_path)
                                 raise
 
-                glm_est = dm = alff_df = fc_df = fc_hbr_df = last_denoised = gcor_reg = None
-                fc_seed: dict = {}
-                fc_roi: dict = {}
+                post_runs: dict[str, dict] = {}
                 if args.get("mode") is not None:
-                    glm_est, dm, alff_df, fc_df, fc_hbr_df, last_denoised, gcor_reg, fc_seed, fc_roi = _run_post_for_subject(subject, sessions, args, toml, output_dir, roi_map=roi_map)
+                    post_runs = _run_post_for_subject(subject, sessions, args, toml, output_dir, roi_map=roi_map)
 
                 # one SQM record per run, written once both passes have finished so the
                 # final section can measure the last file post actually produced. The
@@ -232,24 +229,47 @@ def run_participant_level(args: dict[str, Any]) -> None:
                         logger.warning("sub-%s | SQM database rows failed for %s",
                                        subject, path.name, exc_info=True)
 
-                # rendered before the report, which embeds it: every sidecar it scans is
-                # on disk by now, and --no-report still leaves the diagram behind
-                provenance_path = None
-                try:
-                    from fnirs_pipe.qc.provenance import write_provenance
-                    for path in write_provenance(
-                        sub_dir / "nirs", sub_dir / "figures",
-                        stem="provenance",
-                        title=f"sub-{subject}" + (f"  |  mode: {args['mode']}" if args.get("mode") else ""),
-                    ):
-                        logger.info("sub-%s | provenance → %s", subject, path)
-                        if path.suffix == ".png":
-                            provenance_path = f"figures/{path.name}"
-                except Exception:
-                    logger.warning("sub-%s | provenance graph failed", subject, exc_info=True)
+                # one report per run: the figures, the provenance graph and the metrics all
+                # describe a single recording, and a subject holding five tasks used to get
+                # one report showing whichever finished last
+                for label, (raw, result, run_prep_config) in prep_runs.items():
+                    # rendered before the report, which embeds it: every sidecar it scans is
+                    # on disk by now, and --no-report still leaves the diagram behind
+                    provenance_path = None
+                    try:
+                        from fnirs_pipe.qc.provenance import write_provenance
+                        for path in write_provenance(
+                            sub_dir / "nirs", sub_dir / "figures" / label,
+                            stem="provenance", label=label,
+                            title=label + (f"  |  mode: {args['mode']}" if args.get("mode") else ""),
+                        ):
+                            logger.info("sub-%s | provenance → %s", subject, path)
+                            if path.suffix == ".png":
+                                provenance_path = f"figures/{label}/{path.name}"
+                    except Exception:
+                        logger.warning("%s | provenance graph failed", label, exc_info=True)
 
-                if not args.get("no_report") and last_result is not None:
-                    _emit_subject_report(subject, sub_dir, last_raw, last_result, prep_config, args, glm_est, dm, alff_df=alff_df, fc_df=fc_df, fc_hbr_df=fc_hbr_df, fc_seed=fc_seed, fc_roi=fc_roi, high_pass=cfg_high_pass, low_pass=cfg_low_pass, after_haemo=last_denoised, gcor_reg=gcor_reg, roi_map=roi_map, provenance_path=provenance_path, sqm_label=last_label)
+                    if args.get("no_report"):
+                        continue
+                    post = post_runs.get(label, {})
+                    _emit_subject_report(
+                        subject, sub_dir, raw, result, run_prep_config, args,
+                        post.get("glm_est"), post.get("design_matrix"),
+                        alff_df=post.get("alff_df"), fc_df=post.get("fc_df"),
+                        fc_hbr_df=post.get("fc_hbr_df"), fc_seed=post.get("fc_seed") or {},
+                        fc_roi=post.get("fc_roi") or {},
+                        high_pass=cfg_high_pass, low_pass=cfg_low_pass,
+                        after_haemo=post.get("denoised"), gcor_reg=post.get("gcor_reg"),
+                        roi_map=roi_map, provenance_path=provenance_path, sqm_label=label,
+                    )
+
+                if not args.get("no_report") and prep_runs:
+                    from fnirs_pipe.qc.subject_index import write_subject_index
+                    try:
+                        write_subject_index(subject, sub_dir, " ".join(sys.argv),
+                                            mode=_v(args["mode"]) if args.get("mode") else None)
+                    except Exception:
+                        logger.warning("sub-%s | run index failed", subject, exc_info=True)
 
             except Exception as exc:
                 subject_status = "FAILED"
@@ -317,7 +337,7 @@ def _emit_subject_report(subject, sub_dir, last_raw, last_result, prep_config, a
         bad_channels=last_result.bad_channels,
         config=prep_config,
         run_command=" ".join(sys.argv),
-        out_path=sub_dir / f"sub-{subject}_qc.html",
+        out_path=sub_dir / f"{sqm_label or f'sub-{subject}'}_qc.html",
         coords_head=coords_head,
         good_mask=good_mask,
         ch_names_brain=hbo_names,
@@ -340,6 +360,11 @@ def _emit_subject_report(subject, sub_dir, last_raw, last_result, prep_config, a
     )
 
 
+# What post leaves behind for one run, in the order the report section builders want it.
+_POST_FIELDS = ("glm_est", "design_matrix", "alff_df", "fc_df", "fc_hbr_df",
+                "denoised", "gcor_reg", "fc_seed", "fc_roi")
+
+
 def _run_post_for_subject(
     subject: str,
     sessions: list[str | None],
@@ -347,8 +372,12 @@ def _run_post_for_subject(
     toml: dict[str, Any],
     output_dir: Path,
     roi_map: dict | None = None,
-) -> tuple:
-    """Run post-processing for all sessions/tasks. Returns (glm_est, design_matrix) from last file."""
+) -> dict[str, dict]:
+    """Run post-processing for all sessions/tasks. Returns ``{bids_label: outputs}``.
+
+    One entry per run, keyed the same way as the prep results, so the report loop can pair
+    them up. A run whose post failed simply has no entry.
+    """
     from fnirs_pipe.pipeline.post_pipeline import run_post
 
     mode = _v(args["mode"])
@@ -360,9 +389,7 @@ def _run_post_for_subject(
     # sub-01 in a sibling output tree would be picked up and post-processed as if it
     # were ours. Only this run's own subject directory counts.
     subject_root = (output_dir / f"sub-{subject}").resolve()
-    last_glm_est = last_dm = last_alff_df = last_fc_df = last_fc_hbr_df = last_denoised = last_gcor_reg = None
-    last_fc_seed: dict = {}
-    last_fc_roi: dict = {}
+    post_runs: dict[str, dict] = {}
     for session in sessions:
         post_config = _build_post_config(subject, session, args, toml, roi_map=roi_map)
         for task in tasks:
@@ -382,19 +409,16 @@ def _run_post_for_subject(
                 logger.info("post (%s): %s", mode, snirf_path.name)
                 try:
                     raw_haemo = read_snirf(snirf_path)
-                    last_denoised, glm_est, dm, alff_df, fc_df, fc_hbr_df, gcor_reg, fc_seed, fc_roi = run_post(raw_haemo, post_config, output_dir=output_dir, mode=mode, source_entities=src_entities, source_path=snirf_path)
-                    if glm_est is not None:
-                        last_glm_est, last_dm = glm_est, dm
-                    if fc_df is not None:
-                        last_alff_df, last_fc_df, last_fc_hbr_df = alff_df, fc_df, fc_hbr_df
-                        last_fc_seed, last_fc_roi = fc_seed, fc_roi
-                    if gcor_reg is not None:
-                        last_gcor_reg = gcor_reg
+                    denoised, glm_est, dm, alff_df, fc_df, fc_hbr_df, gcor_reg, fc_seed, fc_roi = run_post(raw_haemo, post_config, output_dir=output_dir, mode=mode, source_entities=src_entities, source_path=snirf_path)
                 except Exception:
                     logger.exception("post failed for %s", snirf_path)
                     raise
+                post_runs[bids_label(subject, src_entities)] = dict(zip(
+                    _POST_FIELDS,
+                    (glm_est, dm, alff_df, fc_df, fc_hbr_df, denoised, gcor_reg, fc_seed, fc_roi),
+                ))
 
-    return last_glm_est, last_dm, last_alff_df, last_fc_df, last_fc_hbr_df, last_denoised, last_gcor_reg, last_fc_seed, last_fc_roi
+    return post_runs
 
 
 def run_group_level(args: dict[str, Any]) -> None:

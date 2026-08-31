@@ -230,7 +230,6 @@ def export_snirfs(n_clicks, bids_dir, deriv_dir, group_csv):
         return dbc.Alert("Load and align first.", color="warning",
                          className="mb-0 py-2")
 
-    import mne
     import pandas as pd
 
     from fnirs_pipe.io.snirf import write_snirf

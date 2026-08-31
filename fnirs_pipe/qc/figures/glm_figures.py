@@ -417,7 +417,7 @@ def per_channel_hrf_figure(
         fig.add_trace(go.Scatter(
             x=t, y=y_lo, mode="lines",
             line=dict(width=0), fill="tonexty",
-            fillcolor=f"rgba(192,57,43,0.15)",
+            fillcolor="rgba(192,57,43,0.15)",
             showlegend=False, hoverinfo="skip",
         ), row=row, col=col)
         fig.add_trace(go.Scatter(
@@ -582,8 +582,6 @@ def glm_betas_figure(
     `glm_df` is the output of `glm_est.to_dataframe()`.
     Only the listed `conditions` are shown (drift/constant excluded).
     """
-    import pandas as pd
-
     glm_df = glm_df.reset_index()
     if "Contrast" not in glm_df.columns:
         for alt in ("contrast", "Regressor", "regressor", "condition", "Condition"):

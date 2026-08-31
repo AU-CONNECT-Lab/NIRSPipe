@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>fnirs-pipe QC — sub-{{ subject }}</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 14px; line-height: 1.5; color: #2c3e50;
+      padding: 1.5rem 2rem 4rem;
+    }
+    h1 { font-size: 1.5rem; margin: 0 0 0.25rem; }
+    h2 { font-size: 1.1rem; font-weight: 600; color: #34495e;
+         border-left: 4px solid #2980b9; padding-left: 0.6rem;
+         margin: 2rem 0 0.75rem; }
+    .subtitle { color: #7f8c8d; font-size: 0.85rem; }
+    .page-header { border-bottom: 2px solid #2980b9; padding-bottom: 0.6rem;
+                   margin-bottom: 1.2rem; }
+    table { border-collapse: collapse; width: 100%; font-size: 0.85rem; }
+    th, td { border: 1px solid #ddd; padding: 0.4rem 0.7rem; text-align: left;
+             white-space: nowrap; }
+    th { background: #f0f3f6; font-weight: 600; }
+    tbody tr:hover { background: #f8fafc; }
+    td a { color: #2980b9; font-weight: 600; text-decoration: none; }
+    td a:hover { text-decoration: underline; }
+    .muted { color: #95a5a6; }
+    pre { background: #f4f4f4; padding: 0.75rem 1rem; border-radius: 4px;
+          overflow-x: auto; font-size: 0.82rem; white-space: pre-wrap;
+          word-break: break-all; }
+    .scroll { overflow-x: auto; }
+  </style>
+</head>
+<body>
+
+<div class="page-header">
+  <h1>fnirs-pipe QC &mdash; sub-{{ subject }}</h1>
+  <span class="subtitle">
+    {{ rows | length }} run{{ "s" if rows | length != 1 }}
+    {%- if mode %} &bull; mode: {{ mode }}{% endif %}
+    &bull; v{{ versions.get('fnirs-pipe', 'unknown') }} &bull; {{ run_date }}
+  </span>
+</div>
+
+<h2>Runs</h2>
+<div class="scroll">
+<table>
+  <thead>
+    <tr>
+      <th>Run</th>
+      <th>Channels</th>
+      <th>Length</th>
+      <th>Rate</th>
+      {% for col in columns %}<th>{{ col }}</th>{% endfor %}
+    </tr>
+  </thead>
+  <tbody>
+  {% for row in rows %}
+    <tr>
+      <td>
+        {% if row.href %}<a href="{{ row.href }}">{{ row.label }}</a>
+        {% else %}{{ row.label }} <span class="muted">(no report)</span>{% endif %}
+      </td>
+      <td>
+        {%- if row.n_channels is not none -%}
+          {{ row.n_channels - (row.n_bad or 0) }}/{{ row.n_channels }}
+        {%- else -%}<span class="muted">n/a</span>{%- endif -%}
+      </td>
+      <td>{% if row.duration_s %}{{ "%.0f"|format(row.duration_s) }} s{% else %}<span class="muted">n/a</span>{% endif %}</td>
+      <td>{% if row.sfreq %}{{ "%.2f"|format(row.sfreq) }} Hz{% else %}<span class="muted">n/a</span>{% endif %}</td>
+      {% for _, value in row.metrics %}<td>{{ value }}</td>{% endfor %}
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+
+<p class="subtitle" style="margin-top:0.6rem;">
+  Metrics are read from each run's <code>desc-sqm</code> record. Open a run for its figures,
+  provenance and full metric table.
+</p>
+
+<h2>Run command</h2>
+<pre>{{ run_command }}</pre>
+
+<h2>Software Versions</h2>
+<div class="scroll">
+<table>
+  <tbody>
+  {% for name, version in versions.items() %}
+    <tr><th>{{ name }}</th><td>{{ version }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+
+</body>
+</html>

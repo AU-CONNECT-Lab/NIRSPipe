@@ -3,11 +3,10 @@
 from __future__ import annotations
 
 import subprocess
-import sys
 from pathlib import Path
 
 import dash_bootstrap_components as dbc
-from dash import Input, Output, State, callback, dcc, html, no_update
+from dash import Input, Output, State, callback, html, no_update
 
 from fnirs_pipe.utils.logging import get_logger
 

@@ -115,7 +115,8 @@ def _guard(label: str, errors: list, subject: str):
 # Serialisation helpers
 # ---------------------------------------------------------------------------
 
-def _section_provenance(nirs_dir: Path, mode: str | None, subject: str, errors: list) -> dict:
+def _section_provenance(nirs_dir: Path, mode: str | None, subject: str, errors: list,
+                        label: str | None = None) -> dict:
     """One row per output: what it is, what made it, and what that step did.
 
     The diagram carries the topology; this carries the narrative, which does not fit in a
@@ -127,14 +128,14 @@ def _section_provenance(nirs_dir: Path, mode: str | None, subject: str, errors: 
         from fnirs_pipe.qc.provenance import scan
 
         seen: set[tuple] = set()
-        for node in sorted(scan(nirs_dir).values(), key=lambda n: (n.depth, n.label)):
+        for node in sorted(scan(nirs_dir, label=label).values(), key=lambda n: (n.depth, n.label)):
             if not node.step:
                 continue
             row = (node.label, node.step,
                    step_sentence(node.step, node.params, mode),
                    node.detail.replace("\n", " "))
-            # several tasks of one subject repeat every step with the same settings, and
-            # the table is a narrative of the steps rather than a listing of the files
+            # only bites when no label was given and the scan spans several tasks, which
+            # repeat every step with the same settings
             if row in seen:
                 continue
             seen.add(row)
@@ -145,6 +146,20 @@ def _section_provenance(nirs_dir: Path, mode: str | None, subject: str, errors: 
                 "metrics": list(node.data.get("metrics") or []),
             })
     return {"provenance_rows": rows}
+
+
+def _fig_href(figures_dir: Path, name: str) -> str:
+    """URL of a figure as the report must link to it, the report sitting above ``figures/``.
+
+    figures/            + carpet_gvtd.png -> "figures/carpet_gvtd.png"
+    figures/sub-01_task-rest/ + same      -> "figures/sub-01_task-rest/carpet_gvtd.png"
+
+    Per-run reports put their figures in a subdirectory so several runs of one subject stop
+    overwriting each other; a caller that passes a bare ``figures/`` still gets the old URL.
+    """
+    if figures_dir.parent.name == "figures":
+        return f"figures/{figures_dir.name}/{name}"
+    return f"figures/{name}"
 
 
 def _save_mpl_fig(fig, path: Path) -> None:
@@ -178,7 +193,7 @@ def _save_plotly_html(fig, path: Path, div_id: str | None = None) -> tuple[str, 
         1,
     )
     path.write_text(html, encoding="utf-8")
-    return f"figures/{path.name}", h
+    return _fig_href(path.parent, path.name), h
 
 
 # ---------------------------------------------------------------------------
@@ -268,7 +283,7 @@ def _section_channel_detail(
             )
             fname = f"ch_detail_{_pair_fname(pair)}.html"
             h = _save_multi_fig_html([detail_fig, psd_fig, epoch_fig], figures_dir / fname)
-            saved.append({"pair": pair, "path": f"figures/{fname}", "h": h})
+            saved.append({"pair": pair, "path": _fig_href(figures_dir, fname), "h": h})
     return {"channel_pairs": saved}
 
 
@@ -294,7 +309,7 @@ def _section_motion_detail(
                                              spike_segments=spike_segments)
             fname = f"motion_detail_{_pair_fname(ch)}.html"
             h = _save_multi_fig_html([fig], figures_dir / fname)
-            saved.append({"pair": ch, "path": f"figures/{fname}", "h": h})
+            saved.append({"pair": ch, "path": _fig_href(figures_dir, fname), "h": h})
     return {"motion_detail_pairs": saved}
 
 
@@ -357,7 +372,7 @@ def _section_motion(
                                  corrected_segments=corrected_segments,
                                  spike_segments=spike_spans)
         _save_b64_png(b64, figures_dir / "carpet_gvtd.png")
-        carpet_gvtd_path = "figures/carpet_gvtd.png"
+        carpet_gvtd_path = _fig_href(figures_dir, "carpet_gvtd.png")
 
     with _guard("Bad segment zoom", errors, subject):
         all_spans = [
@@ -375,7 +390,7 @@ def _section_motion(
                 raw_before=raw_before_motion,
             )
             _save_b64_png(b64, figures_dir / "bad_segment_zoom.png")
-            bad_segment_zoom_path = "figures/bad_segment_zoom.png"
+            bad_segment_zoom_path = _fig_href(figures_dir, "bad_segment_zoom.png")
 
     return {
         "carpet_gvtd_path": carpet_gvtd_path,
@@ -399,7 +414,7 @@ def _section_haemo(
     with _guard("HbO-HbR correlation panel", errors, subject):
         b64 = hbo_hbr_correlation_panel(raw_haemo)
         _save_b64_png(b64, figures_dir / "hbo_hbr_corr.png")
-        hbo_hbr_path = "figures/hbo_hbr_corr.png"
+        hbo_hbr_path = _fig_href(figures_dir, "hbo_hbr_corr.png")
     with _guard("PSD figure", errors, subject):
         fig_psd_custom = psd_figure(
             raw_haemo, l_freq=l_freq, h_freq=h_freq, fmax=2.0,
@@ -444,7 +459,7 @@ def _section_evoked_topomap(
         b64 = evoked_topomap_static(raw_haemo, epoch_tmin=epoch_tmin, epoch_tmax=epoch_tmax)
         if b64:
             _save_b64_png(b64, figures_dir / "evoked_topomap.png")
-            path = "figures/evoked_topomap.png"
+            path = _fig_href(figures_dir, "evoked_topomap.png")
     return {"evoked_topomap_path": path}
 
 
@@ -469,7 +484,7 @@ def _section_trial_image(
             if figs:
                 fname = f"trialimage_roi_{_pair_fname(str(roi_name))}.html"
                 h = _save_multi_fig_html(figs, figures_dir / fname)
-                roi_saved.append({"pair": str(roi_name), "path": f"figures/{fname}", "h": h})
+                roi_saved.append({"pair": str(roi_name), "path": _fig_href(figures_dir, fname), "h": h})
 
     saved = []
     # HbO only: single-trial HbR is too low-amplitude to read as an image, and the HbO/HbR
@@ -480,7 +495,7 @@ def _section_trial_image(
             if figs:
                 fname = f"trialimage_{_pair_fname(ch)}.html"
                 h = _save_multi_fig_html(figs, figures_dir / fname)
-                saved.append({"pair": ch, "path": f"figures/{fname}", "h": h})
+                saved.append({"pair": ch, "path": _fig_href(figures_dir, fname), "h": h})
     return {"trial_image_pairs": saved, "trial_image_roi_pairs": roi_saved}
 
 
@@ -660,7 +675,7 @@ def _section_brain(
             else:
                 raise RuntimeError("brain_b64 is None")
 
-            brain_views_path = "figures/brain_views.png"
+            brain_views_path = _fig_href(figures_dir, "brain_views.png")
     return {"brain_views_path": brain_views_path}
 
 
@@ -688,11 +703,11 @@ def _section_glm(
         with _guard("GLM design matrix (timeseries)", errors, subject):
             b64 = design_matrix_static_figure(design_matrix, conditions, segments=segments)
             _save_b64_png(b64, figures_dir / "glm_design_timeseries.png")
-            glm_design_path = "figures/glm_design_timeseries.png"
+            glm_design_path = _fig_href(figures_dir, "glm_design_timeseries.png")
         with _guard("GLM design matrix (heatmap)", errors, subject):
             b64 = design_matrix_heatmap(design_matrix, conditions=conditions)
             _save_b64_png(b64, figures_dir / "glm_design_heatmap.png")
-            glm_design_heatmap_path = "figures/glm_design_heatmap.png"
+            glm_design_heatmap_path = _fig_href(figures_dir, "glm_design_heatmap.png")
 
     if glm_est is not None and conditions and raw_haemo is not None:
         with _guard("GLM activation panel", errors, subject):
@@ -708,7 +723,7 @@ def _section_glm(
                 results_dict = {c: df[df["Contrast"] == c] for c in conditions}
                 b64 = activation_panel(raw_haemo, results_dict)
                 _save_b64_png(b64, figures_dir / "glm_activation.png")
-                glm_activation_path = "figures/glm_activation.png"
+                glm_activation_path = _fig_href(figures_dir, "glm_activation.png")
 
     return {
         "glm_design_path": glm_design_path,
@@ -733,35 +748,35 @@ def _section_rest(
         if alff_df is not None:
             b64 = alff_falff_figure(alff_df)
             _save_b64_png(b64, figures_dir / "rest_alff.png")
-            alff_path = "figures/rest_alff.png"
+            alff_path = _fig_href(figures_dir, "rest_alff.png")
     with _guard("ALFF topography", errors, subject):
         if alff_df is not None and raw_haemo is not None:
             b64 = alff_topo_figure(raw_haemo, alff_df)
             if b64 is not None:   # None means the montage carries no optode positions
                 _save_b64_png(b64, figures_dir / "rest_alff_topo.png")
-                alff_topo_path = "figures/rest_alff_topo.png"
+                alff_topo_path = _fig_href(figures_dir, "rest_alff_topo.png")
     with _guard("FC matrix figure", errors, subject):
         if fc_df is not None:
             b64 = fc_matrix_figure(fc_df, fc_hbr_df)
             _save_b64_png(b64, figures_dir / "rest_fc.png")
-            fc_path = "figures/rest_fc.png"
+            fc_path = _fig_href(figures_dir, "rest_fc.png")
     with _guard("ROI FC matrix", errors, subject):
         if fc_roi:
             b64 = fc_roi_matrix_figure(fc_roi)
             if b64 is not None:
                 _save_b64_png(b64, figures_dir / "rest_fc_roi.png")
-                fc_roi_path = "figures/rest_fc_roi.png"
+                fc_roi_path = _fig_href(figures_dir, "rest_fc_roi.png")
     with _guard("FC connectogram", errors, subject):
         if fc_df is not None:
             b64 = fc_connectogram(fc_df, fc_hbr_df)
             _save_b64_png(b64, figures_dir / "rest_fc_circle.png")
-            fc_circle_path = "figures/rest_fc_circle.png"
+            fc_circle_path = _fig_href(figures_dir, "rest_fc_circle.png")
     with _guard("FC seed topography", errors, subject):
         if fc_seed and raw_haemo is not None:
             b64 = fc_seed_topo_figure(raw_haemo, fc_seed.get("hbo"), fc_seed.get("hbr"))
             if b64 is not None:   # None means the montage carries no optode positions
                 _save_b64_png(b64, figures_dir / "rest_fc_seed.png")
-                fc_seed_path = "figures/rest_fc_seed.png"
+                fc_seed_path = _fig_href(figures_dir, "rest_fc_seed.png")
     return {"rest_alff_path": alff_path, "rest_alff_topo_path": alff_topo_path,
             "rest_fc_path": fc_path, "rest_fc_roi_path": fc_roi_path,
             "rest_fc_circle_path": fc_circle_path, "rest_fc_seed_path": fc_seed_path}
@@ -851,11 +866,12 @@ def build_subject_report(
     provenance_path: str | None = None,
     sqm_label: str | None = None,
 ) -> None:
-    """Render a per-subject prep QC report and save as HTML.
+    """Render the QC report for one run and save as HTML.
 
-    sqm_label names the run whose SQM record the metrics panel displays. The report is per
-    subject while the record is per run, so a subject with several tasks shows the last one
-    processed, which is already what every other section of this report shows.
+    sqm_label is the run this report covers, as a BIDS stem (``sub-01_task-rest``). It picks
+    the SQM record and the intermediate stage files off disk, and it gives the run its own
+    ``figures/<sqm_label>/`` directory so several runs of one subject stop overwriting each
+    other's figures. Passing None keeps the flat ``figures/`` layout.
 
     provenance_path is the already-rendered flow diagram, relative to out_path
     (the caller renders it: the report embeds, it does not draw).
@@ -867,6 +883,8 @@ def build_subject_report(
     raw_long = _prepare_long_raw(raw_intensity, subject)
 
     figures_dir = out_path.parent / "figures"
+    if sqm_label:
+        figures_dir = figures_dir / sqm_label
 
     nirs_dir = out_path.parent / "nirs"
     windowed_section  = _load_windowed_section(nirs_dir, sqm_label, subject, errors)
@@ -891,7 +909,7 @@ def build_subject_report(
         with _guard("Denoising carpet", errors, subject):
             b64 = carpet_compare_figure(raw_haemo, after_haemo, roi_map=roi_map)
             _save_b64_png(b64, figures_dir / "denoise_carpet.png")
-            denoise_carpet_path = "figures/denoise_carpet.png"
+            denoise_carpet_path = _fig_href(figures_dir, "denoise_carpet.png")
     channel_det_vars  = _section_channel_detail(raw_haemo, subject, errors, figures_dir)
     psd_det_vars      = _section_psd_detail(raw_haemo, subject, errors, figures_dir,
                                             l_freq=l_freq, h_freq=h_freq,
@@ -917,7 +935,8 @@ def build_subject_report(
     # comparison (expected to drop). Bandpass alone raises GCOR, so we do not compare that.
     if gcor_reg and sqm_vars.get("sqm") is not None:
         sqm_vars["sqm"].update(gcor_reg)
-    provenance_vars   = _section_provenance(out_path.parent / "nirs", mode, subject, errors)
+    provenance_vars   = _section_provenance(out_path.parent / "nirs", mode, subject, errors,
+                                            label=sqm_label)
     ch_summary_vars   = _section_channel_summary(
                             sqm_vars["channel_rows"], sqm_vars["sqm"], subject, errors, figures_dir,
                             sci_thresh=getattr(config, "sci_threshold", 0.75))
@@ -935,10 +954,15 @@ def build_subject_report(
 
     env      = Environment(loader=FileSystemLoader(str(_TEMPLATE_DIR)), autoescape=False)
     template = env.get_template("subject_report.html.j2")
+    from fnirs_pipe.qc.sqm_record import entities_of
+
     html = template.render(
         metric_summary=metric_summary,
         is_key_metric=is_key_metric,
         subject=subject,
+        run_label=sqm_label,
+        run_entities={k: v for k, v in entities_of(sqm_label or "").items() if v},
+        index_href=(f"sub-{subject}_qc.html" if sqm_label else None),
         run_date=date.today().isoformat(),
         run_command=run_command,
         versions=versions,

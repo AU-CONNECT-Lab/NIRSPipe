@@ -93,6 +93,17 @@ class FNIRSRatingApp:
                 return f"<h2>Report not found: {html_file}</h2>", 404
             return self._inject_base_href(html_file.read_text(encoding="utf-8"), pid)
 
+        # sub-<pid>_qc.html is an index over the subject's runs; its links point at the
+        # per-run reports next to it, which need a route of their own to be reachable here
+        @app.route("/sub-<pid>/<report>")
+        def run_report(pid, report):
+            if not report.endswith("_qc.html"):
+                return "", 404
+            html_file = self.output_dir / f"sub-{pid}" / report
+            if not html_file.exists():
+                return f"<h2>Report not found: {html_file}</h2>", 404
+            return self._inject_base_href(html_file.read_text(encoding="utf-8"), pid)
+
         @app.route("/sub-<pid>/figures/<path:filename>")
         def figures(pid, filename):
             return send_from_directory(

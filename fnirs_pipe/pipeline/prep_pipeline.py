@@ -17,7 +17,6 @@ from pathlib import Path
 
 import mne
 import mne.io
-import numpy as np
 
 from fnirs_pipe import __version__
 from fnirs_pipe.io.derivatives import build_output_path, carry_entities, data_state, write_sidecar_json
@@ -195,7 +194,7 @@ def run_prep(
     )
     # sci_scores go in the sidecar because the SQM record is assembled from disk after the
     # run, and SCI is the one input to it that no output file carries
-    sci_path = _save(raw_od, "sci", extra_provenance={
+    _save(raw_od, "sci", extra_provenance={
         "bad_channels": bad_chs,
         "sci_scores": {k: float(v) for k, v in sci_scores.items()},
     })

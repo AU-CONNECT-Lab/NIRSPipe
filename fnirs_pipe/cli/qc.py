@@ -233,16 +233,24 @@ def cmd_provenance(output_dir: Path) -> None:
         output_dir,
     ]
 
+    from fnirs_pipe.qc.sqm_record import scan_runs
+
     total = 0
     for nirs_dir in targets:
         dest = nirs_dir.parent if nirs_dir.name == "nirs" else nirs_dir
-        label = dest.name
-        # same destination and stem the run itself uses, so re-rendering refreshes the
-        # image an already-written QC report points at
-        written = write_provenance(nirs_dir, dest / "figures", stem="provenance", title=label)
-        for path in written:
-            print(f"{path}")
-        total += bool(written)
+        # a subject holds one graph per run; anything else (a group tree, the root) has no
+        # run entity to split on and keeps its single graph. Same destinations and stem the
+        # run itself uses, so re-rendering refreshes the images an already-written QC
+        # report points at
+        runs = list(scan_runs(nirs_dir)) if dest.name.startswith("sub-") else []
+        jobs = ([(dest / "figures" / label, label) for label in runs]
+                or [(dest / "figures", None)])
+        for out_dir, label in jobs:
+            written = write_provenance(nirs_dir, out_dir, stem="provenance",
+                                       title=label or dest.name, label=label)
+            for path in written:
+                print(f"{path}")
+            total += bool(written)
 
     if not total:
         print("no provenance sidecars found — run the pipeline first")

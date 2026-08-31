@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import dash
 import dash_bootstrap_components as dbc
-from dash import dash_table, dcc, html
+from dash import dash_table, html
 
 dash.register_page(__name__, path="/batch-prep", name="Batch Prep")
 

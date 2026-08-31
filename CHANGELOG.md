@@ -6,6 +6,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+- **The subject QC report is now one report per run.** A subject holding several tasks or runs used to get a single `sub-<id>_qc.html` built from whichever file finished last, with no sign on the page of which one that was, while every other output was already per run. Each run now writes `sub-<id>_task-<task>_qc.html` with its own `figures/<run>/` directory, and `sub-<id>_qc.html` becomes an index over them: one row per run with channel retention, SCI, GVTD, motion correction and HbO-HbR correlation, read back from the run's own quality record
+
+### Fixed
+- The provenance diagram is drawn per run. It scanned the whole `nirs/` directory, so a subject with five tasks got five disjoint chains of identically named nodes in one figure with nothing to tell them apart. The provenance table in the report had the same problem
+
 ## [0.23.0] - 2026-08-30
 
 ### Added

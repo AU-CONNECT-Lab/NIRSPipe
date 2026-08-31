@@ -187,11 +187,17 @@ def _domain_of(label: str, is_root: bool) -> str:
     return _DOMAIN.get(label, "derivative")
 
 
-def scan(nirs_dir: Path) -> dict[str, Node]:
-    """Read every sidecar under nirs_dir and return the graph keyed by filename stem."""
+def scan(nirs_dir: Path, label: str | None = None) -> dict[str, Node]:
+    """Read the sidecars under nirs_dir and return the graph keyed by filename stem.
+
+    ``label`` is a BIDS run stem (``sub-01_task-rest``). Without it every run of the subject
+    lands in one graph, which for a five-task subject is five disjoint chains of identically
+    named nodes drawn on top of each other. With it the graph is that run alone.
+    """
     nodes: dict[str, Node] = {}
 
-    for sidecar in sorted(Path(nirs_dir).glob("*.json")):
+    pattern = f"{label}_*.json" if label else "*.json"
+    for sidecar in sorted(Path(nirs_dir).glob(pattern)):
         try:
             meta = json.loads(sidecar.read_text())
         except Exception:
@@ -247,14 +253,17 @@ def write_provenance(
     out_dir: Path,
     stem: str,
     title: str | None = None,
+    label: str | None = None,
 ) -> list[Path]:
     """Render the graph for nirs_dir into out_dir as <stem>.png and <stem>.mmd.
+
+    ``label`` restricts the graph to one BIDS run; see :func:`scan`.
 
     Returns the files written, empty if nirs_dir holds no provenance sidecars.
     """
     from fnirs_pipe.qc.figures.provenance_figure import provenance_figure
 
-    nodes = scan(nirs_dir)
+    nodes = scan(nirs_dir, label=label)
     if not nodes:
         return []
 

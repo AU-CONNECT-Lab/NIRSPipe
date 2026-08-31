@@ -229,12 +229,14 @@
   <a href="#Errors">Errors</a>
   <a href="#Provenance">Provenance</a>
   <a href="#Methods">Methods</a>
+  {% if index_href %}<span class="nav-sep">|</span><a href="{{ index_href }}">&larr; All runs</a>{% endif %}
 </nav>
 
 <!-- ================================================================ header -->
 <div class="page-header">
-  <h1>fnirs-pipe QC Report &mdash; sub-{{ subject }}</h1>
-  <span class="subtitle">v{{ versions.get('fnirs-pipe', 'unknown') }} &bull; {{ run_date }}</span>
+  <h1>fnirs-pipe QC Report &mdash; {{ run_label or ('sub-' ~ subject) }}</h1>
+  <span class="subtitle">v{{ versions.get('fnirs-pipe', 'unknown') }} &bull; {{ run_date }}
+    {%- if run_entities %} &bull; {% for k, v in run_entities.items() %}{{ k }}-{{ v }}{{ ", " if not loop.last }}{% endfor %}{% endif %}</span>
 </div>
 
 <!-- ============================================================== summary -->
@@ -243,6 +245,9 @@
   <div class="summary-grid">
     <table>
       <tr><th>Subject</th><td>sub-{{ subject }}</td></tr>
+      {% for key, val in (run_entities or {}).items() %}
+      <tr><th>{{ {'ses': 'Session', 'task': 'Task', 'run': 'Run'}.get(key, key) }}</th><td>{{ val }}</td></tr>
+      {% endfor %}
       <tr><th>Date</th><td>{{ run_date }}</td></tr>
       <tr><th>fnirs-pipe</th><td>v{{ versions.get('fnirs-pipe', 'n/a') }}</td></tr>
       <tr><th>MNE</th><td>v{{ versions.get('mne', 'n/a') }}</td></tr>
@@ -733,7 +738,7 @@
 </p>
 {% if provenance_path %}
   <img class="responsive" src="{{ provenance_path }}" alt="File provenance graph" />
-  <p class="fig-path">{{ provenance_path }} &bull; mermaid source: figures/provenance.mmd</p>
+  <p class="fig-path">{{ provenance_path }} &bull; mermaid source: {{ provenance_path[:-4] }}.mmd</p>
 {% else %}
   <div class="placeholder">
     Diagram not rendered. Regenerate with <code>fnirs-qc provenance OUTPUT_DIR</code>.

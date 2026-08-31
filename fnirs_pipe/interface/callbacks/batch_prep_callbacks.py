@@ -57,7 +57,6 @@ def manage_subjects(detect_clicks, select_all_clicks, clear_clicks, bids_dir, cu
         if isinstance(checklist, dict):
             options = checklist.get("props", {}).get("options", [])
             all_vals = [o["value"] for o in options]
-            import dash
             patched_checklist = dbc.Checklist(
                 id="bp-subject-checklist",
                 options=options,
@@ -224,7 +223,6 @@ def run_batch(
             deriv_nirs_dir, ensure_dataset_description, find_snirf,
         )
 
-        import mne as _mne
         import pandas as _pd
 
         _DERIV_NAME = "aligned"
@@ -362,7 +360,7 @@ def run_batch(
 
         def _crop_one(sub):
             try:
-                import tempfile, pandas as pd
+                import tempfile
                 if segments_df is not None:
                     with tempfile.NamedTemporaryFile(
                         mode="w", suffix=".tsv", delete=False
