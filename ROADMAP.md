@@ -104,16 +104,12 @@ a bare-MNE run of the same chain. Reports are kept with the project notes outsid
 ### Algorithms / numerical validation
 
 - **Spline motion correction** — still raises `NotImplementedError`; TDDR and wavelet are implemented ([pipeline/motion.py](fnirs_pipe/pipeline/motion.py))
-- **Functional connectivity for task data** — `--mode connectivity` not implemented (only resting-state mode has FC)
-- **PLI / wPLI connectivity** — extend hyperscanning via mne-connectivity ([pipeline/hyperscanning.py](fnirs_pipe/pipeline/hyperscanning.py))
 - **External regressors in confound regression** — accept extra nuisance regressors alongside the short-channel ones, e.g. accelerometer traces from the SNIRF `aux` group. Head motion is a different confound from scalp physiology and short channels do not carry it ([pipeline/glm.py](fnirs_pipe/pipeline/glm.py))
 
 ### QC enhancements
 
 - **Aggregate WTC across groups** — a sibling of `group-hyper-raw` that merges every `group-*_hyper-wtc.tsv` and `group-*_hyper-wtc-roi.tsv` into one long table with `group_id` and `task` columns, so a study with many dyads or many conditions has a single file to take into stats ([qc/hyper_report.py](fnirs_pipe/qc/hyper_report.py))
-- **Persist the ISC matrix** — `compute_isc` builds a full n_ch × n_ch inter-brain Pearson matrix per chromophore and it only ever becomes a base64 figure. WTC writes its band means to TSV; ISC writes nothing, so nobody can take those numbers into stats ([qc/hyper_report.py](fnirs_pipe/qc/hyper_report.py), `_isc_panel`)
-- **ALFF/fALFF surface projection** — onto brain via mne_nirs ([qc/figures/rest_figures.py](fnirs_pipe/qc/figures/rest_figures.py))
-- **ROI-to-ROI FC heatmap** — atlas parcellation ([qc/figures/rest_figures.py](fnirs_pipe/qc/figures/rest_figures.py))
+- **ALFF/fALFF on a brain surface** — the flat map is drawn; projecting onto a surface needs head coordinates and mne_nirs ([qc/figures/rest_figures.py](fnirs_pipe/qc/figures/rest_figures.py))
 - **Auto-generate roi.json from fOLD** — derive channel-to-region mapping from montage via `mne_nirs.io.fold_channel_specificity` (needs fOLD Excel DB), as an alternative to hand-written `--roi-mapping`
 
 ### Reports / viewer features (designed, not started)

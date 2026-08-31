@@ -1,11 +1,13 @@
 """Resting-state QC figures.
 
 alff_falff_figure():    per-channel ALFF and fALFF bar charts (HbO / HbR colour-coded).
+alff_topo_figure():     the same two measures drawn on the optode flat map.
 fc_matrix_figure():     functional connectivity heatmaps, HbO and HbR as separate subplots.
+fc_roi_matrix_figure(): the same, ROI by ROI instead of channel by channel.
 fc_seed_topo_figure():  seed-to-whole-brain correlations drawn on the optode flat map.
 
-# TODO: project ALFF/fALFF onto brain surface via mne_nirs when montage/head coords available.
-# TODO: add ROI-to-ROI FC heatmap (atlas parcellation, e.g. via nilearn NiftiLabelsMasker analog).
+# TODO: project ALFF/fALFF onto a brain surface (not just the flat map) via mne_nirs when
+# head coordinates are available.
 """
 
 from __future__ import annotations
@@ -169,6 +171,59 @@ def fc_matrix_figure(
     return base64.b64encode(buf.read()).decode()
 
 
+def fc_roi_matrix_figure(
+    fc_roi: "dict[str, pd.DataFrame]",
+    title: str = "ROI-to-ROI Functional Connectivity (Pearson r)",
+) -> str | None:
+    """Return base64 PNG of the ROI x ROI FC heatmaps, or None if there is nothing to draw.
+
+    ``fc_roi`` is {chromophore: ROI x ROI frame}, as :func:`compute_fc_roi` returns it. Same
+    RdBu_r / +-1 scale as :func:`fc_matrix_figure`, so the ROI view and the channel view can
+    be read against each other. A handful of ROIs means every label fits, so unlike that
+    figure this one labels and annotates every cell. The diagonal is blanked: an ROI's
+    correlation with itself is 1 by construction and says nothing.
+    """
+    panels = [(fc_roi.get(c), lab) for c, lab in (("hbo", "HbO"), ("hbr", "HbR"))]
+    panels = [(f, lab) for f, lab in panels if f is not None and not f.empty]
+    if not panels:
+        return None
+
+    fig, axes = plt.subplots(
+        1, len(panels), figsize=(len(panels) * 4.2 + 1.0, 4.0), squeeze=False,
+    )
+    fig.subplots_adjust(wspace=0.45)
+
+    for ax, (frame, label) in zip(axes[0], panels):
+        names = frame.index.tolist()
+        mat = frame.to_numpy(dtype=float).copy()
+        np.fill_diagonal(mat, np.nan)
+        im = ax.imshow(mat, aspect="equal", cmap="RdBu_r", vmin=-1, vmax=1,
+                       interpolation="nearest")
+        ax.set_xticks(range(len(names)))
+        ax.set_xticklabels(names, fontsize=7, rotation=45, ha="right")
+        ax.set_yticks(range(len(names)))
+        ax.set_yticklabels(names, fontsize=7)
+        for i in range(len(names)):
+            for j in range(len(names)):
+                if i == j or not np.isfinite(mat[i, j]):
+                    continue
+                # white on the saturated ends, black in the pale middle
+                ax.text(j, i, f"{mat[i, j]:.2f}", ha="center", va="center", fontsize=6,
+                        color="white" if abs(mat[i, j]) > 0.6 else "black")
+        for spine in ax.spines.values():
+            spine.set_visible(False)
+        plt.colorbar(im, ax=ax, shrink=0.7, label="Pearson r", pad=0.02)
+        ax.set_title(f"ROI FC - {label}", fontsize=10, pad=6)
+
+    fig.suptitle(title, fontsize=11, y=1.02)
+
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=300, bbox_inches="tight")
+    plt.close(fig)
+    buf.seek(0)
+    return base64.b64encode(buf.read()).decode()
+
+
 def _channel_endpoints(raw: mne.io.Raw) -> "dict[str, tuple[tuple[float, float], tuple[float, float]]]":
     """{channel name: ((source x, y), (detector x, y))} for every channel with usable positions.
 
@@ -278,6 +333,88 @@ def fc_seed_topo_figure(
         plt.cm.ScalarMappable(norm=norm, cmap=cmap), ax=axes, shrink=0.6,
         label="Pearson r", pad=0.02,
     )
+    fig.suptitle(title, fontsize=11)
+
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=300, bbox_inches="tight")
+    plt.close(fig)
+    buf.seek(0)
+    return base64.b64encode(buf.read()).decode()
+
+
+def alff_topo_figure(
+    raw: mne.io.Raw,
+    alff_df: pd.DataFrame,
+    title: str = "ALFF and fALFF on the optode layout",
+) -> str | None:
+    """Return base64 PNG of ALFF and fALFF drawn on the flat map, or None with no positions.
+
+    The bar chart in :func:`alff_falff_figure` orders channels by name, which puts no two
+    neighbours side by side; low-frequency amplitude is a spatial claim, and this is the
+    view it can be read as one in. Each channel is its source-to-detector segment, as in
+    :func:`fc_seed_topo_figure`, and rejected channels are faded rather than dropped.
+
+    Both measures are unsigned and their ranges differ by orders of magnitude, so each panel
+    scales to its own data (viridis) instead of to a shared symmetric scale. Short channels
+    are left out: their amplitude is extracerebral, and including them would set the colour
+    scale from signal nobody is asking about.
+    """
+    from fnirs_pipe.qc.quantitative_metrics import long_short_channels
+
+    ends = _channel_endpoints(raw)
+    if not ends:
+        logger.warning("ALFF topography skipped: montage carries no optode positions")
+        return None
+
+    long_names, _ = long_short_channels(raw)
+    drawable = set(ends) & (set(long_names) or set(ends))
+    bads = set(raw.info["bads"])
+    values = {str(row["channel"]): row for _, row in alff_df.iterrows()}
+
+    head_x = [c for ch in drawable for c in (ends[ch][0][0], ends[ch][1][0])]
+    head_y = [c for ch in drawable for c in (ends[ch][0][1], ends[ch][1][1])]
+
+    cols = [(chromo, lab) for chromo, lab in (("hbo", "HbO"), ("hbr", "HbR"))
+            if any(ch.endswith(f" {chromo}") for ch in drawable)]
+    if not cols:
+        return None
+    rows = ("alff", "falff")
+
+    fig, axes = plt.subplots(
+        len(rows), len(cols), figsize=(len(cols) * 3.0 + 1.4, len(rows) * 3.0), squeeze=False,
+    )
+
+    for i, measure in enumerate(rows):
+        for j, (chromo, label) in enumerate(cols):
+            ax = axes[i][j]
+            ax.set_aspect("equal")
+            ax.axis("off")
+            ax.set_title(f"{measure.upper()} - {label}", fontsize=9, pad=4)
+            head_outline(ax, head_x, head_y)
+
+            cells = [(ch, float(values[ch][measure])) for ch in drawable
+                     if ch.endswith(f" {chromo}") and ch in values
+                     and np.isfinite(values[ch][measure])]
+            if not cells:
+                ax.text(0.5, 0.5, "no value", transform=ax.transAxes,
+                        ha="center", va="center", fontsize=8, color="#888")
+                continue
+
+            # the scale comes from the good channels alone: one rejected channel with a
+            # runaway amplitude would otherwise flatten every real difference into one colour
+            good = [v for ch, v in cells if ch not in bads] or [v for _, v in cells]
+            norm = mcolors.Normalize(vmin=min(good), vmax=max(good))
+            cmap = plt.get_cmap("viridis")
+
+            for ch, v in sorted(cells, key=lambda c: c[1]):
+                (sx, sy), (dx, dy) = ends[ch]
+                ax.plot([sx, dx], [sy, dy], color=cmap(norm(v)), lw=2.0,
+                        alpha=0.35 if ch in bads else 1.0, zorder=1,
+                        solid_capstyle="round")
+
+            plt.colorbar(plt.cm.ScalarMappable(norm=norm, cmap=cmap), ax=ax,
+                         shrink=0.7, pad=0.02)
+
     fig.suptitle(title, fontsize=11)
 
     buf = io.BytesIO()

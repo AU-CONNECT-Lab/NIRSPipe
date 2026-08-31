@@ -58,6 +58,7 @@ class PostConfig:
     short_channel:   bool | str | None     = None
     events_path:     str | None            = None
     contrast_def:    dict[str, Any] | None = None
+    fc:              bool                  = False
 
     combine_runs: bool | None = None
 
@@ -92,10 +93,12 @@ def run_post(
 ) -> tuple:
     """Run post-processing pipeline.
 
-    Returns (result, glm_est, design_matrix, alff_df, fc_df, fc_hbr_df, gcor_reg, fc_seed).
+    Returns (result, glm_est, design_matrix, alff_df, fc_df, fc_hbr_df, gcor_reg, fc_seed,
+    fc_roi).
     glm_est / design_matrix are None for non-GLM modes.
-    alff_df / fc_df / fc_hbr_df are None for non-rest modes; fc_df holds the HbO matrix.
-    fc_seed is {chromophore: ROI x channel seed map}, empty without --roi-mapping.
+    alff_df is None outside rest mode. The FC products are written by rest mode and by glm
+    mode under ``config.fc``; fc_df holds the HbO matrix.
+    fc_seed and fc_roi are {chromophore: frame}, both empty without --roi-mapping.
     gcor_reg (pre/post short-channel regression GCOR) is None unless short_channel ran.
     """
 
@@ -120,6 +123,7 @@ def run_post(
 
     glm_est = dm = alff_df = fc_df = fc_hbr_df = None
     fc_seed: dict = {}
+    fc_roi: dict = {}
     raw_resid = None  # set by the glm/rest/denoise branches
     if mode == "glm":
         missing = [f for f in ("hrf_model", "noise_model", "drift_model") if getattr(config, f) is None]
@@ -144,6 +148,16 @@ def run_post(
             source_path=rec.path_of(result),
         )
         _write_step_snirf(raw_resid, config, output_dir, desc="errts", rec=rec, source_entities=source_entities)
+
+        # FC on the task residual, which is what makes it a connectivity measure rather
+        # than a map of who responded to the same stimulus: the task is in the design
+        # matrix, so what correlates here is what the model did not explain.
+        if config.fc:
+            if config.high_pass is None and config.low_pass is None:
+                logger.warning("sub-%s | --fc without a bandpass: the correlations will be "
+                               "dominated by drift", config.subject)
+            fc_df, fc_hbr_df, fc_roi, fc_seed = _write_fc_derivatives(
+                raw_resid, config, output_dir, rec, source_entities=source_entities)
 
     elif mode == "rest":
         if config.drift_model is None:
@@ -200,7 +214,7 @@ def run_post(
                 _write_step_snirf(raw_resid_bb, config, output_dir, desc="errtsbroad",
                                   rec=rec, source_entities=source_entities)
 
-        alff_df, fc_df, fc_hbr_df, fc_seed = _write_rest_derivatives(
+        alff_df, fc_df, fc_hbr_df, fc_roi, fc_seed = _write_rest_derivatives(
             raw_resid, raw_resid_bb, config, output_dir, rec, source_entities=source_entities)
 
     elif mode == "denoise" and _has_confounds(config):
@@ -238,25 +252,41 @@ def run_post(
         except Exception:
             logger.warning("sub-%s | regression GCOR failed", config.subject, exc_info=True)
 
-    return result, glm_est, dm, alff_df, fc_df, fc_hbr_df, gcor_reg, fc_seed
+    return result, glm_est, dm, alff_df, fc_df, fc_hbr_df, gcor_reg, fc_seed, fc_roi
 
-def _write_rest_derivatives(
+def _deriv_sidecar(path: Path, step: str, source: str | None, bads: list[str], **params) -> None:
+    from fnirs_pipe import __version__
+    from fnirs_pipe.io.derivatives import write_sidecar_json
+
+    write_sidecar_json(path, {
+        "pipeline_version": __version__,
+        "step": step,
+        "Sources": [source] if source else [],
+        "parameters": params,
+        "bad_channels": bads,
+    })
+
+
+def _write_fc_derivatives(
     raw_resid: mne.io.Raw,
-    raw_resid_bb: mne.io.Raw | None,
     config: PostConfig,
     output_dir: Path,
     rec: Recorder,
     source_entities: dict[str, str] | None = None,
 ) -> tuple:
-    """Write ALFF/fALFF and FC TSVs. Returns (alff_df | None, fc_hbo_df, fc_hbr_df, fc_seed).
+    """Write the FC, ROI FC and seed-map TSVs for one residual.
 
-    ALFF/fALFF use the broadband residual (raw_resid_bb); FC/FC-ROI use the bandpassed one.
-    fc_seed is {chromophore: ROI x channel frame}, empty unless a roi_map was given.
+    Returns (fc_hbo_df, fc_hbr_df, fc_roi, fc_seed). The last two are
+    {chromophore: frame} and stay empty without a roi_map.
+
+    rest mode and glm mode's ``--fc`` both land here, and the only thing that differs is
+    which residual arrives: rest regresses confounds alone, glm regresses the task as well.
+    Correlating a task residual is what makes the result connectivity rather than a map of
+    who responded to the same stimulus, so the distinction lives in the caller, not here.
     """
-    from fnirs_pipe import __version__
-    from fnirs_pipe.io.derivatives import build_output_path, carry_entities, write_sidecar_json
+    from fnirs_pipe.io.derivatives import build_output_path, carry_entities
     from fnirs_pipe.pipeline.restingstate import (
-        _roi_members, compute_alff, compute_fc, compute_fc_roi, compute_fc_seed, fisher_z,
+        _roi_members, compute_fc, compute_fc_roi, compute_fc_seed, fisher_z,
     )
 
     entities = carry_entities(source_entities)
@@ -264,98 +294,70 @@ def _write_rest_derivatives(
     # the FC matrices keep their bad rows and columns so the shape stays predictable;
     # the sidecar names them so a consumer can drop or ignore them
     bads = list(raw_resid.info["bads"])
+    src_bp = rec.path_of(raw_resid)
 
-    def _sidecar(path: Path, step: str, source: str | None, **params) -> None:
-        write_sidecar_json(path, {
-            "pipeline_version": __version__,
-            "step": step,
-            "Sources": [source] if source else [],
-            "parameters": params,
-            "bad_channels": bads,
-        })
-
-    src_bp = rec.path_of(raw_resid)                                        # bandpassed residual
-    src_bb = rec.path_of(raw_resid_bb) if raw_resid_bb is not None else None
-
-    alff_df = None
-    if raw_resid_bb is not None:
-        alff_df = compute_alff(raw_resid_bb, low_pass=config.low_pass, high_pass=config.high_pass)
-        alff_path = build_output_path(
+    def _path(ents: dict, suffix: str) -> Path:
+        return build_output_path(
             output_dir=output_dir, subject=config.subject, session=config.session,
-            entities=entities, suffix="alff", extension=".tsv",
+            entities=ents, suffix=suffix, extension=".tsv",
         )
-        alff_df.to_csv(alff_path, sep="\t", index=False)
-        _sidecar(alff_path, "alff", src_bb, low_pass=config.low_pass, high_pass=config.high_pass)
-        logger.info("sub-%s | alff → %s", config.subject, alff_path)
-    else:
-        logger.warning("sub-%s | skipping ALFF: --high-pass and --low-pass required", config.subject)
+
+    def _sidecar(path: Path, step: str, **params) -> None:
+        _deriv_sidecar(path, step, src_bp, bads, **params)
+
+    fc_hbo_df = fc_hbr_df = None
+    fc_roi: dict[str, pd.DataFrame] = {}
+    fc_seed: dict[str, pd.DataFrame] = {}
 
     # FC per chromophore: HbO and HbR anti-correlate, so they never share a matrix. Both are
     # written and both reach the report.
-    fc_hbo_df = fc_hbr_df = None
-    fc_seed: dict[str, pd.DataFrame] = {}
     for chromo in ("hbo", "hbr"):
         fc_df = compute_fc(raw_resid, chromo)
         if fc_df.empty:
             continue
         chromo_entities = {**entities, "desc": chromo}
-        fc_path = build_output_path(
-            output_dir=output_dir, subject=config.subject, session=config.session,
-            entities=chromo_entities, suffix="fc", extension=".tsv",
-        )
-        fc_df.to_csv(fc_path, sep="\t", index_label="channel")
-        _sidecar(fc_path, "fc", src_bp, chromophore=chromo)
+
+        fc_path = _path(chromo_entities, "fc")
+        fc_df.to_csv(fc_path, sep="	", index_label="channel")
+        _sidecar(fc_path, "fc", chromophore=chromo)
         logger.info("sub-%s | fc (%s) → %s", config.subject, chromo, fc_path)
 
-        fcz_path = build_output_path(
-            output_dir=output_dir, subject=config.subject, session=config.session,
-            entities=chromo_entities, suffix="fcz", extension=".tsv",
-        )
-        fisher_z(fc_df).to_csv(fcz_path, sep="\t", index_label="channel")
-        _sidecar(fcz_path, "fisher_z", src_bp, chromophore=chromo)
+        fcz_path = _path(chromo_entities, "fcz")
+        fisher_z(fc_df).to_csv(fcz_path, sep="	", index_label="channel")
+        _sidecar(fcz_path, "fisher_z", chromophore=chromo)
         logger.info("sub-%s | fcz (%s) → %s", config.subject, chromo, fcz_path)
 
         if config.roi_map:
             fc_roi_df = compute_fc_roi(raw_resid, config.roi_map, chromo)
             if not fc_roi_df.empty:
-                fc_roi_path = build_output_path(
-                    output_dir=output_dir, subject=config.subject, session=config.session,
-                    entities=chromo_entities, suffix="fcroi", extension=".tsv",
-                )
-                fc_roi_df.to_csv(fc_roi_path, sep="\t", index_label="roi")
-                _sidecar(fc_roi_path, "fc_roi", src_bp, chromophore=chromo)
+                fc_roi_path = _path(chromo_entities, "fcroi")
+                fc_roi_df.to_csv(fc_roi_path, sep="	", index_label="roi")
+                _sidecar(fc_roi_path, "fc_roi", chromophore=chromo)
                 logger.info("sub-%s | fc_roi (%s) → %s", config.subject, chromo, fc_roi_path)
 
-                fcroiz_path = build_output_path(
-                    output_dir=output_dir, subject=config.subject, session=config.session,
-                    entities=chromo_entities, suffix="fcroiz", extension=".tsv",
-                )
-                fisher_z(fc_roi_df).to_csv(fcroiz_path, sep="\t", index_label="roi")
-                _sidecar(fcroiz_path, "fisher_z", src_bp, chromophore=chromo)
+                fcroiz_path = _path(chromo_entities, "fcroiz")
+                fisher_z(fc_roi_df).to_csv(fcroiz_path, sep="	", index_label="roi")
+                _sidecar(fcroiz_path, "fisher_z", chromophore=chromo)
                 logger.info("sub-%s | fc_roiz (%s) → %s", config.subject, chromo, fcroiz_path)
+
+                fc_roi[chromo] = fc_roi_df
 
             # seed map: one side averaged, so it is a third product rather than a view of the
             # two above. Cells for a seed's own channels are NaN, not zero.
             fc_seed_df = compute_fc_seed(raw_resid, config.roi_map, chromo)
             if not fc_seed_df.empty:
-                fcseed_path = build_output_path(
-                    output_dir=output_dir, subject=config.subject, session=config.session,
-                    entities=chromo_entities, suffix="fcseed", extension=".tsv",
-                )
-                fc_seed_df.to_csv(fcseed_path, sep="\t", index_label="roi")
+                fcseed_path = _path(chromo_entities, "fcseed")
+                fc_seed_df.to_csv(fcseed_path, sep="	", index_label="roi")
                 # the channels each seed was actually built from, which is the requested map
                 # minus whatever was rejected; without it a reader cannot tell why a cell
                 # inside a listed ROI holds a value instead of being blank
-                _sidecar(fcseed_path, "fc_seed", src_bp, chromophore=chromo,
+                _sidecar(fcseed_path, "fc_seed", chromophore=chromo,
                          seed_channels=_roi_members(raw_resid, config.roi_map, chromo))
                 logger.info("sub-%s | fc_seed (%s) → %s", config.subject, chromo, fcseed_path)
 
-                fcseedz_path = build_output_path(
-                    output_dir=output_dir, subject=config.subject, session=config.session,
-                    entities=chromo_entities, suffix="fcseedz", extension=".tsv",
-                )
-                fisher_z(fc_seed_df).to_csv(fcseedz_path, sep="\t", index_label="roi")
-                _sidecar(fcseedz_path, "fisher_z", src_bp, chromophore=chromo)
+                fcseedz_path = _path(chromo_entities, "fcseedz")
+                fisher_z(fc_seed_df).to_csv(fcseedz_path, sep="	", index_label="roi")
+                _sidecar(fcseedz_path, "fisher_z", chromophore=chromo)
                 logger.info("sub-%s | fc_seedz (%s) → %s", config.subject, chromo, fcseedz_path)
 
                 fc_seed[chromo] = fc_seed_df
@@ -365,7 +367,46 @@ def _write_rest_derivatives(
         else:
             fc_hbr_df = fc_df
 
-    return alff_df, fc_hbo_df, fc_hbr_df, fc_seed
+    return fc_hbo_df, fc_hbr_df, fc_roi, fc_seed
+
+
+def _write_rest_derivatives(
+    raw_resid: mne.io.Raw,
+    raw_resid_bb: mne.io.Raw | None,
+    config: PostConfig,
+    output_dir: Path,
+    rec: Recorder,
+    source_entities: dict[str, str] | None = None,
+) -> tuple:
+    """Write ALFF/fALFF and everything :func:`_write_fc_derivatives` writes.
+
+    Returns (alff_df | None, fc_hbo_df, fc_hbr_df, fc_roi, fc_seed).
+    ALFF/fALFF use the broadband residual (raw_resid_bb); every FC product uses the
+    bandpassed one.
+    """
+    from fnirs_pipe.io.derivatives import build_output_path, carry_entities
+    from fnirs_pipe.pipeline.restingstate import compute_alff
+
+    entities = carry_entities(source_entities)
+
+    alff_df = None
+    if raw_resid_bb is not None:
+        alff_df = compute_alff(raw_resid_bb, low_pass=config.low_pass, high_pass=config.high_pass)
+        alff_path = build_output_path(
+            output_dir=output_dir, subject=config.subject, session=config.session,
+            entities=entities, suffix="alff", extension=".tsv",
+        )
+        alff_df.to_csv(alff_path, sep="	", index=False)
+        _deriv_sidecar(alff_path, "alff", rec.path_of(raw_resid_bb),
+                       list(raw_resid.info["bads"]),
+                       low_pass=config.low_pass, high_pass=config.high_pass)
+        logger.info("sub-%s | alff → %s", config.subject, alff_path)
+    else:
+        logger.warning("sub-%s | skipping ALFF: --high-pass and --low-pass required", config.subject)
+
+    fc_hbo_df, fc_hbr_df, fc_roi, fc_seed = _write_fc_derivatives(
+        raw_resid, config, output_dir, rec, source_entities=source_entities)
+    return alff_df, fc_hbo_df, fc_hbr_df, fc_roi, fc_seed
 
 
 def _write_step_snirf(haemo: mne.io.Raw, config: PostConfig, output_dir: Path, desc: str, rec: Recorder, source_entities: dict[str, str] | None = None) -> Path:

@@ -94,6 +94,10 @@ def _build_parser() -> argparse.ArgumentParser:
     glm.add_argument("--short-channel", choices=_SHORT_CHANNEL_CHOICES,
                      help="Short-channel confound regressor strategy. Honoured by every mode: "
                           "glm fits it alongside the task, denoise and rest on its own.")
+    glm.add_argument("--fc", action="store_true", default=None,
+                     help="Also write functional connectivity from the GLM residual, the "
+                          "same products rest mode writes. The task is in the design matrix, "
+                          "so what correlates is what the model did not explain.")
     glm.add_argument("--events-path", type=Path,
                      help="Path to *_events.tsv. If omitted, extracted from snirf annotations.")
     glm.add_argument("--contrast-file", type=Path, help="TOML file defining GLM contrasts.")

@@ -510,9 +510,21 @@
     {% else %}
       <div class="placeholder">ALFF not computed — --high-pass and --low-pass are required.</div>
     {% endif %}
+    {% if rest_alff_topo_path %}
+      <h3>On the optode layout</h3>
+      <p class="step-desc">
+        The same two measures drawn where the channels are, each channel its source-to-detector
+        segment. Each panel is scaled to its own values, so colours compare within a panel and
+        not across them. Faded channels were rejected. Short channels are not drawn.
+      </p>
+      <img class="responsive" src="{{ rest_alff_topo_path }}" alt="ALFF / fALFF topography" />
+      <p class="fig-path">{{ rest_alff_topo_path }}</p>
+    {% endif %}
   </div>
 </details>
+{% endif %}
 
+{% if mode == 'rest' or rest_fc_path %}
 <details id="RestFC" {% if rest_fc_path %}open{% endif %}>
   <summary>Functional Connectivity</summary>
   <div class="details-body">
@@ -525,6 +537,16 @@
       <p class="fig-path">{{ rest_fc_path }}</p>
     {% else %}
       <div class="placeholder">FC matrix not available.</div>
+    {% endif %}
+    {% if rest_fc_roi_path %}
+      <h3>ROI to ROI</h3>
+      <p class="step-desc">
+        The same correlations between ROI-averaged signals rather than between channels, on the
+        same scale. Channels are averaged before correlating, so this is not the mean of the
+        cells above. Needs --roi-mapping.
+      </p>
+      <img class="responsive" src="{{ rest_fc_roi_path }}" alt="ROI-to-ROI connectivity matrix" />
+      <p class="fig-path">{{ rest_fc_roi_path }}</p>
     {% endif %}
     {% if rest_fc_circle_path %}
       <h3>Connectogram (threshold |r| ≥ 0.3)</h3>
@@ -544,8 +566,9 @@
     {% endif %}
   </div>
 </details>
+{% endif %}
 
-{% else %}
+{% if mode != 'rest' %}
 <details id="GLM" {% if glm_design_path or glm_betas_html or glm_activation_path %}open{% endif %}>
   <summary>GLM</summary>
   <div class="details-body">

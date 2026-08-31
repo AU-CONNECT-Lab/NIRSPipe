@@ -22,6 +22,36 @@ _TEMPLATE_DIR = Path(__file__).parent / "templates"
 _BASE_CSS     = (_TEMPLATE_DIR / "_base.css").read_text(encoding="utf-8")
 
 
+def write_isc_matrix(
+    tsv_path: Path,
+    isc_mat,
+    ch_names: list[str],
+    ch_type: str,
+    sources: list[str],
+    subject_ids: list[str],
+) -> None:
+    """Write the matrix the ISC panel is drawn from, so the numbers can leave the report.
+
+    Both axes carry the first subject's channel labels, which is how :func:`compute_isc`
+    pairs the two brains: cell (i, j) is that subject's channel i against the other's
+    channel j. Rejected channels are blank rather than absent, so the file's shape is the
+    montage's however many channels a given dyad lost.
+
+    A failure here costs the file and not the panel: the report is still readable without it.
+    """
+    from fnirs_pipe.pipeline.hyperscanning import _hyper_sidecar
+
+    try:
+        tsv_path.parent.mkdir(parents=True, exist_ok=True)
+        pd.DataFrame(isc_mat, index=ch_names, columns=ch_names).to_csv(
+            tsv_path, sep="\t", index_label="channel")
+        _hyper_sidecar(tsv_path, "hyper_isc", sources,
+                       chromophore=ch_type, subjects=subject_ids)
+        logger.info("ISC matrix saved: %s", tsv_path)
+    except Exception as exc:
+        logger.warning("ISC matrix (%s) not written: %s", ch_type, exc)
+
+
 def build_hyper_report(
     group_id: str,
     task: str,
@@ -230,6 +260,12 @@ def build_hyper_post_report(
             )
             if isc_mat is None:
                 return ""
+            write_isc_matrix(
+                output_dir / f"group-{group_id}_task-{task}_hyper-isc-{ch_type}.tsv",
+                isc_mat, isc_ch_names, ch_type,
+                [p for p in (path_from(r) for r in aligned_raws.values()) if p],
+                subject_ids,
+            )
             return build_isc_panel(
                 isc_mat, isc_ch_names, subject_ids,
                 ch_type=ch_type, isc_threshold=isc_threshold,

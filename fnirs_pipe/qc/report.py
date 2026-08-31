@@ -82,7 +82,9 @@ from fnirs_pipe.qc.figures import (
     build_motion_detail_figure,
     channel_quality_heatmap,
     alff_falff_figure,
+    alff_topo_figure,
     fc_matrix_figure,
+    fc_roi_matrix_figure,
     fc_seed_topo_figure,
     fc_connectogram,
 )
@@ -723,19 +725,32 @@ def _section_rest(
     figures_dir: Path,
     fc_hbr_df: "Any | None" = None,
     fc_seed: dict | None = None,
+    fc_roi: dict | None = None,
     raw_haemo: "mne.io.Raw | None" = None,
 ) -> dict:
-    alff_path = fc_path = fc_circle_path = fc_seed_path = None
+    alff_path = alff_topo_path = fc_path = fc_roi_path = fc_circle_path = fc_seed_path = None
     with _guard("ALFF/fALFF figure", errors, subject):
         if alff_df is not None:
             b64 = alff_falff_figure(alff_df)
             _save_b64_png(b64, figures_dir / "rest_alff.png")
             alff_path = "figures/rest_alff.png"
+    with _guard("ALFF topography", errors, subject):
+        if alff_df is not None and raw_haemo is not None:
+            b64 = alff_topo_figure(raw_haemo, alff_df)
+            if b64 is not None:   # None means the montage carries no optode positions
+                _save_b64_png(b64, figures_dir / "rest_alff_topo.png")
+                alff_topo_path = "figures/rest_alff_topo.png"
     with _guard("FC matrix figure", errors, subject):
         if fc_df is not None:
             b64 = fc_matrix_figure(fc_df, fc_hbr_df)
             _save_b64_png(b64, figures_dir / "rest_fc.png")
             fc_path = "figures/rest_fc.png"
+    with _guard("ROI FC matrix", errors, subject):
+        if fc_roi:
+            b64 = fc_roi_matrix_figure(fc_roi)
+            if b64 is not None:
+                _save_b64_png(b64, figures_dir / "rest_fc_roi.png")
+                fc_roi_path = "figures/rest_fc_roi.png"
     with _guard("FC connectogram", errors, subject):
         if fc_df is not None:
             b64 = fc_connectogram(fc_df, fc_hbr_df)
@@ -747,7 +762,8 @@ def _section_rest(
             if b64 is not None:   # None means the montage carries no optode positions
                 _save_b64_png(b64, figures_dir / "rest_fc_seed.png")
                 fc_seed_path = "figures/rest_fc_seed.png"
-    return {"rest_alff_path": alff_path, "rest_fc_path": fc_path,
+    return {"rest_alff_path": alff_path, "rest_alff_topo_path": alff_topo_path,
+            "rest_fc_path": fc_path, "rest_fc_roi_path": fc_roi_path,
             "rest_fc_circle_path": fc_circle_path, "rest_fc_seed_path": fc_seed_path}
 
 
@@ -828,6 +844,7 @@ def build_subject_report(
     fc_df: "Any | None" = None,
     fc_hbr_df: "Any | None" = None,
     fc_seed: dict | None = None,
+    fc_roi: dict | None = None,
     after_haemo: mne.io.Raw | None = None,
     gcor_reg: dict | None = None,
     roi_map: dict | None = None,
@@ -892,7 +909,7 @@ def build_subject_report(
                                                 subject, errors, figures_dir)
     glm_vars          = _section_glm(design_matrix, glm_est, raw_haemo, subject, errors, figures_dir, segments=segments)
     rest_vars         = _section_rest(alff_df, fc_df, subject, errors, figures_dir, fc_hbr_df=fc_hbr_df,
-                                      fc_seed=fc_seed, raw_haemo=raw_haemo)
+                                      fc_seed=fc_seed, fc_roi=fc_roi, raw_haemo=raw_haemo)
     sqm_vars          = _section_sqm(sci_scores, bad_channels, subject, errors,
                                      out_dir=out_path.parent / "nirs",
                                      sqm_label=sqm_label)

@@ -32,7 +32,13 @@ from .glm_figures import (
 from .correlation_panel import hbo_hbr_correlation_panel
 from .optode_layout import optode_layout_static
 from .topomap import evoked_topomap_static
-from .rest_figures import alff_falff_figure, fc_matrix_figure, fc_seed_topo_figure
+from .rest_figures import (
+    alff_falff_figure,
+    alff_topo_figure,
+    fc_matrix_figure,
+    fc_roi_matrix_figure,
+    fc_seed_topo_figure,
+)
 from .connectogram import fc_connectogram
 
 __all__ = [
@@ -68,7 +74,9 @@ __all__ = [
     "optode_layout_static",
     "evoked_topomap_static",
     "alff_falff_figure",
+    "alff_topo_figure",
     "fc_matrix_figure",
+    "fc_roi_matrix_figure",
     "fc_seed_topo_figure",
     "fc_connectogram",
 ]

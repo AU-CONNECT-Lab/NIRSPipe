@@ -10,10 +10,12 @@ The band-mean tests build a WTCResult by hand rather than running pycwt: the qua
 test is the collapse, and a hand-built map is the only way to know what the right answer is.
 """
 
+import json
 from pathlib import Path
 
 import mne
 import numpy as np
+import pandas as pd
 import pytest
 
 from fnirs_pipe.exceptions import MissingDerivativesError, StageError
@@ -252,3 +254,37 @@ def test_a_haemoglobin_stage_loads(tmp_path):
     loaded = load_group_haemo(tmp_path, group, desc="errts")
     assert set(loaded) == {"sub-01"}
     assert "hbo" in set(loaded["sub-01"].get_channel_types())
+
+
+# ---- what leaves the report ----
+
+def test_the_isc_matrix_is_written_beside_the_panel(tmp_path):
+    """The panel is a picture; without this file the correlations cannot reach a group analysis.
+
+    Same contract as the band mean above: what the figure shows and what a stats script reads
+    have to be one set of numbers.
+    """
+    from fnirs_pipe.qc.hyper_report import write_isc_matrix
+
+    names = ["S1_D1 hbo", "S2_D2 hbo"]
+    mat = np.array([[0.9, np.nan], [0.4, 0.8]])
+    path = tmp_path / "group-G1_task-hold_hyper-isc-hbo.tsv"
+    write_isc_matrix(path, mat, names, "hbo", ["/in/sub-01.snirf"], ["sub-01", "sub-02"])
+
+    written = pd.read_csv(path, sep="\t", index_col="channel")
+    assert list(written.index) == list(written.columns) == names
+    assert written.iloc[1, 0] == pytest.approx(0.4)      # row = sub1, column = sub2
+    assert np.isnan(written.iloc[0, 1])                  # a rejected channel stays blank
+
+    sidecar = json.loads(path.with_suffix(".json").read_text(encoding="utf-8"))
+    assert sidecar["step"] == "hyper_isc"
+    assert sidecar["parameters"]["chromophore"] == "hbo"
+
+
+def test_a_failed_isc_write_costs_the_file_and_not_the_report(tmp_path):
+    # the report is still readable without the TSV, so the writer swallows its own failure
+    from fnirs_pipe.qc.hyper_report import write_isc_matrix
+
+    path = tmp_path / "isc.tsv"
+    write_isc_matrix(path, np.eye(3), ["a", "b"], "hbo", [], ["sub-01"])   # shapes disagree
+    assert not path.exists()

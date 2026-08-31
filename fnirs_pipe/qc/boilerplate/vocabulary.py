@@ -99,10 +99,12 @@ STEP_SUMMARY = {
     "fc": "Channel-by-channel correlation within one chromophore.",
     "fisher_z": "Fisher r-to-z of a correlation matrix, for group-level statistics.",
     "fc_roi": "Connectivity between ROI-averaged signals.",
+    "fc_seed": "Correlation of one ROI's mean signal with every channel.",
     "group_sqm_raw": "Quality metrics pooled across the members of a dyad.",
     "group_sqm_raw_channels": "The same pooling, kept per channel.",
     "hyper_wtc": "Wavelet coherence between a pair, averaged over a band and one value per channel.",
     "hyper_wtc_roi": "The same average, over ROI-averaged signals.",
+    "hyper_isc": "Correlation of each channel of one brain with each channel of the other.",
 }
 
 

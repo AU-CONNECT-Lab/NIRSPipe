@@ -7,6 +7,10 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- `--mode glm --fc` writes the same connectivity products rest mode writes, from the GLM residual. The task sits in the design matrix, so what correlates is what the model did not explain, which is what makes it connectivity rather than a map of who responded to the same stimulus
+- The subject report draws the ROI-to-ROI connectivity matrix. Those numbers were already written to `_fcroi.tsv` and nothing displayed them
+- The subject report draws ALFF and fALFF on the optode layout, next to the per-channel bars. Low-frequency amplitude is a spatial claim, and a bar chart ordered by channel name cannot be read as one
+- `fnirs-qc hyper-post` writes `group-<id>_task-<task>_hyper-isc-<chromophore>.tsv`, the inter-brain correlation matrix behind the ISC panel. It used to exist only as a picture, so the numbers could not be taken into a group analysis
 - `--mode denoise` honours `--short-channel` (and `--drift-model`): the confound regression runs after the bandpass and the residual is written as `desc-errts`. No task model, no ALFF, no FC, no second broadband regression. Task data whose systemic physiology has to go without the task being modelled no longer has to borrow `--mode rest` and throw half its output away. `--drift-model` stays optional here, unlike in `rest`
 - The quality record gains a `motion_post` section: GVTD, spikes, SCI and PSP measured again on the motion-corrected file. Set against the same keys in `raw`, it says whether the correction reduced motion and whether it cost any cardiac signal
 - The quality record gains a `windowed` section: the per-window SCI, PSP and GVTD series, with the window length they were binned on. They used to exist only in what `fnirs-qc prep-raw` wrote

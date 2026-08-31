@@ -23,8 +23,8 @@ ALL_STEPS = [
     "load", "od_conversion", "od_passthrough", "sci_pruning", "motion_correction",
     "beer_lambert", "bandpass", "resample", "design_matrix", "glm_fit", "contrasts",
     "glm_residuals", "glm_residuals_broadband", "sqm", "sqm_raw", "alff", "fc",
-    "fisher_z", "fc_roi", "group_sqm_raw", "group_sqm_raw_channels",
-    "hyper_wtc", "hyper_wtc_roi",
+    "fisher_z", "fc_roi", "fc_seed", "group_sqm_raw", "group_sqm_raw_channels",
+    "hyper_wtc", "hyper_wtc_roi", "hyper_isc",
 ]
 
 
