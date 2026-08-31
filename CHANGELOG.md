@@ -8,8 +8,12 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 - `--mode denoise --fc` writes the connectivity products rest mode writes, taken from the confound residual, or from the bandpassed data itself when no regression was asked for. Bandpass then correlate had no route through the package that did not also run a GLM and write an ALFF nobody asked for
+- The GUI's Analysis page offers the drift model, its cutoff and order, the ROI mapping and the connectivity flag, and its dropdowns now list exactly the choices the CLI accepts. The HRF list was two models short of the CLI's seven
 
 ### Fixed
+- **The GUI could never produce a working `--mode glm` or `--mode rest` command.** Both require a drift model and the page had no control for one, so either choice built a command that stopped in postprocessing. Anything beyond a plain bandpass had to be run from the CLI by hand
+- The GUI offers short-channel regression in every mode rather than GLM alone. rest has always honoured it, and denoise since 0.22.0
+- The GUI's Stim Duration box was drawn but never read, so no task duration ever reached a command
 - The subject report's navigation bar links to the FC and GLM panels whatever mode drew them. A `--mode glm --fc` run drew the connectivity panel with no way to reach it from the top of the page
 - The reproduction script written to `logs/sub-<id>_script.py` named the residual step differently from the pipeline it mirrors, so the sidecars it produced had no method prose and their provenance went unrecognised
 

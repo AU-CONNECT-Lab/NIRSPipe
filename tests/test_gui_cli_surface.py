@@ -1,0 +1,218 @@
+"""The contract between the GUI's command builder and the CLI it drives.
+
+The analysis page does not run the pipeline; it assembles an argv and hands it to
+`fnirs-pipe`. That makes `_build_cli_args` a hand-written copy of the CLI's flag surface,
+and a copy falls behind. It had: `--drift-model` was never emitted at all, so the GLM and
+Rest entries in the mode picker could only ever produce a command that died in `run_post`,
+and `--short-channel` was locked to glm long after rest and denoise honoured it.
+
+Nothing announced any of that, because the two surfaces are only compared by a person
+reading both. These tests do the comparing. `NOT_EXPOSED` is the deliberate half of the
+contract, in the same spirit as `ALL_STEPS` in `test_step_vocabulary.py`: a flag may be left
+out of the GUI, but only on purpose and only in writing.
+"""
+
+import os
+
+import dash
+import dash_bootstrap_components as dbc
+import pytest
+from dash import dcc, html
+
+from fnirs_pipe.cli.run import _build_parser
+from fnirs_pipe.cli.workflows import _build_post_config
+from fnirs_pipe.interface.callbacks.analysis_callbacks import _build_cli_args
+
+# Postprocessing flags the analysis page deliberately does not offer, and why. A flag listed
+# here must still exist in the CLI, and must not also be emitted; both are asserted below.
+NOT_EXPOSED = {
+    "--config": "the form is the config surface; a TOML overriding it would make the preview lie",
+    "--events-path": "a file path, and mutually exclusive with the Stim Duration field",
+    "--contrast-file": "a file path, and the page has no file picker",
+    "--fir-delays": "only meaningful with --hrf-model fir",
+    "--no-combine-runs": "the negative half of a paired flag; the checkbox emits the positive",
+}
+
+# every control filled in, so the union over modes is everything the builder can emit
+_FULL_OPTS = dict(
+    bids_dir="/bids", output_dir="/out", subjects=["001"],
+    session_label="ses-1", task_label="tapping",
+    dpf=6.0, sci_thresh=0.5, motion_correction="tddr",
+    cardiac_l=0.7, cardiac_h=1.5, resp_l=0.1, resp_h=0.5,
+    high_pass=0.01, low_pass=0.1, resample=2.0, n_jobs=1,
+    hrf_model="spm", noise_model="ar1", short_channel="mean",
+    drift_model="cosine", drift_high_pass=0.01, drift_order=1,
+    stim_dur=5.0, roi_mapping="/roi.json", fc=True,
+    flags=["dry_run", "skip_bids_validation", "no_report", "combine_runs"],
+)
+
+_MODES = ["denoise", "glm", "rest"]
+
+# built by a callback into an-subjects-container rather than declared in the layout, which
+# is why the app is constructed with suppress_callback_exceptions
+_DYNAMIC_IDS = {"an-subjects-checklist"}
+
+
+def _post_flags() -> set[str]:
+    """Every long flag in the CLI's two postprocessing argument groups."""
+    parser = _build_parser()
+    return {
+        flag
+        for group in parser._action_groups
+        if group.title and group.title.startswith("postprocessing")
+        for action in group._group_actions
+        for flag in action.option_strings
+        if flag.startswith("--")
+    }
+
+
+def _emitted(**overrides) -> set[str]:
+    opts = {**_FULL_OPTS, **overrides}
+    return {a for a in _build_cli_args(opts) if a.startswith("--")}
+
+
+def _emitted_any_mode() -> set[str]:
+    """Everything the builder can emit, over every mode and drift model.
+
+    Some flags are conditional on more than the mode: --drift-order is polynomial-only and
+    --drift-high-pass is cosine-only, so a union over modes alone would call them missing.
+    """
+    flags: set[str] = set()
+    for mode in _MODES:
+        for drift in ("cosine", "polynomial", "none"):
+            flags |= _emitted(post_mode=mode, drift_model=drift)
+    return flags
+
+
+# ---- the flag surface ----
+
+def test_every_postprocessing_flag_is_offered_or_written_off():
+    missing = _post_flags() - _emitted_any_mode() - set(NOT_EXPOSED)
+    assert not missing, (
+        f"the CLI grew {sorted(missing)} and the analysis page cannot send them; "
+        f"add a control, or add them to NOT_EXPOSED with a reason"
+    )
+
+
+def test_the_written_off_flags_still_exist():
+    """Otherwise the list quietly becomes an excuse for flags nobody removed from it."""
+    stale = set(NOT_EXPOSED) - _post_flags()
+    assert not stale, f"NOT_EXPOSED names flags the CLI no longer has: {sorted(stale)}"
+
+
+def test_nothing_is_both_written_off_and_emitted():
+    assert not set(NOT_EXPOSED) & _emitted_any_mode()
+
+
+# ---- the commands the page actually produces ----
+
+@pytest.mark.parametrize("mode", _MODES)
+def test_the_generated_command_parses(mode):
+    argv = _build_cli_args({**_FULL_OPTS, "post_mode": mode})
+    assert argv[0] == "fnirs-pipe"
+    _build_parser().parse_args(argv[1:])          # raises SystemExit on an unknown flag
+
+
+@pytest.mark.parametrize("mode", _MODES)
+def test_the_generated_command_satisfies_its_modes_requirements(mode):
+    """The regression test for the bug: GLM and Rest used to arrive without a drift model."""
+    argv = _build_cli_args({**_FULL_OPTS, "post_mode": mode})
+    args = vars(_build_parser().parse_args(argv[1:]))
+    config = _build_post_config("001", None, args, {})
+
+    if mode in ("glm", "rest"):
+        assert config.drift_model is not None
+    if mode == "glm":
+        assert config.hrf_model is not None and config.noise_model is not None
+    # __post_init__ refuses a cosine drift with no cutoff, which is what the page defaults to
+    assert config.drift_high_pass is not None
+
+
+@pytest.mark.parametrize("mode", _MODES)
+def test_short_channel_reaches_every_mode(mode):
+    """It was locked behind glm; rest has always honoured it and denoise does since 0.22.0."""
+    argv = _build_cli_args({**_FULL_OPTS, "post_mode": mode})
+    assert "--short-channel" in _emitted(post_mode=mode)
+    args = vars(_build_parser().parse_args(argv[1:]))
+    assert _build_post_config("001", None, args, {}).short_channel == "mean"
+
+
+def test_a_none_short_channel_is_left_out_rather_than_sent():
+    assert "--short-channel" not in _emitted(post_mode="glm", short_channel="none")
+
+
+def test_fc_is_not_sent_to_rest_mode():
+    """rest writes the connectivity products regardless, so the flag would be noise."""
+    assert "--fc" in _emitted(post_mode="denoise")
+    assert "--fc" in _emitted(post_mode="glm")
+    assert "--fc" not in _emitted(post_mode="rest")
+
+
+def test_no_postprocessing_flags_without_a_mode():
+    assert _emitted(post_mode="none") & _post_flags() == set()
+
+
+# ---- controls and the callbacks that read them ----
+
+@pytest.fixture(scope="module")
+def analysis_page():
+    """The built app, the analysis layout's ids, and the ids the callbacks bind to.
+
+    Dash refuses `register_page` before an app exists, so the page modules cannot simply be
+    imported; the app has to be constructed the way `interface.app.launch` constructs it.
+    """
+    import fnirs_pipe.interface.app as app_module
+
+    app = dash.Dash(
+        __name__, use_pages=True,
+        pages_folder=os.path.join(os.path.dirname(app_module.__file__), "pages"),
+        external_stylesheets=[dbc.themes.FLATLY], suppress_callback_exceptions=True,
+    )
+    import fnirs_pipe.interface.callbacks.analysis_callbacks  # noqa: F401
+
+    app.layout = html.Div([dcc.Store(id="app-bids-dir"), dash.page_container])
+    app._setup_server()
+
+    layout = next(p["layout"] for p in dash.page_registry.values()
+                  if p["path"] == "/analysis")
+    layout = layout() if callable(layout) else layout
+
+    def _ids(component):
+        found = set()
+        cid = getattr(component, "id", None)
+        if isinstance(cid, str):
+            found.add(cid)
+        children = getattr(component, "children", None)
+        if isinstance(children, (list, tuple)):
+            for child in children:
+                found |= _ids(child)
+        elif children is not None:
+            found |= _ids(children)
+        return found
+
+    bound = set()
+    for entry in app.callback_map.values():
+        for spec in list(entry["inputs"]) + list(entry.get("state") or []):
+            bound.add(spec["id"])
+        outputs = entry["output"]
+        for out in (outputs if isinstance(outputs, (list, tuple)) else [outputs]):
+            bound.add(out.component_id)
+
+    return _ids(layout), bound
+
+
+def test_every_control_the_callbacks_bind_to_exists_on_the_page(analysis_page):
+    on_page, bound = analysis_page
+    dangling = {i for i in bound if i.startswith("an-")} - on_page - _DYNAMIC_IDS
+    assert not dangling, f"callbacks bind ids the page does not define: {sorted(dangling)}"
+
+
+def test_no_control_on_the_page_is_decoration(analysis_page):
+    """`an-stim-dur` was drawn, never read, and never reached a command for two releases.
+
+    An Output counts: a preview pane is driven by a callback rather than read by one. What
+    this catches is a control wired to nothing in either direction.
+    """
+    on_page, bound = analysis_page
+    unread = {i for i in on_page if i.startswith("an-")} - bound
+    assert not unread, f"controls nothing reads: {sorted(unread)}"

@@ -64,10 +64,14 @@ def _sync_subjects_store(selected):
 
 @callback(
     Output("an-glm-section", "style"),
+    Output("an-confound-section", "style"),
     Input("an-post-mode", "value"),
 )
 def toggle_glm_section(mode):
-    return {"display": "block"} if mode == "glm" else {"display": "none"}
+    shown, hidden = {"display": "block"}, {"display": "none"}
+    # every mode honours the confound options; only the task model is GLM-only
+    return (shown if mode == "glm" else hidden,
+            shown if mode in ("denoise", "glm", "rest") else hidden)
 
 
 @callback(
@@ -158,10 +162,32 @@ def _build_cli_args(opts: dict) -> list[str]:
             args += ["--low-pass", str(opts["low_pass"])]
         if opts.get("resample") is not None:
             args += ["--resample-sfreq", str(opts["resample"])]
+        if opts.get("roi_mapping"):
+            args += ["--roi-mapping", opts["roi_mapping"]]
+
+        # confound regression: honoured by every mode, and glm and rest refuse to run
+        # without a drift model
+        if opts.get("drift_model"):
+            args += ["--drift-model", opts["drift_model"]]
+            if opts["drift_model"] == "cosine" and opts.get("drift_high_pass") is not None:
+                args += ["--drift-high-pass", str(opts["drift_high_pass"])]
+            if opts["drift_model"] == "polynomial" and opts.get("drift_order") is not None:
+                args += ["--drift-order", str(opts["drift_order"])]
+        if opts.get("short_channel") and opts["short_channel"] != "none":
+            args += ["--short-channel", opts["short_channel"]]
+
         if mode == "glm":
-            if opts.get("hrf_model"):     args += ["--hrf-model",     opts["hrf_model"]]
-            if opts.get("noise_model"):   args += ["--noise-model",   opts["noise_model"]]
-            if opts.get("short_channel"): args += ["--short-channel", opts["short_channel"]]
+            if opts.get("hrf_model"):   args += ["--hrf-model",   opts["hrf_model"]]
+            if opts.get("noise_model"): args += ["--noise-model", opts["noise_model"]]
+            if opts.get("stim_dur") is not None:
+                args += ["--stim-dur", str(opts["stim_dur"])]
+
+        # rest writes the connectivity products regardless, so the flag would be noise there
+        if mode in ("denoise", "glm") and opts.get("fc"):
+            args.append("--fc")
+
+        if "combine_runs" in (opts.get("flags") or []):
+            args.append("--combine-runs")
 
     if opts.get("n_jobs"):
         args += ["--n-jobs", str(opts["n_jobs"])]
@@ -170,7 +196,6 @@ def _build_cli_args(opts: dict) -> list[str]:
     if "dry_run"              in flags: args.append("--dry-run")
     if "skip_bids_validation" in flags: args.append("--skip-bids-validation")
     if "no_report"            in flags: args.append("--no-report")
-    if "combine_runs"         in flags: args.append("--combine-runs")
     return args
 
 
@@ -196,6 +221,12 @@ def _build_cli_args(opts: dict) -> list[str]:
     State("an-hrf-model",         "value"),
     State("an-noise-model",       "value"),
     State("an-short-channel",     "value"),
+    State("an-drift-model",       "value"),
+    State("an-drift-high-pass",   "value"),
+    State("an-drift-order",       "value"),
+    State("an-stim-dur",          "value"),
+    State("an-roi-mapping",       "value"),
+    State("an-fc",                "value"),
     State("an-flags",             "value"),
     State("an-session-label",     "value"),
     State("an-task-label",        "value"),
@@ -205,7 +236,9 @@ def _build_cli_args(opts: dict) -> list[str]:
 def generate_command(n_clicks, bids_dir, output_dir, subjects, dpf, sci_thresh,
                      motion_correction, cardiac_l, cardiac_h, resp_l, resp_h,
                      post_mode, high_pass, low_pass, resample, n_jobs,
-                     hrf_model, noise_model, short_channel, flags,
+                     hrf_model, noise_model, short_channel,
+                     drift_model, drift_high_pass, drift_order, stim_dur,
+                     roi_mapping, fc, flags,
                      session_label, task_label, shell):
     if not bids_dir or not output_dir:
         return "Error: BIDS and output directories are required.", {}
@@ -227,6 +260,9 @@ def generate_command(n_clicks, bids_dir, output_dir, subjects, dpf, sci_thresh,
         post_mode=post_mode, high_pass=high_pass, low_pass=low_pass,
         resample=resample, n_jobs=n_jobs,
         hrf_model=hrf_model, noise_model=noise_model, short_channel=short_channel,
+        drift_model=drift_model, drift_high_pass=drift_high_pass,
+        drift_order=drift_order, stim_dur=stim_dur,
+        roi_mapping=roi_mapping, fc=bool(fc),
         flags=flags,
     )
     argv = _build_cli_args(opts)

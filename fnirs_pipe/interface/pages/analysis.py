@@ -9,7 +9,18 @@ import dash_bootstrap_components as dbc
 import dash_cytoscape as cyto
 from dash import dcc, html
 
+from fnirs_pipe.cli.run import (
+    _DRIFT_CHOICES,
+    _HRF_CHOICES,
+    _NOISE_CHOICES,
+    _SHORT_CHANNEL_CHOICES,
+)
+
 dash.register_page(__name__, path="/analysis", name="Analysis")
+
+
+def _opts(choices: list[str]) -> list[dict]:
+    return [{"label": c, "value": c} for c in choices]
 
 _DEFAULT_SHELL = "cmd" if platform.system() == "Windows" else "bash"
 
@@ -239,47 +250,67 @@ layout = dbc.Container([
             ], width=2),
         ], className="g-3"),
 
+        # Confound regression: every mode honours these, and glm and rest require a
+        # drift model, so this block is not GLM-only.
+        html.Div(id="an-confound-section", children=[
+            html.Hr(),
+            dbc.Row([
+                dbc.Col([
+                    dbc.Label("Drift Model"),
+                    dcc.Dropdown(id="an-drift-model", options=_opts(_DRIFT_CHOICES),
+                                 value="cosine", clearable=False),
+                    dbc.FormText("Required by GLM and Rest."),
+                ], width=3),
+                dbc.Col([
+                    dbc.Label("Drift High-pass (Hz)"),
+                    dbc.Input(id="an-drift-high-pass", type="number", value=0.01,
+                              placeholder="e.g. 0.01"),
+                    dbc.FormText("Required when the drift model is cosine."),
+                ], width=3),
+                dbc.Col([
+                    dbc.Label("Drift Order"),
+                    dbc.Input(id="an-drift-order", type="number", value=1, min=0, step=1),
+                    dbc.FormText("Polynomial drift only."),
+                ], width=2),
+                dbc.Col([
+                    dbc.Label("Short Channel"),
+                    dcc.Dropdown(id="an-short-channel", options=_opts(_SHORT_CHANNEL_CHOICES),
+                                 value="none", clearable=False),
+                ], width=2),
+            ], className="g-3"),
+            dbc.Row([
+                dbc.Col([
+                    dbc.Label("ROI Mapping"),
+                    dbc.Input(id="an-roi-mapping", type="text",
+                              placeholder="path to roi.json (optional)"),
+                    dbc.FormText("Needed for the ROI and seed connectivity products."),
+                ], width=5),
+                dbc.Col([
+                    dbc.Label("Connectivity"),
+                    dbc.Checklist(
+                        id="an-fc",
+                        options=[{"label": "Write FC products (--fc)", "value": "fc"}],
+                        value=[],
+                        switch=True,
+                    ),
+                    dbc.FormText("Denoise and GLM. Rest writes them anyway."),
+                ], width=4),
+            ], className="g-3 mt-1"),
+        ]),
+
         # GLM-only options
         html.Div(id="an-glm-section", children=[
             html.Hr(),
             dbc.Row([
                 dbc.Col([
                     dbc.Label("HRF Model"),
-                    dcc.Dropdown(
-                        id="an-hrf-model",
-                        options=[
-                            {"label": "SPM",                 "value": "spm"},
-                            {"label": "SPM + derivative",    "value": "spm + derivative"},
-                            {"label": "Glover",              "value": "glover"},
-                            {"label": "Glover + derivative", "value": "glover + derivative"},
-                            {"label": "FIR",                 "value": "fir"},
-                        ],
-                        value="spm",
-                        clearable=False,
-                    ),
-                ], width=3),
+                    dcc.Dropdown(id="an-hrf-model", options=_opts(_HRF_CHOICES),
+                                 value="spm", clearable=False),
+                ], width=4),
                 dbc.Col([
                     dbc.Label("Noise Model"),
-                    dcc.Dropdown(
-                        id="an-noise-model",
-                        options=[{"label": v, "value": v}
-                                 for v in ["ols", "ar1", "ar2", "ar3", "ar4", "ar5"]],
-                        value="ar1",
-                        clearable=False,
-                    ),
-                ], width=2),
-                dbc.Col([
-                    dbc.Label("Short Channel"),
-                    dcc.Dropdown(
-                        id="an-short-channel",
-                        options=[
-                            {"label": "None", "value": "none"},
-                            {"label": "Mean", "value": "mean"},
-                            {"label": "PCA",  "value": "pca"},
-                        ],
-                        value="none",
-                        clearable=False,
-                    ),
+                    dcc.Dropdown(id="an-noise-model", options=_opts(_NOISE_CHOICES),
+                                 value="ar1", clearable=False),
                 ], width=2),
                 dbc.Col([
                     dbc.Label("Stim Duration (s)"),
