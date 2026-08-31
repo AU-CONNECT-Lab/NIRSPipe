@@ -52,11 +52,11 @@ JSONL-based event logging wired into `fnirs-pipe` run flow.
 Page UI + command generator done in v0.7. The run button executes the generated command
 ([interface/callbacks/analysis_callbacks.py](fnirs_pipe/interface/callbacks/analysis_callbacks.py)),
 blocking until it finishes and then showing the last 30 lines of output. The generated
-command is held against the CLI's flag surface by `tests/test_gui_cli_surface.py`. Still
+command is held against the CLI's flag surface by `tests/test_gui_cli_surface.py`. The QC
+Reports page covers the `fnirs-qc` layer and shows each report it generates inline. Still
 missing:
 
 - Live progress / log streaming during the run, instead of one block of output at the end
-- Show report preview or figure output after run completes
 
 ## v0.10 — Group-Level QC Report `[x]`
 
@@ -121,3 +121,4 @@ a bare-MNE run of the same chain. Reports are kept with the project notes outsid
 ### Infrastructure
 
 - **Switch SNIRF IO to pysnirf2** when it supports NumPy 2.x ([io/snirf.py](fnirs_pipe/io/snirf.py))
+- **Replace `dash_table.DataTable`** in the GUI before Dash removes it from the builtin components; four pages use it ([interface/pages/](fnirs_pipe/interface/pages/))

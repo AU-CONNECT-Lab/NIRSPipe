@@ -4,9 +4,14 @@ from __future__ import annotations
 
 import subprocess
 import sys
+from pathlib import Path
 
 import dash_bootstrap_components as dbc
 from dash import Input, Output, State, callback, dcc, html, no_update
+
+from fnirs_pipe.utils.logging import get_logger
+
+logger = get_logger("interface.analysis_callbacks")
 
 
 # ── Directory sync: store → page (one-way; page 1 writes, page 2 reads) ──────
@@ -74,11 +79,53 @@ def toggle_glm_section(mode):
             shown if mode in ("denoise", "glm", "rest") else hidden)
 
 
+def _provenance_elements(output_dir: str | None) -> list | None:
+    """The real graph a finished run left on disk, or None when there is nothing to read.
+
+    `provenance.scan` reads the sidecars, so this reflects the files that exist rather than
+    the pipeline that was configured. The first subject or group directory carrying sidecars
+    wins; one run's chain is the shape worth showing, and the others repeat it.
+    """
+    if not output_dir:
+        return None
+    try:
+        from fnirs_pipe.qc.provenance import scan
+
+        root = Path(output_dir)
+        for nirs_dir in [*sorted(root.glob("sub-*/nirs")), *sorted(root.glob("group-*/nirs"))]:
+            nodes = scan(nirs_dir)
+            if not nodes:
+                continue
+            # step and state ride along as data rather than in the label: the stylesheet
+            # sizes nodes to a single line, and a wrapped label would overlap its neighbours
+            elements = [
+                {"data": {"id": key, "label": n.label,
+                          "step": n.step or "", "detail": n.detail, "state": n.state},
+                 "classes": "prep" if n.domain in ("input", "od") else "post"}
+                for key, n in nodes.items()
+            ]
+            elements += [
+                {"data": {"source": src, "target": key}, "classes": "post"}
+                for key, n in nodes.items() for src in n.sources if src in nodes
+            ]
+            return elements
+    except Exception:
+        logger.warning("provenance graph unavailable, falling back to the schematic",
+                       exc_info=True)
+    return None
+
+
 @callback(
     Output("an-dag", "elements"),
     Input("an-post-mode", "value"),
+    Input("an-run-status", "children"),
+    State("an-output-dir", "value"),
 )
-def update_dag(post_mode):
+def update_dag(post_mode, _run_status, output_dir):
+    # after a run there is a real graph on disk; before one, the schematic is all we have
+    real = _provenance_elements(output_dir)
+    if real:
+        return real
 
     def node(nid, label, cls):
         return {"data": {"id": nid, "label": label}, "classes": cls}

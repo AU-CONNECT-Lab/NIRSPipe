@@ -59,6 +59,7 @@ def _sidebar() -> html.Div:
                     dbc.NavLink("Batch Prep",       href="/batch-prep", active="exact", className="text-white"),
                     dbc.NavLink("Hyper Align",      href="/hyper-align",active="exact", className="text-white"),
                     dbc.NavLink("Analysis",         href="/analysis",   active="exact", className="text-white"),
+                    dbc.NavLink("QC Reports",       href="/qc",         active="exact", className="text-white"),
                 ], vertical=True, pills=True),
             ),
         ],
@@ -96,6 +97,12 @@ def launch(port: int = 8050) -> None:
     import fnirs_pipe.interface.callbacks.batch_prep_callbacks
     import fnirs_pipe.interface.callbacks.hyper_align_callbacks
     import fnirs_pipe.interface.callbacks.analysis_callbacks
+    import fnirs_pipe.interface.callbacks.qc_callbacks  # noqa: F401  (side effect: registers callbacks)
+
+    # lets the QC page show a generated report in an iframe; group reports are iframe shells
+    # whose panels are sibling files, so they have to be served rather than inlined
+    from fnirs_pipe.interface.report_serve import attach as _attach_reports
+    _attach_reports(app.server)
 
     app.layout = html.Div([
         dcc.Store(id="app-bids-dir",   storage_type="session"),

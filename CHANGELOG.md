@@ -6,9 +6,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.23.0] - 2026-08-30
+
 ### Added
 - `--mode denoise --fc` writes the connectivity products rest mode writes, taken from the confound residual, or from the bandpassed data itself when no regression was asked for. Bandpass then correlate had no route through the package that did not also run a GLM and write an ALFF nobody asked for
 - `fnirs-qc group-hyper-wtc` merges every dyad's `hyper-wtc.tsv` and `hyper-wtc-roi.tsv` into one long table carrying `group_id` and `task`, so a study with many dyads or many conditions has a single file to take into stats. It refuses to merge tables averaged over different frequency bands rather than warning: once the rows are concatenated, nothing downstream can tell which band a row used
+- A **QC Reports page** in the GUI, covering the `fnirs-qc` layer that was command line only: hyperscanning post-analysis, the three group aggregations, provenance graphs and the windowed drill-down. The report each run produces is shown inline on the page
+- The Analysis page's pipeline diagram switches to the **real provenance graph** once a run has written sidecars, instead of always drawing the same schematic of the configured modes
 - The GUI's Analysis page offers the drift model, its cutoff and order, the ROI mapping and the connectivity flag, and its dropdowns now list exactly the choices the CLI accepts. The HRF list was two models short of the CLI's seven
 
 ### Fixed

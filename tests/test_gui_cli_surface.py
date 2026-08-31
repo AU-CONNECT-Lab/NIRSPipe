@@ -22,6 +22,7 @@ from dash import dcc, html
 from fnirs_pipe.cli.run import _build_parser
 from fnirs_pipe.cli.workflows import _build_post_config
 from fnirs_pipe.interface.callbacks.analysis_callbacks import _build_cli_args
+from fnirs_pipe.interface.callbacks.qc_callbacks import _AGGREGATE, build_qc_args
 
 # Postprocessing flags the analysis page deliberately does not offer, and why. A flag listed
 # here must still exist in the CLI, and must not also be emitted; both are asserted below.
@@ -51,6 +52,9 @@ _MODES = ["denoise", "glm", "rest"]
 # built by a callback into an-subjects-container rather than declared in the layout, which
 # is why the app is constructed with suppress_callback_exceptions
 _DYNAMIC_IDS = {"an-subjects-checklist"}
+
+# pages whose command builder this file holds against the CLI
+_PREFIXES = ("an-", "qc-")
 
 
 def _post_flags() -> set[str]:
@@ -156,7 +160,7 @@ def test_no_postprocessing_flags_without_a_mode():
 
 @pytest.fixture(scope="module")
 def analysis_page():
-    """The built app, the analysis layout's ids, and the ids the callbacks bind to.
+    """The built app, the contracted pages' ids, and the ids the callbacks bind to.
 
     Dash refuses `register_page` before an app exists, so the page modules cannot simply be
     imported; the app has to be constructed the way `interface.app.launch` constructs it.
@@ -173,9 +177,9 @@ def analysis_page():
     app.layout = html.Div([dcc.Store(id="app-bids-dir"), dash.page_container])
     app._setup_server()
 
-    layout = next(p["layout"] for p in dash.page_registry.values()
-                  if p["path"] == "/analysis")
-    layout = layout() if callable(layout) else layout
+    layouts = [p["layout"] for p in dash.page_registry.values()
+               if p["path"] in ("/analysis", "/qc")]
+    layouts = [lay() if callable(lay) else lay for lay in layouts]
 
     def _ids(component):
         found = set()
@@ -198,12 +202,16 @@ def analysis_page():
         for out in (outputs if isinstance(outputs, (list, tuple)) else [outputs]):
             bound.add(out.component_id)
 
-    return _ids(layout), bound
+    on_page = set()
+    for lay in layouts:
+        on_page |= _ids(lay)
+
+    return on_page, bound
 
 
 def test_every_control_the_callbacks_bind_to_exists_on_the_page(analysis_page):
     on_page, bound = analysis_page
-    dangling = {i for i in bound if i.startswith("an-")} - on_page - _DYNAMIC_IDS
+    dangling = {i for i in bound if i.startswith(_PREFIXES)} - on_page - _DYNAMIC_IDS
     assert not dangling, f"callbacks bind ids the page does not define: {sorted(dangling)}"
 
 
@@ -214,5 +222,110 @@ def test_no_control_on_the_page_is_decoration(analysis_page):
     this catches is a control wired to nothing in either direction.
     """
     on_page, bound = analysis_page
-    unread = {i for i in on_page if i.startswith("an-")} - bound
+    unread = {i for i in on_page if i.startswith(_PREFIXES)} - bound
     assert not unread, f"controls nothing reads: {sorted(unread)}"
+
+
+# ---- the same contract for the QC page against fnirs-qc ----
+
+# fnirs-qc subcommands the QC page does not offer, and why.
+QC_COMMANDS_NOT_OFFERED = {
+    "prep-raw": "single-subject QC; the Data Prep page's QC tab already does this interactively",
+    "hyper-raw": "pre-analysis dyad QC; belongs with Hyper Align, not with the post-analysis page",
+    "epoch": "needs an events CSV and a file picker the page does not have",
+}
+
+# per-command flags the page leaves out. Both entries are the negative half of a paired
+# BooleanOptionalAction, where the switch emits the positive.
+QC_NOT_EXPOSED = {
+    "hyper-post": {"--no-normalize", "--no-skip-bids-validation"},
+    "window-raw": {"--no-skip-bids-validation"},
+}
+
+_QC_FULL_OPTS = dict(
+    bids_dir="/bids", output_dir="/out", pairs_csv="/pairs.csv", group_id="01",
+    desc="errts", roi_mapping="/roi.json",
+    wtc_fmin=0.004, wtc_fmax=0.2, wtc_band_fmin=0.01, wtc_band_fmax=0.1,
+    wtc_mc_count=300, wtc_seed=42, isc_threshold=0.3,
+    hyper_session="ses-1", hyper_task="rest",
+    hyper_flags=["wtc_significance", "wtc_roi_cross", "no_align", "normalize"],
+    task_label="rest", tstart=0.0, tend=60.0, window_name="early", align="trigger",
+    cardiac_l=0.7, cardiac_h=1.5, sci_thresh=0.8, window_length=10.0,
+    trigger_name="start", participant_label="01 02", window_session="ses-1",
+    run_flags=["skip_bids_validation"],
+)
+
+_QC_OFFERED = ["hyper-post", "window-raw", *_AGGREGATE]
+
+
+def _qc_subparsers():
+    action = next(a for a in _build_qc_parser()._actions if getattr(a, "choices", None))
+    return action.choices
+
+
+def _build_qc_parser():
+    from fnirs_pipe.cli.qc import _build_parser as build
+    return build()
+
+
+def _qc_flags(command: str) -> set[str]:
+    parser = _qc_subparsers()[command]
+    return {flag for action in parser._actions for flag in action.option_strings
+            if flag.startswith("--") and action.dest != "help"}
+
+
+def _qc_emitted(command: str) -> set[str]:
+    return {a for a in build_qc_args(command, _QC_FULL_OPTS) if a.startswith("--")}
+
+
+def test_the_qc_page_offers_every_subcommand_or_writes_it_off():
+    missing = set(_qc_subparsers()) - set(_QC_OFFERED) - set(QC_COMMANDS_NOT_OFFERED)
+    assert not missing, (
+        f"fnirs-qc grew {sorted(missing)} and the QC page neither offers nor declines them"
+    )
+
+
+def test_the_declined_subcommands_still_exist():
+    stale = set(QC_COMMANDS_NOT_OFFERED) - set(_qc_subparsers())
+    assert not stale, f"QC_COMMANDS_NOT_OFFERED names commands fnirs-qc no longer has: {sorted(stale)}"
+
+
+@pytest.mark.parametrize("command", _QC_OFFERED)
+def test_every_flag_of_an_offered_command_is_sendable_or_written_off(command):
+    missing = _qc_flags(command) - _qc_emitted(command) - QC_NOT_EXPOSED.get(command, set())
+    assert not missing, (
+        f"fnirs-qc {command} grew {sorted(missing)} and the page cannot send them; "
+        f"add a control, or add them to QC_NOT_EXPOSED with a reason"
+    )
+
+
+@pytest.mark.parametrize("command", sorted(QC_NOT_EXPOSED))
+def test_the_written_off_qc_flags_still_exist(command):
+    stale = QC_NOT_EXPOSED[command] - _qc_flags(command)
+    assert not stale, f"QC_NOT_EXPOSED[{command!r}] names flags that are gone: {sorted(stale)}"
+
+
+@pytest.mark.parametrize("command", _QC_OFFERED)
+def test_the_generated_qc_command_parses(command):
+    argv = build_qc_args(command, _QC_FULL_OPTS)
+    assert argv[:2] == ["fnirs-qc", command]
+    _build_qc_parser().parse_args(argv[1:])       # raises SystemExit on an unknown flag
+
+
+@pytest.mark.parametrize("command", _QC_OFFERED)
+def test_the_generated_qc_command_reaches_the_right_handler(command):
+    argv = build_qc_args(command, _QC_FULL_OPTS)
+    args = _build_qc_parser().parse_args(argv[1:])
+    assert args.func.__name__ == "cmd_" + command.replace("-", "_")
+
+
+def test_a_space_separated_box_repeats_its_flag_rather_than_joining():
+    """argparse nargs="+" takes repeats; one string with a space in it is one label."""
+    args = _build_qc_parser().parse_args(
+        build_qc_args("window-raw", _QC_FULL_OPTS)[1:])
+    assert args.participant_label == ["01", "02"]
+
+
+def test_the_aggregate_commands_take_only_an_output_directory():
+    for command in _AGGREGATE:
+        assert build_qc_args(command, _QC_FULL_OPTS) == ["fnirs-qc", command, "/out"]
