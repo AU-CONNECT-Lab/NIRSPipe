@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - **The subject QC report is now one report per run.** A subject with several tasks used to get one `sub-<id>_qc.html` built from whichever run finished last, with nothing on the page saying which. Each run now writes `sub-<id>_task-<task>_qc.html` with its own figures, and `sub-<id>_qc.html` becomes an index over them
 - WTC computes only the wavelet scales its frequency range keeps, 1.8x faster on a 900 s recording. The coherences are unchanged bit for bit; `--no-wtc-limit-scales` restores the old behaviour
+- **The quality record is drawn as a node rather than a step in the provenance diagram.** It measures every stage, so it had an arrow from each of them crossing the whole figure and burying the chain underneath. Its own box says which stages it measured. The provenance table names those stages too, in place of the full list of metric names, which stay in the record
 
 ### Added
 - **`hyper-post` writes `hyper-wtc-roichan.tsv` whenever `--roi-mapping` is given**: coherence computed per channel pair, then averaged within each ROI. This is the ROI number the WTC literature reports, and it is not the same as `hyper-wtc-roi.tsv`, which averages the signals first and computes one coherence. Both are written; `n_ch` says how many channels backed each mean. `fnirs-qc group-hyper-wtc` merges the new table too

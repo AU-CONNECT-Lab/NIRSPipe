@@ -36,10 +36,21 @@ class Node:
     detail: str = ""                           # settings the step used, e.g. "0.01-0.5 Hz"
     state: str = ""                            # shape of the data here, e.g. "40/56 ch · 2 Hz"
     missing: bool = False                      # the sidecar is here, the file it describes is not
+    checkpoint: bool = False                   # a QC record, measured off the chain rather than on it
 
 
 def _key(path: str | Path) -> str:
     return Path(path).name.split(".")[0]
+
+
+def _is_checkpoint(data: dict[str, Any]) -> bool:
+    """Whether this sidecar describes a QC record rather than a signal file.
+
+    A QC record measures several stages and holds the numbers itself, so it is neither
+    produced by one parent nor read by anything downstream. ``n_metrics`` marks it; the
+    same field tells `_state_line` to print a metric count instead of a data shape.
+    """
+    return data.get("n_metrics") is not None
 
 
 def _label(key: str) -> str:
@@ -200,7 +211,7 @@ def _file_is_gone(sidecar: Path, data: dict[str, Any]) -> bool:
     numbers itself, so it has no companion by design. ``n_metrics`` is what marks it, the
     same field `_state_line` uses to tell a QC checkpoint from a signal file.
     """
-    if data.get("n_metrics") is not None:
+    if _is_checkpoint(data):
         return False
     stem = sidecar.name[: -len(".json")]
     return not any(p.suffix != ".json" for p in sidecar.parent.glob(f"{stem}.*"))
@@ -236,6 +247,7 @@ def scan(nirs_dir: Path, label: str | None = None) -> dict[str, Node]:
             detail=_step_detail(meta.get("step"), params, data),
             state=_state_line(data),
             missing=_file_is_gone(sidecar, data),
+            checkpoint=_is_checkpoint(data),
         )
 
     # Sources may name files outside nirs_dir (the BIDS input); add them as roots.
@@ -316,6 +328,10 @@ def to_mermaid(nodes: dict[str, Node]) -> str:
         text = f"{n.label}<br/><small>{note}</small>" if note else n.label
         lines.append(f'    {ident(n.key)}["{text}"]' + (":::missing" if n.missing else ""))
     for node in ordered:
+        # a QC record names every stage it measured, which would put an edge from the whole
+        # chain onto one node and bury the chain itself. Its own text says what it measured
+        if node.checkpoint:
+            continue
         for src in node.sources:
             # a wrapped detail is drawn on several lines in the PNG; a mermaid edge label
             # is one line, and a raw newline would break the arrow

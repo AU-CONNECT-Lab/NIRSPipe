@@ -214,17 +214,21 @@ def test_a_long_family_list_is_wrapped_not_run_on(tmp_path):
     assert all(len(line) <= 24 for line in lines)
 
 
-def test_the_wrapped_detail_stays_on_one_mermaid_line(tmp_path):
-    _sidecar(tmp_path, "sub-01_sqm_raw", step="sqm_raw", sources=["/out/in.snirf"],
-             data={"n_metrics": len(_RAW_METRICS), "metrics": _RAW_METRICS})
+def test_no_edge_label_carries_a_newline(tmp_path):
+    # a mermaid edge label is one line, so a wrapped detail on the arrow would break it
+    _sidecar(tmp_path, "sub-01_desc-od_nirs", step="od_conversion", sources=["/out/in.snirf"])
+    _sidecar(tmp_path, "sub-01_desc-filtered_nirs", step="bandpass",
+             sources=["sub-01_desc-od_nirs.snirf"],
+             parameters={"high_pass": 0.01, "low_pass": 0.5})
 
-    text = to_mermaid(scan(tmp_path))
-    assert "\n" not in text.split("-- sqm_raw ")[1].split("-->")[0]
+    for line in to_mermaid(scan(tmp_path)).splitlines():
+        if "-- " in line and "-->" in line:
+            assert "\n" not in line.split("-- ")[1].split("-->")[0]
 
 
 def test_the_node_keeps_the_data_it_was_given(tmp_path):
-    # the report's table shows the full metric names, which only the raw dict has: state
-    # is already compressed to a count and detail to the families
+    # state is compressed to a count and detail to the families, so the raw dict is the
+    # only place the metric names survive
     _sidecar(tmp_path, "sub-01_sqm_raw", step="sqm_raw", sources=["/out/in.snirf"],
              data={"n_metrics": len(_RAW_METRICS), "metrics": _RAW_METRICS})
 
@@ -235,6 +239,59 @@ def test_an_sqm_sidecar_without_metrics_says_nothing(tmp_path):
     # sidecars written before the field existed
     _sidecar(tmp_path, "sub-01_sqm", step="sqm", sources=["/out/in.snirf"])
     assert scan(tmp_path)["sub-01_sqm"].detail == ""
+
+
+# ---- a checkpoint is a node, not a step ----
+
+def _chain_plus_record(directory):
+    """The od -> preproc chain, plus an SQM record naming both of them as sources."""
+    _sidecar(directory, "sub-01_desc-od_nirs", step="od_conversion", sources=["/bids/in.snirf"])
+    _sidecar(directory, "sub-01_desc-preproc_nirs", step="beer_lambert",
+             sources=["sub-01_desc-od_nirs.snirf"])
+    _sidecar(directory, "sub-01_desc-sqm_nirs", step="sqm", data_file=False,
+             sources=["/bids/in.snirf", "sub-01_desc-od_nirs.snirf",
+                      "sub-01_desc-preproc_nirs.snirf"],
+             data={"sections": ["raw", "preproc"], "metrics": ["raw_sci_mean"],
+                   "n_metrics": 121})
+
+
+def test_a_checkpoint_draws_no_edges(tmp_path):
+    # it measures every stage, so its arrows would cross the whole diagram and bury the
+    # chain they are drawn over
+    _chain_plus_record(tmp_path)
+
+    mermaid = to_mermaid(scan(tmp_path))
+    assert "sub_01_desc_sqm_nirs[" in mermaid
+    assert "--> sub_01_desc_sqm_nirs" not in mermaid
+    assert "sub_01_desc_od_nirs -- beer_lambert --> sub_01_desc_preproc_nirs" in mermaid
+
+
+def test_a_checkpoint_still_sits_after_what_it_measured(tmp_path):
+    # the edges are dropped at render time only: the sources stay, so the depth does and
+    # the node is not mistaken for a root
+    _chain_plus_record(tmp_path)
+
+    nodes = scan(tmp_path)
+    assert nodes["sub-01_desc-sqm_nirs"].depth > nodes["sub-01_desc-preproc_nirs"].depth
+    assert nodes["sub-01_desc-sqm_nirs"].domain != "input"
+    assert len(nodes["sub-01_desc-sqm_nirs"].sources) == 3
+
+
+def test_only_a_checkpoint_loses_its_edges(tmp_path):
+    _chain_plus_record(tmp_path)
+    assert all(n.checkpoint is (n.step == "sqm") for n in scan(tmp_path).values())
+
+
+def test_the_table_names_the_stages_rather_than_the_metrics(tmp_path):
+    # 121 metric names in one cell is a paragraph nobody reads; they stay in the record
+    from fnirs_pipe.qc.report import _section_provenance
+
+    _chain_plus_record(tmp_path)
+    rows = _section_provenance(tmp_path, "denoise", "01", [])["provenance_rows"]
+
+    row = next(r for r in rows if r["step"] == "sqm")
+    assert "metrics" not in row
+    assert row["settings"] == "raw preproc"
 
 
 # ---- data shape on the node ----

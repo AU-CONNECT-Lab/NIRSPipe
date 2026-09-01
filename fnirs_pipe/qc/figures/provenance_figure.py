@@ -64,6 +64,10 @@ def provenance_figure(nodes: dict[str, Node], title: str | None = None):
     fig, ax = plt.subplots(figsize=(2.0 + n_cols * 1.55, 1.4 + height * 1.05))
 
     for node in nodes.values():
+        # a QC record names every stage it measured, so drawing its edges lays the whole
+        # chain over itself. It keeps its depth, and its second line says what it measured
+        if node.checkpoint:
+            continue
         x, y = pos[node.key]
         for src in node.sources:
             if src not in pos:
