@@ -14,6 +14,10 @@ Two properties of the format shape everything below:
 - Aux is usually sampled well above the optical rate, so putting it on the optical time axis
   is decimation, and decimation without a low-pass folds the whole difference back into the
   band that is kept. `resample_to_grid` filters before it interpolates for that reason.
+
+Anything that writes a SNIRF through MNE drops the aux group, since MNE's Raw cannot carry
+one. `write_aux_window` puts it back after the write, which is what lets a cropped recording
+reach postprocessing with its accelerometers intact.
 """
 
 from __future__ import annotations
@@ -152,6 +156,81 @@ def resample_to_grid(t_src: np.ndarray, x: np.ndarray, t_dst: np.ndarray) -> np.
             logger.warning("aux series of %d samples is too short to anti-alias", len(x))
 
     return np.interp(t_dst, t_src, filtered)
+
+
+# ---- carrying aux through a crop ----
+
+def write_aux_window(
+    source_path: Path | str,
+    dest_path: Path | str,
+    windows: list[tuple[float, float]],
+) -> list[str]:
+    """Copy a recording's aux channels into another SNIRF, keeping only ``windows``.
+
+    Cropping goes through MNE, and MNE's Raw has nowhere to hold an aux channel, so a
+    cropped recording written by `write_snirf` has no aux group at all. This puts one back
+    afterwards, reading the source with h5py and writing the retained samples straight into
+    the file that was just written.
+
+    Each window is rebased so the result starts at zero, matching what cropping does to the
+    optical data and to the markers. Several windows are laid end to end, window ``i``
+    starting at the summed length of those before it, which is how `mne.concatenate_raws`
+    joins the segments the combined output is made of.
+
+    Aux keeps the rate it was recorded at. Resampling is a postprocessing decision and
+    `resample_to_grid` is where it belongs.
+
+        source 0 to 600 s at 98.67 Hz, windows [(100, 400)]
+            -> one channel of 29601 samples stamped 0 to 300 s
+
+    Parameters
+    ----------
+    source_path : path
+        The uncropped SNIRF, read for its aux group.
+    dest_path : path
+        A SNIRF already written by `write_snirf`. Its ``nirs`` group gains ``aux1``, ``aux2``
+        and so on, numbered over the channels actually written.
+    windows : list of (float, float)
+        Spans to keep, in seconds on the source recording's clock, in output order.
+
+    Returns
+    -------
+    list of str
+        Names of the channels written. Empty when the source has no aux group, or when no
+        channel had a sample inside any window.
+    """
+    import h5py
+
+    times, values, units = read_aux_snirf(source_path)
+    if not values:
+        return []
+
+    written: list[str] = []
+    with h5py.File(str(dest_path), "a") as handle:
+        nirs = handle.require_group("nirs")
+        for name in values:
+            stamps, data = times[name], values[name]
+            kept_t: list[np.ndarray] = []
+            kept_x: list[np.ndarray] = []
+            offset = 0.0
+            for start, stop in windows:
+                inside = (stamps >= start) & (stamps <= stop)
+                if inside.any():
+                    kept_t.append(stamps[inside] - start + offset)
+                    kept_x.append(data[inside])
+                offset += stop - start
+            if not kept_t:
+                logger.warning("aux channel %s has no sample inside the cropped span", name)
+                continue
+
+            group = nirs.create_group(f"aux{len(written) + 1}")
+            group.create_dataset("name", data=name.encode())
+            group.create_dataset("dataTimeSeries", data=np.concatenate(kept_x))
+            group.create_dataset("time", data=np.concatenate(kept_t))
+            group.create_dataset("dataUnit", data=units[name].encode())
+            written.append(name)
+
+    return written
 
 
 # ---- the derivative table ----

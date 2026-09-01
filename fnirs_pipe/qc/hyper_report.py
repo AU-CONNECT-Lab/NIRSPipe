@@ -174,6 +174,7 @@ def build_hyper_post_report(
         _hyper_sidecar,
         compute_wtc,
         compute_wtc_roi,
+        roi_mean_of_channels,
         wtc_band_mean,
     )
     from fnirs_pipe.qc.figures.hyper_post_figures import (
@@ -214,23 +215,27 @@ def build_hyper_post_report(
         except Exception as exc:
             logger.warning("WTC band mean (%s) failed: %s", kind, exc)
             return None
-        tsv_path = output_dir / f"group-{group_id}_task-{task}_hyper-{kind}.tsv"
-        tsv_path.parent.mkdir(parents=True, exist_ok=True)
-        df.to_csv(tsv_path, sep="\t", index=False)
+        tsv_path = _write_df_tsv(df, kind, step)
         if wtc_save_maps:
             from fnirs_pipe.qc.wtc_store import save_wtc
             try:
                 save_wtc(result, tsv_path.with_suffix(".npz"))
             except Exception as exc:
                 logger.warning("saving WTC maps (%s) failed: %s", kind, exc)
+        logger.info("WTC band means saved: %s", tsv_path)
+        return df
+
+    def _write_df_tsv(df, kind: str, step: str) -> Path:
+        tsv_path = output_dir / f"group-{group_id}_task-{task}_hyper-{kind}.tsv"
+        tsv_path.parent.mkdir(parents=True, exist_ok=True)
+        df.to_csv(tsv_path, sep="\t", index=False)
         _hyper_sidecar(
             tsv_path, step,
             [p for p in (path_from(r) for r in aligned_raws.values()) if p],
             band_fmin=band_fmin, band_fmax=band_fmax, mask_coi=True,
             wtc_fmin=wtc_fmin, wtc_fmax=wtc_fmax,
         )
-        logger.info("WTC band means saved: %s", tsv_path)
-        return df
+        return tsv_path
 
     def _safe_post(name: str, fn, *args):
         try:
@@ -257,7 +262,7 @@ def build_hyper_post_report(
     except Exception as exc:
         logger.warning("WTC computation failed: %s", exc)
 
-    _write_band_tsv(wtc_result, "wtc", "hyper_wtc")
+    chan_band_df = _write_band_tsv(wtc_result, "wtc", "hyper_wtc")
 
     pair_key   = next(iter(wtc_result.pairs)) if wtc_result and wtc_result.pairs else None
     pair_label = f"{pair_key[0]} × {pair_key[1]}" if pair_key else ""
@@ -327,6 +332,16 @@ def build_hyper_post_report(
             logger.warning("ROI WTC computation failed: %s", exc)
 
         roi_band_df = _write_band_tsv(roi_wtc, "wtc-roi", "hyper_wtc_roi")
+
+        # the ROI number the WTC literature reports; wtc-roi above is the other algorithm
+        if chan_band_df is not None:
+            try:
+                path = _write_df_tsv(
+                    roi_mean_of_channels(chan_band_df, roi_map),
+                    "wtc-roichan", "hyper_wtc_roichan")
+                logger.info("WTC ROI means from channels saved: %s", path)
+            except Exception as exc:
+                logger.warning("ROI mean of channel WTC failed: %s", exc)
 
         roi_pair_key = next(iter(roi_wtc.pairs)) if roi_wtc and roi_wtc.pairs else None
         roi_labels   = list(roi_map.keys())

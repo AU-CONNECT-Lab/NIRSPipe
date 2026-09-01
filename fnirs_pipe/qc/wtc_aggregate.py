@@ -26,7 +26,11 @@ logger = get_logger("qc.wtc_aggregate")
 # parameters that have to match across every file in a merge, and why they cannot be mixed
 _MUST_AGREE = ("band_fmin", "band_fmax", "mask_coi")
 
-_KINDS = {"wtc": "group_hyper_wtc", "wtc-roi": "group_hyper_wtc_roi"}
+_KINDS = {
+    "wtc":         "group_hyper_wtc",
+    "wtc-roi":     "group_hyper_wtc_roi",
+    "wtc-roichan": "group_hyper_wtc_roichan",
+}
 
 
 def _entities(name: str, kind: str) -> tuple[str, str] | None:

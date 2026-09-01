@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from fnirs_pipe.io.auxiliary import write_aux_window
 from fnirs_pipe.io.snirf import write_snirf
 from fnirs_pipe.io.tables import read_table
 from fnirs_pipe.utils.logging import get_logger
@@ -26,8 +27,20 @@ logger = get_logger("pipeline.crop")
 _DERIV_NAME = "cropped"
 
 
-def _write_segment(raw_seg, out_snirf: Path) -> None:
+def _window(seg) -> tuple[float, float]:
+    """The span a cropped segment occupies on the original recording's clock."""
+    return float(seg.first_time), float(seg.first_time + seg.times[-1])
+
+
+def _write_segment(raw_seg, out_snirf: Path, snirf_path: Path,
+                   windows: list[tuple[float, float]]) -> None:
     write_snirf(raw_seg, out_snirf)
+    # write_snirf goes through the Raw, which has nowhere to hold an aux channel, so the
+    # accelerometers have to be cut from the source and put back afterwards or a cropped
+    # recording reaches postprocessing with no aux at all
+    names = write_aux_window(snirf_path, out_snirf, windows)
+    if names:
+        logger.info("Carried %d aux channels into %s", len(names), out_snirf.name)
     events_path = out_snirf.parent / out_snirf.name.replace("_nirs.snirf", "_events.tsv")
     annotations_to_df(raw_seg).to_csv(events_path, sep="\t", index=False)
 
@@ -52,9 +65,9 @@ def _crop_raw(
 ) -> list[Path]:
     import mne
 
-    def _write(seg, name: str) -> Path:
+    def _write(seg, name: str, windows: list[tuple[float, float]]) -> Path:
         out = out_nirs_dir / f"{name}_nirs.snirf"
-        _write_segment(seg, out)
+        _write_segment(seg, out, snirf_path, windows)
         copy_sidecars(snirf_path, stem, out_nirs_dir, name)
         return out
 
@@ -64,7 +77,9 @@ def _crop_raw(
             for _, row in segments_df.iterrows()
         ]
         if combine:
-            out = _write(mne.concatenate_raws(segs), stem)
+            # taken before concatenating: mne.concatenate_raws appends into segs[0]
+            windows = [_window(seg) for seg in segs]
+            out = _write(mne.concatenate_raws(segs), stem, windows)
             logger.info("Written combined: %s", out)
             return [out]
         tasks = segments_df["task"] if "task" in segments_df.columns else None
@@ -74,12 +89,13 @@ def _crop_raw(
                 name = f"{stem}_seg-{i:02d}"
             else:
                 name = re.sub(r"task-[^_]+", f"task-{tasks.iloc[i - 1]}", stem)
-            out = _write(seg, name)
+            out = _write(seg, name, [_window(seg)])
             logger.info("Written segment %d: %s", i, out)
             out_paths.append(out)
         return out_paths
 
-    out = _write(raw.copy().crop(tmin=tmin, tmax=tmax), stem)
+    seg = raw.copy().crop(tmin=tmin, tmax=tmax)
+    out = _write(seg, stem, [_window(seg)])
     logger.info("Written: %s", out)
     return [out]
 

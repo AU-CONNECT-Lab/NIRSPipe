@@ -19,6 +19,7 @@ from fnirs_pipe.pipeline.synchrony import (  # noqa: F401  re-exported
     compute_pairwise_coherence,
     compute_wtc,
     compute_wtc_roi,
+    roi_mean_of_channels,
     wtc_band_mean,
 )
 from fnirs_pipe.utils import is_optical_density

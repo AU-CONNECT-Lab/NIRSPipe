@@ -106,7 +106,8 @@ a bare-MNE run of the same chain. Reports are kept with the project notes outsid
 ### Algorithms / numerical validation
 
 - **Spline motion correction** — still raises `NotImplementedError`; TDDR and wavelet are implemented ([pipeline/motion.py](fnirs_pipe/pipeline/motion.py))
-- **External regressors in confound regression** — accept extra nuisance regressors alongside the short-channel ones, e.g. accelerometer traces from the SNIRF `aux` group. Head motion is a different confound from scalp physiology and short channels do not carry it ([pipeline/glm.py](fnirs_pipe/pipeline/glm.py))
+- **External regressors in confound regression** — accept extra nuisance regressors alongside the short-channel ones, e.g. accelerometer traces from the SNIRF `aux` group. The two blocks are not orthogonal, so measure the collinearity before choosing between joint regression and a tCCA-style orthogonalisation ([pipeline/glm.py](fnirs_pipe/pipeline/glm.py))
+- **Filter before crop** — each cropped condition is filtered on its own, so a long filter can span much of a short segment. Filtering the whole recording first would fix that, at the cost of inverting the crop and prep stages ([cli/prep.py](fnirs_pipe/cli/prep.py))
 
 ### QC enhancements
 

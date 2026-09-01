@@ -210,7 +210,7 @@ def cmd_group_hyper_wtc(output_dir: Path) -> None:
     from fnirs_pipe.qc.wtc_aggregate import write_aggregate_wtc
 
     wrote = False
-    for kind in ("wtc", "wtc-roi"):
+    for kind in ("wtc", "wtc-roi", "wtc-roichan"):
         path = write_aggregate_wtc(output_dir, kind=kind)
         if path is not None:
             print(f"{kind} -> {path}")

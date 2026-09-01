@@ -14,7 +14,11 @@ Nyquist: naive interpolation returns it at full amplitude wearing a different fr
 Band: a regressor carrying variance the data no longer has inflates the denominator of its
 own beta and puts that variance back into the residual. Short channels avoid this by riding
 through the same filter as the data. Aux comes from outside and has to be filtered on
-purpose, which is what `_aux_regressors` does and what the last section checks.
+purpose, which is what `_aux_regressors` does.
+
+Crop: every SNIRF the package writes goes through a Raw, and a Raw cannot hold an aux
+channel, so a cropped recording arrives at postprocessing with nothing to regress unless the
+aux group is put back explicitly. The last section is what keeps that from regressing.
 """
 
 import gzip
@@ -35,8 +39,10 @@ from fnirs_pipe.io.auxiliary import (
     read_aux_table,
     resample_to_grid,
     write_aux_table,
+    write_aux_window,
 )
 from fnirs_pipe.io.snirf import write_snirf
+from fnirs_pipe.pipeline.crop import crop_snirf_from_path
 from fnirs_pipe.pipeline.glm import _aux_regressors
 from fnirs_pipe.pipeline.post_pipeline import (
     PostConfig,
@@ -308,3 +314,98 @@ def test_no_bandpass_means_nothing_to_match(caplog):
     with caplog.at_level(logging.WARNING):
         _warn_unmatched_design_band(_config(drift_model="none"))
     assert not caplog.text
+
+
+# ---- surviving a crop ----
+
+def _raw_snirf_with_aux(tmp_path: Path, duration: float, fs: float = AUX_FS) -> Path:
+    """A raw-intensity recording whose one aux channel records its own timestamp.
+
+    Making the samples equal to the time they were taken at is what lets a test say where in
+    the original recording a cropped window came from: the value is the answer.
+    """
+    path = tmp_path / "sub-01_task-full_nirs.snirf"
+    write_snirf(synth_raw("01", "rest", duration=duration, motion_onset=None, bad_pair=None),
+                path)
+
+    stamps = np.arange(0, duration, 1 / fs)
+    with h5py.File(path, "a") as handle:
+        group = handle["nirs"].create_group("aux1")
+        group.create_dataset("name", data=b"ACCEL_X")
+        group.create_dataset("dataTimeSeries", data=stamps.copy())
+        group.create_dataset("time", data=stamps)
+        group.create_dataset("dataUnit", data=b"m/s^2")
+    return path
+
+
+def test_a_cropped_recording_keeps_its_aux(tmp_path):
+    """Without this the aux group is gone by the time postprocessing looks for it."""
+    source = _raw_snirf_with_aux(tmp_path, 200.0)
+    out = crop_snirf_from_path(source, tmp_path / "deriv", "01", tmin=50.0, tmax=150.0)[0]
+
+    times, data, units = read_aux_snirf(out)
+    assert list(data) == ["ACCEL_X"]
+    assert units["ACCEL_X"] == "m/s^2"
+    # rebased to the segment, like the markers and the optical data
+    assert times["ACCEL_X"][0] == pytest.approx(0.0, abs=1 / AUX_FS)
+    assert times["ACCEL_X"][-1] == pytest.approx(100.0, abs=1 / AUX_FS)
+    # the samples still say which part of the original recording they are
+    assert data["ACCEL_X"] == pytest.approx(times["ACCEL_X"] + 50.0, abs=1e-6)
+
+
+def test_the_aux_rate_is_not_touched_by_the_crop(tmp_path):
+    """Resampling is postprocessing's decision; baking it in here fixes one downstream rate."""
+    source = _raw_snirf_with_aux(tmp_path, 200.0)
+    out = crop_snirf_from_path(source, tmp_path / "deriv", "01", tmin=50.0, tmax=150.0)[0]
+
+    times, _, _ = read_aux_snirf(out)
+    assert 1 / np.median(np.diff(times["ACCEL_X"])) == pytest.approx(AUX_FS, abs=0.01)
+
+
+def test_each_segment_of_a_multi_segment_crop_gets_its_own_window(tmp_path):
+    source = _raw_snirf_with_aux(tmp_path, 300.0)
+    segments = pd.DataFrame({"onset": [10.0, 200.0], "duration": [60.0, 60.0],
+                             "task": ["early", "late"]})
+    outs = crop_snirf_from_path(source, tmp_path / "deriv", "01", segments_df=segments)
+
+    assert [p.name for p in outs] == ["sub-01_task-early_nirs.snirf",
+                                      "sub-01_task-late_nirs.snirf"]
+    for path, onset in zip(outs, [10.0, 200.0]):
+        times, data, _ = read_aux_snirf(path)
+        assert data["ACCEL_X"] == pytest.approx(times["ACCEL_X"] + onset, abs=1e-6)
+
+
+def test_a_combined_crop_lays_the_windows_end_to_end(tmp_path):
+    """The optical data is concatenated, so the aux has to be too or the two disagree."""
+    source = _raw_snirf_with_aux(tmp_path, 300.0)
+    segments = pd.DataFrame({"onset": [10.0, 200.0], "duration": [60.0, 60.0]})
+    out = crop_snirf_from_path(source, tmp_path / "deriv", "01",
+                               segments_df=segments, combine=True)[0]
+
+    times, data, _ = read_aux_snirf(out)
+    stamps = times["ACCEL_X"]
+    assert stamps[0] == pytest.approx(0.0, abs=1 / AUX_FS)
+    assert stamps[-1] == pytest.approx(120.0, abs=1 / AUX_FS)
+    assert np.all(np.diff(stamps) > 0)                # one axis, not two overlapping ones
+    # the join is visible in the values: the second window comes from 190 s later
+    first, second = data["ACCEL_X"][stamps < 60.0], data["ACCEL_X"][stamps > 60.0]
+    assert first.max() < 71.0 and second.min() > 199.0
+
+
+def test_cropping_a_recording_with_no_aux_writes_no_aux(tmp_path):
+    source = tmp_path / "sub-01_task-full_nirs.snirf"
+    write_snirf(synth_raw("01", "rest", duration=200.0, motion_onset=None, bad_pair=None),
+                source)
+    out = crop_snirf_from_path(source, tmp_path / "deriv", "01", tmin=50.0, tmax=150.0)[0]
+    assert read_aux_snirf(out) == ({}, {}, {})
+
+
+def test_a_window_holding_no_aux_sample_is_reported_rather_than_written(tmp_path, caplog):
+    source = _raw_snirf_with_aux(tmp_path, 200.0)
+    out = tmp_path / "empty.snirf"
+    write_snirf(synth_raw("01", "rest", duration=20.0, motion_onset=None, bad_pair=None), out)
+
+    with caplog.at_level(logging.WARNING):
+        assert write_aux_window(source, out, [(500.0, 600.0)]) == []
+    assert "ACCEL_X" in caplog.text
+    assert read_aux_snirf(out) == ({}, {}, {})

@@ -500,3 +500,35 @@ def wtc_band_mean(
 
     columns = ["sub1", "sub2", "label"] + (["label2"] if crossed else [])
     return pd.DataFrame(rows, columns=columns + ["coherence", "n_valid_frac"])
+
+
+def roi_mean_of_channels(
+    band_df: pd.DataFrame,
+    roi_map: dict[str, list[str]],
+) -> pd.DataFrame:
+    """Average channel-level band means within each ROI: the ROI number the WTC literature reports.
+
+    The field computes coherence per channel pair and averages those values into ROI
+    clusters. :func:`compute_wtc_roi` does the reverse, one WTC on the ROI-averaged signal,
+    which is a different number because coherence is bounded and nonlinear.
+
+    ``band_df`` is what :func:`wtc_band_mean` returns for a channel-level result; a crossed
+    one carries ``label2`` and is grouped on both sides into the ROI-by-ROI matrix. ``n_ch``
+    counts the channel pairs behind each mean, so an ROI thinned by rejection is visible.
+    Channels no ROI lists are dropped.
+    """
+    ch_to_roi = {ch: roi for roi, chs in roi_map.items() for ch in chs}
+    df = band_df.copy()
+    label_cols = ["label"] + (["label2"] if "label2" in df.columns else [])
+    for col in label_cols:
+        df[col] = df[col].map(ch_to_roi)
+    df = df.dropna(subset=label_cols)
+
+    keys = ["sub1", "sub2"] + label_cols
+    return (
+        df.groupby(keys, sort=False)
+          .agg(coherence=("coherence", "mean"),
+               n_valid_frac=("n_valid_frac", "mean"),
+               n_ch=("coherence", "count"))
+          .reset_index()
+    )

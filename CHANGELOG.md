@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 - WTC computes only the wavelet scales its frequency range keeps, 1.8x faster on a 900 s recording. The coherences are unchanged bit for bit; `--no-wtc-limit-scales` restores the old behaviour
 
 ### Added
+- **`hyper-post` writes `hyper-wtc-roichan.tsv` whenever `--roi-mapping` is given**: coherence computed per channel pair, then averaged within each ROI. This is the ROI number the WTC literature reports, and it is not the same as `hyper-wtc-roi.tsv`, which averages the signals first and computes one coherence. Both are written; `n_ch` says how many channels backed each mean. `fnirs-qc group-hyper-wtc` merges the new table too
 - `fnirs-qc hyper-post --wtc-channel-cross` crosses every long channel with every other across the two brains: 196 values instead of 14. Single channels are noisy, so the off-diagonal is exploratory
 - `fnirs-qc hyper-post --wtc-save-maps` keeps the full time-frequency maps, and `fnirs-qc wtc-band` re-averages them over another band without a second wavelet transform
 - `fnirs-qc hyper-post --bads-scope subject` unions each subject's rejected channels over their runs, so conditions are compared on one channel set
@@ -21,6 +22,7 @@ All notable changes to this project will be documented in this file.
 - `--aux-channels` picks individual aux channels by name, for an aux group that also holds something that is not a confound
 
 ### Fixed
+- **`fnirs-prep crop` dropped the aux group.** Cropping writes through MNE, which cannot carry an aux channel, so every cropped recording reached preprocessing with no accelerometers and `--aux-regressors` had nothing to regress. The segment's aux is cut from the source and written back at the rate it was recorded
 - **`hyper-post` excluded the wrong run's bad channels.** A subject with five tasks had four of them analysed with a fifth task's rejections
 - **A group member with two sessions, or two runs of one task, had one silently analysed and the other dropped.** The ambiguity is refused now, naming the CSV column that resolves it
 - **A missing task could be analysed as a different one.** Looking up a processing stage fell back to any task of that subject when the requested one had no file
