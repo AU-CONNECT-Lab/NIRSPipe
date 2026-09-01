@@ -16,6 +16,10 @@ _COLORS = {
     "derivative": ("#d6eaf8", "#2874a6"),
 }
 
+# Outline for a node whose sidecar outlived its file. Not a domain: the box keeps the
+# domain colour it would otherwise have had.
+_MISSING_EDGE = "#b03a2e"
+
 _BOX_W, _BOX_H = 2.4, 1.02
 _X_GAP, _Y_GAP = 3.6, 1.5
 
@@ -75,10 +79,13 @@ def provenance_figure(nodes: dict[str, Node], title: str | None = None):
     for node in nodes.values():
         x, y = pos[node.key]
         fill, edge = _COLORS.get(node.domain, _COLORS["derivative"])
+        # a sidecar whose file was deleted keeps its domain colour, so the chain still reads
+        # left to right, and takes a dashed red outline so it is not mistaken for output
         ax.add_patch(mpatches.FancyBboxPatch(
             (x - _BOX_W / 2, y - _BOX_H / 2), _BOX_W, _BOX_H,
             boxstyle="round,pad=0.02,rounding_size=0.12",
-            facecolor=fill, edgecolor=edge, linewidth=1.3, zorder=2,
+            facecolor=fill, edgecolor=_MISSING_EDGE if node.missing else edge,
+            linestyle="--" if node.missing else "-", linewidth=1.3, zorder=2,
         ))
         # three lines: what it is, how it was made, and the shape of the data left behind
         ax.text(x, y + 0.28, node.label, ha="center", va="center",
@@ -90,9 +97,12 @@ def provenance_figure(nodes: dict[str, Node], title: str | None = None):
         if made:
             ax.text(x, y + 0.02, made, ha="center", va="center",
                     fontsize=_fit(made, 6.5, 24), color="#7f8c8d", zorder=3)
-        if node.state:
-            ax.text(x, y - 0.26, node.state, ha="center", va="center",
-                    fontsize=_fit(node.state, 6.0, 26), color="#95a5a6", zorder=3)
+        # the state line is the shape of the data left behind; there is none to describe
+        note = "file missing" if node.missing else node.state
+        if note:
+            ax.text(x, y - 0.26, note, ha="center", va="center",
+                    fontsize=_fit(note, 6.0, 26),
+                    color=_MISSING_EDGE if node.missing else "#95a5a6", zorder=3)
 
     xs = [p[0] for p in pos.values()]
     ys = [p[1] for p in pos.values()]
@@ -102,10 +112,14 @@ def provenance_figure(nodes: dict[str, Node], title: str | None = None):
     if title:
         ax.set_title(title, fontsize=10, color="#2c3e50", pad=8)
 
+    handles = [mpatches.Patch(facecolor=f, edgecolor=e, label=name)
+               for name, (f, e) in _COLORS.items()]
+    if any(n.missing for n in nodes.values()):
+        handles.append(mpatches.Patch(facecolor="none", edgecolor=_MISSING_EDGE,
+                                      linestyle="--", label="file missing"))
     ax.legend(
-        handles=[mpatches.Patch(facecolor=f, edgecolor=e, label=name)
-                 for name, (f, e) in _COLORS.items()],
-        loc="lower center", bbox_to_anchor=(0.5, -0.04), ncol=4,
+        handles=handles,
+        loc="lower center", bbox_to_anchor=(0.5, -0.04), ncol=len(handles),
         frameon=False, fontsize=7,
     )
     fig.tight_layout()

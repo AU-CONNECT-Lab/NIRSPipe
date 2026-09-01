@@ -22,6 +22,7 @@ All notable changes to this project will be documented in this file.
 - `--aux-channels` picks individual aux channels by name, for an aux group that also holds something that is not a confound
 
 ### Fixed
+- **The provenance diagram drew steps that had not been run.** A sidecar whose output file was deleted, which is what switching a tree from one mode to another leaves behind, was read as an ordinary node. Those nodes are drawn dashed and labelled `file missing` instead of being believed
 - **`fnirs-prep crop` dropped the aux group.** Cropping writes through MNE, which cannot carry an aux channel, so every cropped recording reached preprocessing with no accelerometers and `--aux-regressors` had nothing to regress. The segment's aux is cut from the source and written back at the rate it was recorded
 - **`hyper-post` excluded the wrong run's bad channels.** A subject with five tasks had four of them analysed with a fifth task's rejections
 - **A group member with two sessions, or two runs of one task, had one silently analysed and the other dropped.** The ambiguity is refused now, naming the CSV column that resolves it

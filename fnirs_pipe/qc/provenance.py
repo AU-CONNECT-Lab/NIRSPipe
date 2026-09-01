@@ -35,6 +35,7 @@ class Node:
     depth: int = 0
     detail: str = ""                           # settings the step used, e.g. "0.01-0.5 Hz"
     state: str = ""                            # shape of the data here, e.g. "40/56 ch · 2 Hz"
+    missing: bool = False                      # the sidecar is here, the file it describes is not
 
 
 def _key(path: str | Path) -> str:
@@ -187,6 +188,24 @@ def _domain_of(label: str, is_root: bool) -> str:
     return _DOMAIN.get(label, "derivative")
 
 
+def _file_is_gone(sidecar: Path, data: dict[str, Any]) -> bool:
+    """Whether the file this sidecar describes has been deleted out from under it.
+
+    Nothing in the package removes a sidecar when its output is deleted, and switching a
+    tree from one mode to another leaves the old mode's sidecars behind. Reading them as
+    ordinary nodes makes the graph claim steps the run did not perform, so they are found
+    here and drawn as missing rather than silently believed.
+
+    The SQM record is the exception and is never missing: it is a JSON that holds the
+    numbers itself, so it has no companion by design. ``n_metrics`` is what marks it, the
+    same field `_state_line` uses to tell a QC checkpoint from a signal file.
+    """
+    if data.get("n_metrics") is not None:
+        return False
+    stem = sidecar.name[: -len(".json")]
+    return not any(p.suffix != ".json" for p in sidecar.parent.glob(f"{stem}.*"))
+
+
 def scan(nirs_dir: Path, label: str | None = None) -> dict[str, Node]:
     """Read the sidecars under nirs_dir and return the graph keyed by filename stem.
 
@@ -216,6 +235,7 @@ def scan(nirs_dir: Path, label: str | None = None) -> dict[str, Node]:
             sources=[_key(s) for s in (meta.get("Sources") or [])],
             detail=_step_detail(meta.get("step"), params, data),
             state=_state_line(data),
+            missing=_file_is_gone(sidecar, data),
         )
 
     # Sources may name files outside nirs_dir (the BIDS input); add them as roots.
@@ -290,10 +310,11 @@ def to_mermaid(nodes: dict[str, Node]) -> str:
         return re.sub(r"\W", "_", key)      # mermaid ids allow no dashes or dots
 
     ordered = sorted(nodes.values(), key=lambda n: (n.depth, n.label))
-    lines = ["flowchart LR"]
+    lines = ["flowchart LR", "    classDef missing stroke:#b03a2e,stroke-dasharray: 4 3"]
     for n in ordered:
-        text = f"{n.label}<br/><small>{n.state}</small>" if n.state else n.label
-        lines.append(f'    {ident(n.key)}["{text}"]')
+        note = "file missing" if n.missing else n.state
+        text = f"{n.label}<br/><small>{note}</small>" if note else n.label
+        lines.append(f'    {ident(n.key)}["{text}"]' + (":::missing" if n.missing else ""))
     for node in ordered:
         for src in node.sources:
             # a wrapped detail is drawn on several lines in the PNG; a mermaid edge label

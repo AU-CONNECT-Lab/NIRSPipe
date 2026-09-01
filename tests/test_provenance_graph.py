@@ -12,12 +12,19 @@ import pytest
 from fnirs_pipe.qc.provenance import scan, to_mermaid, write_provenance
 
 
-def _sidecar(directory, name, step=None, sources=(), **extra):
-    """Write one sidecar. Omitting step produces a non-provenance JSON, like SQM."""
+def _sidecar(directory, name, step=None, sources=(), data_file=True, **extra):
+    """Write one sidecar, and by default the file it describes.
+
+    Omitting step produces a non-provenance JSON, like SQM. `data_file=False` leaves the
+    sidecar without its output, which is the state a mode switch leaves behind and which
+    `scan` reports as missing rather than as an ordinary node.
+    """
     payload = {"Sources": list(sources), **extra}
     if step is not None:
         payload["step"] = step
     (directory / f"{name}.json").write_text(json.dumps(payload))
+    if data_file:
+        (directory / f"{name}.snirf").write_bytes(b"")
 
 
 # ---- what counts as a node ----
@@ -263,19 +270,34 @@ def test_write_provenance_writes_nothing_without_sidecars(tmp_path):
 
 
 def test_cmd_provenance_writes_where_the_report_looks_for_it(tmp_path, capsys):
-    # the QC report embeds figures/provenance.png by relative path, so re-rendering has
-    # to land on that exact name or an existing report keeps showing the old diagram
+    # a subject's report embeds figures/<run>/provenance.png by relative path, so
+    # re-rendering has to land on that exact name or an existing report keeps showing the
+    # old diagram
     from fnirs_pipe.cli.qc import cmd_provenance
 
     nirs = tmp_path / "sub-01" / "nirs"
     nirs.mkdir(parents=True)
-    _sidecar(nirs, "sub-01_desc-od_nirs", step="od_conversion", sources=["/bids/in.snirf"])
+    _sidecar(nirs, "sub-01_task-tapping_desc-od_nirs", step="od_conversion",
+             sources=["/bids/in.snirf"])
 
     cmd_provenance(tmp_path)
 
-    figures = tmp_path / "sub-01" / "figures"
+    figures = tmp_path / "sub-01" / "figures" / "sub-01_task-tapping"
     assert (figures / "provenance.png").exists()
     assert (figures / "provenance.mmd").exists()
+
+
+def test_a_tree_with_no_runs_to_split_on_keeps_one_graph(tmp_path):
+    """A group tree carries no run entity, so it lands on the unsuffixed name."""
+    from fnirs_pipe.cli.qc import cmd_provenance
+
+    nirs = tmp_path / "group-d01" / "nirs"
+    nirs.mkdir(parents=True)
+    _sidecar(nirs, "group-d01_task-rest_hyper-wtc", step="hyper_wtc")
+
+    cmd_provenance(tmp_path)
+
+    assert (tmp_path / "group-d01" / "figures" / "provenance.png").exists()
 
 
 def test_write_provenance_writes_png_and_mermaid(tmp_path):
@@ -288,3 +310,47 @@ def test_write_provenance_writes_png_and_mermaid(tmp_path):
 
     assert {p.suffix for p in written} == {".png", ".mmd"}
     assert all(p.exists() and p.stat().st_size > 0 for p in written)
+
+
+# ---- a sidecar that outlived its file ----
+
+def test_a_sidecar_whose_file_is_gone_is_marked_missing(tmp_path):
+    """Switching a tree from rest to denoise leaves the old mode's sidecars behind.
+
+    Nothing removes them, so the graph would otherwise claim steps the run did not perform.
+    """
+    _sidecar(tmp_path, "sub-01_desc-errts_nirs", step="glm_residuals")
+    _sidecar(tmp_path, "sub-01_desc-errtsbroad_nirs", step="glm_residuals", data_file=False)
+
+    nodes = scan(tmp_path)
+    assert nodes["sub-01_desc-errts_nirs"].missing is False
+    assert nodes["sub-01_desc-errtsbroad_nirs"].missing is True
+
+
+def test_a_missing_node_is_drawn_rather_than_dropped(tmp_path):
+    """It stays in the graph: a step that was run and whose output is gone is worth seeing."""
+    _sidecar(tmp_path, "sub-01_desc-od_nirs", step="od_conversion", sources=["/bids/in.snirf"])
+    _sidecar(tmp_path, "sub-01_alff", step="alff", sources=["sub-01_desc-od_nirs.snirf"],
+             data_file=False)
+
+    mermaid = to_mermaid(scan(tmp_path))
+    assert "file missing" in mermaid
+    assert ":::missing" in mermaid
+    assert "sub_01_desc_od_nirs -- alff --> sub_01_alff" in mermaid
+
+
+def test_the_sqm_record_is_its_own_file_and_never_missing(tmp_path):
+    """It holds the numbers itself, so it has no companion by design."""
+    _sidecar(tmp_path, "sub-01_desc-sqm_nirs", step="sqm", data_file=False,
+             data={"sections": ["raw"], "metrics": ["raw_sci_mean"], "n_metrics": 1})
+    assert scan(tmp_path)["sub-01_desc-sqm_nirs"].missing is False
+
+
+def test_a_companion_with_any_extension_counts(tmp_path):
+    """A table, a figure and a compressed table are all the file the sidecar describes."""
+    for name, suffix in (("sub-01_glm_results", ".csv"),
+                         ("sub-01_hyper-wtc", ".tsv"),
+                         ("sub-01_desc-aux_timeseries", ".tsv.gz")):
+        _sidecar(tmp_path, name, step="glm_fit", data_file=False)
+        (tmp_path / f"{name}{suffix}").write_bytes(b"")
+    assert not any(n.missing for n in scan(tmp_path).values())
