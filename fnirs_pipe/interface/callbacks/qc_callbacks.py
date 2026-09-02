@@ -31,7 +31,8 @@ _REPORTS = {
     "group-raw":       ["group_nirs.html"],
     "group-hyper-raw": ["group_hyper_nirs.html"],
     "window-raw":      ["group_nirs_*.html", "group_nirs.html"],
-    "hyper-post":      ["group-*_hyper*.html", "group-*/*.html"],
+    # the second pattern finds a tree written before the reports moved into group-<id>/
+    "hyper-post":      ["group-*/group-*_hyper-post.html", "group-*_hyper*.html"],
 }
 
 

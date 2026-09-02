@@ -8,10 +8,10 @@ A BIDS-compatible fNIRS preprocessing, postprocessing, hyperscanning, and QC pip
 
 | Stage | What it does |
 |-------|--------------|
-| `prep` | Fixed-order preprocessing: OD conversion → SCI channel marking → motion correction (TDDR) → Beer-Lambert |
+| `prep` | Fixed-order preprocessing: OD conversion → SCI channel marking → motion correction (TDDR or wavelet) → Beer-Lambert |
 | `post` | Mode-driven postprocessing: `denoise`, `glm`, or `rest` (bandpass + resample; confound regression; GLM residuals or ALFF/FC) |
 
-Outputs follow the [BIDS Derivatives](https://bids-specification.readthedocs.io/en/stable/derivatives/introduction.html) spec. Each subject gets an HTML QC report with figures and an auto-generated Methods paragraph. Group-level QC, hyperscanning (dyad WTC/ISC), an interactive rating viewer, a Dash desktop GUI, and a JSONL→SQLite run-log database are all first-class features.
+Outputs follow the [BIDS Derivatives](https://bids-specification.readthedocs.io/en/stable/derivatives/introduction.html) spec. Each run gets an HTML QC report with figures, a provenance graph and an auto-generated Methods paragraph, and each subject an index page over their runs. Group-level QC, hyperscanning (dyad WTC/ISC), an interactive rating viewer, a Dash desktop GUI, and a JSONL→SQLite run-log database are all first-class features.
 
 ## Requirements
 
@@ -83,6 +83,7 @@ Preprocessing:
                                tddr + wavelet implemented; spline raises NotImplementedError.
   --bad-channels               Comma-separated S-D labels to mark bad,
                                e.g. "S1_D1,S2_D3" (unioned with SCI bads)
+  --window-length FLOAT        Window (s) for the windowed SCI / PSP / GVTD series. [default: 10.0]
 
 Postprocessing mode:
   --mode                       {denoise,glm,rest}
@@ -103,6 +104,13 @@ GLM (--mode glm):
   --drift-order INT            Polynomial drift order.                                [default: 1]
   --fir-delays STR             FIR delay bins in scans, e.g. "0,1,2,3,4,5"
   --short-channel              {none,mean,pca}                                        [default: none]
+  --aux-regressors             Add the recording's auxiliary channels to the confound
+                               regression (accelerometers, gyroscopes, pulse trace).
+                               Preprocessing extracts them to desc-aux_timeseries.tsv.gz.
+  --aux-channels NAME [NAME ...]
+                               Which aux channels to use. Default: all of them.
+  --fc                         Also write the connectivity products rest mode writes,
+                               from the residual. Works in glm and denoise modes.
   --events-path FILE           Optional. BIDS *_events.tsv overriding SNIRF annotations.
                                Mutually exclusive with --stim-dur.
   --stim-dur FLOAT             Optional. Fixed duration for SNIRF annotations without one.
@@ -110,11 +118,13 @@ GLM (--mode glm):
   --contrast-file FILE         TOML file defining GLM contrasts.
 
 Denoise (--mode denoise):
-  Reuses GLM flags for confound regression (drift model, short-channel).
-  Either one writes desc-errts; no task model, no resting-state derivatives.
+  Reuses GLM flags for confound regression (drift model, short-channel, aux).
+  Any one of them writes desc-errts; no task model, no resting-state derivatives.
+  --fc adds the connectivity products, from the residual or from the bandpassed
+  data itself when no regression was asked for.
 
 Rest (--mode rest):
-  Reuses GLM flags for confound regression (drift model, short-channel).
+  Reuses GLM flags for confound regression (drift model, short-channel, aux).
   --high-pass + --low-pass required for ALFF (FC computed regardless).
 
 Output:
@@ -203,6 +213,7 @@ fnirs-qc hyper-post BIDS_DIR OUTPUT_DIR --pairs-csv PATH
 
 fnirs-qc group-raw       OUTPUT_DIR
 fnirs-qc group-hyper-raw OUTPUT_DIR
+fnirs-qc provenance      OUTPUT_DIR   # redraw the graphs from the sidecars on disk
 
 fnirs-qc window-raw BIDS_DIR OUTPUT_DIR --task-label TEXT
                     --tstart FLOAT --tend FLOAT
@@ -257,12 +268,15 @@ output/
 │   │   └── _outputs/sub-*_*.jsonl
 │   └── fnirs_pipe.db                    # SQLite (after fnirs-log merge)
 ├── sub-01/
-│   ├── sub-01_qc.html                   # per-subject QC report
+│   ├── sub-01_qc.html                   # index over the subject's runs
+│   ├── sub-01_task-<t>_qc.html          # QC report, one per run
 │   ├── figures/
-│   │   ├── provenance.png               # provenance graph (embedded in the report)
-│   │   └── provenance.mmd               # same graph, mermaid source
+│   │   └── sub-01_task-<t>/             # figures, one directory per run
+│   │       ├── provenance.png           # provenance graph (embedded in that run's report)
+│   │       └── provenance.mmd           # same graph, mermaid source
 │   ├── logs/
-│   │   └── sub-01_{ts}.toml             # run record (env + params)
+│   │   ├── sub-01_{ts}.toml             # run record (env + params)
+│   │   └── sub-01_script.py             # reproduction script
 │   └── nirs/
 │       ├── sub-01_desc-od_nirs.snirf              # prep step 2
 │       ├── sub-01_desc-sci_nirs.snirf             # prep step 3
@@ -272,17 +286,20 @@ output/
 │       ├── sub-01_desc-resampled_nirs.snirf       # post: resample applied
 │       ├── sub-01_desc-errts_nirs.snirf           # post glm/rest/denoise: GLM residuals
 │       ├── sub-01_desc-errtsbroad_nirs.snirf      # rest: un-bandpassed residual, ALFF input
+│       ├── sub-01_task-<t>_desc-aux_timeseries.tsv.gz  # aux channels, if the file had any
 │       ├── sub-01_task-<t>_desc-sqm_nirs.json     # SQM record, one per run
+│       ├── sub-01_task-<t>_channel_metrics.csv    # per-channel metrics, one per run
 │       ├── sub-01_design_matrix.csv                # glm mode
 │       ├── sub-01_glm_results.csv                  # glm mode
 │       ├── sub-01_contrasts.csv                    # glm mode + --contrast-file
 │       ├── sub-01_alff.tsv                         # rest mode
-│       ├── sub-01_desc-hbo_fc.tsv                  # rest mode (channel × channel, per chromophore)
-│       ├── sub-01_desc-hbo_fcz.tsv                 # rest mode (Fisher z of the above)
-│       ├── sub-01_desc-hbo_fcroi.tsv               # rest + --roi-mapping (ROI × ROI)
-│       ├── sub-01_desc-hbo_fcroiz.tsv              # rest + --roi-mapping
-│       ├── sub-01_desc-hbo_fcseed.tsv              # rest + --roi-mapping (ROI × channel)
-│       └── sub-01_desc-hbo_fcseedz.tsv             # rest + --roi-mapping
+│       ├── sub-01_desc-hbo_fc.tsv                  # channel × channel, per chromophore
+│       ├── sub-01_desc-hbo_fcz.tsv                 # Fisher z of the above
+│       ├── sub-01_desc-hbo_fcroi.tsv               # + --roi-mapping (ROI × ROI)
+│       ├── sub-01_desc-hbo_fcroiz.tsv              # + --roi-mapping
+│       ├── sub-01_desc-hbo_fcseed.tsv              # + --roi-mapping (ROI × channel)
+│       └── sub-01_desc-hbo_fcseedz.tsv             # + --roi-mapping
+│                                                    # the fc* group: rest mode, or any mode with --fc
 ├── group_nirs.{tsv,html}                # fnirs-qc group-raw
 ├── group_hyper_nirs.{tsv,html}          # fnirs-qc group-hyper-raw
 └── group_nirs_window-<a>-<b>.{tsv,html} # fnirs-qc window-raw (per invocation)
@@ -303,11 +320,11 @@ output/
 
 ## QC Reports
 
-`fnirs-pipe` writes a per-subject HTML report automatically; `fnirs-qc` adds standalone, group, and hyperscanning reports:
+`fnirs-pipe` writes an HTML report per run automatically, plus an index page per subject; `fnirs-qc` adds standalone, group, and hyperscanning reports:
 
 | Report | Command | Level / stage |
 |--------|---------|---------------|
-| Per-subject | (pipeline, automatic) | individual — raw + post |
+| Per-run | (pipeline, automatic) | individual: raw + post, one report per run plus a subject index |
 | Raw pre-flight viewer | `fnirs-qc prep-raw` | individual — raw only |
 | Group | `fnirs-qc group-raw` / `group-hyper-raw` | group — raw |
 | Time-window group | `fnirs-qc window-raw` | group — raw, cropped window |
@@ -315,18 +332,21 @@ output/
 | Dyad raw | `fnirs-qc hyper-raw` | hyperscanning — raw coherence |
 | Dyad post | `fnirs-qc hyper-post` | hyperscanning — post: WTC + ISC (ROI-level with `--roi-mapping`) |
 
-### Per-subject report contents
+### Per-run report contents
 
-- Executive summary with traffic-light badges (bad channel rate, mean SCI, HbO–HbR corr, GVTD p95)
+- Executive summary with traffic-light badges (bad channel rate, mean SCI, HbO–HbR corr, GVTD p95), and a metrics panel whose tooltips say which stage each number was measured on
 - SCI / PSP probe layout + windowed heatmap
-- Carpet plot before / after motion correction (GVTD trace over all channels)
+- Carpet plot before / after motion correction (GVTD trace over all channels), with the spike spans and the correction footprint drawn beneath
 - Per-channel motion panel with SCI-coloured traces
 - PSD before / after bandpass (cardiac + Mayer wave peaks annotated)
 - HbO–HbR correlation panel
-- Denoising carpet — before / after, HbO and HbR separately, both scaled by the pre-denoising SD (grouped by ROI with `--roi-mapping`), when postprocessing runs
+- Topographic maps of the condition-averaged response, at time points after onset, for task data
+- Trial images, split by condition, ROI-averaged and per channel, for task data
+- Denoising carpet, before / after, HbO and HbR separately, both scaled by the pre-denoising SD (grouped by ROI with `--roi-mapping`), when postprocessing runs
 - Global correlation (`gcor`) before → after denoising when postprocessing runs
 - GLM section (design matrix + activation panel) when `--mode glm`
-- Rest section (ALFF table + FC heatmap + connectogram; ROI-level FC and seed topography with `--roi-mapping`) when `--mode rest`
+- Rest section (ALFF and fALFF as bars and on the optode layout, FC heatmap, connectogram, ROI-to-ROI matrix and seed topography with `--roi-mapping`) when `--mode rest`, or in any mode run with `--fc`
+- The run's provenance graph and a table of every output with the step that made it
 - Auto-generated Methods paragraph + software versions + references
 
 Group / window / dyad reports add subject × metric heatmaps, per-scale grouped boxplots with clickable strip points (Tukey 1.5 × IQR outliers), and sortable tables.
@@ -336,13 +356,15 @@ Group / window / dyad reports add subject × metric heatmaps, per-scale grouped 
 ```
 fnirs_pipe/
   cli/          fnirs-pipe, fnirs-recon, fnirs-prep, fnirs-qc, fnirs-rate, fnirs-gui, fnirs-log
-  pipeline/     prep_pipeline, post_pipeline, glm, denoise, restingstate, hyperscanning,
-                crop, edit_markers, channel_registration
-  io/           BIDS layout, snirf read/write, derivatives output
-  qc/           HTML report, Plotly figures, quantitative metrics, boilerplate text,
-                group / hyper / window writers, rating apps
-  interface/    Dash GUI (4 pages + sidebar)
-  utils/        logging, run_record, job_db
+  pipeline/     prep_pipeline, post_pipeline, glm, denoise, restingstate, motion,
+                hyperscanning, synchrony, crop, edit_markers
+  io/           BIDS layout, snirf read/write, derivatives output, snirf aux group,
+                delimiter-sniffing table reader
+  qc/           HTML report, subject index, Plotly figures, quantitative metrics, quality
+                record, provenance graph, boilerplate text, group / hyper / window / epoch
+                writers, WTC store and aggregation, rating apps
+  interface/    Dash GUI (6 pages + sidebar)
+  utils/        logging, run_record, job_db, lineage, run_script
   exceptions.py AlignmentError, GroupCSVError, MissingDerivativesError, ...
 ```
 

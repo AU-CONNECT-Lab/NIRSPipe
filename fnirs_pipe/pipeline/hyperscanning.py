@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 
 from fnirs_pipe.exceptions import AlignmentError, GroupCSVError, StageError
-from fnirs_pipe.io.derivatives import find_preproc_snirf
+from fnirs_pipe.io.derivatives import find_preproc_snirf, group_data_dir
 from fnirs_pipe.io.snirf import read_snirf
 from fnirs_pipe.io.tables import read_table
 from fnirs_pipe.pipeline.synchrony import (  # noqa: F401  re-exported
@@ -123,8 +123,7 @@ def write_group_bads(
                 "rejected_in": ";".join(sources.get(channel) or [task]),
             })
 
-    out_path = output_dir / f"group-{gid}_task-{task}_hyper-bads.tsv"
-    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path = group_data_dir(output_dir, gid) / f"group-{gid}_task-{task}_hyper-bads.tsv"
     columns = ["group_id", "task", "subject_id", "channel", "bads_scope", "rejected_in"]
     pd.DataFrame(rows, columns=columns).to_csv(out_path, sep="	", index=False)
     _hyper_sidecar(out_path, "hyper_bads", [], bads_scope=bads_scope)
@@ -207,7 +206,7 @@ def compute_group_sqm_raw(
 ) -> dict[str, dict]:
     """Compute raw-level SQM (SCI, bad channels) for each group member.
 
-    Writes two TSVs to output_dir following BIDS-derivatives conventions:
+    Writes two TSVs under group-{gid}/nirs/, where a subject's own tables sit:
       group-{gid}_task-{task}_hyper-raw_sqm.tsv      — one row per subject (scalars)
       group-{gid}_task-{task}_hyper-raw_channels.tsv  — one row per subject × channel
 
@@ -217,7 +216,7 @@ def compute_group_sqm_raw(
 
     gid  = group[0].group_id
     task = group[0].task
-    output_dir.mkdir(parents=True, exist_ok=True)
+    data_dir = group_data_dir(output_dir, gid)
 
     sqm_data: dict[str, dict] = {}
     scalar_rows: list[dict] = []
@@ -275,13 +274,13 @@ def compute_group_sqm_raw(
     stem = f"group-{gid}_task-{task}_hyper-raw"
     sources = [p for p in (path_from(raws[e.subject_id]) for e in group) if p]
 
-    scalar_path = output_dir / f"{stem}_sqm.tsv"
+    scalar_path = data_dir / f"{stem}_sqm.tsv"
     pd.DataFrame(scalar_rows).to_csv(scalar_path, sep="\t", index=False)
     _hyper_sidecar(scalar_path, "group_sqm_raw", sources,
                    sci_threshold=sci_threshold,
                    cardiac_l_freq=cardiac_l_freq, cardiac_h_freq=cardiac_h_freq)
 
-    channel_path = output_dir / f"{stem}_channels.tsv"
+    channel_path = data_dir / f"{stem}_channels.tsv"
     pd.DataFrame(channel_rows).to_csv(channel_path, sep="\t", index=False)
     _hyper_sidecar(channel_path, "group_sqm_raw_channels", sources,
                    sci_threshold=sci_threshold,

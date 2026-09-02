@@ -368,9 +368,11 @@ class HyperRatingApp:
         def save_hyper_decisions():
             return self._handle_save_decisions()
 
+        # the report's figure hrefs are relative to the report, which sits in the group's
+        # own folder; serving from output_dir would resolve them against the wrong root
         @app.route("/<path:filename>")
         def static_files(filename):
-            return send_from_directory(self.output_dir, filename)
+            return send_from_directory(self.html_path.parent, filename)
 
     def _handle_save_ratings(self):
         data = request.json

@@ -8,6 +8,7 @@ from pathlib import Path
 import mne
 import pandas as pd
 
+from fnirs_pipe.io.derivatives import group_data_dir, group_report_dir
 from fnirs_pipe.pipeline.hyperscanning import GroupEntry
 from fnirs_pipe.qc.figure_io import (
     _pair_fname, _save_figure_html, _save_multi_fig_html,
@@ -62,11 +63,10 @@ def _process_hyper_raw_group(
     label_parts.append(f"task-{task}")
     label    = "_".join(label_parts)
 
-    group_dir = output_dir / f"group-{group_id}"
+    group_dir = group_report_dir(output_dir, group_id)
     fig_dir   = group_dir / "figures"
-    sqm_dir   = group_dir / (f"ses-{session}" if session else "") / "nirs"
+    sqm_dir   = group_data_dir(output_dir, group_id, session)
     fig_dir.mkdir(parents=True, exist_ok=True)
-    sqm_dir.mkdir(parents=True, exist_ok=True)
 
     subject_ids  = [e.subject_id for e in group]
     first_raw    = aligned_raws.get(subject_ids[0]) if subject_ids else None
@@ -102,7 +102,7 @@ def _process_hyper_raw_group(
                 return
             fname = f"{label}_desc-{desc}_nirs.html"
             h = _save_figure_html(fig, fig_dir / fname)
-            figure_paths[name] = {"src": f"{group_dir.name}/figures/{fname}", "h": h}
+            figure_paths[name] = {"src": f"figures/{fname}", "h": h}
         except Exception as exc:
             logger.warning("%s figure failed: %s", name, exc)
 
@@ -142,7 +142,7 @@ def _process_hyper_raw_group(
 
     if ch_pairs:
         figure_paths["ch_detail_template"] = (
-            f"{group_dir.name}/figures/{label}_desc-ch{{pair}}_nirs.html"
+            f"figures/{label}_desc-ch{{pair}}_nirs.html"
         )
 
     sqm = compute_hyper_sqm(
@@ -158,5 +158,4 @@ def _process_hyper_raw_group(
         "sqm":           sqm,
         "ch_pairs":      ch_pairs,
         "figure_paths":  figure_paths,
-        "data_subdir":   group_dir.name,
     }

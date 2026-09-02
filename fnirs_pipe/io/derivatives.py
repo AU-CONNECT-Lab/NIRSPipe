@@ -62,6 +62,28 @@ def build_output_path(
     return folder / filename
 
 
+def group_report_dir(output_dir: Path, group_id: str) -> Path:
+    """A group's own folder, holding its HTML reports. The mirror of ``sub-<id>/``."""
+    folder = output_dir / f"group-{group_id}"
+    folder.mkdir(parents=True, exist_ok=True)
+    return folder
+
+
+def group_data_dir(output_dir: Path, group_id: str, session: str | None = None) -> Path:
+    """A group's tables, sidecars and quality record: ``group-<id>/[ses-<s>/]nirs``.
+
+    The mirror of a subject's ``sub-<id>/[ses-<s>/]nirs``. These used to sit loose in the
+    derivatives root, where a study of 25 dyads over 5 tasks put two thousand files
+    between the reader and the subject folders.
+    """
+    folder = group_report_dir(output_dir, group_id)
+    if session:
+        folder = folder / f"ses-{session}"
+    folder = folder / "nirs"
+    folder.mkdir(parents=True, exist_ok=True)
+    return folder
+
+
 def data_state(raw: Any) -> dict[str, Any]:
     """Shape of the signal as written, so a sidecar records what the step left behind.
 

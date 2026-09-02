@@ -9,6 +9,7 @@ import mne
 import pandas as pd
 from jinja2 import Environment, FileSystemLoader
 
+from fnirs_pipe.io.derivatives import group_data_dir, group_report_dir
 from fnirs_pipe.pipeline.hyperscanning import GroupEntry
 from fnirs_pipe.qc.figure_io import extract_markers, get_channel_pairs
 from fnirs_pipe.qc.figures.hyper_figures import _cond_colors
@@ -95,7 +96,8 @@ def build_hyper_report(
     if session:
         name_parts.append(f"ses-{session}")
     name_parts.append(f"task-{task}")
-    output_path = output_dir / ("_".join(name_parts) + "_desc-hyperraw_nirs.html")
+    output_path = (group_report_dir(output_dir, group_id)
+                   / ("_".join(name_parts) + "_desc-hyperraw_nirs.html"))
 
     env  = Environment(loader=FileSystemLoader(str(_TEMPLATE_DIR)), autoescape=False)
     html = env.get_template("hyper_report.html.j2").render(
@@ -149,8 +151,8 @@ def build_hyper_post_report(
       4. ISC connectogram — inter-brain arcs filtered by isc_threshold
 
     Each WTC map is also collapsed to one number per channel over
-    [wtc_band_fmin, wtc_band_fmax] and written as a TSV beside the HTML, so a group
-    analysis reads the same values the figures were drawn from.
+    [wtc_band_fmin, wtc_band_fmax] and written as a TSV under the group's nirs/, so a
+    group analysis reads the same values the figures were drawn from.
 
     ``wtc_roi_cross`` crosses each subject's ROIs with the other's, so the TSV gains the
     off-diagonal pairs. Those extra pairs stay out of the time-frequency selector, which
@@ -226,8 +228,8 @@ def build_hyper_post_report(
         return df
 
     def _write_df_tsv(df, kind: str, step: str) -> Path:
-        tsv_path = output_dir / f"group-{group_id}_task-{task}_hyper-{kind}.tsv"
-        tsv_path.parent.mkdir(parents=True, exist_ok=True)
+        tsv_path = (group_data_dir(output_dir, group_id)
+                    / f"group-{group_id}_task-{task}_hyper-{kind}.tsv")
         df.to_csv(tsv_path, sep="\t", index=False)
         _hyper_sidecar(
             tsv_path, step,
@@ -292,7 +294,8 @@ def build_hyper_post_report(
             if isc_mat is None:
                 return ""
             write_isc_matrix(
-                output_dir / f"group-{group_id}_task-{task}_hyper-isc-{ch_type}.tsv",
+                group_data_dir(output_dir, group_id)
+                / f"group-{group_id}_task-{task}_hyper-isc-{ch_type}.tsv",
                 isc_mat, isc_ch_names, ch_type,
                 [p for p in (path_from(r) for r in aligned_raws.values()) if p],
                 subject_ids,
@@ -368,8 +371,8 @@ def build_hyper_post_report(
         for chs in bad_channels.values():
             bad_pairs_all |= {c.rsplit(" ", 1)[0] for c in chs}
 
-    output_path = output_dir / f"group-{group_id}_task-{task}_hyper-post.html"
-    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path = (group_report_dir(output_dir, group_id)
+                   / f"group-{group_id}_task-{task}_hyper-post.html")
 
     env  = Environment(loader=FileSystemLoader(str(_TEMPLATE_DIR)), autoescape=False)
     html = env.get_template("hyper_post_report.html.j2").render(

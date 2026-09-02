@@ -61,7 +61,10 @@ def cmd_hyper(
     if session_label:
         name_parts.append(f"ses-{session_label}")
     name_parts.append(f"task-{task_label}")
-    html_path = output_dir / ("_".join(name_parts) + "_desc-hyperraw_nirs.html")
+    fname = "_".join(name_parts) + "_desc-hyperraw_nirs.html"
+    html_path = output_dir / f"group-{group_id}" / fname
+    if not html_path.exists() and (output_dir / fname).exists():
+        html_path = output_dir / fname      # a tree written before the group folder existed
     if not html_path.exists():
         print(f"Error: hyper report not found: {html_path}", file=sys.stderr)
         raise SystemExit(1)

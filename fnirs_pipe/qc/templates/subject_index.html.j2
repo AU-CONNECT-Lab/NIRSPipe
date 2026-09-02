@@ -25,6 +25,14 @@
     td a { color: #2980b9; font-weight: 600; text-decoration: none; }
     td a:hover { text-decoration: underline; }
     .muted { color: #95a5a6; }
+    .run-links { display: block; margin-top: 0.15rem; font-size: 0.75rem; }
+    .run-links a { color: #7f8c8d; font-weight: 400; margin-right: 0.55rem; }
+    td.flag { background: #fdf0e3; font-weight: 600; color: #b9591a; }
+    td.flag::after { content: " *"; color: #e08b3f; }
+    td.ch-bad { background: #fadbd8; color: #922b21; font-weight: 600; text-align: center; }
+    td.ch-ok  { color: #cfd8dc; text-align: center; }
+    td.ch-n   { text-align: right; }
+    tr.ch-clean td { color: #b0bec5; }
     pre { background: #f4f4f4; padding: 0.75rem 1rem; border-radius: 4px;
           overflow-x: auto; font-size: 0.82rem; white-space: pre-wrap;
           word-break: break-all; }
@@ -60,6 +68,11 @@
       <td>
         {% if row.href %}<a href="{{ row.href }}">{{ row.label }}</a>
         {% else %}{{ row.label }} <span class="muted">(no report)</span>{% endif %}
+        {% if row.links %}
+        <span class="run-links">
+          {% for link in row.links %}<a href="{{ link.href }}">{{ link.text }}</a>{% endfor %}
+        </span>
+        {% endif %}
       </td>
       <td>
         {%- if row.n_channels is not none -%}
@@ -68,7 +81,9 @@
       </td>
       <td>{% if row.duration_s %}{{ "%.0f"|format(row.duration_s) }} s{% else %}<span class="muted">n/a</span>{% endif %}</td>
       <td>{% if row.sfreq %}{{ "%.2f"|format(row.sfreq) }} Hz{% else %}<span class="muted">n/a</span>{% endif %}</td>
-      {% for _, value in row.metrics %}<td>{{ value }}</td>{% endfor %}
+      {% for cell in row.metrics %}
+      <td{% if cell.flagged %} class="flag"{% endif %}>{{ cell.value }}</td>
+      {% endfor %}
     </tr>
   {% endfor %}
   </tbody>
@@ -78,7 +93,49 @@
 <p class="subtitle" style="margin-top:0.6rem;">
   Metrics are read from each run's <code>desc-sqm</code> record. Open a run for its figures,
   provenance and full metric table.
+  {% if rows | length >= 4 %}
+  A marked cell sits more than {{ outlier_z }} median absolute deviations from this subject's
+  other runs on that metric. It says the run differs from its neighbours, not that it failed:
+  conditions of different length or difficulty are expected to differ.
+  {% endif %}
 </p>
+
+{% if channels %}
+<h2>Channel rejections</h2>
+{% if channels.rejected %}
+<div class="scroll">
+<table>
+  <thead>
+    <tr>
+      <th>Source-detector</th>
+      {% for row in rows %}<th>{{ row.entities.get('task', row.label) }}</th>{% endfor %}
+      <th>Runs</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for ch in channels.rejected %}
+    <tr>
+      <td><code>{{ ch.pair }}</code></td>
+      {% for bad in ch.bad_in %}
+      <td class="{{ 'ch-bad' if bad else 'ch-ok' }}">{{ "bad" if bad else "&middot;" }}</td>
+      {% endfor %}
+      <td class="ch-n">{{ ch.n_bad }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+<p class="subtitle" style="margin-top:0.6rem;">
+  {{ channels.n_clean }} of {{ channels.n_pairs }} source-detector pairs survived every run.
+  Both wavelengths of a pair are collapsed into one row: rejecting either rejects the optode.
+  Read from each run's <code>_channel_metrics.csv</code>; this is the set
+  <code>--bads-scope subject</code> takes the union of.
+  {% if channels.clean %}
+  <br /><span class="muted">Kept everywhere: {{ channels.clean | join(', ') }}</span>
+  {% endif %}
+</p>
+{% endif %}
 
 <h2>Run command</h2>
 <pre>{{ run_command }}</pre>
