@@ -230,7 +230,10 @@ def _wtc_over_pairs(
     Time axis decimated to ~1 Hz for display; frequency axis filtered to [fmin, fmax] Hz.
     significance adds a per-frequency Monte Carlo level to each pair (slow; ~300 surrogate runs).
 
-    ``seed`` makes those levels reproducible. It is applied once here rather than per pair:
+    ``seed`` makes those levels reproducible. It seeds pycwt's Monte Carlo only;
+    :func:`compute_wtc_pseudo` takes the same number for its own surrogate generator, so one
+    value makes a whole run reproducible without the two sharing a stream.
+    It is applied once here rather than per pair:
     the surrogates come from numpy's global legacy RNG inside pycwt, which takes no seed
     argument, and seeding every pair with one number would hand nearly identical surrogates
     to channels with similar autocorrelation, turning the Monte Carlo error into a bias
@@ -366,14 +369,26 @@ def compute_wtc_pseudo(
     ``wtc_band_mean`` returns, so a true-dyad table and this one subtract or test cell by cell.
 
     Cost is ``n_iter`` times a full WTC run. Significance contours are never computed here:
-    this table *is* the null, so a second null inside it would be redundant and slow.
+    this table *is* the null, so a second null inside it would be redundant and slow. For the
+    same reason the surrogate maps are not saved; only their band means survive, which is what
+    a comparison against the real table needs.
+
+    ``seed`` drives the phase randomisation and nothing else. Passing the same value as the
+    real run is what makes the pair reproducible together.
     """
     if n_iter < 1:
         raise ValueError(f"n_iter must be at least 1, got {n_iter}")
 
     subject_ids = list(raws.keys())
-    if len(subject_ids) < 2:
-        raise ValueError("Need at least 2 subjects for WTC")
+    if len(subject_ids) != 2:
+        # _wtc_over_pairs walks every combination, and only one subject is scrambled, so a
+        # third member would give pairs of two real recordings sitting in a table labelled
+        # null. Refused rather than warned: a wrong null reads exactly like a right one.
+        raise ValueError(
+            f"pseudo-dyad WTC needs exactly 2 subjects, got {len(subject_ids)}: "
+            f"{subject_ids}. Only one side is scrambled, so a larger group would leave "
+            "real-against-real pairs in a table labelled null. Run it per dyad."
+        )
 
     true_signals = {sid: _long_hbo_signals(raw) for sid, raw in raws.items()}
     labels = list(true_signals[subject_ids[0]])
@@ -527,11 +542,11 @@ def wtc_band_mean(
     it are wavelet coefficients padded against the edges of the record: near 1 whatever the
     data does, and enough of them at the low-frequency end to carry a whole row.
 
-    ``mask_coi`` is **off by default**, which is what the hyperscanning literature does: of 52
-    WTC studies surveyed only one masks, and the published pipelines that ship code average
-    the whole time axis. Masking is the more conservative choice and discards more of a short
-    segment than of a long one, so it moves conditions of different length by different
-    amounts; that is a reason to report ``n_valid_frac``, not a reason to mask by default.
+    ``mask_coi`` is **off by default**, which is what the hyperscanning literature does: almost
+    no published study masks, and the pipelines that ship code average the whole time axis.
+    Masking is the more conservative choice and discards more of a short segment than of a long
+    one, so it moves conditions of different length by different amounts; that is a reason to
+    report ``n_valid_frac``, not a reason to mask by default.
 
     ``n_valid_frac`` is the share of band cells that lie inside the cone of influence. **It is
     reported whether or not the mask is applied**, so the share is visible as a quality number

@@ -556,9 +556,10 @@ def _build_parser() -> argparse.ArgumentParser:
                          "scales linearly; lower it to preview a run, raise it to settle "
                          "a contour. Ignored without --wtc-significance.")
     hp.add_argument("--wtc-seed", type=int, default=None,
-                    help="Seed the Monte Carlo surrogates so --wtc-significance is "
-                         "reproducible. Also bypasses pycwt's on-disk cache, which is not "
-                         "keyed on the seed. Omit for the previous behaviour.")
+                    help="Seed both random sources: the Monte Carlo surrogates behind "
+                         "--wtc-significance and the phase randomisation behind --wtc-pseudo. "
+                         "Also bypasses pycwt's on-disk cache, which is not keyed on the "
+                         "seed. Omit for the previous behaviour.")
     hp.add_argument("--wtc-mask-coi", action="store_true",
                     help="Average each band mean only over cells inside the cone of "
                          "influence. Off by default, which is what the field does; the share "
@@ -568,7 +569,11 @@ def _build_parser() -> argparse.ArgumentParser:
     hp.add_argument("--wtc-pseudo", type=int, default=0, metavar="N",
                     help="Write pseudo-dyad band means from N phase-scrambled iterations, "
                          "the null a coherence value is read against. Costs one full WTC "
-                         "run per iteration; published work uses 100. 0 (default) skips it.")
+                         "run per iteration; published work uses 100. 0 (default) skips it. "
+                         "This asks whether a real pair beats an unrelated pair, which is a "
+                         "different question from --wtc-significance, which asks whether a "
+                         "cell beats red noise; the two are independent and neither implies "
+                         "the other. Surrogate maps are not saved, only their band means.")
     hp.add_argument("--wtc-roi-min-channels", type=int, default=2, metavar="N",
                     help="Drop an ROI cell resting on fewer than N channel pairs, so one "
                          "surviving optode does not stand in for a region (default 2).")

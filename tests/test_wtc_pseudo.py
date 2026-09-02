@@ -178,3 +178,11 @@ def test_crossed_channels_group_into_an_roi_by_roi_matrix():
         ("roiA", "roiA"), ("roiA", "roiB"), ("roiB", "roiA"), ("roiB", "roiB")}
     maps = roi_maps_from_channels(result, roi_map)
     assert ("roiA", "roiB") in maps.pairs[("s1", "s2")]
+
+
+def test_a_group_of_three_is_refused_rather_than_half_scrambled():
+    """Only one subject is scrambled, so a third member would leave real pairs in the null."""
+    from fnirs_pipe.pipeline.synchrony import compute_wtc_pseudo
+
+    with pytest.raises(ValueError, match="exactly 2 subjects"):
+        compute_wtc_pseudo({"s1": None, "s2": None, "s3": None}, 0.06, 0.15, n_iter=1)
