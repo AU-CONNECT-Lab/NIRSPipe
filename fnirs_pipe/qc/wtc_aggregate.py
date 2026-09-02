@@ -28,8 +28,8 @@ _MUST_AGREE = ("band_fmin", "band_fmax", "mask_coi")
 
 _KINDS = {
     "wtc":         "group_hyper_wtc",
-    "wtc-roi":     "group_hyper_wtc_roi",
     "wtc-roichan": "group_hyper_wtc_roichan",
+    "wtc-pseudo":  "group_hyper_wtc_pseudo",
 }
 
 
@@ -76,8 +76,9 @@ def _refuse_mixed_shapes(frames: dict[str, pd.DataFrame]) -> None:
 
     A crossed table carries ``label2``; a homologous one does not. Concatenating the two
     leaves half a column empty, and an empty ``label2`` is indistinguishable from a genuinely
-    missing value. Applies to both levels: ``--wtc-roi-cross`` crosses the ROI tables and
-    ``--wtc-channel-cross`` the channel ones, and either can be on for some dyads only.
+    missing value. ``--wtc-channel-cross`` is what crosses them, at channel level and, since
+    the ROI numbers are grouped from the channel ones, at ROI level too; it can be on for
+    some dyads only.
     """
     crossed = {name for name, df in frames.items() if "label2" in df.columns}
     if crossed and len(crossed) != len(frames):
@@ -93,7 +94,8 @@ def _refuse_mixed_shapes(frames: dict[str, pd.DataFrame]) -> None:
 def aggregate_wtc(output_dir: Path, kind: str = "wtc") -> pd.DataFrame:
     """Concatenate every per-dyad WTC band-mean table under output_dir.
 
-    kind is "wtc" for the channel-level tables or "wtc-roi" for the ROI-level ones. Returns
+    kind is "wtc" for the channel-level tables, "wtc-roichan" for the ROI-level ones or
+    "wtc-pseudo" for the phase-scrambled null. Returns
     an empty frame when nothing matches, so a study that never ran WTC is not an error.
     """
     if kind not in _KINDS:

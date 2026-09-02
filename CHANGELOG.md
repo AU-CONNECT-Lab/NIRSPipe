@@ -6,15 +6,22 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.24.0] - 2026-09-02
+
 ### Changed
+- **The cone of influence is no longer masked by default**, which is what the field does. `--wtc-mask-coi` restores it, and `n_valid_frac` reports the share inside the cone either way. Every coherence value moves, short conditions most
+- **`hyper-wtc-roi.tsv` and `--wtc-roi-cross` are gone.** Averaging the signals into one ROI trace detects less than averaging per-channel coherences. `hyper-wtc-roichan.tsv` is the ROI table and `--wtc-channel-cross` builds the cross-ROI matrix
 - **The subject QC report is now one report per run.** A subject with several tasks used to get one `sub-<id>_qc.html` built from whichever run finished last, with nothing on the page saying which. Each run now writes `sub-<id>_task-<task>_qc.html` with its own figures, and `sub-<id>_qc.html` becomes an index over them
 - WTC computes only the wavelet scales its frequency range keeps, 1.8x faster on a 900 s recording. The coherences are unchanged bit for bit; `--no-wtc-limit-scales` restores the old behaviour
 - **A group's outputs live in `group-<id>/` now**, the way a subject's live in `sub-<id>/`: tables and sidecars under `group-<id>/nirs/`, the two HTML reports beside them, figures where they already were. A study of 25 dyads over 5 tasks used to put two thousand loose files in the derivatives root. Filenames are unchanged, and everything that reads these files searches recursively, so an existing tree is still found
 - **The quality record is drawn as a node rather than a step in the provenance diagram.** It measures every stage, so it had an arrow from each of them crossing the whole figure and burying the chain underneath. Its own box says which stages it measured. The provenance table names those stages too, in place of the full list of metric names, which stay in the record
 
 ### Added
+- **`--wtc-pseudo N` writes a pseudo-dyad table**: the same band means against a phase-scrambled partner. Coherence between two unrelated recordings is not zero, so this is the null a real value has to be read against
+- WTC band-mean tables gain `coherence_z`, the Fisher r-to-z group statistics should average
+- `--wtc-roi-min-channels` drops an ROI cell resting on too few channel pairs
 - **The subject page says which run is the odd one out, and which channels each run rejected.** A cell more than 3.5 median absolute deviations from the subject's other runs is marked, and a table names every source-detector pair that any run rejected together with the runs that rejected it, which is the set `--bads-scope subject` unions. Each run also links to its MNE report, provenance diagram, channel metrics and aux table
-- **`hyper-post` writes `hyper-wtc-roichan.tsv` whenever `--roi-mapping` is given**: coherence computed per channel pair, then averaged within each ROI. This is the ROI number the WTC literature reports, and it is not the same as `hyper-wtc-roi.tsv`, which averages the signals first and computes one coherence. Both are written; `n_ch` says how many channels backed each mean. `fnirs-qc group-hyper-wtc` merges the new table too
+- **`hyper-post` writes `hyper-wtc-roichan.tsv` whenever `--roi-mapping` is given**: coherence per channel pair, then averaged within each ROI. This is the ROI number the WTC literature reports, and now the only ROI table. `n_ch` says how many channels backed each mean
 - `fnirs-qc hyper-post --wtc-channel-cross` crosses every long channel with every other across the two brains: 196 values instead of 14. Single channels are noisy, so the off-diagonal is exploratory
 - `fnirs-qc hyper-post --wtc-save-maps` keeps the full time-frequency maps, and `fnirs-qc wtc-band` re-averages them over another band without a second wavelet transform
 - `fnirs-qc hyper-post --bads-scope subject` unions each subject's rejected channels over their runs, so conditions are compared on one channel set

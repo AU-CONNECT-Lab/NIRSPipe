@@ -77,7 +77,7 @@ def load_wtc(path: Path) -> WTCResult:
     return WTCResult(pairs=pairs, freqs=freqs, times=times)
 
 
-def reband(path: Path, fmin: float, fmax: float, mask_coi: bool = True) -> pd.DataFrame:
+def reband(path: Path, fmin: float, fmax: float, mask_coi: bool = False) -> pd.DataFrame:
     """Band means over a new band, from saved maps rather than a new wavelet transform.
 
     The band has to sit inside the range the maps were computed over: what was filtered out
@@ -88,6 +88,7 @@ def reband(path: Path, fmin: float, fmax: float, mask_coi: bool = True) -> pd.Da
 
 def reband_tree(
     output_dir: Path, fmin: float, fmax: float, suffix: str | None = None,
+    mask_coi: bool = False,
 ) -> list[Path]:
     """Re-average every saved map under output_dir, writing one TSV beside each npz.
 
@@ -101,7 +102,7 @@ def reband_tree(
     written: list[Path] = []
     for npz_path in sorted(output_dir.rglob("*_hyper-wtc*.npz")):
         try:
-            df = reband(npz_path, fmin, fmax)
+            df = reband(npz_path, fmin, fmax, mask_coi=mask_coi)
         except Exception as exc:
             logger.warning("skipping %s: %s", npz_path.name, exc)
             continue
@@ -111,7 +112,7 @@ def reband_tree(
             "pipeline_version": __version__,
             "step": "wtc_reband",
             "Sources": [str(npz_path)],
-            "parameters": {"band_fmin": fmin, "band_fmax": fmax, "mask_coi": True},
+            "parameters": {"band_fmin": fmin, "band_fmax": fmax, "mask_coi": mask_coi},
         })
         logger.info("reband -> %s (%d rows)", out_path, len(df))
         written.append(out_path)

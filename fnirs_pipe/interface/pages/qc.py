@@ -136,7 +136,7 @@ def _hyper_post():
                 id="qc-hyper-flags",
                 options=[
                     {"label": "Significance testing (slow)", "value": "wtc_significance"},
-                    {"label": "Cross ROIs between brains",   "value": "wtc_roi_cross"},
+                    {"label": "Mask cone of influence",      "value": "wtc_mask_coi"},
                     {"label": "Cross channels between brains (slow)",
                                                              "value": "wtc_channel_cross"},
                     {"label": "Bad channels: union over runs", "value": "bads_subject"},

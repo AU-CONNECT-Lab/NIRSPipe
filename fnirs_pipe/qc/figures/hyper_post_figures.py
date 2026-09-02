@@ -128,11 +128,11 @@ def build_wtc_roi_matrix(
 ) -> go.Figure | None:
     """ROI x ROI heatmap of band-mean coherence, rows sub1's ROIs, columns sub2's.
 
-    The crossed ROI result is n**2 time-frequency maps and only n of them reach the page as
-    heatmaps. This carries the rest: one cell per pair holding the number already written to
-    `hyper-wtc-roi.tsv`, so the off-diagonal pairs are visible without embedding their maps.
-    Reads the `label` / `label2` columns, so it needs a crossed frame; an uncrossed one has
-    no `label2` and returns None.
+    The crossed result is n**2 pairings and only the homologous ones reach the page as
+    heatmaps. This carries the rest: one cell per ROI pair holding the number already written
+    to `hyper-wtc-roichan.tsv`, so the off-diagonal pairs are visible without embedding their
+    maps. Reads the `label` / `label2` columns, so it needs a crossed frame; an uncrossed one
+    has no `label2` and returns None.
     """
     if band_df is None or "label2" not in getattr(band_df, "columns", []):
         return None

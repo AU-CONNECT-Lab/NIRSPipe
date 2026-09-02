@@ -121,18 +121,18 @@ def test_a_table_with_no_sidecar_carries_no_opinion(tmp_path):
 
 def test_crossed_and_homologous_roi_tables_do_not_mix(tmp_path):
     """An empty label2 reads as missing data rather than as a different analysis."""
-    _table(tmp_path, "01", "rest", kind="wtc-roi", crossed=True)
-    _table(tmp_path, "02", "rest", kind="wtc-roi", crossed=False)
+    _table(tmp_path, "01", "rest", kind="wtc-roichan", crossed=True)
+    _table(tmp_path, "02", "rest", kind="wtc-roichan", crossed=False)
 
     with pytest.raises(ValueError, match="label2"):
-        aggregate_wtc(tmp_path, kind="wtc-roi")
+        aggregate_wtc(tmp_path, kind="wtc-roichan")
 
 
 def test_all_crossed_roi_tables_merge_and_keep_label2(tmp_path):
-    _table(tmp_path, "01", "rest", kind="wtc-roi", crossed=True)
-    _table(tmp_path, "02", "rest", kind="wtc-roi", crossed=True)
+    _table(tmp_path, "01", "rest", kind="wtc-roichan", crossed=True)
+    _table(tmp_path, "02", "rest", kind="wtc-roichan", crossed=True)
 
-    merged = aggregate_wtc(tmp_path, kind="wtc-roi")
+    merged = aggregate_wtc(tmp_path, kind="wtc-roichan")
     assert "label2" in merged.columns
     assert merged["label2"].notna().all()
 
@@ -146,10 +146,10 @@ def test_an_unknown_kind_is_refused(tmp_path):
 
 def test_the_two_kinds_land_in_separate_files(tmp_path):
     _table(tmp_path, "01", "rest")
-    _table(tmp_path, "01", "rest", kind="wtc-roi")
+    _table(tmp_path, "01", "rest", kind="wtc-roichan")
 
     assert write_aggregate_wtc(tmp_path, "wtc").name == "group_hyper_wtc.tsv"
-    assert write_aggregate_wtc(tmp_path, "wtc-roi").name == "group_hyper_wtc_roi.tsv"
+    assert write_aggregate_wtc(tmp_path, "wtc-roichan").name == "group_hyper_wtc_roichan.tsv"
 
 
 def test_the_sidecar_says_what_went_in(tmp_path):

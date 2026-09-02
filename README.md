@@ -199,17 +199,22 @@ fnirs-qc hyper-post BIDS_DIR OUTPUT_DIR --pairs-csv PATH
                     [--wtc-fmin/--wtc-fmax FLOAT]
                     [--wtc-band-fmin/--wtc-band-fmax FLOAT]
                     [--wtc-significance] [--wtc-seed INT] [--wtc-mc-count INT]
-                    [--wtc-roi-cross]
-                    [--isc-threshold FLOAT]
+                    [--wtc-pseudo N] [--wtc-mask-coi] [--wtc-roi-min-channels N]
+                    [--wtc-channel-cross] [--isc-threshold FLOAT]
                     [--normalize] [--no-align]
 
 # --desc picks the per-subject stage the inter-brain metrics read (default preproc).
+# --wtc-pseudo runs N phase-scrambled iterations and writes the pseudo-dyad band means
+# beside the real ones. Coherence between two unrelated recordings is not zero, so this
+# is the null a value is read against. One full WTC run per iteration.
 # --wtc-significance is slow: --wtc-mc-count surrogate series per channel pair, 300 by
 # default, and the runtime scales with it. --wtc-seed makes those contours reproducible
 # and switches off pycwt's on-disk cache, which is not keyed on the seed.
-# --wtc-roi-cross pairs every ROI with every other across the two brains (needs
-# --roi-mapping): four ROIs give sixteen values instead of four. The extra pairs
-# reach the TSV and an ROI x ROI matrix; the heatmaps stay on the homologous pairs.
+# --wtc-mask-coi restricts each band mean to the cone of influence. Off by default;
+# n_valid_frac reports the share inside the cone either way.
+# --wtc-channel-cross pairs every long channel with every other across the two brains,
+# 196 values instead of 14, and is what builds the ROI x ROI matrix when --roi-mapping
+# is given. The heatmaps stay on the homologous pairs.
 
 fnirs-qc group-raw       OUTPUT_DIR
 fnirs-qc group-hyper-raw OUTPUT_DIR

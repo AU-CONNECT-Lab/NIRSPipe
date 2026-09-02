@@ -2,15 +2,23 @@
 
 Two ways of asking how locked two recordings are.
 
-  compute_wtc / compute_wtc_roi   Wavelet transform coherence, resolved in both time and
+  compute_wtc                     Wavelet transform coherence, resolved in both time and
                                   frequency, so a pair that only synchronises during part
-                                  of the task still shows it. Per channel, or per ROI once
-                                  channels have been averaged. Backed by pycwt.
+                                  of the task still shows it. Per channel pair. Backed by
+                                  pycwt.
+  compute_wtc_pseudo              The same, against a phase-scrambled partner: the null a
+                                  hyperscanning result is actually compared against.
   compute_pairwise_coherence      One magnitude-squared coherence number per channel pair,
                                   averaged over a band. Cheap, and enough when the question
                                   is whether a pair is locked at all.
   wtc_band_mean                   Collapses a WTC map to one number per channel, which is
                                   the form a group analysis wants.
+  roi_mean_of_channels            Groups those numbers into ROIs, and
+  roi_maps_from_channels          groups the maps the same way so the figure matches.
+
+ROI coherence is always computed per channel pair and then averaged. Averaging the signals
+into one ROI trace first is a different and less sensitive number, and the studies that
+compared the two report the channel route detecting effects the signal route misses.
 
 The callers live in pipeline/hyperscanning.py, which handles the dyad bookkeeping these
 functions assume has already happened: recordings loaded, aligned, trimmed to a common
@@ -299,8 +307,10 @@ def compute_wtc(
     ``cross`` crosses every channel with every other rather than pairing like with like, so
     n channels give n**2 results keyed by ``(label_sub1, label_sub2)`` instead of n keyed by
     the label. It tests whether one person's channel couples to a different site on the
-    other's head. The cost is quadratic in the channel count and single channels are noisier
-    than the ROI averages ``compute_wtc_roi`` crosses, so the off-diagonal is exploratory.
+    other's head. The cost is quadratic in the channel count, and it is also what
+    :func:`roi_mean_of_channels` needs to build the cross-ROI matrix. Read cell by cell the
+    off-diagonal is exploratory: single channels are noisy and the correction over n**2 pairs
+    leaves little.
     """
     subject_ids = list(raws.keys())
     if len(subject_ids) < 2:
@@ -313,69 +323,131 @@ def compute_wtc(
         mc_count, cross, limit_scales)
 
 
-def _roi_averaged_signals(
-    raw: mne.io.Raw,
-    roi_map: dict[str, list[str]],
-    bad_pairs: set[str] | None = None,
-) -> dict[str, np.ndarray]:
-    """Average long HbO channels within each ROI → {roi_name: 1D signal}.
+def phase_scramble(sig: np.ndarray, rng: np.random.Generator) -> np.ndarray:
+    """Surrogate with the same power spectrum as ``sig`` and its phases randomised.
 
-    bad_pairs (S-D labels without suffix) are excluded from the average, as are any short
-    channels an ROI happens to list. ROIs left with no usable channel are skipped.
+    The null a hyperscanning result needs is "this dyad against a dyad that never
+    interacted", not "this dyad against red noise". Scrambling one side's phases destroys
+    every temporal relationship while leaving each signal's own spectrum and autocorrelation
+    intact, so coherence computed against the surrogate is the coherence two unrelated
+    recordings of this kind produce.
+
+    Phases are randomised under Hermitian symmetry, so the inverse transform is real and the
+    magnitude spectrum is preserved exactly. DC and, on an even-length record, Nyquist have
+    no mirror partner and keep their sign instead of taking a phase.
     """
-    bad_pairs = bad_pairs or set()
-    label_to_data = _long_hbo_signals(raw)
-    out: dict[str, np.ndarray] = {}
-    for roi, chs in roi_map.items():
-        rows = [label_to_data[c] for c in chs if c in label_to_data and c not in bad_pairs]
-        if rows:
-            out[roi] = np.mean(rows, axis=0)
-    return out
+    n = len(sig)
+    spectrum = np.fft.rfft(sig)
+    scrambled = np.abs(spectrum) * np.exp(1j * rng.uniform(-np.pi, np.pi, size=spectrum.shape))
+    # carried over rather than rebuilt: both are real, and |x| would flip a negative one,
+    # which for DC means flipping the sign of the mean
+    scrambled[0] = spectrum[0]
+    if n % 2 == 0:
+        scrambled[-1] = spectrum[-1]
+    return np.fft.irfft(scrambled, n=n)
 
 
-def compute_wtc_roi(
+def compute_wtc_pseudo(
     raws: dict[str, mne.io.Raw],
-    roi_map: dict[str, list[str]],
-    bad_channels: dict[str, list[str]] | None = None,
+    band_fmin: float,
+    band_fmax: float,
+    n_iter: int = 100,
     fmin: float = 0.004,
     fmax: float = 0.20,
-    significance: bool = False,
     seed: int | None = None,
-    mc_count: int = 300,
     cross: bool = False,
     limit_scales: bool = True,
-) -> WTCResult:
-    """Compute pairwise WTC on ROI-averaged HbO signals.
+    mask_coi: bool = False,
+) -> pd.DataFrame:
+    """Pseudo-dyad band means: WTC against a phase-scrambled partner, averaged over ``n_iter``.
 
-    Averages each ROI's HbO channels into one representative signal per subject,
-    excluding the union of all subjects' bad_channels so every subject's ROI signal
-    is built from the same channel set. Then runs the same Morlet WTC as compute_wtc.
-    Returned WTCResult.pairs is keyed by ROI name instead of channel.
+    One subject's signals are replaced by surrogates and the whole pairwise WTC is rerun, once
+    per iteration; the band means are averaged across iterations. The result has the columns
+    ``wtc_band_mean`` returns, so a true-dyad table and this one subtract or test cell by cell.
 
-    ``cross`` crosses each subject's ROIs with the other's rather than pairing like with
-    like, so four ROIs give sixteen results keyed by ``(roi_sub1, roi_sub2)`` instead of
-    four keyed by ROI name. Off-diagonal entries are what tells you whether one person's
-    PFC couples to the other's TPJ. Averaging within an ROI first is what makes this
-    affordable: the same crossing over raw channels is quadratic in a much larger number.
+    Cost is ``n_iter`` times a full WTC run. Significance contours are never computed here:
+    this table *is* the null, so a second null inside it would be redundant and slow.
     """
+    if n_iter < 1:
+        raise ValueError(f"n_iter must be at least 1, got {n_iter}")
+
     subject_ids = list(raws.keys())
     if len(subject_ids) < 2:
         raise ValueError("Need at least 2 subjects for WTC")
 
-    bad_channels = bad_channels or {}
-    bad_pairs_union = {
-        ch.rsplit(" ", 1)[0]
-        for sid in subject_ids
-        for ch in bad_channels.get(sid, [])
-    }
-    signals = {
-        sid: _roi_averaged_signals(raw, roi_map, bad_pairs_union)
-        for sid, raw in raws.items()
-    }
+    true_signals = {sid: _long_hbo_signals(raw) for sid, raw in raws.items()}
+    labels = list(true_signals[subject_ids[0]])
+    # scramble the second subject only: scrambling both would test surrogate against
+    # surrogate, which is a different and weaker null
+    scrambled_id = subject_ids[1]
+    rng = np.random.default_rng(seed)
 
-    return _wtc_over_pairs(
-        raws, signals, list(roi_map), fmin, fmax, significance, seed, mc_count, cross,
-        limit_scales)
+    frames: list[pd.DataFrame] = []
+    for i in range(n_iter):
+        signals = dict(true_signals)
+        signals[scrambled_id] = {
+            label: phase_scramble(sig, rng)
+            for label, sig in true_signals[scrambled_id].items()
+        }
+        result = _wtc_over_pairs(
+            raws, signals, labels, fmin, fmax, significance=False, seed=None,
+            cross=cross, limit_scales=limit_scales)
+        frames.append(wtc_band_mean(result, band_fmin, band_fmax, mask_coi=mask_coi))
+        if (i + 1) % 10 == 0:
+            logger.info("pseudo-dyad WTC: %d/%d iterations", i + 1, n_iter)
+
+    keys = ["sub1", "sub2", "label"] + (["label2"] if "label2" in frames[0].columns else [])
+    stacked = pd.concat(frames, ignore_index=True)
+    out = (stacked.groupby(keys, sort=False)
+                  .agg(coherence=("coherence", "mean"),
+                       n_valid_frac=("n_valid_frac", "mean"))
+                  .reset_index())
+    out.insert(out.columns.get_loc("n_valid_frac"), "coherence_z",
+               out["coherence"].map(_fisher_z))
+    return out
+
+
+def roi_maps_from_channels(
+    result: WTCResult,
+    roi_map: dict[str, list[str]],
+) -> WTCResult:
+    """Average the channel-pair WTC maps cell by cell into one map per ROI pair.
+
+    The ROI number the field reports is a mean over channel-pair coherences, so the figure
+    that belongs beside it is the mean over those channels' maps rather than a separate
+    transform on ROI-averaged signals. Averaging the maps first and the band second gives the
+    same number as averaging the band first and the channels second, so the picture and the
+    table finally agree.
+
+    ::
+
+      {"S1_D1": map, "S1_D2": map}  + {"lPFC": ["S1_D1", "S1_D2"]}  ->  {"lPFC": mean map}
+
+    The COI depends only on record length and sampling rate, so every member shares one and
+    it is carried through unchanged. ``sig`` is dropped: a Monte Carlo level belongs to the
+    pair it was computed for and does not average.
+    """
+    ch_to_roi = {ch: roi for roi, chs in roi_map.items() for ch in chs}
+
+    pairs: dict = {}
+    for pair_key, labels in result.pairs.items():
+        bucket: dict = {}
+        for label, data in labels.items():
+            if data is None:
+                continue
+            label1, label2 = label if isinstance(label, tuple) else (label, label)
+            roi1, roi2 = ch_to_roi.get(label1), ch_to_roi.get(label2)
+            if roi1 is None or roi2 is None:
+                continue
+            key = (roi1, roi2) if isinstance(label, tuple) else roi1
+            bucket.setdefault(key, []).append(data)
+        pairs[pair_key] = {
+            key: {"wtc": np.mean([d["wtc"] for d in members], axis=0),
+                  "coi": members[0]["coi"], "sig": None}
+            for key, members in bucket.items()
+        }
+
+    return WTCResult(pairs=pairs, freqs=result.freqs, times=result.times)
 
 
 def compute_pairwise_coherence(
@@ -426,13 +498,20 @@ def compute_pairwise_coherence(
     return pd.DataFrame(rows, columns=["ch_name", "sub1", "sub2", "coherence"])
 
 
+def _fisher_z(r: float) -> float:
+    """Fisher r-to-z of one value, clipped as :func:`restingstate.fisher_z` clips a matrix."""
+    if not np.isfinite(r):
+        return float("nan")
+    return float(np.arctanh(np.clip(r, -0.999999, 0.999999)))
+
+
 def wtc_band_mean(
     result: WTCResult,
     fmin: float,
     fmax: float,
-    mask_coi: bool = True,
+    mask_coi: bool = False,
 ) -> pd.DataFrame:
-    r"""Collapse each WTC map to one number per pair and label: the band mean inside the COI.
+    r"""Collapse each WTC map to one number per pair and label: the band mean.
 
     A time-frequency map is what you look at; a single number per channel is what enters a
     group analysis. This averages :math:`R^2(f, t)` over the frequencies of ``[fmin, fmax]``
@@ -448,13 +527,24 @@ def wtc_band_mean(
     it are wavelet coefficients padded against the edges of the record: near 1 whatever the
     data does, and enough of them at the low-frequency end to carry a whole row.
 
-    ``n_valid_frac`` is the share of band cells that survived the mask, so a value resting on
-    a handful of time points is visible instead of implied. It is 1.0 when ``mask_coi`` is off.
+    ``mask_coi`` is **off by default**, which is what the hyperscanning literature does: of 52
+    WTC studies surveyed only one masks, and the published pipelines that ship code average
+    the whole time axis. Masking is the more conservative choice and discards more of a short
+    segment than of a long one, so it moves conditions of different length by different
+    amounts; that is a reason to report ``n_valid_frac``, not a reason to mask by default.
 
-    Returns one row per (pair, label) with columns sub1, sub2, label, coherence, n_valid_frac.
-    A crossed result (see ``compute_wtc_roi``) is keyed by a label pair rather than one label,
-    and gains a ``label2`` column after ``label``: ``label`` is what sub1 contributed, ``label2``
-    what sub2 did, and the homologous rows are the ones where they agree.
+    ``n_valid_frac`` is the share of band cells that lie inside the cone of influence. **It is
+    reported whether or not the mask is applied**, so the share is visible as a quality number
+    even when every cell was averaged.
+
+    ``coherence_z`` is the Fisher r-to-z of ``coherence`` (:math:`\operatorname{arctanh}`,
+    clipped just below 1), which is what group statistics should average: coherence is bounded
+    on [0, 1], so its mean across dyads is biased toward the interior.
+
+    Returns one row per (pair, label) with columns sub1, sub2, label, coherence, coherence_z,
+    n_valid_frac. A crossed result is keyed by a label pair rather than one label, and gains a
+    ``label2`` column after ``label``: ``label`` is what sub1 contributed, ``label2`` what sub2
+    did, and the homologous rows are the ones where they agree.
     Labels that failed to compute keep their row, with NaN coherence and n_valid_frac 0.
     """
     freqs = np.asarray(result.freqs, dtype=float)
@@ -478,44 +568,58 @@ def wtc_band_mean(
             if crossed:
                 head["label2"] = label2
             if data is None:
-                rows.append({**head, "coherence": float("nan"), "n_valid_frac": 0.0})
+                rows.append({**head, "coherence": float("nan"),
+                             "coherence_z": float("nan"), "n_valid_frac": 0.0})
                 continue
 
             wtc = np.asarray(data["wtc"], dtype=float)[band]
+            coi = np.asarray(data["coi"], dtype=float)
+            # coi is a period in seconds; 1/coi is the lowest frequency still reliable at
+            # that time. A coi of 0 (the very edges) leaves nothing reliable there.
+            with np.errstate(divide="ignore"):
+                f_edge = np.where(coi > 1e-10, 1.0 / coi, np.inf)
+            in_coi = band_freqs[:, None] >= f_edge[None, :]
+            # measured whether or not it is applied, so the share stays a reportable number
+            n_valid_frac = float(in_coi.mean()) if in_coi.size else 0.0
             if mask_coi:
-                coi = np.asarray(data["coi"], dtype=float)
-                # coi is a period in seconds; 1/coi is the lowest frequency still reliable at
-                # that time. A coi of 0 (the very edges) leaves nothing reliable there.
-                with np.errstate(divide="ignore"):
-                    f_edge = np.where(coi > 1e-10, 1.0 / coi, np.inf)
-                wtc = np.where(band_freqs[:, None] >= f_edge[None, :], wtc, np.nan)
+                wtc = np.where(in_coi, wtc, np.nan)
 
             valid = np.isfinite(wtc)
-            n_valid_frac = float(valid.mean()) if valid.size else 0.0
+            coherence = float(wtc[valid].mean()) if valid.any() else float("nan")
             rows.append({
                 **head,
-                "coherence": float(wtc[valid].mean()) if valid.any() else float("nan"),
+                "coherence": coherence,
+                "coherence_z": _fisher_z(coherence),
                 "n_valid_frac": n_valid_frac,
             })
 
     columns = ["sub1", "sub2", "label"] + (["label2"] if crossed else [])
-    return pd.DataFrame(rows, columns=columns + ["coherence", "n_valid_frac"])
+    return pd.DataFrame(rows, columns=columns + ["coherence", "coherence_z", "n_valid_frac"])
 
 
 def roi_mean_of_channels(
     band_df: pd.DataFrame,
     roi_map: dict[str, list[str]],
+    min_channels: int = 2,
 ) -> pd.DataFrame:
     """Average channel-level band means within each ROI: the ROI number the WTC literature reports.
 
     The field computes coherence per channel pair and averages those values into ROI
-    clusters. :func:`compute_wtc_roi` does the reverse, one WTC on the ROI-averaged signal,
-    which is a different number because coherence is bounded and nonlinear.
+    clusters. The alternative, one WTC on the ROI-averaged signal, is a different number
+    because coherence is bounded and nonlinear, and it is the less sensitive of the two.
 
     ``band_df`` is what :func:`wtc_band_mean` returns for a channel-level result; a crossed
     one carries ``label2`` and is grouped on both sides into the ROI-by-ROI matrix. ``n_ch``
     counts the channel pairs behind each mean, so an ROI thinned by rejection is visible.
     Channels no ROI lists are dropped.
+
+    ``min_channels`` drops a cell resting on fewer than that many channel pairs, the rule the
+    published pipelines use to stop one surviving optode from standing in for a region. It
+    counts pairs, so on a crossed frame a cell needs ``min_channels`` combinations rather than
+    that many channels on each side.
+
+    ``coherence_z`` is recomputed from the averaged coherence rather than averaged itself, so
+    it stays the Fisher z of the number in the same row.
     """
     ch_to_roi = {ch: roi for roi, chs in roi_map.items() for ch in chs}
     df = band_df.copy()
@@ -525,10 +629,19 @@ def roi_mean_of_channels(
     df = df.dropna(subset=label_cols)
 
     keys = ["sub1", "sub2"] + label_cols
-    return (
+    out = (
         df.groupby(keys, sort=False)
           .agg(coherence=("coherence", "mean"),
                n_valid_frac=("n_valid_frac", "mean"),
                n_ch=("coherence", "count"))
           .reset_index()
     )
+    if min_channels > 1:
+        thin = out["n_ch"] < min_channels
+        if thin.any():
+            logger.info("ROI means: %d cell(s) under %d channel pairs, dropped",
+                        int(thin.sum()), min_channels)
+        out = out[~thin].reset_index(drop=True)
+    out.insert(out.columns.get_loc("n_valid_frac"), "coherence_z",
+               out["coherence"].map(_fisher_z))
+    return out

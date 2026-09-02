@@ -83,13 +83,15 @@ def build_qc_args(command: str, opts: dict) -> list[str]:
         args += _num("--wtc-mc-count", opts.get("wtc_mc_count"))
         args += _num("--wtc-seed", opts.get("wtc_seed"))
         args += _num("--isc-threshold", opts.get("isc_threshold"))
+        args += _num("--wtc-pseudo", opts.get("wtc_pseudo"))
+        args += _num("--wtc-roi-min-channels", opts.get("wtc_roi_min_channels"))
         args += _split("--session-label", opts.get("hyper_session"))
         args += _split("--task-label", opts.get("hyper_task"))
         flags = opts.get("hyper_flags") or []
         if "wtc_significance" in flags:
             args.append("--wtc-significance")
-        if "wtc_roi_cross" in flags:
-            args.append("--wtc-roi-cross")
+        if "wtc_mask_coi" in flags:
+            args.append("--wtc-mask-coi")
         if "wtc_channel_cross" in flags:
             args.append("--wtc-channel-cross")
         if "bads_subject" in flags:
@@ -163,6 +165,7 @@ _STATES = [
     State("qc-wtc-band-fmin", "value"), State("qc-wtc-band-fmax", "value"),
     State("qc-wtc-mc-count", "value"), State("qc-wtc-seed", "value"),
     State("qc-isc-threshold", "value"),
+    State("qc-wtc-pseudo", "value"), State("qc-wtc-roi-min-channels", "value"),
     State("qc-hyper-session", "value"), State("qc-hyper-task", "value"),
     State("qc-hyper-flags", "value"),
     State("qc-band-fmin", "value"), State("qc-band-fmax", "value"),
@@ -179,7 +182,8 @@ _STATES = [
 def _opts(values) -> dict:
     keys = ["bids_dir", "output_dir", "pairs_csv", "group_id", "desc", "roi_mapping",
             "wtc_fmin", "wtc_fmax", "wtc_band_fmin", "wtc_band_fmax", "wtc_mc_count",
-            "wtc_seed", "isc_threshold", "hyper_session", "hyper_task", "hyper_flags",
+            "wtc_seed", "isc_threshold", "wtc_pseudo", "wtc_roi_min_channels",
+            "hyper_session", "hyper_task", "hyper_flags",
             "band_fmin", "band_fmax", "band_suffix",
             "task_label", "tstart", "tend", "window_name",
             "align", "cardiac_l", "cardiac_h", "sci_thresh", "window_length",

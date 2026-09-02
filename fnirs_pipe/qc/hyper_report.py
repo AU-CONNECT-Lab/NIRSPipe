@@ -136,17 +136,19 @@ def build_hyper_post_report(
     wtc_significance: bool = False,
     wtc_seed: int | None = None,
     wtc_mc_count: int = 300,
-    wtc_roi_cross: bool = False,
     wtc_channel_cross: bool = False,
     wtc_limit_scales: bool = True,
     wtc_save_maps: bool = False,
+    wtc_mask_coi: bool = False,
+    wtc_pseudo: int = 0,
+    wtc_roi_min_channels: int = 2,
     isc_threshold: float = 0.3,
 ) -> Path:
     """Build hyperscanning post-QC report.
 
     Sections:
       1. Per-channel WTC  — Morlet wavelet coherence, one heatmap per channel
-      2. Per-ROI WTC      — WTC on HbO averaged within each ROI (when roi_map given)
+      2. Per-ROI WTC      — the member channels' maps averaged cell by cell (when roi_map given)
       3. ISC matrix       — inter-brain Pearson r heatmap (channel × channel)
       4. ISC connectogram — inter-brain arcs filtered by isc_threshold
 
@@ -154,15 +156,19 @@ def build_hyper_post_report(
     [wtc_band_fmin, wtc_band_fmax] and written as a TSV under the group's nirs/, so a
     group analysis reads the same values the figures were drawn from.
 
-    ``wtc_roi_cross`` crosses each subject's ROIs with the other's, so the TSV gains the
-    off-diagonal pairs. Those extra pairs stay out of the time-frequency selector, which
-    keeps showing the homologous ones: every map carried in the page is a full
-    frequency × time array, and a report that embedded all of them would be too large to
-    open. They arrive instead as one ROI × ROI matrix of band means, one cell per pair.
+    ``wtc_channel_cross`` crosses every long channel with every other, 14 channels giving 196
+    rows in ``hyper-wtc.tsv`` instead of 14. The extra pairs reach the TSV, the heatmap
+    selector keeps the homologous ones: every map carried in the page is a full
+    frequency × time array and a report embedding all of them would be too large to open.
+    Crossing is also what produces the ROI × ROI matrix, since the ROI numbers are grouped
+    from the channel ones.
 
-    ``wtc_channel_cross`` does the same at channel level, 14 channels giving 196 rows in
-    ``hyper-wtc.tsv`` instead of 14. Same treatment: the extra pairs reach the TSV, the
-    heatmap selector keeps the homologous ones.
+    ``wtc_pseudo`` runs that many phase-scrambled iterations and writes the pseudo-dyad band
+    means beside the real ones, which is the null a coherence value is read against. Zero
+    skips it. It costs a full WTC run per iteration.
+
+    ``wtc_mask_coi`` restricts each band mean to the cone of influence. Off by default; the
+    share inside the cone is reported either way as ``n_valid_frac``.
 
     ``wtc_save_maps`` writes the full time-frequency maps beside each TSV as ``.npz``, so a
     different band can be averaged later without a second wavelet transform. See
@@ -175,7 +181,8 @@ def build_hyper_post_report(
         WTCResult,
         _hyper_sidecar,
         compute_wtc,
-        compute_wtc_roi,
+        compute_wtc_pseudo,
+        roi_maps_from_channels,
         roi_mean_of_channels,
         wtc_band_mean,
     )
@@ -213,7 +220,7 @@ def build_hyper_post_report(
         if result is None or not result.pairs:
             return None
         try:
-            df = wtc_band_mean(result, band_fmin, band_fmax)
+            df = wtc_band_mean(result, band_fmin, band_fmax, mask_coi=wtc_mask_coi)
         except Exception as exc:
             logger.warning("WTC band mean (%s) failed: %s", kind, exc)
             return None
@@ -234,7 +241,7 @@ def build_hyper_post_report(
         _hyper_sidecar(
             tsv_path, step,
             [p for p in (path_from(r) for r in aligned_raws.values()) if p],
-            band_fmin=band_fmin, band_fmax=band_fmax, mask_coi=True,
+            band_fmin=band_fmin, band_fmax=band_fmax, mask_coi=wtc_mask_coi,
             wtc_fmin=wtc_fmin, wtc_fmax=wtc_fmax,
         )
         return tsv_path
@@ -265,6 +272,19 @@ def build_hyper_post_report(
         logger.warning("WTC computation failed: %s", exc)
 
     chan_band_df = _write_band_tsv(wtc_result, "wtc", "hyper_wtc")
+
+    if wtc_pseudo:
+        logger.info("Pseudo-dyad WTC: %d phase-scrambled iterations, one full WTC run each.",
+                    wtc_pseudo)
+        try:
+            pseudo_df = compute_wtc_pseudo(
+                aligned_raws, band_fmin, band_fmax, n_iter=wtc_pseudo,
+                fmin=wtc_fmin, fmax=wtc_fmax, seed=wtc_seed, cross=wtc_channel_cross,
+                limit_scales=wtc_limit_scales, mask_coi=wtc_mask_coi)
+            path = _write_df_tsv(pseudo_df, "wtc-pseudo", "hyper_wtc_pseudo")
+            logger.info("Pseudo-dyad WTC band means saved: %s", path)
+        except Exception as exc:
+            logger.warning("Pseudo-dyad WTC failed: %s", exc)
 
     pair_key   = next(iter(wtc_result.pairs)) if wtc_result and wtc_result.pairs else None
     pair_label = f"{pair_key[0]} × {pair_key[1]}" if pair_key else ""
@@ -323,32 +343,28 @@ def build_hyper_post_report(
         if unassigned:
             roi_rows.append({"roi": "Unassigned", "channels": unassigned})
 
-        roi_wtc: WTCResult | None = None
-        try:
-            roi_wtc = compute_wtc_roi(
-                aligned_raws, roi_map, bad_channels=bad_channels,
-                fmin=wtc_fmin, fmax=wtc_fmax, significance=wtc_significance,
-                seed=wtc_seed, mc_count=wtc_mc_count, cross=wtc_roi_cross,
-                limit_scales=wtc_limit_scales,
-            )
-        except Exception as exc:
-            logger.warning("ROI WTC computation failed: %s", exc)
-
-        roi_band_df = _write_band_tsv(roi_wtc, "wtc-roi", "hyper_wtc_roi")
-
-        # the ROI number the WTC literature reports; wtc-roi above is the other algorithm
+        # the ROI number the WTC literature reports: coherence per channel pair, then averaged
+        roi_band_df = None
         if chan_band_df is not None:
             try:
-                path = _write_df_tsv(
-                    roi_mean_of_channels(chan_band_df, roi_map),
-                    "wtc-roichan", "hyper_wtc_roichan")
+                roi_band_df = roi_mean_of_channels(
+                    chan_band_df, roi_map, min_channels=wtc_roi_min_channels)
+                path = _write_df_tsv(roi_band_df, "wtc-roichan", "hyper_wtc_roichan")
                 logger.info("WTC ROI means from channels saved: %s", path)
             except Exception as exc:
                 logger.warning("ROI mean of channel WTC failed: %s", exc)
 
+        # the maps grouped the same way, so the picture and the table are the same average
+        roi_wtc: WTCResult | None = None
+        if wtc_result is not None:
+            try:
+                roi_wtc = roi_maps_from_channels(wtc_result, roi_map)
+            except Exception as exc:
+                logger.warning("ROI WTC maps from channels failed: %s", exc)
+
         roi_pair_key = next(iter(roi_wtc.pairs)) if roi_wtc and roi_wtc.pairs else None
         roi_labels   = list(roi_map.keys())
-        if roi_band_df is not None and wtc_roi_cross:
+        if roi_band_df is not None and wtc_channel_cross:
             roi_matrix_fig = _safe_post(
                 "wtc-roi-matrix", build_wtc_roi_matrix,
                 roi_band_df, roi_labels, subject_ids, band_fmin, band_fmax,
@@ -357,10 +373,10 @@ def build_hyper_post_report(
             roi_fig = None
             if roi_wtc and roi_pair_key:
                 # crossing keys every pair, so the homologous one is the (roi, roi) cell
-                roi_key  = (roi_name, roi_name) if wtc_roi_cross else roi_name
+                roi_key  = (roi_name, roi_name) if wtc_channel_cross else roi_name
                 roi_data = roi_wtc.pairs.get(roi_pair_key, {}).get(roi_key)
                 roi_fig = _safe_post(
-                    "wtc-roi", build_wtc_channel,
+                    "wtc-roichan", build_wtc_channel,
                     roi_data, roi_wtc.freqs, roi_wtc.times,
                     pair_label, markers_list, cond_colors_,
                 )

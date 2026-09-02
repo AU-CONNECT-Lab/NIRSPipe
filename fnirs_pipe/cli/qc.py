@@ -309,12 +309,12 @@ def cmd_epoch(
 
 
 def cmd_wtc_band(
-    output_dir: Path, band_fmin: float, band_fmax: float, suffix: str | None,
+    output_dir: Path, band_fmin: float, band_fmax: float, suffix: str | None, mask_coi: bool,
 ) -> None:
     """Re-average every saved WTC map over a new band, without recomputing the transform."""
     from fnirs_pipe.qc.wtc_store import reband_tree
 
-    written = reband_tree(output_dir, band_fmin, band_fmax, suffix=suffix)
+    written = reband_tree(output_dir, band_fmin, band_fmax, suffix=suffix, mask_coi=mask_coi)
     for path in written:
         print(f"reband -> {path}")
     if not written:
@@ -327,9 +327,10 @@ def cmd_hyper_post(
     desc: str,
     roi_mapping: Path | None, wtc_fmin: float, wtc_fmax: float,
     wtc_band_fmin: float | None, wtc_band_fmax: float | None, wtc_significance: bool,
-    wtc_seed: int | None, wtc_mc_count: int, wtc_roi_cross: bool,
+    wtc_seed: int | None, wtc_mc_count: int,
     wtc_channel_cross: bool, bads_scope: str,
     wtc_limit_scales: bool, wtc_save_maps: bool,
+    wtc_mask_coi: bool, wtc_pseudo: int, wtc_roi_min_channels: int,
     isc_threshold: float, normalize: bool, no_align: bool,
     session_label: list[str] | None, task_label: list[str] | None,
     skip_bids_validation: bool,
@@ -347,10 +348,9 @@ def cmd_hyper_post(
     )
     from fnirs_pipe.qc.hyper_report import build_hyper_post_report
 
-    if wtc_roi_cross and roi_mapping is None:
-        print("[error] --wtc-roi-cross needs --roi-mapping: it crosses ROIs, and without a "
-              "mapping there are none.", file=sys.stderr)
-        raise SystemExit(1)
+    if wtc_channel_cross and roi_mapping is None:
+        print("[warn] --wtc-channel-cross without --roi-mapping: the crossed channel table "
+              "is written but no ROI x ROI matrix is built from it.", file=sys.stderr)
 
     groups = _select_groups(pairs_csv, group_id, task_label)
 
@@ -389,10 +389,12 @@ def cmd_hyper_post(
             wtc_significance=wtc_significance,
             wtc_seed=wtc_seed,
             wtc_mc_count=wtc_mc_count,
-            wtc_roi_cross=wtc_roi_cross,
             wtc_channel_cross=wtc_channel_cross,
             wtc_limit_scales=wtc_limit_scales,
             wtc_save_maps=wtc_save_maps,
+            wtc_mask_coi=wtc_mask_coi,
+            wtc_pseudo=wtc_pseudo,
+            wtc_roi_min_channels=wtc_roi_min_channels,
             isc_threshold=isc_threshold,
         )
 
@@ -557,12 +559,19 @@ def _build_parser() -> argparse.ArgumentParser:
                     help="Seed the Monte Carlo surrogates so --wtc-significance is "
                          "reproducible. Also bypasses pycwt's on-disk cache, which is not "
                          "keyed on the seed. Omit for the previous behaviour.")
-    hp.add_argument("--wtc-roi-cross", action="store_true",
-                    help="Cross every ROI with every other across the two brains instead of "
-                         "pairing each ROI with its counterpart, so four ROIs give sixteen "
-                         "coherence values rather than four. Needs --roi-mapping. The extra "
-                         "pairs reach the TSV and an ROI x ROI matrix in the report; the "
-                         "time-frequency heatmaps stay on the homologous pairs.")
+    hp.add_argument("--wtc-mask-coi", action="store_true",
+                    help="Average each band mean only over cells inside the cone of "
+                         "influence. Off by default, which is what the field does; the share "
+                         "inside the cone is reported as n_valid_frac either way. Masking "
+                         "discards more of a short segment than of a long one, so it moves "
+                         "conditions of different length by different amounts.")
+    hp.add_argument("--wtc-pseudo", type=int, default=0, metavar="N",
+                    help="Write pseudo-dyad band means from N phase-scrambled iterations, "
+                         "the null a coherence value is read against. Costs one full WTC "
+                         "run per iteration; published work uses 100. 0 (default) skips it.")
+    hp.add_argument("--wtc-roi-min-channels", type=int, default=2, metavar="N",
+                    help="Drop an ROI cell resting on fewer than N channel pairs, so one "
+                         "surviving optode does not stand in for a region (default 2).")
     hp.add_argument("--wtc-channel-cross", action="store_true",
                     help="Cross every long channel with every other across the two brains "
                          "instead of pairing each channel with its counterpart, so n "
@@ -612,6 +621,9 @@ def _build_parser() -> argparse.ArgumentParser:
                     help="Lower bound (Hz) of the new band.")
     wb.add_argument("--band-fmax", type=float, required=True,
                     help="Upper bound (Hz) of the new band.")
+    wb.add_argument("--mask-coi", action="store_true",
+                    help="Average only over cells inside the cone of influence, matching "
+                         "`hyper-post --wtc-mask-coi`. Off by default.")
     wb.add_argument("--suffix", default=None,
                     help="Name added to each output TSV. Defaults to the band, e.g. "
                          "'band0p05-0p2', so the new tables sit beside the originals "
