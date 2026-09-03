@@ -399,6 +399,7 @@ def cmd_hyper_post(
             output_dir=output_dir,
             roi_map=roi_map,
             bad_channels=bad_channels,
+            subject_sqm=group_sqm,
             wtc_fmin=wtc_fmin,
             wtc_fmax=wtc_fmax,
             wtc_band_fmin=wtc_band_fmin,

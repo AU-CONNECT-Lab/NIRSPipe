@@ -11,6 +11,7 @@ from jinja2 import Environment, FileSystemLoader
 
 from fnirs_pipe.io.derivatives import group_data_dir, group_report_dir
 from fnirs_pipe.pipeline.hyperscanning import GroupEntry
+from fnirs_pipe.qc.boilerplate.vocabulary import metric_summary
 from fnirs_pipe.qc.figure_io import extract_markers, get_channel_pairs
 from fnirs_pipe.qc.figures.hyper_figures import _cond_colors
 from fnirs_pipe.qc.hyper_raw_writer import _process_hyper_raw_group
@@ -21,6 +22,61 @@ logger = get_logger("qc.hyper_report")
 
 _TEMPLATE_DIR = Path(__file__).parent / "templates"
 _BASE_CSS     = (_TEMPLATE_DIR / "_base.css").read_text(encoding="utf-8")
+
+
+# ---- Per-subject quality metrics ----
+#
+# (key, label, better direction, format). Rendered in both hyper reports, which until now
+# showed SCI and nothing else. Absent keys render as a dash, so one spec serves the raw
+# path (intensity metrics only) and the post path (which adds motion and haemoglobin).
+_SUBJECT_METRICS = [
+    ("sci_mean",               "SCI",               "↑", "{:.3f}"),
+    ("psp_mean",               "PSP",               "↑", "{:.2f}"),
+    ("cv_mean",                "CV",                "↓", "{:.3f}"),
+    ("snr_mean",               "SNR",               "↑", "{:.1f}"),
+    ("gvtd_filt_p95",          "GVTD p95",          "↓", "{:.4f}"),
+    ("motion_corrected_pct",   "Motion corrected",  "↓", "{:.3f}"),
+    ("spike_pct_frames",       "Spike frames",      "↓", "{:.3f}"),
+    ("hbo_hbr_corr_mean",      "HbO-HbR r",         "↓", "{:+.3f}"),
+    ("channel_retention_rate", "Channels kept",     "↑", "{:.3f}"),
+]
+
+
+def _metric_class(key: str, value: float, sci_threshold: float) -> str:
+    """Colour only where a threshold is actually justified.
+
+    SCI has one the caller chose. HbO-HbR is judged by sign, because the two chromophores
+    moving together says a shared artifact dominates the channel. The rest are shown plain:
+    the published cut-offs (PSP 0.1, say) sit far below anything a real montage produces,
+    so colouring by them would mark every run as passing.
+    """
+    if key == "sci_mean":
+        return "qm-ok" if value >= sci_threshold else "qm-bad"
+    if key == "hbo_hbr_corr_mean":
+        return "qm-bad" if value >= 0 else "qm-ok"
+    return ""
+
+
+def subject_metric_rows(
+    sqm_data: dict[str, dict],
+    subject_ids: list[str],
+    sci_threshold: float,
+) -> list[dict]:
+    """One row per metric, one cell per subject, for the per-subject quality table."""
+    rows = []
+    for key, label, direction, fmt in _SUBJECT_METRICS:
+        cells = []
+        for sid in subject_ids:
+            value = (sqm_data.get(sid) or {}).get(key)
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                cells.append({"text": fmt.format(value),
+                              "cls": _metric_class(key, value, sci_threshold)})
+            else:
+                cells.append({"text": "—", "cls": ""})
+        if any(c["text"] != "—" for c in cells):
+            rows.append({"label": label, "direction": direction, "cells": cells,
+                         "summary": metric_summary(key)})
+    return rows
 
 
 def write_isc_matrix(
@@ -114,6 +170,8 @@ def build_hyper_report(
         figure_paths=meta["figure_paths"],
         ch_detail_template_json=json.dumps(meta["figure_paths"].get("ch_detail_template")),
         sci_per_subject_json=json.dumps(sci_per_subject),
+        subject_metrics_rows=subject_metric_rows(
+            sqm_data, meta["subject_ids"], sci_threshold),
     )
     output_path.write_text(html, encoding="utf-8")
     logger.info("Hyper raw report saved: %s", output_path)
@@ -129,6 +187,7 @@ def build_hyper_post_report(
     output_dir: Path,
     roi_map: dict[str, list[str]] | None = None,
     bad_channels: dict[str, list[str]] | None = None,
+    subject_sqm: dict[str, dict] | None = None,
     wtc_fmin: float = 0.004,
     wtc_fmax: float = 0.20,
     wtc_band_fmin: float | None = None,
@@ -142,6 +201,7 @@ def build_hyper_post_report(
     wtc_mask_coi: bool = False,
     wtc_roi_min_channels: int = 2,
     isc_threshold: float = 0.3,
+    sci_threshold: float = 0.8,
 ) -> Path:
     """Build hyperscanning post-QC report.
 
@@ -390,6 +450,8 @@ def build_hyper_post_report(
         roi_labels_json=json.dumps(roi_labels),
         per_roi_post_json=json.dumps(per_roi_post),
         wtc_roi_matrix_json=json.dumps(roi_matrix_fig),
+        subject_metrics_rows=subject_metric_rows(
+            subject_sqm or {}, subject_ids, sci_threshold),
     )
     output_path.write_text(html, encoding="utf-8")
     logger.info("Hyper post report saved: %s", output_path)

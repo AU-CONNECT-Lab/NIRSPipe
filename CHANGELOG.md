@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
 - **`--bads-scope` never reached the coherence.** Rejected channels were recorded and kept out of ISC, but WTC ran on the full montage whatever was asked for. Every WTC value on a dyad with a rejected long channel changes
 
 ### Changed
+- **The hyperscanning reports and `hyper-raw_sqm.tsv` carried SCI and nothing else.** Both computed the full metric set and wrote three columns of it, and SCI is amplitude-invariant, so a run whose cardiac pulse had collapsed read as clean. The TSV now carries every scalar in the record, and both hyper reports gain a per-subject quality table (PSP, CV, SNR, GVTD, motion footprint, HbO-HbR). Nothing is recomputed
 - **The raw QC report moves into `sub-<id>/`** with the subject's other reports, instead of loose in the derivatives root
 - **The pseudo-dyad null is its own command, `fnirs-qc hyper-null`**, and no longer inherits `--wtc-channel-cross` from the real run. Leaving the null homologous costs 0.6 h per dyad against 8.4 h crossed. `hyper-post --wtc-pseudo` is gone; the table and its columns are unchanged
 - The null records how many iterations it ran, and `group-hyper-wtc` refuses to merge nulls of different lengths

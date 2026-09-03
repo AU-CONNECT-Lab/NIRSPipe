@@ -285,13 +285,16 @@ def compute_group_sqm_raw(
         sqm["bad_channels"]    = bad_channels
         sqm_data[entry.subject_id] = sqm
 
+        # Every scalar the record holds, not a whitelist: the three columns this used to
+        # write left SCI as the only quality metric a hyperscanning study ever saw, and SCI
+        # is amplitude-invariant, so a run with a collapsed cardiac pulse reads as fine
         scalar_rows.append({
-            "group_id":               gid,
-            "subject_id":             entry.subject_id,
-            "task":                   task,
-            "sci_mean":               sqm.get("sci_mean"),
-            "n_bad_channels":         len(bad_channels),
-            "channel_retention_rate": sqm.get("channel_retention_rate"),
+            "group_id":       gid,
+            "subject_id":     entry.subject_id,
+            "task":           task,
+            "n_bad_channels": len(bad_channels),
+            **{k: v for k, v in sqm.items()
+               if isinstance(v, (int, float)) and not isinstance(v, bool)},
         })
 
         for ch, sci_val in sci_cw.items():
@@ -489,6 +492,7 @@ def load_group_sqm(
             except (OSError, json.JSONDecodeError):
                 continue
             sqm.update(record.get("raw_long") or record.get("raw") or {})
+            sqm.update(record.get("motion") or {})
             sqm.update(record.get("preproc") or {})
 
         csvs = sorted(nirs_dir.glob(f"{entry.subject_id}*_channel_metrics.csv"))

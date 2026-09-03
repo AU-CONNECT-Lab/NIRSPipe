@@ -1,4 +1,4 @@
-{% from "_macros.html.j2" import card %}
+{% from "_macros.html.j2" import card, subject_metrics %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -73,6 +73,15 @@ select#ch-select {
   </table>
 </div>
 {% endcall %}
+
+<!-- Per-subject quality metrics -->
+{% if subject_metrics_rows %}
+{% call card("Per-subject Quality Metrics", hint="↑ / ↓ = better direction &bull; SCI coloured against the threshold, HbO-HbR by sign") %}
+<div class="subj-metrics-wrap">
+  {{ subject_metrics(subject_metrics_rows, subject_ids) }}
+</div>
+{% endcall %}
+{% endif %}
 
 {% if figure_paths.trigger_timeline_raw %}
 {% call card("Trigger Timeline (Raw)", hint="event onsets per subject before alignment &bull; original recording time", id="trigger-raw-card") %}

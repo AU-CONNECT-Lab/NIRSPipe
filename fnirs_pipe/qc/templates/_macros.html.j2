@@ -13,3 +13,23 @@
   {{ caller() }}
 </div>
 {%- endmacro %}
+
+{# Per-subject quality metrics: one row per metric, one column per subject.
+   Rows come from hyper_report.subject_metric_rows. #}
+{% macro subject_metrics(rows, subject_ids) -%}
+<table class="subj-metrics">
+  <thead>
+    <tr><th>Metric</th>{% for sid in subject_ids %}<th>{{ sid }}</th>{% endfor %}</tr>
+  </thead>
+  <tbody>
+    {%- for row in rows %}
+    <tr>
+      <td{% if row.summary %} title="{{ row.summary }}"{% endif %}>{{ row.label }} <span class="dir">{{ row.direction }}</span></td>
+      {%- for cell in row.cells %}
+      <td class="{{ cell.cls }}">{{ cell.text }}</td>
+      {%- endfor %}
+    </tr>
+    {%- endfor %}
+  </tbody>
+</table>
+{%- endmacro %}

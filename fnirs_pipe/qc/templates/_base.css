@@ -43,3 +43,15 @@ h1 { font-size: 1.05rem; margin: 0; }
 #align-table th { background: #f1f3f5; font-weight: 600; }
 #align-table tbody tr:hover { background: #f8f9fa; }
 .align-wrap { padding: 0.5rem 0.8rem; }
+
+.subj-metrics { border-collapse: collapse; width: 100%; font-size: 0.82rem; }
+.subj-metrics th, .subj-metrics td {
+  border: 1px solid #dde3ea; padding: 0.26rem 0.55rem; text-align: left;
+}
+.subj-metrics th { background: #f1f3f5; font-weight: 600; }
+.subj-metrics td:not(:first-child) { text-align: right; font-variant-numeric: tabular-nums; }
+.subj-metrics tbody tr:hover { background: #f8f9fa; }
+.subj-metrics .dir { color: #adb5bd; font-weight: 400; }
+.subj-metrics .qm-ok { color: #27ae60; font-weight: 600; }
+.subj-metrics .qm-bad { color: #c0392b; font-weight: 600; }
+.subj-metrics-wrap { padding: 0.5rem 0.8rem; }
