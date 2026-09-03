@@ -132,6 +132,38 @@ def write_group_bads(
     return out_path
 
 
+def apply_group_bads(
+    raws: dict[str, mne.io.Raw],
+    sqm_by_subject: dict[str, dict],
+) -> None:
+    """Mark each subject's rejected channels bad on their Raw, in place.
+
+    Rejection lives in the quality record, not in the SNIRF: the post stage writes
+    ``desc-errts`` with an empty ``info["bads"]``, so until this runs every inter-brain
+    metric sees the full montage. ``long_channel_picks`` drops bads, so marking them here is
+    what makes WTC, ISC and the report rest on the one channel set ``--bads-scope`` chose.
+
+    The record names channels by wavelength ("S6_D5 760"), a haemoglobin Raw by chromophore
+    ("S6_D5 hbo"). Both reduce to the S-D label, which is the key every inter-brain metric
+    already matches on, so a pair rejected at either wavelength is marked at both
+    chromophores.
+
+    ::
+
+      {"sub-A": raw}  + {"sub-A": {"bad_channels": ["S6_D5 760", "S6_D5 850"]}}
+      ->  raw.info["bads"] == ["S6_D5 hbo", "S6_D5 hbr"]
+    """
+    for subject_id, raw in raws.items():
+        labels = {ch.rsplit(" ", 1)[0]
+                  for ch in (sqm_by_subject.get(subject_id, {}).get("bad_channels") or [])}
+        if not labels:
+            continue
+        marked = [ch for ch in raw.ch_names if ch.rsplit(" ", 1)[0] in labels]
+        raw.info["bads"] = sorted(set(raw.info["bads"]) | set(marked))
+        logger.info("%s: %d channel(s) marked bad from the quality record: %s",
+                    subject_id, len(marked), ", ".join(sorted(labels)))
+
+
 def load_group_haemo(
     output_dir: Path,
     group: list[GroupEntry],

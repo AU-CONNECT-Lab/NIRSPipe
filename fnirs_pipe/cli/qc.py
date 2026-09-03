@@ -67,23 +67,32 @@ def _run_groups(groups: dict, process) -> None:
         raise SystemExit(1)
 
 
-def _load_aligned_group(output_dir, members, task, desc, no_align, normalize):
-    """Load one dyad's haemoglobin stage and put the two recordings on one time axis."""
+def _load_aligned_group(output_dir, members, task, desc, no_align, normalize, bads_scope):
+    """Load one dyad, put both recordings on one time axis, and mark the rejected channels.
+
+    Returns (aligned_raws, offsets, group_sqm). The rejections have to be applied here rather
+    than in each metric: `desc-errts` carries an empty ``info["bads"]``, so a metric that
+    reads the Raw alone sees the full montage whatever --bads-scope was asked for.
+    """
     from fnirs_pipe.pipeline.hyperscanning import (
         align_recordings,
+        apply_group_bads,
         load_group_haemo,
+        load_group_sqm,
         normalize_raws,
         trim_to_shortest,
     )
 
     raws = load_group_haemo(output_dir, members, desc=desc)
+    group_sqm = load_group_sqm(output_dir, members, bads_scope=bads_scope)
+    apply_group_bads(raws, group_sqm)
     if no_align:
         aligned_raws, offsets = trim_to_shortest(raws)
     else:
         aligned_raws, offsets = align_recordings(raws, task)
     if normalize:
         aligned_raws = normalize_raws(aligned_raws)
-    return aligned_raws, offsets
+    return aligned_raws, offsets, group_sqm
 
 
 def cmd_prep_raw(
@@ -357,7 +366,7 @@ def cmd_hyper_post(
     """Generate hyperscanning post-processing QC report (WTC, ISC, connectivity)."""
     import json
 
-    from fnirs_pipe.pipeline.hyperscanning import load_group_sqm, write_group_bads
+    from fnirs_pipe.pipeline.hyperscanning import write_group_bads
     from fnirs_pipe.qc.hyper_report import build_hyper_post_report
 
     if wtc_channel_cross and roi_mapping is None:
@@ -375,9 +384,8 @@ def cmd_hyper_post(
             raise SystemExit(1)
 
     def _process(gid, task, members):
-        aligned_raws, offsets = _load_aligned_group(
-            output_dir, members, task, desc, no_align, normalize)
-        group_sqm = load_group_sqm(output_dir, members, bads_scope=bads_scope)
+        aligned_raws, offsets, group_sqm = _load_aligned_group(
+            output_dir, members, task, desc, no_align, normalize, bads_scope)
         bad_channels = {sid: sqm.get("bad_channels", []) for sid, sqm in group_sqm.items()}
         write_group_bads(output_dir, members, group_sqm, bads_scope)
         return build_hyper_post_report(
@@ -412,7 +420,7 @@ def cmd_hyper_null(
     desc: str, wtc_fmin: float, wtc_fmax: float,
     wtc_band_fmin: float | None, wtc_band_fmax: float | None,
     wtc_pseudo: int, wtc_seed: int | None, wtc_channel_cross: bool,
-    wtc_limit_scales: bool, wtc_mask_coi: bool,
+    wtc_limit_scales: bool, wtc_mask_coi: bool, bads_scope: str,
     normalize: bool, no_align: bool,
     session_label: list[str] | None, task_label: list[str] | None,
     skip_bids_validation: bool,
@@ -423,8 +431,8 @@ def cmd_hyper_null(
     groups = _select_groups(pairs_csv, group_id, task_label)
 
     def _process(gid, task, members):
-        aligned_raws, _ = _load_aligned_group(
-            output_dir, members, task, desc, no_align, normalize)
+        aligned_raws, _, _ = _load_aligned_group(
+            output_dir, members, task, desc, no_align, normalize, bads_scope)
         return write_wtc_null(
             group_id=gid,
             task=task,
@@ -689,6 +697,10 @@ def _build_parser() -> argparse.ArgumentParser:
                          "surrogate run expensive. The homologous null is still the null "
                          "for the homologous cells of a crossed real table, which are the "
                          "rows where label and label2 agree.")
+    hn.add_argument("--bads-scope", choices=("run", "subject"), default="run",
+                    help="Which rejected channels are excluded, exactly as in hyper-post. "
+                         "Must match that run: a null computed over a different channel set "
+                         "is not the null for the table it sits beside.")
     hn.add_argument("--wtc-limit-scales", action=argparse.BooleanOptionalAction, default=True,
                     help="Compute only the wavelet scales inside --wtc-fmin/--wtc-fmax plus "
                          "margin (default on), matching hyper-post.")

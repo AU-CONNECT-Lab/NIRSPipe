@@ -291,3 +291,40 @@ def test_a_failed_isc_write_costs_the_file_and_not_the_report(tmp_path):
     path = tmp_path / "isc.tsv"
     write_isc_matrix(path, np.eye(3), ["a", "b"], "hbo", [], ["sub-01"])   # shapes disagree
     assert not path.exists()
+
+
+# ---- the quality record reaching the Raw ----
+
+def test_a_rejected_pair_is_marked_at_both_chromophores():
+    from fnirs_pipe.pipeline.hyperscanning import apply_group_bads
+
+    raw = _haemo("10031")
+    raws = {"sub-A": raw}
+    # the record names channels by wavelength; the haemo Raw names them by chromophore
+    apply_group_bads(raws, {"sub-A": {"bad_channels": ["S2_D2 760", "S2_D2 850"]}})
+
+    assert set(raw.info["bads"]) == {"S2_D2 hbo", "S2_D2 hbr"}
+    assert _labels(raw) == {"S1_D1", "S3_D3", "S4_D4"}
+
+
+def test_a_rejected_pair_never_reaches_the_coherence():
+    """desc-errts carries no bads, so nothing but this marking keeps a rejected pair out."""
+    from fnirs_pipe.pipeline.hyperscanning import apply_group_bads
+
+    raws = {"sub-10031": _haemo("10031"), "sub-10032": _haemo("10032")}
+    assert all(not r.info["bads"] for r in raws.values())          # the state on disk
+
+    apply_group_bads(raws, {"sub-10031": {"bad_channels": ["S2_D2 760"]}})
+    labels = set(next(iter(compute_wtc(raws, fmin=0.02, fmax=0.5).pairs.values())))
+
+    assert "S2_D2" not in labels
+    assert labels == {"S1_D1", "S3_D3", "S4_D4"}
+
+
+def test_a_subject_with_nothing_rejected_keeps_every_channel():
+    from fnirs_pipe.pipeline.hyperscanning import apply_group_bads
+
+    raw = _haemo("10031")
+    apply_group_bads({"sub-A": raw}, {"sub-A": {"bad_channels": []}})
+    assert raw.info["bads"] == []
+    assert _labels(raw) == {"S1_D1", "S2_D2", "S3_D3", "S4_D4"}
