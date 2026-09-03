@@ -243,7 +243,12 @@ QC_COMMANDS_NOT_OFFERED = {
 # worth putting on screen. It is an escape hatch for comparing against old output.
 QC_NOT_EXPOSED = {
     "hyper-post": {"--no-normalize", "--no-skip-bids-validation",
-                   "--wtc-limit-scales", "--no-wtc-limit-scales"},
+                   "--wtc-limit-scales", "--no-wtc-limit-scales",
+                   # only tints the per-subject quality table, against a threshold the run
+                   # was already prepped with. A second control here could be set to a
+                   # different number than prep used, with nothing saying which one the
+                   # colours mean
+                   "--sci-threshold"},
     "hyper-null": {"--no-normalize", "--no-skip-bids-validation",
                    "--wtc-limit-scales", "--no-wtc-limit-scales"},
     "window-raw": {"--no-skip-bids-validation"},

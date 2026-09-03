@@ -135,12 +135,20 @@ def build_ts_figure(
         data=traces,
         layout=go.Layout(
             xaxis=dict(title="Time (s)", gridcolor="#eeeeee", zerolinecolor="#cccccc"),
-            yaxis=dict(showticklabels=False, gridcolor="#eeeeee"),
+            # one tick per trace, so the name sits on the trace instead of in a legend
+            # whose order is the reverse of the stacking and whose spacing is unrelated
+            yaxis=dict(
+                tickmode="array",
+                tickvals=[i * 3 for i in range(n)],
+                ticktext=[raw.ch_names[p] for p in picks],
+                tickfont=dict(size=8),
+                showgrid=False, zeroline=False,
+            ),
             plot_bgcolor="white", paper_bgcolor="white",
             shapes=band_shapes + mk_shapes,
             height=max(380, n * 22 + 80),
-            margin=dict(l=55, r=15, t=12, b=40),
-            legend=dict(font=dict(size=8), tracegroupgap=0),
+            margin=dict(l=110, r=15, t=12, b=40),
+            showlegend=False,
             hovermode="closest",
         ),
     )
@@ -290,6 +298,66 @@ def build_channel_figure(
     return detail_fig, psd_fig, epoch_fig
 
 
+def _topomap_project(xyz: np.ndarray, sphere: np.ndarray) -> np.ndarray:
+    """Flatten 3-D points the way MNE flattens sensors for a topomap.
+
+    Azimuthal-equidistant projection about the fitted head sphere: translate to the sphere
+    origin, read (azimuth, polar) as (angle, radius), scale radians back to metres. MNE only
+    exposes this for channel positions, so optodes are projected here with the same sphere and
+    land in the same frame as the channel midpoints returned by ``_get_pos_outlines``.
+
+    e.g. a point on the sphere equator, 90 deg from the vertex, maps onto the head circle.
+    """
+    from mne.transforms import _cart_to_sph, _pol_to_cart
+
+    sph = _cart_to_sph(np.asarray(xyz, dtype=float) - sphere[:3])
+    out = _pol_to_cart(sph[:, 1:][:, ::-1])
+    out *= sph[:, [0]] / (np.pi / 2.0)
+    return out + sphere[:2]
+
+
+def _optode_positions(chs, ch_names) -> tuple[dict, dict, list[tuple[str, str]]]:
+    """Named source / detector coordinates read off the fNIRS channel locs.
+
+    A channel "S1_D2 760" carries its source in ``loc[3:6]`` and its detector in ``loc[6:9]``
+    (``loc[:3]`` is the midpoint, not the detector), so it contributes {"S1": xyz} to the
+    sources, {"D2": xyz} to the detectors and ("S1", "D2") to the pairs; repeats collapse.
+    """
+    src: dict[str, np.ndarray] = {}
+    det: dict[str, np.ndarray] = {}
+    pairs: list[tuple[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for ch, name in zip(chs, ch_names):
+        pair = name.split(" ")[0]
+        if "_" not in pair:
+            continue
+        s_name, d_name = pair.split("_")[:2]
+        s_xyz, d_xyz = np.asarray(ch["loc"][3:6]), np.asarray(ch["loc"][6:9])
+        if not (np.any(s_xyz) or np.any(d_xyz)):
+            continue
+        src.setdefault(s_name, s_xyz)
+        det.setdefault(d_name, d_xyz)
+        if (s_name, d_name) not in seen:
+            seen.add((s_name, d_name))
+            pairs.append((s_name, d_name))
+    return src, det, pairs
+
+
+def _head_outline_shapes(outlines: dict | None) -> list[dict]:
+    """MNE head / nose / ear polylines as plotly paths, drawn under the montage."""
+    if not outlines:
+        return []
+    shapes = []
+    for key in ("head", "nose", "ear_left", "ear_right"):
+        xy = outlines.get(key)
+        if xy is None:
+            continue
+        pts = " L ".join(f"{x},{y}" for x, y in zip(*xy))
+        shapes.append(dict(type="path", path=f"M {pts}", xref="x", yref="y",
+                           layer="below", line=dict(color="#b7c0c9", width=1.6)))
+    return shapes
+
+
 def build_layout_figure(
     raw: mne.io.Raw,
     bad_channels: set[str],
@@ -306,43 +374,76 @@ def build_layout_figure(
     fig_2d = fig_3d = None
 
     if has_positions:
-        x = (ch_locs[:, 0] * 1000).tolist()
-        y = (ch_locs[:, 1] * 1000).tolist()
-        seen: set = set()
+        picks_2d = list(mne.pick_types(raw.info, meg=False, fnirs=True)) or list(range(len(chs)))
+        names_2d = [ch_names[i] for i in picks_2d]
+        chs_2d   = [chs[i] for i in picks_2d]
+
+        sphere = pos2d = outlines = None
+        try:
+            from mne.utils import _check_sphere
+            from mne.viz.topomap import _get_pos_outlines
+            sphere = _check_sphere(None, raw.info)
+            pos2d, outlines = _get_pos_outlines(raw.info, picks_2d, sphere)
+        except Exception as exc:
+            logger.warning("head projection unavailable, plotting flat x/y: %s", exc)
+
+        flat = pos2d is None
+        if flat:
+            pos2d = np.array([ch["loc"][:3] for ch in chs_2d])[:, :2]
+
+        def _project(xyz):
+            arr = np.asarray(xyz, dtype=float)
+            return arr[:, :2] if flat else _topomap_project(arr, sphere)
+
+        src_xyz, det_xyz, pairs = _optode_positions(chs_2d, names_2d)
+        opt_xy: dict[str, np.ndarray] = {}
+        for group in (src_xyz, det_xyz):
+            if group:
+                opt_xy.update(zip(group, _project(np.array(list(group.values())))))
+
         lines_x, lines_y = [], []
-        for ch in chs:
-            src = tuple(round(v, 6) for v in ch["loc"][3:6])
-            det = tuple(round(v, 6) for v in ch["loc"][:3])
-            key = src + det
-            if key in seen or not (any(src) or any(det)):
-                continue
-            seen.add(key)
-            lines_x += [src[0] * 1000, det[0] * 1000, None]
-            lines_y += [src[1] * 1000, det[1] * 1000, None]
+        for s_name, d_name in pairs:
+            if s_name in opt_xy and d_name in opt_xy:
+                lines_x += [float(opt_xy[s_name][0]), float(opt_xy[d_name][0]), None]
+                lines_y += [float(opt_xy[s_name][1]), float(opt_xy[d_name][1]), None]
 
         marker_colors_2d = [
             "#949e9f" if n in bad_channels else sci_color(sci_scores.get(n))
-            for n in ch_names
+            for n in names_2d
         ]
+
+        def _optode_trace(names, color, symbol):
+            return go.Scatter(
+                x=[float(opt_xy[n][0]) for n in names],
+                y=[float(opt_xy[n][1]) for n in names],
+                mode="markers+text", text=list(names),
+                textposition="top center", textfont=dict(size=8, color="#5d6d7e"),
+                marker=dict(size=7, color=color, symbol=symbol,
+                            line=dict(width=0.8, color="#ffffff")),
+                hovertemplate="<b>%{text}</b><extra></extra>", showlegend=False,
+            )
+
+        # trace 1 has to stay the channel scatter: the viewer and the Dash app both index it there
         fig_2d = go.Figure(
             data=[
                 go.Scatter(x=lines_x, y=lines_y, mode="lines",
                            line=dict(color="#bdc3c7", width=2),
                            hoverinfo="skip", showlegend=False),
-                go.Scatter(x=x, y=y, mode="markers+text",
-                           text=[n.split(" ")[0] for n in ch_names],
-                           textposition="top center", textfont=dict(size=7),
+                go.Scatter(x=pos2d[:, 0].tolist(), y=pos2d[:, 1].tolist(), mode="markers",
                            marker=dict(size=10, color=marker_colors_2d, opacity=0.9,
                                        line=dict(width=0.8, color="#555")),
-                           customdata=ch_names,
+                           customdata=names_2d,
                            hovertemplate="<b>%{customdata}</b><extra></extra>",
                            showlegend=False),
+                _optode_trace([n for n in src_xyz if n in opt_xy], "#c0392b", "square"),
+                _optode_trace([n for n in det_xyz if n in opt_xy], "#2980b9", "circle"),
             ],
             layout=go.Layout(
-                xaxis=dict(showgrid=False, zeroline=False, title="x (mm)"),
-                yaxis=dict(showgrid=False, zeroline=False, title="y (mm)", scaleanchor="x"),
-                plot_bgcolor="#f8f9fa", paper_bgcolor="white",
-                height=700, margin=dict(l=40, r=15, t=10, b=40),
+                xaxis=dict(visible=False),
+                yaxis=dict(visible=False, scaleanchor="x"),
+                plot_bgcolor="white", paper_bgcolor="white",
+                height=700, margin=dict(l=10, r=10, t=10, b=10),
+                shapes=_head_outline_shapes(outlines),
                 hovermode="closest",
             ),
         )

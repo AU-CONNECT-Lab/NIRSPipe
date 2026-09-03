@@ -363,7 +363,7 @@ def cmd_hyper_post(
     wtc_channel_cross: bool, bads_scope: str,
     wtc_limit_scales: bool, wtc_save_maps: bool,
     wtc_mask_coi: bool, wtc_roi_min_channels: int,
-    isc_threshold: float, normalize: bool, no_align: bool,
+    isc_threshold: float, sci_threshold: float, normalize: bool, no_align: bool,
     session_label: list[str] | None, task_label: list[str] | None,
     skip_bids_validation: bool,
 ) -> None:
@@ -415,6 +415,7 @@ def cmd_hyper_post(
             wtc_mask_coi=wtc_mask_coi,
             wtc_roi_min_channels=wtc_roi_min_channels,
             isc_threshold=isc_threshold,
+            sci_threshold=sci_threshold,
         )
 
     _run_groups(groups, _process)
@@ -657,6 +658,9 @@ def _build_parser() -> argparse.ArgumentParser:
                          "per pair per dyad per task.")
     hp.add_argument("--isc-threshold", type=float, default=0.3,
                     help="Minimum mean ISC to draw an arc in the connectivity circle.")
+    hp.add_argument("--sci-threshold", type=float, default=0.8,
+                    help="SCI below which a channel counts as badly coupled. Colours the "
+                         "per-subject quality table; pass what the run was prepped with.")
     hp.add_argument("--normalize", action=argparse.BooleanOptionalAction, default=False,
                     help="Z-score each channel per subject after alignment.")
     hp.add_argument("--no-align", action="store_true",
