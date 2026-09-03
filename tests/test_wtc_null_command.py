@@ -11,6 +11,7 @@ refuses to mix iteration counts.
 """
 
 import json
+import pathlib
 
 import pandas as pd
 import pytest
@@ -97,3 +98,15 @@ def test_nulls_of_one_length_merge(tmp_path):
     _write_null(tmp_path, "d02", "baseline", 100)
     merged = aggregate_wtc(tmp_path, kind="wtc-pseudo")
     assert sorted(merged["group_id"]) == ["d01", "d02"]
+
+
+def test_the_merge_command_covers_every_kind_the_aggregator_has():
+    """It asked for wtc-roi, gone since 0.24.0, and died before reaching the null."""
+    import inspect
+
+    from fnirs_pipe.cli.qc import cmd_group_hyper_wtc
+    from fnirs_pipe.qc.wtc_aggregate import _KINDS
+
+    for kind in _KINDS:
+        aggregate_wtc(pathlib.Path("."), kind=kind)          # every kind is accepted
+    assert "for kind in _KINDS" in inspect.getsource(cmd_group_hyper_wtc)

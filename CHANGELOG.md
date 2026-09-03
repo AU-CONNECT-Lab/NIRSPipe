@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 - **Optodes rendered off the brain when the montage was already in MNI.** The 3D layout, the quality brain views and the GLM surface projection applied fsaverage's head-to-MRI transform regardless of the source frame. The frame is now read from the file. Datasets in head space are unaffected
 - **The correlation matrix labelled only every other channel**, so rows and labels appeared to disagree
+- **`fnirs-qc group-hyper-wtc` merged only the channel table.** It asked for an ROI table removed in 0.24.0 and stopped there, so the ROI and null tables were never merged
 - **`--bads-scope` never reached the coherence.** Rejected channels were recorded and kept out of ISC, but WTC ran on the full montage whatever was asked for. Every WTC value on a dyad with a rejected long channel changes
 
 ### Changed

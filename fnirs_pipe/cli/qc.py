@@ -237,10 +237,12 @@ def cmd_group_hyper_raw(output_dir: Path) -> None:
 
 def cmd_group_hyper_wtc(output_dir: Path) -> None:
     """Merge every per-dyad WTC band-mean table into one long table per kind."""
-    from fnirs_pipe.qc.wtc_aggregate import write_aggregate_wtc
+    from fnirs_pipe.qc.wtc_aggregate import _KINDS, write_aggregate_wtc
 
+    # driven off the aggregator's own kinds, so removing or adding one cannot leave this
+    # list behind: it named wtc-roi, gone since 0.24.0, and never named wtc-pseudo at all
     wrote = False
-    for kind in ("wtc", "wtc-roi", "wtc-roichan"):
+    for kind in _KINDS:
         path = write_aggregate_wtc(output_dir, kind=kind)
         if path is not None:
             print(f"{kind} -> {path}")
