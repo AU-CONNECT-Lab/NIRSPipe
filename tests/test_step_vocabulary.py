@@ -24,8 +24,8 @@ ALL_STEPS = [
     "beer_lambert", "bandpass", "resample", "design_matrix", "glm_fit", "contrasts",
     "glm_residuals", "glm_residuals_broadband", "sqm", "sqm_raw", "alff", "fc",
     "fisher_z", "fc_roi", "fc_seed", "group_sqm_raw", "group_sqm_raw_channels",
-    "hyper_wtc", "hyper_wtc_roi", "hyper_wtc_roichan", "hyper_isc",
-    "group_hyper_wtc", "group_hyper_wtc_roi", "group_hyper_wtc_roichan",
+    "hyper_wtc", "hyper_wtc_roichan", "hyper_wtc_pseudo", "hyper_isc",
+    "group_hyper_wtc", "group_hyper_wtc_roichan", "group_hyper_wtc_pseudo",
 ]
 
 

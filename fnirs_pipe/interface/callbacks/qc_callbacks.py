@@ -66,6 +66,8 @@ def build_qc_args(command: str, opts: dict) -> list[str]:
         args += [opts["output_dir"]]
         args += _num("--band-fmin", opts.get("band_fmin"))
         args += _num("--band-fmax", opts.get("band_fmax"))
+        if "band_mask_coi" in (opts.get("band_flags") or []):
+            args.append("--mask-coi")
         args += _text("--suffix", opts.get("band_suffix"))
         return args
 
@@ -169,7 +171,7 @@ _STATES = [
     State("qc-hyper-session", "value"), State("qc-hyper-task", "value"),
     State("qc-hyper-flags", "value"),
     State("qc-band-fmin", "value"), State("qc-band-fmax", "value"),
-    State("qc-band-suffix", "value"),
+    State("qc-band-suffix", "value"), State("qc-band-flags", "value"),
     State("qc-task-label", "value"), State("qc-tstart", "value"), State("qc-tend", "value"),
     State("qc-window-name", "value"), State("qc-align", "value"),
     State("qc-cardiac-l", "value"), State("qc-cardiac-h", "value"),
@@ -184,7 +186,7 @@ def _opts(values) -> dict:
             "wtc_fmin", "wtc_fmax", "wtc_band_fmin", "wtc_band_fmax", "wtc_mc_count",
             "wtc_seed", "isc_threshold", "wtc_pseudo", "wtc_roi_min_channels",
             "hyper_session", "hyper_task", "hyper_flags",
-            "band_fmin", "band_fmax", "band_suffix",
+            "band_fmin", "band_fmax", "band_suffix", "band_flags",
             "task_label", "tstart", "tend", "window_name",
             "align", "cardiac_l", "cardiac_h", "sci_thresh", "window_length",
             "trigger_name", "participant_label", "window_session", "run_flags"]

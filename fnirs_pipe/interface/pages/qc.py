@@ -130,6 +130,20 @@ def _hyper_post():
                 dbc.Input(id="qc-isc-threshold", type="number", step=0.05,
                           placeholder="default"),
             ], width=2),
+            dbc.Col([
+                dbc.Label("Pseudo-dyad Iterations"),
+                dbc.Input(id="qc-wtc-pseudo", type="number", min=0, step=10,
+                          placeholder="0, off"),
+                dbc.FormText("The null a coherence is read against. One full WTC run each; "
+                             "published work uses 100."),
+            ], width=2),
+            dbc.Col([
+                dbc.Label("Min Channels per ROI"),
+                dbc.Input(id="qc-wtc-roi-min-channels", type="number", min=1, step=1,
+                          placeholder="2"),
+                dbc.FormText("Below this an ROI cell is dropped rather than resting on one "
+                             "optode."),
+            ], width=2),
         ], className="g-3 mt-1"),
         dbc.Row([
             dbc.Col(dbc.Checklist(
@@ -172,6 +186,13 @@ def _wtc_band():
                              "Defaults to the band."),
             ], width=4),
         ], className="g-3"),
+        dbc.Row([
+            dbc.Col(dbc.Checklist(
+                id="qc-band-flags",
+                options=[{"label": "Mask cone of influence", "value": "band_mask_coi"}],
+                value=[], inline=True, switch=True,
+            )),
+        ], className="g-3 mt-1"),
         subtitle="Reads the npz written by hyper-post with Save WTC maps on. "
                  "Writes tables, not a report.",
     ))

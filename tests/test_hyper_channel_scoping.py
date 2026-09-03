@@ -170,8 +170,8 @@ def _result(wtc=WTC, coi=COI) -> WTCResult:
 
 def test_cells_outside_the_cone_of_influence_do_not_enter_the_mean():
     # the four corner cells hold the 1.0s; masking them leaves 8 cells holding two of them
-    masked   = wtc_band_mean(_result(), 0.04, 0.25).iloc[0]
-    unmasked = wtc_band_mean(_result(), 0.04, 0.25, mask_coi=False).iloc[0]
+    masked   = wtc_band_mean(_result(), 0.04, 0.25, mask_coi=True).iloc[0]
+    unmasked = wtc_band_mean(_result(), 0.04, 0.25).iloc[0]
     assert masked["coherence"] == pytest.approx(2 / 8)
     assert unmasked["coherence"] == pytest.approx(6 / 12)
     assert masked["n_valid_frac"] == pytest.approx(8 / 12)
@@ -179,7 +179,7 @@ def test_cells_outside_the_cone_of_influence_do_not_enter_the_mean():
 
 
 def test_the_band_selects_rows_before_the_mask_applies():
-    row = wtc_band_mean(_result(), 0.15, 0.25).iloc[0]      # the 0.2 Hz row alone
+    row = wtc_band_mean(_result(), 0.15, 0.25, mask_coi=True).iloc[0]  # the 0.2 Hz row alone
     assert row["coherence"] == pytest.approx(0.5)
     assert row["n_valid_frac"] == pytest.approx(1.0)
 
@@ -203,7 +203,8 @@ def test_every_pair_and_label_gets_one_row():
              ("sub-A", "sub-C"): {"S1_D1": {"wtc": WTC, "coi": COI},
                                   "S2_D2": None}}
     df = wtc_band_mean(WTCResult(pairs=pairs, freqs=FREQS, times=TIMES), 0.04, 0.25)
-    assert list(df.columns) == ["sub1", "sub2", "label", "coherence", "n_valid_frac"]
+    assert list(df.columns) == ["sub1", "sub2", "label",
+                                "coherence", "coherence_z", "n_valid_frac"]
     assert len(df) == 4
 
 

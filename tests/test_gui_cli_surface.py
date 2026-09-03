@@ -257,6 +257,7 @@ _QC_FULL_OPTS = dict(
     hyper_flags=["wtc_significance", "wtc_mask_coi", "wtc_channel_cross", "bads_subject",
                  "wtc_save_maps", "no_align", "normalize"],
     band_fmin=0.05, band_fmax=0.2, band_suffix="band0p05-0p2",
+    band_flags=["band_mask_coi"],
     task_label="rest", tstart=0.0, tend=60.0, window_name="early", align="trigger",
     cardiac_l=0.7, cardiac_h=1.5, sci_thresh=0.8, window_length=10.0,
     trigger_name="start", participant_label="01 02", window_session="ses-1",
