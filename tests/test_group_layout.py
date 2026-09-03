@@ -8,7 +8,11 @@ did not change.
 
 import pandas as pd
 
-from fnirs_pipe.io.derivatives import group_data_dir, group_report_dir
+from fnirs_pipe.io.derivatives import (
+    group_data_dir,
+    group_report_dir,
+    subject_report_dir,
+)
 from fnirs_pipe.pipeline.hyperscanning import GroupEntry, write_group_bads
 
 
@@ -49,3 +53,22 @@ def test_the_derivatives_root_keeps_no_loose_group_files(tmp_path):
 
     loose = [p.name for p in tmp_path.iterdir() if p.is_file()]
     assert loose == []
+
+
+# ---- the subject side of the same rule ----
+
+def test_a_subject_folder_is_named_the_same_way_from_either_form(tmp_path):
+    assert subject_report_dir(tmp_path, "01") == tmp_path / "sub-01"
+    assert subject_report_dir(tmp_path, "sub-01") == tmp_path / "sub-01"
+    assert (tmp_path / "sub-01").is_dir()
+
+
+def test_the_raw_qc_report_lands_in_the_subject_folder(tmp_path):
+    """It used to sit loose in the root, which for 23 dyads is 230 files beside the study ones."""
+    from fnirs_pipe.qc.prep_raw_report import build_prep_raw_report
+
+    out = subject_report_dir(tmp_path, "01") / "sub-01_task-hold_desc-raw_nirs.html"
+    build_prep_raw_report([], out, cardiac_l_freq=0.7, cardiac_h_freq=1.5, dpf=[6.0])
+
+    assert out.exists()
+    assert [q.name for q in tmp_path.iterdir() if q.is_file()] == []

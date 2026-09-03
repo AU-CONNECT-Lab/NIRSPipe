@@ -106,6 +106,7 @@ def cmd_prep_raw(
     from collections import defaultdict
 
     from fnirs_pipe.io.bids import bids_label, get_layout, get_nirs_files
+    from fnirs_pipe.io.derivatives import subject_report_dir
     from fnirs_pipe.qc.prep_raw_report import build_prep_raw_report
 
     layout = get_layout(bids_dir, validate=not skip_bids_validation)
@@ -145,7 +146,8 @@ def cmd_prep_raw(
         name_parts = [f"sub-{participant_label}"]
         if ses:  name_parts.append(f"ses-{ses}")
         if task: name_parts.append(f"task-{task}")
-        html_path = output_dir / ("_".join(name_parts) + "_desc-raw_nirs.html")
+        html_path = (subject_report_dir(output_dir, participant_label)
+                     / ("_".join(name_parts) + "_desc-raw_nirs.html"))
         print(f"Generating raw QC report: {html_path.name} ...")
         try:
             build_prep_raw_report(group_runs, html_path, dpf=dpf, sci_threshold=sci_threshold,

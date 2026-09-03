@@ -20,14 +20,17 @@ from fnirs_pipe.qc.figures.group_figures import (
 from fnirs_pipe.qc.sqm_record import SECTIONS
 from fnirs_pipe.utils.logging import get_logger
 
-# Click a strip point -> open that subject's raw report (sibling of the group HTML,
-# one dir up from this figure iframe). Multi-run viewers open at their first run.
+# Click a strip point -> open that subject's raw report, which lives in sub-<id>/ next to
+# the rest of that subject's files. The figure is an iframe one dir down from the group HTML,
+# so the hop is up and then into the subject folder, whose name is the label's first field.
+# Multi-run viewers open at their first run.
 _STRIP_CLICK_JS = (
     "<script>(function(){function bind(){var gd=document.querySelector('.plotly-graph-div');"
     "if(!gd||!gd.on){return setTimeout(bind,150);}"
     "gd.on('plotly_click',function(e){var p=e.points&&e.points[0];if(!p||p.customdata==null)return;"
     "var b=Array.isArray(p.customdata)?p.customdata[0]:p.customdata;"
-    "if(b)window.open('../'+b+'_desc-raw_nirs.html','_blank');});}bind();})();</script>"
+    "if(b)window.open('../'+b.split('_')[0]+'/'+b+'_desc-raw_nirs.html','_blank');});}"
+    "bind();})();</script>"
 )
 
 # Per-window metrics that should produce a time × subject heatmap.

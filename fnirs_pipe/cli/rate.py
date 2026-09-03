@@ -39,7 +39,8 @@ def cmd_raw(
         name_parts.append(f"ses-{session_label}")
     if task_label:
         name_parts.append(f"task-{task_label}")
-    html_path = output_dir / ("_".join(name_parts) + "_desc-raw_nirs.html")
+    html_path = (output_dir / f"sub-{participant_label}"
+                 / ("_".join(name_parts) + "_desc-raw_nirs.html"))
 
     if not html_path.exists():
         print(f"Error: raw report not found: {html_path}", file=sys.stderr)

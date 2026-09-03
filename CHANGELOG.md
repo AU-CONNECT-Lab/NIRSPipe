@@ -9,12 +9,12 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 - **Optodes rendered off the brain when the montage was already in MNI.** The 3D layout, the quality brain views and the GLM surface projection applied fsaverage's head-to-MRI transform regardless of the source frame. The frame is now read from the file. Datasets in head space are unaffected
 - **The correlation matrix labelled only every other channel**, so rows and labels appeared to disagree
-- **`--bads-scope` never reached the coherence.** The rejected channels were loaded, written to `hyper-bads.tsv` and used to blank the ISC matrix, but never marked on the Raw, and `desc-errts` carries none of its own, so WTC ran on the full montage whatever was asked for. `hyper-bads.tsv` claimed to name the channels the inter-brain metrics excluded and named channels that were still in the result. Every WTC value on a dyad with a rejected long channel changes
-- `hyper-null` takes `--bads-scope` for the same reason: a null computed over a different channel set is not the null for the table it sits beside
+- **`--bads-scope` never reached the coherence.** Rejected channels were recorded and kept out of ISC, but WTC ran on the full montage whatever was asked for. Every WTC value on a dyad with a rejected long channel changes
 
 ### Changed
-- **The pseudo-dyad null is its own command, `fnirs-qc hyper-null`, and no longer inherits `--wtc-channel-cross`.** As `hyper-post --wtc-pseudo` it took the real run's crossing, so asking for the exploratory 196-pair channel table also multiplied every surrogate iteration by 14. Crossing is now the null's own flag and defaults to off. The table, its name and its columns are unchanged
-- The pseudo-dyad sidecar records `n_iter` and `cross`, without which a short probe and a full null look alike on disk. `group-hyper-wtc` refuses to merge nulls of different lengths
+- **The raw QC report moves into `sub-<id>/`** with the subject's other reports, instead of loose in the derivatives root
+- **The pseudo-dyad null is its own command, `fnirs-qc hyper-null`**, and no longer inherits `--wtc-channel-cross` from the real run. Leaving the null homologous costs 0.6 h per dyad against 8.4 h crossed. `hyper-post --wtc-pseudo` is gone; the table and its columns are unchanged
+- The null records how many iterations it ran, and `group-hyper-wtc` refuses to merge nulls of different lengths
 
 ## [0.24.0] - 2026-09-02
 

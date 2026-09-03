@@ -62,6 +62,13 @@ def build_output_path(
     return folder / filename
 
 
+def subject_report_dir(output_dir: Path, subject_id: str) -> Path:
+    """A subject's own folder, holding their HTML reports. The mirror of ``group-<id>/``."""
+    folder = output_dir / f"sub-{subject_id.removeprefix('sub-')}"
+    folder.mkdir(parents=True, exist_ok=True)
+    return folder
+
+
 def group_report_dir(output_dir: Path, group_id: str) -> Path:
     """A group's own folder, holding its HTML reports. The mirror of ``sub-<id>/``."""
     folder = output_dir / f"group-{group_id}"
