@@ -199,14 +199,11 @@ fnirs-qc hyper-post BIDS_DIR OUTPUT_DIR --pairs-csv PATH
                     [--wtc-fmin/--wtc-fmax FLOAT]
                     [--wtc-band-fmin/--wtc-band-fmax FLOAT]
                     [--wtc-significance] [--wtc-seed INT] [--wtc-mc-count INT]
-                    [--wtc-pseudo N] [--wtc-mask-coi] [--wtc-roi-min-channels N]
+                    [--wtc-mask-coi] [--wtc-roi-min-channels N]
                     [--wtc-channel-cross] [--isc-threshold FLOAT]
                     [--normalize] [--no-align]
 
 # --desc picks the per-subject stage the inter-brain metrics read (default preproc).
-# --wtc-pseudo runs N phase-scrambled iterations and writes the pseudo-dyad band means
-# beside the real ones. Coherence between two unrelated recordings is not zero, so this
-# is the null a value is read against. One full WTC run per iteration.
 # --wtc-significance is slow: --wtc-mc-count surrogate series per channel pair, 300 by
 # default, and the runtime scales with it. --wtc-seed makes those contours reproducible
 # and switches off pycwt's on-disk cache, which is not keyed on the seed.
@@ -215,6 +212,21 @@ fnirs-qc hyper-post BIDS_DIR OUTPUT_DIR --pairs-csv PATH
 # --wtc-channel-cross pairs every long channel with every other across the two brains,
 # 196 values instead of 14, and is what builds the ROI x ROI matrix when --roi-mapping
 # is given. The heatmaps stay on the homologous pairs.
+
+fnirs-qc hyper-null BIDS_DIR OUTPUT_DIR --pairs-csv PATH
+                    [--group-id / --task-label / --session-label]
+                    [--desc TEXT] [--wtc-pseudo N] [--wtc-seed INT]
+                    [--wtc-fmin/--wtc-fmax FLOAT]
+                    [--wtc-band-fmin/--wtc-band-fmax FLOAT]
+                    [--wtc-mask-coi] [--wtc-channel-cross]
+                    [--normalize] [--no-align]
+
+# The pseudo-dyad null: the same band means against a phase-scrambled partner.
+# Coherence between two unrelated recordings is not zero, so this is what a real value
+# is read against. One full WTC run per iteration, 100 by default.
+# It is its own command so the null does not inherit --wtc-channel-cross from the real
+# run: crossing squares the pair count and the null pays that on every iteration.
+# Every other flag must match the hyper-post run this null is read against.
 
 fnirs-qc group-raw       OUTPUT_DIR
 fnirs-qc group-hyper-raw OUTPUT_DIR

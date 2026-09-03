@@ -140,7 +140,6 @@ def build_hyper_post_report(
     wtc_limit_scales: bool = True,
     wtc_save_maps: bool = False,
     wtc_mask_coi: bool = False,
-    wtc_pseudo: int = 0,
     wtc_roi_min_channels: int = 2,
     isc_threshold: float = 0.3,
 ) -> Path:
@@ -163,10 +162,6 @@ def build_hyper_post_report(
     Crossing is also what produces the ROI × ROI matrix, since the ROI numbers are grouped
     from the channel ones.
 
-    ``wtc_pseudo`` runs that many phase-scrambled iterations and writes the pseudo-dyad band
-    means beside the real ones, which is the null a coherence value is read against. Zero
-    skips it. It costs a full WTC run per iteration.
-
     ``wtc_mask_coi`` restricts each band mean to the cone of influence. Off by default; the
     share inside the cone is reported either way as ``n_valid_frac``.
 
@@ -181,7 +176,6 @@ def build_hyper_post_report(
         WTCResult,
         _hyper_sidecar,
         compute_wtc,
-        compute_wtc_pseudo,
         roi_maps_from_channels,
         roi_mean_of_channels,
         wtc_band_mean,
@@ -272,19 +266,6 @@ def build_hyper_post_report(
         logger.warning("WTC computation failed: %s", exc)
 
     chan_band_df = _write_band_tsv(wtc_result, "wtc", "hyper_wtc")
-
-    if wtc_pseudo:
-        logger.info("Pseudo-dyad WTC: %d phase-scrambled iterations, one full WTC run each.",
-                    wtc_pseudo)
-        try:
-            pseudo_df = compute_wtc_pseudo(
-                aligned_raws, band_fmin, band_fmax, n_iter=wtc_pseudo,
-                fmin=wtc_fmin, fmax=wtc_fmax, seed=wtc_seed, cross=wtc_channel_cross,
-                limit_scales=wtc_limit_scales, mask_coi=wtc_mask_coi)
-            path = _write_df_tsv(pseudo_df, "wtc-pseudo", "hyper_wtc_pseudo")
-            logger.info("Pseudo-dyad WTC band means saved: %s", path)
-        except Exception as exc:
-            logger.warning("Pseudo-dyad WTC failed: %s", exc)
 
     pair_key   = next(iter(wtc_result.pairs)) if wtc_result and wtc_result.pairs else None
     pair_label = f"{pair_key[0]} × {pair_key[1]}" if pair_key else ""

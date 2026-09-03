@@ -134,8 +134,8 @@ def _hyper_post():
                 dbc.Label("Pseudo-dyad Iterations"),
                 dbc.Input(id="qc-wtc-pseudo", type="number", min=0, step=10,
                           placeholder="0, off"),
-                dbc.FormText("The null a coherence is read against. One full WTC run each; "
-                             "published work uses 100."),
+                dbc.FormText("The null a coherence is read against, written by hyper-null. "
+                             "One full WTC run each; published work uses 100."),
             ], width=2),
             dbc.Col([
                 dbc.Label("Min Channels per ROI"),
@@ -286,6 +286,8 @@ layout = dbc.Container([
                     options=[
                         {"label": "Hyperscanning post-analysis (hyper-post)",
                          "value": "hyper-post"},
+                        {"label": "Pseudo-dyad null (hyper-null)",
+                         "value": "hyper-null"},
                         {"label": "Windowed group QC (window-raw)", "value": "window-raw"},
                         {"label": "Re-average saved WTC maps (wtc-band)",
                          "value": "wtc-band"},

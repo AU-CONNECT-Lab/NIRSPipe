@@ -67,6 +67,25 @@ def _run_groups(groups: dict, process) -> None:
         raise SystemExit(1)
 
 
+def _load_aligned_group(output_dir, members, task, desc, no_align, normalize):
+    """Load one dyad's haemoglobin stage and put the two recordings on one time axis."""
+    from fnirs_pipe.pipeline.hyperscanning import (
+        align_recordings,
+        load_group_haemo,
+        normalize_raws,
+        trim_to_shortest,
+    )
+
+    raws = load_group_haemo(output_dir, members, desc=desc)
+    if no_align:
+        aligned_raws, offsets = trim_to_shortest(raws)
+    else:
+        aligned_raws, offsets = align_recordings(raws, task)
+    if normalize:
+        aligned_raws = normalize_raws(aligned_raws)
+    return aligned_raws, offsets
+
+
 def cmd_prep_raw(
     bids_dir: Path, output_dir: Path, participant_label: str,
     session_label: list[str] | None, task_label: list[str] | None,
@@ -330,7 +349,7 @@ def cmd_hyper_post(
     wtc_seed: int | None, wtc_mc_count: int,
     wtc_channel_cross: bool, bads_scope: str,
     wtc_limit_scales: bool, wtc_save_maps: bool,
-    wtc_mask_coi: bool, wtc_pseudo: int, wtc_roi_min_channels: int,
+    wtc_mask_coi: bool, wtc_roi_min_channels: int,
     isc_threshold: float, normalize: bool, no_align: bool,
     session_label: list[str] | None, task_label: list[str] | None,
     skip_bids_validation: bool,
@@ -338,14 +357,7 @@ def cmd_hyper_post(
     """Generate hyperscanning post-processing QC report (WTC, ISC, connectivity)."""
     import json
 
-    from fnirs_pipe.pipeline.hyperscanning import (
-        align_recordings,
-        load_group_haemo,
-        load_group_sqm,
-        normalize_raws,
-        trim_to_shortest,
-        write_group_bads,
-    )
+    from fnirs_pipe.pipeline.hyperscanning import load_group_sqm, write_group_bads
     from fnirs_pipe.qc.hyper_report import build_hyper_post_report
 
     if wtc_channel_cross and roi_mapping is None:
@@ -363,13 +375,8 @@ def cmd_hyper_post(
             raise SystemExit(1)
 
     def _process(gid, task, members):
-        raws = load_group_haemo(output_dir, members, desc=desc)
-        if no_align:
-            aligned_raws, offsets = trim_to_shortest(raws)
-        else:
-            aligned_raws, offsets = align_recordings(raws, task)
-        if normalize:
-            aligned_raws = normalize_raws(aligned_raws)
+        aligned_raws, offsets = _load_aligned_group(
+            output_dir, members, task, desc, no_align, normalize)
         group_sqm = load_group_sqm(output_dir, members, bads_scope=bads_scope)
         bad_channels = {sid: sqm.get("bad_channels", []) for sid, sqm in group_sqm.items()}
         write_group_bads(output_dir, members, group_sqm, bads_scope)
@@ -393,9 +400,45 @@ def cmd_hyper_post(
             wtc_limit_scales=wtc_limit_scales,
             wtc_save_maps=wtc_save_maps,
             wtc_mask_coi=wtc_mask_coi,
-            wtc_pseudo=wtc_pseudo,
             wtc_roi_min_channels=wtc_roi_min_channels,
             isc_threshold=isc_threshold,
+        )
+
+    _run_groups(groups, _process)
+
+
+def cmd_hyper_null(
+    bids_dir: Path, output_dir: Path, pairs_csv: Path, group_id: str | None,
+    desc: str, wtc_fmin: float, wtc_fmax: float,
+    wtc_band_fmin: float | None, wtc_band_fmax: float | None,
+    wtc_pseudo: int, wtc_seed: int | None, wtc_channel_cross: bool,
+    wtc_limit_scales: bool, wtc_mask_coi: bool,
+    normalize: bool, no_align: bool,
+    session_label: list[str] | None, task_label: list[str] | None,
+    skip_bids_validation: bool,
+) -> None:
+    """Write the pseudo-dyad null for each group, without rerunning the real WTC."""
+    from fnirs_pipe.qc.wtc_null import write_wtc_null
+
+    groups = _select_groups(pairs_csv, group_id, task_label)
+
+    def _process(gid, task, members):
+        aligned_raws, _ = _load_aligned_group(
+            output_dir, members, task, desc, no_align, normalize)
+        return write_wtc_null(
+            group_id=gid,
+            task=task,
+            aligned_raws=aligned_raws,
+            output_dir=output_dir,
+            n_iter=wtc_pseudo,
+            wtc_fmin=wtc_fmin,
+            wtc_fmax=wtc_fmax,
+            band_fmin=wtc_band_fmin,
+            band_fmax=wtc_band_fmax,
+            seed=wtc_seed,
+            cross=wtc_channel_cross,
+            limit_scales=wtc_limit_scales,
+            mask_coi=wtc_mask_coi,
         )
 
     _run_groups(groups, _process)
@@ -556,24 +599,17 @@ def _build_parser() -> argparse.ArgumentParser:
                          "scales linearly; lower it to preview a run, raise it to settle "
                          "a contour. Ignored without --wtc-significance.")
     hp.add_argument("--wtc-seed", type=int, default=None,
-                    help="Seed both random sources: the Monte Carlo surrogates behind "
-                         "--wtc-significance and the phase randomisation behind --wtc-pseudo. "
-                         "Also bypasses pycwt's on-disk cache, which is not keyed on the "
-                         "seed. Omit for the previous behaviour.")
+                    help="Seed the Monte Carlo surrogates behind --wtc-significance. Also "
+                         "bypasses pycwt's on-disk cache, which is not keyed on the seed. "
+                         "Pass the same value to `fnirs-qc hyper-null` to seed its phase "
+                         "randomisation together with this run. Omit for the previous "
+                         "behaviour.")
     hp.add_argument("--wtc-mask-coi", action="store_true",
                     help="Average each band mean only over cells inside the cone of "
                          "influence. Off by default, which is what the field does; the share "
                          "inside the cone is reported as n_valid_frac either way. Masking "
                          "discards more of a short segment than of a long one, so it moves "
                          "conditions of different length by different amounts.")
-    hp.add_argument("--wtc-pseudo", type=int, default=0, metavar="N",
-                    help="Write pseudo-dyad band means from N phase-scrambled iterations, "
-                         "the null a coherence value is read against. Costs one full WTC "
-                         "run per iteration; published work uses 100. 0 (default) skips it. "
-                         "This asks whether a real pair beats an unrelated pair, which is a "
-                         "different question from --wtc-significance, which asks whether a "
-                         "cell beats red noise; the two are independent and neither implies "
-                         "the other. Surrogate maps are not saved, only their band means.")
     hp.add_argument("--wtc-roi-min-channels", type=int, default=2, metavar="N",
                     help="Drop an ROI cell resting on fewer than N channel pairs, so one "
                          "surviving optode does not stand in for a region (default 2).")
@@ -616,6 +652,54 @@ def _build_parser() -> argparse.ArgumentParser:
     hp.add_argument("--task-label",    nargs="+", action="extend", help="Task label(s) to include.")
     hp.add_argument("--skip-bids-validation", action=argparse.BooleanOptionalAction, default=False)
     hp.set_defaults(func=cmd_hyper_post)
+
+    hn = sub.add_parser("hyper-null",
+                        help="Pseudo-dyad null for the WTC band means (phase-scrambled partner).")
+    hn.add_argument("bids_dir",   type=Path, help="BIDS dataset root")
+    hn.add_argument("output_dir", type=Path, help="fnirs-pipe derivatives directory")
+    hn.add_argument("--pairs-csv", type=Path, required=True,
+                    help="CSV with columns: group_id, subject_id, task. "
+                         "Each unique (group_id, task) pair is processed as one session.")
+    hn.add_argument("--group-id", default=None,
+                    help="Process only this group_id. Omit to process all groups.")
+    hn.add_argument("--desc", default="preproc",
+                    help="desc entity of the per-subject stage to read. Must match the "
+                         "hyper-post run this null is read against.")
+    hn.add_argument("--wtc-pseudo", type=int, default=100, metavar="N",
+                    help="Phase-scrambled iterations to average (default 100, which is what "
+                         "published work uses). Costs one full WTC run each.")
+    hn.add_argument("--wtc-fmin", type=float, default=0.004, help="Lower bound (Hz) for WTC frequency axis.")
+    hn.add_argument("--wtc-fmax", type=float, default=0.20,  help="Upper bound (Hz) for WTC frequency axis.")
+    hn.add_argument("--wtc-band-fmin", type=float, default=None,
+                    help="Lower bound (Hz) of the band averaged over. Defaults to --wtc-fmin.")
+    hn.add_argument("--wtc-band-fmax", type=float, default=None,
+                    help="Upper bound (Hz) of that band. Defaults to --wtc-fmax.")
+    hn.add_argument("--wtc-seed", type=int, default=None,
+                    help="Seed the phase randomisation. Pass the same value as the "
+                         "hyper-post run to make the pair reproducible together.")
+    hn.add_argument("--wtc-mask-coi", action="store_true",
+                    help="Average only over cells inside the cone of influence. Must match "
+                         "the hyper-post run, or the two tables are not comparable and "
+                         "`group-hyper-wtc` will refuse to merge them.")
+    hn.add_argument("--wtc-channel-cross", action="store_true",
+                    help="Cross every long channel with every other, as `hyper-post "
+                         "--wtc-channel-cross` does for the real table. Off by default and "
+                         "no longer tied to that flag: crossing squares the pair count, and "
+                         "since the null pays that on every iteration it is what makes a "
+                         "surrogate run expensive. The homologous null is still the null "
+                         "for the homologous cells of a crossed real table, which are the "
+                         "rows where label and label2 agree.")
+    hn.add_argument("--wtc-limit-scales", action=argparse.BooleanOptionalAction, default=True,
+                    help="Compute only the wavelet scales inside --wtc-fmin/--wtc-fmax plus "
+                         "margin (default on), matching hyper-post.")
+    hn.add_argument("--normalize", action=argparse.BooleanOptionalAction, default=False,
+                    help="Z-score each channel per subject after alignment.")
+    hn.add_argument("--no-align", action="store_true",
+                    help="Skip trigger-based alignment; trim all recordings to the shortest duration.")
+    hn.add_argument("--session-label", nargs="+", action="extend", help="Session label(s) to include.")
+    hn.add_argument("--task-label",    nargs="+", action="extend", help="Task label(s) to include.")
+    hn.add_argument("--skip-bids-validation", action=argparse.BooleanOptionalAction, default=False)
+    hn.set_defaults(func=cmd_hyper_null)
 
     wb = sub.add_parser("wtc-band",
                         help="Re-average saved WTC maps over a different frequency band.")

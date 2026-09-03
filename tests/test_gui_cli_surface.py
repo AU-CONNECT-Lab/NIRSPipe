@@ -244,6 +244,8 @@ QC_COMMANDS_NOT_OFFERED = {
 QC_NOT_EXPOSED = {
     "hyper-post": {"--no-normalize", "--no-skip-bids-validation",
                    "--wtc-limit-scales", "--no-wtc-limit-scales"},
+    "hyper-null": {"--no-normalize", "--no-skip-bids-validation",
+                   "--wtc-limit-scales", "--no-wtc-limit-scales"},
     "window-raw": {"--no-skip-bids-validation"},
 }
 
@@ -264,7 +266,7 @@ _QC_FULL_OPTS = dict(
     run_flags=["skip_bids_validation"],
 )
 
-_QC_OFFERED = ["hyper-post", "wtc-band", "window-raw", *_AGGREGATE]
+_QC_OFFERED = ["hyper-post", "hyper-null", "wtc-band", "window-raw", *_AGGREGATE]
 
 
 def _qc_subparsers():

@@ -19,6 +19,7 @@ _AGGREGATE = ("group-raw", "group-hyper-raw", "group-hyper-wtc", "provenance")
 # which form sections each command needs; anything not listed here is hidden
 _SECTIONS = {
     "hyper-post":  {"qc-hyper-post-section"},
+    "hyper-null":  {"qc-hyper-post-section"},
     "wtc-band":    {"qc-wtc-band-section"},
     "window-raw":  {"qc-window-section"},
 }
@@ -85,7 +86,6 @@ def build_qc_args(command: str, opts: dict) -> list[str]:
         args += _num("--wtc-mc-count", opts.get("wtc_mc_count"))
         args += _num("--wtc-seed", opts.get("wtc_seed"))
         args += _num("--isc-threshold", opts.get("isc_threshold"))
-        args += _num("--wtc-pseudo", opts.get("wtc_pseudo"))
         args += _num("--wtc-roi-min-channels", opts.get("wtc_roi_min_channels"))
         args += _split("--session-label", opts.get("hyper_session"))
         args += _split("--task-label", opts.get("hyper_task"))
@@ -100,6 +100,28 @@ def build_qc_args(command: str, opts: dict) -> list[str]:
             args += ["--bads-scope", "subject"]
         if "wtc_save_maps" in flags:
             args.append("--wtc-save-maps")
+        if "no_align" in flags:
+            args.append("--no-align")
+        if "normalize" in flags:
+            args.append("--normalize")
+
+    elif command == "hyper-null":
+        args += _text("--pairs-csv", opts.get("pairs_csv"))
+        args += _text("--group-id", opts.get("group_id"))
+        args += _text("--desc", opts.get("desc"))
+        args += _num("--wtc-pseudo", opts.get("wtc_pseudo"))
+        args += _num("--wtc-fmin", opts.get("wtc_fmin"))
+        args += _num("--wtc-fmax", opts.get("wtc_fmax"))
+        args += _num("--wtc-band-fmin", opts.get("wtc_band_fmin"))
+        args += _num("--wtc-band-fmax", opts.get("wtc_band_fmax"))
+        args += _num("--wtc-seed", opts.get("wtc_seed"))
+        args += _split("--session-label", opts.get("hyper_session"))
+        args += _split("--task-label", opts.get("hyper_task"))
+        flags = opts.get("hyper_flags") or []
+        if "wtc_mask_coi" in flags:
+            args.append("--wtc-mask-coi")
+        if "wtc_channel_cross" in flags:
+            args.append("--wtc-channel-cross")
         if "no_align" in flags:
             args.append("--no-align")
         if "normalize" in flags:

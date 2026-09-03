@@ -6,6 +6,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+- **The pseudo-dyad null is its own command, `fnirs-qc hyper-null`, and no longer inherits `--wtc-channel-cross`.** As `hyper-post --wtc-pseudo` it took the real run's crossing, so asking for the exploratory 196-pair channel table also multiplied every surrogate iteration by 14. Crossing is now the null's own flag and defaults to off. The table, its name and its columns are unchanged
+- The pseudo-dyad sidecar records `n_iter` and `cross`, without which a short probe and a full null look alike on disk. `group-hyper-wtc` refuses to merge nulls of different lengths
+
 ## [0.24.0] - 2026-09-02
 
 ### Changed
