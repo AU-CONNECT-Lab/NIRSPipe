@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import os
-
 import mne
 import numpy as np
 import plotly.graph_objects as go
@@ -11,6 +9,7 @@ from plotly.subplots import make_subplots
 
 from fnirs_pipe.utils.logging import get_logger
 
+from ._brain_utils import mni_trans
 from ._utils import CONDITION_PALETTE, HBO_COLOR, HBR_COLOR, decimate as _decimate
 
 logger = get_logger("qc.figures")
@@ -348,14 +347,8 @@ def build_layout_figure(
             ),
         )
 
-        coords_mm = ch_locs * 1000
-        trans = None
-        try:
-            fs_dir = mne.datasets.fetch_fsaverage(verbose=False)
-            trans = mne.read_trans(os.path.join(fs_dir, "bem", "fsaverage-trans.fif"))
-            coords_mm = mne.transforms.apply_trans(trans, ch_locs) * 1000
-        except Exception:
-            pass
+        trans     = mni_trans(raw.info)
+        coords_mm = mne.transforms.apply_trans(trans, ch_locs) * 1000
 
         seen3: set = set()
         lx, ly, lz = [], [], []
@@ -365,11 +358,8 @@ def build_layout_figure(
             if key in seen3 or not (np.any(src) or np.any(det)):
                 continue
             seen3.add(key)
-            try:
-                src_m = mne.transforms.apply_trans(trans, src.reshape(1, 3))[0] * 1000
-                det_m = mne.transforms.apply_trans(trans, det.reshape(1, 3))[0] * 1000
-            except Exception:
-                src_m, det_m = src * 1000, det * 1000
+            src_m = mne.transforms.apply_trans(trans, src.reshape(1, 3))[0] * 1000
+            det_m = mne.transforms.apply_trans(trans, det.reshape(1, 3))[0] * 1000
             lx += [float(src_m[0]), float(det_m[0]), None]
             ly += [float(src_m[1]), float(det_m[1]), None]
             lz += [float(src_m[2]), float(det_m[2]), None]

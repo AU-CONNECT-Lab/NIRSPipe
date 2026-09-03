@@ -111,7 +111,7 @@ def _link_traces(raw: mne.io.Raw, sci_scores: dict, good_by_base: dict) -> list[
 
     pair_ids = list(ends)
     flat = np.vstack([np.vstack(ends[p]) for p in pair_ids])
-    mni  = to_mni(flat)
+    mni  = to_mni(flat, raw.info)
 
     groups: dict[str, dict[str, list]] = {}
     sources: dict[str, np.ndarray] = {}
@@ -213,7 +213,11 @@ def quality_brain_views(
         except Exception as exc:
             logger.warning("channel links failed: %s", exc)
     if not data_traces:
-        data_traces = [_channel_marker_trace(ch_names, to_mni(coords_head), good_mask)]
+        data_traces = [_channel_marker_trace(
+            ch_names,
+            to_mni(coords_head, raw.info if raw is not None else None),
+            good_mask,
+        )]
 
     fig_3d = _build_3d_scene(mesh_traces, data_traces)
 

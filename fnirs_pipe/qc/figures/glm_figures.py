@@ -18,6 +18,7 @@ from plotly.subplots import make_subplots
 
 from fnirs_pipe.utils.logging import get_logger
 
+from ._brain_utils import to_head
 from ._utils import HBO_COLOR, HBR_COLOR
 
 logger = get_logger("qc.figures.glm")
@@ -196,7 +197,11 @@ def _save_glm_brain(
         if ch_col is not None:
             results_df = results_df.set_index(ch_col).loc[raw_hbo.ch_names].reset_index()
         ea = EvokedArray(results_df[coef_col].values[:, np.newaxis], raw_hbo.info.copy())
+        # trans="fsaverage" makes stc_near_sensors read loc as head coords, so move the
+        # optodes into that frame rather than just relabelling them
         for idx in range(len(ea.ch_names)):
+            loc = ea.info["chs"][idx]["loc"]
+            loc[:9] = to_head(loc[:9].reshape(3, 3), raw_hbo.info).reshape(9)
             ea.info["chs"][idx]["coord_frame"] = FIFF.FIFFV_COORD_HEAD
 
         subjects_dir = get_subjects_dir(raise_error=True)

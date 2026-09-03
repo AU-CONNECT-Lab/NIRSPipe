@@ -15,6 +15,8 @@ import numpy as np
 
 from ._utils import HBO_COLOR, HBR_COLOR
 
+_MAX_TICK_LABELS = 60
+
 
 def hbo_hbr_correlation_panel(
     raw_haemo: mne.io.Raw,
@@ -67,21 +69,28 @@ def hbo_hbr_correlation_panel(
     ax_c.axhline(n_hbo - 0.5, color="#888", lw=0.6, ls="--")
     ax_c.axvline(n_hbo - 0.5, color="#888", lw=0.6, ls="--")
 
-    step = max(1, n_ch // 20)
-    idxs = list(range(0, n_ch, step))
+    # Label every channel while they still fit; past that, subsample and mark the
+    # unlabelled cells with minor ticks so the rows stay countable
+    step  = 1 if n_ch <= _MAX_TICK_LABELS else int(np.ceil(n_ch / _MAX_TICK_LABELS))
+    idxs  = list(range(0, n_ch, step))
+    tick_fs = 6 if n_ch <= 40 else 4.5
     ax_c.set_xticks(idxs)
-    ax_c.set_xticklabels([all_names[i] for i in idxs], fontsize=6,
+    ax_c.set_xticklabels([all_names[i] for i in idxs], fontsize=tick_fs,
                          rotation=45, ha="right")
     ax_c.set_yticks(idxs)
-    ax_c.set_yticklabels([all_names[i] for i in idxs], fontsize=6)
+    ax_c.set_yticklabels([all_names[i] for i in idxs], fontsize=tick_fs)
+    if step > 1:
+        ax_c.set_xticks(np.arange(n_ch), minor=True)
+        ax_c.set_yticks(np.arange(n_ch), minor=True)
+        ax_c.tick_params(which="minor", length=1.5, width=0.4, color="#bbbbbb")
 
-    # block type labels on y-axis
-    ax_c.text(-n_ch * 0.04, n_hbo / 2 - 0.5, "HbO",
-              ha="right", va="center", fontsize=8, fontweight="bold",
-              color=HBO_COLOR, clip_on=False)
-    ax_c.text(-n_ch * 0.04, n_hbo + len(hbr_names) / 2 - 0.5, "HbR",
-              ha="right", va="center", fontsize=8, fontweight="bold",
-              color=HBR_COLOR, clip_on=False)
+    # block type labels, placed outside the tick labels (x in axes fraction, y in rows)
+    block_tr = ax_c.get_yaxis_transform()
+    for label, centre, color in [("HbO", n_hbo / 2 - 0.5, HBO_COLOR),
+                                 ("HbR", n_hbo + len(hbr_names) / 2 - 0.5, HBR_COLOR)]:
+        ax_c.text(-0.24, centre, label, transform=block_tr,
+                  ha="right", va="center", fontsize=9, fontweight="bold",
+                  color=color, clip_on=False)
 
     for spine in ax_c.spines.values():
         spine.set_visible(False)

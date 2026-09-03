@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from itertools import combinations
 
 import mne
@@ -13,6 +12,7 @@ from plotly.subplots import make_subplots
 from scipy.signal import coherence
 
 from fnirs_pipe.qc.figure_io import extract_markers as _extract_markers
+from fnirs_pipe.qc.figures._brain_utils import mni_trans
 from fnirs_pipe.qc.figures._utils import CONDITION_PALETTE, decimate as _decimate, physio_bands
 from fnirs_pipe.utils.logging import get_logger
 
@@ -560,14 +560,8 @@ def build_layout_3d(
 
     pair_names = [ch_names[p].rsplit(" ", 1)[0] for p in hbo_picks]
 
-    coords_mm = locs * 1000
-    trans = None
-    try:
-        fs_dir = mne.datasets.fetch_fsaverage(verbose=False)
-        trans  = mne.read_trans(os.path.join(fs_dir, "bem", "fsaverage-trans.fif"))
-        coords_mm = mne.transforms.apply_trans(trans, locs) * 1000
-    except Exception:
-        pass
+    trans     = mni_trans(ref_raw.info)
+    coords_mm = mne.transforms.apply_trans(trans, locs) * 1000
 
     seen3: set = set()
     lx, ly, lz = [], [], []
@@ -579,11 +573,8 @@ def build_layout_3d(
         if key in seen3 or not (np.any(src) or np.any(det)):
             continue
         seen3.add(key)
-        try:
-            src_m = mne.transforms.apply_trans(trans, src.reshape(1, 3))[0] * 1000
-            det_m = mne.transforms.apply_trans(trans, det.reshape(1, 3))[0] * 1000
-        except Exception:
-            src_m, det_m = src * 1000, det * 1000
+        src_m = mne.transforms.apply_trans(trans, src.reshape(1, 3))[0] * 1000
+        det_m = mne.transforms.apply_trans(trans, det.reshape(1, 3))[0] * 1000
         lx += [float(src_m[0]), float(det_m[0]), None]
         ly += [float(src_m[1]), float(det_m[1]), None]
         lz += [float(src_m[2]), float(det_m[2]), None]

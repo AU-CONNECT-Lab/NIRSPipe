@@ -7,6 +7,8 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Fixed
+- **Optodes rendered off the brain when the montage was already in MNI.** The 3D layout, the quality brain views and the GLM surface projection applied fsaverage's head-to-MRI transform regardless of the source frame. The frame is now read from the file. Datasets in head space are unaffected
+- **The correlation matrix labelled only every other channel**, so rows and labels appeared to disagree
 - **`--bads-scope` never reached the coherence.** The rejected channels were loaded, written to `hyper-bads.tsv` and used to blank the ISC matrix, but never marked on the Raw, and `desc-errts` carries none of its own, so WTC ran on the full montage whatever was asked for. `hyper-bads.tsv` claimed to name the channels the inter-brain metrics excluded and named channels that were still in the result. Every WTC value on a dyad with a rejected long channel changes
 - `hyper-null` takes `--bads-scope` for the same reason: a null computed over a different channel set is not the null for the table it sits beside
 
