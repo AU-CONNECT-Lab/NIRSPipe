@@ -4,12 +4,13 @@ A BIDS-compatible fNIRS preprocessing, postprocessing, hyperscanning, and QC pip
 
 ## Overview
 
-`fnirs-pipe` is split into two stages:
+`fnirs-pipe` runs three kinds of work, selected by the analysis level:
 
-| Stage | What it does |
+| Level | What it does |
 |-------|--------------|
-| `prep` | Fixed-order preprocessing: OD conversion → SCI channel marking → motion correction (TDDR or wavelet) → Beer-Lambert |
-| `post` | Mode-driven postprocessing: `denoise`, `glm`, or `rest` (bandpass + resample; confound regression; GLM residuals or ALFF/FC) |
+| `participant` | `prep`: fixed-order preprocessing, OD conversion → SCI channel marking → motion correction (TDDR or wavelet) → Beer-Lambert. Then `post` when `--mode` is given: `denoise`, `glm`, or `rest` (bandpass + resample; confound regression; GLM residuals or ALFF/FC) |
+| `hyper` | Dyad analysis over the derivatives: wavelet coherence, inter-subject correlation, and the pseudo-dyad null |
+| `group` | Cohort aggregation of the quality records and the per-dyad coherence tables |
 
 Outputs follow the [BIDS Derivatives](https://bids-specification.readthedocs.io/en/stable/derivatives/introduction.html) spec. Each run gets an HTML QC report with figures, a provenance graph and an auto-generated Methods paragraph, and each subject an index page over their runs. Group-level QC, hyperscanning (dyad WTC/ISC), an interactive rating viewer, a Dash desktop GUI, and a JSONL→SQLite run-log database are all first-class features.
 
@@ -62,9 +63,9 @@ Wherever a command takes a table from you (events, segments, the pairs file, `pa
 ### `fnirs-pipe`
 
 ```
-fnirs-pipe BIDS_DIR OUTPUT_DIR {participant,group} [OPTIONS]
+fnirs-pipe BIDS_DIR OUTPUT_DIR {participant,group,hyper,wtc-band} [OPTIONS]
 
-Required:
+Required at participant level:
   --dpf FLOAT [FLOAT ...]      Differential pathlength factor. One value or one per wavelength.
   --sci-threshold FLOAT        SCI threshold for bad channel detection (e.g. 0.8).
   --cardiac-l-freq FLOAT       Lower cardiac band bound in Hz (population-dependent, no default).
@@ -127,10 +128,38 @@ Rest (--mode rest):
   Reuses GLM flags for confound regression (drift model, short-channel, aux).
   --high-pass + --low-pass required for ALFF (FC computed regardless).
 
+Hyperscanning analysis (hyper level):
+  --pairs-csv FILE             Required. Columns: group_id, subject_id, task.
+  --group-id TEXT              Process one group only.
+  --desc TEXT                  Per-subject stage to read.                     [default: preproc]
+  --wtc-fmin/--wtc-fmax FLOAT  WTC frequency axis.                       [default: 0.004 / 0.20]
+  --wtc-band-fmin FLOAT        Band the per-channel TSV averages over. Defaults to the axis.
+  --wtc-band-fmax FLOAT
+  --wtc-significance           Monte Carlo significance contour (slow).
+  --wtc-mc-count INT           Surrogates behind each contour.                      [default: 300]
+  --wtc-seed INT               Seeds the surrogates and the phase randomisation.
+  --wtc-mask-coi               Restrict each band mean to the cone of influence.
+  --wtc-roi-min-channels N     Drop an ROI cell resting on fewer pairs.               [default: 2]
+  --wtc-channel-cross          Cross every long channel with every other.
+  --wtc-save-maps              Keep the time-frequency maps for the wtc-band level.
+  --wtc-pseudo N               Also write the pseudo-dyad null, averaged over N iterations.
+  --wtc-pseudo-cross           Cross the channels for the null too. Independent of the above.
+  --bads-scope {run,subject}   Which rejections the metrics exclude.                [default: run]
+  --isc-threshold FLOAT        Minimum mean ISC to draw an arc.                     [default: 0.3]
+  --normalize                  Z-score each channel per subject after alignment.
+  --no-align                   Trim to the shortest recording instead of aligning on a trigger.
+  --tstart/--tend FLOAT        Window on the aligned clock, where 0 is the shared trigger.
+
+wtc-band level:
+  --band-fmin/--band-fmax      Required. The new band to average the saved maps over.
+  --mask-coi                   Cone-of-influence masking, matching --wtc-mask-coi.
+  --suffix TEXT                Names the new tables. Defaults to the band.
+
 Output:
   --no-report                  Skip HTML QC report.
   --roi-mapping FILE           JSON mapping ROI labels → channel lists. Groups the denoising
-                               carpet by ROI and enables ROI-level FC (rest mode).
+                               carpet by ROI and enables ROI-level FC (rest mode); at the
+                               hyper level it drives the ROI x ROI coherence matrix.
   --n-jobs INT                 Parallel subject jobs.                                 [default: 1]
   --work-dir DIR               Hash cache directory (not yet implemented).
 
@@ -143,6 +172,14 @@ Other:
   --verbose
   --version
 ```
+
+`participant` and `group` take a BIDS dataset. `hyper` and `wtc-band` read the derivatives tree only, and accept `BIDS_DIR` without using it, so the positional shape is the same at every level.
+
+The `hyper` level computes wavelet coherence and inter-subject correlation for each dyad named in the pairs file, and writes one report per group. `--wtc-significance` is slow: it draws `--wtc-mc-count` surrogate series per channel pair, 300 by default, and the runtime scales with that count. `--wtc-channel-cross` pairs every long channel with every other across the two brains, 196 values instead of 14, and is what builds the ROI x ROI matrix when `--roi-mapping` is given; the heatmaps stay on the homologous pairs.
+
+`--wtc-pseudo N` adds the pseudo-dyad null: the same band means taken against a phase-scrambled partner, averaged over N iterations. Coherence between two unrelated recordings is not zero, so this is what a real value is read against. Each iteration is a full WTC run, which makes it the expensive half of a hyper run, so nothing is computed unless you ask. It shares this run's stage, band and window by construction, which is what makes it the null for the table it sits beside; its crossing is the one thing it does not share, since crossing squares the pair count and the null would pay that on every iteration. Ask for it separately with `--wtc-pseudo-cross`.
+
+The `group` level aggregates the per-subject and per-dyad quality records into cohort reports, and merges every per-dyad WTC band-mean table into one long table per kind.
 
 ### `fnirs-recon` — raw SNIRF → BIDS
 
@@ -194,34 +231,14 @@ fnirs-qc hyper-raw BIDS_DIR OUTPUT_DIR --pairs-csv PATH
                    [--sci-threshold FLOAT] [--fmin/--fmax FLOAT]
                    [--normalize] [--no-align] [--tstart/--tend FLOAT]
 
-fnirs-qc hyper-post BIDS_DIR OUTPUT_DIR --pairs-csv PATH
-                    [--group-id / --task-label / --session-label]
-                    [--desc TEXT] [--roi-mapping PATH]
-                    [--wtc-fmin/--wtc-fmax FLOAT]
-                    [--wtc-band-fmin/--wtc-band-fmax FLOAT]
-                    [--wtc-significance] [--wtc-seed INT] [--wtc-mc-count INT]
-                    [--wtc-mask-coi] [--wtc-roi-min-channels N]
-                    [--wtc-channel-cross] [--isc-threshold FLOAT]
-                    [--normalize] [--no-align] [--tstart/--tend FLOAT]
-
-fnirs-qc hyper-null BIDS_DIR OUTPUT_DIR --pairs-csv PATH
-                    [--group-id / --task-label / --session-label]
-                    [--desc TEXT] [--wtc-pseudo N] [--wtc-seed INT]
-                    [--wtc-fmin/--wtc-fmax FLOAT]
-                    [--wtc-band-fmin/--wtc-band-fmax FLOAT]
-                    [--wtc-mask-coi] [--wtc-channel-cross]
-                    [--normalize] [--no-align] [--tstart/--tend FLOAT]
-
 fnirs-qc group-raw       OUTPUT_DIR
 fnirs-qc group-hyper-raw OUTPUT_DIR
 fnirs-qc provenance      OUTPUT_DIR
 ```
 
-`hyper-post` reads the per-subject stage named by `--desc`, `preproc` by default. `--wtc-significance` is slow: it draws `--wtc-mc-count` surrogate series per channel pair, 300 by default, and the runtime scales with that count. `--wtc-seed` makes the significance contours reproducible and switches off pycwt's on-disk cache, which is not keyed on the seed. `--wtc-mask-coi` restricts each band mean to the cone of influence; it is off by default, and `n_valid_frac` reports the share inside the cone either way. `--wtc-channel-cross` pairs every long channel with every other across the two brains, 196 values instead of 14, and is what builds the ROI x ROI matrix when `--roi-mapping` is given; the heatmaps stay on the homologous pairs.
-
-`hyper-null` computes the pseudo-dyad null, the same band means taken against a phase-scrambled partner. Coherence between two unrelated recordings is not zero, so this is what a real value is read against. Each iteration is a full WTC run, 100 iterations by default. It is a separate command so that the null does not inherit `--wtc-channel-cross` from the real run: crossing squares the pair count, and the null would pay that on every iteration. Every other flag must match the `hyper-post` run the null is read against.
-
 `provenance` redraws the graphs from the sidecars already on disk.
+
+The dyad analysis used to live here as `hyper-post`, `hyper-null`, `wtc-band` and `group-hyper-wtc`. It is `fnirs-pipe` now: those four are the `hyper` level, its `--wtc-pseudo` flag, the `wtc-band` level, and the `group` level.
 
 For a cohort report over one time window, crop first and then run the usual pair of commands:
 
@@ -308,7 +325,7 @@ output/
 
 The `fc*` files are written in rest mode, or in any mode run with `--fc`.
 
-Standalone QC HTMLs from `fnirs-qc prep-raw` / `hyper-raw` / `hyper-post` sit at the derivatives root:
+Standalone HTMLs from `fnirs-qc prep-raw` / `hyper-raw` and from `fnirs-pipe ... hyper` sit at the derivatives root:
 
 ```
 output/
@@ -316,7 +333,7 @@ output/
 ├── sub-01_task-tapping_raw_channel_decisions.json       # fnirs-rate raw sidecar
 ├── sub-01_task-tapping_raw_ratings.json
 ├── group-G1003_task-tapping_desc-hyperraw_nirs.html     # fnirs-qc hyper-raw
-├── group-G1003_task-tapping_desc-hyperpost_nirs.html    # fnirs-qc hyper-post
+├── group-G1003_task-tapping_desc-hyperpost_nirs.html    # fnirs-pipe ... hyper
 └── group-G1003/
     └── figures/
 ```
@@ -333,7 +350,7 @@ output/
 | Time-window group | `fnirs-prep crop` then `prep-raw` + `group-raw` | group — raw, cropped window |
 | Per-trial | `fnirs-qc prep-raw --epoch-qc` | individual — SQM per task event, in the raw report |
 | Dyad raw | `fnirs-qc hyper-raw` | hyperscanning — raw coherence |
-| Dyad post | `fnirs-qc hyper-post` | hyperscanning — post: WTC + ISC (ROI-level with `--roi-mapping`) |
+| Dyad post | `fnirs-pipe ... hyper` | hyperscanning — post: WTC + ISC (ROI-level with `--roi-mapping`) |
 
 ### Per-run report contents
 

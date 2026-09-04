@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 <!-- Format: Keep a Changelog (https://keepachangelog.com/en/1.0.0/) -->
 
+## [0.26.0] - 2026-09-04
+
+### Changed
+- **The dyad analysis moved from `fnirs-qc` to `fnirs-pipe`.** Wavelet coherence, inter-brain correlation and the pseudo-dyad null are results, not quality checks, so they sit beside `glm` and `rest` now. `hyper-post` is the `hyper` analysis level, `wtc-band` is a level of its own, and `group-hyper-wtc` is folded into `group`, which already aggregated everything else. `hyper-raw` stays in `fnirs-qc`: a pre-flight look at raw dyad data is quality control. No output file changes name
+- **The pseudo-dyad null is a flag on the hyper run again, `--wtc-pseudo N`,** and writes nothing unless you ask. Nine parameters had to match between `hyper-null` and the run it was the null for, and nothing on disk checked it: a null averaged over one band could sit beside a real table averaged over another. Shared by construction now. Its crossing stays its own decision, `--wtc-pseudo-cross`, which is what the split was for
+- **`fnirs-pipe ... group` no longer demands the preprocessing flags.** `--dpf`, `--sci-threshold` and the four band bounds describe preprocessing and were required of every invocation, including levels that never preprocess anything
+
+### Removed
+- **`fnirs-qc hyper-post`, `hyper-null`, `wtc-band` and `group-hyper-wtc` are gone**, with no forwarding. Use the `fnirs-pipe` levels above
+
 ## [0.25.0] - 2026-09-04
 
 ### Fixed

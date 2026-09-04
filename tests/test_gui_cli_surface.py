@@ -227,7 +227,16 @@ def test_no_control_on_the_page_is_decoration(analysis_page):
     assert not unread, f"controls nothing reads: {sorted(unread)}"
 
 
-# ---- the same contract for the QC page against fnirs-qc ----
+# ---- the same contract for the QC page, which now drives two CLIs ----
+
+# The aggregate commands are still fnirs-qc subcommands. The hyperscanning analysis, the WTC
+# re-band and the group merge are fnirs-pipe analysis levels, so their flags live in a named
+# argument group on the one flat parser rather than in a subparser of their own.
+_LEVEL_GROUPS = {
+    "hyper":    "hyperscanning analysis (hyper level)",
+    "wtc-band": "wtc-band level",
+    "group":    None,      # takes no flags of its own
+}
 
 # fnirs-qc subcommands the QC page does not offer, and why.
 QC_COMMANDS_NOT_OFFERED = {
@@ -240,16 +249,13 @@ QC_COMMANDS_NOT_OFFERED = {
 # exception and goes the other way: it defaults to on, and the CLI's own help says the
 # restricted and unrestricted coherences match bit for bit, so neither half is a choice
 # worth putting on screen. It is an escape hatch for comparing against old output.
+#
+# --sci-threshold is absent from this map because it is not a hyper flag: it sits in the prep
+# group and the hyper level only borrows it to tint the per-subject quality table. A second
+# control here could be set to a different number than prep used, with nothing saying which
+# one the colours mean.
 QC_NOT_EXPOSED = {
-    "hyper-post": {"--no-normalize", "--no-skip-bids-validation",
-                   "--wtc-limit-scales", "--no-wtc-limit-scales",
-                   # only tints the per-subject quality table, against a threshold the run
-                   # was already prepped with. A second control here could be set to a
-                   # different number than prep used, with nothing saying which one the
-                   # colours mean
-                   "--sci-threshold"},
-    "hyper-null": {"--no-normalize", "--no-skip-bids-validation",
-                   "--wtc-limit-scales", "--no-wtc-limit-scales"},
+    "hyper": {"--no-normalize", "--wtc-limit-scales", "--no-wtc-limit-scales"},
 }
 
 _QC_FULL_OPTS = dict(
@@ -259,20 +265,15 @@ _QC_FULL_OPTS = dict(
     wtc_mc_count=300, wtc_seed=42, isc_threshold=0.3,
     wtc_pseudo=100, wtc_roi_min_channels=2,
     hyper_session="ses-1", hyper_task="rest",
-    hyper_flags=["wtc_significance", "wtc_mask_coi", "wtc_channel_cross", "bads_subject",
-                 "wtc_save_maps", "no_align", "normalize"],
+    hyper_flags=["wtc_significance", "wtc_mask_coi", "wtc_channel_cross", "wtc_pseudo_cross",
+                 "bads_subject", "wtc_save_maps", "no_align", "normalize"],
     band_fmin=0.05, band_fmax=0.2, band_suffix="band0p05-0p2",
     band_flags=["band_mask_coi"],
     tstart=0.0, tend=60.0,
     run_flags=["skip_bids_validation"],
 )
 
-_QC_OFFERED = ["hyper-post", "hyper-null", "wtc-band", *_AGGREGATE]
-
-
-def _qc_subparsers():
-    action = next(a for a in _build_qc_parser()._actions if getattr(a, "choices", None))
-    return action.choices
+_QC_OFFERED = [*_LEVEL_GROUPS, *_AGGREGATE]
 
 
 def _build_qc_parser():
@@ -280,7 +281,23 @@ def _build_qc_parser():
     return build()
 
 
+def _qc_subparsers():
+    action = next(a for a in _build_qc_parser()._actions if getattr(a, "choices", None))
+    return action.choices
+
+
+def _level_flags(command: str) -> set[str]:
+    title = _LEVEL_GROUPS[command]
+    if title is None:
+        return set()
+    group = next(g for g in _build_parser()._action_groups if g.title == title)
+    return {flag for action in group._group_actions for flag in action.option_strings
+            if flag.startswith("--")}
+
+
 def _qc_flags(command: str) -> set[str]:
+    if command in _LEVEL_GROUPS:
+        return _level_flags(command)
     parser = _qc_subparsers()[command]
     return {flag for action in parser._actions for flag in action.option_strings
             if flag.startswith("--") and action.dest != "help"}
@@ -302,11 +319,17 @@ def test_the_declined_subcommands_still_exist():
     assert not stale, f"QC_COMMANDS_NOT_OFFERED names commands fnirs-qc no longer has: {sorted(stale)}"
 
 
+def test_the_moved_commands_left_fnirs_qc():
+    """hyper-post, hyper-null, wtc-band and group-hyper-wtc are fnirs-pipe levels now."""
+    gone = {"hyper-post", "hyper-null", "wtc-band", "group-hyper-wtc"} & set(_qc_subparsers())
+    assert not gone, f"fnirs-qc still carries {sorted(gone)}"
+
+
 @pytest.mark.parametrize("command", _QC_OFFERED)
 def test_every_flag_of_an_offered_command_is_sendable_or_written_off(command):
     missing = _qc_flags(command) - _qc_emitted(command) - QC_NOT_EXPOSED.get(command, set())
     assert not missing, (
-        f"fnirs-qc {command} grew {sorted(missing)} and the page cannot send them; "
+        f"{command} grew {sorted(missing)} and the page cannot send them; "
         f"add a control, or add them to QC_NOT_EXPOSED with a reason"
     )
 
@@ -320,21 +343,19 @@ def test_the_written_off_qc_flags_still_exist(command):
 @pytest.mark.parametrize("command", _QC_OFFERED)
 def test_the_generated_qc_command_parses(command):
     argv = build_qc_args(command, _QC_FULL_OPTS)
-    assert argv[:2] == ["fnirs-qc", command]
-    _build_qc_parser().parse_args(argv[1:])       # raises SystemExit on an unknown flag
-
-
-@pytest.mark.parametrize("command", _QC_OFFERED)
-def test_the_generated_qc_command_reaches_the_right_handler(command):
-    argv = build_qc_args(command, _QC_FULL_OPTS)
-    args = _build_qc_parser().parse_args(argv[1:])
-    assert args.func.__name__ == "cmd_" + command.replace("-", "_")
+    if command in _LEVEL_GROUPS:
+        assert argv[0] == "fnirs-pipe"
+        args = _build_parser().parse_args(argv[1:])   # raises SystemExit on an unknown flag
+        assert args.analysis_level == command
+    else:
+        assert argv[:2] == ["fnirs-qc", command]
+        _build_qc_parser().parse_args(argv[1:])
 
 
 def test_a_space_separated_box_repeats_its_flag_rather_than_joining():
     """argparse nargs="+" takes repeats; one string with a space in it is one label."""
-    args = _build_qc_parser().parse_args(
-        build_qc_args("hyper-post", dict(_QC_FULL_OPTS, hyper_task="rest tap"))[1:])
+    argv = build_qc_args("hyper", dict(_QC_FULL_OPTS, hyper_task="rest tap"))
+    args = _build_parser().parse_args(argv[1:])
     assert args.task_label == ["rest", "tap"]
 
 

@@ -131,16 +131,45 @@ def test_dispatch_participant(monkeypatch):
     assert called["participant"]["participant_label"] == ["01"]
 
 
-def test_dispatch_group(monkeypatch):
-    called = {}
+def _fake_workflows(monkeypatch, called):
     fake = types.ModuleType("fnirs_pipe.cli.workflows")
     fake.run_participant_level = lambda opts: called.setdefault("participant", opts)
-    fake.run_group_level = lambda opts: called.setdefault("group", opts)
+    fake.run_group_level       = lambda opts: called.setdefault("group", opts)
+    fake.run_hyper_level       = lambda opts: called.setdefault("hyper", opts)
+    fake.run_wtc_band          = lambda opts: called.setdefault("wtc-band", opts)
     monkeypatch.setitem(sys.modules, "fnirs_pipe.cli.workflows", fake)
+    return called
 
-    # group still requires --dpf/--sci-threshold in current behaviour
-    run_cli.main(["bids", "out", "group", "--dpf", "6.0", "--sci-threshold", "0.8", *_BANDS])
+
+def test_dispatch_group(monkeypatch):
+    called = _fake_workflows(monkeypatch, {})
+    # the prep flags describe preprocessing, so the derivatives-only levels must not ask for them
+    run_cli.main(["bids", "out", "group"])
     assert "group" in called
+
+
+def test_dispatch_hyper(monkeypatch):
+    called = _fake_workflows(monkeypatch, {})
+    run_cli.main(["bids", "out", "hyper", "--pairs-csv", "p.csv", "--desc", "errts"])
+    assert called["hyper"]["desc"] == "errts"
+
+
+def test_hyper_needs_pairs_csv(capsys):
+    with pytest.raises(SystemExit):
+        run_cli.main(["bids", "out", "hyper"])
+    assert "--pairs-csv" in capsys.readouterr().err
+
+
+def test_dispatch_wtc_band(monkeypatch):
+    called = _fake_workflows(monkeypatch, {})
+    run_cli.main(["bids", "out", "wtc-band", "--band-fmin", "0.05", "--band-fmax", "0.2"])
+    assert (called["wtc-band"]["band_fmin"], called["wtc-band"]["band_fmax"]) == (0.05, 0.2)
+
+
+def test_participant_still_requires_the_bands(capsys):
+    with pytest.raises(SystemExit):
+        run_cli.main(["bids", "out", "participant", "--dpf", "6.0", "--sci-threshold", "0.8"])
+    assert "--cardiac-l-freq" in capsys.readouterr().err
 
 
 @pytest.mark.skipif(shutil.which("fnirs-pipe") is None, reason="console script not installed")
@@ -209,20 +238,27 @@ def test_qc_subcommands_and_fmin_dest():
     assert args.coherence_fmax == 0.2
 
 
-def test_qc_hyper_post_stage_and_band_flags():
-    args = qc_cli._build_parser().parse_args(
-        ["hyper-post", "/b", "/o", "--pairs-csv", "p.csv", "--desc", "errts",
+def test_hyper_stage_and_band_flags():
+    args = run_cli._build_parser().parse_args(
+        ["/b", "/o", "hyper", "--pairs-csv", "p.csv", "--desc", "errts",
          "--wtc-band-fmin", "0.03", "--wtc-band-fmax", "0.10"]
     )
-    assert args.func is qc_cli.cmd_hyper_post
     assert (args.desc, args.wtc_band_fmin, args.wtc_band_fmax) == ("errts", 0.03, 0.10)
 
 
-def test_qc_hyper_post_reads_preproc_unless_told_otherwise():
+def test_hyper_reads_preproc_unless_told_otherwise():
     # the band bounds stay None so the report can say it averaged the whole axis
-    args = qc_cli._build_parser().parse_args(["hyper-post", "/b", "/o", "--pairs-csv", "p.csv"])
+    args = run_cli._build_parser().parse_args(["/b", "/o", "hyper", "--pairs-csv", "p.csv"])
     assert args.desc == "preproc"
     assert (args.wtc_band_fmin, args.wtc_band_fmax) == (None, None)
+
+
+def test_moved_commands_are_gone_from_qc():
+    import argparse as _ap
+    sub = [a for a in qc_cli._build_parser()._actions
+           if isinstance(a, _ap._SubParsersAction)][0]
+    assert set(sub.choices) == {
+        "prep-raw", "hyper-raw", "group-raw", "group-hyper-raw", "provenance"}
 
 
 def test_rate_subcommands():

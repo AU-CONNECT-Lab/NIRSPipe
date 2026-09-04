@@ -445,3 +445,223 @@ def run_group_level(args: dict[str, Any]) -> None:
         logger.info("fnirs-pipe group: also aggregating hyperscanning SQMs")
         hyper_path = build_group_hyper_raw_report(qc_root)
         logger.info("  -> %s", hyper_path)
+
+    # driven off the aggregator's own kinds, so removing or adding one cannot leave this
+    # behind. Searched from output_dir rather than qc_root: the per-dyad tables live under
+    # group-<id>/, which rglob reaches either way
+    from fnirs_pipe.qc.wtc_aggregate import _KINDS, write_aggregate_wtc
+
+    for kind in _KINDS:
+        wtc_path = write_aggregate_wtc(output_dir, kind=kind)
+        if wtc_path is not None:
+            logger.info("fnirs-pipe group: %s -> %s", kind, wtc_path)
+
+
+# ---- Hyperscanning ----
+
+def _select_groups(pairs_csv: Path, group_id: str | None, task_label: list[str] | None) -> dict:
+    """Parse the group CSV and filter by group_id / task_label. Exits non-zero on empty selection."""
+    from fnirs_pipe.exceptions import GroupCSVError
+    from fnirs_pipe.pipeline.hyperscanning import parse_group_csv
+
+    try:
+        groups = parse_group_csv(pairs_csv)
+    except GroupCSVError as exc:
+        print(f"[error] {exc}", file=sys.stderr)
+        raise SystemExit(1)
+
+    if group_id is not None:
+        groups = {k: v for k, v in groups.items() if k[0] == group_id}
+        if not groups:
+            print(f"[error] group_id '{group_id}' not found in CSV", file=sys.stderr)
+            raise SystemExit(1)
+
+    if task_label is not None:
+        groups = {k: v for k, v in groups.items() if k[1] in task_label}
+        if not groups:
+            print(f"[error] task_label {task_label} not found in CSV", file=sys.stderr)
+            raise SystemExit(1)
+
+    return groups
+
+
+def _run_groups(groups: dict, process) -> None:
+    """Run process(gid, task, members) -> report_path per group, tally ok/fail, exit non-zero on failure."""
+    from fnirs_pipe.exceptions import AlignmentError, MissingDerivativesError
+
+    print(f"Processing {len(groups)} group session(s)...")
+    n_ok = n_fail = 0
+    for (gid, task), members in groups.items():
+        print(f"  -> {gid}/{task} ({len(members)} subjects)")
+        try:
+            report_path = process(gid, task, members)
+            print(f"     report -> {report_path}")
+            n_ok += 1
+        except MissingDerivativesError as exc:
+            print(f"     [skip] {exc}", file=sys.stderr)
+            n_fail += 1
+        except AlignmentError as exc:
+            print(f"     [skip] alignment failed: {exc}", file=sys.stderr)
+            n_fail += 1
+        except Exception as exc:
+            logger.exception("group %s task %s failed", gid, task)
+            print(f"     [error] unexpected error: {exc}", file=sys.stderr)
+            n_fail += 1
+
+    print(f"\nDone: {n_ok} succeeded, {n_fail} failed.")
+    if n_fail > 0:
+        raise SystemExit(1)
+
+
+def _load_aligned_group(output_dir, members, task, desc, no_align, normalize, bads_scope,
+                        tstart=None, tend=None):
+    """Load one dyad, put both recordings on one time axis, and mark the rejected channels.
+
+    Returns (aligned_raws, offsets, group_sqm). The rejections have to be applied here rather
+    than in each metric: `desc-errts` carries an empty ``info["bads"]``, so a metric that
+    reads the Raw alone sees the full montage whatever --bads-scope was asked for.
+    """
+    from fnirs_pipe.pipeline.hyperscanning import (
+        align_recordings,
+        apply_group_bads,
+        crop_aligned_window,
+        load_group_haemo,
+        load_group_sqm,
+        normalize_raws,
+        trim_to_shortest,
+    )
+
+    raws = load_group_haemo(output_dir, members, desc=desc)
+    group_sqm = load_group_sqm(output_dir, members, bads_scope=bads_scope)
+    apply_group_bads(raws, group_sqm)
+    if no_align:
+        aligned_raws, offsets = trim_to_shortest(raws)
+    else:
+        aligned_raws, offsets = align_recordings(raws, task)
+    aligned_raws = crop_aligned_window(aligned_raws, tstart, tend)
+    if normalize:
+        aligned_raws = normalize_raws(aligned_raws)
+    return aligned_raws, offsets, group_sqm
+
+
+# the hyper level colours its quality table by SCI but detects no bad channels of its own,
+# so --sci-threshold is optional here and falls back to what prep uses by default
+_HYPER_SCI_DEFAULT = 0.8
+
+
+def run_hyper_level(args: dict[str, Any]) -> None:
+    """Dyad analysis: one WTC + ISC report per group, plus the pseudo-dyad null on request.
+
+    The null reuses this run's aligned recordings and every band parameter, so it can no
+    longer be computed over a different band than the table it sits beside.
+    """
+    import json
+
+    from fnirs_pipe.pipeline.hyperscanning import write_group_bads
+    from fnirs_pipe.qc.hyper_report import build_hyper_post_report
+    from fnirs_pipe.qc.wtc_null import write_wtc_null
+
+    setup_logging(verbose=args.get("verbose", False))
+
+    output_dir   = Path(args["output_dir"])
+    desc         = args.get("desc") or "preproc"
+    bads_scope   = args.get("bads_scope") or "run"
+    normalize    = bool(args.get("normalize", False))
+    no_align     = bool(args.get("no_align", False))
+    tstart       = args.get("tstart")
+    tend         = args.get("tend")
+    wtc_fmin     = args.get("wtc_fmin")
+    wtc_fmax     = args.get("wtc_fmax")
+    band_fmin    = args.get("wtc_band_fmin")
+    band_fmax    = args.get("wtc_band_fmax")
+    mask_coi     = bool(args.get("wtc_mask_coi", False))
+    limit_scales = args.get("wtc_limit_scales", True)
+    wtc_seed     = args.get("wtc_seed")
+    wtc_pseudo   = args.get("wtc_pseudo")
+
+    sci_threshold = args.get("sci_threshold")
+    if sci_threshold is None:
+        sci_threshold = _HYPER_SCI_DEFAULT
+
+    if args.get("wtc_channel_cross") and args.get("roi_mapping") is None:
+        print("[warn] --wtc-channel-cross without --roi-mapping: the crossed channel table "
+              "is written but no ROI x ROI matrix is built from it.", file=sys.stderr)
+
+    groups = _select_groups(args["pairs_csv"], args.get("group_id"), args.get("task_label"))
+
+    roi_map: dict[str, list[str]] | None = None
+    roi_mapping = args.get("roi_mapping")
+    if roi_mapping is not None:
+        try:
+            roi_map = json.loads(Path(roi_mapping).read_text())
+        except Exception as exc:
+            print(f"[error] failed to load ROI mapping: {exc}", file=sys.stderr)
+            raise SystemExit(1)
+
+    def _process(gid, task, members):
+        aligned_raws, offsets, group_sqm = _load_aligned_group(
+            output_dir, members, task, desc, no_align, normalize, bads_scope, tstart, tend)
+        bad_channels = {sid: sqm.get("bad_channels", []) for sid, sqm in group_sqm.items()}
+        write_group_bads(output_dir, members, group_sqm, bads_scope)
+        report_path = build_hyper_post_report(
+            group_id=gid,
+            task=task,
+            group=members,
+            aligned_raws=aligned_raws,
+            offsets=offsets,
+            output_dir=output_dir,
+            roi_map=roi_map,
+            bad_channels=bad_channels,
+            subject_sqm=group_sqm,
+            wtc_fmin=wtc_fmin,
+            wtc_fmax=wtc_fmax,
+            wtc_band_fmin=band_fmin,
+            wtc_band_fmax=band_fmax,
+            wtc_significance=bool(args.get("wtc_significance", False)),
+            wtc_seed=wtc_seed,
+            wtc_mc_count=args.get("wtc_mc_count"),
+            wtc_channel_cross=bool(args.get("wtc_channel_cross", False)),
+            wtc_limit_scales=limit_scales,
+            wtc_save_maps=bool(args.get("wtc_save_maps", False)),
+            wtc_mask_coi=mask_coi,
+            wtc_roi_min_channels=args.get("wtc_roi_min_channels"),
+            isc_threshold=args.get("isc_threshold"),
+            sci_threshold=sci_threshold,
+        )
+        if wtc_pseudo:
+            null_path = write_wtc_null(
+                group_id=gid,
+                task=task,
+                aligned_raws=aligned_raws,
+                output_dir=output_dir,
+                n_iter=wtc_pseudo,
+                wtc_fmin=wtc_fmin,
+                wtc_fmax=wtc_fmax,
+                band_fmin=band_fmin,
+                band_fmax=band_fmax,
+                seed=wtc_seed,
+                cross=bool(args.get("wtc_pseudo_cross", False)),
+                limit_scales=limit_scales,
+                mask_coi=mask_coi,
+            )
+            print(f"     null   -> {null_path}")
+        return report_path
+
+    if wtc_pseudo:
+        logger.info("pseudo-dyad null requested: %d full WTC runs per dyad, on top of the real one",
+                    wtc_pseudo)
+    _run_groups(groups, _process)
+
+
+def run_wtc_band(args: dict[str, Any]) -> None:
+    """Re-average every saved WTC map over a new band, without recomputing the transform."""
+    from fnirs_pipe.qc.wtc_store import reband_tree
+
+    output_dir = Path(args["output_dir"])
+    written = reband_tree(output_dir, args["band_fmin"], args["band_fmax"],
+                          suffix=args.get("suffix"), mask_coi=bool(args.get("mask_coi", False)))
+    for path in written:
+        print(f"reband -> {path}")
+    if not written:
+        print(f"no *_hyper-wtc*.npz under {output_dir}; rerun the hyper level with "
+              "--wtc-save-maps to write them", file=sys.stderr)

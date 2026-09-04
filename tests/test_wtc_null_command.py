@@ -1,13 +1,15 @@
-"""The null is its own command now, and it no longer inherits the real run's crossing.
+"""The null shares the hyper run but not its crossing.
 
 `hyper-post --wtc-pseudo` used to pass `cross=wtc_channel_cross` straight through, so asking
 for the exploratory 196-pair channel table also multiplied every surrogate iteration by 14.
 That coupling was invisible on disk too: the pseudo sidecar recorded the band but neither the
 iteration count nor the shape, so a 5-iteration probe and a 100-iteration null looked alike.
 
-These tests hold the split in place: the flag is gone from `hyper-post`, `hyper-null` carries
-its own `--wtc-channel-cross` defaulting off, the sidecar says what was run, and a merge
-refuses to mix iteration counts.
+0.25.0 fixed it by splitting the null into its own command. The null now runs inside the
+hyper level again, which is what keeps its band and its stage identical to the table it sits
+beside, and the independence is carried by `--wtc-pseudo-cross` instead. These tests hold
+that independence in place: the null is off unless asked for, its crossing is its own
+decision, the sidecar says what was run, and a merge refuses to mix iteration counts.
 """
 
 import json
@@ -15,39 +17,40 @@ import json
 import pandas as pd
 import pytest
 
-from fnirs_pipe.cli.qc import _build_parser
+from fnirs_pipe.cli.run import _build_parser
 from fnirs_pipe.qc.wtc_aggregate import aggregate_wtc
 
 
-def _sub(name):
-    action = next(a for a in _build_parser()._actions if getattr(a, "choices", None))
-    return action.choices[name]
+def _hyper(*argv):
+    return _build_parser().parse_args(["/bids", "/out", "hyper", "--pairs-csv", "/p.csv", *argv])
 
 
-def _flags(name):
-    return {f for a in _sub(name)._actions for f in a.option_strings if f.startswith("--")}
+# ---- the null is opt-in ----
+
+def test_no_null_unless_asked():
+    assert _hyper().wtc_pseudo is None
 
 
-# ---- the split itself ----
-
-def test_hyper_post_no_longer_runs_the_null():
-    assert "--wtc-pseudo" not in _flags("hyper-post")
+def test_the_iteration_count_is_what_asks_for_it():
+    assert _hyper("--wtc-pseudo", "100").wtc_pseudo == 100
 
 
-def test_hyper_null_exists_and_takes_the_iteration_count():
-    assert "--wtc-pseudo" in _flags("hyper-null")
-
+# ---- the crossing stays split ----
 
 def test_the_null_is_homologous_unless_asked():
-    args = _sub("hyper-null").parse_args(["/bids", "/out", "--pairs-csv", "/p.csv"])
+    assert _hyper("--wtc-pseudo", "100").wtc_pseudo_cross is False
+
+
+def test_crossing_the_real_run_does_not_cross_the_null():
+    args = _hyper("--wtc-pseudo", "100", "--wtc-channel-cross")
+    assert args.wtc_channel_cross is True
+    assert args.wtc_pseudo_cross is False
+
+
+def test_the_null_can_be_crossed_on_its_own():
+    args = _hyper("--wtc-pseudo", "100", "--wtc-pseudo-cross")
+    assert args.wtc_pseudo_cross is True
     assert args.wtc_channel_cross is False
-    assert args.wtc_pseudo == 100
-
-
-def test_crossing_the_null_is_independent_of_crossing_the_real_run():
-    crossed = _sub("hyper-null").parse_args(
-        ["/bids", "/out", "--pairs-csv", "/p.csv", "--wtc-channel-cross"])
-    assert crossed.wtc_channel_cross is True
 
 
 # ---- what lands on disk ----
@@ -99,13 +102,19 @@ def test_nulls_of_one_length_merge(tmp_path):
     assert sorted(merged["group_id"]) == ["d01", "d02"]
 
 
-def test_the_merge_command_covers_every_kind_the_aggregator_has(tmp_path):
+def test_the_group_level_merges_every_kind_the_aggregator_has(tmp_path, monkeypatch):
     """It asked for wtc-roi, gone since 0.24.0, and died before reaching the null."""
-    from fnirs_pipe.cli.qc import cmd_group_hyper_wtc
+    from fnirs_pipe.cli import workflows
+    from fnirs_pipe.qc import group_writer
     from fnirs_pipe.qc.wtc_aggregate import _KINDS
 
+    monkeypatch.setattr(group_writer, "build_group_raw_report",
+                        lambda root: root / "group_nirs.html")
+    monkeypatch.setattr(group_writer, "build_group_hyper_raw_report",
+                        lambda root: root / "group_hyper_nirs.html")
+
     _write_null(tmp_path, "d01", "baseline", 100)
-    cmd_group_hyper_wtc(tmp_path)                            # no kind raises
+    workflows.run_group_level({"output_dir": tmp_path})       # no kind raises
 
     assert (tmp_path / "group_hyper_wtc_pseudo.tsv").exists()
     for kind in _KINDS:

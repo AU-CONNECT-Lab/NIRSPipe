@@ -27,7 +27,7 @@ _DESC_CHOICES = [desc for desc, domain in _DOMAIN.items() if domain == "haemo"]
 _AGGREGATE_COMMANDS = [
     {"label": "Group QC (individual subjects)", "value": "group-raw"},
     {"label": "Group QC (hyperscanning dyads)", "value": "group-hyper-raw"},
-    {"label": "Merge WTC tables across dyads", "value": "group-hyper-wtc"},
+    {"label": "Group aggregation, incl. WTC merge", "value": "group"},
     {"label": "Provenance graphs", "value": "provenance"},
 ]
 
@@ -134,8 +134,9 @@ def _hyper_post():
                 dbc.Label("Pseudo-dyad Iterations"),
                 dbc.Input(id="qc-wtc-pseudo", type="number", min=0, step=10,
                           placeholder="0, off"),
-                dbc.FormText("The null a coherence is read against, written by hyper-null. "
-                             "One full WTC run each; published work uses 100."),
+                dbc.FormText("The null a coherence is read against, computed in the same "
+                             "run. One full WTC run each; published work uses 100. Leave "
+                             "empty and no null is written."),
             ], width=2),
             dbc.Col([
                 dbc.Label("Min Channels per ROI"),
@@ -153,6 +154,8 @@ def _hyper_post():
                     {"label": "Mask cone of influence",      "value": "wtc_mask_coi"},
                     {"label": "Cross channels between brains (slow)",
                                                              "value": "wtc_channel_cross"},
+                    {"label": "Cross channels for the null too (very slow)",
+                                                             "value": "wtc_pseudo_cross"},
                     {"label": "Bad channels: union over runs", "value": "bads_subject"},
                     {"label": "Save WTC maps (large)",         "value": "wtc_save_maps"},
                     {"label": "Skip alignment",              "value": "no_align"},
@@ -193,7 +196,7 @@ def _wtc_band():
                 value=[], inline=True, switch=True,
             )),
         ], className="g-3 mt-1"),
-        subtitle="Reads the npz written by hyper-post with Save WTC maps on. "
+        subtitle="Reads the npz the hyper level writes with Save WTC maps on. "
                  "Writes tables, not a report.",
     ))
 
@@ -220,8 +223,9 @@ layout = dbc.Container([
     dcc.Store(id="qc-command-store"),
 
     html.H3("QC Reports", className="mt-4"),
-    html.P("Hyperscanning analysis and group aggregation. "
-           "Every button here builds a fnirs-qc command and runs it.",
+    html.P("Hyperscanning analysis and group aggregation. Every button here builds a "
+           "command and runs it: the group QC and provenance entries call fnirs-qc, the "
+           "rest call fnirs-pipe.",
            className="text-muted"),
 
     _card(
@@ -232,15 +236,13 @@ layout = dbc.Container([
                 dcc.Dropdown(
                     id="qc-command",
                     options=[
-                        {"label": "Hyperscanning post-analysis (hyper-post)",
-                         "value": "hyper-post"},
-                        {"label": "Pseudo-dyad null (hyper-null)",
-                         "value": "hyper-null"},
+                        {"label": "Hyperscanning analysis (hyper)",
+                         "value": "hyper"},
                         {"label": "Re-average saved WTC maps (wtc-band)",
                          "value": "wtc-band"},
                         *_AGGREGATE_COMMANDS,
                     ],
-                    value="hyper-post",
+                    value="hyper",
                     clearable=False,
                 ),
             ], width=6),

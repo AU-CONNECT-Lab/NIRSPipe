@@ -1,4 +1,8 @@
-"""Callbacks for the QC Reports page: build a fnirs-qc argv, run it, show what it made."""
+"""Callbacks for the QC Reports page: build a CLI argv, run it, show what it made.
+
+The aggregate commands are `fnirs-qc`; the hyperscanning analysis, the WTC re-band and the
+group merge are `fnirs-pipe` analysis levels.
+"""
 
 from __future__ import annotations
 
@@ -13,25 +17,24 @@ from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("interface.qc_callbacks")
 
-# commands whose whole argument list is one output_dir
-_AGGREGATE = ("group-raw", "group-hyper-raw", "group-hyper-wtc", "provenance")
+# fnirs-qc commands whose whole argument list is one output_dir
+_AGGREGATE = ("group-raw", "group-hyper-raw", "provenance")
 
 # which form sections each command needs; anything not listed here is hidden
 _SECTIONS = {
-    "hyper-post":  {"qc-hyper-post-section", "qc-window-section"},
-    "hyper-null":  {"qc-hyper-post-section", "qc-window-section"},
-    "wtc-band":    {"qc-wtc-band-section"},
+    "hyper":    {"qc-hyper-post-section", "qc-window-section"},
+    "wtc-band": {"qc-wtc-band-section"},
 }
 
 _ALL_SECTIONS = ("qc-hyper-post-section", "qc-wtc-band-section", "qc-window-section")
 
-# report each command writes, relative to output_dir, best match first. hyper-post names its
-# file after the group, so it is found by glob rather than named here.
+# report each command writes, relative to output_dir, best match first. The hyper level names
+# its file after the group, so it is found by glob rather than named here.
 _REPORTS = {
     "group-raw":       ["group_nirs.html"],
     "group-hyper-raw": ["group_hyper_nirs.html"],
     # the second pattern finds a tree written before the reports moved into group-<id>/
-    "hyper-post":      ["group-*/group-*_hyper-post.html", "group-*_hyper*.html"],
+    "hyper":           ["group-*/group-*_hyper-post.html", "group-*_hyper*.html"],
 }
 
 
@@ -49,20 +52,19 @@ def _split(flag: str, value) -> list[str]:
 
 
 def build_qc_args(command: str, opts: dict) -> list[str]:
-    """Translate widget values into a fnirs-qc argv list.
+    """Translate widget values into an argv list for whichever CLI owns the command.
 
     Kept beside the page rather than derived from the parser: argparse can say a flag exists
     but not which widget should fill it. `tests/test_gui_cli_surface.py` is what stops the
     two drifting apart.
     """
-    args = ["fnirs-qc", command]
-
     if command in _AGGREGATE:
-        return args + [opts["output_dir"]]
+        return ["fnirs-qc", command, opts["output_dir"]]
 
-    # also output_dir only, but with a band to re-average over
+    # everything else is an fnirs-pipe analysis level: BIDS_DIR OUTPUT_DIR LEVEL
+    args = ["fnirs-pipe", opts["bids_dir"], opts["output_dir"], command]
+
     if command == "wtc-band":
-        args += [opts["output_dir"]]
         args += _num("--band-fmin", opts.get("band_fmin"))
         args += _num("--band-fmax", opts.get("band_fmax"))
         if "band_mask_coi" in (opts.get("band_flags") or []):
@@ -70,9 +72,7 @@ def build_qc_args(command: str, opts: dict) -> list[str]:
         args += _text("--suffix", opts.get("band_suffix"))
         return args
 
-    args += [opts["bids_dir"], opts["output_dir"]]
-
-    if command == "hyper-post":
+    if command == "hyper":
         args += _text("--pairs-csv", opts.get("pairs_csv"))
         args += _text("--group-id", opts.get("group_id"))
         args += _text("--desc", opts.get("desc"))
@@ -83,6 +83,7 @@ def build_qc_args(command: str, opts: dict) -> list[str]:
         args += _num("--wtc-band-fmax", opts.get("wtc_band_fmax"))
         args += _num("--wtc-mc-count", opts.get("wtc_mc_count"))
         args += _num("--wtc-seed", opts.get("wtc_seed"))
+        args += _num("--wtc-pseudo", opts.get("wtc_pseudo"))
         args += _num("--isc-threshold", opts.get("isc_threshold"))
         args += _num("--wtc-roi-min-channels", opts.get("wtc_roi_min_channels"))
         args += _split("--session-label", opts.get("hyper_session"))
@@ -94,36 +95,12 @@ def build_qc_args(command: str, opts: dict) -> list[str]:
             args.append("--wtc-mask-coi")
         if "wtc_channel_cross" in flags:
             args.append("--wtc-channel-cross")
+        if "wtc_pseudo_cross" in flags:
+            args.append("--wtc-pseudo-cross")
         if "bads_subject" in flags:
             args += ["--bads-scope", "subject"]
         if "wtc_save_maps" in flags:
             args.append("--wtc-save-maps")
-        if "no_align" in flags:
-            args.append("--no-align")
-        if "normalize" in flags:
-            args.append("--normalize")
-        args += _num("--tstart", opts.get("tstart"))
-        args += _num("--tend", opts.get("tend"))
-
-    elif command == "hyper-null":
-        args += _text("--pairs-csv", opts.get("pairs_csv"))
-        args += _text("--group-id", opts.get("group_id"))
-        args += _text("--desc", opts.get("desc"))
-        args += _num("--wtc-pseudo", opts.get("wtc_pseudo"))
-        args += _num("--wtc-fmin", opts.get("wtc_fmin"))
-        args += _num("--wtc-fmax", opts.get("wtc_fmax"))
-        args += _num("--wtc-band-fmin", opts.get("wtc_band_fmin"))
-        args += _num("--wtc-band-fmax", opts.get("wtc_band_fmax"))
-        args += _num("--wtc-seed", opts.get("wtc_seed"))
-        args += _split("--session-label", opts.get("hyper_session"))
-        args += _split("--task-label", opts.get("hyper_task"))
-        flags = opts.get("hyper_flags") or []
-        if "wtc_mask_coi" in flags:
-            args.append("--wtc-mask-coi")
-        if "wtc_channel_cross" in flags:
-            args.append("--wtc-channel-cross")
-        if "bads_subject" in flags:
-            args += ["--bads-scope", "subject"]
         if "no_align" in flags:
             args.append("--no-align")
         if "normalize" in flags:
@@ -143,14 +120,14 @@ def _missing(command: str, opts: dict) -> str | None:
         return "Output directory is required."
     if command in _AGGREGATE:
         return None
+    if not opts.get("bids_dir"):
+        return "BIDS directory is required."
     if command == "wtc-band":
         if opts.get("band_fmin") is None or opts.get("band_fmax") is None:
             return "wtc-band needs both a band start and end."
         return None
-    if not opts.get("bids_dir"):
-        return "BIDS directory is required."
-    if command == "hyper-post" and not opts.get("pairs_csv"):
-        return "hyper-post needs a pairs CSV."
+    if command == "hyper" and not opts.get("pairs_csv"):
+        return "The hyper level needs a pairs CSV."
     return None
 
 
