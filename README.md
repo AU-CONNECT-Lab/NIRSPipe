@@ -157,11 +157,7 @@ fnirs-recon INPUT_FILE BIDS_DIR --subject LABEL --task LABEL
 ```
 fnirs-prep crop BIDS_DIR DERIVATIVES_DIR --participant-label SUB ...
                 ( --tmin FLOAT [--tmax FLOAT] | --segments-path PATH [--combine] )
-                # segments table: onset, duration, and an optional task column that
-                # names each segment's output task entity instead of _seg-NN
                 [--align none|trigger] [--trigger-name TEXT]
-                # trigger: times are measured from the first annotation of that name,
-                # so one window selects the same stretch of task in every subject
                 [--ses TEXT] [--task TEXT] [--run TEXT]
                 [--n-jobs INT] [--skip-bids-validation]
 
@@ -177,12 +173,13 @@ fnirs-prep edit-markers apply BIDS_DIR DERIVATIVES_DIR --participant-label SUB .
                               [--ses/--task/--run] [--n-jobs INT]
 ```
 
+`crop` takes its window either from `--tmin` / `--tmax` or from a segments table passed to `--segments-path`. That table holds `onset` and `duration`, plus an optional `task` column naming each segment's output task entity instead of the default `_seg-NN`. Under `--align trigger`, times are measured from the first annotation of the name given to `--trigger-name` rather than from the start of the recording, so a single window selects the same stretch of task in every subject.
+
 ### `fnirs-qc` — QC reports
 
-```
-# prep-raw / hyper-raw require --cardiac-l-freq/--cardiac-h-freq (no default);
-# prep-raw and hyper-raw additionally require --dpf (they convert to haemoglobin internally)
+`prep-raw` and `hyper-raw` read raw recordings, so both require `--cardiac-l-freq` / `--cardiac-h-freq`, which are population-dependent and have no default, and `--dpf`, which they use to convert to haemoglobin internally.
 
+```
 fnirs-qc prep-raw BIDS_DIR OUTPUT_DIR PARTICIPANT_LABEL
                   --dpf FLOAT [FLOAT ...]
                   --cardiac-l-freq FLOAT --cardiac-h-freq FLOAT
@@ -207,16 +204,6 @@ fnirs-qc hyper-post BIDS_DIR OUTPUT_DIR --pairs-csv PATH
                     [--wtc-channel-cross] [--isc-threshold FLOAT]
                     [--normalize] [--no-align] [--tstart/--tend FLOAT]
 
-# --desc picks the per-subject stage the inter-brain metrics read (default preproc).
-# --wtc-significance is slow: --wtc-mc-count surrogate series per channel pair, 300 by
-# default, and the runtime scales with it. --wtc-seed makes those contours reproducible
-# and switches off pycwt's on-disk cache, which is not keyed on the seed.
-# --wtc-mask-coi restricts each band mean to the cone of influence. Off by default;
-# n_valid_frac reports the share inside the cone either way.
-# --wtc-channel-cross pairs every long channel with every other across the two brains,
-# 196 values instead of 14, and is what builds the ROI x ROI matrix when --roi-mapping
-# is given. The heatmaps stay on the homologous pairs.
-
 fnirs-qc hyper-null BIDS_DIR OUTPUT_DIR --pairs-csv PATH
                     [--group-id / --task-label / --session-label]
                     [--desc TEXT] [--wtc-pseudo N] [--wtc-seed INT]
@@ -225,25 +212,24 @@ fnirs-qc hyper-null BIDS_DIR OUTPUT_DIR --pairs-csv PATH
                     [--wtc-mask-coi] [--wtc-channel-cross]
                     [--normalize] [--no-align] [--tstart/--tend FLOAT]
 
-# The pseudo-dyad null: the same band means against a phase-scrambled partner.
-# Coherence between two unrelated recordings is not zero, so this is what a real value
-# is read against. One full WTC run per iteration, 100 by default.
-# It is its own command so the null does not inherit --wtc-channel-cross from the real
-# run: crossing squares the pair count and the null pays that on every iteration.
-# Every other flag must match the hyper-post run this null is read against.
-
 fnirs-qc group-raw       OUTPUT_DIR
 fnirs-qc group-hyper-raw OUTPUT_DIR
-fnirs-qc provenance      OUTPUT_DIR   # redraw the graphs from the sidecars on disk
-
+fnirs-qc provenance      OUTPUT_DIR
 ```
+
+`hyper-post` reads the per-subject stage named by `--desc`, `preproc` by default. `--wtc-significance` is slow: it draws `--wtc-mc-count` surrogate series per channel pair, 300 by default, and the runtime scales with that count. `--wtc-seed` makes the significance contours reproducible and switches off pycwt's on-disk cache, which is not keyed on the seed. `--wtc-mask-coi` restricts each band mean to the cone of influence; it is off by default, and `n_valid_frac` reports the share inside the cone either way. `--wtc-channel-cross` pairs every long channel with every other across the two brains, 196 values instead of 14, and is what builds the ROI x ROI matrix when `--roi-mapping` is given; the heatmaps stay on the homologous pairs.
+
+`hyper-null` computes the pseudo-dyad null, the same band means taken against a phase-scrambled partner. Coherence between two unrelated recordings is not zero, so this is what a real value is read against. Each iteration is a full WTC run, 100 iterations by default. It is a separate command so that the null does not inherit `--wtc-channel-cross` from the real run: crossing squares the pair count, and the null would pay that on every iteration. Every other flag must match the `hyper-post` run the null is read against.
+
+`provenance` redraws the graphs from the sidecars already on disk.
 
 For a cohort report over one time window, crop first and then run the usual pair of commands:
 
 ```
 fnirs-prep crop BIDS_DIR DERIV_DIR --participant-label ... --tmin FLOAT --tmax FLOAT
                 [--align none|trigger] [--trigger-name TEXT]
-fnirs-qc   prep-raw DERIV_DIR/cropped OUTPUT_DIR PARTICIPANT_LABEL --dpf ...                     --cardiac-l-freq FLOAT --cardiac-h-freq FLOAT
+fnirs-qc   prep-raw DERIV_DIR/cropped OUTPUT_DIR PARTICIPANT_LABEL --dpf ...
+                    --cardiac-l-freq FLOAT --cardiac-h-freq FLOAT
 fnirs-qc   group-raw OUTPUT_DIR
 ```
 
@@ -316,10 +302,11 @@ output/
 │       ├── sub-01_desc-hbo_fcroiz.tsv              # + --roi-mapping
 │       ├── sub-01_desc-hbo_fcseed.tsv              # + --roi-mapping (ROI × channel)
 │       └── sub-01_desc-hbo_fcseedz.tsv             # + --roi-mapping
-│                                                    # the fc* group: rest mode, or any mode with --fc
 ├── group_nirs.{tsv,html}                # fnirs-qc group-raw
 └── group_hyper_nirs.{tsv,html}          # fnirs-qc group-hyper-raw
 ```
+
+The `fc*` files are written in rest mode, or in any mode run with `--fc`.
 
 Standalone QC HTMLs from `fnirs-qc prep-raw` / `hyper-raw` / `hyper-post` sit at the derivatives root:
 
