@@ -17,6 +17,7 @@ from .sci_psp_panel import (
     binary_heatmap_figure,
     lollipop_scores_figure,
     channel_quality_heatmap,
+    trial_quality_heatmap,
 )
 from .brain_views import quality_brain_views
 from .motion_panel import (
@@ -58,6 +59,7 @@ __all__ = [
     "binary_heatmap_figure",
     "lollipop_scores_figure",
     "channel_quality_heatmap",
+    "trial_quality_heatmap",
     "quality_brain_views",
     "carpet_gvtd_figure",
     "bad_segment_zoom_figure",

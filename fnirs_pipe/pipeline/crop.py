@@ -27,6 +27,31 @@ logger = get_logger("pipeline.crop")
 _DERIV_NAME = "cropped"
 
 
+def _trigger_origin(raw, trigger_name: str | None) -> float:
+    """Onset of the first annotation named `trigger_name`, the t=0 the window is measured from.
+
+    Recordings of the same session start whenever each machine was told to, so a window given
+    in absolute seconds names a different moment of the task in every subject. Measuring it
+    from a shared hardware trigger puts them back on one clock.
+
+    Example: a subject whose "start" trigger fires at 12.4 s, cropped with tmin=60, tmax=90,
+    keeps 72.4 s to 102.4 s of its own recording.
+
+    A missing trigger falls back to 0.0 with a warning rather than raising: the crop still
+    produces a usable file, just on the recording's own clock, and refusing would take down
+    a whole batch for one subject.
+    """
+    if not trigger_name:
+        raise ValueError("--align trigger requires --trigger-name")
+    onsets = [float(a["onset"]) for a in raw.annotations
+              if str(a["description"]) == trigger_name]
+    if not onsets:
+        logger.warning("trigger '%s' not found; measuring the window from t=0 instead",
+                       trigger_name)
+        return 0.0
+    return min(onsets)
+
+
 def _window(seg) -> tuple[float, float]:
     """The span a cropped segment occupies on the original recording's clock."""
     return float(seg.first_time), float(seg.first_time + seg.times[-1])
@@ -62,8 +87,27 @@ def _crop_raw(
     tmax: float | None,
     segments_df: pd.DataFrame | None,
     combine: bool,
+    t0: float = 0.0,
 ) -> list[Path]:
     import mne
+
+    duration = float(raw.times[-1])
+
+    def _clip(a: float | None, b: float | None) -> tuple[float, float]:
+        """Shift a window onto the recording and keep it inside it.
+
+        A trigger origin pushes every window later, so one that fit on the recording's own
+        clock can now run off the end. Clipping keeps the segment that does exist instead of
+        letting mne refuse the whole crop. An open end is resolved here too: mne reads a
+        `tmin` of None as a comparison against None, not as "from the start".
+        """
+        lo = t0 if a is None else min(t0 + a, duration)
+        hi = duration if b is None else min(t0 + b, duration)
+        if hi - lo <= 0:
+            logger.warning("window [%s, %s] starts at or past the end of %s (%.1fs); "
+                           "the segment will be empty",
+                           a, b, snirf_path.name, duration)
+        return lo, hi
 
     def _write(seg, name: str, windows: list[tuple[float, float]]) -> Path:
         out = out_nirs_dir / f"{name}_nirs.snirf"
@@ -73,7 +117,7 @@ def _crop_raw(
 
     if segments_df is not None:
         segs = [
-            raw.copy().crop(tmin=row.onset, tmax=row.onset + row.duration)
+            raw.copy().crop(*_clip(row.onset, row.onset + row.duration))
             for _, row in segments_df.iterrows()
         ]
         if combine:
@@ -94,7 +138,8 @@ def _crop_raw(
             out_paths.append(out)
         return out_paths
 
-    seg = raw.copy().crop(tmin=tmin, tmax=tmax)
+    lo, hi = _clip(tmin, tmax)
+    seg = raw.copy().crop(tmin=lo, tmax=hi)
     out = _write(seg, stem, [_window(seg)])
     logger.info("Written: %s", out)
     return [out]
@@ -110,6 +155,8 @@ def crop_snirf_from_path(
     tmax: float | None = None,
     segments_df: pd.DataFrame | None = None,
     combine: bool = False,
+    align: str = "none",
+    trigger_name: str | None = None,
 ) -> list[Path]:
     """Crop a SNIRF given its path directly (no BIDS layout lookup).
 
@@ -118,8 +165,9 @@ def crop_snirf_from_path(
     stem = bids_stem(snirf_path)
     out_nirs_dir = _setup_deriv_dir(derivatives_dir, sub, ses)
     raw = read_raw_snirf(snirf_path)
+    t0 = _trigger_origin(raw, trigger_name) if align == "trigger" else 0.0
     return _crop_raw(raw, snirf_path, out_nirs_dir, stem,
-                     tmin=tmin, tmax=tmax, segments_df=segments_df, combine=combine)
+                     tmin=tmin, tmax=tmax, segments_df=segments_df, combine=combine, t0=t0)
 
 
 def crop_snirf(
@@ -134,6 +182,8 @@ def crop_snirf(
     tmax: float | None = None,
     segments_path: Path | None = None,
     combine: bool = False,
+    align: str = "none",
+    trigger_name: str | None = None,
     validate: bool = False,
 ) -> list[Path]:
     """Crop a raw SNIRF via BIDS layout lookup and write to derivatives/cropped/.
@@ -145,6 +195,10 @@ def crop_snirf(
     rather than one task the pipeline cannot tell apart.
     combine=True concatenates multi-segment output into one file.
 
+    align="trigger" measures tmin/tmax (and every segment onset) from the first annotation
+    named `trigger_name` rather than from the recording start, so one window selects the same
+    stretch of task in subjects whose recordings started at different moments.
+
     Returns list of written SNIRF paths.
     """
     snirf_path = find_snirf(bids_dir, sub, ses, task, run, validate=validate)
@@ -154,5 +208,6 @@ def crop_snirf(
     raw = read_raw_snirf(snirf_path)
 
     segments_df = read_table(segments_path) if segments_path is not None else None
+    t0 = _trigger_origin(raw, trigger_name) if align == "trigger" else 0.0
     return _crop_raw(raw, snirf_path, out_nirs_dir, stem,
-                     tmin=tmin, tmax=tmax, segments_df=segments_df, combine=combine)
+                     tmin=tmin, tmax=tmax, segments_df=segments_df, combine=combine, t0=t0)

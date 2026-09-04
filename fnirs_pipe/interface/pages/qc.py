@@ -1,4 +1,4 @@
-"""Page 6: quality control reports — hyperscanning, group aggregates and windowed drill-down.
+"""Page 6: quality control reports — hyperscanning analysis and group aggregates.
 
 The whole `fnirs-qc` aggregate layer used to be command line only, which left the Hyper Align
 page preparing dyads that nothing on screen could then analyse. Like the Analysis page, this
@@ -198,15 +198,10 @@ def _wtc_band():
     ))
 
 
-def _window_raw():
+def _analysis_window():
     return html.Div(id="qc-window-section", children=_card(
-        "Windowed drill-down",
+        "Analysis window",
         dbc.Row([
-            dbc.Col([
-                dbc.Label("Task Label"),
-                dbc.Input(id="qc-task-label", type="text", placeholder="e.g. rest"),
-                dbc.FormText("Required, one task at a time."),
-            ], width=3),
             dbc.Col([
                 dbc.Label("Window (s)"),
                 dbc.InputGroup([
@@ -214,57 +209,10 @@ def _window_raw():
                     dbc.InputGroupText("–"),
                     dbc.Input(id="qc-tend", type="number", placeholder="end"),
                 ]),
-            ], width=3),
-            dbc.Col([
-                dbc.Label("Name"),
-                dbc.Input(id="qc-window-name", type="text", placeholder="suffix (optional)"),
-                dbc.FormText("Names the output, so windows do not overwrite each other."),
-            ], width=3),
-            dbc.Col([
-                dbc.Label("Align"),
-                dcc.Dropdown(id="qc-align",
-                             options=[{"label": "none", "value": "none"},
-                                      {"label": "trigger", "value": "trigger"}],
-                             value="none", clearable=False),
-            ], width=3),
-        ], className="g-3"),
-        dbc.Row([
-            dbc.Col([
-                dbc.Label("Cardiac Band (Hz)"),
-                dbc.InputGroup([
-                    dbc.Input(id="qc-cardiac-l", type="number", step=0.1,
-                              placeholder="lo (adult ~0.7)"),
-                    dbc.InputGroupText("–"),
-                    dbc.Input(id="qc-cardiac-h", type="number", step=0.1,
-                              placeholder="hi (adult ~1.5)"),
-                ]),
-                dbc.FormText("Required, population-dependent."),
+                dbc.FormText("Measured from the shared trigger, after alignment. "
+                             "Leave empty to use the whole recording."),
             ], width=4),
-            dbc.Col([
-                dbc.Label("SCI Threshold"),
-                dbc.Input(id="qc-sci-thresh", type="number", value=0.8, step=0.05),
-            ], width=2),
-            dbc.Col([
-                dbc.Label("Window Length (s)"),
-                dbc.Input(id="qc-window-length", type="number", value=10.0, step=1.0),
-            ], width=2),
-        ], className="g-3 mt-1"),
-        dbc.Row([
-            dbc.Col([
-                dbc.Label("Participant Label"),
-                dbc.Input(id="qc-participant-label", type="text", placeholder="all subjects"),
-                dbc.FormText("Space-separated for several."),
-            ], width=3),
-            dbc.Col([
-                dbc.Label("Session Label"),
-                dbc.Input(id="qc-window-session", type="text", placeholder="all sessions"),
-            ], width=3),
-            dbc.Col([
-                dbc.Label("Trigger Name"),
-                dbc.Input(id="qc-trigger-name", type="text", placeholder="align by trigger"),
-                dbc.FormText("Only used when Align is trigger."),
-            ], width=3),
-        ], className="g-3 mt-1"),
+        ], className="g-3"),
     ))
 
 
@@ -272,7 +220,7 @@ layout = dbc.Container([
     dcc.Store(id="qc-command-store"),
 
     html.H3("QC Reports", className="mt-4"),
-    html.P("Hyperscanning analysis, group aggregation and windowed drill-down. "
+    html.P("Hyperscanning analysis and group aggregation. "
            "Every button here builds a fnirs-qc command and runs it.",
            className="text-muted"),
 
@@ -288,7 +236,6 @@ layout = dbc.Container([
                          "value": "hyper-post"},
                         {"label": "Pseudo-dyad null (hyper-null)",
                          "value": "hyper-null"},
-                        {"label": "Windowed group QC (window-raw)", "value": "window-raw"},
                         {"label": "Re-average saved WTC maps (wtc-band)",
                          "value": "wtc-band"},
                         *_AGGREGATE_COMMANDS,
@@ -311,7 +258,7 @@ layout = dbc.Container([
     _dirs(),
     _hyper_post(),
     _wtc_band(),
-    _window_raw(),
+    _analysis_window(),
 
     _card(
         "Run",

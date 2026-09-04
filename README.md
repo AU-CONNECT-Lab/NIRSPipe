@@ -159,6 +159,9 @@ fnirs-prep crop BIDS_DIR DERIVATIVES_DIR --participant-label SUB ...
                 ( --tmin FLOAT [--tmax FLOAT] | --segments-path PATH [--combine] )
                 # segments table: onset, duration, and an optional task column that
                 # names each segment's output task entity instead of _seg-NN
+                [--align none|trigger] [--trigger-name TEXT]
+                # trigger: times are measured from the first annotation of that name,
+                # so one window selects the same stretch of task in every subject
                 [--ses TEXT] [--task TEXT] [--run TEXT]
                 [--n-jobs INT] [--skip-bids-validation]
 
@@ -177,7 +180,7 @@ fnirs-prep edit-markers apply BIDS_DIR DERIVATIVES_DIR --participant-label SUB .
 ### `fnirs-qc` — QC reports
 
 ```
-# prep-raw / hyper-raw / window-raw / epoch require --cardiac-l-freq/--cardiac-h-freq (no default);
+# prep-raw / hyper-raw require --cardiac-l-freq/--cardiac-h-freq (no default);
 # prep-raw and hyper-raw additionally require --dpf (they convert to haemoglobin internally)
 
 fnirs-qc prep-raw BIDS_DIR OUTPUT_DIR PARTICIPANT_LABEL
@@ -185,13 +188,14 @@ fnirs-qc prep-raw BIDS_DIR OUTPUT_DIR PARTICIPANT_LABEL
                   --cardiac-l-freq FLOAT --cardiac-h-freq FLOAT
                   [--session-label / --task-label]
                   [--sci-threshold FLOAT] [--skip-bids-validation]
+                  [--epoch-qc] [--epoch-tmin/--epoch-tmax FLOAT]
 
 fnirs-qc hyper-raw BIDS_DIR OUTPUT_DIR --pairs-csv PATH
                    --dpf FLOAT [FLOAT ...]
                    --cardiac-l-freq FLOAT --cardiac-h-freq FLOAT
                    [--group-id / --task-label / --session-label]
                    [--sci-threshold FLOAT] [--fmin/--fmax FLOAT]
-                   [--normalize] [--no-align]
+                   [--normalize] [--no-align] [--tstart/--tend FLOAT]
 
 fnirs-qc hyper-post BIDS_DIR OUTPUT_DIR --pairs-csv PATH
                     [--group-id / --task-label / --session-label]
@@ -201,7 +205,7 @@ fnirs-qc hyper-post BIDS_DIR OUTPUT_DIR --pairs-csv PATH
                     [--wtc-significance] [--wtc-seed INT] [--wtc-mc-count INT]
                     [--wtc-mask-coi] [--wtc-roi-min-channels N]
                     [--wtc-channel-cross] [--isc-threshold FLOAT]
-                    [--normalize] [--no-align]
+                    [--normalize] [--no-align] [--tstart/--tend FLOAT]
 
 # --desc picks the per-subject stage the inter-brain metrics read (default preproc).
 # --wtc-significance is slow: --wtc-mc-count surrogate series per channel pair, 300 by
@@ -219,7 +223,7 @@ fnirs-qc hyper-null BIDS_DIR OUTPUT_DIR --pairs-csv PATH
                     [--wtc-fmin/--wtc-fmax FLOAT]
                     [--wtc-band-fmin/--wtc-band-fmax FLOAT]
                     [--wtc-mask-coi] [--wtc-channel-cross]
-                    [--normalize] [--no-align]
+                    [--normalize] [--no-align] [--tstart/--tend FLOAT]
 
 # The pseudo-dyad null: the same band means against a phase-scrambled partner.
 # Coherence between two unrelated recordings is not zero, so this is what a real value
@@ -232,19 +236,15 @@ fnirs-qc group-raw       OUTPUT_DIR
 fnirs-qc group-hyper-raw OUTPUT_DIR
 fnirs-qc provenance      OUTPUT_DIR   # redraw the graphs from the sidecars on disk
 
-fnirs-qc window-raw BIDS_DIR OUTPUT_DIR --task-label TEXT
-                    --tstart FLOAT --tend FLOAT
-                    --cardiac-l-freq FLOAT --cardiac-h-freq FLOAT
-                    [--participant-label ...] [--session-label ...]
-                    [--align none|trigger] [--trigger-name TEXT]
-                    [--name TEXT] [--sci-threshold FLOAT]
+```
 
-fnirs-qc epoch BIDS_DIR OUTPUT_DIR --task-label TEXT
-               --mode epoch|duration
-               --cardiac-l-freq FLOAT --cardiac-h-freq FLOAT
-               [--tmin/--tmax FLOAT] [--events-csv PATH]
-               [--participant-label ...] [--session-label ...]
-               [--sci-threshold FLOAT]
+For a cohort report over one time window, crop first and then run the usual pair of commands:
+
+```
+fnirs-prep crop BIDS_DIR DERIV_DIR --participant-label ... --tmin FLOAT --tmax FLOAT
+                [--align none|trigger] [--trigger-name TEXT]
+fnirs-qc   prep-raw DERIV_DIR/cropped OUTPUT_DIR PARTICIPANT_LABEL --dpf ...                     --cardiac-l-freq FLOAT --cardiac-h-freq FLOAT
+fnirs-qc   group-raw OUTPUT_DIR
 ```
 
 ### `fnirs-rate` — Flask rating viewers
@@ -318,8 +318,7 @@ output/
 │       └── sub-01_desc-hbo_fcseedz.tsv             # + --roi-mapping
 │                                                    # the fc* group: rest mode, or any mode with --fc
 ├── group_nirs.{tsv,html}                # fnirs-qc group-raw
-├── group_hyper_nirs.{tsv,html}          # fnirs-qc group-hyper-raw
-└── group_nirs_window-<a>-<b>.{tsv,html} # fnirs-qc window-raw (per invocation)
+└── group_hyper_nirs.{tsv,html}          # fnirs-qc group-hyper-raw
 ```
 
 Standalone QC HTMLs from `fnirs-qc prep-raw` / `hyper-raw` / `hyper-post` sit at the derivatives root:
@@ -344,8 +343,8 @@ output/
 | Per-run | (pipeline, automatic) | individual: raw + post, one report per run plus a subject index |
 | Raw pre-flight viewer | `fnirs-qc prep-raw` | individual — raw only |
 | Group | `fnirs-qc group-raw` / `group-hyper-raw` | group — raw |
-| Time-window group | `fnirs-qc window-raw` | group — raw, cropped window |
-| Per-trial | `fnirs-qc epoch` | individual — SQM per task event |
+| Time-window group | `fnirs-prep crop` then `prep-raw` + `group-raw` | group — raw, cropped window |
+| Per-trial | `fnirs-qc prep-raw --epoch-qc` | individual — SQM per task event, in the raw report |
 | Dyad raw | `fnirs-qc hyper-raw` | hyperscanning — raw coherence |
 | Dyad post | `fnirs-qc hyper-post` | hyperscanning — post: WTC + ISC (ROI-level with `--roi-mapping`) |
 

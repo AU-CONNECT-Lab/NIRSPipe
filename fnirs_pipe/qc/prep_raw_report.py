@@ -26,6 +26,69 @@ _EPOCH_TMIN   = -5.0
 _EPOCH_TMAX   = 25.0
 
 
+def _trial_windows(
+    markers: list[dict],
+    tmin: float | None,
+    tmax: float | None,
+    duration: float,
+) -> list[tuple[str, float, float]]:
+    """Turn the event list into (label, t0, t1) windows to score one at a time.
+
+    Two ways to size a window, chosen by whether tmin/tmax were given:
+    fixed, `[onset+tmin, onset+tmax]`, which lets a negative tmin pull in a baseline; or the
+    event's own duration, `[onset, onset+duration]`, for block designs that record one.
+
+    Example: an event at 30.0 s of 8 s with tmin/tmax unset yields
+    ``("trial-001_30s_speak", 30.0, 38.0)``.
+
+    Events that describe no window are dropped rather than guessed at: a zero duration with no
+    tmin/tmax has no extent, and a window starting past the end of the recording has no data.
+    """
+    fixed = tmin is not None and tmax is not None
+    windows: list[tuple[str, float, float]] = []
+    for i, m in enumerate(markers, start=1):
+        onset = float(m["onset"])
+        if fixed:
+            t0, t1 = onset + tmin, onset + tmax
+        elif float(m["duration"]) > 0:
+            t0, t1 = onset, onset + float(m["duration"])
+        else:
+            logger.warning("trial %d at %.1fs has no duration and no --epoch-tmin/--epoch-tmax; "
+                           "skipping", i, onset)
+            continue
+        t0, t1 = max(0.0, t0), min(duration, t1)
+        if t1 - t0 <= 0:
+            logger.warning("trial %d at %.1fs falls outside the recording; skipping", i, onset)
+            continue
+        cond = str(m.get("description", "")).strip()
+        windows.append((f"trial-{i:03d}_{onset:.0f}s" + (f"_{cond}" if cond else ""), t0, t1))
+    return windows
+
+
+def _trial_sqm(raw, t0: float, t1: float,
+               sci_threshold: float, cardiac_l_freq: float, cardiac_h_freq: float) -> dict:
+    """SQM scalars for one trial window, scored the way the whole recording was.
+
+    The intensity recording is what gets cropped, not the optical density derived from it,
+    so that a trial's CV, SNR and spike count sit on the same scale as the recording-level
+    numbers in the same report. Reusing the whole-recording OD object would be cheaper by one
+    conversion per trial but would put the two sets of figures on different footings.
+
+    No sliding-window series is attached: a window of a few seconds has no room for the 10 s
+    grid the recording-level series uses.
+    """
+    from fnirs_pipe.qc.quantitative_metrics import compute_raw_sqm, compute_sci_scores
+
+    seg = raw.copy().crop(tmin=t0, tmax=t1)
+    sci_scores, _ = compute_sci_scores(seg, cardiac_l_freq, cardiac_h_freq)
+    bad = [ch for ch, v in sci_scores.items() if v < sci_threshold]
+    try:
+        return compute_raw_sqm(seg, sci_scores, bad, cardiac_l_freq, cardiac_h_freq)
+    except Exception as exc:
+        logger.warning("trial SQM failed: %s", exc)
+        return {}
+
+
 def _process_run(
     run: dict,
     sci_threshold: float,
@@ -34,6 +97,9 @@ def _process_run(
     cardiac_h_freq: float,
     dpf: list[float],
     window_s: float = 10.0,
+    epoch_qc: bool = False,
+    epoch_tmin: float | None = None,
+    epoch_tmax: float | None = None,
 ) -> dict:
     """Compute all data, save figure HTMLs + SQM JSON. Returns inline dict for HTML."""
     from fnirs_pipe.qc.figures import (
@@ -47,6 +113,7 @@ def _process_run(
         carpet_gvtd_figure,
         channel_quality_heatmap,
         condition_colors,
+        trial_quality_heatmap,
     )
     from fnirs_pipe.qc.quantitative_metrics import (
         attach_windowed_series, compute_raw_sqm, compute_sci_scores,
@@ -218,6 +285,27 @@ def _process_run(
                 f"figures/{label}_desc-ch{{pair}}_nirs.html"
             )
 
+    # ── file: per-trial QC ─────────────────────────────────────────────────────
+    # scored here rather than persisted: a trial is not a BIDS entity, so per-trial records
+    # have nowhere to live in the derivatives tree without colliding on filename
+    trial_qc_inline: dict = {}
+    if epoch_qc:
+        try:
+            windows = _trial_windows(markers, epoch_tmin, epoch_tmax, float(raw.times[-1]))
+            labels  = [w[0] for w in windows]
+            sqms    = [_trial_sqm(raw, t0, t1, sci_threshold,
+                                  cardiac_l_freq, cardiac_h_freq) for _, t0, t1 in windows]
+            fig = trial_quality_heatmap(labels, sqms)
+            if fig:
+                fname = f"{label}_desc-trialqc_nirs.html"
+                h     = _save_figure_html(fig, fig_dir / fname)
+                figure_paths["trial_qc"] = {"src": f"figures/{fname}", "h": h}
+                trial_qc_inline = {"figure": fig.to_dict(), "n_trials": len(labels)}
+            elif not windows:
+                logger.warning("%s: no usable trial windows; per-trial QC skipped", label)
+        except Exception as exc:
+            logger.warning("trial_quality_heatmap failed: %s", exc)
+
     # ── file: SQM JSON ─────────────────────────────────────────────────────────
     # desc-sqmraw, not desc-sqm: the pipeline writes a sectioned record at the latter path
     # for the same run, and one silently overwriting the other loses whichever ran first
@@ -233,6 +321,7 @@ def _process_run(
         "sci_psp":          sci_psp_inline,
         "ch_summary":       ch_summary_inline,
         "trigger_timeline": trigger_timeline_inline,
+        "trial_qc":         trial_qc_inline,
         "sqm": {
             "scalars":     {k: v for k, v in sqm.items() if not isinstance(v, (dict, list))},
             "per_channel": {"sci_per_channel": sqm.get("sci_per_channel", {})},
@@ -250,6 +339,9 @@ def build_prep_raw_report(
     dpf: list[float],
     sci_threshold: float = 0.8,
     window_s: float = 10.0,
+    epoch_qc: bool = False,
+    epoch_tmin: float | None = None,
+    epoch_tmax: float | None = None,
 ) -> None:
     """Generate raw QC report: lightweight HTML + per-run folders with figure HTMLs + SQM JSON."""
     # the report sits in the subject's own folder, so its figures are one level in from it
@@ -261,7 +353,8 @@ def build_prep_raw_report(
         label = run["label"]
         logger.info("[%d/%d] processing %s ...", i + 1, len(runs), label)
         try:
-            d = _process_run(run, sci_threshold, sub_dir, cardiac_l_freq, cardiac_h_freq, dpf, window_s)
+            d = _process_run(run, sci_threshold, sub_dir, cardiac_l_freq, cardiac_h_freq, dpf,
+                             window_s, epoch_qc, epoch_tmin, epoch_tmax)
             static_data.append(d)
         except Exception as exc:
             logger.error("Failed to process run %s: %s", label, exc)

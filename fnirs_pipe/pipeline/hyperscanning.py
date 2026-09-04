@@ -401,6 +401,44 @@ def trim_to_shortest(
     return trimmed, offsets
 
 
+def crop_aligned_window(
+    raws: dict[str, mne.io.Raw],
+    tstart: float | None,
+    tend: float | None,
+) -> dict[str, mne.io.Raw]:
+    """Cut every aligned recording down to [tstart, tend] on the shared post-alignment clock.
+
+    Runs after `align_recordings` / `trim_to_shortest`, where t=0 is the shared trigger
+    (or the common start) and all recordings already have one length. That is what makes a
+    single window valid for the whole group: the same [tstart, tend] names the same moment
+    of the task in every subject, which it would not on the raw per-subject clocks.
+
+    Example: a 600 s aligned dyad with tstart=60, tend=300 returns both recordings cut to
+    the 240 s of task between them, so the coherence never sees the baseline or the wrap-up.
+
+    `tend` past the end of the data is clipped rather than refused: recordings differ in
+    length and an over-long window is a request for "to the end", not a mistake. A `tstart`
+    at or past the end has no data to describe and raises.
+    """
+    if tstart is None and tend is None:
+        return raws
+
+    duration = min(float(r.times[-1]) for r in raws.values())
+    t0 = 0.0 if tstart is None else float(tstart)
+    t1 = duration if tend is None else min(float(tend), duration)
+    if t0 >= duration:
+        raise AlignmentError(
+            f"--tstart {t0:g}s is at or past the aligned recording length ({duration:g}s)"
+        )
+    if t1 <= t0:
+        raise AlignmentError(f"empty window: --tstart {t0:g}s is not before --tend {t1:g}s")
+    if tend is not None and tend > duration:
+        logger.warning("--tend %gs exceeds the aligned length %gs; using %gs",
+                       tend, duration, duration)
+
+    return {sid: raw.copy().crop(tmin=t0, tmax=t1) for sid, raw in raws.items()}
+
+
 def normalize_raws(raws: dict[str, mne.io.Raw]) -> dict[str, mne.io.Raw]:
     """Z-score each channel independently per subject (mean=0, std=1 across time).
 

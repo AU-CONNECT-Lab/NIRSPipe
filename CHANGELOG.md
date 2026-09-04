@@ -4,15 +4,27 @@ All notable changes to this project will be documented in this file.
 
 <!-- Format: Keep a Changelog (https://keepachangelog.com/en/1.0.0/) -->
 
-## [Unreleased]
+## [0.25.0] - 2026-09-04
 
 ### Fixed
+- **The raw signal panel named its traces in the wrong order.** Channel names came from a legend whose order was the reverse of the stacking, so the name beside a trace belonged to another channel. Names are now axis ticks sitting on the trace
+- **The 2D optode layout drew every channel link at half length.** It joined the source to the channel midpoint instead of to the detector, and drew no optodes
 - **Optodes rendered off the brain when the montage was already in MNI.** The 3D layout, the quality brain views and the GLM surface projection applied fsaverage's head-to-MRI transform regardless of the source frame. The frame is now read from the file. Datasets in head space are unaffected
 - **The correlation matrix labelled only every other channel**, so rows and labels appeared to disagree
 - **`fnirs-qc group-hyper-wtc` merged only the channel table.** It asked for an ROI table removed in 0.24.0 and stopped there, so the ROI and null tables were never merged
 - **`--bads-scope` never reached the coherence.** Rejected channels were recorded and kept out of ISC, but WTC ran on the full montage whatever was asked for. Every WTC value on a dyad with a rejected long channel changes
 
+### Added
+- `fnirs-qc hyper-post` / `hyper-null` / `hyper-raw` take `--tstart` / `--tend`, restricting the synchrony metrics to one window of the aligned recording. The per-subject quality record still describes the whole recording
+- `fnirs-qc prep-raw --epoch-qc` adds a per-trial section to the raw report: each event window is scored on its own and shown as a trial x metric heatmap. `--epoch-tmin` / `--epoch-tmax` set a fixed window relative to onset; without them each event's own duration is used
+- `fnirs-prep crop --align trigger --trigger-name TEXT` measures `--tmin` / `--tmax` and every segment onset from a named annotation instead of from the recording start, so one window selects the same stretch of task in subjects whose recordings started at different moments
+
+### Removed
+- **`fnirs-qc window-raw` is gone.** Cropping with `fnirs-prep crop` and then running `prep-raw` + `group-raw` over the cropped tree gives the same report, and unlike `window-raw` it leaves the windowed metrics on disk where the group aggregation and the provenance graph can see them. `crop` gains the `--align trigger` that only `window-raw` had
+- **`fnirs-qc epoch` is gone**, replaced by `prep-raw --epoch-qc`. The trial scores now sit in the subject's raw report next to everything else measured on that recording, instead of in a separate pair of files
+
 ### Changed
+- **The 2D optode layout is projected onto a head outline**, using the projection the topographies already use, with sources and detectors drawn and named. The axes are gone: projected distances are not millimetres, so read source-detector distance from the channel table instead
 - **The hyperscanning reports and `hyper-raw_sqm.tsv` carried SCI and nothing else.** Both computed the full metric set and wrote three columns of it, and SCI is amplitude-invariant, so a run whose cardiac pulse had collapsed read as clean. The TSV now carries every scalar in the record, and both hyper reports gain a per-subject quality table (PSP, CV, SNR, GVTD, motion footprint, HbO-HbR). Nothing is recomputed
 - **The raw QC report moves into `sub-<id>/`** with the subject's other reports, instead of loose in the derivatives root
 - **The pseudo-dyad null is its own command, `fnirs-qc hyper-null`**, and no longer inherits `--wtc-channel-cross` from the real run. Leaving the null homologous costs 0.6 h per dyad against 8.4 h crossed. `hyper-post --wtc-pseudo` is gone; the table and its columns are unchanged

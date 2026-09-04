@@ -159,8 +159,7 @@ def _render_group(
 ) -> Path:
     """Render TSV + HTML for an already-collected group of SQM rows.
 
-    Shared by `_build_group` (globs SQM JSONs) and `window_writer` (recomputes SQM
-    after cropping). Empty df renders an empty report (logged as warning)."""
+    Empty df renders an empty report (logged as warning)."""
     output_dir.mkdir(parents=True, exist_ok=True)
     if df.empty:
         logger.warning("rendering empty group report: %s", out_stem)
@@ -240,7 +239,7 @@ def _build_group(
 
 
 def rows_to_dataframe(full_rows: list[dict]) -> pd.DataFrame:
-    """Public helper for callers (e.g. window_writer) that pre-compute SQM rows."""
+    """Scalar-only table from full SQM records, one row per run, columns sorted."""
     if not full_rows:
         return pd.DataFrame(columns=["bids_name"])
     scalar_rows = [{"bids_name": r["bids_name"], **_scalars(r)} for r in full_rows]

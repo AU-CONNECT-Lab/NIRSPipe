@@ -241,6 +241,12 @@ select#run-select {
   <div id="ch-summary-plot"></div>
 </div>
 
+<!-- Row 7b: per-trial QC (hidden unless --epoch-qc was asked for) -->
+<div class="card" id="trial-qc-card" style="margin-bottom:0.5rem;display:none">
+  <div class="panel-title">Per-trial Quality &nbsp;<span style="font-weight:400;color:#aaa" id="trial-qc-hint">each event window scored on its own &bull; colour is relative within a metric row, not a threshold</span></div>
+  <div id="trial-qc-plot"></div>
+</div>
+
 <!-- Row 8: Channel Decisions -->
 <div class="card" style="margin-bottom:0.5rem" id="ch-decisions-card">
   <div class="panel-title">
@@ -364,6 +370,7 @@ window.addEventListener("DOMContentLoaded", function() {
   loadSciPsp();
   loadSqm();
   loadChannelSummary();
+  loadTrialQc();
   loadEvokedTopo();
   buildChDecisionsTable();
 });
@@ -639,6 +646,21 @@ function loadChannelSummary() {
   }
 }
 
+// ─── Per-trial QC (static mode only; absent unless --epoch-qc was asked for) ──
+function loadTrialQc() {
+  var card = document.getElementById("trial-qc-card");
+  if (!_STATIC_DATA) { if (card) card.style.display = "none"; return; }
+  var d = (_STATIC_DATA[_run_idx] || {}).trial_qc || {};
+  var p = ((_STATIC_DATA[_run_idx] || {}).figure_paths || {}).trial_qc;
+  if (card) card.style.display = (p && p.src) ? "" : "none";
+  if (!p || !p.src) return;
+  var hint = document.getElementById("trial-qc-hint");
+  if (hint && d.n_trials) {
+    hint.textContent = d.n_trials + " trials • colour is relative within a metric row, not a threshold";
+  }
+  _setIframeSrc("trial-qc-plot", p.src, p.h || 260);
+}
+
 // ─── Evoked topo (static mode only) ───────────────────────────────────────────
 function loadEvokedTopo() {
   if (!_STATIC_DATA) return;
@@ -728,7 +750,7 @@ function switchRun(idx) {
     loadTimeSeries(); loadLayout(); loadPsdMean();
     loadTriggerTimeline(); loadCarpetGvtd();
     loadSciPsp(); loadSqm(); loadChannelSummary();
-    loadEvokedTopo(); buildChDecisionsTable();
+    loadTrialQc(); loadEvokedTopo(); buildChDecisionsTable();
   }
   if (_STATIC_DATA) {
     _reload();

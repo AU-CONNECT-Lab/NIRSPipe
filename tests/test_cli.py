@@ -225,11 +225,6 @@ def test_qc_hyper_post_reads_preproc_unless_told_otherwise():
     assert (args.wtc_band_fmin, args.wtc_band_fmax) == (None, None)
 
 
-def test_qc_window_raw_required_opts():
-    with pytest.raises(SystemExit):
-        qc_cli._build_parser().parse_args(["window-raw", "/b", "/o"])  # missing required --task-label/--tstart/--tend
-
-
 def test_rate_subcommands():
     assert rate_cli._build_parser().parse_args(["rate", "/out"]).func is rate_cli.cmd_rate
     assert rate_cli._build_parser().parse_args(
@@ -264,9 +259,6 @@ def test_qc_provenance_accepts_no_options():
 @pytest.mark.parametrize("argv", [
     pytest.param(["prep-raw", "/b", "/o", "01", "--dpf", "6.0"], id="prep-raw"),
     pytest.param(["hyper-raw", "/b", "/o", "--pairs-csv", "p.csv", "--dpf", "6.0"], id="hyper-raw"),
-    pytest.param(["window-raw", "/b", "/o", "--task-label", "tap",
-                  "--tstart", "0", "--tend", "30"], id="window-raw"),
-    pytest.param(["epoch", "/b", "/o", "--task-label", "tap", "--mode", "duration"], id="epoch"),
 ])
 def test_cardiac_band_stays_required(argv, capsys):
     # The band is population-dependent and drives SCI, PSP and Cardiac Power. A default

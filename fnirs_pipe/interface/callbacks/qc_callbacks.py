@@ -18,10 +18,9 @@ _AGGREGATE = ("group-raw", "group-hyper-raw", "group-hyper-wtc", "provenance")
 
 # which form sections each command needs; anything not listed here is hidden
 _SECTIONS = {
-    "hyper-post":  {"qc-hyper-post-section"},
-    "hyper-null":  {"qc-hyper-post-section"},
+    "hyper-post":  {"qc-hyper-post-section", "qc-window-section"},
+    "hyper-null":  {"qc-hyper-post-section", "qc-window-section"},
     "wtc-band":    {"qc-wtc-band-section"},
-    "window-raw":  {"qc-window-section"},
 }
 
 _ALL_SECTIONS = ("qc-hyper-post-section", "qc-wtc-band-section", "qc-window-section")
@@ -31,7 +30,6 @@ _ALL_SECTIONS = ("qc-hyper-post-section", "qc-wtc-band-section", "qc-window-sect
 _REPORTS = {
     "group-raw":       ["group_nirs.html"],
     "group-hyper-raw": ["group_hyper_nirs.html"],
-    "window-raw":      ["group_nirs_*.html", "group_nirs.html"],
     # the second pattern finds a tree written before the reports moved into group-<id>/
     "hyper-post":      ["group-*/group-*_hyper-post.html", "group-*_hyper*.html"],
 }
@@ -104,6 +102,8 @@ def build_qc_args(command: str, opts: dict) -> list[str]:
             args.append("--no-align")
         if "normalize" in flags:
             args.append("--normalize")
+        args += _num("--tstart", opts.get("tstart"))
+        args += _num("--tend", opts.get("tend"))
 
     elif command == "hyper-null":
         args += _text("--pairs-csv", opts.get("pairs_csv"))
@@ -128,20 +128,8 @@ def build_qc_args(command: str, opts: dict) -> list[str]:
             args.append("--no-align")
         if "normalize" in flags:
             args.append("--normalize")
-
-    elif command == "window-raw":
-        args += _text("--task-label", opts.get("task_label"))
         args += _num("--tstart", opts.get("tstart"))
         args += _num("--tend", opts.get("tend"))
-        args += _text("--name", opts.get("window_name"))
-        args += _text("--align", opts.get("align"))
-        args += _num("--cardiac-l-freq", opts.get("cardiac_l"))
-        args += _num("--cardiac-h-freq", opts.get("cardiac_h"))
-        args += _num("--sci-threshold", opts.get("sci_thresh"))
-        args += _num("--window-length", opts.get("window_length"))
-        args += _text("--trigger-name", opts.get("trigger_name"))
-        args += _split("--participant-label", opts.get("participant_label"))
-        args += _split("--session-label", opts.get("window_session"))
 
     if "skip_bids_validation" in (opts.get("run_flags") or []):
         args.append("--skip-bids-validation")
@@ -163,13 +151,6 @@ def _missing(command: str, opts: dict) -> str | None:
         return "BIDS directory is required."
     if command == "hyper-post" and not opts.get("pairs_csv"):
         return "hyper-post needs a pairs CSV."
-    if command == "window-raw":
-        if not opts.get("task_label"):
-            return "window-raw needs a task label."
-        if opts.get("tstart") is None or opts.get("tend") is None:
-            return "window-raw needs both a window start and end."
-        if opts.get("cardiac_l") is None or opts.get("cardiac_h") is None:
-            return "Cardiac band lower/upper frequency is required (population-dependent)."
     return None
 
 
@@ -196,12 +177,8 @@ _STATES = [
     State("qc-hyper-flags", "value"),
     State("qc-band-fmin", "value"), State("qc-band-fmax", "value"),
     State("qc-band-suffix", "value"), State("qc-band-flags", "value"),
-    State("qc-task-label", "value"), State("qc-tstart", "value"), State("qc-tend", "value"),
-    State("qc-window-name", "value"), State("qc-align", "value"),
-    State("qc-cardiac-l", "value"), State("qc-cardiac-h", "value"),
-    State("qc-sci-thresh", "value"), State("qc-window-length", "value"),
-    State("qc-trigger-name", "value"), State("qc-participant-label", "value"),
-    State("qc-window-session", "value"), State("qc-run-flags", "value"),
+    State("qc-tstart", "value"), State("qc-tend", "value"),
+    State("qc-run-flags", "value"),
 ]
 
 
@@ -211,9 +188,7 @@ def _opts(values) -> dict:
             "wtc_seed", "isc_threshold", "wtc_pseudo", "wtc_roi_min_channels",
             "hyper_session", "hyper_task", "hyper_flags",
             "band_fmin", "band_fmax", "band_suffix", "band_flags",
-            "task_label", "tstart", "tend", "window_name",
-            "align", "cardiac_l", "cardiac_h", "sci_thresh", "window_length",
-            "trigger_name", "participant_label", "window_session", "run_flags"]
+            "tstart", "tend", "run_flags"]
     return dict(zip(keys, values))
 
 

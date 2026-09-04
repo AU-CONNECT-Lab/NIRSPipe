@@ -43,7 +43,8 @@ def cmd_crop(
     bids_dir: Path, derivatives_dir: Path, participant_label: list[str],
     ses: str | None, task: str | None, run: str | None,
     tmin: float | None, tmax: float | None, segments_path: Path | None,
-    combine: bool, n_jobs: int, skip_bids_validation: bool,
+    combine: bool, align: str, trigger_name: str | None,
+    n_jobs: int, skip_bids_validation: bool,
 ) -> None:
     """Crop raw SNIRFs and write to derivatives/cropped/."""
     if segments_path is not None and (tmin is not None or tmax is not None):
@@ -55,6 +56,9 @@ def cmd_crop(
     if combine and segments_path is None:
         print("[error] --combine requires --segments-path.", file=sys.stderr)
         raise SystemExit(1)
+    if align == "trigger" and not trigger_name:
+        print("[error] --align trigger requires --trigger-name.", file=sys.stderr)
+        raise SystemExit(1)
 
     from fnirs_pipe.pipeline.crop import crop_snirf
 
@@ -65,6 +69,7 @@ def cmd_crop(
             tmin=tmin, tmax=tmax,
             segments_path=segments_path,
             combine=combine,
+            align=align, trigger_name=trigger_name,
             validate=not skip_bids_validation,
         )
 
@@ -231,6 +236,12 @@ def _build_parser() -> argparse.ArgumentParser:
     crop.add_argument("--tmax", type=float, default=None, help="End time in seconds (single segment).")
     crop.add_argument("--segments-path", type=Path, default=None,
                       help="TSV with onset/duration columns defining segments to keep.")
+    crop.add_argument("--align", choices=["none", "trigger"], default="none",
+                      help="t=0 for --tmin/--tmax and segment onsets: 'none' = recording start, "
+                           "'trigger' = first annotation named --trigger-name.")
+    crop.add_argument("--trigger-name", default=None,
+                      help="Annotation description marking t=0 when --align trigger. "
+                           "A recording without it falls back to the recording start.")
     crop.add_argument("--combine", action=argparse.BooleanOptionalAction, default=False,
                       help="Concatenate multi-segment output into one file.")
     crop.set_defaults(func=cmd_crop)

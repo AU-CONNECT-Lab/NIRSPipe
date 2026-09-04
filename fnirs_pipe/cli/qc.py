@@ -67,7 +67,8 @@ def _run_groups(groups: dict, process) -> None:
         raise SystemExit(1)
 
 
-def _load_aligned_group(output_dir, members, task, desc, no_align, normalize, bads_scope):
+def _load_aligned_group(output_dir, members, task, desc, no_align, normalize, bads_scope,
+                        tstart=None, tend=None):
     """Load one dyad, put both recordings on one time axis, and mark the rejected channels.
 
     Returns (aligned_raws, offsets, group_sqm). The rejections have to be applied here rather
@@ -77,6 +78,7 @@ def _load_aligned_group(output_dir, members, task, desc, no_align, normalize, ba
     from fnirs_pipe.pipeline.hyperscanning import (
         align_recordings,
         apply_group_bads,
+        crop_aligned_window,
         load_group_haemo,
         load_group_sqm,
         normalize_raws,
@@ -90,6 +92,7 @@ def _load_aligned_group(output_dir, members, task, desc, no_align, normalize, ba
         aligned_raws, offsets = trim_to_shortest(raws)
     else:
         aligned_raws, offsets = align_recordings(raws, task)
+    aligned_raws = crop_aligned_window(aligned_raws, tstart, tend)
     if normalize:
         aligned_raws = normalize_raws(aligned_raws)
     return aligned_raws, offsets, group_sqm
@@ -100,6 +103,7 @@ def cmd_prep_raw(
     session_label: list[str] | None, task_label: list[str] | None,
     dpf: list[float], sci_threshold: float, cardiac_l_freq: float, cardiac_h_freq: float,
     window_length: float,
+    epoch_qc: bool, epoch_tmin: float | None, epoch_tmax: float | None,
     skip_bids_validation: bool,
 ) -> None:
     """Generate static raw QC report for a single participant."""
@@ -108,6 +112,10 @@ def cmd_prep_raw(
     from fnirs_pipe.io.bids import bids_label, get_layout, get_nirs_files
     from fnirs_pipe.io.derivatives import subject_report_dir
     from fnirs_pipe.qc.prep_raw_report import build_prep_raw_report
+
+    if (epoch_tmin is None) != (epoch_tmax is None):
+        print("Error: --epoch-tmin and --epoch-tmax must be given together.", file=sys.stderr)
+        raise SystemExit(1)
 
     layout = get_layout(bids_dir, validate=not skip_bids_validation)
     sessions = session_label or [None]
@@ -152,7 +160,8 @@ def cmd_prep_raw(
         try:
             build_prep_raw_report(group_runs, html_path, dpf=dpf, sci_threshold=sci_threshold,
                                   cardiac_l_freq=cardiac_l_freq, cardiac_h_freq=cardiac_h_freq,
-                                  window_s=window_length)
+                                  window_s=window_length, epoch_qc=epoch_qc,
+                                  epoch_tmin=epoch_tmin, epoch_tmax=epoch_tmax)
             print(f"  -> {html_path}")
         except Exception as exc:
             logger.exception("Raw report generation failed for %s", html_path.name)
@@ -165,7 +174,7 @@ def cmd_hyper_raw(
     bids_dir: Path, output_dir: Path, pairs_csv: Path, group_id: str | None,
     dpf: list[float], sci_threshold: float, cardiac_l_freq: float, cardiac_h_freq: float,
     coherence_fmin: float, coherence_fmax: float,
-    normalize: bool, no_align: bool,
+    normalize: bool, no_align: bool, tstart: float | None, tend: float | None,
     session_label: list[str] | None, task_label: list[str] | None,
     skip_bids_validation: bool,
 ) -> None:
@@ -175,6 +184,7 @@ def cmd_hyper_raw(
         align_recordings,
         compute_group_sqm_raw,
         compute_pairwise_coherence,
+        crop_aligned_window,
         load_group_raw_bids,
         normalize_raws,
         trim_to_shortest,
@@ -193,6 +203,7 @@ def cmd_hyper_raw(
             aligned_raws, offsets = trim_to_shortest(raws_haemo)
         else:
             aligned_raws, offsets = align_recordings(raws_haemo, task)
+        aligned_raws = crop_aligned_window(aligned_raws, tstart, tend)
         if normalize:
             aligned_raws = normalize_raws(aligned_raws)
         coherence_df = compute_pairwise_coherence(
@@ -288,58 +299,6 @@ def cmd_provenance(output_dir: Path) -> None:
         print("no provenance sidecars found — run the pipeline first")
 
 
-def cmd_window_raw(
-    bids_dir: Path, output_dir: Path, task_label: str, tstart: float, tend: float,
-    participant_label: list[str] | None, session_label: list[str] | None,
-    align: str, trigger_name: str | None, name: str | None,
-    sci_threshold: float, cardiac_l_freq: float, cardiac_h_freq: float,
-    window_length: float,
-    skip_bids_validation: bool,
-) -> None:
-    """Crop each subject's raw to [tstart, tend] + aggregate SQM into a windowed group report."""
-    from fnirs_pipe.qc.window_writer import build_window_raw_report
-
-    path = build_window_raw_report(
-        bids_dir=bids_dir, output_dir=output_dir,
-        task=task_label, tstart=tstart, tend=tend,
-        participant_label=participant_label, session_label=session_label,
-        align=align, trigger_name=trigger_name, name=name,
-        sci_threshold=sci_threshold,
-        cardiac_l_freq=cardiac_l_freq, cardiac_h_freq=cardiac_h_freq,
-        window_s=window_length,
-        skip_bids_validation=skip_bids_validation,
-    )
-    print(f"report -> {path}")
-
-
-def cmd_epoch(
-    bids_dir: Path, output_dir: Path, task_label: str, mode: str,
-    tmin: float | None, tmax: float | None, events_csv: Path | None,
-    participant_label: list[str] | None, session_label: list[str] | None,
-    sci_threshold: float, cardiac_l_freq: float, cardiac_h_freq: float,
-    skip_bids_validation: bool,
-) -> None:
-    """Per-trial (epoch) QC: one window per event, recompute SQM, render trial x metric report."""
-    from fnirs_pipe.qc.epoch_writer import build_epoch_qc_report
-
-    if mode == "epoch" and (tmin is None or tmax is None):
-        print("Error: --mode epoch requires --tmin and --tmax.", file=sys.stderr)
-        raise SystemExit(1)
-
-    paths = build_epoch_qc_report(
-        bids_dir=bids_dir, output_dir=output_dir, task=task_label,
-        mode=mode, tmin=tmin, tmax=tmax, events_csv=events_csv,
-        participant_label=participant_label, session_label=session_label,
-        sci_threshold=sci_threshold,
-        cardiac_l_freq=cardiac_l_freq, cardiac_h_freq=cardiac_h_freq,
-        skip_bids_validation=skip_bids_validation,
-    )
-    for p in paths:
-        print(f"report -> {p}")
-    if not paths:
-        print("No epoch QC reports produced (no events / no matching files).", file=sys.stderr)
-
-
 def cmd_wtc_band(
     output_dir: Path, band_fmin: float, band_fmax: float, suffix: str | None, mask_coi: bool,
 ) -> None:
@@ -364,6 +323,7 @@ def cmd_hyper_post(
     wtc_limit_scales: bool, wtc_save_maps: bool,
     wtc_mask_coi: bool, wtc_roi_min_channels: int,
     isc_threshold: float, sci_threshold: float, normalize: bool, no_align: bool,
+    tstart: float | None, tend: float | None,
     session_label: list[str] | None, task_label: list[str] | None,
     skip_bids_validation: bool,
 ) -> None:
@@ -389,7 +349,7 @@ def cmd_hyper_post(
 
     def _process(gid, task, members):
         aligned_raws, offsets, group_sqm = _load_aligned_group(
-            output_dir, members, task, desc, no_align, normalize, bads_scope)
+            output_dir, members, task, desc, no_align, normalize, bads_scope, tstart, tend)
         bad_channels = {sid: sqm.get("bad_channels", []) for sid, sqm in group_sqm.items()}
         write_group_bads(output_dir, members, group_sqm, bads_scope)
         return build_hyper_post_report(
@@ -427,7 +387,7 @@ def cmd_hyper_null(
     wtc_band_fmin: float | None, wtc_band_fmax: float | None,
     wtc_pseudo: int, wtc_seed: int | None, wtc_channel_cross: bool,
     wtc_limit_scales: bool, wtc_mask_coi: bool, bads_scope: str,
-    normalize: bool, no_align: bool,
+    normalize: bool, no_align: bool, tstart: float | None, tend: float | None,
     session_label: list[str] | None, task_label: list[str] | None,
     skip_bids_validation: bool,
 ) -> None:
@@ -438,7 +398,7 @@ def cmd_hyper_null(
 
     def _process(gid, task, members):
         aligned_raws, _, _ = _load_aligned_group(
-            output_dir, members, task, desc, no_align, normalize, bads_scope)
+            output_dir, members, task, desc, no_align, normalize, bads_scope, tstart, tend)
         return write_wtc_null(
             group_id=gid,
             task=task,
@@ -481,6 +441,15 @@ def _build_parser() -> argparse.ArgumentParser:
                     help="Upper bound of cardiac band in Hz (required; population-dependent).")
     pr.add_argument("--window-length", type=float, default=10.0,
                     help="Sliding-window length (s) for windowed SCI/PSP/GVTD series.")
+    pr.add_argument("--epoch-qc", action="store_true",
+                    help="Add a per-trial section: score each event window on its own and show "
+                         "them as a trial x metric heatmap.")
+    pr.add_argument("--epoch-tmin", type=float, default=None,
+                    help="Trial window start relative to event onset in s; negative pulls in a "
+                         "baseline. Omit to use each event's own duration.")
+    pr.add_argument("--epoch-tmax", type=float, default=None,
+                    help="Trial window end relative to event onset in s. Given together with "
+                         "--epoch-tmin, or neither.")
     pr.add_argument("--skip-bids-validation", action=argparse.BooleanOptionalAction, default=False)
     pr.set_defaults(func=cmd_prep_raw)
 
@@ -508,6 +477,14 @@ def _build_parser() -> argparse.ArgumentParser:
                     help="Z-score each channel per subject after alignment.")
     hr.add_argument("--no-align", action="store_true",
                     help="Skip trigger-based alignment; trim all recordings to the shortest duration.")
+    hr.add_argument("--tstart", type=float, default=None,
+                    help="Keep only from this time (s) on the aligned clock, where 0 is the "
+                         "shared trigger. Omit to start at the alignment point.")
+    hr.add_argument("--tend", type=float, default=None,
+                    help="Keep only up to this time (s) on the aligned clock. Omit to run to "
+                         "the end; a value past the end is clipped. The window narrows the "
+                         "synchrony metrics only: the per-subject quality record describes "
+                         "the whole recording either way.")
     hr.add_argument("--session-label", nargs="+", action="extend", help="Session label(s) to include.")
     hr.add_argument("--task-label",    nargs="+", action="extend", help="Task label(s) to include.")
     hr.add_argument("--skip-bids-validation", action=argparse.BooleanOptionalAction, default=False)
@@ -533,54 +510,6 @@ def _build_parser() -> argparse.ArgumentParser:
     pv.add_argument("output_dir", type=Path, help="fnirs-pipe derivatives directory")
     pv.set_defaults(func=cmd_provenance)
 
-    wr = sub.add_parser("window-raw", help="Windowed group raw QC report over [tstart, tend].")
-    wr.add_argument("bids_dir",   type=Path, help="BIDS dataset root")
-    wr.add_argument("output_dir", type=Path, help="QC output directory (where group_nirs.html lives)")
-    wr.add_argument("--task-label", required=True, help="BIDS task label (one task at a time).")
-    wr.add_argument("--tstart", type=float, required=True, help="Window start time (s)")
-    wr.add_argument("--tend",   type=float, required=True, help="Window end time (s)")
-    wr.add_argument("--participant-label", nargs="+", action="extend",
-                    help="Subject(s) to include (default: all).")
-    wr.add_argument("--session-label", nargs="+", action="extend", help="Session label(s) to include.")
-    wr.add_argument("--align", default="none",
-                    help="t=0 origin: 'none' = recording start, 'trigger' = first matching annotation.")
-    wr.add_argument("--trigger-name", default=None,
-                    help="Annotation description used when --align trigger.")
-    wr.add_argument("--name", default=None, help="Output suffix (default: window-{tstart}-{tend}).")
-    wr.add_argument("--sci-threshold", type=float, default=0.8,
-                    help="SCI threshold for bad-channel detection.")
-    wr.add_argument("--cardiac-l-freq", type=float, required=True,
-                    help="Lower bound of cardiac band in Hz (required; population-dependent).")
-    wr.add_argument("--cardiac-h-freq", type=float, required=True,
-                    help="Upper bound of cardiac band in Hz (required; population-dependent).")
-    wr.add_argument("--window-length", type=float, default=10.0,
-                    help="Sliding-window length (s) for windowed SCI/PSP/GVTD series.")
-    wr.add_argument("--skip-bids-validation", action=argparse.BooleanOptionalAction, default=False)
-    wr.set_defaults(func=cmd_window_raw)
-
-    ep = sub.add_parser("epoch", help="Per-trial (epoch) QC report from task events.")
-    ep.add_argument("bids_dir",   type=Path, help="BIDS dataset root")
-    ep.add_argument("output_dir", type=Path, help="QC output directory")
-    ep.add_argument("--task-label", required=True, help="BIDS task label (one task at a time).")
-    ep.add_argument("--mode", choices=["epoch", "duration"], required=True,
-                    help="epoch: fixed [onset+tmin, onset+tmax] window; duration: [onset, onset+event duration].")
-    ep.add_argument("--tmin", type=float, default=None,
-                    help="Epoch start relative to event onset in s (required for --mode epoch).")
-    ep.add_argument("--tmax", type=float, default=None,
-                    help="Epoch end relative to event onset in s (required for --mode epoch).")
-    ep.add_argument("--events-csv", type=Path, default=None,
-                    help="CSV with columns onset[,duration,trial_type]. Default: read events from the SNIRF.")
-    ep.add_argument("--participant-label", nargs="+", action="extend",
-                    help="Subject(s) to include (default: all).")
-    ep.add_argument("--session-label", nargs="+", action="extend", help="Session label(s) to include.")
-    ep.add_argument("--sci-threshold", type=float, default=0.8,
-                    help="SCI threshold for bad-channel detection.")
-    ep.add_argument("--cardiac-l-freq", type=float, required=True,
-                    help="Lower bound of cardiac band in Hz (required; population-dependent).")
-    ep.add_argument("--cardiac-h-freq", type=float, required=True,
-                    help="Upper bound of cardiac band in Hz (required; population-dependent).")
-    ep.add_argument("--skip-bids-validation", action=argparse.BooleanOptionalAction, default=False)
-    ep.set_defaults(func=cmd_epoch)
 
     hp = sub.add_parser("hyper-post", help="Hyperscanning post QC report (WTC, ISC, connectivity).")
     hp.add_argument("bids_dir",   type=Path, help="BIDS dataset root")
@@ -665,6 +594,14 @@ def _build_parser() -> argparse.ArgumentParser:
                     help="Z-score each channel per subject after alignment.")
     hp.add_argument("--no-align", action="store_true",
                     help="Skip trigger-based alignment; trim all recordings to the shortest duration.")
+    hp.add_argument("--tstart", type=float, default=None,
+                    help="Keep only from this time (s) on the aligned clock, where 0 is the "
+                         "shared trigger. Omit to start at the alignment point.")
+    hp.add_argument("--tend", type=float, default=None,
+                    help="Keep only up to this time (s) on the aligned clock. Omit to run to "
+                         "the end; a value past the end is clipped. The window narrows the "
+                         "synchrony metrics only: the per-subject quality record describes "
+                         "the whole recording either way.")
     hp.add_argument("--session-label", nargs="+", action="extend", help="Session label(s) to include.")
     hp.add_argument("--task-label",    nargs="+", action="extend", help="Task label(s) to include.")
     hp.add_argument("--skip-bids-validation", action=argparse.BooleanOptionalAction, default=False)
@@ -717,6 +654,14 @@ def _build_parser() -> argparse.ArgumentParser:
                     help="Z-score each channel per subject after alignment.")
     hn.add_argument("--no-align", action="store_true",
                     help="Skip trigger-based alignment; trim all recordings to the shortest duration.")
+    hn.add_argument("--tstart", type=float, default=None,
+                    help="Keep only from this time (s) on the aligned clock, where 0 is the "
+                         "shared trigger. Omit to start at the alignment point.")
+    hn.add_argument("--tend", type=float, default=None,
+                    help="Keep only up to this time (s) on the aligned clock. Omit to run to "
+                         "the end; a value past the end is clipped. The window narrows the "
+                         "synchrony metrics only: the per-subject quality record describes "
+                         "the whole recording either way.")
     hn.add_argument("--session-label", nargs="+", action="extend", help="Session label(s) to include.")
     hn.add_argument("--task-label",    nargs="+", action="extend", help="Task label(s) to include.")
     hn.add_argument("--skip-bids-validation", action=argparse.BooleanOptionalAction, default=False)

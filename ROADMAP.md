@@ -67,7 +67,7 @@ HTML report (iframe shell): subject × metric robust-z heatmap, per-metric boxpl
 
 prep-raw also persists `sci_per_window` / `psp_per_window` / `gvtd_per_window` into the SQM JSON; group-raw renders time × subject heatmaps for these so users can spot group-wide vs individual outlier windows.
 
-`fnirs-qc window-raw` crops each subject's raw recording to `[--tstart, --tend]` (`--align {none,trigger}`), recomputes SQM, and renders the same report layout into `group_nirs_{name}.{tsv,html}` — drill-down for "is this time window dropping for everyone?".
+For "is this time window dropping for everyone?", `fnirs-prep crop` writes a cropped derivatives tree (`--align trigger` measures the window from a shared trigger rather than from each recording's own start) and `prep-raw` + `group-raw` then run over it unchanged.
 
 ## v0.11 — Self-Contained QC Viewers `[x]`
 

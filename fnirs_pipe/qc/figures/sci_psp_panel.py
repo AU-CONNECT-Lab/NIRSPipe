@@ -120,6 +120,77 @@ def channel_quality_heatmap(
     return fig
 
 
+# key, row label, hover format, and whether a larger value is the better one. CV and GVTD
+# are the two that run the other way: they measure noise and movement, so the top of their
+# range is the end worth looking at.
+_TRIAL_METRICS = [
+    ("sci_mean",               "SCI",        ".3f", True),
+    ("psp_mean",               "PSP",        ".3f", True),
+    ("cv_mean",                "CV",         ".3f", False),
+    ("snr_mean",               "SNR",        ".1f", True),
+    ("gvtd_mean",              "GVTD",       ".4f", False),
+    ("channel_retention_rate", "Retention",  ".2f", True),
+]
+
+
+def trial_quality_heatmap(
+    trial_labels: list[str],
+    trial_sqms: list[dict],
+) -> go.Figure | None:
+    """Trial x metric heatmap: which trials stand out, on which metric.
+
+    Each metric row is scaled to its own min-max across trials, because SCI (0 to 1) and SNR
+    (tens to hundreds) share no range and one colour scale over both would flatten SCI to a
+    single shade. Colour is therefore relative within a row: red marks the worse end of what
+    this recording actually did, not a threshold anyone crossed. Hover carries the real value.
+
+    Example: 40 trials whose SCI holds near 0.9 except trials 12 and 13 gives a mostly uniform
+    SCI row with two red cells, which is the whole point of looking per trial rather than at
+    the recording mean.
+
+    Returns None when no metric survives on any trial (nothing to draw).
+    """
+    present = [m for m in _TRIAL_METRICS
+               if any(isinstance(s.get(m[0]), (int, float)) for s in trial_sqms)]
+    if not present or not trial_labels:
+        return None
+
+    z, text = [], []
+    for key, label, fmt, higher_is_better in present:
+        raw_vals = [s.get(key) for s in trial_sqms]
+        vals = [float(v) if isinstance(v, (int, float)) else None for v in raw_vals]
+        good = [v for v in vals if v is not None]
+        lo, hi = min(good), max(good)
+        span = hi - lo
+        if span == 0:
+            # a metric that never moved has no worse end to point at; a whole row of red
+            # would read as 40 bad trials rather than as a steady one
+            z.append([None if v is None else 0.5 for v in vals])
+        else:
+            z.append([None if v is None
+                      else ((v - lo) / span if higher_is_better else (hi - v) / span)
+                      for v in vals])
+        text.append([f"{label}: —" if v is None else f"{label}: {v:{fmt}}" for v in vals])
+
+    fig = go.Figure(go.Heatmap(
+        z=z, text=text,
+        x=trial_labels,
+        y=[m[1] for m in present],
+        colorscale=[[0.0, _BAD_COLOR], [0.5, "#FFD966"], [1.0, _GOOD_COLOR]],
+        showscale=False,
+        hovertemplate="%{x}<br>%{text}<extra></extra>",
+        xgap=1, ygap=1,
+    ))
+    fig.update_layout(
+        xaxis=dict(tickangle=-45, tickfont=dict(size=8), showgrid=False),
+        yaxis=dict(autorange="reversed", tickfont=dict(size=10), showgrid=False),
+        plot_bgcolor="white", paper_bgcolor="white",
+        margin=dict(l=70, r=20, t=20, b=90),
+        height=60 + 26 * len(present),
+    )
+    return fig
+
+
 def lollipop_scores_figure(
     ch_names: list[str],
     mean_scores: np.ndarray,

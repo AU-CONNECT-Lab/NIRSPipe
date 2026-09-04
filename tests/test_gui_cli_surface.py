@@ -233,7 +233,6 @@ def test_no_control_on_the_page_is_decoration(analysis_page):
 QC_COMMANDS_NOT_OFFERED = {
     "prep-raw": "single-subject QC; the Data Prep page's QC tab already does this interactively",
     "hyper-raw": "pre-analysis dyad QC; belongs with Hyper Align, not with the post-analysis page",
-    "epoch": "needs an events CSV and a file picker the page does not have",
 }
 
 # per-command flags the page leaves out. Most are the negative half of a paired
@@ -251,7 +250,6 @@ QC_NOT_EXPOSED = {
                    "--sci-threshold"},
     "hyper-null": {"--no-normalize", "--no-skip-bids-validation",
                    "--wtc-limit-scales", "--no-wtc-limit-scales"},
-    "window-raw": {"--no-skip-bids-validation"},
 }
 
 _QC_FULL_OPTS = dict(
@@ -265,13 +263,11 @@ _QC_FULL_OPTS = dict(
                  "wtc_save_maps", "no_align", "normalize"],
     band_fmin=0.05, band_fmax=0.2, band_suffix="band0p05-0p2",
     band_flags=["band_mask_coi"],
-    task_label="rest", tstart=0.0, tend=60.0, window_name="early", align="trigger",
-    cardiac_l=0.7, cardiac_h=1.5, sci_thresh=0.8, window_length=10.0,
-    trigger_name="start", participant_label="01 02", window_session="ses-1",
+    tstart=0.0, tend=60.0,
     run_flags=["skip_bids_validation"],
 )
 
-_QC_OFFERED = ["hyper-post", "hyper-null", "wtc-band", "window-raw", *_AGGREGATE]
+_QC_OFFERED = ["hyper-post", "hyper-null", "wtc-band", *_AGGREGATE]
 
 
 def _qc_subparsers():
@@ -338,8 +334,8 @@ def test_the_generated_qc_command_reaches_the_right_handler(command):
 def test_a_space_separated_box_repeats_its_flag_rather_than_joining():
     """argparse nargs="+" takes repeats; one string with a space in it is one label."""
     args = _build_qc_parser().parse_args(
-        build_qc_args("window-raw", _QC_FULL_OPTS)[1:])
-    assert args.participant_label == ["01", "02"]
+        build_qc_args("hyper-post", dict(_QC_FULL_OPTS, hyper_task="rest tap"))[1:])
+    assert args.task_label == ["rest", "tap"]
 
 
 def test_the_aggregate_commands_take_only_an_output_directory():
