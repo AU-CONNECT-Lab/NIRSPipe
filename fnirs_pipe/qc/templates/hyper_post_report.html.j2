@@ -104,10 +104,11 @@ select#ch-select-post {
 {% if wtc_roi_grid_b64 %}
 <div class="card">
   <div class="panel-title">
-    Wavelet Transform Coherence (ROI &times; ROI, full maps)
+    Wavelet Transform Coherence (ROI maps, with relative phase)
     <span class="panel-hint">
-      row = {{ subject_ids[0] }}'s ROI, column = {{ subject_ids[1] }}'s &bull; the diagonal is
-      what the selector above plots &bull; white dashed = COI boundary
+      arrows: right = in phase, left = antiphase, up = {{ subject_ids[0] }} leads by a quarter
+      cycle &bull; white dashed = COI boundary &bull; crossed runs get every ROI pair, rows
+      {{ subject_ids[0] }} and columns {{ subject_ids[1] }}
     </span>
   </div>
   <div style="text-align:center; padding:0.5rem">

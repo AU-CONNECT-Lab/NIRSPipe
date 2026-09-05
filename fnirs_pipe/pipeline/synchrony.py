@@ -88,7 +88,8 @@ class WTCResult:
     ::
 
       pairs[(sub1, sub2)][ch_name] = {"wtc": ndarray(n_freqs, n_times),
-                                       "coi": ndarray(n_times)}
+                                       "coi": ndarray(n_times),
+                                       "phase": ndarray(n_freqs, n_times)}
 
     freqs: ascending Hz.  times: decimated aligned time axis (seconds).
     """
@@ -143,7 +144,7 @@ def _pairwise_wtc(
     cache: bool = True,
     mc_count: int = 300,
     limit_scales: bool = True,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray | None]:
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray | None, np.ndarray]:
     r"""Morlet wavelet transform coherence for one signal pair (0 = independent, 1 = locked).
 
     .. math::
@@ -157,6 +158,12 @@ def _pairwise_wtc(
     pads internally for the FFT but unpads before returning, so the slice is a no-op
     until a version does not. With ``significance`` the fourth return is the
     per-frequency Monte Carlo significance level (else None).
+
+    The fifth is the relative phase in radians, on the same grid: 0 points right and means
+    the two are in phase, :math:`\pi` points left and means antiphase, and a quarter turn up
+    means the first signal leads the second by a quarter cycle. It is what the arrows on a
+    coherence map are drawn from, and coherence alone cannot distinguish a pair that moves
+    together from one that moves together a few seconds apart.
 
     ``cache`` is pycwt's on-disk store of significance curves. It is keyed on the AR1
     coefficients and the wavelet grid but not on the seed or the surrogate count, and lives
@@ -185,11 +192,12 @@ def _pairwise_wtc(
     if limit_scales:
         s0, J = _scale_range(dt, dj, fmin, fmax, len(sig1))
         kwargs.update(s0=s0, J=J)
-    WCT, _, coi, freqs, signif = pycwt.wct(
+    WCT, aWCT, coi, freqs, signif = pycwt.wct(
         sig1, sig2, dt=dt, dj=dj, sig=significance, normalize=True, **kwargs,
     )
     n_sig = len(sig1)
     WCT   = WCT[:, :n_sig]
+    aWCT  = aWCT[:, :n_sig]
     coi   = coi[:n_sig]
 
     order      = np.argsort(freqs)
@@ -197,6 +205,7 @@ def _pairwise_wtc(
     WCT_s      = WCT[order]
     band       = (freqs_s >= fmin) & (freqs_s <= fmax)
     WCT_band   = WCT_s[band][:, ::step].astype(np.float32)
+    phase_band = aWCT[order][band][:, ::step].astype(np.float32)
     freqs_band = freqs_s[band]
     coi_dec    = coi[::step].astype(np.float32)
 
@@ -204,7 +213,7 @@ def _pairwise_wtc(
     sig_band = None
     if significance and np.ndim(signif) == 1 and len(signif) == len(freqs):
         sig_band = np.asarray(signif)[order][band].astype(np.float32)
-    return WCT_band, freqs_band, coi_dec, sig_band
+    return WCT_band, freqs_band, coi_dec, sig_band, phase_band
 
 
 def _wtc_over_pairs(
@@ -267,14 +276,15 @@ def _wtc_over_pairs(
                     pair_data[key] = None
                     continue
                 try:
-                    WCT_band, freqs_band, coi_dec, sig_band = _pairwise_wtc(
+                    WCT_band, freqs_band, coi_dec, sig_band, phase_band = _pairwise_wtc(
                         sig1, sig2, dt, step, fmin, fmax, significance,
                         cache=seed is None, mc_count=mc_count,
                         limit_scales=limit_scales)
                     if shared_freqs is None:
                         shared_freqs = freqs_band
                         shared_times = ref_raw.times[::step]
-                    pair_data[key] = {"wtc": WCT_band, "coi": coi_dec, "sig": sig_band}
+                    pair_data[key] = {"wtc": WCT_band, "coi": coi_dec, "sig": sig_band,
+                                      "phase": phase_band}
                 except Exception as exc:
                     logger.warning("WTC failed %s-%s label %s: %s", sub1, sub2, key, exc)
                     pair_data[key] = None
@@ -422,6 +432,17 @@ def compute_wtc_pseudo(
     return out
 
 
+def _mean_phase(phases: "list[np.ndarray]") -> "np.ndarray | None":
+    """Circular mean of several phase maps, cell by cell.
+
+    e.g. [179 deg, -179 deg] gives 180 deg, not the 0 deg an arithmetic mean would.
+    """
+    if not phases:
+        return None
+    stack = np.stack([np.asarray(p, dtype=float) for p in phases])
+    return np.angle(np.exp(1j * stack).mean(axis=0)).astype(np.float32)
+
+
 def roi_maps_from_channels(
     result: WTCResult,
     roi_map: dict[str, list[str]],
@@ -441,6 +462,11 @@ def roi_maps_from_channels(
     The COI depends only on record length and sampling rate, so every member shares one and
     it is carried through unchanged. ``sig`` is dropped: a Monte Carlo level belongs to the
     pair it was computed for and does not average.
+
+    Phase averages as a direction, not as a number: the arithmetic mean of 179 degrees and
+    -179 degrees is 0, the one direction neither member points in. The members are summed as
+    unit vectors and the angle read off the sum, so a set of members that disagree gives a
+    short resultant and, drawn as an arrow, a direction no more confident than they were.
     """
     ch_to_roi = {ch: roi for roi, chs in roi_map.items() for ch in chs}
 
@@ -458,7 +484,9 @@ def roi_maps_from_channels(
             bucket.setdefault(key, []).append(data)
         pairs[pair_key] = {
             key: {"wtc": np.mean([d["wtc"] for d in members], axis=0),
-                  "coi": members[0]["coi"], "sig": None}
+                  "coi": members[0]["coi"], "sig": None,
+                  "phase": _mean_phase([d["phase"] for d in members
+                                       if d.get("phase") is not None])}
             for key, members in bucket.items()
         }
 

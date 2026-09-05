@@ -305,6 +305,30 @@ def build_wtc_cross_matrix(
     return _png_b64(fig)
 
 
+def _phase_arrows(ax, times: np.ndarray, freqs: np.ndarray, phase, n_time: int = 14,
+                  n_freq: int = 10) -> None:
+    """Draw the relative-phase field over a coherence map, thinned to a readable grid.
+
+    Right means in phase, left antiphase, and up means the row's subject leads by a quarter
+    cycle. The map carries one phase per pixel, tens of thousands of them, so it is sampled
+    onto a coarse grid; the arrows are directions and not magnitudes, so every one is the
+    same length and drawing fewer loses nothing.
+    """
+    if phase is None:
+        return
+    phase = np.asarray(phase, dtype=float)
+    if phase.shape != (len(freqs), len(times)):
+        return
+
+    fi = np.unique(np.linspace(0, len(freqs) - 1, min(n_freq, len(freqs))).astype(int))
+    ti = np.unique(np.linspace(0, len(times) - 1, min(n_time, len(times))).astype(int))
+    grid_t, grid_f = np.meshgrid(times[ti], freqs[fi])
+    angle = phase[np.ix_(fi, ti)]
+    ax.quiver(grid_t, grid_f, np.cos(angle), np.sin(angle),
+              color="black", scale=22, width=0.006, headwidth=4, headlength=5,
+              pivot="mid", zorder=3)
+
+
 def build_wtc_roi_grid(
     roi_wtc,
     roi_labels: list[str],
@@ -313,33 +337,36 @@ def build_wtc_roi_grid(
 ) -> str | None:
     """Every ROI-by-ROI coherence map on one grid, rows sub1's ROIs and columns sub2's.
 
-    The per-ROI selector in the report carries the diagonal only, one map at a time. A few
-    ROIs cross to a few dozen maps, which is small enough to draw at once and is the view
-    that shows whether an off-diagonal pairing is coupled at a different time or a different
-    frequency from the homologous one. Channels are left out of this treatment on purpose:
-    14 of them cross to 196 maps, and no page wants that.
+    The per-ROI selector in the report carries one map at a time and, on a crossed run, only
+    the diagonal of them. A few ROIs cross to a few dozen maps, which is small enough to draw
+    at once and is the view that shows whether an off-diagonal pairing is coupled at a
+    different time or a different frequency from the homologous one. Channels are left out of
+    this treatment on purpose: 14 of them cross to 196 maps, and no page wants that.
 
-    Needs a crossed ``roi_wtc``, whose pair keys are ``(roi1, roi2)`` tuples; returns None
-    on an uncrossed one, which has nothing off the diagonal to draw.
+    An uncrossed result has only the homologous pairings and gets a single row of them rather
+    than nothing: the arrows are drawn here and not on the interactive maps, so this has to be
+    where the lead-lag of a run without crossing is readable too.
     """
     if roi_wtc is None or pair_key is None or not roi_labels:
         return None
     pairs = roi_wtc.pairs.get(pair_key, {})
-    if not any(isinstance(k, tuple) for k in pairs):
+    if not pairs:
         return None
+    crossed = any(isinstance(k, tuple) for k in pairs)
 
     freqs, times = np.asarray(roi_wtc.freqs), np.asarray(roi_wtc.times)
     if freqs.size == 0 or times.size == 0:
         return None
 
     n = len(roi_labels)
-    fig, axes = plt.subplots(n, n, figsize=(2.6 * n + 1.2, 2.1 * n),
+    rows = roi_labels if crossed else [None]
+    fig, axes = plt.subplots(len(rows), n, figsize=(2.6 * n + 1.2, 2.1 * len(rows) + 0.6),
                              squeeze=False, sharex=True, sharey=True)
     mesh = None
-    for i, roi1 in enumerate(roi_labels):
+    for i, roi1 in enumerate(rows):
         for j, roi2 in enumerate(roi_labels):
             ax = axes[i][j]
-            data = pairs.get((roi1, roi2))
+            data = pairs.get((roi1, roi2) if crossed else roi2)
             if data is None:
                 ax.text(0.5, 0.5, "no data", transform=ax.transAxes, ha="center",
                         va="center", fontsize=8, color="#888")
@@ -357,13 +384,15 @@ def build_wtc_roi_grid(
                 freq_coi = np.where(coi > 1e-10, 1.0 / coi, freqs.max())
             ax.plot(times, np.clip(freq_coi, freqs.min(), freqs.max()),
                     color="white", lw=1.2, ls="--")
+            _phase_arrows(ax, times, freqs, data.get("phase"))
 
             ax.tick_params(labelsize=7)
             if i == 0:
                 ax.set_title(roi2, fontsize=9)
             if j == 0:
-                ax.set_ylabel(f"{roi1}\nFrequency (Hz)", fontsize=8)
-            if i == n - 1:
+                ax.set_ylabel(f"{roi1}\nFrequency (Hz)" if roi1 else "Frequency (Hz)",
+                              fontsize=8)
+            if i == len(rows) - 1:
                 ax.set_xlabel("Time (s)", fontsize=8)
 
     if mesh is None:
@@ -373,7 +402,15 @@ def build_wtc_roi_grid(
     sub1 = subject_ids[0] if subject_ids else "sub1"
     sub2 = subject_ids[1] if len(subject_ids) > 1 else "sub2"
     fig.colorbar(mesh, ax=axes, shrink=0.6, pad=0.02, label="WTC")
-    fig.suptitle(f"Row: {sub1}'s ROI    Column: {sub2}'s ROI", fontsize=11)
+    heading = (f"Row: {sub1}'s ROI    Column: {sub2}'s ROI" if crossed
+               else f"{sub1} × {sub2}, ROI by ROI")
+    # a single-row grid has no spare height inside, so the heading sits above the figure and
+    # the arrow key below it; bbox_inches="tight" takes in both
+    fig.suptitle(heading, fontsize=11, y=1 + 0.30 / fig.get_figheight())
+    fig.text(0.5, -0.4 / fig.get_figheight(),
+             f"arrows: right = in phase, left = antiphase, "
+             f"up = {sub1} leads by a quarter cycle",
+             ha="center", fontsize=9, color="#444444")
     return _png_b64(fig)
 
 

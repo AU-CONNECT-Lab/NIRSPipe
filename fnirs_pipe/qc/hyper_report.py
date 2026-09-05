@@ -423,12 +423,12 @@ def build_hyper_post_report(
                 "wtc-roi-matrix", build_wtc_roi_matrix,
                 roi_band_df, roi_labels, subject_ids, band_fmin, band_fmax,
             )
-        if wtc_channel_cross:
-            try:
-                roi_grid_b64 = build_wtc_roi_grid(
-                    roi_wtc, roi_labels, roi_pair_key, subject_ids) or ""
-            except Exception as exc:
-                logger.warning("WTC ROI cross grid failed: %s", exc)
+        # drawn crossed or not: it is the only figure carrying the phase arrows
+        try:
+            roi_grid_b64 = build_wtc_roi_grid(
+                roi_wtc, roi_labels, roi_pair_key, subject_ids) or ""
+        except Exception as exc:
+            logger.warning("WTC ROI map grid failed: %s", exc)
         for roi_name in roi_labels:
             roi_fig = None
             if roi_wtc and roi_pair_key:

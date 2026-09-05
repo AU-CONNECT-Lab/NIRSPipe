@@ -37,6 +37,10 @@ def save_wtc(result: WTCResult, path: Path) -> Path:
 
     Stored as float32, which is what the maps already are: a coherence is bounded in [0, 1]
     and nothing downstream reads more than three decimals of it.
+
+    The relative phase is stored beside each map when the pair carries one, so the arrows can
+    be redrawn from a saved run. A file written before phase existed simply has none, and
+    :func:`load_wtc` gives those pairs a phase of None.
     """
     arrays: dict[str, np.ndarray] = {
         "freqs": np.asarray(result.freqs, dtype=np.float32),
@@ -50,6 +54,8 @@ def save_wtc(result: WTCResult, path: Path) -> Path:
             key = _flatten_key(sub1, sub2, label)
             arrays[f"wtc{_SEP}{key}"] = np.asarray(data["wtc"], dtype=np.float32)
             arrays[f"coi{_SEP}{key}"] = np.asarray(data["coi"], dtype=np.float32)
+            if data.get("phase") is not None:
+                arrays[f"phase{_SEP}{key}"] = np.asarray(data["phase"], dtype=np.float32)
             n_pairs += 1
 
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -69,10 +75,12 @@ def load_wtc(path: Path) -> WTCResult:
                 continue
             key = name.split(_SEP, 1)[1]
             sub1, sub2, label = _restore_key(key)
+            phase_key = f"phase{_SEP}{key}"
             pairs.setdefault((sub1, sub2), {})[label] = {
                 "wtc": npz[name],
                 "coi": npz[f"coi{_SEP}{key}"],
                 "sig": None,
+                "phase": npz[phase_key] if phase_key in npz.files else None,
             }
     return WTCResult(pairs=pairs, freqs=freqs, times=times)
 
