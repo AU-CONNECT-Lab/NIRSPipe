@@ -293,15 +293,52 @@ def run_participant_level(args: dict[str, Any]) -> None:
         raise
 
 
+def _bad_channels_for(spec: str | None, subject: str) -> list[str]:
+    """Resolve --bad-channels for one subject: a shared list, or a table with one row each.
+
+    e.g. "S1_D1,S2_D3" gives that list for every subject, while a table
+
+    ::
+
+        participant_id  bad_channels
+        sub-01          S1_D1,S2_D3
+        sub-02          S4_D4
+
+    gives "sub-01" the first row and "sub-02" the second. A subject the table does not list
+    has none, which is how a cohort where only some caps slipped is described. The prefix is
+    optional on either side, so "01" and "sub-01" name the same subject.
+    """
+    if not spec:
+        return []
+    spec = str(spec)
+    path = Path(spec)
+    if not path.exists():
+        return [c.strip() for c in spec.split(",") if c.strip()]
+
+    from fnirs_pipe.io.tables import read_table
+
+    table = read_table(path, dtype=str).fillna("")
+    missing = {"participant_id", "bad_channels"} - set(table.columns)
+    if missing:
+        raise ValueError(
+            f"--bad-channels table {path} needs columns participant_id and bad_channels; "
+            f"missing {sorted(missing)}"
+        )
+    wanted = subject.removeprefix("sub-")
+    rows = table[table["participant_id"].str.removeprefix("sub-") == wanted]
+    if rows.empty:
+        return []
+    return [c.strip() for c in ",".join(rows["bad_channels"]).split(",") if c.strip()]
+
+
 def _make_prep_config(subject: str, session: str | None, args: dict[str, Any]) -> "PrepConfig":
-    raw_bad = args.get("bad_channels")
     return PrepConfig(
         subject=subject,
         session=session,
         dpf=args["dpf"],
         sci_threshold=args["sci_threshold"],
         motion_correction=_v(args["motion_correction"]),
-        bad_channels=[c.strip() for c in raw_bad.split(",")] if raw_bad else [],
+        bad_channels=_bad_channels_for(args.get("bad_channels"), subject),
         cardiac_l_freq=args["cardiac_l_freq"],
         cardiac_h_freq=args["cardiac_h_freq"],
         resp_l_freq=args["resp_l_freq"],

@@ -56,8 +56,11 @@ def _build_parser() -> argparse.ArgumentParser:
     prep_opt.add_argument("--motion-correction", choices=_MOTION_CHOICES, default="tddr",
                           help="Motion correction method.")
     prep_opt.add_argument("--bad-channels",
-                          help="Comma-separated source-detector labels to mark as bad, e.g. 'S1_D1,S2_D3'. "
-                               "Kept in the data, unioned with SCI-detected bad channels.")
+                          help="Source-detector labels to mark as bad, e.g. 'S1_D1,S2_D3', applied to "
+                               "every subject. Or a path to a table with participant_id and "
+                               "bad_channels columns, one row per subject. Naming either wavelength "
+                               "of a pair marks both. Kept in the data, unioned with SCI-detected "
+                               "bad channels.")
     prep_opt.add_argument("--cardiac-l-freq", type=float,
                           help="Lower bound of cardiac band in Hz (required at participant level; "
                                "population-dependent). Adult resting ~0.7; children/infants higher "

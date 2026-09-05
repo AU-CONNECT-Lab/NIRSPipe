@@ -100,6 +100,7 @@ def _build_script_text(
         'from fnirs_pipe.utils import is_optical_density',
         'from fnirs_pipe.pipeline.prep_pipeline import (',
         '    intensity_to_od, mark_bad_channels, correct_motion, od_to_haemo,',
+        '    _expand_bad_pairs,',
         ')',
     )
     if mode:
@@ -223,8 +224,8 @@ def _build_script_text(
         'raw_od, bad_chs, sci_scores = mark_bad_channels(',
         '    raw_od, threshold=SCI_THRESHOLD,',
         '    cardiac_l_freq=CARDIAC_L_FREQ, cardiac_h_freq=CARDIAC_H_FREQ)',
-        'if BAD_CHANNELS:  # merge manual --bad-channels',
-        '    bad_chs = sorted(set(bad_chs) | set(BAD_CHANNELS))',
+        'if BAD_CHANNELS:  # merge manual --bad-channels, both wavelengths of each pair',
+        '    bad_chs = sorted(set(bad_chs) | set(_expand_bad_pairs(raw_od, BAD_CHANNELS)))',
         '    raw_od.info["bads"] = bad_chs',
         'save_step(raw_od, "sci", "sci_pruning", session=session,',
         '          extra={"bad_channels": bad_chs})',
@@ -371,8 +372,8 @@ def write_run_script(
         tuple(int(x) for x in raw_fir.split(",")) if raw_fir else (0,)
     )
 
-    raw_bad = args.get("bad_channels")
-    bad_channels = [c.strip() for c in raw_bad.split(",")] if raw_bad else []
+    from fnirs_pipe.cli.workflows import _bad_channels_for
+    bad_channels = _bad_channels_for(args.get("bad_channels"), subject)
 
     def _fwd(p: Any) -> str | None:
         return str(p).replace("\\", "/") if p else None

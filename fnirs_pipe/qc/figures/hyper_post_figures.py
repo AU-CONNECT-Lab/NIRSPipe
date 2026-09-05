@@ -24,6 +24,55 @@ def _hex_to_rgba(hex_color: str, alpha: float = 1.0) -> str:
     return f"rgba({r},{g},{b},{alpha})"
 
 
+def _log_freq_axis(freqs: np.ndarray) -> dict:
+    """y-axis for a WTC map: log frequency, decades labelled, low frequency at the top.
+
+    e.g. a 0.004-0.2 Hz axis is labelled at 0.01 and 0.1 with unlabelled ticks at every
+    intermediate digit.
+
+    Left to itself plotly picks "D1" over a range of that width, which labels all nine digits
+    of every decade: 0.008 and 0.009 then sit a fifth as far apart as 0.1 and 0.2 and the text
+    collides. Worse, the rule flips to "D2" once the band is a little narrower, so two figures
+    from one report disagree about what a tick means. Naming the ticks fixes both.
+
+    The axis is reversed so frequency increases downward, which is how the wavelet coherence
+    figures in the literature are drawn.
+    """
+    lo, hi = float(np.min(freqs)), float(np.max(freqs))
+    if not (lo > 0 and hi > lo):
+        return dict(title="Frequency (Hz)", type="log", autorange="reversed", gridcolor="#444")
+
+    decades = range(int(np.floor(np.log10(lo))), int(np.ceil(np.log10(hi))) + 1)
+    steps = [m * 10.0 ** d for d in decades for m in range(1, 10)]
+    major = [f for f in steps if f == 10.0 ** round(np.log10(f)) and lo <= f <= hi]
+    # a band narrower than two decades carries at most one of them, which is not an axis:
+    # fall back to the 1-2-5 pattern, and to the band's own ends when even that is empty.
+    # Still one rule the whole way down, rather than plotly's two
+    if len(major) < 2:
+        major = [f for f in steps if round(f / 10.0 ** np.floor(np.log10(f))) in (1, 2, 5)
+                 and lo <= f <= hi]
+    if len(major) < 2:
+        major = list(np.geomspace(lo, hi, 3))
+    minor = [f for f in steps if lo <= f <= hi and f not in major]
+
+    def _label(f: float) -> str:
+        exponent = np.log10(f)
+        if abs(exponent - round(exponent)) < 1e-9:
+            return f"10<sup>{int(round(exponent))}</sup>"
+        return f"{f:.3g}"
+
+    return dict(
+        title="Frequency (Hz)",
+        type="log",
+        autorange="reversed",
+        gridcolor="#444",
+        tickmode="array",
+        tickvals=major,
+        ticktext=[_label(f) for f in major],
+        minor=dict(tickvals=minor, ticks="outside", ticklen=3, showgrid=False),
+    )
+
+
 def build_wtc_channel(
     wtc_data: dict,
     freqs: np.ndarray,
@@ -33,6 +82,8 @@ def build_wtc_channel(
     cond_colors: dict[str, str],
 ) -> go.Figure | None:
     """WTC heatmap for one channel pair: time × log-frequency, colour = coherence [0–1].
+
+    Frequency runs downward on a log axis labelled at the decades; see :func:`_log_freq_axis`.
 
     ::
 
@@ -108,7 +159,7 @@ def build_wtc_channel(
     fig.update_layout(
         shapes=shapes,
         xaxis=dict(title=f"Time (s)  [{pair_label}]", gridcolor="#444"),
-        yaxis=dict(title="Frequency (Hz)", type="log", gridcolor="#444"),
+        yaxis=_log_freq_axis(freqs),
         height=300,
         margin=dict(l=60, r=80, t=10, b=40),
         plot_bgcolor="#1a1a2e",

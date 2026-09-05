@@ -46,9 +46,16 @@ def compute_sci(raw_od: mne.io.Raw, cardiac_l_freq: float, cardiac_h_freq: float
 
 
 def _expand_bad_pairs(raw: mne.io.Raw, labels: list[str]) -> list[str]:
-    """Match S-D pair labels (or full channel names) to channels present in raw."""
-    wanted = set(labels)
-    return [ch for ch in raw.ch_names if ch in wanted or ch.rsplit(" ", 1)[0] in wanted]
+    """Match S-D pair labels (or full channel names) to channels present in raw.
+
+    e.g. ["S1_D1"] and ["S1_D1 760"] both give ["S1_D1 760", "S1_D1 850"] on an OD
+    recording. A label is reduced to its S-D pair, so naming one wavelength marks the other
+    with it: the two are one measurement, and a pair whose 760 nm is unusable has no usable
+    760/850 ratio either. Beer-Lambert then renames the marks to "S1_D1 hbo" / "S1_D1 hbr",
+    which is what keeps a manual rejection from surviving into only one chromophore.
+    """
+    wanted = {lbl.rsplit(" ", 1)[0] for lbl in labels}
+    return [ch for ch in raw.ch_names if ch.rsplit(" ", 1)[0] in wanted]
 
 
 def mark_bad_channels(
