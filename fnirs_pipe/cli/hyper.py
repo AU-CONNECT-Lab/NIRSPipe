@@ -81,13 +81,16 @@ def _run_groups(groups: dict, process) -> None:
 
 
 def _load_aligned_group(output_dir, members, task, desc, no_align, normalize, bads_scope,
-                        tstart=None, tend=None):
+                        tstart=None, tend=None, passband_check=None):
     """Load one dyad, put both recordings on one time axis, and mark the rejected channels.
 
     Returns (aligned_raws, offsets, group_sqm). The rejections are applied here rather than
     in each metric because --bads-scope decides them: a metric reading the Raw alone gets
     whatever that one file's sidecar recorded, which is the run's own rejections and not
     the union over the subject's runs that `subject` scope asks for.
+
+    `passband_check` is the (fmin, fmax) a metric is about to ask for, checked against the
+    bandpass the files record while the sidecars are still in hand.
     """
     from fnirs_pipe.pipeline.hyperscanning import (
         align_recordings,
@@ -95,11 +98,14 @@ def _load_aligned_group(output_dir, members, task, desc, no_align, normalize, ba
         crop_aligned_window,
         load_group_haemo,
         load_group_sqm,
+        warn_outside_passband,
         normalize_raws,
         trim_to_shortest,
     )
 
     raws = load_group_haemo(output_dir, members, desc=desc)
+    if passband_check is not None:
+        warn_outside_passband(raws, *passband_check)
     group_sqm = load_group_sqm(output_dir, members, bads_scope=bads_scope)
     apply_group_bads(raws, group_sqm)
     if no_align:
@@ -220,7 +226,8 @@ def cmd_run(
 
     def _process(gid, task, members):
         aligned_raws, offsets, group_sqm = _load_aligned_group(
-            output_dir, members, task, desc, no_align, normalize, bads_scope, tstart, tend)
+            output_dir, members, task, desc, no_align, normalize, bads_scope, tstart, tend,
+            passband_check=(wtc_fmin, wtc_fmax))
         _quality_summary(aligned_raws, group_sqm)
         if check_only:
             return None

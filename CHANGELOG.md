@@ -6,7 +6,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- **The low-pass filter barely filtered.** `--low-pass 0.2` attenuated the cardiac band by 4 dB where a working filter manages 60, so every `desc-filtered` and `desc-errts` still carried the heartbeat. The high-pass was unaffected. Every filtered file, and every number measured on one, changes: rerun anything written before this
+
 ### Added
+- **`--filter-method` and `--filter-order`.** The bandpass is now a zero-phase Butterworth of order 4, which is what the fNIRS toolboxes use and what a methods section can state. `--filter-method fir` keeps the linear-phase option and refuses, rather than quietly truncating, when the filter would be longer than the recording
+- **The filter is recorded on every stage's sidecar**, not only on `desc-filtered`, so a file can say which passband its content is confined to
+- **A warning when a coherence range reaches past the bandpass.** Asking for scales above the low-pass reads as a working analysis and is not: those scales carry what the filter removed
 - **`--wtc-by-condition`**, which runs the coherence inside each task annotation's window as well as over the whole recording, so a block design gets one result per block. A trigger with a duration uses it, one without runs to the next trigger, and a window too short to carry the lowest frequency asked for is skipped and said so
 
 

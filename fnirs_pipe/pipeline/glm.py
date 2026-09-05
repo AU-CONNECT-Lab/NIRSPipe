@@ -8,6 +8,11 @@ import mne
 import mne.io
 
 from fnirs_pipe.io.tables import read_table
+from fnirs_pipe.pipeline.denoise import (
+    DEFAULT_FILTER_METHOD,
+    DEFAULT_FILTER_ORDER,
+    filter_array,
+)
 from fnirs_pipe.utils.lineage import stamp
 from fnirs_pipe.utils.logging import get_logger
 
@@ -95,6 +100,8 @@ def _aux_regressors(
     aux_path: Path | str,
     channels: list[str] | None,
     data_band: tuple[float | None, float | None] | None,
+    filter_method: str = DEFAULT_FILTER_METHOD,
+    filter_order: int = DEFAULT_FILTER_ORDER,
 ) -> dict[str, np.ndarray]:
     """External confound columns from the aux table preprocessing wrote.
 
@@ -146,10 +153,10 @@ def _aux_regressors(
         column = resample_to_grid(t_aux, table[name].to_numpy(dtype=float), t_dst)
         if l_freq is not None or h_freq is not None:
             kept = _band_fraction(column, haemo.info["sfreq"], l_freq, h_freq)
-            # the settings bandpass_filter uses, so regressor and data see one filter
-            column = mne.filter.filter_data(
+            # the same design bandpass_filter used, so regressor and data see one filter
+            column = filter_array(
                 column[None, :], haemo.info["sfreq"], l_freq, h_freq,
-                method="fir", fir_window="hamming", verbose="error",
+                method=filter_method, order=filter_order,
             )[0]
             # the z-score below rescales whatever survives to unit variance, so a channel
             # with nothing inside the band would arrive as a unit-variance regressor made
@@ -253,8 +260,11 @@ def run_glm_pipeline(
     aux_path: str | Path | None = None,
     aux_channels: list[str] | None = None,
     # the bandpass applied to `haemo`, not the drift cutoff `high_pass` above. Only the aux
-    # regressors need it, and only to be filtered to the same band as the data.
+    # regressors need it, and only to be filtered to the same band as the data. The design
+    # travels with the band because two designs over one band are not the same filter.
     data_band: tuple[float | None, float | None] | None = None,
+    data_filter_method: str = DEFAULT_FILTER_METHOD,
+    data_filter_order: int = DEFAULT_FILTER_ORDER,
     contrast_def: dict[str, Any] | None = None,
     output_dir: str | None = None,
     source_path: str | None = None,
@@ -273,7 +283,8 @@ def run_glm_pipeline(
     # for free, which is what `_aux_regressors` filters them for.
     confound_cols = _short_channel_regressors(haemo, short_channel) if short_channel else {}
     if aux_path:
-        confound_cols.update(_aux_regressors(haemo, aux_path, aux_channels, data_band))
+        confound_cols.update(_aux_regressors(haemo, aux_path, aux_channels, data_band,
+                                             data_filter_method, data_filter_order))
     confounds = pd.DataFrame(confound_cols) if confound_cols else None
 
     dm = build_design_matrix(

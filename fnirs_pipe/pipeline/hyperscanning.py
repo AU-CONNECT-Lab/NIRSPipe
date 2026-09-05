@@ -25,7 +25,7 @@ from fnirs_pipe.pipeline.synchrony import (  # noqa: F401  re-exported
     wtc_band_mean,
 )
 from fnirs_pipe.utils import is_optical_density
-from fnirs_pipe.utils.lineage import path_from
+from fnirs_pipe.utils.lineage import lineage_of, path_from
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("pipeline.hyperscanning")
@@ -196,6 +196,27 @@ def load_group_haemo(
             )
         result[entry.subject_id] = raw
     return result
+
+
+def warn_outside_passband(raws: dict[str, mne.io.Raw], fmin: float, fmax: float) -> None:
+    """Warn when a requested frequency range reaches past the bandpass the files record.
+
+    Reported rather than enforced: a wider range is occasionally deliberate. The passband
+    comes from the sidecar, so it is what the file went through rather than what was asked for.
+    """
+    for subject_id, raw in raws.items():
+        lin = lineage_of(raw)
+        params = (lin.params if lin else None) or {}
+        low, high = params.get("high_pass"), params.get("low_pass")
+        outside = []
+        if low is not None and fmin < low:
+            outside.append(f"{fmin} Hz is below its {low} Hz high-pass")
+        if high is not None and fmax > high:
+            outside.append(f"{fmax} Hz is above its {high} Hz low-pass")
+        if outside:
+            logger.warning("sub-%s | requested %s-%s Hz but %s. Those scales carry what the "
+                           "filter removed, not signal",
+                           subject_id, fmin, fmax, " and ".join(outside))
 
 
 def load_group_raw_bids(bids_dir: Path, group: list[GroupEntry]) -> dict[str, mne.io.Raw]:

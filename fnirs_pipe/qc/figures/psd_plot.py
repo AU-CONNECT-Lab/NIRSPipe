@@ -9,6 +9,12 @@ from plotly.subplots import make_subplots
 
 logger = logging.getLogger(__name__)
 
+from fnirs_pipe.pipeline.denoise import (
+    DEFAULT_FILTER_METHOD,
+    DEFAULT_FILTER_ORDER,
+    filter_kwargs,
+)
+
 from ._utils import HBO_COLOR as _HBO_COLOR, HBR_COLOR as _HBR_COLOR
 from ._utils import physio_bands as _physio_bands
 
@@ -28,17 +34,21 @@ def _simulate_bandpass(
     raw_haemo: mne.io.Raw,
     l_freq: float | None,
     h_freq: float | None,
-    h_trans_bandwidth: float,
+    method: str,
+    order: int,
 ) -> "tuple[str, mne.io.Raw] | None":
-    """The bandpass this figure used to show before the real stage files were passed in.
+    """The bandpass this figure shows when no real stage file was passed in.
 
     Kept for the prep-only report, where no post-processing has run and there is no second
     file to read. The label says it is a simulation, so the two reports cannot be confused.
+
+    The design comes from filter_kwargs, so the curve is one the pipeline would build.
     """
     if l_freq is None and h_freq is None:
         return None
-    filtered = raw_haemo.copy().filter(
-        l_freq=l_freq, h_freq=h_freq, h_trans_bandwidth=h_trans_bandwidth, verbose=False)
+    kwargs = filter_kwargs(raw_haemo.info["sfreq"], raw_haemo.n_times,
+                           l_freq, h_freq, method, order)
+    filtered = raw_haemo.copy().filter(l_freq=l_freq, h_freq=h_freq, verbose=False, **kwargs)
     edges = "  ".join(part for part in (f"HP {l_freq} Hz" if l_freq is not None else "",
                                         f"LP {h_freq} Hz" if h_freq is not None else "") if part)
     return f"simulated bandpass ({edges})", filtered
@@ -86,7 +96,8 @@ def psd_figure(
     raw_haemo: mne.io.Raw,
     l_freq: float | None = None,
     h_freq: float | None = 0.4,
-    h_trans_bandwidth: float = 0.1,
+    filter_method: str = DEFAULT_FILTER_METHOD,
+    filter_order: int = DEFAULT_FILTER_ORDER,
     fmax: float = 2.0,
     title: str = "Power spectral density by stage",
     cardiac: "tuple[float, float] | None" = None,
@@ -108,7 +119,8 @@ def psd_figure(
         raw_haemo:          Beer-Lambert output (HbO/HbR channels), the first stage.
         l_freq:             High-pass cutoff, for the cutoff marker and the simulation.
         h_freq:             Low-pass cutoff, same.
-        h_trans_bandwidth:  Transition bandwidth, simulation only.
+        filter_method:      Filter design for the simulation only; must match the pipeline's.
+        filter_order:       Butterworth order, simulation only.
         fmax:               Maximum frequency to display (Hz), clamped per stage to Nyquist.
         title:              Figure title.
         stages:             Later stages as (label, raw); None simulates the bandpass.
@@ -120,7 +132,7 @@ def psd_figure(
         fmax = nyquist
 
     if stages is None:
-        simulated = _simulate_bandpass(raw_haemo, l_freq, h_freq, h_trans_bandwidth)
+        simulated = _simulate_bandpass(raw_haemo, l_freq, h_freq, filter_method, filter_order)
         stages = [simulated] if simulated is not None else []
     all_stages = [(first_label, raw_haemo), *stages]
 

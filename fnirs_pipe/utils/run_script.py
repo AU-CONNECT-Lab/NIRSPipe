@@ -8,6 +8,8 @@ noted in comments rather than re-run here.
 
 import sys
 from datetime import datetime
+
+from fnirs_pipe.pipeline.denoise import DEFAULT_FILTER_METHOD, DEFAULT_FILTER_ORDER
 from pathlib import Path
 from typing import Any
 
@@ -42,6 +44,8 @@ def _build_script_text(
     bad_channels: list[str] | None = None,
     high_pass: float | None = None,
     low_pass: float | None = None,
+    filter_method: str = DEFAULT_FILTER_METHOD,
+    filter_order: int = DEFAULT_FILTER_ORDER,
     resample_sfreq: float | None = None,
     stim_dur: float | None = None,
     hrf_model: str = "spm",
@@ -66,6 +70,7 @@ def _build_script_text(
     _aux_lines = ([
         '    aux_path=find_aux_table(preproc_path), aux_channels=AUX_CHANNELS,',
         '    data_band=(HIGH_PASS, LOW_PASS),',
+        '    data_filter_method=FILTER_METHOD, data_filter_order=FILTER_ORDER,',
     ] if aux else [])
     sessions_repr = repr(session_label if session_label else [None])
     tasks_repr    = repr(task_label    if task_label    else [None])
@@ -141,7 +146,8 @@ def _build_script_text(
     # ---- post parameters ----
     if mode:
         w('', '# ---- post parameters ----', f'HIGH_PASS      = {high_pass!r}',
-          f'LOW_PASS       = {low_pass!r}', f'RESAMPLE_SFREQ = {resample_sfreq!r}')
+          f'LOW_PASS       = {low_pass!r}', f'FILTER_METHOD  = {filter_method!r}',
+          f'FILTER_ORDER   = {filter_order!r}', f'RESAMPLE_SFREQ = {resample_sfreq!r}')
     if mode == "glm":
         w(
             f'STIM_DUR       = {stim_dur!r}',
@@ -260,8 +266,9 @@ def _build_script_text(
         if high_pass is not None or low_pass is not None:
             b(
                 '',
-                '# ----- block: bandpass | FIR bandpass filter (l=HIGH_PASS, h=LOW_PASS) -----',
-                'result = bandpass_filter(result, l_freq=HIGH_PASS, h_freq=LOW_PASS)',
+                '# ----- block: bandpass | bandpass filter (l=HIGH_PASS, h=LOW_PASS) -----',
+                'result = bandpass_filter(result, l_freq=HIGH_PASS, h_freq=LOW_PASS,',
+                '                         method=FILTER_METHOD, order=FILTER_ORDER)',
             )
             if mode in ("denoise", "glm"):
                 b('save_step(result, "filtered", "bandpass", session=session)')
@@ -403,6 +410,8 @@ def write_run_script(
         bad_channels=bad_channels or None,
         high_pass=args.get("high_pass"),
         low_pass=args.get("low_pass"),
+        filter_method=_pick("filter_method", DEFAULT_FILTER_METHOD),
+        filter_order=_pick("filter_order", DEFAULT_FILTER_ORDER),
         resample_sfreq=args.get("resample_sfreq"),
         stim_dur=args.get("stim_dur"),
         hrf_model=_unwrap(args.get("hrf_model"), "spm"),

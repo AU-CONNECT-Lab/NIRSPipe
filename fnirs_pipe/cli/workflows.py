@@ -14,6 +14,7 @@ from typing import Any
 from fnirs_pipe.io.bids import bids_label, get_layout, get_nirs_files
 from fnirs_pipe.io.derivatives import write_dataset_description
 from fnirs_pipe.io.snirf import read_snirf
+from fnirs_pipe.pipeline.denoise import DEFAULT_FILTER_METHOD, DEFAULT_FILTER_ORDER
 from fnirs_pipe.pipeline.prep_pipeline import PrepConfig, run_prep
 from fnirs_pipe.utils import unwrap_enum as _v
 from fnirs_pipe.utils import job_db as _jdb
@@ -57,6 +58,8 @@ def _build_post_config(subject: str, session: str | None, args: dict[str, Any], 
         dry_run=args.get("dry_run", False),
         high_pass=pick("high_pass"),
         low_pass=pick("low_pass"),
+        filter_method=pick("filter_method", default=DEFAULT_FILTER_METHOD),
+        filter_order=pick("filter_order", default=DEFAULT_FILTER_ORDER),
         resample_sfreq=pick("resample_sfreq"),
         stim_dur=pick("stim_dur"),
         hrf_model=pick("hrf_model"),

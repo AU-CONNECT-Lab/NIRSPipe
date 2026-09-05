@@ -5,6 +5,11 @@ import sys
 from pathlib import Path
 
 from fnirs_pipe import __version__
+from fnirs_pipe.pipeline.denoise import (
+    DEFAULT_FILTER_METHOD,
+    DEFAULT_FILTER_ORDER,
+    FILTER_METHODS,
+)
 
 _MOTION_CHOICES        = ["tddr", "wavelet", "spline", "none"]
 _MODE_CHOICES          = ["denoise", "glm", "rest"]
@@ -86,6 +91,15 @@ def _build_parser() -> argparse.ArgumentParser:
                       help="TOML file providing post parameter values. CLI flags override TOML.")
     post.add_argument("--high-pass", type=float, help="High-pass filter cutoff in Hz, e.g. 0.01.")
     post.add_argument("--low-pass",  type=float, help="Low-pass filter cutoff in Hz, e.g. 0.5.")
+    post.add_argument("--filter-method", choices=FILTER_METHODS,
+                      help=f"Bandpass design, default {DEFAULT_FILTER_METHOD!r}. 'iir' is a zero-phase "
+                           "Butterworth, what the fNIRS toolboxes use. 'fir' is a hamming-windowed "
+                           "linear-phase filter, which needs 3.3 * sfreq / transition samples and "
+                           "is refused when that is longer than the recording.")
+    post.add_argument("--filter-order", type=int,
+                      help=f"Butterworth order, default {DEFAULT_FILTER_ORDER}, ignored by "
+                           "--filter-method fir. Applied with filtfilt, so the effective rolloff "
+                           "is twice this and the cutoff sits at -6 dB.")
     post.add_argument("--resample-sfreq", type=float,
                       help="Target sampling rate in Hz after filtering, e.g. 2.0.")
     post.add_argument("--combine-runs", action=argparse.BooleanOptionalAction, default=False,

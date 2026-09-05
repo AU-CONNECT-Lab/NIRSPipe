@@ -17,7 +17,13 @@ import mne.io
 import pandas as pd
 
 from fnirs_pipe.io.auxiliary import find_aux_table
-from fnirs_pipe.pipeline.denoise import bandpass_filter, resample
+from fnirs_pipe.pipeline.denoise import (
+    DEFAULT_FILTER_METHOD,
+    DEFAULT_FILTER_ORDER,
+    bandpass_filter,
+    filter_description,
+    resample,
+)
 from fnirs_pipe.pipeline.glm import run_glm_pipeline
 from fnirs_pipe.exceptions import StageError
 from fnirs_pipe.utils.lineage import Recorder, lineage_of, stage_of, stamp
@@ -41,6 +47,8 @@ class PostConfig:
     # bandpass filter
     high_pass: float | None = None
     low_pass:  float | None = None
+    filter_method: str = DEFAULT_FILTER_METHOD
+    filter_order:  int = DEFAULT_FILTER_ORDER
 
     roi_map: dict | None = None
 
@@ -157,11 +165,16 @@ def run_post(
                            config.subject, Path(source_path).name if source_path else "the input")
     # every regression below takes the same three, so they travel together
     aux_kwargs = dict(aux_path=aux_path, aux_channels=config.aux_channels,
-                      data_band=(config.high_pass, config.low_pass))
+                      data_band=(config.high_pass, config.low_pass),
+                      data_filter_method=config.filter_method,
+                      data_filter_order=config.filter_order)
 
     if config.high_pass is not None or config.low_pass is not None:
-        logger.info("sub-%s | bandpass: l_freq=%s h_freq=%s", config.subject, config.high_pass, config.low_pass)
-        result = bandpass_filter(result, l_freq=config.high_pass, h_freq=config.low_pass)
+        logger.info("sub-%s | bandpass: %s", config.subject,
+                    filter_description(config.high_pass, config.low_pass,
+                                       config.filter_method, config.filter_order))
+        result = bandpass_filter(result, l_freq=config.high_pass, h_freq=config.low_pass,
+                                 method=config.filter_method, order=config.filter_order)
         _write_step_snirf(result, config, output_dir, desc="filtered", rec=rec, source_entities=source_entities)
 
     if config.resample_sfreq is not None:
@@ -501,9 +514,13 @@ def _write_step_snirf(haemo: mne.io.Raw, config: PostConfig, output_dir: Path, d
         "pipeline_version": __version__,
         "step": lin.step if lin else None,
         "Sources": rec.sources_of(haemo),
+        # on every stage, not just desc-filtered: a later stage is what downstream tools
+        # read, and it is the one that has to name its own passband
         "parameters": {
             "high_pass": config.high_pass,
             "low_pass": config.low_pass,
+            "filter_method": config.filter_method,
+            "filter_order": config.filter_order if config.filter_method == "iir" else None,
             "resample_sfreq": config.resample_sfreq,
             **(lin.params if lin else {}),
         },
