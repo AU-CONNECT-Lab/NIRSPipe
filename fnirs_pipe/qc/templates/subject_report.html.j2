@@ -671,8 +671,9 @@
      <span class="ql-dot" aria-hidden="true">&#9679;</span> marks the ones that decide whether the run is usable.</p>
   <p class="qm-note">A pair written <b>a &rarr; b</b> is the same metric measured twice, over the same
      channels: <b>a</b> before a processing step and <b>b</b> after it, so the pair shows what the step
-     did. GVTD is measured either side of motion correction, global correlation either side of
-     regression. A single number means that step did not run for this recording.</p>
+     did. GVTD is measured either side of motion correction; global correlation, HbO&ndash;HbR
+     correlation and CNR either side of the confound regression. A single number means that
+     step did not run for this recording.</p>
   <ul class="qm-list">
     {% set ret  = sqm.get('channel_retention_rate') %}
     {% set sci  = sqm.get('sci_mean') %}
@@ -688,8 +689,21 @@
         <span class="qv">{{ qm_val(sqm.get('psp_mean')) }}</span></li>
     <li>{{ ql('snr_mean', 'Mean SNR (intensity)') }}
         <span class="qv {{ qv_class(snr, snr >= 100, snr >= 20) }}">{{ qm_val(snr, '.1f') }}</span></li>
-    <li>{{ ql('hbo_hbr_corr_mean', 'Mean HbO–HbR corr') }}
-        <span class="qv {{ qv_class(corr, corr < -0.3, corr < 0) }}">{{ qm_val(corr) }}</span></li>
+    {% set corr_after = sqm.get('hbo_hbr_corr_mean_errts') %}
+    <li>{{ ql('hbo_hbr_corr_mean', 'Mean HbO–HbR corr' ~ (' (denoise before→after)' if corr_after is not none else '')) }}
+        <span class="qv {{ qv_class(corr_after if corr_after is not none else corr,
+                                    (corr_after if corr_after is not none else corr) < -0.3,
+                                    (corr_after if corr_after is not none else corr) < 0) }}">
+          {% if corr_after is not none %}{{ qm_val(corr) }} → {{ qm_val(corr_after) }}{% else %}{{ qm_val(corr) }}{% endif %}</span></li>
+    {% if sqm.get('cnr_hbo_mean') is not none or sqm.get('cnr_hbo_mean_errts') is not none %}
+    {% for chroma, key in [('HbO', 'cnr_hbo_mean'), ('HbR', 'cnr_hbr_mean')] %}
+    {% set cnr_before = sqm.get(key) %}
+    {% set cnr_after  = sqm.get(key ~ '_errts') %}
+    <li>{{ ql(key, 'CNR ' ~ chroma ~ (' (denoise before→after)' if cnr_after is not none else '')
+                 ~ (' — %d epochs'|format(sqm.get('cnr_n_epochs')) if sqm.get('cnr_n_epochs') else '')) }}
+        <span class="qv">{% if cnr_after is not none %}{{ qm_val(cnr_before) }} → {{ qm_val(cnr_after) }}{% else %}{{ qm_val(cnr_before) }}{% endif %}</span></li>
+    {% endfor %}
+    {% endif %}
     <li>{{ ql('gcor_hbo', 'Global corr HbO' ~ (' (reg before→after)' if sqm.get('gcor_hbo_postreg') is not none else '')) }}
         <span class="qv">{% if sqm.get('gcor_hbo_postreg') is not none %}{{ qm_val(sqm.get('gcor_hbo_prereg')) }} → {{ qm_val(sqm.get('gcor_hbo_postreg')) }}{% else %}{{ qm_val(sqm.get('gcor_hbo')) }}{% endif %}</span></li>
     <li>{{ ql('gcor_hbr', 'Global corr HbR' ~ (' (reg before→after)' if sqm.get('gcor_hbr_postreg') is not none else '')) }}

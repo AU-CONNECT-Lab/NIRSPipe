@@ -701,8 +701,10 @@ def _section_sqm(
     and so is a record that carries none of the sections the panel reads, which is what a
     foreign file at this path looks like.
 
-    The motion-corrected side of the same channel set is added under a ``_post`` suffix,
-    which is what lets the template print GVTD as ``before -> after``.
+    The motion-corrected side of the same channel set is added under a ``_post`` suffix, and
+    the confound-regression residual under an ``_errts`` one. Both carry the same key names
+    as the section they are paired with, so a plain merge would silently overwrite the
+    before values; the suffix is what lets the template print ``before -> after``.
     """
     sqm: dict = {}
     with _guard("SQM record", errors, subject):
@@ -727,6 +729,12 @@ def _section_sqm(
         post_key = "motion_post_long" if raw_key == "raw_long" else "motion_post"
         for k, v in (record.get(post_key) or {}).items():
             sqm[f"{k}_post"] = v
+        # The denoised side of the haemoglobin metrics. `errts` rather than `filtered`: the
+        # bandpass alone moves gcor and the band powers for reasons that are the filter's,
+        # not the recording's, while the regression is the step whose effect is worth a
+        # number. A run that regressed nothing has no `errts` and prints single values.
+        for k, v in (record.get("errts") or {}).items():
+            sqm[f"{k}_errts"] = v
     channel_rows = []
     for ch in sci_scores:
         pair_key = re.sub(r'\s+(\d+|hbo|hbr)$', '', ch, flags=re.IGNORECASE)
