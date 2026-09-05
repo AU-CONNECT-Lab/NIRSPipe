@@ -12,6 +12,7 @@ section are the same names the metric functions have always returned:
     raw_short  the same recording, short channels only: are the regressors trustworthy
     motion     what the motion correction repaired, from the OD either side of it
     preproc    Beer-Lambert output, before any filtering
+    errts      the confound-regression residual, the last denoising step there is
     final      the last haemo file the run produced (resampled > filtered > preproc)
 
 The three ``raw*`` sections are one file seen through three channel sets, so the only
@@ -20,7 +21,7 @@ thing that differs between them is source-detector separation.
 Bad channels: the Beer-Lambert conversion is the dividing line, never the section.
 
     raw / raw_long / raw_short / motion   intensity and OD, include them
-    preproc / final                       haemoglobin, exclude them
+    preproc / errts / final               haemoglobin, exclude them
 
 A rejected channel is still part of what the machine recorded, so everything measured
 before Beer-Lambert describes the recording as it arrived; after it the channel is out of
@@ -53,7 +54,7 @@ _DESC_RE = re.compile(r"_desc-([A-Za-z0-9]+)_nirs\.snirf$")
 _FINAL_ORDER = ("resampled", "filtered", "preproc")
 
 SECTIONS = ("raw", "raw_long", "raw_short", "motion", "motion_post",
-            "motion_post_long", "motion_post_short", "windowed", "preproc", "final")
+            "motion_post_long", "motion_post_short", "windowed", "preproc", "errts", "final")
 
 
 def scan_runs(nirs_dir: Path) -> dict[str, dict[str, Path]]:
@@ -223,6 +224,9 @@ def _motion_post_section(
     # the mean over every channel, bads included, so it is comparable with `raw`
     scores, _ = compute_sci_scores(raw_od, cardiac_l_freq, cardiac_h_freq)
     record["sci_mean"] = _mean_or_none(scores.values())
+    # per channel as well as the mean: the report pairs these against the pre-correction
+    # scores channel by channel, and a mean cannot say which channel the correction cost
+    record["sci_per_channel"] = {k: float(v) for k, v in scores.items()}
     record.update(_psp_metrics(raw_od, cardiac_l_freq, cardiac_h_freq))
     return record
 
@@ -324,15 +328,23 @@ def compute_run_sections(
         except Exception:
             logger.warning("windowed: spike spans failed", exc_info=True)
 
-    # SCI, PSP and GVTD per window, all three on the same grid.
+    # SCI, PSP and GVTD per window, all three on the same grid, but not off the same file.
     #
-    # Read off the corrected OD when there is one. That is the signal Beer-Lambert actually
-    # received, and it is what the subject report draws, so record and report cannot drift.
-    od_source = stages.get("motcorrected") or stages.get("sci") or stages.get("od")
-    if od_source is not None:
+    # SCI and PSP come from the uncorrected OD, which is where the per-channel scores in
+    # `raw` were taken. The report draws both halves of one panel from these, and reading
+    # the windows off the corrected file put the heatmap a stage ahead of the lollipop
+    # beside it. GVTD keeps the corrected file: it measures the movement the correction
+    # exists to remove, so the corrected one is the informative stage for it.
+    sci_source  = stages.get("sci") or stages.get("od") or stages.get("motcorrected")
+    gvtd_source = stages.get("motcorrected") or sci_source
+    if sci_source is not None:
         try:
+            raw_sci_od = read_snirf(sci_source)
+            raw_gvtd_od = (raw_sci_od if gvtd_source == sci_source
+                           else read_snirf(gvtd_source))
             series = attach_windowed_series(
-                windowed, read_snirf(od_source), cardiac_l_freq, cardiac_h_freq, qc_window_s)
+                windowed, raw_sci_od, cardiac_l_freq, cardiac_h_freq, qc_window_s,
+                gvtd_od=raw_gvtd_od)
             # the channel by window matrices as well as the channel-averaged series: the
             # report's per-channel heatmap needs them, and it must not recompute
             for key in ("sci_matrix", "psp_matrix"):
@@ -389,6 +401,13 @@ def compute_run_sections(
         section("preproc", lambda: compute_prep_haemo_sqm(
             read_snirf(stages["preproc"]), cardiac_l_freq, cardiac_h_freq,
             resp_l_freq, resp_h_freq))
+
+    # The confound-regression residual, measured with the same haemo metrics as `preproc`
+    # so the two subtract. This is the pair the report draws its denoising before/after
+    # from: `final` is whatever file happened to be last, which on a run without a
+    # regression is the bandpassed file and on one with it is not the residual either.
+    if "errts" in stages:
+        section("errts", lambda: compute_haemo_sqm(read_snirf(stages["errts"])))
 
     final_desc = next((d for d in _FINAL_ORDER if d in stages), None)
     if final_desc is not None:

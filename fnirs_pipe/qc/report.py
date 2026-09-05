@@ -15,17 +15,20 @@ Report sections
     Per-channel HbO/HbR timeseries + PSD + epoch preview (dropdown selector).
 
   b. Raw Signal Quality (SCI / PSP)
-    Windowed SCI/PSP heatmap + lollipop summary (build_sci_psp_figure).
+    Windowed SCI/PSP heatmap + lollipop summary (build_sci_psp_figure), all on the
+    uncorrected optical density. Per-channel SCI/PSP across the motion correction.
     Brain-surface quality map + optode flat map (if head coordinates available).
 
   c. Motion Correction
     GVTD + carpet plot; bad-segment zoom; per-channel before/after OD traces.
 
   d. HbO / HbR (Beer-Lambert)
-    HbO–HbR correlation panel.
+    HbO–HbR correlation panel before and after denoising, plus per-channel strips
+    for HbO–HbR r and CNR across the same pair of stages.
 
-  e. PSD (before / after bandpass)
-    Full-dataset PSD panel + per-channel PSD detail (dropdown selector).
+  e. PSD by stage
+    Full-dataset PSD panel + per-channel PSD detail (dropdown selector), one line
+    per stage file on disk.
 
   f. Epoch / HRF Preview
     Grand-mean HbO/HbR averaged across good channels, baseline-corrected.
@@ -78,6 +81,7 @@ from fnirs_pipe.qc.figures import (
     build_trial_image_figure,
     build_roi_trial_image_figure,
     build_sci_psp_figure,
+    stage_dumbbell_figure,
     build_channel_figure,
     build_motion_detail_figure,
     channel_quality_heatmap,
@@ -220,12 +224,21 @@ def _section_sci(
     subject: str,
     errors: list,
     figures_dir: Path,
+    record: dict | None = None,
 ) -> dict:
-    """The SCI/PSP panel, per channel and per window.
+    """The SCI/PSP panel, per channel and per window, plus the motion-correction strips.
 
     ``windowed`` is the record's section of that name; the series are read from it rather
     than recomputed, so the panel and the stored numbers cannot disagree. An absent section
     leaves the per-window half of the panel out and the per-channel half intact.
+
+    Every view in the panel is the uncorrected optical density. SCI and PSP measure optode
+    coupling, which is a property of how the cap sat rather than of anything the pipeline
+    does, so the stage that answers "was this channel worth keeping" is the one before the
+    correction. The strips below the panel are the separate question of whether the
+    correction cost any coupling, drawn from ``raw*`` against ``motion_post*`` in the
+    record; wavelet correction can eat cardiac pulsation along with the artifact, TDDR
+    largely does not, and this is where that shows.
     """
     def _series(key: str) -> "np.ndarray | None":
         value = (windowed or {}).get(key)
@@ -256,7 +269,35 @@ def _section_sci(
             fig, figures_dir / "sci_psp_panel.html"
         )
 
-    return {"sci_psp_panel_path": sci_psp_panel_path, "sci_psp_panel_h": sci_psp_panel_h}
+    record = record or {}
+    # the same channel split on both sides: a long-channel SCI against an all-channel one
+    # would read as an effect of the correction
+    before_key = "raw_long" if (record.get("per_channel") or {}).get("raw_long") else "raw"
+    after_key  = "motion_post_long" if before_key == "raw_long" else "motion_post"
+    motion_strips = []
+    for metric, label, thresh in (
+        ("sci_per_channel", "SCI", getattr(config, "sci_threshold", 0.75)),
+        ("psp_per_channel", "PSP", None),
+    ):
+        with _guard(f"{label} motion-correction strip", errors, subject):
+            before, after = _record_pair(record, before_key, after_key, metric)
+            fig = stage_dumbbell_figure(
+                before, after,
+                title=f"{label} across motion correction",
+                x_title=label,
+                before_label="desc-sci (before)",
+                after_label="desc-motcorrected (after)",
+                higher_is_better=True,
+                reference=thresh,
+                reference_label=f"threshold {thresh}" if thresh is not None else "",
+            )
+            if fig is not None:
+                path, h = _save_plotly_html(
+                    fig, figures_dir / f"motion_strip_{label.lower()}.html")
+                motion_strips.append({"label": label, "path": path, "h": h})
+
+    return {"sci_psp_panel_path": sci_psp_panel_path, "sci_psp_panel_h": sci_psp_panel_h,
+            "motion_strips": motion_strips}
 
 
 def _section_channel_detail(
@@ -317,6 +358,7 @@ def _section_psd_detail(
     h_freq: float | None = 0.4,
     cardiac: "tuple[float, float] | None" = None,
     resp: "tuple[float, float] | None" = None,
+    psd_stages: "list[tuple[str, mne.io.Raw]] | None" = None,
 ) -> dict:
     pairs = get_channel_pairs(raw_haemo)
     saved = []
@@ -326,8 +368,18 @@ def _section_psd_detail(
             if not picks:
                 continue
             raw_sub = raw_haemo.copy().pick(picks)
+            # a later stage may have dropped the pair (bad channel), so each stage is
+            # narrowed to whatever it still carries and skipped when that is nothing
+            stages_sub = None
+            if psd_stages is not None:
+                stages_sub = [
+                    (label, raw.copy().pick(present))
+                    for label, raw in psd_stages
+                    if (present := [c for c in picks if c in raw.ch_names])
+                ]
             fig = psd_figure(raw_sub, l_freq=l_freq, h_freq=h_freq, fmax=2.0,
-                             title=f"PSD — {pair}", cardiac=cardiac, resp=resp)
+                             title=f"PSD — {pair}", cardiac=cardiac, resp=resp,
+                             stages=stages_sub)
             fname = f"psd_detail_{_pair_fname(pair)}.html"
             path, h = _save_plotly_html(fig, figures_dir / fname)
             saved.append({"pair": pair, "path": path, "h": h})
@@ -410,22 +462,75 @@ def _section_haemo(
     figures_dir: Path,
     l_freq: float | None = None,
     h_freq: float | None = None,
+    raw_errts: mne.io.Raw | None = None,
+    psd_stages: "list[tuple[str, mne.io.Raw]] | None" = None,
+    record: dict | None = None,
 ) -> dict:
-    hbo_hbr_path = psd_panel_path = None
+    """Beer-Lambert output and what the denoising did to it.
+
+    The correlation panels are drawn from the recordings, the strips beside them from the
+    record: a figure needs the samples, a number must not be computed twice. ``raw_errts``
+    is the confound-regression residual, the stage the denoising before/after is taken
+    against; it is absent on a prep-only run and on a denoise run with nothing to regress,
+    and then only the before panel is drawn.
+    """
+    hbo_hbr_path = hbo_hbr_after_path = psd_panel_path = None
     psd_panel_h = 0
     with _guard("HbO-HbR correlation panel", errors, subject):
-        b64 = hbo_hbr_correlation_panel(raw_haemo)
+        b64 = hbo_hbr_correlation_panel(
+            raw_haemo, title="HbO–HbR Signal Quality — desc-preproc (before denoising)")
         _save_b64_png(b64, figures_dir / "hbo_hbr_corr.png")
         hbo_hbr_path = _fig_href(figures_dir, "hbo_hbr_corr.png")
+    if raw_errts is not None:
+        with _guard("HbO-HbR correlation panel (after)", errors, subject):
+            b64 = hbo_hbr_correlation_panel(
+                raw_errts, title="HbO–HbR Signal Quality — desc-errts (after denoising)")
+            _save_b64_png(b64, figures_dir / "hbo_hbr_corr_after.png")
+            hbo_hbr_after_path = _fig_href(figures_dir, "hbo_hbr_corr_after.png")
+
+    # A real response drives HbO up and HbR down, so denoising that removes shared systemic
+    # signal should push r towards -1. CNR is the other half of the same question: whether
+    # it took the response with it. HbR CNR runs negative, so its "better" direction flips.
+    record = record or {}
+    denoise_strips = []
+
+    def _strip(before: dict, after: dict, fname: str, label: str, **spec) -> None:
+        fig = stage_dumbbell_figure(before, after, before_label="desc-preproc",
+                                    after_label="desc-errts", reference=0.0, **spec)
+        if fig is not None:
+            path, h = _save_plotly_html(fig, figures_dir / fname)
+            denoise_strips.append({"label": label, "path": path, "h": h})
+
+    with _guard("Denoising strip: HbO-HbR r", errors, subject):
+        before, after = _record_pair(record, "preproc", "errts", "hbo_hbr_corr_per_channel")
+        _strip(before, after, "denoise_strip_corr.html", "HbO–HbR r",
+               title="HbO–HbR correlation across denoising", x_title="Pearson r",
+               higher_is_better=False, reference_label="r = 0")
+
+    with _guard("Denoising strip: CNR", errors, subject):
+        before, after = _record_pair(record, "preproc", "errts", "cnr_per_channel")
+        # one strip per chromophore: HbO rises and HbR falls with a response, so a single
+        # sorted list would call one chromophore's improvement a degradation
+        for chroma, higher in (("hbo", True), ("hbr", False)):
+            _strip({k: v for k, v in before.items() if k.endswith(f" {chroma}")},
+                   {k: v for k, v in after.items() if k.endswith(f" {chroma}")},
+                   f"denoise_strip_cnr_{chroma}.html", f"CNR {chroma.upper()}",
+                   title=f"CNR across denoising — {chroma.upper()}",
+                   x_title="Contrast-to-noise ratio", higher_is_better=higher)
+
     with _guard("PSD figure", errors, subject):
         fig_psd_custom = psd_figure(
             raw_haemo, l_freq=l_freq, h_freq=h_freq, fmax=2.0,
             cardiac=(config.cardiac_l_freq, config.cardiac_h_freq),
-            resp=(config.resp_l_freq, config.resp_h_freq))
+            resp=(config.resp_l_freq, config.resp_h_freq),
+            stages=psd_stages)
         psd_panel_path, psd_panel_h = _save_plotly_html(fig_psd_custom, figures_dir / "psd_panel.html")
     return {
         "hbo_hbr_path":   hbo_hbr_path,
+        "hbo_hbr_after_path": hbo_hbr_after_path,
+        "denoise_strips": denoise_strips,
         "psd_panel_path": psd_panel_path, "psd_panel_h": psd_panel_h,
+        "psd_stage_labels": [label for label, _ in (psd_stages or [])],
     }
 
 
@@ -516,24 +621,43 @@ def _save_channel_csv(channel_rows: list, label: str, out_dir: Path) -> None:
     logger.info("%s | channel metrics CSV saved: %s", label, out_path)
 
 
-def _load_windowed_section(
+def _load_record(
     out_dir: Path | None,
     sqm_label: str | None,
     subject: str,
     errors: list,
-) -> dict | None:
-    """The record's ``windowed`` section, or None if there is no record to read it from.
+) -> dict:
+    """The run's SQM record, empty when there is none to read.
 
-    Separate from :func:`_section_sqm` because the panel it feeds is drawn long before the
-    metrics table, and because a run whose record failed should still get the per-channel
-    half of that panel.
+    Read once here rather than inside each section that wants a slice of it. Separate from
+    :func:`_section_sqm`, which keeps its own read and its own validation because it is the
+    one that must report a missing record as an error; the before/after strips fed from
+    here simply do not appear when their numbers are absent.
     """
     if out_dir is None or sqm_label is None:
-        return None
-    with _guard("Windowed series", errors, subject):
-        record = json.loads(_sqm_record_path(out_dir, sqm_label).read_text(encoding="utf-8"))
-        return record.get("windowed") or None
-    return None
+        return {}
+    # its own label, so a missing record is not reported twice over: _section_sqm reads the
+    # same file again and is the one that must say the metrics table has nothing to show
+    with _guard("Reading the SQM record", errors, subject):
+        return json.loads(_sqm_record_path(out_dir, sqm_label).read_text(encoding="utf-8"))
+    return {}
+
+
+def _record_pair(record: dict, before: str, after: str, key: str) -> "tuple[dict, dict]":
+    """One per-channel metric at two sections of the record, as ``(before, after)``.
+
+    ``_split_scalars`` files every per-channel dict under ``per_channel``, so that is where
+    these live::
+
+        _record_pair(rec, "preproc", "errts", "cnr_per_channel")
+        -> (rec["per_channel"]["preproc"]["cnr_per_channel"], ... same for "errts")
+
+    Either half is ``{}`` when that section or that key is absent, which is what a run
+    without the second stage looks like; the caller draws nothing rather than half a figure.
+    """
+    per_channel = record.get("per_channel") or {}
+    return ((per_channel.get(before) or {}).get(key) or {},
+            (per_channel.get(after) or {}).get(key) or {})
 
 
 def _load_stage_raw(
@@ -900,12 +1024,22 @@ def build_subject_report(
         figures_dir = figures_dir / sqm_label
 
     nirs_dir = out_path.parent / "nirs"
-    windowed_section  = _load_windowed_section(nirs_dir, sqm_label, subject, errors)
+    record            = _load_record(nirs_dir, sqm_label, subject, errors)
+    windowed_section  = record.get("windowed") or None
     raw_before_motion = _load_stage_raw(nirs_dir, sqm_label, "sci", subject, errors)
     raw_after_motion  = _load_stage_raw(nirs_dir, sqm_label, "motcorrected", subject, errors)
+    raw_errts         = _load_stage_raw(nirs_dir, sqm_label, "errts", subject, errors)
+    # the haemo chain as it exists on disk, in the order it was written. The PSD figure used
+    # to re-filter `raw_haemo` in memory to invent its "after" row, which showed the filter
+    # rather than the run; a stage missing here simply does not get a line.
+    psd_stages        = [
+        (f"desc-{desc}", raw)
+        for desc in ("filtered", "resampled", "errts")
+        if (raw := _load_stage_raw(nirs_dir, sqm_label, desc, subject, errors)) is not None
+    ] or None
     sci_vars          = _section_sci(
                             raw_intensity, sci_scores, bad_channels, config,
-                            windowed_section, subject, errors, figures_dir)
+                            windowed_section, subject, errors, figures_dir, record=record)
     motion_vars       = _section_motion(
                             raw_long, sci_scores, config, segments, subject, errors,
                             figures_dir, windowed=windowed_section,
@@ -917,7 +1051,9 @@ def build_subject_report(
                             corrected_segments=motion_vars.get("corrected_segments"),
                             spike_segments=motion_vars.get("spike_spans"))
     haemo_vars        = _section_haemo(raw_haemo, config, subject, errors, figures_dir,
-                                       l_freq=l_freq, h_freq=h_freq)
+                                       l_freq=l_freq, h_freq=h_freq,
+                                       raw_errts=raw_errts, psd_stages=psd_stages,
+                                       record=record)
     denoise_carpet_path = None
     if after_haemo is not None:
         with _guard("Denoising carpet", errors, subject):
@@ -928,7 +1064,8 @@ def build_subject_report(
     psd_det_vars      = _section_psd_detail(raw_haemo, subject, errors, figures_dir,
                                             l_freq=l_freq, h_freq=h_freq,
                                             cardiac=(config.cardiac_l_freq, config.cardiac_h_freq),
-                                            resp=(config.resp_l_freq, config.resp_h_freq))
+                                            resp=(config.resp_l_freq, config.resp_h_freq),
+                                            psd_stages=psd_stages)
     brain_vars        = _section_brain(
                             sci_scores, bad_channels, coords_head, good_mask, raw_intensity,
                             subject, errors, figures_dir, ch_names_brain=ch_names_brain)

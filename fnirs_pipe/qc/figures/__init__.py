@@ -25,6 +25,7 @@ from .motion_panel import (
 )
 from .carpet_compare import carpet_compare_figure
 from .psd_plot import psd_figure
+from .stage_compare import stage_dumbbell_figure
 from .glm_figures import (
     design_matrix_figure, design_matrix_static_figure,
     activation_brain_figure, activation_panel,
@@ -66,6 +67,7 @@ __all__ = [
     "build_motion_detail_figure",
     "carpet_compare_figure",
     "psd_figure",
+    "stage_dumbbell_figure",
     "design_matrix_figure",
     "design_matrix_static_figure",
     "activation_brain_figure",

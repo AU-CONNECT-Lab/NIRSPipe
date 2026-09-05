@@ -320,10 +320,11 @@ _SQM_COLS = [
     "resp_band_frac_hbo", "resp_band_frac_hbr",
     "lowfreq_drift_amplitude_hbo", "lowfreq_drift_amplitude_hbr",
     "pct_data_retained",
+    "cnr_hbo_mean", "cnr_hbr_mean", "cnr_n_epochs",
 ]
 
 
-_SQM_INT_COLS = {"gvtd_num_above_thresh", "spike_count"}
+_SQM_INT_COLS = {"gvtd_num_above_thresh", "spike_count", "cnr_n_epochs"}
 
 
 def _add_missing_sqm_columns(conn: sqlite3.Connection) -> None:

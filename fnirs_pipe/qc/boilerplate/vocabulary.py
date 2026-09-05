@@ -178,6 +178,9 @@ METRIC_SUMMARY = {
 
     # haemoglobin
     "hbo_hbr_corr_mean": "Correlation between HbO and HbR. Strongly negative is physiologically expected; near zero or positive suggests artifact.",
+    "cnr_hbo_mean": "How far the evoked HbO response clears its own noise, averaged over channels. Higher is better. Absent on a run with no stimulus annotations.",
+    "cnr_hbr_mean": "The same for HbR. HbR falls with a response, so this one runs negative and more negative is better.",
+    "cnr_n_epochs": "How many stimulus epochs the CNR was averaged over. Descriptive; a handful of epochs makes the value noisy.",
     "gcor_hbo": "How much every HbO channel moves together. Higher means a stronger shared systemic or global component rather than localised activity.",
     "gcor_hbr": "The same for HbR.",
     "lowfreq_drift_amplitude_hbo": "Peak-to-peak size of the slow HbO baseline wander. Lower is a more stable baseline. Non-standard, may be removed.",
@@ -282,7 +285,8 @@ _PREPROC_METRICS = (
     "resp_band_power_hbo", "resp_band_power_hbr",
     "resp_band_frac_hbo", "resp_band_frac_hbr",
 )
-_BOTH_METRICS = ("hbo_hbr_corr_mean", "gcor_hbo", "gcor_hbr", "pct_data_retained")
+_BOTH_METRICS = ("hbo_hbr_corr_mean", "gcor_hbo", "gcor_hbr", "pct_data_retained",
+                 "cnr_hbo_mean", "cnr_hbr_mean", "cnr_n_epochs")
 
 METRIC_STAGE = {
     **{k: _STAGE_RAW for k in _RAW_METRICS},

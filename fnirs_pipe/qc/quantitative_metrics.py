@@ -46,6 +46,15 @@ GVTD_MOTION_BAND = (0.01, 0.5)  # Hz, bandpass for the filtered (motion-specific
 # psp_mean averages over both kinds, so no factor converts one window's value to another's.
 PSP_WINDOW_S = 10.0
 
+# ---- CNR windows, relative to stimulus onset (s) ----
+# The baseline is the pre-stimulus stretch the response has not reached yet; the response
+# window brackets the canonical HRF peak, which fNIRS puts at 5-10 s with a plateau out to
+# roughly 15 s for a sustained block. Both are fixed rather than derived from stimulus
+# duration: CNR is only comparable across stages of one recording, and a window that moved
+# with the design would make two runs' numbers incomparable for a reason unrelated to noise.
+CNR_BASELINE_S = (-5.0, 0.0)
+CNR_RESPONSE_S = (5.0, 15.0)
+
 # ---- Source-detector separation, mne_nirs' convention ----
 # These are the defaults of mne_nirs.channels.get_short_channels(max_dist=) and
 # get_long_channels(min_dist=, max_dist=). Note they do not meet: 10-15 mm is neither
@@ -845,6 +854,83 @@ def haemo_quality_metrics(raw_haemo: mne.io.Raw) -> dict[str, Any]:
     }
 
 
+@_safe_metrics("CNR", ("cnr_hbo_mean", "cnr_hbr_mean", "cnr_per_channel", "cnr_n_epochs"))
+def _cnr_metrics(
+    raw_haemo: mne.io.Raw,
+    baseline: "tuple[float, float]" = CNR_BASELINE_S,
+    response: "tuple[float, float]" = CNR_RESPONSE_S,
+) -> dict[str, Any]:
+    r"""Contrast-to-noise ratio per channel: how far the evoked response clears its own noise.
+
+    .. math::
+
+        \mathrm{CNR} = \frac{\mu_\text{resp} - \mu_\text{base}}
+                            {\sqrt{\sigma^2_\text{resp} + \sigma^2_\text{base}}},
+
+    taken per epoch on the channel's own samples and then averaged over epochs. HbO rises
+    and HbR falls with a genuine response, so HbO CNR is positive and HbR CNR negative;
+    the two means are reported separately for that reason, as ``gcor`` is.
+
+    Parameters
+    ----------
+    raw_haemo : mne.io.Raw
+        Haemoglobin recording carrying stimulus annotations.
+    baseline, response : tuple[float, float]
+        Window edges relative to onset, in seconds.
+
+    Returns
+    -------
+    dict
+        cnr_hbo_mean, cnr_hbr_mean, cnr_per_channel and cnr_n_epochs; all None on a
+        recording with no stimulus annotations, which is what a resting run looks like.
+
+    Notes
+    -----
+    This is the one signal-quality measure that survives a comparison across the bandpass.
+    Anything built from band power cannot: the filter removes the out-of-band term by
+    construction, so the ratio improves whatever the data did. CNR can move either way,
+    because a filter or a regression that eats the response shrinks the numerator at the
+    same time as the denominator, which is exactly the failure worth seeing.
+
+    ``BAD_`` annotations are censoring marks rather than stimuli and are excluded from the
+    event set; epochs overlapping them are dropped by ``reject_by_annotation``. Bad channels
+    are excluded, following ``mne.pick_types``.
+    """
+    events, event_id = mne.events_from_annotations(raw_haemo, verbose=False)
+    event_id = {k: v for k, v in event_id.items() if not str(k).upper().startswith("BAD")}
+    if not event_id or len(events) == 0:
+        return {}
+    picks = mne.pick_types(raw_haemo.info, fnirs=True)
+    epochs = mne.Epochs(
+        raw_haemo, events, event_id, tmin=baseline[0], tmax=response[1],
+        picks=picks, baseline=None, preload=True, reject_by_annotation=True, verbose=False,
+    )
+    if len(epochs) == 0:
+        return {}
+
+    times = epochs.times
+    base_mask = (times >= baseline[0]) & (times <= baseline[1])
+    resp_mask = (times >= response[0]) & (times <= response[1])
+    if not base_mask.any() or not resp_mask.any():
+        return {}
+
+    data = epochs.get_data(copy=False)          # epoch x channel x time
+    base, resp = data[:, :, base_mask], data[:, :, resp_mask]
+    contrast = resp.mean(axis=2) - base.mean(axis=2)
+    noise = np.sqrt(resp.var(axis=2) + base.var(axis=2))
+    cnr = np.divide(contrast, noise, out=np.full_like(contrast, np.nan), where=noise > 0)
+
+    per_ch = {name: float(v)
+              for name, v in zip(epochs.ch_names, np.nanmean(cnr, axis=0))
+              if np.isfinite(v)}
+    return {
+        "cnr_hbo_mean": _mean_or_none([v for k, v in per_ch.items() if k.endswith(" hbo")]),
+        "cnr_hbr_mean": _mean_or_none([v for k, v in per_ch.items() if k.endswith(" hbr")]),
+        "cnr_per_channel": per_ch,
+        "cnr_n_epochs": int(len(epochs)),
+    }
+
+
 @_safe_metrics("PSD metrics", (
     "cardiac_band_power_hbo", "cardiac_band_power_hbr",
     "cardiac_band_frac_hbo", "cardiac_band_frac_hbr",
@@ -1207,6 +1293,8 @@ def attach_windowed_series(
     cardiac_l_freq: float,
     cardiac_h_freq: float,
     window_s: float = 10.0,
+    *,
+    gvtd_od: "mne.io.Raw | None" = None,
 ) -> dict:
     """Compute sliding-window SCI/PSP/GVTD series, attach summaries to sqm, return raw series.
 
@@ -1215,11 +1303,13 @@ def attach_windowed_series(
     sqm : dict
         Metric dict; per-window summaries are attached to it in place.
     raw_od : mne.io.Raw
-        Optical-density recording.
+        Optical-density recording the SCI and PSP series are read off.
     cardiac_l_freq, cardiac_h_freq : float
         Cardiac band edges in Hz.
     window_s : float, optional
         Non-overlapping window length in seconds.
+    gvtd_od : mne.io.Raw or None, optional
+        A second optical-density recording for the GVTD series alone; ``raw_od`` when None.
 
     Returns
     -------
@@ -1233,6 +1323,13 @@ def attach_windowed_series(
     times collapse the mne-nirs [start, end] window pairs to their midpoint. ``window_s``
     is stored as ``qc_window_s`` so a record says which grid its series were binned on;
     ``psp_mean`` is deliberately not on that grid, see :data:`PSP_WINDOW_S`.
+
+    ``gvtd_od`` exists because the two families want different stages. SCI and PSP measure
+    optode coupling, which the motion correction is not supposed to change, so they belong
+    on the uncorrected file where the per-channel scores were taken. GVTD measures movement,
+    which the correction is entirely about, so it belongs on the corrected one. Both grids
+    are derived from ``window_s`` the same way, so the series stay time-aligned across the
+    two files as long as neither was resampled.
     """
     def _center_times(t):
         a = np.asarray(t)
@@ -1254,9 +1351,10 @@ def attach_windowed_series(
 
     gvtd_per_window = gvtd_p95_per_window = gvtd_t = None
     gvtd_filt_per_window = gvtd_filt_p95_per_window = None
+    raw_gvtd = raw_od if gvtd_od is None else gvtd_od
     try:
-        gvtd_per_window, gvtd_p95_per_window, gvtd_t = compute_windowed_gvtd(raw_od, window_s)
-        gvtd_filt_per_window, gvtd_filt_p95_per_window, _ = compute_windowed_filtered_gvtd(raw_od, window_s)
+        gvtd_per_window, gvtd_p95_per_window, gvtd_t = compute_windowed_gvtd(raw_gvtd, window_s)
+        gvtd_filt_per_window, gvtd_filt_p95_per_window, _ = compute_windowed_filtered_gvtd(raw_gvtd, window_s)
     except Exception as exc:
         logger.warning("windowed GVTD failed: %s", exc)
 
@@ -1347,10 +1445,11 @@ def compute_haemo_sqm(raw_haemo: mne.io.Raw) -> dict[str, Any]:
     """Haemoglobin metrics that stay valid after bandpass and resampling.
 
     For the final checkpoint, where the signal has usually been filtered and
-    downsampled. Returns HbO-HbR correlation, gcor, and data retention.
+    downsampled. Returns HbO-HbR correlation, CNR, gcor, and data retention.
     """
     record: dict[str, Any] = {}
     record.update(haemo_quality_metrics(raw_haemo))
+    record.update(_cnr_metrics(raw_haemo))
     record.update(gcor_metrics(raw_haemo))
     record.update(_retention_metrics(raw_haemo))
     return record
@@ -1374,6 +1473,7 @@ def compute_prep_haemo_sqm(
     require_stage(raw_haemo, "preproc")
     record: dict[str, Any] = {}
     record.update(haemo_quality_metrics(raw_haemo))
+    record.update(_cnr_metrics(raw_haemo))
     record.update(gcor_metrics(raw_haemo))
     record.update(_spectral_metrics(raw_haemo, cardiac_l_freq, cardiac_h_freq, resp_l_freq, resp_h_freq))
     record.update(_drift_metrics(raw_haemo))

@@ -308,7 +308,10 @@
   <summary>b. Raw Signal Quality (SCI / PSP / Short Channel)</summary>
   <div class="details-body">
     <p class="step-desc">
-      Scalp coupling index (SCI) and peak spectral power (PSP) computed per channel.
+      Scalp coupling index (SCI) and peak spectral power (PSP) per channel and per window,
+      both measured on <code>desc-sci</code>, the optical density before motion correction.
+      Both metrics cross-correlate the two wavelengths, so they exist only in the optical
+      density domain and have no counterpart after Beer-Lambert.
       SCI threshold: <strong>{{ config.sci_threshold }}</strong>.
     </p>
 
@@ -318,6 +321,22 @@
       <p class="fig-path">{{ sci_psp_panel_path }}</p>
     {% else %}
       <div class="placeholder">SCI/PSP panel not available.</div>
+    {% endif %}
+
+    {% if motion_strips %}
+      <h3>Did the motion correction cost any coupling?</h3>
+      <p style="font-size:0.82rem;color:#666;margin:0 0 0.3rem;">
+        Same metrics on <code>desc-motcorrected</code>. SCI and PSP sit in the cardiac band,
+        above the frequencies motion correction works on, so they should come back roughly
+        unchanged. Red rows are channels that fell: the correction removed pulsation along
+        with the artifact.
+      </p>
+      {% for strip in motion_strips %}
+        <iframe class="plotly-frame" src="{{ strip.path }}"
+                title="{{ strip.label }} before/after motion correction"
+                style="height:{{ strip.h }}px"></iframe>
+        <p class="fig-path">{{ strip.path }}</p>
+      {% endfor %}
     {% endif %}
 
     {% if brain_views_path %}
@@ -377,11 +396,37 @@
       Modified Beer-Lambert law applied with DPF = {{ config.dpf | join(', ') }}.
     </p>
     <h3>HbO–HbR Correlation</h3>
+    <p style="font-size:0.82rem;color:#666;margin:0 0 0.3rem;">
+      A genuine haemodynamic response drives HbO up and HbR down, so r near &minus;1 is the
+      target and r near 0 or positive means a shared artifact.
+    </p>
     {% if hbo_hbr_path %}
-      <img class="responsive" src="{{ hbo_hbr_path }}" alt="HbO–HbR correlation panel" />
+      <img class="responsive" src="{{ hbo_hbr_path }}" alt="HbO–HbR correlation panel (before denoising)" />
       <p class="fig-path">{{ hbo_hbr_path }}</p>
     {% else %}
       <div class="placeholder">Figure generation failed — see Errors section.</div>
+    {% endif %}
+
+    {% if hbo_hbr_after_path %}
+      <img class="responsive" src="{{ hbo_hbr_after_path }}" alt="HbO–HbR correlation panel (after denoising)" />
+      <p class="fig-path">{{ hbo_hbr_after_path }}</p>
+    {% endif %}
+
+    {% if denoise_strips %}
+      <h3>Across denoising, per channel</h3>
+      <p style="font-size:0.82rem;color:#666;margin:0 0 0.3rem;">
+        <code>desc-preproc</code> against <code>desc-errts</code>, the confound-regression
+        residual. Removing shared systemic signal should push HbO–HbR r towards &minus;1;
+        CNR says whether it took the evoked response with it. CNR is the one quality measure
+        that survives this comparison: anything built from band power improves by
+        construction once a bandpass has run, whatever the data did.
+      </p>
+      {% for strip in denoise_strips %}
+        <iframe class="plotly-frame" src="{{ strip.path }}"
+                title="{{ strip.label }} before/after denoising"
+                style="height:{{ strip.h }}px"></iframe>
+        <p class="fig-path">{{ strip.path }}</p>
+      {% endfor %}
     {% endif %}
 
 
@@ -399,12 +444,20 @@
 
 <!-- step e: PSD -->
 <details open>
-  <summary>e. Power Spectral Density (before / after bandpass)</summary>
+  <summary>e. Power Spectral Density by stage</summary>
   <div class="details-body">
     <p class="step-desc">
-      PSD before and after bandpass filter. Coloured bands: Mayer wave (~0.1&thinsp;Hz),
-      respiration (0.1–0.5&thinsp;Hz), cardiac (0.7–1.5&thinsp;Hz).
-      HbO = red, HbR = blue; thin lines = individual channels, thick = mean.
+      One row per chromophore, one line per stage file on disk. Coloured bands: Mayer wave
+      (~0.1&thinsp;Hz), respiration (0.1–0.5&thinsp;Hz), cardiac (0.7–1.5&thinsp;Hz).
+      Faint lines are the individual channels of the first stage; dashed verticals mark the
+      filter cutoffs.
+      {% if psd_stage_labels %}
+        Stages after <code>desc-preproc</code>:
+        {% for label in psd_stage_labels %}<code>{{ label }}</code>{% if not loop.last %}, {% endif %}{% endfor %}.
+      {% else %}
+        No post-processing output was found for this run, so the second line is the bandpass
+        simulated in memory rather than a file the pipeline wrote.
+      {% endif %}
     </p>
     {% if psd_panel_path %}
       <iframe class="plotly-frame" src="{{ psd_panel_path }}" title="PSD panel" style="height:{{ psd_panel_h }}px"></iframe>
@@ -414,9 +467,9 @@
     {% endif %}
 
     {% if psd_detail_pairs %}
-    <h3>Per-channel PSD (before / after bandpass)</h3>
+    <h3>Per-channel PSD by stage</h3>
     <p style="font-size:0.82rem;color:#666;margin:0 0 0.3rem;">
-      Select a channel to compare its PSD before and after bandpass filtering.
+      Select a channel to compare its PSD across the stages.
     </p>
     <select class="ch-select"
             onchange="document.getElementById('psd-det-frame').src=this.value">

@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 <!-- Format: Keep a Changelog (https://keepachangelog.com/en/1.0.0/) -->
 
+## [Unreleased]
+
+### Added
+- **The subject report shows HbO–HbR correlation before and after denoising**, one panel per stage plus a per-channel strip from `desc-preproc` to `desc-errts`. Removing shared systemic signal should push the correlation towards −1; the strip says on which channels it did
+- **Contrast-to-noise ratio, per channel and across denoising.** It is the one signal-quality measure that stays honest across a bandpass: anything built from band power improves by construction once the filter has run, whether or not the data got better, while CNR falls if the denoising ate the evoked response. Task runs only, since it needs stimulus markers
+- **SCI and PSP before and after motion correction**, as a per-channel strip under the quality panel. Both metrics sit above the frequencies motion correction works on, so a channel that fell is one where the correction removed cardiac pulsation along with the artifact
+- `errts` section in the run's quality record, the confound-regression residual measured with the same haemoglobin metrics as `preproc`
+
+### Changed
+- **The PSD panel plots the files the run actually wrote**, one line per stage, instead of re-filtering the unfiltered signal in memory to invent an "after" curve. The old curve showed the filter's shape rather than the run's, and never reflected resampling. A run with no post-processing still gets the simulated curve, labelled as one
+- **The SCI/PSP panel is one stage throughout.** Its heatmap was read off the motion-corrected file while the lollipops beside it came from before the correction, so the two halves of one figure described different data. Everything in the panel is now the uncorrected optical density
+
 ## [0.26.0] - 2026-09-04
 
 ### Added
