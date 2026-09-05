@@ -178,6 +178,72 @@ def build_hyper_report(
     return output_path
 
 
+def condition_windows(
+    raw: "mne.io.Raw",
+    min_duration: float,
+) -> "list[tuple[str, float, float]]":
+    """[(label, tstart, tend)] on the aligned clock, one window per task annotation.
+
+    e.g. annotations "Video" at 60 s for 240 s and "Talk" at 300 s for 240 s give
+    ``[("Video", 60.0, 300.0), ("Talk", 300.0, 540.0)]``.
+
+    An annotation's own ``duration`` is the window when it has one. Many acquisition systems
+    write triggers with a duration of zero, so a window with none runs from its onset to the
+    next annotation's, and the last to the end of the recording. Which rule each window came
+    from is logged, and the tail of a zero-duration run is as long as the recording happens
+    to be rather than as long as the block was.
+
+    A description that occurs more than once gets one window per occurrence, numbered
+    ``desc#1``, ``desc#2``. They are not spliced into a single record: a wavelet transform
+    reads a join between two non-adjacent segments as a step, which lands in the result as
+    broadband coherence at the join.
+
+    ``min_duration`` drops windows shorter than that, in seconds. One cycle of the lowest
+    frequency asked for is the sensible floor, and it is why an event-related design with
+    two-second trials yields nothing here: no crop can carry a frequency whose period is
+    longer than the crop.
+    """
+    from fnirs_pipe.qc.figure_io import extract_markers
+
+    markers = sorted(extract_markers(raw), key=lambda m: m["onset"])
+    if not markers:
+        return []
+
+    end = float(raw.times[-1])
+    counts: dict[str, int] = {}
+    for m in markers:
+        counts[m["description"]] = counts.get(m["description"], 0) + 1
+    seen: dict[str, int] = {}
+
+    windows: list[tuple[str, float, float]] = []
+    n_from_duration = 0
+    for i, m in enumerate(markers):
+        onset = float(m["onset"])
+        if float(m["duration"]) > 0:
+            stop = onset + float(m["duration"])
+            n_from_duration += 1
+        else:
+            stop = float(markers[i + 1]["onset"]) if i + 1 < len(markers) else end
+        stop = min(stop, end)
+
+        desc = m["description"]
+        if counts[desc] > 1:
+            seen[desc] = seen.get(desc, 0) + 1
+            label = f"{desc}#{seen[desc]}"
+        else:
+            label = desc
+
+        if stop - onset < min_duration:
+            logger.info("condition %s spans %.1fs, under the %.1fs floor: skipped",
+                        label, stop - onset, min_duration)
+            continue
+        windows.append((label, onset, stop))
+
+    logger.info("condition windows: %d kept, %d took their own duration and %d ran to the "
+                "next trigger", len(windows), n_from_duration, len(markers) - n_from_duration)
+    return windows
+
+
 def build_hyper_post_report(
     group_id: str,
     task: str,
@@ -196,6 +262,7 @@ def build_hyper_post_report(
     wtc_seed: int | None = None,
     wtc_mc_count: int = 300,
     wtc_channel_cross: bool = False,
+    wtc_by_condition: bool = False,
     wtc_limit_scales: bool = True,
     wtc_save_maps: bool = False,
     wtc_mask_coi: bool = False,
@@ -222,6 +289,13 @@ def build_hyper_post_report(
     Crossing is also what produces the ROI × ROI matrix, since the ROI numbers are grouped
     from the channel ones.
 
+    ``wtc_by_condition`` repeats the whole coherence analysis inside each task annotation's
+    own window, on top of the whole-run pass, which stays as it was. The band means of every
+    window land in one ``hyper-wtcbycond.tsv`` with a ``condition`` column, and each window
+    gets its own figures. See :func:`condition_windows` for how a window is decided, and note
+    that the runtime is roughly doubled: the windows together are about one more pass over
+    the recording.
+
     ``wtc_mask_coi`` restricts each band mean to the cone of influence. Off by default; the
     share inside the cone is reported either way as ``n_valid_frac``.
 
@@ -236,6 +310,7 @@ def build_hyper_post_report(
         WTCResult,
         _hyper_sidecar,
         compute_wtc,
+        crop_aligned_window,
         roi_maps_from_channels,
         roi_mean_of_channels,
         wtc_band_mean,
@@ -290,7 +365,7 @@ def build_hyper_post_report(
         logger.info("WTC band means saved: %s", tsv_path)
         return df
 
-    def _write_df_tsv(df, kind: str, step: str) -> Path:
+    def _write_df_tsv(df, kind: str, step: str, **extra) -> Path:
         tsv_path = (group_data_dir(output_dir, group_id)
                     / f"group-{group_id}_task-{task}_hyper-{kind}.tsv")
         df.to_csv(tsv_path, sep="\t", index=False)
@@ -298,7 +373,7 @@ def build_hyper_post_report(
             tsv_path, step,
             [p for p in (path_from(r) for r in aligned_raws.values()) if p],
             band_fmin=band_fmin, band_fmax=band_fmax, mask_coi=wtc_mask_coi,
-            wtc_fmin=wtc_fmin, wtc_fmax=wtc_fmax,
+            wtc_fmin=wtc_fmin, wtc_fmax=wtc_fmax, **extra,
         )
         return tsv_path
 
@@ -442,6 +517,77 @@ def build_hyper_post_report(
                 )
             per_roi_post[roi_name] = {"wtc": roi_fig}
 
+    # ---- per condition ----
+    # The whole-run pass above stands; this adds the same analysis inside each task window,
+    # which is the comparison a block design is run for.
+    condition_figs: list[dict] = []
+    if wtc_by_condition:
+        windows = condition_windows(ref_raw, min_duration=1.0 / wtc_fmin) if ref_raw else []
+        if not windows:
+            logger.warning("--wtc-by-condition: no annotation window survived; nothing to do")
+        else:
+            logger.info("--wtc-by-condition: %d window(s), each a further WTC pass",
+                        len(windows))
+        chan_frames, roi_frames = [], []
+        for label, tstart, tstop in windows:
+            try:
+                cropped = crop_aligned_window(aligned_raws, tstart, tstop)
+                cond_wtc = compute_wtc(
+                    cropped, fmin=wtc_fmin, fmax=wtc_fmax, significance=wtc_significance,
+                    seed=wtc_seed, mc_count=wtc_mc_count, cross=wtc_channel_cross,
+                    limit_scales=wtc_limit_scales)
+                cond_chan = wtc_band_mean(cond_wtc, band_fmin, band_fmax,
+                                          mask_coi=wtc_mask_coi)
+            except Exception as exc:
+                logger.warning("condition %s: WTC failed: %s", label, exc)
+                continue
+
+            cond_chan.insert(0, "condition", label)
+            chan_frames.append(cond_chan)
+
+            entry: dict = {"label": label, "tstart": round(tstart, 1),
+                           "tstop": round(tstop, 1), "matrix": "", "grid": ""}
+            if wtc_channel_cross:
+                try:
+                    ch_labels = sorted({*cond_chan["label"], *cond_chan["label2"]})
+                    entry["matrix"] = build_wtc_cross_matrix(
+                        cond_chan, ch_labels, subject_ids, band_fmin, band_fmax,
+                        kind="channel") or ""
+                except Exception as exc:
+                    logger.warning("condition %s: channel matrix failed: %s", label, exc)
+
+            if roi_map:
+                try:
+                    cond_roi = roi_mean_of_channels(
+                        cond_chan.drop(columns="condition"), roi_map,
+                        min_channels=wtc_roi_min_channels)
+                    cond_roi.insert(0, "condition", label)
+                    roi_frames.append(cond_roi)
+                except Exception as exc:
+                    logger.warning("condition %s: ROI means failed: %s", label, exc)
+                try:
+                    cond_roi_wtc = roi_maps_from_channels(cond_wtc, roi_map)
+                    key = next(iter(cond_roi_wtc.pairs), None)
+                    entry["grid"] = build_wtc_roi_grid(
+                        cond_roi_wtc, list(roi_map), key, subject_ids) or ""
+                except Exception as exc:
+                    logger.warning("condition %s: ROI grid failed: %s", label, exc)
+
+            condition_figs.append(entry)
+
+        # the windows are the one thing a reader cannot reconstruct from the table
+        spans = {label: [round(t0, 3), round(t1, 3)] for label, t0, t1 in windows}
+        if chan_frames:
+            path = _write_df_tsv(pd.concat(chan_frames, ignore_index=True),
+                                 "wtcbycond", "hyper_wtc_bycondition",
+                                 condition_windows_s=spans)
+            logger.info("WTC band means per condition saved: %s", path)
+        if roi_frames:
+            path = _write_df_tsv(pd.concat(roi_frames, ignore_index=True),
+                                 "wtcbycond-roichan", "hyper_wtc_bycondition_roichan",
+                                 condition_windows_s=spans)
+            logger.info("WTC ROI means per condition saved: %s", path)
+
     bad_pairs_all: set[str] = set()
     if bad_channels:
         for chs in bad_channels.values():
@@ -471,6 +617,7 @@ def build_hyper_post_report(
         wtc_roi_matrix_json=json.dumps(roi_matrix_fig),
         wtc_chan_matrix_b64=chan_matrix_b64,
         wtc_roi_grid_b64=roi_grid_b64,
+        condition_figs=condition_figs,
         subject_metrics_rows=subject_metric_rows(
             subject_sqm or {}, subject_ids, sci_threshold),
     )

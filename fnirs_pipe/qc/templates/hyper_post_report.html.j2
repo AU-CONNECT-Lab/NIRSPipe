@@ -118,6 +118,31 @@ select#ch-select-post {
 {% endif %}
 {% endif %}
 
+{% for cond in condition_figs %}
+{% if cond.matrix or cond.grid %}
+<div class="card">
+  <div class="panel-title">
+    Condition: {{ cond.label }}
+    <span class="panel-hint">
+      {{ cond.tstart }}&ndash;{{ cond.tstop }} s on the aligned clock &bull; the same analysis
+      as the whole run, inside this window only &bull; numbers in
+      <code>hyper-wtcbycond.tsv</code>
+    </span>
+  </div>
+  {% if cond.matrix %}
+  <div style="text-align:center; padding:0.5rem">
+    <img src="data:image/png;base64,{{ cond.matrix }}" style="max-width:100%"/>
+  </div>
+  {% endif %}
+  {% if cond.grid %}
+  <div style="text-align:center; padding:0.5rem">
+    <img src="data:image/png;base64,{{ cond.grid }}" style="max-width:100%"/>
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+{% endfor %}
+
 {% if wtc_chan_matrix_b64 %}
 <div class="card">
   <div class="panel-title">

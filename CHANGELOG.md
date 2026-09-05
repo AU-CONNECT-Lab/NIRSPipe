@@ -7,6 +7,12 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- **`--wtc-by-condition`**, which runs the coherence inside each task annotation's window as well as over the whole recording, so a block design gets one result per block. A trigger with a duration uses it, one without runs to the next trigger, and a window too short to carry the lowest frequency asked for is skipped and said so
+
+
+## [0.27.0] - 2026-09-05
+
+### Added
 - **The subject report shows HbO–HbR correlation before and after denoising**, one panel per stage plus a per-channel strip from `desc-preproc` to `desc-errts`. Removing shared systemic signal should push the correlation towards −1; the strip says on which channels it did
 - **Contrast-to-noise ratio, per channel and across denoising.** It is the one signal-quality measure that stays honest across a bandpass: anything built from band power improves by construction once the filter has run, whether or not the data got better, while CNR falls if the denoising ate the evoked response. Task runs only, since it needs stimulus markers
 - **SCI and PSP before and after motion correction**, as a per-channel strip under the quality panel. Both metrics sit above the frequencies motion correction works on, so a channel that fell is one where the correction removed cardiac pulsation along with the artifact

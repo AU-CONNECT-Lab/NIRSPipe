@@ -29,9 +29,13 @@ logger = get_logger("qc.wtc_aggregate")
 _MUST_AGREE = ("band_fmin", "band_fmax", "mask_coi", "n_iter")
 
 _KINDS = {
-    "wtc":         "group_hyper_wtc",
-    "wtc-roichan": "group_hyper_wtc_roichan",
-    "wtc-pseudo":  "group_hyper_wtc_pseudo",
+    "wtc":                "group_hyper_wtc",
+    "wtc-roichan":        "group_hyper_wtc_roichan",
+    "wtc-pseudo":         "group_hyper_wtc_pseudo",
+    # --wtc-by-condition writes these beside the whole-run pair above; they carry a
+    # `condition` column and are merged separately, never into the whole-run table
+    "wtcbycond":          "group_hyper_wtc_bycondition",
+    "wtcbycond-roichan":  "group_hyper_wtc_bycondition_roichan",
 }
 
 
@@ -96,9 +100,10 @@ def _refuse_mixed_shapes(frames: dict[str, pd.DataFrame]) -> None:
 def aggregate_wtc(output_dir: Path, kind: str = "wtc") -> pd.DataFrame:
     """Concatenate every per-dyad WTC band-mean table under output_dir.
 
-    kind is "wtc" for the channel-level tables, "wtc-roichan" for the ROI-level ones or
-    "wtc-pseudo" for the phase-scrambled null. Returns
-    an empty frame when nothing matches, so a study that never ran WTC is not an error.
+    kind is "wtc" for the channel-level tables, "wtc-roichan" for the ROI-level ones,
+    "wtc-pseudo" for the phase-scrambled null, or the "wtcbycond" pair for what
+    ``--wtc-by-condition`` wrote. Returns an empty frame when nothing matches, so a study
+    that never ran WTC is not an error.
     """
     if kind not in _KINDS:
         raise ValueError(f"kind must be one of {sorted(_KINDS)}, got {kind!r}")

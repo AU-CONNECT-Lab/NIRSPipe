@@ -181,6 +181,7 @@ def cmd_run(
     wtc_band_fmin: float | None, wtc_band_fmax: float | None,
     wtc_significance: bool, wtc_mc_count: int, wtc_seed: int | None,
     wtc_mask_coi: bool, wtc_roi_min_channels: int, wtc_channel_cross: bool,
+    wtc_by_condition: bool,
     wtc_limit_scales: bool, wtc_save_maps: bool,
     wtc_pseudo: int | None, wtc_pseudo_cross: bool,
     bads_scope: str, isc_threshold: float, sci_threshold: float | None,
@@ -243,6 +244,7 @@ def cmd_run(
             wtc_seed=wtc_seed,
             wtc_mc_count=wtc_mc_count,
             wtc_channel_cross=wtc_channel_cross,
+            wtc_by_condition=wtc_by_condition,
             wtc_limit_scales=wtc_limit_scales,
             wtc_save_maps=wtc_save_maps,
             wtc_mask_coi=wtc_mask_coi,
@@ -396,6 +398,15 @@ def _build_parser() -> argparse.ArgumentParser:
                           "channels are noisier than ROI averages, so treat the off-diagonal "
                           "as exploratory and correct for the number of tests. Does not "
                           "affect the null: see --wtc-pseudo-cross.")
+    run.add_argument("--wtc-by-condition", action="store_true",
+                     help="Also run the coherence inside each task annotation's own window, "
+                          "so a block design gets one result per block rather than one over "
+                          "the whole recording. Band means land in hyper-wtcbycond.tsv with "
+                          "a condition column, and each window gets its own figures. A "
+                          "trigger with a duration uses it; one without runs to the next "
+                          "trigger, and the last to the end. Windows shorter than one cycle "
+                          "of --wtc-fmin are skipped. The whole-run analysis still runs, so "
+                          "expect roughly double the time.")
     run.add_argument("--wtc-limit-scales", action=argparse.BooleanOptionalAction, default=True,
                      help="Compute only the wavelet scales inside --wtc-fmin/--wtc-fmax "
                           "plus margin, instead of every scale the record length allows "
