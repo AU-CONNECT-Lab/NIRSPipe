@@ -85,12 +85,16 @@ def test_defaults_preserved():
 def test_bands_have_no_default(flag, capsys):
     # Dropping any one of them must be refused rather than filled in: the bands are
     # population-dependent and a wrong band silently corrupts SCI, PSP and band power.
+    #
+    # Driven through main() rather than the parser: the bands describe preprocessing, so
+    # they are required of the participant level rather than of every invocation, and the
+    # group level no longer has to name four frequencies it never uses.
     argv = list(_MIN)
     i = argv.index(flag)
     del argv[i:i + 2]
 
     with pytest.raises(SystemExit):
-        _parse(argv)
+        run_cli.main(argv)
     assert flag in capsys.readouterr().err
 
 

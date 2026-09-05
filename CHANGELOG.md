@@ -6,6 +6,9 @@ All notable changes to this project will be documented in this file.
 
 ## [0.26.0] - 2026-09-04
 
+### Fixed
+- **A `--no-report` run left the dyad analysis with nothing excluded.** Rejected channels were read from the per-channel CSV, which the report writes, so preprocessing that skipped the report produced a tree where `--desc errts` analysed every channel including the bad ones, and `--bads-scope subject` did nothing at any stage. Neither said so. Rejection now comes from the `desc-sci` sidecar, which prep writes either way, and the log names the source and the count. Every coherence value on a dyad with a rejected channel changes
+
 ### Added
 - **`fnirs-hyper`, a tool for dyad analysis.** `run` writes the WTC + ISC report per dyad, `band` re-averages saved coherence maps over another frequency band, and `merge` concatenates the per-dyad tables into one long table per kind. Every subcommand takes one derivatives directory and reads no BIDS input
 

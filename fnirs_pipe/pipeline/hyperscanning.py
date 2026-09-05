@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -479,6 +480,30 @@ def _for_task(paths: list[Path], task: str) -> list[Path]:
     return paths
 
 
+def _bad_from_sidecar(json_path: Path) -> list[str]:
+    """The rejected channels prep recorded for a run, from its desc-sci sidecar.
+
+    ``{"parameters": ..., "bad_channels": ["S6_D5 760", "S6_D5 850"]}`` -> that list.
+
+    This is where rejection is decided: prep writes the sidecar after unioning the SCI
+    detections with any manual --bad-channels, and writes it whether or not a report was
+    asked for. The channel-metrics CSV carries the same set, but the report writes that one.
+    """
+    try:
+        return list(json.loads(json_path.read_text(encoding="utf-8")).get("bad_channels") or [])
+    except (OSError, json.JSONDecodeError):
+        return []
+
+
+def _sci_from_sidecar(json_path: Path) -> dict[str, float]:
+    """The per-channel SCI prep recorded for a run, from the same sidecar."""
+    try:
+        scores = json.loads(json_path.read_text(encoding="utf-8")).get("sci_scores") or {}
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return {str(k): float(v) for k, v in scores.items()}
+
+
 def _bad_from_csv(csv_path: Path) -> list[str]:
     try:
         ch_df = pd.read_csv(csv_path)
@@ -511,8 +536,6 @@ def load_group_sqm(
 
     Returns {subject_id: sqm_dict}.
     """
-    import json
-
     if bads_scope not in ("run", "subject"):
         raise ValueError(f"bads_scope must be 'run' or 'subject', got {bads_scope!r}")
 
@@ -533,24 +556,46 @@ def load_group_sqm(
             sqm.update(record.get("motion") or {})
             sqm.update(record.get("preproc") or {})
 
-        csvs = sorted(nirs_dir.glob(f"{entry.subject_id}*_channel_metrics.csv"))
-        run_csvs = _for_task(csvs, entry.task)
-        if csvs and not run_csvs:
+        # Rejection is read from the desc-sci sidecars, which prep writes on every run. The
+        # channel-metrics CSV holds the same set, but the report writes that one, so a tree
+        # produced with --no-report has the sidecars and no CSV. Reading the CSV alone used
+        # to leave desc-errts with nothing rejected at all, silently, because the post stage
+        # writes an empty info["bads"] and the CSV was the only other record.
+        sidecars = sorted(nirs_dir.glob(f"{entry.subject_id}*_desc-sci_nirs.json"))
+        csvs     = sorted(nirs_dir.glob(f"{entry.subject_id}*_channel_metrics.csv"))
+        marks, read_bads = ((sidecars, _bad_from_sidecar) if sidecars
+                            else (csvs, _bad_from_csv))
+        kind = "desc-sci sidecar" if sidecars else "channel metrics CSV"
+
+        run_marks = _for_task(marks, entry.task)
+        if not marks:
             logger.warning(
-                "%s has channel metrics but none for task-%s, so no channel is rejected "
-                "for it. Rerun fnirs-pipe on this task to write them.",
-                entry.subject_id, entry.task)
-        for csv_path in run_csvs:
-            try:
-                ch_df = pd.read_csv(csv_path)
-                if {"name", "sci"}.issubset(ch_df.columns):
-                    sqm["sci_per_channel"] = dict(
-                        zip(ch_df["name"].astype(str),
-                            pd.to_numeric(ch_df["sci"], errors="coerce"))
-                    )
-            except Exception:
-                pass
-            sqm["bad_channels"] = _bad_from_csv(csv_path)
+                "%s has neither a desc-sci sidecar nor channel metrics, so no channel is "
+                "rejected for task-%s and every bad channel enters the inter-brain metrics. "
+                "Rerun fnirs-pipe on this subject.", entry.subject_id, entry.task)
+        elif not run_marks:
+            logger.warning(
+                "%s has a %s but none for task-%s, so no channel is rejected for it. "
+                "Rerun fnirs-pipe on this task.", entry.subject_id, kind, entry.task)
+
+        for path in run_marks:
+            if sidecars:
+                scores = _sci_from_sidecar(path)
+                if scores:
+                    sqm["sci_per_channel"] = scores
+            else:
+                try:
+                    ch_df = pd.read_csv(path)
+                    if {"name", "sci"}.issubset(ch_df.columns):
+                        sqm["sci_per_channel"] = dict(
+                            zip(ch_df["name"].astype(str),
+                                pd.to_numeric(ch_df["sci"], errors="coerce"))
+                        )
+                except Exception:
+                    pass
+            sqm["bad_channels"] = read_bads(path)
+            logger.info("%s task-%s: %d rejected channel(s) from %s (%s)",
+                        entry.subject_id, entry.task, len(sqm["bad_channels"]), kind, path.name)
 
         # which run each rejection came from, so the union is reviewable rather than a
         # channel list with no explanation of why a clean condition lost a channel
@@ -558,12 +603,14 @@ def load_group_sqm(
             ch: [entry.task] for ch in (sqm.get("bad_channels") or [])
         }
         if bads_scope == "subject":
-            for csv_path in csvs:
-                from_task = m.group(1) if (m := re.search(r"_task-([A-Za-z0-9]+)", csv_path.name)) else entry.task
-                for ch in _bad_from_csv(csv_path):
+            for path in marks:
+                from_task = m.group(1) if (m := re.search(r"_task-([A-Za-z0-9]+)", path.name)) else entry.task
+                for ch in read_bads(path):
                     if from_task not in sources.setdefault(ch, []):
                         sources[ch].append(from_task)
             sqm["bad_channels"] = sorted(sources)
+            logger.info("%s: --bads-scope subject unions %d channel(s) over %d run(s) of %s",
+                        entry.subject_id, len(sources), len(marks), kind)
         sqm["bad_channel_sources"] = {ch: sorted(t) for ch, t in sources.items()}
 
         result[entry.subject_id] = sqm
