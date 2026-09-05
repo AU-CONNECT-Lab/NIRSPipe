@@ -6,6 +6,9 @@ All notable changes to this project will be documented in this file.
 
 ## [0.26.0] - 2026-09-04
 
+### Added
+- **The subject report shows GVTD before and after motion correction**, as `before → after` on the same five rows it already had, the way global correlation shows the regression either side. Both sides are measured on the same channel set: a long-channel GVTD read against an all-channel one differs several-fold on the same recording, which would show up as an improvement the correction never made
+
 ### Fixed
 - **A `--no-report` run left the dyad analysis with nothing excluded.** Rejected channels were read from the per-channel CSV, which the report writes, so preprocessing that skipped the report produced a tree where `--desc errts` analysed every channel including the bad ones, and `--bads-scope subject` did nothing at any stage. Neither said so. Rejection now comes from the `desc-sci` sidecar, which prep writes either way, and the log names the source and the count. Every coherence value on a dyad with a rejected channel changes
 

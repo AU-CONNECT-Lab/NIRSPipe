@@ -52,8 +52,8 @@ _DESC_RE = re.compile(r"_desc-([A-Za-z0-9]+)_nirs\.snirf$")
 # the haemo file the "final" section measures, best first
 _FINAL_ORDER = ("resampled", "filtered", "preproc")
 
-SECTIONS = ("raw", "raw_long", "raw_short", "motion", "motion_post", "windowed",
-            "preproc", "final")
+SECTIONS = ("raw", "raw_long", "raw_short", "motion", "motion_post",
+            "motion_post_long", "motion_post_short", "windowed", "preproc", "final")
 
 
 def scan_runs(nirs_dir: Path) -> dict[str, dict[str, Path]]:
@@ -362,10 +362,28 @@ def compute_run_sections(
             logger.warning("windowed: correction spans failed", exc_info=True)
 
     # the same OD-domain metrics as `raw`, measured on the corrected file. Same domain and
-    # same units, so these subtract against `raw`; nothing across Beer-Lambert does
+    # same units, so these subtract against `raw`; nothing across Beer-Lambert does.
+    # Split by separation the same way `raw` is, so every post section has a `raw*` section
+    # on the identical channel set to subtract against; mixing the two splits would compare
+    # a long-channel GVTD against an all-channel one and read the difference as an effect
+    # of the correction.
     if "motcorrected" in stages:
-        section("motion_post", lambda: _motion_post_section(
-            read_snirf(stages["motcorrected"]), cardiac_l_freq, cardiac_h_freq))
+        try:
+            raw_motcorr = read_snirf(stages["motcorrected"])
+        except Exception:
+            raw_motcorr = None
+            logger.warning("%s unreadable; motion_post sections skipped",
+                           stages["motcorrected"], exc_info=True)
+        if raw_motcorr is not None:
+            section("motion_post", lambda: _motion_post_section(
+                raw_motcorr, cardiac_l_freq, cardiac_h_freq))
+            post_long, post_short = long_short_channels(raw_motcorr)
+            if post_long and len(post_long) < len(raw_motcorr.ch_names):
+                section("motion_post_long", lambda: _motion_post_section(
+                    raw_motcorr.copy().pick(post_long), cardiac_l_freq, cardiac_h_freq))
+            if post_short:
+                section("motion_post_short", lambda: _motion_post_section(
+                    raw_motcorr.copy().pick(post_short), cardiac_l_freq, cardiac_h_freq))
 
     if "preproc" in stages:
         section("preproc", lambda: compute_prep_haemo_sqm(

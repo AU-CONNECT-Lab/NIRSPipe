@@ -53,8 +53,8 @@ Page UI + command generator done in v0.7. The run button executes the generated 
 ([interface/callbacks/analysis_callbacks.py](fnirs_pipe/interface/callbacks/analysis_callbacks.py)),
 blocking until it finishes and then showing the last 30 lines of output. The generated
 command is held against the CLI's flag surface by `tests/test_gui_cli_surface.py`. The QC
-Reports page covers the `fnirs-qc` layer and shows each report it generates inline. Still
-missing:
+Reports page covers the `fnirs-qc` and `fnirs-hyper` layers and shows each report it
+generates inline. Still missing:
 
 - Live progress / log streaming during the run, instead of one block of output at the end
 

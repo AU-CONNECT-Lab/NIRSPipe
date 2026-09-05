@@ -638,16 +638,16 @@
         <span class="qv">{% if sqm.get('gcor_hbr_postreg') is not none %}{{ qm_val(sqm.get('gcor_hbr_prereg')) }} → {{ qm_val(sqm.get('gcor_hbr_postreg')) }}{% else %}{{ qm_val(sqm.get('gcor_hbr')) }}{% endif %}</span></li>
     <li>{{ ql('pct_data_retained', '% data retained') }}
         <span class="qv {{ qv_class(ret_pct, ret_pct >= 0.8, ret_pct >= 0.6) }}">{{ pct(ret_pct) }}</span></li>
-    <li>{{ ql('gvtd_mean', 'GVTD mean') }}
-        <span class="qv">{{ qm_val(sqm.get('gvtd_mean'), '.3e') }}</span></li>
-    <li>{{ ql('gvtd_p95', 'GVTD p95') }}
-        <span class="qv">{{ qm_val(sqm.get('gvtd_p95'), '.3e') }}</span></li>
-    <li>{{ ql('gvtd_pct_above_thresh', 'GVTD % motion') }}
-        <span class="qv">{{ pct(sqm.get('gvtd_pct_above_thresh')) }}</span></li>
-    <li>{{ ql('gvtd_num_above_thresh', 'GVTD motion frames') }}
-        <span class="qv">{{ qm_val(sqm.get('gvtd_num_above_thresh'), 'd') }}</span></li>
-    <li>{{ ql('gvtd_thresh', 'GVTD threshold') }}
-        <span class="qv">{{ qm_val(sqm.get('gvtd_thresh'), '.3e') }}</span></li>
+    <li>{{ ql('gvtd_mean', 'GVTD mean' ~ (' (motion before→after)' if sqm.get('gvtd_mean_post') is not none else '')) }}
+        <span class="qv">{% if sqm.get('gvtd_mean_post') is not none %}{{ qm_val(sqm.get('gvtd_mean'), '.3e') }} → {{ qm_val(sqm.get('gvtd_mean_post'), '.3e') }}{% else %}{{ qm_val(sqm.get('gvtd_mean'), '.3e') }}{% endif %}</span></li>
+    <li>{{ ql('gvtd_p95', 'GVTD p95' ~ (' (motion before→after)' if sqm.get('gvtd_p95_post') is not none else '')) }}
+        <span class="qv">{% if sqm.get('gvtd_p95_post') is not none %}{{ qm_val(sqm.get('gvtd_p95'), '.3e') }} → {{ qm_val(sqm.get('gvtd_p95_post'), '.3e') }}{% else %}{{ qm_val(sqm.get('gvtd_p95'), '.3e') }}{% endif %}</span></li>
+    <li>{{ ql('gvtd_pct_above_thresh', 'GVTD % motion' ~ (' (motion before→after)' if sqm.get('gvtd_pct_above_thresh_post') is not none else '')) }}
+        <span class="qv">{% if sqm.get('gvtd_pct_above_thresh_post') is not none %}{{ pct(sqm.get('gvtd_pct_above_thresh')) }} → {{ pct(sqm.get('gvtd_pct_above_thresh_post')) }}{% else %}{{ pct(sqm.get('gvtd_pct_above_thresh')) }}{% endif %}</span></li>
+    <li>{{ ql('gvtd_num_above_thresh', 'GVTD motion frames' ~ (' (motion before→after)' if sqm.get('gvtd_num_above_thresh_post') is not none else '')) }}
+        <span class="qv">{% if sqm.get('gvtd_num_above_thresh_post') is not none %}{{ qm_val(sqm.get('gvtd_num_above_thresh'), 'd') }} → {{ qm_val(sqm.get('gvtd_num_above_thresh_post'), 'd') }}{% else %}{{ qm_val(sqm.get('gvtd_num_above_thresh'), 'd') }}{% endif %}</span></li>
+    <li>{{ ql('gvtd_thresh', 'GVTD threshold' ~ (' (motion before→after)' if sqm.get('gvtd_thresh_post') is not none else '')) }}
+        <span class="qv">{% if sqm.get('gvtd_thresh_post') is not none %}{{ qm_val(sqm.get('gvtd_thresh'), '.3e') }} → {{ qm_val(sqm.get('gvtd_thresh_post'), '.3e') }}{% else %}{{ qm_val(sqm.get('gvtd_thresh'), '.3e') }}{% endif %}</span></li>
     {% if sqm.get('motion_corrected_pct') is not none %}
     <li>{{ ql('motion_corrected_pct', 'Motion corrected % (exp.)') }}
         <span class="qv">{{ pct(sqm.get('motion_corrected_pct')) }}</span></li>

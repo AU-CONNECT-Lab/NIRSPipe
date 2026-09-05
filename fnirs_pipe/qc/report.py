@@ -569,6 +569,9 @@ def _section_sqm(
     missing record is reported as an error rather than silently measured a second time,
     and so is a record that carries none of the sections the panel reads, which is what a
     foreign file at this path looks like.
+
+    The motion-corrected side of the same channel set is added under a ``_post`` suffix,
+    which is what lets the template print GVTD as ``before -> after``.
     """
     sqm: dict = {}
     with _guard("SQM record", errors, subject):
@@ -585,6 +588,14 @@ def _section_sqm(
         for key in keys:
             sqm.update(record.get(key) or {})
             sqm.update(per_channel.get(key) or {})
+        # The corrected side of the *same* channel set, suffixed rather than merged: it
+        # carries the same key names as `raw_key` by design, so a plain update would
+        # silently replace the pre-correction values with the post ones. No fallback to a
+        # different split if this one is missing -- a long-channel GVTD against an
+        # all-channel one would read as an effect of the correction.
+        post_key = "motion_post_long" if raw_key == "raw_long" else "motion_post"
+        for k, v in (record.get(post_key) or {}).items():
+            sqm[f"{k}_post"] = v
     channel_rows = []
     for ch in sci_scores:
         pair_key = re.sub(r'\s+(\d+|hbo|hbr)$', '', ch, flags=re.IGNORECASE)
