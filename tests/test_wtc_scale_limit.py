@@ -45,14 +45,17 @@ def test_limiting_scales_reproduces_the_full_transform(duration, sfreq, fmin, fm
     full = _pairwise_wtc(x, y, dt, step, fmin, fmax, cache=False, limit_scales=False)
     limited = _pairwise_wtc(x, y, dt, step, fmin, fmax, cache=False, limit_scales=True)
 
-    wtc_full, freqs_full, coi_full, _ = full
-    wtc_lim, freqs_lim, coi_lim, _ = limited
+    wtc_full, freqs_full, coi_full, _, phase_full = full
+    wtc_lim, freqs_lim, coi_lim, _, phase_lim = limited
 
     assert freqs_full.shape == freqs_lim.shape
     np.testing.assert_allclose(freqs_full, freqs_lim, rtol=1e-12)
     np.testing.assert_allclose(coi_full, coi_lim, rtol=1e-12)
     # the coherences themselves, which is what a band mean is taken over
     np.testing.assert_allclose(wtc_full, wtc_lim, atol=1e-6)
+    # and the phase, which the arrows are drawn from. It is band-limited and decimated by
+    # the same indexing, so a slip there would rotate every arrow without touching the map
+    np.testing.assert_allclose(phase_full, phase_lim, atol=1e-6)
 
 
 @pytest.mark.parametrize("duration,sfreq,fmin,fmax", CASES)

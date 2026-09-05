@@ -48,20 +48,20 @@ def raw_pycwt(short_pair):
     import pycwt
 
     sig1, sig2 = short_pair
-    WCT, _, coi, freqs, _ = pycwt.wct(sig1, sig2, dt=DT, dj=1.0 / 12,
-                                      sig=False, normalize=True, cache=False)
-    return WCT, coi, freqs
+    WCT, aWCT, coi, freqs, _ = pycwt.wct(sig1, sig2, dt=DT, dj=1.0 / 12,
+                                         sig=False, normalize=True, cache=False)
+    return WCT, coi, freqs, aWCT
 
 
 # ---- structural: rebuild each step by hand ----
 
 def test_the_whole_adaptation_reproduces_a_hand_built_one(short_pair, raw_pycwt):
-    WCT, coi, freqs = raw_pycwt
+    WCT, coi, freqs, _ = raw_pycwt
     order = np.argsort(freqs)
     freqs_s = freqs[order]
     band = (freqs_s >= FMIN) & (freqs_s <= FMAX)
 
-    W, f, c, sig = _ours(*short_pair)
+    W, f, c, sig, _ = _ours(*short_pair)
     assert sig is None
     assert f.tolist() == pytest.approx(freqs_s[band].tolist())
     assert W == pytest.approx(WCT[order][band][:, ::STEP].astype(np.float32))
@@ -71,20 +71,44 @@ def test_the_whole_adaptation_reproduces_a_hand_built_one(short_pair, raw_pycwt)
 def test_pycwt_returns_frequency_in_descending_order(raw_pycwt):
     # the sort exists only because of this; if pycwt ever returns ascending, the sort is a
     # no-op rather than a bug, but the assertion below stops the reason being forgotten
-    _, _, freqs = raw_pycwt
+    _, _, freqs, _ = raw_pycwt
     assert np.all(np.diff(freqs) < 0)
 
 
 def test_every_row_still_belongs_to_its_own_frequency(short_pair, raw_pycwt):
-    WCT, _, freqs = raw_pycwt
-    W, f, _, _ = _ours(*short_pair)
+    WCT, _, freqs, _ = raw_pycwt
+    W, f, _, _, _ = _ours(*short_pair)
     for i, fi in enumerate(f):
         j = int(np.argmin(np.abs(freqs - fi)))
         assert W[i] == pytest.approx(WCT[j][::STEP].astype(np.float32)), f"row {i}, {fi} Hz"
 
 
+def test_the_phase_is_carried_through_the_same_reordering_as_the_coherence(short_pair, raw_pycwt):
+    """pycwt's second return is the relative phase, and we used to drop it.
+
+    It is the one output that has to travel through the identical sort, band mask and
+    decimation as the coherence: a mismatch anywhere in that chain rotates every arrow on
+    the figure while leaving the map underneath it correct, so nothing looks wrong.
+    """
+    _, _, freqs, aWCT = raw_pycwt
+    order = np.argsort(freqs)
+    band = (freqs[order] >= FMIN) & (freqs[order] <= FMAX)
+
+    W, f, _, _, phase = _ours(*short_pair)
+    assert phase.shape == W.shape
+    assert phase == pytest.approx(aWCT[order][band][:, ::STEP].astype(np.float32))
+
+
+def test_the_phase_is_an_angle_rather_than_a_coherence(short_pair):
+    """Read as a coherence it would look like noise in [0, 1]; it is radians on (-pi, pi]."""
+    _, _, _, _, phase = _ours(*short_pair)
+    assert phase.min() >= -np.pi - 1e-6
+    assert phase.max() <= np.pi + 1e-6
+    assert phase.min() < 0, "an all-positive range would mean it was never a signed angle"
+
+
 def test_the_returned_frequencies_are_ascending_and_inside_the_band(short_pair):
-    _, f, _, _ = _ours(*short_pair)
+    _, f, _, _, _ = _ours(*short_pair)
     assert np.all(np.diff(f) > 0)
     assert f.min() >= FMIN and f.max() <= FMAX
 
@@ -93,7 +117,7 @@ def test_the_three_decimated_axes_have_the_same_length(short_pair):
     # the figures pair WCT columns with ref_raw.times[::step] and with coi; a mismatch there
     # shifts the whole heatmap in time without failing anywhere
     n = len(short_pair[0])
-    W, _, c, _ = _ours(*short_pair)
+    W, _, c, _, _ = _ours(*short_pair)
     assert W.shape[1] == len(np.arange(n)[::STEP]) == len(c)
 
 
@@ -104,7 +128,7 @@ def test_pycwt_does_not_pad_the_time_axis(short_pair, raw_pycwt):
     len(sig) columns. If a future version starts padding, this test fails and the trim stops
     being dead code; if the trim is deleted as unused, nothing else notices.
     """
-    WCT, coi, _ = raw_pycwt
+    WCT, coi, _, _ = raw_pycwt
     assert WCT.shape[1] == len(short_pair[0])
     assert len(coi) == len(short_pair[0])
 
@@ -115,7 +139,7 @@ def test_a_burst_lands_in_the_right_row_and_the_right_columns():
     n = 6000
     mask = np.zeros(n)
     mask[n // 3:2 * n // 3] = 1.0
-    W, f, _, _ = _ours(*_pair(n, seed=11, mask=mask))
+    W, f, _, _, _ = _ours(*_pair(n, seed=11, mask=mask))
 
     row = int(np.argmin(np.abs(f - F0)))
     lo, hi = W.shape[1] // 3, 2 * W.shape[1] // 3
@@ -132,7 +156,7 @@ def test_a_burst_does_not_light_up_an_unrelated_frequency():
     n = 6000
     mask = np.zeros(n)
     mask[n // 3:2 * n // 3] = 1.0
-    W, f, _, _ = _ours(*_pair(n, seed=11, mask=mask))
+    W, f, _, _, _ = _ours(*_pair(n, seed=11, mask=mask))
 
     row = int(np.argmin(np.abs(f - 0.35)))
     lo, hi = W.shape[1] // 3, 2 * W.shape[1] // 3

@@ -83,9 +83,16 @@ def test_the_roi_products_are_absent_without_a_roi_map(haemo, tmp_path):
 def test_the_channel_matrix_is_square_and_channel_labelled(rest_out, haemo):
     fc = pd.read_csv(_one(rest_out, "fc"), sep="\t", index_col="channel")
     hbo = [c for c in haemo.ch_names if c.endswith("hbo")]
+    good = [i for i, c in enumerate(hbo) if c not in set(haemo.info["bads"])]
 
     assert list(fc.index) == list(fc.columns) == hbo
-    assert np.allclose(np.diag(fc.to_numpy()), 1.0)
+    # a rejected channel is blanked whole, its own self-correlation included: a diagonal 1
+    # sitting in an otherwise empty row would be the one cell claiming the channel is there
+    assert np.allclose(np.diag(fc.to_numpy())[good], 1.0)
+
+    rejected = [c for c in hbo if c in set(haemo.info["bads"])]
+    assert rejected, "fixture no longer rejects a channel"
+    assert fc.loc[rejected].isna().all().all()
 
 
 def test_the_seed_map_is_roi_by_channel_on_disk(rest_out, haemo, roi_map):

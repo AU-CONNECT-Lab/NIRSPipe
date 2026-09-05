@@ -81,8 +81,9 @@ Subject / session / task selection:
 Preprocessing:
   --motion-correction          {tddr,wavelet,spline,none}   [default: tddr]
                                tddr + wavelet implemented; spline raises NotImplementedError.
-  --bad-channels               Comma-separated S-D labels to mark bad,
-                               e.g. "S1_D1,S2_D3" (unioned with SCI bads)
+  --bad-channels               S-D labels to mark bad, e.g. "S1_D1,S2_D3", or a table with
+                               participant_id + bad_channels columns for one row per subject.
+                               Either wavelength marks the pair. (unioned with SCI bads)
   --window-length FLOAT        Window (s) for the windowed SCI / PSP / GVTD series. [default: 10.0]
 
 Postprocessing mode:
@@ -156,7 +157,7 @@ fnirs-hyper run OUTPUT_DIR --pairs-csv PATH
                 [--wtc-band-fmin/--wtc-band-fmax FLOAT]
                 [--wtc-significance] [--wtc-mc-count INT] [--wtc-seed INT]
                 [--wtc-mask-coi] [--wtc-roi-min-channels N]
-                [--wtc-channel-cross] [--wtc-save-maps]
+                [--wtc-channel-cross] [--wtc-by-condition] [--wtc-save-maps]
                 [--wtc-pseudo N] [--wtc-pseudo-cross]
                 [--bads-scope {run,subject}] [--isc-threshold FLOAT]
                 [--sci-threshold FLOAT]
@@ -170,7 +171,7 @@ fnirs-hyper merge OUTPUT_DIR
 
 Every subcommand reads the derivatives tree `fnirs-pipe` wrote and takes no BIDS input, which is why there is one positional and not two.
 
-`run` computes wavelet coherence and inter-subject correlation for each dyad named in the pairs file, and writes one report per group. `--wtc-significance` is slow: it draws `--wtc-mc-count` surrogate series per channel pair, 300 by default, and the runtime scales with that count. `--wtc-channel-cross` pairs every long channel with every other across the two brains, 196 values instead of 14, and is what builds the ROI x ROI matrix when `--roi-mapping` is given; the heatmaps stay on the homologous pairs.
+`run` computes wavelet coherence and inter-subject correlation for each dyad named in the pairs file, and writes one report per group. `--wtc-significance` is slow: it draws `--wtc-mc-count` surrogate series per channel pair, 300 by default, and the runtime scales with that count. `--wtc-channel-cross` pairs every long channel with every other across the two brains, 196 values instead of 14, and adds a channel x channel matrix of the band means to the report, plus the ROI x ROI matrix and the full grid of ROI maps when `--roi-mapping` is given; the interactive heatmaps stay on the homologous pairs, since each is a whole time-frequency array. Every coherence map carries the relative phase as arrows, so a pair that moves together is distinguishable from one that moves together a few seconds apart. `--wtc-by-condition` repeats the analysis inside each task annotation's own window, one result per block.
 
 `--wtc-pseudo N` adds the pseudo-dyad null: the same band means taken against a phase-scrambled partner, averaged over N iterations. Coherence between two unrelated recordings is not zero, so this is what a real value is read against. Each iteration is a full WTC run, which makes it the expensive half, so nothing is computed unless you ask. It shares this run's stage, band and window by construction, which is what makes it the null for the table it sits beside; its crossing is the one thing it does not share, since crossing squares the pair count and the null would pay that on every iteration. Ask for it separately with `--wtc-pseudo-cross`.
 

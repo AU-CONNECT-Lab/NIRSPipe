@@ -148,6 +148,8 @@ def _hyper_post():
                                                              "value": "wtc_channel_cross"},
                     {"label": "Cross channels for the null too (very slow)",
                                                              "value": "wtc_pseudo_cross"},
+                    {"label": "One result per condition (slow)",
+                                                             "value": "wtc_by_condition"},
                     {"label": "Bad channels: union over runs", "value": "bads_subject"},
                     {"label": "Save WTC maps (large)",         "value": "wtc_save_maps"},
                     {"label": "Skip alignment",              "value": "no_align"},

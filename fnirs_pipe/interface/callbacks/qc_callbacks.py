@@ -99,6 +99,8 @@ def build_qc_args(command: str, opts: dict) -> list[str]:
             args.append("--wtc-channel-cross")
         if "wtc_pseudo_cross" in flags:
             args.append("--wtc-pseudo-cross")
+        if "wtc_by_condition" in flags:
+            args.append("--wtc-by-condition")
         if "check_only" in flags:
             args.append("--check-only")
         if "bads_subject" in flags:
