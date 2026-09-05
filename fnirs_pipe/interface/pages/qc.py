@@ -152,6 +152,7 @@ def _hyper_post():
                     {"label": "Save WTC maps (large)",         "value": "wtc_save_maps"},
                     {"label": "Skip alignment",              "value": "no_align"},
                     {"label": "Normalize recordings",        "value": "normalize"},
+                    {"label": "Check only (compute nothing)", "value": "check_only"},
                 ],
                 value=[], inline=True, switch=True,
             )),

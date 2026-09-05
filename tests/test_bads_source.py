@@ -102,3 +102,53 @@ def test_the_log_names_the_source_it_read(nirs_dir, caplog):
     with caplog.at_level("INFO"):
         _load(nirs_dir)
     assert "2 rejected channel(s) from desc-sci sidecar" in caplog.text
+
+
+# ---- the preflight summary ----
+
+def _raw(n_pairs=3, bads=()):
+    """A haemoglobin Raw with n_pairs S-D pairs, hbo and hbr each."""
+    import mne
+    import numpy as np
+
+    names, types = [], []
+    for i in range(n_pairs):
+        names += [f"S{i+1}_D{i+1} hbo", f"S{i+1}_D{i+1} hbr"]
+        types += ["hbo", "hbr"]
+    info = mne.create_info(names, sfreq=10.0, ch_types=types)
+    raw = mne.io.RawArray(np.zeros((len(names), 100)), info, verbose=False)
+    raw.info["bads"] = list(bads)
+    return raw
+
+
+def test_the_summary_names_the_channel_budget(capsys):
+    from fnirs_pipe.cli.hyper import _quality_summary
+
+    raws = {"sub-01": _raw(3, ["S3_D3 hbo", "S3_D3 hbr"])}
+    sqm = {"sub-01": {"sci_per_channel": {"a": 0.9, "b": 0.7},
+                      "bad_channel_sources": {"S3_D3 760": ["tap", "rest"]}}}
+    _quality_summary(raws, sqm)
+
+    out = capsys.readouterr().out
+    assert "sub-01" in out
+    assert "bad 1" in out              # one S-D pair, not two chromophore entries
+    assert "mean SCI 0.80" in out
+    assert "from: rest, tap" in out
+
+
+def test_the_summary_warns_when_most_of_the_montage_is_gone(capsys):
+    from fnirs_pipe.cli.hyper import _quality_summary
+
+    bads = [f"S{i}_D{i} {c}" for i in (1, 2, 3) for c in ("hbo", "hbr")]
+    _quality_summary({"sub-02": _raw(4, bads)}, {})
+    assert "loses 3 of 4 channel pairs" in capsys.readouterr().err
+
+
+def test_the_summary_says_nothing_it_does_not_know(capsys):
+    """No quality record at all still prints a line, rather than crashing on a missing key."""
+    from fnirs_pipe.cli.hyper import _quality_summary
+
+    _quality_summary({"sub-03": _raw(2)}, {})
+    out = capsys.readouterr().out
+    assert "mean SCI n/a" in out
+    assert "from:" not in out

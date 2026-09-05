@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 - **A `--no-report` run left the dyad analysis with nothing excluded.** Rejected channels were read from the per-channel CSV, which the report writes, so preprocessing that skipped the report produced a tree where `--desc errts` analysed every channel including the bad ones, and `--bads-scope subject` did nothing at any stage. Neither said so. Rejection now comes from the `desc-sci` sidecar, which prep writes either way, and the log names the source and the count. Every coherence value on a dyad with a rejected channel changes
 
 ### Added
+- **`fnirs-hyper run` says what the metrics will run on before it starts**: long channels kept, channels rejected, mean SCI, and which runs the rejections came from, per subject. `--check-only` stops after that and writes nothing, so a cohort can be looked over before committing to a run that with `--wtc-pseudo` takes hours
 - **`fnirs-hyper`, a tool for dyad analysis.** `run` writes the WTC + ISC report per dyad, `band` re-averages saved coherence maps over another frequency band, and `merge` concatenates the per-dyad tables into one long table per kind. Every subcommand takes one derivatives directory and reads no BIDS input
 
 - `fnirs-hyper run` ends by saying whether the merged tables are behind the per-dyad ones, and with what command to catch them up. It does not merge on its own: a run often covers one dyad, and merging the whole tree after it would fail on a band a later run legitimately changed

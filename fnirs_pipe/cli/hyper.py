@@ -61,7 +61,8 @@ def _run_groups(groups: dict, process) -> None:
         print(f"  -> {gid}/{task} ({len(members)} subjects)")
         try:
             report_path = process(gid, task, members)
-            print(f"     report -> {report_path}")
+            if report_path is not None:
+                print(f"     report -> {report_path}")
             n_ok += 1
         except MissingDerivativesError as exc:
             print(f"     [skip] {exc}", file=sys.stderr)
@@ -110,6 +111,38 @@ def _load_aligned_group(output_dir, members, task, desc, no_align, normalize, ba
     return aligned_raws, offsets, group_sqm
 
 
+def _quality_summary(aligned_raws: dict, group_sqm: dict) -> None:
+    """Print what the metrics are about to be computed on, one line per subject.
+
+    ``sub-01  long 12/14  bad 2  mean SCI 0.86  from: tapping``
+
+    Counted off the aligned Raw after the rejections are applied, so it describes the channel
+    set the coherence actually uses rather than what the montage holds. The report says the
+    same thing, but only once the run has finished, which with --wtc-pseudo is hours later.
+    """
+    from fnirs_pipe.io.snirf import long_channel_picks
+
+    for subject_id, raw in aligned_raws.items():
+        sqm = group_sqm.get(subject_id, {})
+        pairs = {ch.rsplit(" ", 1)[0] for ch in raw.ch_names
+                 if ch.endswith(" hbo") or ch.endswith(" hbr")}
+        bad = {ch.rsplit(" ", 1)[0] for ch in raw.info["bads"]}
+        kept = len(long_channel_picks(raw, "hbo"))     # pick_types drops bads already
+
+        scores = [v for v in (sqm.get("sci_per_channel") or {}).values()
+                  if v is not None and v == v]
+        sci = f"mean SCI {sum(scores) / len(scores):.2f}" if scores else "mean SCI n/a"
+
+        tasks = sorted({t for ts in (sqm.get("bad_channel_sources") or {}).values()
+                        for t in ts})
+        origin = f"  from: {', '.join(tasks)}" if tasks else ""
+
+        print(f"     {subject_id}  long {kept}/{len(pairs)}  bad {len(bad)}  {sci}{origin}")
+        if pairs and len(bad) > len(pairs) / 2:
+            print(f"     [warn] {subject_id} loses {len(bad)} of {len(pairs)} channel pairs",
+                  file=sys.stderr)
+
+
 def _merge_reminder(output_dir: Path) -> None:
     """Say so when the merged tables are missing or older than the per-dyad ones.
 
@@ -151,7 +184,7 @@ def cmd_run(
     wtc_pseudo: int | None, wtc_pseudo_cross: bool,
     bads_scope: str, isc_threshold: float, sci_threshold: float | None,
     normalize: bool, no_align: bool, tstart: float | None, tend: float | None,
-    verbose: bool,
+    check_only: bool, verbose: bool,
 ) -> None:
     """Dyad WTC + ISC report per group, plus the pseudo-dyad null when --wtc-pseudo is given.
 
@@ -186,6 +219,9 @@ def cmd_run(
     def _process(gid, task, members):
         aligned_raws, offsets, group_sqm = _load_aligned_group(
             output_dir, members, task, desc, no_align, normalize, bads_scope, tstart, tend)
+        _quality_summary(aligned_raws, group_sqm)
+        if check_only:
+            return None
         bad_channels = {sid: sqm.get("bad_channels", []) for sid, sqm in group_sqm.items()}
         write_group_bads(output_dir, members, group_sqm, bads_scope)
         report_path = build_hyper_post_report(
@@ -236,7 +272,8 @@ def cmd_run(
         logger.info("pseudo-dyad null requested: %d full WTC runs per dyad, on top of the real one",
                     wtc_pseudo)
     _run_groups(groups, _process)
-    _merge_reminder(output_dir)
+    if not check_only:
+        _merge_reminder(output_dir)
 
 
 def cmd_band(
@@ -394,6 +431,11 @@ def _build_parser() -> argparse.ArgumentParser:
                           "one segment was bad.")
     run.add_argument("--isc-threshold", type=float, default=0.3,
                      help="Minimum mean ISC to draw an arc in the connectivity circle.")
+    run.add_argument("--check-only", action="store_true",
+                     help="Load and align each dyad, print what the metrics would be "
+                          "computed on, and stop. Nothing is written. Use it to look over a "
+                          "cohort's channel budget before committing to a run, which with "
+                          "--wtc-pseudo is hours.")
     run.add_argument("--sci-threshold", type=float, default=None,
                      help="SCI below which a channel counts as badly coupled. Detects "
                           "nothing here; it only colours the per-subject quality table. "
