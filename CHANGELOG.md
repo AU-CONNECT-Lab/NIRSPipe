@@ -6,13 +6,19 @@ All notable changes to this project will be documented in this file.
 
 ## [0.26.0] - 2026-09-04
 
+### Added
+- **`fnirs-hyper`, a tool for dyad analysis.** `run` writes the WTC + ISC report per dyad, `band` re-averages saved coherence maps over another frequency band, and `merge` concatenates the per-dyad tables into one long table per kind. Every subcommand takes one derivatives directory and reads no BIDS input
+
 ### Changed
-- **The dyad analysis moved from `fnirs-qc` to `fnirs-pipe`.** Wavelet coherence, inter-brain correlation and the pseudo-dyad null are results, not quality checks, so they sit beside `glm` and `rest` now. `hyper-post` is the `hyper` analysis level, `wtc-band` is a level of its own, and `group-hyper-wtc` is folded into `group`, which already aggregated everything else. `hyper-raw` stays in `fnirs-qc`: a pre-flight look at raw dyad data is quality control. No output file changes name
-- **The pseudo-dyad null is a flag on the hyper run again, `--wtc-pseudo N`,** and writes nothing unless you ask. Nine parameters had to match between `hyper-null` and the run it was the null for, and nothing on disk checked it: a null averaged over one band could sit beside a real table averaged over another. Shared by construction now. Its crossing stays its own decision, `--wtc-pseudo-cross`, which is what the split was for
-- **`fnirs-pipe ... group` no longer demands the preprocessing flags.** `--dpf`, `--sci-threshold` and the four band bounds describe preprocessing and were required of every invocation, including levels that never preprocess anything
+- **The dyad analysis left `fnirs-qc`.** Wavelet coherence, inter-brain correlation and the pseudo-dyad null are results, not quality checks, and hyperscanning has its own input and its own unit of analysis, so it is its own tool now. `hyper-raw` stays in `fnirs-qc`: a pre-flight look at raw dyad data is quality control. No output file changes name
+- **The pseudo-dyad null is a flag on the dyad run again, `--wtc-pseudo N`,** and writes nothing unless you ask. Nine parameters had to match between `hyper-null` and the run it was the null for, and nothing on disk checked it: a null averaged over one band could sit beside a real table averaged over another. Shared by construction now. Its crossing stays its own decision, `--wtc-pseudo-cross`, which is what the split was for
+- **One name per parameter for the frequency band.** `--band-fmin`, `--band-fmax` and `--mask-coi` were second names for `--wtc-band-fmin`, `--wtc-band-fmax` and `--wtc-mask-coi`, and the docs had to say they must agree. `--wtc-suffix` is the only flag `band` keeps to itself
+- **`fnirs-pipe ... group` no longer demands the preprocessing flags.** `--dpf`, `--sci-threshold` and the four band bounds describe preprocessing and were required of every invocation, including a level that never preprocesses anything. A bad command line is also rejected before the pipeline imports rather than after
+- The QC Reports page drives both tools and asks for one directory, since neither reads BIDS. Its Session Label field is gone: the pairs table names the session, and the field filtered nothing
 
 ### Removed
-- **`fnirs-qc hyper-post`, `hyper-null`, `wtc-band` and `group-hyper-wtc` are gone**, with no forwarding. Use the `fnirs-pipe` levels above
+- **`fnirs-qc hyper-post`, `hyper-null`, `wtc-band` and `group-hyper-wtc` are gone**, with no forwarding. Use `fnirs-hyper run`, `--wtc-pseudo`, `fnirs-hyper band` and `fnirs-hyper merge`
+- The dyad commands took `--session-label` and `--skip-bids-validation` and used neither
 
 ## [0.25.0] - 2026-09-04
 

@@ -94,7 +94,7 @@ def cmd_hyper_raw(
     skip_bids_validation: bool,
 ) -> None:
     """Generate hyperscanning raw QC report from BIDS raw data."""
-    from fnirs_pipe.cli.workflows import _run_groups, _select_groups
+    from fnirs_pipe.cli.hyper import _run_groups, _select_groups
     from fnirs_pipe.pipeline.hyperscanning import (
         _raw_to_haemo,
         align_recordings,

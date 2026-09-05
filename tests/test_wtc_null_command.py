@@ -5,11 +5,12 @@ for the exploratory 196-pair channel table also multiplied every surrogate itera
 That coupling was invisible on disk too: the pseudo sidecar recorded the band but neither the
 iteration count nor the shape, so a 5-iteration probe and a 100-iteration null looked alike.
 
-0.25.0 fixed it by splitting the null into its own command. The null now runs inside the
-hyper level again, which is what keeps its band and its stage identical to the table it sits
-beside, and the independence is carried by `--wtc-pseudo-cross` instead. These tests hold
-that independence in place: the null is off unless asked for, its crossing is its own
-decision, the sidecar says what was run, and a merge refuses to mix iteration counts.
+0.25.0 fixed it by splitting the null into its own command. The null now runs inside
+`fnirs-hyper run` again, which is what keeps its band and its stage identical to the table
+it sits beside, and the independence is carried by `--wtc-pseudo-cross` instead. These
+tests hold that independence in place: the null is off unless asked for, its crossing is
+its own decision, the sidecar says what was run, and a merge refuses to mix iteration
+counts.
 """
 
 import json
@@ -17,12 +18,12 @@ import json
 import pandas as pd
 import pytest
 
-from fnirs_pipe.cli.run import _build_parser
+from fnirs_pipe.cli.hyper import _build_parser
 from fnirs_pipe.qc.wtc_aggregate import aggregate_wtc
 
 
 def _hyper(*argv):
-    return _build_parser().parse_args(["/bids", "/out", "hyper", "--pairs-csv", "/p.csv", *argv])
+    return _build_parser().parse_args(["run", "/out", "--pairs-csv", "/p.csv", *argv])
 
 
 # ---- the null is opt-in ----
@@ -102,19 +103,13 @@ def test_nulls_of_one_length_merge(tmp_path):
     assert sorted(merged["group_id"]) == ["d01", "d02"]
 
 
-def test_the_group_level_merges_every_kind_the_aggregator_has(tmp_path, monkeypatch):
+def test_merge_covers_every_kind_the_aggregator_has(tmp_path):
     """It asked for wtc-roi, gone since 0.24.0, and died before reaching the null."""
-    from fnirs_pipe.cli import workflows
-    from fnirs_pipe.qc import group_writer
+    from fnirs_pipe.cli.hyper import cmd_merge
     from fnirs_pipe.qc.wtc_aggregate import _KINDS
 
-    monkeypatch.setattr(group_writer, "build_group_raw_report",
-                        lambda root: root / "group_nirs.html")
-    monkeypatch.setattr(group_writer, "build_group_hyper_raw_report",
-                        lambda root: root / "group_hyper_nirs.html")
-
     _write_null(tmp_path, "d01", "baseline", 100)
-    workflows.run_group_level({"output_dir": tmp_path})       # no kind raises
+    cmd_merge(tmp_path, verbose=False)                        # no kind raises
 
     assert (tmp_path / "group_hyper_wtc_pseudo.tsv").exists()
     for kind in _KINDS:

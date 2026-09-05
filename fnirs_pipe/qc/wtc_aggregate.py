@@ -1,6 +1,6 @@
 """Merge the per-dyad WTC band-mean tables into one long table per study.
 
-``fnirs-qc hyper-post`` writes one ``group-<id>_task-<task>_hyper-wtc.tsv`` per dyad and
+``fnirs-hyper run`` writes one ``group-<id>_task-<task>_hyper-wtc.tsv`` per dyad and
 task. A study with twenty dyads and three conditions therefore ends up with sixty files that
 a group analysis has to stitch together by hand, and the stitching is where the mistakes
 live. This produces the stitched table instead, with ``group_id`` and ``task`` carried as
@@ -68,7 +68,7 @@ def _refuse_mixed_bands(seen: dict[str, dict]) -> None:
             raise ValueError(
                 f"the WTC tables disagree on {key}, so their coherence columns are not "
                 f"comparable and merging them would hide it:\n{spread}\n"
-                f"Re-run hyper-post for the odd ones out with a matching band, or aggregate "
+                f"Re-run `fnirs-hyper run` for the odd ones out with a matching band, or aggregate "
                 f"them separately."
             )
 

@@ -135,8 +135,6 @@ def _fake_workflows(monkeypatch, called):
     fake = types.ModuleType("fnirs_pipe.cli.workflows")
     fake.run_participant_level = lambda opts: called.setdefault("participant", opts)
     fake.run_group_level       = lambda opts: called.setdefault("group", opts)
-    fake.run_hyper_level       = lambda opts: called.setdefault("hyper", opts)
-    fake.run_wtc_band          = lambda opts: called.setdefault("wtc-band", opts)
     monkeypatch.setitem(sys.modules, "fnirs_pipe.cli.workflows", fake)
     return called
 
@@ -148,22 +146,11 @@ def test_dispatch_group(monkeypatch):
     assert "group" in called
 
 
-def test_dispatch_hyper(monkeypatch):
-    called = _fake_workflows(monkeypatch, {})
-    run_cli.main(["bids", "out", "hyper", "--pairs-csv", "p.csv", "--desc", "errts"])
-    assert called["hyper"]["desc"] == "errts"
-
-
-def test_hyper_needs_pairs_csv(capsys):
+def test_the_dyad_analysis_is_not_a_pipeline_level():
+    """It is fnirs-hyper. fnirs-pipe stays on the BIDS App levels, and its three
+    positionals stay the app signature every container entry point has to accept."""
     with pytest.raises(SystemExit):
-        run_cli.main(["bids", "out", "hyper"])
-    assert "--pairs-csv" in capsys.readouterr().err
-
-
-def test_dispatch_wtc_band(monkeypatch):
-    called = _fake_workflows(monkeypatch, {})
-    run_cli.main(["bids", "out", "wtc-band", "--band-fmin", "0.05", "--band-fmax", "0.2"])
-    assert (called["wtc-band"]["band_fmin"], called["wtc-band"]["band_fmax"]) == (0.05, 0.2)
+        run_cli.main(["bids", "out", "hyper", "--pairs-csv", "p.csv"])
 
 
 def test_participant_still_requires_the_bands(capsys):
@@ -184,6 +171,7 @@ def test_console_script_entry_point():
 from fnirs_pipe.cli import db as db_cli
 from fnirs_pipe.cli import gui as gui_cli
 from fnirs_pipe.cli import prep as prep_cli
+from fnirs_pipe.cli import hyper as hyper_cli
 from fnirs_pipe.cli import qc as qc_cli
 from fnirs_pipe.cli import rate as rate_cli
 from fnirs_pipe.cli import recon as recon_cli
@@ -239,18 +227,46 @@ def test_qc_subcommands_and_fmin_dest():
 
 
 def test_hyper_stage_and_band_flags():
-    args = run_cli._build_parser().parse_args(
-        ["/b", "/o", "hyper", "--pairs-csv", "p.csv", "--desc", "errts",
+    args = hyper_cli._build_parser().parse_args(
+        ["run", "/o", "--pairs-csv", "p.csv", "--desc", "errts",
          "--wtc-band-fmin", "0.03", "--wtc-band-fmax", "0.10"]
     )
+    assert args.func is hyper_cli.cmd_run
     assert (args.desc, args.wtc_band_fmin, args.wtc_band_fmax) == ("errts", 0.03, 0.10)
 
 
 def test_hyper_reads_preproc_unless_told_otherwise():
     # the band bounds stay None so the report can say it averaged the whole axis
-    args = run_cli._build_parser().parse_args(["/b", "/o", "hyper", "--pairs-csv", "p.csv"])
+    args = hyper_cli._build_parser().parse_args(["run", "/o", "--pairs-csv", "p.csv"])
     assert args.desc == "preproc"
     assert (args.wtc_band_fmin, args.wtc_band_fmax) == (None, None)
+
+
+def test_hyper_takes_one_derivatives_directory_and_no_bids():
+    """Every subcommand reads derivatives only, so none of them accepts a BIDS positional
+    it would then ignore."""
+    for argv in (["run", "/o", "--pairs-csv", "p.csv"], ["band", "/o", "--wtc-band-fmin", "0.1",
+                 "--wtc-band-fmax", "0.2"], ["merge", "/o"]):
+        args = hyper_cli._build_parser().parse_args(argv)
+        assert str(args.output_dir) in ("/o", "\\o")
+        assert not hasattr(args, "bids_dir")
+
+
+def test_the_band_flags_are_shared_between_run_and_band():
+    """One name per parameter: `band` reuses the `run` flags rather than carrying
+    --band-fmin / --mask-coi under a second name that has to be kept in step."""
+    flags = {f for a in hyper_cli._build_parser()._actions for f in a.option_strings}
+    assert not ({"--band-fmin", "--band-fmax", "--mask-coi", "--suffix"} & flags)
+    for argv in (["run", "/o", "--pairs-csv", "p.csv"],
+                 ["band", "/o", "--wtc-band-fmin", "0.1", "--wtc-band-fmax", "0.2"]):
+        args = hyper_cli._build_parser().parse_args(argv)
+        assert hasattr(args, "wtc_band_fmin") and hasattr(args, "wtc_mask_coi")
+
+
+def test_band_needs_a_band(capsys):
+    with pytest.raises(SystemExit):
+        hyper_cli.main(["band", "/o"])
+    assert "--wtc-band-fmin" in capsys.readouterr().err
 
 
 def test_moved_commands_are_gone_from_qc():

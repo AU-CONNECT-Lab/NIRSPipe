@@ -27,7 +27,7 @@ _DESC_CHOICES = [desc for desc, domain in _DOMAIN.items() if domain == "haemo"]
 _AGGREGATE_COMMANDS = [
     {"label": "Group QC (individual subjects)", "value": "group-raw"},
     {"label": "Group QC (hyperscanning dyads)", "value": "group-hyper-raw"},
-    {"label": "Group aggregation, incl. WTC merge", "value": "group"},
+    {"label": "Merge WTC tables across dyads", "value": "merge"},
     {"label": "Provenance graphs", "value": "provenance"},
 ]
 
@@ -44,13 +44,9 @@ def _dirs():
         "Directories",
         dbc.Row([
             dbc.Col([
-                dbc.Label("BIDS Directory"),
-                dbc.Input(id="qc-bids-dir", type="text", placeholder="path to BIDS root"),
-                dbc.FormText("Not needed by the aggregate commands."),
-            ], width=6),
-            dbc.Col([
                 dbc.Label("Derivatives / Output Directory"),
                 dbc.Input(id="qc-output-dir", type="text", placeholder="path to derivatives"),
+                dbc.FormText("Every command on this page reads the derivatives tree only."),
             ], width=6),
         ], className="g-3"),
     )
@@ -117,14 +113,10 @@ def _hyper_post():
         ], className="g-3"),
         dbc.Row([
             dbc.Col([
-                dbc.Label("Session Label"),
-                dbc.Input(id="qc-hyper-session", type="text", placeholder="all sessions"),
-            ], width=3),
-            dbc.Col([
                 dbc.Label("Task Label"),
                 dbc.Input(id="qc-hyper-task", type="text", placeholder="all tasks"),
                 dbc.FormText("Filters the pairs CSV, which already names a task per row."),
-            ], width=3),
+            ], width=4),
             dbc.Col([
                 dbc.Label("ISC Threshold"),
                 dbc.Input(id="qc-isc-threshold", type="number", step=0.05,
@@ -225,7 +217,8 @@ layout = dbc.Container([
     html.H3("QC Reports", className="mt-4"),
     html.P("Hyperscanning analysis and group aggregation. Every button here builds a "
            "command and runs it: the group QC and provenance entries call fnirs-qc, the "
-           "rest call fnirs-pipe.",
+           "rest call fnirs-hyper. Neither reads BIDS, so only a derivatives directory "
+           "is needed.",
            className="text-muted"),
 
     _card(
@@ -236,13 +229,13 @@ layout = dbc.Container([
                 dcc.Dropdown(
                     id="qc-command",
                     options=[
-                        {"label": "Hyperscanning analysis (hyper)",
-                         "value": "hyper"},
-                        {"label": "Re-average saved WTC maps (wtc-band)",
-                         "value": "wtc-band"},
+                        {"label": "Hyperscanning analysis (fnirs-hyper run)",
+                         "value": "run"},
+                        {"label": "Re-average saved WTC maps (fnirs-hyper band)",
+                         "value": "band"},
                         *_AGGREGATE_COMMANDS,
                     ],
-                    value="hyper",
+                    value="run",
                     clearable=False,
                 ),
             ], width=6),
@@ -264,13 +257,6 @@ layout = dbc.Container([
 
     _card(
         "Run",
-        dbc.Row([
-            dbc.Col(dbc.Checklist(
-                id="qc-run-flags",
-                options=[{"label": "Skip BIDS validation", "value": "skip_bids_validation"}],
-                value=[], switch=True,
-            )),
-        ], className="g-2 mb-3"),
         dbc.Row([
             dbc.Col(dbc.Button("Generate Command", id="qc-generate-btn",
                                color="secondary"), width="auto"),

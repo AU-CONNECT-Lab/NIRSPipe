@@ -1,7 +1,7 @@
 """Callbacks for the QC Reports page: build a CLI argv, run it, show what it made.
 
-The aggregate commands are `fnirs-qc`; the hyperscanning analysis, the WTC re-band and the
-group merge are `fnirs-pipe` analysis levels.
+Two tools: the aggregate commands are `fnirs-qc`, the dyad analysis is `fnirs-hyper`.
+Neither reads BIDS, so every command here takes one derivatives directory.
 """
 
 from __future__ import annotations
@@ -20,10 +20,13 @@ logger = get_logger("interface.qc_callbacks")
 # fnirs-qc commands whose whole argument list is one output_dir
 _AGGREGATE = ("group-raw", "group-hyper-raw", "provenance")
 
+# fnirs-hyper subcommands, which take one output_dir and their own flags
+_HYPER = ("run", "band", "merge")
+
 # which form sections each command needs; anything not listed here is hidden
 _SECTIONS = {
-    "hyper":    {"qc-hyper-post-section", "qc-window-section"},
-    "wtc-band": {"qc-wtc-band-section"},
+    "run":  {"qc-hyper-post-section", "qc-window-section"},
+    "band": {"qc-wtc-band-section"},
 }
 
 _ALL_SECTIONS = ("qc-hyper-post-section", "qc-wtc-band-section", "qc-window-section")
@@ -34,7 +37,7 @@ _REPORTS = {
     "group-raw":       ["group_nirs.html"],
     "group-hyper-raw": ["group_hyper_nirs.html"],
     # the second pattern finds a tree written before the reports moved into group-<id>/
-    "hyper":           ["group-*/group-*_hyper-post.html", "group-*_hyper*.html"],
+    "run":             ["group-*/group-*_hyper-post.html", "group-*_hyper*.html"],
 }
 
 
@@ -61,18 +64,18 @@ def build_qc_args(command: str, opts: dict) -> list[str]:
     if command in _AGGREGATE:
         return ["fnirs-qc", command, opts["output_dir"]]
 
-    # everything else is an fnirs-pipe analysis level: BIDS_DIR OUTPUT_DIR LEVEL
-    args = ["fnirs-pipe", opts["bids_dir"], opts["output_dir"], command]
+    args = ["fnirs-hyper", command, opts["output_dir"]]
 
-    if command == "wtc-band":
-        args += _num("--band-fmin", opts.get("band_fmin"))
-        args += _num("--band-fmax", opts.get("band_fmax"))
+    # the band and the COI switch are shared with `run`; only the suffix is this one's own
+    if command == "band":
+        args += _num("--wtc-band-fmin", opts.get("band_fmin"))
+        args += _num("--wtc-band-fmax", opts.get("band_fmax"))
         if "band_mask_coi" in (opts.get("band_flags") or []):
-            args.append("--mask-coi")
-        args += _text("--suffix", opts.get("band_suffix"))
+            args.append("--wtc-mask-coi")
+        args += _text("--wtc-suffix", opts.get("band_suffix"))
         return args
 
-    if command == "hyper":
+    if command == "run":
         args += _text("--pairs-csv", opts.get("pairs_csv"))
         args += _text("--group-id", opts.get("group_id"))
         args += _text("--desc", opts.get("desc"))
@@ -86,7 +89,6 @@ def build_qc_args(command: str, opts: dict) -> list[str]:
         args += _num("--wtc-pseudo", opts.get("wtc_pseudo"))
         args += _num("--isc-threshold", opts.get("isc_threshold"))
         args += _num("--wtc-roi-min-channels", opts.get("wtc_roi_min_channels"))
-        args += _split("--session-label", opts.get("hyper_session"))
         args += _split("--task-label", opts.get("hyper_task"))
         flags = opts.get("hyper_flags") or []
         if "wtc_significance" in flags:
@@ -108,9 +110,6 @@ def build_qc_args(command: str, opts: dict) -> list[str]:
         args += _num("--tstart", opts.get("tstart"))
         args += _num("--tend", opts.get("tend"))
 
-    if "skip_bids_validation" in (opts.get("run_flags") or []):
-        args.append("--skip-bids-validation")
-
     return args
 
 
@@ -118,16 +117,12 @@ def _missing(command: str, opts: dict) -> str | None:
     """The CLI would fail on these anyway; saying so here costs no subprocess."""
     if not opts.get("output_dir"):
         return "Output directory is required."
-    if command in _AGGREGATE:
-        return None
-    if not opts.get("bids_dir"):
-        return "BIDS directory is required."
-    if command == "wtc-band":
+    if command == "band":
         if opts.get("band_fmin") is None or opts.get("band_fmax") is None:
-            return "wtc-band needs both a band start and end."
+            return "band needs both a band start and end."
         return None
-    if command == "hyper" and not opts.get("pairs_csv"):
-        return "The hyper level needs a pairs CSV."
+    if command == "run" and not opts.get("pairs_csv"):
+        return "The dyad analysis needs a pairs CSV."
     return None
 
 
@@ -142,7 +137,7 @@ def toggle_sections(command):
 
 
 _STATES = [
-    State("qc-bids-dir", "value"), State("qc-output-dir", "value"),
+    State("qc-output-dir", "value"),
     State("qc-pairs-csv", "value"), State("qc-group-id", "value"),
     State("qc-desc", "value"), State("qc-roi-mapping", "value"),
     State("qc-wtc-fmin", "value"), State("qc-wtc-fmax", "value"),
@@ -150,22 +145,21 @@ _STATES = [
     State("qc-wtc-mc-count", "value"), State("qc-wtc-seed", "value"),
     State("qc-isc-threshold", "value"),
     State("qc-wtc-pseudo", "value"), State("qc-wtc-roi-min-channels", "value"),
-    State("qc-hyper-session", "value"), State("qc-hyper-task", "value"),
+    State("qc-hyper-task", "value"),
     State("qc-hyper-flags", "value"),
     State("qc-band-fmin", "value"), State("qc-band-fmax", "value"),
     State("qc-band-suffix", "value"), State("qc-band-flags", "value"),
     State("qc-tstart", "value"), State("qc-tend", "value"),
-    State("qc-run-flags", "value"),
 ]
 
 
 def _opts(values) -> dict:
-    keys = ["bids_dir", "output_dir", "pairs_csv", "group_id", "desc", "roi_mapping",
+    keys = ["output_dir", "pairs_csv", "group_id", "desc", "roi_mapping",
             "wtc_fmin", "wtc_fmax", "wtc_band_fmin", "wtc_band_fmax", "wtc_mc_count",
             "wtc_seed", "isc_threshold", "wtc_pseudo", "wtc_roi_min_channels",
-            "hyper_session", "hyper_task", "hyper_flags",
+            "hyper_task", "hyper_flags",
             "band_fmin", "band_fmax", "band_suffix", "band_flags",
-            "tstart", "tend", "run_flags"]
+            "tstart", "tend"]
     return dict(zip(keys, values))
 
 

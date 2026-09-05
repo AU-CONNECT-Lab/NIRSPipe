@@ -22,7 +22,7 @@ from dash import dcc, html
 from fnirs_pipe.cli.run import _build_parser
 from fnirs_pipe.cli.workflows import _build_post_config
 from fnirs_pipe.interface.callbacks.analysis_callbacks import _build_cli_args
-from fnirs_pipe.interface.callbacks.qc_callbacks import _AGGREGATE, build_qc_args
+from fnirs_pipe.interface.callbacks.qc_callbacks import _AGGREGATE, _HYPER, build_qc_args
 
 # Postprocessing flags the analysis page deliberately does not offer, and why. A flag listed
 # here must still exist in the CLI, and must not also be emitted; both are asserted below.
@@ -227,16 +227,10 @@ def test_no_control_on_the_page_is_decoration(analysis_page):
     assert not unread, f"controls nothing reads: {sorted(unread)}"
 
 
-# ---- the same contract for the QC page, which now drives two CLIs ----
+# ---- the same contract for the QC page, which drives two tools ----
 
-# The aggregate commands are still fnirs-qc subcommands. The hyperscanning analysis, the WTC
-# re-band and the group merge are fnirs-pipe analysis levels, so their flags live in a named
-# argument group on the one flat parser rather than in a subparser of their own.
-_LEVEL_GROUPS = {
-    "hyper":    "hyperscanning analysis (hyper level)",
-    "wtc-band": "wtc-band level",
-    "group":    None,      # takes no flags of its own
-}
+# The page builds `fnirs-qc` for the aggregate commands and `fnirs-hyper` for the dyad
+# analysis. Both are subparser CLIs, so each command's flag list is read off its own parser.
 
 # fnirs-qc subcommands the QC page does not offer, and why.
 QC_COMMANDS_NOT_OFFERED = {
@@ -249,31 +243,39 @@ QC_COMMANDS_NOT_OFFERED = {
 # exception and goes the other way: it defaults to on, and the CLI's own help says the
 # restricted and unrestricted coherences match bit for bit, so neither half is a choice
 # worth putting on screen. It is an escape hatch for comparing against old output.
-#
-# --sci-threshold is absent from this map because it is not a hyper flag: it sits in the prep
-# group and the hyper level only borrows it to tint the per-subject quality table. A second
-# control here could be set to a different number than prep used, with nothing saying which
-# one the colours mean.
 QC_NOT_EXPOSED = {
-    "hyper": {"--no-normalize", "--wtc-limit-scales", "--no-wtc-limit-scales"},
+    "run": {"--no-normalize", "--wtc-limit-scales", "--no-wtc-limit-scales",
+            # a log-level switch, not a parameter of the analysis
+            "--verbose",
+            # only tints the per-subject quality table, against a threshold the run was
+            # already prepped with. A second control here could be set to a different number
+            # than prep used, with nothing saying which one the colours mean
+            "--sci-threshold"},
+    "band":  {"--verbose"},
+    "merge": {"--verbose"},
 }
 
 _QC_FULL_OPTS = dict(
-    bids_dir="/bids", output_dir="/out", pairs_csv="/pairs.csv", group_id="01",
+    output_dir="/out", pairs_csv="/pairs.csv", group_id="01",
     desc="errts", roi_mapping="/roi.json",
     wtc_fmin=0.004, wtc_fmax=0.2, wtc_band_fmin=0.01, wtc_band_fmax=0.1,
     wtc_mc_count=300, wtc_seed=42, isc_threshold=0.3,
     wtc_pseudo=100, wtc_roi_min_channels=2,
-    hyper_session="ses-1", hyper_task="rest",
+    hyper_task="rest",
     hyper_flags=["wtc_significance", "wtc_mask_coi", "wtc_channel_cross", "wtc_pseudo_cross",
                  "bads_subject", "wtc_save_maps", "no_align", "normalize"],
     band_fmin=0.05, band_fmax=0.2, band_suffix="band0p05-0p2",
     band_flags=["band_mask_coi"],
     tstart=0.0, tend=60.0,
-    run_flags=["skip_bids_validation"],
 )
 
-_QC_OFFERED = [*_LEVEL_GROUPS, *_AGGREGATE]
+_QC_OFFERED = [*_HYPER, *_AGGREGATE]
+
+
+def _subcommands(build):
+    parser = build()
+    action = next(a for a in parser._actions if getattr(a, "choices", None))
+    return action.choices
 
 
 def _build_qc_parser():
@@ -281,24 +283,21 @@ def _build_qc_parser():
     return build()
 
 
+def _build_hyper_parser():
+    from fnirs_pipe.cli.hyper import _build_parser as build
+    return build()
+
+
 def _qc_subparsers():
-    action = next(a for a in _build_qc_parser()._actions if getattr(a, "choices", None))
-    return action.choices
+    return _subcommands(_build_qc_parser)
 
 
-def _level_flags(command: str) -> set[str]:
-    title = _LEVEL_GROUPS[command]
-    if title is None:
-        return set()
-    group = next(g for g in _build_parser()._action_groups if g.title == title)
-    return {flag for action in group._group_actions for flag in action.option_strings
-            if flag.startswith("--")}
+def _hyper_subparsers():
+    return _subcommands(_build_hyper_parser)
 
 
 def _qc_flags(command: str) -> set[str]:
-    if command in _LEVEL_GROUPS:
-        return _level_flags(command)
-    parser = _qc_subparsers()[command]
+    parser = (_hyper_subparsers() if command in _HYPER else _qc_subparsers())[command]
     return {flag for action in parser._actions for flag in action.option_strings
             if flag.startswith("--") and action.dest != "help"}
 
@@ -314,13 +313,18 @@ def test_the_qc_page_offers_every_subcommand_or_writes_it_off():
     )
 
 
+def test_the_page_offers_every_hyper_subcommand():
+    missing = set(_hyper_subparsers()) - set(_QC_OFFERED)
+    assert not missing, f"fnirs-hyper grew {sorted(missing)} and the page cannot reach them"
+
+
 def test_the_declined_subcommands_still_exist():
     stale = set(QC_COMMANDS_NOT_OFFERED) - set(_qc_subparsers())
     assert not stale, f"QC_COMMANDS_NOT_OFFERED names commands fnirs-qc no longer has: {sorted(stale)}"
 
 
-def test_the_moved_commands_left_fnirs_qc():
-    """hyper-post, hyper-null, wtc-band and group-hyper-wtc are fnirs-pipe levels now."""
+def test_the_dyad_analysis_left_fnirs_qc():
+    """hyper-post, hyper-null, wtc-band and group-hyper-wtc are fnirs-hyper now."""
     gone = {"hyper-post", "hyper-null", "wtc-band", "group-hyper-wtc"} & set(_qc_subparsers())
     assert not gone, f"fnirs-qc still carries {sorted(gone)}"
 
@@ -343,19 +347,25 @@ def test_the_written_off_qc_flags_still_exist(command):
 @pytest.mark.parametrize("command", _QC_OFFERED)
 def test_the_generated_qc_command_parses(command):
     argv = build_qc_args(command, _QC_FULL_OPTS)
-    if command in _LEVEL_GROUPS:
-        assert argv[0] == "fnirs-pipe"
-        args = _build_parser().parse_args(argv[1:])   # raises SystemExit on an unknown flag
-        assert args.analysis_level == command
+    if command in _HYPER:
+        assert argv[:2] == ["fnirs-hyper", command]
+        _build_hyper_parser().parse_args(argv[1:])   # raises SystemExit on an unknown flag
     else:
         assert argv[:2] == ["fnirs-qc", command]
         _build_qc_parser().parse_args(argv[1:])
 
 
+def test_neither_tool_on_this_page_asks_for_a_bids_directory():
+    """Both read derivatives only, which is why the page has one directory field."""
+    for command in _QC_OFFERED:
+        argv = build_qc_args(command, _QC_FULL_OPTS)
+        assert "/bids" not in argv
+
+
 def test_a_space_separated_box_repeats_its_flag_rather_than_joining():
     """argparse nargs="+" takes repeats; one string with a space in it is one label."""
-    argv = build_qc_args("hyper", dict(_QC_FULL_OPTS, hyper_task="rest tap"))
-    args = _build_parser().parse_args(argv[1:])
+    argv = build_qc_args("run", dict(_QC_FULL_OPTS, hyper_task="rest tap"))
+    args = _build_hyper_parser().parse_args(argv[1:])
     assert args.task_label == ["rest", "tap"]
 
 

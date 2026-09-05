@@ -1,10 +1,11 @@
 """The pseudo-dyad null, computed and written on its own.
 
-Split out of ``hyper-post`` because the null is the expensive half of a WTC run and has no
-reason to share that run's options. The one that mattered is crossing: the null used to
-inherit ``--wtc-channel-cross``, so asking for the exploratory 196-pair channel table also
-multiplied the surrogate cost by 14. Here crossing is the null's own decision and defaults
-to off.
+Called from ``fnirs-hyper run`` when ``--wtc-pseudo`` is given, so it inherits that run's
+stage, band and window by construction: a null averaged over a different band is not the
+null for the table it sits beside. Crossing is the one thing it does not inherit. The null
+used to take ``--wtc-channel-cross`` from the real run, so asking for the exploratory
+196-pair channel table also multiplied the surrogate cost by 14; it is now the null's own
+decision, ``--wtc-pseudo-cross``, and defaults to off.
 """
 
 from __future__ import annotations
@@ -32,9 +33,8 @@ def write_wtc_null(
 ) -> Path:
     """Run the phase-scrambled null for one dyad and write its band means beside the real ones.
 
-    Writes ``group-<id>_task-<task>_hyper-wtc-pseudo.tsv``, the same name and columns
-    ``hyper-post --wtc-pseudo`` used to write, so anything already reading that table is
-    unaffected. The sidecar additionally records ``n_iter`` and ``cross``, without which a
+    Writes ``group-<id>_task-<task>_hyper-wtc-pseudo.tsv``, the name and columns this table
+    has always had, so anything already reading it is unaffected. The sidecar additionally records ``n_iter`` and ``cross``, without which a
     5-iteration probe and a 100-iteration null are indistinguishable on disk.
     """
     from fnirs_pipe.io.derivatives import group_data_dir
