@@ -203,7 +203,7 @@ METRIC_SUMMARY = {
     "gvtd_filt_p95": "The same at the worst moments. Above gvtd_thresh means motion.",
     "gvtd_vstd_mean": "Average movement with each channel scaled by its own SD first, so a few loud channels cannot dominate.",
     "gvtd_vstd_p95": "The same at the worst moments.",
-    "gvtd_thresh": "Motion cutoff for this recording, set from the mode of its own band-passed GVTD histogram. Compare it with gvtd_filt_p95, not with gvtd_mean.",
+    "gvtd_thresh": "Motion cutoff for this recording, set from the mode of its own band-passed GVTD histogram. Compare it with gvtd_filt_p95, not with gvtd_mean. Each side of a before → after pair is set from its own data, so a fall here is the cutoff following the recording, not motion being removed.",
     "gvtd_num_above_thresh": "Timepoints whose band-passed GVTD exceeds that cutoff.",
     "gvtd_pct_above_thresh": "Those timepoints as a fraction of the recording, roughly how much is motion-contaminated. Lower is cleaner.",
     "spike_count": "Sudden jumps across all channels, counted on the motion-band-filtered derivative so they reflect movement rather than pulse. Lower is better.",
@@ -251,8 +251,11 @@ _STAGE_BOTH = (
     "you are reading is the section it sits in."
 )
 _STAGE_RAW_AND_CORRECTED = (
-    "Measured on the recording as it arrived, and again on the motion-corrected file. "
-    "Which one you are reading is the section it sits in."
+    "Measured on the recording as it arrived, and again on the motion-corrected file, over "
+    "the same channels both times. A pair written before → after is those two "
+    "numbers: the left one is the recording, the right one is what motion correction left "
+    "behind, so the pair says whether the correction removed what it was there to remove. "
+    "A single number means this run has no corrected file to compare against."
 )
 
 _RAW_METRICS = (

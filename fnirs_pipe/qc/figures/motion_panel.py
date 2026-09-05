@@ -16,6 +16,10 @@ from plotly.subplots import make_subplots
 
 from fnirs_pipe.qc.figures._utils import decimate as _decimate
 from fnirs_pipe.qc.quantitative_metrics import GVTD_MOTION_BAND, gvtd_threshold, gvtd_timetrace
+from fnirs_pipe.utils import is_optical_density
+from fnirs_pipe.utils.logging import get_logger
+
+logger = get_logger("qc.figures.motion_panel")
 
 _MAX_PTS = 4000
 
@@ -37,6 +41,51 @@ def _maxpool_xy(t: np.ndarray, y: np.ndarray, max_pts: int = 2000):
     return t_ds, y_ds
 
 
+def _matched_od_after(
+    raw_after: "mne.io.Raw | None",
+    ch_names: list[str],
+    shape: tuple,
+    sfreq: float,
+) -> "np.ndarray | None":
+    """The motion-corrected recording as OD over ``ch_names``, or None if it does not line up.
+
+    A before/after panel only says something if both sides describe the same thing, so this
+    returns data on an exact match and None on anything else, which the caller draws as the
+    plain single-trace figure::
+
+        ch_names = [S1_D1 760, S1_D1 850];  after has both, 10 Hz, same n_times  -> (2, N)
+        ch_names = [S1_D1 760, S1_D1 850];  after has only S1_D1 760             -> None
+
+    A near miss is worse than nothing here: GVTD over a different channel set differs
+    several-fold on one recording, and the panel would show that as an effect of the
+    correction. The corrected file is already OD, so the conversion is only for the case
+    where a caller hands over intensity.
+    """
+    if raw_after is None:
+        return None
+    try:
+        od = (raw_after if is_optical_density(raw_after)
+              else mne.preprocessing.nirs.optical_density(raw_after.copy()))
+        if not set(ch_names) <= set(od.ch_names):            # same channels
+            logger.warning("corrected file is missing channels the panel draws; "
+                           "before/after comparison dropped")
+            return None
+        if abs(float(od.info["sfreq"]) - sfreq) > 1e-6:      # same rate
+            logger.warning("corrected file is at a different sampling rate; "
+                           "before/after comparison dropped")
+            return None
+        data = od.get_data(picks=ch_names)
+        if data.shape != shape:                              # same duration
+            logger.warning("corrected file has a different length; "
+                           "before/after comparison dropped")
+            return None
+        return data
+    except Exception:
+        logger.warning("corrected file unusable; before/after comparison dropped",
+                       exc_info=True)
+        return None
+
+
 def carpet_gvtd_figure(
     raw: mne.io.Raw,
     ch_names: list[str],
@@ -44,117 +93,185 @@ def carpet_gvtd_figure(
     z_threshold: float = 3.0,
     corrected_segments: "list[tuple[float, float]] | None" = None,
     spike_segments: "list[tuple[float, float]] | None" = None,
-) -> str:
-    """Raw GVTD + filtered GVTD + per-channel z-scored OD carpet, shared x-axis.
+    raw_after: "mne.io.Raw | None" = None,
+) -> go.Figure:
+    """Raw GVTD + filtered GVTD + per-channel z-scored OD carpet, on one shared time axis.
 
     The two GVTD traces sit in separate stacked panels (they overlap badly on one axis).
     ``corrected_segments`` (motion-correction footprint) and ``spike_segments`` are drawn
-    as short bands along the carpet's bottom edge, distinct from the full-height red
+    as short bands on a strip under the carpet, distinct from the full-height red
     ``segments`` windows.
+
+    Given ``raw_after``, the motion-corrected recording, each GVTD panel carries a second
+    trace and a second carpet is stacked under the first, so the figure answers whether the
+    correction removed what it was there to remove. The two traces land on top of each other
+    wherever the correction changed nothing, which for the unfiltered trace is nearly
+    everywhere; they share a legend group per side, so clicking ``before`` or ``after`` in
+    the legend pulls that side out of both panels at once and separates them.
+
+    Everything the comparison is read against stays fixed to the uncorrected side: the
+    threshold line, and the per-channel mean and SD both carpets are z-scored by.
+    Re-deriving either from the corrected data would rescale the very panel that is supposed
+    to show the improvement, and a correction that shrank the signal would come out looking
+    unchanged. A ``raw_after`` that does not cover the same channels for the same duration at
+    the same rate is dropped rather than drawn (see ``_matched_od_after``).
     """
     raw_od = mne.preprocessing.nirs.optical_density(raw.copy())
     od_data, times = raw_od.get_data(picks=ch_names, return_times=True)
+    sfreq = float(raw_od.info["sfreq"])
+    od_after = _matched_od_after(raw_after, ch_names, od_data.shape, sfreq)
+    has_after = od_after is not None
 
     # GVTD full-res for the threshold/metric; plotted trace is max-pooled for display only.
     # filt = 0.01-0.5 Hz motion band (used for the threshold).
-    sfreq     = float(raw_od.info["sfreq"])
     gvtd      = gvtd_timetrace(od_data, sfreq)
     gvtd_filt = gvtd_timetrace(od_data, sfreq, *GVTD_MOTION_BAND)
     t_gvtd    = times[1:]
     motion_thresh = gvtd_threshold(gvtd_filt, n_std=3.0)
     t_raw_ds,  gvtd_ds      = _maxpool_xy(t_gvtd, gvtd)
     t_filt_ds, gvtd_filt_ds = _maxpool_xy(t_gvtd, gvtd_filt)
+    if has_after:
+        _, gvtd_post_ds      = _maxpool_xy(t_gvtd, gvtd_timetrace(od_after, sfreq))
+        _, gvtd_filt_post_ds = _maxpool_xy(
+            t_gvtd, gvtd_timetrace(od_after, sfreq, *GVTD_MOTION_BAND))
 
-    # carpet: all channels (both wavelengths are positively correlated, safe in one z-scored image);
-    # matches GVTD's channel set. decimate columns for display only
-    carpet   = od_data
+    # carpet: all channels (both wavelengths are positively correlated, safe in one z-scored
+    # image); matches GVTD's channel set. decimate columns for display only
     MAX_PTS = 2000
-    if carpet.shape[1] > MAX_PTS:
-        carpet = carpet[:, :: carpet.shape[1] // MAX_PTS]
-    # per-channel z-score: (OD - mean_t) / std_t, clipped to ±z_threshold
-    mean     = carpet.mean(axis=1, keepdims=True)
-    std      = carpet.std(axis=1, keepdims=True)
+    step     = max(1, od_data.shape[1] // MAX_PTS)
+    carpet   = od_data[:, ::step]
+    t_carpet = times[::step]
+    # one scale for both carpets, taken from the uncorrected side: z-scoring the corrected
+    # data by its own SD would divide out the very shrinkage the panel is there to show
+    mean = carpet.mean(axis=1, keepdims=True)
+    std  = carpet.std(axis=1, keepdims=True)
     std[std == 0] = 1.0
-    data_z   = np.clip((carpet - mean) / std, -z_threshold, z_threshold)
+    # 2 dp: the colour scale cannot resolve more, and the z values are most of the payload
+    # of the saved HTML, so rounding them keeps the file a fraction of the size
+    data_z = np.round(np.clip((carpet - mean) / std, -z_threshold, z_threshold), 2)
+    data_z_after = (None if not has_after else
+                    np.round(np.clip((od_after[:, ::step] - mean) / std,
+                                     -z_threshold, z_threshold), 2))
 
-    n_ch     = carpet.shape[0]
-    carpet_h = max(1.5, n_ch * 0.09)
-    fig = plt.figure(figsize=(12, carpet_h + 3.0))
-    gs  = fig.add_gridspec(
-        4, 2,
-        height_ratios=[1.0, 1.0, carpet_h, 0.5],
-        width_ratios=[1, 0.025],
-        hspace=0.0, wspace=0.05,
+    n_ch      = carpet.shape[0]
+    n_carpets = 2 if has_after else 1
+    n_rows    = 2 + n_carpets + 1  # 2 GVTD panels, the carpets, the annotation strip
+    gvtd_px   = 110
+    carpet_px = int(max(200, min(n_ch * 13, 700)))
+    band_px   = 60
+    heights   = [gvtd_px, gvtd_px] + [carpet_px] * n_carpets + [band_px]
+    total_px  = sum(heights) + 120  # margins and the shared x-axis title
+    band_row  = n_rows
+
+    titles = ["GVTD (raw)", "GVTD (0.01\u20130.5 Hz)"]
+    titles += (["Carpet (before)", "Carpet (after)"] if has_after else ["Carpet"])
+    titles += [""]
+    fig = make_subplots(
+        rows=n_rows, cols=1, shared_xaxes=True,
+        row_heights=[h / sum(heights) for h in heights],
+        vertical_spacing=0.02,
+        subplot_titles=titles,
     )
-    ax_graw  = fig.add_subplot(gs[0, 0])
-    ax_gfilt = fig.add_subplot(gs[1, 0], sharex=ax_graw)
-    ax_c     = fig.add_subplot(gs[2, 0], sharex=ax_graw)
-    ax_b     = fig.add_subplot(gs[3, 0], sharex=ax_graw)  # dedicated band strip, never overlaps carpet
-    cax      = fig.add_subplot(gs[2, 1])
 
-    ax_graw.plot(t_raw_ds, gvtd_ds, lw=0.5, color="#b0b0b0")
-    ax_graw.set_xlim(times[0], times[-1])
-    ax_graw.set_ylabel("GVTD\nraw", fontsize=8)
-    ax_graw.tick_params(labelsize=7, labelbottom=False)
+    def _gvtd_traces(row, y_before, y_after, t, color_before):
+        """One GVTD panel: the uncorrected trace, plus the corrected one when there is one.
 
-    ax_gfilt.plot(t_filt_ds, gvtd_filt_ds, lw=0.6, color="#2c3e50")
+        ``legendgroup`` is the side rather than the panel, so one click in the legend hides
+        that side in every panel at once. Only the first panel contributes legend entries;
+        the second would otherwise duplicate them.
+        """
+        show = row == 1
+        if y_after is not None:
+            fig.add_trace(go.Scatter(
+                x=t, y=y_after, mode="lines", name="after",
+                legendgroup="after", showlegend=show,
+                line=dict(color="#16a085", width=1.4),
+                hovertemplate="t=%{x:.1f}s<br>after=%{y:.3e}<extra></extra>",
+            ), row=row, col=1)
+        fig.add_trace(go.Scatter(
+            x=t, y=y_before, mode="lines",
+            name="before" if y_after is not None else "GVTD",
+            legendgroup="before", showlegend=show,
+            line=dict(color=color_before, width=1.0),
+            hovertemplate="t=%{x:.1f}s<br>before=%{y:.3e}<extra></extra>",
+        ), row=row, col=1)
+
+    _gvtd_traces(1, gvtd_ds, gvtd_post_ds if has_after else None, t_raw_ds, "#5d6d7e")
+    _gvtd_traces(2, gvtd_filt_ds, gvtd_filt_post_ds if has_after else None,
+                 t_filt_ds, "#2c3e50")
+
     if motion_thresh is not None:
-        ax_gfilt.axhline(motion_thresh, ls="--", lw=0.8, color="#e74c3c",
-                         label=f"thresh={motion_thresh:.4f}")
-        ax_gfilt.legend(fontsize=7, loc="upper right", framealpha=0.6)
-    ax_gfilt.set_ylabel("GVTD\n0.01–0.5 Hz", fontsize=8)
-    ax_gfilt.tick_params(labelsize=7, labelbottom=False)
-    for ax in (ax_graw, ax_gfilt):
-        for sp in ax.spines.values():
-            sp.set_visible(False)
+        # the uncorrected recording's threshold, kept for the corrected trace as well: it is
+        # the yardstick the % motion in the metrics table is counted against
+        fig.add_hline(
+            y=motion_thresh, row=2, col=1,
+            line=dict(color="#e74c3c", width=1, dash="dash"),
+            annotation_text=f"thresh={motion_thresh:.3e}",
+            annotation_position="top right",
+            annotation_font=dict(size=9, color="#e74c3c"),
+        )
 
-    im = ax_c.imshow(
-        data_z, aspect="auto", cmap="gray_r",
-        vmin=-z_threshold, vmax=z_threshold,
-        extent=[times[0], times[-1], n_ch - 0.5, -0.5],
-        interpolation="nearest",
-    )
-    ax_c.set_yticks([])
-    ax_c.tick_params(labelbottom=False)  # x-axis lives on the band strip below
-    for sp in ax_c.spines.values():
-        sp.set_visible(False)
-    fig.colorbar(im, cax=cax, label="Z-score")
+    for i, z in enumerate([data_z, data_z_after][:n_carpets]):
+        fig.add_trace(go.Heatmap(
+            z=z, x=t_carpet, y=ch_names,
+            coloraxis="coloraxis",  # one scale and one bar for both carpets
+            hovertemplate="%{y}<br>t=%{x:.1f}s<br>z=%{z:.2f}<extra></extra>",
+            showlegend=False,
+        ), row=3 + i, col=1)
+
+    def _band(spans, y, color, label):
+        xs, ys = [], []
+        for onset, duration in (spans or []):
+            xs += [onset, onset + duration, None]
+            ys += [y, y, None]
+        fig.add_trace(go.Scatter(
+            x=xs or [None], y=ys or [None], mode="lines", name=label,
+            line=dict(color=color, width=9),
+            hovertemplate=label + ": %{x:.1f}s<extra></extra>",
+        ), row=band_row, col=1)
+
+    _band(corrected_segments, 0.3, "#16a085", "corrected")
+    _band(spike_segments, 0.7, "#e67e22", "spikes")
 
     if segments:
-        for k, (label, spans) in enumerate(segments.items()):
-            for j, (onset, duration) in enumerate(spans):
-                for ax in (ax_graw, ax_gfilt, ax_c):
-                    ax.axvspan(onset, onset + duration,
-                               color="#e74c3c", alpha=0.15, zorder=2)
-                if j == 0:
-                    ax_graw.text(
-                        onset + duration / 2, 1.02, label,
-                        ha="center", va="bottom", fontsize=6, color="#e74c3c",
-                        transform=ax_graw.get_xaxis_transform(),
-                    )
+        for label, spans in segments.items():
+            for onset, duration in spans:
+                fig.add_vrect(
+                    x0=onset, x1=onset + duration,
+                    fillcolor="#e74c3c", opacity=0.15, line_width=0,
+                    layer="below", row="all", col=1,
+                )
+                fig.add_annotation(
+                    x=onset + duration / 2, y=1.0, yref="y domain", row=1, col=1,
+                    text=label, showarrow=False, yanchor="bottom",
+                    font=dict(size=9, color="#e74c3c"),
+                )
 
-    # dedicated strip below the carpet: motion-correction footprint + spike timepoints
-    ax_b.set_ylim(0, 1)
-    ax_b.set_yticks([])
-    ax_b.set_xlabel("Time (s)", fontsize=9)
-    ax_b.tick_params(labelsize=7)
-    for sp in ax_b.spines.values():
-        sp.set_visible(False)
+    fig.update_yaxes(title_text="GVTD", title_font_size=9, row=1, col=1)
+    fig.update_yaxes(title_text="GVTD", title_font_size=9, row=2, col=1)
+    for i in range(n_carpets):
+        # the channel names stay in the hover, where they are readable; on the axis a full
+        # montage would be an unreadable stack
+        fig.update_yaxes(showticklabels=False, autorange="reversed", row=3 + i, col=1)
+    fig.update_yaxes(showticklabels=False, range=[0, 1], row=band_row, col=1)
+    fig.update_xaxes(title_text="Time (s)", row=band_row, col=1)
+    fig.update_xaxes(range=[float(times[0]), float(times[-1])])
 
-    def _band(spans, ymin, ymax, color, label):
-        for onset, duration in (spans or []):
-            ax_b.axvspan(onset, onset + duration, ymin=ymin, ymax=ymax, color=color, alpha=0.9)
-        ax_b.text(-0.006, (ymin + ymax) / 2, label, transform=ax_b.transAxes,
-                  fontsize=6, color=color, va="center", ha="right")
-
-    _band(corrected_segments, 0.05, 0.45, "#16a085", "corrected")
-    _band(spike_segments, 0.55, 0.95, "#e67e22", "spikes")
-
-    buf = io.BytesIO()
-    fig.savefig(buf, format="png", dpi=300, bbox_inches="tight")
-    plt.close(fig)
-    buf.seek(0)
-    return base64.b64encode(buf.read()).decode()
+    fig.update_layout(
+        height=total_px,
+        coloraxis=dict(
+            colorscale="Greys", cmin=-z_threshold, cmax=z_threshold,
+            colorbar=dict(title="Z-score", thickness=10, len=0.5, y=0.4),
+        ),
+        margin=dict(l=60, r=20, t=40, b=45),
+        hovermode="x unified",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
+        plot_bgcolor="white",
+    )
+    for ann in fig.layout.annotations:
+        if ann.text in titles:
+            ann.font.size = 10
+    return fig
 
 
 def bad_segment_zoom_figure(

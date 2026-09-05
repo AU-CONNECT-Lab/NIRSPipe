@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import base64
 import json
 from pathlib import Path
 
@@ -185,13 +184,16 @@ def _process_run(
     except Exception as exc:
         logger.warning("layout_figure failed: %s", exc)
 
-    # ── file: carpet GVTD (PNG) ────────────────────────────────────────────────
-    carpet_b64 = None
+    # ── file: carpet GVTD ──────────────────────────────────────────────────
+    #   an iframe rather than inlined like the panels above: the carpet is a channels x 2000
+    #   heatmap, and every run of the viewer would carry one in the page itself
+    carpet_inline: dict = {}
     try:
-        carpet_b64 = carpet_gvtd_figure(raw, raw.ch_names)
-        png_name   = f"{label}_desc-carpet_nirs.png"
-        (fig_dir / png_name).write_bytes(base64.b64decode(carpet_b64))
-        figure_paths["carpet"] = {"src": f"figures/{png_name}"}
+        fig   = carpet_gvtd_figure(raw, raw.ch_names)
+        fname = f"{label}_desc-carpet_nirs.html"
+        h     = _save_figure_html(fig, fig_dir / fname)
+        figure_paths["carpet"] = {"src": f"figures/{fname}", "h": h}
+        carpet_inline = {"figure": fig.to_dict()}
     except Exception as exc:
         logger.warning("carpet_gvtd_figure failed: %s", exc)
 
@@ -317,7 +319,7 @@ def _process_run(
         "ts":           ts_inline,
         "layout":       layout_inline,
         "evoked_topo":  evoked_topo_inline,
-        "carpet_gvtd":  {"b64": carpet_b64} if carpet_b64 else {},
+        "carpet_gvtd":  carpet_inline,
         "sci_psp":          sci_psp_inline,
         "ch_summary":       ch_summary_inline,
         "trigger_timeline": trigger_timeline_inline,

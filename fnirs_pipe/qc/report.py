@@ -146,8 +146,8 @@ def _section_provenance(nirs_dir: Path, mode: str | None, subject: str, errors: 
 def _fig_href(figures_dir: Path, name: str) -> str:
     """URL of a figure as the report must link to it, the report sitting above ``figures/``.
 
-    figures/            + carpet_gvtd.png -> "figures/carpet_gvtd.png"
-    figures/sub-01_task-rest/ + same      -> "figures/sub-01_task-rest/carpet_gvtd.png"
+    figures/            + carpet_gvtd.html -> "figures/carpet_gvtd.html"
+    figures/sub-01_task-rest/ + same       -> "figures/sub-01_task-rest/carpet_gvtd.html"
 
     Per-run reports put their figures in a subdirectory so several runs of one subject stop
     overwriting each other; a caller that passes a bare ``figures/`` still gets the old URL.
@@ -344,6 +344,7 @@ def _section_motion(
     figures_dir: Path,
     windowed: dict | None = None,
     raw_before_motion: mne.io.Raw | None = None,
+    raw_after_motion: mne.io.Raw | None = None,
 ) -> dict:
     """The carpet and GVTD panel, with the flagged spans drawn over it.
 
@@ -351,8 +352,12 @@ def _section_motion(
     here. They were measured on the same channel set this panel draws, so reading them back
     is not a shortcut: it is what keeps the stripes on the carpet and the counts in the
     metrics table describing one event each.
+
+    ``raw_after_motion`` puts the corrected trace and carpet in the same panel as the
+    uncorrected one, matching the ``before -> after`` pairs in the metrics table.
     """
     carpet_gvtd_path = None
+    carpet_gvtd_h = 600
     bad_segment_zoom_path = None
 
     def _spans(key: str) -> "list | None":
@@ -363,11 +368,12 @@ def _section_motion(
     spike_spans = _spans("spike_spans_s")
 
     with _guard("Carpet + GVTD", errors, subject):
-        b64 = carpet_gvtd_figure(raw_long, raw_long.ch_names, segments,
+        fig = carpet_gvtd_figure(raw_long, raw_long.ch_names, segments,
                                  corrected_segments=corrected_segments,
-                                 spike_segments=spike_spans)
-        _save_b64_png(b64, figures_dir / "carpet_gvtd.png")
-        carpet_gvtd_path = _fig_href(figures_dir, "carpet_gvtd.png")
+                                 spike_segments=spike_spans,
+                                 raw_after=raw_after_motion)
+        carpet_gvtd_path, carpet_gvtd_h = _save_plotly_html(
+            fig, figures_dir / "carpet_gvtd.html")
 
     with _guard("Bad segment zoom", errors, subject):
         all_spans = [
@@ -389,6 +395,7 @@ def _section_motion(
 
     return {
         "carpet_gvtd_path": carpet_gvtd_path,
+        "carpet_gvtd_h": carpet_gvtd_h,
         "bad_segment_zoom_path": bad_segment_zoom_path,
         "corrected_segments": corrected_segments,
         "spike_spans": spike_spans,
@@ -902,7 +909,8 @@ def build_subject_report(
     motion_vars       = _section_motion(
                             raw_long, sci_scores, config, segments, subject, errors,
                             figures_dir, windowed=windowed_section,
-                            raw_before_motion=raw_before_motion)
+                            raw_before_motion=raw_before_motion,
+                            raw_after_motion=raw_after_motion)
     motion_det_vars   = _section_motion_detail(
                             raw_before_motion, raw_after_motion, subject, errors, figures_dir,
                             segments=segments,

@@ -339,7 +339,8 @@
     </p>
     {% if carpet_gvtd_path %}
       <h3>GVTD + Carpet plot</h3>
-      <img class="responsive" src="{{ carpet_gvtd_path }}" alt="GVTD + Carpet plot" />
+      <iframe class="plotly-frame" src="{{ carpet_gvtd_path }}" title="GVTD + Carpet plot"
+              style="height:{{ carpet_gvtd_h }}px"></iframe>
       <p class="fig-path">{{ carpet_gvtd_path }}</p>
     {% else %}
       <div class="placeholder">GVTD + Carpet not available.</div>
@@ -615,6 +616,10 @@
         title="{{ metric_summary(key) }}">{{ text }}{% if is_key_metric(key) %}<span class="ql-dot" aria-hidden="true">&#9679;</span>{% endif %}</span>{% endmacro %}
   <p class="qm-note">Hover a metric for what it means and which way is good.
      <span class="ql-dot" aria-hidden="true">&#9679;</span> marks the ones that decide whether the run is usable.</p>
+  <p class="qm-note">A pair written <b>a &rarr; b</b> is the same metric measured twice, over the same
+     channels: <b>a</b> before a processing step and <b>b</b> after it, so the pair shows what the step
+     did. GVTD is measured either side of motion correction, global correlation either side of
+     regression. A single number means that step did not run for this recording.</p>
   <ul class="qm-list">
     {% set ret  = sqm.get('channel_retention_rate') %}
     {% set sci  = sqm.get('sci_mean') %}

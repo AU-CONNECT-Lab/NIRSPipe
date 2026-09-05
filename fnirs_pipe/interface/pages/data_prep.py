@@ -342,8 +342,8 @@ layout = dbc.Container([
 
                 _card("Carpet + GVTD",
                       html.Div(id="dp-carpet-gvtd-wrap", style=_HIDDEN, children=[
-                          html.Img(id="dp-carpet-gvtd",
-                                   style={"width": "100%", "display": "block"}),
+                          dcc.Graph(id="dp-carpet-gvtd", responsive=True,
+                                    style={"minHeight": "600px"}),
                       ])),
 
                 _card("SCI / PSP",

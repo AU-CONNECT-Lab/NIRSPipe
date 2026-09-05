@@ -598,7 +598,8 @@ function loadCarpetGvtd() {
   if (_STATIC_DATA) {
     var p = ((_STATIC_DATA[_run_idx] || {}).figure_paths || {}).carpet;
     if (p && p.src) {
-      panel.innerHTML = '<img src="' + p.src + '" style="max-width:100%;display:block;margin:0 auto;">';
+      panel.innerHTML = '<iframe id="carpet-gvtd-plot" class="plotly-frame" style="width:100%;border:0;"></iframe>';
+      _setIframeSrc("carpet-gvtd-plot", p.src, p.h || 600);
     } else {
       panel.innerHTML = '<span style="color:#adb5bd;font-style:italic;font-size:0.85rem;">No data</span>';
     }

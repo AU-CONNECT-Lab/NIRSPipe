@@ -251,7 +251,7 @@ _SHOW = {}
     Output("dp-channel-selector",       "value",   allow_duplicate=True),
     Output("dp-evoked-topo",            "figure"),
     Output("dp-trigger-timeline",       "figure"),
-    Output("dp-carpet-gvtd",            "src"),
+    Output("dp-carpet-gvtd",            "figure"),
     Output("dp-ts-figure-wrap",         "style"),
     Output("dp-layout-2d-wrap",         "style"),
     Output("dp-layout-3d-wrap",         "style"),
@@ -308,8 +308,7 @@ def restore_from_store(store, _tick):
         for k, v in sqm_scalars.items()
     ] or no_update
 
-    b64 = cached.get("carpet_gvtd", {}).get("b64")
-    carpet_src = f"data:image/png;base64,{b64}" if b64 else no_update
+    carpet_src = cached.get("carpet_gvtd", {}).get("figure") or no_update
 
     def _wrap(val):
         return _SHOW if val is not no_update else no_update

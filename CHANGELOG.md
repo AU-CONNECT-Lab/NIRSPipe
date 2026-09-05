@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 - **The subject report shows GVTD before and after motion correction**, as `before → after` on the same five rows it already had, the way global correlation shows the regression either side. Both sides are measured on the same channel set: a long-channel GVTD read against an all-channel one differs several-fold on the same recording, which would show up as an improvement the correction never made
+- **The carpet + GVTD figure carries the corrected recording too**, a second trace in each GVTD panel and a second carpet under the first. Both carpets are on one colour scale and the threshold line stays the uncorrected one, so the panel is read against a fixed yardstick rather than a rescaled one
 
 ### Fixed
 - **A `--no-report` run left the dyad analysis with nothing excluded.** Rejected channels were read from the per-channel CSV, which the report writes, so preprocessing that skipped the report produced a tree where `--desc errts` analysed every channel including the bad ones, and `--bads-scope subject` did nothing at any stage. Neither said so. Rejection now comes from the `desc-sci` sidecar, which prep writes either way, and the log names the source and the count. Every coherence value on a dyad with a rejected channel changes
@@ -19,6 +20,7 @@ All notable changes to this project will be documented in this file.
 - `fnirs-hyper run` ends by saying whether the merged tables are behind the per-dyad ones, and with what command to catch them up. It does not merge on its own: a run often covers one dyad, and merging the whole tree after it would fail on a band a later run legitimately changed
 
 ### Changed
+- **The carpet + GVTD figure is interactive**, an in-page plot rather than a PNG, so the before and after traces can be toggled from the legend where they lie on top of each other, and hovering names the channel and the time. It reaches the subject report, the raw viewer and the Data Preparation page alike
 - **The dyad analysis left `fnirs-qc`.** Wavelet coherence, inter-brain correlation and the pseudo-dyad null are results, not quality checks, and hyperscanning has its own input and its own unit of analysis, so it is its own tool now. `hyper-raw` stays in `fnirs-qc`: a pre-flight look at raw dyad data is quality control. No output file changes name
 - **The pseudo-dyad null is a flag on the dyad run again, `--wtc-pseudo N`,** and writes nothing unless you ask. Nine parameters had to match between `hyper-null` and the run it was the null for, and nothing on disk checked it: a null averaged over one band could sit beside a real table averaged over another. Shared by construction now. Its crossing stays its own decision, `--wtc-pseudo-cross`, which is what the split was for
 - **One name per parameter for the frequency band.** `--band-fmin`, `--band-fmax` and `--mask-coi` were second names for `--wtc-band-fmin`, `--wtc-band-fmax` and `--wtc-mask-coi`, and the docs had to say they must agree. `--wtc-suffix` is the only flag `band` keeps to itself
