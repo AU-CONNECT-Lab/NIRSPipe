@@ -42,12 +42,16 @@ def alff_falff_figure(
 
     alff_df must have columns: channel, alff, falff.
     HbO channels (name ends with ' hbo') are drawn in red; HbR in blue.
+    Rejected channels arrive NaN and so have no bar; a grey stripe marks where they sat, and
+    the mean lines are over the good channels only.
     """
     channels = alff_df["channel"].tolist()
     alff_vals = alff_df["alff"].to_numpy(dtype=float)
     falff_vals = alff_df["falff"].to_numpy(dtype=float)
 
     is_hbo = np.array([ch.endswith(" hbo") for ch in channels])
+    is_bad = (alff_df["bad"].to_numpy(dtype=bool) if "bad" in alff_df.columns
+              else np.zeros(len(channels), dtype=bool))
     colors = [_HBO_COLOR if h else _HBR_COLOR for h in is_hbo]
     x = np.arange(len(channels))
 
@@ -64,14 +68,25 @@ def alff_falff_figure(
     ):
         ax.bar(x, vals, color=colors, edgecolor="none", alpha=0.85)
 
-        hbo_mean = np.nanmean(vals[is_hbo]) if is_hbo.any() else None
-        hbr_mean = np.nanmean(vals[~is_hbo]) if (~is_hbo).any() else None
+        # a rejected channel's value is NaN, so its bar is missing rather than zero; the
+        # stripe says the gap is a rejection and not a channel that measured nothing
+        for i in np.flatnonzero(is_bad):
+            ax.axvspan(i - 0.5, i + 0.5, color="#eeeeee", lw=0, zorder=0)
+
+        def _mean(mask):
+            sel = vals[mask]
+            return float(np.nanmean(sel)) if np.isfinite(sel).any() else None
+
+        hbo_mean = _mean(is_hbo) if is_hbo.any() else None
+        hbr_mean = _mean(~is_hbo) if (~is_hbo).any() else None
         if hbo_mean is not None:
+            # ALFF is ~1e-8 and fALFF ~1e-2, so a fixed number of decimals reads 0.0000
+            # on one of the two panels whichever number is chosen
             ax.axhline(hbo_mean, color=_HBO_COLOR, lw=1.0, ls="--", alpha=0.7,
-                       label=f"HbO mean = {hbo_mean:.4f}")
+                       label=f"HbO mean = {hbo_mean:.4g}")
         if hbr_mean is not None:
             ax.axhline(hbr_mean, color=_HBR_COLOR, lw=1.0, ls="--", alpha=0.7,
-                       label=f"HbR mean = {hbr_mean:.4f}")
+                       label=f"HbR mean = {hbr_mean:.4g}")
 
         ax.set_ylabel(ylabel, fontsize=9)
         ax.set_title(row_title, fontsize=10, pad=4)
@@ -117,6 +132,9 @@ def fc_matrix_figure(
     compute_fc returns one matrix per chromophore, so HbO arrives in fc_df and HbR in
     fc_hbr_df. A single matrix holding both is also accepted and split by channel suffix.
     Diagonal is set to NaN so self-correlations are not shown.
+
+    Blank cells are grey. A rejected channel arrives from compute_fc already NaN, so it shows
+    as a full grey row and column; the diagonal is the one-cell grey line through the middle.
     """
     panels: list[tuple[list[str], np.ndarray, str]] = []
     for frame in (fc_df, fc_hbr_df):
@@ -138,6 +156,9 @@ def fc_matrix_figure(
 
     sizes = [_square_size(len(names)) for names, _, _ in panels]
 
+    cmap = plt.get_cmap("RdBu_r").copy()
+    cmap.set_bad("#dddddd")
+
     fig, axes = plt.subplots(
         1, len(panels),
         figsize=(sum(sizes) + 2.0, max(sizes)),
@@ -147,7 +168,7 @@ def fc_matrix_figure(
     fig.subplots_adjust(wspace=0.4)
 
     for ax, (names, mat, label) in zip(axes[0], panels):
-        im = ax.imshow(mat, aspect="equal", cmap="RdBu_r", vmin=-1, vmax=1,
+        im = ax.imshow(mat, aspect="equal", cmap=cmap, vmin=-1, vmax=1,
                        interpolation="nearest")
         n = len(names)
         step = max(1, n // 20)
@@ -193,11 +214,14 @@ def fc_roi_matrix_figure(
     )
     fig.subplots_adjust(wspace=0.45)
 
+    cmap = plt.get_cmap("RdBu_r").copy()
+    cmap.set_bad("#dddddd")
+
     for ax, (frame, label) in zip(axes[0], panels):
         names = frame.index.tolist()
         mat = frame.to_numpy(dtype=float).copy()
         np.fill_diagonal(mat, np.nan)
-        im = ax.imshow(mat, aspect="equal", cmap="RdBu_r", vmin=-1, vmax=1,
+        im = ax.imshow(mat, aspect="equal", cmap=cmap, vmin=-1, vmax=1,
                        interpolation="nearest")
         ax.set_xticks(range(len(names)))
         ax.set_xticklabels(names, fontsize=7, rotation=45, ha="right")
@@ -352,7 +376,8 @@ def alff_topo_figure(
     The bar chart in :func:`alff_falff_figure` orders channels by name, which puts no two
     neighbours side by side; low-frequency amplitude is a spatial claim, and this is the
     view it can be read as one in. Each channel is its source-to-detector segment, as in
-    :func:`fc_seed_topo_figure`, and rejected channels are faded rather than dropped.
+    :func:`fc_seed_topo_figure`, and rejected channels are drawn faded grey rather than
+    dropped: their ALFF arrives NaN, so there is no value to colour them by.
 
     Both measures are unsigned and their ranges differ by orders of magnitude, so each panel
     scales to its own data (viridis) instead of to a shared symmetric scale. Short channels
@@ -368,7 +393,6 @@ def alff_topo_figure(
 
     long_names, _ = long_short_channels(raw)
     drawable = set(ends) & (set(long_names) or set(ends))
-    bads = set(raw.info["bads"])
     values = {str(row["channel"]): row for _, row in alff_df.iterrows()}
 
     head_x = [c for ch in drawable for c in (ends[ch][0][0], ends[ch][1][0])]
@@ -392,24 +416,32 @@ def alff_topo_figure(
             ax.set_title(f"{measure.upper()} - {label}", fontsize=9, pad=4)
             head_outline(ax, head_x, head_y)
 
-            cells = [(ch, float(values[ch][measure])) for ch in drawable
-                     if ch.endswith(f" {chromo}") and ch in values
-                     and np.isfinite(values[ch][measure])]
+            drawn = [ch for ch in drawable if ch.endswith(f" {chromo}") and ch in values]
+            cells = [(ch, float(values[ch][measure])) for ch in drawn
+                     if np.isfinite(values[ch][measure])]
+            blanks = [ch for ch in drawn if not np.isfinite(values[ch][measure])]
             if not cells:
                 ax.text(0.5, 0.5, "no value", transform=ax.transAxes,
                         ha="center", va="center", fontsize=8, color="#888")
                 continue
 
-            # the scale comes from the good channels alone: one rejected channel with a
-            # runaway amplitude would otherwise flatten every real difference into one colour
-            good = [v for ch, v in cells if ch not in bads] or [v for _, v in cells]
+            # the scale comes from the good channels alone, which is what compute_alff
+            # already guarantees: a rejected channel with a runaway amplitude arrives NaN
+            # instead of flattening every real difference into one colour
+            good = [v for _, v in cells]
             norm = mcolors.Normalize(vmin=min(good), vmax=max(good))
             cmap = plt.get_cmap("viridis")
 
+            # a rejected channel has no value to colour, so it is drawn as a faded grey
+            # segment: the montage stays complete and the gap reads as a rejection
+            for ch in blanks:
+                (sx, sy), (dx, dy) = ends[ch]
+                ax.plot([sx, dx], [sy, dy], color="#aaaaaa", lw=2.0, alpha=0.35, zorder=1,
+                        solid_capstyle="round")
+
             for ch, v in sorted(cells, key=lambda c: c[1]):
                 (sx, sy), (dx, dy) = ends[ch]
-                ax.plot([sx, dx], [sy, dy], color=cmap(norm(v)), lw=2.0,
-                        alpha=0.35 if ch in bads else 1.0, zorder=1,
+                ax.plot([sx, dx], [sy, dy], color=cmap(norm(v)), lw=2.0, zorder=1,
                         solid_capstyle="round")
 
             plt.colorbar(plt.cm.ScalarMappable(norm=norm, cmap=cmap), ax=ax,

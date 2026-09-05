@@ -129,6 +129,8 @@ def fc_connectogram(
         fc_hbr_df:  The HbR matrix, when the two are supplied separately.
         groups:     Optional mapping channel → group label for colour-coding nodes.
                     Defaults to grouping by source label (S1, S2, …).
+                    Rejected channels are left off the circle: compute_fc blanks their row,
+                    so they carry no edge.
         threshold:  Minimum ``|r|`` to draw a connection. Weaker edges are hidden.
         n_lines:    If set, draw only the top-N strongest connections (overrides threshold).
         title:      Base title; " — HbO" / " — HbR" is appended automatically.
@@ -141,9 +143,12 @@ def fc_connectogram(
             continue
         all_ch = frame.columns.tolist()
         fc_mat = frame.to_numpy(dtype=float).copy()
+        # a rejected channel is an all-NaN row: it has no edge to draw, and a node kept for
+        # it would sit on the circle claiming the ring has one more channel than it measured
+        drawable = ~np.all(np.isnan(fc_mat), axis=1)
         np.fill_diagonal(fc_mat, 0.0)
         for suffix, label in ((" hbo", "HbO"), (" hbr", "HbR")):
-            names = [c for c in all_ch if c.endswith(suffix)]
+            names = [c for i, c in enumerate(all_ch) if c.endswith(suffix) and drawable[i]]
             if not names:
                 continue
             idx = [all_ch.index(c) for c in names]

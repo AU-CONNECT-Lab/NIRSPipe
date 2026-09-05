@@ -32,6 +32,10 @@ def compute_alff(raw: mne.io.Raw, low_pass: float, high_pass: float) -> pd.DataF
 
     Notes
     -----
+    All four measures are NaN on a rejected channel, and the ``bad`` column says which those
+    are. The mALFF/zALFF reference mean and SD already exclude them, so the blanking only
+    removes the values themselves.
+
     Rest mode produces two residuals and this function must receive the broadband one.
     Connectivity (FC) wants a bandpassed residual (~0.01-0.08 Hz) so cardiac, respiration and
     Mayer waves are dropped before correlating. ALFF/fALFF want the opposite: fALFF is the
@@ -92,6 +96,11 @@ def compute_alff(raw: mne.io.Raw, low_pass: float, high_pass: float) -> pd.DataF
         if grp_std != 0 and np.isfinite(grp_std):
             zalff_vals[idx] = (alff_vals[idx] - grp_mean) / grp_std
 
+    # rejected channels are blanked rather than dropped, so the frame keeps one row per
+    # channel and a group analysis can stack subjects whose rejections differ
+    for vals in (alff_vals, falff_vals, malff_vals, zalff_vals):
+        vals[is_bad] = np.nan
+
     return pd.DataFrame({
         "channel": raw.ch_names,
         "alff":    alff_vals,
@@ -113,6 +122,11 @@ def compute_fc(raw: mne.io.Raw, chromophore: str) -> pd.DataFrame:
     anti-correlate, so a mixed matrix has no clean meaning and the two are kept separate. Diagonal
     is 1. Empty frame if the chromophore has < 2 channels.
 
+    A rejected channel's row and column are NaN, not dropped: every subject's matrix keeps the
+    same shape and the same channel order, so a group analysis can stack them however their
+    rejections differ. This is the convention NIRS-KIT uses (``N_Matrix.m``) and the one
+    :func:`fnirs_pipe.qc.figures.hyper_post_figures.compute_isc` already follows.
+
     Plain Pearson, and deliberately so: a shrinkage estimator is more accurate per edge on weak
     connections, but shrinks by an amount that tracks the channel-to-sample ratio, so subjects
     with shorter runs or more rejected channels are pulled toward zero harder than others and
@@ -121,7 +135,11 @@ def compute_fc(raw: mne.io.Raw, chromophore: str) -> pd.DataFrame:
     picks = [c for c in raw.ch_names if c.endswith(f" {chromophore}")]
     if len(picks) < 2:
         return pd.DataFrame()
-    return pd.DataFrame(np.corrcoef(raw.get_data(picks=picks)), index=picks, columns=picks)
+    fc = pd.DataFrame(np.corrcoef(raw.get_data(picks=picks)), index=picks, columns=picks)
+    bads = [c for c in picks if c in set(raw.info["bads"])]
+    fc.loc[bads, :] = np.nan
+    fc.loc[:, bads] = np.nan
+    return fc
 
 
 def fisher_z(fc: pd.DataFrame) -> pd.DataFrame:
@@ -229,7 +247,8 @@ def compute_fc_seed(raw: mne.io.Raw, roi_map: dict[str, list[str]], chromophore:
     map into an apparent absence.
 
     Membership means the channels actually averaged, so a rejected one listed in ``roi_map``
-    keeps its value. Columns span every channel, rejected included, as in :func:`compute_fc`.
+    is not part of any seed. Columns span every channel, a rejected one's being NaN, as in
+    :func:`compute_fc`.
     """
     members = _roi_members(raw, roi_map, chromophore)
     cols = [c for c in raw.ch_names if c.endswith(f" {chromophore}")]
@@ -238,10 +257,12 @@ def compute_fc_seed(raw: mne.io.Raw, roi_map: dict[str, list[str]], chromophore:
 
     data = raw.get_data(picks=cols)
     col_index = {c: i for i, c in enumerate(cols)}
+    bad_cols = [col_index[c] for c in cols if c in set(raw.info["bads"])]
     rows = []
     for picks in members.values():
         seed = raw.get_data(picks=picks).mean(axis=0)
         r = np.corrcoef(np.vstack([seed, data]))[0, 1:]   # row 0 is the seed against every column
         r[[col_index[c] for c in picks]] = np.nan
+        r[bad_cols] = np.nan
         rows.append(r)
     return pd.DataFrame(np.vstack(rows), index=list(members), columns=cols)

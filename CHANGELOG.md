@@ -12,6 +12,9 @@ All notable changes to this project will be documented in this file.
 - **SCI and PSP before and after motion correction**, as a per-channel strip under the quality panel. Both metrics sit above the frequencies motion correction works on, so a channel that fell is one where the correction removed cardiac pulsation along with the artifact
 - **One quality-record section per haemoglobin file the run wrote**, each named after it: `preproc`, `filtered`, `resampled`, `errts`. A step that did not run leaves no section, so the bandpass and the confound regression stay separable
 
+### Fixed
+- **Connectivity and ALFF counted rejected channels.** A channel preprocessing had thrown out still carried a value, and read as an ordinary result. It is now blank in the tables and grey in the figures. Every FC and ALFF table on a subject with a rejected channel changes
+
 ### Changed
 - **The `final` section is gone**, replaced by the sections above. It named a position rather than a file, so the same key meant the bandpassed signal on one run and the unfiltered signal on another, and on a run that regressed confounds it pointed at neither: the actual endpoint sat outside it. Group tables and databases written before this hold `final_*` columns and `checkpoint = 'final'` rows that will not be written again
 - **The PSD panel plots the files the run actually wrote**, one line per stage, instead of re-filtering the unfiltered signal in memory to invent an "after" curve. The old curve showed the filter's shape rather than the run's, and never reflected resampling. A run with no post-processing still gets the simulated curve, labelled as one

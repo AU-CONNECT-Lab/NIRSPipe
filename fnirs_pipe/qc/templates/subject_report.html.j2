@@ -562,7 +562,8 @@
     <p class="step-desc">
       Amplitude of Low-Frequency Fluctuations (ALFF) and fractional ALFF (fALFF) per channel,
       computed from the denoised residual time series. HbO in red, HbR in blue.
-      Dashed lines mark per-group means.
+      Dashed lines mark per-group means. Rejected channels carry no value and so no bar; a
+      grey stripe marks where they sat, and they are out of the means.
     </p>
     {% if rest_alff_path %}
       <img class="responsive" src="{{ rest_alff_path }}" alt="ALFF / fALFF per channel" />
@@ -575,7 +576,7 @@
       <p class="step-desc">
         The same two measures drawn where the channels are, each channel its source-to-detector
         segment. Each panel is scaled to its own values, so colours compare within a panel and
-        not across them. Faded channels were rejected. Short channels are not drawn.
+        not across them. Faded grey channels were rejected. Short channels are not drawn.
       </p>
       <img class="responsive" src="{{ rest_alff_topo_path }}" alt="ALFF / fALFF topography" />
       <p class="fig-path">{{ rest_alff_topo_path }}</p>
@@ -590,7 +591,9 @@
   <div class="details-body">
     <p class="step-desc">
       Channel-level Pearson correlation matrix computed from the denoised residual time series.
-      HbO and HbR are shown as separate heatmaps.
+      HbO and HbR are shown as separate heatmaps. A rejected channel is blank: it keeps its row
+      and column so every subject's matrix has the same shape, but holds no values, so it shows
+      as a grey cross through the matrix.
     </p>
     {% if rest_fc_path %}
       <img class="responsive" src="{{ rest_fc_path }}" alt="Functional connectivity matrix" />
@@ -610,7 +613,7 @@
     {% endif %}
     {% if rest_fc_circle_path %}
       <h3>Connectogram (threshold |r| ≥ 0.3)</h3>
-      <p class="step-desc">HbO and HbR channels together, nodes colour-coded by source. Only connections above threshold are drawn.</p>
+      <p class="step-desc">HbO and HbR channels together, nodes colour-coded by source. Only connections above threshold are drawn. Rejected channels are off the circle.</p>
       <img class="responsive" src="{{ rest_fc_circle_path }}" alt="FC connectogram" />
       <p class="fig-path">{{ rest_fc_circle_path }}</p>
     {% endif %}
@@ -618,8 +621,9 @@
       <h3>Seed topography</h3>
       <p class="step-desc">
         One flat map per seed ROI, each channel coloured by its correlation with that seed's mean
-        signal, on the same scale as the matrix above. Grey channels are inside the seed: their
-        value is undefined, not zero. Faded channels were rejected. Short channels are not drawn.
+        signal, on the same scale as the matrix above. Solid grey channels are inside the seed:
+        their value is undefined, not zero. Faded grey channels were rejected, and are in no
+        seed. Short channels are not drawn.
       </p>
       <img class="responsive" src="{{ rest_fc_seed_path }}" alt="Seed-to-whole-brain topography" />
       <p class="fig-path">{{ rest_fc_seed_path }}</p>
