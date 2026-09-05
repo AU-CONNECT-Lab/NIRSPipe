@@ -1444,8 +1444,10 @@ def compute_raw_sqm(
 def compute_haemo_sqm(raw_haemo: mne.io.Raw) -> dict[str, Any]:
     """Haemoglobin metrics that stay valid after bandpass and resampling.
 
-    For the final checkpoint, where the signal has usually been filtered and
-    downsampled. Returns HbO-HbR correlation, CNR, gcor, and data retention.
+    For every stage past ``preproc``, where the signal has usually been filtered,
+    downsampled or regressed. Returns HbO-HbR correlation, CNR, gcor, and data retention.
+    Band power and drift are deliberately absent: past the bandpass they describe the
+    filter rather than the recording, which is what ``compute_prep_haemo_sqm`` is for.
     """
     record: dict[str, Any] = {}
     record.update(haemo_quality_metrics(raw_haemo))

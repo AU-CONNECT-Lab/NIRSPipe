@@ -84,9 +84,10 @@ def _load_aligned_group(output_dir, members, task, desc, no_align, normalize, ba
                         tstart=None, tend=None):
     """Load one dyad, put both recordings on one time axis, and mark the rejected channels.
 
-    Returns (aligned_raws, offsets, group_sqm). The rejections have to be applied here rather
-    than in each metric: `desc-errts` carries an empty ``info["bads"]``, so a metric that
-    reads the Raw alone sees the full montage whatever --bads-scope was asked for.
+    Returns (aligned_raws, offsets, group_sqm). The rejections are applied here rather than
+    in each metric because --bads-scope decides them: a metric reading the Raw alone gets
+    whatever that one file's sidecar recorded, which is the run's own rejections and not
+    the union over the subject's runs that `subject` scope asks for.
     """
     from fnirs_pipe.pipeline.hyperscanning import (
         align_recordings,

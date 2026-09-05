@@ -250,8 +250,9 @@ _STAGE_PREPROC = (
     "measuring itself."
 )
 _STAGE_BOTH = (
-    "Measured twice: before filtering and again after filtering and resampling. Which one "
-    "you are reading is the section it sits in."
+    "Measured on every haemoglobin file the run wrote, so there is one of these per stage: "
+    "Beer-Lambert output, then the bandpass, the resample and the confound regression as "
+    "each of those ran. Which one you are reading is the section it sits in."
 )
 _STAGE_RAW_AND_CORRECTED = (
     "Measured on the recording as it arrived, and again on the motion-corrected file, over "

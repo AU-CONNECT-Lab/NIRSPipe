@@ -12,8 +12,9 @@ section are the same names the metric functions have always returned:
     raw_short  the same recording, short channels only: are the regressors trustworthy
     motion     what the motion correction repaired, from the OD either side of it
     preproc    Beer-Lambert output, before any filtering
+    filtered   the same signal after the bandpass
+    resampled  the same signal after the resample, when one ran
     errts      the confound-regression residual, the last denoising step there is
-    final      the last haemo file the run produced (resampled > filtered > preproc)
 
 The three ``raw*`` sections are one file seen through three channel sets, so the only
 thing that differs between them is source-detector separation.
@@ -21,7 +22,7 @@ thing that differs between them is source-detector separation.
 Bad channels: the Beer-Lambert conversion is the dividing line, never the section.
 
     raw / raw_long / raw_short / motion   intensity and OD, include them
-    preproc / errts / final               haemoglobin, exclude them
+    preproc / filtered / resampled / errts  haemoglobin, exclude them
 
 A rejected channel is still part of what the machine recorded, so everything measured
 before Beer-Lambert describes the recording as it arrived; after it the channel is out of
@@ -50,11 +51,17 @@ logger = get_logger("qc.sqm_record")
 
 _DESC_RE = re.compile(r"_desc-([A-Za-z0-9]+)_nirs\.snirf$")
 
-# the haemo file the "final" section measures, best first
-_FINAL_ORDER = ("resampled", "filtered", "preproc")
+# the post-Beer-Lambert stages, in the order the pipeline writes them. Each is its own
+# section named after the file it measured, which is the rule every other section follows.
+# The `final` section this replaced named a position rather than an input: it meant
+# "resampled, or filtered, or preproc, whichever exists", so the same key described the
+# bandpassed file on one run and the unfiltered one on another, and a run that regressed
+# confounds had its actual endpoint (`errts`) sitting outside it.
+_HAEMO_STAGES = ("filtered", "resampled", "errts")
 
 SECTIONS = ("raw", "raw_long", "raw_short", "motion", "motion_post",
-            "motion_post_long", "motion_post_short", "windowed", "preproc", "errts", "final")
+            "motion_post_long", "motion_post_short", "windowed",
+            "preproc", *_HAEMO_STAGES)
 
 
 def scan_runs(nirs_dir: Path) -> dict[str, dict[str, Path]]:
@@ -402,18 +409,13 @@ def compute_run_sections(
             read_snirf(stages["preproc"]), cardiac_l_freq, cardiac_h_freq,
             resp_l_freq, resp_h_freq))
 
-    # The confound-regression residual, measured with the same haemo metrics as `preproc`
-    # so the two subtract. This is the pair the report draws its denoising before/after
-    # from: `final` is whatever file happened to be last, which on a run without a
-    # regression is the bandpassed file and on one with it is not the residual either.
-    if "errts" in stages:
-        section("errts", lambda: compute_haemo_sqm(read_snirf(stages["errts"])))
-
-    final_desc = next((d for d in _FINAL_ORDER if d in stages), None)
-    if final_desc is not None:
-        section("final", lambda: compute_haemo_sqm(read_snirf(stages[final_desc])))
-        if "final" in sections:
-            sections["final"]["stage"] = final_desc
+    # One section per haemo stage the run actually wrote, each measured with the same
+    # metrics as `preproc` so any of them subtracts against it. Band power and drift are
+    # not among those metrics: past the bandpass they measure the filter, which is why
+    # `compute_prep_haemo_sqm` is used for `preproc` alone.
+    for desc in _HAEMO_STAGES:
+        if desc in stages:
+            section(desc, lambda path=stages[desc]: compute_haemo_sqm(read_snirf(path)))
 
     if windowed:
         sections["windowed"] = windowed

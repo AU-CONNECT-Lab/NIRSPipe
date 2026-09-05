@@ -296,10 +296,11 @@ def _build_script_text(
                   ' run_post',
                   '#   (_write_fc_derivatives) from the residual above, or from `result` when no'
                   ' regression ran.')
-            b('# QC (not run here): the `final` section is read back from the last bandpassed or'
-              ' resampled file,',
-              '#   not from desc-errts. It pairs with `preproc` across the bandpass, and a residual'
-              ' does not.')
+            b('# QC (not run here): the record gets one section per haemo file this wrote,'
+              ' named after it:',
+              '#   `filtered`, `resampled`, `errts`. Each pairs with `preproc`, so the'
+              ' bandpass and the',
+              '#   regression are separable rather than collapsed into one "after".')
 
         if mode == "glm":
             b(

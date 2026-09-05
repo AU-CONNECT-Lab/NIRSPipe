@@ -139,10 +139,12 @@ def apply_group_bads(
 ) -> None:
     """Mark each subject's rejected channels bad on their Raw, in place.
 
-    Rejection lives in the quality record, not in the SNIRF: the post stage writes
-    ``desc-errts`` with an empty ``info["bads"]``, so until this runs every inter-brain
-    metric sees the full montage. ``long_channel_picks`` drops bads, so marking them here is
-    what makes WTC, ISC and the report rest on the one channel set ``--bads-scope`` chose.
+    Not because the file lacks the marks: every derivative's sidecar carries
+    ``bad_channels`` and ``read_snirf`` restores them. It is ``--bads-scope`` that needs
+    this. A per-file sidecar can only name what that run rejected, while ``subject`` scope
+    is the union over every run the subject has, which no single file knows. Marking the
+    union here is what makes WTC, ISC and the report rest on the one channel set the scope
+    chose, since ``long_channel_picks`` drops bads.
 
     The record names channels by wavelength ("S6_D5 760"), a haemoglobin Raw by chromophore
     ("S6_D5 hbo"). Both reduce to the S-D label, which is the key every inter-brain metric
@@ -556,11 +558,11 @@ def load_group_sqm(
             sqm.update(record.get("motion") or {})
             sqm.update(record.get("preproc") or {})
 
-        # Rejection is read from the desc-sci sidecars, which prep writes on every run. The
-        # channel-metrics CSV holds the same set, but the report writes that one, so a tree
-        # produced with --no-report has the sidecars and no CSV. Reading the CSV alone used
-        # to leave desc-errts with nothing rejected at all, silently, because the post stage
-        # writes an empty info["bads"] and the CSV was the only other record.
+        # Rejection is read from the desc-sci sidecars, which prep writes on every run and
+        # which name every channel the run rejected whatever came after. The channel-metrics
+        # CSV holds the same set, but the report writes that one, so a tree produced with
+        # --no-report has the sidecars and no CSV and used to end up with nothing rejected
+        # at all, silently.
         sidecars = sorted(nirs_dir.glob(f"{entry.subject_id}*_desc-sci_nirs.json"))
         csvs     = sorted(nirs_dir.glob(f"{entry.subject_id}*_channel_metrics.csv"))
         marks, read_bads = ((sidecars, _bad_from_sidecar) if sidecars

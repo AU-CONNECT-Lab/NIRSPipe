@@ -8,8 +8,9 @@ input, and for reading it. Nine paths in one function, each of which drops data 
 warning rather than failing. A record missing half its sections looks exactly like a
 record whose run had less to measure.
 
-So the first test simply demands that a normal run produce all six sections. It is worth
-more than its length suggests: it converts all nine of those paths into something loud.
+So the first test simply demands that a run exercising every optional step produce all of
+them. It is worth more than its length suggests: it converts all nine of those paths into
+something loud.
 
 The rest enforce the rules the module docstring states, because those are the ones that
 rot when a section is added or a metric moves:
@@ -17,9 +18,11 @@ rot when a section is added or a metric moves:
   - SCI is the one input the record cannot recover from any output file, so it travels
     run -> sci sidecar -> record, and nothing else would notice if that link broke
   - Beer-Lambert is the dividing line for bad channels: raw* and motion include them,
-    preproc and final exclude them. Reading it the other way gives an sci_mean over
+    the haemo sections exclude them. Reading it the other way gives an sci_mean over
     channels chosen for good SCI, which can never fall below the threshold
-  - `final` follows resampled > filtered > preproc, so it names the last haemo file
+  - every section is named after the file it measured, so a section exists only when its
+    file does, and a run that skipped a step is missing that section rather than holding
+    one whose meaning silently moved
   - one run per BIDS label, never one that keeps the last task
 """
 
@@ -39,13 +42,19 @@ from fnirs_pipe.qc.sqm_record import (
     scan_runs,
 )
 
-from ._synth import synth_raw
+from ._synth import SFREQ, synth_raw
 
 _BANDS = dict(cardiac_l_freq=0.7, cardiac_h_freq=1.5, resp_l_freq=0.2, resp_h_freq=0.5)
+# below the synthetic recording's rate, so `resampled` is a different file from `filtered`
+_RESAMPLE_SFREQ = SFREQ / 2
 
 
 def _run(out_dir, subject="01", task="tapping", post=True):
-    """A full run on synthetic data, left on disk the way the pipeline leaves it."""
+    """A full run on synthetic data, left on disk the way the pipeline leaves it.
+
+    Post is asked for every optional step it has, so the record comes out with one section
+    per haemo stage. A leaner post is what `test_a_skipped_step_leaves_no_section` covers.
+    """
     bids = out_dir / "bids"
     (bids / f"sub-{subject}" / "nirs").mkdir(parents=True, exist_ok=True)
     source = bids / f"sub-{subject}" / "nirs" / f"sub-{subject}_task-{task}_nirs.snirf"
@@ -62,7 +71,9 @@ def _run(out_dir, subject="01", task="tapping", post=True):
                     output_dir=out_dir, source_entities=entities, source_path=source)
     if post:
         run_post(prep.raw_haemo.copy(),
-                 PostConfig(subject=subject, high_pass=0.01, low_pass=0.5, **_BANDS),
+                 PostConfig(subject=subject, high_pass=0.01, low_pass=0.5,
+                            resample_sfreq=_RESAMPLE_SFREQ, short_channel="mean",
+                            drift_model="cosine", drift_high_pass=0.01, **_BANDS),
                  output_dir=out_dir, mode="denoise", source_entities=entities)
     return prep, out_dir / f"sub-{subject}" / "nirs"
 
@@ -89,9 +100,9 @@ def test_every_section_carries_metrics(run):
 
 
 def test_the_per_channel_maps_cover_every_section(run):
-    # `windowed` holds per-window series, not per-channel values, and `final` is scalars only
+    # `windowed` holds per-window series, not per-channel values, so it has no entry there
     _, _, _, sections = run
-    assert set(sections["per_channel"]) >= set(SECTIONS) - {"final", "windowed"}
+    assert set(sections["per_channel"]) >= set(SECTIONS) - {"windowed"}
 
 
 # ---- SCI: the one value no output file carries ----
@@ -124,15 +135,27 @@ def test_the_retention_rate_reports_the_rejected_channels(run):
 
 # ---- Which file each section measured ----
 
-def test_final_names_the_last_haemo_file(run):
-    _, _, _, sections = run
-    assert sections["final"]["stage"] == "filtered"
+def test_each_haemo_section_measured_its_own_file(run):
+    """The sections are distinct files, not three views of one.
+
+    `resampled` is the cheapest proof: it is the only stage whose sampling rate differs, so
+    a section wired to the wrong file shows up as a Nyquist that cannot be there.
+    """
+    _, _, stages, sections = run
+    assert {"filtered", "resampled", "errts"} <= set(stages)
+    # the bandpass, the resample and the regression each moved the signal somewhere else
+    values = [sections[d]["hbo_hbr_corr_mean"] for d in ("preproc", "filtered", "errts")]
+    assert len(set(values)) == len(values), values
 
 
-def test_final_falls_back_to_preproc_when_nothing_was_filtered(tmp_path_factory):
+def test_a_skipped_step_leaves_no_section(tmp_path_factory):
+    """A section exists only when its file does. Nothing stands in for a step that was
+    skipped, which is what the old `final` did when it fell back to `preproc`."""
     _, nirs_dir = _run(tmp_path_factory.mktemp("sqm_prep_only"), post=False)
     sections = compute_run_sections(scan_runs(nirs_dir)["sub-01_task-tapping"], **_BANDS)
-    assert sections["final"]["stage"] == "preproc"
+    assert sections["preproc"]
+    for desc in ("filtered", "resampled", "errts"):
+        assert desc not in sections, desc
 
 
 def test_the_long_short_split_keeps_bad_channels():

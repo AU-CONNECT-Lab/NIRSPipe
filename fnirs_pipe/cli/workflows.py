@@ -204,9 +204,9 @@ def run_participant_level(args: dict[str, Any]) -> None:
                     post_runs = _run_post_for_subject(subject, sessions, args, toml, output_dir, roi_map=roi_map)
 
                 # one SQM record per run, written once both passes have finished so the
-                # final section can measure the last file post actually produced. The
-                # database takes one row per section, which is what its checkpoint column
-                # has always been for.
+                # post-Beer-Lambert sections can measure the files post actually produced.
+                # The database takes one row per section, which is what its checkpoint
+                # column has always been for.
                 import json as _json
                 from fnirs_pipe.qc.sqm_record import SECTIONS, build_sqm_records, entities_of
                 try:
