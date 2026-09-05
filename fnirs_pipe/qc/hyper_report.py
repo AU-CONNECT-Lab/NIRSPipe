@@ -243,6 +243,8 @@ def build_hyper_post_report(
     from fnirs_pipe.qc.figures.hyper_post_figures import (
         build_isc_panel,
         build_wtc_channel,
+        build_wtc_cross_matrix,
+        build_wtc_roi_grid,
         build_wtc_roi_matrix,
         compute_isc,
     )
@@ -330,6 +332,16 @@ def build_hyper_post_report(
     pair_key   = next(iter(wtc_result.pairs)) if wtc_result and wtc_result.pairs else None
     pair_label = f"{pair_key[0]} × {pair_key[1]}" if pair_key else ""
 
+    chan_matrix_b64 = ""
+    if wtc_channel_cross and chan_band_df is not None:
+        try:
+            chan_labels = sorted({*chan_band_df["label"], *chan_band_df["label2"]})
+            chan_matrix_b64 = build_wtc_cross_matrix(
+                chan_band_df, chan_labels, subject_ids, band_fmin, band_fmax,
+                kind="channel") or ""
+        except Exception as exc:
+            logger.warning("WTC channel cross matrix failed: %s", exc)
+
     # Build per-channel WTC figures
     ch_pairs_post: list[str] = get_channel_pairs(ref_raw) if ref_raw else []
     per_channel_post: dict[str, dict] = {}
@@ -376,6 +388,7 @@ def build_hyper_post_report(
     roi_labels: list[str] = []
     per_roi_post: dict[str, dict] = {}
     roi_matrix_fig = None
+    roi_grid_b64 = ""
     if roi_map:
         assigned = {ch for chs in roi_map.values() for ch in chs}
         for roi_name, chs in roi_map.items():
@@ -410,6 +423,12 @@ def build_hyper_post_report(
                 "wtc-roi-matrix", build_wtc_roi_matrix,
                 roi_band_df, roi_labels, subject_ids, band_fmin, band_fmax,
             )
+        if wtc_channel_cross:
+            try:
+                roi_grid_b64 = build_wtc_roi_grid(
+                    roi_wtc, roi_labels, roi_pair_key, subject_ids) or ""
+            except Exception as exc:
+                logger.warning("WTC ROI cross grid failed: %s", exc)
         for roi_name in roi_labels:
             roi_fig = None
             if roi_wtc and roi_pair_key:
@@ -450,6 +469,8 @@ def build_hyper_post_report(
         roi_labels_json=json.dumps(roi_labels),
         per_roi_post_json=json.dumps(per_roi_post),
         wtc_roi_matrix_json=json.dumps(roi_matrix_fig),
+        wtc_chan_matrix_b64=chan_matrix_b64,
+        wtc_roi_grid_b64=roi_grid_b64,
         subject_metrics_rows=subject_metric_rows(
             subject_sqm or {}, subject_ids, sci_threshold),
     )

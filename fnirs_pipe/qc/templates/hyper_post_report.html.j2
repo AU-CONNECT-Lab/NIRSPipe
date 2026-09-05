@@ -100,6 +100,37 @@ select#ch-select-post {
   </div>
   <div id="wtc-roi-matrix-plot"></div>
 </div>
+
+{% if wtc_roi_grid_b64 %}
+<div class="card">
+  <div class="panel-title">
+    Wavelet Transform Coherence (ROI &times; ROI, full maps)
+    <span class="panel-hint">
+      row = {{ subject_ids[0] }}'s ROI, column = {{ subject_ids[1] }}'s &bull; the diagonal is
+      what the selector above plots &bull; white dashed = COI boundary
+    </span>
+  </div>
+  <div style="text-align:center; padding:0.5rem">
+    <img src="data:image/png;base64,{{ wtc_roi_grid_b64 }}" style="max-width:100%"/>
+  </div>
+</div>
+{% endif %}
+{% endif %}
+
+{% if wtc_chan_matrix_b64 %}
+<div class="card">
+  <div class="panel-title">
+    Wavelet Transform Coherence (channel &times; channel)
+    <span class="panel-hint">
+      band mean per channel pair &bull; row = {{ subject_ids[0] }}, column =
+      {{ subject_ids[1] }} &bull; diagonal = the homologous pairs the selector plots &bull;
+      same numbers as <code>hyper-wtc.tsv</code>
+    </span>
+  </div>
+  <div style="text-align:center; padding:0.5rem">
+    <img src="data:image/png;base64,{{ wtc_chan_matrix_b64 }}" style="max-width:100%"/>
+  </div>
+</div>
 {% endif %}
 
 <!-- ISC panel — HbO -->

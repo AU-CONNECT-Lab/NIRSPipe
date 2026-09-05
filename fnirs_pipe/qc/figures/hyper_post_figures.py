@@ -24,23 +24,21 @@ def _hex_to_rgba(hex_color: str, alpha: float = 1.0) -> str:
     return f"rgba({r},{g},{b},{alpha})"
 
 
-def _log_freq_axis(freqs: np.ndarray) -> dict:
-    """y-axis for a WTC map: log frequency, decades labelled, low frequency at the top.
+def _log_freq_ticks(freqs: np.ndarray) -> "tuple[list[float], list[float]]":
+    """(labelled ticks, unlabelled ticks) for a WTC frequency axis, in Hz.
 
-    e.g. a 0.004-0.2 Hz axis is labelled at 0.01 and 0.1 with unlabelled ticks at every
-    intermediate digit.
+    e.g. a 0.004-0.2 Hz axis gives ([0.01, 0.1], [0.005 ... 0.09]): the decades carry the
+    labels and every intermediate digit gets a bare tick.
 
     Left to itself plotly picks "D1" over a range of that width, which labels all nine digits
     of every decade: 0.008 and 0.009 then sit a fifth as far apart as 0.1 and 0.2 and the text
     collides. Worse, the rule flips to "D2" once the band is a little narrower, so two figures
-    from one report disagree about what a tick means. Naming the ticks fixes both.
-
-    The axis is reversed so frequency increases downward, which is how the wavelet coherence
-    figures in the literature are drawn.
+    from one report disagree about what a tick means. Naming the ticks fixes both, and the
+    same list drives the matplotlib panels so the two kinds of figure agree.
     """
     lo, hi = float(np.min(freqs)), float(np.max(freqs))
     if not (lo > 0 and hi > lo):
-        return dict(title="Frequency (Hz)", type="log", autorange="reversed", gridcolor="#444")
+        return [], []
 
     decades = range(int(np.floor(np.log10(lo))), int(np.ceil(np.log10(hi))) + 1)
     steps = [m * 10.0 ** d for d in decades for m in range(1, 10)]
@@ -53,24 +51,50 @@ def _log_freq_axis(freqs: np.ndarray) -> dict:
                  and lo <= f <= hi]
     if len(major) < 2:
         major = list(np.geomspace(lo, hi, 3))
-    minor = [f for f in steps if lo <= f <= hi and f not in major]
+    return major, [f for f in steps if lo <= f <= hi and f not in major]
 
-    def _label(f: float) -> str:
-        exponent = np.log10(f)
-        if abs(exponent - round(exponent)) < 1e-9:
-            return f"10<sup>{int(round(exponent))}</sup>"
+
+def _freq_label(f: float, superscript: str = "html") -> str:
+    """"0.01" as "10^-2" where it is a whole power of ten, else three significant digits."""
+    exponent = np.log10(f)
+    if abs(exponent - round(exponent)) >= 1e-9:
         return f"{f:.3g}"
+    e = int(round(exponent))
+    return f"10<sup>{e}</sup>" if superscript == "html" else f"$10^{{{e}}}$"
 
-    return dict(
-        title="Frequency (Hz)",
-        type="log",
-        autorange="reversed",
-        gridcolor="#444",
+
+def _log_freq_axis(freqs: np.ndarray) -> dict:
+    """plotly y-axis for a WTC map: log frequency, decades labelled, low frequency at the top.
+
+    Reversed so frequency increases downward, which is how the wavelet coherence figures in
+    the literature are drawn. Ticks come from :func:`_log_freq_ticks`.
+    """
+    major, minor = _log_freq_ticks(freqs)
+    axis = dict(title="Frequency (Hz)", type="log", autorange="reversed", gridcolor="#444")
+    if not major:
+        return axis
+    axis.update(
         tickmode="array",
         tickvals=major,
-        ticktext=[_label(f) for f in major],
+        ticktext=[_freq_label(f) for f in major],
         minor=dict(tickvals=minor, ticks="outside", ticklen=3, showgrid=False),
     )
+    return axis
+
+
+def _apply_log_freq_axis(ax, freqs: np.ndarray) -> None:
+    """The matplotlib half of :func:`_log_freq_axis`, so both kinds of figure tick alike."""
+    from matplotlib.ticker import FixedFormatter, FixedLocator, NullFormatter
+
+    major, minor = _log_freq_ticks(freqs)
+    ax.set_yscale("log")
+    ax.set_ylim(float(np.max(freqs)), float(np.min(freqs)))   # frequency increases downward
+    if not major:
+        return
+    ax.yaxis.set_major_locator(FixedLocator(major))
+    ax.yaxis.set_major_formatter(FixedFormatter([_freq_label(f, "tex") for f in major]))
+    ax.yaxis.set_minor_locator(FixedLocator(minor))
+    ax.yaxis.set_minor_formatter(NullFormatter())
 
 
 def build_wtc_channel(
@@ -211,6 +235,146 @@ def build_wtc_roi_matrix(
         paper_bgcolor="white",
     )
     return fig
+
+
+def _png_b64(fig) -> str:
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=200, bbox_inches="tight", facecolor="white")
+    plt.close(fig)
+    buf.seek(0)
+    return base64.b64encode(buf.read()).decode()
+
+
+def build_wtc_cross_matrix(
+    band_df,
+    labels: list[str],
+    subject_ids: list[str],
+    band_fmin: float,
+    band_fmax: float,
+    kind: str = "channel",
+) -> str | None:
+    """Band-mean coherence for every pairing across the two brains, as one heatmap.
+
+    Rows are sub1's sites, columns sub2's, so cell (i, j) is sub1's site i against sub2's
+    site j and the diagonal is the homologous pairing the rest of the report shows. This is
+    the whole point of ``--wtc-channel-cross``: the crossed pairs are computed and written to
+    the TSV, and without this figure the only ones anybody looks at are the n on the diagonal.
+
+    Needs a crossed frame, recognised by its ``label2`` column; returns None without one.
+    ``kind`` names the sites in the axis titles ("channel" or "ROI"). A blank cell is a
+    pairing that failed or was dropped for resting on too few channels.
+
+    Read cell by cell the off-diagonal is exploratory: single pairings are noisy and a
+    correction over n**2 of them leaves little. The structure is what it is for.
+    """
+    if band_df is None or "label2" not in getattr(band_df, "columns", []):
+        return None
+
+    lookup = {(r.label, r.label2): r.coherence for r in band_df.itertuples()}
+    z = np.array([[lookup.get((row, col), np.nan) for col in labels] for row in labels],
+                 dtype=float)
+    if not np.isfinite(z).any():
+        return None
+
+    sub1 = subject_ids[0] if subject_ids else "sub1"
+    sub2 = subject_ids[1] if len(subject_ids) > 1 else "sub2"
+
+    n = len(labels)
+    side = max(4.0, min(0.34 * n + 1.6, 11.0))
+    fig, ax = plt.subplots(figsize=(side + 1.4, side))
+
+    cmap = plt.get_cmap("viridis").copy()
+    cmap.set_bad("#dddddd")
+    im = ax.imshow(z, cmap=cmap, vmin=0, vmax=1, interpolation="nearest", aspect="equal")
+
+    ax.set_xticks(range(n))
+    ax.set_xticklabels(labels, rotation=90, fontsize=max(5, min(8, 120 // max(n, 1))))
+    ax.set_yticks(range(n))
+    ax.set_yticklabels(labels, fontsize=max(5, min(8, 120 // max(n, 1))))
+    ax.xaxis.set_label_position("top")
+    ax.xaxis.tick_top()
+    ax.set_xlabel(f"{sub2} {kind}", fontsize=9, labelpad=8)
+    ax.set_ylabel(f"{sub1} {kind}", fontsize=9)
+    for spine in ax.spines.values():
+        spine.set_visible(False)
+
+    mean = float(np.nanmean(z))
+    ax.set_title(f"Band mean {band_fmin:.3g}-{band_fmax:.3g} Hz   (grand mean {mean:.3f})",
+                 fontsize=10, pad=26)
+    fig.colorbar(im, ax=ax, shrink=0.75, pad=0.02, label="coherence")
+    return _png_b64(fig)
+
+
+def build_wtc_roi_grid(
+    roi_wtc,
+    roi_labels: list[str],
+    pair_key,
+    subject_ids: list[str],
+) -> str | None:
+    """Every ROI-by-ROI coherence map on one grid, rows sub1's ROIs and columns sub2's.
+
+    The per-ROI selector in the report carries the diagonal only, one map at a time. A few
+    ROIs cross to a few dozen maps, which is small enough to draw at once and is the view
+    that shows whether an off-diagonal pairing is coupled at a different time or a different
+    frequency from the homologous one. Channels are left out of this treatment on purpose:
+    14 of them cross to 196 maps, and no page wants that.
+
+    Needs a crossed ``roi_wtc``, whose pair keys are ``(roi1, roi2)`` tuples; returns None
+    on an uncrossed one, which has nothing off the diagonal to draw.
+    """
+    if roi_wtc is None or pair_key is None or not roi_labels:
+        return None
+    pairs = roi_wtc.pairs.get(pair_key, {})
+    if not any(isinstance(k, tuple) for k in pairs):
+        return None
+
+    freqs, times = np.asarray(roi_wtc.freqs), np.asarray(roi_wtc.times)
+    if freqs.size == 0 or times.size == 0:
+        return None
+
+    n = len(roi_labels)
+    fig, axes = plt.subplots(n, n, figsize=(2.6 * n + 1.2, 2.1 * n),
+                             squeeze=False, sharex=True, sharey=True)
+    mesh = None
+    for i, roi1 in enumerate(roi_labels):
+        for j, roi2 in enumerate(roi_labels):
+            ax = axes[i][j]
+            data = pairs.get((roi1, roi2))
+            if data is None:
+                ax.text(0.5, 0.5, "no data", transform=ax.transAxes, ha="center",
+                        va="center", fontsize=8, color="#888")
+                ax.set_xticks([])
+                ax.set_yticks([])
+                continue
+
+            mesh = ax.pcolormesh(times, freqs, np.asarray(data["wtc"], dtype=float),
+                                 cmap="viridis", vmin=0, vmax=1, shading="nearest")
+            _apply_log_freq_axis(ax, freqs)
+
+            # below the cone of influence the map is padding, not measurement
+            coi = np.asarray(data["coi"], dtype=float)
+            with np.errstate(divide="ignore", invalid="ignore"):
+                freq_coi = np.where(coi > 1e-10, 1.0 / coi, freqs.max())
+            ax.plot(times, np.clip(freq_coi, freqs.min(), freqs.max()),
+                    color="white", lw=1.2, ls="--")
+
+            ax.tick_params(labelsize=7)
+            if i == 0:
+                ax.set_title(roi2, fontsize=9)
+            if j == 0:
+                ax.set_ylabel(f"{roi1}\nFrequency (Hz)", fontsize=8)
+            if i == n - 1:
+                ax.set_xlabel("Time (s)", fontsize=8)
+
+    if mesh is None:
+        plt.close(fig)
+        return None
+
+    sub1 = subject_ids[0] if subject_ids else "sub1"
+    sub2 = subject_ids[1] if len(subject_ids) > 1 else "sub2"
+    fig.colorbar(mesh, ax=axes, shrink=0.6, pad=0.02, label="WTC")
+    fig.suptitle(f"Row: {sub1}'s ROI    Column: {sub2}'s ROI", fontsize=11)
+    return _png_b64(fig)
 
 
 def compute_isc(
