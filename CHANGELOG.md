@@ -9,6 +9,8 @@ All notable changes to this project will be documented in this file.
 ### Added
 - **`fnirs-hyper`, a tool for dyad analysis.** `run` writes the WTC + ISC report per dyad, `band` re-averages saved coherence maps over another frequency band, and `merge` concatenates the per-dyad tables into one long table per kind. Every subcommand takes one derivatives directory and reads no BIDS input
 
+- `fnirs-hyper run` ends by saying whether the merged tables are behind the per-dyad ones, and with what command to catch them up. It does not merge on its own: a run often covers one dyad, and merging the whole tree after it would fail on a band a later run legitimately changed
+
 ### Changed
 - **The dyad analysis left `fnirs-qc`.** Wavelet coherence, inter-brain correlation and the pseudo-dyad null are results, not quality checks, and hyperscanning has its own input and its own unit of analysis, so it is its own tool now. `hyper-raw` stays in `fnirs-qc`: a pre-flight look at raw dyad data is quality control. No output file changes name
 - **The pseudo-dyad null is a flag on the dyad run again, `--wtc-pseudo N`,** and writes nothing unless you ask. Nine parameters had to match between `hyper-null` and the run it was the null for, and nothing on disk checked it: a null averaged over one band could sit beside a real table averaged over another. Shared by construction now. Its crossing stays its own decision, `--wtc-pseudo-cross`, which is what the split was for

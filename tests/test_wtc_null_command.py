@@ -114,3 +114,59 @@ def test_merge_covers_every_kind_the_aggregator_has(tmp_path):
     assert (tmp_path / "group_hyper_wtc_pseudo.tsv").exists()
     for kind in _KINDS:
         aggregate_wtc(tmp_path, kind=kind)
+
+
+# ---- the merge reminder ----
+
+def _write_table(root, gid, task, kind="wtc"):
+    d = root / f"group-{gid}" / "nirs"
+    d.mkdir(parents=True, exist_ok=True)
+    tsv = d / f"group-{gid}_task-{task}_hyper-{kind}.tsv"
+    pd.DataFrame({"sub1": ["a"], "sub2": ["b"], "label": ["S1_D1"],
+                  "coherence": [0.3]}).to_csv(tsv, sep="\t", index=False)
+    return tsv
+
+
+def test_a_run_says_when_nothing_has_been_merged(tmp_path, capsys):
+    """A stale merged table reads like a finished result, so the run says which it is.
+    It does not merge: a run often covers one dyad, and merging the whole tree after it
+    would fail on a band a later run legitimately changed."""
+    from fnirs_pipe.cli.hyper import _merge_reminder
+
+    _write_table(tmp_path, "d01", "baseline")
+    _write_table(tmp_path, "d02", "baseline")
+    _merge_reminder(tmp_path)
+
+    out = capsys.readouterr().out
+    assert "2 wtc table(s) on disk, never merged" in out
+    assert "fnirs-hyper merge" in out
+
+
+def test_a_run_says_when_the_merged_table_is_behind(tmp_path, capsys):
+    import os
+
+    from fnirs_pipe.cli.hyper import _merge_reminder
+
+    tsv = _write_table(tmp_path, "d01", "baseline")
+    merged = tmp_path / "group_hyper_wtc.tsv"
+    merged.write_text("stale")
+    os.utime(merged, (1, 1))                       # older than the dyad table
+    _merge_reminder(tmp_path)
+    assert "1 newer than group_hyper_wtc.tsv" in capsys.readouterr().out
+
+    os.utime(merged, (tsv.stat().st_mtime + 10,) * 2)
+    _merge_reminder(tmp_path)
+    assert capsys.readouterr().out == ""           # up to date, so nothing to say
+
+
+def test_the_reminder_counts_what_the_merge_would_take(tmp_path, capsys):
+    """Same glob as the aggregator, so the count cannot disagree with what merge does."""
+    from fnirs_pipe.cli.hyper import _merge_reminder
+
+    _write_table(tmp_path, "d01", "baseline", kind="wtc")
+    _write_table(tmp_path, "d01", "baseline", kind="wtc-pseudo")
+    _merge_reminder(tmp_path)
+
+    out = capsys.readouterr().out
+    assert "1 wtc table(s)" in out
+    assert "1 wtc-pseudo table(s)" in out

@@ -110,6 +110,36 @@ def _load_aligned_group(output_dir, members, task, desc, no_align, normalize, ba
     return aligned_raws, offsets, group_sqm
 
 
+def _merge_reminder(output_dir: Path) -> None:
+    """Say so when the merged tables are missing or older than the per-dyad ones.
+
+    A stale merged table is worse than none: it reads like a finished result. Merging is not
+    done here because a run often covers one dyad, and merging the whole tree after it would
+    fail on bands that a later run legitimately changed, and would race a parallel run for
+    the same three files.
+
+    Driven off the aggregator's own kinds and its own glob, so the counts are the ones
+    `merge` would use and a new kind cannot be left out.
+    """
+    from fnirs_pipe.qc.wtc_aggregate import _KINDS
+
+    lines = []
+    for kind, stem in _KINDS.items():
+        parts = list(output_dir.rglob(f"*_hyper-{kind}.tsv"))
+        if not parts:
+            continue
+        merged = output_dir / f"{stem}.tsv"
+        if not merged.exists():
+            lines.append(f"  {len(parts)} {kind} table(s) on disk, never merged")
+            continue
+        stale = sum(p.stat().st_mtime > merged.stat().st_mtime for p in parts)
+        if stale:
+            lines.append(f"  {len(parts)} {kind} table(s) on disk, {stale} newer than {merged.name}")
+
+    if lines:
+        print("\n".join(["", *lines, f"Run `fnirs-hyper merge {output_dir}` for one table per kind."]))
+
+
 def cmd_run(
     output_dir: Path, pairs_csv: Path, group_id: str | None, task_label: list[str] | None,
     desc: str, roi_mapping: Path | None,
@@ -206,6 +236,7 @@ def cmd_run(
         logger.info("pseudo-dyad null requested: %d full WTC runs per dyad, on top of the real one",
                     wtc_pseudo)
     _run_groups(groups, _process)
+    _merge_reminder(output_dir)
 
 
 def cmd_band(
