@@ -19,6 +19,7 @@ from fnirs_pipe.pipeline.denoise import (
 from fnirs_pipe.utils.lineage import lineage_of
 
 from ._utils import HBO_COLOR as _HBO_COLOR, HBR_COLOR as _HBR_COLOR
+from ._utils import HBO_MEAN_COLOR as _HBO_MEAN_COLOR, HBR_MEAN_COLOR as _HBR_MEAN_COLOR
 from ._utils import physio_bands as _physio_bands
 
 # colors for the physiological band annotations (band frequencies come from _physio_bands)
@@ -103,12 +104,26 @@ def _add_band_annotations(fig: go.Figure, fmax: float, bands: list, rows: int = 
         for row in range(1, rows + 1):
             ax = "" if row == 1 else str(row)
             fig.add_annotation(
-                x=label_x, y=0.93,
+                x=label_x, y=1.0,
                 xref=f"x{ax}", yref=f"y{ax} domain",
                 text=name, showarrow=False,
                 font=dict(size=8, color="#555"),
                 textangle=-90, xanchor="center", yanchor="top",
             )
+
+
+def _passband_level(freqs: np.ndarray, db: np.ndarray, l_freq, h_freq) -> float:
+    """Mean power inside the passband, the level the filter's 0 dB is drawn at.
+
+    _passband_level(freqs, hbo_mean_db, 0.02, 0.2) -> the dB the curve sits at between the
+    cutoffs, so a response curve added to it lands on top of the data it should explain.
+    """
+    inside = np.ones(len(freqs), dtype=bool)
+    if l_freq is not None:
+        inside &= freqs >= l_freq
+    if h_freq is not None:
+        inside &= freqs <= h_freq
+    return float(db[inside].mean()) if inside.any() else float(db.mean())
 
 
 def psd_figure(
@@ -124,18 +139,17 @@ def psd_figure(
     stages: "list[tuple[str, mne.io.Raw]] | None" = None,
     first_label: str = "desc-preproc (no filtering)",
 ) -> go.Figure:
-    """One row per pipeline stage, HbO and HbR together, over the filter's own response.
+    """One row per pipeline stage, HbO and HbR together, with the filter drawn on its output.
 
     ``raw_haemo`` is the first stage, the Beer-Lambert output. ``stages`` are the ones
     after it as ``[(label, raw), ...]``, read off disk by the caller. Passing None falls
     back to simulating the bandpass in memory, which is what a prep-only run gets.
 
     Stage is the row so that a step is read by looking down the column, and every row shares
-    one power axis or the comparison would be against a rescaled yardstick. The last row is
-    the filter's own frequency response, which answers "what did the bandpass do" directly
-    rather than leaving it to be inferred from the gap between two noisy curves. It is a
-    separate row rather than a second axis on the data rows: two scales on one plot invent
-    an alignment the data does not have.
+    one power axis or the comparison would be against a rescaled yardstick. The filter's own
+    response is drawn dashed over the row it produced, shifted so 0 dB sits at that row's
+    passband level: it stays on the one power axis that way, and the data curve can be read
+    straight against the shape the filter should have given it.
 
     Individual channels are drawn faintly behind each stage's channel mean, so a mean is
     read against a real spread. Physiological bands are shaded and the cutoffs marked.
@@ -163,21 +177,17 @@ def psd_figure(
     l_freq, h_freq, filter_method, filter_order = _recorded_filter(
         stages, l_freq, h_freq, filter_method, filter_order)
 
-    n_data = len(all_stages)
-    has_response = l_freq is not None or h_freq is not None
-    n_rows = n_data + (1 if has_response else 0)
-    # the response is a reference, not a measurement, so it gets a shorter row
-    heights = [1.0] * n_data + ([0.62] if has_response else [])
-    titles = [label for label, _ in all_stages] + (["Filter response"] if has_response else [])
-
+    n_rows = len(all_stages)
     fig = make_subplots(
-        rows=n_rows, cols=1, shared_xaxes=True, vertical_spacing=0.06,
-        row_heights=[h / sum(heights) for h in heights], subplot_titles=titles,
+        rows=n_rows, cols=1, shared_xaxes=True, vertical_spacing=0.09,
+        subplot_titles=[label for label, _ in all_stages],
     )
 
     lo, hi = np.inf, -np.inf
+    anchor = None  # passband level of the filter's output row, for the response curve
     for row, (label, raw) in enumerate(all_stages, start=1):
-        for ch_type, color in (("hbo", _HBO_COLOR), ("hbr", _HBR_COLOR)):
+        for ch_type, color, mean_color in (("hbo", _HBO_COLOR, _HBO_MEAN_COLOR),
+                                           ("hbr", _HBR_COLOR, _HBR_MEAN_COLOR)):
             result = _stage_psd(raw, fmax, ch_type)
             if result is None:
                 continue
@@ -186,34 +196,39 @@ def psd_figure(
             for channel in db:
                 fig.add_trace(go.Scatter(
                     x=x, y=channel.tolist(), mode="lines",
-                    line=dict(width=0.6, color=color), opacity=0.15,
+                    line=dict(width=0.6, color=color), opacity=0.2,
                     showlegend=False, hoverinfo="skip",
                 ), row=row, col=1)
             mean_db = db.mean(axis=0)
-            name = ch_type.upper().replace("HBO", "HbO").replace("HBR", "HbR")
+            name = "HbO" if ch_type == "hbo" else "HbR"
             fig.add_trace(go.Scatter(
                 x=x, y=mean_db.tolist(), mode="lines",
-                line=dict(width=2.0, color=color),
+                line=dict(width=2.0, color=mean_color),
                 name=name, legendgroup=name, showlegend=(row == 1),
                 hovertemplate=f"{label} {name}<br>%{{x:.3f}} Hz<br>%{{y:.1f}} dB<extra></extra>",
             ), row=row, col=1)
             lo, hi = min(lo, float(db.min())), max(hi, float(db.max()))
+            if row == 2 and ch_type == "hbo":
+                anchor = _passband_level(freqs, mean_db, l_freq, h_freq)
 
-    if has_response:
+    # the filter goes over row 2, the stage it produced; row 1 is its input
+    if anchor is not None and n_rows >= 2:
         freqs, db = filter_response(raw_haemo.info["sfreq"], raw_haemo.n_times,
                                     l_freq, h_freq, filter_method, filter_order)
         inside = freqs <= fmax
+        attenuation = np.maximum(db[inside], _RESPONSE_FLOOR)
         fig.add_trace(go.Scatter(
             x=freqs[inside].tolist(),
-            y=np.maximum(db[inside], _RESPONSE_FLOOR).tolist(),
+            # clipped to the data's own floor rather than extending the axis to reach it:
+            # the filter's stopband runs tens of dB below anything the PSD can measure
+            y=np.maximum(attenuation + anchor, lo).tolist(),
             mode="lines", line=dict(width=1.5, color=_RESPONSE_COLOR, dash="dash"),
-            showlegend=False,
-            hovertemplate="filter<br>%{x:.3f} Hz<br>%{y:.1f} dB<extra></extra>",
-        ), row=n_rows, col=1)
-        fig.update_yaxes(title_text="Attenuation (dB)", range=[_RESPONSE_FLOOR, 6],
-                         gridcolor="#eeeeee", row=n_rows, col=1)
+            name="Filter response", legendgroup="Filter response",
+            hovertemplate="filter<br>%{x:.3f} Hz<br>%{text:.1f} dB<extra></extra>",
+            text=attenuation.tolist(),
+        ), row=2, col=1)
 
-    _add_band_annotations(fig, fmax=fmax, bands=_physio_bands(cardiac, resp), rows=n_data)
+    _add_band_annotations(fig, fmax=fmax, bands=_physio_bands(cardiac, resp), rows=n_rows)
 
     for cutoff in (l_freq, h_freq):
         if cutoff is not None and cutoff <= fmax:
@@ -221,22 +236,17 @@ def psd_figure(
 
     if np.isfinite(lo):
         pad = 0.04 * (hi - lo) or 1.0
-        for row in range(1, n_data + 1):
-            fig.update_yaxes(range=[lo - pad, hi + pad], row=row, col=1)
-    fig.update_yaxes(title_text="Power (dB)", gridcolor="#eeeeee",
-                     row=(n_data + 1) // 2, col=1)
+        fig.update_yaxes(range=[lo - pad, hi + pad])
     fig.update_xaxes(gridcolor="#eeeeee")
     fig.update_xaxes(title_text="Frequency (Hz)", row=n_rows, col=1)
-    for note in fig.layout.annotations[:n_rows]:
-        note.update(font=dict(size=11, color="#555"), xanchor="left", x=0)
+    fig.update_yaxes(title_text="Power (dB)", gridcolor="#eeeeee")
     fig.update_layout(
         title=dict(text=f"{title}<br><span style='font-size:11px;color:#777'>"
                         f"{filter_description(l_freq, h_freq, filter_method, filter_order)}</span>"),
-        height=120 + 210 * sum(heights),
-        margin=dict(l=70, r=30, t=110, b=50),
+        height=110 + 210 * n_rows,
+        margin=dict(l=70, r=30, t=95, b=50),
         plot_bgcolor="white",
         paper_bgcolor="white",
-        legend=dict(font=dict(size=10), orientation="h",
-                    yanchor="bottom", y=1.01, xanchor="right", x=1),
+        legend=dict(font=dict(size=11)),
     )
     return fig
