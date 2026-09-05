@@ -13,7 +13,8 @@ from scipy.signal import coherence
 
 from fnirs_pipe.qc.figure_io import extract_markers as _extract_markers
 from fnirs_pipe.qc.figures._brain_utils import mni_trans
-from fnirs_pipe.qc.figures._utils import CONDITION_PALETTE, decimate as _decimate, physio_bands
+from fnirs_pipe.qc.figures._utils import (CONDITION_PALETTE, decimate as _decimate,
+                                          epochable_events, physio_bands)
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("qc.figures.hyper")
@@ -400,7 +401,7 @@ def build_epoch(
             continue
         pick = raw.ch_names.index(hbo_name)
         try:
-            events_mne, event_id = mne.events_from_annotations(raw, verbose=False)
+            events_mne, event_id = epochable_events(raw, tmin, tmax)
             if len(events_mne) == 0:
                 continue
             epochs = mne.Epochs(

@@ -10,7 +10,8 @@ from plotly.subplots import make_subplots
 from fnirs_pipe.utils.logging import get_logger
 
 from ._brain_utils import mni_trans
-from ._utils import CONDITION_PALETTE, HBO_COLOR, HBR_COLOR, decimate as _decimate
+from ._utils import (CONDITION_PALETTE, HBO_COLOR, HBR_COLOR, decimate as _decimate,
+                     epochable_events)
 
 logger = get_logger("qc.figures")
 
@@ -245,7 +246,7 @@ def build_channel_figure(
                 description=[m["description"] for m in markers],
             )
             raw_copy = raw_haemo.copy().set_annotations(anns)
-            events_mne, event_id = mne.events_from_annotations(raw_copy, verbose=False)
+            events_mne, event_id = epochable_events(raw_copy, epoch_tmin, epoch_tmax)
             if len(events_mne) > 0:
                 epochs = mne.Epochs(
                     raw_copy, events_mne, event_id,
@@ -708,9 +709,8 @@ def _trial_image_data(
     if not picks:
         return None
     try:
-        events, event_id = mne.events_from_annotations(raw_haemo, verbose=False)
-        event_id = {k: v for k, v in event_id.items() if not k.upper().startswith("BAD")}
-        if len(events) == 0 or not event_id:
+        events, event_id = epochable_events(raw_haemo, epoch_tmin, epoch_tmax)
+        if len(events) == 0:
             return None
         epochs = mne.Epochs(
             raw_haemo, events, event_id, tmin=epoch_tmin, tmax=epoch_tmax,
@@ -866,7 +866,7 @@ def build_epoch_preview_figure(
     cond_colors_ = condition_colors(markers)
     colors10 = CONDITION_PALETTE
     try:
-        events_mne, event_id = mne.events_from_annotations(raw_haemo, verbose=False)
+        events_mne, event_id = epochable_events(raw_haemo, epoch_tmin, epoch_tmax)
         if len(events_mne) == 0:
             return None
 
@@ -1017,8 +1017,8 @@ def _topo_layers(
                 description=[m["description"] for m in usable],
             )
             raw_copy = raw_haemo.copy().set_annotations(anns)
-            events, event_id = mne.events_from_annotations(raw_copy, verbose=False)
-            if len(events) > 0 and event_id:
+            events, event_id = epochable_events(raw_copy, epoch_tmin, epoch_tmax)
+            if len(events) > 0:
                 epochs = mne.Epochs(
                     raw_copy, events, event_id, tmin=epoch_tmin, tmax=epoch_tmax,
                     picks=picks, baseline=(epoch_tmin, 0), preload=True, verbose=False,

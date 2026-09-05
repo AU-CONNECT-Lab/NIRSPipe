@@ -8,8 +8,10 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 - **The low-pass filter barely filtered.** `--low-pass 0.2` attenuated the cardiac band by 4 dB where a working filter manages 60, so every `desc-filtered` and `desc-errts` still carried the heartbeat. The high-pass was unaffected. Every filtered file, and every number measured on one, changes: rerun anything written before this
+- **A run whose markers cannot be epoched filled the console with warnings.** A design that only marks where each condition starts and ends carries annotations but no trials, and every epoch figure tried anyway. The run is now recognised up front, said once in the log, and reported as a note
 
 ### Added
+- **Run notes in the subject report**, listing the sections a run left out because its data does not carry what they need, kept apart from the errors list and repeated once at the end of the run
 - **`--filter-method` and `--filter-order`.** The bandpass is now a zero-phase Butterworth of order 4, which is what the fNIRS toolboxes use and what a methods section can state. `--filter-method fir` keeps the linear-phase option and refuses, rather than quietly truncating, when the filter would be longer than the recording
 - **The filter is recorded on every stage's sidecar**, not only on `desc-filtered`, so a file can say which passband its content is confined to
 - **A warning when a coherence range reaches past the bandpass.** Asking for scales above the low-pass reads as a working analysis and is not: those scales carry what the filter removed

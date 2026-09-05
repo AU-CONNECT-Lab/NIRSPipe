@@ -15,6 +15,7 @@ import io
 import mne
 import numpy as np
 
+from fnirs_pipe.qc.figures._utils import epochable_events
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("qc.figures")
@@ -28,9 +29,8 @@ def _condition_evokeds(
     """Condition -> evoked, epoched on the (non-BAD) annotations. Empty dict if there are none."""
     if not any(not str(a["description"]).upper().startswith("BAD") for a in raw_haemo.annotations):
         return {}
-    events, event_id = mne.events_from_annotations(raw_haemo, verbose=False)
-    event_id = {k: v for k, v in event_id.items() if not k.upper().startswith("BAD")}
-    if len(events) == 0 or not event_id:
+    events, event_id = epochable_events(raw_haemo, epoch_tmin, epoch_tmax)
+    if len(events) == 0:
         return {}
     epochs = mne.Epochs(
         raw_haemo, events, event_id, tmin=epoch_tmin, tmax=epoch_tmax,

@@ -101,6 +101,9 @@
                   border-radius: 4px; padding: 0.75rem 1rem; }
     .error-list li { color: #c0392b; font-size: 0.85rem; }
     .no-errors { color: #27ae60; font-weight: 600; }
+    .note-list { background: #f4f7fa; border: 1px solid #cfd9e2;
+                 border-radius: 4px; padding: 0.75rem 1rem; margin-bottom: 1rem; }
+    .note-list li { color: #46596b; font-size: 0.85rem; }
 
     /* ---- methods tabs ---- */
     .tab-bar { display: flex; gap: 0; margin-bottom: -1px; }
@@ -797,6 +800,15 @@
 
 <!-- =========================================================== errors -->
 <h2 id="Errors">Errors &amp; Warnings</h2>
+{% if notes %}
+  <p style="font-size:0.85rem; color:#666; margin-bottom:0.35rem;">
+    Sections this run left out on purpose, because the data does not carry what they need.
+    Not failures.
+  </p>
+  <ul class="note-list">
+    {% for n in notes %}<li>{{ n }}</li>{% endfor %}
+  </ul>
+{% endif %}
 {% if errors %}
   <ul class="error-list">
     {% for e in errors %}<li>{{ e }}</li>{% endfor %}

@@ -896,9 +896,10 @@ def _cnr_metrics(
     event set; epochs overlapping them are dropped by ``reject_by_annotation``. Bad channels
     are excluded, following ``mne.pick_types``.
     """
-    events, event_id = mne.events_from_annotations(raw_haemo, verbose=False)
-    event_id = {k: v for k, v in event_id.items() if not str(k).upper().startswith("BAD")}
-    if not event_id or len(events) == 0:
+    from fnirs_pipe.qc.figures._utils import epochable_events
+
+    events, event_id = epochable_events(raw_haemo, baseline[0], response[1])
+    if len(events) == 0:
         return {}
     picks = mne.pick_types(raw_haemo.info, fnirs=True)
     epochs = mne.Epochs(

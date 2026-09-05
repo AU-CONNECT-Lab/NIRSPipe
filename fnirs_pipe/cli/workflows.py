@@ -140,6 +140,8 @@ def run_participant_level(args: dict[str, Any]) -> None:
         dry_run=args.get("dry_run", False),
     )
 
+    run_notes: list[tuple[str, str]] = []
+
     try:
         for subject in participant_label:
             sub_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -258,7 +260,7 @@ def run_participant_level(args: dict[str, Any]) -> None:
                     if args.get("no_report"):
                         continue
                     post = post_runs.get(label, {})
-                    _emit_subject_report(
+                    run_notes += [(label, n) for n in _emit_subject_report(
                         subject, sub_dir, raw, result, run_prep_config, args,
                         post.get("glm_est"), post.get("design_matrix"),
                         alff_df=post.get("alff_df"), fc_df=post.get("fc_df"),
@@ -267,7 +269,7 @@ def run_participant_level(args: dict[str, Any]) -> None:
                         high_pass=cfg_high_pass, low_pass=cfg_low_pass,
                         after_haemo=post.get("denoised"), gcor_reg=post.get("gcor_reg"),
                         roi_map=roi_map, provenance_path=provenance_path, sqm_label=label,
-                    )
+                    ) or []]
 
                 if not args.get("no_report") and prep_runs:
                     from fnirs_pipe.qc.subject_index import write_subject_index
@@ -290,10 +292,24 @@ def run_participant_level(args: dict[str, Any]) -> None:
                 )
 
         _jdb.update_execution(db_path, execution_id, "COMPLETED")
+        _log_run_notes(run_notes)
 
     except Exception:
         _jdb.update_execution(db_path, execution_id, "FAILED")
         raise
+
+
+def _log_run_notes(run_notes: "list[tuple[str, str]]") -> None:
+    """Repeat every report note once at the end, so a whole run's omissions read together.
+
+    They were already logged where they happened, hundreds of lines back and one run at a
+    time. Nothing here is an error; the same list is in each run's QC report.
+    """
+    if not run_notes:
+        return
+    logger.info("run notes (%d) — sections left out, not failures:", len(run_notes))
+    for label, note in run_notes:
+        logger.info("  %s | %s", label, note)
 
 
 def _bad_channels_for(spec: str | None, subject: str) -> list[str]:
@@ -372,7 +388,7 @@ def _emit_subject_report(subject, sub_dir, last_raw, last_result, prep_config, a
                 (float(annot["onset"]), float(annot["duration"]))
             )
 
-    build_subject_report(
+    return build_subject_report(
         subject=subject,
         raw_intensity=last_raw,
         raw_haemo=last_result.raw_haemo,

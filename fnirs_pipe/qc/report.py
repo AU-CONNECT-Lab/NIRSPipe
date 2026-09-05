@@ -2,7 +2,8 @@
 
 Each section is an independent _section_*() builder that returns a dict of
 template variables. Failures are caught by _guard() and appended to the errors
-list — the rest of the report still renders.
+list — the rest of the report still renders. A section skipped because the run does
+not carry what it needs is not a failure: it goes to the notes list instead.
 
 Report sections
 ---------------
@@ -113,6 +114,42 @@ def _guard(label: str, errors: list, subject: str):
     except Exception as e:
         errors.append(f"{label}: {e}")
         logger.exception("sub-%s | %s failed", subject, label)
+
+
+def _note(notes: list, subject: str, message: str) -> None:
+    """Record something the report leaves out on purpose.
+
+    Kept apart from the errors list: a section skipped because the run does not carry what
+    it needs is a property of the data, not a failure, and it reads as one in the report and
+    in the run log. The caller decides what is worth a note; nothing here is fatal.
+    """
+    notes.append(message)
+    logger.info("sub-%s | %s", subject, message)
+
+
+# ---- Epoching gate ----
+
+_EPOCH_TMIN, _EPOCH_TMAX = -5.0, 25.0
+
+
+def _no_epoch_reason(raw_haemo: mne.io.Raw) -> "str | None":
+    """Why nothing can be epoched over the report's window, or None when something can.
+
+    A block design that only marks where each condition starts and ends carries annotations
+    but no trials: both windows run off an edge of the run. Asking first is what keeps the
+    epoch sections from rendering empty and MNE from warning once per figure.
+    """
+    from fnirs_pipe.qc.figures._utils import epochable_events
+
+    events, _ = epochable_events(raw_haemo, _EPOCH_TMIN, _EPOCH_TMAX)
+    if len(events) > 0:
+        return None
+    n_marks = sum(1 for a in raw_haemo.annotations
+                  if not str(a["description"]).upper().startswith("BAD"))
+    if not n_marks:
+        return "the run carries no events"
+    return (f"the run carries {n_marks} marker(s), none of them leaving a full "
+            f"{_EPOCH_TMIN:g} to {_EPOCH_TMAX:g} s window inside the recording")
 
 
 # ---------------------------------------------------------------------------
@@ -1010,8 +1047,8 @@ def build_subject_report(
     roi_map: dict | None = None,
     provenance_path: str | None = None,
     sqm_label: str | None = None,
-) -> None:
-    """Render the QC report for one run and save as HTML.
+) -> list[str]:
+    """Render the QC report for one run and save as HTML. Returns its run-level notes.
 
     sqm_label is the run this report covers, as a BIDS stem (``sub-01_task-rest``). It picks
     the SQM record and the intermediate stage files off disk, and it gives the run its own
@@ -1022,6 +1059,7 @@ def build_subject_report(
     (the caller renders it: the report embeds, it does not draw).
     """
     errors: list[str] = []
+    notes: list[str] = []
     versions = collect_software_versions()
     # raw_long: long-channel-only copy used for OD/motion/SQM figures
     # raw_intensity: full original (all channels) passed to SCI/brain sections
@@ -1077,13 +1115,23 @@ def build_subject_report(
     brain_vars        = _section_brain(
                             sci_scores, bad_channels, coords_head, good_mask, raw_intensity,
                             subject, errors, figures_dir, ch_names_brain=ch_names_brain)
-    epoch_vars        = _section_epoch_preview(raw_haemo, subject, errors, figures_dir)
-    # trial image on the denoised (bandpassed, pre-regression) haemo so drift/noise is gone and the
-    # task response is intact; fall back to preproc only if no post-processing ran.
-    trial_image_vars  = _section_trial_image(after_haemo if after_haemo is not None else raw_haemo,
-                                             subject, errors, figures_dir, roi_map=roi_map)
-    topomap_vars      = _section_evoked_topomap(after_haemo if after_haemo is not None else raw_haemo,
-                                                subject, errors, figures_dir)
+    # trial image and topomap on the denoised (bandpassed, pre-regression) haemo so drift/noise
+    # is gone and the task response is intact; fall back to preproc only if no post-processing ran.
+    epoch_haemo       = after_haemo if after_haemo is not None else raw_haemo
+    epoch_skip        = _no_epoch_reason(raw_haemo)
+    if epoch_skip is not None:
+        _note(notes, subject,
+              f"Epoch preview, evoked topomap and trial images were skipped because "
+              f"{epoch_skip}. The per-channel and layout figures show the continuous "
+              f"signal instead.")
+        epoch_vars       = {"epoch_preview_path": None, "epoch_preview_h": 0}
+        trial_image_vars = {"trial_image_pairs": [], "trial_image_roi_pairs": []}
+        topomap_vars     = {"evoked_topomap_path": None}
+    else:
+        epoch_vars        = _section_epoch_preview(raw_haemo, subject, errors, figures_dir)
+        trial_image_vars  = _section_trial_image(epoch_haemo, subject, errors, figures_dir,
+                                                 roi_map=roi_map)
+        topomap_vars      = _section_evoked_topomap(epoch_haemo, subject, errors, figures_dir)
     glm_vars          = _section_glm(design_matrix, glm_est, raw_haemo, subject, errors, figures_dir, segments=segments)
     rest_vars         = _section_rest(alff_df, fc_df, subject, errors, figures_dir, fc_hbr_df=fc_hbr_df,
                                       fc_seed=fc_seed, fc_roi=fc_roi, raw_haemo=raw_haemo)
@@ -1133,6 +1181,7 @@ def build_subject_report(
         sci_scores=sci_scores,
         config=config,
         errors=errors,
+        notes=notes,
         methods=generate_methods_text(config, versions=versions, mode=mode,
                                       nirs_dir=out_path.parent / "nirs"),
 
@@ -1162,6 +1211,7 @@ def build_subject_report(
     logger.info("sub-%s | figures saved: %s", subject, figures_dir)
 
     _build_mne_report(subject, raw_intensity, raw_haemo, out_path, errors)
+    return notes
 
 
 

@@ -70,3 +70,48 @@ def head_outline(ax, xs, ys):
     ax.set_xlim(cx - r - r * 0.14 - pad, cx + r + r * 0.14 + pad)
     ax.set_ylim(cy - r - pad, cy + r + r * 0.12 + pad)
     return cx, cy, r
+
+
+# ---- Epoching gate ----
+
+def epochable_events(raw, tmin: float, tmax: float):
+    """Events that can actually be epoched over ``[tmin, tmax]``, as ``(events, event_id)``.
+
+    ``BAD_`` annotations are censoring marks rather than stimuli and never enter the event
+    set. What is left is kept only if its whole window lies inside the recording and clears
+    the ``BAD_`` segments, which is the same test MNE applies before dropping an epoch.
+    Applying it up front lets a caller skip the figure instead of building an empty Epochs
+    and drawing nothing, which is what MNE reports as "All epochs were dropped"::
+
+        markers at 0 s and 300 s in a 300 s run, tmin=-5, tmax=25  ->  (empty, {})
+
+    That is the block design that marks only where a condition starts and ends: neither
+    window fits, so the run has no trials to epoch even though it carries annotations.
+    """
+    import mne
+
+    events, event_id = mne.events_from_annotations(raw, verbose=False)
+    event_id = {k: v for k, v in event_id.items() if not str(k).upper().startswith("BAD")}
+    empty = (np.empty((0, 3), dtype=int), {})
+    if len(events) == 0 or not event_id:
+        return empty
+    events = events[np.isin(events[:, 2], list(event_id.values()))]
+
+    sfreq = raw.info["sfreq"]
+    first = int(round(tmin * sfreq))
+    n_win = int(round(tmax * sfreq)) + 1 - first
+    start = events[:, 0] + first - raw.first_samp
+    keep = (start >= 0) & (start + n_win <= len(raw.times))
+
+    for ann in raw.annotations:
+        if not str(ann["description"]).upper().startswith("BAD"):
+            continue
+        onset = float(ann["onset"]) - raw.first_time
+        keep &= ~((onset < (start + n_win) / sfreq) & (onset + float(ann["duration"]) > start / sfreq))
+
+    events = events[keep]
+    if len(events) == 0:
+        return empty
+    codes = set(events[:, 2].tolist())
+    event_id = {k: v for k, v in event_id.items() if v in codes}
+    return (events, event_id) if event_id else empty
