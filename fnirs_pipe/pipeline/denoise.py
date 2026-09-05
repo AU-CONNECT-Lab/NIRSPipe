@@ -19,6 +19,9 @@ logger = get_logger("post.denoise")
 # leaves an fNIRS low-pass with its stopband above the cardiac band. FIR stays available for
 # the one thing Butterworth cannot do, linear phase.
 
+# https://mne.tools/stable/generated/mne.io.Raw.html#mne.io.Raw.filter
+# https://mne.tools/mne-nirs/stable/auto_examples/general/plot_30_frequency.html
+
 FILTER_METHODS = ("iir", "fir")
 DEFAULT_FILTER_METHOD = "iir"
 DEFAULT_FILTER_ORDER = 4
@@ -122,6 +125,37 @@ def filter_description(
     l_trans, h_trans = _fir_transitions(l_freq, h_freq)
     trans = "/".join(f"{t:g}" for t in (l_trans, h_trans) if t is not None)
     return f"hamming-windowed FIR {band}, {edges}, transition {trans} Hz"
+
+
+def filter_response(
+    sfreq: float,
+    n_times: int,
+    l_freq: float | None = None,
+    h_freq: float | None = None,
+    method: str = DEFAULT_FILTER_METHOD,
+    order: int = DEFAULT_FILTER_ORDER,
+    n_points: int = 4096,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Frequency response of the design `filter_kwargs` returns, as (freqs, dB).
+
+    For plotting the filter itself rather than inferring it from a before/after pair. The
+    IIR branch doubles the dB because MNE applies it with filtfilt, so what is drawn is the
+    attenuation the data actually receives.
+    """
+    from scipy.signal import butter, freqz, sosfreqz
+
+    kwargs = filter_kwargs(sfreq, n_times, l_freq, h_freq, method, order)
+    if kwargs["method"] == "iir":
+        btype = ("bandpass" if l_freq and h_freq else "highpass" if l_freq else "lowpass")
+        wn = [l_freq, h_freq] if btype == "bandpass" else (l_freq or h_freq)
+        sos = butter(kwargs["iir_params"]["order"], wn, btype=btype, fs=sfreq, output="sos")
+        freqs, resp = sosfreqz(sos, worN=n_points, fs=sfreq)
+        return freqs, 2 * 20 * np.log10(np.abs(resp) + 1e-30)
+    taps = mne.filter.create_filter(
+        None, sfreq, l_freq, h_freq, verbose=False,
+        **{k: v for k, v in kwargs.items() if k != "method"})
+    freqs, resp = freqz(taps, worN=n_points, fs=sfreq)
+    return freqs, 20 * np.log10(np.abs(resp) + 1e-30)
 
 
 def filter_array(

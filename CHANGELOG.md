@@ -15,6 +15,9 @@ All notable changes to this project will be documented in this file.
 - **A warning when a coherence range reaches past the bandpass.** Asking for scales above the low-pass reads as a working analysis and is not: those scales carry what the filter removed
 - **`--wtc-by-condition`**, which runs the coherence inside each task annotation's window as well as over the whole recording, so a block design gets one result per block. A trigger with a duration uses it, one without runs to the next trigger, and a window too short to carry the lowest frequency asked for is skipped and said so
 
+### Changed
+- **The PSD panel is one row per stage**, HbO and HbR together in each, on one shared power axis. A last row draws the filter's own frequency response, so what the bandpass did is read off the filter rather than guessed from the gap between two noisy curves, and the panel names the filter it drew
+
 
 ## [0.27.0] - 2026-09-05
 
