@@ -394,6 +394,9 @@ def alff_topo_figure(
     long_names, _ = long_short_channels(raw)
     drawable = set(ends) & (set(long_names) or set(ends))
     values = {str(row["channel"]): row for _, row in alff_df.iterrows()}
+    # compute_alff already blanks a rejected channel, but the frame is an argument and may
+    # not have come from it; the recording's own bads are the authority either way
+    bads = set(raw.info["bads"])
 
     head_x = [c for ch in drawable for c in (ends[ch][0][0], ends[ch][1][0])]
     head_y = [c for ch in drawable for c in (ends[ch][0][1], ends[ch][1][1])]
@@ -417,17 +420,17 @@ def alff_topo_figure(
             head_outline(ax, head_x, head_y)
 
             drawn = [ch for ch in drawable if ch.endswith(f" {chromo}") and ch in values]
-            cells = [(ch, float(values[ch][measure])) for ch in drawn
-                     if np.isfinite(values[ch][measure])]
-            blanks = [ch for ch in drawn if not np.isfinite(values[ch][measure])]
+            usable = [ch for ch in drawn
+                      if ch not in bads and np.isfinite(values[ch][measure])]
+            cells = [(ch, float(values[ch][measure])) for ch in usable]
+            blanks = [ch for ch in drawn if ch not in set(usable)]
             if not cells:
                 ax.text(0.5, 0.5, "no value", transform=ax.transAxes,
                         ha="center", va="center", fontsize=8, color="#888")
                 continue
 
-            # the scale comes from the good channels alone, which is what compute_alff
-            # already guarantees: a rejected channel with a runaway amplitude arrives NaN
-            # instead of flattening every real difference into one colour
+            # the scale comes from the good channels alone: one rejected channel with a
+            # runaway amplitude would otherwise flatten every real difference into one colour
             good = [v for _, v in cells]
             norm = mcolors.Normalize(vmin=min(good), vmax=max(good))
             cmap = plt.get_cmap("viridis")

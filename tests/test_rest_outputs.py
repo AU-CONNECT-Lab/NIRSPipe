@@ -103,22 +103,26 @@ def test_a_seed_stays_blank_rather_than_zero_through_the_tsv(rest_out, haemo, ro
     for roi, chans in roi_map.items():
         used = [c for c in chans if c not in bads]
         assert seed.loc[roi, used].isna().all()
-        assert seed.loc[roi].drop(used).notna().all()
+        # everything else holds a value, bar the rejected columns, which are blank for their
+        # own reason and are covered by the test below
+        ordinary = [c for c in seed.columns if c not in used and c not in bads]
+        assert seed.loc[roi, ordinary].notna().all()
 
 
-def test_a_rejected_channel_listed_in_an_roi_is_not_blanked(rest_out, haemo, roi_map):
-    """It never entered the average, so its correlation with the seed is an ordinary one.
+def test_a_rejected_channel_is_blank_in_every_seed_row(rest_out, haemo, roi_map):
+    """A channel preprocessing threw out has no correlation to report, seed member or not.
 
-    The synthetic recording rejects one long pair, and the fixture puts it in an ROI on
-    purpose: blanking by requested membership rather than actual would hide a real value.
+    The synthetic recording rejects one long pair and the fixture puts it in an ROI, so both
+    routes to a blank cell are covered at once: dropped from the seed it was listed in, and
+    dropped as a column of every other seed's row.
     """
     seed = pd.read_csv(_one(rest_out, "fcseed"), sep="\t", index_col="roi")
-    rejected = [(roi, c) for roi, chans in roi_map.items()
-                for c in chans if c in set(haemo.info["bads"])]
+    rejected = [c for c in seed.columns if c in set(haemo.info["bads"])]
+    listed = [c for chans in roi_map.values() for c in chans if c in rejected]
     assert rejected, "fixture no longer covers the case it was built for"
+    assert listed, "fixture no longer puts a rejected channel inside an ROI"
 
-    for roi, chan in rejected:
-        assert not np.isnan(seed.loc[roi, chan])
+    assert seed[rejected].isna().all().all()
 
 
 def test_fisher_z_of_the_seed_map_keeps_every_column(rest_out, roi_map):

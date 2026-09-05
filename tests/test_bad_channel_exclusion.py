@@ -135,18 +135,21 @@ def test_the_same_boost_moves_the_reference_while_the_channel_is_good(make_raw):
     assert not np.allclose(clean["malff"].to_numpy()[:2], boosted["malff"].to_numpy()[:2])
 
 
-def test_a_bad_channel_still_gets_its_own_malff(make_raw):
-    # excluded from the reference, not from the output: group analysis reads the frame
-    # by position, and the bad column says which rows to drop
+def test_a_bad_channel_keeps_its_row_and_loses_its_values(make_raw):
+    # the row stays so every subject's frame has the same shape and the same order; the
+    # values go because a channel preprocessing threw out has no measurement to report
     frame = _alff(make_raw, bads=[2])
     assert frame.loc[2, "bad"]
-    assert frame.loc[2, "malff"] != 0.0
+    assert frame.loc[2, ["alff", "falff", "malff", "zalff"]].isna().all()
+    assert len(frame) == 4
 
 
-def test_every_channel_bad_falls_back_to_the_full_reference(make_raw):
-    # nothing to average over otherwise; mALFF would be 0 for every channel
+def test_every_channel_bad_leaves_the_frame_blank_rather_than_raising(make_raw):
+    # the reference falls back to the whole set, but every row is rejected, so every row is
+    # blank. A run this bad has to reach the report as an empty panel, not as a traceback
     frame = _alff(make_raw, bads=[0, 1, 2, 3])
-    assert (frame["malff"] > 0).all()
+    assert frame["bad"].all()
+    assert frame[["alff", "falff", "malff", "zalff"]].isna().all().all()
 
 
 # ---- ROI connectivity ----
