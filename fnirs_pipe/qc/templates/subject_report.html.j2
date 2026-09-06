@@ -729,32 +729,55 @@
   </ul>
 
   {% if channel_rows %}
-  <details>
-    <summary style="font-weight:500; font-size:0.88rem; cursor:pointer;">Per-channel metrics</summary>
-    <div style="overflow-x:auto; margin-top:0.5rem;">
-      <table class="qm-table">
-        <thead>
-          <tr>
-            <th>Channel</th><th>Status</th><th>SCI</th>
-            <th>SNR (intensity)</th><th>CV</th><th>HbO–HbR corr</th>
-          </tr>
-        </thead>
-        <tbody>
-        {% for row in channel_rows %}
+  {% macro ch_row(row) %}
           <tr>
             <td>{{ row.name }}</td>
             <td class="{{ 'bad' if row.is_bad else 'good' }}">{{ 'BAD' if row.is_bad else 'OK' }}</td>
             <td class="{{ 'bad' if row.sci is not none and row.sci < 0.75 else '' }}">
               {% if row.sci is not none %}{{ "%.3f"|format(row.sci) }}{% else %}—{% endif %}
             </td>
+            <td>{% if row.psp is not none %}{{ "%.3f"|format(row.psp) }}{% else %}—{% endif %}</td>
             <td>{% if row.snr is not none %}{{ "%.1f"|format(row.snr) }}{% else %}—{% endif %}</td>
             <td>{% if row.cv is not none %}{{ "%.3f"|format(row.cv) }}{% else %}—{% endif %}</td>
             <td class="{{ 'neg' if row.corr is not none and row.corr < 0 else ('pos' if row.corr is not none else '') }}">
               {% if row.corr is not none %}{{ "%.3f"|format(row.corr) }}{% else %}—{% endif %}
             </td>
           </tr>
-        {% endfor %}
+  {% endmacro %}
+  {% set long_rows  = channel_rows | rejectattr('is_short') | list %}
+  {% set short_rows = channel_rows | selectattr('is_short')  | list %}
+  <details>
+    <summary style="font-weight:500; font-size:0.88rem; cursor:pointer;">Per-channel metrics</summary>
+    {% if short_rows %}
+    <p style="font-size:0.82rem;color:#666;margin:0.5rem 0 0;">
+      Split by source-detector separation. Both blocks are pruned against the same SCI
+      threshold, so Status is a verdict for short channels too, and a short channel marked
+      BAD is one that should not be used as a regressor. The scalar means above this table
+      are long channels only.
+    </p>
+    {% endif %}
+    <div style="overflow-x:auto; margin-top:0.5rem;">
+      <table class="qm-table">
+        <thead>
+          <tr>
+            <th>Channel</th><th>Status</th><th>SCI</th><th>PSP</th>
+            <th>SNR (intensity)</th><th>CV</th><th>HbO–HbR corr</th>
+          </tr>
+        </thead>
+        {% if short_rows %}
+        <tbody>
+          <tr><td colspan="7" style="font-weight:600;background:#f2f4f6;">Long channels ({{ long_rows | length }})</td></tr>
+          {% for row in long_rows %}{{ ch_row(row) }}{% endfor %}
         </tbody>
+        <tbody>
+          <tr><td colspan="7" style="font-weight:600;background:#f2f4f6;">Short channels ({{ short_rows | length }})</td></tr>
+          {% for row in short_rows %}{{ ch_row(row) }}{% endfor %}
+        </tbody>
+        {% else %}
+        <tbody>
+          {% for row in channel_rows %}{{ ch_row(row) }}{% endfor %}
+        </tbody>
+        {% endif %}
       </table>
     </div>
   </details>
@@ -766,8 +789,8 @@
 <h2 id="ChannelSummary">Channel Quality Summary</h2>
 {% if channel_summary_path %}
 <p style="font-size:0.82rem;color:#666;margin:0 0 0.6rem;">
-  Per-channel pass/fail for Status, SCI, CV, PSP, and SNR.
-  Green&nbsp;=&nbsp;pass, red&nbsp;=&nbsp;fail, white&nbsp;=&nbsp;missing data.
+  Per-channel pass/fail for Status, SCI, CV, PSP, and SNR, long channels then short ones.
+  Green&nbsp;=&nbsp;pass, red&nbsp;=&nbsp;fail, grey&nbsp;=&nbsp;missing data.
 </p>
 <div style="overflow-x:auto;">
   <iframe src="{{ channel_summary_path }}"

@@ -641,7 +641,7 @@ def _save_channel_csv(channel_rows: list, label: str, out_dir: Path) -> None:
         return
     out_path = out_dir / f"{label}_channel_metrics.csv"
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    fieldnames = ["name", "sci", "snr", "cv", "corr", "is_bad"]
+    fieldnames = ["name", "sci", "psp", "snr", "cv", "corr", "is_bad", "is_short"]
     with out_path.open("w", newline="", encoding="utf-8") as fh:
         writer = csv.DictWriter(fh, fieldnames=fieldnames)
         writer.writeheader()
@@ -712,6 +712,12 @@ def _load_stage_raw(
     return None
 
 
+# ---- per-channel metrics the raw sections carry on both sides of the long/short split ----
+_PER_CHANNEL_KEYS = (
+    "sci_per_channel", "psp_per_channel", "snr_per_channel", "cv_per_channel",
+)
+
+
 def _section_sqm(
     sci_scores: dict,
     bad_channels: list,
@@ -723,11 +729,16 @@ def _section_sqm(
 ) -> dict:
     """Read this run's SQM record; the report displays, it does not compute.
 
-    The panel judges data quality, so it shows the long-channel sections; ``raw`` stands
-    in when the montage has no short channels to exclude. Nothing recomputes here: a
-    missing record is reported as an error rather than silently measured a second time,
-    and so is a record that carries none of the sections the panel reads, which is what a
-    foreign file at this path looks like.
+    The panel judges data quality, so its scalars come from the long-channel sections;
+    ``raw`` stands in when the montage has no short channels to exclude. Nothing
+    recomputes here: a missing record is reported as an error rather than silently
+    measured a second time, and so is a record that carries none of the sections the panel
+    reads, which is what a foreign file at this path looks like.
+
+    The per-channel table is the one place short channels appear, read from ``raw_short``.
+    They are pruned against the same SCI threshold as everything else, so their status is
+    a real verdict with a downstream cost -- a bad short channel is a bad regressor -- and
+    printing that verdict without the score behind it leaves it uncheckable.
 
     The motion-corrected side of the same channel set is added under a ``_post`` suffix, and
     the confound-regression residual under an ``_errts`` one. Both carry the same key names
@@ -735,6 +746,7 @@ def _section_sqm(
     before values; the suffix is what lets the template print ``before -> after``.
     """
     sqm: dict = {}
+    short_pc: dict = {}
     with _guard("SQM record", errors, subject):
         if out_dir is None or sqm_label is None:
             raise FileNotFoundError("no SQM record location for this run")
@@ -763,16 +775,30 @@ def _section_sqm(
         # number. A run that regressed nothing has no `errts` and prints single values.
         for k, v in (record.get("errts") or {}).items():
             sqm[f"{k}_errts"] = v
+        # The short-channel half of the same raw file, kept beside `sqm` rather than merged
+        # into it: the scalar means the panel prints are long-only by design, and a short
+        # channel's coupling belongs in its own row of the table, not in those averages.
+        short_pc = per_channel.get("raw_short") or {}
+
+    short_names = {ch for key in _PER_CHANNEL_KEYS for ch in (short_pc.get(key) or {})}
+
+    def per_channel_value(key: str, ch: str):
+        return ((short_pc if ch in short_names else sqm).get(key) or {}).get(ch)
+
     channel_rows = []
     for ch in sci_scores:
         pair_key = re.sub(r'\s+(\d+|hbo|hbr)$', '', ch, flags=re.IGNORECASE)
         channel_rows.append({
-            "name":   ch,
-            "sci":    sqm.get("sci_per_channel", {}).get(ch),
-            "snr":    sqm.get("snr_per_channel", {}).get(ch),
-            "cv":     sqm.get("cv_per_channel", {}).get(ch),
-            "corr":   sqm.get("hbo_hbr_corr_per_channel", {}).get(pair_key),
-            "is_bad": ch in bad_channels,
+            "name":     ch,
+            "sci":      per_channel_value("sci_per_channel", ch),
+            "psp":      per_channel_value("psp_per_channel", ch),
+            "snr":      per_channel_value("snr_per_channel", ch),
+            "cv":       per_channel_value("cv_per_channel", ch),
+            # from `preproc`, which is not split by separation, so this one column is
+            # filled for short channels even when the raw_short section is missing
+            "corr":     sqm.get("hbo_hbr_corr_per_channel", {}).get(pair_key),
+            "is_bad":   ch in bad_channels,
+            "is_short": ch in short_names,
         })
     if out_dir is not None and sqm:
         with _guard("Channel metrics CSV", errors, subject):
@@ -782,7 +808,6 @@ def _section_sqm(
 
 def _section_channel_summary(
     channel_rows: list,
-    sqm: dict,
     subject: str,
     errors: list,
     figures_dir: Path,
@@ -790,15 +815,20 @@ def _section_channel_summary(
 ) -> dict:
     path, h = None, 0
     with _guard("Channel quality summary", errors, subject):
-        ch_names = [r["name"] for r in channel_rows]
-        is_bad   = [r["is_bad"] for r in channel_rows]
-        sci_pc   = {r["name"]: r["sci"] for r in channel_rows if r["sci"] is not None}
-        cv_pc    = {r["name"]: r["cv"]  for r in channel_rows if r["cv"]  is not None}
-        snr_pc   = {r["name"]: r["snr"] for r in channel_rows if r["snr"] is not None}
-        psp_pc   = sqm.get("psp_per_channel", {})
+        # long block then short block, so the grid reads the way the table above it does.
+        # A stable sort, so the acquisition order survives inside each block.
+        rows     = sorted(channel_rows, key=lambda r: bool(r.get("is_short")))
+        ch_names = [r["name"] for r in rows]
+        is_bad   = [r["is_bad"] for r in rows]
+        sci_pc   = {r["name"]: r["sci"] for r in rows if r["sci"] is not None}
+        cv_pc    = {r["name"]: r["cv"]  for r in rows if r["cv"]  is not None}
+        snr_pc   = {r["name"]: r["snr"] for r in rows if r["snr"] is not None}
+        psp_pc   = {r["name"]: r["psp"] for r in rows if r.get("psp") is not None}
+        n_long   = sum(1 for r in rows if not r.get("is_short"))
         fig = channel_quality_heatmap(
             ch_names, is_bad, sci_pc, cv_pc, snr_pc, psp_pc,
             sci_thresh=sci_thresh,
+            split_at=n_long if 0 < n_long < len(rows) else None,
         )
         path, h = _save_plotly_html(fig, figures_dir / "channel_summary.html")
     return {"channel_summary_path": path, "channel_summary_h": h}
@@ -1138,7 +1168,7 @@ def build_subject_report(
     provenance_vars   = _section_provenance(out_path.parent / "nirs", mode, subject, errors,
                                             label=sqm_label)
     ch_summary_vars   = _section_channel_summary(
-                            sqm_vars["channel_rows"], sqm_vars["sqm"], subject, errors, figures_dir,
+                            sqm_vars["channel_rows"], subject, errors, figures_dir,
                             sci_thresh=getattr(config, "sci_threshold", 0.75))
 
     n_bad    = len(bad_channels)

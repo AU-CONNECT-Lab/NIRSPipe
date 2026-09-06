@@ -56,8 +56,15 @@ def channel_quality_heatmap(
     cv_thresh: float = 0.5,
     snr_thresh: float = 20.0,
     psp_thresh: float = 0.1,
+    split_at: int | None = None,
 ) -> go.Figure:
-    """Square-marker grid: channels on x-axis, metrics on y-axis. Green=pass, red=fail, gray=missing."""
+    """Square-marker grid: channels on x-axis, metrics on y-axis. Green=pass, red=fail, gray=missing.
+
+    ``split_at`` is the index the short channels start at, given when the caller has
+    already ordered ``ch_names`` long block first; it draws the divider and names the two
+    blocks. The two are pruned by the same threshold but answer different questions, so a
+    reader needs to know which side of the line a column is on.
+    """
     _MISSING = "#D3D3D3"
     metrics = ["Status", "SCI", "CV", "PSP", "SNR"]
     n_ch  = len(ch_names)
@@ -117,6 +124,15 @@ def channel_quality_heatmap(
         margin=dict(l=70, r=20, t=20, b=100),
         height=260,
     )
+    if split_at is not None and 0 < split_at < n_ch:
+        # the line sits in the gap between the last long column and the first short one
+        x_div = (split_at - 0.5) * _SPACING
+        fig.add_vline(x=x_div, line_dash="dot", line_color="#888", line_width=1)
+        for centre, text in (((split_at - 1) / 2, "long"),
+                             ((split_at + n_ch - 1) / 2, "short")):
+            fig.add_annotation(x=centre * _SPACING, y=1.02, xref="x", yref="paper",
+                               text=text, showarrow=False, font=dict(size=10, color="#666"))
+        fig.update_layout(margin=dict(l=70, r=20, t=36, b=100))
     return fig
 
 
