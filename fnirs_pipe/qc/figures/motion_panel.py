@@ -33,14 +33,13 @@ _LW_RULE = 1.2     # threshold rules, thinner than the data they judge
 # Muted rather than saturated, so the shading and the rules read as background and the
 # traces as foreground. One green for everything the correction owns: the corrected trace in
 # both figures and the footprint strip. Amber shades spikes, dark red draws the threshold.
-_GVTD_INK = "#4c72b0"
-_GVTD_BEFORE = "#8494a6"
-_GVTD_AFTER = "#16a085"
+_GVTD_LINE = "#8494a6"
+_GVTD_AFTER = "#55a868"
 _DERIVATIVE = "#8172b3"
 _OD_BEFORE = "#adb5bd"
 _THRESH_RULE = "#c44e52"
 _SPIKE_FILL = "rgba(245,158,11,0.20)"
-_CORRECTED = "#16a085"
+_CORRECTED = "#55a868"
 
 _SPIKE_LABEL = "derivative spikes (≥10% ch)"
 
@@ -85,6 +84,19 @@ def _span_polygons(spans, y0: float, y1: float):
         xs += [x0, x0, x1, x1, None]
         ys += [y0, y1, y1, y0, None]
     return (xs or [None]), (ys or [None])
+
+
+def _tighten_strip(fig, gap: float = 0.006) -> None:
+    """Sit the correction strip directly on the panel below it.
+
+    ``make_subplots`` spaces every row equally, which leaves a strip one tenth the height of
+    its neighbours floating well clear of the trace it annotates. This moves the first row's
+    domain down until it nearly touches the second, without changing its height.
+    """
+    strip, panel = fig.layout.yaxis, fig.layout.yaxis2
+    height = strip.domain[1] - strip.domain[0]
+    bottom = min(panel.domain[1] + gap, 1.0 - height)
+    strip.domain = (bottom, bottom + height)
 
 
 def _matched_od_after(
@@ -208,7 +220,7 @@ def carpet_gvtd_figure(
     # to draw; prep-raw runs before any and would otherwise get a labelled empty band
     has_strip = bool(corrected_segments)
     n_rows    = 1 + int(has_strip) + n_carpets
-    strip_px  = 24
+    strip_px  = 26
     gvtd_px   = 130
     carpet_px = int(max(200, min(n_ch * 13, 700)))
     heights   = ([strip_px] if has_strip else []) + [gvtd_px] + [carpet_px] * n_carpets
@@ -227,7 +239,7 @@ def carpet_gvtd_figure(
     )
 
     if has_strip:
-        xs, ys = _span_polygons(corrected_segments, 0.18, 0.82)
+        xs, ys = _span_polygons(corrected_segments, 0.30, 0.70)
         fig.add_trace(go.Scatter(
             x=xs, y=ys, fill="toself", mode="lines", name="corrected",
             fillcolor=_CORRECTED, line=dict(width=0),
@@ -250,7 +262,7 @@ def carpet_gvtd_figure(
     fig.add_trace(go.Scatter(
         x=t_filt_ds, y=gvtd_filt_ds, mode="lines",
         name="before" if has_after else "GVTD",
-        line=dict(color=_GVTD_BEFORE if has_after else _GVTD_INK, width=_LW),
+        line=dict(color=_GVTD_LINE, width=_LW),
         hovertemplate="t=%{x:.1f}s<br>before=%{y:.3e}<extra></extra>",
     ), row=gvtd_row, col=1)
 
@@ -298,9 +310,14 @@ def carpet_gvtd_figure(
         fig.update_yaxes(title_text="corrected", title_font_size=8, range=[0, 1],
                          showticklabels=False, showgrid=False, zeroline=False,
                          row=strip_row, col=1)
-    fig.update_yaxes(title_text="GVTD (0.01–0.5 Hz)", title_font_size=9,
+    fig.update_yaxes(title_text="GVTD", title_font_size=9,
                      range=[0, y_top], tickfont=dict(size=8),
                      gridcolor="#eef1f4", zeroline=False, row=gvtd_row, col=1)
+    fig.add_annotation(
+        x=0.004, xref="x domain", y=0.97, yref="y domain",
+        text="0.01–0.5 Hz", showarrow=False, xanchor="left", yanchor="top",
+        font=dict(size=8, color="#8b95a1"), row=gvtd_row, col=1,
+    )
     for i in range(n_carpets):
         # the channel names stay in the hover, where they are readable; on the axis a full
         # montage would be an unreadable stack
@@ -309,6 +326,8 @@ def carpet_gvtd_figure(
                          row=gvtd_row + 1 + i, col=1)
     fig.update_xaxes(title_text="Time (s)", row=n_rows, col=1)
     fig.update_xaxes(range=[float(times[0]), float(times[-1])])
+    if has_strip:
+        _tighten_strip(fig)
 
     fig.update_layout(
         height=total_px,
@@ -481,7 +500,7 @@ def build_motion_detail_figure(
     )
 
     if has_strip:
-        xs, ys = _span_polygons(corrected_segments, 0.18, 0.82)
+        xs, ys = _span_polygons(corrected_segments, 0.30, 0.70)
         fig.add_trace(go.Scatter(
             x=xs, y=ys, fill="toself", mode="lines", name="corrected",
             fillcolor=_CORRECTED, line=dict(width=0),
@@ -503,7 +522,7 @@ def build_motion_detail_figure(
 
     fig.add_trace(go.Scatter(
         x=t_gvtd, y=gvtd_filt.tolist(), mode="lines",
-        line=dict(color=_GVTD_INK, width=_LW), name="GVTD 0.01–0.5 Hz",
+        line=dict(color=_GVTD_LINE, width=_LW), name="GVTD 0.01–0.5 Hz",
     ), row=gvtd_row, col=1)
     if motion_thresh is not None:
         fig.add_shape(
@@ -571,6 +590,8 @@ def build_motion_detail_figure(
             font=dict(size=8, color="#8b95a1"), row=row, col=1,
         )
     fig.update_xaxes(title_text="Time (s)", gridcolor="#eee", row=od_row, col=1)
+    if has_strip:
+        _tighten_strip(fig)
     fig.update_layout(
         title_text=ch_name, height=560,
         plot_bgcolor="white", paper_bgcolor="white",
