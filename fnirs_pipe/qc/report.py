@@ -641,7 +641,7 @@ def _save_channel_csv(channel_rows: list, label: str, out_dir: Path) -> None:
         return
     out_path = out_dir / f"{label}_channel_metrics.csv"
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    fieldnames = ["name", "sci", "psp", "snr", "cv", "corr", "is_bad", "is_short"]
+    fieldnames = ["name", "sci", "psp", "snr", "cv", "corr", "is_bad", "separation"]
     with out_path.open("w", newline="", encoding="utf-8") as fh:
         writer = csv.DictWriter(fh, fieldnames=fieldnames)
         writer.writeheader()
@@ -747,6 +747,7 @@ def _section_sqm(
     """
     sqm: dict = {}
     short_pc: dict = {}
+    long_pc: dict = {}
     with _guard("SQM record", errors, subject):
         if out_dir is None or sqm_label is None:
             raise FileNotFoundError("no SQM record location for this run")
@@ -779,8 +780,29 @@ def _section_sqm(
         # into it: the scalar means the panel prints are long-only by design, and a short
         # channel's coupling belongs in its own row of the table, not in those averages.
         short_pc = per_channel.get("raw_short") or {}
+        long_pc = per_channel.get("raw_long") or {}
+        # how the montage split, which lives in `raw` whichever section the scalars came from
+        for key in ("n_long_channels", "n_short_channels"):
+            if (raw_section := record.get("raw") or {}).get(key) is not None:
+                sqm[key] = raw_section[key]
 
-    short_names = {ch for key in _PER_CHANNEL_KEYS for ch in (short_pc.get(key) or {})}
+    def _named(pc: dict) -> set:
+        return {ch for key in _PER_CHANNEL_KEYS for ch in (pc.get(key) or {})}
+
+    short_names, long_names = _named(short_pc), _named(long_pc)
+
+    def separation_of(ch: str) -> str:
+        """Which block a channel belongs to, or "" when the record was never split.
+
+        The two separation ranges do not meet, so a channel at 12 mm is in neither list.
+        Those get their own name rather than falling into the long block, where a row of
+        dashes would read as a long channel whose metrics failed.
+        """
+        if not long_names:
+            return ""
+        if ch in short_names:
+            return "short"
+        return "long" if ch in long_names else "unclassified"
 
     def per_channel_value(key: str, ch: str):
         return ((short_pc if ch in short_names else sqm).get(key) or {}).get(ch)
@@ -798,12 +820,63 @@ def _section_sqm(
             # filled for short channels even when the raw_short section is missing
             "corr":     sqm.get("hbo_hbr_corr_per_channel", {}).get(pair_key),
             "is_bad":   ch in bad_channels,
-            "is_short": ch in short_names,
+            "separation": separation_of(ch),
         })
     if out_dir is not None and sqm:
         with _guard("Channel metrics CSV", errors, subject):
             _save_channel_csv(channel_rows, sqm_label or f"sub-{subject}", out_dir)
     return {"sqm": sqm, "channel_rows": channel_rows}
+
+
+def _note_separation(
+    notes: list,
+    subject: str,
+    sqm: dict,
+    channel_rows: list,
+    short_channel_requested: bool = False,
+) -> None:
+    """Say when the montage could not be split the way the metrics assume it was.
+
+    Three cases, and they are worth telling apart. No channel in either range means the
+    recording carries no registered optode positions, so every distance reads as zero and
+    the metrics fall back to the whole montage. Channels in neither range is a real
+    montage with real positions that happens to use separations the two ranges leave out;
+    those channels are measured by no section and show dashes. The third is a run that
+    asked for short-channel regression and had no short channel to build it from, which
+    the pipeline treats as a warning and carries on past.
+    """
+    n_long, n_short = sqm.get("n_long_channels"), sqm.get("n_short_channels")
+    if n_long == 0 and n_short == 0:
+        _note(notes, subject,
+              "No channel fell in either separation range, which is what a recording with "
+              "no registered optode positions looks like. The quantitative metrics are over "
+              "every channel rather than long channels only, and the per-channel table is "
+              "not grouped. Anything that needs positions, including short-channel "
+              "regression and the topographies, is unavailable for this run.")
+        return
+    n_odd = sum(1 for r in channel_rows if r.get("separation") == "unclassified")
+    if n_odd:
+        from fnirs_pipe.qc.quantitative_metrics import (
+            LONG_MAX_DIST, LONG_MIN_DIST, SHORT_MAX_DIST,
+        )
+        _note(notes, subject,
+              f"{n_odd} channel(s) sit at a separation the long and short ranges leave out "
+              f"({SHORT_MAX_DIST * 1000:.0f}-{LONG_MIN_DIST * 1000:.0f} mm, or over "
+              f"{LONG_MAX_DIST * 1000:.0f} mm). They are in no section, so their row in the "
+              f"per-channel table is blank apart from status and HbO-HbR correlation, and "
+              f"they are in none of the scalar metrics.")
+
+    if short_channel_requested:
+        short_rows = [r for r in channel_rows if r.get("separation") == "short"]
+        if not n_short:
+            _note(notes, subject,
+                  "Short-channel regression was requested but this montage carries no short "
+                  "channel, so it did not run and no systemic signal was regressed out.")
+        elif short_rows and all(r["is_bad"] for r in short_rows):
+            _note(notes, subject,
+                  f"Short-channel regression was requested but all {len(short_rows)} short "
+                  f"channels were rejected, so it did not run. Their scores are in the "
+                  f"per-channel table.")
 
 
 def _section_channel_summary(
@@ -815,20 +888,25 @@ def _section_channel_summary(
 ) -> dict:
     path, h = None, 0
     with _guard("Channel quality summary", errors, subject):
-        # long block then short block, so the grid reads the way the table above it does.
-        # A stable sort, so the acquisition order survives inside each block.
-        rows     = sorted(channel_rows, key=lambda r: bool(r.get("is_short")))
+        # long block first, so the grid reads the way the table above it does. A stable
+        # sort, so the acquisition order survives inside each block.
+        order    = {"long": 0, "": 0, "short": 1, "unclassified": 2}
+        rows     = sorted(channel_rows, key=lambda r: order.get(r.get("separation"), 2))
         ch_names = [r["name"] for r in rows]
         is_bad   = [r["is_bad"] for r in rows]
         sci_pc   = {r["name"]: r["sci"] for r in rows if r["sci"] is not None}
         cv_pc    = {r["name"]: r["cv"]  for r in rows if r["cv"]  is not None}
         snr_pc   = {r["name"]: r["snr"] for r in rows if r["snr"] is not None}
         psp_pc   = {r["name"]: r["psp"] for r in rows if r.get("psp") is not None}
-        n_long   = sum(1 for r in rows if not r.get("is_short"))
+        n_long = sum(1 for r in rows if r.get("separation") == "long")
+        # the divider names its two sides, so it is only drawn when there are two sides:
+        # a montage carrying channels in neither range has three blocks, and the table
+        # above is where those are named
+        n_odd = sum(1 for r in rows if r.get("separation") == "unclassified")
         fig = channel_quality_heatmap(
             ch_names, is_bad, sci_pc, cv_pc, snr_pc, psp_pc,
             sci_thresh=sci_thresh,
-            split_at=n_long if 0 < n_long < len(rows) else None,
+            split_at=n_long if not n_odd and 0 < n_long < len(rows) else None,
         )
         path, h = _save_plotly_html(fig, figures_dir / "channel_summary.html")
     return {"channel_summary_path": path, "channel_summary_h": h}
@@ -1161,6 +1239,8 @@ def build_subject_report(
     sqm_vars          = _section_sqm(sci_scores, bad_channels, subject, errors,
                                      out_dir=out_path.parent / "nirs",
                                      sqm_label=sqm_label)
+    _note_separation(notes, subject, sqm_vars["sqm"], sqm_vars["channel_rows"],
+                     short_channel_requested=bool(getattr(config, "short_channel", None)))
     # GCOR before→after the short-channel regression (fNIRS GSR analog): the meaningful
     # comparison (expected to drop). Bandpass alone raises GCOR, so we do not compare that.
     if gcor_reg and sqm_vars.get("sqm") is not None:

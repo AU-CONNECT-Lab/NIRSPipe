@@ -302,6 +302,13 @@ def compute_run_sections(
             raw_intensity, sci_scores, bad_channels, cardiac_l_freq, cardiac_h_freq))
 
         long_names, short_names = long_short_channels(raw_intensity)
+        # The split itself, recorded rather than only acted on. Without it a record with
+        # neither `raw_long` nor `raw_short` is ambiguous: it is what a montage of long
+        # channels only looks like, and also what a montage with no registered optode
+        # positions looks like. Two counts of zero is the second case.
+        if "raw" in sections:
+            sections["raw"]["n_long_channels"] = len(long_names)
+            sections["raw"]["n_short_channels"] = len(short_names)
         if long_names and len(long_names) < len(raw_intensity.ch_names):
             def raw_long_section():
                 raw_long = raw_intensity.copy().pick(long_names)

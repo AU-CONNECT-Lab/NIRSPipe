@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
 - **A run whose markers cannot be epoched filled the console with warnings.** A design that only marks where each condition starts and ends carries annotations but no trials, and every epoch figure tried anyway. The run is now recognised up front, said once in the log, and reported as a note
 
 ### Added
+- **Run notes for a montage the metrics cannot split**: no registered optode positions, channels at a separation the long and short ranges leave out, or short-channel regression requested where there is no usable short channel to build it from
 - **Run notes in the subject report**, listing the sections a run left out because its data does not carry what they need, kept apart from the errors list and repeated once at the end of the run
 - **`--filter-method` and `--filter-order`.** The bandpass is now a zero-phase Butterworth of order 4, which is what the fNIRS toolboxes use and what a methods section can state. `--filter-method fir` keeps the linear-phase option and refuses, rather than quietly truncating, when the filter would be longer than the recording
 - **The filter is recorded on every stage's sidecar**, not only on `desc-filtered`, so a file can say which passband its content is confined to
@@ -19,7 +20,7 @@ All notable changes to this project will be documented in this file.
 - **`--wtc-by-condition`**, which runs the coherence inside each task annotation's window as well as over the whole recording, so a block design gets one result per block. A trigger with a duration uses it, one without runs to the next trigger, and a window too short to carry the lowest frequency asked for is skipped and said so
 
 ### Changed
-- **Short channels get their scores back in the per-channel metrics.** They were listed with a Status but a dash under SCI, SNR and CV, because the report read only the long-channel half of the record.
+- **The per-channel metrics table is grouped by source-detector separation**, and short channels now carry their SCI, PSP, SNR and CV instead of a dash. The Channel Quality Summary grid is grouped the same way, and the scalar metrics now say that they are long channels only
 - **The HbO–HbR correlation panel separates short channels from long ones.** Ranked together, the short channels sat at the top of the list and read as the worst channels on the montage, when the anticorrelation the −0.3 threshold tests for is a property of cortical haemodynamics and says nothing about a channel that only sees scalp. They now form their own group, drawn in grey and left out of the pass/fail colouring, and the correlation matrix is blocked the same way. A montage with no short channels looks as it did
 - **The provenance diagram matches the interface's pipeline DAG.** Same palette, outlined boxes instead of filled pastel blocks, and straight arrows in the colour of the stage they feed. Red now means only that a file is missing, and the colour legend is gone: every box already names its own step
 - **The subject report's five before/after strips are now one small panel per metric across the stages**, drawing every stage on disk rather than only the two ends, so a step that did nothing is visible as one. Both stage comparisons now sit in the Channel Quality Summary, and the motion-correction one, having only two stages, is printed as a table
