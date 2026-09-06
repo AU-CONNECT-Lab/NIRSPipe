@@ -11,10 +11,12 @@ All notable changes to this project will be documented in this file.
 - **"What each denoising step did" still averaged long and short channels together**, so the same metric read one number there and another in the table above it. On a montage with eight short channels its HbO–HbR correlation sat at −0.18 where the long channels alone gave −0.50. It is measured on the long channels now, as everything else on the page is
 - **A spike on the last sample of a recording was never drawn.** It came out as a span of zero width, which no figure can render
 - **Peaks in the GVTD and per-channel derivative traces were drawn slightly late.** Downsampling kept each peak's height but moved it to the start of its bin
+- **Cells overlapped in the evoked topo figure**, so a channel underneath was unreadable and, in the interface, impossible to click: its selection went to the cell drawn over it. Channels sharing an optode hit this every time, short channels above all. The cells are now placed so none overlaps
 
 ### Changed
 - **The correlation matrix draws its lower triangle only.** The upper half repeated the same values read the other way round; the HbO x HbR block that the panel exists for is unaffected, and the colour bar moves into the corner the mask freed
-- **The GVTD panel was redrawn.** Spike segments now shade the trace itself instead of sitting on a band below the carpet, the motion-correction footprint moved to a strip directly above the trace, the samples over the motion threshold are marked in red, and the panel is taller with heavier lines and a calmer palette
+- **The interface was restyled**, and the Signal Topo now shares the viewer row evenly with the layout panels instead of overhanging them
+- **The motion figures were redrawn.** In both the carpet panel and the per-channel detail figure, spike segments now shade the traces themselves instead of sitting on a band below them, and the motion-correction footprint moved to a strip directly above. Lines are heavier, rows are labelled where the label fits, and the carpet panel's uncorrected GVTD trace is a filled area with the corrected one over it
 
 ### Removed
 - **The "What the motion correction did, and what it cost" table.** Two columns of numbers, half of them carrying no direction; the GVTD panel answers the same question in a form you can read

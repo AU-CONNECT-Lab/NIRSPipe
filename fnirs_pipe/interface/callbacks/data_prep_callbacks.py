@@ -10,6 +10,8 @@ from pathlib import Path
 import dash_bootstrap_components as dbc
 from dash import ALL, Input, Output, Patch, State, callback, ctx, dcc, html, no_update
 
+from fnirs_pipe.interface.theme import style_figure
+
 # Server-side cache: cache_key -> _process_run result dict (large figures stay here)
 _RESULT_CACHE: dict[str, dict] = {}
 # In-memory only: cache_key -> raw_haemo MNE object (not pickled)
@@ -35,10 +37,14 @@ def _snirf_options(subject: str, bids_dir: str) -> list[dict]:
     return options
 
 
+# bump whenever a cached figure's builder changes, or the disk cache keeps serving the old one
+_CACHE_VERSION = 2
+
+
 def _make_cache_key(snirf_path: str, sci_thresh: float,
                     cardiac_l: float, cardiac_h: float, dpf: float) -> str:
     import hashlib
-    payload = f"{snirf_path}|{sci_thresh}|{cardiac_l}|{cardiac_h}|{dpf}"
+    payload = f"v{_CACHE_VERSION}|{snirf_path}|{sci_thresh}|{cardiac_l}|{cardiac_h}|{dpf}"
     return hashlib.md5(payload.encode()).hexdigest()[:16]
 
 
@@ -277,7 +283,7 @@ def restore_from_store(store, _tick):
             if not isinstance(d, dict):
                 return no_update
             d = d.get(k)
-        return d or no_update
+        return style_figure(d) if d else no_update
 
     ts_fig       = _fig(cached, "ts",               "figure")
     layout_2d    = _fig(cached, "layout",           "layout_2d_figure")
@@ -308,7 +314,8 @@ def restore_from_store(store, _tick):
         for k, v in sqm_scalars.items()
     ] or no_update
 
-    carpet_src = cached.get("carpet_gvtd", {}).get("figure") or no_update
+    carpet_src = cached.get("carpet_gvtd", {}).get("figure")
+    carpet_src = style_figure(carpet_src) if carpet_src else no_update
 
     def _wrap(val):
         return _SHOW if val is not no_update else no_update
@@ -508,9 +515,10 @@ def update_channel_detail(channel_pair, store):
 
     ch_data = channels.get(channel_pair, {})
     return (
-        ch_data.get("detail_figure") or _placeholder_fig("No channel data", 160),
-        ch_data.get("psd_figure")    or _placeholder_fig("No PSD available", 220),
-        ch_data.get("epoch_figure")  or _placeholder_fig("No markers — epoch preview not available", 220),
+        style_figure(ch_data.get("detail_figure") or _placeholder_fig("No channel data", 160)),
+        style_figure(ch_data.get("psd_figure")    or _placeholder_fig("No PSD available", 220)),
+        style_figure(ch_data.get("epoch_figure")
+                     or _placeholder_fig("No markers — epoch preview not available", 220)),
         _SHOW,
         _SHOW,
         _SHOW,

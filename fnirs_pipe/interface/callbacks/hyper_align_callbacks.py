@@ -8,6 +8,8 @@ from pathlib import Path
 import dash_bootstrap_components as dbc
 from dash import ALL, Input, Output, State, callback, ctx, html, no_update
 
+from fnirs_pipe.interface.theme import style_figure
+
 # aligned_raws not JSON-serializable — keep in process memory
 _ALIGNED_CACHE: dict[str, dict] = {}
 
@@ -196,7 +198,7 @@ def update_group_figures(group_val, bids_dir, group_csv):
     def _safe(fn, *args):
         try:
             fig = fn(*args)
-            return fig.to_dict() if fig is not None else no_update
+            return style_figure(fig.to_dict()) if fig is not None else no_update
         except Exception as exc:
             print(f"[DEBUG hyper_align] {fn.__name__} failed: {exc}")
             return no_update

@@ -9,12 +9,14 @@ import dash_bootstrap_components as dbc
 import dash_cytoscape as cyto
 from dash import Input, Output, State, callback, dcc, html
 
+from fnirs_pipe.interface.theme import SIDEBAR_BG
+
 cyto.load_extra_layouts()
 
 
 _SIDEBAR_EXPANDED = {
     "position": "fixed", "top": 0, "left": 0, "bottom": 0,
-    "width": "200px", "background": "#2c3e50",
+    "width": "200px", "background": SIDEBAR_BG,
     "transition": "width 0.2s", "overflow": "hidden", "zIndex": 1000,
 }
 _SIDEBAR_COLLAPSED = {
@@ -49,7 +51,8 @@ def _sidebar() -> html.Div:
                     ),
                 ],
             ),
-            html.Hr(className="border-secondary my-0"),
+            html.Hr(style={"borderColor": "rgba(255,255,255,0.12)", "opacity": 1,
+                           "margin": 0}),
             dbc.Collapse(
                 id="app-sidebar-nav",
                 is_open=True,
@@ -88,7 +91,7 @@ def launch(port: int = 8050) -> None:
         __name__,
         use_pages=True,
         pages_folder=pages_folder,
-        external_stylesheets=[dbc.themes.FLATLY],
+        external_stylesheets=[dbc.themes.BOOTSTRAP],
         suppress_callback_exceptions=True,
     )
 

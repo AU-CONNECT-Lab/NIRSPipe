@@ -252,7 +252,7 @@ layout = dbc.Container([
                                           style={"aspectRatio": "1 / 1"}),
                             ]),
                         ),
-                        width=7,
+                        width=6,
                     ),
                     dbc.Col([
                         _card("Optode Layout (2D)",
@@ -268,7 +268,7 @@ layout = dbc.Container([
                                   dcc.Graph(id="dp-layout-3d", responsive=True,
                                             style={"height": "390px"}),
                               ])),
-                    ], width=5),
+                    ], width=6),
                 ], className="mb-3", align="start"),
 
                 # Channel Detail (full width)

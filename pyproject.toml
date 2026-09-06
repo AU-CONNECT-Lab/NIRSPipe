@@ -58,7 +58,7 @@ where = ["."]
 include = ["fnirs_pipe*"]
 
 [tool.setuptools.package-data]
-fnirs_pipe = ["qc/boilerplate/*.toml", "qc/boilerplate/*.bib", "qc/templates/*.html", "qc/templates/*.j2"]
+fnirs_pipe = ["qc/boilerplate/*.toml", "qc/boilerplate/*.bib", "qc/templates/*.html", "qc/templates/*.j2", "interface/assets/*.css"]
 
 [tool.ruff]
 line-length = 100

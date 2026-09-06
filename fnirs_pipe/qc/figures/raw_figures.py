@@ -1061,6 +1061,70 @@ def _topo_layers(
     }]
 
 
+# ---- Topo cell placement ----
+
+_TOPO_INSET = 0.03          # keep cells off the head outline
+_TOPO_LABEL_GAP = 0.014     # paper units reserved above a cell for its S-D label
+_TOPO_DISC_R = 0.46         # cell centres stay within this radius of the head outline
+
+
+def _spread_topo_cells(norm01: "np.ndarray", hw: float, hh: float) -> "np.ndarray":
+    """Snap cell centres onto a grid of non-overlapping slots, nearest free slot wins.
+
+    Each cell is its own plotly subplot, and overlapping subplot domains swallow each
+    other's clicks: whichever is drawn last takes the whole overlap, so a channel hidden
+    underneath can never be selected. Short channels make this the common case, since they
+    sit almost exactly on top of the long channel sharing their source.
+
+    e.g. two channels normalised to (0.51, 0.30) and (0.52, 0.30) land in the same slot;
+    the second is pushed to the neighbouring slot instead of on top of the first.
+    """
+    slot_w = 2 * hw + 0.006
+    slot_h = 2 * hh + _TOPO_LABEL_GAP
+    lo, hi = _TOPO_INSET, 1.0 - _TOPO_INSET
+    ncols = max(1, int((hi - lo) // slot_w))
+    nrows = max(1, int((hi - lo) // slot_h))
+    cell_w = (hi - lo) / ncols
+    cell_h = (hi - lo) / nrows
+
+    def centre(r, c):
+        return lo + (c + 0.5) * cell_w, hi - (r + 0.5) * cell_h
+
+    # corner slots of the square fall outside the head outline; drop them unless the
+    # montage needs more slots than the disc holds
+    inside = {
+        (r, c) for r in range(nrows) for c in range(ncols)
+        if sum((v - 0.5) ** 2 for v in centre(r, c)) <= _TOPO_DISC_R ** 2
+    }
+    allowed = inside if len(inside) >= len(norm01) else None
+
+    # rings of slots around the target, nearest in paper distance first
+    reach = max(nrows, ncols)
+    offsets = sorted(
+        ((dr, dc) for dr in range(-reach, reach + 1) for dc in range(-reach, reach + 1)),
+        key=lambda d: (d[0] * cell_h) ** 2 + (d[1] * cell_w) ** 2,
+    )
+
+    taken: set = set()
+    out = np.empty_like(norm01, dtype=float)
+    # place top-left first so the fallback drift is downward/rightward and stays readable
+    for i in np.lexsort((norm01[:, 0], -norm01[:, 1])):
+        c0 = int(np.clip(round(norm01[i, 0] * ncols - 0.5), 0, ncols - 1))
+        r0 = int(np.clip(round((1.0 - norm01[i, 1]) * nrows - 0.5), 0, nrows - 1))
+        for dr, dc in offsets:
+            r, c = r0 + dr, c0 + dc
+            if not (0 <= r < nrows and 0 <= c < ncols) or (r, c) in taken:
+                continue
+            if allowed is not None and (r, c) not in allowed:
+                continue
+            taken.add((r, c))
+            out[i] = centre(r, c)
+            break
+        else:
+            out[i] = centre(r0, c0)
+    return out
+
+
 def build_evoked_topo_figure(
     raw_haemo: mne.io.Raw,
     markers: list[dict],
@@ -1087,13 +1151,12 @@ def build_evoked_topo_figure(
     if np.any(locs != 0):
         lo, hi = locs.min(axis=0), locs.max(axis=0)
         span = np.where(hi - lo > 0, hi - lo, 1.0)
-        norm = (locs - lo) / span * 0.82 + 0.06
+        norm01 = (locs - lo) / span
     else:
         ncols = int(np.ceil(np.sqrt(n)))
         nrows = int(np.ceil(n / ncols))
-        norm = np.array([
-            [(i % ncols + 0.5) / ncols * 0.82 + 0.06,
-             (i // ncols + 0.5) / nrows * 0.82 + 0.06]
+        norm01 = np.array([
+            [(i % ncols + 0.5) / ncols, (i // ncols + 0.5) / nrows]
             for i in range(n)
         ])
 
@@ -1108,7 +1171,8 @@ def build_evoked_topo_figure(
 
     _H, _ML, _MR, _MT, _MB = 700, 10, 10, 12, 8
 
-    hw, hh = 0.050, 0.025
+    hw, hh = 0.048, 0.023
+    norm = _spread_topo_cells(norm01, hw, hh)
     box_shapes = []
     onset_shapes = []
     fig = go.Figure()
