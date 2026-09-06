@@ -18,7 +18,7 @@ All notable changes to this project will be documented in this file.
 - **`--wtc-by-condition`**, which runs the coherence inside each task annotation's window as well as over the whole recording, so a block design gets one result per block. A trigger with a duration uses it, one without runs to the next trigger, and a window too short to carry the lowest frequency asked for is skipped and said so
 
 ### Changed
-- **The PSD panel is one row per stage**, HbO and HbR together in each, on one shared power axis. A last row draws the filter's own frequency response, so what the bandpass did is read off the filter rather than guessed from the gap between two noisy curves, and the panel names the filter it drew
+- **The PSD panel draws the filter's own response over the filtered signal**, so what the bandpass did is read off the filter rather than guessed from the gap between two noisy curves, and the panel names the filter it drew. Both rows share one power axis, and the panel stops at the bandpass: the confound regression's output is not a spectral question
 
 
 ## [0.27.0] - 2026-09-05

@@ -133,20 +133,21 @@ def psd_figure(
     filter_method: str = DEFAULT_FILTER_METHOD,
     filter_order: int = DEFAULT_FILTER_ORDER,
     fmax: float = 2.0,
-    title: str = "Power spectral density by stage",
+    title: str = "Power spectral density, before and after the bandpass",
     cardiac: "tuple[float, float] | None" = None,
     resp: "tuple[float, float] | None" = None,
     stages: "list[tuple[str, mne.io.Raw]] | None" = None,
-    first_label: str = "desc-preproc (no filtering)",
+    first_label: str = "Before bandpass",
 ) -> go.Figure:
-    """One row per pipeline stage, HbO and HbR together, with the filter drawn on its output.
+    """The bandpass, before over after, HbO and HbR together, with the filter drawn on it.
 
-    ``raw_haemo`` is the first stage, the Beer-Lambert output. ``stages`` are the ones
-    after it as ``[(label, raw), ...]``, read off disk by the caller. Passing None falls
-    back to simulating the bandpass in memory, which is what a prep-only run gets.
+    ``raw_haemo`` is the Beer-Lambert output, the filter's input. ``stages`` are what the run
+    wrote after it as ``[(label, raw), ...]``, read off disk by the caller, normally just the
+    filtered file. Passing None falls back to simulating the bandpass in memory, which is
+    what a prep-only run gets.
 
-    Stage is the row so that a step is read by looking down the column, and every row shares
-    one power axis or the comparison would be against a rescaled yardstick. The filter's own
+    Stage is the row so a step is read by looking down the column, and both rows share one
+    power axis or the comparison would be against a rescaled yardstick. The filter's own
     response is drawn dashed over the row it produced, shifted so 0 dB sits at that row's
     passband level: it stays on the one power axis that way, and the data curve can be read
     straight against the shape the filter should have given it.
@@ -163,7 +164,7 @@ def psd_figure(
         fmax:               Maximum frequency to display (Hz), clamped per stage to Nyquist.
         title:              Figure title.
         stages:             Later stages as (label, raw); None simulates the bandpass.
-        first_label:        Legend label for ``raw_haemo``.
+        first_label:        Row title for ``raw_haemo``.
     """
     nyquist = raw_haemo.info["sfreq"] / 2
     if fmax > nyquist:
@@ -178,9 +179,14 @@ def psd_figure(
         stages, l_freq, h_freq, filter_method, filter_order)
 
     n_rows = len(all_stages)
+    titles = [label for label, _ in all_stages]
+    if n_rows >= 2 and titles[1].startswith("desc-") and (l_freq is not None or h_freq is not None):
+        edges = "  ".join(part for part in (f"HP {l_freq} Hz" if l_freq is not None else "",
+                                            f"LP {h_freq} Hz" if h_freq is not None else "") if part)
+        titles[1] = f"After bandpass ({edges})"
     fig = make_subplots(
         rows=n_rows, cols=1, shared_xaxes=True, vertical_spacing=0.09,
-        subplot_titles=[label for label, _ in all_stages],
+        subplot_titles=titles,
     )
 
     lo, hi = np.inf, -np.inf

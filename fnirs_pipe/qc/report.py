@@ -1077,10 +1077,12 @@ def build_subject_report(
     raw_errts         = _load_stage_raw(nirs_dir, sqm_label, "errts", subject, errors)
     # the haemo chain as it exists on disk, in the order it was written. The PSD figure used
     # to re-filter `raw_haemo` in memory to invent its "after" row, which showed the filter
-    # rather than the run; a stage missing here simply does not get a line.
+    # rather than the run; a stage missing here simply does not get a line. It stops at the
+    # bandpass: desc-errts is the confound regression's output, and what that step did is
+    # not a spectral question.
     psd_stages        = [
         (f"desc-{desc}", raw)
-        for desc in ("filtered", "resampled", "errts")
+        for desc in ("filtered", "resampled")
         if (raw := _load_stage_raw(nirs_dir, sqm_label, desc, subject, errors)) is not None
     ] or None
     sci_vars          = _section_sci(
