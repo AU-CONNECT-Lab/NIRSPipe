@@ -172,6 +172,13 @@
     .qm-table td.neg  { color: #27ae60; }
     .qm-table td.pos  { color: #c0392b; }
 
+    /* ---- stage-comparison table ---- */
+    .stage-table { border-collapse: collapse; }
+    .stage-table th, .stage-table td { border: 1px solid #ddd; padding: 0.22rem 0.55rem; text-align: right; }
+    .stage-table th { background: #f1f3f5; font-weight: 600; text-align: center; }
+    .stage-table td:first-child { text-align: left; }
+    .stage-table tr.muted td, .stage-table tr.muted td:first-child { color: #8b95a1; }
+
     /* ---- GLM beta table ---- */
     .glm-beta-table { font-size: 0.80rem; border-collapse: collapse; margin-top: 0.25rem; }
     .glm-beta-table th, .glm-beta-table td { border: 1px solid #ddd; padding: 0.22rem 0.55rem; text-align: right; }
@@ -228,7 +235,7 @@
   {% if glm_design_path or glm_activation_path %}<a href="#GLM">GLM</a>{% endif %}
   <span class="nav-sep">|</span>
   <a href="#Metrics">Metrics</a>
-  {% if channel_summary_path %}<a href="#ChannelSummary">Ch. Summary</a>{% endif %}
+  {% if channel_summary_path or motion_stage_rows or stage_metrics_path %}<a href="#ChannelSummary">Ch. Summary</a>{% endif %}
   <a href="#Errors">Errors</a>
   <a href="#Provenance">Provenance</a>
   <a href="#Methods">Methods</a>
@@ -326,23 +333,6 @@
       <div class="placeholder">SCI/PSP panel not available.</div>
     {% endif %}
 
-    {% if motion_stage_path %}
-      <h3>What the motion correction did, and what it cost</h3>
-      <p style="font-size:0.82rem;color:#666;margin:0 0 0.3rem;">
-        <code>desc-sci</code> against <code>desc-motcorrected</code>, one panel per metric,
-        each on its own scale. Both stages are unfiltered optical density, so these are the
-        stored numbers compared as they are. The GVTD and spike panels are what the
-        correction exists to reduce. The greyed SCI and PSP panels are the other half of the
-        question: they sit in the cardiac band, above the frequencies motion correction works
-        on, so they should come back where they started. They carry no direction because a
-        small movement in either is not a verdict; what matters is whether they held.
-      </p>
-      <iframe class="plotly-frame" src="{{ motion_stage_path }}"
-              title="Metrics across motion correction"
-              style="height:{{ motion_stage_h }}px"></iframe>
-      <p class="fig-path">{{ motion_stage_path }}</p>
-    {% endif %}
-
     {% if brain_views_path %}
       <h3>Channel quality — 3D &amp; optode map</h3>
       <p style="font-size:0.82rem; color:#666; margin:0 0 0.3rem;">Green = good, red = below threshold.</p>
@@ -415,38 +405,6 @@
       <img class="responsive" src="{{ hbo_hbr_after_path }}" alt="HbO–HbR correlation panel (after denoising)" />
       <p class="fig-path">{{ hbo_hbr_after_path }}</p>
     {% endif %}
-
-    {% if stage_metrics_path %}
-      <h3>What each denoising step did</h3>
-      <p style="font-size:0.82rem;color:#666;margin:0 0 0.3rem;">
-        One panel per metric, each on its own scale.
-        {% if stage_banded %}
-          The quality panels are recomputed with the analysis passband applied at every
-          stage, so the columns measure the same thing: a stage before the bandpass and one
-          after it carry different frequency content, and the raw difference between their
-          metrics is mostly the filter. They will not match the per-stage values in the
-          metrics table, which are measured on each stage as stored.
-        {% else %}
-          No passband was requested, so every panel is measured on each stage as stored and
-          differences across a filtering step should be read with that in mind.
-        {% endif %}
-        The greyed panels are not quality claims: they show what left the recording.
-        Direction is marked only across the whole chain, never on a single step, since a
-        step can move a metric for reasons that are not quality.
-      </p>
-      <iframe class="plotly-frame" src="{{ stage_metrics_path }}"
-              title="Metrics by denoising stage"
-              style="height:{{ stage_metrics_h }}px"></iframe>
-      <p class="fig-path">{{ stage_metrics_path }}</p>
-    {% endif %}
-
-    {% if stage_slope_path %}
-      <iframe class="plotly-frame" src="{{ stage_slope_path }}"
-              title="HbO–HbR r per channel across the denoising chain"
-              style="height:{{ stage_slope_h }}px"></iframe>
-      <p class="fig-path">{{ stage_slope_path }}</p>
-    {% endif %}
-
 
     {% if denoise_carpet_path %}
       <h3>Denoising carpet — before / after</h3>
@@ -803,9 +761,10 @@
   {% endif %}
 </div>
 
-{% if channel_summary_path %}
+{% if channel_summary_path or motion_stage_rows or stage_metrics_path %}
 <!-- ===================================================== channel summary -->
 <h2 id="ChannelSummary">Channel Quality Summary</h2>
+{% if channel_summary_path %}
 <p style="font-size:0.82rem;color:#666;margin:0 0 0.6rem;">
   Per-channel pass/fail for Status, SCI, CV, PSP, and SNR.
   Green&nbsp;=&nbsp;pass, red&nbsp;=&nbsp;fail, white&nbsp;=&nbsp;missing data.
@@ -815,6 +774,66 @@
           width="100%" height="{{ channel_summary_h + 20 }}px"
           style="border:none;min-width:500px;display:block;"></iframe>
 </div>
+{% endif %}
+
+{% if motion_stage_rows %}
+<h3>What the motion correction did, and what it cost</h3>
+<p style="font-size:0.82rem;color:#666;margin:0 0 0.3rem;">
+  <code>desc-sci</code> against <code>desc-motcorrected</code>, one row per metric. Both
+  stages are unfiltered optical density, so these are the stored numbers compared as they
+  are. The GVTD and spike rows are what the correction exists to reduce. The greyed SCI and
+  PSP rows are the other half of the question: they sit in the cardiac band, above the
+  frequencies motion correction works on, so they should come back where they started. They
+  carry no direction because a small movement in either is not a verdict; what matters is
+  whether they held.
+</p>
+<div style="overflow-x:auto;">
+  <table class="qm-table stage-table">
+    <thead>
+      <tr>
+        <th>Metric</th>
+        {% for label in motion_stage_labels %}<th>{{ label }}</th>{% endfor %}
+        <th>Change</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for row in motion_stage_rows %}
+      <tr{% if row.muted %} class="muted"{% endif %}>
+        <td>{{ row.title }}</td>
+        {% for cell in row.cells %}<td>{{ cell }}</td>{% endfor %}
+        <td class="{{ 'good' if row.verdict == 'better' else ('bad' if row.verdict == 'worse' else '') }}">
+          {{ row.arrow }}{% if row.verdict %} {{ row.verdict }}{% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+{% if stage_metrics_path %}
+<h3>What each denoising step did</h3>
+<p style="font-size:0.82rem;color:#666;margin:0 0 0.3rem;">
+  One panel per metric, each on its own scale.
+  {% if stage_banded %}
+    The quality panels are recomputed with the analysis passband applied at every stage, so
+    the columns measure the same thing: a stage before the bandpass and one after it carry
+    different frequency content, and the raw difference between their metrics is mostly the
+    filter. They will not match the per-stage values in the metrics table, which are
+    measured on each stage as stored.
+  {% else %}
+    No passband was requested, so every panel is measured on each stage as stored and
+    differences across a filtering step should be read with that in mind.
+  {% endif %}
+  The greyed panels are not quality claims: they show what left the recording. Direction is
+  marked only across the whole chain, never on a single step, since a step can move a metric
+  for reasons that are not quality.
+</p>
+<iframe class="plotly-frame" src="{{ stage_metrics_path }}"
+        title="Metrics by denoising stage"
+        style="height:{{ stage_metrics_h }}px"></iframe>
+<p class="fig-path">{{ stage_metrics_path }}</p>
+{% endif %}
 {% endif %}
 
 <!-- =========================================================== errors -->

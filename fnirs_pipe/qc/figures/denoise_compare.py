@@ -119,6 +119,33 @@ def motion_stage_panels(record: dict, sections: "list[tuple[str, str]]") -> "lis
     return panels
 
 
+def stage_metrics_table(panels: "list[Panel]") -> "list[dict]":
+    """The same panels as rows of a table, for chains short enough to read as numbers.
+
+    One row per panel: the formatted value at each stage, plus a direction arrow across the
+    whole chain. Rows follow the figure's reading rules, so the two cannot disagree: a panel
+    with ``lower_better`` unset gets no arrow, and a non-primary panel is marked ``muted`` so
+    the template can grey it the way the figure greys its title.
+
+    ``Panel("SCI", [0.950, 0.948], None, False)`` becomes
+    ``{"title": "SCI", "cells": ["0.950", "0.948"], "arrow": "", "verdict": "",
+    "muted": True}``. The stage column is named ``cells`` rather than ``values`` because a
+    template resolves ``row.values`` to the dict method, not the key.
+    """
+    rows = []
+    for panel in panels:
+        arrow, verdict = "", ""
+        numeric = all(isinstance(v, (int, float)) for v in panel.values)
+        if panel.lower_better is not None and numeric and len(panel.values) > 1:
+            fell = panel.values[-1] < panel.values[0]
+            arrow = "↓" if fell else "↑"
+            verdict = "better" if fell == panel.lower_better else "worse"
+        rows.append({"title": panel.title,
+                     "cells": [_fmt(v, panel.unit) for v in panel.values],
+                     "arrow": arrow, "verdict": verdict, "muted": not panel.primary})
+    return rows
+
+
 def stage_metrics_figure(
     labels: list[str],
     panels: "list[Panel]",

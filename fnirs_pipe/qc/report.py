@@ -85,7 +85,7 @@ from fnirs_pipe.qc.figures import (
     denoise_stage_panels,
     motion_stage_panels,
     stage_metrics_figure,
-    stage_slope_figure,
+    stage_metrics_table,
     build_channel_figure,
     build_motion_detail_figure,
     channel_quality_heatmap,
@@ -266,7 +266,7 @@ def _section_sci(
     figures_dir: Path,
     record: dict | None = None,
 ) -> dict:
-    """The SCI/PSP panel, per channel and per window, plus the motion-correction strips.
+    """The SCI/PSP panel, per channel and per window, plus the motion-correction table.
 
     ``windowed`` is the record's section of that name; the series are read from it rather
     than recomputed, so the panel and the stored numbers cannot disagree. An absent section
@@ -275,10 +275,11 @@ def _section_sci(
     Every view in the panel is the uncorrected optical density. SCI and PSP measure optode
     coupling, which is a property of how the cap sat rather than of anything the pipeline
     does, so the stage that answers "was this channel worth keeping" is the one before the
-    correction. The strips below the panel are the separate question of whether the
-    correction cost any coupling, drawn from ``raw*`` against ``motion_post*`` in the
-    record; wavelet correction can eat cardiac pulsation along with the artifact, TDDR
-    largely does not, and this is where that shows.
+    correction. The table rows are the separate question of whether the correction cost any
+    coupling, drawn from ``raw*`` against ``motion_post*`` in the record; wavelet correction
+    can eat cardiac pulsation along with the artifact, TDDR largely does not, and this is
+    where that shows. They are returned rather than rendered here, since the template prints
+    them in the channel summary at the foot of the report.
     """
     def _series(key: str) -> "np.ndarray | None":
         value = (windowed or {}).get(key)
@@ -314,18 +315,18 @@ def _section_sci(
     # would read as an effect of the correction
     before_key = "raw_long" if (record.get("per_channel") or {}).get("raw_long") else "raw"
     after_key  = "motion_post_long" if before_key == "raw_long" else "motion_post"
-    motion_stage_path = None
-    motion_stage_h = 0
+    motion_stage_labels: list = []
+    motion_stage_rows: list = []
     with _guard("Motion-correction stage metrics", errors, subject):
         sections = [("desc-sci", before_key), ("desc-motcorrected", after_key)]
-        fig = stage_metrics_figure([label for label, _ in sections],
-                                   motion_stage_panels(record, sections))
-        if fig is not None:
-            motion_stage_path, motion_stage_h = _save_plotly_html(
-                fig, figures_dir / "motion_stage_metrics.html")
+        rows = stage_metrics_table(motion_stage_panels(record, sections))
+        if rows:
+            motion_stage_labels = [label for label, _ in sections]
+            motion_stage_rows = rows
 
     return {"sci_psp_panel_path": sci_psp_panel_path, "sci_psp_panel_h": sci_psp_panel_h,
-            "motion_stage_path": motion_stage_path, "motion_stage_h": motion_stage_h}
+            "motion_stage_labels": motion_stage_labels,
+            "motion_stage_rows": motion_stage_rows}
 
 
 def _section_channel_detail(
@@ -520,8 +521,8 @@ def _section_haemo(
     # signal as it stands there, which cannot be compared across the bandpass. See
     # comparable_stage_metrics.
     record = record or {}
-    stage_metrics_path = stage_slope_path = None
-    stage_metrics_h = stage_slope_h = 0
+    stage_metrics_path = None
+    stage_metrics_h = 0
     stage_banded = False
     stages = [("desc-preproc", raw_haemo)]
     stages += [(label, raw) for label, raw in (psd_stages or [])
@@ -543,13 +544,6 @@ def _section_haemo(
             if fig is not None:
                 stage_metrics_path, stage_metrics_h = _save_plotly_html(
                     fig, figures_dir / "denoise_stage_metrics.html")
-            fig = stage_slope_figure(
-                stage_metrics["hbo_hbr_corr_per_channel"], stage_metrics["labels"],
-                title="HbO–HbR r per channel across the chain",
-                y_title="Pearson r", higher_is_better=False)
-            if fig is not None:
-                stage_slope_path, stage_slope_h = _save_plotly_html(
-                    fig, figures_dir / "denoise_stage_slope.html")
 
     with _guard("PSD figure", errors, subject):
         fig_psd_custom = psd_figure(
@@ -562,7 +556,6 @@ def _section_haemo(
         "hbo_hbr_path":   hbo_hbr_path,
         "hbo_hbr_after_path": hbo_hbr_after_path,
         "stage_metrics_path": stage_metrics_path, "stage_metrics_h": stage_metrics_h,
-        "stage_slope_path": stage_slope_path, "stage_slope_h": stage_slope_h,
         "stage_banded": stage_banded,
         "psd_panel_path": psd_panel_path, "psd_panel_h": psd_panel_h,
         "psd_stage_labels": [label for label, _ in (psd_stages or [])],
