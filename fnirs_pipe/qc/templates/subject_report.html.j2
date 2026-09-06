@@ -163,6 +163,8 @@
     .ql-dot { color: #2980b9; font-size: 0.62em; vertical-align: 0.35em; margin-left: 0.3rem; }
     .qm-note { font-size: 0.78rem; color: #8a949e; margin: 0 0 0.55rem; }
     .qm-sub { font-size: 0.9rem; font-weight: 600; margin: 1rem 0 0.3rem; }
+    .ch-group { font-weight: 600; background: #f2f4f6; }
+    .qm-panel-title { margin-top: 0.9rem; }
     .qm-split td:first-child { white-space: nowrap; }
     .qm-split td:not(:first-child), .qm-split th:not(:first-child) { text-align: right; }
     .qm-list .qv { font-weight: 600; white-space: nowrap; }
@@ -799,24 +801,29 @@
         <span class="qv">{{ qm_val(sqm.get('lowfreq_drift_amplitude_hbo'), '.3e') }}</span></li>
   </ul>
 
-  {% if channel_rows %}
+</div>
+
+{% if channel_rows %}
+<!-- ------------------------------------------ per-channel, its own panel -->
+<h3 class="qm-sub qm-panel-title">Per-channel metrics</h3>
+<div class="qm-box">
   {% macro ch_row(row) %}
-          <tr>
-            <td>{{ row.name }}</td>
-            <td class="{{ 'bad' if row.is_bad else 'good' }}">{{ 'BAD' if row.is_bad else 'OK' }}</td>
-            <td class="{{ 'bad' if row.sci is not none and row.sci < 0.75 else '' }}">
-              {% if row.sci is not none %}{{ "%.3f"|format(row.sci) }}{% else %}—{% endif %}
-            </td>
-            <td>{% if row.psp is not none %}{{ "%.3f"|format(row.psp) }}{% else %}—{% endif %}</td>
-            <td>{% if row.snr is not none %}{{ "%.1f"|format(row.snr) }}{% else %}—{% endif %}</td>
-            <td>{% if row.cv is not none %}{{ "%.3f"|format(row.cv) }}{% else %}—{% endif %}</td>
-            <td class="{{ 'neg' if row.corr is not none and row.corr < 0 else ('pos' if row.corr is not none else '') }}">
-              {% if row.corr is not none %}{{ "%.3f"|format(row.corr) }}{% else %}—{% endif %}
-            </td>
-          </tr>
+      <tr>
+        <td>{{ row.name }}</td>
+        <td class="{{ 'bad' if row.is_bad else 'good' }}">{{ 'BAD' if row.is_bad else 'OK' }}</td>
+        <td class="{{ 'bad' if row.sci is not none and row.sci < 0.75 else '' }}">
+          {% if row.sci is not none %}{{ "%.3f"|format(row.sci) }}{% else %}&mdash;{% endif %}
+        </td>
+        <td>{% if row.psp is not none %}{{ "%.3f"|format(row.psp) }}{% else %}&mdash;{% endif %}</td>
+        <td>{% if row.snr is not none %}{{ "%.1f"|format(row.snr) }}{% else %}&mdash;{% endif %}</td>
+        <td>{% if row.cv is not none %}{{ "%.3f"|format(row.cv) }}{% else %}&mdash;{% endif %}</td>
+        <td class="{{ 'neg' if row.corr is not none and row.corr < 0 else ('pos' if row.corr is not none else '') }}">
+          {% if row.corr is not none %}{{ "%.3f"|format(row.corr) }}{% else %}&mdash;{% endif %}
+        </td>
+      </tr>
   {% endmacro %}
-  {#- the montage split, long first. An unsplit record leaves `separation` empty and
-      falls through to one block, which is what a montage of one kind looks like. -#}
+  {#- the montage split, long first. An unsplit record leaves `separation` empty and every
+      row falls into one block, which is what a montage of one kind looks like. -#}
   {% set long_rows  = channel_rows | selectattr('separation', 'equalto', 'long')  | list %}
   {% set short_rows = channel_rows | selectattr('separation', 'equalto', 'short') | list %}
   {% set odd_rows   = channel_rows | selectattr('separation', 'equalto', 'unclassified') | list %}
@@ -824,42 +831,36 @@
                        ('Neither range (10-15 mm, or over 45 mm)', odd_rows)] %}
   {% set n_blocks   = (long_rows | length > 0) | int + (short_rows | length > 0) | int
                       + (odd_rows | length > 0) | int %}
-  <details>
-    <summary style="font-weight:500; font-size:0.88rem; cursor:pointer;">Per-channel metrics</summary>
-    {% if n_blocks > 1 %}
-    <p style="font-size:0.82rem;color:#666;margin:0.5rem 0 0;">
-      Grouped by source-detector separation. Every block is pruned against the same SCI
-      threshold, so Status is a verdict for short channels too, and a short channel marked
-      BAD is one that should not be used as a regressor. Channels in neither range are
-      measured by no section and show dashes. The scalar metrics above this table are long
-      channels only.
-    </p>
-    {% endif %}
-    <div style="overflow-x:auto; margin-top:0.5rem;">
-      <table class="qm-table">
-        <thead>
-          <tr>
-            <th>Channel</th><th>Status</th><th>SCI</th><th>PSP</th>
-            <th>SNR (intensity)</th><th>CV</th><th>HbO–HbR corr</th>
-          </tr>
-        </thead>
-        {% if n_blocks > 1 %}
-        {% for title, rows in ch_blocks if rows %}
-        <tbody>
-          <tr><td colspan="7" style="font-weight:600;background:#f2f4f6;">{{ title }} ({{ rows | length }})</td></tr>
-          {% for row in rows %}{{ ch_row(row) }}{% endfor %}
-        </tbody>
-        {% endfor %}
-        {% else %}
-        <tbody>
-          {% for row in channel_rows %}{{ ch_row(row) }}{% endfor %}
-        </tbody>
-        {% endif %}
-      </table>
-    </div>
-  </details>
+  {% if n_blocks > 1 %}
+  <p class="qm-note">Grouped by source-detector separation. Every block is pruned against the same
+     SCI threshold, so Status is a verdict for short channels too, and a short channel marked BAD is
+     one that should not be used as a regressor. Channels in neither range are measured by no
+     section and show dashes.</p>
   {% endif %}
+  <div style="overflow-x:auto;">
+    <table class="qm-table">
+      <thead>
+        <tr>
+          <th>Channel</th><th>Status</th><th>SCI</th><th>PSP</th>
+          <th>SNR (intensity)</th><th>CV</th><th>HbO&ndash;HbR corr</th>
+        </tr>
+      </thead>
+      {% if n_blocks > 1 %}
+      {% for title, rows in ch_blocks if rows %}
+      <tbody>
+        <tr><td colspan="7" class="ch-group">{{ title }} ({{ rows | length }})</td></tr>
+        {% for row in rows %}{{ ch_row(row) }}{% endfor %}
+      </tbody>
+      {% endfor %}
+      {% else %}
+      <tbody>
+        {% for row in channel_rows %}{{ ch_row(row) }}{% endfor %}
+      </tbody>
+      {% endif %}
+    </table>
+  </div>
 </div>
+{% endif %}
 
 {% if channel_summary_path or motion_stage_rows or stage_metrics_path %}
 <!-- ===================================================== channel summary -->

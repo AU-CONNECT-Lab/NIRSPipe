@@ -117,6 +117,7 @@ def _process_run(
     from fnirs_pipe.qc.quantitative_metrics import (
         attach_windowed_series, compute_raw_sqm, compute_sci_scores,
     )
+    from fnirs_pipe.qc.sqm_record import raw_sections, sqm_record_dict
 
     label   = run["label"]
     session = run.get("session")
@@ -136,8 +137,15 @@ def _process_run(
         logger.warning("SQM failed: %s", exc)
         sqm = {}
 
-    # Persist windowed series so group_raw can build time × subject heatmaps.
-    series = attach_windowed_series(sqm, raw_od, cardiac_l_freq, cardiac_h_freq, window_s)
+    # `sqm` stays the flat all-channel view the figures below read. The record written to
+    # disk is the sectioned one, built through the same function the pipeline uses.
+    raw_secs, raw_pc = raw_sections(
+        raw, sci_scores, list(bad_channels), cardiac_l_freq, cardiac_h_freq)
+
+    # Persist windowed series so group_raw can build time × subject heatmaps. Their own
+    # section, since `_split_scalars` would file every one of these lists under per_channel.
+    windowed: dict = {}
+    series = attach_windowed_series(windowed, raw_od, cardiac_l_freq, cardiac_h_freq, window_s)
     sci_matrix, sci_win_times = series["sci_matrix"], series["sci_times"]
     psp_matrix, psp_win_times = series["psp_matrix"], series["psp_times"]
 
@@ -309,10 +317,15 @@ def _process_run(
             logger.warning("trial_quality_heatmap failed: %s", exc)
 
     # ── file: SQM JSON ─────────────────────────────────────────────────────────
-    # desc-sqmraw, not desc-sqm: the pipeline writes a sectioned record at the latter path
-    # for the same run, and one silently overwriting the other loses whichever ran first
+    # desc-sqmraw, not desc-sqm: the pipeline writes a record at the latter path for the
+    # same run, and one silently overwriting the other loses whichever ran first. Same
+    # shape as that one, so the group table reads both through one path.
     sqm_path = sqm_dir / f"{label}_desc-sqmraw_nirs.json"
-    sqm_path.write_text(json.dumps(sqm, indent=2, default=str), encoding="utf-8")
+    record = sqm_record_dict(
+        {**raw_secs, "windowed": windowed, "per_channel": raw_pc},
+        [str(run["snirf_path"])],
+    )
+    sqm_path.write_text(json.dumps(record, indent=2, default=str), encoding="utf-8")
     logger.info("SQM JSON → %s", sqm_path)
 
     return {

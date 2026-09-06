@@ -83,11 +83,12 @@ def _scalars(sqm: dict) -> dict:
     return flat
 
 
-# The two records a run can leave behind, best first. `sqm` is the pipeline's sectioned
-# record; `sqmraw` is what `fnirs-qc prep-raw` writes, measuring the original recording
-# only. A run that saw both commands has both files.
+# The two records a run can leave behind, best first. `sqm` is what the pipeline writes,
+# `sqmraw` what `fnirs-qc prep-raw` writes, measuring the original recording only. A run
+# that saw both commands has both files. Both are sectioned; the shape is what is read,
+# never the name, so a record written before the two writers shared their raw sections
+# still lands in the same columns.
 _SQM_DESCS = ("sqm", "sqmraw")
-_PREP_RAW_DESC = "sqmraw"
 
 
 def _bids_name_from_sqm_path(path: Path) -> str:
@@ -97,19 +98,18 @@ def _bids_name_from_sqm_path(path: Path) -> str:
     return path.stem
 
 
-def _sqm_row(bids_name: str, sqm: dict, desc: str) -> dict:
+def _sqm_row(bids_name: str, sqm: dict) -> dict:
     """One group-table row, in the sectioned record's column vocabulary.
 
-    prep-raw measures the original recording over every channel, which is exactly the
-    sectioned record's ``raw`` view, so its scalars take the same ``raw_`` prefix and a
-    cohort holding both kinds compares in one set of columns. Windowed series keep the
-    names prep-raw writes: the time x subject heatmaps look them up by those.
+    A legacy record is flat: every scalar sits at the top level and describes every
+    channel. That is exactly the sectioned record's ``raw`` view, so it takes the same
+    ``raw_`` prefix and a cohort holding both shapes compares in one set of columns.
     """
-    if desc != _PREP_RAW_DESC:
+    if any(isinstance(sqm.get(section), dict) for section in SECTIONS):
         row = {"bids_name": bids_name, **sqm}
-        # the sectioned record keeps the series in a `windowed` section, prep-raw writes
-        # them flat, and the heatmaps below look them up by the flat names. Lifting here
-        # means one shape reaches the panels; the section stays as written on disk
+        # the record keeps the series in a `windowed` section and the heatmaps below look
+        # them up by their bare names. Lifting here means one shape reaches the panels;
+        # the section stays as written on disk
         windowed = row.pop("windowed", None)
         if isinstance(windowed, dict):
             row.update(windowed)
@@ -132,19 +132,19 @@ def _collect_sqm(
       - df:        scalar SQM columns (bids_name + numeric scalars), for TSV/heatmap/boxplot
       - full_rows: each row keeps the full SQM dict (incl. windowed list fields)
     """
-    by_run: dict[str, tuple[Path, str]] = {}
+    by_run: dict[str, Path] = {}
     for desc in _SQM_DESCS:
         for sqm_path in sorted(output_dir.glob(f"{entity_glob}/**/nirs/*_desc-{desc}_nirs.json")):
-            by_run.setdefault(_bids_name_from_sqm_path(sqm_path), (sqm_path, desc))
+            by_run.setdefault(_bids_name_from_sqm_path(sqm_path), sqm_path)
 
     full_rows: list[dict] = []
-    for bids_name, (sqm_path, desc) in sorted(by_run.items()):
+    for bids_name, sqm_path in sorted(by_run.items()):
         try:
             sqm = json.loads(sqm_path.read_text(encoding="utf-8"))
         except Exception as exc:
             logger.warning("skip %s: %s", sqm_path, exc)
             continue
-        full_rows.append(_sqm_row(bids_name, sqm, desc))
+        full_rows.append(_sqm_row(bids_name, sqm))
 
     return rows_to_dataframe(full_rows), full_rows
 

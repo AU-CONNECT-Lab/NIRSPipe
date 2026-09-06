@@ -26,14 +26,19 @@ from fnirs_pipe.utils.logging import get_logger
 logger = get_logger("qc.subject_index")
 _TEMPLATE_DIR = Path(__file__).parent / "templates"
 
-# Column -> (heading, "section_metric" in the SQM record, format spec). The five that say
-# whether a run is usable at a glance; everything else stays in the run's own report.
+# Column -> (heading, "section_metric" keys in preference order, format spec). The five that
+# say whether a run is usable at a glance; everything else stays in the run's own report.
+#
+# Long channels first, all channels as the fallback, which is the same preference the run's
+# own report and the hyperscanning tables use. Without it this table read `raw_*` while the
+# report beside it read `raw_long_*`, so one label named two different numbers. The last two
+# have no long-channel form: those sections are not split by separation.
 _COLUMNS = (
-    ("Channels kept", "raw_channel_retention_rate", "{:.0%}"),
-    ("SCI mean",      "raw_sci_mean",               "{:.2f}"),
-    ("GVTD p95",      "raw_gvtd_p95",               "{:.2e}"),
-    ("Motion corr.",  "motion_motion_corrected_pct", "{:.1f}%"),
-    ("HbO-HbR corr",  "preproc_hbo_hbr_corr_mean",  "{:+.2f}"),
+    ("Channels kept", ("raw_long_channel_retention_rate", "raw_channel_retention_rate"), "{:.0%}"),
+    ("SCI mean",      ("raw_long_sci_mean", "raw_sci_mean"),                             "{:.2f}"),
+    ("GVTD p95",      ("raw_long_gvtd_p95", "raw_gvtd_p95"),                             "{:.2e}"),
+    ("Motion corr.",  ("motion_motion_corrected_pct",),                                  "{:.1f}%"),
+    ("HbO-HbR corr",  ("preproc_hbo_hbr_corr_mean",),                                    "{:+.2f}"),
 )
 
 
@@ -161,6 +166,14 @@ def collect_bad_channels(sub_dir: Path, labels: list[str]) -> dict:
     }
 
 
+def _metric_cell(flat: dict, keys: tuple, fmt: str) -> dict:
+    """One table cell, taking the first key the record actually carries."""
+    for key in keys:
+        if flat.get(key) is not None:
+            return {"value": fmt.format(flat[key]), "raw": flat[key], "flagged": False}
+    return {"value": "n/a", "raw": None, "flagged": False}
+
+
 def collect_runs(sub_dir: Path) -> list[dict]:
     """One row per run under sub_dir, newest BIDS entity order, for the index table."""
     nirs_dir = sub_dir / "nirs"
@@ -185,9 +198,7 @@ def collect_runs(sub_dir: Path) -> list[dict]:
             "sfreq": shape.get("sfreq"),
             "links": _links(sub_dir, label),
             "metrics": [
-                {"value": fmt.format(flat[key]) if key in flat else "n/a",
-                 "raw": flat.get(key), "flagged": False}
-                for _, key, fmt in _COLUMNS
+                _metric_cell(flat, keys, fmt) for _, keys, fmt in _COLUMNS
             ],
         })
 

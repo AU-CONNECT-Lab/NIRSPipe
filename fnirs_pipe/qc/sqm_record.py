@@ -203,6 +203,74 @@ def _short_section(
     return _split_scalars(record)
 
 
+def _section_writer(sections: dict[str, Any], per_channel: dict[str, Any]):
+    """A ``section(name, compute)`` that files one family and survives its own failure.
+
+    A section that raises costs that section alone, never the rest of the record, which is
+    what lets a partial recording still produce something readable.
+    """
+    def section(name: str, compute) -> None:
+        try:
+            scalars, nested = _split_scalars(compute())
+        except Exception:
+            logger.warning("%s: section failed", name, exc_info=True)
+            return
+        sections[name] = scalars
+        per_channel[name] = nested
+    return section
+
+
+def raw_sections(
+    raw_intensity: mne.io.Raw,
+    sci_scores: dict[str, float],
+    bad_channels: list[str],
+    cardiac_l_freq: float,
+    cardiac_h_freq: float,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """The three views of the original recording, as ``(sections, per_channel)``.
+
+    One file measured over every channel, over the long ones, and over the short ones.
+    Every writer of a run record goes through here, so a tree holds one record shape
+    whichever command produced it and the group table needs no per-writer special case.
+
+    ``raw_long`` is skipped when the long set is the whole montage, since it would repeat
+    ``raw``; ``raw_short`` is skipped when there is no short channel. Both missing is
+    therefore ambiguous on its own, which is what ``n_long_channels`` and
+    ``n_short_channels`` on ``raw`` are for: two zeros means no registered optode
+    positions, and any other pair means a montage of one kind.
+    """
+    from fnirs_pipe.qc.quantitative_metrics import compute_raw_sqm, long_short_channels
+
+    sections: dict[str, Any] = {}
+    per_channel: dict[str, Any] = {}
+    section = _section_writer(sections, per_channel)
+
+    section("raw", lambda: compute_raw_sqm(
+        raw_intensity, sci_scores, bad_channels, cardiac_l_freq, cardiac_h_freq))
+
+    long_names, short_names = long_short_channels(raw_intensity)
+    if "raw" in sections:
+        sections["raw"]["n_long_channels"] = len(long_names)
+        sections["raw"]["n_short_channels"] = len(short_names)
+    if long_names and len(long_names) < len(raw_intensity.ch_names):
+        def long_section():
+            raw_long = raw_intensity.copy().pick(long_names)
+            long_sci = {k: v for k, v in sci_scores.items() if k in set(long_names)}
+            long_bad = [c for c in bad_channels if c in set(long_names)]
+            return compute_raw_sqm(
+                raw_long, long_sci, long_bad, cardiac_l_freq, cardiac_h_freq)
+        section("raw_long", long_section)
+    if short_names:
+        # already returns the (scalars, nested) split, so it bypasses `section`
+        try:
+            sections["raw_short"], per_channel["raw_short"] = _short_section(
+                raw_intensity, short_names, sci_scores, bad_channels,
+                cardiac_l_freq, cardiac_h_freq)
+        except Exception:
+            logger.warning("raw_short: section failed", exc_info=True)
+    return sections, per_channel
+
+
 def _motion_post_section(
     raw_od: mne.io.Raw,
     cardiac_l_freq: float,
@@ -262,15 +330,7 @@ def compute_run_sections(
     sections: dict[str, Any] = {}
     per_channel: dict[str, Any] = {}
 
-    def section(name: str, compute) -> None:
-        """Run one section. A failure costs that section alone, never the whole record."""
-        try:
-            scalars, nested = _split_scalars(compute())
-        except Exception:
-            logger.warning("%s: section failed", name, exc_info=True)
-            return
-        sections[name] = scalars
-        per_channel[name] = nested
+    section = _section_writer(sections, per_channel)
 
     try:
         sci_scores = _sci_scores(stages)
@@ -298,33 +358,10 @@ def compute_run_sections(
         bad_channels = list(_sidecar(stages["sci"]).get("bad_channels") or []) if "sci" in stages else []
         raw_intensity.info["bads"] = [c for c in bad_channels if c in raw_intensity.ch_names]
 
-        section("raw", lambda: compute_raw_sqm(
-            raw_intensity, sci_scores, bad_channels, cardiac_l_freq, cardiac_h_freq))
-
-        long_names, short_names = long_short_channels(raw_intensity)
-        # The split itself, recorded rather than only acted on. Without it a record with
-        # neither `raw_long` nor `raw_short` is ambiguous: it is what a montage of long
-        # channels only looks like, and also what a montage with no registered optode
-        # positions looks like. Two counts of zero is the second case.
-        if "raw" in sections:
-            sections["raw"]["n_long_channels"] = len(long_names)
-            sections["raw"]["n_short_channels"] = len(short_names)
-        if long_names and len(long_names) < len(raw_intensity.ch_names):
-            def raw_long_section():
-                raw_long = raw_intensity.copy().pick(long_names)
-                long_sci = {k: v for k, v in sci_scores.items() if k in set(long_names)}
-                long_bad = [c for c in bad_channels if c in set(long_names)]
-                return compute_raw_sqm(
-                    raw_long, long_sci, long_bad, cardiac_l_freq, cardiac_h_freq)
-            section("raw_long", raw_long_section)
-        if short_names:
-            # already returns the (scalars, nested) split, so it bypasses `section`
-            try:
-                sections["raw_short"], per_channel["raw_short"] = _short_section(
-                    raw_intensity, short_names, sci_scores, bad_channels,
-                    cardiac_l_freq, cardiac_h_freq)
-            except Exception:
-                logger.warning("raw_short: section failed", exc_info=True)
+        raw_secs, raw_pc = raw_sections(
+            raw_intensity, sci_scores, bad_channels, cardiac_l_freq, cardiac_h_freq)
+        sections.update(raw_secs)
+        per_channel.update(raw_pc)
 
     # the spans the report draws on the carpet, on the channel set it draws them for, so the
     # figure reads them back instead of running the same detection again. Pre-correction by
@@ -431,6 +468,30 @@ def compute_run_sections(
     return sections
 
 
+def sqm_record_dict(sections: dict[str, Any], sources: list[str]) -> dict[str, Any]:
+    """The on-disk record: provenance keys wrapped around the sections themselves.
+
+    Shared by both writers so a record is the same shape whichever command made it. The
+    provenance table lists a record's metric names prefixed the way the group table names
+    its columns, so the two read as one vocabulary.
+    """
+    from fnirs_pipe import __version__
+
+    metrics = [f"{s}_{k}" for s in SECTIONS if isinstance(sections.get(s), dict)
+               for k in sections[s]]
+    return {
+        "pipeline_version": __version__,
+        "step": "sqm",
+        "Sources": sources,
+        "data": {
+            "sections": [s for s in SECTIONS if s in sections],
+            "metrics": metrics,
+            "n_metrics": len(metrics),
+        },
+        **sections,
+    }
+
+
 def write_run_sqm(
     nirs_dir: Path,
     label: str,
@@ -444,28 +505,12 @@ def write_run_sqm(
     ``x.json`` would resolve to ``x.json`` itself. A top-level ``step`` is all the
     provenance graph needs to pick the file up.
     """
-    from fnirs_pipe import __version__
-
     sources = [p.as_posix() for p in stages.values()]
     bids_input = _bids_input(stages, bids_root)
     if bids_input is not None:
         sources.insert(0, bids_input.as_posix())
 
-    # the provenance table lists a checkpoint's metric names; prefixed the way the group
-    # table names its columns, so the two read as one vocabulary
-    metrics = [f"{s}_{k}" for s in SECTIONS if isinstance(sections.get(s), dict)
-               for k in sections[s]]
-    record = {
-        "pipeline_version": __version__,
-        "step": "sqm",
-        "Sources": sources,
-        "data": {
-            "sections": [s for s in SECTIONS if s in sections],
-            "metrics": metrics,
-            "n_metrics": len(metrics),
-        },
-        **sections,
-    }
+    record = sqm_record_dict(sections, sources)
     out_path = record_path(nirs_dir, label)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(record, indent=2, default=str), encoding="utf-8")
