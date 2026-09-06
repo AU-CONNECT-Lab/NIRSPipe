@@ -1490,3 +1490,108 @@ def compute_prep_haemo_sqm(
     return record
 
 
+
+
+def comparable_stage_metrics(
+    stages: "list[tuple[str, mne.io.Raw]]",
+    l_freq: "float | None",
+    h_freq: "float | None",
+    cardiac_l_freq: float,
+    cardiac_h_freq: float,
+    resp_l_freq: float,
+    resp_h_freq: float,
+) -> dict[str, Any]:
+    """Stage-by-stage metrics that may be compared with each other.
+
+    Not read from the record: a record stores each stage measured on the signal as it is at
+    that stage, which is the right thing to store and the wrong thing to subtract. A stage
+    before the bandpass and one after it are dominated by different frequency content, so
+    the difference between their quality metrics is mostly the filter. Every quality metric
+    here is therefore recomputed with the analysis passband applied at every stage, which
+    is the only way the columns answer the same question::
+
+        stages = [("desc-preproc", raw_a), ("desc-errts", raw_b)], l_freq=0.02, h_freq=0.2
+        -> quality["gcor_hbo"] == [<a in 0.02-0.2 Hz>, <b in 0.02-0.2 Hz>]
+
+    ``removed`` is the opposite case and stays on the signal as stored: those rows exist to
+    show what left the recording, so band-limiting them would erase the answer. ``banded``
+    is False when no passband was given and the quality rows fall back to as-stored, which
+    the caller should say out loud.
+
+    Returns
+    -------
+    dict
+        ``labels``, ``banded``, ``quality`` and ``removed`` ({key: value per stage}),
+        ``variance_remaining``, the median share of the first stage's per-channel variance
+        still present at each stage, and ``hbo_hbr_corr_per_channel``, one dict per stage.
+    """
+    labels = [label for label, _ in stages]
+    raws = [raw for _, raw in stages]
+    banded = l_freq is not None or h_freq is not None
+    limited = [raw.copy().filter(l_freq, h_freq, verbose=False) if banded else raw
+               for raw in raws]
+
+    haemo = [haemo_quality_metrics(r) for r in limited]
+    quality: dict[str, list] = {}
+    for key, values in (("hbo_hbr_corr_mean", [h.get("hbo_hbr_corr_mean") for h in haemo]),
+                        ("gcor_hbo", [gcor_metrics(r).get("gcor_hbo") for r in limited]),
+                        ("gcor_hbr", [gcor_metrics(r).get("gcor_hbr") for r in limited]),
+                        ("cnr_hbo_mean", [_cnr_metrics(r).get("cnr_hbo_mean") for r in limited]),
+                        ("cnr_hbr_mean", [_cnr_metrics(r).get("cnr_hbr_mean") for r in limited])):
+        if any(isinstance(v, (int, float)) for v in values):
+            quality[key] = values
+
+    # respiration is the one named band that can overlap the passband, and only the overlap
+    # survives the filter. Measured over the whole configured band, the drop across the
+    # bandpass would be the filter discarding the part above the cutoff; over the overlap it
+    # is what the recording lost, so it belongs with the quality rows.
+    resp_lo = max(resp_l_freq, l_freq) if l_freq else resp_l_freq
+    resp_hi = min(resp_h_freq, h_freq) if h_freq else resp_h_freq
+    if resp_lo < resp_hi:
+        in_band = [_band_power(r, "hbo", resp_lo, resp_hi) for r in raws]
+        if any(isinstance(v, (int, float)) for v in in_band):
+            quality["resp_band_power_hbo"] = in_band
+
+    # these two sit entirely outside the passband, so they fall by the filter's stopband
+    # attenuation whatever the data did: they say whether the filter ran, not how good the
+    # recording is
+    removed: dict[str, list] = {}
+    spectral = [_spectral_metrics(r, cardiac_l_freq, cardiac_h_freq,
+                                  resp_l_freq, resp_h_freq) for r in raws]
+    cardiac = [s.get("cardiac_band_power_hbo") for s in spectral]
+    if any(isinstance(v, (int, float)) for v in cardiac):
+        removed["cardiac_band_power_hbo"] = cardiac
+    if l_freq:
+        drift = [_band_power(r, "hbo", 0.0, l_freq) for r in raws]
+        if any(isinstance(v, (int, float)) for v in drift):
+            removed["drift_band_power_hbo"] = drift
+
+    return {"labels": labels, "banded": banded, "quality": quality, "removed": removed,
+            "variance_remaining": _variance_remaining(raws),
+            "hbo_hbr_corr_per_channel": [h.get("hbo_hbr_corr_per_channel") or {}
+                                         for h in haemo]}
+
+
+def _band_power(raw_haemo: mne.io.Raw, chroma: str, fmin: float, fmax: float) -> "float | None":
+    """Mean PSD density in [fmin, fmax], on the same footing as ``_spectral_metrics``."""
+    if chroma not in raw_haemo.get_channel_types():
+        return None
+    psd = raw_haemo.compute_psd(verbose=False)
+    data = psd.get_data(picks=chroma)
+    mask = (psd.freqs >= fmin) & (psd.freqs <= fmax)
+    return float(data[:, mask].mean()) if (data.size and mask.any()) else None
+
+
+def _variance_remaining(raws: "list[mne.io.Raw]") -> "list[float | None]":
+    """Median share of the first stage's per-channel variance still present at each stage."""
+    if not raws:
+        return []
+    shared = [ch for ch in raws[0].ch_names if all(ch in r.ch_names for r in raws)]
+    if not shared:
+        return [None] * len(raws)
+    base = raws[0].get_data(picks=shared).var(axis=1)
+    keep = base > 0
+    if not keep.any():
+        return [None] * len(raws)
+    return [float(np.median(r.get_data(picks=shared).var(axis=1)[keep] / base[keep]))
+            for r in raws]

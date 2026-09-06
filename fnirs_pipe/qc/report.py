@@ -24,8 +24,8 @@ Report sections
     GVTD + carpet plot; bad-segment zoom; per-channel before/after OD traces.
 
   d. HbO / HbR (Beer-Lambert)
-    HbO–HbR correlation panel before and after denoising, plus per-channel strips
-    for HbO–HbR r and CNR across the same pair of stages.
+    HbO–HbR correlation panel before and after denoising, one small panel per metric
+    across the haemoglobin stages, and HbO–HbR r per channel over the same stages.
 
   e. PSD by stage
     Full-dataset PSD panel + per-channel PSD detail (dropdown selector), one line
@@ -82,7 +82,10 @@ from fnirs_pipe.qc.figures import (
     build_trial_image_figure,
     build_roi_trial_image_figure,
     build_sci_psp_figure,
-    stage_dumbbell_figure,
+    denoise_stage_panels,
+    motion_stage_panels,
+    stage_metrics_figure,
+    stage_slope_figure,
     build_channel_figure,
     build_motion_detail_figure,
     channel_quality_heatmap,
@@ -311,30 +314,18 @@ def _section_sci(
     # would read as an effect of the correction
     before_key = "raw_long" if (record.get("per_channel") or {}).get("raw_long") else "raw"
     after_key  = "motion_post_long" if before_key == "raw_long" else "motion_post"
-    motion_strips = []
-    for metric, label, thresh in (
-        ("sci_per_channel", "SCI", getattr(config, "sci_threshold", 0.75)),
-        ("psp_per_channel", "PSP", None),
-    ):
-        with _guard(f"{label} motion-correction strip", errors, subject):
-            before, after = _record_pair(record, before_key, after_key, metric)
-            fig = stage_dumbbell_figure(
-                before, after,
-                title=f"{label} across motion correction",
-                x_title=label,
-                before_label="desc-sci (before)",
-                after_label="desc-motcorrected (after)",
-                higher_is_better=True,
-                reference=thresh,
-                reference_label=f"threshold {thresh}" if thresh is not None else "",
-            )
-            if fig is not None:
-                path, h = _save_plotly_html(
-                    fig, figures_dir / f"motion_strip_{label.lower()}.html")
-                motion_strips.append({"label": label, "path": path, "h": h})
+    motion_stage_path = None
+    motion_stage_h = 0
+    with _guard("Motion-correction stage metrics", errors, subject):
+        sections = [("desc-sci", before_key), ("desc-motcorrected", after_key)]
+        fig = stage_metrics_figure([label for label, _ in sections],
+                                   motion_stage_panels(record, sections))
+        if fig is not None:
+            motion_stage_path, motion_stage_h = _save_plotly_html(
+                fig, figures_dir / "motion_stage_metrics.html")
 
     return {"sci_psp_panel_path": sci_psp_panel_path, "sci_psp_panel_h": sci_psp_panel_h,
-            "motion_strips": motion_strips}
+            "motion_stage_path": motion_stage_path, "motion_stage_h": motion_stage_h}
 
 
 def _section_channel_detail(
@@ -525,35 +516,40 @@ def _section_haemo(
             _save_b64_png(b64, figures_dir / "hbo_hbr_corr_after.png")
             hbo_hbr_after_path = _fig_href(figures_dir, "hbo_hbr_corr_after.png")
 
-    # A real response drives HbO up and HbR down, so denoising that removes shared systemic
-    # signal should push r towards -1. CNR is the other half of the same question: whether
-    # it took the response with it. HbR CNR runs negative, so its "better" direction flips.
+    # Recomputed rather than read from the record: the record measures each stage on the
+    # signal as it stands there, which cannot be compared across the bandpass. See
+    # comparable_stage_metrics.
     record = record or {}
-    denoise_strips = []
+    stage_metrics_path = stage_slope_path = None
+    stage_metrics_h = stage_slope_h = 0
+    stage_banded = False
+    stages = [("desc-preproc", raw_haemo)]
+    stages += [(label, raw) for label, raw in (psd_stages or [])
+               if label == "desc-filtered" and "hbo" in raw.get_channel_types()]
+    if raw_errts is not None:
+        stages.append(("desc-errts", raw_errts))
 
-    def _strip(before: dict, after: dict, fname: str, label: str, **spec) -> None:
-        fig = stage_dumbbell_figure(before, after, before_label="desc-preproc",
-                                    after_label="desc-errts", reference=0.0, **spec)
-        if fig is not None:
-            path, h = _save_plotly_html(fig, figures_dir / fname)
-            denoise_strips.append({"label": label, "path": path, "h": h})
+    if len(stages) > 1:
+        from fnirs_pipe.qc.quantitative_metrics import comparable_stage_metrics
 
-    with _guard("Denoising strip: HbO-HbR r", errors, subject):
-        before, after = _record_pair(record, "preproc", "errts", "hbo_hbr_corr_per_channel")
-        _strip(before, after, "denoise_strip_corr.html", "HbO–HbR r",
-               title="HbO–HbR correlation across denoising", x_title="Pearson r",
-               higher_is_better=False, reference_label="r = 0")
-
-    with _guard("Denoising strip: CNR", errors, subject):
-        before, after = _record_pair(record, "preproc", "errts", "cnr_per_channel")
-        # one strip per chromophore: HbO rises and HbR falls with a response, so a single
-        # sorted list would call one chromophore's improvement a degradation
-        for chroma, higher in (("hbo", True), ("hbr", False)):
-            _strip({k: v for k, v in before.items() if k.endswith(f" {chroma}")},
-                   {k: v for k, v in after.items() if k.endswith(f" {chroma}")},
-                   f"denoise_strip_cnr_{chroma}.html", f"CNR {chroma.upper()}",
-                   title=f"CNR across denoising — {chroma.upper()}",
-                   x_title="Contrast-to-noise ratio", higher_is_better=higher)
+        with _guard("Denoising stage metrics", errors, subject):
+            stage_metrics = comparable_stage_metrics(
+                stages, l_freq, h_freq,
+                config.cardiac_l_freq, config.cardiac_h_freq,
+                config.resp_l_freq, config.resp_h_freq)
+            stage_banded = bool(stage_metrics["banded"])
+            fig = stage_metrics_figure(stage_metrics["labels"],
+                                       denoise_stage_panels(stage_metrics))
+            if fig is not None:
+                stage_metrics_path, stage_metrics_h = _save_plotly_html(
+                    fig, figures_dir / "denoise_stage_metrics.html")
+            fig = stage_slope_figure(
+                stage_metrics["hbo_hbr_corr_per_channel"], stage_metrics["labels"],
+                title="HbO–HbR r per channel across the chain",
+                y_title="Pearson r", higher_is_better=False)
+            if fig is not None:
+                stage_slope_path, stage_slope_h = _save_plotly_html(
+                    fig, figures_dir / "denoise_stage_slope.html")
 
     with _guard("PSD figure", errors, subject):
         fig_psd_custom = psd_figure(
@@ -565,7 +561,9 @@ def _section_haemo(
     return {
         "hbo_hbr_path":   hbo_hbr_path,
         "hbo_hbr_after_path": hbo_hbr_after_path,
-        "denoise_strips": denoise_strips,
+        "stage_metrics_path": stage_metrics_path, "stage_metrics_h": stage_metrics_h,
+        "stage_slope_path": stage_slope_path, "stage_slope_h": stage_slope_h,
+        "stage_banded": stage_banded,
         "psd_panel_path": psd_panel_path, "psd_panel_h": psd_panel_h,
         "psd_stage_labels": [label for label, _ in (psd_stages or [])],
     }
