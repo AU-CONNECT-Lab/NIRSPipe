@@ -575,10 +575,13 @@ def load_group_sqm(
                 record = json.loads(record_path.read_text(encoding="utf-8"))
             except (OSError, json.JSONDecodeError):
                 continue
-            sqm.update(record.get("raw_long") or record.get("raw") or {})
+            # Whole-file section underneath its long-channel split in both families, rather
+            # than replaced by it: the split sections carry only what a channel set can be
+            # measured on, so the run-level numbers (the montage counts, the recording's
+            # duration) survive underneath while the long values win where both exist.
+            sqm.update(record.get("raw") or {})
+            sqm.update(record.get("raw_long") or {})
             sqm.update(record.get("motion") or {})
-            # preproc underneath preproc_long: the split section leaves out the metrics
-            # that describe the recording's duration rather than its channels
             sqm.update(record.get("preproc") or {})
             sqm.update(record.get("preproc_long") or {})
 

@@ -177,8 +177,6 @@
     .qm-table td.neg  { color: #27ae60; }
     .qm-table td.pos  { color: #c0392b; }
 
-    /* ---- stage-comparison table ---- */
-
     /* ---- GLM beta table ---- */
     .glm-beta-table { font-size: 0.80rem; border-collapse: collapse; margin-top: 0.25rem; }
     .glm-beta-table th, .glm-beta-table td { border: 1px solid #ddd; padding: 0.22rem 0.55rem; text-align: right; }
@@ -914,7 +912,9 @@
 {% if stage_metrics_path %}
 <h3>What each denoising step did</h3>
 <p style="font-size:0.82rem;color:#666;margin:0 0 0.3rem;">
-  One panel per metric, each on its own scale.
+  One panel per metric, each on its own scale, measured on the long channels alone: a short
+  channel is a regressor rather than a measurement, and an average over both describes
+  neither.
   {% if stage_banded %}
     The quality panels are recomputed with the analysis passband applied at every stage, so
     the columns measure the same thing: a stage before the bandpass and one after it carry

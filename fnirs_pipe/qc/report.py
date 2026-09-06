@@ -508,11 +508,26 @@ def _section_haemo(
         stages.append(("desc-errts", raw_errts))
 
     if len(stages) > 1:
-        from fnirs_pipe.qc.quantitative_metrics import comparable_stage_metrics
+        from fnirs_pipe.qc.quantitative_metrics import (
+            comparable_stage_metrics, long_short_channels,
+        )
+
+        def _long_only(raw: mne.io.Raw) -> mne.io.Raw:
+            """The stage measured where the verdict lives, or unchanged with nothing to drop.
+
+            Long channels only, so these panels answer the question the metrics table above
+            them answers. A short channel is a regressor rather than a measurement, and an
+            average over both moved the correlation that reads as the verdict: on a montage
+            with eight short channels it sat at -0.18 where the long channels alone gave -0.50.
+            """
+            names, _ = long_short_channels(raw)
+            if not names or len(names) == len(raw.ch_names):
+                return raw
+            return raw.copy().pick(names)
 
         with _guard("Denoising stage metrics", errors, subject):
             stage_metrics = comparable_stage_metrics(
-                stages, l_freq, h_freq,
+                [(label, _long_only(raw)) for label, raw in stages], l_freq, h_freq,
                 config.cardiac_l_freq, config.cardiac_h_freq,
                 config.resp_l_freq, config.resp_h_freq)
             stage_banded = bool(stage_metrics["banded"])
