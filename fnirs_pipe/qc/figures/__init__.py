@@ -26,8 +26,7 @@ from .motion_panel import (
 from .carpet_compare import carpet_compare_figure
 from .psd_plot import psd_figure
 from .denoise_compare import (
-    denoise_stage_panels, motion_stage_panels, stage_metrics_figure,
-    stage_metrics_table, stage_slope_figure,
+    denoise_stage_panels, stage_metrics_figure, stage_slope_figure,
 )
 from .glm_figures import (
     design_matrix_figure, design_matrix_static_figure,
@@ -71,9 +70,7 @@ __all__ = [
     "carpet_compare_figure",
     "psd_figure",
     "denoise_stage_panels",
-    "motion_stage_panels",
     "stage_metrics_figure",
-    "stage_metrics_table",
     "stage_slope_figure",
     "design_matrix_figure",
     "design_matrix_static_figure",

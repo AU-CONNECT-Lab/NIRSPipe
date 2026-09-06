@@ -6,6 +6,18 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- **Short channels lost their HbO–HbR correlation in the per-channel table and the metrics CSV.** The column came back empty for every short channel once the haemoglobin metrics were split by separation
+- **A spike on the last sample of a recording was never drawn.** It came out as a span of zero width, which no figure can render
+- **Peaks in the GVTD and per-channel derivative traces were drawn slightly late.** Downsampling kept each peak's height but moved it to the start of its bin
+
+### Changed
+- **The correlation matrix draws its lower triangle only.** The upper half repeated the same values read the other way round; the HbO x HbR block that the panel exists for is unaffected, and the colour bar moves into the corner the mask freed
+- **The GVTD panel was redrawn.** Spike segments now shade the trace itself instead of sitting on a band below the carpet, the motion-correction footprint moved to a strip directly above the trace, the samples over the motion threshold are marked in red, and the panel is taller with heavier lines and a calmer palette
+
+### Removed
+- **The "What the motion correction did, and what it cost" table.** Two columns of numbers, half of them carrying no direction; the GVTD panel answers the same question in a form you can read
+
 ## [0.28.0] - 2026-09-06
 
 ### Fixed

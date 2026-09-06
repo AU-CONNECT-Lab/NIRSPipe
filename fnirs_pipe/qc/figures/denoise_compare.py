@@ -10,9 +10,8 @@ a metric for reasons that are not quality, and colouring that step would print t
 conclusion on the figure. A panel with ``lower_better`` unset gets no direction at all, for
 rows where movement is not itself good or bad.
 
-``stage_metrics_figure`` renders whatever panels it is handed, so the same figure serves
-both the haemoglobin chain and the optical-density one; the ``*_stage_panels`` builders
-below turn each chain's numbers into panels.
+``stage_metrics_figure`` renders whatever panels it is handed; ``denoise_stage_panels``
+below turns the haemoglobin chain's numbers into panels.
 """
 
 from typing import NamedTuple
@@ -48,20 +47,6 @@ _DENOISE_FILTER_CHECK = [
     ("cardiac_band_power_hbo", "cardiac power HbO"),
 ]
 
-_MOTION_COUPLING = [
-    ("sci_mean", "SCI"),
-    ("psp_mean", "PSP"),
-]
-# key, label, whether a smaller value is the better one, display scale. The last two are
-# stored as fractions despite the pct in their names, so they are scaled here to be read
-# as the percentages their labels promise.
-_MOTION_ARTIFACT = [
-    ("gvtd_filt_mean", "GVTD, motion band", True, 1.0),
-    ("gvtd_filt_p95", "GVTD p95, motion band", True, 1.0),
-    ("gvtd_pct_above_thresh", "% of run above GVTD threshold", True, 100.0),
-    ("spike_pct", "% of samples spiking", True, 100.0),
-]
-
 
 def _fmt(v, unit: str = "") -> str:
     if not isinstance(v, (int, float)) or v != v:
@@ -90,60 +75,6 @@ def denoise_stage_panels(metrics: dict) -> "list[Panel]":
     panels += [Panel(title, metrics["removed"][key], None, False)
                for key, title in _DENOISE_FILTER_CHECK if key in metrics["removed"]]
     return panels
-
-
-def motion_stage_panels(record: dict, sections: "list[tuple[str, str]]") -> "list[Panel]":
-    """Panels for the optical-density chain, read from the record.
-
-    ``sections`` is ``[(stage label, record section), ...]``. Nothing is recomputed here:
-    both stages are unfiltered optical density, so unlike the haemoglobin chain their
-    stored numbers already sit in the same band and may be compared as they are.
-
-    SCI and PSP get no direction. They measure optode coupling, which the correction is not
-    supposed to change, so the reading is whether they came back where they started, and a
-    verdict on a small movement would be noise dressed as a finding.
-    """
-    def series(key: str) -> list:
-        return [(record.get(section) or {}).get(key) for _, section in sections]
-
-    panels = [Panel(label, series(key), None, False)
-              for key, label in _MOTION_COUPLING
-              if any(isinstance(v, (int, float)) for v in series(key))]
-    for key, label, lower_better, scale in _MOTION_ARTIFACT:
-        values = series(key)
-        if not any(isinstance(v, (int, float)) for v in values):
-            continue
-        scaled = [None if not isinstance(v, (int, float)) else v * scale for v in values]
-        panels.append(Panel(label, scaled, lower_better, True,
-                            "%" if scale != 1.0 else ""))
-    return panels
-
-
-def stage_metrics_table(panels: "list[Panel]") -> "list[dict]":
-    """The same panels as rows of a table, for chains short enough to read as numbers.
-
-    One row per panel: the formatted value at each stage, plus a direction arrow across the
-    whole chain. Rows follow the figure's reading rules, so the two cannot disagree: a panel
-    with ``lower_better`` unset gets no arrow, and a non-primary panel is marked ``muted`` so
-    the template can grey it the way the figure greys its title.
-
-    ``Panel("SCI", [0.950, 0.948], None, False)`` becomes
-    ``{"title": "SCI", "cells": ["0.950", "0.948"], "arrow": "", "verdict": "",
-    "muted": True}``. The stage column is named ``cells`` rather than ``values`` because a
-    template resolves ``row.values`` to the dict method, not the key.
-    """
-    rows = []
-    for panel in panels:
-        arrow, verdict = "", ""
-        numeric = all(isinstance(v, (int, float)) for v in panel.values)
-        if panel.lower_better is not None and numeric and len(panel.values) > 1:
-            fell = panel.values[-1] < panel.values[0]
-            arrow = "↓" if fell else "↑"
-            verdict = "better" if fell == panel.lower_better else "worse"
-        rows.append({"title": panel.title,
-                     "cells": [_fmt(v, panel.unit) for v in panel.values],
-                     "arrow": arrow, "verdict": verdict, "muted": not panel.primary})
-    return rows
 
 
 def stage_metrics_figure(

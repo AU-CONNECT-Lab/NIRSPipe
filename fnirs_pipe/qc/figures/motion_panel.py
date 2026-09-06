@@ -27,10 +27,34 @@ _MAX_PTS = 4000
 
 _ZOOM_COLORS = ["#e74c3c", "#2980b9", "#27ae60"]
 
+_LW = 1.5          # data traces, thick enough to read at report width
+_LW_RULE = 1.2     # threshold rules, thinner than the data they judge
+
+# GVTD panel: pale slate for the uncorrected trace, deep teal for what the correction left
+# (the correction footprint reuses it), amber for spikes, dark red for the threshold and
+# the samples over it.
+_GVTD_SOLO = "#334155"
+_GVTD_SOLO_FILL = "rgba(51,65,85,0.22)"
+_GVTD_BEFORE = "#8494a6"
+_GVTD_BEFORE_FILL = "rgba(132,148,166,0.30)"
+_GVTD_AFTER = "#0f766e"
+_OVER_THRESH = "#b91c1c"
+_SPIKE = "#d97706"
+_SPIKE_FILL = "rgba(245,158,11,0.20)"
+_CORRECTED = "#0f766e"
+
+_SPIKE_LABEL = "derivative spikes (≥10% ch)"
+
 
 def _maxpool_xy(t: np.ndarray, y: np.ndarray, max_pts: int = 2000):
     """Downsample a trace to <= max_pts by taking the max in each bin (keeps spike heights).
 
+    The timestamp kept for each bin is the one the maximum was found at, not the bin's first
+    sample, so a peak stays at the time it happened instead of sliding up to a bin edge::
+
+        t = [0, 1, 2, 3], y = [0, 5, 0, 0], step 2  ->  t = [1, 2], y = [5, 0]
+
+    Spacing therefore becomes slightly uneven, which a line plot does not care about.
     Display only: reported GVTD scalars are computed full-res elsewhere and are unaffected.
     """
     n = len(y)
@@ -38,9 +62,30 @@ def _maxpool_xy(t: np.ndarray, y: np.ndarray, max_pts: int = 2000):
         return t, y
     step = n // max_pts
     m = (n // step) * step
-    y_ds = y[:m].reshape(-1, step).max(axis=1)
-    t_ds = t[:m].reshape(-1, step)[:, 0]
+    bins = y[:m].reshape(-1, step)
+    peak = bins.argmax(axis=1)
+    y_ds = bins[np.arange(bins.shape[0]), peak]
+    t_ds = t[:m].reshape(-1, step)[np.arange(bins.shape[0]), peak]
     return t_ds, y_ds
+
+
+def _span_polygons(spans, y0: float, y1: float):
+    """Every span as its own closed rectangle in one ``fill="toself"`` trace.
+
+    Vertices are the span edges exactly as given, and the ``None`` between rectangles keeps
+    them separate, so neighbouring spans are never bridged into one block::
+
+        [(1.0, 2.0), (7.0, 0.5)] -> x = [1,1,3,3,None, 7,7,7.5,7.5,None]
+
+    Returns two flat lists (x, y), or two ``[None]`` placeholders for an empty span list.
+    """
+    xs: list = []
+    ys: list = []
+    for onset, duration in (spans or []):
+        x0, x1 = float(onset), float(onset) + float(duration)
+        xs += [x0, x0, x1, x1, None]
+        ys += [y0, y1, y1, y0, None]
+    return (xs or [None]), (ys or [None])
 
 
 def _matched_od_after(
@@ -102,9 +147,16 @@ def carpet_gvtd_figure(
     Only the 0.01-0.5 Hz GVTD is drawn. Differencing amplifies the ~1 Hz cardiac component
     well above head motion, so the unfiltered trace reads as pulse rather than movement and
     is not worth a panel; ``gvtd_mean`` and ``gvtd_p95`` still report it.
-    ``corrected_segments`` (motion-correction footprint) and ``spike_segments`` are drawn
-    as short bands on a strip under the carpet, distinct from the full-height red
-    ``segments`` windows.
+    ``corrected_segments`` (motion-correction footprint) is a bar on a thin strip directly
+    above the trace, so what the correction touched sits against what it was aimed at.
+    ``spike_segments`` shades the GVTD panel behind the trace, with a tick under each span
+    as well: a single flagged sample is a fraction of a pixel wide on a run-length axis and
+    would otherwise be shading nobody can see. Both are drawn span by span with no merging,
+    since the gap between two spans is the claim that nothing happened there. Neither is
+    derived from the trace: spikes are a per-channel robust outlier test on the same
+    band-limited derivative, so shading without a peak over the threshold, or the reverse,
+    is a real disagreement between a per-channel and a cross-channel reading rather than a
+    drawing error. The full-height red ``segments`` windows are separate again.
 
     Given ``raw_after``, the motion-corrected recording, the GVTD panel carries a second
     trace and a second carpet is stacked under the first, so the figure answers whether the
@@ -129,9 +181,9 @@ def carpet_gvtd_figure(
     t_gvtd    = times[1:]
     motion_thresh = gvtd_threshold(gvtd_filt, n_std=3.0)
     t_filt_ds, gvtd_filt_ds = _maxpool_xy(t_gvtd, gvtd_filt)
-    gvtd_filt_post_ds = None
+    t_post_ds, gvtd_filt_post_ds = None, None
     if has_after:
-        _, gvtd_filt_post_ds = _maxpool_xy(
+        t_post_ds, gvtd_filt_post_ds = _maxpool_xy(
             t_gvtd, gvtd_timetrace(od_after, sfreq, *GVTD_MOTION_BAND))
 
     # carpet: all channels (both wavelengths are positively correlated, safe in one z-scored
@@ -154,17 +206,22 @@ def carpet_gvtd_figure(
 
     n_ch      = carpet.shape[0]
     n_carpets = 2 if has_after else 1
-    n_rows    = 1 + n_carpets + 1  # the GVTD panel, the carpets, the annotation strip
-    gvtd_px   = 110
+    # the strip is the correction's own row, so it is there only when there is a correction
+    # to draw; prep-raw runs before any and would otherwise get a labelled empty band
+    has_strip = bool(corrected_segments)
+    n_rows    = 1 + int(has_strip) + n_carpets
+    strip_px  = 34
+    gvtd_px   = 170
     carpet_px = int(max(200, min(n_ch * 13, 700)))
-    band_px   = 60
-    heights   = [gvtd_px] + [carpet_px] * n_carpets + [band_px]
-    total_px  = sum(heights) + 120  # margins and the shared x-axis title
-    band_row  = n_rows
+    heights   = ([strip_px] if has_strip else []) + [gvtd_px] + [carpet_px] * n_carpets
+    total_px  = sum(heights) + 130  # margins, the legend and the shared x-axis title
+    strip_row = 1 if has_strip else None
+    gvtd_row  = 2 if has_strip else 1
 
-    titles = ["GVTD (0.01\u20130.5 Hz)"]
-    titles += (["Carpet (before)", "Carpet (after)"] if has_after else ["Carpet"])
-    titles += [""]
+    # the strip and the GVTD panel are named on their y-axes rather than by a subplot title,
+    # which leaves the top of the figure to the legend instead of stacking the two
+    titles = ([""] if has_strip else []) + [""]
+    titles += ["Carpet (before)", "Carpet (after)"] if has_after else ["Carpet"]
     fig = make_subplots(
         rows=n_rows, cols=1, shared_xaxes=True,
         row_heights=[h / sum(heights) for h in heights],
@@ -172,28 +229,71 @@ def carpet_gvtd_figure(
         subplot_titles=titles,
     )
 
-    if gvtd_filt_post_ds is not None:
+    if has_strip:
+        xs, ys = _span_polygons(corrected_segments, 0.18, 0.82)
         fig.add_trace(go.Scatter(
-            x=t_filt_ds, y=gvtd_filt_post_ds, mode="lines", name="after",
-            line=dict(color="#16a085", width=1.4),
-            hovertemplate="t=%{x:.1f}s<br>after=%{y:.3e}<extra></extra>",
-        ), row=1, col=1)
+            x=xs, y=ys, fill="toself", mode="lines", name="corrected",
+            fillcolor=_CORRECTED, line=dict(width=0),
+            hovertemplate="corrected: %{x:.1f}s<extra></extra>",
+        ), row=strip_row, col=1)
+
+    # a fixed y-range, because the spike shading is drawn as polygons and needs a top edge
+    y_top = float(np.nanmax(gvtd_filt_ds)) if gvtd_filt_ds.size else 1.0
+    if motion_thresh is not None:
+        y_top = max(y_top, float(motion_thresh))
+    y_top *= 1.10
+
+    spike_mids = [float(onset) + float(dur) / 2 for onset, dur in (spike_segments or [])]
+    if spike_mids:
+        xs, ys = _span_polygons(spike_segments, 0.0, y_top)
+        fig.add_trace(go.Scatter(
+            x=xs, y=ys, fill="toself", mode="lines", name=_SPIKE_LABEL,
+            fillcolor=_SPIKE_FILL, line=dict(width=0), hoverinfo="skip",
+        ), row=gvtd_row, col=1)
+        # a span narrower than a pixel leaves no visible shading, so every one of them also
+        # gets a tick: the shading says how long, the tick says it happened at all
+        fig.add_trace(go.Scatter(
+            x=spike_mids, y=[y_top * 0.012] * len(spike_mids), mode="markers",
+            marker=dict(symbol="triangle-up", size=6, color=_SPIKE),
+            name=_SPIKE_LABEL, showlegend=False,
+            hovertemplate="spike: %{x:.1f}s<extra></extra>",
+        ), row=gvtd_row, col=1)
+
+    # the uncorrected trace as a filled area with the corrected one drawn over it, so the
+    # panel reads as "what was there" against "what is left" rather than as two lines
     fig.add_trace(go.Scatter(
         x=t_filt_ds, y=gvtd_filt_ds, mode="lines",
-        name="before" if gvtd_filt_post_ds is not None else "GVTD",
-        line=dict(color="#2c3e50", width=1.0),
+        name="before" if has_after else "GVTD",
+        line=dict(color=_GVTD_BEFORE if has_after else _GVTD_SOLO, width=_LW),
+        fill="tozeroy", fillcolor=_GVTD_BEFORE_FILL if has_after else _GVTD_SOLO_FILL,
         hovertemplate="t=%{x:.1f}s<br>before=%{y:.3e}<extra></extra>",
-    ), row=1, col=1)
+    ), row=gvtd_row, col=1)
+
+    if motion_thresh is not None:
+        # the same samples the % motion in the metrics table counts, marked on the trace
+        # they were counted from, which is always the uncorrected one
+        over = np.where(gvtd_filt_ds > motion_thresh, gvtd_filt_ds, np.nan)
+        fig.add_trace(go.Scatter(
+            x=t_filt_ds, y=over, mode="lines", name="over threshold",
+            line=dict(color=_OVER_THRESH, width=_LW), connectgaps=False, hoverinfo="skip",
+        ), row=gvtd_row, col=1)
+
+    if gvtd_filt_post_ds is not None:
+        fig.add_trace(go.Scatter(
+            x=t_post_ds, y=gvtd_filt_post_ds, mode="lines", name="after",
+            line=dict(color=_GVTD_AFTER, width=_LW),
+            hovertemplate="t=%{x:.1f}s<br>after=%{y:.3e}<extra></extra>",
+        ), row=gvtd_row, col=1)
 
     if motion_thresh is not None:
         # the uncorrected recording's threshold, kept for the corrected trace as well: it is
         # the yardstick the % motion in the metrics table is counted against
         fig.add_hline(
-            y=motion_thresh, row=1, col=1,
-            line=dict(color="#e74c3c", width=1, dash="dash"),
+            y=motion_thresh, row=gvtd_row, col=1,
+            line=dict(color=_OVER_THRESH, width=_LW_RULE, dash="dash"),
             annotation_text=f"thresh={motion_thresh:.3e}",
             annotation_position="top right",
-            annotation_font=dict(size=9, color="#e74c3c"),
+            annotation_font=dict(size=9, color=_OVER_THRESH),
         )
 
     for i, z in enumerate([data_z, data_z_after][:n_carpets]):
@@ -202,21 +302,7 @@ def carpet_gvtd_figure(
             coloraxis="coloraxis",  # one scale and one bar for both carpets
             hovertemplate="%{y}<br>t=%{x:.1f}s<br>z=%{z:.2f}<extra></extra>",
             showlegend=False,
-        ), row=2 + i, col=1)
-
-    def _band(spans, y, color, label):
-        xs, ys = [], []
-        for onset, duration in (spans or []):
-            xs += [onset, onset + duration, None]
-            ys += [y, y, None]
-        fig.add_trace(go.Scatter(
-            x=xs or [None], y=ys or [None], mode="lines", name=label,
-            line=dict(color=color, width=9),
-            hovertemplate=label + ": %{x:.1f}s<extra></extra>",
-        ), row=band_row, col=1)
-
-    _band(corrected_segments, 0.3, "#16a085", "corrected")
-    _band(spike_segments, 0.7, "#e67e22", "spikes")
+        ), row=gvtd_row + 1 + i, col=1)
 
     if segments:
         for label, spans in segments.items():
@@ -227,33 +313,39 @@ def carpet_gvtd_figure(
                     layer="below", row="all", col=1,
                 )
                 fig.add_annotation(
-                    x=onset + duration / 2, y=1.0, yref="y domain", row=1, col=1,
+                    x=onset + duration / 2, y=1.0, yref="y domain", row=gvtd_row, col=1,
                     text=label, showarrow=False, yanchor="bottom",
                     font=dict(size=9, color="#e74c3c"),
                 )
 
-    fig.update_yaxes(title_text="GVTD", title_font_size=9, row=1, col=1)
+    if has_strip:
+        fig.update_yaxes(title_text="corrected", title_font_size=8, range=[0, 1],
+                         showticklabels=False, showgrid=False, zeroline=False,
+                         row=strip_row, col=1)
+    fig.update_yaxes(title_text="GVTD (0.01–0.5 Hz)", title_font_size=9,
+                     range=[0, y_top], tickfont=dict(size=8),
+                     gridcolor="#eef1f4", zeroline=False, row=gvtd_row, col=1)
     for i in range(n_carpets):
         # the channel names stay in the hover, where they are readable; on the axis a full
         # montage would be an unreadable stack
-        fig.update_yaxes(showticklabels=False, autorange="reversed", row=2 + i, col=1)
-    fig.update_yaxes(showticklabels=False, range=[0, 1], row=band_row, col=1)
-    fig.update_xaxes(title_text="Time (s)", row=band_row, col=1)
+        fig.update_yaxes(showticklabels=False, autorange="reversed",
+                         row=gvtd_row + 1 + i, col=1)
+    fig.update_xaxes(title_text="Time (s)", row=n_rows, col=1)
     fig.update_xaxes(range=[float(times[0]), float(times[-1])])
 
     fig.update_layout(
         height=total_px,
         coloraxis=dict(
             colorscale="Greys", cmin=-z_threshold, cmax=z_threshold,
-            colorbar=dict(title="Z-score", thickness=10, len=0.5, y=0.4),
+            colorbar=dict(title="Z-score", thickness=10, len=0.45, y=0.35),
         ),
-        margin=dict(l=60, r=20, t=40, b=45),
+        margin=dict(l=64, r=20, t=52, b=45),
         hovermode="x unified",
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0, font=dict(size=9)),
         plot_bgcolor="white",
     )
     for ann in fig.layout.annotations:
-        if ann.text in titles:
+        if ann.text in titles and ann.text:
             ann.font.size = 10
     return fig
 
@@ -411,34 +503,34 @@ def build_motion_detail_figure(
 
     fig.add_trace(go.Scatter(
         x=t_gvtd, y=gvtd_filt.tolist(), mode="lines",
-        line=dict(color="#2c3e50", width=0.6), name="GVTD 0.01–0.5 Hz",
+        line=dict(color=_GVTD_SOLO, width=_LW), name="GVTD 0.01–0.5 Hz",
     ), row=1, col=1)
     if motion_thresh is not None:
         fig.add_shape(
             type="line", x0=0, x1=1, xref="x domain",
             y0=motion_thresh, y1=motion_thresh, yref="y",
-            line=dict(dash="dash", color="#e74c3c", width=0.8),
+            line=dict(dash="dash", color=_OVER_THRESH, width=_LW_RULE),
             row=1, col=1,
         )
         fig.add_annotation(
             x=1, xref="x domain", y=motion_thresh, yref="y",
             text=f"thresh={motion_thresh:.4f}", showarrow=False,
-            font=dict(size=7), xanchor="right", yanchor="bottom",
+            font=dict(size=8, color=_OVER_THRESH), xanchor="right", yanchor="bottom",
             row=1, col=1,
         )
 
     fig.add_trace(go.Scatter(
         x=t_tvd, y=tvd, mode="lines",
-        line=dict(color="#8e44ad", width=1.0), name="|dOD/dt|",
+        line=dict(color="#7c3aed", width=_LW), name="|dOD/dt|",
     ), row=2, col=1)
 
     fig.add_trace(go.Scatter(
         x=t_b, y=y_b, mode="lines",
-        line=dict(color="#95a5a6", width=1.0), name="Before", opacity=0.7,
+        line=dict(color=_GVTD_BEFORE, width=_LW), name="Before", opacity=0.8,
     ), row=3, col=1)
     fig.add_trace(go.Scatter(
         x=t_a, y=y_a, mode="lines",
-        line=dict(color="#2980b9", width=1.2), name="After",
+        line=dict(color=_GVTD_AFTER, width=_LW), name="After",
     ), row=3, col=1)
 
     if segments:
@@ -464,8 +556,8 @@ def build_motion_detail_figure(
         for onset, dur in (spans or []):
             fig.add_shape(type="rect", x0=onset, x1=onset + dur, y0=y0, y1=y1,
                           fillcolor=color, line_width=0, layer="above", row=4, col=1)
-    _detail_band(corrected_segments, 0.05, 0.45, "#16a085")
-    _detail_band(spike_segments, 0.55, 0.95, "#e67e22")
+    _detail_band(corrected_segments, 0.05, 0.45, _CORRECTED)
+    _detail_band(spike_segments, 0.55, 0.95, _SPIKE)
 
     fig.update_yaxes(title_text="GVTD",   tickfont=dict(size=7), row=1, col=1)
     fig.update_yaxes(title_text="|dOD/dt|", tickfont=dict(size=7), row=2, col=1)

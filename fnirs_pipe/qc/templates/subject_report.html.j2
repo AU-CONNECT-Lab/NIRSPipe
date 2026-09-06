@@ -178,11 +178,6 @@
     .qm-table td.pos  { color: #c0392b; }
 
     /* ---- stage-comparison table ---- */
-    .stage-table { border-collapse: collapse; }
-    .stage-table th, .stage-table td { border: 1px solid #ddd; padding: 0.22rem 0.55rem; text-align: right; }
-    .stage-table th { background: #f1f3f5; font-weight: 600; text-align: center; }
-    .stage-table td:first-child { text-align: left; }
-    .stage-table tr.muted td, .stage-table tr.muted td:first-child { color: #8b95a1; }
 
     /* ---- GLM beta table ---- */
     .glm-beta-table { font-size: 0.80rem; border-collapse: collapse; margin-top: 0.25rem; }
@@ -240,7 +235,7 @@
   {% if glm_design_path or glm_activation_path %}<a href="#GLM">GLM</a>{% endif %}
   <span class="nav-sep">|</span>
   <a href="#Metrics">Metrics</a>
-  {% if channel_summary_path or motion_stage_rows or stage_metrics_path %}<a href="#ChannelSummary">Ch. Summary</a>{% endif %}
+  {% if channel_summary_path or stage_metrics_path %}<a href="#ChannelSummary">Ch. Summary</a>{% endif %}
   <a href="#Errors">Errors</a>
   <a href="#Provenance">Provenance</a>
   <a href="#Methods">Methods</a>
@@ -901,7 +896,7 @@
 </div>
 {% endif %}
 
-{% if channel_summary_path or motion_stage_rows or stage_metrics_path %}
+{% if channel_summary_path or stage_metrics_path %}
 <!-- ===================================================== channel summary -->
 <h2 id="ChannelSummary">Channel Quality Summary</h2>
 {% if channel_summary_path %}
@@ -913,41 +908,6 @@
   <iframe src="{{ channel_summary_path }}"
           width="100%" height="{{ channel_summary_h + 20 }}px"
           style="border:none;min-width:500px;display:block;"></iframe>
-</div>
-{% endif %}
-
-{% if motion_stage_rows %}
-<h3>What the motion correction did, and what it cost</h3>
-<p style="font-size:0.82rem;color:#666;margin:0 0 0.3rem;">
-  <code>desc-sci</code> against <code>desc-motcorrected</code>, one row per metric. Both
-  stages are unfiltered optical density, so these are the stored numbers compared as they
-  are. The GVTD and spike rows are what the correction exists to reduce. The greyed SCI and
-  PSP rows are the other half of the question: they sit in the cardiac band, above the
-  frequencies motion correction works on, so they should come back where they started. They
-  carry no direction because a small movement in either is not a verdict; what matters is
-  whether they held.
-</p>
-<div style="overflow-x:auto;">
-  <table class="qm-table stage-table">
-    <thead>
-      <tr>
-        <th>Metric</th>
-        {% for label in motion_stage_labels %}<th>{{ label }}</th>{% endfor %}
-        <th>Change</th>
-      </tr>
-    </thead>
-    <tbody>
-    {% for row in motion_stage_rows %}
-      <tr{% if row.muted %} class="muted"{% endif %}>
-        <td>{{ row.title }}</td>
-        {% for cell in row.cells %}<td>{{ cell }}</td>{% endfor %}
-        <td class="{{ 'good' if row.verdict == 'better' else ('bad' if row.verdict == 'worse' else '') }}">
-          {{ row.arrow }}{% if row.verdict %} {{ row.verdict }}{% endif %}
-        </td>
-      </tr>
-    {% endfor %}
-    </tbody>
-  </table>
 </div>
 {% endif %}
 

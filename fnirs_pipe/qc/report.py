@@ -83,9 +83,7 @@ from fnirs_pipe.qc.figures import (
     build_roi_trial_image_figure,
     build_sci_psp_figure,
     denoise_stage_panels,
-    motion_stage_panels,
     stage_metrics_figure,
-    stage_metrics_table,
     build_channel_figure,
     build_motion_detail_figure,
     channel_quality_heatmap,
@@ -264,9 +262,8 @@ def _section_sci(
     subject: str,
     errors: list,
     figures_dir: Path,
-    record: dict | None = None,
 ) -> dict:
-    """The SCI/PSP panel, per channel and per window, plus the motion-correction table.
+    """The SCI/PSP panel, per channel and per window.
 
     ``windowed`` is the record's section of that name; the series are read from it rather
     than recomputed, so the panel and the stored numbers cannot disagree. An absent section
@@ -275,11 +272,7 @@ def _section_sci(
     Every view in the panel is the uncorrected optical density. SCI and PSP measure optode
     coupling, which is a property of how the cap sat rather than of anything the pipeline
     does, so the stage that answers "was this channel worth keeping" is the one before the
-    correction. The table rows are the separate question of whether the correction cost any
-    coupling, drawn from ``raw*`` against ``motion_post*`` in the record; wavelet correction
-    can eat cardiac pulsation along with the artifact, TDDR largely does not, and this is
-    where that shows. They are returned rather than rendered here, since the template prints
-    them in the channel summary at the foot of the report.
+    correction.
     """
     def _series(key: str) -> "np.ndarray | None":
         value = (windowed or {}).get(key)
@@ -310,23 +303,7 @@ def _section_sci(
             fig, figures_dir / "sci_psp_panel.html"
         )
 
-    record = record or {}
-    # the same channel split on both sides: a long-channel SCI against an all-channel one
-    # would read as an effect of the correction
-    before_key = "raw_long" if (record.get("per_channel") or {}).get("raw_long") else "raw"
-    after_key  = "motion_post_long" if before_key == "raw_long" else "motion_post"
-    motion_stage_labels: list = []
-    motion_stage_rows: list = []
-    with _guard("Motion-correction stage metrics", errors, subject):
-        sections = [("desc-sci", before_key), ("desc-motcorrected", after_key)]
-        rows = stage_metrics_table(motion_stage_panels(record, sections))
-        if rows:
-            motion_stage_labels = [label for label, _ in sections]
-            motion_stage_rows = rows
-
-    return {"sci_psp_panel_path": sci_psp_panel_path, "sci_psp_panel_h": sci_psp_panel_h,
-            "motion_stage_labels": motion_stage_labels,
-            "motion_stage_rows": motion_stage_rows}
+    return {"sci_psp_panel_path": sci_psp_panel_path, "sci_psp_panel_h": sci_psp_panel_h}
 
 
 def _section_channel_detail(
@@ -760,6 +737,7 @@ def _section_sqm(
     hb_all: dict = {}
     hb_long: dict = {}
     hb_short: dict = {}
+    corr_pc: dict = {}
     with _guard("SQM record", errors, subject):
         if out_dir is None or sqm_label is None:
             raise FileNotFoundError("no SQM record location for this run")
@@ -796,6 +774,10 @@ def _section_sqm(
         # channel's coupling belongs in its own row of the table, not in those averages.
         short_pc = per_channel.get("raw_short") or {}
         long_pc = per_channel.get("raw_long") or {}
+        # Taken from the whole-file `preproc` rather than from `sqm`: the merge above ends
+        # on `preproc_long`, and a per-channel dict is replaced wholesale by update(), so
+        # reading it there would leave every short channel's correlation blank.
+        corr_pc = (per_channel.get("preproc") or {}).get("hbo_hbr_corr_per_channel") or {}
         # The same raw file measured over three channel sets, kept as three dicts so the
         # panel can print them side by side. `sqm` above already carries one of them and
         # decides the verdict; these are for the comparison, not for it.
@@ -841,9 +823,8 @@ def _section_sqm(
             "psp":      per_channel_value("psp_per_channel", ch),
             "snr":      per_channel_value("snr_per_channel", ch),
             "cv":       per_channel_value("cv_per_channel", ch),
-            # from `preproc`, which is not split by separation, so this one column is
-            # filled for short channels even when the raw_short section is missing
-            "corr":     sqm.get("hbo_hbr_corr_per_channel", {}).get(pair_key),
+            # the whole-file measurement, so this column is filled for short channels too
+            "corr":     corr_pc.get(pair_key),
             "is_bad":   ch in bad_channels,
             "separation": separation_of(ch),
         })
@@ -1223,7 +1204,7 @@ def build_subject_report(
     ] or None
     sci_vars          = _section_sci(
                             raw_intensity, sci_scores, bad_channels, config,
-                            windowed_section, subject, errors, figures_dir, record=record)
+                            windowed_section, subject, errors, figures_dir)
     motion_vars       = _section_motion(
                             raw_long, sci_scores, config, segments, subject, errors,
                             figures_dir, windowed=windowed_section,

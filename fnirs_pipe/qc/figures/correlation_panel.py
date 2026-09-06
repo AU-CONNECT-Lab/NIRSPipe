@@ -81,6 +81,10 @@ def hbo_hbr_correlation_panel(
     n_ch      = len(all_names)
     corr      = np.corrcoef(all_data).astype(float)
     np.fill_diagonal(corr, np.nan)
+    # Lower triangle only: the matrix is symmetric, so the upper half is the same values
+    # read the other way round. The HbO x HbR block, which is what the panel is for,
+    # survives once in the lower left.
+    corr[np.triu_indices(n_ch, k=1)] = np.nan
 
     hbo_map = {_pair_key(n): hbo_data[i] for i, n in enumerate(hbo_names)}
     hbr_map = {_pair_key(n): hbr_data[i] for i, n in enumerate(hbr_names)}
@@ -138,16 +142,20 @@ def hbo_hbr_correlation_panel(
     # ---- left: channel correlation matrix ----
     im = ax_c.imshow(corr, aspect="equal", cmap="RdBu_r", vmin=-1, vmax=1,
                      interpolation="nearest")
-    ax_c.axhline(n_hbo - 0.5, color="#888", lw=0.6, ls="--")
-    ax_c.axvline(n_hbo - 0.5, color="#888", lw=0.6, ls="--")
+    def _divider(pos: float, **style) -> None:
+        # an L hugging the diagonal, since a full-width rule would run out over the blank
+        # upper triangle and read as part of the plot
+        ax_c.plot([-0.5, pos], [pos, pos], **style)
+        ax_c.plot([pos, pos], [pos, n_ch - 0.5], **style)
+
+    _divider(n_hbo - 0.5, color="#888", lw=0.6, ls="--")
 
     # separation boundaries inside each chromophore block, lighter than the HbO/HbR one
     for offset, names in [(0, hbo_names), (n_hbo, hbr_names)]:
         seen = [groups[_pair_key(n)] for n in names]
         for i in range(1, len(seen)):
             if seen[i] != seen[i - 1]:
-                ax_c.axhline(offset + i - 0.5, color="#ccc", lw=0.5, ls=":")
-                ax_c.axvline(offset + i - 0.5, color="#ccc", lw=0.5, ls=":")
+                _divider(offset + i - 0.5, color="#ccc", lw=0.5, ls=":")
 
     # Label every channel while they still fit; past that, subsample and mark the
     # unlabelled cells with minor ticks so the rows stay countable
@@ -174,7 +182,12 @@ def hbo_hbr_correlation_panel(
 
     for spine in ax_c.spines.values():
         spine.set_visible(False)
-    plt.colorbar(im, ax=ax_c, shrink=0.65, label="Pearson r", pad=0.02)
+    # into the corner the masked triangle freed. Axes fractions, so it clears the diagonal
+    # (which runs from top-left to bottom-right) whatever the channel count.
+    cax = ax_c.inset_axes([0.70, 0.55, 0.035, 0.35])
+    cbar = plt.colorbar(im, cax=cax)
+    cbar.set_label("Pearson r", fontsize=8)
+    cbar.ax.tick_params(labelsize=7)
     ax_c.set_title("Channel correlation matrix"
                    + (" (grouped by separation)" if show_headers else ""),
                    fontsize=10, pad=6)

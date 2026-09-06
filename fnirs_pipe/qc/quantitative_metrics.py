@@ -720,8 +720,10 @@ def _mask_to_segments(flagged: np.ndarray, times: np.ndarray) -> "list[tuple[flo
 
     Given which timepoints are flagged (motion / corrected / spike), return each
     contiguous run of True as a time interval, used to draw shaded bands on figures.
+    A run of n samples is n sample periods long, so a single flagged sample is a span
+    one period wide rather than a span of zero width that no figure can draw.
 
-    Example: mask [F,T,T,F,T] at 1 Hz -> [(1.0, 2.0), (4.0, 0.0)].
+    Example: mask [F,T,T,F,T] at 1 Hz -> [(1.0, 2.0), (4.0, 1.0)].
     """
     if not flagged.any():
         return []
@@ -733,8 +735,11 @@ def _mask_to_segments(flagged: np.ndarray, times: np.ndarray) -> "list[tuple[flo
     if flagged[0]:
         starts.insert(0, 0)
     if flagged[-1]:
-        ends.append(len(flagged) - 1)
-    return [(float(times[s]), max(float(times[e]) - float(times[s]), 0.0)) for s, e in zip(starts, ends)]
+        ends.append(len(flagged))    # one past the last sample; closed below by extrapolation
+    dt = float(times[-1] - times[-2]) if len(times) > 1 else 0.0
+    def _end_time(e: int) -> float:
+        return float(times[e]) if e < len(times) else float(times[-1]) + dt
+    return [(float(times[s]), max(_end_time(e) - float(times[s]), 0.0)) for s, e in zip(starts, ends)]
 
 
 @_safe_metrics("motion correction footprint", (
