@@ -7,21 +7,32 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from fnirs_pipe.qc.provenance import Node
 
-# Signal domain -> (fill, edge). Reading left to right the colour tracks the domain
-# change: intensity -> optical density -> haemoglobin -> analysis output.
+# ---- Palette (shared with the interface DAG, fnirs_pipe/interface/pages/analysis.py) ----
+# Signal domain -> outline colour. Reading left to right the colour tracks the domain
+# change: intensity -> optical density -> haemoglobin -> analysis output. Boxes are drawn
+# unfilled, so the outline carries the whole signal, as it does in the interface.
 _COLORS = {
-    "input":      ("#ecf0f1", "#7f8c8d"),
-    "od":         ("#fdebd0", "#e67e22"),
-    "haemo":      ("#fadbd8", "#c0392b"),
-    "derivative": ("#d6eaf8", "#2874a6"),
+    "input":      "#9CA3AF",
+    "od":         "#E67E22",
+    "haemo":      "#8E44AD",
+    "derivative": "#2980B9",
 }
 
-# Outline for a node whose sidecar outlived its file. Not a domain: the box keeps the
-# domain colour it would otherwise have had.
-_MISSING_EDGE = "#b03a2e"
+# Outline for a node whose sidecar outlived its file. Red is reserved for this, so it is
+# never a domain colour: anything red in the diagram is a problem.
+_MISSING = "#C0392B"
 
-_BOX_W, _BOX_H = 2.4, 1.02
-_X_GAP, _Y_GAP = 3.6, 1.5
+_CANVAS = "#FAFAFA"
+_LABEL_TEXT = "#374151"
+_STEP_TEXT = "#6B7280"
+_STATE_TEXT = "#9CA3AF"
+
+# Box shape and spacing follow the interface stylesheet, scaled up for three text lines:
+# there the node is 140x44 px with 80 px between ranks and 35 px between rows.
+_BOX_W, _BOX_H = 2.8, 1.10
+_X_GAP, _Y_GAP = 4.4, 1.95
+_PAD_X, _PAD_Y = 0.55, 0.55
+_SCALE = 0.52          # inches per data unit
 
 
 def _fit(text: str, base: float, max_chars: int) -> float:
@@ -59,9 +70,10 @@ def provenance_figure(nodes: dict[str, Node], title: str | None = None):
         for i, node in enumerate(column):
             pos[node.key] = (depth * _X_GAP, (offset - i) * _Y_GAP)
 
-    n_cols = max(columns) + 1
-    height = max(len(c) for c in columns.values())
-    fig, ax = plt.subplots(figsize=(2.0 + n_cols * 1.55, 1.4 + height * 1.05))
+    span_x = (max(columns)) * _X_GAP + _BOX_W + 2 * _PAD_X
+    span_y = (max(len(c) for c in columns.values()) - 1) * _Y_GAP + _BOX_H + 2 * _PAD_Y
+    fig, ax = plt.subplots(figsize=(span_x * _SCALE, span_y * _SCALE + 0.35))
+    ax.set_facecolor(_CANVAS)
 
     for node in nodes.values():
         # a QC record names every stage it measured, so drawing its edges lays the whole
@@ -69,62 +81,57 @@ def provenance_figure(nodes: dict[str, Node], title: str | None = None):
         if node.checkpoint:
             continue
         x, y = pos[node.key]
+        # the edge takes the colour of the node it feeds, as the interface stylesheet does
+        colour = _COLORS.get(node.domain, _COLORS["derivative"])
         for src in node.sources:
             if src not in pos:
                 continue
             sx, sy = pos[src]
             ax.annotate(
                 "", xy=(x - _BOX_W / 2, y), xytext=(sx + _BOX_W / 2, sy),
-                arrowprops=dict(arrowstyle="-|>", color="#95a5a6", lw=1.2,
-                                shrinkA=0, shrinkB=0,
-                                connectionstyle="arc3,rad=0.06"),
+                arrowprops=dict(arrowstyle="-|>", color=colour, lw=1.5,
+                                mutation_scale=11, shrinkA=0, shrinkB=0),
             )
 
     for node in nodes.values():
         x, y = pos[node.key]
-        fill, edge = _COLORS.get(node.domain, _COLORS["derivative"])
-        # a sidecar whose file was deleted keeps its domain colour, so the chain still reads
-        # left to right, and takes a dashed red outline so it is not mistaken for output
+        colour = _COLORS.get(node.domain, _COLORS["derivative"])
+        # a sidecar whose file was deleted takes a dashed red outline, the one place red
+        # appears, so it is not mistaken for output
         ax.add_patch(mpatches.FancyBboxPatch(
             (x - _BOX_W / 2, y - _BOX_H / 2), _BOX_W, _BOX_H,
-            boxstyle="round,pad=0.02,rounding_size=0.12",
-            facecolor=fill, edgecolor=_MISSING_EDGE if node.missing else edge,
-            linestyle="--" if node.missing else "-", linewidth=1.3, zorder=2,
+            boxstyle="round,pad=0.02,rounding_size=0.16",
+            facecolor="none", edgecolor=_MISSING if node.missing else colour,
+            linestyle="--" if node.missing else "-", linewidth=2.0, zorder=2,
         ))
         # three lines: what it is, how it was made, and the shape of the data left behind
-        ax.text(x, y + 0.28, node.label, ha="center", va="center",
-                fontsize=9, fontweight="bold", color="#2c3e50", zorder=3)
+        ax.text(x, y + 0.30, node.label, ha="center", va="center",
+                fontsize=9.5, fontweight="bold", color=_LABEL_TEXT, zorder=3)
         # the SQM checkpoints are named after their step, so printing it again under the
         # label would spend the line on a word already there
         step = node.step if node.step != node.label else ""
         made = " ".join(p for p in (step, node.detail) if p)
         if made:
-            ax.text(x, y + 0.02, made, ha="center", va="center",
-                    fontsize=_fit(made, 6.5, 24), color="#7f8c8d", zorder=3)
+            ax.text(x, y + 0.01, made, ha="center", va="center",
+                    fontsize=_fit(made, 6.5, 26), color=_STEP_TEXT, zorder=3)
         # the state line is the shape of the data left behind; there is none to describe
         note = "file missing" if node.missing else node.state
         if note:
-            ax.text(x, y - 0.26, note, ha="center", va="center",
-                    fontsize=_fit(note, 6.0, 26),
-                    color=_MISSING_EDGE if node.missing else "#95a5a6", zorder=3)
+            ax.text(x, y - 0.28, note, ha="center", va="center",
+                    fontsize=_fit(note, 6.0, 28),
+                    color=_MISSING if node.missing else _STATE_TEXT, zorder=3)
 
     xs = [p[0] for p in pos.values()]
     ys = [p[1] for p in pos.values()]
-    ax.set_xlim(min(xs) - _BOX_W, max(xs) + _BOX_W)
-    ax.set_ylim(min(ys) - _BOX_H, max(ys) + _BOX_H)
-    ax.axis("off")
+    ax.set_xlim(min(xs) - _BOX_W / 2 - _PAD_X, max(xs) + _BOX_W / 2 + _PAD_X)
+    ax.set_ylim(min(ys) - _BOX_H / 2 - _PAD_Y, max(ys) + _BOX_H / 2 + _PAD_Y)
+    ax.set_aspect("equal")
+    for spine in ax.spines.values():
+        spine.set_visible(False)
+    ax.set_xticks([])
+    ax.set_yticks([])
     if title:
-        ax.set_title(title, fontsize=10, color="#2c3e50", pad=8)
+        ax.set_title(title, fontsize=10, fontweight="bold", color=_LABEL_TEXT, pad=8)
 
-    handles = [mpatches.Patch(facecolor=f, edgecolor=e, label=name)
-               for name, (f, e) in _COLORS.items()]
-    if any(n.missing for n in nodes.values()):
-        handles.append(mpatches.Patch(facecolor="none", edgecolor=_MISSING_EDGE,
-                                      linestyle="--", label="file missing"))
-    ax.legend(
-        handles=handles,
-        loc="lower center", bbox_to_anchor=(0.5, -0.04), ncol=len(handles),
-        frameon=False, fontsize=7,
-    )
     fig.tight_layout()
     return fig
