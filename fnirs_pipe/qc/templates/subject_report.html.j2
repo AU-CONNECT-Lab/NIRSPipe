@@ -721,6 +721,10 @@
         <span class="qv">{% if sqm.get('gvtd_mean_post') is not none %}{{ qm_val(sqm.get('gvtd_mean'), '.3e') }} → {{ qm_val(sqm.get('gvtd_mean_post'), '.3e') }}{% else %}{{ qm_val(sqm.get('gvtd_mean'), '.3e') }}{% endif %}</span></li>
     <li>{{ ql('gvtd_p95', 'GVTD p95' ~ (' (motion before→after)' if sqm.get('gvtd_p95_post') is not none else '')) }}
         <span class="qv">{% if sqm.get('gvtd_p95_post') is not none %}{{ qm_val(sqm.get('gvtd_p95'), '.3e') }} → {{ qm_val(sqm.get('gvtd_p95_post'), '.3e') }}{% else %}{{ qm_val(sqm.get('gvtd_p95'), '.3e') }}{% endif %}</span></li>
+    <li>{{ ql('gvtd_filt_mean', 'GVTD mean 0.01-0.5 Hz' ~ (' (motion before→after)' if sqm.get('gvtd_filt_mean_post') is not none else '')) }}
+        <span class="qv">{% if sqm.get('gvtd_filt_mean_post') is not none %}{{ qm_val(sqm.get('gvtd_filt_mean'), '.3e') }} → {{ qm_val(sqm.get('gvtd_filt_mean_post'), '.3e') }}{% else %}{{ qm_val(sqm.get('gvtd_filt_mean'), '.3e') }}{% endif %}</span></li>
+    <li>{{ ql('gvtd_filt_p95', 'GVTD p95 0.01-0.5 Hz' ~ (' (motion before→after)' if sqm.get('gvtd_filt_p95_post') is not none else '')) }}
+        <span class="qv">{% if sqm.get('gvtd_filt_p95_post') is not none %}{{ qm_val(sqm.get('gvtd_filt_p95'), '.3e') }} → {{ qm_val(sqm.get('gvtd_filt_p95_post'), '.3e') }}{% else %}{{ qm_val(sqm.get('gvtd_filt_p95'), '.3e') }}{% endif %}</span></li>
     <li>{{ ql('gvtd_pct_above_thresh', 'GVTD % motion' ~ (' (motion before→after)' if sqm.get('gvtd_pct_above_thresh_post') is not none else '')) }}
         <span class="qv">{% if sqm.get('gvtd_pct_above_thresh_post') is not none %}{{ pct(sqm.get('gvtd_pct_above_thresh')) }} → {{ pct(sqm.get('gvtd_pct_above_thresh_post')) }}{% else %}{{ pct(sqm.get('gvtd_pct_above_thresh')) }}{% endif %}</span></li>
     <li>{{ ql('gvtd_num_above_thresh', 'GVTD motion frames' ~ (' (motion before→after)' if sqm.get('gvtd_num_above_thresh_post') is not none else '')) }}

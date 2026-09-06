@@ -36,7 +36,13 @@ from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("qc.quantitative_metrics")
 
-GVTD_MOTION_BAND = (0.01, 0.5)  # Hz, bandpass for the filtered (motion-specific) GVTD
+# Hz, the band GVTD is measured on. :footcite:`Sherafati2020` computes GVTD on data already
+# band-passed by the analysis, and measured the artifact-to-background ratio at four pipeline
+# stages: it peaks after filtering, which is why this is applied at all. 0.5 is that paper's
+# task low-pass, the fNIRS convention for dropping cardiac; 0.01 sits between its two
+# high-passes (0.009 rest, 0.02 task). One band for every mode, not the analysis band of the
+# moment: a QC number that moved with the mode could not be compared across a cohort.
+GVTD_MOTION_BAND = (0.01, 0.5)
 
 # The window is part of what PSP measures, not a smoothing setting, so it is pinned here
 # rather than following the QC window. Lengthening it raises the score on a channel with a
@@ -614,7 +620,7 @@ def _spike_metrics(raw_intensity: mne.io.Raw, ch_frac: float = 0.1) -> dict[str,
     raw_od = (raw_intensity if is_optical_density(raw_intensity)
               else mne.preprocessing.nirs.optical_density(raw_intensity.copy()))
     od_data = np.nan_to_num(raw_od.get_data(), nan=0.0, posinf=0.0, neginf=0.0)
-    diff_raw = np.diff(od_data, axis=1)  # unfiltered: for the derivative-energy TVD
+    diff_raw = np.diff(od_data, axis=1)  # unfiltered: for the per-channel derivative energy
     spikes = _spike_mask(_motion_band_diff(od_data, float(raw_od.info["sfreq"])))
     flagged = spikes.mean(axis=0) >= ch_frac  # timepoints with >= ch_frac channels spiking
     return {

@@ -129,6 +129,7 @@ _TRIAL_METRICS = [
     ("cv_mean",                "CV",         ".3f", False),
     ("snr_mean",               "SNR",        ".1f", True),
     ("gvtd_mean",              "GVTD",       ".4f", False),
+    ("gvtd_filt_mean",         "GVTD band",  ".4f", False),
     ("channel_retention_rate", "Retention",  ".2f", True),
 ]
 

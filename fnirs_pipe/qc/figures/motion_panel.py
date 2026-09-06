@@ -15,7 +15,9 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
 from fnirs_pipe.qc.figures._utils import decimate as _decimate
-from fnirs_pipe.qc.quantitative_metrics import GVTD_MOTION_BAND, gvtd_threshold, gvtd_timetrace
+from fnirs_pipe.qc.quantitative_metrics import (
+    GVTD_MOTION_BAND, _motion_band_diff, gvtd_threshold, gvtd_timetrace,
+)
 from fnirs_pipe.utils import is_optical_density
 from fnirs_pipe.utils.logging import get_logger
 
@@ -95,19 +97,18 @@ def carpet_gvtd_figure(
     spike_segments: "list[tuple[float, float]] | None" = None,
     raw_after: "mne.io.Raw | None" = None,
 ) -> go.Figure:
-    """Raw GVTD + filtered GVTD + per-channel z-scored OD carpet, on one shared time axis.
+    """Motion-band GVTD + per-channel z-scored OD carpet, on one shared time axis.
 
-    The two GVTD traces sit in separate stacked panels (they overlap badly on one axis).
+    Only the 0.01-0.5 Hz GVTD is drawn. Differencing amplifies the ~1 Hz cardiac component
+    well above head motion, so the unfiltered trace reads as pulse rather than movement and
+    is not worth a panel; ``gvtd_mean`` and ``gvtd_p95`` still report it.
     ``corrected_segments`` (motion-correction footprint) and ``spike_segments`` are drawn
     as short bands on a strip under the carpet, distinct from the full-height red
     ``segments`` windows.
 
-    Given ``raw_after``, the motion-corrected recording, each GVTD panel carries a second
+    Given ``raw_after``, the motion-corrected recording, the GVTD panel carries a second
     trace and a second carpet is stacked under the first, so the figure answers whether the
-    correction removed what it was there to remove. The two traces land on top of each other
-    wherever the correction changed nothing, which for the unfiltered trace is nearly
-    everywhere; they share a legend group per side, so clicking ``before`` or ``after`` in
-    the legend pulls that side out of both panels at once and separates them.
+    correction removed what it was there to remove.
 
     Everything the comparison is read against stays fixed to the uncorrected side: the
     threshold line, and the per-channel mean and SD both carpets are z-scored by.
@@ -123,15 +124,13 @@ def carpet_gvtd_figure(
     has_after = od_after is not None
 
     # GVTD full-res for the threshold/metric; plotted trace is max-pooled for display only.
-    # filt = 0.01-0.5 Hz motion band (used for the threshold).
-    gvtd      = gvtd_timetrace(od_data, sfreq)
+    # 0.01-0.5 Hz motion band, the band the threshold is set on.
     gvtd_filt = gvtd_timetrace(od_data, sfreq, *GVTD_MOTION_BAND)
     t_gvtd    = times[1:]
     motion_thresh = gvtd_threshold(gvtd_filt, n_std=3.0)
-    t_raw_ds,  gvtd_ds      = _maxpool_xy(t_gvtd, gvtd)
     t_filt_ds, gvtd_filt_ds = _maxpool_xy(t_gvtd, gvtd_filt)
+    gvtd_filt_post_ds = None
     if has_after:
-        _, gvtd_post_ds      = _maxpool_xy(t_gvtd, gvtd_timetrace(od_after, sfreq))
         _, gvtd_filt_post_ds = _maxpool_xy(
             t_gvtd, gvtd_timetrace(od_after, sfreq, *GVTD_MOTION_BAND))
 
@@ -155,15 +154,15 @@ def carpet_gvtd_figure(
 
     n_ch      = carpet.shape[0]
     n_carpets = 2 if has_after else 1
-    n_rows    = 2 + n_carpets + 1  # 2 GVTD panels, the carpets, the annotation strip
+    n_rows    = 1 + n_carpets + 1  # the GVTD panel, the carpets, the annotation strip
     gvtd_px   = 110
     carpet_px = int(max(200, min(n_ch * 13, 700)))
     band_px   = 60
-    heights   = [gvtd_px, gvtd_px] + [carpet_px] * n_carpets + [band_px]
+    heights   = [gvtd_px] + [carpet_px] * n_carpets + [band_px]
     total_px  = sum(heights) + 120  # margins and the shared x-axis title
     band_row  = n_rows
 
-    titles = ["GVTD (raw)", "GVTD (0.01\u20130.5 Hz)"]
+    titles = ["GVTD (0.01\u20130.5 Hz)"]
     titles += (["Carpet (before)", "Carpet (after)"] if has_after else ["Carpet"])
     titles += [""]
     fig = make_subplots(
@@ -173,38 +172,24 @@ def carpet_gvtd_figure(
         subplot_titles=titles,
     )
 
-    def _gvtd_traces(row, y_before, y_after, t, color_before):
-        """One GVTD panel: the uncorrected trace, plus the corrected one when there is one.
-
-        ``legendgroup`` is the side rather than the panel, so one click in the legend hides
-        that side in every panel at once. Only the first panel contributes legend entries;
-        the second would otherwise duplicate them.
-        """
-        show = row == 1
-        if y_after is not None:
-            fig.add_trace(go.Scatter(
-                x=t, y=y_after, mode="lines", name="after",
-                legendgroup="after", showlegend=show,
-                line=dict(color="#16a085", width=1.4),
-                hovertemplate="t=%{x:.1f}s<br>after=%{y:.3e}<extra></extra>",
-            ), row=row, col=1)
+    if gvtd_filt_post_ds is not None:
         fig.add_trace(go.Scatter(
-            x=t, y=y_before, mode="lines",
-            name="before" if y_after is not None else "GVTD",
-            legendgroup="before", showlegend=show,
-            line=dict(color=color_before, width=1.0),
-            hovertemplate="t=%{x:.1f}s<br>before=%{y:.3e}<extra></extra>",
-        ), row=row, col=1)
-
-    _gvtd_traces(1, gvtd_ds, gvtd_post_ds if has_after else None, t_raw_ds, "#5d6d7e")
-    _gvtd_traces(2, gvtd_filt_ds, gvtd_filt_post_ds if has_after else None,
-                 t_filt_ds, "#2c3e50")
+            x=t_filt_ds, y=gvtd_filt_post_ds, mode="lines", name="after",
+            line=dict(color="#16a085", width=1.4),
+            hovertemplate="t=%{x:.1f}s<br>after=%{y:.3e}<extra></extra>",
+        ), row=1, col=1)
+    fig.add_trace(go.Scatter(
+        x=t_filt_ds, y=gvtd_filt_ds, mode="lines",
+        name="before" if gvtd_filt_post_ds is not None else "GVTD",
+        line=dict(color="#2c3e50", width=1.0),
+        hovertemplate="t=%{x:.1f}s<br>before=%{y:.3e}<extra></extra>",
+    ), row=1, col=1)
 
     if motion_thresh is not None:
         # the uncorrected recording's threshold, kept for the corrected trace as well: it is
         # the yardstick the % motion in the metrics table is counted against
         fig.add_hline(
-            y=motion_thresh, row=2, col=1,
+            y=motion_thresh, row=1, col=1,
             line=dict(color="#e74c3c", width=1, dash="dash"),
             annotation_text=f"thresh={motion_thresh:.3e}",
             annotation_position="top right",
@@ -217,7 +202,7 @@ def carpet_gvtd_figure(
             coloraxis="coloraxis",  # one scale and one bar for both carpets
             hovertemplate="%{y}<br>t=%{x:.1f}s<br>z=%{z:.2f}<extra></extra>",
             showlegend=False,
-        ), row=3 + i, col=1)
+        ), row=2 + i, col=1)
 
     def _band(spans, y, color, label):
         xs, ys = [], []
@@ -248,11 +233,10 @@ def carpet_gvtd_figure(
                 )
 
     fig.update_yaxes(title_text="GVTD", title_font_size=9, row=1, col=1)
-    fig.update_yaxes(title_text="GVTD", title_font_size=9, row=2, col=1)
     for i in range(n_carpets):
         # the channel names stay in the hover, where they are readable; on the axis a full
         # montage would be an unreadable stack
-        fig.update_yaxes(showticklabels=False, autorange="reversed", row=3 + i, col=1)
+        fig.update_yaxes(showticklabels=False, autorange="reversed", row=2 + i, col=1)
     fig.update_yaxes(showticklabels=False, range=[0, 1], row=band_row, col=1)
     fig.update_xaxes(title_text="Time (s)", row=band_row, col=1)
     fig.update_xaxes(range=[float(times[0]), float(times[-1])])
@@ -371,33 +355,41 @@ def build_motion_detail_figure(
     corrected_segments: "list[tuple[float, float]] | None" = None,
     spike_segments: "list[tuple[float, float]] | None" = None,
 ) -> go.Figure:
-    """4-row per-channel motion figure: GVTD (global) + TVD + before/after OD + band strip.
+    """4-row per-channel motion figure: GVTD, this channel's derivative, before/after OD, band strip.
 
     Both inputs must be in OD space (output of optical_density()). The bottom strip shows
     the (global) motion-correction footprint and spike timepoints, never overlapping the traces.
+
+    Row 2 is this channel's band-limited |dOD/dt|, the signal the spike marks in the strip are
+    detected on, so a peak there and a mark below it refer to the same event. It is a
+    per-channel view of the spike detector, not a per-channel GVTD: GVTD is defined across
+    channels :footcite:`Sherafati2020` and has no single-channel form. Both rows are
+    band-limited to ``GVTD_MOTION_BAND`` before differencing, since the unfiltered derivative
+    is dominated by the ~1 Hz cardiac component and shows pulse rather than movement.
+
+    References
+    ----------
+    .. footbibliography::
     """
-    # GVTD + threshold on full-res OD so they match the reported gvtd_* metrics; the plotted
-    # GVTD traces are decimated afterwards (display only), like the carpet figure.
+    # GVTD + threshold on full-res OD so they match the reported gvtd_filt_* metrics; the
+    # plotted trace is max-pooled afterwards (display only), like the carpet figure.
     od_full, t_full = raw_od_before.get_data(return_times=True)
     full_sfreq = float(raw_od_before.info["sfreq"])
-    gvtd_full      = gvtd_timetrace(od_full, full_sfreq)                     # canonical (unfiltered)
-    gvtd_filt_full = gvtd_timetrace(od_full, full_sfreq, *GVTD_MOTION_BAND)  # motion-band
+    gvtd_filt_full = gvtd_timetrace(od_full, full_sfreq, *GVTD_MOTION_BAND)
     motion_thresh  = gvtd_threshold(gvtd_filt_full, n_std=3.0)
-    gvtd_arr, t_gvtd_arr = _decimate(gvtd_full[np.newaxis], t_full[1:], max_pts)
-    gvtd_filt_arr, _     = _decimate(gvtd_filt_full[np.newaxis], t_full[1:], max_pts)
-    gvtd, gvtd_filt = gvtd_arr[0], gvtd_filt_arr[0]
+    t_gvtd_arr, gvtd_filt = _maxpool_xy(t_full[1:], gvtd_filt_full, max_pts)
     t_gvtd = t_gvtd_arr.tolist()
 
-    # decimated OD (display resolution) for this channel's TVD and before/after traces
-    od_data, od_times = _decimate(od_full, t_full, max_pts)
-    diff_all = np.diff(od_data, axis=1)
-    t_tvd = od_times[1:].tolist()
-
+    # This channel's |dOD/dt|, on full-res OD and through the same band-limited derivative
+    # the spike marks come from. Differencing the decimated trace instead would alias the
+    # cardiac band back in; max-pooling rather than striding keeps each peak at its height.
     if ch_name in raw_od_before.ch_names:
-        ch_idx = raw_od_before.ch_names.index(ch_name)
-        tvd = np.abs(diff_all[ch_idx]).tolist()    # TVD = |diff_t(OD)| for this channel
+        ch_idx   = raw_od_before.ch_names.index(ch_name)
+        tvd_full = np.abs(_motion_band_diff(od_full[[ch_idx]], full_sfreq)[0])
     else:
-        tvd = np.zeros(len(t_tvd)).tolist()
+        tvd_full = np.zeros(len(t_full) - 1)
+    t_tvd_arr, tvd_ds = _maxpool_xy(t_full[1:], tvd_full, max_pts)
+    t_tvd, tvd = t_tvd_arr.tolist(), tvd_ds.tolist()
 
     def _get_ch(raw, ch):
         idx = raw.ch_names.index(ch)
@@ -413,13 +405,10 @@ def build_motion_detail_figure(
         shared_xaxes=True,
         row_heights=[0.19, 0.19, 0.5, 0.12],
         vertical_spacing=0.04,
-        subplot_titles=["GVTD (global)", f"TVD — {ch_name}", f"{ch_name}  before / after", "motion bands"],
+        subplot_titles=["GVTD (global, 0.01–0.5 Hz)", f"|dOD/dt| (0.01–0.5 Hz) — {ch_name}",
+                        f"{ch_name}  before / after", "motion bands"],
     )
 
-    fig.add_trace(go.Scatter(
-        x=t_gvtd, y=gvtd.tolist(), mode="lines",
-        line=dict(color="#b0b0b0", width=0.4), name="GVTD raw",
-    ), row=1, col=1)
     fig.add_trace(go.Scatter(
         x=t_gvtd, y=gvtd_filt.tolist(), mode="lines",
         line=dict(color="#2c3e50", width=0.6), name="GVTD 0.01–0.5 Hz",
@@ -440,7 +429,7 @@ def build_motion_detail_figure(
 
     fig.add_trace(go.Scatter(
         x=t_tvd, y=tvd, mode="lines",
-        line=dict(color="#8e44ad", width=1.0), name="TVD",
+        line=dict(color="#8e44ad", width=1.0), name="|dOD/dt|",
     ), row=2, col=1)
 
     fig.add_trace(go.Scatter(
@@ -479,7 +468,7 @@ def build_motion_detail_figure(
     _detail_band(spike_segments, 0.55, 0.95, "#e67e22")
 
     fig.update_yaxes(title_text="GVTD",   tickfont=dict(size=7), row=1, col=1)
-    fig.update_yaxes(title_text="TVD",    tickfont=dict(size=7), row=2, col=1)
+    fig.update_yaxes(title_text="|dOD/dt|", tickfont=dict(size=7), row=2, col=1)
     fig.update_yaxes(title_text="OD",     tickfont=dict(size=7), row=3, col=1)
     fig.update_yaxes(range=[0, 1], showticklabels=False, row=4, col=1)
     fig.update_xaxes(title_text="Time (s)", gridcolor="#eee", row=4, col=1)

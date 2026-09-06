@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Fixed
+- **The per-channel derivative trace showed pulse, not motion.** It was differenced on the already-downsampled signal and never band-limited, so the cardiac rhythm aliased into it and its peaks did not line up with the spike marks drawn underneath. It is now taken at full resolution over the same 0.01-0.5 Hz band the spikes are detected on
 - **The low-pass filter barely filtered.** `--low-pass 0.2` attenuated the cardiac band by 4 dB where a working filter manages 60, so every `desc-filtered` and `desc-errts` still carried the heartbeat. The high-pass was unaffected. Every filtered file, and every number measured on one, changes: rerun anything written before this
 - **A run whose markers cannot be epoched filled the console with warnings.** A design that only marks where each condition starts and ends carries annotations but no trials, and every epoch figure tried anyway. The run is now recognised up front, said once in the log, and reported as a note
 
@@ -18,6 +19,8 @@ All notable changes to this project will be documented in this file.
 - **`--wtc-by-condition`**, which runs the coherence inside each task annotation's window as well as over the whole recording, so a block design gets one result per block. A trigger with a duration uses it, one without runs to the next trigger, and a window too short to carry the lowest frequency asked for is skipped and said so
 
 ### Changed
+- **The motion figures drop the unfiltered GVTD trace.** Differencing amplifies the heartbeat well above head motion, so that trace read as pulse and never as movement, and it is the pipeline stage the GVTD paper measured the worst artifact-to-background ratio at. Only the 0.01-0.5 Hz band is drawn; `gvtd_mean` and `gvtd_p95` are unchanged and now sit next to their motion-band counterparts in the report and the per-trial table
+- **The per-channel motion row is labelled `|dOD/dt|` rather than TVD.** It is a view of the spike detector's input, not a per-channel GVTD: GVTD is defined across channels and has no single-channel form, and TVD already means total variation denoising elsewhere. The stored `temporal_derivative_variance` is unchanged
 - **The PSD panel draws the filter's own response over the filtered signal**, so what the bandpass did is read off the filter rather than guessed from the gap between two noisy curves, and the panel names the filter it drew. Both rows share one power axis, and the panel stops at the bandpass: the confound regression's output is not a spectral question
 
 
