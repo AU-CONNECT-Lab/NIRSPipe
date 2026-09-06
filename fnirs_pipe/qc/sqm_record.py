@@ -16,8 +16,29 @@ section are the same names the metric functions have always returned:
     resampled  the same signal after the resample, when one ran
     errts      the confound-regression residual, the last denoising step there is
 
-The three ``raw*`` sections are one file seen through three channel sets, so the only
-thing that differs between them is source-detector separation.
+Every family is written three times, over every channel, the long ones and the short ones:
+``raw`` / ``raw_long`` / ``raw_short``, ``preproc`` / ``preproc_long`` / ``preproc_short``,
+and so on for each stage. One file seen through three channel sets, so the only thing that
+differs within a trio is source-detector separation, and a ``_long`` number is only ever
+compared against another ``_long`` one.
+
+**Split a new metric three ways unless it cannot be.** A short channel sits millimetres
+from its source: it returns far more light, a far stronger pulse, and it sees scalp rather
+than cortex, so an average over both sets describes neither. Two kinds of metric are the
+exception, and both are exceptions for a reason that can be stated:
+
+    montage-wide     GVTD, the spike counts, the motion-correction footprint. These
+                     aggregate across channels, and a handful of scalp channels has no
+                     reference distribution to read them against. A short-channel GVTD
+                     would be a number without a meaning.
+    not channel-based  ``pct_data_retained`` is a share of the recording's duration. It is
+                     the same number for every channel set, so it stays on the whole-file
+                     section alone (see ``_WHOLE_FILE_KEYS``); repeating it under ``_long``
+                     would name a quantity that does not exist.
+
+Anything else, split it. The metric that made this a rule was ``hbo_hbr_corr_mean``: the
+HbO-HbR anticorrelation is a property of cortical haemodynamics, a short channel has none,
+and mixing the two moved one of the numbers that decides whether a run looks usable.
 
 Bad channels: the Beer-Lambert conversion is the dividing line, never the section.
 

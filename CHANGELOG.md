@@ -6,6 +6,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.28.0] - 2026-09-06
+
 ### Fixed
 - **A recording whose input was already optical density could lose its whole report.** The metrics panel compared an undefined SNR against its threshold and stopped rendering
 - **The per-channel derivative trace showed pulse, not motion.** It was differenced on the already-downsampled signal and never band-limited, so the cardiac rhythm aliased into it and its peaks did not line up with the spike marks drawn underneath. It is now taken at full resolution over the same 0.01-0.5 Hz band the spikes are detected on
