@@ -59,9 +59,23 @@ _DESC_RE = re.compile(r"_desc-([A-Za-z0-9]+)_nirs\.snirf$")
 # confounds had its actual endpoint (`errts`) sitting outside it.
 _HAEMO_STAGES = ("filtered", "resampled", "errts")
 
+# Every haemoglobin stage is split by separation the same way the raw ones are, so a
+# `_long` metric always has a `_long` counterpart to compare against, never an all-channel
+# one. `_SPLIT_SUFFIXES` is the order they are written and read in.
+_SPLIT_SUFFIXES = ("long", "short")
+_HAEMO_SECTIONS = tuple(
+    name for stage in ("preproc", *_HAEMO_STAGES)
+    for name in (stage, *(f"{stage}_{s}" for s in _SPLIT_SUFFIXES))
+)
+
 SECTIONS = ("raw", "raw_long", "raw_short", "motion", "motion_post",
             "motion_post_long", "motion_post_short", "windowed",
-            "preproc", *_HAEMO_STAGES)
+            *_HAEMO_SECTIONS)
+
+# `pct_data_retained` measures the recording's duration, not its channels, so it is one
+# number for every channel set. It stays on the whole-file section alone: repeating it
+# under `_long` would name a long-channel quantity that does not exist.
+_WHOLE_FILE_KEYS = ("pct_data_retained",)
 
 
 def scan_runs(nirs_dir: Path) -> dict[str, dict[str, Path]]:
@@ -271,6 +285,44 @@ def raw_sections(
     return sections, per_channel
 
 
+def haemo_sections(
+    name: str,
+    raw_haemo: mne.io.Raw,
+    compute,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """One haemoglobin file measured over every channel, the long ones, the short ones.
+
+    The same three-way split as :func:`raw_sections`, and for the same reason: a short
+    channel sees scalp, so a mean taken over both sets describes neither. Global
+    correlation is the sharpest case, since short channels correlate strongly with one
+    another and lift it by construction, but the HbO-HbR anticorrelation is the one that
+    misleads most: it is a property of cortical haemodynamics, and a short channel has
+    none, so mixing the two moves the number that decides whether a run looks usable.
+
+    ``compute`` maps a Raw to a flat metric dict, which is what lets the unfiltered stage
+    (band power and drift included) and the filtered ones share this.
+
+    A subset that turns out to be the whole file is skipped rather than written twice.
+    """
+    from fnirs_pipe.qc.quantitative_metrics import long_short_channels
+
+    sections: dict[str, Any] = {}
+    per_channel: dict[str, Any] = {}
+    section = _section_writer(sections, per_channel)
+
+    section(name, lambda: compute(raw_haemo))
+
+    long_names, short_names = long_short_channels(raw_haemo)
+    for suffix, names in zip(_SPLIT_SUFFIXES, (long_names, short_names)):
+        if not names or len(names) == len(raw_haemo.ch_names):
+            continue
+        def subset(names=names):
+            picked = compute(raw_haemo.copy().pick(names))
+            return {k: v for k, v in picked.items() if k not in _WHOLE_FILE_KEYS}
+        section(f"{name}_{suffix}", subset)
+    return sections, per_channel
+
+
 def _motion_post_section(
     raw_od: mne.io.Raw,
     cardiac_l_freq: float,
@@ -323,7 +375,7 @@ def compute_run_sections(
     """
     from fnirs_pipe.io.snirf import read_snirf
     from fnirs_pipe.qc.quantitative_metrics import (
-        attach_windowed_series, compute_haemo_sqm, compute_prep_haemo_sqm, compute_raw_sqm,
+        attach_windowed_series, compute_haemo_sqm, compute_prep_haemo_sqm,
         long_short_channels,
     )
 
@@ -448,18 +500,28 @@ def compute_run_sections(
                 section("motion_post_short", lambda: _motion_post_section(
                     raw_motcorr.copy().pick(post_short), cardiac_l_freq, cardiac_h_freq))
 
-    if "preproc" in stages:
-        section("preproc", lambda: compute_prep_haemo_sqm(
-            read_snirf(stages["preproc"]), cardiac_l_freq, cardiac_h_freq,
-            resp_l_freq, resp_h_freq))
-
-    # One section per haemo stage the run actually wrote, each measured with the same
+    # One family per haemo stage the run actually wrote, each measured with the same
     # metrics as `preproc` so any of them subtracts against it. Band power and drift are
     # not among those metrics: past the bandpass they measure the filter, which is why
-    # `compute_prep_haemo_sqm` is used for `preproc` alone.
-    for desc in _HAEMO_STAGES:
-        if desc in stages:
-            section(desc, lambda path=stages[desc]: compute_haemo_sqm(read_snirf(path)))
+    # `compute_prep_haemo_sqm` is used for `preproc` alone. Every family is split by
+    # separation, so a `_long` number is only ever compared with another `_long` one.
+    haemo_computes = {
+        "preproc": lambda r: compute_prep_haemo_sqm(
+            r, cardiac_l_freq, cardiac_h_freq, resp_l_freq, resp_h_freq),
+        **{desc: (lambda r: compute_haemo_sqm(r)) for desc in _HAEMO_STAGES},
+    }
+    for desc, compute in haemo_computes.items():
+        if desc not in stages:
+            continue
+        try:
+            raw_haemo = read_snirf(stages[desc])
+        except Exception:
+            logger.warning("%s unreadable; its sections are skipped", stages[desc],
+                           exc_info=True)
+            continue
+        haemo_secs, haemo_pc = haemo_sections(desc, raw_haemo, compute)
+        sections.update(haemo_secs)
+        per_channel.update(haemo_pc)
 
     if windowed:
         sections["windowed"] = windowed

@@ -679,15 +679,16 @@
   {%- set lsci = sqm_long.get('sci_mean') %}
   {%- set lsnr = sqm_long.get('snr_mean') %}
   {%- set lret = sqm_long.get('channel_retention_rate') %}
-  <p class="qm-note">The same raw recording measured over three channel sets. <b>Long</b> is what the
-     verdict is read off; <b>Short</b> answers a different question, whether the regressors those
-     channels feed are trustworthy, and carries no colouring because a short channel's coupling is
-     high by construction and has no established threshold. Rejection itself is per channel against
-     the SCI threshold, over the whole montage, and is not read off any of these averages.</p>
+  <p class="qm-note">Measured over three channel sets. <b>Long</b> is what the verdict is read off;
+     <b>Short</b> answers a different question, whether the regressors those channels feed are
+     trustworthy, and carries no colouring because a short channel's coupling is high by
+     construction and has no established threshold. Rejection itself is per channel against the SCI
+     threshold, over the whole montage, and is not read off any of these averages.</p>
   <div style="overflow-x:auto;">
   <table class="qm-table qm-split">
     <thead><tr><th>Metric</th><th>All</th><th>Long</th><th>Short</th></tr></thead>
     <tbody>
+      <tr><td colspan="4" class="ch-group">Original recording &mdash; optical density</td></tr>
       <tr><td>Channels</td>
           <td>{{ channel_rows | length }}</td>
           <td>{{ sqm.get('n_long_channels') if sqm.get('n_long_channels') is not none else '—' }}</td>
@@ -717,6 +718,39 @@
           <td class="qv">{{ dv(sqm_long, 'mean_amp_mean', '.3e') }}</td>
           <td>{{ dv(sqm_short, 'mean_amp_mean', '.3e') }}</td></tr>
     </tbody>
+    {% if hb_split %}
+    {%- set hcorr = hb_long.get('hbo_hbr_corr_mean') %}
+    <tbody>
+      <tr><td colspan="4" class="ch-group">Haemoglobin &mdash; before denoising</td></tr>
+      <tr><td>{{ ql('hbo_hbr_corr_mean', 'Mean HbO&ndash;HbR corr') }}</td>
+          <td>{{ dv(hb_all, 'hbo_hbr_corr_mean') }}</td>
+          <td class="qv {{ qv_class(hcorr, hcorr is not none and hcorr < -0.3,
+                                    hcorr is not none and hcorr < 0) }}">{{ dv(hb_long, 'hbo_hbr_corr_mean') }}</td>
+          <td>{{ dv(hb_short, 'hbo_hbr_corr_mean') }}</td></tr>
+      {% for key, text in [('gcor_hbo', 'Global corr HbO'), ('gcor_hbr', 'Global corr HbR')] %}
+      <tr><td>{{ ql(key, text) }}</td>
+          <td>{{ dv(hb_all, key) }}</td>
+          <td class="qv">{{ dv(hb_long, key) }}</td>
+          <td>{{ dv(hb_short, key) }}</td></tr>
+      {% endfor %}
+      {% if hb_all.get('cnr_hbo_mean') is not none %}
+      {% for key, text in [('cnr_hbo_mean', 'CNR HbO'), ('cnr_hbr_mean', 'CNR HbR')] %}
+      <tr><td>{{ ql(key, text) }}</td>
+          <td>{{ dv(hb_all, key) }}</td>
+          <td class="qv">{{ dv(hb_long, key) }}</td>
+          <td>{{ dv(hb_short, key) }}</td></tr>
+      {% endfor %}
+      {% endif %}
+      <tr><td>{{ ql('cardiac_band_frac_hbo', 'Cardiac band fraction (HbO)') }}</td>
+          <td>{{ dp(hb_all, 'cardiac_band_frac_hbo') }}</td>
+          <td class="qv">{{ dp(hb_long, 'cardiac_band_frac_hbo') }}</td>
+          <td>{{ dp(hb_short, 'cardiac_band_frac_hbo') }}</td></tr>
+      <tr><td>{{ ql('lowfreq_drift_amplitude_hbo', 'Low-freq drift (HbO)') }}</td>
+          <td>{{ dv(hb_all, 'lowfreq_drift_amplitude_hbo', '.3e') }}</td>
+          <td class="qv">{{ dv(hb_long, 'lowfreq_drift_amplitude_hbo', '.3e') }}</td>
+          <td>{{ dv(hb_short, 'lowfreq_drift_amplitude_hbo', '.3e') }}</td></tr>
+    </tbody>
+    {% endif %}
   </table>
   </div>
   {% else %}
@@ -770,7 +804,12 @@
   </ul>
 
   <h3 class="qm-sub">Haemoglobin and timing</h3>
-  <p class="qm-note">Measured after Beer-Lambert, over <b>every</b> channel: these sections are not split by separation, so short channels are included in each of them. % data retained is a share of the recording's duration, not of its channels.</p>
+  <p class="qm-note">Measured after Beer-Lambert, on
+     {% if hb_split %}long channels{% else %}every channel{% endif %}. These rows are the
+     stage comparison: what the denoising did, not what the recording arrived as. The
+     table above holds the same metrics before denoising, split by channel set. % data
+     retained is a share of the recording's duration, not of its channels, so it is one
+     number for every channel set.</p>
   <ul class="qm-list">
     {% set corr_after = sqm.get('hbo_hbr_corr_mean_errts') %}
     <li>{{ ql('hbo_hbr_corr_mean', 'Mean HbO–HbR corr' ~ (' (denoise before→after)' if corr_after is not none else '')) }}

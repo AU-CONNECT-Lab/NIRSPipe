@@ -577,7 +577,10 @@ def load_group_sqm(
                 continue
             sqm.update(record.get("raw_long") or record.get("raw") or {})
             sqm.update(record.get("motion") or {})
+            # preproc underneath preproc_long: the split section leaves out the metrics
+            # that describe the recording's duration rather than its channels
             sqm.update(record.get("preproc") or {})
+            sqm.update(record.get("preproc_long") or {})
 
         # Rejection is read from the desc-sci sidecars, which prep writes on every run and
         # which name every channel the run rejected whatever came after. The channel-metrics

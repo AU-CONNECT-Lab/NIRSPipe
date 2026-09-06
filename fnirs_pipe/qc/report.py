@@ -740,6 +740,12 @@ def _section_sqm(
     a real verdict with a downstream cost -- a bad short channel is a bad regressor -- and
     printing that verdict without the score behind it leaves it uncheckable.
 
+    Every family is read at its long-channel split where the record carries one, so the
+    panel's verdict is never an average over long and short channels together. ``preproc``
+    is merged underneath ``preproc_long`` rather than replaced by it, because the split
+    sections deliberately omit the metrics that describe the recording's duration instead
+    of its channels.
+
     The motion-corrected side of the same channel set is added under a ``_post`` suffix, and
     the confound-regression residual under an ``_errts`` one. Both carry the same key names
     as the section they are paired with, so a plain merge would silently overwrite the
@@ -751,6 +757,9 @@ def _section_sqm(
     sqm_all: dict = {}
     sqm_long: dict = {}
     sqm_short: dict = {}
+    hb_all: dict = {}
+    hb_long: dict = {}
+    hb_short: dict = {}
     with _guard("SQM record", errors, subject):
         if out_dir is None or sqm_label is None:
             raise FileNotFoundError("no SQM record location for this run")
@@ -762,7 +771,9 @@ def _section_sqm(
         if not any(record.get(k) for k in keys):
             raise ValueError(
                 f"{record_file.name} holds none of {keys}; not a sectioned SQM record")
-        for key in keys:
+        # `preproc` before `preproc_long`, so the long values win where they exist and the
+        # whole-file ones the split does not carry (pct_data_retained) survive underneath
+        for key in (*keys, "preproc_long"):
             sqm.update(record.get(key) or {})
             sqm.update(per_channel.get(key) or {})
         # The corrected side of the *same* channel set, suffixed rather than merged: it
@@ -777,7 +788,8 @@ def _section_sqm(
         # bandpass alone moves gcor and the band powers for reasons that are the filter's,
         # not the recording's, while the regression is the step whose effect is worth a
         # number. A run that regressed nothing has no `errts` and prints single values.
-        for k, v in (record.get("errts") or {}).items():
+        errts_key = "errts_long" if record.get("errts_long") else "errts"
+        for k, v in (record.get(errts_key) or {}).items():
             sqm[f"{k}_errts"] = v
         # The short-channel half of the same raw file, kept beside `sqm` rather than merged
         # into it: the scalar means the panel prints are long-only by design, and a short
@@ -790,6 +802,10 @@ def _section_sqm(
         sqm_all = dict(record.get("raw") or {})
         sqm_long = dict(record.get("raw_long") or {})
         sqm_short = dict(record.get("raw_short") or {})
+        # the same three views of the haemoglobin file, for the second half of the table
+        hb_all = dict(record.get("preproc") or {})
+        hb_long = dict(record.get("preproc_long") or {})
+        hb_short = dict(record.get("preproc_short") or {})
         # how the montage split, which lives in `raw` whichever section the scalars came from
         for key in ("n_long_channels", "n_short_channels"):
             if sqm_all.get(key) is not None:
@@ -840,8 +856,12 @@ def _section_sqm(
         "sqm_all": sqm_all,
         "sqm_long": sqm_long,
         "sqm_short": sqm_short,
+        "hb_all": hb_all,
+        "hb_long": hb_long,
+        "hb_short": hb_short,
         # three columns are worth printing only when all three are real
         "sqm_split": bool(sqm_long and sqm_short),
+        "hb_split": bool(hb_long and hb_short),
     }
 
 

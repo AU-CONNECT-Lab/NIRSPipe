@@ -32,13 +32,14 @@ _TEMPLATE_DIR = Path(__file__).parent / "templates"
 # Long channels first, all channels as the fallback, which is the same preference the run's
 # own report and the hyperscanning tables use. Without it this table read `raw_*` while the
 # report beside it read `raw_long_*`, so one label named two different numbers. The last two
-# have no long-channel form: those sections are not split by separation.
+# `Motion corr.` has no long-channel form: the correction footprint counts what the
+# correction touched, over every channel.
 _COLUMNS = (
     ("Channels kept", ("raw_long_channel_retention_rate", "raw_channel_retention_rate"), "{:.0%}"),
     ("SCI mean",      ("raw_long_sci_mean", "raw_sci_mean"),                             "{:.2f}"),
     ("GVTD p95",      ("raw_long_gvtd_p95", "raw_gvtd_p95"),                             "{:.2e}"),
     ("Motion corr.",  ("motion_motion_corrected_pct",),                                  "{:.1f}%"),
-    ("HbO-HbR corr",  ("preproc_hbo_hbr_corr_mean",),                                    "{:+.2f}"),
+    ("HbO-HbR corr",  ("preproc_long_hbo_hbr_corr_mean", "preproc_hbo_hbr_corr_mean"),   "{:+.2f}"),
 )
 
 
