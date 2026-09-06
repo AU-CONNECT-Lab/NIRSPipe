@@ -748,6 +748,9 @@ def _section_sqm(
     sqm: dict = {}
     short_pc: dict = {}
     long_pc: dict = {}
+    sqm_all: dict = {}
+    sqm_long: dict = {}
+    sqm_short: dict = {}
     with _guard("SQM record", errors, subject):
         if out_dir is None or sqm_label is None:
             raise FileNotFoundError("no SQM record location for this run")
@@ -781,10 +784,16 @@ def _section_sqm(
         # channel's coupling belongs in its own row of the table, not in those averages.
         short_pc = per_channel.get("raw_short") or {}
         long_pc = per_channel.get("raw_long") or {}
+        # The same raw file measured over three channel sets, kept as three dicts so the
+        # panel can print them side by side. `sqm` above already carries one of them and
+        # decides the verdict; these are for the comparison, not for it.
+        sqm_all = dict(record.get("raw") or {})
+        sqm_long = dict(record.get("raw_long") or {})
+        sqm_short = dict(record.get("raw_short") or {})
         # how the montage split, which lives in `raw` whichever section the scalars came from
         for key in ("n_long_channels", "n_short_channels"):
-            if (raw_section := record.get("raw") or {}).get(key) is not None:
-                sqm[key] = raw_section[key]
+            if sqm_all.get(key) is not None:
+                sqm[key] = sqm_all[key]
 
     def _named(pc: dict) -> set:
         return {ch for key in _PER_CHANNEL_KEYS for ch in (pc.get(key) or {})}
@@ -825,7 +834,15 @@ def _section_sqm(
     if out_dir is not None and sqm:
         with _guard("Channel metrics CSV", errors, subject):
             _save_channel_csv(channel_rows, sqm_label or f"sub-{subject}", out_dir)
-    return {"sqm": sqm, "channel_rows": channel_rows}
+    return {
+        "sqm": sqm,
+        "channel_rows": channel_rows,
+        "sqm_all": sqm_all,
+        "sqm_long": sqm_long,
+        "sqm_short": sqm_short,
+        # three columns are worth printing only when all three are real
+        "sqm_split": bool(sqm_long and sqm_short),
+    }
 
 
 def _note_separation(

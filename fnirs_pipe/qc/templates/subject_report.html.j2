@@ -162,6 +162,9 @@
     .qm-list .ql-key { color: #34495e; font-weight: 600; }
     .ql-dot { color: #2980b9; font-size: 0.62em; vertical-align: 0.35em; margin-left: 0.3rem; }
     .qm-note { font-size: 0.78rem; color: #8a949e; margin: 0 0 0.55rem; }
+    .qm-sub { font-size: 0.9rem; font-weight: 600; margin: 1rem 0 0.3rem; }
+    .qm-split td:first-child { white-space: nowrap; }
+    .qm-split td:not(:first-child), .qm-split th:not(:first-child) { text-align: right; }
     .qm-list .qv { font-weight: 600; white-space: nowrap; }
     .qm-ok   { color: #27ae60; }
     .qm-warn { color: #e67e22; }
@@ -649,7 +652,7 @@
         title="{{ metric_summary(key) }}">{{ text }}{% if is_key_metric(key) %}<span class="ql-dot" aria-hidden="true">&#9679;</span>{% endif %}</span>{% endmacro %}
   <p class="qm-note">Hover a metric for what it means and which way is good.
      <span class="ql-dot" aria-hidden="true">&#9679;</span> marks the ones that decide whether the run is usable.</p>
-  {% if sqm.get('n_short_channels') %}
+  {% if sqm_long and not sqm_split %}
   <p class="qm-note">These are measured on <b>long channels only</b>. A short channel sits a few
      millimetres from its source, so it returns far more light and a far stronger pulse than any
      long channel; averaging the two together lifts SCI, PSP and SNR and can make a poorly coupled
@@ -661,42 +664,77 @@
      did. GVTD is measured either side of motion correction; global correlation, HbO&ndash;HbR
      correlation and CNR either side of the confound regression. A single number means that
      step did not run for this recording.</p>
-  <ul class="qm-list">
     {% set ret  = sqm.get('channel_retention_rate') %}
     {% set sci  = sqm.get('sci_mean') %}
     {% set corr = sqm.get('hbo_hbr_corr_mean') %}
     {% set ret_pct = sqm.get('pct_data_retained') %}
     {% set snr  = sqm.get('snr_mean') %}
     {% set spk  = sqm.get('spike_count') %}
+
+  {% if sqm_split %}
+  {% macro dv(d, key, fmt='.3f') %}{{ qm_val(d.get(key), fmt) }}{% endmacro %}
+  {% macro dp(d, key) %}{{ pct(d.get(key)) }}{% endmacro %}
+  {%- set lsci = sqm_long.get('sci_mean') %}
+  {%- set lsnr = sqm_long.get('snr_mean') %}
+  {%- set lret = sqm_long.get('channel_retention_rate') %}
+  <p class="qm-note">The same raw recording measured over three channel sets. <b>Long</b> is what the
+     verdict is read off; <b>Short</b> answers a different question, whether the regressors those
+     channels feed are trustworthy, and carries no colouring because a short channel's coupling is
+     high by construction and has no established threshold. Rejection itself is per channel against
+     the SCI threshold, over the whole montage, and is not read off any of these averages.</p>
+  <div style="overflow-x:auto;">
+  <table class="qm-table qm-split">
+    <thead><tr><th>Metric</th><th>All</th><th>Long</th><th>Short</th></tr></thead>
+    <tbody>
+      <tr><td>Channels</td>
+          <td>{{ channel_rows | length }}</td>
+          <td>{{ sqm.get('n_long_channels') if sqm.get('n_long_channels') is not none else '—' }}</td>
+          <td>{{ sqm.get('n_short_channels') if sqm.get('n_short_channels') is not none else '—' }}</td></tr>
+      <tr><td>{{ ql('channel_retention_rate', 'Channel retention') }}</td>
+          <td>{{ dp(sqm_all, 'channel_retention_rate') }}</td>
+          <td class="qv {{ qv_class(lret, lret is not none and lret >= 0.9, lret is not none and lret >= 0.7) }}">{{ dp(sqm_long, 'channel_retention_rate') }}</td>
+          <td>{{ dp(sqm_short, 'channel_retention_rate') }}</td></tr>
+      <tr><td>{{ ql('sci_mean', 'Mean SCI') }}</td>
+          <td>{{ dv(sqm_all, 'sci_mean') }}</td>
+          <td class="qv {{ qv_class(lsci, lsci is not none and lsci >= 0.75, lsci is not none and lsci >= 0.5) }}">{{ dv(sqm_long, 'sci_mean') }}</td>
+          <td>{{ dv(sqm_short, 'sci_mean') }}</td></tr>
+      <tr><td>{{ ql('psp_mean', 'Mean PSP (10 s windows)') }}</td>
+          <td>{{ dv(sqm_all, 'psp_mean') }}</td>
+          <td class="qv">{{ dv(sqm_long, 'psp_mean') }}</td>
+          <td>{{ dv(sqm_short, 'psp_mean') }}</td></tr>
+      <tr><td>{{ ql('snr_mean', 'Mean SNR (intensity)') }}</td>
+          <td>{{ dv(sqm_all, 'snr_mean', '.1f') }}</td>
+          <td class="qv {{ qv_class(lsnr, lsnr is not none and lsnr >= 100, lsnr is not none and lsnr >= 20) }}">{{ dv(sqm_long, 'snr_mean', '.1f') }}</td>
+          <td>{{ dv(sqm_short, 'snr_mean', '.1f') }}</td></tr>
+      <tr><td>{{ ql('cv_mean', 'Mean CV') }}</td>
+          <td>{{ dv(sqm_all, 'cv_mean') }}</td>
+          <td class="qv">{{ dv(sqm_long, 'cv_mean') }}</td>
+          <td>{{ dv(sqm_short, 'cv_mean') }}</td></tr>
+      <tr><td>{{ ql('mean_amp_mean', 'Mean amplitude') }}</td>
+          <td>{{ dv(sqm_all, 'mean_amp_mean', '.3e') }}</td>
+          <td class="qv">{{ dv(sqm_long, 'mean_amp_mean', '.3e') }}</td>
+          <td>{{ dv(sqm_short, 'mean_amp_mean', '.3e') }}</td></tr>
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <ul class="qm-list">
     <li>{{ ql('channel_retention_rate', 'Channel retention') }}
-        <span class="qv {{ qv_class(ret, ret >= 0.9, ret >= 0.7) }}">{{ pct(ret) }}</span></li>
+        <span class="qv {{ qv_class(ret, ret is not none and ret >= 0.9, ret is not none and ret >= 0.7) }}">{{ pct(ret) }}</span></li>
     <li>{{ ql('sci_mean', 'Mean SCI') }}
-        <span class="qv {{ qv_class(sci, sci >= 0.75, sci >= 0.5) }}">{{ qm_val(sci) }}</span></li>
+        <span class="qv {{ qv_class(sci, sci is not none and sci >= 0.75, sci is not none and sci >= 0.5) }}">{{ qm_val(sci) }}</span></li>
     <li>{{ ql('psp_mean', 'Mean PSP (10 s windows)') }}
         <span class="qv">{{ qm_val(sqm.get('psp_mean')) }}</span></li>
     <li>{{ ql('snr_mean', 'Mean SNR (intensity)') }}
-        <span class="qv {{ qv_class(snr, snr >= 100, snr >= 20) }}">{{ qm_val(snr, '.1f') }}</span></li>
-    {% set corr_after = sqm.get('hbo_hbr_corr_mean_errts') %}
-    <li>{{ ql('hbo_hbr_corr_mean', 'Mean HbO–HbR corr' ~ (' (denoise before→after)' if corr_after is not none else '')) }}
-        <span class="qv {{ qv_class(corr_after if corr_after is not none else corr,
-                                    (corr_after if corr_after is not none else corr) < -0.3,
-                                    (corr_after if corr_after is not none else corr) < 0) }}">
-          {% if corr_after is not none %}{{ qm_val(corr) }} → {{ qm_val(corr_after) }}{% else %}{{ qm_val(corr) }}{% endif %}</span></li>
-    {% if sqm.get('cnr_hbo_mean') is not none or sqm.get('cnr_hbo_mean_errts') is not none %}
-    {% for chroma, key in [('HbO', 'cnr_hbo_mean'), ('HbR', 'cnr_hbr_mean')] %}
-    {% set cnr_before = sqm.get(key) %}
-    {% set cnr_after  = sqm.get(key ~ '_errts') %}
-    <li>{{ ql(key, 'CNR ' ~ chroma ~ (' (denoise before→after)' if cnr_after is not none else '')
-                 ~ (' — %d epochs'|format(sqm.get('cnr_n_epochs')) if sqm.get('cnr_n_epochs') else '')) }}
-        <span class="qv">{% if cnr_after is not none %}{{ qm_val(cnr_before) }} → {{ qm_val(cnr_after) }}{% else %}{{ qm_val(cnr_before) }}{% endif %}</span></li>
-    {% endfor %}
-    {% endif %}
-    <li>{{ ql('gcor_hbo', 'Global corr HbO' ~ (' (reg before→after)' if sqm.get('gcor_hbo_postreg') is not none else '')) }}
-        <span class="qv">{% if sqm.get('gcor_hbo_postreg') is not none %}{{ qm_val(sqm.get('gcor_hbo_prereg')) }} → {{ qm_val(sqm.get('gcor_hbo_postreg')) }}{% else %}{{ qm_val(sqm.get('gcor_hbo')) }}{% endif %}</span></li>
-    <li>{{ ql('gcor_hbr', 'Global corr HbR' ~ (' (reg before→after)' if sqm.get('gcor_hbr_postreg') is not none else '')) }}
-        <span class="qv">{% if sqm.get('gcor_hbr_postreg') is not none %}{{ qm_val(sqm.get('gcor_hbr_prereg')) }} → {{ qm_val(sqm.get('gcor_hbr_postreg')) }}{% else %}{{ qm_val(sqm.get('gcor_hbr')) }}{% endif %}</span></li>
-    <li>{{ ql('pct_data_retained', '% data retained') }}
-        <span class="qv {{ qv_class(ret_pct, ret_pct >= 0.8, ret_pct >= 0.6) }}">{{ pct(ret_pct) }}</span></li>
+        <span class="qv {{ qv_class(snr, snr is not none and snr >= 100, snr is not none and snr >= 20) }}">{{ qm_val(snr, '.1f') }}</span></li>
+  </ul>
+  {% endif %}
+
+  <h3 class="qm-sub">Motion and spikes</h3>
+  <p class="qm-note">Optical density. GVTD and the spike counts are measured on
+     {% if sqm_split %}long channels only{% else %}every channel{% endif %}; the correction
+     footprint is over every channel, since it counts what the correction touched.</p>
+  <ul class="qm-list">
     <li>{{ ql('gvtd_mean', 'GVTD mean' ~ (' (motion before→after)' if sqm.get('gvtd_mean_post') is not none else '')) }}
         <span class="qv">{% if sqm.get('gvtd_mean_post') is not none %}{{ qm_val(sqm.get('gvtd_mean'), '.3e') }} → {{ qm_val(sqm.get('gvtd_mean_post'), '.3e') }}{% else %}{{ qm_val(sqm.get('gvtd_mean'), '.3e') }}{% endif %}</span></li>
     <li>{{ ql('gvtd_p95', 'GVTD p95' ~ (' (motion before→after)' if sqm.get('gvtd_p95_post') is not none else '')) }}
@@ -720,13 +758,39 @@
         <span class="qv">{{ qm_val(sqm.get('motion_corrected_n_segments'), 'd') }}</span></li>
     {% endif %}
     <li>{{ ql('spike_count', 'Spike count') }}
-        <span class="qv {{ qv_class(spk, spk == 0, spk < 10) }}">{% if spk is not none %}{{ spk }}{% else %}<span style="color:#aaa">n/a</span>{% endif %}</span></li>
+        <span class="qv {{ qv_class(spk, spk == 0, spk is not none and spk < 10) }}">{% if spk is not none %}{{ spk }}{% else %}<span style="color:#aaa">n/a</span>{% endif %}</span></li>
     {% if sqm.get('spike_pct') is not none %}
     <li>{{ ql('spike_pct', 'Spike % (exp.)') }}
         <span class="qv">{{ pct(sqm.get('spike_pct')) }}</span></li>
     <li>{{ ql('spike_pct_frames', 'Spike % frames') }}
         <span class="qv">{{ pct(sqm.get('spike_pct_frames')) }}</span></li>
     {% endif %}
+  </ul>
+
+  <h3 class="qm-sub">Haemoglobin and timing</h3>
+  <p class="qm-note">Measured after Beer-Lambert, over <b>every</b> channel: these sections are not split by separation, so short channels are included in each of them. % data retained is a share of the recording's duration, not of its channels.</p>
+  <ul class="qm-list">
+    {% set corr_after = sqm.get('hbo_hbr_corr_mean_errts') %}
+    <li>{{ ql('hbo_hbr_corr_mean', 'Mean HbO–HbR corr' ~ (' (denoise before→after)' if corr_after is not none else '')) }}
+        {%- set corr_now = corr_after if corr_after is not none else corr %}
+        <span class="qv {{ qv_class(corr_now, corr_now is not none and corr_now < -0.3,
+                                    corr_now is not none and corr_now < 0) }}">
+          {% if corr_after is not none %}{{ qm_val(corr) }} → {{ qm_val(corr_after) }}{% else %}{{ qm_val(corr) }}{% endif %}</span></li>
+    {% if sqm.get('cnr_hbo_mean') is not none or sqm.get('cnr_hbo_mean_errts') is not none %}
+    {% for chroma, key in [('HbO', 'cnr_hbo_mean'), ('HbR', 'cnr_hbr_mean')] %}
+    {% set cnr_before = sqm.get(key) %}
+    {% set cnr_after  = sqm.get(key ~ '_errts') %}
+    <li>{{ ql(key, 'CNR ' ~ chroma ~ (' (denoise before→after)' if cnr_after is not none else '')
+                 ~ (' — %d epochs'|format(sqm.get('cnr_n_epochs')) if sqm.get('cnr_n_epochs') else '')) }}
+        <span class="qv">{% if cnr_after is not none %}{{ qm_val(cnr_before) }} → {{ qm_val(cnr_after) }}{% else %}{{ qm_val(cnr_before) }}{% endif %}</span></li>
+    {% endfor %}
+    {% endif %}
+    <li>{{ ql('gcor_hbo', 'Global corr HbO' ~ (' (reg before→after)' if sqm.get('gcor_hbo_postreg') is not none else '')) }}
+        <span class="qv">{% if sqm.get('gcor_hbo_postreg') is not none %}{{ qm_val(sqm.get('gcor_hbo_prereg')) }} → {{ qm_val(sqm.get('gcor_hbo_postreg')) }}{% else %}{{ qm_val(sqm.get('gcor_hbo')) }}{% endif %}</span></li>
+    <li>{{ ql('gcor_hbr', 'Global corr HbR' ~ (' (reg before→after)' if sqm.get('gcor_hbr_postreg') is not none else '')) }}
+        <span class="qv">{% if sqm.get('gcor_hbr_postreg') is not none %}{{ qm_val(sqm.get('gcor_hbr_prereg')) }} → {{ qm_val(sqm.get('gcor_hbr_postreg')) }}{% else %}{{ qm_val(sqm.get('gcor_hbr')) }}{% endif %}</span></li>
+    <li>{{ ql('pct_data_retained', '% data retained') }}
+        <span class="qv {{ qv_class(ret_pct, ret_pct is not none and ret_pct >= 0.8, ret_pct is not none and ret_pct >= 0.6) }}">{{ pct(ret_pct) }}</span></li>
     <li>{{ ql('cardiac_band_power_hbo', 'Cardiac band power (HbO)') }}
         <span class="qv">{{ qm_val(sqm.get('cardiac_band_power_hbo'), '.3e') }}</span></li>
     <li>{{ ql('cardiac_band_frac_hbo', 'Cardiac band fraction (HbO)') }}

@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Fixed
+- **A recording whose input was already optical density could lose its whole report.** The metrics panel compared an undefined SNR against its threshold and stopped rendering
 - **The per-channel derivative trace showed pulse, not motion.** It was differenced on the already-downsampled signal and never band-limited, so the cardiac rhythm aliased into it and its peaks did not line up with the spike marks drawn underneath. It is now taken at full resolution over the same 0.01-0.5 Hz band the spikes are detected on
 - **The low-pass filter barely filtered.** `--low-pass 0.2` attenuated the cardiac band by 4 dB where a working filter manages 60, so every `desc-filtered` and `desc-errts` still carried the heartbeat. The high-pass was unaffected. Every filtered file, and every number measured on one, changes: rerun anything written before this
 - **A run whose markers cannot be epoched filled the console with warnings.** A design that only marks where each condition starts and ends carries annotations but no trials, and every epoch figure tried anyway. The run is now recognised up front, said once in the log, and reported as a note
@@ -20,6 +21,7 @@ All notable changes to this project will be documented in this file.
 - **`--wtc-by-condition`**, which runs the coherence inside each task annotation's window as well as over the whole recording, so a block design gets one result per block. A trigger with a duration uses it, one without runs to the next trigger, and a window too short to carry the lowest frequency asked for is skipped and said so
 
 ### Changed
+- **The quantitative metrics panel reports SCI, PSP, SNR, CV, amplitude and retention in three columns, All / Long / Short**, instead of one long-channel number with nothing to compare it against. The rest of the scalars are grouped by what they were measured on, so it is visible which ones still include short channels
 - **The per-channel metrics table is grouped by source-detector separation**, and short channels now carry their SCI, PSP, SNR and CV instead of a dash. The Channel Quality Summary grid is grouped the same way, and the scalar metrics now say that they are long channels only
 - **The HbO–HbR correlation panel separates short channels from long ones.** Ranked together, the short channels sat at the top of the list and read as the worst channels on the montage, when the anticorrelation the −0.3 threshold tests for is a property of cortical haemodynamics and says nothing about a channel that only sees scalp. They now form their own group, drawn in grey and left out of the pass/fail colouring, and the correlation matrix is blocked the same way. A montage with no short channels looks as it did
 - **The provenance diagram matches the interface's pipeline DAG.** Same palette, outlined boxes instead of filled pastel blocks, and straight arrows in the colour of the stage they feed. Red now means only that a file is missing, and the colour legend is gone: every box already names its own step
