@@ -38,6 +38,53 @@ def physio_bands(cardiac=None, resp=None):
     return bands
 
 
+# colours for the physiological band annotations (the frequencies come from physio_bands)
+BAND_COLORS = {
+    "Mayer":   "rgba(46,204,113,0.12)",
+    "Resp":    "rgba(241,196,15,0.10)",
+    "Cardiac": "rgba(231,76,60,0.10)",
+}
+
+
+def add_band_shading(fig, fmax: float, bands: list, rows: "int | None" = None) -> None:
+    """Shade and label the physiological bands on a PSD figure.
+
+    One definition so the multi-stage PSD panel and the per-channel PSD mark the same bands
+    the same way: a reader comparing the two should not have to work out whether a stripe
+    means the same thing in both. ``rows`` is the subplot row count for a figure made with
+    make_subplots, or None for a plain single-axis figure, which is the only difference
+    between the two::
+
+        add_band_shading(fig, 2.0, physio_bands(cardiac=(0.7, 1.5)))          # plain
+        add_band_shading(fig, 2.0, physio_bands((0.7, 1.5), (0.2, 0.4)), 2)   # 2 subplots
+
+    Bands starting past ``fmax`` are dropped rather than clamped: a stripe pinned to the
+    right edge would claim the band is in view when it is off the plot.
+    """
+    targets = [{}] if rows is None else [{"row": row, "col": 1} for row in range(1, rows + 1)]
+    for name, x0, x1 in bands:
+        if x0 > fmax:
+            continue
+        for target in targets:
+            fig.add_vrect(x0=x0, x1=min(x1, fmax),
+                          fillcolor=BAND_COLORS.get(name, "rgba(120,120,120,0.10)"),
+                          line_width=0, layer="below", **target)
+
+    for name, x0, x1 in bands:
+        label_x = (x0 + min(x1, fmax)) / 2
+        if label_x > fmax:
+            continue
+        for i, _ in enumerate(targets):
+            ax = "" if (rows is None or i == 0) else str(i + 1)
+            fig.add_annotation(
+                x=label_x, y=1.0,
+                xref=f"x{ax}", yref=f"y{ax} domain",
+                text=name, showarrow=False,
+                font=dict(size=8, color="#555"),
+                textangle=-90, xanchor="center", yanchor="top",
+            )
+
+
 def head_outline(ax, xs, ys):
     """Draw the head circle, ears and nose around a set of optode x/y, and set the limits.
 

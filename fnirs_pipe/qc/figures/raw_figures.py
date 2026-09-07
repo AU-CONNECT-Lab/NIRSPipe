@@ -10,16 +10,12 @@ from plotly.subplots import make_subplots
 from fnirs_pipe.utils.logging import get_logger
 
 from ._brain_utils import mni_trans
-from ._utils import (CONDITION_PALETTE, HBO_COLOR, HBR_COLOR, decimate as _decimate,
-                     epochable_events)
+from ._utils import (BAND_COLORS, CONDITION_PALETTE, HBO_COLOR, HBR_COLOR,
+                     decimate as _decimate, epochable_events, physio_bands)
 
 logger = get_logger("qc.figures")
 
-_PSD_BANDS = [
-    {"name": "Mayer",   "x0": 0.07, "x1": 0.13, "color": "rgba(52,152,219,0.10)"},
-    {"name": "Resp",    "x0": 0.15, "x1": 0.40, "color": "rgba(39,174,96,0.08)"},
-    {"name": "Cardiac", "x0": 0.70, "x1": 1.50, "color": "rgba(231,76,60,0.08)"},
-]
+_PSD_FMAX = 2.0
 
 
 def _window_centers(win_times) -> np.ndarray:
@@ -48,15 +44,27 @@ def _ch_colors(raw: mne.io.Raw, short_thresh: float) -> list[str]:
         return ["rgba(243,125,125,0.78)"] * len(raw.ch_names)
 
 
-def psd_layout(height: int = 220) -> dict:
+def psd_layout(height: int = 220, cardiac=None, resp=None) -> dict:
+    """Layout for a single-panel PSD, with the physiological bands shaded.
+
+    ``cardiac`` and ``resp`` are the run's own ``(l_freq, h_freq)``, which is the point: the
+    band edges used to be constants here, so a study of infants (cardiac near 2 Hz) got a
+    stripe drawn over the adult band and a reader checking whether a channel carries a pulse
+    was looking at the wrong place. Passing None omits that band, and the colours and
+    frequencies both come from the same place the multi-stage PSD figure reads them from.
+    """
+    bands = physio_bands(cardiac, resp)
     shapes = [dict(type="rect", xref="x", yref="paper",
-                   x0=b["x0"], x1=b["x1"], y0=0, y1=1,
-                   fillcolor=b["color"], line=dict(width=0)) for b in _PSD_BANDS]
-    annotations = [dict(x=(b["x0"] + b["x1"]) / 2, y=0.97, xref="x", yref="paper",
-                        text=b["name"], showarrow=False,
-                        font=dict(size=8, color="#666")) for b in _PSD_BANDS]
+                   x0=x0, x1=min(x1, _PSD_FMAX), y0=0, y1=1,
+                   fillcolor=BAND_COLORS.get(name, "rgba(120,120,120,0.10)"),
+                   line=dict(width=0))
+              for name, x0, x1 in bands if x0 <= _PSD_FMAX]
+    annotations = [dict(x=(x0 + min(x1, _PSD_FMAX)) / 2, y=0.97, xref="x", yref="paper",
+                        text=name, showarrow=False,
+                        font=dict(size=8, color="#666"))
+                   for name, x0, x1 in bands if x0 <= _PSD_FMAX]
     return dict(
-        xaxis=dict(title="Frequency (Hz)", range=[0, 2], gridcolor="#eeeeee"),
+        xaxis=dict(title="Frequency (Hz)", range=[0, _PSD_FMAX], gridcolor="#eeeeee"),
         yaxis=dict(title="Power", type="log", gridcolor="#eeeeee"),
         plot_bgcolor="white", paper_bgcolor="white",
         height=height, margin=dict(l=60, r=15, t=8, b=38),
@@ -164,7 +172,16 @@ def build_channel_figure(
     max_ts_pts: int,
     epoch_tmin: float,
     epoch_tmax: float,
+    cardiac: "tuple[float, float] | None" = None,
+    resp: "tuple[float, float] | None" = None,
 ) -> tuple[go.Figure, go.Figure | None, go.Figure | None]:
+    """One channel pair as three panels: HbO/HbR over time, its PSD, its epoch average.
+
+    ``cardiac`` and ``resp`` are the run's own band edges, taken from the CLI, and shade the
+    PSD panel the way the multi-stage PSD figure shades its rows. Without them the panel is
+    a bare spectrum, and a reader judging whether a channel carries a pulse has to hold the
+    band edges in their head; passing None omits that band rather than guessing a default.
+    """
     hbo_name = f"{ch_pair} hbo"
     hbr_name = f"{ch_pair} hbr"
     haemo_names = raw_haemo.ch_names
@@ -231,7 +248,7 @@ def build_channel_figure(
                 go.Scatter(x=freqs[mask].tolist(), y=psd_hbr[mask].tolist(),
                            name="HbR", mode="lines", line=dict(color=HBR_COLOR, width=2)),
             ],
-            layout=go.Layout(**psd_layout()),
+            layout=go.Layout(**psd_layout(cardiac=cardiac, resp=resp)),
         )
     except Exception as exc:
         logger.warning("channel PSD failed for %s: %s", ch_pair, exc)
@@ -550,7 +567,7 @@ def build_layout_figure(
     return fig_2d, fig_3d
 
 
-def build_psd_mean_figure(raw: mne.io.Raw) -> go.Figure | None:
+def build_psd_mean_figure(raw: mne.io.Raw, cardiac=None, resp=None) -> go.Figure | None:
     try:
         from mne.time_frequency import psd_array_welch
         picks = mne.pick_types(raw.info, meg=False, fnirs=True)
@@ -574,7 +591,8 @@ def build_psd_mean_figure(raw: mne.io.Raw) -> go.Figure | None:
             x=freqs_list, y=psds[:, mask].mean(axis=0).tolist(),
             name="Mean (OD)", mode="lines", line=dict(width=2.5, color="#2980b9"),
         ))
-        return go.Figure(data=traces, layout=go.Layout(**psd_layout()))
+        return go.Figure(data=traces,
+                         layout=go.Layout(**psd_layout(cardiac=cardiac, resp=resp)))
     except Exception as exc:
         logger.warning("mean PSD failed: %s", exc)
         return None

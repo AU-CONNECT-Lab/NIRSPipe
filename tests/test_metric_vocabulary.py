@@ -19,10 +19,15 @@ import pytest
 import fnirs_pipe.qc as qc_pkg
 from fnirs_pipe.qc.boilerplate.vocabulary import (
     KEY_METRICS,
+    METRIC_DISPLAY,
     METRIC_SUMMARY,
+    format_metric,
     is_key_metric,
+    metric_class,
     metric_summary,
 )
+from fnirs_pipe.qc.channel_table import OD_SPLIT_COLUMNS
+from fnirs_pipe.qc.prep_raw_report import _VIEW_SCALAR_KEYS
 
 _QC = Path(qc_pkg.__file__).parent
 _SUBJECT_TEMPLATE = _QC / "templates" / "subject_report.html.j2"
@@ -64,8 +69,26 @@ def _scalar_metric_keys() -> set[str]:
 
 
 def _template_metric_keys() -> set[str]:
-    """The keys the report's metrics panel asks the registry about, i.e. every `ql('x', …)`."""
-    return set(re.findall(r"\bql\('([^']+)'", _SUBJECT_TEMPLATE.read_text(encoding="utf-8")))
+    """The keys the report's metrics panel asks the registry about.
+
+    Three call shapes, because the panel prints three kinds of row: `qm_li('x', …)` for a
+    list row, `ql('x', …)` for a bare label, and `('x', 'Label')` for a column in the
+    channel-set table. All three end in a registry lookup, so all three are drift risks.
+    """
+    text = _SUBJECT_TEMPLATE.read_text(encoding="utf-8")
+    return (set(re.findall(r"\bqm_li\('([^']+)'", text))
+            | set(re.findall(r"\bql\('([^']+)'", text))
+            | set(re.findall(r"\('([a-z0-9_]+)',\s*'[A-Z]", text)))
+
+
+def _view_metric_keys() -> set[str]:
+    """The keys the raw viewer and the GUI ask about, which they take from Python.
+
+    Those two render in JavaScript and in Dash components, so they cannot name a key in a
+    template: they receive rows already built by the registry. The lists naming which rows
+    are still hand-written, and still drift.
+    """
+    return set(_VIEW_SCALAR_KEYS) | {key for key, _ in OD_SPLIT_COLUMNS}
 
 
 # ---- the map ----
@@ -86,10 +109,36 @@ def test_the_report_never_asks_for_a_metric_that_has_no_entry():
     )
 
 
+def test_no_view_asks_for_a_metric_that_has_no_entry():
+    """The same check for the two views that build their rows in Python.
+
+    The raw viewer and the GUI print whatever the registry hands them, so a key with no
+    entry there is a row with no label, no format and no verdict.
+    """
+    missing = sorted(_view_metric_keys() - set(METRIC_SUMMARY))
+    assert not missing, f"the raw views name {missing}, which the registry does not describe"
+
+
+def test_every_key_a_view_prints_has_a_format():
+    """METRIC_SUMMARY says what a number means; METRIC_DISPLAY says how to print it.
+
+    A key in the first and not the second renders at a default three decimals with no
+    units and no colour, which for a percentage or an exponent is unreadable rather than
+    merely plain.
+    """
+    asked = _template_metric_keys() | _view_metric_keys()
+    unformatted = sorted(asked - set(METRIC_DISPLAY))
+    assert not unformatted, (
+        f"these print with the fallback format and no threshold: {unformatted}. "
+        "Add a METRIC_DISPLAY row giving the label, the format and the cutoffs."
+    )
+
+
 def test_the_panel_asks_about_something():
-    # guards the regex above: a template rewrite that drops `ql(` would silently make
-    # the previous test vacuous
+    # guards the regexes above: a template rewrite that drops the call shapes would
+    # silently make the previous tests vacuous
     assert len(_template_metric_keys()) > 15
+    assert len(_view_metric_keys()) > 5
 
 
 def test_the_decisive_metrics_are_described_and_real():
@@ -132,9 +181,37 @@ def test_the_chromophore_pairs_are_complete():
 
 
 def test_an_unknown_metric_reads_as_empty_rather_than_raising():
-    # the template calls this for every row, so a lookup miss has to degrade to no tooltip
+    # the template calls these for every row, so a lookup miss has to degrade to a plain
+    # number with no tooltip and no verdict, never to an exception mid-render
     assert metric_summary("no_such_metric") == ""
     assert is_key_metric("no_such_metric") is False
+    assert metric_class("no_such_metric", 0.5) == ""
+    assert format_metric("no_such_metric", 0.5) == "0.500"
+
+
+def test_a_missing_value_prints_as_a_dash_not_as_a_verdict():
+    """A metric the run did not measure must not read as one that scored zero."""
+    for metric in ("sci_mean", "pct_data_retained", "spike_count", "gvtd_mean"):
+        assert format_metric(metric, None) == "\u2014"
+        assert metric_class(metric, None) == ""
+
+
+@pytest.mark.parametrize("metric", sorted(METRIC_DISPLAY))
+def test_a_display_row_is_usable(metric):
+    label, fmt, thresholds, direction = METRIC_DISPLAY[metric]
+    assert label and label.strip() == label
+    assert metric in METRIC_SUMMARY, f"{metric} is printed but not described"
+    # a threshold and a direction are meaningless apart: one without the other either
+    # colours nothing or colours in whichever direction the code happens to default to
+    assert (thresholds is None) == (direction is None), f"{metric}: half a cutoff"
+    if thresholds is not None:
+        ok, warn = thresholds
+        # ok is the stricter end, so the three bands come out in the right order whichever
+        # way the metric is read
+        assert (ok > warn) if direction == "higher" else (ok < warn), (
+            f"{metric}: ok={ok} warn={warn} reads backwards for direction {direction!r}")
+    # the format has to survive a real number, which is the whole point of storing it
+    assert format_metric(metric, 0.5, fmt)
 
 
 def test_gvtd_points_at_the_threshold_that_applies_to_it():

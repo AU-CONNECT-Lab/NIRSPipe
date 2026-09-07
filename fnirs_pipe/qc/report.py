@@ -32,7 +32,8 @@ Report sections
     per stage file on disk.
 
   f. Epoch / HRF Preview
-    Grand-mean HbO/HbR averaged across good channels, baseline-corrected.
+    Event timeline (one row per condition), then the grand-mean HbO/HbR averaged across
+    good channels, baseline-corrected.
 
   Postprocessing (GLM mode)
     Design-matrix timeseries + heatmap; activation panel per condition.
@@ -41,13 +42,15 @@ Report sections
     SQM scalar summary (channel retention, SCI, PSP, SNR, HbO–HbR corr, etc.)
     + per-channel table; CSV sidecar saved to nirs/ output directory.
 
+  Per-trial Quality
+    Every trial window scored on its own, over the epoch window, on the intensity
+    recording.
+
   Errors / Methods / Software Versions
 """
 
 import base64
-import csv
 import json
-import re
 from contextlib import contextmanager
 import matplotlib
 matplotlib.use("Agg")
@@ -62,6 +65,10 @@ import mne.io
 from jinja2 import Environment, FileSystemLoader
 
 from fnirs_pipe.qc.boilerplate import collect_software_versions, generate_methods_text
+from fnirs_pipe.qc.channel_table import (
+    OD_SPLIT_COLUMNS, channel_rows, format_rows, heatmap_args, save_channel_csv,
+    separation_blocks, separation_notes,
+)
 from fnirs_pipe.qc.figure_io import (
     PLOTLY_CDN_URL, _IFRAME_CSS, _RESIZE_JS,
     _figure_height, _pair_fname, _save_multi_fig_html,
@@ -69,6 +76,9 @@ from fnirs_pipe.qc.figure_io import (
 )
 from fnirs_pipe.qc.metrics import gvtd_channel_picks
 from fnirs_pipe.qc.figures import (
+    build_trigger_timeline_single,
+    condition_colors,
+    trial_quality_heatmap,
     carpet_gvtd_figure,
     carpet_compare_figure,
     bad_segment_zoom_figure,
@@ -96,6 +106,7 @@ from fnirs_pipe.qc.figures import (
     fc_connectogram,
 )
 from fnirs_pipe.qc.sqm_record import record_path as _sqm_record_path
+from fnirs_pipe.qc.trial_qc import score_trials
 from fnirs_pipe.utils.logging import get_logger
 
 if TYPE_CHECKING:
@@ -338,6 +349,8 @@ def _section_channel_detail(
     epoch_tmin: float = -5.0,
     epoch_tmax: float = 25.0,
     max_pts: int = 4000,
+    cardiac: "tuple[float, float] | None" = None,
+    resp: "tuple[float, float] | None" = None,
 ) -> dict:
     markers = extract_markers(raw_haemo)
     pairs = get_channel_pairs(raw_haemo)
@@ -346,6 +359,7 @@ def _section_channel_detail(
         with _guard(f"Channel detail {pair}", errors, subject):
             detail_fig, psd_fig, epoch_fig = build_channel_figure(
                 raw_haemo, markers, pair, max_pts, epoch_tmin, epoch_tmax,
+                cardiac=cardiac, resp=resp,
             )
             fname = f"ch_detail_{_pair_fname(pair)}.html"
             h = _save_multi_fig_html([detail_fig, psd_fig, epoch_fig], figures_dir / fname)
@@ -603,6 +617,56 @@ def _section_epoch_preview(
     return {"epoch_preview_path": epoch_preview_path, "epoch_preview_h": epoch_preview_h}
 
 
+def _section_trigger_timeline(
+    raw: mne.io.Raw,
+    subject: str,
+    errors: list,
+    figures_dir: Path,
+) -> dict:
+    """Every event on one time axis, one row per condition.
+
+    The epoch figures below average trials together, which is what hides a condition that
+    stopped being delivered halfway through or an experimenter who started a block twice.
+    This is the same panel the raw QC viewer opens with, so a run inspected before the
+    pipeline and after it is read off one picture of its design.
+    """
+    path, h = None, 0
+    with _guard("Trigger timeline", errors, subject):
+        markers = extract_markers(raw)
+        fig = build_trigger_timeline_single(markers, condition_colors(markers))
+        if fig is not None:
+            path, h = _save_plotly_html(fig, figures_dir / "trigger_timeline.html")
+    return {"trigger_timeline_path": path, "trigger_timeline_h": h}
+
+
+def _section_trial_qc(
+    raw_intensity: mne.io.Raw,
+    config: Any,
+    subject: str,
+    errors: list,
+    figures_dir: Path,
+) -> dict:
+    """Each trial window scored on its own, so one bad trial is visible before averaging.
+
+    Scored over the same window the epoch figures average, ``_EPOCH_TMIN`` to
+    ``_EPOCH_TMAX``, and on the intensity recording, so a trial's SCI and SNR are on the
+    scale the metrics table prints rather than on the haemoglobin one. The scoring is shared
+    with ``fnirs-qc raw``, which is where this panel came from.
+    """
+    path, h = None, 0
+    with _guard("Per-trial quality", errors, subject):
+        labels, sqms = score_trials(
+            raw_intensity, extract_markers(raw_intensity),
+            getattr(config, "sci_threshold", 0.75),
+            config.cardiac_l_freq, config.cardiac_h_freq,
+            _EPOCH_TMIN, _EPOCH_TMAX,
+        )
+        fig = trial_quality_heatmap(labels, sqms)
+        if fig is not None:
+            path, h = _save_plotly_html(fig, figures_dir / "trial_qc.html")
+    return {"trial_qc_path": path, "trial_qc_h": h}
+
+
 def _section_evoked_topomap(
     raw_haemo: mne.io.Raw,
     subject: str,
@@ -654,21 +718,6 @@ def _section_trial_image(
                 h = _save_multi_fig_html(figs, figures_dir / fname)
                 saved.append({"pair": ch, "path": _fig_href(figures_dir, fname), "h": h})
     return {"trial_image_pairs": saved, "trial_image_roi_pairs": roi_saved}
-
-
-def _save_channel_csv(channel_rows: list, label: str, out_dir: Path) -> None:
-    """Per-channel metrics for one run. The name carries the run's entities, or a subject
-    with several tasks would keep only whichever ran last."""
-    if not channel_rows:
-        return
-    out_path = out_dir / f"{label}_channel_metrics.csv"
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    fieldnames = ["name", "sci", "psp", "snr", "cv", "corr", "is_bad", "separation"]
-    with out_path.open("w", newline="", encoding="utf-8") as fh:
-        writer = csv.DictWriter(fh, fieldnames=fieldnames)
-        writer.writeheader()
-        writer.writerows(channel_rows)
-    logger.info("%s | channel metrics CSV saved: %s", label, out_path)
 
 
 def _load_record(
@@ -734,12 +783,6 @@ def _load_stage_raw(
     return None
 
 
-# ---- per-channel metrics the raw sections carry on both sides of the long/short split ----
-_PER_CHANNEL_KEYS = (
-    "sci_per_channel", "psp_per_channel", "snr_per_channel", "cv_per_channel",
-)
-
-
 def _section_sqm(
     sci_scores: dict,
     bad_channels: list,
@@ -749,6 +792,7 @@ def _section_sqm(
     *,
     sqm_label: str | None = None,
     gvtd_channels: str = "long",
+    sci_threshold: float = 0.75,
 ) -> dict:
     """Read this run's SQM record; the report displays, it does not compute.
 
@@ -761,7 +805,9 @@ def _section_sqm(
     The per-channel table is the one place short channels appear, read from ``raw_short``.
     They are pruned against the same SCI threshold as everything else, so their status is
     a real verdict with a downstream cost -- a bad short channel is a bad regressor -- and
-    printing that verdict without the score behind it leaves it uncheckable.
+    printing that verdict without the score behind it leaves it uncheckable. Assembling
+    those rows is :mod:`fnirs_pipe.qc.channel_table`, which the raw views share, so the
+    three per-channel tables in the package read one record the same way.
 
     Every family is read at its long-channel split where the record carries one, so the
     panel's verdict is never an average over long and short channels together. ``preproc``
@@ -775,20 +821,18 @@ def _section_sqm(
     before values; the suffix is what lets the template print ``before -> after``.
     """
     sqm: dict = {}
-    short_pc: dict = {}
-    long_pc: dict = {}
     sqm_all: dict = {}
     sqm_long: dict = {}
     sqm_short: dict = {}
     hb_all: dict = {}
     hb_long: dict = {}
     hb_short: dict = {}
-    corr_pc: dict = {}
+    record_read: dict = {}
     with _guard("SQM record", errors, subject):
         if out_dir is None or sqm_label is None:
             raise FileNotFoundError("no SQM record location for this run")
         record_file = _sqm_record_path(out_dir, sqm_label)
-        record = json.loads(record_file.read_text(encoding="utf-8"))
+        record = record_read = json.loads(record_file.read_text(encoding="utf-8"))
         per_channel = record.get("per_channel") or {}
         raw_key = "raw_long" if "raw_long" in record else "raw"
         keys = (raw_key, "motion", "preproc")
@@ -828,15 +872,6 @@ def _section_sqm(
                 for k, v in (src or {}).items():
                     if k.startswith("gvtd_"):
                         sqm[f"{k}{suffix}"] = v
-        # The short-channel half of the same raw file, kept beside `sqm` rather than merged
-        # into it: the scalar means the panel prints are long-only by design, and a short
-        # channel's coupling belongs in its own row of the table, not in those averages.
-        short_pc = per_channel.get("raw_short") or {}
-        long_pc = per_channel.get("raw_long") or {}
-        # Taken from the whole-file `preproc` rather than from `sqm`: the merge above ends
-        # on `preproc_long`, and a per-channel dict is replaced wholesale by update(), so
-        # reading it there would leave every short channel's correlation blank.
-        corr_pc = (per_channel.get("preproc") or {}).get("hbo_hbr_corr_per_channel") or {}
         # The same raw file measured over three channel sets, kept as three dicts so the
         # panel can print them side by side. `sqm` above already carries one of them and
         # decides the verdict; these are for the comparison, not for it.
@@ -852,47 +887,19 @@ def _section_sqm(
             if sqm_all.get(key) is not None:
                 sqm[key] = sqm_all[key]
 
-    def _named(pc: dict) -> set:
-        return {ch for key in _PER_CHANNEL_KEYS for ch in (pc.get(key) or {})}
-
-    short_names, long_names = _named(short_pc), _named(long_pc)
-
-    def separation_of(ch: str) -> str:
-        """Which block a channel belongs to, or "" when the record was never split.
-
-        The two separation ranges do not meet, so a channel at 12 mm is in neither list.
-        Those get their own name rather than falling into the long block, where a row of
-        dashes would read as a long channel whose metrics failed.
-        """
-        if not long_names:
-            return ""
-        if ch in short_names:
-            return "short"
-        return "long" if ch in long_names else "unclassified"
-
-    def per_channel_value(key: str, ch: str):
-        return ((short_pc if ch in short_names else sqm).get(key) or {}).get(ch)
-
-    channel_rows = []
-    for ch in sci_scores:
-        pair_key = re.sub(r'\s+(\d+|hbo|hbr)$', '', ch, flags=re.IGNORECASE)
-        channel_rows.append({
-            "name":     ch,
-            "sci":      per_channel_value("sci_per_channel", ch),
-            "psp":      per_channel_value("psp_per_channel", ch),
-            "snr":      per_channel_value("snr_per_channel", ch),
-            "cv":       per_channel_value("cv_per_channel", ch),
-            # the whole-file measurement, so this column is filled for short channels too
-            "corr":     corr_pc.get(pair_key),
-            "is_bad":   ch in bad_channels,
-            "separation": separation_of(ch),
-        })
+    rows = channel_rows(record_read, sci_scores, bad_channels)
     if out_dir is not None and sqm:
         with _guard("Channel metrics CSV", errors, subject):
-            _save_channel_csv(channel_rows, sqm_label or f"sub-{subject}", out_dir)
+            save_channel_csv(rows, sqm_label or f"sub-{subject}", out_dir)
+    # the raw rows stay for the CSV and the quality grid, which want the numbers; the
+    # template gets them formatted, so the per-channel table prints the same widths and the
+    # same SCI verdict as the raw viewer and the GUI
+    cells = format_rows(rows, sci_threshold)
     return {
         "sqm": sqm,
-        "channel_rows": channel_rows,
+        "channel_rows": rows,
+        "channel_cells": cells,
+        "channel_blocks": separation_blocks(cells),
         "sqm_all": sqm_all,
         "sqm_long": sqm_long,
         "sqm_short": sqm_short,
@@ -909,55 +916,21 @@ def _note_separation(
     notes: list,
     subject: str,
     sqm: dict,
-    channel_rows: list,
+    rows: list,
     short_channel_requested: bool = False,
 ) -> None:
-    """Say when the montage could not be split the way the metrics assume it was.
+    """File the montage-split warnings as run notes, one note each.
 
-    Three cases, and they are worth telling apart. No channel in either range means the
-    recording carries no registered optode positions, so every distance reads as zero and
-    the metrics fall back to the whole montage. Channels in neither range is a real
-    montage with real positions that happens to use separations the two ranges leave out;
-    those channels are measured by no section and show dashes. The third is a run that
-    asked for short-channel regression and had no short channel to build it from, which
-    the pipeline treats as a warning and carries on past.
+    The wording is shared with the raw views; what differs is where it goes. Here it joins
+    the report's notes list and the run log, so a reader who never opens the per-channel
+    table still learns the split did not come out the way the metrics assume.
     """
-    n_long, n_short = sqm.get("n_long_channels"), sqm.get("n_short_channels")
-    if n_long == 0 and n_short == 0:
-        _note(notes, subject,
-              "No channel fell in either separation range, which is what a recording with "
-              "no registered optode positions looks like. The quantitative metrics are over "
-              "every channel rather than long channels only, and the per-channel table is "
-              "not grouped. Anything that needs positions, including short-channel "
-              "regression and the topographies, is unavailable for this run.")
-        return
-    n_odd = sum(1 for r in channel_rows if r.get("separation") == "unclassified")
-    if n_odd:
-        from fnirs_pipe.qc.metrics import (
-            LONG_MAX_DIST, LONG_MIN_DIST, SHORT_MAX_DIST,
-        )
-        _note(notes, subject,
-              f"{n_odd} channel(s) sit at a separation the long and short ranges leave out "
-              f"({SHORT_MAX_DIST * 1000:.0f}-{LONG_MIN_DIST * 1000:.0f} mm, or over "
-              f"{LONG_MAX_DIST * 1000:.0f} mm). They are in no section, so their row in the "
-              f"per-channel table is blank apart from status and HbO-HbR correlation, and "
-              f"they are in none of the scalar metrics.")
-
-    if short_channel_requested:
-        short_rows = [r for r in channel_rows if r.get("separation") == "short"]
-        if not n_short:
-            _note(notes, subject,
-                  "Short-channel regression was requested but this montage carries no short "
-                  "channel, so it did not run and no systemic signal was regressed out.")
-        elif short_rows and all(r["is_bad"] for r in short_rows):
-            _note(notes, subject,
-                  f"Short-channel regression was requested but all {len(short_rows)} short "
-                  f"channels were rejected, so it did not run. Their scores are in the "
-                  f"per-channel table.")
+    for message in separation_notes(sqm, rows, short_channel_requested):
+        _note(notes, subject, message)
 
 
 def _section_channel_summary(
-    channel_rows: list,
+    rows: list,
     subject: str,
     errors: list,
     figures_dir: Path,
@@ -965,26 +938,7 @@ def _section_channel_summary(
 ) -> dict:
     path, h = None, 0
     with _guard("Channel quality summary", errors, subject):
-        # long block first, so the grid reads the way the table above it does. A stable
-        # sort, so the acquisition order survives inside each block.
-        order    = {"long": 0, "": 0, "short": 1, "unclassified": 2}
-        rows     = sorted(channel_rows, key=lambda r: order.get(r.get("separation"), 2))
-        ch_names = [r["name"] for r in rows]
-        is_bad   = [r["is_bad"] for r in rows]
-        sci_pc   = {r["name"]: r["sci"] for r in rows if r["sci"] is not None}
-        cv_pc    = {r["name"]: r["cv"]  for r in rows if r["cv"]  is not None}
-        snr_pc   = {r["name"]: r["snr"] for r in rows if r["snr"] is not None}
-        psp_pc   = {r["name"]: r["psp"] for r in rows if r.get("psp") is not None}
-        n_long = sum(1 for r in rows if r.get("separation") == "long")
-        # the divider names its two sides, so it is only drawn when there are two sides:
-        # a montage carrying channels in neither range has three blocks, and the table
-        # above is where those are named
-        n_odd = sum(1 for r in rows if r.get("separation") == "unclassified")
-        fig = channel_quality_heatmap(
-            ch_names, is_bad, sci_pc, cv_pc, snr_pc, psp_pc,
-            sci_thresh=sci_thresh,
-            split_at=n_long if not n_odd and 0 < n_long < len(rows) else None,
-        )
+        fig = channel_quality_heatmap(sci_thresh=sci_thresh, **heatmap_args(rows))
         path, h = _save_plotly_html(fig, figures_dir / "channel_summary.html")
     return {"channel_summary_path": path, "channel_summary_h": h}
 
@@ -1295,7 +1249,9 @@ def build_subject_report(
     raw_haemo_uncorr  = _uncorrected_haemo(raw_before_motion, config, subject, errors)
     channel_det_vars  = _section_channel_detail(
                             raw_haemo_uncorr if raw_haemo_uncorr is not None else raw_haemo,
-                            subject, errors, figures_dir)
+                            subject, errors, figures_dir,
+                            cardiac=(config.cardiac_l_freq, config.cardiac_h_freq),
+                            resp=(config.resp_l_freq, config.resp_h_freq))
     channel_det_vars["channel_detail_stage"] = (
         "desc-sci" if raw_haemo_uncorr is not None else "desc-preproc")
     psd_det_vars      = _section_psd_detail(raw_haemo, subject, errors, figures_dir,
@@ -1312,30 +1268,35 @@ def build_subject_report(
     epoch_skip        = _no_epoch_reason(raw_haemo)
     if epoch_skip is not None:
         _note(notes, subject,
-              f"Epoch preview, evoked topomap and trial images were skipped because "
-              f"{epoch_skip}. The per-channel and layout figures show the continuous "
-              f"signal instead.")
+              f"Epoch preview, evoked topomap, trial images and per-trial quality were "
+              f"skipped because {epoch_skip}. The per-channel and layout figures show the "
+              f"continuous signal instead.")
         epoch_vars       = {"epoch_preview_path": None, "epoch_preview_h": 0}
         trial_image_vars = {"trial_image_pairs": [], "trial_image_roi_pairs": []}
         topomap_vars     = {"evoked_topomap_path": None}
+        trial_qc_vars    = {"trial_qc_path": None, "trial_qc_h": 0}
     else:
         epoch_vars        = _section_epoch_preview(raw_haemo, subject, errors, figures_dir)
         trial_image_vars  = _section_trial_image(epoch_haemo, subject, errors, figures_dir,
                                                  roi_map=roi_map)
         topomap_vars      = _section_evoked_topomap(epoch_haemo, subject, errors, figures_dir)
+        trial_qc_vars     = _section_trial_qc(raw_intensity, config, subject, errors,
+                                              figures_dir)
     glm_vars          = _section_glm(design_matrix, glm_est, raw_haemo, subject, errors, figures_dir, segments=segments)
     rest_vars         = _section_rest(alff_df, fc_df, subject, errors, figures_dir, fc_hbr_df=fc_hbr_df,
                                       fc_seed=fc_seed, fc_roi=fc_roi, raw_haemo=raw_haemo)
     sqm_vars          = _section_sqm(sci_scores, bad_channels, subject, errors,
                                      out_dir=out_path.parent / "nirs",
                                      sqm_label=sqm_label,
-                                     gvtd_channels=gvtd_channels)
+                                     gvtd_channels=gvtd_channels,
+                                     sci_threshold=getattr(config, "sci_threshold", 0.75))
     _note_separation(notes, subject, sqm_vars["sqm"], sqm_vars["channel_rows"],
                      short_channel_requested=bool(getattr(config, "short_channel", None)))
     # GCOR before→after the short-channel regression (fNIRS GSR analog): the meaningful
     # comparison (expected to drop). Bandpass alone raises GCOR, so we do not compare that.
     if gcor_reg and sqm_vars.get("sqm") is not None:
         sqm_vars["sqm"].update(gcor_reg)
+    trigger_vars      = _section_trigger_timeline(raw_intensity, subject, errors, figures_dir)
     provenance_vars   = _section_provenance(out_path.parent / "nirs", mode, subject, errors,
                                             label=sqm_label)
     ch_summary_vars   = _section_channel_summary(
@@ -1351,7 +1312,9 @@ def build_subject_report(
         else "badge-red"
     )
 
-    from fnirs_pipe.qc.boilerplate.vocabulary import is_key_metric, metric_summary
+    from fnirs_pipe.qc.boilerplate.vocabulary import (
+        format_metric, is_key_metric, metric_class, metric_summary,
+    )
 
     env      = Environment(loader=FileSystemLoader(str(_TEMPLATE_DIR)), autoescape=False)
     template = env.get_template("subject_report.html.j2")
@@ -1360,6 +1323,9 @@ def build_subject_report(
     html = template.render(
         metric_summary=metric_summary,
         is_key_metric=is_key_metric,
+        format_metric=format_metric,
+        metric_class=metric_class,
+        od_split_columns=OD_SPLIT_COLUMNS,
         subject=subject,
         run_label=sqm_label,
         run_entities={k: v for k, v in entities_of(sqm_label or "").items() if v},
@@ -1391,6 +1357,8 @@ def build_subject_report(
         **brain_vars,
 
         **epoch_vars,
+        **trigger_vars,
+        **trial_qc_vars,
         **glm_vars,
         **rest_vars,
         **ch_summary_vars,

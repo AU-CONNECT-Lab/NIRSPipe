@@ -12,7 +12,12 @@ from fnirs_pipe.qc.figure_io import (
     _pair_fname, _save_figure_html, _save_multi_fig_html,
     extract_markers, get_channel_pairs,
 )
+from fnirs_pipe.qc.channel_table import (
+    channel_rows, format_rows, heatmap_args, pair_rows, save_channel_csv,
+    separation_blocks, separation_notes, split_table,
+)
 from fnirs_pipe.qc.metrics import SHORT_MAX_DIST
+from fnirs_pipe.qc.trial_qc import score_trials
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("qc.prep_raw_report")
@@ -23,69 +28,16 @@ _MAX_TS_PTS   = 4000
 _SHORT_THRESH = SHORT_MAX_DIST
 _EPOCH_TMIN   = -5.0
 _EPOCH_TMAX   = 25.0
-
-
-def _trial_windows(
-    markers: list[dict],
-    tmin: float | None,
-    tmax: float | None,
-    duration: float,
-) -> list[tuple[str, float, float]]:
-    """Turn the event list into (label, t0, t1) windows to score one at a time.
-
-    Two ways to size a window, chosen by whether tmin/tmax were given:
-    fixed, `[onset+tmin, onset+tmax]`, which lets a negative tmin pull in a baseline; or the
-    event's own duration, `[onset, onset+duration]`, for block designs that record one.
-
-    Example: an event at 30.0 s of 8 s with tmin/tmax unset yields
-    ``("trial-001_30s_speak", 30.0, 38.0)``.
-
-    Events that describe no window are dropped rather than guessed at: a zero duration with no
-    tmin/tmax has no extent, and a window starting past the end of the recording has no data.
-    """
-    fixed = tmin is not None and tmax is not None
-    windows: list[tuple[str, float, float]] = []
-    for i, m in enumerate(markers, start=1):
-        onset = float(m["onset"])
-        if fixed:
-            t0, t1 = onset + tmin, onset + tmax
-        elif float(m["duration"]) > 0:
-            t0, t1 = onset, onset + float(m["duration"])
-        else:
-            logger.warning("trial %d at %.1fs has no duration and no --epoch-tmin/--epoch-tmax; "
-                           "skipping", i, onset)
-            continue
-        t0, t1 = max(0.0, t0), min(duration, t1)
-        if t1 - t0 <= 0:
-            logger.warning("trial %d at %.1fs falls outside the recording; skipping", i, onset)
-            continue
-        cond = str(m.get("description", "")).strip()
-        windows.append((f"trial-{i:03d}_{onset:.0f}s" + (f"_{cond}" if cond else ""), t0, t1))
-    return windows
-
-
-def _trial_sqm(raw, t0: float, t1: float,
-               sci_threshold: float, cardiac_l_freq: float, cardiac_h_freq: float) -> dict:
-    """SQM scalars for one trial window, scored the way the whole recording was.
-
-    The intensity recording is what gets cropped, not the optical density derived from it,
-    so that a trial's CV, SNR and spike count sit on the same scale as the recording-level
-    numbers in the same report. Reusing the whole-recording OD object would be cheaper by one
-    conversion per trial but would put the two sets of figures on different footings.
-
-    No sliding-window series is attached: a window of a few seconds has no room for the 10 s
-    grid the recording-level series uses.
-    """
-    from fnirs_pipe.qc.metrics import compute_raw_sqm, compute_sci_scores
-
-    seg = raw.copy().crop(tmin=t0, tmax=t1)
-    sci_scores, _ = compute_sci_scores(seg, cardiac_l_freq, cardiac_h_freq)
-    bad = [ch for ch, v in sci_scores.items() if v < sci_threshold]
-    try:
-        return compute_raw_sqm(seg, sci_scores, bad, cardiac_l_freq, cardiac_h_freq)
-    except Exception as exc:
-        logger.warning("trial SQM failed: %s", exc)
-        return {}
+# the scalars the viewer's metrics panel lists, in order. Names, formats, thresholds and
+# tooltips all come from the metric registry, so this is only the choice of which ones and
+# in what order: the same ones the subject report prints, minus what a raw recording has no
+# later stage to measure.
+_VIEW_SCALAR_KEYS = (
+    "channel_retention_rate", "sci_mean", "psp_mean", "snr_mean", "cv_mean",
+    "cp_mean", "n_flat_channels", "mean_amp_mean",
+    "gvtd_mean", "gvtd_filt_p95", "gvtd_thresh",
+    "gvtd_pct_above_thresh", "gvtd_num_above_thresh", "spike_count",
+)
 
 
 def _process_run(
@@ -115,6 +67,7 @@ def _process_run(
         condition_colors,
         trial_quality_heatmap,
     )
+    from fnirs_pipe.qc.boilerplate.vocabulary import metric_rows
     from fnirs_pipe.qc.metrics import (
         attach_windowed_series, compute_raw_sqm, compute_sci_scores,
     )
@@ -138,10 +91,25 @@ def _process_run(
         logger.warning("SQM failed: %s", exc)
         sqm = {}
 
-    # `sqm` stays the flat all-channel view the figures below read. The record written to
-    # disk is the sectioned one, built through the same function the pipeline uses.
+    # `sqm` stays the flat all-channel view the per-window figures below read. The record
+    # written to disk is the sectioned one, built through the same function the pipeline
+    # uses, and it is now what the panels read too: the flat view averages a short
+    # channel's coupling in with the long ones, which lifts SCI, PSP and SNR and can make a
+    # poorly coupled recording read as a good one.
     raw_secs, raw_pc = raw_sections(
         raw, sci_scores, list(bad_channels), cardiac_l_freq, cardiac_h_freq)
+    record_view = {**raw_secs, "per_channel": raw_pc}
+    ch_rows = channel_rows(record_view, sci_scores, bad_channels)
+    # the verdict is read off the long channels wherever the montage was split, exactly as
+    # the subject report reads it, so two views of one recording cannot disagree
+    view_scalars = raw_secs.get("raw_long") or raw_secs.get("raw") or {}
+    raw_all = raw_secs.get("raw") or {}
+    sqm_split = bool(raw_secs.get("raw_long") and raw_secs.get("raw_short"))
+    split = split_table([
+        ("All",   len(sci_scores),                raw_all,                         False),
+        ("Long",  raw_all.get("n_long_channels"), raw_secs.get("raw_long") or {},  True),
+        ("Short", raw_all.get("n_short_channels"), raw_secs.get("raw_short") or {}, False),
+    ]) if sqm_split else {}
 
     # Persist windowed series so group_raw can build time × subject heatmaps. Their own
     # section, since `_split_scalars` would file every one of these lists under per_channel.
@@ -226,7 +194,7 @@ def _process_run(
 
     # ── file: PSD mean ─────────────────────────────────────────────────────────
     try:
-        fig = build_psd_mean_figure(raw)
+        fig = build_psd_mean_figure(raw, cardiac=(cardiac_l_freq, cardiac_h_freq))
         if fig:
             fname = f"{label}_desc-psd_nirs.html"
             h     = _save_figure_html(fig, fig_dir / fname)
@@ -249,16 +217,10 @@ def _process_run(
     # ── file: channel quality summary ──────────────────────────────────────────
     ch_summary_inline: dict = {}
     try:
-        ch_names = list(sci_scores.keys())
-        is_bad   = [ch in bad_channels for ch in ch_names]
-        fig = channel_quality_heatmap(
-            ch_names, is_bad,
-            sci_per_ch=sqm.get("sci_per_channel", sci_scores),
-            cv_per_ch=sqm.get("cv_per_channel", {}),
-            snr_per_ch=sqm.get("snr_per_channel", {}),
-            psp_per_ch=psp_per_ch,
-            sci_thresh=sci_threshold,
-        )
+        # long block first with the divider between the two, from the same helper the
+        # subject report uses, so the grid and the per-channel table below it read in one
+        # order and a short channel never lands in a long channel's verdict
+        fig = channel_quality_heatmap(sci_thresh=sci_threshold, **heatmap_args(ch_rows))
         fname = f"{label}_desc-chsummary_nirs.html"
         h     = _save_figure_html(fig, fig_dir / fname)
         figure_paths["ch_summary"] = {"src": f"figures/{fname}", "h": h}
@@ -293,6 +255,7 @@ def _process_run(
             try:
                 detail_fig, psd_fig, epoch_fig = build_channel_figure(
                     raw_haemo, markers, pair, _MAX_TS_PTS, fig_tmin, fig_tmax,
+                    cardiac=(cardiac_l_freq, cardiac_h_freq),
                 )
                 fname = f"{label}_desc-ch{_pair_fname(pair)}_nirs.html"
                 _save_multi_fig_html([detail_fig, psd_fig, epoch_fig], fig_dir / fname)
@@ -303,23 +266,27 @@ def _process_run(
                 f"figures/{label}_desc-ch{{pair}}_nirs.html"
             )
 
+    # `channel_pairs or None` so a run whose Beer-Lambert failed still gets a table, built
+    # from the pairs the intensity recording carries rather than from an empty list
+    pair_cells = format_rows(pair_rows(ch_rows, channel_pairs or None), sci_threshold,
+                             name_key="pair")
+
     # ── file: per-trial QC ─────────────────────────────────────────────────────
     # scored here rather than persisted: a trial is not a BIDS entity, so per-trial records
     # have nowhere to live in the derivatives tree without colliding on filename
     trial_qc_inline: dict = {}
     if epoch_qc:
         try:
-            windows = _trial_windows(markers, epoch_tmin, epoch_tmax, float(raw.times[-1]))
-            labels  = [w[0] for w in windows]
-            sqms    = [_trial_sqm(raw, t0, t1, sci_threshold,
-                                  cardiac_l_freq, cardiac_h_freq) for _, t0, t1 in windows]
+            labels, sqms = score_trials(raw, markers, sci_threshold,
+                                        cardiac_l_freq, cardiac_h_freq,
+                                        epoch_tmin, epoch_tmax)
             fig = trial_quality_heatmap(labels, sqms)
             if fig:
                 fname = f"{label}_desc-trialqc_nirs.html"
                 h     = _save_figure_html(fig, fig_dir / fname)
                 figure_paths["trial_qc"] = {"src": f"figures/{fname}", "h": h}
                 trial_qc_inline = {"figure": fig.to_dict(), "n_trials": len(labels)}
-            elif not windows:
+            elif not labels:
                 logger.warning("%s: no usable trial windows; per-trial QC skipped", label)
         except Exception as exc:
             logger.warning("trial_quality_heatmap failed: %s", exc)
@@ -335,6 +302,7 @@ def _process_run(
     )
     sqm_path.write_text(json.dumps(record, indent=2, default=str), encoding="utf-8")
     logger.info("SQM JSON → %s", sqm_path)
+    save_channel_csv(ch_rows, label, sqm_dir)
 
     return {
         "ts":           ts_inline,
@@ -348,9 +316,26 @@ def _process_run(
         "sqm": {
             "scalars":     {k: v for k, v in sqm.items() if not isinstance(v, (dict, list))},
             "per_channel": {"sci_per_channel": sqm.get("sci_per_channel", {})},
+            # already labelled, formatted and coloured by the metric registry, so the
+            # viewer prints them and carries no copy of the cutoffs
+            "rows":        metric_rows(view_scalars, _VIEW_SCALAR_KEYS, skip_missing=True),
+            "split":       split,
+            "channel_set": "long channels" if sqm_split else "every channel",
+        },
+        # One table, at pair granularity: a decision is taken per source-detector pair and
+        # SCI is a property of the pair rather than of either wavelength, so a per-wavelength
+        # table beside this one would list every channel twice for no extra information. The
+        # per-wavelength numbers are in the CSV written next to the record.
+        "channels": {
+            "pairs":  pair_cells,
+            "blocks": separation_blocks(pair_cells),
+            "notes":  separation_notes(raw_all, ch_rows),
         },
         "channel_pairs": channel_pairs,
         "figure_paths":  figure_paths,
+        # the GUI builds its per-channel figures on demand and needs the run's own band to
+        # shade the PSD the way the ones built here are shaded
+        "cardiac":       [cardiac_l_freq, cardiac_h_freq],
     }
 
 

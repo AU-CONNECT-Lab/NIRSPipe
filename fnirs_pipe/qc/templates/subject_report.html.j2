@@ -219,6 +219,9 @@
 {% if channel_summary_path %}
   {% set _ = _nav.append({"id": "ChannelSummary" ~ _rk, "name": "Ch. Summary", "href": "#ChannelSummary"}) %}
 {% endif %}
+{% if trial_qc_path %}
+  {% set _ = _nav.append({"id": "TrialQC" ~ _rk, "name": "Per-trial", "href": "#TrialQC"}) %}
+{% endif %}
 {% set _ = _nav.append({"id": "Errors" ~ _rk, "name": "Errors", "href": "#Errors"}) %}
 {% set _ = _nav.append({"id": "Provenance", "name": "Provenance", "href": "#Provenance", "ratable": false}) %}
 {% set _ = _nav.append({"id": "Methods",    "name": "Methods",    "href": "#Methods",    "ratable": false}) %}
@@ -468,6 +471,18 @@
 <details id="Epoch" open>
   <summary>f. Epoch / HRF Preview (grand mean)</summary>
   <div class="details-body">
+    {% if trigger_timeline_path %}
+    <h3>Event timeline</h3>
+    <p style="font-size:0.82rem;color:#666;margin:0 0 0.3rem;">
+      Every event on one axis, one row per condition. The averages below cannot show a
+      condition that stopped being delivered partway through or a block that was started
+      twice; this can. Same panel the raw QC viewer opens with.
+    </p>
+    <iframe class="plotly-frame" src="{{ trigger_timeline_path }}" title="Event timeline"
+            style="height:{{ trigger_timeline_h }}px"></iframe>
+    <p class="fig-path">{{ trigger_timeline_path }}</p>
+    <h3>Grand mean</h3>
+    {% endif %}
     <p class="step-desc">
       Grand-mean HbO and HbR responses averaged across good channels, baseline-corrected
       to the pre-stimulus window (−5 to 0&thinsp;s). Each condition is shown separately.
@@ -641,15 +656,30 @@
 {% endif %}
 
 <!-- ================================================= quantitative metrics -->
-{% macro qm_val(v, fmt='.3f') %}{% if v is not none %}{{ ('%' ~ fmt) | format(v) }}{% else %}<span style="color:#aaa">n/a</span>{% endif %}{% endmacro %}
-{% macro pct(v) %}{% if v is not none %}{{ "%.1f"|format(v * 100) }}%{% else %}<span style="color:#aaa">n/a</span>{% endif %}{% endmacro %}
+{#- Number formats, colour cutoffs and tooltips all come from the metric registry in
+    fnirs_pipe.qc.boilerplate.vocabulary, which the raw viewer and the GUI read as well, so
+    a threshold moves in one place instead of once per renderer. Only the labels are
+    written here, where a header has room to say more than a registry default can. -#}
+{#- label + hover text from the metric registry; a marker on the ones that decide usability -#}
+{% macro ql(key, text) %}<span class="ql{% if is_key_metric(key) %} ql-key{% endif %}"
+      title="{{ metric_summary(key) }}">{{ text }}{% if is_key_metric(key) %}<span class="ql-dot" aria-hidden="true">&#9679;</span>{% endif %}</span>{% endmacro %}
+
+{% macro mv(key, v, fmt=none) %}{% if v is not none %}{{ format_metric(key, v, fmt) }}{% else %}<span style="color:#aaa">n/a</span>{% endif %}{% endmacro %}
+
+{#- One metric as a list row. ``suffix`` names the second half of a before → after pair
+    (``_post``, ``_errts``); the colour is read off whichever value is the later one, since
+    a metric's verdict is what the run ended up with, and comes back empty for the metrics
+    the registry has no cutoff for. -#}
+{% macro qm_li(key, text, suffix='', note='') %}
+    {%- set after = sqm.get(key ~ suffix) if suffix else none -%}
+    <li>{{ ql(key, text ~ (note if after is not none else '')) }}
+        <span class="qv {{ metric_class(key, after if after is not none else sqm.get(key)) }}">
+          {%- if after is not none %}{{ mv(key, sqm.get(key)) }} &rarr; {{ mv(key, after) }}{% else %}{{ mv(key, sqm.get(key)) }}{% endif -%}
+        </span></li>
+{%- endmacro %}
 
 <h2 id="Metrics">Quantitative Metrics</h2>
 <div class="qm-box">
-  {% macro qv_class(v, ok_test, warn_test) %}{% if v is not none %}{% if ok_test %}qm-ok{% elif warn_test %}qm-warn{% else %}qm-bad{% endif %}{% endif %}{% endmacro %}
-  {#- label + hover text from the metric registry; a marker on the ones that decide usability -#}
-  {% macro ql(key, text) %}<span class="ql{% if is_key_metric(key) %} ql-key{% endif %}"
-        title="{{ metric_summary(key) }}">{{ text }}{% if is_key_metric(key) %}<span class="ql-dot" aria-hidden="true">&#9679;</span>{% endif %}</span>{% endmacro %}
   <p class="qm-note">Hover a metric for what it means and which way is good.
      <span class="ql-dot" aria-hidden="true">&#9679;</span> marks the ones that decide whether the run is usable.</p>
   {% if sqm_long and not sqm_split %}
@@ -664,12 +694,6 @@
      did. GVTD is measured either side of motion correction; global correlation, HbO&ndash;HbR
      correlation and CNR either side of the confound regression. A single number means that
      step did not run for this recording.</p>
-    {% set ret  = sqm.get('channel_retention_rate') %}
-    {% set sci  = sqm.get('sci_mean') %}
-    {% set corr = sqm.get('hbo_hbr_corr_mean') %}
-    {% set ret_pct = sqm.get('pct_data_retained') %}
-    {% set snr  = sqm.get('snr_mean') %}
-    {% set spk  = sqm.get('spike_count') %}
 
   {% if sqm_split %}
   <p class="qm-note">Measured over three channel sets. <b>Long</b> is what the verdict is read off;
@@ -680,24 +704,20 @@
 
   {#- one column per metric, one row per channel set. Both halves are measured before
       denoising, so they share one table; the domain changes at the divider, and the two
-      halves come from different records, hence the two dicts per row. Spec is
-      (key, header, format), and 'pct' is written as a percentage. -#}
-  {%- set od_cols = [('channel_retention_rate', 'Channel retention', 'pct'),
-                     ('sci_mean', 'Mean SCI', '.3f'),
-                     ('psp_mean', 'Mean PSP (10 s)', '.3f'),
-                     ('snr_mean', 'Mean SNR', '.1f'),
-                     ('cv_mean', 'Mean CV', '.3f'),
-                     ('mean_amp_mean', 'Mean amplitude', '.3e')] %}
-  {%- set hb_cols = [('hbo_hbr_corr_mean', 'HbO&ndash;HbR corr', '.3f'),
-                     ('gcor_hbo', 'Global corr HbO', '.3f'),
-                     ('gcor_hbr', 'Global corr HbR', '.3f')]
-                    + ([('cnr_hbo_mean', 'CNR HbO', '.3f'), ('cnr_hbr_mean', 'CNR HbR', '.3f')]
+      halves come from different records, hence the two dicts per row. -#}
+  {#- the OD columns come from fnirs_pipe.qc.channel_table, so this table and the raw
+      viewer's cannot end up listing different metrics for the same recording -#}
+  {%- set od_cols = od_split_columns %}
+  {%- set hb_cols = [('hbo_hbr_corr_mean', 'HbO&ndash;HbR corr'),
+                     ('gcor_hbo', 'Global corr HbO'),
+                     ('gcor_hbr', 'Global corr HbR')]
+                    + ([('cnr_hbo_mean', 'CNR HbO'), ('cnr_hbr_mean', 'CNR HbR')]
                        if hb_split and hb_all.get('cnr_hbo_mean') is not none else [])
-                    + [('cardiac_band_frac_hbo', 'Cardiac band (HbO)', 'pct'),
-                       ('lowfreq_drift_amplitude_hbo', 'Low-freq drift (HbO)', '.3e')] %}
-  {#- colour is read off the long channels alone, and only where a threshold is established -#}
-  {%- macro cell_class(key, v, is_long) %}{% if is_long and v is not none %}{% if key == 'channel_retention_rate' %}{{ qv_class(v, v >= 0.9, v >= 0.7) }}{% elif key == 'sci_mean' %}{{ qv_class(v, v >= 0.75, v >= 0.5) }}{% elif key == 'snr_mean' %}{{ qv_class(v, v >= 100, v >= 20) }}{% elif key == 'hbo_hbr_corr_mean' %}{{ qv_class(v, v < -0.3, v < 0) }}{% endif %}{% endif %}{% endmacro -%}
-  {%- macro qm_cells(d, cols, is_long, first_class='') %}{% for key, text, fmt in cols %}{% set v = d.get(key) %}<td class="qv {{ first_class if loop.first }} {{ cell_class(key, v, is_long) }}">{% if fmt == 'pct' %}{{ pct(v) }}{% else %}{{ qm_val(v, fmt) }}{% endif %}</td>{% endfor %}{% endmacro -%}
+                    + [('cardiac_band_frac_hbo', 'Cardiac band (HbO)'),
+                       ('lowfreq_drift_amplitude_hbo', 'Low-freq drift (HbO)')] %}
+  {#- colour is read off the long channels alone, and only where the registry has a cutoff -#}
+  {%- macro cell_class(key, v, is_long) %}{% if is_long %}{{ metric_class(key, v) }}{% endif %}{% endmacro -%}
+  {%- macro qm_cells(d, cols, is_long, first_class='') %}{% for key, text in cols %}{% set v = d.get(key) %}<td class="qv {{ first_class if loop.first }} {{ cell_class(key, v, is_long) }}">{{ mv(key, v) }}</td>{% endfor %}{% endmacro -%}
   {%- macro qm_row(name, d_od, d_hb, is_long, lead) %}<tr><td>{{ name }}</td><td>{{ lead }}</td>{{ qm_cells(d_od, od_cols, is_long) }}{% if hb_split %}{{ qm_cells(d_hb, hb_cols, is_long, 'dom-split') }}{% endif %}</tr>{% endmacro -%}
   <div style="overflow-x:auto;">
   <table class="qm-table qm-split">
@@ -705,8 +725,8 @@
       <tr><th colspan="{{ od_cols | length + 2 }}" class="ch-group">Original recording &mdash; optical density</th>
           {% if hb_split %}<th colspan="{{ hb_cols | length }}" class="ch-group dom-split">Haemoglobin &mdash; before denoising</th>{% endif %}</tr>
       <tr><th>Channel set</th><th>Channels</th>
-          {%- for key, text, fmt in od_cols %}<th>{{ ql(key, text) }}</th>{% endfor %}
-          {%- if hb_split %}{% for key, text, fmt in hb_cols %}<th class="{{ 'dom-split' if loop.first }}">{{ ql(key, text) }}</th>{% endfor %}{% endif %}</tr>
+          {%- for key, text in od_cols %}<th>{{ ql(key, text) }}</th>{% endfor %}
+          {%- if hb_split %}{% for key, text in hb_cols %}<th class="{{ 'dom-split' if loop.first }}">{{ ql(key, text) }}</th>{% endfor %}{% endif %}</tr>
     </thead>
     <tbody>
       {{ qm_row('All', sqm_all, hb_all, false, channel_rows | length) }}
@@ -717,14 +737,10 @@
   </div>
   {% else %}
   <ul class="qm-list">
-    <li>{{ ql('channel_retention_rate', 'Channel retention') }}
-        <span class="qv {{ qv_class(ret, ret is not none and ret >= 0.9, ret is not none and ret >= 0.7) }}">{{ pct(ret) }}</span></li>
-    <li>{{ ql('sci_mean', 'Mean SCI') }}
-        <span class="qv {{ qv_class(sci, sci is not none and sci >= 0.75, sci is not none and sci >= 0.5) }}">{{ qm_val(sci) }}</span></li>
-    <li>{{ ql('psp_mean', 'Mean PSP (10 s windows)') }}
-        <span class="qv">{{ qm_val(sqm.get('psp_mean')) }}</span></li>
-    <li>{{ ql('snr_mean', 'Mean SNR (intensity)') }}
-        <span class="qv {{ qv_class(snr, snr is not none and snr >= 100, snr is not none and snr >= 20) }}">{{ qm_val(snr, '.1f') }}</span></li>
+    {{ qm_li('channel_retention_rate', 'Channel retention') }}
+    {{ qm_li('sci_mean', 'Mean SCI') }}
+    {{ qm_li('psp_mean', 'Mean PSP (10 s windows)') }}
+    {{ qm_li('snr_mean', 'Mean SNR (intensity)') }}
   </ul>
   {% endif %}
 
@@ -758,42 +774,28 @@
   <p class="qm-note">Optical density. GVTD and the spike counts are measured on
      {% if sqm_split %}long channels only{% else %}every channel{% endif %}; the correction
      footprint is over every channel, since it counts what the correction touched.</p>
+  {%- set motion_note = ' (motion before&rarr;after)' %}
   <ul class="qm-list">
-    <li>{{ ql('gvtd_mean', 'GVTD mean' ~ (' (motion before→after)' if sqm.get('gvtd_mean_post') is not none else '')) }}
-        <span class="qv">{% if sqm.get('gvtd_mean_post') is not none %}{{ qm_val(sqm.get('gvtd_mean'), '.3e') }} → {{ qm_val(sqm.get('gvtd_mean_post'), '.3e') }}{% else %}{{ qm_val(sqm.get('gvtd_mean'), '.3e') }}{% endif %}</span></li>
-    <li>{{ ql('gvtd_p95', 'GVTD p95' ~ (' (motion before→after)' if sqm.get('gvtd_p95_post') is not none else '')) }}
-        <span class="qv">{% if sqm.get('gvtd_p95_post') is not none %}{{ qm_val(sqm.get('gvtd_p95'), '.3e') }} → {{ qm_val(sqm.get('gvtd_p95_post'), '.3e') }}{% else %}{{ qm_val(sqm.get('gvtd_p95'), '.3e') }}{% endif %}</span></li>
-    <li>{{ ql('gvtd_filt_mean', 'GVTD mean 0.01-0.5 Hz' ~ (' (motion before→after)' if sqm.get('gvtd_filt_mean_post') is not none else '')) }}
-        <span class="qv">{% if sqm.get('gvtd_filt_mean_post') is not none %}{{ qm_val(sqm.get('gvtd_filt_mean'), '.3e') }} → {{ qm_val(sqm.get('gvtd_filt_mean_post'), '.3e') }}{% else %}{{ qm_val(sqm.get('gvtd_filt_mean'), '.3e') }}{% endif %}</span></li>
-    <li>{{ ql('gvtd_filt_p95', 'GVTD p95 0.01-0.5 Hz' ~ (' (motion before→after)' if sqm.get('gvtd_filt_p95_post') is not none else '')) }}
-        <span class="qv">{% if sqm.get('gvtd_filt_p95_post') is not none %}{{ qm_val(sqm.get('gvtd_filt_p95'), '.3e') }} → {{ qm_val(sqm.get('gvtd_filt_p95_post'), '.3e') }}{% else %}{{ qm_val(sqm.get('gvtd_filt_p95'), '.3e') }}{% endif %}</span></li>
-    <li>{{ ql('gvtd_pct_above_thresh', 'GVTD % motion' ~ (' (motion before→after)' if sqm.get('gvtd_pct_above_thresh_post') is not none else '')) }}
-        <span class="qv">{% if sqm.get('gvtd_pct_above_thresh_post') is not none %}{{ pct(sqm.get('gvtd_pct_above_thresh')) }} → {{ pct(sqm.get('gvtd_pct_above_thresh_post')) }}{% else %}{{ pct(sqm.get('gvtd_pct_above_thresh')) }}{% endif %}</span></li>
-    <li>{{ ql('gvtd_num_above_thresh', 'GVTD motion frames' ~ (' (motion before→after)' if sqm.get('gvtd_num_above_thresh_post') is not none else '')) }}
-        <span class="qv">{% if sqm.get('gvtd_num_above_thresh_post') is not none %}{{ qm_val(sqm.get('gvtd_num_above_thresh'), 'd') }} → {{ qm_val(sqm.get('gvtd_num_above_thresh_post'), 'd') }}{% else %}{{ qm_val(sqm.get('gvtd_num_above_thresh'), 'd') }}{% endif %}</span></li>
-    <li>{{ ql('gvtd_thresh', 'GVTD threshold' ~ (' (motion before→after)' if sqm.get('gvtd_thresh_post') is not none else '')) }}
-        <span class="qv">{% if sqm.get('gvtd_thresh_post') is not none %}{{ qm_val(sqm.get('gvtd_thresh'), '.3e') }} → {{ qm_val(sqm.get('gvtd_thresh_post'), '.3e') }}{% else %}{{ qm_val(sqm.get('gvtd_thresh'), '.3e') }}{% endif %}</span></li>
+    {{ qm_li('gvtd_mean', 'GVTD mean', '_post', motion_note) }}
+    {{ qm_li('gvtd_p95', 'GVTD p95', '_post', motion_note) }}
+    {{ qm_li('gvtd_filt_mean', 'GVTD mean 0.01-0.5 Hz', '_post', motion_note) }}
+    {{ qm_li('gvtd_filt_p95', 'GVTD p95 0.01-0.5 Hz', '_post', motion_note) }}
+    {{ qm_li('gvtd_pct_above_thresh', 'GVTD % motion', '_post', motion_note) }}
+    {{ qm_li('gvtd_num_above_thresh', 'GVTD motion frames', '_post', motion_note) }}
+    {{ qm_li('gvtd_thresh', 'GVTD threshold', '_post', motion_note) }}
     {% if sqm.get('gvtd_censor_pct') is not none %}
-    <li>{{ ql('gvtd_censor_pct', 'GVTD censored % (n_std ' ~ sqm.get('gvtd_censor_n_std') ~ ')') }}
-        <span class="qv">{{ pct(sqm.get('gvtd_censor_pct')) }}</span></li>
-    <li>{{ ql('gvtd_censor_retained_s', 'GVTD retained (s in ' ~ sqm.get('gvtd_censor_n_epochs') ~ ' epoch(s))') }}
-        <span class="qv">{{ qm_val(sqm.get('gvtd_censor_retained_s'), '.0f') }}</span></li>
+    {{ qm_li('gvtd_censor_pct', 'GVTD censored % (n_std ' ~ sqm.get('gvtd_censor_n_std') ~ ')') }}
+    {{ qm_li('gvtd_censor_retained_s', 'GVTD retained (s in ' ~ sqm.get('gvtd_censor_n_epochs') ~ ' epoch(s))') }}
     {% endif %}
     {% if sqm.get('motion_corrected_pct') is not none %}
-    <li>{{ ql('motion_corrected_pct', 'Motion corrected % (exp.)') }}
-        <span class="qv">{{ pct(sqm.get('motion_corrected_pct')) }}</span></li>
-    <li>{{ ql('motion_corrected_num', 'Motion corrected frames') }}
-        <span class="qv">{{ qm_val(sqm.get('motion_corrected_num'), 'd') }}</span></li>
-    <li>{{ ql('motion_corrected_n_segments', 'Motion corrected segments') }}
-        <span class="qv">{{ qm_val(sqm.get('motion_corrected_n_segments'), 'd') }}</span></li>
+    {{ qm_li('motion_corrected_pct', 'Motion corrected % (exp.)') }}
+    {{ qm_li('motion_corrected_num', 'Motion corrected frames') }}
+    {{ qm_li('motion_corrected_n_segments', 'Motion corrected segments') }}
     {% endif %}
-    <li>{{ ql('spike_count', 'Spike count') }}
-        <span class="qv {{ qv_class(spk, spk == 0, spk is not none and spk < 10) }}">{% if spk is not none %}{{ spk }}{% else %}<span style="color:#aaa">n/a</span>{% endif %}</span></li>
+    {{ qm_li('spike_count', 'Spike count') }}
     {% if sqm.get('spike_pct') is not none %}
-    <li>{{ ql('spike_pct', 'Spike % (exp.)') }}
-        <span class="qv">{{ pct(sqm.get('spike_pct')) }}</span></li>
-    <li>{{ ql('spike_pct_frames', 'Spike % frames') }}
-        <span class="qv">{{ pct(sqm.get('spike_pct_frames')) }}</span></li>
+    {{ qm_li('spike_pct', 'Spike % (exp.)') }}
+    {{ qm_li('spike_pct_frames', 'Spike % frames') }}
     {% endif %}
   </ul>
 
@@ -805,33 +807,25 @@
      retained is a share of the recording's duration, not of its channels, so it is one
      number for every channel set.</p>
   <ul class="qm-list">
-    {% set corr_after = sqm.get('hbo_hbr_corr_mean_errts') %}
-    <li>{{ ql('hbo_hbr_corr_mean', 'Mean HbO–HbR corr' ~ (' (denoise before→after)' if corr_after is not none else '')) }}
-        {%- set corr_now = corr_after if corr_after is not none else corr %}
-        <span class="qv {{ qv_class(corr_now, corr_now is not none and corr_now < -0.3,
-                                    corr_now is not none and corr_now < 0) }}">
-          {% if corr_after is not none %}{{ qm_val(corr) }} → {{ qm_val(corr_after) }}{% else %}{{ qm_val(corr) }}{% endif %}</span></li>
+    {{ qm_li('hbo_hbr_corr_mean', 'Mean HbO&ndash;HbR corr', '_errts', ' (denoise before&rarr;after)') }}
     {% if sqm.get('cnr_hbo_mean') is not none or sqm.get('cnr_hbo_mean_errts') is not none %}
     {% for chroma, key in [('HbO', 'cnr_hbo_mean'), ('HbR', 'cnr_hbr_mean')] %}
-    {% set cnr_before = sqm.get(key) %}
-    {% set cnr_after  = sqm.get(key ~ '_errts') %}
-    <li>{{ ql(key, 'CNR ' ~ chroma ~ (' (denoise before→after)' if cnr_after is not none else '')
-                 ~ (' — %d epochs'|format(sqm.get('cnr_n_epochs')) if sqm.get('cnr_n_epochs') else '')) }}
-        <span class="qv">{% if cnr_after is not none %}{{ qm_val(cnr_before) }} → {{ qm_val(cnr_after) }}{% else %}{{ qm_val(cnr_before) }}{% endif %}</span></li>
+    {{ qm_li(key, 'CNR ' ~ chroma
+                  ~ (' — %d epochs'|format(sqm.get('cnr_n_epochs')) if sqm.get('cnr_n_epochs') else ''),
+             '_errts', ' (denoise before&rarr;after)') }}
     {% endfor %}
     {% endif %}
-    <li>{{ ql('gcor_hbo', 'Global corr HbO' ~ (' (reg before→after)' if sqm.get('gcor_hbo_postreg') is not none else '')) }}
-        <span class="qv">{% if sqm.get('gcor_hbo_postreg') is not none %}{{ qm_val(sqm.get('gcor_hbo_prereg')) }} → {{ qm_val(sqm.get('gcor_hbo_postreg')) }}{% else %}{{ qm_val(sqm.get('gcor_hbo')) }}{% endif %}</span></li>
-    <li>{{ ql('gcor_hbr', 'Global corr HbR' ~ (' (reg before→after)' if sqm.get('gcor_hbr_postreg') is not none else '')) }}
-        <span class="qv">{% if sqm.get('gcor_hbr_postreg') is not none %}{{ qm_val(sqm.get('gcor_hbr_prereg')) }} → {{ qm_val(sqm.get('gcor_hbr_postreg')) }}{% else %}{{ qm_val(sqm.get('gcor_hbr')) }}{% endif %}</span></li>
-    <li>{{ ql('pct_data_retained', '% data retained') }}
-        <span class="qv {{ qv_class(ret_pct, ret_pct is not none and ret_pct >= 0.8, ret_pct is not none and ret_pct >= 0.6) }}">{{ pct(ret_pct) }}</span></li>
-    <li>{{ ql('cardiac_band_power_hbo', 'Cardiac band power (HbO)') }}
-        <span class="qv">{{ qm_val(sqm.get('cardiac_band_power_hbo'), '.3e') }}</span></li>
-    <li>{{ ql('cardiac_band_frac_hbo', 'Cardiac band fraction (HbO)') }}
-        <span class="qv">{{ pct(sqm.get('cardiac_band_frac_hbo')) }}</span></li>
-    <li>{{ ql('lowfreq_drift_amplitude_hbo', 'Low-freq drift (HbO)') }}
-        <span class="qv">{{ qm_val(sqm.get('lowfreq_drift_amplitude_hbo'), '.3e') }}</span></li>
+    {#- the regression's own before/after, which is stored under its own two keys rather
+        than as a suffix on gcor_hbo, so it does not go through qm_li -#}
+    {% for chroma, key in [('HbO', 'gcor_hbo'), ('HbR', 'gcor_hbr')] %}
+    {% set reg_after = sqm.get(key ~ '_postreg') %}
+    <li>{{ ql(key, 'Global corr ' ~ chroma ~ (' (reg before&rarr;after)' if reg_after is not none else '')) }}
+        <span class="qv">{% if reg_after is not none %}{{ mv(key, sqm.get(key ~ '_prereg')) }} &rarr; {{ mv(key, reg_after) }}{% else %}{{ mv(key, sqm.get(key)) }}{% endif %}</span></li>
+    {% endfor %}
+    {{ qm_li('pct_data_retained', '% data retained') }}
+    {{ qm_li('cardiac_band_power_hbo', 'Cardiac band power (HbO)') }}
+    {{ qm_li('cardiac_band_frac_hbo', 'Cardiac band fraction (HbO)') }}
+    {{ qm_li('lowfreq_drift_amplitude_hbo', 'Low-freq drift (HbO)') }}
   </ul>
 
 </div>
@@ -840,30 +834,24 @@
 <!-- ------------------------------------------ per-channel, its own panel -->
 <h3 class="qm-sub qm-panel-title">Per-channel metrics</h3>
 <div class="qm-box">
+  {#- values and cell classes come pre-formatted from fnirs_pipe.qc.channel_table, so this
+      table, the raw viewer's and the GUI's print one number one way, and the SCI column is
+      marked against the run's own --sci-threshold rather than a copy of it -#}
   {% macro ch_row(row) %}
       <tr>
         <td>{{ row.name }}</td>
-        <td class="{{ 'bad' if row.is_bad else 'good' }}">{{ 'BAD' if row.is_bad else 'OK' }}</td>
-        <td class="{{ 'bad' if row.sci is not none and row.sci < 0.75 else '' }}">
-          {% if row.sci is not none %}{{ "%.3f"|format(row.sci) }}{% else %}&mdash;{% endif %}
-        </td>
-        <td>{% if row.psp is not none %}{{ "%.3f"|format(row.psp) }}{% else %}&mdash;{% endif %}</td>
-        <td>{% if row.snr is not none %}{{ "%.1f"|format(row.snr) }}{% else %}&mdash;{% endif %}</td>
-        <td>{% if row.cv is not none %}{{ "%.3f"|format(row.cv) }}{% else %}&mdash;{% endif %}</td>
-        <td class="{{ 'neg' if row.corr is not none and row.corr < 0 else ('pos' if row.corr is not none else '') }}">
-          {% if row.corr is not none %}{{ "%.3f"|format(row.corr) }}{% else %}&mdash;{% endif %}
-        </td>
+        <td class="{{ row.status_cls }}">{{ row.status }}</td>
+        <td class="{{ row.sci_cls }}">{{ row.sci }}</td>
+        <td>{{ row.psp }}</td>
+        <td>{{ row.snr }}</td>
+        <td>{{ row.cv }}</td>
+        <td class="{{ row.corr_cls }}">{{ row.corr }}</td>
       </tr>
   {% endmacro %}
-  {#- the montage split, long first. An unsplit record leaves `separation` empty and every
-      row falls into one block, which is what a montage of one kind looks like. -#}
-  {% set long_rows  = channel_rows | selectattr('separation', 'equalto', 'long')  | list %}
-  {% set short_rows = channel_rows | selectattr('separation', 'equalto', 'short') | list %}
-  {% set odd_rows   = channel_rows | selectattr('separation', 'equalto', 'unclassified') | list %}
-  {% set ch_blocks  = [('Long channels', long_rows), ('Short channels', short_rows),
-                       ('Neither range (10-15 mm, or over 45 mm)', odd_rows)] %}
-  {% set n_blocks   = (long_rows | length > 0) | int + (short_rows | length > 0) | int
-                      + (odd_rows | length > 0) | int %}
+  {#- the montage split, long first, grouped by fnirs_pipe.qc.channel_table so this table
+      and the raw views block their channels the same way. An unsplit record comes back as
+      one block, which is what a montage of one kind looks like. -#}
+  {% set n_blocks = channel_blocks | length %}
   {% if n_blocks > 1 %}
   <p class="qm-note">Grouped by source-detector separation. Every block is pruned against the same
      SCI threshold, so Status is a verdict for short channels too, and a short channel marked BAD is
@@ -879,7 +867,7 @@
         </tr>
       </thead>
       {% if n_blocks > 1 %}
-      {% for title, rows in ch_blocks if rows %}
+      {% for title, rows in channel_blocks %}
       <tbody>
         <tr><td colspan="7" class="ch-group">{{ title }} ({{ rows | length }})</td></tr>
         {% for row in rows %}{{ ch_row(row) }}{% endfor %}
@@ -887,7 +875,7 @@
       {% endfor %}
       {% else %}
       <tbody>
-        {% for row in channel_rows %}{{ ch_row(row) }}{% endfor %}
+        {% for row in channel_cells %}{{ ch_row(row) }}{% endfor %}
       </tbody>
       {% endif %}
     </table>
@@ -907,6 +895,23 @@
           width="100%" height="{{ channel_summary_h + 20 }}px"
           style="border:none;min-width:500px;display:block;"></iframe>
 </div>
+{% endif %}
+
+{% if trial_qc_path %}
+<!-- ==================================================== per-trial quality -->
+<h2 id="TrialQC">Per-trial Quality</h2>
+<p style="font-size:0.82rem;color:#666;margin:0 0 0.6rem;">
+  Every trial window scored on its own, over the same &minus;5 to 25&thinsp;s window the
+  epoch figures average, on the intensity recording. Colour is relative within a metric
+  row, not a threshold: red marks the worse end of what this recording did. A run whose
+  mean SCI looks fine can still hold a handful of trials where the cap moved, and that is
+  what this is for. Hover a cell for the value.
+</p>
+<div style="overflow-x:auto;">
+  <iframe class="plotly-frame" src="{{ trial_qc_path }}" title="Per-trial quality"
+          style="height:{{ trial_qc_h }}px;min-width:500px;"></iframe>
+</div>
+<p class="fig-path">{{ trial_qc_path }}</p>
 {% endif %}
 
 <!-- =========================================================== errors -->

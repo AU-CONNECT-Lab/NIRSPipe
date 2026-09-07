@@ -10,9 +10,18 @@ from fnirs_pipe.qc.metrics import GVTD_CHANNEL_SETS
 
 dash.register_page(__name__, path="/", name="Data Preparation")
 
+# The rows come from the metric registry already labelled and formatted, so this only
+# names the columns. `cls` carries the registry's verdict and drives the row colouring in
+# _SQM_STYLE rather than being printed.
 _SQM_COLS = [
-    {"name": "Metric", "id": "metric"},
+    {"name": "Metric", "id": "label"},
     {"name": "Value",  "id": "value"},
+]
+
+_SQM_STYLE = [
+    {"if": {"filter_query": "{cls} = 'qm-ok'",   "column_id": "value"}, "color": "#27ae60"},
+    {"if": {"filter_query": "{cls} = 'qm-warn'", "column_id": "value"}, "color": "#e67e22"},
+    {"if": {"filter_query": "{cls} = 'qm-bad'",  "column_id": "value"}, "color": "#c0392b"},
 ]
 
 _SEG_COLS = [
@@ -384,11 +393,18 @@ layout = dbc.Container([
                       ])),
 
                 _card("Image Quality Metrics",
+                    html.Small(id="dp-sqm-scope",
+                               className="text-muted d-block mb-1"),
                     dash_table.DataTable(
                         id="dp-sqm-table",
                         columns=_SQM_COLS,
+                        tooltip_data=[],
+                        tooltip_duration=None,
                         style_table={"overflowX": "auto"},
+                        style_data_conditional=_SQM_STYLE,
+                        style_cell={"fontSize": "0.82rem", "textAlign": "left"},
                     ),
+                    html.Div(id="dp-sqm-split", className="mt-2"),
                 ),
 
                 _card("Per-trial QC",
@@ -406,8 +422,9 @@ layout = dbc.Container([
                           dcc.Graph(id="dp-ch-summary-figure", style={"minHeight": "400px"}),
                       ])),
 
-                _card("Channel Decisions",
-                      html.Small("click chip to cycle: — → good → bad · auto-saves",
+                _card("Per-channel Metrics",
+                      html.Small("one row per source-detector pair · click chip to cycle: "
+                                 "— → good → bad · auto-saves",
                                  className="text-muted d-block mb-2"),
                       html.Div(id="dp-decisions-table",
                                children=html.Small("Load a run to rate channels.",

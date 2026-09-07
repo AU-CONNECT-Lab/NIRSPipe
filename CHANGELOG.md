@@ -7,11 +7,17 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- **The raw QC report and the interface now judge long channels separately.** Both read the whole montage at once, so a short channel's coupling lifted SCI, PSP and SNR and a poorly coupled recording could read as a good one. Both now show the verdict on the long channels, with an All / Long / Short comparison beside it
+- **The raw QC report and the interface show every per-channel metric**, not SCI alone: status, SCI, PSP, SNR and CV per source-detector pair, grouped by separation. The raw report also writes the per-channel metrics CSV the subject report writes
+- **The subject report shows the event timeline and the per-trial quality panel**, which were in the raw QC report only. The timeline shows a condition that stopped being delivered partway through, which the averages cannot
 - **The analysis page offers the bandpass design.** `--filter-method` and `--filter-order` were command-line only, so the interface silently pinned every run to the defaults
 - **`--gvtd-censor` marks the frames GVTD flags as `BAD_gvtd`, so an analysis can leave them out.** Nothing is cut, so a threshold set too strictly is undone by rerunning. `--gvtd-censor-n-std` and `--gvtd-min-epoch-s` set the threshold and the shortest stretch worth keeping. Off by default: on a high-motion recording it can flag everything
 
 ### Fixed
 - **`--gvtd-censor` failed on any recording that has event markers**, which is every task run. It worked only on a recording with no markers at all
+- **The interface showed no SCI at all in its channel table**, a dash on every row
+- **The per-channel PSD shaded the cardiac and respiration bands at fixed frequencies** instead of the run's own, so a study outside the adult range had the stripe drawn over the wrong part of the spectrum. The raw QC report and the interface were affected; the multi-stage PSD figure already used the run's bands
+- **The same metric could read as passing in one view and failing in another.** The three views each carried their own copy of the thresholds, and the interface printed record keys at four decimals with no label, units or verdict
 
 ## [0.29.0] - 2026-09-06
 

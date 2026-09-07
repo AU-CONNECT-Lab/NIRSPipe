@@ -38,7 +38,7 @@ def _snirf_options(subject: str, bids_dir: str) -> list[dict]:
 
 
 # bump whenever a cached figure's builder changes, or the disk cache keeps serving the old one
-_CACHE_VERSION = 5
+_CACHE_VERSION = 6
 
 
 def _pair_name(ch_name: str) -> str:
@@ -259,6 +259,9 @@ _SHOW = {}
     Output("dp-marker-store",           "data",    allow_duplicate=True),
     Output("dp-channel-selector",       "options"),
     Output("dp-sqm-table",              "data"),
+    Output("dp-sqm-table",              "tooltip_data"),
+    Output("dp-sqm-scope",              "children"),
+    Output("dp-sqm-split",              "children"),
     Output("dp-channel-selector",       "value",   allow_duplicate=True),
     Output("dp-evoked-topo",            "figure"),
     Output("dp-trigger-timeline",       "figure"),
@@ -279,10 +282,10 @@ _SHOW = {}
 )
 def restore_from_store(store, _tick):
     if not store:
-        return (no_update,) * 23
+        return (no_update,) * 26
     cached = _RESULT_CACHE.get(store.get("cache_key"), {})
     if not cached:
-        return (no_update,) * 23
+        return (no_update,) * 26
 
     def _fig(nested, *keys):
         d = nested
@@ -312,14 +315,16 @@ def restore_from_store(store, _tick):
         for m in markers
     ] or no_update
 
-    ch_pairs = cached.get("channel_pairs", sorted(cached.get("channels", {}).keys()))
+    ch_pairs = cached.get("channel_pairs", [])
     ch_options = [{"label": p, "value": p} for p in ch_pairs] or no_update
 
-    sqm_scalars = cached.get("sqm", {}).get("scalars", {})
-    sqm_rows = [
-        {"metric": k, "value": f"{v:.4f}" if isinstance(v, float) else str(v)}
-        for k, v in sqm_scalars.items()
-    ] or no_update
+    # already labelled, formatted and coloured by the metric registry, which is also what
+    # the subject report and the raw viewer print. This panel used to dump the record's raw
+    # keys at four decimals with no units, no direction and no verdict.
+    sqm = cached.get("sqm", {})
+    sqm_rows = sqm.get("rows", []) or no_update
+    sqm_tips = [{"label": {"value": r["tip"], "type": "markdown"}}
+                for r in sqm.get("rows", [])] or no_update
 
     carpet_src = cached.get("carpet_gvtd", {}).get("figure")
     carpet_src = style_figure(carpet_src) if carpet_src else no_update
@@ -338,6 +343,9 @@ def restore_from_store(store, _tick):
         marker_rows,
         ch_options,
         sqm_rows,
+        sqm_tips,
+        _sqm_scope_text(sqm),
+        _build_split_table(sqm.get("split") or {}),
         no_update,
         evoked_topo,
         trigger_tl,
@@ -510,8 +518,10 @@ def update_channel_detail(channel_pair, store):
             from fnirs_pipe.qc.prep_raw_report import _EPOCH_TMAX, _EPOCH_TMIN, _MAX_TS_PTS
             markers = cached.get("ts", {}).get("markers", [])
             tmin, tmax = cached.get("epoch_window", [_EPOCH_TMIN, _EPOCH_TMAX])
+            cardiac = cached.get("cardiac")
             detail_fig, psd_fig, epoch_fig = build_channel_figure(
                 raw_haemo, markers, channel_pair, _MAX_TS_PTS, tmin, tmax,
+                cardiac=tuple(cardiac) if cardiac else None,
             )
             channels[channel_pair] = {
                 "detail_figure": detail_fig.to_dict() if detail_fig else None,
@@ -1125,34 +1135,98 @@ def _cd_btn(pair: str, state: str) -> dbc.Button:
     )
 
 
-def _build_decisions_table(pairs: list[str], sci_map: dict,
-                            run_decisions: dict, sci_thresh: float) -> html.Table:
-    _th = lambda t: html.Th(t, style={"padding": "4px 8px", "fontWeight": "600",
-                                       "borderBottom": "2px solid #dde3ea",
-                                       "background": "#f8f9fa", "fontSize": "0.8rem"})
-    rows = []
-    for pair in pairs:
-        hbo   = f"{pair} hbo"
-        sci   = sci_map.get(hbo, sci_map.get(f"{pair} hbr", None))
-        below = sci is not None and sci < sci_thresh
-        state = run_decisions.get(hbo, "unrated")
-        rows.append(html.Tr([
-            html.Td(pair, style={"fontWeight": "500", "padding": "3px 8px",
-                                  "background": "#fff8f8" if below else "",
-                                  "borderBottom": "1px solid #f0f0f0"}),
-            html.Td(f"{sci:.3f}" if sci is not None else "—",
-                    style={"color": "#c0392b" if below else "#6c757d",
-                           "fontVariantNumeric": "tabular-nums",
-                           "padding": "3px 8px",
-                           "borderBottom": "1px solid #f0f0f0"}),
-            html.Td(_cd_btn(pair, state),
-                    style={"padding": "2px 6px", "borderBottom": "1px solid #f0f0f0"}),
-        ]))
-    return html.Table(
-        [html.Thead(html.Tr([_th("Channel"), _th("SCI"), _th("Decision")])),
-         html.Tbody(rows)],
+# the metric columns, in the order the subject report and the raw viewer print them
+_CH_COLUMNS = (("status", "Status"), ("sci", "SCI"), ("psp", "PSP"),
+               ("snr", "SNR (intensity)"), ("cv", "CV"))
+_CELL_COLOR = {"bad": "#c0392b", "good": "#27ae60", "neg": "#27ae60", "pos": "#c0392b"}
+_TH_STYLE = {"padding": "4px 8px", "fontWeight": "600", "fontSize": "0.8rem",
+             "borderBottom": "2px solid #dde3ea", "background": "#f8f9fa"}
+_TD_STYLE = {"padding": "3px 8px", "borderBottom": "1px solid #f0f0f0",
+             "fontVariantNumeric": "tabular-nums"}
+
+
+def _sqm_scope_text(sqm: dict) -> str:
+    if sqm.get("channel_set") == "long channels":
+        return ("Measured on long channels only. A short channel returns far more light and "
+                "a far stronger pulse, so averaging the two together lifts SCI, PSP and SNR "
+                "and can make a poorly coupled recording read as a good one.")
+    return "Measured on every channel: this montage carries no short channels."
+
+
+def _build_split_table(split: dict) -> "html.Div | None":
+    """The one-recording-three-channel-sets table, cells already formatted and classed."""
+    if not split.get("rows"):
+        return None
+    head = html.Thead(html.Tr(
+        [html.Th("Channel set", style=_TH_STYLE), html.Th("Channels", style=_TH_STYLE)]
+        + [html.Th(c["label"], title=c["tip"], style=_TH_STYLE) for c in split["columns"]]))
+    body = html.Tbody([
+        html.Tr(
+            [html.Td(r["name"], style=_TD_STYLE),
+             html.Td("—" if r["n"] is None else r["n"], style=_TD_STYLE)]
+            + [html.Td(c["value"],
+                       style={**_TD_STYLE,
+                              "color": _CELL_COLOR.get(c["cls"].removeprefix("qm-"), "")})
+               for c in r["cells"]])
+        for r in split["rows"]])
+    return html.Div([
+        html.Small("The same recording over three channel sets. Long is what the verdict is "
+                   "read off; Short carries no colouring, since a short channel's coupling "
+                   "is high by construction and has no established threshold.",
+                   className="text-muted d-block mb-1"),
+        html.Table([head, body],
+                   style={"borderCollapse": "collapse", "width": "100%",
+                          "fontSize": "0.82rem"}),
+    ])
+
+
+def _build_decisions_table(pair_cells: list[dict], blocks: list, notes: list,
+                            run_decisions: dict) -> html.Div:
+    """Per-channel metrics with the rating decision as the last column.
+
+    Rows arrive from fnirs_pipe.qc.channel_table with their numbers formatted and their
+    cells classed, so this table, the raw viewer's and the subject report's cannot print one
+    channel three ways. It used to show SCI alone, looked up under a key the raw recording
+    does not use, so every row read as a dash.
+    """
+    n_cols = len(_CH_COLUMNS) + 2
+
+    def _row(cell: dict) -> html.Tr:
+        below = cell.get("sci_cls") == "bad"
+        name = html.Td(cell["name"],
+                       style={**_TD_STYLE, "fontWeight": "500",
+                              "background": "#fff8f8" if below else ""})
+        metrics = [
+            html.Td(cell[key],
+                    style={**_TD_STYLE,
+                           "color": _CELL_COLOR.get(cell.get(f"{key}_cls", ""), "#6c757d")})
+            for key, _ in _CH_COLUMNS
+        ]
+        decision = html.Td(_cd_btn(cell["name"],
+                                   run_decisions.get(f"{cell['name']} hbo", "unrated")),
+                           style={"padding": "2px 6px",
+                                  "borderBottom": "1px solid #f0f0f0"})
+        return html.Tr([name, *metrics, decision])
+
+    body_rows: list = []
+    # group headers only when the montage split into more than one block
+    for title, block in (blocks or [("", pair_cells)]):
+        if title and len(blocks) > 1:
+            body_rows.append(html.Tr(html.Td(
+                f"{title} ({len(block)})", colSpan=n_cols,
+                style={**_TD_STYLE, "fontWeight": "600", "background": "#f2f4f6"})))
+        body_rows.extend(_row(cell) for cell in block)
+
+    table = html.Table(
+        [html.Thead(html.Tr([html.Th("Channel", style=_TH_STYLE)]
+                            + [html.Th(label, style=_TH_STYLE) for _, label in _CH_COLUMNS]
+                            + [html.Th("Decision", style=_TH_STYLE)])),
+         html.Tbody(body_rows)],
         style={"borderCollapse": "collapse", "width": "100%", "fontSize": "0.82rem"},
     )
+    warnings = [dbc.Alert(note, color="warning", className="py-2 small")
+                for note in (notes or [])]
+    return html.Div([*warnings, html.Div(table, style={"overflowX": "auto"})])
 
 
 @callback(
@@ -1163,14 +1237,22 @@ def _build_decisions_table(pairs: list[str], sci_map: dict,
     State("app-output-dir",   "data"),
     prevent_initial_call=True,
 )
+def _cached_channels(cache_key) -> tuple[list, list, list]:
+    """The run's per-channel rows as ``(pair_cells, blocks, notes)``, empty when uncached.
+
+    One reader for both decisions callbacks: they render the same table and used to build
+    its inputs separately.
+    """
+    channels = (_RESULT_CACHE.get(cache_key, {}) or {}).get("channels") or {}
+    return channels.get("pairs", []), channels.get("blocks", []), channels.get("notes", [])
+
+
 def load_decisions(store, sci_thresh, output_dir):
     if not store:
         return no_update, no_update
-    cached    = _RESULT_CACHE.get(store.get("cache_key"), {})
-    pairs     = cached.get("channel_pairs", [])
-    sci_map   = (cached.get("sqm") or {}).get("per_channel", {}).get("sci_per_channel", {})
+    pair_cells, blocks, notes = _cached_channels(store.get("cache_key"))
     sci_thresh = float(sci_thresh or 0.8)
-    if not pairs:
+    if not pair_cells:
         return {}, html.Small("No channels found.", className="text-muted")
 
     run_decisions = {}
@@ -1181,10 +1263,7 @@ def load_decisions(store, sci_thresh, output_dir):
         state.update({"output_dir": output_dir, "run_label": run_label,
                       "dec_path": str(dec_path), "run_decisions": run_decisions})
 
-    table = html.Div(
-        _build_decisions_table(pairs, sci_map, run_decisions, sci_thresh),
-    )
-    return state, table
+    return state, _build_decisions_table(pair_cells, blocks, notes, run_decisions)
 
 
 @callback(
@@ -1194,10 +1273,9 @@ def load_decisions(store, sci_thresh, output_dir):
     Input({"type": "dp-cd-btn", "index": ALL}, "n_clicks"),
     State("dp-decisions-store", "data"),
     State("dp-run-store",       "data"),
-    State("dp-sci-thresh",      "value"),
     prevent_initial_call=True,
 )
-def click_cd(_, dec_state, run_store, sci_thresh):
+def click_cd(_, dec_state, run_store):
     if not dec_state or not ctx.triggered_id:
         return no_update, no_update, no_update
     triggered = ctx.triggered_id
@@ -1224,11 +1302,6 @@ def click_cd(_, dec_state, run_store, sci_thresh):
     else:
         msg = "No output dir set — decisions not saved."
 
-    cached     = _RESULT_CACHE.get((run_store or {}).get("cache_key"), {})
-    pairs      = cached.get("channel_pairs", [])
-    sci_map    = (cached.get("sqm") or {}).get("per_channel", {}).get("sci_per_channel", {})
-    sci_thresh = float(sci_thresh or 0.8)
-    table = html.Div(
-        _build_decisions_table(pairs, sci_map, run_decisions, sci_thresh),
-    )
+    pair_cells, blocks, notes = _cached_channels((run_store or {}).get("cache_key"))
+    table = _build_decisions_table(pair_cells, blocks, notes, run_decisions)
     return dec_state, table, msg

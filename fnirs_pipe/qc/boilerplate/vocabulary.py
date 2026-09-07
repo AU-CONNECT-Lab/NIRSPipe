@@ -17,6 +17,7 @@ section. Those get a plain one-liner here instead.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -315,6 +316,183 @@ def metric_summary(metric: str) -> str:
 
 def is_key_metric(metric: str) -> bool:
     return metric in KEY_METRICS
+
+
+# ---- how a metric is printed ----
+#
+# One row per metric: the label a panel prints, the number format, and where the colouring
+# changes. It sits beside METRIC_SUMMARY because a label and its tooltip drift apart the
+# moment they live in different files, and these thresholds used to live in three places:
+# the subject report's Jinja macros, the raw viewer's JavaScript, and nowhere at all in the
+# GUI, which printed bare record keys.
+#
+# Format is a Python format spec, plus "pct" for a 0-1 fraction written as a percentage.
+# Thresholds are ``(ok, warn)`` read in the given direction; None means no established
+# cutoff, and those print uncoloured rather than coloured against an invented one.
+# "higher" tests ``v >= ok``, "lower" tests ``v < ok``, which is what each of the three
+# call sites already did.
+
+_HIGHER, _LOWER = "higher", "lower"
+
+METRIC_DISPLAY: dict[str, tuple[str, str, "tuple[float, float] | None", "str | None"]] = {
+    # coupling
+    "sci_mean":                ("Mean SCI", ".3f", (0.75, 0.5), _HIGHER),
+    "channel_retention_rate":  ("Channel retention", "pct", (0.9, 0.7), _HIGHER),
+    "psp_mean":                ("Mean PSP (10 s)", ".3f", None, None),
+    "cp_mean":                 ("Mean CP (exp.)", ".3f", None, None),
+    "cp_pass_rate":            ("CP pass rate (exp.)", "pct", None, None),
+
+    # raw intensity
+    "cv_mean":                 ("Mean CV", ".3f", None, None),
+    "snr_mean":                ("Mean SNR", ".1f", (100, 20), _HIGHER),
+    "snr_pass_rate":           ("SNR pass rate", "pct", None, None),
+    "n_flat_channels":         ("Flat channels", "d", (1, 2), _LOWER),
+    "mean_amp_mean":           ("Mean amplitude", ".3e", None, None),
+
+    # geometry
+    "ch_dist_mean":            ("Mean separation (m)", ".3f", None, None),
+    "ch_dist_min":             ("Min separation (m)", ".3f", None, None),
+    "ch_dist_max":             ("Max separation (m)", ".3f", None, None),
+
+    # haemoglobin
+    "hbo_hbr_corr_mean":       ("HbO-HbR corr", ".3f", (-0.3, 0.0), _LOWER),
+    "cnr_hbo_mean":            ("CNR HbO", ".3f", None, None),
+    "cnr_hbr_mean":            ("CNR HbR", ".3f", None, None),
+    "cnr_n_epochs":            ("CNR epochs", "d", None, None),
+    "gcor_hbo":                ("Global corr HbO", ".3f", None, None),
+    "gcor_hbr":                ("Global corr HbR", ".3f", None, None),
+    "lowfreq_drift_amplitude_hbo": ("Low-freq drift (HbO)", ".3e", None, None),
+    "lowfreq_drift_amplitude_hbr": ("Low-freq drift (HbR)", ".3e", None, None),
+
+    # spectral
+    "cardiac_band_power_hbo":  ("Cardiac band power (HbO)", ".3e", None, None),
+    "cardiac_band_power_hbr":  ("Cardiac band power (HbR)", ".3e", None, None),
+    "cardiac_band_frac_hbo":   ("Cardiac band (HbO)", "pct", None, None),
+    "cardiac_band_frac_hbr":   ("Cardiac band (HbR)", "pct", None, None),
+    "resp_band_power_hbo":     ("Resp band power (HbO)", ".3e", None, None),
+    "resp_band_power_hbr":     ("Resp band power (HbR)", ".3e", None, None),
+    "resp_band_frac_hbo":      ("Resp band (HbO)", "pct", None, None),
+    "resp_band_frac_hbr":      ("Resp band (HbR)", "pct", None, None),
+
+    # motion and spikes
+    "gvtd_mean":               ("GVTD mean", ".3e", None, None),
+    "gvtd_p95":                ("GVTD p95", ".3e", None, None),
+    "gvtd_filt_mean":          ("GVTD mean 0.01-0.5 Hz", ".3e", None, None),
+    "gvtd_filt_p95":           ("GVTD p95 0.01-0.5 Hz", ".3e", None, None),
+    "gvtd_vstd_mean":          ("GVTD mean (var-normalised)", ".3e", None, None),
+    "gvtd_vstd_p95":           ("GVTD p95 (var-normalised)", ".3e", None, None),
+    "gvtd_thresh":             ("GVTD threshold", ".3e", None, None),
+    "gvtd_num_above_thresh":   ("GVTD motion frames", "d", None, None),
+    "gvtd_pct_above_thresh":   ("GVTD % motion", "pct", None, None),
+    "gvtd_censor_pct":         ("GVTD censored %", "pct", None, None),
+    "gvtd_censor_retained_s":  ("GVTD retained (s)", ".0f", None, None),
+    "spike_count":             ("Spike count", "d", (1, 10), _LOWER),
+    "spike_pct":               ("Spike % (exp.)", "pct", None, None),
+    "spike_num_frames":        ("Spike frames", "d", None, None),
+    "spike_pct_frames":        ("Spike % frames", "pct", None, None),
+    "motion_corrected_frac_mean":  ("Motion corrected fraction (exp.)", ".3f", None, None),
+    "motion_corrected_num":        ("Motion corrected frames", "d", None, None),
+    "motion_corrected_pct":        ("Motion corrected % (exp.)", "pct", None, None),
+    "motion_corrected_n_segments": ("Motion corrected segments", "d", None, None),
+
+    # time
+    "pct_data_retained":       ("% data retained", "pct", (0.8, 0.6), _HIGHER),
+}
+
+MISSING_VALUE = "\u2014"
+
+
+def metric_label(metric: str, fallback: str | None = None) -> str:
+    spec = METRIC_DISPLAY.get(metric)
+    if spec is not None:
+        return spec[0]
+    return metric if fallback is None else fallback
+
+
+def metric_format(metric: str) -> str:
+    spec = METRIC_DISPLAY.get(metric)
+    return spec[1] if spec is not None else ".3f"
+
+
+def format_metric(metric: str, value: Any, fmt: str | None = None) -> str:
+    """One metric as a panel prints it, or an em dash when the run did not measure it.
+
+    format_metric("sci_mean", 0.8132)          -> "0.813"
+    format_metric("pct_data_retained", 0.9241) -> "92.4%"
+    format_metric("spike_count", None)         -> "\u2014"
+
+    ``fmt`` overrides the registry for the rare caller that needs a different width; every
+    other caller gets the format the metric is defined with, so one number does not print
+    to three decimals in one view and two in the next.
+    """
+    if value is None:
+        return MISSING_VALUE
+    spec_fmt = fmt or metric_format(metric)
+    try:
+        if spec_fmt == "pct":
+            return f"{float(value) * 100:.1f}%"
+        if spec_fmt == "d":
+            return f"{int(round(float(value)))}"
+        return format(float(value), spec_fmt)
+    except (TypeError, ValueError):
+        return str(value)
+
+
+def metric_class(metric: str, value: Any) -> str:
+    """CSS class for a metric's value, or '' when the metric has no established cutoff.
+
+    metric_class("sci_mean", 0.81)  -> "qm-ok"
+    metric_class("psp_mean", 0.81)  -> ""        (no published threshold)
+
+    The empty string is deliberate and is not a passing verdict: a metric nobody has a
+    cutoff for prints in the default colour rather than being called good.
+    """
+    spec = METRIC_DISPLAY.get(metric)
+    if value is None or spec is None or spec[2] is None:
+        return ""
+    (ok, warn), direction = spec[2], spec[3]
+    try:
+        v = float(value)
+    except (TypeError, ValueError):
+        return ""
+    if direction == _LOWER:
+        return "qm-ok" if v < ok else "qm-warn" if v < warn else "qm-bad"
+    return "qm-ok" if v >= ok else "qm-warn" if v >= warn else "qm-bad"
+
+
+def metric_rows(
+    scalars: dict[str, Any],
+    keys: "Sequence[str] | None" = None,
+    *,
+    skip_missing: bool = False,
+) -> list[dict[str, Any]]:
+    """A scalar panel's rows, ready for whatever renders them.
+
+    metric_rows({"sci_mean": 0.81}, ["sci_mean"])
+    -> [{"key": "sci_mean", "label": "Mean SCI", "value": "0.810", "cls": "qm-ok",
+         "tip": "Scalp coupling: ...", "key_metric": True}]
+
+    Every view that prints these numbers goes through here, so a threshold or a label moves
+    in one place instead of once per renderer. ``keys`` is the print order and defaults to
+    every described metric the dict carries; ``skip_missing`` drops what the run did not
+    measure rather than printing a row of dashes for it.
+    """
+    if keys is None:
+        keys = [k for k in METRIC_DISPLAY if k in scalars]
+    rows: list[dict[str, Any]] = []
+    for key in keys:
+        value = scalars.get(key)
+        if value is None and skip_missing:
+            continue
+        rows.append({
+            "key":        key,
+            "label":      metric_label(key),
+            "value":      format_metric(key, value),
+            "cls":        metric_class(key, value),
+            "tip":        metric_summary(key),
+            "key_metric": is_key_metric(key),
+        })
+    return rows
 
 
 # ---- what a run actually did ----

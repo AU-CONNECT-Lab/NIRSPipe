@@ -20,14 +20,8 @@ from fnirs_pipe.utils.lineage import lineage_of
 
 from ._utils import HBO_COLOR as _HBO_COLOR, HBR_COLOR as _HBR_COLOR
 from ._utils import HBO_MEAN_COLOR as _HBO_MEAN_COLOR, HBR_MEAN_COLOR as _HBR_MEAN_COLOR
+from ._utils import add_band_shading as _add_band_shading
 from ._utils import physio_bands as _physio_bands
-
-# colors for the physiological band annotations (band frequencies come from _physio_bands)
-_BAND_COLORS = {
-    "Mayer":   "rgba(46,204,113,0.12)",
-    "Resp":    "rgba(241,196,15,0.10)",
-    "Cardiac": "rgba(231,76,60,0.10)",
-}
 
 # Stage is the row and chromophore is the colour, so HbO and HbR keep the identity they have
 # in every other figure of the report and a step is read by looking down the column.
@@ -84,32 +78,6 @@ def _recorded_filter(stages, l_freq, h_freq, method, order):
                     params.get("filter_method") or method,
                     params.get("filter_order") or order)
     return l_freq, h_freq, method, order
-
-
-def _add_band_annotations(fig: go.Figure, fmax: float, bands: list, rows: int = 2) -> None:
-    for name, x0, x1 in bands:
-        if x0 > fmax:
-            continue
-        for row in range(1, rows + 1):
-            fig.add_vrect(
-                x0=x0, x1=min(x1, fmax),
-                fillcolor=_BAND_COLORS.get(name, "rgba(120,120,120,0.10)"),
-                line_width=0, layer="below", row=row, col=1,
-            )
-
-    for name, x0, x1 in bands:
-        label_x = (x0 + min(x1, fmax)) / 2
-        if label_x > fmax:
-            continue
-        for row in range(1, rows + 1):
-            ax = "" if row == 1 else str(row)
-            fig.add_annotation(
-                x=label_x, y=1.0,
-                xref=f"x{ax}", yref=f"y{ax} domain",
-                text=name, showarrow=False,
-                font=dict(size=8, color="#555"),
-                textangle=-90, xanchor="center", yanchor="top",
-            )
 
 
 def _passband_level(freqs: np.ndarray, db: np.ndarray, l_freq, h_freq) -> float:
@@ -234,7 +202,7 @@ def psd_figure(
             text=attenuation.tolist(),
         ), row=2, col=1)
 
-    _add_band_annotations(fig, fmax=fmax, bands=_physio_bands(cardiac, resp), rows=n_rows)
+    _add_band_shading(fig, fmax=fmax, bands=_physio_bands(cardiac, resp), rows=n_rows)
 
     for cutoff in (l_freq, h_freq):
         if cutoff is not None and cutoff <= fmax:
