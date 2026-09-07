@@ -130,9 +130,10 @@ def channel_quality_heatmap(
         fig.add_vline(x=x_div, line_dash="dot", line_color="#888", line_width=1)
         for centre, text in (((split_at - 1) / 2, "long"),
                              ((split_at + n_ch - 1) / 2, "short")):
-            fig.add_annotation(x=centre * _SPACING, y=1.02, xref="x", yref="paper",
+            fig.add_annotation(x=centre * _SPACING, y=1.10, xref="x", yref="paper",
                                text=text, showarrow=False, font=dict(size=10, color="#666"))
-        fig.update_layout(margin=dict(l=70, r=20, t=36, b=100))
+        # the extra top margin is what the raised labels sit in
+        fig.update_layout(margin=dict(l=70, r=20, t=52, b=100))
     return fig
 
 

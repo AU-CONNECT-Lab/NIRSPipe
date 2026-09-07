@@ -11,11 +11,14 @@ All notable changes to this project will be documented in this file.
 - **"What each denoising step did" still averaged long and short channels together**, so the same metric read one number there and another in the table above it. On a montage with eight short channels its HbO–HbR correlation sat at −0.18 where the long channels alone gave −0.50. It is measured on the long channels now, as everything else on the page is
 - **A spike on the last sample of a recording was never drawn.** It came out as a span of zero width, which no figure can render
 - **Peaks in the GVTD and per-channel derivative traces were drawn slightly late.** Downsampling kept each peak's height but moved it to the start of its bin
-- **Cells overlapped in the evoked topo figure**, so a channel underneath was unreadable and, in the interface, impossible to click: its selection went to the cell drawn over it. Channels sharing an optode hit this every time, short channels above all. The cells are now placed so none overlaps
+- **Clicking a cell in the Signal Topo selected a different channel.** Cells were ordered by name read as text, and overlapped wherever channels share an optode. They now follow channel order, no longer overlap, and a click anywhere inside one selects it
 
 ### Changed
+- **"What each denoising step did" now sits directly under the metrics table**, where the numbers it carries forward are, rather than at the end of the channel quality summary
+- **The quantitative metrics table reads across instead of down.** Each metric is a column and the three channel sets are the rows, and the optical density and haemoglobin halves share one table with a divider between them
+- **The provenance diagram says less.** The QC record box reads "quantitative QC metrics" rather than listing every stage it covers, and the recording it all starts from is labelled as such
 - **The correlation matrix draws its lower triangle only.** The upper half repeated the same values read the other way round; the HbO x HbR block that the panel exists for is unaffected, and the colour bar moves into the corner the mask freed
-- **The interface was restyled**, and the Signal Topo now shares the viewer row evenly with the layout panels instead of overhanging them
+- **The interface was restyled.** The run picker moved up beside the subject it belongs to, and the Signal Topo shares the viewer row evenly with the layout panels instead of overhanging them
 - **The motion figures were redrawn.** In both the carpet panel and the per-channel detail figure, spike segments now shade the traces themselves instead of sitting on a band below them, and the motion-correction footprint moved to a strip directly above. Lines are heavier, rows are labelled where the label fits, and the carpet panel's uncorrected GVTD trace is a filled area with the corrected one over it
 
 ### Removed

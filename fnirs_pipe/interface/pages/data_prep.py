@@ -201,24 +201,24 @@ layout = dbc.Container([
                     dbc.Button("Clear",  id="dp-clear-btn",  color="secondary"),
                 ]),
             ], width="auto", className="d-flex align-items-end"),
+            dbc.Col([
+                dbc.Label("Run"),
+                dcc.Dropdown(id="dp-run-dropdown", options=[],
+                             placeholder="Select run"),
+            ]),
         ], className="g-3 mb-3"),
         html.Div(id="dp-subjects-result",    className="mb-2"),
         html.Div(id="dp-subjects-container"),
     ),
 
-    # ── Run ──────────────────────────────────────────────────────────────────
-    _card("Run",
+    # ── Parameters ───────────────────────────────────────────────────────────
+    _card("Parameters",
         dbc.Row([
-            dbc.Col([
-                dbc.Label("Run"),
-                dcc.Dropdown(id="dp-run-dropdown", options=[],
-                             placeholder="Select run"),
-            ], width=4),
             dbc.Col([
                 dbc.Label("SCI Threshold"),
                 dbc.Input(id="dp-sci-thresh", type="number", value=0.8,
                           min=0.0, max=1.0, step=0.01),
-            ], width=2),
+            ], width=3),
             dbc.Col([
                 dbc.Label("Cardiac Band (Hz)"),
                 dbc.InputGroup([
@@ -226,12 +226,34 @@ layout = dbc.Container([
                     dbc.InputGroupText("–"),
                     dbc.Input(id="dp-cardiac-h", type="number", step=0.1, placeholder="hi (adult ~1.5)"),
                 ]),
-            ], width=4),
+            ], width=6),
             dbc.Col([
                 dbc.Label("DPF"),
                 dbc.Input(id="dp-dpf", type="number", step=0.1, placeholder="e.g. 6.0"),
-            ], width=2),
+            ], width=3),
         ], className="g-3 align-items-end"),
+        dbc.Row([
+            dbc.Col([
+                dbc.Label("SCI / PSP Window (s)"),
+                dbc.Input(id="dp-window-s", type="number", value=10.0, min=1.0, step=1.0),
+            ], width=3),
+            dbc.Col([
+                dbc.Label("Epoch Window (s)"),
+                dbc.InputGroup([
+                    dbc.Input(id="dp-epoch-tmin", type="number", step=0.5, value=-5.0),
+                    dbc.InputGroupText("–"),
+                    dbc.Input(id="dp-epoch-tmax", type="number", step=0.5, value=25.0),
+                ]),
+            ], width=6),
+            dbc.Col(
+                dbc.Checklist(
+                    id="dp-epoch-qc",
+                    options=[{"label": "Per-trial QC", "value": "on"}],
+                    value=[], switch=True, className="small",
+                ),
+                width=3, className="d-flex align-items-end pb-2",
+            ),
+        ], className="g-3 mt-1 align-items-end"),
         html.Div(id="dp-load-status", className="mt-2 small"),
     ),
 
@@ -248,7 +270,10 @@ layout = dbc.Container([
                             html.Small("raw HbO / HbR per channel · click to select",
                                        className="text-muted d-block mb-1"),
                             html.Div(id="dp-evoked-topo-wrap", style=_HIDDEN, children=[
+                                # plotly's 20px axis drag handles blanket cells this small,
+                                # so a neighbour's handle takes the click
                                 dcc.Graph(id="dp-evoked-topo", responsive=True,
+                                          config={"showAxisDragHandles": False},
                                           style={"aspectRatio": "1 / 1"}),
                             ]),
                         ),
@@ -358,6 +383,14 @@ layout = dbc.Container([
                         style_table={"overflowX": "auto"},
                     ),
                 ),
+
+                _card("Per-trial QC",
+                      html.Small("one column per trial, scored over the epoch window"
+                                 " · needs Per-trial QC switched on",
+                                 className="text-muted d-block mb-1"),
+                      html.Div(id="dp-trial-qc-wrap", style=_HIDDEN, children=[
+                          dcc.Graph(id="dp-trial-qc", style={"minHeight": "400px"}),
+                      ])),
 
                 _card("Channel Quality Summary",
                       html.Small("status / SCI / CV / PSP / SNR per channel",

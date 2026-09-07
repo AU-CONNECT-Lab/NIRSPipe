@@ -38,7 +38,7 @@ def _snirf_options(subject: str, bids_dir: str) -> list[dict]:
 
 
 # bump whenever a cached figure's builder changes, or the disk cache keeps serving the old one
-_CACHE_VERSION = 2
+_CACHE_VERSION = 3
 
 
 def _make_cache_key(snirf_path: str, sci_thresh: float,
@@ -799,11 +799,13 @@ def highlight_topo_channel(channel_pair, store):
     if not store:
         return no_update
     cached = _RESULT_CACHE.get(store.get("cache_key"), {})
-    pairs = cached.get("channel_pairs", [])
-    if not pairs:
+    # by shape name, not by index: a positional lookup highlighted the wrong cell
+    shapes = cached.get("evoked_topo", {}).get("figure", {}).get("layout", {}).get("shapes", [])
+    cells = [(i, sh.get("name")) for i, sh in enumerate(shapes) if sh.get("name")]
+    if not cells:
         return no_update
     patched = Patch()
-    for i, pair in enumerate(pairs):
+    for i, pair in cells:
         if pair == channel_pair:
             patched["layout"]["shapes"][i]["line"]["color"] = "#f39c12"
             patched["layout"]["shapes"][i]["line"]["width"] = 2.5

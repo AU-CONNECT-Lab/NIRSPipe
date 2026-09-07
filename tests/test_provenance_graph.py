@@ -180,13 +180,12 @@ _RAW_METRICS = ["sci_mean", "channel_retention_rate", "ch_dist_mean", "psp_mean"
                 "spike_count", "gvtd_p95"]
 
 
-def test_an_sqm_node_names_the_metric_families(tmp_path):
+def test_an_sqm_node_says_what_it_holds(tmp_path):
     _sidecar(tmp_path, "sub-01_sqm_raw", step="sqm_raw", sources=["/out/in.snirf"],
              data={"n_metrics": len(_RAW_METRICS), "metrics": _RAW_METRICS})
 
     node = scan(tmp_path)["sub-01_sqm_raw"]
-    assert node.detail.replace("\n", " ") == (
-        "sci retention distance psp cp cv snr amplitude spike gvtd")
+    assert node.detail == "quantitative QC metrics"
     assert node.state == "10 metrics"
 
 
@@ -199,19 +198,19 @@ def test_the_two_checkpoints_read_differently(tmp_path):
                                                "gcor_hbr", "pct_data_retained"]})
 
     nodes = scan(tmp_path)
-    assert nodes["sub-01_sqm"].detail == "hbo/hbr gcor retention"
-    assert nodes["sub-01_sqm"].detail != nodes["sub-01_sqm_raw"].detail
+    assert nodes["sub-01_sqm"].state == "4 metrics"
+    assert nodes["sub-01_sqm"].state != nodes["sub-01_sqm_raw"].state
 
 
-def test_a_long_family_list_is_wrapped_not_run_on(tmp_path):
-    # the figure shrinks the font to the longest line, so an unwrapped list would render
-    # every node's text at a size chosen by the worst one
+def test_no_node_text_carries_a_newline(tmp_path):
+    # the figure shrinks the font to the longest line, so a wrapped line would render every
+    # node's text at a size chosen by the worst one
     _sidecar(tmp_path, "sub-01_sqm_raw", step="sqm_raw", sources=["/out/in.snirf"],
              data={"n_metrics": len(_RAW_METRICS), "metrics": _RAW_METRICS})
 
-    lines = scan(tmp_path)["sub-01_sqm_raw"].detail.split("\n")
-    assert len(lines) > 1
-    assert all(len(line) <= 24 for line in lines)
+    for node in scan(tmp_path).values():
+        assert "\n" not in node.detail
+        assert "\n" not in node.state
 
 
 def test_no_edge_label_carries_a_newline(tmp_path):
@@ -227,18 +226,19 @@ def test_no_edge_label_carries_a_newline(tmp_path):
 
 
 def test_the_node_keeps_the_data_it_was_given(tmp_path):
-    # state is compressed to a count and detail to the families, so the raw dict is the
-    # only place the metric names survive
+    # state is compressed to a count and detail says nothing of the names, so the raw dict
+    # is the only place they survive
     _sidecar(tmp_path, "sub-01_sqm_raw", step="sqm_raw", sources=["/out/in.snirf"],
              data={"n_metrics": len(_RAW_METRICS), "metrics": _RAW_METRICS})
 
     assert scan(tmp_path)["sub-01_sqm_raw"].data["metrics"] == _RAW_METRICS
 
 
-def test_an_sqm_sidecar_without_metrics_says_nothing(tmp_path):
-    # sidecars written before the field existed
-    _sidecar(tmp_path, "sub-01_sqm", step="sqm", sources=["/out/in.snirf"])
-    assert scan(tmp_path)["sub-01_sqm"].detail == ""
+def test_a_root_says_it_is_the_recording(tmp_path):
+    # the BIDS input has no sidecar of its own, so the box would carry a bare name
+    _sidecar(tmp_path, "sub-01_desc-od_nirs", step="od_conversion",
+             sources=["/bids/sub-01_task-tapping_nirs.snirf"])
+    assert scan(tmp_path)["sub-01_task-tapping_nirs"].detail == "raw data"
 
 
 # ---- a checkpoint is a node, not a step ----
@@ -282,7 +282,7 @@ def test_only_a_checkpoint_loses_its_edges(tmp_path):
     assert all(n.checkpoint is (n.step == "sqm") for n in scan(tmp_path).values())
 
 
-def test_the_table_names_the_stages_rather_than_the_metrics(tmp_path):
+def test_the_table_names_the_record_rather_than_the_metrics(tmp_path):
     # 121 metric names in one cell is a paragraph nobody reads; they stay in the record
     from fnirs_pipe.qc.report import _section_provenance
 
@@ -291,7 +291,7 @@ def test_the_table_names_the_stages_rather_than_the_metrics(tmp_path):
 
     row = next(r for r in rows if r["step"] == "sqm")
     assert "metrics" not in row
-    assert row["settings"] == "raw preproc"
+    assert row["settings"] == "quantitative QC metrics"
 
 
 # ---- data shape on the node ----

@@ -165,6 +165,8 @@
     .ch-group { font-weight: 600; background: #f2f4f6; }
     .qm-panel-title { margin-top: 0.9rem; }
     .qm-split td:first-child { white-space: nowrap; }
+    /* the one place the signal domain changes mid-row */
+    .qm-split .dom-split { border-left: 2px solid #c3ccd5; }
     .qm-split td:not(:first-child), .qm-split th:not(:first-child) { text-align: right; }
     .qm-list .qv { font-weight: 600; white-space: nowrap; }
     .qm-ok   { color: #27ae60; }
@@ -232,7 +234,7 @@
   {% if glm_design_path or glm_activation_path %}<a href="#GLM">GLM</a>{% endif %}
   <span class="nav-sep">|</span>
   <a href="#Metrics">Metrics</a>
-  {% if channel_summary_path or stage_metrics_path %}<a href="#ChannelSummary">Ch. Summary</a>{% endif %}
+  {% if channel_summary_path %}<a href="#ChannelSummary">Ch. Summary</a>{% endif %}
   <a href="#Errors">Errors</a>
   <a href="#Provenance">Provenance</a>
   <a href="#Methods">Methods</a>
@@ -666,83 +668,47 @@
     {% set spk  = sqm.get('spike_count') %}
 
   {% if sqm_split %}
-  {% macro dv(d, key, fmt='.3f') %}{{ qm_val(d.get(key), fmt) }}{% endmacro %}
-  {% macro dp(d, key) %}{{ pct(d.get(key)) }}{% endmacro %}
-  {%- set lsci = sqm_long.get('sci_mean') %}
-  {%- set lsnr = sqm_long.get('snr_mean') %}
-  {%- set lret = sqm_long.get('channel_retention_rate') %}
   <p class="qm-note">Measured over three channel sets. <b>Long</b> is what the verdict is read off;
      <b>Short</b> answers a different question, whether the regressors those channels feed are
      trustworthy, and carries no colouring because a short channel's coupling is high by
      construction and has no established threshold. Rejection itself is per channel against the SCI
      threshold, over the whole montage, and is not read off any of these averages.</p>
+
+  {#- one column per metric, one row per channel set. Both halves are measured before
+      denoising, so they share one table; the domain changes at the divider, and the two
+      halves come from different records, hence the two dicts per row. Spec is
+      (key, header, format), and 'pct' is written as a percentage. -#}
+  {%- set od_cols = [('channel_retention_rate', 'Channel retention', 'pct'),
+                     ('sci_mean', 'Mean SCI', '.3f'),
+                     ('psp_mean', 'Mean PSP (10 s)', '.3f'),
+                     ('snr_mean', 'Mean SNR', '.1f'),
+                     ('cv_mean', 'Mean CV', '.3f'),
+                     ('mean_amp_mean', 'Mean amplitude', '.3e')] %}
+  {%- set hb_cols = [('hbo_hbr_corr_mean', 'HbO&ndash;HbR corr', '.3f'),
+                     ('gcor_hbo', 'Global corr HbO', '.3f'),
+                     ('gcor_hbr', 'Global corr HbR', '.3f')]
+                    + ([('cnr_hbo_mean', 'CNR HbO', '.3f'), ('cnr_hbr_mean', 'CNR HbR', '.3f')]
+                       if hb_split and hb_all.get('cnr_hbo_mean') is not none else [])
+                    + [('cardiac_band_frac_hbo', 'Cardiac band (HbO)', 'pct'),
+                       ('lowfreq_drift_amplitude_hbo', 'Low-freq drift (HbO)', '.3e')] %}
+  {#- colour is read off the long channels alone, and only where a threshold is established -#}
+  {%- macro cell_class(key, v, is_long) %}{% if is_long and v is not none %}{% if key == 'channel_retention_rate' %}{{ qv_class(v, v >= 0.9, v >= 0.7) }}{% elif key == 'sci_mean' %}{{ qv_class(v, v >= 0.75, v >= 0.5) }}{% elif key == 'snr_mean' %}{{ qv_class(v, v >= 100, v >= 20) }}{% elif key == 'hbo_hbr_corr_mean' %}{{ qv_class(v, v < -0.3, v < 0) }}{% endif %}{% endif %}{% endmacro -%}
+  {%- macro qm_cells(d, cols, is_long, first_class='') %}{% for key, text, fmt in cols %}{% set v = d.get(key) %}<td class="qv {{ first_class if loop.first }} {{ cell_class(key, v, is_long) }}">{% if fmt == 'pct' %}{{ pct(v) }}{% else %}{{ qm_val(v, fmt) }}{% endif %}</td>{% endfor %}{% endmacro -%}
+  {%- macro qm_row(name, d_od, d_hb, is_long, lead) %}<tr><td>{{ name }}</td><td>{{ lead }}</td>{{ qm_cells(d_od, od_cols, is_long) }}{% if hb_split %}{{ qm_cells(d_hb, hb_cols, is_long, 'dom-split') }}{% endif %}</tr>{% endmacro -%}
   <div style="overflow-x:auto;">
   <table class="qm-table qm-split">
-    <thead><tr><th>Metric</th><th>All</th><th>Long</th><th>Short</th></tr></thead>
+    <thead>
+      <tr><th colspan="{{ od_cols | length + 2 }}" class="ch-group">Original recording &mdash; optical density</th>
+          {% if hb_split %}<th colspan="{{ hb_cols | length }}" class="ch-group dom-split">Haemoglobin &mdash; before denoising</th>{% endif %}</tr>
+      <tr><th>Channel set</th><th>Channels</th>
+          {%- for key, text, fmt in od_cols %}<th>{{ ql(key, text) }}</th>{% endfor %}
+          {%- if hb_split %}{% for key, text, fmt in hb_cols %}<th class="{{ 'dom-split' if loop.first }}">{{ ql(key, text) }}</th>{% endfor %}{% endif %}</tr>
+    </thead>
     <tbody>
-      <tr><td colspan="4" class="ch-group">Original recording &mdash; optical density</td></tr>
-      <tr><td>Channels</td>
-          <td>{{ channel_rows | length }}</td>
-          <td>{{ sqm.get('n_long_channels') if sqm.get('n_long_channels') is not none else '—' }}</td>
-          <td>{{ sqm.get('n_short_channels') if sqm.get('n_short_channels') is not none else '—' }}</td></tr>
-      <tr><td>{{ ql('channel_retention_rate', 'Channel retention') }}</td>
-          <td>{{ dp(sqm_all, 'channel_retention_rate') }}</td>
-          <td class="qv {{ qv_class(lret, lret is not none and lret >= 0.9, lret is not none and lret >= 0.7) }}">{{ dp(sqm_long, 'channel_retention_rate') }}</td>
-          <td>{{ dp(sqm_short, 'channel_retention_rate') }}</td></tr>
-      <tr><td>{{ ql('sci_mean', 'Mean SCI') }}</td>
-          <td>{{ dv(sqm_all, 'sci_mean') }}</td>
-          <td class="qv {{ qv_class(lsci, lsci is not none and lsci >= 0.75, lsci is not none and lsci >= 0.5) }}">{{ dv(sqm_long, 'sci_mean') }}</td>
-          <td>{{ dv(sqm_short, 'sci_mean') }}</td></tr>
-      <tr><td>{{ ql('psp_mean', 'Mean PSP (10 s windows)') }}</td>
-          <td>{{ dv(sqm_all, 'psp_mean') }}</td>
-          <td class="qv">{{ dv(sqm_long, 'psp_mean') }}</td>
-          <td>{{ dv(sqm_short, 'psp_mean') }}</td></tr>
-      <tr><td>{{ ql('snr_mean', 'Mean SNR (intensity)') }}</td>
-          <td>{{ dv(sqm_all, 'snr_mean', '.1f') }}</td>
-          <td class="qv {{ qv_class(lsnr, lsnr is not none and lsnr >= 100, lsnr is not none and lsnr >= 20) }}">{{ dv(sqm_long, 'snr_mean', '.1f') }}</td>
-          <td>{{ dv(sqm_short, 'snr_mean', '.1f') }}</td></tr>
-      <tr><td>{{ ql('cv_mean', 'Mean CV') }}</td>
-          <td>{{ dv(sqm_all, 'cv_mean') }}</td>
-          <td class="qv">{{ dv(sqm_long, 'cv_mean') }}</td>
-          <td>{{ dv(sqm_short, 'cv_mean') }}</td></tr>
-      <tr><td>{{ ql('mean_amp_mean', 'Mean amplitude') }}</td>
-          <td>{{ dv(sqm_all, 'mean_amp_mean', '.3e') }}</td>
-          <td class="qv">{{ dv(sqm_long, 'mean_amp_mean', '.3e') }}</td>
-          <td>{{ dv(sqm_short, 'mean_amp_mean', '.3e') }}</td></tr>
+      {{ qm_row('All', sqm_all, hb_all, false, channel_rows | length) }}
+      {{ qm_row('Long', sqm_long, hb_long, true, sqm.get('n_long_channels') if sqm.get('n_long_channels') is not none else '—') }}
+      {{ qm_row('Short', sqm_short, hb_short, false, sqm.get('n_short_channels') if sqm.get('n_short_channels') is not none else '—') }}
     </tbody>
-    {% if hb_split %}
-    {%- set hcorr = hb_long.get('hbo_hbr_corr_mean') %}
-    <tbody>
-      <tr><td colspan="4" class="ch-group">Haemoglobin &mdash; before denoising</td></tr>
-      <tr><td>{{ ql('hbo_hbr_corr_mean', 'Mean HbO&ndash;HbR corr') }}</td>
-          <td>{{ dv(hb_all, 'hbo_hbr_corr_mean') }}</td>
-          <td class="qv {{ qv_class(hcorr, hcorr is not none and hcorr < -0.3,
-                                    hcorr is not none and hcorr < 0) }}">{{ dv(hb_long, 'hbo_hbr_corr_mean') }}</td>
-          <td>{{ dv(hb_short, 'hbo_hbr_corr_mean') }}</td></tr>
-      {% for key, text in [('gcor_hbo', 'Global corr HbO'), ('gcor_hbr', 'Global corr HbR')] %}
-      <tr><td>{{ ql(key, text) }}</td>
-          <td>{{ dv(hb_all, key) }}</td>
-          <td class="qv">{{ dv(hb_long, key) }}</td>
-          <td>{{ dv(hb_short, key) }}</td></tr>
-      {% endfor %}
-      {% if hb_all.get('cnr_hbo_mean') is not none %}
-      {% for key, text in [('cnr_hbo_mean', 'CNR HbO'), ('cnr_hbr_mean', 'CNR HbR')] %}
-      <tr><td>{{ ql(key, text) }}</td>
-          <td>{{ dv(hb_all, key) }}</td>
-          <td class="qv">{{ dv(hb_long, key) }}</td>
-          <td>{{ dv(hb_short, key) }}</td></tr>
-      {% endfor %}
-      {% endif %}
-      <tr><td>{{ ql('cardiac_band_frac_hbo', 'Cardiac band fraction (HbO)') }}</td>
-          <td>{{ dp(hb_all, 'cardiac_band_frac_hbo') }}</td>
-          <td class="qv">{{ dp(hb_long, 'cardiac_band_frac_hbo') }}</td>
-          <td>{{ dp(hb_short, 'cardiac_band_frac_hbo') }}</td></tr>
-      <tr><td>{{ ql('lowfreq_drift_amplitude_hbo', 'Low-freq drift (HbO)') }}</td>
-          <td>{{ dv(hb_all, 'lowfreq_drift_amplitude_hbo', '.3e') }}</td>
-          <td class="qv">{{ dv(hb_long, 'lowfreq_drift_amplitude_hbo', '.3e') }}</td>
-          <td>{{ dv(hb_short, 'lowfreq_drift_amplitude_hbo', '.3e') }}</td></tr>
-    </tbody>
-    {% endif %}
   </table>
   </div>
   {% else %}
@@ -756,6 +722,32 @@
     <li>{{ ql('snr_mean', 'Mean SNR (intensity)') }}
         <span class="qv {{ qv_class(snr, snr is not none and snr >= 100, snr is not none and snr >= 20) }}">{{ qm_val(snr, '.1f') }}</span></li>
   </ul>
+  {% endif %}
+
+  {% if stage_metrics_path %}
+  <h3 class="qm-sub">What each denoising step did</h3>
+  <p class="qm-note">
+    One panel per metric, each on its own scale, measured on the long channels alone: a short
+    channel is a regressor rather than a measurement, and an average over both describes
+    neither.
+    {% if stage_banded %}
+      The quality panels are recomputed with the analysis passband applied at every stage, so
+      the columns measure the same thing: a stage before the bandpass and one after it carry
+      different frequency content, and the raw difference between their metrics is mostly the
+      filter. They will not match the per-stage values in the metrics table, which are
+      measured on each stage as stored.
+    {% else %}
+      No passband was requested, so every panel is measured on each stage as stored and
+      differences across a filtering step should be read with that in mind.
+    {% endif %}
+    The greyed panels are not quality claims: they show what left the recording. Direction is
+    marked only across the whole chain, never on a single step, since a step can move a metric
+    for reasons that are not quality.
+  </p>
+  <iframe class="plotly-frame" src="{{ stage_metrics_path }}"
+          title="Metrics by denoising stage"
+          style="height:{{ stage_metrics_h }}px"></iframe>
+  <p class="fig-path">{{ stage_metrics_path }}</p>
   {% endif %}
 
   <h3 class="qm-sub">Motion and spikes</h3>
@@ -893,10 +885,9 @@
 </div>
 {% endif %}
 
-{% if channel_summary_path or stage_metrics_path %}
+{% if channel_summary_path %}
 <!-- ===================================================== channel summary -->
 <h2 id="ChannelSummary">Channel Quality Summary</h2>
-{% if channel_summary_path %}
 <p style="font-size:0.82rem;color:#666;margin:0 0 0.6rem;">
   Per-channel pass/fail for Status, SCI, CV, PSP, and SNR, long channels then short ones.
   Green&nbsp;=&nbsp;pass, red&nbsp;=&nbsp;fail, grey&nbsp;=&nbsp;missing data.
@@ -906,33 +897,6 @@
           width="100%" height="{{ channel_summary_h + 20 }}px"
           style="border:none;min-width:500px;display:block;"></iframe>
 </div>
-{% endif %}
-
-{% if stage_metrics_path %}
-<h3>What each denoising step did</h3>
-<p style="font-size:0.82rem;color:#666;margin:0 0 0.3rem;">
-  One panel per metric, each on its own scale, measured on the long channels alone: a short
-  channel is a regressor rather than a measurement, and an average over both describes
-  neither.
-  {% if stage_banded %}
-    The quality panels are recomputed with the analysis passband applied at every stage, so
-    the columns measure the same thing: a stage before the bandpass and one after it carry
-    different frequency content, and the raw difference between their metrics is mostly the
-    filter. They will not match the per-stage values in the metrics table, which are
-    measured on each stage as stored.
-  {% else %}
-    No passband was requested, so every panel is measured on each stage as stored and
-    differences across a filtering step should be read with that in mind.
-  {% endif %}
-  The greyed panels are not quality claims: they show what left the recording. Direction is
-  marked only across the whole chain, never on a single step, since a step can move a metric
-  for reasons that are not quality.
-</p>
-<iframe class="plotly-frame" src="{{ stage_metrics_path }}"
-        title="Metrics by denoising stage"
-        style="height:{{ stage_metrics_h }}px"></iframe>
-<p class="fig-path">{{ stage_metrics_path }}</p>
-{% endif %}
 {% endif %}
 
 <!-- =========================================================== errors -->

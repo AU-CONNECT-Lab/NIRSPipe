@@ -79,47 +79,7 @@ def _label(key: str) -> str:
     return f"{suffix} ({desc})" if desc else suffix
 
 
-# Metric family shown on an SQM node. A key whose leading token says nothing on its own
-# gets an explicit name here; every other key falls back to the token before the first "_".
-_SQM_FAMILIES = {
-    "channel_retention": "retention",
-    "pct_data": "retention",
-    "ch_dist": "distance",
-    "mean_amp": "amplitude",
-    "hbo_hbr": "hbo/hbr",
-}
-
-
-def _wrap_terms(terms: list[str], width: int = 24, max_lines: int = 3) -> str:
-    """Join terms onto at most max_lines lines of width, eliding the rest with an ellipsis."""
-    import textwrap
-
-    lines = textwrap.wrap(" ".join(terms), width=width) or [""]
-    if len(lines) > max_lines:
-        lines = lines[:max_lines]
-        lines[-1] += " …"
-    return "\n".join(lines)
-
-
-def _sqm_detail(metrics: list[str], width: int = 24, max_lines: int = 3) -> str:
-    """The metric families a checkpoint computed, wrapped to fit inside a node box.
-
-    ["sci_mean", "ch_dist_min", "gvtd_p95"] -> "sci distance gvtd"
-
-    The full key list stays in the sidecar; only the families are drawn, or a 27-metric
-    checkpoint would need a paragraph.
-    """
-    families: list[str] = []
-    for key in metrics:
-        name = next((v for k, v in _SQM_FAMILIES.items() if key.startswith(k)),
-                    key.split("_")[0])
-        if name not in families:
-            families.append(name)
-
-    return _wrap_terms(families, width, max_lines)
-
-
-def _step_detail(step: str | None, params: dict[str, Any], data: dict[str, Any] | None = None) -> str:
+def _step_detail(step: str | None, params: dict[str, Any]) -> str:
     """The settings a step actually used, short enough to sit under the node label.
 
     bandpass     + {high_pass: 0.01, low_pass: 0.5} -> "0.01-0.5 Hz"
@@ -160,12 +120,9 @@ def _step_detail(step: str | None, params: dict[str, Any], data: dict[str, Any] 
         return str(pick("motion_correction") or "")
 
     if step in ("sqm", "sqm_raw"):
-        # the sectioned record names the stages it measured; the older per-checkpoint
-        # sidecars name the metrics they computed
-        data = data or {}
-        if data.get("sections"):
-            return _wrap_terms(list(data["sections"]))
-        return _sqm_detail(data.get("metrics") or [])
+        # the record covers every stage and every metric family, so listing either fills the
+        # box with a paragraph. The count on the state line says how much of it there is
+        return "quantitative QC metrics"
 
     if step in ("glm_residuals", "glm_fit", "design_matrix"):
         bits = [pick("hrf_model"), pick("noise_model")]
@@ -244,7 +201,7 @@ def scan(nirs_dir: Path, label: str | None = None) -> dict[str, Node]:
             params=params,
             data=data,
             sources=[_key(s) for s in (meta.get("Sources") or [])],
-            detail=_step_detail(meta.get("step"), params, data),
+            detail=_step_detail(meta.get("step"), params),
             state=_state_line(data),
             missing=_file_is_gone(sidecar, data),
             checkpoint=_is_checkpoint(data),
@@ -254,7 +211,8 @@ def scan(nirs_dir: Path, label: str | None = None) -> dict[str, Node]:
     for node in list(nodes.values()):
         for src in node.sources:
             if src not in nodes:
-                nodes[src] = Node(key=src, label=_label(src))
+                # a root has no sidecar to describe it, so the box would carry a bare name
+                nodes[src] = Node(key=src, label=_label(src), detail="raw data")
 
     for node in nodes.values():
         node.domain = _domain_of(node.label, is_root=not node.sources and node.step is None)

@@ -1137,10 +1137,8 @@ def build_evoked_topo_figure(
     One cell per S-D pair, one trace pair per condition. Without usable events the cells
     show the continuous signal instead, so a resting-state run still gets the layout view.
     """
-    hbo_entries = sorted(
-        [(i, ch) for i, ch in enumerate(raw_haemo.ch_names) if ch.endswith(" hbo")],
-        key=lambda x: x[1].rsplit(" ", 1)[0],
-    )
+    # channel order, matching get_channel_pairs; a name sort disagrees on multi-digit indices
+    hbo_entries = [(i, ch) for i, ch in enumerate(raw_haemo.ch_names) if ch.endswith(" hbo")]
     if not hbo_entries:
         return None
 
@@ -1192,8 +1190,9 @@ def build_evoked_topo_figure(
             yk: dict(domain=[y0, y1], showticklabels=False, showgrid=False,
                      zeroline=False, anchor=xr),
         })
+        # name lets a caller find a cell's box without relying on shape order
         box_shapes.append(dict(
-            type="rect", xref="paper", yref="paper",
+            type="rect", name=pair, xref="paper", yref="paper",
             x0=x0, y0=y0, x1=x1, y1=y1,
             line=dict(color="#ccc", width=0.8),
             fillcolor="rgba(255,255,255,0.80)",
@@ -1271,6 +1270,7 @@ def build_evoked_topo_figure(
         height=_H,
         plot_bgcolor="rgba(0,0,0,0)",
         paper_bgcolor="white",
+        hoverdistance=-1,   # the default 20px cutoff leaves dead spots inside a cell
         margin=dict(l=_ML, r=_MR, t=_MT, b=_MB),
         shapes=box_shapes + onset_shapes + head_shapes,
         legend=dict(x=0.99, y=0.99, xanchor="right",
