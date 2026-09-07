@@ -306,6 +306,29 @@ def _section_sci(
     return {"sci_psp_panel_path": sci_psp_panel_path, "sci_psp_panel_h": sci_psp_panel_h}
 
 
+def _uncorrected_haemo(
+    raw_od_before: "mne.io.Raw | None",
+    config: Any,
+    subject: str,
+    errors: list,
+) -> "mne.io.Raw | None":
+    """Beer-Lambert on desc-sci, the optical density before the motion step.
+
+    The section this feeds is labelled raw, and desc-preproc is not: it sits one step after
+    the motion correction. There is no uncorrected haemoglobin file on disk (the pipeline
+    converts once, after correcting), so it is derived here from the OD that is, using the
+    run's own DPF. Returning None leaves the caller on desc-preproc.
+    """
+    if raw_od_before is None:
+        return None
+    with _guard("Uncorrected haemo", errors, subject):
+        from mne.preprocessing.nirs import beer_lambert_law
+        dpf = list(getattr(config, "dpf", []) or [])
+        if not dpf:
+            return None
+        return beer_lambert_law(raw_od_before.copy(), ppf=dpf[0] if len(dpf) == 1 else dpf)
+
+
 def _section_channel_detail(
     raw_haemo: mne.io.Raw,
     subject: str,
@@ -429,7 +452,8 @@ def _section_motion(
         fig = carpet_gvtd_figure(raw_long, raw_long.ch_names, segments,
                                  corrected_segments=corrected_segments,
                                  spike_segments=spike_spans,
-                                 raw_after=raw_after_motion)
+                                 raw_after=raw_after_motion,
+                                 channel_set="long")
         carpet_gvtd_path, carpet_gvtd_h = _save_plotly_html(
             fig, figures_dir / "carpet_gvtd.html")
 
@@ -1240,7 +1264,15 @@ def build_subject_report(
             b64 = carpet_compare_figure(raw_haemo, after_haemo, roi_map=roi_map)
             _save_b64_png(b64, figures_dir / "denoise_carpet.png")
             denoise_carpet_path = _fig_href(figures_dir, "denoise_carpet.png")
-    channel_det_vars  = _section_channel_detail(raw_haemo, subject, errors, figures_dir)
+    # the "Raw Signal" section is the recording before anything was done to it, so its
+    # figures come off desc-sci rather than the corrected desc-preproc the rest of the
+    # report is built on. Same stage as the SCI/PSP windows and the SNR/CV numbers below.
+    raw_haemo_uncorr  = _uncorrected_haemo(raw_before_motion, config, subject, errors)
+    channel_det_vars  = _section_channel_detail(
+                            raw_haemo_uncorr if raw_haemo_uncorr is not None else raw_haemo,
+                            subject, errors, figures_dir)
+    channel_det_vars["channel_detail_stage"] = (
+        "desc-sci" if raw_haemo_uncorr is not None else "desc-preproc")
     psd_det_vars      = _section_psd_detail(raw_haemo, subject, errors, figures_dir,
                                             l_freq=l_freq, h_freq=h_freq,
                                             cardiac=(config.cardiac_l_freq, config.cardiac_h_freq),

@@ -69,7 +69,14 @@ def _px_rows(heights_px: list[int], vertical_spacing: float, chrome_px: int):
     return [h / total for h in heights_px], int(round(plot_px)) + chrome_px
 
 
-def _maxpool_xy(t: np.ndarray, y: np.ndarray, max_pts: int = 2000):
+# A GVTD line at this length is still cheap to draw, so a 15-minute run at 10 Hz reaches the
+# page at its own resolution and the pooling below only bites on recordings several times
+# longer. Kept well above the carpet's own column cap, which is an image and bounded by the
+# screen instead.
+_LINE_MAX_PTS = 10000
+
+
+def _maxpool_xy(t: np.ndarray, y: np.ndarray, max_pts: int = _LINE_MAX_PTS):
     """Downsample a trace to <= max_pts by taking the max in each bin (keeps spike heights).
 
     The timestamp kept for each bin is the one the maximum was found at, not the bin's first
@@ -169,6 +176,12 @@ def _matched_od_after(
         return None
 
 
+def _gvtd_band_label(ch_names: list[str], channel_set: str | None) -> str:
+    """Band and channel set, e.g. ``0.01-0.5 Hz · 24 ch (long)``."""
+    tail = f" ({channel_set})" if channel_set else ""
+    return f"0.01–0.5 Hz · {len(ch_names)} ch{tail}"
+
+
 def carpet_gvtd_figure(
     raw: mne.io.Raw,
     ch_names: list[str],
@@ -177,6 +190,7 @@ def carpet_gvtd_figure(
     corrected_segments: "list[tuple[float, float]] | None" = None,
     spike_segments: "list[tuple[float, float]] | None" = None,
     raw_after: "mne.io.Raw | None" = None,
+    channel_set: str | None = None,
 ) -> go.Figure:
     """Motion-band GVTD + per-channel z-scored OD carpet, on one shared time axis.
 
@@ -203,6 +217,11 @@ def carpet_gvtd_figure(
     to show the improvement, and a correction that shrank the signal would come out looking
     unchanged. A ``raw_after`` that does not cover the same channels for the same duration at
     the same rate is dropped rather than drawn (see ``_matched_od_after``).
+
+    ``channel_set`` names the set ``ch_names`` came from, drawn in the GVTD panel beside the
+    band. GVTD is an RMS across channels, so which channels went in changes every value on
+    the panel and the threshold with them; a figure that does not say cannot be compared
+    against another one.
     """
     raw_od = mne.preprocessing.nirs.optical_density(raw.copy())
     od_data, times = raw_od.get_data(picks=ch_names, return_times=True)
@@ -339,7 +358,7 @@ def carpet_gvtd_figure(
                      gridcolor="#eef1f4", zeroline=False, row=gvtd_row, col=1)
     fig.add_annotation(
         x=0.004, xref="x domain", y=0.97, yref="y domain",
-        text="0.01–0.5 Hz", showarrow=False, xanchor="left", yanchor="top",
+        text=_gvtd_band_label(ch_names, channel_set), showarrow=False, xanchor="left", yanchor="top",
         font=dict(size=8, color="#8b95a1"), row=gvtd_row, col=1,
     )
     for i in range(n_carpets):
@@ -460,7 +479,7 @@ def build_motion_detail_figure(
     raw_od_after: mne.io.Raw,
     ch_name: str,
     segments: "dict | None" = None,
-    max_pts: int = 4000,
+    max_pts: int = _LINE_MAX_PTS,
     corrected_segments: "list[tuple[float, float]] | None" = None,
     spike_segments: "list[tuple[float, float]] | None" = None,
 ) -> go.Figure:

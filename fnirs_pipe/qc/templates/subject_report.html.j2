@@ -289,7 +289,14 @@
   <summary>a. Raw Signal</summary>
   <div class="details-body">
     <p class="step-desc">
-      Per-channel HbO/HbR timeseries, PSD, and epoch-averaged response.
+      Per-channel HbO/HbR timeseries, PSD, and epoch-averaged response, on
+      <code>{{ channel_detail_stage or 'desc-sci' }}</code> converted with
+      DPF = {{ config.dpf | join(', ') }}. This is the recording before motion correction
+      ({{ config.motion_correction }}) and before any filtering, the same stage the
+      sliding-window SCI/PSP and the SNR/CV numbers are measured on.
+      {%- if channel_detail_stage == 'desc-preproc' %}
+      <strong>desc-sci was not readable for this run, so these are post-correction.</strong>
+      {%- endif %}
     </p>
 
     {% if channel_pairs %}

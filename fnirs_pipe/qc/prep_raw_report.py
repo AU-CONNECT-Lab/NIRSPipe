@@ -195,9 +195,16 @@ def _process_run(
     # ── file: carpet GVTD ──────────────────────────────────────────────────
     #   an iframe rather than inlined like the panels above: the carpet is a channels x 2000
     #   heatmap, and every run of the viewer would carry one in the page itself
+    # long channels only, matching the subject report and the GVTD scalars in the record:
+    # GVTD is an RMS across channels, so mixing an 8 mm channel's OD variance with a 30 mm
+    # one's puts two different amplitude scales in one number
     carpet_inline: dict = {}
     try:
-        fig   = carpet_gvtd_figure(raw, raw.ch_names)
+        from fnirs_pipe.qc.quantitative_metrics import long_short_channels
+        long_names, _ = long_short_channels(raw)
+        raw_carpet = raw.copy().pick(long_names) if long_names else raw
+        fig   = carpet_gvtd_figure(raw_carpet, raw_carpet.ch_names,
+                                   channel_set="long" if long_names else "all")
         fname = f"{label}_desc-carpet_nirs.html"
         h     = _save_figure_html(fig, fig_dir / fname)
         figure_paths["carpet"] = {"src": f"figures/{fname}", "h": h}

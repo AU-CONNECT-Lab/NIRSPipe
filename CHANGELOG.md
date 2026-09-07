@@ -19,6 +19,8 @@ All notable changes to this project will be documented in this file.
 - **Peaks in the GVTD and per-channel derivative traces were drawn slightly late.** Downsampling kept each peak's height but moved it to the start of its bin
 - **Clicking a cell in the Signal Topo selected a different channel.** Cells were ordered by name read as text, and overlapped wherever channels share an optode. They now follow channel order, no longer overlap, and a click anywhere inside one selects it
 - **The interface drew its per-channel figures at a fixed DPF of 6.** Whatever DPF was set for the run applied to every other panel but not to these, so a montage on any other value read its HbO and HbR off a different scale than the rest of the page
+- **The "Raw Signal" section was not raw.** Its per-channel HbO/HbR, PSD and epoch figures were drawn on the motion-corrected recording, while the sliding-window SCI/PSP and the SNR/CV numbers on the same page were drawn on the recording before correction. They are all on the uncorrected stage now, and the section says which stage and which DPF it used
+- **The interface measured GVTD over every channel** where the subject report and the stored metrics measure it over the long ones. GVTD is an RMS across channels, so an 8 mm channel and a 30 mm one were contributing two different amplitude scales to one number, and the interface and the report disagreed on the same recording. The carpet panel now names its channel set and count on the figure
 
 ### Changed
 - **"What each denoising step did" now sits directly under the metrics table**, where the numbers it carries forward are, rather than at the end of the channel quality summary
