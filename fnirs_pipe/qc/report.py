@@ -67,7 +67,7 @@ from fnirs_pipe.qc.figure_io import (
     _figure_height, _pair_fname, _save_multi_fig_html,
     extract_markers, get_channel_pairs,
 )
-from fnirs_pipe.qc.quantitative_metrics import gvtd_channel_picks
+from fnirs_pipe.qc.metrics import gvtd_channel_picks
 from fnirs_pipe.qc.figures import (
     carpet_gvtd_figure,
     carpet_compare_figure,
@@ -239,7 +239,7 @@ def _save_plotly_html(fig, path: Path, div_id: str | None = None) -> tuple[str, 
 # ---------------------------------------------------------------------------
 
 def _prepare_long_raw(raw_intensity: mne.io.Raw, subject: str) -> mne.io.Raw:
-    from fnirs_pipe.qc.quantitative_metrics import long_short_channels
+    from fnirs_pipe.qc.metrics import long_short_channels
 
     raw = raw_intensity.copy()
     long_names, _ = long_short_channels(raw)
@@ -538,7 +538,7 @@ def _section_haemo(
         stages.append(("desc-errts", raw_errts))
 
     if len(stages) > 1:
-        from fnirs_pipe.qc.quantitative_metrics import (
+        from fnirs_pipe.qc.metrics import (
             comparable_stage_metrics, long_short_channels,
         )
 
@@ -933,7 +933,7 @@ def _note_separation(
         return
     n_odd = sum(1 for r in channel_rows if r.get("separation") == "unclassified")
     if n_odd:
-        from fnirs_pipe.qc.quantitative_metrics import (
+        from fnirs_pipe.qc.metrics import (
             LONG_MAX_DIST, LONG_MIN_DIST, SHORT_MAX_DIST,
         )
         _note(notes, subject,

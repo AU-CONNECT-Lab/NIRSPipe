@@ -6,7 +6,7 @@ import dash
 import dash_bootstrap_components as dbc
 from dash import dash_table, dcc, html
 
-from fnirs_pipe.qc.quantitative_metrics import GVTD_CHANNEL_SETS
+from fnirs_pipe.qc.metrics import GVTD_CHANNEL_SETS
 
 dash.register_page(__name__, path="/", name="Data Preparation")
 

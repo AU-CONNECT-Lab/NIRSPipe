@@ -269,7 +269,7 @@ def compute_group_sqm_raw(
 
     Returns {subject_id: sqm_dict} for use in the HTML report.
     """
-    from fnirs_pipe.qc.quantitative_metrics import compute_raw_sqm
+    from fnirs_pipe.qc.metrics import compute_raw_sqm
 
     gid  = group[0].group_id
     task = group[0].task

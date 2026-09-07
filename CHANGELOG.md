@@ -10,6 +10,9 @@ All notable changes to this project will be documented in this file.
 - **The analysis page offers the bandpass design.** `--filter-method` and `--filter-order` were command-line only, so the interface silently pinned every run to the defaults
 - **`--gvtd-censor` marks the frames GVTD flags as `BAD_gvtd`, so an analysis can leave them out.** Nothing is cut, so a threshold set too strictly is undone by rerunning. `--gvtd-censor-n-std` and `--gvtd-min-epoch-s` set the threshold and the shortest stretch worth keeping. Off by default: on a high-motion recording it can flag everything
 
+### Fixed
+- **`--gvtd-censor` failed on any recording that has event markers**, which is every task run. It worked only on a recording with no markers at all
+
 ## [0.29.0] - 2026-09-06
 
 ### Added

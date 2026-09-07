@@ -295,7 +295,7 @@ def fc_seed_topo_figure(
     them is not a connectivity claim. Channels are drawn weakest first, so strong connections
     are never hidden under weak ones.
     """
-    from fnirs_pipe.qc.quantitative_metrics import long_short_channels
+    from fnirs_pipe.qc.metrics import long_short_channels
 
     panels = [(f, lab) for f, lab in ((seed_df, "HbO"), (seed_hbr_df, "HbR"))
               if f is not None and not f.empty]
@@ -384,7 +384,7 @@ def alff_topo_figure(
     are left out: their amplitude is extracerebral, and including them would set the colour
     scale from signal nobody is asking about.
     """
-    from fnirs_pipe.qc.quantitative_metrics import long_short_channels
+    from fnirs_pipe.qc.metrics import long_short_channels
 
     ends = _channel_endpoints(raw)
     if not ends:

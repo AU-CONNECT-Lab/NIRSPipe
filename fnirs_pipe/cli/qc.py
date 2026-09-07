@@ -6,7 +6,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from fnirs_pipe.qc.quantitative_metrics import GVTD_CHANNEL_SETS
+from fnirs_pipe.qc.metrics import GVTD_CHANNEL_SETS
 from fnirs_pipe.utils.logging import get_logger, setup_logging
 
 setup_logging()

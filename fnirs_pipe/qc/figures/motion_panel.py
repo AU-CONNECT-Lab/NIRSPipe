@@ -15,7 +15,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
 from fnirs_pipe.qc.figures._utils import decimate as _decimate
-from fnirs_pipe.qc.quantitative_metrics import (
+from fnirs_pipe.qc.metrics import (
     GVTD_MOTION_BAND, GVTD_N_STD, _motion_band_diff, gvtd_threshold, gvtd_timetrace,
 )
 from fnirs_pipe.utils import is_optical_density

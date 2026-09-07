@@ -22,7 +22,7 @@ import numpy as np
 import pytest
 from numpy.testing import assert_allclose
 
-from fnirs_pipe.qc.quantitative_metrics import (
+from fnirs_pipe.qc.metrics import (
     compute_prep_haemo_sqm,
     compute_raw_sqm,
     compute_sci_scores,

@@ -47,7 +47,7 @@ def _pair_group(raw_haemo: mne.io.Raw) -> "dict[str, str]":
 
         ["S1_D1 hbo", "S1_D8 hbo"] -> {"S1_D1": "long", "S1_D8": "short"}
     """
-    from fnirs_pipe.qc.quantitative_metrics import long_short_channels
+    from fnirs_pipe.qc.metrics import long_short_channels
 
     long_names, short_names = long_short_channels(raw_haemo)
     groups = {_pair_key(n): "mid" for n in raw_haemo.ch_names}

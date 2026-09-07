@@ -197,7 +197,7 @@ def _sci_scores(stages: dict[str, Path]) -> dict[str, float]:
     if source is None:
         return {}
     from fnirs_pipe.io.snirf import read_snirf
-    from fnirs_pipe.qc.quantitative_metrics import compute_sci_scores
+    from fnirs_pipe.qc.metrics import compute_sci_scores
     bands = _bands(stages) or {}
     if not bands:
         return {}
@@ -228,7 +228,7 @@ def _short_section(
     and drift do not, because they aggregate over a montage and a handful of scalp
     channels has no reference distribution to read them against.
     """
-    from fnirs_pipe.qc.quantitative_metrics import _intensity_metrics, _psp_metrics, _sci_metrics
+    from fnirs_pipe.qc.metrics import _intensity_metrics, _psp_metrics, _sci_metrics
 
     raw_short = raw_intensity.copy().pick(short_names)
     short_sci = {k: v for k, v in sci_scores.items() if k in set(short_names)}
@@ -279,7 +279,7 @@ def raw_sections(
     ``n_short_channels`` on ``raw`` are for: two zeros means no registered optode
     positions, and any other pair means a montage of one kind.
     """
-    from fnirs_pipe.qc.quantitative_metrics import compute_raw_sqm, long_short_channels
+    from fnirs_pipe.qc.metrics import compute_raw_sqm, long_short_channels
 
     sections: dict[str, Any] = {}
     per_channel: dict[str, Any] = {}
@@ -330,7 +330,7 @@ def haemo_sections(
 
     A subset that turns out to be the whole file is skipped rather than written twice.
     """
-    from fnirs_pipe.qc.quantitative_metrics import long_short_channels
+    from fnirs_pipe.qc.metrics import long_short_channels
 
     sections: dict[str, Any] = {}
     per_channel: dict[str, Any] = {}
@@ -367,7 +367,7 @@ def _motion_post_section(
     would set the whole intensity family to None and add CP and channel distance on top,
     twenty-odd keys of which half would be empty.
     """
-    from fnirs_pipe.qc.quantitative_metrics import (
+    from fnirs_pipe.qc.metrics import (
         _mean_or_none, _motion_metrics, _psp_metrics, _spike_metrics, compute_sci_scores,
     )
 
@@ -400,7 +400,7 @@ def compute_run_sections(
     recorded no longer resolves; without it a moved tree loses the ``raw*`` sections.
     """
     from fnirs_pipe.io.snirf import read_snirf
-    from fnirs_pipe.qc.quantitative_metrics import (
+    from fnirs_pipe.qc.metrics import (
         attach_windowed_series, compute_haemo_sqm, compute_prep_haemo_sqm,
         long_short_channels,
     )
@@ -455,7 +455,7 @@ def compute_run_sections(
     spike_stage = stages.get("sci") or stages.get("od")
     if raw_intensity is not None or spike_stage is not None:
         try:
-            from fnirs_pipe.qc.quantitative_metrics import spike_segments
+            from fnirs_pipe.qc.metrics import spike_segments
             spike_source = raw_intensity if raw_intensity is not None else read_snirf(spike_stage)
             spike_long, _ = long_short_channels(spike_source)
             if spike_long:
@@ -495,7 +495,7 @@ def compute_run_sections(
     # the OD either side of the motion step is on disk as desc-sci and desc-motcorrected,
     # so the correction's footprint is measurable here rather than only in memory
     if "sci" in stages and "motcorrected" in stages:
-        from fnirs_pipe.qc.quantitative_metrics import (
+        from fnirs_pipe.qc.metrics import (
             motion_corrected_segments, motion_correction_metrics,
         )
         section("motion", lambda: motion_correction_metrics(

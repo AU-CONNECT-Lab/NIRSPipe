@@ -10,7 +10,7 @@ from fnirs_pipe.pipeline.denoise import (
     DEFAULT_FILTER_ORDER,
     FILTER_METHODS,
 )
-from fnirs_pipe.qc.quantitative_metrics import GVTD_CHANNEL_SETS
+from fnirs_pipe.qc.metrics import GVTD_CHANNEL_SETS
 
 _MOTION_CHOICES        = ["tddr", "wavelet", "spline", "none"]
 _MODE_CHOICES          = ["denoise", "glm", "rest"]

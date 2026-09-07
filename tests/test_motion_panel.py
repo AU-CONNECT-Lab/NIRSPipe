@@ -21,7 +21,7 @@ import pytest
 from fnirs_pipe.qc.figures.motion_panel import (
     _SPIKE_LABEL, _maxpool_xy, build_motion_detail_figure, carpet_gvtd_figure,
 )
-from fnirs_pipe.qc.quantitative_metrics import _mask_to_segments
+from fnirs_pipe.qc.metrics import _mask_to_segments
 from tests._synth import synth_raw
 
 CARDIAC_HZ = 1.0

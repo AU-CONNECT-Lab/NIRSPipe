@@ -11,7 +11,7 @@ samples however you round, so every grid disagreement here is invisible; at 7.81
 import numpy as np
 import pytest
 
-from fnirs_pipe.qc.quantitative_metrics import (
+from fnirs_pipe.qc.metrics import (
     PSP_WINDOW_S,
     attach_windowed_series,
     compute_windowed_gvtd,
@@ -77,7 +77,7 @@ def test_psp_scales_with_window_length_and_sci_does_not(od_raw):
 def test_psp_mean_uses_the_pinned_window_not_the_library_default(od_raw, monkeypatch):
     import mne_nirs.preprocessing as nirs_prep
 
-    from fnirs_pipe.qc import quantitative_metrics as qm
+    from fnirs_pipe.qc import metrics as qm
 
     seen = {}
     real = nirs_prep.peak_power

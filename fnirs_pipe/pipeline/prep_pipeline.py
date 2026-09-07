@@ -214,7 +214,7 @@ def run_prep(
     if config.gvtd_censor:
         logger.info("sub-%s | GVTD censoring (n_std=%s, min epoch %.0fs)",
                     config.subject, config.gvtd_censor_n_std, config.gvtd_min_epoch_s)
-        from fnirs_pipe.qc.quantitative_metrics import gvtd_censor_spans
+        from fnirs_pipe.qc.metrics import gvtd_censor_spans
         censor_spans, censor_metrics = gvtd_censor_spans(
             raw_od, n_std=config.gvtd_censor_n_std,
             min_epoch_s=config.gvtd_min_epoch_s, channel_set=config.gvtd_channels)
@@ -223,9 +223,14 @@ def run_prep(
         # analysis can pick the surviving stretches, and a threshold set too strictly is
         # undone by rerunning rather than by re-acquiring
         if censor_spans:
+            # orig_time has to be the existing annotations': a fresh Annotations defaults
+            # to None, and mne refuses to concatenate two that disagree. It only refuses
+            # when the left side is non-empty, so without this a run with no events works
+            # and every task run raises.
             raw_od.set_annotations(raw_od.annotations + mne.Annotations(
                 [o for o, _ in censor_spans], [d for _, d in censor_spans],
-                ["BAD_gvtd"] * len(censor_spans)))
+                ["BAD_gvtd"] * len(censor_spans),
+                orig_time=raw_od.annotations.orig_time))
 
     # sci_scores go in the sidecar because the SQM record is assembled from disk after the
     # run, and SCI is the one input to it that no output file carries

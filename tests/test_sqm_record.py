@@ -33,7 +33,7 @@ import pytest
 
 from fnirs_pipe.pipeline.post_pipeline import PostConfig, run_post
 from fnirs_pipe.pipeline.prep_pipeline import PrepConfig, run_prep
-from fnirs_pipe.qc.quantitative_metrics import long_short_channels
+from fnirs_pipe.qc.metrics import long_short_channels
 from fnirs_pipe.qc.sqm_record import (
     SECTIONS,
     build_sqm_records,
@@ -49,7 +49,15 @@ _BANDS = dict(cardiac_l_freq=0.7, cardiac_h_freq=1.5, resp_l_freq=0.2, resp_h_fr
 _RESAMPLE_SFREQ = SFREQ / 2
 
 
-def _run(out_dir, subject="01", task="tapping", post=True):
+# ---- GVTD censoring, deliberately on none of its defaults ----
+# PrepConfig's defaults are gvtd_censor_spans' defaults, so a config value that never
+# reached the function would still produce a plausible record. These do not match, which
+# turns "the kwarg went somewhere else" into a failing assertion.
+_CENSOR = dict(gvtd_censor=True, gvtd_censor_n_std=8.0, gvtd_min_epoch_s=20.0,
+               gvtd_channels="all")
+
+
+def _run(out_dir, subject="01", task="tapping", post=True, censor=None):
     """A full run on synthetic data, left on disk the way the pipeline leaves it.
 
     Post is asked for every optional step it has, so the record comes out with one section
@@ -67,7 +75,7 @@ def _run(out_dir, subject="01", task="tapping", post=True):
     entities = {"task": task}
     prep = run_prep(read_snirf(source), PrepConfig(subject=subject, dpf=[6.0, 6.0],
                                            sci_threshold=0.8, motion_correction="tddr",
-                                           **_BANDS),
+                                           **_BANDS, **(censor or {})),
                     output_dir=out_dir, source_entities=entities, source_path=source)
     if post:
         run_post(prep.raw_haemo.copy(),
@@ -216,3 +224,74 @@ def test_two_tasks_get_two_records_not_one(tmp_path_factory):
     labels = set(scan_runs(out / "sub-01" / "nirs"))
     assert labels == {"sub-01_task-tapping", "sub-01_task-rest"}
     assert len(build_sqm_records(out / "sub-01" / "nirs")) == 2
+
+
+# ---- GVTD censoring ----
+# The step is opt-in and everything it produces is opt-in with it: the annotations, the
+# sidecar entry and the record section. So every assertion here has a mirror in
+# `test_censoring_off_...`, because a censoring step wired to nothing at all would satisfy
+# the off case on its own.
+
+@pytest.fixture(scope="module")
+def censored_run(tmp_path_factory):
+    prep, nirs_dir = _run(tmp_path_factory.mktemp("sqm_censored"), censor=_CENSOR)
+    stages = scan_runs(nirs_dir)["sub-01_task-tapping"]
+    return prep, nirs_dir, stages, compute_run_sections(stages, **_BANDS)
+
+
+def _n_bad_gvtd(path):
+    """How many BAD_gvtd annotations the file on disk carries."""
+    from fnirs_pipe.io.snirf import read_snirf
+    return sum(1 for d in read_snirf(path).annotations.description if d == "BAD_gvtd")
+
+
+def test_the_censored_run_actually_censored_something(censored_run):
+    """Guards every assertion below: they are all vacuous on a run that flagged nothing."""
+    prep, _, _, _ = censored_run
+    assert prep.censor_spans
+
+
+def test_the_marks_reach_every_derivative_taken_after_the_censoring(censored_run):
+    """desc-sci is written after the annotations are set, so the three files past it
+    inherit them through OD -> TDDR -> Beer-Lambert and two snirf round trips."""
+    prep, _, stages, _ = censored_run
+    for desc in ("sci", "motcorrected", "preproc"):
+        assert _n_bad_gvtd(stages[desc]) == len(prep.censor_spans), desc
+
+
+def test_the_od_file_predates_the_censoring_and_carries_none(censored_run):
+    """desc-od is step 1 and the censoring is step 2, so a marked desc-od would mean the
+    annotations were attached to the wrong object."""
+    _, _, stages, _ = censored_run
+    assert _n_bad_gvtd(stages["od"]) == 0
+
+
+def test_the_censor_section_is_the_sidecar_the_run_wrote(censored_run):
+    """Nothing recomputes this one: censoring is a decision the run made, so the section
+    is the sidecar read back, and the link is the only thing that can break."""
+    _, _, stages, sections = censored_run
+    assert "censor" in sections
+    sidecar = json.loads(stages["sci"].with_suffix(".json").read_text(encoding="utf-8"))
+    assert sections["censor"] == sidecar["gvtd_censor"]
+
+
+def test_the_config_the_run_was_given_is_what_censored_it(censored_run):
+    """The four fields travel config -> gvtd_censor_spans -> sidecar -> record, and the
+    record echoes three of them verbatim. This is the assertion that catches a kwarg
+    handed to the wrong function, which is silent everywhere else."""
+    prep, _, _, sections = censored_run
+    censor = sections["censor"]
+    assert censor["gvtd_censor_n_std"] == _CENSOR["gvtd_censor_n_std"]
+    assert censor["gvtd_censor_min_epoch_s"] == _CENSOR["gvtd_min_epoch_s"]
+    assert censor["gvtd_censor_channel_set"] == _CENSOR["gvtd_channels"]
+    assert censor["gvtd_censor_n_spans"] == len(prep.censor_spans)
+
+
+def test_censoring_off_leaves_no_marks_and_no_section(run):
+    """The default run. A section named after an opt-in step must be absent, not empty,
+    and the rest of the record must be untouched by the option not being taken."""
+    _, _, stages, sections = run
+    for desc in ("od", "sci", "motcorrected", "preproc"):
+        assert _n_bad_gvtd(stages[desc]) == 0, desc
+    assert "censor" not in sections
+    assert set(SECTIONS) <= set(sections), set(SECTIONS) - set(sections)

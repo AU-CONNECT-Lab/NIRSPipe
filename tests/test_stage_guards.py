@@ -16,7 +16,7 @@ import pytest
 from fnirs_pipe.exceptions import StageError
 from fnirs_pipe.pipeline.post_pipeline import PostConfig, _write_step_snirf
 from fnirs_pipe.pipeline.prep_pipeline import PrepConfig, run_prep
-from fnirs_pipe.qc.quantitative_metrics import compute_prep_haemo_sqm
+from fnirs_pipe.qc.metrics import compute_prep_haemo_sqm
 from fnirs_pipe.utils.lineage import Recorder, stamp
 
 from ._synth import synth_raw

@@ -2,8 +2,8 @@
 
 `test_step_vocabulary.py` holds the same contract one level up, for steps. This one is for
 the numbers those steps produce, and it exists because the two halves live apart: the keys
-are written in `quantitative_metrics.py`, the sentences in `vocabulary.py`, and the report
-template names keys by hand. Nothing but this file notices when they drift.
+are written in `qc/metrics/`, the sentences in `vocabulary.py`, and the report template
+names keys by hand. Nothing but this file notices when they drift.
 
 The drift is silent in both directions. A metric with no entry renders as a bare number
 with no way to act on it, and a template asking for a key that was renamed renders an
@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 
-import fnirs_pipe.qc.quantitative_metrics as qm
+import fnirs_pipe.qc as qc_pkg
 from fnirs_pipe.qc.boilerplate.vocabulary import (
     KEY_METRICS,
     METRIC_SUMMARY,
@@ -24,7 +24,12 @@ from fnirs_pipe.qc.boilerplate.vocabulary import (
     metric_summary,
 )
 
-_SUBJECT_TEMPLATE = Path(qm.__file__).parent / "templates" / "subject_report.html.j2"
+_QC = Path(qc_pkg.__file__).parent
+_SUBJECT_TEMPLATE = _QC / "templates" / "subject_report.html.j2"
+
+def _metric_modules() -> list[Path]:
+    return sorted((_QC / "metrics").glob("*.py"))
+
 
 # Per-channel dicts are deliberately undescribed: each is the same quantity as its scalar
 # sibling, one value per channel. So is the wildcard family, which has no fixed members.
@@ -36,16 +41,20 @@ def _declared_metric_keys() -> set[str]:
 
     Read statically rather than by calling the functions: the decorator only exposes its
     keys through the wrapper's behaviour, and running the metrics needs real data.
+
+    Every module in `qc/metrics/`, not one file: a family that moved to a new module would
+    otherwise drop out of the check silently, which is the failure this test exists to make
+    loud. `test_the_scan_reaches_every_metric_module` guards the glob.
     """
-    src = Path(qm.__file__).read_text(encoding="utf-8")
     keys: set[str] = set()
-    for node in ast.walk(ast.parse(src)):
-        if not isinstance(node, ast.FunctionDef):
-            continue
-        for dec in node.decorator_list:
-            if isinstance(dec, ast.Call) and getattr(dec.func, "id", "") == "_safe_metrics":
-                keys.update(e.value for e in ast.walk(dec.args[1])
-                            if isinstance(e, ast.Constant) and isinstance(e.value, str))
+    for path in _metric_modules():
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if not isinstance(node, ast.FunctionDef):
+                continue
+            for dec in node.decorator_list:
+                if isinstance(dec, ast.Call) and getattr(dec.func, "id", "") == "_safe_metrics":
+                    keys.update(e.value for e in ast.walk(dec.args[1])
+                                if isinstance(e, ast.Constant) and isinstance(e.value, str))
     return keys
 
 
@@ -137,3 +146,14 @@ def test_gvtd_points_at_the_threshold_that_applies_to_it():
     assert "gvtd_thresh" in METRIC_SUMMARY["gvtd_filt_p95"] or \
            "gvtd_thresh" in METRIC_SUMMARY["gvtd_filt_mean"]
     assert "does not apply" in METRIC_SUMMARY["gvtd_mean"]
+
+
+def test_the_scan_reaches_every_metric_module():
+    """`_declared_metric_keys` globs a directory, so a module the glob stops reaching drops
+    its whole family out of every test above without failing any of them.
+
+    One key per declaring module, named by hand. Deriving them from the same glob would
+    make this test agree with itself whatever the glob found.
+    """
+    assert {p.stem for p in _metric_modules()} >= {"coupling", "gvtd", "haemo", "motion"}
+    assert {"psp_mean", "gvtd_thresh", "cnr_hbo_mean", "spike_pct"} <= _declared_metric_keys()

@@ -12,7 +12,7 @@ from fnirs_pipe.qc.figure_io import (
     _pair_fname, _save_figure_html, _save_multi_fig_html,
     extract_markers, get_channel_pairs,
 )
-from fnirs_pipe.qc.quantitative_metrics import SHORT_MAX_DIST
+from fnirs_pipe.qc.metrics import SHORT_MAX_DIST
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("qc.prep_raw_report")
@@ -76,7 +76,7 @@ def _trial_sqm(raw, t0: float, t1: float,
     No sliding-window series is attached: a window of a few seconds has no room for the 10 s
     grid the recording-level series uses.
     """
-    from fnirs_pipe.qc.quantitative_metrics import compute_raw_sqm, compute_sci_scores
+    from fnirs_pipe.qc.metrics import compute_raw_sqm, compute_sci_scores
 
     seg = raw.copy().crop(tmin=t0, tmax=t1)
     sci_scores, _ = compute_sci_scores(seg, cardiac_l_freq, cardiac_h_freq)
@@ -115,7 +115,7 @@ def _process_run(
         condition_colors,
         trial_quality_heatmap,
     )
-    from fnirs_pipe.qc.quantitative_metrics import (
+    from fnirs_pipe.qc.metrics import (
         attach_windowed_series, compute_raw_sqm, compute_sci_scores,
     )
     from fnirs_pipe.qc.sqm_record import raw_sections, sqm_record_dict
@@ -198,7 +198,7 @@ def _process_run(
     #   heatmap, and every run of the viewer would carry one in the page itself
     carpet_inline: dict = {}
     try:
-        from fnirs_pipe.qc.quantitative_metrics import gvtd_channel_picks
+        from fnirs_pipe.qc.metrics import gvtd_channel_picks
         gvtd_picks, gvtd_set = gvtd_channel_picks(raw, gvtd_channels)
         raw_carpet = raw.copy().pick(gvtd_picks)
         fig   = carpet_gvtd_figure(raw_carpet, raw_carpet.ch_names, channel_set=gvtd_set)
