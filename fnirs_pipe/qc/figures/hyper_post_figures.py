@@ -273,6 +273,8 @@ def build_wtc_cross_matrix(
     lookup = {(r.label, r.label2): r.coherence for r in band_df.itertuples()}
     z = np.array([[lookup.get((row, col), np.nan) for col in labels] for row in labels],
                  dtype=float)
+    # labels is the montage, so a blank row is a channel one member lost and a blank
+    # column one the other lost; the shape is the same for every dyad
     if not np.isfinite(z).any():
         return None
 
@@ -425,16 +427,26 @@ def compute_isc(
     matrix[i, j] = Pearson r between sub1_ch_i and sub2_ch_j.
     Diagonal = same-channel ISC.
 
-    Both axes carry sub1's S-D labels and sub2's channels are looked up by label, the way
-    WTC matches them. Position is not a safe key here: a participant with one more rejected
-    channel than the other shifts every channel after it, so column j would hold a different
-    pair than its own label claims, and the blanking below would then blank the wrong one.
-    A label sub2 does not have leaves a blank column.
+    Both axes are the *montage's* long channels, rejected ones included, so every dyad's
+    matrix has one shape and a group analysis can stack them however their rejections
+    differ. That is the convention
+    :func:`fnirs_pipe.pipeline.restingstate.compute_fc` follows for the same reason. A
+    rejected channel of sub1 leaves a blank row and one of sub2 a blank column -- never
+    both, since sub1's copy of a channel is not needed to correlate sub2's against
+    everything else. The axes carried sub1's *surviving* channels until 0.30.0, which left
+    a matrix whose shape moved with the rejections and dropped sub2's own channels wherever
+    sub1 had lost the same one.
+
+    Position is not a safe key: a participant with one more rejected channel than the other
+    shifts every channel after it, so column j would hold a different pair than its label
+    claims. Everything here is looked up by S-D label.
 
     Args:
         ch_type: "hbo" or "hbr".
-        bad_channels: {subject_id: [bad channel names]}. sub1's bad channels blank
-            the matching rows, sub2's blank the columns (set to NaN).
+        bad_channels: {subject_id: [bad channel names]}, the rejections the run resolved,
+            which under ``--bads-scope subject`` is the union over the subject's runs and so
+            is wider than any one file's own. Rows and columns not present for a subject are
+            blanked whether or not they appear here.
     """
     if len(subject_ids) < 2:
         return None, None
@@ -443,27 +455,36 @@ def compute_isc(
     if raw1 is None or raw2 is None:
         return None, None
 
-    def _by_label(raw: mne.io.Raw) -> dict[str, int]:
-        return {raw.ch_names[p].rsplit(" ", 1)[0]: p for p in long_channel_picks(raw, ch_type)}
+    def _by_label(raw: mne.io.Raw, exclude="bads") -> dict[str, int]:
+        return {raw.ch_names[p].rsplit(" ", 1)[0]: p
+                for p in long_channel_picks(raw, ch_type, exclude=exclude)}
 
+    # the axis is the montage, the maps are what survived: one shape, blanks where a
+    # channel went. Both members contribute, since a montage they do not share is still two
+    # montages and a label only one of them carries has a row or a column of its own
+    axis1, axis2 = _by_label(raw1, exclude=[]), _by_label(raw2, exclude=[])
+    ch_names = list(axis1) + [c for c in axis2 if c not in axis1]
     map1, map2 = _by_label(raw1), _by_label(raw2)
-    ch_names = list(map1)
     if not ch_names:
         return None, None
 
     # alignment trims the pair to a common length, but nothing here depends on that having run
     n_times = min(raw1.n_times, raw2.n_times)
-    data1   = raw1.get_data(picks=[map1[c] for c in ch_names])[:, :n_times]
 
-    shared  = [c for c in ch_names if c in map2]
-    missing = [c for c in ch_names if c not in map2]
-    if missing:
-        logger.warning("ISC (%s): %s has no %s, leaving those columns blank",
-                       ch_type, subject_ids[1], ", ".join(missing))
-    data2 = np.full_like(data1, np.nan)
-    if shared:
-        data2[[ch_names.index(c) for c in shared]] = \
-            raw2.get_data(picks=[map2[c] for c in shared])[:, :n_times]
+    def _rows(raw: mne.io.Raw, by_label: dict[str, int], who: str) -> np.ndarray:
+        """One row per axis label, NaN for a label this subject has no usable channel at."""
+        out = np.full((len(ch_names), n_times), np.nan)
+        have = [c for c in ch_names if c in by_label]
+        if have:
+            out[[ch_names.index(c) for c in have]] = \
+                raw.get_data(picks=[by_label[c] for c in have])[:, :n_times]
+        if (blank := [c for c in ch_names if c not in by_label]):
+            logger.warning("ISC (%s): %s has no usable %s, leaving those blank",
+                           ch_type, who, ", ".join(blank))
+        return out
+
+    data1 = _rows(raw1, map1, subject_ids[0])
+    data2 = _rows(raw2, map2, subject_ids[1])
 
     def _zscore(x: np.ndarray) -> np.ndarray:
         mu  = x.mean(axis=1, keepdims=True)
@@ -476,17 +497,9 @@ def compute_isc(
     isc_mat = (d1 @ d2.T) / d1.shape[1]
     np.clip(isc_mat, -1.0, 1.0, out=isc_mat)
 
-    if bad_channels:
-        def _bad_idx(sub_id: str) -> list[int]:
-            bad_pairs = {c.rsplit(" ", 1)[0] for c in bad_channels.get(sub_id, [])}
-            return [i for i, ch in enumerate(ch_names) if ch in bad_pairs]
-        bad_rows = _bad_idx(subject_ids[0])
-        bad_cols = _bad_idx(subject_ids[1])
-        if bad_rows:
-            isc_mat[bad_rows, :] = np.nan
-        if bad_cols:
-            isc_mat[:, bad_cols] = np.nan
-
+    # `bad_channels` needs no second pass: a rejected channel contributed a row of NaN
+    # above, which the products carry. The pass that used to be here looked for sub1's
+    # rejections inside a list that had already excluded them, so it blanked nothing.
     return isc_mat, ch_names
 
 

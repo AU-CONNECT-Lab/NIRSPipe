@@ -124,8 +124,11 @@ def compute_fc(raw: mne.io.Raw, chromophore: str) -> pd.DataFrame:
 
     A rejected channel's row and column are NaN, not dropped: every subject's matrix keeps the
     same shape and the same channel order, so a group analysis can stack them however their
-    rejections differ. This is the convention NIRS-KIT uses (``N_Matrix.m``) and the one
-    :func:`fnirs_pipe.qc.figures.hyper_post_figures.compute_isc` already follows.
+    rejections differ. It is the package's convention for every channel-by-channel matrix,
+    :func:`fnirs_pipe.qc.figures.hyper_post_figures.compute_isc` included since 0.30.0.
+    ROI-level products do the opposite and drop the rejected channels before averaging (see
+    :func:`compute_fc_roi`): a bad channel inside an ROI mean reaches every correlation that
+    ROI takes part in, where in a channel matrix it is confined to one row and one column.
 
     Plain Pearson, and deliberately so: a shrinkage estimator is more accurate per edge on weak
     connections, but shrinks by an amount that tracks the channel-to-sample ratio, so subjects

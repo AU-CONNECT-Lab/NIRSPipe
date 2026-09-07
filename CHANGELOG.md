@@ -24,6 +24,8 @@ All notable changes to this project will be documented in this file.
 - **The hyperscanning raw report writes its coherence tables**, whole-record and windowed, so the numbers behind the bar chart and the heatmap can leave the report
 
 ### Fixed
+- **Crossing the channels drew both axes from one member of the dyad**, so every pairing involving a channel the other member kept and the first had rejected was missing from the crossed WTC table and the ISC matrix -- pairings that never needed the first member's copy of that channel. Which member counted depended on the order the pairs table lists them in. Each side now contributes its own surviving channels, and the crossed table grows by the pairings it was dropping
+- **The dyad matrices are indexed by the montage**, rejected channels included, so every dyad's matrix has one shape and a group analysis can stack them however their rejections differ. A rejection blanks its own row or its own column, never both. This is what channel-level FC has always done; the dyad side was indexed by whatever survived
 - **`fnirs-qc hyper-raw` scored its per-subject quality table over every channel**, while the individual reports and `fnirs-hyper run` score the long ones, so a subject's SCI, CV, SNR and GVTD could not be read across the two. The dyad table is the long-channel view now, and says which set it describes
 - **`--gvtd-censor` failed on any recording that has event markers**, which is every task run. It worked only on a recording with no markers at all
 - **The interface showed no SCI at all in its channel table**, a dash on every row

@@ -81,6 +81,20 @@ def _long_hbo_signals(raw: mne.io.Raw) -> dict[str, np.ndarray]:
     }
 
 
+def long_hbo_axis(raw: mne.io.Raw) -> list[str]:
+    """The S-D labels a channel-by-channel matrix is indexed by: the montage, bads included.
+
+    Distinct from :func:`_long_hbo_by_label`, which drops the rejected channels because it is
+    choosing what to compute on. An axis has to outlive a rejection: two dyads that lost
+    different channels still have to produce matrices of one shape to be stacked, and a
+    reader has to be able to tell an empty cell from a channel that was never in the montage.
+
+    A 20-channel montage with 2 rejected -> 20 labels, of which 2 index an all-blank row.
+    """
+    return [raw.ch_names[p].rsplit(" ", 1)[0]
+            for p in long_channel_picks(raw, "hbo", exclude=[])]
+
+
 @dataclass
 class WTCResult:
     """Pairwise wavelet transform coherence per HbO channel.
@@ -253,7 +267,6 @@ def _pairwise_wtc(
 def _wtc_over_pairs(
     raws: dict[str, mne.io.Raw],
     signals: dict[str, dict[str, np.ndarray]],
-    labels: list[str],
     fmin: float,
     fmax: float,
     significance: bool = False,
@@ -265,10 +278,17 @@ def _wtc_over_pairs(
     """Run pairwise Morlet WTC over precomputed per-subject {label: signal} maps.
 
     Signals are matched by label: the first subject's ``S1_D1`` against the second's
-    ``S1_D1``, and nothing else, so ``n`` labels give ``n`` results keyed by the label
-    string. ``cross`` instead crosses every label with every other, ``n**2`` results keyed
-    by the ``(label_sub1, label_sub2)`` tuple, of which the homologous ones are the
-    diagonal. A label absent for either subject yields None for that pair.
+    ``S1_D1``, and nothing else, so the homologous set is the labels both subjects kept.
+    ``cross`` instead crosses every label of one with every label of the other, keyed by the
+    ``(label_sub1, label_sub2)`` tuple, of which the homologous ones are the diagonal.
+
+    **Each side contributes its own surviving channels.** Crossing used to draw both axes
+    from the first subject's list, which dropped every pairing involving a channel the
+    second subject kept and the first had rejected -- pairings that never needed the first
+    subject's copy of that channel -- and made the result depend on which member the pairs
+    table happens to list first. The published pipelines cross the two lists independently
+    and blank only the row or only the column a rejection belongs to (St. Clair et al.
+    2025).
 
     Time axis decimated to ~1 Hz for display; frequency axis filtered to [fmin, fmax] Hz.
     significance adds a per-frequency Monte Carlo level to each pair (slow; ~300 surrogate runs).
@@ -294,21 +314,18 @@ def _wtc_over_pairs(
     shared_freqs: np.ndarray | None = None
     shared_times: np.ndarray | None = None
 
-    label_pairs = [(a, b) for a in labels for b in labels] if cross else [(a, a) for a in labels]
-
     rng_state = np.random.get_state() if seed is not None else None
     if seed is not None:
         np.random.seed(seed)
     try:
         for sub1, sub2 in combinations(subject_ids, 2):
             sig_map1, sig_map2 = signals[sub1], signals[sub2]
+            label_pairs = ([(a, b) for a in sig_map1 for b in sig_map2] if cross
+                           else [(a, a) for a in sig_map1 if a in sig_map2])
             pair_data: dict[str | tuple[str, str], dict | None] = {}
             for label1, label2 in label_pairs:
                 key = (label1, label2) if cross else label1
-                sig1, sig2 = sig_map1.get(label1), sig_map2.get(label2)
-                if sig1 is None or sig2 is None:
-                    pair_data[key] = None
-                    continue
+                sig1, sig2 = sig_map1[label1], sig_map2[label2]
                 try:
                     WCT_band, freqs_band, coi_dec, sig_band, phase_band = _pairwise_wtc(
                         sig1, sig2, dt, step, fmin, fmax, significance,
@@ -366,8 +383,7 @@ def compute_wtc(
     signals = {sid: _long_hbo_signals(raw) for sid, raw in raws.items()}
 
     return _wtc_over_pairs(
-        raws, signals, list(signals[subject_ids[0]]), fmin, fmax, significance, seed,
-        mc_count, cross, limit_scales)
+        raws, signals, fmin, fmax, significance, seed, mc_count, cross, limit_scales)
 
 
 def phase_scramble(sig: np.ndarray, rng: np.random.Generator) -> np.ndarray:
@@ -435,7 +451,6 @@ def compute_wtc_pseudo(
         )
 
     true_signals = {sid: _long_hbo_signals(raw) for sid, raw in raws.items()}
-    labels = list(true_signals[subject_ids[0]])
     # scramble the second subject only: scrambling both would test surrogate against
     # surrogate, which is a different and weaker null
     scrambled_id = subject_ids[1]
@@ -449,7 +464,7 @@ def compute_wtc_pseudo(
             for label, sig in true_signals[scrambled_id].items()
         }
         result = _wtc_over_pairs(
-            raws, signals, labels, fmin, fmax, significance=False, seed=None,
+            raws, signals, fmin, fmax, significance=False, seed=None,
             cross=cross, limit_scales=limit_scales)
         frames.append(wtc_band_mean(result, band_fmin, band_fmax, mask_coi=mask_coi))
         if (i + 1) % 10 == 0:

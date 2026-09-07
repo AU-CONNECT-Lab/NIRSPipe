@@ -97,10 +97,10 @@ def write_isc_matrix(
 ) -> None:
     """Write the matrix the ISC panel is drawn from, so the numbers can leave the report.
 
-    Both axes carry the first subject's channel labels, which is how :func:`compute_isc`
-    pairs the two brains: cell (i, j) is that subject's channel i against the other's
-    channel j. Rejected channels are blank rather than absent, so the file's shape is the
-    montage's however many channels a given dyad lost.
+    Both axes carry the montage's channel labels, which is how :func:`compute_isc` pairs the
+    two brains: cell (i, j) is the first subject's channel i against the other's channel j.
+    Rejected channels are blank rather than absent, so the file's shape is the montage's
+    however many channels a given dyad lost.
 
     A failure here costs the file and not the panel: the report is still readable without it.
     """
@@ -399,7 +399,7 @@ def build_hyper_post_report(
         roi_mean_of_channels,
         wtc_band_mean,
     )
-    from fnirs_pipe.pipeline.synchrony import wtc_grid_params
+    from fnirs_pipe.pipeline.synchrony import long_hbo_axis, wtc_grid_params
     from fnirs_pipe.qc.figures.hyper_post_figures import (
         build_isc_panel,
         build_wtc_channel,
@@ -495,7 +495,10 @@ def build_hyper_post_report(
     chan_matrix_b64 = ""
     if wtc_channel_cross and chan_band_df is not None:
         with guard("WTC channel cross matrix", errors, scope):
-            chan_labels = sorted({*chan_band_df["label"], *chan_band_df["label2"]})
+            # the montage, not the labels the table happens to carry: a dyad that lost a
+            # channel still gets a matrix of the same shape as one that did not
+            chan_labels = long_hbo_axis(ref_raw) if ref_raw is not None else sorted(
+                {*chan_band_df["label"], *chan_band_df["label2"]})
             chan_matrix_b64 = build_wtc_cross_matrix(
                 chan_band_df, chan_labels, subject_ids, band_fmin, band_fmax,
                 kind="channel") or ""
