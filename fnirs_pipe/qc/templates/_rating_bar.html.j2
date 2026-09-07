@@ -45,6 +45,7 @@ body.rating-static-mode #qc-container .qc-module {
 }
 #qc-bar-scroll {
   flex: 1 1 auto;
+  min-width: 0;
   overflow-x: auto;
   scrollbar-width: thin;
 }
@@ -66,6 +67,7 @@ body.rating-static-mode #qc-container .qc-module {
 }
 #qc-pinned {
   flex: 0 0 auto;
+  min-width: 0;          /* .qc-grid's min-width:100% would claim the whole bar here */
   border-left: 1px solid #dde3ea;
   background: #fbfcfd;
 }
@@ -95,8 +97,9 @@ body.rating-static-mode #qc-container .qc-module {
   display: flex;
   align-items: center;
   justify-content: center;
+  justify-self: center;  /* uniform pill, centred under a label of any width */
+  width: 70px;
   min-height: 1.35rem;
-  padding: 1px 8px;
   border: 1.5px solid #ccd3da;
   border-radius: 8px;
   background: #f7f8fa;

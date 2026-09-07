@@ -195,7 +195,7 @@
 {% set _nav = [
   {"id": "Summary", "name": "Summary", "href": "#Final", "ratable": false},
   {"sep": true},
-  {"id": "RawSignal" ~ _rk, "name": "Raw Signal", "href": "#RawSignal"},
+  {"id": "RawSignal" ~ _rk, "name": "Raw", "href": "#RawSignal"},
   {"id": "Signal" ~ _rk,    "name": "SCI/PSP",    "href": "#Signal"},
   {"id": "Motion" ~ _rk,    "name": "Motion",     "href": "#Motion"},
   {"id": "HbO_HbR" ~ _rk,   "name": "HbO/HbR",    "href": "#HbO_HbR"},
@@ -215,11 +215,11 @@
   {% set _ = _nav.append({"id": "GLM" ~ _rk, "name": "GLM", "href": "#GLM"}) %}
 {% endif %}
 {% set _ = _nav.append({"sep": true}) %}
-{% set _ = _nav.append({"id": "Metrics", "name": "Metrics", "href": "#Metrics", "ratable": false}) %}
+{% set _ = _nav.append({"id": "Metrics" ~ _rk, "name": "Metrics", "href": "#Metrics"}) %}
 {% if channel_summary_path %}
   {% set _ = _nav.append({"id": "ChannelSummary" ~ _rk, "name": "Ch. Summary", "href": "#ChannelSummary"}) %}
 {% endif %}
-{% set _ = _nav.append({"id": "Errors",     "name": "Errors",     "href": "#Errors",     "ratable": false}) %}
+{% set _ = _nav.append({"id": "Errors" ~ _rk, "name": "Errors", "href": "#Errors"}) %}
 {% set _ = _nav.append({"id": "Provenance", "name": "Provenance", "href": "#Provenance", "ratable": false}) %}
 {% set _ = _nav.append({"id": "Methods",    "name": "Methods",    "href": "#Methods",    "ratable": false}) %}
 {% if index_href %}
