@@ -90,6 +90,11 @@ Preprocessing:
                                that fakes a high SCI, so raising it prunes more than
                                --sci-threshold alone does.
   --window-length FLOAT        Window (s) for the windowed SCI / PSP / GVTD series. [default: 10.0]
+  --epoch-tmin FLOAT           Trial window for the report's epoch figures and per-trial
+  --epoch-tmax FLOAT           scoring, relative to each event onset. Given together, or
+                               neither. Omitted, the figures use -5 to 25 s and the per-trial
+                               scoring uses each event's own duration, which is what a block
+                               design records and a fixed window would cut off.
   --gvtd-channels              {long,all}   [default: long]
                                Channels GVTD covers. It is an RMS across channels, so the set
                                is part of the value; `all` is for montages whose usable

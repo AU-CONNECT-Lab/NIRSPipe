@@ -721,8 +721,8 @@
 <!-- ==================================================== per-trial quality -->
 <h2 id="TrialQC">Per-trial Quality</h2>
 <p style="font-size:0.82rem;color:#666;margin:0 0 0.6rem;">
-  Every trial window scored on its own, over the same &minus;5 to 25&thinsp;s window the
-  epoch figures average, on the intensity recording. Colour is relative within a metric
+  Every trial window scored on its own, over {{ trial_qc_window }}, on the intensity
+  recording, and screened by the same criteria the whole recording was. Colour is relative within a metric
   row, not a threshold: red marks the worse end of what this recording did. A run whose
   mean SCI looks fine can still hold a handful of trials where the cap moved, and that is
   what this is for. Hover a cell for the value.

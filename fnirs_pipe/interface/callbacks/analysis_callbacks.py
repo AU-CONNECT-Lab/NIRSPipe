@@ -188,6 +188,8 @@ def _build_cli_args(opts: dict) -> list[str]:
         args += ["--dpf", str(opts["dpf"])]
     if opts.get("sci_thresh") is not None:
         args += ["--sci-threshold", str(opts["sci_thresh"])]
+    if opts.get("psp_thresh") is not None:
+        args += ["--psp-threshold", str(opts["psp_thresh"])]
     if opts.get("motion_correction"):
         args += ["--motion-correction", opts["motion_correction"]]
     if opts.get("cardiac_l") is not None:
@@ -262,6 +264,7 @@ def _build_cli_args(opts: dict) -> list[str]:
     State("an-subjects-store",    "data"),
     State("an-dpf",               "value"),
     State("an-sci-thresh",        "value"),
+    State("an-psp-thresh",        "value"),
     State("an-motion-correction", "value"),
     State("an-cardiac-l",         "value"),
     State("an-cardiac-h",         "value"),
@@ -291,7 +294,7 @@ def _build_cli_args(opts: dict) -> list[str]:
     State("an-shell-select",      "value"),
     prevent_initial_call=True,
 )
-def generate_command(n_clicks, bids_dir, output_dir, subjects, dpf, sci_thresh,
+def generate_command(n_clicks, bids_dir, output_dir, subjects, dpf, sci_thresh, psp_thresh,
                      motion_correction, cardiac_l, cardiac_h, resp_l, resp_h,
                      post_mode, high_pass, low_pass, filter_method, filter_order,
                      resample, n_jobs,
@@ -313,7 +316,7 @@ def generate_command(n_clicks, bids_dir, output_dir, subjects, dpf, sci_thresh,
     opts = dict(
         bids_dir=bids_dir, output_dir=output_dir, subjects=subjects,
         session_label=session_label, task_label=task_label,
-        dpf=dpf, sci_thresh=sci_thresh,
+        dpf=dpf, sci_thresh=sci_thresh, psp_thresh=psp_thresh,
         motion_correction=motion_correction, cardiac_l=cardiac_l, cardiac_h=cardiac_h,
         resp_l=resp_l, resp_h=resp_h,
         post_mode=post_mode, high_pass=high_pass, low_pass=low_pass,

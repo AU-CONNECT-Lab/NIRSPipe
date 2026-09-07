@@ -87,6 +87,14 @@ def _build_parser() -> argparse.ArgumentParser:
     _shared.add_psp_threshold(prep_opt)
     prep_opt.add_argument("--window-length", type=float, default=10.0,
                           help="Sliding-window length (s) for windowed SCI/PSP/GVTD QC series.")
+    prep_opt.add_argument("--epoch-tmin", type=float, default=None,
+                          help="Trial window start relative to event onset in s, for the "
+                               "report's epoch figures and per-trial scoring; negative pulls "
+                               "in a baseline. Omit for -5 to 25 s, which suits a single "
+                               "trial and not a 60 s block.")
+    prep_opt.add_argument("--epoch-tmax", type=float, default=None,
+                          help="Trial window end relative to event onset in s. Given together "
+                               "with --epoch-tmin, or neither.")
     prep_opt.add_argument("--gvtd-censor", action="store_true",
                           help="Mark the frames GVTD flags as BAD_gvtd. The data is annotated, "
                                "never cut, so epoching drops the trials they overlap and a "
@@ -184,6 +192,13 @@ def _build_parser() -> argparse.ArgumentParser:
     return p
 
 
+def _check_epoch_window(args: argparse.Namespace) -> None:
+    """Both edges or neither: one alone has no window to describe."""
+    if (args.epoch_tmin is None) != (args.epoch_tmax is None):
+        print("Error: --epoch-tmin and --epoch-tmax must be given together.", file=sys.stderr)
+        raise SystemExit(1)
+
+
 def _require(args: argparse.Namespace, *flags: str) -> None:
     """Exit non-zero naming the first flag the chosen level needs and did not get."""
     for flag in flags:
@@ -198,6 +213,7 @@ def main(argv: list[str] | None = None) -> None:
 
     # checked before the workflow import: a bad command line should not first pay for mne
     _require(args, *_LEVEL_REQUIRES[level])
+    _check_epoch_window(args)
 
     from fnirs_pipe.cli.workflows import run_group_level, run_participant_level
 

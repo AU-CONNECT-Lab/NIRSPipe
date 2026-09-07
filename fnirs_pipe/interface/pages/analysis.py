@@ -187,6 +187,11 @@ layout = dbc.Container([
                           value=0.8, min=0.0, max=1.0, step=0.01),
             ], width=2),
             dbc.Col([
+                dbc.Label("PSP Threshold"),
+                dbc.Input(id="an-psp-thresh", type="number",
+                          value=0.1, min=0.0, max=1.0, step=0.01),
+            ], width=2),
+            dbc.Col([
                 dbc.Label("Motion Correction"),
                 dcc.Dropdown(
                     id="an-motion-correction",

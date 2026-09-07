@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 - **`--psp-threshold` sets the second screening line**, which was fixed at 0.1 with no way to change it even though a channel failing it is rejected. Taken by `fnirs-pipe`, `fnirs-qc prep-raw` and `fnirs-qc hyper-raw`, and named in the Methods paragraph
 - **`fnirs-qc hyper-raw` exposes the windows its figures use**: `--coh-window-length` and `--coh-window-step` for the sliding-window coherence, `--epoch-tmin` / `--epoch-tmax` for the per-pair evoked panels, and `--gvtd-channels` as the individual reports take it. All four were fixed in the source and unreachable from the command line
+- **`--epoch-tmin` / `--epoch-tmax` set the trial window the subject report works in.** Every epoch figure, the evoked topomap, the trial images and the per-trial scoring were pinned to -5 to 25 s, which suits a single trial and not a 60 s block. `fnirs-qc prep-raw` could already set it
 - **The WTC sidecars record the wavelet grid**, `wtc_dj` and `wtc_time_step_s`. Neither is configurable, and both decide how many time-frequency cells a band mean averages over
 - **The raw QC report and the interface judge long channels separately**, with an All / Long / Short comparison. Averaging short channels in was lifting SCI, PSP and SNR
 - **The raw QC report and the interface show every per-channel metric**, not SCI alone, and write the per-channel metrics CSV
@@ -34,6 +35,8 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 - **`fnirs-qc hyper-raw`'s coherence band is `--coh-fmin` / `--coh-fmax`.** As `--fmin` / `--fmax` it said nothing about which of the report's frequency bands it set, and read like `fnirs-hyper`'s `--wtc-fmin`. The old names still work
+- **The subject report's per-trial panel scores each trial over the event's own duration** when no epoch window is given, which is what `fnirs-qc prep-raw` has always done. It used a fixed -5 to 25 s window, so on a block design it scored the first 25 s of each block and called that the trial. The panel says which window it used
+- **The analysis page offers the PSP threshold**, so the interface can no longer only produce runs that screen at the default
 - **The hyperscanning reports print their per-subject metrics through the shared metric registry**, so a number cannot appear to three decimals in a subject report and four in a dyad report
 - **The all-channel PSD panel averages the screened-out, long and short channels separately** instead of pooling every channel into one curve. A recording with a few dead optodes read as a uniformly poor spectrum, with no way to tell that from a montage-wide problem
 - **Every PSD panel says which stage it is measured on**: optical density before Beer-Lambert for the all-channel spectrum, concentration after it for a single channel's. The two look alike and were being read against each other

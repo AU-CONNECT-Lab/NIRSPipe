@@ -128,6 +128,10 @@ class PrepConfig:
     session: str | None = None
     psp_threshold: float = PSP_PASS         # the other screening line; SCI is the required one
     qc_window_s: float = 10.0               # sliding-window length (s) for windowed SCI/PSP/GVTD
+    # trial window for the report's epoch figures and per-trial scoring; None means the
+    # report's own -5 to 25 s for the figures and each event's own duration for the scoring
+    epoch_tmin: float | None = None
+    epoch_tmax: float | None = None
     gvtd_channels: str = "long"              # channel set the GVTD trace and carpet cover
     gvtd_censor: bool = False                # mark the frames GVTD flags as BAD_gvtd
     gvtd_censor_n_std: float = 10.0

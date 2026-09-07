@@ -138,16 +138,21 @@ def _note(notes: list, subject: str, message: str) -> None:
 _EPOCH_TMIN, _EPOCH_TMAX = -5.0, 25.0
 
 
-def _no_epoch_reason(raw_haemo: mne.io.Raw) -> "str | None":
+def _no_epoch_reason(
+    raw_haemo: mne.io.Raw,
+    epoch_tmin: float = _EPOCH_TMIN,
+    epoch_tmax: float = _EPOCH_TMAX,
+) -> "str | None":
     """Why nothing can be epoched over the report's window, or None when something can.
 
     A block design that only marks where each condition starts and ends carries annotations
     but no trials: both windows run off an edge of the run. Asking first is what keeps the
-    epoch sections from rendering empty and MNE from warning once per figure.
+    epoch sections from rendering empty and MNE from warning once per figure. The window is
+    the run's own, so the reason it prints names the window that was actually asked for.
     """
     from fnirs_pipe.qc.figures._utils import epochable_events
 
-    events, _ = epochable_events(raw_haemo, _EPOCH_TMIN, _EPOCH_TMAX)
+    events, _ = epochable_events(raw_haemo, epoch_tmin, epoch_tmax)
     if len(events) > 0:
         return None
     n_marks = sum(1 for a in raw_haemo.annotations
@@ -155,7 +160,7 @@ def _no_epoch_reason(raw_haemo: mne.io.Raw) -> "str | None":
     if not n_marks:
         return "the run carries no events"
     return (f"the run carries {n_marks} marker(s), none of them leaving a full "
-            f"{_EPOCH_TMIN:g} to {_EPOCH_TMAX:g} s window inside the recording")
+            f"{epoch_tmin:g} to {epoch_tmax:g} s window inside the recording")
 
 
 # ---------------------------------------------------------------------------
@@ -613,23 +618,30 @@ def _section_trial_qc(
 ) -> dict:
     """Each trial window scored on its own, so one bad trial is visible before averaging.
 
-    Scored over the same window the epoch figures average, ``_EPOCH_TMIN`` to
-    ``_EPOCH_TMAX``, and on the intensity recording, so a trial's SCI and SNR are on the
-    scale the metrics table prints rather than on the haemoglobin one. The scoring is shared
-    with ``fnirs-qc raw``, which is where this panel came from.
+    Scored over the same window the epoch figures average, and on the intensity recording,
+    so a trial's SCI and SNR are on the scale the metrics table prints rather than on the
+    haemoglobin one. The scoring is shared with ``fnirs-qc prep-raw``, which is where this
+    panel came from, and so is the meaning of an unset window: the figures fall back to
+    ``_EPOCH_TMIN`` / ``_EPOCH_TMAX`` while the scoring uses each event's own duration,
+    which is what a block design records and a fixed window would cut off.
     """
+    tmin = getattr(config, "epoch_tmin", None)
+    tmax = getattr(config, "epoch_tmax", None)
+    window = (f"{tmin:g} to {tmax:g} s from each onset" if tmin is not None and tmax is not None
+              else "each event's own duration")
     path, h = None, 0
     with _guard("Per-trial quality", errors, subject):
         labels, sqms = score_trials(
             raw_intensity, extract_markers(raw_intensity),
             getattr(config, "sci_threshold", SCI_PASS),
             config.cardiac_l_freq, config.cardiac_h_freq,
-            _EPOCH_TMIN, _EPOCH_TMAX,
+            tmin, tmax,
+            psp_threshold=getattr(config, "psp_threshold", None),
         )
         fig = trial_quality_heatmap(labels, sqms)
         if fig is not None:
             path, h = _save_plotly_html(fig, figures_dir / "trial_qc.html")
-    return {"trial_qc_path": path, "trial_qc_h": h}
+    return {"trial_qc_path": path, "trial_qc_h": h, "trial_qc_window": window}
 
 
 def _section_evoked_topomap(
@@ -1210,6 +1222,11 @@ def build_subject_report(
             b64 = carpet_compare_figure(raw_haemo, after_haemo, roi_map=roi_map)
             _save_b64_png(b64, figures_dir / "denoise_carpet.png")
             denoise_carpet_path = _fig_href(figures_dir, "denoise_carpet.png")
+    # the trial window every epoch figure averages over. None on the config means the
+    # report's own default, so an unset flag draws exactly what it always drew
+    epoch_tmin = _EPOCH_TMIN if getattr(config, "epoch_tmin", None) is None else config.epoch_tmin
+    epoch_tmax = _EPOCH_TMAX if getattr(config, "epoch_tmax", None) is None else config.epoch_tmax
+
     # the "Raw Signal" section is the recording before anything was done to it, so its
     # figures come off desc-sci rather than the corrected desc-preproc the rest of the
     # report is built on. Same stage as the SCI/PSP windows and the SNR/CV numbers below.
@@ -1217,6 +1234,7 @@ def build_subject_report(
     channel_det_vars  = _section_channel_detail(
                             raw_haemo_uncorr if raw_haemo_uncorr is not None else raw_haemo,
                             subject, errors, figures_dir,
+                            epoch_tmin=epoch_tmin, epoch_tmax=epoch_tmax,
                             cardiac=(config.cardiac_l_freq, config.cardiac_h_freq),
                             resp=(config.resp_l_freq, config.resp_h_freq))
     channel_det_vars["channel_detail_stage"] = (
@@ -1232,7 +1250,7 @@ def build_subject_report(
     # trial image and topomap on the denoised (bandpassed, pre-regression) haemo so drift/noise
     # is gone and the task response is intact; fall back to preproc only if no post-processing ran.
     epoch_haemo       = after_haemo if after_haemo is not None else raw_haemo
-    epoch_skip        = _no_epoch_reason(raw_haemo)
+    epoch_skip        = _no_epoch_reason(raw_haemo, epoch_tmin, epoch_tmax)
     if epoch_skip is not None:
         _note(notes, subject,
               f"Epoch preview, evoked topomap, trial images and per-trial quality were "
@@ -1241,12 +1259,18 @@ def build_subject_report(
         epoch_vars       = {"epoch_preview_path": None, "epoch_preview_h": 0}
         trial_image_vars = {"trial_image_pairs": [], "trial_image_roi_pairs": []}
         topomap_vars     = {"evoked_topomap_path": None}
-        trial_qc_vars    = {"trial_qc_path": None, "trial_qc_h": 0}
+        trial_qc_vars    = {"trial_qc_path": None, "trial_qc_h": 0, "trial_qc_window": ""}
     else:
-        epoch_vars        = _section_epoch_preview(raw_haemo, subject, errors, figures_dir)
+        epoch_vars        = _section_epoch_preview(raw_haemo, subject, errors, figures_dir,
+                                                   epoch_tmin=epoch_tmin,
+                                                   epoch_tmax=epoch_tmax)
         trial_image_vars  = _section_trial_image(epoch_haemo, subject, errors, figures_dir,
-                                                 roi_map=roi_map)
-        topomap_vars      = _section_evoked_topomap(epoch_haemo, subject, errors, figures_dir)
+                                                 roi_map=roi_map,
+                                                 epoch_tmin=epoch_tmin,
+                                                 epoch_tmax=epoch_tmax)
+        topomap_vars      = _section_evoked_topomap(epoch_haemo, subject, errors, figures_dir,
+                                                    epoch_tmin=epoch_tmin,
+                                                    epoch_tmax=epoch_tmax)
         trial_qc_vars     = _section_trial_qc(raw_intensity, config, subject, errors,
                                               figures_dir)
     glm_vars          = _section_glm(design_matrix, glm_est, raw_haemo, subject, errors, figures_dir, segments=segments)
