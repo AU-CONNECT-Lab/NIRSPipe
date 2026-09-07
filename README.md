@@ -95,6 +95,11 @@ Preprocessing:
                                neither. Omitted, the figures use -5 to 25 s and the per-trial
                                scoring uses each event's own duration, which is what a block
                                design records and a fixed window would cut off.
+  --epoch-chunk-duration SEC   Cut each task annotation into trials this long before any
+                               epoching, so a block design gets one trial per piece rather
+                               than one per block. A 240 s block at 25 s gives 9 trials and
+                               drops the remainder. Nothing can average a single 240 s trial,
+                               so without this the epoch figures describe the start of a block.
   --gvtd-channels              {long,all}   [default: long]
                                Channels GVTD covers. It is an RMS across channels, so the set
                                is part of the value; `all` is for montages whose usable
@@ -371,7 +376,7 @@ output/
 ├── sub-01_task-tapping_raw_channel_decisions.json       # fnirs-rate raw sidecar
 ├── sub-01_task-tapping_raw_ratings.json
 ├── group-G1003_task-tapping_desc-hyperraw_nirs.html     # fnirs-qc hyper-raw
-├── group-G1003_task-tapping_hyper-post.html             # fnirs-hyper run
+├── group-G1003_task-tapping_desc-hyperpost_nirs.html    # fnirs-hyper run
 └── group-G1003/
     └── figures/
 ```

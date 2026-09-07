@@ -2,6 +2,10 @@
 
 import numpy as np
 
+from fnirs_pipe.utils.logging import get_logger
+
+logger = get_logger("qc.figures.utils")
+
 HBO_COLOR      = "#e74c3c"
 HBR_COLOR      = "#3498db"
 HBO_MEAN_COLOR = "#c0392b"   # darker HbO for bold mean line
@@ -137,6 +141,54 @@ def head_outline(ax, xs, ys):
 
 
 # ---- Epoching gate ----
+
+def chunk_annotations(raw, chunk_duration: "float | None"):
+    """A copy of ``raw`` with each long annotation cut into ``chunk_duration``-long trials.
+
+    A block design marks one 240 s annotation per condition. Nothing can average that: an
+    evoked response needs several trials of one length, and MNE's Epochs is a 3-D array, so
+    every trial has to be the same length. Cutting the block into equal pieces is what MNE
+    itself offers for this, as ``events_from_annotations(chunk_duration=...)``; doing it to
+    the annotations instead means every figure, the event timeline and the per-trial scoring
+    all see the same trials, without each of them growing a parameter.
+
+    A 240 s block chunked at 25 s -> 9 annotations of 25 s, and the 15 s that do not fill a
+    chunk are dropped, which is the rule MNE applies. Annotations already shorter than a
+    chunk are left alone, and ``BAD_`` marks are censoring spans rather than stimuli and are
+    never cut.
+
+    ``None`` returns ``raw`` itself, so a caller can pass the option straight through.
+    """
+    import mne
+
+    if not chunk_duration or chunk_duration <= 0:
+        return raw
+
+    onsets, durations, descriptions = [], [], []
+    for ann in raw.annotations:
+        onset, duration = float(ann["onset"]), float(ann["duration"])
+        desc = str(ann["description"])
+        if desc.upper().startswith("BAD") or duration < 2 * chunk_duration:
+            onsets.append(onset)
+            durations.append(duration)
+            descriptions.append(desc)
+            continue
+        # np.arange from the onset, keeping only the pieces a whole chunk fits in
+        for start in np.arange(onset, onset + duration, chunk_duration):
+            if onset + duration - start < chunk_duration:
+                break
+            onsets.append(float(start))
+            durations.append(float(chunk_duration))
+            descriptions.append(desc)
+
+    out = raw.copy()
+    out.set_annotations(mne.Annotations(
+        onsets, durations, descriptions,
+        orig_time=raw.annotations.orig_time))
+    logger.info("annotations chunked at %.1f s: %d -> %d",
+                chunk_duration, len(raw.annotations), len(onsets))
+    return out
+
 
 def epochable_events(raw, tmin: float, tmax: float):
     """Events that can actually be epoched over ``[tmin, tmax]``, as ``(events, event_id)``.

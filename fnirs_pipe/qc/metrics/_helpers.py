@@ -15,10 +15,36 @@ from fnirs_pipe.utils.logging import get_logger
 logger = get_logger("qc.metrics.helpers")
 
 
-# the bands do not meet, deliberately, so long + short is not every channel on a montage
+# The source-detector separations that make a channel short or long, in metres. The bands do
+# not meet, deliberately, so long + short is not every channel on a montage: 12 mm is too far
+# to be scalp-only and too near to reach cortex, and 60 mm returns too little light to trust.
+# The values are mne_nirs' own defaults, which is what lets one number serve both the metric
+# path (`long_short_channels` here) and the analysis path (`io.snirf.long_channel_picks`,
+# `pipeline.glm._short_channel_regressors`, which reach mne_nirs directly). Those two used to
+# read separate copies, and "long" meant [15, 45] mm to the reports and "anything not short"
+# to the dyad metrics, so a 50 mm channel was outside the montage in one half of the package
+# and inside it in the other.
 SHORT_MAX_DIST = 0.01   # m, <= this is a short channel
 LONG_MIN_DIST  = 0.015  # m, >= this and <= LONG_MAX_DIST is a long channel
 LONG_MAX_DIST  = 0.045  # m
+
+
+# Montages already named in the orphan warning below. `long_short_channels` is a pure
+# function of the montage and is called once per figure, so a dyad run would otherwise print
+# the same list a dozen times; the set is for log noise only and nothing reads it.
+_ORPHANS_WARNED: "set[tuple[str, ...]]" = set()
+
+
+def separation_bands() -> "tuple[float, float, float]":
+    """``(short_max, long_min, long_max)`` in metres: the package's one separation rule.
+
+    An accessor rather than three imports, so a caller cannot pick up two of the three and
+    silently invent a fourth band. Not configurable: changing any of the three makes every
+    ``raw_long`` / ``raw_short`` number incomparable with one already on disk, so a montage
+    that needs different bands needs that decided on the command line and stamped in the
+    record, which is not built yet.
+    """
+    return SHORT_MAX_DIST, LONG_MIN_DIST, LONG_MAX_DIST
 
 
 # Per-channel pass/fail lines. Apart from METRIC_DISPLAY, which holds the cutoffs for a
@@ -47,18 +73,33 @@ def long_short_channels(raw: mne.io.Raw) -> "tuple[list[str], list[str]]":
     A montage with no registered optode positions reports every distance as zero, which
     would make every channel short; that case is logged and yields no split at all.
 
+    A channel in neither band is named in a warning rather than passed over. It takes part
+    in no split section, no GVTD trace and no verdict, and the two bands not meeting is
+    what makes that possible without anything on the page saying so.
+
     Bad channels stay in both lists. Separation is the only thing being asked about, and
     pick_types drops bads by default, which would leave every metric computed from these
     lists averaging over channels that were selected for being good.
     """
+    short_max, long_min, long_max = separation_bands()
     picks = mne.pick_types(raw.info, meg=False, fnirs=True, exclude=[])
     dists = mne.preprocessing.nirs.source_detector_distances(raw.info, picks=picks)
     names = [raw.ch_names[i] for i in picks]
-    long_names  = [ch for ch, d in zip(names, dists) if LONG_MIN_DIST <= d <= LONG_MAX_DIST]
-    short_names = [ch for ch, d in zip(names, dists) if 0 < d <= SHORT_MAX_DIST]
+    long_names  = [ch for ch, d in zip(names, dists) if long_min <= d <= long_max]
+    short_names = [ch for ch, d in zip(names, dists) if 0 < d <= short_max]
     if not long_names and not short_names:
         logger.warning("no channel falls in either separation range; optode positions "
                        "are probably missing")
+        return long_names, short_names
+    claimed = set(long_names) | set(short_names)
+    orphans = {ch: d for ch, d in zip(names, dists) if ch not in claimed}
+    if orphans and (key := tuple(sorted(orphans))) not in _ORPHANS_WARNED:
+        _ORPHANS_WARNED.add(key)
+        logger.warning(
+            "%d channel(s) fall in neither separation band (short <= %.0f mm, long %.0f-%.0f "
+            "mm) and so take part in no split section, no GVTD trace and no quality verdict: "
+            "%s", len(orphans), short_max * 1e3, long_min * 1e3, long_max * 1e3,
+            ", ".join(f"{ch} {d * 1e3:.0f}mm" for ch, d in sorted(orphans.items())))
     return long_names, short_names
 
 

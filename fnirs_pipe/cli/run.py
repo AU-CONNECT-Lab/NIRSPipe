@@ -95,6 +95,13 @@ def _build_parser() -> argparse.ArgumentParser:
     prep_opt.add_argument("--epoch-tmax", type=float, default=None,
                           help="Trial window end relative to event onset in s. Given together "
                                "with --epoch-tmin, or neither.")
+    prep_opt.add_argument("--epoch-chunk-duration", type=float, default=None, metavar="SECONDS",
+                          help="Cut each task annotation into trials this long before any "
+                               "epoching, so a block design gets one trial per piece instead "
+                               "of one per block. A 240 s block at 25 s gives 9 trials and "
+                               "drops the remainder, which is what MNE does. Nothing can "
+                               "average a single 240 s trial, so without this the epoch "
+                               "figures describe the start of each block.")
     prep_opt.add_argument("--gvtd-censor", action="store_true",
                           help="Mark the frames GVTD flags as BAD_gvtd. The data is annotated, "
                                "never cut, so epoching drops the trials they overlap and a "
@@ -109,10 +116,12 @@ def _build_parser() -> argparse.ArgumentParser:
                                "shorter is censored with the artifacts around it, since a few "
                                "seconds between two of them cannot carry an analysis.")
     prep_opt.add_argument("--gvtd-channels", choices=list(GVTD_CHANNEL_SETS), default="long",
-                          help="Channels the GVTD trace, carpet and scalars cover. 'long' keeps "
-                               "one separation band, so the value does not move with separations "
-                               "the montage carries outside it; 'all' uses every channel, for "
-                               "dense arrays whose usable separations span more than one band.")
+                          help="Channel set the GVTD scalars are read off, and the first row of "
+                               "its panel. 'long' keeps one separation band, so the value does not "
+                               "move with separations the montage carries outside it, and the "
+                               "panel adds a second row for the short channels where the montage "
+                               "has them; 'all' uses every channel in one row, for dense arrays "
+                               "whose usable separations span more than one band.")
 
     post = p.add_argument_group("postprocessing (requires --mode)")
     post.add_argument("--mode", choices=_MODE_CHOICES,

@@ -222,6 +222,7 @@ def run_participant_level(args: dict[str, Any]) -> None:
                         qc_window_s=args.get("window_length", 10.0),
         epoch_tmin=args.get("epoch_tmin"),
         epoch_tmax=args.get("epoch_tmax"),
+        epoch_chunk_duration=args.get("epoch_chunk_duration"),
                         labels=set(prep_runs))
                 except Exception:
                     logger.error("sub-%s | SQM records failed", subject, exc_info=True)
@@ -371,6 +372,7 @@ def _make_prep_config(subject: str, session: str | None, args: dict[str, Any]) -
         qc_window_s=args.get("window_length", 10.0),
         epoch_tmin=args.get("epoch_tmin"),
         epoch_tmax=args.get("epoch_tmax"),
+        epoch_chunk_duration=args.get("epoch_chunk_duration"),
         gvtd_channels=args.get("gvtd_channels") or "long",
         gvtd_censor=bool(args.get("gvtd_censor")),
         gvtd_censor_n_std=args.get("gvtd_censor_n_std", 10.0),

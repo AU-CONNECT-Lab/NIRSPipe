@@ -668,8 +668,10 @@ def build_hyper_post_report(
         for chs in bad_channels.values():
             bad_pairs_all |= {c.rsplit(" ", 1)[0] for c in chs}
 
+    # desc-hyperpost, matching the raw report's desc-hyperraw: the two are one pair of
+    # pages and were named by two conventions, one BIDS-shaped and one not
     output_path = (group_report_dir(output_dir, group_id)
-                   / f"group-{group_id}_task-{task}_hyper-post.html")
+                   / f"group-{group_id}_task-{task}_desc-hyperpost_nirs.html")
 
     # Rendered here rather than by the caller: every sidecar the scan reads was written by
     # the passes above, so this is the first moment the graph is complete. Same stem

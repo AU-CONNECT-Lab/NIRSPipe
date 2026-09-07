@@ -192,6 +192,14 @@ layout = dbc.Container([
                           value=0.1, min=0.0, max=1.0, step=0.01),
             ], width=2),
             dbc.Col([
+                dbc.Label("Epoch tmin (s)"),
+                dbc.Input(id="an-epoch-tmin", type="number", placeholder="-5"),
+            ], width=2),
+            dbc.Col([
+                dbc.Label("Epoch tmax (s)"),
+                dbc.Input(id="an-epoch-tmax", type="number", placeholder="25"),
+            ], width=2),
+            dbc.Col([
                 dbc.Label("Motion Correction"),
                 dcc.Dropdown(
                     id="an-motion-correction",

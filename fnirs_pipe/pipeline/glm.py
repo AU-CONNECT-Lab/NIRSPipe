@@ -37,8 +37,11 @@ SCRStrategy = Literal["mean", "pca"]
 def _short_channel_regressors(haemo: mne.io.Raw, strategy: SCRStrategy) -> dict[str, np.ndarray]:
     from mne_nirs.channels import get_short_channels
 
+    from fnirs_pipe.qc.metrics._helpers import separation_bands
+
+    short_max, _, _ = separation_bands()
     try:
-        short = get_short_channels(haemo)
+        short = get_short_channels(haemo, max_dist=short_max)
     except ValueError:
         logger.warning("no short channels found — skipping short-channel regressors")
         return {}

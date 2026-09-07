@@ -112,7 +112,11 @@ def _patch_haemo_wavelengths(raw: mne.io.Raw) -> mne.io.Raw:
 def has_short_channels(raw: mne.io.Raw) -> bool:
     """Return True if the recording contains short-distance reference channels."""
     from mne_nirs.channels import get_short_channels
-    return len(get_short_channels(raw)) > 0
+
+    from fnirs_pipe.qc.metrics._helpers import separation_bands
+
+    short_max, _, _ = separation_bands()
+    return len(get_short_channels(raw, max_dist=short_max)) > 0
 
 
 def long_channel_picks(raw: mne.io.Raw, ch_type: str = "hbo", exclude="bads") -> list[int]:
@@ -125,16 +129,20 @@ def long_channel_picks(raw: mne.io.Raw, ch_type: str = "hbo", exclude="bads") ->
     measures systemic physiology two people share by sitting in the same room rather than
     any brain coupling. Montages with no short channels lose nothing.
 
+    "Long" is the package's one separation rule,
+    :func:`~fnirs_pipe.qc.metrics._helpers.separation_bands`, and a channel outside both
+    bands is in neither list. This dropped only the short channels until 0.30.0, so a
+    separation past the long band was short-distance to the reports and usable to the dyad
+    metrics; ``long_short_channels`` names such a channel in a warning.
+
     ``exclude`` is pick_types', so rejected channels are dropped by default, which is what a
     metric wants. ``exclude=[]`` keeps them, which is what the *axis* of a channel-by-channel
     matrix wants: an axis over the montage rather than over the survivors gives every subject
     and every dyad a matrix of one shape, so a group analysis can stack them however their
     rejections differ.
     """
-    from mne_nirs.channels import get_short_channels
-    try:
-        short = set(get_short_channels(raw).ch_names)
-    except Exception:  # no short channel in the montage: mne_nirs picks an empty selection
-        short = set()
+    from fnirs_pipe.qc.metrics._helpers import long_short_channels
+
+    long_names = set(long_short_channels(raw)[0])
     return [p for p in mne.pick_types(raw.info, fnirs=ch_type, exclude=exclude)
-            if raw.ch_names[p] not in short]
+            if raw.ch_names[p] in long_names]

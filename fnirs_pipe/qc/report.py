@@ -73,6 +73,7 @@ from fnirs_pipe.qc.figure_io import (
     extract_markers, get_channel_pairs,
 )
 from fnirs_pipe.qc.metrics import SCI_PASS, gvtd_channel_blocks
+from fnirs_pipe.qc.figures._utils import chunk_annotations
 from fnirs_pipe.qc.figures import (
     build_trigger_timeline_single,
     condition_colors,
@@ -1250,6 +1251,20 @@ def build_subject_report(
     # report's own default, so an unset flag draws exactly what it always drew
     epoch_tmin = _EPOCH_TMIN if getattr(config, "epoch_tmin", None) is None else config.epoch_tmin
     epoch_tmax = _EPOCH_TMAX if getattr(config, "epoch_tmax", None) is None else config.epoch_tmax
+
+    # --epoch-chunk-duration cuts the long annotations up once, here, rather than in each
+    # figure: the epoch sections, the event timeline and the per-trial scoring then all read
+    # one set of trials. A raw with no long annotation, or no flag, comes back unchanged.
+    chunk = getattr(config, "epoch_chunk_duration", None)
+    if chunk:
+        raw_intensity = chunk_annotations(raw_intensity, chunk)
+        raw_haemo = chunk_annotations(raw_haemo, chunk)
+        if after_haemo is not None:
+            after_haemo = chunk_annotations(after_haemo, chunk)
+        _note(notes, subject,
+              f"Task annotations were cut into {chunk:g} s trials before epoching, so a "
+              f"trial in the epoch figures and the per-trial panel is one piece of a block "
+              f"rather than the whole block.")
 
     # the "Raw Signal" section is the recording before anything was done to it, so its
     # figures come off desc-sci rather than the corrected desc-preproc the rest of the

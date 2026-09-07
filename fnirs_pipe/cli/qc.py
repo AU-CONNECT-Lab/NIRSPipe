@@ -246,8 +246,9 @@ def _build_parser() -> argparse.ArgumentParser:
                     help="Trial window end relative to event onset in s. Given together with "
                          "--epoch-tmin, or neither.")
     pr.add_argument("--gvtd-channels", choices=list(GVTD_CHANNEL_SETS), default="long",
-                    help="Channels the GVTD trace and carpet cover. 'long' keeps one "
-                         "separation band; 'all' uses every channel.")
+                    help="Channel set the GVTD scalars are read off, and the first row of its "
+                         "panel. 'long' keeps one separation band and the panel adds a second row "
+                         "for the short channels; 'all' uses every channel in one row.")
     pr.add_argument("--skip-bids-validation", action=argparse.BooleanOptionalAction, default=False)
     pr.set_defaults(func=cmd_prep_raw)
 

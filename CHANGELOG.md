@@ -8,10 +8,11 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 - **The GVTD panel draws the short channels on their own row**, under the long one and on the same scale, with the carpet split into a long block and a short block beside it. Short-channel quality had no time-resolved view anywhere in the report. The verdict, the threshold and the reported scalars still come from the long row alone, so nothing a run is judged on changes
-- **`--psp-threshold` sets the second screening line**, which was fixed at 0.1 with no way to change it even though a channel failing it is rejected. Taken by `fnirs-pipe`, `fnirs-qc prep-raw` and `fnirs-qc hyper-raw`, and named in the Methods paragraph
-- **`fnirs-qc hyper-raw` exposes the windows its figures use**: `--coh-window-length` and `--coh-window-step` for the sliding-window coherence, `--epoch-tmin` / `--epoch-tmax` for the per-pair evoked panels, and `--gvtd-channels` as the individual reports take it. All four were fixed in the source and unreachable from the command line
-- **`--epoch-tmin` / `--epoch-tmax` set the trial window the subject report works in.** Every epoch figure, the evoked topomap, the trial images and the per-trial scoring were pinned to -5 to 25 s, which suits a single trial and not a 60 s block. `fnirs-qc prep-raw` could already set it. Left unset, the report now says so when the run's events outrun the window the figures average, which is how a 240 s block came to be described by its first 25 s with nothing pointing it out
-- **The WTC sidecars record the wavelet grid**, `wtc_dj` and `wtc_time_step_s`. Neither is configurable, and both decide how many time-frequency cells a band mean averages over
+- **`--psp-threshold` sets the second screening line.** It was fixed at 0.1 with no way to change it, even though a channel failing it is rejected
+- **`fnirs-qc hyper-raw` exposes the windows its figures use**, and the GVTD channel set. All four were fixed in the source with no way to reach them
+- **`--epoch-tmin` / `--epoch-tmax` set the trial window the subject report works in.** Every epoch figure and the per-trial panel were pinned to -5 to 25 s, which suits a single trial and not a 60 s block. Left unset, the report says so when the run's events outrun the window the figures average
+- **`--epoch-chunk-duration` cuts a long task annotation into trials the epoch figures can average.** A block design marks one 240 s annotation per condition and nothing can average a single 240 s trial, so that half of the report described the start of each block. Cutting at 25 s gives 9 trials
+- **The WTC sidecars record the wavelet grid.** Neither value is configurable, and both decide how many time-frequency cells a band mean averages over
 - **The raw QC report and the interface judge long channels separately**, with an All / Long / Short comparison. Averaging short channels in was lifting SCI, PSP and SNR
 - **The raw QC report and the interface show every per-channel metric**, not SCI alone, and write the per-channel metrics CSV
 - **The subject report gained the event timeline and the per-trial quality panel**
@@ -25,9 +26,10 @@ All notable changes to this project will be documented in this file.
 - **The hyperscanning raw report writes its coherence tables**, whole-record and windowed, so the numbers behind the bar chart and the heatmap can leave the report
 
 ### Fixed
-- **Crossing the channels drew both axes from one member of the dyad**, so every pairing involving a channel the other member kept and the first had rejected was missing from the crossed WTC table and the ISC matrix -- pairings that never needed the first member's copy of that channel. Which member counted depended on the order the pairs table lists them in. Each side now contributes its own surviving channels, and the crossed table grows by the pairings it was dropping
-- **The dyad matrices are indexed by the montage**, rejected channels included, so every dyad's matrix has one shape and a group analysis can stack them however their rejections differ. A rejection blanks its own row or its own column, never both. This is what channel-level FC has always done; the dyad side was indexed by whatever survived
-- **`fnirs-qc hyper-raw` scored its per-subject quality table over every channel**, while the individual reports and `fnirs-hyper run` score the long ones, so a subject's SCI, CV, SNR and GVTD could not be read across the two. The dyad table is the long-channel view now, and says which set it describes
+- **"Long channel" meant two different things**: 15-45 mm to the reports and the GVTD trace, anything over 10 mm to the dyad metrics and the short-channel regressors. A separation past 45 mm was outside the montage in one half of the package and usable in the other. One rule now, and a channel in neither band is named in a warning instead of silently taking part in nothing
+- **Crossing the channels drew both axes from one member of the dyad**, so the crossed WTC table and the ISC matrix were missing every pairing that used a channel the other member kept and this one had rejected. Which member counted depended on the order the pairs table lists them in. The crossed table grows by the pairings it was dropping
+- **The dyad matrices are indexed by the montage**, rejected channels included, so every dyad's matrix has one shape and a group analysis can stack them however their rejections differ. A rejection blanks its own row or its own column, never both
+- **`fnirs-qc hyper-raw` scored its per-subject quality table over every channel**, while the individual reports score the long ones, so a subject's SCI, CV, SNR and GVTD could not be read across the two. It is the long-channel view now, and says which set it describes
 - **`--gvtd-censor` failed on any recording that has event markers**, which is every task run. It worked only on a recording with no markers at all
 - **The interface showed no SCI at all in its channel table**, a dash on every row
 - **The per-channel PSD shaded the cardiac and respiration bands at fixed frequencies** instead of the run's own, so a study outside the adult range had the stripe over the wrong part of the spectrum
@@ -37,10 +39,11 @@ All notable changes to this project will be documented in this file.
 - **A figure that failed took the whole group report with it.** Every other report loses one panel; this one had no error handling at all
 
 ### Changed
-- **`fnirs-qc hyper-raw`'s coherence band is `--coh-fmin` / `--coh-fmax`.** As `--fmin` / `--fmax` it said nothing about which of the report's frequency bands it set, and read like `fnirs-hyper`'s `--wtc-fmin`. The old names still work
-- **The subject report's per-trial panel scores each trial over the event's own duration** when no epoch window is given, which is what `fnirs-qc prep-raw` has always done. It used a fixed -5 to 25 s window, so on a block design it scored the first 25 s of each block and called that the trial. The panel says which window it used
-- **The analysis page offers the PSP threshold**, so the interface can no longer only produce runs that screen at the default
-- **The hyperscanning reports print their per-subject metrics through the shared metric registry**, so a number cannot appear to three decimals in a subject report and four in a dyad report
+- **`fnirs-qc hyper-raw`'s coherence band is `--coh-fmin` / `--coh-fmax`.** As `--fmin` / `--fmax` it said nothing about which of the report's bands it set. The old names still work
+- **The subject report's per-trial panel scores each trial over the event's own duration** when no epoch window is given, which is what the raw viewer has always done. It used a fixed -5 to 25 s window, so on a block design it scored the first 25 s of a block and called that the trial. The panel says which window it used
+- **The analysis page offers the PSP threshold and the epoch window**, so the interface can no longer only produce runs that screen and epoch at the defaults
+- **`fnirs-hyper run`'s report is named the way every other report is**, `desc-hyperpost`. The two dyad pages followed two conventions
+- **The hyperscanning reports print their per-subject metrics the way every other report does**, so a number cannot appear to three decimals in one and four in another. Some labels change
 - **The all-channel PSD panel draws a mean per separation group** instead of pooling every channel into one curve. A short channel's spectrum sits well above a long one's, so the single mean described neither, and the groups and their colours are now the ones the rest of the raw report uses
 - **The channel quality heatmap prints its channel names in the same colour in the report and in the interface.** Any figure that left its font unset came out one colour when the command line wrote it and another when the interface drew it
 - **Every PSD panel says which stage it is measured on**: optical density before Beer-Lambert for the all-channel spectrum, concentration after it for a single channel's. The two look alike and were being read against each other
