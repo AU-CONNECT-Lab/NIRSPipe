@@ -359,7 +359,6 @@ def _section_motion_detail(
     errors: list,
     figures_dir: Path,
     segments: dict | None = None,
-    max_pts: int = 4000,
     corrected_segments: list | None = None,
     spike_segments: list | None = None,
 ) -> dict:
@@ -369,7 +368,7 @@ def _section_motion_detail(
     saved = []
     for ch in shared_chs:
         with _guard(f"Motion detail {ch}", errors, subject):
-            fig = build_motion_detail_figure(raw_od_before, raw_od_after, ch, segments, max_pts,
+            fig = build_motion_detail_figure(raw_od_before, raw_od_after, ch, segments,
                                              corrected_segments=corrected_segments,
                                              spike_segments=spike_segments)
             fname = f"motion_detail_{_pair_fname(ch)}.html"

@@ -1,17 +1,19 @@
-{# Shared rating bar UI: sticky module chips + static-mode banner.
+{# Shared sticky top bar: navigation row above, rating row below, columns aligned.
    Required variables (set by the parent template):
      rating_subject:        identifier passed back to the save endpoint
-     rating_modules:        list of lists of {id, name} module groups
+     rating_modules:        list of groups; each group a list of entries, where an entry is
+                            {id, name, href?, ratable?} or {sep: true} for a divider
      rating_save_endpoint:  POST URL for ratings (e.g. "/save_hyper_ratings")
      rating_load_endpoint:  GET URL for existing ratings (e.g. "/load_ratings")
-   In static mode (fetch fails) the bar is greyed out and a banner appears. #}
+   Optional:
+     rating_pinned:         entries kept in a fixed block at the right edge (overall verdict)
+     rating_chip:           text shown in the right-hand identity chip
+   href defaults to "#<id>" and ratable to true, so callers that only pass {id, name}
+   get a clickable anchor with a pill under it; href: false renders a plain label
+   for pages with no matching anchor.
+   In static mode (fetch fails) the rating row is greyed out and a banner appears. #}
 
 <style>
-:root {
-  --qc-module-width: 110px;
-  --qc-module-gap: 6px;
-  --qc-run-gap: 16px;
-}
 #rating-static-banner {
   display: none;
   background: #fff3cd;
@@ -23,7 +25,7 @@
   font-family: Arial, sans-serif;
 }
 body.rating-static-mode #rating-static-banner { display: block; }
-body.rating-static-mode #qc-rating-bar .qc-module {
+body.rating-static-mode #qc-container .qc-module {
   pointer-events: none;
   opacity: 0.45;
   cursor: not-allowed;
@@ -33,95 +35,145 @@ body.rating-static-mode #qc-rating-bar .qc-module {
   position: sticky;
   top: 0;
   z-index: 1000;
-  background: white;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
-  font-family: Arial, sans-serif;
-  user-select: none;
-  width: 100%;
-}
-#qc-rating-index, #qc-rating-bar {
-  overflow-x: auto;
-  width: 100%;
-  padding: 6px 0;
-  border-bottom: 1px solid #bbb;
-  box-sizing: border-box;
-}
-#qc-rating-index {
-  background-color: #e0e8f8;
-  border-bottom: 2px solid #0078d7;
-  scrollbar-width: none;
-}
-#qc-rating-index::-webkit-scrollbar { display: none; }
-#qc-rating-bar {
-  background-color: #f0f4ff;
-  scrollbar-width: auto;
-}
-#qc-rating-bar::-webkit-scrollbar { height: 8px; display: block; }
-#qc-rating-bar::-webkit-scrollbar-thumb { background: #bbb; border-radius: 4px; }
-#qc-rating-index .qc-inner,
-#qc-rating-bar .qc-inner {
   display: flex;
-  gap: var(--qc-run-gap);
+  align-items: stretch;
+  background: #fff;
+  border-bottom: 2px solid #2980b9;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+  user-select: none;
+}
+#qc-bar-scroll {
+  flex: 1 1 auto;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+#qc-bar-scroll::-webkit-scrollbar { height: 7px; }
+#qc-bar-scroll::-webkit-scrollbar-thumb { background: #ccc; border-radius: 4px; }
+
+/* two rows sharing one grid: nav cell and its pill always land in the same column */
+.qc-grid {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: max-content;
+  grid-template-rows: auto auto;
+  column-gap: 4px;
+  row-gap: 3px;
+  padding: 5px 8px;
   width: max-content;
   min-width: 100%;
-  box-sizing: content-box;
+  box-sizing: border-box;
 }
-#qc-rating-index a {
+#qc-pinned {
+  flex: 0 0 auto;
+  border-left: 1px solid #dde3ea;
+  background: #fbfcfd;
+}
+.qc-sep {
+  grid-row: 1 / span 2;
+  width: 1px;
+  background: #dde3ea;
+  margin: 2px 7px;
+}
+.qc-nav-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.2rem 0.55rem;
+  border-radius: 3px;
+  color: #2980b9;
+  font-size: 0.85rem;
   font-weight: 600;
-  color: #004a9f;
   text-decoration: none;
-  cursor: pointer;
-  padding: 6px 8px;
-  border-radius: 4px;
-  font-size: 14px;
   white-space: nowrap;
-  user-select: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: var(--qc-module-width);
-  box-sizing: border-box;
 }
-.qc-run-group { display: flex; gap: var(--qc-module-gap); }
+.qc-nav-cell:hover { background: #eaf3fb; }
+.qc-nav-plain { color: #495057; cursor: default; }
+.qc-nav-plain:hover { background: none; }
+.qc-pad { min-height: 1.35rem; }
 .qc-module {
-  cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 5px 8px;
-  border-radius: 6px;
-  border: 1.5px solid transparent;
-  min-width: var(--qc-module-width);
-  box-sizing: border-box;
-  user-select: none;
-  white-space: nowrap;
   justify-content: center;
-  font-size: 14px;
+  min-height: 1.35rem;
+  padding: 1px 8px;
+  border: 1.5px solid #ccd3da;
+  border-radius: 8px;
+  background: #f7f8fa;
+  cursor: pointer;
 }
 .qc-module .qc-icon {
   font-family: monospace;
-  font-size: 18px;
-  width: 18px;
-  text-align: center;
+  font-size: 15px;
+  line-height: 1.1;
+  color: #8a939c;
 }
-.qc-module span.label { font-weight: 600; }
-.qc-module.good  { background-color: #d4edda; border-color: #28a745; color: #155724; }
-.qc-module.bad   { background-color: #f8d7da; border-color: #dc3545; color: #721c24; }
-.qc-module.other { background-color: #fff3cd; border-color: #ffc107; color: #856404; }
+.qc-module.good  { background: #d4edda; border-color: #28a745; }
+.qc-module.bad   { background: #f8d7da; border-color: #dc3545; }
+.qc-module.other { background: #fff; border-color: #6c757d; }
+.qc-module.good  .qc-icon { color: #155724; }
+.qc-module.bad   .qc-icon { color: #721c24; }
+.qc-module.other .qc-icon { color: #343a40; }
+.qc-module.has-note { box-shadow: inset 0 -3px 0 #f0ad4e; }
+.qc-chip {
+  grid-row: 1 / span 2;
+  display: flex;
+  align-items: center;
+  padding: 0 0.6rem;
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 0.82rem;
+  color: #495057;
+  white-space: nowrap;
+}
+
+/* anchors land below the bar instead of under it */
+h1[id], h2[id], h3[id], details[id] {
+  scroll-margin-top: calc(var(--qc-topbar-h, 76px) + 8px);
+}
 </style>
 
 <div id="rating-static-banner">
-  Static mode — launch via <code>fnirs-rate</code> to load existing ratings and save changes.
+  Static mode &mdash; launch via <code>fnirs-rate</code> to load existing ratings and save changes.
 </div>
 
-<div id="qc-container" title="Ctrl+click to add comment, click to rate: + &#8594; &#8722; &#8594; ?">
-  <div id="qc-rating-index"><div class="qc-inner"></div></div>
-  <div id="qc-rating-bar"><div class="qc-inner"></div></div>
+{% macro qc_cells(entries) %}
+  {%- for e in entries %}
+    {%- if e.sep %}
+  <span class="qc-sep"></span>
+    {%- else %}
+    {%- if e.href is defined and not e.href %}
+  <span class="qc-nav-cell qc-nav-plain">{{ e.name }}</span>
+    {%- else %}
+  <a class="qc-nav-cell" href="{{ e.href | default('#' ~ e.id) }}">{{ e.name }}</a>
+    {%- endif %}
+      {%- if e.ratable is not defined or e.ratable %}
+  <div class="qc-module" data-mod-id="{{ e.id }}" title="click to rate &nbsp;+ &#8594; &#8722; &#8594; ? &nbsp;&bull;&nbsp; ctrl+click to comment"><span class="qc-icon">&#9723;</span></div>
+      {%- else %}
+  <div class="qc-pad"></div>
+      {%- endif %}
+    {%- endif %}
+  {%- endfor %}
+{% endmacro %}
+
+<div id="qc-container">
+  <div id="qc-bar-scroll">
+    <div class="qc-grid">
+      {%- for group in rating_modules %}
+        {%- if not loop.first %}<span class="qc-sep"></span>{% endif %}
+        {{ qc_cells(group) }}
+      {%- endfor %}
+    </div>
+  </div>
+  {%- if rating_pinned or rating_chip %}
+  <div id="qc-pinned" class="qc-grid">
+    {{ qc_cells(rating_pinned or []) }}
+    {%- if rating_chip %}<span class="qc-chip">{{ rating_chip }}</span>{% endif %}
+  </div>
+  {%- endif %}
 </div>
 
 <script>
 (function() {
-  var modulesByRun  = {{ rating_modules | tojson }};
   var ratings       = {};
   var notes         = {};
   var participantId = {{ rating_subject | tojson }};
@@ -130,73 +182,45 @@ body.rating-static-mode #qc-rating-bar .qc-module {
 
   var icons        = {NA: "◻", good: "+", bad: "−", other: "?"};
   var ratingStates = ["NA", "good", "bad", "other"];
+  var cells = [].slice.call(document.querySelectorAll("#qc-container .qc-module"));
 
-  var indexInner = document.querySelector("#qc-rating-index .qc-inner");
-  var barInner   = document.querySelector("#qc-rating-bar .qc-inner");
-
-  function buildBar() {
-    indexInner.innerHTML = "";
-    barInner.innerHTML   = "";
-    modulesByRun.forEach(function(runModules) {
-      var runGroupDiv = document.createElement("div");
-      runGroupDiv.className = "qc-run-group";
-
-      runModules.forEach(function(mod) {
-        var link = document.createElement("a");
-        link.textContent = mod.name;
-        link.href = "#" + mod.id;
-        indexInner.appendChild(link);
-
-        if (!(mod.id in ratings)) ratings[mod.id] = "NA";
-        if (!(mod.id in notes))   notes[mod.id]   = "";
-
-        var modEl = document.createElement("div");
-        modEl.className = "qc-module" + (mod.name === "Final" || mod.name.startsWith("Final") ? " final-module" : "");
-        modEl.innerHTML = '<span class="qc-icon">◻</span><span class="label">' + mod.name + '</span>';
-        modEl.dataset.modId = mod.id;
-
-        modEl.addEventListener("click", (function(m, el) {
-          return function(e) {
-            if (document.body.classList.contains("rating-static-mode")) return;
-            if (e.ctrlKey) {
-              var v = prompt('Comment for "' + m.name + '"', notes[m.id] || "");
-              if (v !== null) { notes[m.id] = v.trim(); save(); }
-            } else {
-              var idx = ratingStates.indexOf(ratings[m.id] || "NA");
-              ratings[m.id] = ratingStates[(idx + 1) % ratingStates.length];
-              updateDisplay(el, m.id);
-              save();
-            }
-          };
-        })(mod, modEl));
-
-        updateDisplay(modEl, mod.id);
-        runGroupDiv.appendChild(modEl);
-      });
-
-      barInner.appendChild(runGroupDiv);
-    });
-  }
-
-  function updateDisplay(el, id) {
-    var s = ratings[id] || "NA";
+  function updateDisplay(el) {
+    var id = el.dataset.modId;
+    var s  = ratings[id] || "NA";
     el.classList.remove("good", "bad", "other");
     if (s !== "NA") el.classList.add(s);
+    el.classList.toggle("has-note", !!notes[id]);
     el.querySelector(".qc-icon").textContent = icons[s];
   }
 
-  // Load existing ratings (+ optional modules override) via fetch; failure → static mode.
+  cells.forEach(function(el) {
+    el.addEventListener("click", function(e) {
+      if (document.body.classList.contains("rating-static-mode")) return;
+      var id = el.dataset.modId;
+      if (e.ctrlKey) {
+        var v = prompt('Comment for "' + id + '"', notes[id] || "");
+        if (v === null) return;
+        notes[id] = v.trim();
+      } else {
+        var idx = ratingStates.indexOf(ratings[id] || "NA");
+        ratings[id] = ratingStates[(idx + 1) % ratingStates.length];
+      }
+      updateDisplay(el);
+      save();
+    });
+  });
+
+  // Existing ratings come from the rating server; a failed fetch means the report was
+  // opened as a plain file, so the row is greyed out instead of pretending to save.
   fetch(loadEndpoint)
     .then(function(r) { if (!r.ok) throw new Error("load failed"); return r.json(); })
     .then(function(data) {
-      if (data.modules) modulesByRun = data.modules;
       Object.assign(ratings, data.ratings || {});
       Object.assign(notes,   data.notes   || {});
-      buildBar();
+      cells.forEach(updateDisplay);
     })
     .catch(function() {
       document.body.classList.add("rating-static-mode");
-      buildBar();
     });
 
   function save() {
@@ -212,29 +236,11 @@ body.rating-static-mode #qc-rating-bar .qc-module {
     .catch(function() { alert("Network error while saving rating"); });
   }
 
-  var indexContainer = document.querySelector("#qc-rating-index");
-  var barContainer   = document.querySelector("#qc-rating-bar");
-  var lockIndex = false, lockBar = false;
-
-  indexContainer.addEventListener("scroll", function() {
-    if (!lockIndex) {
-      lockBar = true;
-      barContainer.scrollLeft = indexContainer.scrollLeft;
-      setTimeout(function() { lockBar = false; }, 10);
-    }
-  });
-  barContainer.addEventListener("scroll", function() {
-    if (!lockBar) {
-      lockIndex = true;
-      indexContainer.scrollLeft = barContainer.scrollLeft;
-      setTimeout(function() { lockIndex = false; }, 10);
-    }
-  });
-  indexContainer.addEventListener("wheel", function(e) {
-    if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) {
-      e.preventDefault();
-      indexContainer.scrollLeft += e.deltaY * 0.5;
-    }
-  }, {passive: false});
+  function syncHeight() {
+    var bar = document.getElementById("qc-container");
+    document.documentElement.style.setProperty("--qc-topbar-h", bar.offsetHeight + "px");
+  }
+  syncHeight();
+  window.addEventListener("resize", syncHeight);
 })();
 </script>

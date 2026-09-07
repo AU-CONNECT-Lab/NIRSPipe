@@ -25,21 +25,6 @@
     th, td { border: 1px solid #ddd; padding: 0.35rem 0.7rem; text-align: left; }
     th { background: #f0f3f6; font-weight: 600; }
 
-    /* ---- top nav ---- */
-    #report-nav {
-      position: sticky; top: 0; z-index: 100;
-      background: #fff; border-bottom: 2px solid #2980b9;
-      padding: 0.4rem 2rem; display: flex; align-items: center;
-      gap: 0.25rem; flex-wrap: wrap; font-size: 0.85rem;
-      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
-    }
-    #report-nav a {
-      color: #2980b9; text-decoration: none; font-weight: 600;
-      padding: 0.2rem 0.55rem; border-radius: 3px;
-    }
-    #report-nav a:hover { background: #eaf3fb; }
-    .nav-sep { color: #ccc; padding: 0 0.2rem; }
-
     /* ---- header bar ---- */
     .page-header {
       display: flex; align-items: baseline; justify-content: space-between;
@@ -203,43 +188,52 @@
 </head>
 <body>
 
-{# Fallback modules: used in static mode and overridden by /load_ratings/<pid> when Flask serves. #}
-{% set _glm_module = [{"id": "GLM", "name": "GLM"}] if (mode == "glm") else [] %}
+{# One section list drives both rows of the top bar: the anchor links and the rating
+   pills under them. Rating ids carry the run label so a subject's runs do not share
+   a key in ratings.toml; hrefs stay the plain anchors used in the body. #}
+{% set _rk = ("__" ~ run_label) if run_label else "" %}
+{% set _nav = [
+  {"id": "Summary", "name": "Summary", "href": "#Final", "ratable": false},
+  {"sep": true},
+  {"id": "RawSignal" ~ _rk, "name": "Raw Signal", "href": "#RawSignal"},
+  {"id": "Signal" ~ _rk,    "name": "SCI/PSP",    "href": "#Signal"},
+  {"id": "Motion" ~ _rk,    "name": "Motion",     "href": "#Motion"},
+  {"id": "HbO_HbR" ~ _rk,   "name": "HbO/HbR",    "href": "#HbO_HbR"},
+] %}
+{% if mode != 'rest' %}
+  {% set _ = _nav.append({"id": "Epoch" ~ _rk, "name": "Epoch", "href": "#Epoch"}) %}
+{% endif %}
+{# three independent conditions, matching the body: glm --fc and denoise --fc draw the
+   FC panel too, and used to reach it with no nav entry #}
+{% if rest_alff_path %}
+  {% set _ = _nav.append({"id": "RestALFF" ~ _rk, "name": "ALFF/fALFF", "href": "#RestALFF"}) %}
+{% endif %}
+{% if rest_fc_path %}
+  {% set _ = _nav.append({"id": "RestFC" ~ _rk, "name": "FC", "href": "#RestFC"}) %}
+{% endif %}
+{% if glm_design_path or glm_activation_path %}
+  {% set _ = _nav.append({"id": "GLM" ~ _rk, "name": "GLM", "href": "#GLM"}) %}
+{% endif %}
+{% set _ = _nav.append({"sep": true}) %}
+{% set _ = _nav.append({"id": "Metrics", "name": "Metrics", "href": "#Metrics", "ratable": false}) %}
+{% if channel_summary_path %}
+  {% set _ = _nav.append({"id": "ChannelSummary" ~ _rk, "name": "Ch. Summary", "href": "#ChannelSummary"}) %}
+{% endif %}
+{% set _ = _nav.append({"id": "Errors",     "name": "Errors",     "href": "#Errors",     "ratable": false}) %}
+{% set _ = _nav.append({"id": "Provenance", "name": "Provenance", "href": "#Provenance", "ratable": false}) %}
+{% set _ = _nav.append({"id": "Methods",    "name": "Methods",    "href": "#Methods",    "ratable": false}) %}
+{% if index_href %}
+  {% set _ = _nav.append({"sep": true}) %}
+  {% set _ = _nav.append({"id": "AllRuns", "name": "← All runs", "href": index_href, "ratable": false}) %}
+{% endif %}
+
 {% set rating_subject = "sub-" ~ subject %}
-{% set rating_modules = [[
-  {"id": "Signal", "name": "Signal"},
-  {"id": "Motion", "name": "Motion"},
-  {"id": "HbO_HbR", "name": "HbO HbR"},
-] + _glm_module + [
-  {"id": "Final", "name": "Final"},
-]] %}
+{% set rating_modules = [_nav] %}
+{% set rating_pinned = [{"id": "Final" ~ _rk, "name": "FINAL", "href": "#Final"}] %}
+{% set rating_chip = "sub-" ~ subject %}
 {% set rating_save_endpoint = "/save_ratings" %}
 {% set rating_load_endpoint = "/load_ratings/sub-" ~ subject %}
 {% include "_rating_bar.html.j2" %}
-
-<!-- ================================================================ top nav -->
-<nav id="report-nav">
-  <a href="#Final">Summary</a>
-  <a href="#Metrics">Metrics</a>
-  <span class="nav-sep">|</span>
-  <a href="#RawSignal">Raw Signal</a>
-  <a href="#Signal">SCI/PSP</a>
-  <a href="#Motion">Motion</a>
-  <a href="#HbO_HbR">HbO/HbR</a>
-  {% if mode != 'rest' %}<a href="#Epoch">Epoch</a>{% endif %}
-  {# three independent conditions, matching the body: glm --fc and denoise --fc draw the
-     FC panel too, and used to reach it with no nav entry #}
-  {% if rest_alff_path %}<a href="#RestALFF">ALFF/fALFF</a>{% endif %}
-  {% if rest_fc_path %}<a href="#RestFC">FC</a>{% endif %}
-  {% if glm_design_path or glm_activation_path %}<a href="#GLM">GLM</a>{% endif %}
-  <span class="nav-sep">|</span>
-  <a href="#Metrics">Metrics</a>
-  {% if channel_summary_path %}<a href="#ChannelSummary">Ch. Summary</a>{% endif %}
-  <a href="#Errors">Errors</a>
-  <a href="#Provenance">Provenance</a>
-  <a href="#Methods">Methods</a>
-  {% if index_href %}<span class="nav-sep">|</span><a href="{{ index_href }}">&larr; All runs</a>{% endif %}
-</nav>
 
 <!-- ================================================================ header -->
 <div class="page-header">

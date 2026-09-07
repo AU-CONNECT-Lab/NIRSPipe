@@ -47,8 +47,9 @@ select#ch-select {
 {% set rating_modules = [[
   {"id": "Signal_Quality", "name": "Signal Quality"},
   {"id": "Coherence", "name": "Coherence"},
-  {"id": "Final", "name": "Final"},
 ]] %}
+{% set rating_pinned = [{"id": "Final", "name": "FINAL"}] %}
+{% set rating_chip = "group-" ~ group_id %}
 {% set rating_save_endpoint = "/save_hyper_ratings" %}
 {% set rating_load_endpoint = "/load_hyper_ratings" %}
 {% include "_rating_bar.html.j2" %}

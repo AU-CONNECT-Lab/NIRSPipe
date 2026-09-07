@@ -8,13 +8,9 @@ from pathlib import Path
 
 from flask import Flask, jsonify, request, send_from_directory
 
-from fnirs_pipe.qc.rating.detect import detect_glm, detect_sessions
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("qc.rating")
-
-_SECTIONS        = ["Signal", "Motion", "HbO_HbR", "GLM", "Final"]
-_SECTIONS_NO_GLM = ["Signal", "Motion", "HbO_HbR", "Final"]
 
 
 def _utc_now_iso() -> str:
@@ -48,23 +44,6 @@ class FNIRSRatingApp:
         self.subjects = subjects
         self.app = Flask(__name__)
         self._setup_routes()
-
-    def _build_modules(self, subject: str) -> list[list[dict]]:
-        sessions = detect_sessions(self.output_dir, subject)
-        sections = _SECTIONS if detect_glm(self.output_dir, subject) else _SECTIONS_NO_GLM
-        groups = []
-        if sessions == [None]:
-            groups.append([
-                {"id": s, "name": s.replace("_", " ")}
-                for s in sections
-            ])
-        else:
-            for ses in sessions:
-                groups.append([
-                    {"id": f"{s}_ses-{ses}", "name": f"{s.replace('_', ' ')} s{ses}"}
-                    for s in sections
-                ])
-        return groups
 
     def _load_ratings(self, subject: str) -> dict:
         toml_path = (self.output_dir / f"sub-{subject}" / "figures"
@@ -116,11 +95,10 @@ class FNIRSRatingApp:
                 self.output_dir / f"sub-{pid}" / "nirs", filename
             )
 
+        # the report page owns its own module list: only it knows which panels were drawn
         @app.route("/load_ratings/sub-<pid>", methods=["GET"])
         def load_ratings(pid):
-            payload = self._load_ratings(pid)
-            payload["modules"] = self._build_modules(pid)
-            return jsonify(payload)
+            return jsonify(self._load_ratings(pid))
 
         @app.route("/save_ratings", methods=["POST"])
         def save_ratings():

@@ -114,9 +114,9 @@ select#run-select {
 {% set ns = namespace(modules=[]) %}
 {% for label in run_labels %}
   {% set _ = ns.modules.append([
-    {"id": label ~ "_Raw_Signal", "name": "Raw Signal"},
-    {"id": label ~ "_SCI_PSP",    "name": "SCI PSP"},
-    {"id": label ~ "_Final",      "name": "Final"},
+    {"id": label ~ "_Raw_Signal", "name": "Raw Signal", "href": false},
+    {"id": label ~ "_SCI_PSP",    "name": "SCI PSP",    "href": false},
+    {"id": label ~ "_Final",      "name": "FINAL",      "href": false},
   ]) %}
 {% endfor %}
 {% set rating_subject = stem %}
