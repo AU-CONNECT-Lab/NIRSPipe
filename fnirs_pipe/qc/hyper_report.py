@@ -7,21 +7,19 @@ from pathlib import Path
 
 import mne
 import pandas as pd
-from jinja2 import Environment, FileSystemLoader
 
 from fnirs_pipe.io.derivatives import group_data_dir, group_report_dir
 from fnirs_pipe.pipeline.hyperscanning import GroupEntry
+from fnirs_pipe.qc.boilerplate import collect_software_versions
 from fnirs_pipe.qc.boilerplate.vocabulary import metric_summary
 from fnirs_pipe.qc.figure_io import extract_markers, get_channel_pairs
 from fnirs_pipe.qc.figures.hyper_figures import _cond_colors
 from fnirs_pipe.qc.hyper_raw_writer import _process_hyper_raw_group
+from fnirs_pipe.qc.report_shell import footer_vars, guard, note, page_vars, render
 from fnirs_pipe.utils.lineage import path_from
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("qc.hyper_report")
-
-_TEMPLATE_DIR = Path(__file__).parent / "templates"
-_BASE_CSS     = (_TEMPLATE_DIR / "_base.css").read_text(encoding="utf-8")
 
 
 # ---- Per-subject quality metrics ----
@@ -131,6 +129,8 @@ def build_hyper_report(
     coherence_step_s: float = 5.0,
 ) -> Path:
     output_dir.mkdir(parents=True, exist_ok=True)
+    errors: list[str] = []
+    notes: list[str] = []
 
     meta = _process_hyper_raw_group(
         group_id=group_id, task=task, group=group,
@@ -141,6 +141,7 @@ def build_hyper_report(
         coherence_fmin=coherence_fmin, coherence_fmax=coherence_fmax,
         epoch_tmin=epoch_tmin, epoch_tmax=epoch_tmax,
         coherence_window_s=coherence_window_s, coherence_step_s=coherence_step_s,
+        errors=errors, notes=notes,
     )
 
     sci_per_subject = {
@@ -155,9 +156,21 @@ def build_hyper_report(
     output_path = (group_report_dir(output_dir, group_id)
                    / ("_".join(name_parts) + "_desc-hyperraw_nirs.html"))
 
-    env  = Environment(loader=FileSystemLoader(str(_TEMPLATE_DIR)), autoescape=False)
-    html = env.get_template("hyper_report.html.j2").render(
-        base_css=_BASE_CSS,
+    html = render(
+        "hyper_report.html.j2",
+        **page_vars(
+            title=f"fnirs-pipe Hyper Raw Report — {group_id} / {task}",
+            heading="fnirs‑pipe   Hyper Raw Report",
+            nav_meta=[("group", group_id), ("task", task),
+                      ("subjects", ", ".join(meta["subject_ids"]))],
+            nav_note=(f"SCI thr: {sci_threshold:.2f} • "
+                      f"Coh: {coherence_fmin:.3f}–{coherence_fmax:.3f} Hz"),
+        ),
+        **footer_vars(
+            scope=meta["label"], errors=errors, notes=notes,
+            nirs_dir=meta["sqm_dir"],
+            versions=collect_software_versions(),
+        ),
         group_id=group_id,
         task=task,
         subject_ids=meta["subject_ids"],
@@ -324,6 +337,10 @@ def build_hyper_post_report(
         compute_isc,
     )
 
+    errors: list[str] = []
+    notes: list[str] = []
+    scope = f"group-{group_id}_task-{task}"
+
     subject_ids  = [e.subject_id for e in group]
     ref_raw      = aligned_raws.get(subject_ids[0]) if subject_ids else None
     markers_list = extract_markers(ref_raw) if ref_raw else []
@@ -350,18 +367,16 @@ def build_hyper_post_report(
     def _write_band_tsv(result: "WTCResult | None", kind: str, step: str):
         if result is None or not result.pairs:
             return None
-        try:
+        df = None
+        with guard(f"WTC band mean ({kind})", errors, scope):
             df = wtc_band_mean(result, band_fmin, band_fmax, mask_coi=wtc_mask_coi)
-        except Exception as exc:
-            logger.warning("WTC band mean (%s) failed: %s", kind, exc)
+        if df is None:
             return None
         tsv_path = _write_df_tsv(df, kind, step)
         if wtc_save_maps:
             from fnirs_pipe.qc.wtc_store import save_wtc
-            try:
+            with guard(f"Saving WTC maps ({kind})", errors, scope):
                 save_wtc(result, tsv_path.with_suffix(".npz"))
-            except Exception as exc:
-                logger.warning("saving WTC maps (%s) failed: %s", kind, exc)
         logger.info("WTC band means saved: %s", tsv_path)
         return df
 
@@ -378,16 +393,15 @@ def build_hyper_post_report(
         return tsv_path
 
     def _safe_post(name: str, fn, *args):
-        try:
+        out = None
+        with guard(f"{name} figure", errors, scope):
             fig = fn(*args)
-            return fig.to_dict() if fig is not None else None
-        except Exception as exc:
-            logger.warning("%s figure failed: %s", name, exc)
-            return None
+            out = fig.to_dict() if fig is not None else None
+        return out
 
     # Compute WTC
     wtc_result: WTCResult | None = None
-    try:
+    with guard("WTC computation", errors, scope):
         if wtc_significance:
             logger.warning("WTC significance on: %d Monte Carlo surrogates per channel pair, "
                            "this is slow.", wtc_mc_count)
@@ -399,8 +413,6 @@ def build_hyper_post_report(
             aligned_raws, fmin=wtc_fmin, fmax=wtc_fmax, significance=wtc_significance,
             seed=wtc_seed, mc_count=wtc_mc_count, cross=wtc_channel_cross,
             limit_scales=wtc_limit_scales)
-    except Exception as exc:
-        logger.warning("WTC computation failed: %s", exc)
 
     chan_band_df = _write_band_tsv(wtc_result, "wtc", "hyper_wtc")
 
@@ -409,13 +421,11 @@ def build_hyper_post_report(
 
     chan_matrix_b64 = ""
     if wtc_channel_cross and chan_band_df is not None:
-        try:
+        with guard("WTC channel cross matrix", errors, scope):
             chan_labels = sorted({*chan_band_df["label"], *chan_band_df["label2"]})
             chan_matrix_b64 = build_wtc_cross_matrix(
                 chan_band_df, chan_labels, subject_ids, band_fmin, band_fmax,
                 kind="channel") or ""
-        except Exception as exc:
-            logger.warning("WTC channel cross matrix failed: %s", exc)
 
     # Build per-channel WTC figures
     ch_pairs_post: list[str] = get_channel_pairs(ref_raw) if ref_raw else []
@@ -435,7 +445,8 @@ def build_hyper_post_report(
 
     # Compute ISC panels (HbO and HbR)
     def _isc_panel(ch_type: str) -> str:
-        try:
+        panel = ""
+        with guard(f"ISC panel ({ch_type})", errors, scope):
             isc_mat, isc_ch_names = compute_isc(
                 aligned_raws, subject_ids, ch_type, bad_channels=bad_channels
             )
@@ -448,13 +459,11 @@ def build_hyper_post_report(
                 [p for p in (path_from(r) for r in aligned_raws.values()) if p],
                 subject_ids,
             )
-            return build_isc_panel(
+            panel = build_isc_panel(
                 isc_mat, isc_ch_names, subject_ids,
                 ch_type=ch_type, isc_threshold=isc_threshold,
             )
-        except Exception as exc:
-            logger.warning("ISC panel (%s) failed: %s", ch_type, exc)
-            return ""
+        return panel
 
     isc_panel_hbo_b64 = _isc_panel("hbo")
     isc_panel_hbr_b64 = _isc_panel("hbr")
@@ -475,21 +484,17 @@ def build_hyper_post_report(
         # the ROI number the WTC literature reports: coherence per channel pair, then averaged
         roi_band_df = None
         if chan_band_df is not None:
-            try:
+            with guard("ROI mean of channel WTC", errors, scope):
                 roi_band_df = roi_mean_of_channels(
                     chan_band_df, roi_map, min_channels=wtc_roi_min_channels)
                 path = _write_df_tsv(roi_band_df, "wtc-roichan", "hyper_wtc_roichan")
                 logger.info("WTC ROI means from channels saved: %s", path)
-            except Exception as exc:
-                logger.warning("ROI mean of channel WTC failed: %s", exc)
 
         # the maps grouped the same way, so the picture and the table are the same average
         roi_wtc: WTCResult | None = None
         if wtc_result is not None:
-            try:
+            with guard("ROI WTC maps from channels", errors, scope):
                 roi_wtc = roi_maps_from_channels(wtc_result, roi_map)
-            except Exception as exc:
-                logger.warning("ROI WTC maps from channels failed: %s", exc)
 
         roi_pair_key = next(iter(roi_wtc.pairs)) if roi_wtc and roi_wtc.pairs else None
         roi_labels   = list(roi_map.keys())
@@ -499,11 +504,9 @@ def build_hyper_post_report(
                 roi_band_df, roi_labels, subject_ids, band_fmin, band_fmax,
             )
         # drawn crossed or not: it is the only figure carrying the phase arrows
-        try:
+        with guard("WTC ROI map grid", errors, scope):
             roi_grid_b64 = build_wtc_roi_grid(
                 roi_wtc, roi_labels, roi_pair_key, subject_ids) or ""
-        except Exception as exc:
-            logger.warning("WTC ROI map grid failed: %s", exc)
         for roi_name in roi_labels:
             roi_fig = None
             if roi_wtc and roi_pair_key:
@@ -524,13 +527,16 @@ def build_hyper_post_report(
     if wtc_by_condition:
         windows = condition_windows(ref_raw, min_duration=1.0 / wtc_fmin) if ref_raw else []
         if not windows:
-            logger.warning("--wtc-by-condition: no annotation window survived; nothing to do")
+            note(notes, scope,
+                 "--wtc-by-condition asked for, but no annotation window is long enough "
+                 f"for one cycle of {wtc_fmin:.4f} Hz: no per-condition figures")
         else:
             logger.info("--wtc-by-condition: %d window(s), each a further WTC pass",
                         len(windows))
         chan_frames, roi_frames = [], []
         for label, tstart, tstop in windows:
-            try:
+            cond_chan = None
+            with guard(f"Condition {label}: WTC", errors, scope):
                 cropped = crop_aligned_window(aligned_raws, tstart, tstop)
                 cond_wtc = compute_wtc(
                     cropped, fmin=wtc_fmin, fmax=wtc_fmax, significance=wtc_significance,
@@ -538,8 +544,7 @@ def build_hyper_post_report(
                     limit_scales=wtc_limit_scales)
                 cond_chan = wtc_band_mean(cond_wtc, band_fmin, band_fmax,
                                           mask_coi=wtc_mask_coi)
-            except Exception as exc:
-                logger.warning("condition %s: WTC failed: %s", label, exc)
+            if cond_chan is None:
                 continue
 
             cond_chan.insert(0, "condition", label)
@@ -548,30 +553,24 @@ def build_hyper_post_report(
             entry: dict = {"label": label, "tstart": round(tstart, 1),
                            "tstop": round(tstop, 1), "matrix": "", "grid": ""}
             if wtc_channel_cross:
-                try:
+                with guard(f"Condition {label}: channel matrix", errors, scope):
                     ch_labels = sorted({*cond_chan["label"], *cond_chan["label2"]})
                     entry["matrix"] = build_wtc_cross_matrix(
                         cond_chan, ch_labels, subject_ids, band_fmin, band_fmax,
                         kind="channel") or ""
-                except Exception as exc:
-                    logger.warning("condition %s: channel matrix failed: %s", label, exc)
 
             if roi_map:
-                try:
+                with guard(f"Condition {label}: ROI means", errors, scope):
                     cond_roi = roi_mean_of_channels(
                         cond_chan.drop(columns="condition"), roi_map,
                         min_channels=wtc_roi_min_channels)
                     cond_roi.insert(0, "condition", label)
                     roi_frames.append(cond_roi)
-                except Exception as exc:
-                    logger.warning("condition %s: ROI means failed: %s", label, exc)
-                try:
+                with guard(f"Condition {label}: ROI grid", errors, scope):
                     cond_roi_wtc = roi_maps_from_channels(cond_wtc, roi_map)
                     key = next(iter(cond_roi_wtc.pairs), None)
                     entry["grid"] = build_wtc_roi_grid(
                         cond_roi_wtc, list(roi_map), key, subject_ids) or ""
-                except Exception as exc:
-                    logger.warning("condition %s: ROI grid failed: %s", label, exc)
 
             condition_figs.append(entry)
 
@@ -596,9 +595,36 @@ def build_hyper_post_report(
     output_path = (group_report_dir(output_dir, group_id)
                    / f"group-{group_id}_task-{task}_hyper-post.html")
 
-    env  = Environment(loader=FileSystemLoader(str(_TEMPLATE_DIR)), autoescape=False)
-    html = env.get_template("hyper_post_report.html.j2").render(
-        base_css=_BASE_CSS,
+    # Rendered here rather than by the caller: every sidecar the scan reads was written by
+    # the passes above, so this is the first moment the graph is complete. Same stem
+    # `fnirs-qc provenance` uses, so re-running that refreshes the image this report links.
+    provenance_path = None
+    with guard("Provenance diagram", errors, scope):
+        from fnirs_pipe.qc.provenance import write_provenance
+
+        for written in write_provenance(
+            group_data_dir(output_dir, group_id),
+            group_report_dir(output_dir, group_id) / "figures",
+            stem="provenance", title=f"group-{group_id}_task-{task}",
+        ):
+            if written.suffix == ".png":
+                provenance_path = f"figures/{written.name}"
+
+    html = render(
+        "hyper_post_report.html.j2",
+        **page_vars(
+            title=f"fnirs-pipe Hyper Post Report — {group_id} / {task}",
+            heading="fnirs‑pipe   Hyper Post Report",
+            nav_meta=[("group", group_id), ("task", task),
+                      ("subjects", ", ".join(subject_ids))],
+            nav_note=f"WTC: {wtc_fmin:.3f}–{wtc_fmax:.3f} Hz",
+        ),
+        **footer_vars(
+            scope=f"group-{group_id}_task-{task}", errors=errors, notes=notes,
+            nirs_dir=group_data_dir(output_dir, group_id),
+            provenance_path=provenance_path,
+            versions=collect_software_versions(),
+        ),
         group_id=group_id,
         task=task,
         subject_ids=subject_ids,

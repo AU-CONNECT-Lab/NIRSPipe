@@ -7,8 +7,8 @@ import json
 from pathlib import Path
 
 import pandas as pd
-from jinja2 import Environment, FileSystemLoader
 
+from fnirs_pipe.qc.boilerplate import collect_software_versions
 from fnirs_pipe.qc.figure_io import _save_figure_html
 from fnirs_pipe.qc.figures.group_figures import (
     build_grouped_boxes,
@@ -17,6 +17,7 @@ from fnirs_pipe.qc.figures.group_figures import (
     detect_outliers,
     group_metrics,
 )
+from fnirs_pipe.qc.report_shell import footer_vars, page_vars, render
 from fnirs_pipe.qc.sqm_record import OPTIONAL_SECTIONS, SECTIONS
 from fnirs_pipe.utils.logging import get_logger
 
@@ -45,8 +46,6 @@ _WINDOWED_METRICS = [
 
 logger = get_logger("qc.group_writer")
 
-_TEMPLATE_DIR = Path(__file__).parent / "templates"
-_BASE_CSS     = (_TEMPLATE_DIR / "_base.css").read_text(encoding="utf-8")
 
 
 def _warn_on_mixed_windows(rows: list) -> None:
@@ -206,9 +205,14 @@ def _render_group(
 
     outliers = detect_outliers(df, metric_cols) if metric_cols else {}
 
-    env  = Environment(loader=FileSystemLoader(str(_TEMPLATE_DIR)), autoescape=False)
-    html = env.get_template(template_name).render(
-        base_css=_BASE_CSS,
+    html = render(
+        template_name,
+        **page_vars(
+            title=title,
+            heading=title,
+            nav_meta=[("rows", len(df)), ("metrics", len(metric_cols))],
+        ),
+        **footer_vars(scope=out_stem, versions=collect_software_versions()),
         title=title,
         n_rows=len(df),
         n_metrics=len(metric_cols),

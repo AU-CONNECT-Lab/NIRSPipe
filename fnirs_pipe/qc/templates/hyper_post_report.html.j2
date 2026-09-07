@@ -1,30 +1,18 @@
+{% extends "_report_base.html.j2" %}
 {% from "_macros.html.j2" import card, subject_metrics %}
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8"/>
-<title>fnirs-pipe Hyper Post Report — {{ group_id }} / {{ task }}</title>
-<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
-<style>
-{{ base_css }}
 
+{% block head_extra %}
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+{%- endblock %}
+
+{% block css %}
 select#ch-select-post {
   font-size: 0.78rem; border: 1px solid #ced4da; border-radius: 4px;
   padding: 0.15rem 0.35rem; background: #fff; margin-left: auto; max-width: 220px;
 }
-</style>
-</head>
-<body>
+{% endblock %}
 
-<nav id="qc-nav">
-  <h1>fnirs&#8209;pipe &nbsp; Hyper Post Report</h1>
-  <span class="nav-meta">group: <b>{{ group_id }}</b></span>
-  <span class="nav-meta">task: <b>{{ task }}</b></span>
-  <span class="nav-meta">subjects: <b>{{ subject_ids | join(", ") }}</b></span>
-  <span class="nav-meta" style="margin-left:auto">
-    WTC: {{ "%.3f"|format(wtc_fmin) }}–{{ "%.3f"|format(wtc_fmax) }} Hz
-  </span>
-</nav>
+{% block content %}
 
 <!-- Alignment table -->
 {% call card("Time Alignment", hint="crop offset from first shared trigger &bull; all recordings trimmed to shortest") %}
@@ -270,9 +258,4 @@ window.addEventListener("DOMContentLoaded", function() {
 });
 </script>
 
-{# TODO: add Methods section with boilerplate tabs (Rendered/Plain/Markdown/LaTeX),
-   mirroring subject_report.html.j2. Needs post-pipeline config (bandpass, WTC band,
-   ISC params) passed through to generate_methods_text. #}
-
-</body>
-</html>
+{% endblock %}

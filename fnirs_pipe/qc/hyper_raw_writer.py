@@ -28,6 +28,7 @@ from fnirs_pipe.qc.figures.hyper_figures import (
     compute_hyper_sqm,
     compute_windowed_coherence,
 )
+from fnirs_pipe.qc.report_shell import guard, note
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("qc.hyper_raw_writer")
@@ -53,9 +54,18 @@ def _process_hyper_raw_group(
     epoch_tmax: float = 25.0,
     coherence_window_s: float = 30.0,
     coherence_step_s: float = 5.0,
+    errors: list | None = None,
+    notes: list | None = None,
 ) -> dict:
     """Compute hyper raw figures, save each as a standalone HTML, write SQM JSON.
-    Returns the metadata dict the main viewer HTML needs."""
+
+    Returns the metadata dict the main viewer HTML needs. A panel that fails goes into
+    ``errors`` and a panel the dyad does not carry into ``notes``, both of which the
+    report's footer prints, so a missing figure is visible in the report and not only in
+    the run log.
+    """
+    errors = errors if errors is not None else []
+    notes  = notes  if notes  is not None else []
 
     label_parts = [f"group-{group_id}"]
     if session:
@@ -84,27 +94,23 @@ def _process_hyper_raw_group(
         for sid in subject_ids
     ]
 
-    try:
+    windowed_coh_df = pd.DataFrame()
+    with guard("Windowed coherence", errors, label):
         windowed_coh_df = compute_windowed_coherence(
             aligned_raws, coherence_fmin, coherence_fmax,
             window_s=coherence_window_s, step_s=coherence_step_s,
         )
-    except Exception as exc:
-        logger.warning("windowed coherence failed: %s", exc)
-        windowed_coh_df = pd.DataFrame()
 
     figure_paths: dict = {}
 
     def _safe_save(name: str, desc: str, fn, *args) -> None:
-        try:
+        with guard(f"{name} figure", errors, label):
             fig = fn(*args)
             if fig is None:
                 return
             fname = f"{label}_desc-{desc}_nirs.html"
             h = _save_figure_html(fig, fig_dir / fname)
             figure_paths[name] = {"src": f"figures/{fname}", "h": h}
-        except Exception as exc:
-            logger.warning("%s figure failed: %s", name, exc)
 
     if raw_raws:
         _safe_save("trigger_timeline_raw", "triggerraw",
@@ -121,8 +127,11 @@ def _process_hyper_raw_group(
                build_channel_summary, sqm_data, subject_ids, sci_threshold)
 
     ch_pairs: list[str] = get_channel_pairs(first_raw) if first_raw else []
+    if not ch_pairs:
+        note(notes, label, "no channel pairs on the aligned recordings: "
+                           "the per-channel panel is empty")
     for pair in ch_pairs:
-        try:
+        with guard(f"Channel {pair}", errors, label):
             trace_fig = build_signal_overlay_pair(
                 aligned_raws, subject_ids, pair, markers_list, cond_colors_,
             )
@@ -137,8 +146,6 @@ def _process_hyper_raw_group(
             _save_multi_fig_html(
                 [trace_fig, psd_fig, epoch_fig], fig_dir / fname,
             )
-        except Exception as exc:
-            logger.warning("channel %s figure failed: %s", pair, exc)
 
     if ch_pairs:
         figure_paths["ch_detail_template"] = (
@@ -154,6 +161,8 @@ def _process_hyper_raw_group(
 
     return {
         "subject_ids":   subject_ids,
+        "label":         label,
+        "sqm_dir":       sqm_dir,
         "alignment":     alignment_rows,
         "sqm":           sqm,
         "ch_pairs":      ch_pairs,

@@ -1,0 +1,55 @@
+{# The document every QC report is rendered into.
+
+   A report template extends this and fills {% block content %}. The shell owns the head,
+   the nav bar, the rating bar, the footer (errors / provenance / methods / versions) and
+   the tab script, so a report cannot be written that quietly lacks them.
+
+   Head and nav variables come from qc.report_shell.page_vars, footer variables from
+   qc.report_shell.footer_vars. Setting rating_modules (see _rating_bar.html.j2) is what
+   puts a rating bar on the page.
+
+   Blocks:
+     head_extra  extra tags inside <head>, e.g. a CDN script
+     css         report-specific CSS, appended after base_css
+     header      the whole nav bar, for a report that wants a different one
+     nav_extra   extra elements at the end of the default nav bar
+     content     the report itself
+     footer      the four closing sections; override with an empty block to drop them
+     scripts     the report's own <script> blocks
+#}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<title>{{ page_title }}</title>
+{%- block head_extra %}{% endblock %}
+<style>
+{{ base_css }}
+{% block css %}{% endblock %}
+</style>
+</head>
+<body>
+
+{% if rating_modules %}{% include "_rating_bar.html.j2" %}{% endif %}
+
+{% block header %}
+<nav id="qc-nav">
+  <h1>{{ page_heading }}</h1>
+  {%- for label, value in nav_meta or [] %}
+  <span class="nav-meta">{{ label }}: <b>{{ value }}</b></span>
+  {%- endfor %}
+  {%- if nav_note %}
+  <span class="nav-meta" style="margin-left:auto">{{ nav_note }}</span>
+  {%- endif %}
+  {%- block nav_extra %}{% endblock %}
+</nav>
+{% endblock %}
+
+{% block content %}{% endblock %}
+
+{% block footer %}{% include "_footer.html.j2" %}{% endblock %}
+
+{% block scripts %}{% endblock %}
+
+</body>
+</html>

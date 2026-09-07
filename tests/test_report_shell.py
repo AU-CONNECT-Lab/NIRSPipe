@@ -1,0 +1,163 @@
+"""The page shell every QC report is rendered into.
+
+`_report_base.html.j2` owns the document and `_footer.html.j2` owns the four closing
+sections, so a report gets its head, nav, rating bar, errors block, provenance table,
+Methods tabs and version table without writing any of them. This file is the guard on that
+arrangement, and it exists because both halves of it fail quietly:
+
+- A report template that stops extending the base still renders. It just renders a
+  fragment with no `<html>`, which a browser will happily show.
+- `footer_vars` decides which of the four sections appear by which keys it returns. Drop a
+  key and the section vanishes with no error anywhere.
+"""
+
+import re
+from pathlib import Path
+
+import pytest
+from jinja2 import ChainableUndefined, Environment, FileSystemLoader
+
+from fnirs_pipe.qc.report_shell import (
+    BASE_CSS,
+    TEMPLATE_DIR,
+    footer_vars,
+    guard,
+    note,
+    page_vars,
+    stylesheet,
+)
+
+# Every report template, i.e. every .html.j2 that is not a partial (partials are named
+# with a leading underscore and are included rather than rendered).
+REPORT_TEMPLATES = sorted(
+    p.name for p in TEMPLATE_DIR.glob("*.html.j2") if not p.name.startswith("_")
+)
+
+METHODS = {"html": "<p>M</p>", "plain": "M", "markdown": "M", "latex": "M"}
+
+
+@pytest.fixture
+def env():
+    # the shell is what is under test, not whether a caller passed every panel variable
+    return Environment(loader=FileSystemLoader(str(TEMPLATE_DIR)), autoescape=False,
+                       undefined=ChainableUndefined)
+
+
+# ---- the shell is not optional ----
+
+def test_every_report_template_extends_the_shell():
+    assert REPORT_TEMPLATES, "no report templates found; the glob or the directory moved"
+    for name in REPORT_TEMPLATES:
+        first = (TEMPLATE_DIR / name).read_text(encoding="utf-8").lstrip().splitlines()[0]
+        assert first == '{% extends "_report_base.html.j2" %}', (
+            f"{name} does not extend the shell, so it renders without a document"
+        )
+
+
+def test_no_report_template_opens_its_own_document():
+    for name in REPORT_TEMPLATES:
+        text = (TEMPLATE_DIR / name).read_text(encoding="utf-8")
+        for tag in ("<!DOCTYPE", "<html", "<head>", "<body>"):
+            assert tag not in text, f"{name} still carries its own {tag}"
+
+
+def test_no_report_template_writes_the_footer_itself():
+    # the four section ids belong to _footer.html.j2 alone; a second copy would render twice
+    for name in REPORT_TEMPLATES:
+        text = (TEMPLATE_DIR / name).read_text(encoding="utf-8")
+        for section in ('id="Errors"', 'id="Provenance"', 'id="Methods"', 'id="Versions"'):
+            assert section not in text, f"{name} duplicates the footer's {section}"
+
+
+# ---- footer_vars decides which sections appear ----
+
+def test_an_absent_key_drops_its_section(env):
+    html = env.get_template("group_report.html.j2").render(
+        **page_vars(title="T", heading="T"),
+        **footer_vars(versions={"fnirs-pipe": "0.1"}),
+    )
+    assert 'id="Versions"' in html
+    for absent in ('id="Errors"', 'id="Provenance"', 'id="Methods"'):
+        assert absent not in html
+
+
+def test_an_empty_errors_list_still_prints_the_section(env):
+    # "no errors" is a result, unlike a section the report has nothing to say about
+    html = env.get_template("group_report.html.j2").render(
+        **page_vars(title="T", heading="T"), **footer_vars(errors=[]),
+    )
+    assert 'id="Errors"' in html
+    assert "No errors or warnings." in html
+
+
+def test_methods_tabs_appear_with_their_script(env):
+    html = env.get_template("group_report.html.j2").render(
+        **page_vars(title="T", heading="T"), **footer_vars(methods=METHODS),
+    )
+    for tab in ("tab-rendered", "tab-plain", "tab-md", "tab-latex"):
+        assert f'id="{tab}"' in html
+    assert "function showTab" in html, "the tabs render with nothing to switch them"
+
+
+def test_a_tree_with_no_sidecars_gets_no_provenance_section(tmp_path):
+    assert "provenance_rows" not in footer_vars(nirs_dir=tmp_path)
+
+
+def test_a_diagram_alone_is_enough_for_the_section(tmp_path):
+    out = footer_vars(nirs_dir=tmp_path, provenance_path="figures/provenance.png")
+    assert out["provenance_rows"] == []
+    assert out["provenance_path"] == "figures/provenance.png"
+
+
+# ---- error and note collection ----
+
+def test_guard_records_the_failure_and_lets_the_report_continue():
+    errors = []
+    with guard("Brain views", errors, "sub-01"):
+        raise ValueError("no head coordinates")
+    assert errors == ["Brain views: no head coordinates"]
+
+
+def test_the_same_failure_on_every_channel_collapses_to_one_line():
+    errors = ["Channel figure: bad", "Channel figure: bad", "Other: x"]
+    out = footer_vars(errors=errors)["errors"]
+    assert out == ["Channel figure: bad (x2)", "Other: x"]
+
+
+def test_notes_are_kept_apart_from_errors():
+    notes = []
+    note(notes, "sub-01", "no epochs: the run carries no events")
+    out = footer_vars(errors=[], notes=notes)
+    assert out["errors"] == []
+    assert out["notes"] == notes
+
+
+# ---- stylesheets ----
+
+def test_the_subject_report_replaces_the_dashboard_stylesheet():
+    subject = stylesheet("subject.css")
+    assert subject != BASE_CSS
+    # the dashboard ground colour reaching a document report is the visible symptom of
+    # the two sheets being concatenated instead of one replacing the other
+    assert "#f5f7fa" not in subject
+
+
+def test_the_footer_styles_ship_with_the_shell():
+    for cls in (".tab-btn", ".boilerplate-html", ".error-list", ".note-list",
+                ".report-footer"):
+        assert cls in BASE_CSS, f"{cls} is used by the footer and styled nowhere"
+
+
+def test_the_document_reports_style_the_footer_too():
+    subject = stylesheet("subject.css")
+    for cls in (".tab-btn", ".boilerplate-html", ".error-list", ".note-list"):
+        assert cls in subject, f"{cls} is unstyled in the subject report"
+
+
+def test_the_index_shares_the_subject_stylesheet():
+    # the index used to carry a near-copy of the subject report's CSS; only the rules that
+    # differ belong in its own block, and a block this long means they have re-forked
+    text = (TEMPLATE_DIR / "subject_index.html.j2").read_text(encoding="utf-8")
+    block = re.search(r"{% block css %}(.*?){% endblock %}", text, re.S)
+    assert block, "the index defines no css block; check it still loads subject.css"
+    assert len(block.group(1).strip().splitlines()) < 40

@@ -14,17 +14,14 @@ from __future__ import annotations
 import csv
 import json
 import statistics
-from datetime import date
 from pathlib import Path
 
-from jinja2 import Environment, FileSystemLoader
-
 from fnirs_pipe.qc.boilerplate import collect_software_versions
+from fnirs_pipe.qc.report_shell import footer_vars, page_vars, render, stylesheet
 from fnirs_pipe.qc.sqm_record import entities_of
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("qc.subject_index")
-_TEMPLATE_DIR = Path(__file__).parent / "templates"
 
 # Column -> (heading, "section_metric" keys in preference order, format spec). The five that
 # say whether a run is usable at a glance; everything else stays in the run's own report.
@@ -224,8 +221,14 @@ def write_subject_index(
         logger.warning("sub-%s | no SQM records found, index not written", subject)
         return None
 
-    env = Environment(loader=FileSystemLoader(str(_TEMPLATE_DIR)), autoescape=False)
-    html = env.get_template("subject_index.html.j2").render(
+    html = render(
+        "subject_index.html.j2",
+        **page_vars(
+            title=f"fnirs-pipe QC — sub-{subject}",
+            heading=f"fnirs-pipe QC — sub-{subject}",
+            css=stylesheet("subject.css"),
+        ),
+        **footer_vars(versions=collect_software_versions()),
         subject=subject,
         rows=rows,
         channels=collect_bad_channels(sub_dir, [r["label"] for r in rows]),
@@ -233,8 +236,6 @@ def write_subject_index(
         outlier_z=_OUTLIER_Z,
         run_command=run_command,
         mode=mode or "",
-        run_date=date.today().isoformat(),
-        versions=collect_software_versions(),
     )
     out_path = sub_dir / f"sub-{subject}_qc.html"
     out_path.write_text(html, encoding="utf-8")

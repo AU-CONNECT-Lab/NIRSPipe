@@ -1,0 +1,98 @@
+{# Errors, provenance, methods and software versions: the four sections every QC report
+   closes with. Included by _report_base.html.j2.
+
+   Variables come from qc.report_shell.footer_vars. A section whose variable is absent is
+   skipped, so a report can carry three of the four and the page still reads straight.
+#}
+<section class="report-footer">
+
+{% if errors is defined %}
+<h2 id="Errors">Errors &amp; Warnings</h2>
+{% if notes %}
+  <p class="section-hint" style="margin-bottom:0.35rem;">
+    Sections this run left out on purpose, because the data does not carry what they need.
+    Not failures.
+  </p>
+  <ul class="note-list">
+    {% for n in notes %}<li>{{ n }}</li>{% endfor %}
+  </ul>
+{% endif %}
+{% if errors %}
+  <ul class="error-list">
+    {% for e in errors %}<li>{{ e }}</li>{% endfor %}
+  </ul>
+{% else %}
+  <p class="no-errors">No errors or warnings.</p>
+{% endif %}
+{% endif %}
+
+{% if provenance_rows is defined or provenance_path is defined %}
+<h2 id="Provenance">Provenance</h2>
+<p class="section-hint">
+  Every file this run wrote, the step that produced it, the settings that step used, and
+  the channels / sampling rate / duration left behind at each point. Rebuilt from the JSON
+  sidecars in <code>nirs/</code>, so it reports what ran, not what was requested.
+</p>
+{% if provenance_path %}
+  <img class="responsive" src="{{ provenance_path }}" alt="File provenance graph" />
+  <p class="fig-path">{{ provenance_path }} &bull; mermaid source: {{ provenance_path[:-4] }}.mmd</p>
+{% else %}
+  <div class="placeholder">
+    Diagram not rendered. Regenerate with <code>fnirs-qc provenance OUTPUT_DIR</code>.
+  </div>
+{% endif %}
+
+{% if provenance_rows %}
+<table>
+  <tr><th>Output</th><th>Step</th><th>What it did</th><th>Settings</th></tr>
+  {% for row in provenance_rows %}
+  <tr>
+    <td><code>{{ row.name }}</code></td>
+    <td><code>{{ row.step }}</code></td>
+    <td>{{ row.what }}</td>
+    <td>{{ row.settings }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% endif %}
+{% endif %}
+
+{% if methods %}
+<h2 id="Methods">Methods</h2>
+<p class="section-hint">
+  Auto-generated from what the run recorded. Citations follow APA 7;
+  switch tabs to copy as Markdown or LaTeX.
+</p>
+
+<div class="tab-bar">
+  <button class="tab-btn active" onclick="showTab(event,'tab-rendered')">Rendered</button>
+  <button class="tab-btn" onclick="showTab(event,'tab-plain')">Plain text</button>
+  <button class="tab-btn" onclick="showTab(event,'tab-md')">Markdown</button>
+  <button class="tab-btn" onclick="showTab(event,'tab-latex')">LaTeX</button>
+</div>
+<div id="tab-rendered" class="tab-content active"><div class="boilerplate-html">{{ methods.html }}</div></div>
+<div id="tab-plain"    class="tab-content"><pre>{{ methods.plain }}</pre></div>
+<div id="tab-md"       class="tab-content"><pre>{{ methods.markdown }}</pre></div>
+<div id="tab-latex"    class="tab-content"><pre>{{ methods.latex }}</pre></div>
+
+<script>
+function showTab(event, id) {
+  document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  event.target.classList.add('active');
+}
+</script>
+{% endif %}
+
+{% if versions %}
+<h2 id="Versions">Software Versions</h2>
+<table style="max-width:400px;">
+  <tr><th>Package</th><th>Version</th></tr>
+  {% for pkg, ver in versions.items() %}
+  <tr><td>{{ pkg }}</td><td>{{ ver }}</td></tr>
+  {% endfor %}
+</table>
+{% endif %}
+
+</section>

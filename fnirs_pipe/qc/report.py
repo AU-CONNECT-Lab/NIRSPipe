@@ -56,13 +56,11 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
-from datetime import date
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import mne
 import mne.io
-from jinja2 import Environment, FileSystemLoader
 
 from fnirs_pipe.qc.boilerplate import collect_software_versions, generate_methods_text
 from fnirs_pipe.qc.channel_table import (
@@ -74,7 +72,7 @@ from fnirs_pipe.qc.figure_io import (
     _figure_height, _pair_fname, _save_multi_fig_html,
     extract_markers, get_channel_pairs,
 )
-from fnirs_pipe.qc.metrics import gvtd_channel_picks
+from fnirs_pipe.qc.metrics import SCI_PASS, gvtd_channel_picks
 from fnirs_pipe.qc.figures import (
     build_trigger_timeline_single,
     condition_colors,
@@ -105,6 +103,9 @@ from fnirs_pipe.qc.figures import (
     fc_seed_topo_figure,
     fc_connectogram,
 )
+from fnirs_pipe.qc.report_shell import (
+    footer_vars, guard, note, page_vars, render, stylesheet,
+)
 from fnirs_pipe.qc.sqm_record import record_path as _sqm_record_path
 from fnirs_pipe.qc.trial_qc import score_trials
 from fnirs_pipe.utils.logging import get_logger
@@ -113,31 +114,23 @@ if TYPE_CHECKING:
     from fnirs_pipe.pipeline.prep_pipeline import PrepConfig
 
 logger = get_logger("qc.report")
-_TEMPLATE_DIR = Path(__file__).parent / "templates"
 
 
 # ---------------------------------------------------------------------------
 # Error-handling helper
 # ---------------------------------------------------------------------------
+#
+# Thin wrappers over the shared recorders, kept because every section in this file passes
+# the bare subject id rather than the scope string the shell logs under.
 
 @contextmanager
 def _guard(label: str, errors: list, subject: str):
-    try:
+    with guard(label, errors, f"sub-{subject}"):
         yield
-    except Exception as e:
-        errors.append(f"{label}: {e}")
-        logger.exception("sub-%s | %s failed", subject, label)
 
 
 def _note(notes: list, subject: str, message: str) -> None:
-    """Record something the report leaves out on purpose.
-
-    Kept apart from the errors list: a section skipped because the run does not carry what
-    it needs is a property of the data, not a failure, and it reads as one in the report and
-    in the run log. The caller decides what is worth a note; nothing here is fatal.
-    """
-    notes.append(message)
-    logger.info("sub-%s | %s", subject, message)
+    note(notes, f"sub-{subject}", message)
 
 
 # ---- Epoching gate ----
@@ -168,34 +161,6 @@ def _no_epoch_reason(raw_haemo: mne.io.Raw) -> "str | None":
 # ---------------------------------------------------------------------------
 # Serialisation helpers
 # ---------------------------------------------------------------------------
-
-def _section_provenance(nirs_dir: Path, mode: str | None, subject: str, errors: list,
-                        label: str | None = None) -> dict:
-    """One row per output: what it is, what made it, and what that step did.
-
-    The diagram carries the topology; this carries the narrative, which does not fit in a
-    node box. Both come from the same sidecars.
-    """
-    rows: list[dict] = []
-    with _guard("Provenance table", errors, subject):
-        from fnirs_pipe.qc.boilerplate.generate import step_sentence
-        from fnirs_pipe.qc.provenance import scan
-
-        seen: set[tuple] = set()
-        for node in sorted(scan(nirs_dir, label=label).values(), key=lambda n: (n.depth, n.label)):
-            if not node.step:
-                continue
-            row = (node.label, node.step,
-                   step_sentence(node.step, node.params, mode),
-                   node.detail.replace("\n", " "))
-            # only bites when no label was given and the scan spans several tasks, which
-            # repeat every step with the same settings
-            if row in seen:
-                continue
-            seen.add(row)
-            rows.append(dict(zip(("name", "step", "what", "settings"), row)))
-    return {"provenance_rows": rows}
-
 
 def _fig_href(figures_dir: Path, name: str) -> str:
     """URL of a figure as the report must link to it, the report sitting above ``figures/``.
@@ -305,7 +270,7 @@ def _section_sci(
     with _guard("SCI/PSP panel", errors, subject):
         fig = build_sci_psp_figure(
             sci_scores, psp_per_ch, set(bad_channels),
-            sci_threshold=getattr(config, "sci_threshold", 0.75),
+            sci_threshold=getattr(config, "sci_threshold", SCI_PASS),
             sci_matrix=sci_scores_matrix,
             sci_win_times=sci_win_times,
             psp_matrix=psp_scores_matrix,
@@ -657,7 +622,7 @@ def _section_trial_qc(
     with _guard("Per-trial quality", errors, subject):
         labels, sqms = score_trials(
             raw_intensity, extract_markers(raw_intensity),
-            getattr(config, "sci_threshold", 0.75),
+            getattr(config, "sci_threshold", SCI_PASS),
             config.cardiac_l_freq, config.cardiac_h_freq,
             _EPOCH_TMIN, _EPOCH_TMAX,
         )
@@ -792,7 +757,7 @@ def _section_sqm(
     *,
     sqm_label: str | None = None,
     gvtd_channels: str = "long",
-    sci_threshold: float = 0.75,
+    sci_threshold: float = SCI_PASS,
 ) -> dict:
     """Read this run's SQM record; the report displays, it does not compute.
 
@@ -934,7 +899,7 @@ def _section_channel_summary(
     subject: str,
     errors: list,
     figures_dir: Path,
-    sci_thresh: float = 0.75,
+    sci_thresh: float = SCI_PASS,
 ) -> dict:
     path, h = None, 0
     with _guard("Channel quality summary", errors, subject):
@@ -1289,7 +1254,7 @@ def build_subject_report(
                                      out_dir=out_path.parent / "nirs",
                                      sqm_label=sqm_label,
                                      gvtd_channels=gvtd_channels,
-                                     sci_threshold=getattr(config, "sci_threshold", 0.75))
+                                     sci_threshold=getattr(config, "sci_threshold", SCI_PASS))
     _note_separation(notes, subject, sqm_vars["sqm"], sqm_vars["channel_rows"],
                      short_channel_requested=bool(getattr(config, "short_channel", None)))
     # GCOR before→after the short-channel regression (fNIRS GSR analog): the meaningful
@@ -1297,11 +1262,9 @@ def build_subject_report(
     if gcor_reg and sqm_vars.get("sqm") is not None:
         sqm_vars["sqm"].update(gcor_reg)
     trigger_vars      = _section_trigger_timeline(raw_intensity, subject, errors, figures_dir)
-    provenance_vars   = _section_provenance(out_path.parent / "nirs", mode, subject, errors,
-                                            label=sqm_label)
     ch_summary_vars   = _section_channel_summary(
                             sqm_vars["channel_rows"], subject, errors, figures_dir,
-                            sci_thresh=getattr(config, "sci_threshold", 0.75))
+                            sci_thresh=getattr(config, "sci_threshold", SCI_PASS))
 
     n_bad    = len(bad_channels)
     n_total  = len(sci_scores)
@@ -1316,11 +1279,24 @@ def build_subject_report(
         format_metric, is_key_metric, metric_class, metric_summary,
     )
 
-    env      = Environment(loader=FileSystemLoader(str(_TEMPLATE_DIR)), autoescape=False)
-    template = env.get_template("subject_report.html.j2")
     from fnirs_pipe.qc.sqm_record import entities_of
 
-    html = template.render(
+    run_label_text = sqm_label or f"sub-{subject}"
+    html = render(
+        "subject_report.html.j2",
+        **page_vars(
+            title=f"fnirs-pipe QC \u2014 sub-{subject}",
+            heading=f"fnirs-pipe QC Report \u2014 {run_label_text}",
+            css=stylesheet("subject.css"),
+        ),
+        **footer_vars(
+            scope=f"sub-{subject}", errors=errors, notes=notes,
+            nirs_dir=out_path.parent / "nirs", mode=mode, label=sqm_label,
+            provenance_path=provenance_path,
+            methods=generate_methods_text(config, versions=versions, mode=mode,
+                                          nirs_dir=out_path.parent / "nirs"),
+            versions=versions,
+        ),
         metric_summary=metric_summary,
         is_key_metric=is_key_metric,
         format_metric=format_metric,
@@ -1330,9 +1306,7 @@ def build_subject_report(
         run_label=sqm_label,
         run_entities={k: v for k, v in entities_of(sqm_label or "").items() if v},
         index_href=(f"sub-{subject}_qc.html" if sqm_label else None),
-        run_date=date.today().isoformat(),
         run_command=run_command,
-        versions=versions,
         n_bad=n_bad,
         n_total=n_total,
         bad_rate=bad_rate,
@@ -1340,10 +1314,6 @@ def build_subject_report(
         bad_channels=bad_channels,
         sci_scores=sci_scores,
         config=config,
-        errors=errors,
-        notes=notes,
-        methods=generate_methods_text(config, versions=versions, mode=mode,
-                                      nirs_dir=out_path.parent / "nirs"),
 
         **sci_vars,
         **motion_vars,
@@ -1362,9 +1332,7 @@ def build_subject_report(
         **glm_vars,
         **rest_vars,
         **ch_summary_vars,
-        **provenance_vars,
         denoise_carpet_path=denoise_carpet_path,
-        provenance_path=provenance_path,
         mode=mode or "",
     )
     out_path.parent.mkdir(parents=True, exist_ok=True)

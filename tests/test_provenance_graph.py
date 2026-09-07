@@ -284,10 +284,10 @@ def test_only_a_checkpoint_loses_its_edges(tmp_path):
 
 def test_the_table_names_the_record_rather_than_the_metrics(tmp_path):
     # 121 metric names in one cell is a paragraph nobody reads; they stay in the record
-    from fnirs_pipe.qc.report import _section_provenance
+    from fnirs_pipe.qc.report_shell import provenance_rows
 
     _chain_plus_record(tmp_path)
-    rows = _section_provenance(tmp_path, "denoise", "01", [])["provenance_rows"]
+    rows = provenance_rows(tmp_path, "denoise", scope="sub-01")
 
     row = next(r for r in rows if r["step"] == "sqm")
     assert "metrics" not in row

@@ -1,54 +1,42 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <title>fnirs-pipe QC — sub-{{ subject }}</title>
-  <style>
-    *, *::before, *::after { box-sizing: border-box; }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      font-size: 14px; line-height: 1.5; color: #2c3e50;
-      padding: 1.5rem 2rem 4rem;
-    }
-    h1 { font-size: 1.5rem; margin: 0 0 0.25rem; }
-    h2 { font-size: 1.1rem; font-weight: 600; color: #34495e;
-         border-left: 4px solid #2980b9; padding-left: 0.6rem;
-         margin: 2rem 0 0.75rem; }
-    .subtitle { color: #7f8c8d; font-size: 0.85rem; }
-    .page-header { border-bottom: 2px solid #2980b9; padding-bottom: 0.6rem;
-                   margin-bottom: 1.2rem; }
-    table { border-collapse: collapse; width: 100%; font-size: 0.85rem; }
-    th, td { border: 1px solid #ddd; padding: 0.4rem 0.7rem; text-align: left;
-             white-space: nowrap; }
-    th { background: #f0f3f6; font-weight: 600; }
-    tbody tr:hover { background: #f8fafc; }
-    td a { color: #2980b9; font-weight: 600; text-decoration: none; }
-    td a:hover { text-decoration: underline; }
-    .muted { color: #95a5a6; }
-    .run-links { display: block; margin-top: 0.15rem; font-size: 0.75rem; }
-    .run-links a { color: #7f8c8d; font-weight: 400; margin-right: 0.55rem; }
-    td.flag { background: #fdf0e3; font-weight: 600; color: #b9591a; }
-    td.flag::after { content: " *"; color: #e08b3f; }
-    td.ch-bad { background: #fadbd8; color: #922b21; font-weight: 600; text-align: center; }
-    td.ch-ok  { color: #cfd8dc; text-align: center; }
-    td.ch-n   { text-align: right; }
-    tr.ch-clean td { color: #b0bec5; }
-    pre { background: #f4f4f4; padding: 0.75rem 1rem; border-radius: 4px;
-          overflow-x: auto; font-size: 0.82rem; white-space: pre-wrap;
-          word-break: break-all; }
-    .scroll { overflow-x: auto; }
-  </style>
-</head>
-<body>
+{% extends "_report_base.html.j2" %}
 
+{# The index shares the subject report's stylesheet: both are documents, not dashboards.
+   Only what differs is here, so the two stay one look as long as this block stays short. #}
+{% block css %}
+.subtitle { color: #7f8c8d; font-size: 0.85rem; }
+.page-header {
+  display: block;
+  border-bottom: 2px solid #2980b9; padding-bottom: 0.6rem; margin-bottom: 1.2rem;
+}
+.page-header .subtitle { color: #7f8c8d; }
+th, td { padding: 0.4rem 0.7rem; white-space: nowrap; }
+tbody tr:hover { background: #f8fafc; }
+td a { color: #2980b9; font-weight: 600; text-decoration: none; }
+td a:hover { text-decoration: underline; }
+.muted { color: #95a5a6; }
+.run-links { display: block; margin-top: 0.15rem; font-size: 0.75rem; }
+.run-links a { color: #7f8c8d; font-weight: 400; margin-right: 0.55rem; }
+td.flag { background: #fdf0e3; font-weight: 600; color: #b9591a; }
+td.flag::after { content: " *"; color: #e08b3f; }
+td.ch-bad { background: #fadbd8; color: #922b21; font-weight: 600; text-align: center; }
+td.ch-ok  { color: #cfd8dc; text-align: center; }
+td.ch-n   { text-align: right; }
+tr.ch-clean td { color: #b0bec5; }
+.scroll { overflow-x: auto; }
+{% endblock %}
+
+{% block header %}
 <div class="page-header">
-  <h1>fnirs-pipe QC &mdash; sub-{{ subject }}</h1>
+  <h1>{{ page_heading }}</h1>
   <span class="subtitle">
     {{ rows | length }} run{{ "s" if rows | length != 1 }}
     {%- if mode %} &bull; mode: {{ mode }}{% endif %}
     &bull; v{{ versions.get('fnirs-pipe', 'unknown') }} &bull; {{ run_date }}
   </span>
 </div>
+{% endblock %}
+
+{% block content %}
 
 <h2>Runs</h2>
 <div class="scroll">
@@ -140,16 +128,4 @@
 <h2>Run command</h2>
 <pre>{{ run_command }}</pre>
 
-<h2>Software Versions</h2>
-<div class="scroll">
-<table>
-  <tbody>
-  {% for name, version in versions.items() %}
-    <tr><th>{{ name }}</th><td>{{ version }}</td></tr>
-  {% endfor %}
-  </tbody>
-</table>
-</div>
-
-</body>
-</html>
+{% endblock %}

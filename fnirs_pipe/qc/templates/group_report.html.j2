@@ -1,12 +1,7 @@
+{% extends "_report_base.html.j2" %}
 {% from "_macros.html.j2" import card %}
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8"/>
-<title>{{ title }}</title>
-<style>
-{{ base_css }}
 
+{% block css %}
 .plot-frame { width: 100%; border: none; display: block; }
 
 #box-flow {
@@ -59,18 +54,15 @@ table.group-table th .sort-ind { color: #adb5bd; font-size: 0.7rem; margin-left:
   display: inline-block; background: #fff3cd; color: #856404;
   padding: 0.05rem 0.4rem; margin: 0 0.15rem; border-radius: 3px; font-size: 0.78rem;
 }
-</style>
-</head>
-<body>
+{% endblock %}
 
-<nav id="qc-nav">
-  <h1>{{ title }}</h1>
-  <span class="nav-meta">rows: <b>{{ n_rows }}</b></span>
-  <span class="nav-meta">metrics: <b>{{ n_metrics }}</b></span>
+{% block nav_extra %}
   <span class="nav-meta" style="margin-left:auto">
     <a href="{{ tsv_name }}" download style="color:#2980b9;text-decoration:none;font-weight:600">⬇ {{ tsv_name }}</a>
   </span>
-</nav>
+{%- endblock %}
+
+{% block content %}
 
 <div class="card" id="summary-card">
   <div id="summary-bar">
@@ -200,5 +192,5 @@ table.group-table th .sort-ind { color: #adb5bd; font-size: 0.7rem; margin-left:
   });
 })();
 </script>
-</body>
-</html>
+
+{% endblock %}

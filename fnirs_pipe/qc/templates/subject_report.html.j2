@@ -1,192 +1,4 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <title>fnirs-pipe QC — sub-{{ subject }}</title>
-  <style>
-    /* ---- base ---- */
-    *, *::before, *::after { box-sizing: border-box; }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      font-size: 14px; line-height: 1.5; color: #2c3e50;
-      padding: 1.5rem 2rem 4rem;
-    }
-    h1 { font-size: 1.5rem; margin: 0 0 0.25rem; }
-    h2 { font-size: 1.1rem; font-weight: 600; color: #34495e;
-         border-left: 4px solid #2980b9; padding-left: 0.6rem;
-         margin: 2rem 0 0.75rem; }
-    h3 { font-size: 0.95rem; margin: 1rem 0 0.4rem; color: #555; }
-    pre { background: #f4f4f4; padding: 0.75rem 1rem; border-radius: 4px;
-          overflow-x: auto; font-size: 0.82rem; white-space: pre-wrap;
-          word-break: break-all; }
-    img { max-width: 100%; border: 1px solid #ddd; border-radius: 4px;
-          display: block; margin-top: 0.5rem; }
-    table { border-collapse: collapse; width: 100%; font-size: 0.85rem; }
-    th, td { border: 1px solid #ddd; padding: 0.35rem 0.7rem; text-align: left; }
-    th { background: #f0f3f6; font-weight: 600; }
-
-    /* ---- header bar ---- */
-    .page-header {
-      display: flex; align-items: baseline; justify-content: space-between;
-      padding-bottom: 0.5rem; margin-bottom: 1.5rem;
-    }
-    .page-header .subtitle { font-size: 0.85rem; color: #888; }
-
-    /* ---- summary box ---- */
-    .summary-box {
-      background: #f8fafc; border: 1px solid #d0dae6;
-      border-radius: 6px; padding: 1rem 1.25rem; margin-bottom: 1.5rem;
-    }
-    .summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 2rem; }
-    .summary-grid table { font-size: 0.88rem; border: none; }
-    .summary-grid td, .summary-grid th { border: none; padding: 0.2rem 0.5rem 0.2rem 0; }
-    .summary-grid th { background: none; width: 140px; color: #666; font-weight: 500; }
-
-    /* ---- badges ---- */
-    .badge-green  { color: #27ae60; font-weight: 700; }
-    .badge-yellow { color: #e67e22; font-weight: 700; }
-    .badge-red    { color: #c0392b; font-weight: 700; }
-
-    /* ---- collapsible steps ---- */
-    details { border: 1px solid #dde3ea; border-radius: 5px;
-              margin-bottom: 0.75rem; }
-    details > summary {
-      padding: 0.6rem 1rem; cursor: pointer; font-weight: 600;
-      background: #f0f3f6; border-radius: 4px; list-style: none;
-      display: flex; align-items: center; gap: 0.5rem;
-      user-select: none;
-    }
-    details > summary::-webkit-details-marker { display: none; }
-    details > summary::before {
-      content: "▶"; font-size: 0.65rem; transition: transform 0.15s;
-    }
-    details[open] > summary::before { transform: rotate(90deg); }
-    .details-body { padding: 0.75rem 1rem 1rem; }
-    .step-desc { color: #555; margin: 0 0 0.75rem; }
-    .fig-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;
-               margin-top: 0.5rem; }
-    .fig-row.single { grid-template-columns: 1fr; }
-
-    /* ---- SCI table ---- */
-    .sci-table td.bad  { background: #fde8e8; color: #c0392b; }
-    .sci-table td.good { background: #e8f8ee; color: #1e8449; }
-
-    /* ---- placeholder ---- */
-    .placeholder {
-      background: repeating-linear-gradient(
-        45deg, #f9f9f9, #f9f9f9 10px, #f1f1f1 10px, #f1f1f1 20px
-      );
-      border: 1px dashed #ccc; border-radius: 4px;
-      padding: 1.5rem; text-align: center; color: #aaa;
-      font-style: italic; font-size: 0.85rem; margin-top: 0.5rem;
-    }
-
-    /* ---- errors ---- */
-    .error-list { background: #fff3f3; border: 1px solid #f5c6cb;
-                  border-radius: 4px; padding: 0.75rem 1rem; }
-    .error-list li { color: #c0392b; font-size: 0.85rem; }
-    .no-errors { color: #27ae60; font-weight: 600; }
-    .note-list { background: #f4f7fa; border: 1px solid #cfd9e2;
-                 border-radius: 4px; padding: 0.75rem 1rem; margin-bottom: 1rem; }
-    .note-list li { color: #46596b; font-size: 0.85rem; }
-
-    /* ---- methods tabs ---- */
-    .tab-bar { display: flex; gap: 0; margin-bottom: -1px; }
-    .tab-btn {
-      padding: 0.35rem 0.9rem; border: 1px solid #ccc; background: #f5f5f5;
-      cursor: pointer; font-size: 0.82rem; border-bottom: none;
-      border-radius: 4px 4px 0 0;
-    }
-    .tab-btn.active { background: #fff; font-weight: 600; color: #2980b9; }
-    .tab-content { display: none; border: 1px solid #ccc; border-radius: 0 4px 4px 4px; }
-    .tab-content.active { display: block; }
-    .tab-content pre { border: none; border-radius: 0 4px 4px 4px; margin: 0; }
-
-    /* ---- boilerplate (Methods) HTML rendering ---- */
-    .boilerplate-html {
-      font-family: "Bitstream Charter", Georgia, Times, serif;
-      background: #f8f9fa; padding: 1rem 1.25rem;
-      border-radius: 0 4px 4px 4px;
-      font-size: 0.9rem; line-height: 1.55;
-    }
-    .boilerplate-para { margin: 0 0 0.6rem; }
-    .boilerplate-cite { color: #555; }
-    .boilerplate-refs-title { font-size: 0.95rem; margin: 0.8rem 0 0.3rem; }
-    .boilerplate-refs { font-size: 0.82rem; padding-left: 1.3rem; }
-    .boilerplate-refs li { margin-bottom: 0.3rem; }
-
-    /* ---- plotly figures ---- */
-    .plotly-fig { margin-top: 0.5rem; overflow: hidden; }
-
-    /* ---- channel / detail selectors ---- */
-    .ch-select {
-      font-size: 0.82rem; border: 1px solid #ced4da; border-radius: 4px;
-      padding: 0.2rem 0.5rem; background: #f8f9fa;
-      margin: 0.6rem 0 0.3rem; display: block;
-    }
-
-    /* ---- two-column panel grid (e.g. heatmap + optode) ---- */
-    .panel-grid-2 {
-      display: grid; grid-template-columns: 2fr 1fr; gap: 0.75rem; margin-top: 0.75rem;
-    }
-    @media (max-width: 900px) { .panel-grid-2 { grid-template-columns: 1fr; } }
-
-    /* ---- full-width responsive images ---- */
-    img.responsive { width: 100%; height: auto; display: block; border: none; }
-
-    /* ---- quantitative metrics ---- */
-    .qm-box { margin-bottom: 1.5rem; }
-    .qm-list { font-size: 0.88rem; column-count: 2; column-gap: 2.5rem;
-               margin: 0; padding: 0; list-style: none; }
-    .qm-list li { display: flex; justify-content: space-between; padding: 0.18rem 0;
-                  border-bottom: 1px solid #eef0f3; break-inside: avoid; gap: 1rem; }
-    .qm-list .ql { color: #666; white-space: nowrap; }
-    /* dotted underline is the only cue that a native title tooltip is there */
-    .qm-list .ql[title]:not([title=""]) { cursor: help; border-bottom: 1px dotted #b8c2cc; }
-    .qm-list .ql-key { color: #34495e; font-weight: 600; }
-    .ql-dot { color: #2980b9; font-size: 0.62em; vertical-align: 0.35em; margin-left: 0.3rem; }
-    .qm-note { font-size: 0.78rem; color: #8a949e; margin: 0 0 0.55rem; }
-    .qm-sub { font-size: 0.9rem; font-weight: 600; margin: 1rem 0 0.3rem; }
-    .ch-group { font-weight: 600; background: #f2f4f6; }
-    .qm-panel-title { margin-top: 0.9rem; }
-    .qm-split td:first-child { white-space: nowrap; }
-    /* the one place the signal domain changes mid-row */
-    .qm-split .dom-split { border-left: 2px solid #c3ccd5; }
-    .qm-split td:not(:first-child), .qm-split th:not(:first-child) { text-align: right; }
-    .qm-list .qv { font-weight: 600; white-space: nowrap; }
-    .qm-ok   { color: #27ae60; }
-    .qm-warn { color: #e67e22; }
-    .qm-bad  { color: #c0392b; }
-    .qm-table { font-size: 0.82rem; margin-top: 0.5rem; }
-    .qm-table td.bad  { color: #c0392b; }
-    .qm-table td.good { color: #27ae60; }
-    .qm-table td.neg  { color: #27ae60; }
-    .qm-table td.pos  { color: #c0392b; }
-
-    /* ---- GLM beta table ---- */
-    .glm-beta-table { font-size: 0.80rem; border-collapse: collapse; margin-top: 0.25rem; }
-    .glm-beta-table th, .glm-beta-table td { border: 1px solid #ddd; padding: 0.22rem 0.55rem; text-align: right; }
-    .glm-beta-table th { background: #f0f3f6; text-align: center; }
-    .glm-beta-table td:first-child, .glm-beta-table td:nth-child(2) { text-align: left; }
-    .glm-beta-table td.pos { color: #c0392b; }
-    .glm-beta-table td.neg { color: #27ae60; }
-    .glm-beta-table td.chroma-hbo { color: #c0392b; font-weight: 600; }
-    .glm-beta-table td.chroma-hbr { color: #2471a3; font-weight: 600; }
-
-    /* ---- figure path caption ---- */
-    .fig-path {
-      font-size: 0.75rem; color: #888; margin: 0.3rem 0 0;
-      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
-    }
-    .fig-path::before { content: "file: "; }
-
-    /* ---- plotly iframes ---- */
-    .plotly-frame {
-      width: 100%; border: none; display: block; margin-top: 0.5rem;
-    }
-  </style>
-</head>
-<body>
+{% extends "_report_base.html.j2" %}
 
 {# One section list drives both rows of the top bar: the anchor links and the rating
    pills under them. Rating ids carry the run label so a subject's runs do not share
@@ -236,14 +48,18 @@
 {% set rating_chip = "sub-" ~ subject %}
 {% set rating_save_endpoint = "/save_ratings" %}
 {% set rating_load_endpoint = "/load_ratings/sub-" ~ subject %}
-{% include "_rating_bar.html.j2" %}
 
-<!-- ================================================================ header -->
+{# The subject report reads as a document, so its header is a titled band rather than the
+   sticky nav bar the dashboard reports carry. #}
+{% block header %}
 <div class="page-header">
-  <h1>fnirs-pipe QC Report &mdash; {{ run_label or ('sub-' ~ subject) }}</h1>
+  <h1>{{ page_heading }}</h1>
   <span class="subtitle">v{{ versions.get('fnirs-pipe', 'unknown') }} &bull; {{ run_date }}
     {%- if run_entities %} &bull; {% for k, v in run_entities.items() %}{{ k }}-{{ v }}{{ ", " if not loop.last }}{% endfor %}{% endif %}</span>
 </div>
+{% endblock %}
+
+{% block content %}
 
 <!-- ============================================================== summary -->
 <h2 id="Final">Summary</h2>
@@ -889,6 +705,9 @@
 <p style="font-size:0.82rem;color:#666;margin:0 0 0.6rem;">
   Per-channel pass/fail for Status, SCI, CV, PSP, and SNR, long channels then short ones.
   Green&nbsp;=&nbsp;pass, red&nbsp;=&nbsp;fail, grey&nbsp;=&nbsp;missing data.
+  Status is the screening verdict: a channel is rejected if it fails SCI
+  (<code>--sci-threshold</code> {{ "%.2f"|format(config.sci_threshold) }}) or PSP. The CV
+  and SNR rows are reported and not acted on.
 </p>
 <div style="overflow-x:auto;">
   <iframe src="{{ channel_summary_path }}"
@@ -914,91 +733,4 @@
 <p class="fig-path">{{ trial_qc_path }}</p>
 {% endif %}
 
-<!-- =========================================================== errors -->
-<h2 id="Errors">Errors &amp; Warnings</h2>
-{% if notes %}
-  <p style="font-size:0.85rem; color:#666; margin-bottom:0.35rem;">
-    Sections this run left out on purpose, because the data does not carry what they need.
-    Not failures.
-  </p>
-  <ul class="note-list">
-    {% for n in notes %}<li>{{ n }}</li>{% endfor %}
-  </ul>
-{% endif %}
-{% if errors %}
-  <ul class="error-list">
-    {% for e in errors %}<li>{{ e }}</li>{% endfor %}
-  </ul>
-{% else %}
-  <p class="no-errors">No errors or warnings.</p>
-{% endif %}
-
-<!-- ========================================================== provenance -->
-<h2 id="Provenance">Provenance</h2>
-<p style="font-size:0.85rem; color:#666;">
-  Every file this run wrote, the step that produced it, the settings that step used, and
-  the channels / sampling rate / duration left behind at each point. Rebuilt from the JSON
-  sidecars in <code>nirs/</code>, so it reports what ran, not what was requested.
-</p>
-{% if provenance_path %}
-  <img class="responsive" src="{{ provenance_path }}" alt="File provenance graph" />
-  <p class="fig-path">{{ provenance_path }} &bull; mermaid source: {{ provenance_path[:-4] }}.mmd</p>
-{% else %}
-  <div class="placeholder">
-    Diagram not rendered. Regenerate with <code>fnirs-qc provenance OUTPUT_DIR</code>.
-  </div>
-{% endif %}
-
-{% if provenance_rows %}
-<table>
-  <tr><th>Output</th><th>Step</th><th>What it did</th><th>Settings</th></tr>
-  {% for row in provenance_rows %}
-  <tr>
-    <td><code>{{ row.name }}</code></td>
-    <td><code>{{ row.step }}</code></td>
-    <td>{{ row.what }}</td>
-    <td>{{ row.settings }}</td>
-  </tr>
-  {% endfor %}
-</table>
-{% endif %}
-
-<!-- ============================================================= methods -->
-<h2 id="Methods">Methods</h2>
-<p style="font-size:0.85rem; color:#666;">
-  Auto-generated from the pipeline configuration. Citations follow APA 7;
-  switch tabs to copy as Markdown or LaTeX.
-</p>
-
-<div class="tab-bar">
-  <button class="tab-btn active" onclick="showTab(event,'tab-rendered')">Rendered</button>
-  <button class="tab-btn" onclick="showTab(event,'tab-plain')">Plain text</button>
-  <button class="tab-btn" onclick="showTab(event,'tab-md')">Markdown</button>
-  <button class="tab-btn" onclick="showTab(event,'tab-latex')">LaTeX</button>
-</div>
-<div id="tab-rendered" class="tab-content active"><div class="boilerplate-html">{{ methods.html }}</div></div>
-<div id="tab-plain"    class="tab-content"><pre>{{ methods.plain }}</pre></div>
-<div id="tab-md"       class="tab-content"><pre>{{ methods.markdown }}</pre></div>
-<div id="tab-latex"    class="tab-content"><pre>{{ methods.latex }}</pre></div>
-
-<!-- ========================================================== versions -->
-<h2>Software Versions</h2>
-<table style="max-width:400px;">
-  <tr><th>Package</th><th>Version</th></tr>
-  {% for pkg, ver in versions.items() %}
-  <tr><td>{{ pkg }}</td><td>{{ ver }}</td></tr>
-  {% endfor %}
-</table>
-
-<script>
-function showTab(event, id) {
-  document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
-  document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
-  document.getElementById(id).classList.add('active');
-  event.target.classList.add('active');
-}
-
-</script>
-
-</body>
-</html>
+{% endblock %}

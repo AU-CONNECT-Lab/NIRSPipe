@@ -1,12 +1,7 @@
+{% extends "_report_base.html.j2" %}
 {% from "_macros.html.j2" import card, subject_metrics %}
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8"/>
-<title>fnirs-pipe Hyper Raw Report — {{ group_id }} / {{ task }}</title>
-<style>
-{{ base_css }}
 
+{% block css %}
 .row { display: grid; gap: 0.5rem; margin-bottom: 0.5rem; }
 .row-2     { grid-template-columns: 1fr 1fr; }
 .row-coh   { grid-template-columns: 1fr 2fr; }
@@ -39,9 +34,7 @@ select#ch-select {
 .cd-chip.cd-good{background:#d4edda;color:#155724}
 .cd-chip.cd-bad{background:#f8d7da;color:#721c24}
 .cd-chip.cd-disabled{opacity:.45;pointer-events:none;cursor:not-allowed}
-</style>
-</head>
-<body>
+{% endblock %}
 
 {% set rating_subject = "group-" ~ group_id ~ "_task-" ~ task %}
 {% set rating_modules = [[
@@ -52,18 +45,8 @@ select#ch-select {
 {% set rating_chip = "group-" ~ group_id %}
 {% set rating_save_endpoint = "/save_hyper_ratings" %}
 {% set rating_load_endpoint = "/load_hyper_ratings" %}
-{% include "_rating_bar.html.j2" %}
 
-<nav id="qc-nav">
-  <h1>fnirs&#8209;pipe &nbsp; Hyper Raw Report</h1>
-  <span class="nav-meta">group: <b>{{ group_id }}</b></span>
-  <span class="nav-meta">task: <b>{{ task }}</b></span>
-  <span class="nav-meta">subjects: <b>{{ subject_ids | join(", ") }}</b></span>
-  <span class="nav-meta" style="margin-left:auto">
-    SCI thr: {{ "%.2f"|format(sci_threshold) }} &bull;
-    Coh: {{ "%.3f"|format(coherence_fmin) }}–{{ "%.3f"|format(coherence_fmax) }} Hz
-  </span>
-</nav>
+{% block content %}
 
 <!-- Alignment table -->
 {% call card("Time Alignment", hint="crop offset from first shared trigger &bull; all recordings trimmed to shortest") %}
@@ -369,5 +352,5 @@ function _pairFname(pair) {
   }
 })();
 </script>
-</body>
-</html>
+
+{% endblock %}

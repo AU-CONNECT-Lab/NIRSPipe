@@ -141,6 +141,10 @@ def _load_refs() -> dict[str, dict]:
 # ---- Step assembly ----
 
 def _active_steps(prep_config: Any, post_config: Any, mode: str | None) -> list[tuple[str, dict]]:
+    # the fallback describes what a run was asked to do, which only a config can say. A
+    # caller with no config (a group-level report, say) has only the sidecars to go on.
+    if prep_config is None:
+        return []
     dpf_str = ", ".join(str(d) for d in prep_config.dpf)
 
     result = [
@@ -281,7 +285,7 @@ def _build_reflist(active: list[tuple[str, dict]], steps: dict, refs: dict) -> s
 # ---- Public API ----
 
 def generate_methods_text(
-    prep_config: Any,
+    prep_config: Any = None,
     post_config: Any = None,
     mode: str | None = None,
     versions: dict[str, str] | None = None,
@@ -291,7 +295,9 @@ def generate_methods_text(
 
     Given nirs_dir, the steps are read from the sidecars that run wrote, so the text
     describes what actually happened; the config is the fallback for a tree with no
-    sidecars, and it can only describe what was requested.
+    sidecars, and it can only describe what was requested. A caller that holds no config
+    passes nirs_dir alone and gets whatever the sidecars support, down to the opening
+    sentence when they support nothing.
     """
     steps = _load_steps()
     refs = _load_refs()

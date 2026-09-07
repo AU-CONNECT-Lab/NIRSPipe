@@ -12,6 +12,8 @@ All notable changes to this project will be documented in this file.
 - **The subject report shows the event timeline and the per-trial quality panel**, which were in the raw QC report only. The timeline shows a condition that stopped being delivered partway through, which the averages cannot
 - **The analysis page offers the bandpass design.** `--filter-method` and `--filter-order` were command-line only, so the interface silently pinned every run to the defaults
 - **`--gvtd-censor` marks the frames GVTD flags as `BAD_gvtd`, so an analysis can leave them out.** Nothing is cut, so a threshold set too strictly is undone by rerunning. `--gvtd-censor-n-std` and `--gvtd-min-epoch-s` set the threshold and the shortest stretch worth keeping. Off by default: on a high-motion recording it can flag everything
+- **The hyperscanning and group reports now end with the same closing sections the subject report does**: what failed, what was left out on purpose, the provenance table, and the software versions. A panel that failed used to appear only in the run log, so a report could be read as complete when it was not
+- **The hyperscanning post report carries a provenance diagram**, rebuilt from the sidecars its own WTC and ISC passes wrote
 
 ### Fixed
 - **`--gvtd-censor` failed on any recording that has event markers**, which is every task run. It worked only on a recording with no markers at all
@@ -20,7 +22,9 @@ All notable changes to this project will be documented in this file.
 - **The same metric could read as passing in one view and failing in another.** The three views each carried their own copy of the thresholds, and the interface printed record keys at four decimals with no label, units or verdict
 
 ### Changed
+- **Channel screening now rejects a channel that fails SCI *or* PSP**, where it used to test SCI alone. Both measure optode coupling and they catch different failures: SCI stays high whenever the two wavelengths agree, which movement can fake, and PSP drops to near zero when it is faked. Runs will reject at least as many channels as before, and the reports name which criterion each rejection failed. The criteria are one table now, so adding or dropping one is a single edit
 - **The per-trial quality panel prints its numbers the way the rest of the report does.** Channel retention reads as a percentage and GVTD as an exponent; the panel had its own formats and its own record of which way each metric is better
+- **Every QC report is rendered into one shared page shell**, so the header, the rating bar and the closing sections are the same wherever they appear and a new report cannot ship without them
 
 ## [0.29.0] - 2026-09-06
 
