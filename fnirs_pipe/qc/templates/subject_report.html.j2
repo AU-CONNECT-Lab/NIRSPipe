@@ -263,6 +263,7 @@
       </tr>
       <tr><th>SCI threshold</th><td>{{ config.sci_threshold }}</td></tr>
       <tr><th>Motion corr.</th><td>{{ config.motion_correction }}</td></tr>
+      <tr><th>GVTD channels</th><td>{{ config.gvtd_channels or 'long' }}</td></tr>
       <tr><th>DPF</th><td>{{ config.dpf | join(', ') }}</td></tr>
     </table>
   </div>
@@ -349,6 +350,8 @@
   <div class="details-body">
     <p class="step-desc">
       Motion correction method: <strong>{{ config.motion_correction }}</strong>.
+      GVTD covers the <strong>{{ config.gvtd_channels or 'long' }}</strong> channels; the count
+      is on the figure. It is an RMS across channels, so that set is part of the value.
     </p>
     {% if carpet_gvtd_path %}
       <h3>GVTD + Carpet plot</h3>

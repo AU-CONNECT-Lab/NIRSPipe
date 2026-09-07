@@ -99,6 +99,7 @@ def _process_run(
     epoch_qc: bool = False,
     epoch_tmin: float | None = None,
     epoch_tmax: float | None = None,
+    gvtd_channels: str = "long",
 ) -> dict:
     """Compute all data, save figure HTMLs + SQM JSON. Returns inline dict for HTML."""
     from fnirs_pipe.qc.figures import (
@@ -195,16 +196,12 @@ def _process_run(
     # ── file: carpet GVTD ──────────────────────────────────────────────────
     #   an iframe rather than inlined like the panels above: the carpet is a channels x 2000
     #   heatmap, and every run of the viewer would carry one in the page itself
-    # long channels only, matching the subject report and the GVTD scalars in the record:
-    # GVTD is an RMS across channels, so mixing an 8 mm channel's OD variance with a 30 mm
-    # one's puts two different amplitude scales in one number
     carpet_inline: dict = {}
     try:
-        from fnirs_pipe.qc.quantitative_metrics import long_short_channels
-        long_names, _ = long_short_channels(raw)
-        raw_carpet = raw.copy().pick(long_names) if long_names else raw
-        fig   = carpet_gvtd_figure(raw_carpet, raw_carpet.ch_names,
-                                   channel_set="long" if long_names else "all")
+        from fnirs_pipe.qc.quantitative_metrics import gvtd_channel_picks
+        gvtd_picks, gvtd_set = gvtd_channel_picks(raw, gvtd_channels)
+        raw_carpet = raw.copy().pick(gvtd_picks)
+        fig   = carpet_gvtd_figure(raw_carpet, raw_carpet.ch_names, channel_set=gvtd_set)
         fname = f"{label}_desc-carpet_nirs.html"
         h     = _save_figure_html(fig, fig_dir / fname)
         figure_paths["carpet"] = {"src": f"figures/{fname}", "h": h}
@@ -368,6 +365,7 @@ def build_prep_raw_report(
     epoch_qc: bool = False,
     epoch_tmin: float | None = None,
     epoch_tmax: float | None = None,
+    gvtd_channels: str = "long",
 ) -> None:
     """Generate raw QC report: lightweight HTML + per-run folders with figure HTMLs + SQM JSON."""
     # the report sits in the subject's own folder, so its figures are one level in from it
@@ -380,7 +378,7 @@ def build_prep_raw_report(
         logger.info("[%d/%d] processing %s ...", i + 1, len(runs), label)
         try:
             d = _process_run(run, sci_threshold, sub_dir, cardiac_l_freq, cardiac_h_freq, dpf,
-                             window_s, epoch_qc, epoch_tmin, epoch_tmax)
+                             window_s, epoch_qc, epoch_tmin, epoch_tmax, gvtd_channels)
             static_data.append(d)
         except Exception as exc:
             logger.error("Failed to process run %s: %s", label, exc)

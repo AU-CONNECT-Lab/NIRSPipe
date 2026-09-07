@@ -67,6 +67,7 @@ from fnirs_pipe.qc.figure_io import (
     _figure_height, _pair_fname, _save_multi_fig_html,
     extract_markers, get_channel_pairs,
 )
+from fnirs_pipe.qc.quantitative_metrics import gvtd_channel_picks
 from fnirs_pipe.qc.figures import (
     carpet_gvtd_figure,
     carpet_compare_figure,
@@ -416,6 +417,8 @@ def _section_psd_detail(
 
 def _section_motion(
     raw_long: mne.io.Raw,
+    raw_gvtd: mne.io.Raw,
+    gvtd_set: str,
     sci_scores: dict,
     config: Any,
     segments: dict | None,
@@ -435,6 +438,10 @@ def _section_motion(
 
     ``raw_after_motion`` puts the corrected trace and carpet in the same panel as the
     uncorrected one, matching the ``before -> after`` pairs in the metrics table.
+
+    ``raw_gvtd`` is the channel set the GVTD panel covers, which ``--gvtd-channels`` decides
+    and which is not always ``raw_long``. Everything else here stays on the long channels:
+    the zoom below is per-channel optical density, so a wider set would only add rows.
     """
     carpet_gvtd_path = None
     carpet_gvtd_h = 600
@@ -448,11 +455,11 @@ def _section_motion(
     spike_spans = _spans("spike_spans_s")
 
     with _guard("Carpet + GVTD", errors, subject):
-        fig = carpet_gvtd_figure(raw_long, raw_long.ch_names, segments,
+        fig = carpet_gvtd_figure(raw_gvtd, raw_gvtd.ch_names, segments,
                                  corrected_segments=corrected_segments,
                                  spike_segments=spike_spans,
                                  raw_after=raw_after_motion,
-                                 channel_set="long")
+                                 channel_set=gvtd_set)
         carpet_gvtd_path, carpet_gvtd_h = _save_plotly_html(
             fig, figures_dir / "carpet_gvtd.html")
 
@@ -741,6 +748,7 @@ def _section_sqm(
     out_dir: Path | None = None,
     *,
     sqm_label: str | None = None,
+    gvtd_channels: str = "long",
 ) -> dict:
     """Read this run's SQM record; the report displays, it does not compute.
 
@@ -807,6 +815,18 @@ def _section_sqm(
         errts_key = "errts_long" if record.get("errts_long") else "errts"
         for k, v in (record.get(errts_key) or {}).items():
             sqm[f"{k}_errts"] = v
+        # `--gvtd-channels all` moves the GVTD scalars alone, not the panel around them: it
+        # names one metric, and SCI and PSP measure coupling per channel rather than across
+        # channels, so widening their set would answer a different question than was asked.
+        # The corrected side moves with it, since a post value read off a different channel
+        # set than its pre value makes the correction look like an effect it is not.
+        gvtd_key = "raw" if gvtd_channels == "all" else raw_key
+        if gvtd_key != raw_key:
+            for src, suffix in ((record.get(gvtd_key), ""),
+                                (record.get("motion_post"), "_post")):
+                for k, v in (src or {}).items():
+                    if k.startswith("gvtd_"):
+                        sqm[f"{k}{suffix}"] = v
         # The short-channel half of the same raw file, kept beside `sqm` rather than merged
         # into it: the scalar means the panel prints are long-only by design, and a short
         # channel's coupling belongs in its own row of the table, not in those averages.
@@ -1219,6 +1239,10 @@ def build_subject_report(
     # raw_long: long-channel-only copy used for OD/motion/SQM figures
     # raw_intensity: full original (all channels) passed to SCI/brain sections
     raw_long = _prepare_long_raw(raw_intensity, subject)
+    # the GVTD panel's channel set, which config decides and which need not be raw_long
+    gvtd_channels = getattr(config, "gvtd_channels", None) or "long"
+    gvtd_picks, gvtd_set = gvtd_channel_picks(raw_intensity, gvtd_channels)
+    raw_gvtd = raw_intensity.copy().pick(gvtd_picks)
 
     figures_dir = out_path.parent / "figures"
     if sqm_label:
@@ -1244,7 +1268,8 @@ def build_subject_report(
                             raw_intensity, sci_scores, bad_channels, config,
                             windowed_section, subject, errors, figures_dir)
     motion_vars       = _section_motion(
-                            raw_long, sci_scores, config, segments, subject, errors,
+                            raw_long, raw_gvtd, gvtd_set,
+                            sci_scores, config, segments, subject, errors,
                             figures_dir, windowed=windowed_section,
                             raw_before_motion=raw_before_motion,
                             raw_after_motion=raw_after_motion)
@@ -1302,7 +1327,8 @@ def build_subject_report(
                                       fc_seed=fc_seed, fc_roi=fc_roi, raw_haemo=raw_haemo)
     sqm_vars          = _section_sqm(sci_scores, bad_channels, subject, errors,
                                      out_dir=out_path.parent / "nirs",
-                                     sqm_label=sqm_label)
+                                     sqm_label=sqm_label,
+                                     gvtd_channels=gvtd_channels)
     _note_separation(notes, subject, sqm_vars["sqm"], sqm_vars["channel_rows"],
                      short_channel_requested=bool(getattr(config, "short_channel", None)))
     # GCOR before→after the short-channel regression (fNIRS GSR analog): the meaningful

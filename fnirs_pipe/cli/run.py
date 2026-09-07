@@ -10,6 +10,7 @@ from fnirs_pipe.pipeline.denoise import (
     DEFAULT_FILTER_ORDER,
     FILTER_METHODS,
 )
+from fnirs_pipe.qc.quantitative_metrics import GVTD_CHANNEL_SETS
 
 _MOTION_CHOICES        = ["tddr", "wavelet", "spline", "none"]
 _MODE_CHOICES          = ["denoise", "glm", "rest"]
@@ -82,6 +83,11 @@ def _build_parser() -> argparse.ArgumentParser:
                                "population-dependent). Adult ~0.5; infants higher.")
     prep_opt.add_argument("--window-length", type=float, default=10.0,
                           help="Sliding-window length (s) for windowed SCI/PSP/GVTD QC series.")
+    prep_opt.add_argument("--gvtd-channels", choices=list(GVTD_CHANNEL_SETS), default="long",
+                          help="Channels the GVTD trace, carpet and scalars cover. 'long' keeps "
+                               "one separation band, so the value does not move with separations "
+                               "the montage carries outside it; 'all' uses every channel, for "
+                               "dense arrays whose usable separations span more than one band.")
 
     post = p.add_argument_group("postprocessing (requires --mode)")
     post.add_argument("--mode", choices=_MODE_CHOICES,

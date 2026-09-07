@@ -36,46 +36,55 @@ from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("qc.quantitative_metrics")
 
-# Hz, the band GVTD is measured on. :footcite:`Sherafati2020` computes GVTD on data already
-# band-passed by the analysis, and measured the artifact-to-background ratio at four pipeline
-# stages: it peaks after filtering, which is why this is applied at all. 0.5 is that paper's
-# task low-pass, the fNIRS convention for dropping cardiac; 0.01 sits between its two
-# high-passes (0.009 rest, 0.02 task). One band for every mode, not the analysis band of the
-# moment: a QC number that moved with the mode could not be compared across a cohort.
+# ---- GVTD ----
+# Hz, Sherafati 2020. One band for every mode: a QC number that moved with the analysis band
+# could not be compared across a cohort.
 GVTD_MOTION_BAND = (0.01, 0.5)
+GVTD_N_STD = 3.0  # one constant: the figures draw this threshold, the record stores it
+GVTD_CHANNEL_SETS = ("long", "all")
 
-# The window is part of what PSP measures, not a smoothing setting, so it is pinned here
-# rather than following the QC window. Lengthening it raises the score on a channel with a
-# coherent cardiac component and lowers it on one without: measured over 10 s to 80 s, a
-# well-coupled pair grew 8x while an uncoupled pair fell to a fifth. So it changes the
-# spread between good and bad channels, and therefore what any fixed threshold selects.
-# psp_mean averages over both kinds, so no factor converts one window's value to another's.
+# ---- PSP window (s) ----
+# part of what PSP measures, not smoothing: it moves the spread between good and bad channels
 PSP_WINDOW_S = 10.0
 
 # ---- CNR windows, relative to stimulus onset (s) ----
-# The baseline is the pre-stimulus stretch the response has not reached yet; the response
-# window brackets the canonical HRF peak, which fNIRS puts at 5-10 s with a plateau out to
-# roughly 15 s for a sustained block. Both are fixed rather than derived from stimulus
-# duration: CNR is only comparable across stages of one recording, and a window that moved
-# with the design would make two runs' numbers incomparable for a reason unrelated to noise.
+# fixed rather than derived from stimulus duration, so two runs stay comparable
 CNR_BASELINE_S = (-5.0, 0.0)
 CNR_RESPONSE_S = (5.0, 15.0)
 
 # ---- Source-detector separation, mne_nirs' convention ----
-# These are the defaults of mne_nirs.channels.get_short_channels(max_dist=) and
-# get_long_channels(min_dist=, max_dist=). Note they do not meet: 10-15 mm is neither
-# short nor long. That gap is deliberate upstream. A 10-15 mm channel is too far to be
-# reading scalp alone and too near to be reading cortex, so it belongs to neither view
-# rather than being forced into one. 45 mm is the far edge: beyond it too little light
-# returns for the channel to be worth averaging in.
-# Consequence worth knowing: on a montage carrying either kind, the long and short
-# channel sets do not add up to every channel, by design.
+# the bands do not meet, deliberately, so long + short is not every channel on a montage
 SHORT_MAX_DIST = 0.01   # m, <= this is a short channel
 LONG_MIN_DIST  = 0.015  # m, >= this and <= LONG_MAX_DIST is a long channel
 LONG_MAX_DIST  = 0.045  # m
 
 
 # ------------------------------------ Shared helpers ------------------------------------
+def gvtd_channel_picks(
+    raw: mne.io.Raw, channel_set: str = "long",
+) -> "tuple[list[str], str]":
+    """Channels for the GVTD trace and carpet, plus the name to label the figure with.
+
+    ``"long"`` on a montage with no registered optode positions has no long channels to pick
+    and an empty pick has no trace at all, so it falls back to every channel. The returned
+    label is what actually happened rather than what was asked for, since it is what the
+    figure prints and a wrong label makes two runs look comparable when they are not.
+
+    Example: a 40-channel montage with 22 long and 18 out-of-band channels returns
+    ``(22 names, "long")``; the same call on an unregistered montage returns
+    ``(40 names, "all")``.
+    """
+    if channel_set not in GVTD_CHANNEL_SETS:
+        raise ValueError(f"channel_set must be one of {GVTD_CHANNEL_SETS}, got {channel_set!r}")
+    if channel_set == "all":
+        return list(raw.ch_names), "all"
+    long_names, _ = long_short_channels(raw)
+    if not long_names:
+        logger.warning("no long channels by separation; GVTD falls back to every channel")
+        return list(raw.ch_names), "all"
+    return long_names, "long"
+
+
 def long_short_channels(raw: mne.io.Raw) -> "tuple[list[str], list[str]]":
     """Split channel names by source-detector separation, returning ``(long, short)``.
 
@@ -668,7 +677,7 @@ def _motion_metrics(raw_intensity: mne.io.Raw) -> dict[str, Any]:
     gvtd_ts = gvtd_timetrace(od_data, sfreq)                           # canonical (unfiltered)
     gvtd_filt = gvtd_timetrace(od_data, sfreq, *GVTD_MOTION_BAND)  # motion-band
     gvtd_vstd = gvtd_timetrace(od_data, sfreq, standardize_channels=True)  # channel-equalized
-    motion_thresh = gvtd_threshold(gvtd_filt, n_std=3.0)
+    motion_thresh = gvtd_threshold(gvtd_filt, n_std=GVTD_N_STD)
     if motion_thresh is not None:
         above = gvtd_filt > motion_thresh
         pct_above = float(np.mean(above))

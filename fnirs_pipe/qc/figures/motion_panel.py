@@ -16,7 +16,7 @@ from plotly.subplots import make_subplots
 
 from fnirs_pipe.qc.figures._utils import decimate as _decimate
 from fnirs_pipe.qc.quantitative_metrics import (
-    GVTD_MOTION_BAND, _motion_band_diff, gvtd_threshold, gvtd_timetrace,
+    GVTD_MOTION_BAND, GVTD_N_STD, _motion_band_diff, gvtd_threshold, gvtd_timetrace,
 )
 from fnirs_pipe.utils import is_optical_density
 from fnirs_pipe.utils.logging import get_logger
@@ -233,7 +233,7 @@ def carpet_gvtd_figure(
     # 0.01-0.5 Hz motion band, the band the threshold is set on.
     gvtd_filt = gvtd_timetrace(od_data, sfreq, *GVTD_MOTION_BAND)
     t_gvtd    = times[1:]
-    motion_thresh = gvtd_threshold(gvtd_filt, n_std=3.0)
+    motion_thresh = gvtd_threshold(gvtd_filt, n_std=GVTD_N_STD)
     t_filt_ds, gvtd_filt_ds = _maxpool_xy(t_gvtd, gvtd_filt)
     t_post_ds, gvtd_filt_post_ds = None, None
     if has_after:
@@ -504,7 +504,7 @@ def build_motion_detail_figure(
     od_full, t_full = raw_od_before.get_data(return_times=True)
     full_sfreq = float(raw_od_before.info["sfreq"])
     gvtd_filt_full = gvtd_timetrace(od_full, full_sfreq, *GVTD_MOTION_BAND)
-    motion_thresh  = gvtd_threshold(gvtd_filt_full, n_std=3.0)
+    motion_thresh  = gvtd_threshold(gvtd_filt_full, n_std=GVTD_N_STD)
     t_gvtd_arr, gvtd_filt = _maxpool_xy(t_full[1:], gvtd_filt_full, max_pts)
     t_gvtd = t_gvtd_arr.tolist()
 

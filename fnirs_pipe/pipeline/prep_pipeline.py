@@ -111,6 +111,7 @@ class PrepConfig:
     resp_h_freq: float
     session: str | None = None
     qc_window_s: float = 10.0               # sliding-window length (s) for windowed SCI/PSP/GVTD
+    gvtd_channels: str = "long"              # channel set the GVTD trace and carpet cover
     motion_correction: str | None = None
     bad_channels: list[str] = field(default_factory=list)
     ignore: list[str] = field(default_factory=list)

@@ -6,6 +6,7 @@ import argparse
 import sys
 from pathlib import Path
 
+from fnirs_pipe.qc.quantitative_metrics import GVTD_CHANNEL_SETS
 from fnirs_pipe.utils.logging import get_logger, setup_logging
 
 setup_logging()
@@ -19,6 +20,7 @@ def cmd_prep_raw(
     dpf: list[float], sci_threshold: float, cardiac_l_freq: float, cardiac_h_freq: float,
     window_length: float,
     epoch_qc: bool, epoch_tmin: float | None, epoch_tmax: float | None,
+    gvtd_channels: str,
     skip_bids_validation: bool,
 ) -> None:
     """Generate static raw QC report for a single participant."""
@@ -76,7 +78,8 @@ def cmd_prep_raw(
             build_prep_raw_report(group_runs, html_path, dpf=dpf, sci_threshold=sci_threshold,
                                   cardiac_l_freq=cardiac_l_freq, cardiac_h_freq=cardiac_h_freq,
                                   window_s=window_length, epoch_qc=epoch_qc,
-                                  epoch_tmin=epoch_tmin, epoch_tmax=epoch_tmax)
+                                  epoch_tmin=epoch_tmin, epoch_tmax=epoch_tmax,
+                                  gvtd_channels=gvtd_channels)
             print(f"  -> {html_path}")
         except Exception as exc:
             logger.exception("Raw report generation failed for %s", html_path.name)
@@ -231,6 +234,9 @@ def _build_parser() -> argparse.ArgumentParser:
     pr.add_argument("--epoch-tmax", type=float, default=None,
                     help="Trial window end relative to event onset in s. Given together with "
                          "--epoch-tmin, or neither.")
+    pr.add_argument("--gvtd-channels", choices=list(GVTD_CHANNEL_SETS), default="long",
+                    help="Channels the GVTD trace and carpet cover. 'long' keeps one "
+                         "separation band; 'all' uses every channel.")
     pr.add_argument("--skip-bids-validation", action=argparse.BooleanOptionalAction, default=False)
     pr.set_defaults(func=cmd_prep_raw)
 

@@ -9,33 +9,34 @@ All notable changes to this project will be documented in this file.
 ## [0.29.0] - 2026-09-06
 
 ### Added
-- **The interface exposes the SCI/PSP window and the epoch window**, and can run the per-trial QC panel, which was reachable only from the command line before
+- **The interface exposes the SCI/PSP window and the epoch window**, and can run the per-trial QC panel, which was command-line only before
+- **`--gvtd-channels` chooses which channels GVTD covers.** It defaults to the long channels, which is what the reports already drew; the choice is named on the carpet figure and in the parameter table
 
 ### Fixed
-- **Short channels lost their HbO–HbR correlation in the per-channel table and the metrics CSV.** The column came back empty for every short channel once the haemoglobin metrics were split by separation
-- **"What each denoising step did" still averaged long and short channels together**, so the same metric read one number there and another in the table above it. On a montage with eight short channels its HbO–HbR correlation sat at −0.18 where the long channels alone gave −0.50. It is measured on the long channels now, as everything else on the page is
-- **A spike on the last sample of a recording was never drawn.** It came out as a span of zero width, which no figure can render
-- **The 3D layout never marked the selected channel.** It looked its channels up by haemoglobin name, and that figure is built on the raw recording, whose channels are named by wavelength
-- **Peaks in the GVTD and per-channel derivative traces were drawn slightly late.** Downsampling kept each peak's height but moved it to the start of its bin
-- **Clicking a cell in the Signal Topo selected a different channel.** Cells were ordered by name read as text, and overlapped wherever channels share an optode. They now follow channel order, no longer overlap, and a click anywhere inside one selects it
-- **The interface drew its per-channel figures at a fixed DPF of 6.** Whatever DPF was set for the run applied to every other panel but not to these, so a montage on any other value read its HbO and HbR off a different scale than the rest of the page
-- **The "Raw Signal" section was not raw.** Its per-channel HbO/HbR, PSD and epoch figures were drawn on the motion-corrected recording, while the sliding-window SCI/PSP and the SNR/CV numbers on the same page were drawn on the recording before correction. They are all on the uncorrected stage now, and the section says which stage and which DPF it used
-- **The interface measured GVTD over every channel** where the subject report and the stored metrics measure it over the long ones. GVTD is an RMS across channels, so an 8 mm channel and a 30 mm one were contributing two different amplitude scales to one number, and the interface and the report disagreed on the same recording. The carpet panel now names its channel set and count on the figure
-- **A subject's runs shared one set of ratings.** Every run's report wrote to the same keys, so rating one run overwrote the last, and on multi-session data the links in the rating bar pointed at sections the page did not have. Ratings are keyed by run now, and the bar is built from the sections the report actually drew rather than guessed from filenames. Ratings saved before this release are not read back
+- **Short channels lost their HbO-HbR correlation** in the per-channel table and the metrics CSV
+- **"What each denoising step did" averaged long and short channels together**, so the same metric read one number there and another in the table above it. It is measured on the long channels now
+- **A spike on the last sample of a recording was never drawn**
+- **The 3D layout never marked the selected channel**
+- **Peaks in the GVTD and per-channel derivative traces were drawn slightly late**
+- **Clicking a cell in the Signal Topo selected a different channel.** Cells also overlapped wherever two channels share an optode
+- **The interface drew its per-channel figures at a fixed DPF of 6**, whatever DPF the run was set to
+- **The "Raw Signal" section was not raw.** Its figures came off the motion-corrected recording while the sliding-window SCI/PSP and the SNR/CV numbers on the same page came off the recording before correction. They are all on the uncorrected stage now, and the section says which stage and which DPF it used
+- **The interface measured GVTD over every channel** where the subject report and the stored metrics measure it over the long ones, so the two disagreed on the same recording
+- **A subject's runs shared one set of ratings**, so rating one run overwrote the last, and on multi-session data the rating bar linked to sections the page did not have. Ratings saved before this release are not read back
 
 ### Changed
-- **"What each denoising step did" now sits directly under the metrics table**, where the numbers it carries forward are, rather than at the end of the channel quality summary
-- **The quantitative metrics table reads across instead of down.** Each metric is a column and the three channel sets are the rows, and the optical density and haemoglobin halves share one table with a divider between them
-- **The provenance diagram says less.** The QC record box reads "quantitative QC metrics" rather than listing every stage it covers, and the recording it all starts from is labelled as such
-- **The correlation matrix draws its lower triangle only.** The upper half repeated the same values read the other way round; the HbO x HbR block that the panel exists for is unaffected, and the colour bar moves into the corner the mask freed
-- **The interface was restyled.** The run picker moved up beside the subject it belongs to, and the Signal Topo shares the viewer row evenly with the layout panels instead of overhanging them
-- **`--epoch-tmin` and `--epoch-tmax` now also set the window the epoch figures are drawn over.** They sized the per-trial QC windows and nothing else, so the evoked topo and the per-channel epoch preview always showed -5 to 25 s whatever was asked for
-- **The motion figures were redrawn.** In both the carpet panel and the per-channel detail figure, spike segments now shade the traces themselves instead of sitting on a band below them, and the motion-correction footprint moved to a strip directly above. Lines are heavier, rows are labelled where the label fits, and the carpet panel's uncorrected GVTD trace is a filled area with the corrected one over it
-- **The GVTD and per-channel derivative traces are drawn at their own resolution.** They were pooled down to 2000 points, which on a 15-minute run at 10 Hz kept every spike at full height but threw away the valleys between them, so a trace read as a row of pickets. The pooling now only engages on recordings several times longer, where losing a spike would be worse than the picket look
-- **The report's section links and the rating row are one bar now.** They were two strips pinned at the same offset, so the links vanished behind the rating chips as soon as the page scrolled. Each link now sits directly above the chip that rates that section, every figure section can be rated instead of four of them, the whole bar scrolls sideways when it is wider than the window, and the overall verdict plus the subject stay at the right edge
+- **"What each denoising step did" now sits directly under the metrics table**, where the numbers it carries forward are
+- **The quantitative metrics table reads across instead of down.** Each metric is a column, the three channel sets are the rows, and the optical density and haemoglobin halves share one table
+- **The provenance diagram says less.** The QC record box no longer lists every stage it covers
+- **The correlation matrix draws its lower triangle only.** The upper half repeated the same values read the other way round
+- **The interface was restyled.** The run picker sits beside the subject it belongs to, and the Signal Topo shares the viewer row evenly with the layout panels
+- **`--epoch-tmin` and `--epoch-tmax` now also set the window the epoch figures are drawn over.** The evoked topo and the per-channel epoch preview always showed -5 to 25 s whatever was asked for
+- **The motion figures were redrawn.** Spike segments shade the traces themselves instead of sitting on a band below them, the motion-correction footprint moved to a strip directly above, and rows are labelled where the label fits
+- **The GVTD and per-channel derivative traces are drawn at their own resolution.** Pooling them to 2000 points turned a 15-minute run's trace into a row of pickets
+- **The report's section links and the rating row are one bar.** The links used to vanish behind the rating chips as soon as the page scrolled, and every figure section can be rated now instead of four of them
 
 ### Removed
-- **The "What the motion correction did, and what it cost" table.** Two columns of numbers, half of them carrying no direction; the GVTD panel answers the same question in a form you can read
+- **The "What the motion correction did, and what it cost" table.** The GVTD panel answers the same question in a form you can read
 
 ## [0.28.0] - 2026-09-06
 
