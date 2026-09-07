@@ -797,7 +797,8 @@ def _section_sqm(
                 f"{record_file.name} holds none of {keys}; not a sectioned SQM record")
         # `preproc` before `preproc_long`, so the long values win where they exist and the
         # whole-file ones the split does not carry (pct_data_retained) survive underneath
-        for key in (*keys, "preproc_long"):
+        # `censor` last and unsuffixed: its keys are all gvtd_censor_* so nothing collides
+        for key in (*keys, "preproc_long", "censor"):
             sqm.update(record.get(key) or {})
             sqm.update(per_channel.get(key) or {})
         # The corrected side of the *same* channel set, suffixed rather than merged: it

@@ -773,6 +773,12 @@
         <span class="qv">{% if sqm.get('gvtd_num_above_thresh_post') is not none %}{{ qm_val(sqm.get('gvtd_num_above_thresh'), 'd') }} → {{ qm_val(sqm.get('gvtd_num_above_thresh_post'), 'd') }}{% else %}{{ qm_val(sqm.get('gvtd_num_above_thresh'), 'd') }}{% endif %}</span></li>
     <li>{{ ql('gvtd_thresh', 'GVTD threshold' ~ (' (motion before→after)' if sqm.get('gvtd_thresh_post') is not none else '')) }}
         <span class="qv">{% if sqm.get('gvtd_thresh_post') is not none %}{{ qm_val(sqm.get('gvtd_thresh'), '.3e') }} → {{ qm_val(sqm.get('gvtd_thresh_post'), '.3e') }}{% else %}{{ qm_val(sqm.get('gvtd_thresh'), '.3e') }}{% endif %}</span></li>
+    {% if sqm.get('gvtd_censor_pct') is not none %}
+    <li>{{ ql('gvtd_censor_pct', 'GVTD censored % (n_std ' ~ sqm.get('gvtd_censor_n_std') ~ ')') }}
+        <span class="qv">{{ pct(sqm.get('gvtd_censor_pct')) }}</span></li>
+    <li>{{ ql('gvtd_censor_retained_s', 'GVTD retained (s in ' ~ sqm.get('gvtd_censor_n_epochs') ~ ' epoch(s))') }}
+        <span class="qv">{{ qm_val(sqm.get('gvtd_censor_retained_s'), '.0f') }}</span></li>
+    {% endif %}
     {% if sqm.get('motion_corrected_pct') is not none %}
     <li>{{ ql('motion_corrected_pct', 'Motion corrected % (exp.)') }}
         <span class="qv">{{ pct(sqm.get('motion_corrected_pct')) }}</span></li>

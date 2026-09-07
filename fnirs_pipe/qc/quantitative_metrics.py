@@ -751,6 +751,93 @@ def _mask_to_segments(flagged: np.ndarray, times: np.ndarray) -> "list[tuple[flo
     return [(float(times[s]), max(_end_time(e) - float(times[s]), 0.0)) for s, e in zip(starts, ends)]
 
 
+def gvtd_censor_spans(
+    raw_od: mne.io.Raw,
+    n_std: float = 10.0,
+    min_epoch_s: float = 30.0,
+    channel_set: str = "long",
+) -> "tuple[list[tuple[float, float]], dict[str, Any]]":
+    """Spans of a recording to censor on GVTD, and what censoring them costs.
+
+    :footcite:`Sherafati2020` excludes the timepoints above the GVTD threshold from later
+    analysis rather than repairing them, so this returns spans to mark rather than data to
+    replace: nothing here interpolates, zero-fills or averages over what it flags.
+
+    Two passes, and the second is why a threshold alone is not enough. First every sample
+    above the threshold is flagged. Then any surviving stretch shorter than ``min_epoch_s``
+    is flagged as well, since a four-second island between two artifacts is not something a
+    spectral or connectivity analysis can use, and leaving it in makes the retained fraction
+    look better than the retained data is.
+
+    Example: on a 100 s recording with artifacts at 20-22 s and 26-28 s and
+    ``min_epoch_s=30``, the 4 s island between them is censored too, giving spans
+    ``[(20.0, 8.0)]`` and two surviving epochs rather than three.
+
+    ``n_std`` defaults to the lenient 10 the reference used for censoring, not to the 3.0
+    the reports score with. The two answer different questions: scoring asks how far a
+    recording departed from its own resting level, censoring decides what to throw away, and
+    on a recording that flags half its frames the strict value cascades through the
+    ``min_epoch_s`` pass and censors everything.
+
+    Returns
+    -------
+    spans : list of (onset, duration)
+        In seconds, to attach as ``BAD_gvtd`` annotations.
+    metrics : dict
+        ``gvtd_censor_*``: the threshold used, the censored percentage, how many spans, how
+        many surviving epochs and how many seconds they hold.
+
+    References
+    ----------
+    .. footbibliography::
+    """
+    picks, picked_set = gvtd_channel_picks(raw_od, channel_set)
+    data = np.nan_to_num(raw_od.get_data(picks=picks), nan=0.0, posinf=0.0, neginf=0.0)
+    times = raw_od.times
+    sfreq = float(raw_od.info["sfreq"])
+    empty = {
+        "gvtd_censor_n_std": float(n_std), "gvtd_censor_min_epoch_s": float(min_epoch_s),
+        "gvtd_censor_channel_set": picked_set, "gvtd_censor_thresh": None,
+        "gvtd_censor_pct": None, "gvtd_censor_n_spans": None,
+        "gvtd_censor_n_epochs": None, "gvtd_censor_retained_s": None,
+    }
+    gvtd = gvtd_timetrace(data, sfreq, *GVTD_MOTION_BAND)
+    thresh = gvtd_threshold(gvtd, n_std)
+    if thresh is None:
+        logger.warning("GVTD has no positive values; nothing censored")
+        return [], empty
+
+    # gvtd is one sample shorter than times, the first sample having no derivative. The
+    # reference prepends a zero there, which no threshold flags, so the mask starts False.
+    flagged = np.concatenate(([False], gvtd > thresh))
+
+    # second pass: a surviving stretch too short to analyse is censored with the artifacts
+    if min_epoch_s > 0:
+        for onset, dur in _mask_to_segments(~flagged, times):
+            if dur < min_epoch_s:
+                flagged[(times >= onset) & (times < onset + dur)] = True
+
+    spans = _mask_to_segments(flagged, times)
+    kept = _mask_to_segments(~flagged, times)
+    metrics = {
+        **empty,
+        "gvtd_censor_thresh": float(thresh),
+        "gvtd_censor_pct": float(np.mean(flagged)),
+        "gvtd_censor_n_spans": len(spans),
+        "gvtd_censor_n_epochs": len(kept),
+        "gvtd_censor_retained_s": float(sum(d for _, d in kept)),
+    }
+    logger.info("GVTD censoring: %.1f%% of samples in %d span(s), %d epoch(s) of >= %.0fs "
+                "left holding %.0fs", 100 * metrics["gvtd_censor_pct"], len(spans),
+                len(kept), min_epoch_s, metrics["gvtd_censor_retained_s"])
+    if not kept:
+        logger.error("GVTD censoring leaves nothing: every sample is either above the "
+                     "threshold (n_std=%s) or in a stretch shorter than %.0fs. The data is "
+                     "marked, not deleted, so a larger --gvtd-censor-n-std or a smaller "
+                     "--gvtd-min-epoch-s recovers it.", n_std, min_epoch_s)
+    return spans, metrics
+
+
 @_safe_metrics("motion correction footprint", (
     "motion_corrected_frac_mean", "motion_corrected_frac_per_channel",
     "motion_corrected_num", "motion_corrected_pct", "motion_corrected_n_segments",

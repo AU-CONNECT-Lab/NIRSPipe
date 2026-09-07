@@ -6,6 +6,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- **`--gvtd-censor` marks the frames GVTD flags as `BAD_gvtd`, so an analysis can leave them out.** Nothing is cut, so a threshold set too strictly is undone by rerunning. `--gvtd-censor-n-std` and `--gvtd-min-epoch-s` set the threshold and the shortest stretch worth keeping. Off by default: on a high-motion recording it can flag everything
+
 ## [0.29.0] - 2026-09-06
 
 ### Added

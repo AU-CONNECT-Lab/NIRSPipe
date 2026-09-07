@@ -99,6 +99,7 @@ class PrepResult:
     raw_haemo: mne.io.Raw
     sci_scores: dict[str, float]
     bad_channels: list[str]
+    censor_spans: list[tuple[float, float]] = field(default_factory=list)
 
 @dataclass
 class PrepConfig:
@@ -112,6 +113,9 @@ class PrepConfig:
     session: str | None = None
     qc_window_s: float = 10.0               # sliding-window length (s) for windowed SCI/PSP/GVTD
     gvtd_channels: str = "long"              # channel set the GVTD trace and carpet cover
+    gvtd_censor: bool = False                # mark the frames GVTD flags as BAD_gvtd
+    gvtd_censor_n_std: float = 10.0
+    gvtd_min_epoch_s: float = 30.0
     motion_correction: str | None = None
     bad_channels: list[str] = field(default_factory=list)
     ignore: list[str] = field(default_factory=list)
@@ -203,11 +207,32 @@ def run_prep(
         config.subject, n_bad, n_total,
         f" — {bad_chs}" if bad_chs else "",
     )
+    # before desc-sci is written, so that file carries the marks and every
+    # derivative taken from it inherits them
+    censor_spans: list[tuple[float, float]] = []
+    censor_metrics: dict = {}
+    if config.gvtd_censor:
+        logger.info("sub-%s | GVTD censoring (n_std=%s, min epoch %.0fs)",
+                    config.subject, config.gvtd_censor_n_std, config.gvtd_min_epoch_s)
+        from fnirs_pipe.qc.quantitative_metrics import gvtd_censor_spans
+        censor_spans, censor_metrics = gvtd_censor_spans(
+            raw_od, n_std=config.gvtd_censor_n_std,
+            min_epoch_s=config.gvtd_min_epoch_s, channel_set=config.gvtd_channels)
+        # BAD_ annotations, so the spans travel with the data instead of being cut out of
+        # it: MNE's reject_by_annotation drops the epochs they overlap, a continuous
+        # analysis can pick the surviving stretches, and a threshold set too strictly is
+        # undone by rerunning rather than by re-acquiring
+        if censor_spans:
+            raw_od.set_annotations(raw_od.annotations + mne.Annotations(
+                [o for o, _ in censor_spans], [d for _, d in censor_spans],
+                ["BAD_gvtd"] * len(censor_spans)))
+
     # sci_scores go in the sidecar because the SQM record is assembled from disk after the
     # run, and SCI is the one input to it that no output file carries
     _save(raw_od, "sci", extra_provenance={
         "bad_channels": bad_chs,
         "sci_scores": {k: float(v) for k, v in sci_scores.items()},
+        **({"gvtd_censor": censor_metrics} if censor_metrics else {}),
     })
 
     # step 3: motion correction (spike/step artifact repair)
@@ -236,6 +261,7 @@ def run_prep(
         raw_haemo=raw_haemo,
         sci_scores=sci_scores,
         bad_channels=bad_chs,
+        censor_spans=censor_spans,
     )
 
 

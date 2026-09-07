@@ -219,6 +219,9 @@ def run_participant_level(args: dict[str, Any]) -> None:
                         sub_dir / "nirs", bids_root=bids_dir,
                         qc_window_s=args.get("window_length", 10.0),
         gvtd_channels=args.get("gvtd_channels") or "long",
+        gvtd_censor=bool(args.get("gvtd_censor")),
+        gvtd_censor_n_std=args.get("gvtd_censor_n_std", 10.0),
+        gvtd_min_epoch_s=args.get("gvtd_min_epoch_s", 30.0),
                         labels=set(prep_runs))
                 except Exception:
                     logger.error("sub-%s | SQM records failed", subject, exc_info=True)
@@ -388,6 +391,10 @@ def _emit_subject_report(subject, sub_dir, last_raw, last_result, prep_config, a
             bad_annots.setdefault(desc, []).append(
                 (float(annot["onset"]), float(annot["duration"]))
             )
+    # censoring annotates the optical density, which last_raw is upstream of, so the spans
+    # come off the result rather than out of the input
+    if last_result.censor_spans:
+        bad_annots["BAD_gvtd"] = [tuple(span) for span in last_result.censor_spans]
 
     return build_subject_report(
         subject=subject,

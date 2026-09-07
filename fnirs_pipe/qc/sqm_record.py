@@ -90,7 +90,7 @@ _HAEMO_SECTIONS = tuple(
 )
 
 SECTIONS = ("raw", "raw_long", "raw_short", "motion", "motion_post",
-            "motion_post_long", "motion_post_short", "windowed",
+            "motion_post_long", "motion_post_short", "windowed", "censor",
             *_HAEMO_SECTIONS)
 
 # `pct_data_retained` measures the recording's duration, not its channels, so it is one
@@ -435,6 +435,13 @@ def compute_run_sections(
             raw_intensity, sci_scores, bad_channels, cardiac_l_freq, cardiac_h_freq)
         sections.update(raw_secs)
         per_channel.update(raw_pc)
+
+    # written by the prep step rather than measured here: censoring is a decision the run
+    # made, and re-deriving it would silently disagree with the marks already on the files
+    if "sci" in stages:
+        censor = _sidecar(stages["sci"]).get("gvtd_censor")
+        if censor:
+            sections["censor"] = censor
 
     # the spans the report draws on the carpet, on the channel set it draws them for, so the
     # figure reads them back instead of running the same detection again. Pre-correction by

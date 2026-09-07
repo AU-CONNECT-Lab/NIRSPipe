@@ -83,6 +83,19 @@ def _build_parser() -> argparse.ArgumentParser:
                                "population-dependent). Adult ~0.5; infants higher.")
     prep_opt.add_argument("--window-length", type=float, default=10.0,
                           help="Sliding-window length (s) for windowed SCI/PSP/GVTD QC series.")
+    prep_opt.add_argument("--gvtd-censor", action="store_true",
+                          help="Mark the frames GVTD flags as BAD_gvtd. The data is annotated, "
+                               "never cut, so epoching drops the trials they overlap and a "
+                               "threshold set too strictly is undone by rerunning. Off by "
+                               "default: on a high-motion recording this can flag everything.")
+    prep_opt.add_argument("--gvtd-censor-n-std", type=float, default=10.0,
+                          help="Threshold for --gvtd-censor, in left-tail SDs above the GVTD "
+                               "mode. 10 is the lenient value used for censoring; the reports "
+                               "score at 3, which censors far more.")
+    prep_opt.add_argument("--gvtd-min-epoch-s", type=float, default=30.0,
+                          help="Shortest surviving stretch --gvtd-censor keeps (s). Anything "
+                               "shorter is censored with the artifacts around it, since a few "
+                               "seconds between two of them cannot carry an analysis.")
     prep_opt.add_argument("--gvtd-channels", choices=list(GVTD_CHANNEL_SETS), default="long",
                           help="Channels the GVTD trace, carpet and scalars cover. 'long' keeps "
                                "one separation band, so the value does not move with separations "

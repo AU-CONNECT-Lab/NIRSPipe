@@ -85,6 +85,18 @@ Preprocessing:
                                participant_id + bad_channels columns for one row per subject.
                                Either wavelength marks the pair. (unioned with SCI bads)
   --window-length FLOAT        Window (s) for the windowed SCI / PSP / GVTD series. [default: 10.0]
+  --gvtd-channels              {long,all}   [default: long]
+                               Channels GVTD covers. It is an RMS across channels, so the set
+                               is part of the value; `all` is for montages whose usable
+                               separations do not fall in one band.
+  --gvtd-censor                Mark the frames GVTD flags as BAD_gvtd annotations. Off by
+                               default. Nothing is cut: epoching drops the trials the spans
+                               overlap, continuous analyses pick the surviving stretches, and
+                               a threshold set too strictly is undone by rerunning.
+  --gvtd-censor-n-std FLOAT    Censoring threshold, in left-tail SDs above the GVTD mode.
+                               [default: 10.0, the lenient value; the reports score at 3]
+  --gvtd-min-epoch-s FLOAT     Shortest surviving stretch censoring keeps (s). Anything
+                               shorter is censored with the artifacts around it. [default: 30.0]
 
 Postprocessing mode:
   --mode                       {denoise,glm,rest}
@@ -221,6 +233,7 @@ fnirs-qc prep-raw BIDS_DIR OUTPUT_DIR PARTICIPANT_LABEL
                   [--session-label / --task-label]
                   [--sci-threshold FLOAT] [--skip-bids-validation]
                   [--epoch-qc] [--epoch-tmin/--epoch-tmax FLOAT]
+                  [--gvtd-channels {long,all}]
 
 fnirs-qc hyper-raw BIDS_DIR OUTPUT_DIR --pairs-csv PATH
                    --dpf FLOAT [FLOAT ...]
@@ -354,7 +367,7 @@ output/
 
 - Executive summary with traffic-light badges (bad channel rate, mean SCI, HbO–HbR corr, GVTD p95), and a metrics panel whose tooltips say which stage each number was measured on
 - SCI / PSP probe layout + windowed heatmap
-- Carpet plot before / after motion correction (GVTD trace over all channels), with the spike spans and the correction footprint drawn beneath
+- Carpet plot before / after motion correction, with the spike spans and the correction footprint drawn beneath. The GVTD trace covers the long channels by default (`--gvtd-channels`) and names its channel set and count on the figure; censored spans, if any, are drawn over it
 - Per-channel motion panel with SCI-coloured traces
 - PSD before / after bandpass (cardiac + Mayer wave peaks annotated)
 - HbO–HbR correlation panel
