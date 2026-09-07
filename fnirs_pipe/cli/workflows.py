@@ -218,10 +218,6 @@ def run_participant_level(args: dict[str, Any]) -> None:
                     sqm_paths = build_sqm_records(
                         sub_dir / "nirs", bids_root=bids_dir,
                         qc_window_s=args.get("window_length", 10.0),
-        gvtd_channels=args.get("gvtd_channels") or "long",
-        gvtd_censor=bool(args.get("gvtd_censor")),
-        gvtd_censor_n_std=args.get("gvtd_censor_n_std", 10.0),
-        gvtd_min_epoch_s=args.get("gvtd_min_epoch_s", 30.0),
                         labels=set(prep_runs))
                 except Exception:
                     logger.error("sub-%s | SQM records failed", subject, exc_info=True)
@@ -367,6 +363,10 @@ def _make_prep_config(subject: str, session: str | None, args: dict[str, Any]) -
         resp_l_freq=args["resp_l_freq"],
         resp_h_freq=args["resp_h_freq"],
         qc_window_s=args.get("window_length", 10.0),
+        gvtd_channels=args.get("gvtd_channels") or "long",
+        gvtd_censor=bool(args.get("gvtd_censor")),
+        gvtd_censor_n_std=args.get("gvtd_censor_n_std", 10.0),
+        gvtd_min_epoch_s=args.get("gvtd_min_epoch_s", 30.0),
         ignore=[_v(ig) for ig in (args.get("ignore") or [])],
     )
 

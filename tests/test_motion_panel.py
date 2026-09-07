@@ -67,7 +67,7 @@ def test_channel_derivative_peak_survives_pooling(od_with_cardiac):
 def _panel_labels(fig):
     """Every label the figure prints: subplot titles, annotations and axis titles."""
     labels = [a.text for a in fig.layout.annotations if a.text]
-    labels += [axis.title.text for axis in fig.layout.to_plotly_json().values()
+    labels += [axis["title"]["text"] for axis in fig.layout.to_plotly_json().values()
                if isinstance(axis, dict) and (axis.get("title") or {}).get("text")]
     return [str(t) for t in labels]
 
@@ -78,9 +78,11 @@ def test_carpet_draws_only_the_motion_band_gvtd(od_with_cardiac):
     raw = synth_raw("01", "tapping", duration=200.0)
     fig = carpet_gvtd_figure(raw, raw.ch_names[:6])
 
-    gvtd_labels = [t for t in _panel_labels(fig) if "GVTD" in t]
-    assert len(gvtd_labels) == 1
-    assert "0.01" in gvtd_labels[0]
+    labels = _panel_labels(fig)
+    assert len([t for t in labels if "GVTD" in t]) == 1
+    # the band and the channel set are printed beside the panel, not inside its axis title
+    assert any("0.01" in t for t in labels)
+    assert any("ch" in t for t in labels)
 
 
 # ---- the spans are drawn as given -------------------------------------------------------

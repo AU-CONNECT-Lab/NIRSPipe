@@ -17,7 +17,7 @@ from fnirs_pipe.qc.figures.group_figures import (
     detect_outliers,
     group_metrics,
 )
-from fnirs_pipe.qc.sqm_record import SECTIONS
+from fnirs_pipe.qc.sqm_record import OPTIONAL_SECTIONS, SECTIONS
 from fnirs_pipe.utils.logging import get_logger
 
 # Click a strip point -> open that subject's raw report, which lives in sub-<id>/ next to
@@ -75,7 +75,7 @@ def _scalars(sqm: dict) -> dict:
     channel.
     """
     flat = {k: v for k, v in sqm.items() if isinstance(v, (int, float))}
-    for section in SECTIONS:
+    for section in (*SECTIONS, *OPTIONAL_SECTIONS):
         values = sqm.get(section)
         if isinstance(values, dict):
             flat.update({f"{section}_{k}": v for k, v in values.items()

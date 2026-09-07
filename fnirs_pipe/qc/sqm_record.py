@@ -90,8 +90,13 @@ _HAEMO_SECTIONS = tuple(
 )
 
 SECTIONS = ("raw", "raw_long", "raw_short", "motion", "motion_post",
-            "motion_post_long", "motion_post_short", "windowed", "censor",
+            "motion_post_long", "motion_post_short", "windowed",
             *_HAEMO_SECTIONS)
+
+# Sections only some runs have. Kept out of SECTIONS, which means "every run writes this" and
+# is asserted as such: censoring is opt-in, so a record without it is correct, not incomplete.
+# The group table still descends into these.
+OPTIONAL_SECTIONS = ("censor",)
 
 # `pct_data_retained` measures the recording's duration, not its channels, so it is one
 # number for every channel set. It stays on the whole-file section alone: repeating it
@@ -567,14 +572,15 @@ def sqm_record_dict(sections: dict[str, Any], sources: list[str]) -> dict[str, A
     """
     from fnirs_pipe import __version__
 
-    metrics = [f"{s}_{k}" for s in SECTIONS if isinstance(sections.get(s), dict)
+    known = (*SECTIONS, *OPTIONAL_SECTIONS)
+    metrics = [f"{s}_{k}" for s in known if isinstance(sections.get(s), dict)
                for k in sections[s]]
     return {
         "pipeline_version": __version__,
         "step": "sqm",
         "Sources": sources,
         "data": {
-            "sections": [s for s in SECTIONS if s in sections],
+            "sections": [s for s in known if s in sections],
             "metrics": metrics,
             "n_metrics": len(metrics),
         },

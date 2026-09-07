@@ -96,14 +96,16 @@ def test_cv_is_blind_to_scale_and_snr_with_it():
 SECONDS = np.arange(5.0)
 
 
+# A run of n samples is n sample periods wide, at the end of the recording as anywhere else.
+# The last-sample cases used to expect zero width, which is the span no figure can draw.
 @pytest.mark.parametrize("mask, expected", [
-    ([0, 1, 1, 0, 1], [(1.0, 2.0), (4.0, 0.0)]),   # the docstring's own example
+    ([0, 1, 1, 0, 1], [(1.0, 2.0), (4.0, 1.0)]),   # the docstring's own example
     ([0, 0, 0, 0, 0], []),
-    ([1, 1, 1, 1, 1], [(0.0, 4.0)]),               # one run touching both boundaries
+    ([1, 1, 1, 1, 1], [(0.0, 5.0)]),               # one run touching both boundaries
     ([1, 0, 0, 0, 0], [(0.0, 1.0)]),               # opens at sample 0, no rising edge to find
-    ([0, 0, 0, 0, 1], [(4.0, 0.0)]),               # closes at the last sample, no falling edge
+    ([0, 0, 0, 0, 1], [(4.0, 1.0)]),               # closes at the last sample, no falling edge
     ([0, 0, 1, 0, 0], [(2.0, 1.0)]),
-    ([1, 0, 1, 0, 1], [(0.0, 1.0), (2.0, 1.0), (4.0, 0.0)]),
+    ([1, 0, 1, 0, 1], [(0.0, 1.0), (2.0, 1.0), (4.0, 1.0)]),
 ])
 def test_runs_become_intervals(mask, expected):
     assert _mask_to_segments(np.array(mask, dtype=bool), SECONDS) == expected

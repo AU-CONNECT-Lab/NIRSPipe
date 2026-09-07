@@ -209,6 +209,8 @@ METRIC_SUMMARY = {
     "gvtd_thresh": "Motion cutoff for this recording, set from the mode of its own band-passed GVTD histogram. Compare it with gvtd_filt_p95, not with gvtd_mean. Each side of a before → after pair is set from its own data, so a fall here is the cutoff following the recording, not motion being removed.",
     "gvtd_num_above_thresh": "Timepoints whose band-passed GVTD exceeds that cutoff.",
     "gvtd_pct_above_thresh": "Those timepoints as a fraction of the recording, roughly how much is motion-contaminated. Lower is cleaner.",
+    "gvtd_censor_pct": "Fraction of the recording marked BAD_gvtd, so larger than gvtd_pct_above_thresh: it also takes the surviving stretches too short to analyse. Nothing was deleted, and a different --gvtd-censor-n-std changes this on a rerun.",
+    "gvtd_censor_retained_s": "Seconds left after censoring, held in gvtd_censor_n_epochs continuous stretches. This, not the censored fraction, is what an analysis has to work with.",
     "spike_count": "Sudden jumps across all channels, counted on the motion-band-filtered derivative so they reflect movement rather than pulse. Lower is better.",
     "spike_pct": "Those jumps as a fraction of all channel-samples. Experimental.",
     "spike_num_frames": "Timepoints where at least a tenth of channels jumped together. Experimental.",
