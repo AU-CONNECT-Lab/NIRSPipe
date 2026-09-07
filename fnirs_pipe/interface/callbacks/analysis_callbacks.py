@@ -206,6 +206,10 @@ def _build_cli_args(opts: dict) -> list[str]:
             args += ["--high-pass", str(opts["high_pass"])]
         if opts.get("low_pass") is not None:
             args += ["--low-pass", str(opts["low_pass"])]
+        if opts.get("filter_method"):
+            args += ["--filter-method", str(opts["filter_method"])]
+        if opts.get("filter_order") is not None:
+            args += ["--filter-order", str(int(opts["filter_order"]))]
         if opts.get("resample") is not None:
             args += ["--resample-sfreq", str(opts["resample"])]
         if opts.get("roi_mapping"):
@@ -266,6 +270,8 @@ def _build_cli_args(opts: dict) -> list[str]:
     State("an-post-mode",         "value"),
     State("an-high-pass",         "value"),
     State("an-low-pass",          "value"),
+    State("an-filter-method",     "value"),
+    State("an-filter-order",      "value"),
     State("an-resample",          "value"),
     State("an-n-jobs",            "value"),
     State("an-hrf-model",         "value"),
@@ -287,7 +293,8 @@ def _build_cli_args(opts: dict) -> list[str]:
 )
 def generate_command(n_clicks, bids_dir, output_dir, subjects, dpf, sci_thresh,
                      motion_correction, cardiac_l, cardiac_h, resp_l, resp_h,
-                     post_mode, high_pass, low_pass, resample, n_jobs,
+                     post_mode, high_pass, low_pass, filter_method, filter_order,
+                     resample, n_jobs,
                      hrf_model, noise_model, short_channel, aux, aux_channels,
                      drift_model, drift_high_pass, drift_order, stim_dur,
                      roi_mapping, fc, flags,
@@ -310,6 +317,7 @@ def generate_command(n_clicks, bids_dir, output_dir, subjects, dpf, sci_thresh,
         motion_correction=motion_correction, cardiac_l=cardiac_l, cardiac_h=cardiac_h,
         resp_l=resp_l, resp_h=resp_h,
         post_mode=post_mode, high_pass=high_pass, low_pass=low_pass,
+        filter_method=filter_method, filter_order=filter_order,
         resample=resample, n_jobs=n_jobs,
         hrf_model=hrf_model, noise_model=noise_model, short_channel=short_channel,
         aux=bool(aux), aux_channels=aux_channels,

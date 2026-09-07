@@ -16,6 +16,12 @@ from fnirs_pipe.cli.run import (
     _SHORT_CHANNEL_CHOICES,
 )
 
+from fnirs_pipe.pipeline.denoise import (
+    DEFAULT_FILTER_METHOD,
+    DEFAULT_FILTER_ORDER,
+    FILTER_METHODS,
+)
+
 dash.register_page(__name__, path="/analysis", name="Analysis")
 
 
@@ -239,6 +245,17 @@ layout = dbc.Container([
             dbc.Col([
                 dbc.Label("Low-pass (Hz)"),
                 dbc.Input(id="an-low-pass", type="number", placeholder="e.g. 0.5"),
+            ], width=2),
+            dbc.Col([
+                dbc.Label("Filter"),
+                dbc.Select(id="an-filter-method",
+                           options=[{"label": m, "value": m} for m in FILTER_METHODS],
+                           value=DEFAULT_FILTER_METHOD),
+            ], width=2),
+            dbc.Col([
+                dbc.Label("Filter order"),
+                dbc.Input(id="an-filter-order", type="number", value=DEFAULT_FILTER_ORDER,
+                          min=1, step=1),
             ], width=2),
             dbc.Col([
                 dbc.Label("Resample (Hz)"),
