@@ -64,7 +64,7 @@ def _psp_scorer(raw_od: mne.io.Raw, cardiac_l_freq: float, cardiac_h_freq: float
 # wavelengths agree, which movement can fake, and PSP is near zero when it is faked.
 CRITERIA: tuple[Criterion, ...] = (
     Criterion("sci", "SCI", SCI_PASS, _sci_scorer, config_field="sci_threshold"),
-    Criterion("psp", "PSP", PSP_PASS, _psp_scorer),
+    Criterion("psp", "PSP", PSP_PASS, _psp_scorer, config_field="psp_threshold"),
 )
 
 
@@ -82,6 +82,24 @@ def criterion_cutoffs(config: object | None = None) -> dict[str, float]:
         if config is not None and c.config_field:
             value = getattr(config, c.config_field, None)
         cutoffs[c.name] = c.cutoff if value is None else float(value)
+    return cutoffs
+
+
+def resolve_cutoffs(config: object | None = None, **overrides) -> dict[str, float]:
+    """:func:`criterion_cutoffs` with loose per-criterion overrides laid on top.
+
+    resolve_cutoffs(sci=0.9, psp=None) -> {"sci": 0.9, "psp": 0.1}
+
+    For a caller holding the lines as separate floats rather than as a config object, which
+    is every CLI command and every report builder. A None override is not a value, so it
+    keeps whatever the config or the default gave; an unknown criterion name is a typo the
+    screening would silently ignore, so it raises.
+    """
+    unknown = set(overrides) - {c.name for c in CRITERIA}
+    if unknown:
+        raise ValueError(f"no such screening criterion: {sorted(unknown)}")
+    cutoffs = criterion_cutoffs(config)
+    cutoffs.update({k: float(v) for k, v in overrides.items() if v is not None})
     return cutoffs
 
 

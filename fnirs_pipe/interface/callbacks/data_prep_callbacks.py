@@ -1232,14 +1232,6 @@ def _build_decisions_table(pair_cells: list[dict], blocks: list, notes: list,
     return html.Div([*warnings, html.Div(table, style={"overflowX": "auto"})])
 
 
-@callback(
-    Output("dp-decisions-store", "data"),
-    Output("dp-decisions-table", "children"),
-    Input("dp-run-store", "data"),
-    State("dp-sci-thresh",    "value"),
-    State("app-output-dir",   "data"),
-    prevent_initial_call=True,
-)
 def _cached_channels(cache_key) -> tuple[list, list, list]:
     """The run's per-channel rows as ``(pair_cells, blocks, notes)``, empty when uncached.
 
@@ -1250,6 +1242,14 @@ def _cached_channels(cache_key) -> tuple[list, list, list]:
     return channels.get("pairs", []), channels.get("blocks", []), channels.get("notes", [])
 
 
+@callback(
+    Output("dp-decisions-store", "data"),
+    Output("dp-decisions-table", "children"),
+    Input("dp-run-store", "data"),
+    State("dp-sci-thresh",    "value"),
+    State("app-output-dir",   "data"),
+    prevent_initial_call=True,
+)
 def load_decisions(store, sci_thresh, output_dir):
     if not store:
         return no_update, no_update

@@ -23,7 +23,8 @@ All notable changes to this project will be documented in this file.
 - **`--gvtd-censor` failed on any recording that has event markers**, which is every task run. It worked only on a recording with no markers at all
 - **The interface showed no SCI at all in its channel table**, a dash on every row
 - **The per-channel PSD shaded the cardiac and respiration bands at fixed frequencies** instead of the run's own, so a study outside the adult range had the stripe over the wrong part of the spectrum
-- **The interface's all-channel PSD panel never appeared.** It stayed hidden until a channel was selected, and selecting one replaced it with that channel's spectrum while the label still read "mean across channels". The two spectra are separate panels now
+- **The interface's all-channel PSD panel never appeared.** It was never sent a figure to draw, it stayed hidden until a channel was selected, and selecting one replaced it with that channel's spectrum while the label still read "mean across channels". The two spectra are separate panels now
+- **The interface's Per-channel Metrics table stayed empty on every run**
 - **The same metric could read as passing in one view and failing in another**, and the interface printed record keys with no label, units or verdict
 - **A figure that failed took the whole group report with it.** Every other report loses one panel; this one had no error handling at all
 

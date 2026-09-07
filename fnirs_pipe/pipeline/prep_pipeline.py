@@ -25,6 +25,7 @@ from fnirs_pipe.io.derivatives import build_output_path, carry_entities, data_st
 from fnirs_pipe.io.snirf import write_snirf
 from fnirs_pipe.pipeline.motion import MotionMethod, correct_motion  # noqa: F401  re-exported
 from fnirs_pipe.exceptions import StageError
+from fnirs_pipe.qc.metrics._helpers import PSP_PASS
 from fnirs_pipe.utils import is_optical_density
 from fnirs_pipe.utils.lineage import Recorder, lineage_of, stage_of, stamp
 from fnirs_pipe.utils.logging import get_logger
@@ -63,34 +64,39 @@ def mark_bad_channels(
     threshold: float,
     cardiac_l_freq: float,
     cardiac_h_freq: float,
+    psp_threshold: float | None = None,
 ) -> tuple[mne.io.Raw, list[str], dict[str, float]]:
     """Screen channels into raw.info['bads'].
 
     The criteria are :data:`fnirs_pipe.qc.metrics.screening.CRITERIA` and a channel is
     rejected if it fails any of them, so what gets pruned is decided by that table rather
-    than here. ``threshold`` is the SCI line, which is the one criterion a run sets.
+    than here. ``threshold`` is the SCI line and ``psp_threshold`` the PSP one; None keeps
+    the criterion's own default.
 
     Returns raw (modified in-place), the rejected channel names, and the SCI scores, which
     the report and the quality record both want on their own.
     Raises StageError if the criteria leave no usable channel.
     """
-    from fnirs_pipe.qc.metrics import screen_channels, screening_scores
+    from fnirs_pipe.qc.metrics import resolve_cutoffs, screen_channels, screening_scores
 
+    cutoffs = resolve_cutoffs(sci=threshold, psp=psp_threshold)
     sci_scores = compute_sci(raw_od, cardiac_l_freq, cardiac_h_freq)
     scores = screening_scores(raw_od, cardiac_l_freq, cardiac_h_freq,
                               have={"sci": sci_scores})
-    bad_chs, why = screen_channels(scores, {"sci": threshold})
+    bad_chs, why = screen_channels(scores, cutoffs)
     # without this the run dies four steps later inside Beer-Lambert, which reports only
     # that it found no optical density data and never mentions the screening
     if sci_scores and len(bad_chs) == len(sci_scores):
         failed = sorted({c for reasons in why.values() for c in reasons})
+        lines = ", ".join(f"{k} {v}" for k, v in sorted(cutoffs.items()))
         raise StageError(
-            f"every channel failed screening on {', '.join(failed)} (SCI threshold "
-            f"{threshold}; best SCI {max(sci_scores.values()):.3f}). Lower "
-            f"--sci-threshold, or check the recording for scalp coupling."
+            f"every channel failed screening on {', '.join(failed)} (cutoffs {lines}; "
+            f"best SCI {max(sci_scores.values()):.3f}). Lower --sci-threshold or "
+            f"--psp-threshold, or check the recording for scalp coupling."
         )
     raw_od.info["bads"] = bad_chs
-    stamp(raw_od, stage="sci", step="sci_pruning", source=raw_od, threshold=threshold)
+    stamp(raw_od, stage="sci", step="sci_pruning", source=raw_od, threshold=threshold,
+          psp_threshold=cutoffs["psp"])
     return raw_od, bad_chs, sci_scores
 
 # Step 4: Beer-Lambert
@@ -120,6 +126,7 @@ class PrepConfig:
     resp_l_freq: float
     resp_h_freq: float
     session: str | None = None
+    psp_threshold: float = PSP_PASS         # the other screening line; SCI is the required one
     qc_window_s: float = 10.0               # sliding-window length (s) for windowed SCI/PSP/GVTD
     gvtd_channels: str = "long"              # channel set the GVTD trace and carpet cover
     gvtd_censor: bool = False                # mark the frames GVTD flags as BAD_gvtd
@@ -196,7 +203,7 @@ def run_prep(
     # step 2: SCI channel marking
     logger.info("sub-%s | step 2: SCI marking (threshold=%.2f, %d ch)", config.subject, config.sci_threshold, len(raw_od.ch_names))
     raw_od, bad_chs, sci_scores = mark_bad_channels(
-        raw_od, threshold=config.sci_threshold,
+        raw_od, threshold=config.sci_threshold, psp_threshold=config.psp_threshold,
         cardiac_l_freq=config.cardiac_l_freq, cardiac_h_freq=config.cardiac_h_freq)
     if config.bad_channels:
         manual = _expand_bad_pairs(raw_od, config.bad_channels)

@@ -198,6 +198,7 @@ def _process_run(
         sci_psp_inline = {"figure": fig.to_dict()}
 
     # ── file: PSD mean ─────────────────────────────────────────────────────────
+    psd_inline: dict = {}
     with guard("PSD", errors, label):
         fig = build_psd_mean_figure(raw, cardiac=(cardiac_l_freq, cardiac_h_freq),
                                     bad_channels=bad_channels, short_thresh=_SHORT_THRESH)
@@ -205,6 +206,7 @@ def _process_run(
             fname = f"{label}_desc-psd_nirs.html"
             h     = _save_figure_html(fig, fig_dir / fname)
             figure_paths["psd"] = {"src": f"figures/{fname}", "h": h}
+            psd_inline = {"figure": fig.to_dict()}
 
     # ── file: trigger timeline ─────────────────────────────────────────────────
     trigger_timeline_inline: dict = {}
@@ -305,6 +307,7 @@ def _process_run(
         "evoked_topo":  evoked_topo_inline,
         "carpet_gvtd":  carpet_inline,
         "sci_psp":          sci_psp_inline,
+        "psd":              psd_inline,
         "ch_summary":       ch_summary_inline,
         "trigger_timeline": trigger_timeline_inline,
         "trial_qc":         trial_qc_inline,
