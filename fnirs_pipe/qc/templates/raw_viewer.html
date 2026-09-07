@@ -151,7 +151,7 @@ select#run-select {
 <!-- Row 2: single-channel detail -->
 <div class="row row-detail">
   <div class="card" id="detail-card">
-    <div class="panel-title" id="detail-title">Channel detail &nbsp;<span style="font-weight:400;color:#aaa">click a channel in the signal panel to inspect HbO / HbR</span></div>
+    <div class="panel-title" id="detail-title">Channel detail &nbsp;<span style="font-weight:400;color:#aaa">click a channel in the signal panel &bull; HbO / HbR concentration, after Beer-Lambert</span></div>
     <div id="detail-placeholder">click a channel to view HbO &amp; HbR</div>
     <div id="detail-plot" style="display:none"></div>
   </div>
@@ -160,7 +160,7 @@ select#run-select {
 <!-- Row 3: PSD -->
 <div class="row" style="margin-bottom:0.5rem;">
   <div class="card">
-    <div class="panel-title">PSD &nbsp;<span style="font-weight:400;color:#aaa" id="psd-subtitle">mean across channels (OD)</span></div>
+    <div class="panel-title">PSD &nbsp;<span style="font-weight:400;color:#aaa">mean across channels &bull; optical density, before Beer-Lambert</span></div>
     <div id="psd-plot"></div>
   </div>
 </div>
@@ -477,7 +477,8 @@ function selectChannel(pair) {
   if (_selChannel === pair) return;
   _selChannel = pair;
   document.getElementById("detail-title").innerHTML =
-    "Channel detail &nbsp;<span style='font-weight:400;color:#aaa'>" + _esc(pair) + "</span>";
+    "Channel detail &nbsp;<span style='font-weight:400;color:#aaa'>" + _esc(pair)
+    + " &bull; HbO / HbR concentration, after Beer-Lambert</span>";
   document.getElementById("detail-placeholder").style.display = "none";
   document.getElementById("detail-plot").style.display = "block";
 

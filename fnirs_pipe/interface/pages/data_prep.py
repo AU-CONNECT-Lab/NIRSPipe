@@ -331,15 +331,22 @@ layout = dbc.Container([
                         html.Div(id="dp-channel-detail-wrap", style=_HIDDEN, children=[
                             dcc.Graph(id="dp-channel-detail"),
                         ]),
+                        # this channel's own PSD, kept in the same card as its timeseries so
+                        # it cannot be mistaken for the all-channel panel below
+                        html.Div(id="dp-channel-psd-wrap", style=_HIDDEN, children=[
+                            html.Small("PSD · HbO / HbR concentration, after Beer-Lambert",
+                                       className="text-muted d-block mb-1"),
+                            dcc.Graph(id="dp-channel-psd"),
+                        ]),
                     ]),
                 ], className="mb-3"),
 
                 # PSD (below Channel Detail)
                 _card("PSD",
-                    html.Small("mean across channels",
-                               id="dp-psd-subtitle", className="text-muted d-block mb-1"),
-                    html.Div(id="dp-channel-psd-wrap", style=_HIDDEN, children=[
-                        dcc.Graph(id="dp-channel-psd"),
+                    html.Small("mean across channels · optical density, before Beer-Lambert",
+                               className="text-muted d-block mb-1"),
+                    html.Div(id="dp-psd-mean-wrap", style=_HIDDEN, children=[
+                        dcc.Graph(id="dp-psd-mean"),
                     ]),
                 ),
 

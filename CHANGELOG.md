@@ -23,10 +23,13 @@ All notable changes to this project will be documented in this file.
 - **`--gvtd-censor` failed on any recording that has event markers**, which is every task run. It worked only on a recording with no markers at all
 - **The interface showed no SCI at all in its channel table**, a dash on every row
 - **The per-channel PSD shaded the cardiac and respiration bands at fixed frequencies** instead of the run's own, so a study outside the adult range had the stripe over the wrong part of the spectrum
+- **The interface's all-channel PSD panel never appeared.** It stayed hidden until a channel was selected, and selecting one replaced it with that channel's spectrum while the label still read "mean across channels". The two spectra are separate panels now
 - **The same metric could read as passing in one view and failing in another**, and the interface printed record keys with no label, units or verdict
 - **A figure that failed took the whole group report with it.** Every other report loses one panel; this one had no error handling at all
 
 ### Changed
+- **The all-channel PSD panel averages the screened-out, long and short channels separately** instead of pooling every channel into one curve. A recording with a few dead optodes read as a uniformly poor spectrum, with no way to tell that from a montage-wide problem
+- **Every PSD panel says which stage it is measured on**: optical density before Beer-Lambert for the all-channel spectrum, concentration after it for a single channel's. The two look alike and were being read against each other
 - **Channel screening rejects a channel that fails SCI *or* PSP**, where it tested SCI alone. Runs will reject at least as many channels as before, and the reports name which criterion failed
 - **The CV pass line in the channel quality grid was 50%**, looser than any published threshold, so the CV row passed almost everything. It is 5% now (Lloyd-Fox 2009), measured per wavelength, and the SNR line is derived from it
 - **The per-trial quality panel prints its numbers the way the rest of the report does**

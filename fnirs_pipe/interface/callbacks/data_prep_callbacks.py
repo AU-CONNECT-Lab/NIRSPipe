@@ -38,7 +38,7 @@ def _snirf_options(subject: str, bids_dir: str) -> list[dict]:
 
 
 # bump whenever a cached figure's builder changes, or the disk cache keeps serving the old one
-_CACHE_VERSION = 6
+_CACHE_VERSION = 7
 
 
 def _pair_name(ch_name: str) -> str:
@@ -254,7 +254,7 @@ _SHOW = {}
     Output("dp-layout-2d",              "figure"),
     Output("dp-layout-3d",              "figure"),
     Output("dp-sci-psp-figure",         "figure"),
-    Output("dp-channel-psd",            "figure",  allow_duplicate=True),
+    Output("dp-psd-mean",               "figure"),
     Output("dp-ch-summary-figure",      "figure"),
     Output("dp-marker-store",           "data",    allow_duplicate=True),
     Output("dp-channel-selector",       "options"),
@@ -271,6 +271,7 @@ _SHOW = {}
     Output("dp-layout-2d-wrap",         "style"),
     Output("dp-layout-3d-wrap",         "style"),
     Output("dp-sci-psp-figure-wrap",    "style"),
+    Output("dp-psd-mean-wrap",          "style"),
     Output("dp-ch-summary-figure-wrap", "style"),
     Output("dp-evoked-topo-wrap",       "style"),
     Output("dp-trigger-timeline-wrap",  "style"),
@@ -282,10 +283,10 @@ _SHOW = {}
 )
 def restore_from_store(store, _tick):
     if not store:
-        return (no_update,) * 26
+        return (no_update,) * 27
     cached = _RESULT_CACHE.get(store.get("cache_key"), {})
     if not cached:
-        return (no_update,) * 26
+        return (no_update,) * 27
 
     def _fig(nested, *keys):
         d = nested
@@ -355,6 +356,7 @@ def restore_from_store(store, _tick):
         _wrap(layout_2d),
         _wrap(layout_3d),
         _wrap(sci_psp_out),
+        _wrap(psd_out),
         _wrap(ch_sum_out),
         _wrap(evoked_topo),
         _wrap(trigger_tl),
@@ -477,7 +479,7 @@ def _placeholder_fig(msg: str, height: int = 220) -> dict:
 
 @callback(
     Output("dp-channel-detail",      "figure"),
-    Output("dp-channel-psd",         "figure",  allow_duplicate=True),
+    Output("dp-channel-psd",         "figure"),
     Output("dp-channel-epoch",       "figure"),
     Output("dp-channel-detail-wrap", "style"),
     Output("dp-channel-psd-wrap",    "style"),

@@ -199,7 +199,8 @@ def _process_run(
 
     # ── file: PSD mean ─────────────────────────────────────────────────────────
     with guard("PSD", errors, label):
-        fig = build_psd_mean_figure(raw, cardiac=(cardiac_l_freq, cardiac_h_freq))
+        fig = build_psd_mean_figure(raw, cardiac=(cardiac_l_freq, cardiac_h_freq),
+                                    bad_channels=bad_channels, short_thresh=_SHORT_THRESH)
         if fig:
             fname = f"{label}_desc-psd_nirs.html"
             h     = _save_figure_html(fig, fig_dir / fname)

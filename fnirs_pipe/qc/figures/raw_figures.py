@@ -568,7 +568,59 @@ def build_layout_figure(
     return fig_2d, fig_3d
 
 
-def build_psd_mean_figure(raw: mne.io.Raw, cardiac=None, resp=None) -> go.Figure | None:
+def _psd_groups(
+    ch_names: list[str],
+    dists: "np.ndarray | None",
+    bad_channels: "set[str] | None",
+    short_thresh: "float | None",
+) -> list[tuple[str, np.ndarray, dict]]:
+    """Partition the PSD rows into the groups worth averaging separately.
+
+    A single mean over every channel pools the ones screening already rejected, so a
+    recording with a few dead optodes reads as a uniformly poor spectrum and the reader
+    cannot tell a coupling failure from a montage-wide problem. Splitting also keeps the
+    short channels out of the long-channel mean, which the rest of the report already does.
+
+    e.g. 30 channels of which 4 are screened out and 6 are short ->
+    [("Long, passed", <20 rows>, ...), ("Screened out", <4 rows>, ...), ("Short", <6 rows>, ...)]
+
+    Groups are mutually exclusive and tried in that order, so a short channel that also
+    failed screening is counted once, as a failure. Returns a single "Mean (OD)" group when
+    neither the screening verdict nor the separations are available.
+    """
+    bad = bad_channels or set()
+    if not bad and dists is None:
+        return [("Mean (OD)", np.arange(len(ch_names)), dict(color="#2980b9", width=2.5))]
+
+    split = dists is not None and short_thresh is not None
+    is_short = dists <= short_thresh if split else np.zeros(len(ch_names), dtype=bool)
+    failed = np.array([ch in bad for ch in ch_names])
+
+    groups = [
+        # blue solid is the long-channel mean, the curve this panel is really about. Without
+        # separations the same curve is every passing channel, so it must not claim "long"
+        ("Long, passed" if split else "Passed",
+                         ~failed & ~is_short, dict(color="#2980b9", width=2.5)),
+        ("Screened out", failed,              dict(color="#e74c3c", width=2, dash="dash")),
+        # same light blue the raw signal panel uses for a short channel
+        ("Short",        ~failed & is_short,  dict(color="#78b1f2", width=2)),
+    ]
+    return [(name, np.flatnonzero(sel), line) for name, sel, line in groups if sel.any()]
+
+
+def build_psd_mean_figure(
+    raw: mne.io.Raw,
+    cardiac=None,
+    resp=None,
+    bad_channels: "set[str] | None" = None,
+    short_thresh: "float | None" = None,
+) -> go.Figure | None:
+    """Channel spectra in optical density, averaged within group, individual channels behind.
+
+    ``bad_channels`` is the screening verdict and ``short_thresh`` the short-channel cutoff
+    in metres; both are optional and without them the panel falls back to one mean over
+    every channel. See ``_psd_groups`` for why the split is worth drawing.
+    """
     try:
         from mne.time_frequency import psd_array_welch
         picks = mne.pick_types(raw.info, meg=False, fnirs=True)
@@ -579,19 +631,32 @@ def build_psd_mean_figure(raw: mne.io.Raw, cardiac=None, resp=None) -> go.Figure
         sfreq = raw_od.info["sfreq"]
         # match the metric-side PSD (MNE compute_psd default Welch, n_fft=256)
         psds, freqs = psd_array_welch(data, sfreq, n_fft=min(256, data.shape[1]), verbose=False)
-        fmax = min(2.0, sfreq / 2)
+        fmax = min(_PSD_FMAX, sfreq / 2)
         mask = freqs <= fmax
         freqs_list = freqs[mask].tolist()
+        band = psds[:, mask]
+
+        # ---- Group the rows ----
+        ch_names = [raw_od.ch_names[i] for i in picks]
+        try:
+            dists = mne.preprocessing.nirs.source_detector_distances(raw_od.info, picks=picks)
+        except Exception:
+            dists = None
+        groups = _psd_groups(ch_names, dists, bad_channels, short_thresh)
+
+        # ---- Individual channels behind, one bold mean per group ----
         traces = [
             go.Scatter(x=freqs_list, y=ch_psd, mode="lines",
                        line=dict(width=0.6, color="rgba(100,150,200,0.18)"),
                        showlegend=False, hoverinfo="skip")
-            for ch_psd in psds[:, mask].tolist()
+            for ch_psd in band.tolist()
         ]
-        traces.append(go.Scatter(
-            x=freqs_list, y=psds[:, mask].mean(axis=0).tolist(),
-            name="Mean (OD)", mode="lines", line=dict(width=2.5, color="#2980b9"),
-        ))
+        for name, rows, line in groups:
+            traces.append(go.Scatter(
+                x=freqs_list, y=band[rows].mean(axis=0).tolist(), mode="lines",
+                name=f"{name} (n={len(rows)})", line=dict(**line),
+                hovertemplate=f"{name}<br>%{{x:.3f}} Hz<br>%{{y:.3g}}<extra></extra>",
+            ))
         return go.Figure(data=traces,
                          layout=go.Layout(**psd_layout(cardiac=cardiac, resp=resp)))
     except Exception as exc:
