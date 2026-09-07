@@ -11,7 +11,7 @@ from typing import Any
 import mne
 import numpy as np
 
-from fnirs_pipe.qc.metrics._helpers import SNR_PASS_RATE
+from fnirs_pipe.qc.metrics._helpers import SNR_PASS
 from fnirs_pipe.qc.metrics._helpers import _mean_or_none, _safe_metrics
 from fnirs_pipe.utils import is_optical_density
 from fnirs_pipe.utils.logging import get_logger
@@ -123,11 +123,11 @@ def channel_snr(data: np.ndarray) -> np.ndarray:
     "mean_amp_mean", "mean_amp_per_channel",
 ))
 def _intensity_metrics(raw_intensity: mne.io.Raw,
-                       snr_threshold: float = SNR_PASS_RATE) -> dict[str, Any]:
+                       snr_threshold: float = SNR_PASS) -> dict[str, Any]:
     """Per-channel CV, SNR and mean amplitude from raw intensity (with means; CV also per wavelength).
 
-    snr_pass_rate is the fraction of channels with SNR > snr_threshold (SNR_PASS_RATE,
-    a common channel-pruning cutoff; SNR = mean/std, higher is better). Its denominator is
+    snr_pass_rate is the fraction of channels with SNR > snr_threshold (SNR_PASS, the same
+    line the per-channel figures draw; SNR = mean/std, higher is better). Its denominator is
     every channel, not every channel with a finite SNR: a flat or saturated channel has
     std 0 and no finite SNR at all, and letting it drop out of the denominator would mean a
     recording whose channels are dying reads as a recording whose channels are passing.

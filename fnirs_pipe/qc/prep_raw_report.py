@@ -13,7 +13,7 @@ from fnirs_pipe.qc.figure_io import (
     extract_markers, get_channel_pairs,
 )
 from fnirs_pipe.qc.channel_table import (
-    channel_rows, format_rows, heatmap_args, pair_reasons, pair_rows, save_channel_csv,
+    channel_rows, format_rows, heatmap_args, pair_rows, save_channel_csv,
     separation_blocks, separation_notes, split_table,
 )
 from fnirs_pipe.qc.metrics import SHORT_MAX_DIST
@@ -86,7 +86,7 @@ def _process_run(
     sci_scores, raw_od = compute_sci_scores(raw, cardiac_l_freq, cardiac_h_freq)
     screen_scores = screening_scores(raw_od, cardiac_l_freq, cardiac_h_freq,
                                      have={"sci": sci_scores})
-    bad_list, bad_why = screen_channels(screen_scores, {"sci": sci_threshold})
+    bad_list, _why = screen_channels(screen_scores, {"sci": sci_threshold})
     bad_channels: set[str] = set(bad_list)
 
     try:
@@ -273,7 +273,7 @@ def _process_run(
     # `channel_pairs or None` so a run whose Beer-Lambert failed still gets a table, built
     # from the pairs the intensity recording carries rather than from an empty list
     pair_cells = format_rows(pair_rows(ch_rows, channel_pairs or None), sci_threshold,
-                             name_key="pair", reasons=pair_reasons(bad_why))
+                             name_key="pair")
 
     # ── file: per-trial QC ─────────────────────────────────────────────────────
     # scored here rather than persisted: a trial is not a BIDS entity, so per-trial records
@@ -306,7 +306,7 @@ def _process_run(
     )
     sqm_path.write_text(json.dumps(record, indent=2, default=str), encoding="utf-8")
     logger.info("SQM JSON → %s", sqm_path)
-    save_channel_csv(ch_rows, label, sqm_dir)
+    save_channel_csv(ch_rows, label, sqm_dir, sci_threshold)
 
     return {
         "ts":           ts_inline,

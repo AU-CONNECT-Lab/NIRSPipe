@@ -26,14 +26,13 @@ LONG_MAX_DIST  = 0.045  # m
 # reading 20.
 SCI_PASS = 0.8        # also the --sci-threshold default
 PSP_PASS = 0.1
-# CV is measured per channel name, and intensity names are per wavelength, so it is CVW and
-# takes CVW's threshold: 5% (Lloyd-Fox 2009). Alternatives are 7.5% (Hocke 2018) and 15%
-# (Piper 2014), both on whole-channel CV. SNR is 1/CV by construction, so it is derived
-# rather than written down: the two were 0.5 and 20 here, which are not reciprocal and put
-# the CV row at 50%, over three times looser than the loosest published line.
+# CV is measured per channel name, and intensity names are per wavelength, so it is the
+# per-wavelength CV and takes its threshold: 5% (Lloyd-Fox 2009). Alternatives are 7.5%
+# (Hocke 2018) and 15% (Piper 2014), both on whole-channel CV. SNR is 1/CV by construction,
+# so it is derived rather than written down, and the stored snr_pass_rate reads the same
+# line: three numbers for one decision is how they drifted apart in the first place.
 CV_PASS  = 0.05
 SNR_PASS = 1.0 / CV_PASS
-SNR_PASS_RATE = 2.0   # the cutoff behind the stored snr_pass_rate metric (i.e. CV < 50%)
 
 
 def long_short_channels(raw: mne.io.Raw) -> "tuple[list[str], list[str]]":

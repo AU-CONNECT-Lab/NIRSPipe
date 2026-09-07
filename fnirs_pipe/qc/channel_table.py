@@ -35,7 +35,7 @@ _PER_CHANNEL_KEYS = (
 _LONG_MERGE_SECTIONS = ("motion", "preproc", "preproc_long", "censor")
 
 # CSV column order, also the column order every view prints
-CSV_FIELDS = ("name", "sci", "psp", "snr", "cv", "corr", "is_bad", "separation")
+CSV_FIELDS = ("name", "sci", "psp", "snr", "cv", "corr", "is_bad", "reason", "separation")
 
 
 def _pair_of(ch: str) -> str:
@@ -120,20 +120,6 @@ def channel_rows(
         "is_bad":     ch in bad,
         "separation": separation_of(ch),
     } for ch in sci_scores]
-
-
-def pair_reasons(reasons: dict[str, list[str]] | None) -> dict[str, list[str]]:
-    """Per-channel failure reasons keyed by S-D pair, for a table that lists pairs.
-
-    {"S1_D1 760": ["SCI"], "S1_D1 850": ["PSP"]} -> {"S1_D1": ["SCI", "PSP"]}
-
-    Either wavelength failing is the pair failing, so the pair carries both reasons.
-    """
-    out: dict[str, list[str]] = {}
-    for ch, why in (reasons or {}).items():
-        bucket = out.setdefault(_pair_of(ch), [])
-        bucket.extend(w for w in why if w not in bucket)
-    return out
 
 
 def pair_rows(rows: list[dict], pairs: list[str] | None = None) -> list[dict[str, Any]]:
@@ -347,12 +333,39 @@ def split_table(
     }
 
 
+def _failed_criteria(row: dict, cutoffs: dict[str, float]) -> list[str]:
+    """Which screening criteria this row's own scores fail, or ["manual"].
+
+    _failed_criteria({"sci": 0.95, "psp": 0.02}, {"sci": 0.8, "psp": 0.1}) -> ["PSP"]
+
+    Derived rather than stored: the record already carries every criterion's per-channel
+    score, so asking it again costs nothing and cannot disagree with the screening that
+    produced the verdict. A rejected channel that fails nothing was rejected by hand, which
+    is only claimed when every criterion actually has a score to judge it by -- an
+    unmeasured criterion is not evidence of a manual rejection.
+    """
+    from fnirs_pipe.qc.metrics import CRITERIA
+
+    failed, scored = [], True
+    for c in CRITERIA:
+        value = row.get(c.name)
+        if value is None:
+            scored = False
+            continue
+        # one throwaway channel, so the criterion's own comparison decides rather than a
+        # second copy of it here
+        if c.failures({"_": value}, cutoffs.get(c.name)):
+            failed.append(c.label)
+    if failed:
+        return failed
+    return ["manual"] if scored else []
+
+
 def format_rows(
     rows: list[dict],
     sci_threshold: float | None = None,
     *,
     name_key: str = "name",
-    reasons: dict[str, list[str]] | None = None,
 ) -> list[dict[str, Any]]:
     """Rows with the numbers already formatted and the cells already classed.
 
@@ -372,24 +385,26 @@ def format_rows(
     against anything else would show a verdict the run did not reach.
     ``name_key`` is ``"pair"`` for rows that came through :func:`pair_rows`.
 
-    ``reasons`` is :func:`~fnirs_pipe.qc.metrics.screening.screen_channels`' second return
-    value, and Status names the criterion when it is given. Screening is a union over
-    several criteria, so a channel can be BAD with a passing SCI cell; without the reason
-    printed beside it that reads as a contradiction rather than as a PSP failure.
+Status names the criterion a rejected channel failed. Screening is a union, so a channel
+    can be BAD with a passing SCI cell; without the reason printed beside it that reads as a
+    contradiction rather than as a PSP failure.
     """
+    from fnirs_pipe.qc.metrics import criterion_cutoffs
     from fnirs_pipe.qc.boilerplate.vocabulary import format_metric
     from fnirs_pipe.qc.metrics import SCI_PASS
 
     if sci_threshold is None:
         sci_threshold = SCI_PASS
+    cutoffs = {**criterion_cutoffs(), "sci": sci_threshold}
     out = []
     for row in rows:
-        why = (reasons or {}).get(row.get(name_key)) or []
+        why = _failed_criteria(row, cutoffs) if row["is_bad"] else []
         formatted: dict[str, Any] = {
             "name":       row.get(name_key),
-            "status":     ("BAD (" + "/".join(why) + ")" if row["is_bad"] and why
+            "status":     ("BAD (" + "/".join(why) + ")" if why
                            else "BAD" if row["is_bad"] else "OK"),
             "status_cls": "bad" if row["is_bad"] else "good",
+            "reason":     "/".join(why),
             "separation": row.get("separation") or "",
             "is_bad":     row["is_bad"],
         }
@@ -405,11 +420,18 @@ def format_rows(
     return out
 
 
-def save_channel_csv(rows: list[dict], label: str, out_dir: Path) -> None:
+def save_channel_csv(rows: list[dict], label: str, out_dir: Path,
+                     sci_threshold: float | None = None) -> None:
     """Per-channel metrics for one run. The name carries the run's entities, or a subject
-    with several tasks would keep only whichever ran last."""
+    with several tasks would keep only whichever ran last.
+
+    ``reason`` names the criterion a rejected channel failed, so the CSV answers "why did
+    this channel go" without the reader re-deriving it from the score columns.
+    """
     if not rows:
         return
+    reasons = {r["name"]: r["reason"] for r in format_rows(rows, sci_threshold)}
+    rows = [{**r, "reason": reasons.get(r["name"], "")} for r in rows]
     out_path = Path(out_dir) / f"{label}_channel_metrics.csv"
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with out_path.open("w", newline="", encoding="utf-8") as fh:

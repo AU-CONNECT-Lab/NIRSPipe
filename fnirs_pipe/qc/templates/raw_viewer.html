@@ -281,7 +281,8 @@ select#run-select {
     <p class="qm-note">One row per source-detector pair: a decision applies to the pair, and
        SCI is a property of the pair rather than of either wavelength. The per-wavelength
        numbers are in the channel metrics CSV written beside the quality record. Rows in red
-       have SCI below threshold. Click the decision chip to cycle:
+       were rejected by screening, and Status names the criterion. Click the decision chip
+       to cycle:
        &#8212; &#8594; good &#8594; bad. Saves automatically.</p>
     <div style="overflow-x:auto">
     <table id="ch-decisions-table" class="qm-table">
@@ -822,7 +823,7 @@ function buildChDecisionsTable() {
     }
     rows.forEach(function(row) {
       var tr = document.createElement("tr");
-      if (row.sci_cls === "bad") tr.style.background = "#fff8f8";
+      if (row.is_bad) tr.style.background = "#fff8f8";
       var name = document.createElement("td");
       name.textContent = row.name;
       tr.appendChild(name);

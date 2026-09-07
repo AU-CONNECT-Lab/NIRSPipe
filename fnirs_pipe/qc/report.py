@@ -768,7 +768,7 @@ def _section_sqm(
     reads, which is what a foreign file at this path looks like.
 
     The per-channel table is the one place short channels appear, read from ``raw_short``.
-    They are pruned against the same SCI threshold as everything else, so their status is
+    They are screened by the same criteria as everything else, so their status is
     a real verdict with a downstream cost -- a bad short channel is a bad regressor -- and
     printing that verdict without the score behind it leaves it uncheckable. Assembling
     those rows is :mod:`fnirs_pipe.qc.channel_table`, which the raw views share, so the
@@ -855,7 +855,7 @@ def _section_sqm(
     rows = channel_rows(record_read, sci_scores, bad_channels)
     if out_dir is not None and sqm:
         with _guard("Channel metrics CSV", errors, subject):
-            save_channel_csv(rows, sqm_label or f"sub-{subject}", out_dir)
+            save_channel_csv(rows, sqm_label or f"sub-{subject}", out_dir, sci_threshold)
     # the raw rows stay for the CSV and the quality grid, which want the numbers; the
     # template gets them formatted, so the per-channel table prints the same widths and the
     # same SCI verdict as the raw viewer and the GUI

@@ -1192,10 +1192,11 @@ def _build_decisions_table(pair_cells: list[dict], blocks: list, notes: list,
     n_cols = len(_CH_COLUMNS) + 2
 
     def _row(cell: dict) -> html.Tr:
-        below = cell.get("sci_cls") == "bad"
+        # the verdict, not one of its inputs: screening is a union, so a channel rejected on
+        # PSP alone still has to be marked
         name = html.Td(cell["name"],
                        style={**_TD_STYLE, "fontWeight": "500",
-                              "background": "#fff8f8" if below else ""})
+                              "background": "#fff8f8" if cell["is_bad"] else ""})
         metrics = [
             html.Td(cell[key],
                     style={**_TD_STYLE,

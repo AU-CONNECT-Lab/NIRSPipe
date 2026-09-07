@@ -515,8 +515,8 @@
   <p class="qm-note">Measured over three channel sets. <b>Long</b> is what the verdict is read off;
      <b>Short</b> answers a different question, whether the regressors those channels feed are
      trustworthy, and carries no colouring because a short channel's coupling is high by
-     construction and has no established threshold. Rejection itself is per channel against the SCI
-     threshold, over the whole montage, and is not read off any of these averages.</p>
+     construction and has no established threshold. Rejection itself is per channel, against the
+     screening criteria, over the whole montage, and is not read off any of these averages.</p>
 
   {#- one column per metric, one row per channel set. Both halves are measured before
       denoising, so they share one table; the domain changes at the divider, and the two
@@ -669,10 +669,11 @@
       one block, which is what a montage of one kind looks like. -#}
   {% set n_blocks = channel_blocks | length %}
   {% if n_blocks > 1 %}
-  <p class="qm-note">Grouped by source-detector separation. Every block is pruned against the same
-     SCI threshold, so Status is a verdict for short channels too, and a short channel marked BAD is
-     one that should not be used as a regressor. Channels in neither range are measured by no
-     section and show dashes.</p>
+  <p class="qm-note">Grouped by source-detector separation. Every block is screened by the same
+     criteria, so Status is a verdict for short channels too, and a short channel marked BAD is
+     one that should not be used as a regressor. Screening is a union of SCI and PSP, so a row can
+     be BAD with a passing SCI. Channels in neither range are measured by no section and show
+     dashes.</p>
   {% endif %}
   <div style="overflow-x:auto;">
     <table class="qm-table">
