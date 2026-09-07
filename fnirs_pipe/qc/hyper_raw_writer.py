@@ -29,9 +29,32 @@ from fnirs_pipe.qc.figures.hyper_figures import (
     compute_windowed_coherence,
 )
 from fnirs_pipe.qc.report_shell import guard, note
+from fnirs_pipe.utils.lineage import path_from
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("qc.hyper_raw_writer")
+
+
+def _hyper_sqm_record(sqm: dict, aligned_raws: dict[str, mne.io.Raw]) -> dict:
+    """The dyad's quality record, with the provenance keys the graph reads.
+
+    The keys sit in the file rather than in a sidecar beside it, the way
+    :func:`~fnirs_pipe.qc.sqm_record.sqm_record_dict` puts them there: a sidecar for
+    ``x.json`` would resolve to ``x.json`` itself. ``n_metrics`` is what marks the node as
+    a QC record measured off the chain rather than a signal file on it, so the graph draws
+    it without edges. The step name is its own: two objects sharing one is how a stage gets
+    credited to the wrong file.
+    """
+    from fnirs_pipe import __version__
+
+    metrics = [k for k, v in sqm.items() if isinstance(v, (int, float))]
+    return {
+        "pipeline_version": __version__,
+        "step": "hyper_sqm",
+        "Sources": [p for p in (path_from(raw) for raw in aligned_raws.values()) if p],
+        "data": {"metrics": metrics, "n_metrics": len(metrics)},
+        **sqm,
+    }
 
 
 def _process_hyper_raw_group(
@@ -156,7 +179,8 @@ def _process_hyper_raw_group(
         sqm_data, coherence_df, aligned_raws, offsets, subject_ids, sci_threshold,
     )
     sqm_path = sqm_dir / f"{label}_desc-sqm_nirs.json"
-    sqm_path.write_text(json.dumps(sqm, indent=2, default=str), encoding="utf-8")
+    sqm_path.write_text(json.dumps(_hyper_sqm_record(sqm, aligned_raws), indent=2,
+                                  default=str), encoding="utf-8")
     logger.info("Hyper SQM JSON → %s", sqm_path)
 
     return {

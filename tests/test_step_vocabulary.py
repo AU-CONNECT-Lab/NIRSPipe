@@ -24,7 +24,9 @@ ALL_STEPS = [
     "beer_lambert", "bandpass", "resample", "design_matrix", "glm_fit", "contrasts",
     "glm_residuals", "glm_residuals_broadband", "sqm", "sqm_raw", "alff", "fc",
     "fisher_z", "fc_roi", "fc_seed", "group_sqm_raw", "group_sqm_raw_channels",
+    "hyper_sqm", "hyper_bads",
     "hyper_wtc", "hyper_wtc_roichan", "hyper_wtc_pseudo", "hyper_isc",
+    "hyper_wtc_bycondition", "hyper_wtc_bycondition_roichan",
     "group_hyper_wtc", "group_hyper_wtc_roichan", "group_hyper_wtc_pseudo",
 ]
 
@@ -198,3 +200,53 @@ def test_both_regressor_families_are_named_when_both_ran():
         "short_channel": "mean", "drift_model": "polynomial", "drift_order": 1,
     })["regressors"]
     assert "short-channel" in phrase and "polynomial" in phrase
+
+
+# ---- hyperscanning steps ----
+#
+# A dyad's steps reach the Methods paragraph two ways: the coherence passes leave sidecars
+# and are read off disk, while the alignment leaves no file and is passed in by the report.
+# Both go through the same table, and a key the table does not know renders as nothing.
+
+@pytest.mark.parametrize("step", [
+    "hyper_wtc", "hyper_wtc_roichan", "hyper_wtc_bycondition",
+    "hyper_wtc_bycondition_roichan", "hyper_wtc_pseudo",
+])
+def test_every_coherence_output_maps_to_the_one_coherence_sentence(step):
+    # five files, one method; the band is the same for all of them
+    assert boilerplate_key(step, {}) == "hyper_wtc"
+
+
+def test_the_coherence_sentence_names_the_axis_and_the_band_apart():
+    slots = template_slots("hyper_wtc", {
+        "wtc_fmin": 0.004, "wtc_fmax": 0.2, "band_fmin": 0.03, "band_fmax": 0.1,
+    })
+    assert slots == {"wtc_fmin": "0.004", "wtc_fmax": "0.2",
+                     "band_fmin": "0.03", "band_fmax": "0.1"}
+
+
+def test_a_run_that_named_no_band_averaged_the_whole_axis():
+    slots = template_slots("hyper_wtc", {"wtc_fmin": 0.004, "wtc_fmax": 0.2})
+    assert slots["band_fmin"] == "0.004" and slots["band_fmax"] == "0.2"
+
+
+def test_the_hyper_sentences_all_exist():
+    from fnirs_pipe.qc.boilerplate.generate import _load_steps
+
+    steps = _load_steps()
+    for key in ("hyper_alignment", "hyper_wtc", "hyper_coherence", "hyper_isc"):
+        assert key in steps, f"{key} has no prose"
+        assert "{citations}" in steps[key]["plain"]
+
+
+def test_the_hyper_citations_are_still_placeholders():
+    # a reminder, not a failure: replace the TODO_ keys in references.bib and this goes away
+    from fnirs_pipe.qc.boilerplate.generate import _load_refs, _load_steps
+
+    steps, refs = _load_steps(), _load_refs()
+    todo = sorted({key for section in steps.values()
+                   for key in section.get("citations", []) if key.startswith("TODO_")})
+    for key in todo:
+        assert key in refs, f"{key} is cited but not in references.bib"
+    if todo:
+        pytest.skip(f"hyperscanning Methods still cites placeholders: {todo}")

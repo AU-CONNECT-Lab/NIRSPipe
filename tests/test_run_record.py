@@ -130,3 +130,54 @@ def test_environment_records_the_pipeline_version(record):
 def test_a_prep_only_run_has_no_post_section(prep_only_record):
     assert "post" not in prep_only_record
     assert "prep" in prep_only_record
+
+
+# ---- the hyperscanning group record ----
+#
+# The mirror of a subject's record, and it exists for the same reason: the command is the
+# only place several of these settings appear, so a run nobody wrote down cannot be redone.
+
+@pytest.fixture
+def group_record(tmp_path):
+    import tomllib
+
+    from fnirs_pipe.utils.run_record import write_group_run_record
+
+    out = write_group_run_record(
+        {"pairs_csv": tmp_path / "pairs.csv", "wtc_fmin": 0.004, "wtc_fmax": 0.2,
+         "wtc_channel_cross": False, "task_label": ["chat"], "roi_mapping": None,
+         "output_dir": tmp_path, "verbose": False, "func": None,
+         "roi_map": {"L": ["S1_D1"]}},
+        "D01", "chat", "20260907_120000", tmp_path, tmp_path / "group-D01",
+        members=["01", "02"],
+    )
+    return out, tomllib.loads(out.read_text(encoding="utf-8"))
+
+
+def test_the_group_record_lands_beside_the_group_reports(group_record):
+    out, _ = group_record
+    assert out.parent.name == "logs"
+    assert out.parent.parent.name == "group-D01"
+    assert out.name == "group-D01_task-chat.toml"
+
+
+def test_the_group_record_names_the_group_and_its_members(group_record):
+    _, record = group_record
+    assert record["execution"]["group_id"] == "D01"
+    assert record["execution"]["task_label"] == "chat"
+    assert record["execution"]["participant_label"] == ["01", "02"]
+
+
+def test_the_group_record_carries_every_resolved_option(group_record):
+    _, record = group_record
+    assert record["hyper"]["wtc_fmin"] == 0.004
+    assert record["hyper"]["wtc_channel_cross"] is False
+    # structures are settings for the analysis, not for the record; the ROI file is named
+    # by roi_mapping and its contents belong beside the results
+    assert "roi_map" not in record["hyper"]
+    assert "output_dir" not in record["hyper"]
+
+
+def test_both_records_report_the_same_environment(group_record, record):
+    _, group = group_record
+    assert group["environment"] == record["environment"]

@@ -69,6 +69,32 @@ def _config_section(config: Any) -> dict[str, Any]:
     return out
 
 
+def _environment() -> dict[str, Any]:
+    """Versions and machine, the same for every record a run writes."""
+    from fnirs_pipe import __version__
+    from fnirs_pipe.qc.boilerplate import collect_software_versions
+
+    env: dict[str, Any] = {
+        "fnirs_pipe_version": __version__,
+        "python_version": (
+            f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+        ),
+        "platform": platform.platform(),
+        "cpu_count": os.cpu_count(),
+    }
+    try:
+        import psutil
+        env["free_mem_gb"] = round(psutil.virtual_memory().available / 1024 ** 3, 1)
+    except ImportError:
+        pass
+
+    for pkg_name, pkg_ver in collect_software_versions().items():
+        if pkg_name in ("python", "fnirs-pipe"):
+            continue
+        env[pkg_name.replace("-", "_") + "_version"] = pkg_ver
+    return env
+
+
 def write_run_record(
     args: dict[str, Any],
     subject: str,
@@ -95,33 +121,7 @@ def write_run_record(
     # distribution, motion summary) will be added here once the QC text
     # summary pipeline is implemented.
     """
-    from fnirs_pipe.qc.boilerplate import collect_software_versions
-    from fnirs_pipe import __version__
-
-    versions = collect_software_versions()
-
-    free_mem_gb = None
-    try:
-        import psutil
-        free_mem_gb = round(psutil.virtual_memory().available / 1024 ** 3, 1)
-    except ImportError:
-        pass
-
-    env: dict[str, Any] = {
-        "fnirs_pipe_version": __version__,
-        "python_version": (
-            f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
-        ),
-        "platform": platform.platform(),
-        "cpu_count": os.cpu_count(),
-    }
-    if free_mem_gb is not None:
-        env["free_mem_gb"] = free_mem_gb
-
-    for pkg_name, pkg_ver in versions.items():
-        if pkg_name in ("python", "fnirs-pipe"):
-            continue
-        env[pkg_name.replace("-", "_") + "_version"] = pkg_ver
+    env = _environment()
 
     execution: dict[str, Any] = {
         "run_uuid": timestamp,
@@ -161,3 +161,52 @@ def write_run_record(
     out = base / "logs" / f"sub-{subject}.toml"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text("\n".join(sections), encoding="utf-8")
+
+
+def write_group_run_record(
+    args: dict[str, Any],
+    group_id: str,
+    task: str,
+    timestamp: str,
+    output_dir: Path,
+    group_dir: Path,
+    members: list[str] | None = None,
+) -> Path:
+    """Write a TOML run record for one hyperscanning group.
+
+    Output: group_dir/logs/group-{group_id}_task-{task}.toml, the mirror of a subject's
+    logs/sub-{id}.toml.
+
+    Sections:
+      [environment] - software versions + system info, the same block a subject gets
+      [execution]   - the verbatim command, the paths, and which group and task it covered
+      [hyper]       - every option the invocation resolved to
+
+    [hyper] is the whole argument dict rather than a config dataclass because the
+    hyperscanning CLI has none: its options go straight from argparse into the report
+    builder, so the args *are* the resolved settings.
+    """
+    execution: dict[str, Any] = {
+        "run_uuid": timestamp,
+        "run_timestamp": datetime.strptime(timestamp, "%Y%m%d_%H%M%S").isoformat(),
+        "run_command": " ".join(sys.argv).replace("\\", "/"),
+        "output_dir": _fwd(output_dir),
+        "log_dir": _fwd(group_dir / "logs"),
+        "group_id": group_id,
+        "task_label": task,
+        "participant_label": list(members or []),
+    }
+
+    skip = {"func", "output_dir", "verbose"}
+    hyper = {k: (list(v) if isinstance(v, tuple) else v)
+             for k, v in args.items()
+             if k not in skip and not isinstance(v, dict)}
+
+    out = group_dir / "logs" / f"group-{group_id}_task-{task}.toml"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text("\n".join([
+        _section("environment", _environment()),
+        _section("execution", execution),
+        _section("hyper", hyper),
+    ]), encoding="utf-8")
+    return out

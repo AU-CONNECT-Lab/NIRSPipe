@@ -290,32 +290,35 @@ def generate_methods_text(
     mode: str | None = None,
     versions: dict[str, str] | None = None,
     nirs_dir: Any = None,
+    steps: "list[tuple[str, dict]] | None" = None,
 ) -> dict[str, str]:
     """Methods prose for one run.
 
-    Given nirs_dir, the steps are read from the sidecars that run wrote, so the text
-    describes what actually happened; the config is the fallback for a tree with no
-    sidecars, and it can only describe what was requested. A caller that holds no config
-    passes nirs_dir alone and gets whatever the sidecars support, down to the opening
-    sentence when they support nothing.
+    Three ways to say what ran, most specific first. ``steps`` is the step list itself,
+    already slot-filled (see :func:`~fnirs_pipe.qc.boilerplate.vocabulary.template_slots`),
+    for a caller that assembles it from more than one place: a dyad's paragraph continues
+    from a member's preprocessing into steps that left no file. ``nirs_dir`` reads the
+    steps from the sidecars a run wrote, so the text describes what actually happened.
+    The config is the fallback for a tree with no sidecars, and it can only describe what
+    was requested.
     """
-    steps = _load_steps()
+    templates = _load_steps()
     refs = _load_refs()
     ver = (versions or {}).get("fnirs-pipe", "unknown")
 
-    active = []
-    if nirs_dir is not None:
+    active = list(steps) if steps else []
+    if not active and nirs_dir is not None:
         from fnirs_pipe.qc.boilerplate.vocabulary import steps_from_sidecars
         active = steps_from_sidecars(nirs_dir, mode)
     if not active:
         active = _active_steps(prep_config, post_config, mode)
 
-    prose_plain = _with_connectives(_collect_prose(active, steps, refs, "plain"))
-    prose_md    = _with_connectives(_collect_prose(active, steps, refs, "markdown"))
-    prose_latex = _with_connectives(_collect_prose(active, steps, refs, "latex"))
-    reflist     = _build_reflist(active, steps, refs)
+    prose_plain = _with_connectives(_collect_prose(active, templates, refs, "plain"))
+    prose_md    = _with_connectives(_collect_prose(active, templates, refs, "markdown"))
+    prose_latex = _with_connectives(_collect_prose(active, templates, refs, "latex"))
+    reflist     = _build_reflist(active, templates, refs)
 
-    header = steps.get("header", {})
+    header = templates.get("header", {})
     header_plain = header.get("plain", "fNIRS data were preprocessed using fnirs-pipe v{ver}.").format(ver=ver)
     header_md    = header.get("markdown", header_plain).format(ver=ver)
     header_latex = header.get("latex", header_plain).format(ver=ver)
@@ -338,7 +341,7 @@ def generate_methods_text(
         "% BibTeX keys: see fnirs_pipe/qc/boilerplate/references.bib"
     )
 
-    html = _build_html(header_plain, refs, active, steps)
+    html = _build_html(header_plain, refs, active, templates)
 
     return {"plain": plain, "markdown": markdown, "latex": latex, "html": html}
 

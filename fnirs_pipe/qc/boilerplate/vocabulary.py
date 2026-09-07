@@ -23,7 +23,12 @@ from typing import Any
 
 # ---- pipeline step -> steps.toml section ----
 
-_DIRECT = ("od_conversion", "beer_lambert", "resample")
+_DIRECT = ("od_conversion", "beer_lambert", "resample", "hyper_isc")
+
+# A dyad's coherence is written once per grouping (channels, ROI means, per condition) and
+# once more for the null; they are one method sentence, and the band is the same for all.
+_WTC_STEPS = ("hyper_wtc", "hyper_wtc_roichan", "hyper_wtc_bycondition",
+              "hyper_wtc_bycondition_roichan", "hyper_wtc_pseudo")
 
 
 def boilerplate_key(step: str | None, params: dict[str, Any], mode: str | None = None) -> str | None:
@@ -48,6 +53,8 @@ def boilerplate_key(step: str | None, params: dict[str, Any], mode: str | None =
         # rest and denoise run this same code to regress confounds out; only a task run is a
         # first-level GLM, and nothing in the sidecar separates the two
         return "glm" if mode == "glm" else "confound_regression"
+    if step in _WTC_STEPS:
+        return "hyper_wtc"
     return None
 
 
@@ -112,7 +119,32 @@ def template_slots(key: str, params: dict[str, Any]) -> dict[str, str]:
             "drift_model": str(params.get("drift_model", "")),
             "drift_high_pass": str(params.get("drift_high_pass", "")),
         }
+    if key == "hyper_wtc":
+        # the axis the transform covered and the band it was collapsed over are different
+        # numbers and the sentence names both; a run that gave no band averaged the whole axis
+        wtc_lo, wtc_hi = params.get("wtc_fmin"), params.get("wtc_fmax")
+        return {
+            "wtc_fmin":  _num(wtc_lo),
+            "wtc_fmax":  _num(wtc_hi),
+            "band_fmin": _num(params.get("band_fmin", wtc_lo)),
+            "band_fmax": _num(params.get("band_fmax", wtc_hi)),
+        }
+    if key == "hyper_coherence":
+        return {"coh_fmin": _num(params.get("coherence_fmin")),
+                "coh_fmax": _num(params.get("coherence_fmax"))}
+    if key == "hyper_alignment":
+        return {"n_subjects": str(params.get("n_subjects", "member"))}
     return {}
+
+
+def _num(value: Any) -> str:
+    """A frequency as the Methods should print it: 0.004 not 0.004000000000000001."""
+    if value is None:
+        return ""
+    try:
+        return f"{float(value):g}"
+    except (TypeError, ValueError):
+        return str(value)
 
 
 # ---- steps with no method prose ----
@@ -133,6 +165,8 @@ STEP_SUMMARY = {
     "fisher_z": "Fisher r-to-z of a correlation matrix, for group-level statistics.",
     "fc_roi": "Connectivity between ROI-averaged signals.",
     "fc_seed": "Correlation of one ROI's mean signal with every channel.",
+    "hyper_bads": "The channels excluded for this dyad, over the scope named in the settings.",
+    "hyper_sqm": "Quality metrics for the dyad: alignment, coupling and the members' own.",
     "group_sqm_raw": "Quality metrics pooled across the members of a dyad.",
     "group_sqm_raw_channels": "The same pooling, kept per channel.",
     "hyper_wtc": "Wavelet coherence between a pair, averaged over a band and one value per channel.",
@@ -172,7 +206,7 @@ METRIC_SUMMARY = {
     # raw intensity
     "cv_mean": "Noise relative to a channel's own brightness (SD / mean), per wavelength. Lower is cleaner.",
     "snr_mean": "Signal size relative to its fluctuation (mean / SD), the reciprocal of CV. Higher is better.",
-    "snr_pass_rate": "Fraction of channels with SNR above 2. Higher is better.",
+    "snr_pass_rate": "Fraction of channels whose SNR clears the per-channel line. Higher is better.",
     "n_flat_channels": "How many channels carry no variation at all, flat or saturated. Zero is what you want; these are counted as failures in snr_pass_rate but cannot enter the SNR and CV means.",
     "mean_amp_mean": "Average light level reaching the detectors. No universal good value; use it to spot channels far dimmer than their neighbours.",
 
@@ -526,25 +560,36 @@ def metric_rows(
 
 # ---- what a run actually did ----
 
-def steps_from_sidecars(nirs_dir: Path, mode: str | None = None) -> list[tuple[str, dict[str, str]]]:
+def steps_from_sidecars(
+    nirs_dir: "Path | Sequence[Path]",
+    mode: str | None = None,
+) -> list[tuple[str, dict[str, str]]]:
     """(steps.toml key, filled slots) for every method step a run recorded, in run order.
 
     Ordered by depth in the provenance graph, so the sentences follow the data rather than
     the filenames. A step that ran more than once contributes one entry, with the later
     parameters filling anything the first was missing (the GLM's four outputs each carry
     part of the picture).
+
+    Several directories are scanned in the order given and merged the same way, which is
+    how a dyad's Methods paragraph continues from a member subject's preprocessing into
+    the group's own steps. Directories the caller passes in the wrong order produce
+    sentences in the wrong order; nothing here re-sorts across them.
     """
     from fnirs_pipe.qc.provenance import scan
 
+    dirs = [nirs_dir] if isinstance(nirs_dir, (str, Path)) else list(nirs_dir)
+
     merged: dict[str, dict[str, Any]] = {}
     order: list[str] = []
-    for node in sorted(scan(nirs_dir).values(), key=lambda n: (n.depth, n.label)):
-        key = boilerplate_key(node.step, node.params, mode)
-        if key is None:
-            continue
-        if key not in merged:
-            merged[key] = {}
-            order.append(key)
-        merged[key] = {**node.params, **merged[key]}
+    for directory in dirs:
+        for node in sorted(scan(directory).values(), key=lambda n: (n.depth, n.label)):
+            key = boilerplate_key(node.step, node.params, mode)
+            if key is None:
+                continue
+            if key not in merged:
+                merged[key] = {}
+                order.append(key)
+            merged[key] = {**node.params, **merged[key]}
 
     return [(key, template_slots(key, merged[key])) for key in order]

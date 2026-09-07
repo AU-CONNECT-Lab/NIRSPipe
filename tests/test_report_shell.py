@@ -19,6 +19,7 @@ from jinja2 import ChainableUndefined, Environment, FileSystemLoader
 
 from fnirs_pipe.qc.report_shell import (
     BASE_CSS,
+    FOOTER_CSS,
     TEMPLATE_DIR,
     footer_vars,
     guard,
@@ -142,16 +143,25 @@ def test_the_subject_report_replaces_the_dashboard_stylesheet():
     assert "#f5f7fa" not in subject
 
 
-def test_the_footer_styles_ship_with_the_shell():
+def test_the_footer_styles_ship_with_the_footer():
     for cls in (".tab-btn", ".boilerplate-html", ".error-list", ".note-list",
-                ".report-footer"):
-        assert cls in BASE_CSS, f"{cls} is used by the footer and styled nowhere"
+                ".section-hint", ".placeholder"):
+        assert cls in FOOTER_CSS, f"{cls} is used by the footer and styled nowhere"
 
 
-def test_the_document_reports_style_the_footer_too():
-    subject = stylesheet("subject.css")
-    for cls in (".tab-btn", ".boilerplate-html", ".error-list", ".note-list"):
-        assert cls in subject, f"{cls} is unstyled in the subject report"
+def test_page_vars_appends_the_footer_sheet_to_either_look():
+    for css in (None, stylesheet("subject.css")):
+        sheet = page_vars(title="T", heading="T", css=css)["base_css"]
+        assert ".boilerplate-html" in sheet, "the footer would render unstyled"
+
+
+def test_neither_base_sheet_keeps_its_own_copy_of_the_footer_rules():
+    # both sheets carried a verbatim copy until the rules moved to _footer.css; a copy
+    # coming back means one look has quietly started overriding the other
+    for name in ("_base.css", "subject.css"):
+        sheet = stylesheet(name)
+        for cls in (".tab-btn {", ".boilerplate-html {", ".error-list {"):
+            assert cls not in sheet, f"{name} has a second copy of {cls}"
 
 
 def test_the_index_shares_the_subject_stylesheet():

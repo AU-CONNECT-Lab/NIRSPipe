@@ -22,8 +22,8 @@ plain = "Raw intensity signals were converted to optical density (OD) using MNE-
 citations = ["Gramfort2013"]
 
 [sci_marking]
-plain = "Channel signal quality was assessed using the scalp coupling index (SCI) and the peak spectral power (PSP) of the cardiac band {citations}. Channels with SCI below {threshold} or PSP below {psp_threshold} were {action}."
-citations = ["Pollonini2014", "Pollonini2016"]
+plain = "Channel signal quality was assessed using the scalp coupling index (SCI) {citations} together with the peak spectral power (PSP) of the cardiac band. Channels with SCI below {threshold} or PSP below {psp_threshold} were {action}."
+citations = ["Pollonini2014"]
 
 [motion_tddr]
 plain = "Motion artifacts were corrected using temporal derivative distribution repair (TDDR) {citations}."
@@ -64,3 +64,25 @@ citations = ["Yucel2021"]
 [glm]
 plain = "A first-level general linear model (GLM) was fitted to the haemodynamic time series using a {hrf_model} haemodynamic response function, a {noise_model} noise model, and a {drift_model} drift term (high-pass cutoff: {drift_high_pass} Hz) {citations}."
 citations = ["Santosa2018"]
+
+# ---- Hyperscanning ----
+#
+# These describe a dyad rather than a subject, and they are appended after the member
+# subjects' own steps so the paragraph reads as one pipeline. Their citations are
+# placeholders (see references.bib); the prose is real.
+
+[hyper_alignment]
+plain = "The {n_subjects} recordings of each group were aligned on their first shared event marker and trimmed to the shortest, so every cross-brain measure was taken over one common time base {citations}."
+citations = ["TODO_HyperAlignment"]
+
+[hyper_wtc]
+plain = "Inter-brain coupling was quantified as wavelet transform coherence between homologous channels of the two recordings over {wtc_fmin}–{wtc_fmax} Hz, and each channel's coherence map was averaged over {band_fmin}–{band_fmax} Hz to give one value per channel {citations}."
+citations = ["TODO_Wavelet"]
+
+[hyper_coherence]
+plain = "Inter-brain coupling was screened with the magnitude-squared coherence of each homologous channel pair, averaged over {coh_fmin}–{coh_fmax} Hz {citations}."
+citations = ["TODO_Coherence"]
+
+[hyper_isc]
+plain = "Inter-subject correlation was computed as the Pearson correlation of each channel of one brain with every channel of the other over the aligned recordings, separately for HbO and HbR {citations}."
+citations = ["TODO_ISC"]

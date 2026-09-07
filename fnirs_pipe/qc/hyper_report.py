@@ -8,7 +8,9 @@ from pathlib import Path
 import mne
 import pandas as pd
 
-from fnirs_pipe.io.derivatives import group_data_dir, group_report_dir
+from fnirs_pipe.io.derivatives import (
+    group_data_dir, group_report_dir, subject_report_dir,
+)
 from fnirs_pipe.pipeline.hyperscanning import GroupEntry
 from fnirs_pipe.qc.boilerplate import collect_software_versions
 from fnirs_pipe.qc.boilerplate.vocabulary import metric_summary
@@ -107,6 +109,56 @@ def write_isc_matrix(
         logger.warning("ISC matrix (%s) not written: %s", ch_type, exc)
 
 
+def _member_nirs_dir(output_dir: Path, entry: GroupEntry) -> Path:
+    """A member's ``nirs/``, laid out the way :func:`group_data_dir` lays out a group's."""
+    folder = subject_report_dir(output_dir, entry.subject_id)
+    if entry.session:
+        folder = folder / f"ses-{entry.session}"
+    return folder / "nirs"
+
+
+def group_methods(
+    output_dir: Path,
+    group: list[GroupEntry],
+    group_nirs: Path,
+    own_steps: list[tuple[str, dict]],
+    versions: dict[str, str],
+    notes: list,
+    scope: str,
+) -> dict[str, str]:
+    """Methods prose for a dyad: a member's preprocessing, then the group's own steps.
+
+    Three sources in the order a reader needs them: what was done to each recording (read
+    from a member's sidecars), what was done to bring them onto one clock (``own_steps``,
+    which leaves no file to scan), then what was measured across the two (read from the
+    group's sidecars).
+
+    The paragraph describes **one** preprocessing pipeline, because that is what a
+    manuscript can use. When the members were not processed the same way, that becomes a
+    note rather than a sentence naming both, since a Methods section hedging every
+    parameter is worse than one that says which subject it describes.
+    """
+    from fnirs_pipe.qc.boilerplate import generate_methods_text
+    from fnirs_pipe.qc.boilerplate.vocabulary import steps_from_sidecars
+
+    per_member = {e.subject_id: steps_from_sidecars(_member_nirs_dir(output_dir, e))
+                  for e in group}
+    chains = list(per_member.values())
+    if chains and any(chain != chains[0] for chain in chains[1:]):
+        note(notes, scope,
+             "the members of this group were not preprocessed identically, so the Methods "
+             f"paragraph describes sub-{next(iter(per_member))} only")
+    if not any(chains):
+        note(notes, scope,
+             "no preprocessing sidecars found for the members, so the Methods paragraph "
+             "covers the group-level steps only")
+
+    steps = list(chains[0]) if chains else []
+    steps += own_steps
+    steps += steps_from_sidecars(group_nirs)
+    return generate_methods_text(versions=versions, steps=steps)
+
+
 def build_hyper_report(
     group_id: str,
     task: str,
@@ -149,6 +201,18 @@ def build_hyper_report(
         for sid in meta["subject_ids"]
     }
 
+    from fnirs_pipe.qc.boilerplate.vocabulary import template_slots
+    versions = collect_software_versions()
+    own_steps = [
+        ("hyper_alignment", template_slots(
+            "hyper_alignment", {"n_subjects": len(meta["subject_ids"])})),
+        ("hyper_coherence", template_slots(
+            "hyper_coherence", {"coherence_fmin": coherence_fmin,
+                                "coherence_fmax": coherence_fmax})),
+    ]
+    methods = group_methods(output_dir, group, meta["sqm_dir"], own_steps,
+                            versions, notes, meta["label"])
+
     name_parts = [f"group-{group_id}"]
     if session:
         name_parts.append(f"ses-{session}")
@@ -169,7 +233,7 @@ def build_hyper_report(
         **footer_vars(
             scope=meta["label"], errors=errors, notes=notes,
             nirs_dir=meta["sqm_dir"],
-            versions=collect_software_versions(),
+            methods=methods, versions=versions,
         ),
         group_id=group_id,
         task=task,
@@ -610,6 +674,13 @@ def build_hyper_post_report(
             if written.suffix == ".png":
                 provenance_path = f"figures/{written.name}"
 
+    from fnirs_pipe.qc.boilerplate.vocabulary import template_slots
+    versions = collect_software_versions()
+    own_steps = [("hyper_alignment", template_slots(
+        "hyper_alignment", {"n_subjects": len(subject_ids)}))]
+    methods = group_methods(output_dir, group, group_data_dir(output_dir, group_id),
+                            own_steps, versions, notes, scope)
+
     html = render(
         "hyper_post_report.html.j2",
         **page_vars(
@@ -623,7 +694,7 @@ def build_hyper_post_report(
             scope=f"group-{group_id}_task-{task}", errors=errors, notes=notes,
             nirs_dir=group_data_dir(output_dir, group_id),
             provenance_path=provenance_path,
-            versions=collect_software_versions(),
+            methods=methods, versions=versions,
         ),
         group_id=group_id,
         task=task,

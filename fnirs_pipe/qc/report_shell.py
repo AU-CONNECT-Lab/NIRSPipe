@@ -36,6 +36,7 @@ def stylesheet(name: str) -> str:
 
 _SHEETS: dict[str, str] = {}
 BASE_CSS = stylesheet("_base.css")
+FOOTER_CSS = stylesheet("_footer.css")
 
 
 # ---- Error handling ----
@@ -92,14 +93,16 @@ def page_vars(
 
     ``nav_meta`` prints as ``label: <b>value</b>`` chips in run order; ``nav_note`` is the
     right-aligned line, which is where the parameters a reader needs to judge the numbers
-    belong. ``css`` replaces the base stylesheet, for a report with its own look.
+    belong. ``css`` replaces the base stylesheet, for a report with its own look; the
+    footer's own sheet is appended either way, since the footer comes from the shell and
+    not from either look.
     """
     return {
         "page_title":   title,
         "page_heading": heading,
         "nav_meta":     list(nav_meta or []),
         "nav_note":     nav_note,
-        "base_css":     BASE_CSS if css is None else css,
+        "base_css":     (BASE_CSS if css is None else css) + "\n" + FOOTER_CSS,
         "run_date":     date.today().isoformat(),
     }
 

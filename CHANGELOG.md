@@ -7,23 +7,26 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
-- **The raw QC report and the interface now judge long channels separately.** Both read the whole montage at once, so a short channel's coupling lifted SCI, PSP and SNR and a poorly coupled recording could read as a good one. Both now show the verdict on the long channels, with an All / Long / Short comparison beside it
-- **The raw QC report and the interface show every per-channel metric**, not SCI alone: status, SCI, PSP, SNR and CV per source-detector pair, grouped by separation. The raw report also writes the per-channel metrics CSV the subject report writes
-- **The subject report shows the event timeline and the per-trial quality panel**, which were in the raw QC report only. The timeline shows a condition that stopped being delivered partway through, which the averages cannot
+- **The raw QC report and the interface judge long channels separately**, with an All / Long / Short comparison. Averaging short channels in was lifting SCI, PSP and SNR
+- **The raw QC report and the interface show every per-channel metric**, not SCI alone, and write the per-channel metrics CSV
+- **The subject report gained the event timeline and the per-trial quality panel**
 - **The analysis page offers the bandpass design.** `--filter-method` and `--filter-order` were command-line only, so the interface silently pinned every run to the defaults
 - **`--gvtd-censor` marks the frames GVTD flags as `BAD_gvtd`, so an analysis can leave them out.** Nothing is cut, so a threshold set too strictly is undone by rerunning. `--gvtd-censor-n-std` and `--gvtd-min-epoch-s` set the threshold and the shortest stretch worth keeping. Off by default: on a high-motion recording it can flag everything
 - **The hyperscanning and group reports now end with the same closing sections the subject report does**: what failed, what was left out on purpose, the provenance table, and the software versions. A panel that failed used to appear only in the run log, so a report could be read as complete when it was not
-- **The hyperscanning post report carries a provenance diagram**, rebuilt from the sidecars its own WTC and ISC passes wrote
+- **The hyperscanning reports carry a Methods paragraph**, in the same four tabs the subject report offers. It continues from a member subject's preprocessing into the alignment and the cross-brain measures, so the paragraph describes one pipeline end to end, and it says so when the two members were not preprocessed the same way. **The wavelet coherence, coherence, ISC and alignment citations are placeholders**: they print as `TODO-ADD-...-REFERENCE` until the real references are filled into `references.bib`
+- **The hyperscanning reports carry their provenance**, the post report as a diagram rebuilt from the sidecars its own WTC and ISC passes wrote, and both as the table naming every file and the step behind it
+- **`fnirs-hyper run` writes a run record** to `group-<id>/logs/`, the mirror of a subject's. It holds the verbatim command, the machine, and every option the invocation resolved to, several of which appear nowhere else once the shell history is gone
 
 ### Fixed
 - **`--gvtd-censor` failed on any recording that has event markers**, which is every task run. It worked only on a recording with no markers at all
 - **The interface showed no SCI at all in its channel table**, a dash on every row
-- **The per-channel PSD shaded the cardiac and respiration bands at fixed frequencies** instead of the run's own, so a study outside the adult range had the stripe drawn over the wrong part of the spectrum. The raw QC report and the interface were affected; the multi-stage PSD figure already used the run's bands
-- **The same metric could read as passing in one view and failing in another.** The three views each carried their own copy of the thresholds, and the interface printed record keys at four decimals with no label, units or verdict
+- **The per-channel PSD shaded the cardiac and respiration bands at fixed frequencies** instead of the run's own, so a study outside the adult range had the stripe over the wrong part of the spectrum
+- **The same metric could read as passing in one view and failing in another**, and the interface printed record keys with no label, units or verdict
 
 ### Changed
-- **Channel screening now rejects a channel that fails SCI *or* PSP**, where it used to test SCI alone. Both measure optode coupling and they catch different failures: SCI stays high whenever the two wavelengths agree, which movement can fake, and PSP drops to near zero when it is faked. Runs will reject at least as many channels as before, and the reports name which criterion each rejection failed. The criteria are one table now, so adding or dropping one is a single edit
-- **The per-trial quality panel prints its numbers the way the rest of the report does.** Channel retention reads as a percentage and GVTD as an exponent; the panel had its own formats and its own record of which way each metric is better
+- **Channel screening rejects a channel that fails SCI *or* PSP**, where it tested SCI alone. Runs will reject at least as many channels as before, and the reports name which criterion failed
+- **The CV pass line in the channel quality grid was 50%**, looser than any published threshold, so the CV row passed almost everything. It is 5% now (Lloyd-Fox 2009), measured per wavelength, and the SNR line is derived from it
+- **The per-trial quality panel prints its numbers the way the rest of the report does**
 - **Every QC report is rendered into one shared page shell**, so the header, the rating bar and the closing sections are the same wherever they appear and a new report cannot ship without them
 
 ## [0.29.0] - 2026-09-06

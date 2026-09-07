@@ -199,13 +199,21 @@ def cmd_run(
     The null reuses this run's aligned recordings and every band parameter, so it cannot be
     computed over a different band than the table it sits beside.
     """
-    import json
+    # every parameter as resolved, for the run record. Read off locals() before anything
+    # else runs, so a new option lands in the record without being listed here as well.
+    run_args = dict(locals())
 
+    import json
+    from datetime import datetime
+
+    from fnirs_pipe.io.derivatives import group_report_dir
     from fnirs_pipe.pipeline.hyperscanning import write_group_bads
     from fnirs_pipe.qc.hyper_report import build_hyper_post_report
     from fnirs_pipe.qc.wtc_null import write_wtc_null
+    from fnirs_pipe.utils.run_record import write_group_run_record
 
     setup_logging(verbose=verbose)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
     if sci_threshold is None:
         sci_threshold = _SCI_DEFAULT
@@ -276,6 +284,17 @@ def cmd_run(
                 mask_coi=wtc_mask_coi,
             )
             print(f"     null   -> {null_path}")
+
+        try:
+            record = write_group_run_record(
+                run_args, gid, task, timestamp, output_dir,
+                group_report_dir(output_dir, gid),
+                members=[e.subject_id for e in members],
+            )
+            logger.info("group-%s | run record -> %s", gid, record)
+        except Exception:
+            logger.warning("group-%s | run record failed", gid, exc_info=True)
+
         return report_path
 
     if wtc_pseudo:
@@ -456,7 +475,8 @@ def _build_parser() -> argparse.ArgumentParser:
                           "cohort's channel budget before committing to a run, which with "
                           "--wtc-pseudo is hours.")
     run.add_argument("--sci-threshold", type=float, default=None,
-                     help="SCI below which a channel counts as badly coupled. Detects "
+                     help="The SCI line for channel screening, which also applies PSP. "
+                          "Detects "
                           "nothing here; it only colours the per-subject quality table. "
                           "Pass what the run was prepped with (default 0.8).")
     run.add_argument("--normalize", action=argparse.BooleanOptionalAction, default=False,
