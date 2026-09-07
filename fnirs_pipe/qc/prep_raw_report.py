@@ -313,11 +313,11 @@ def _process_run(
         "ch_summary":       ch_summary_inline,
         "trigger_timeline": trigger_timeline_inline,
         "trial_qc":         trial_qc_inline,
+        # already labelled, formatted and coloured by the metric registry, so the views
+        # print these and carry no copy of the cutoffs. The flat all-channel scalars used to
+        # travel here too; nothing reads them now that the panels read the record's own
+        # channel-set sections, and the quality record on disk is where the raw numbers live.
         "sqm": {
-            "scalars":     {k: v for k, v in sqm.items() if not isinstance(v, (dict, list))},
-            "per_channel": {"sci_per_channel": sqm.get("sci_per_channel", {})},
-            # already labelled, formatted and coloured by the metric registry, so the
-            # viewer prints them and carries no copy of the cutoffs
             "rows":        metric_rows(view_scalars, _VIEW_SCALAR_KEYS, skip_missing=True),
             "split":       split,
             "channel_set": "long channels" if sqm_split else "every channel",

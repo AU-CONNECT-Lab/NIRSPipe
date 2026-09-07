@@ -1,6 +1,10 @@
 import numpy as np
 import plotly.graph_objects as go
 
+from fnirs_pipe.utils.logging import get_logger
+
+logger = get_logger("qc.figures.sci_psp")
+
 _GOOD_COLOR = "#C5E0B3"
 _BAD_COLOR  = "#F8786E"
 _MAX_TS_PTS = 3000
@@ -137,18 +141,38 @@ def channel_quality_heatmap(
     return fig
 
 
-# key, row label, hover format, and whether a larger value is the better one. CV and GVTD
-# are the two that run the other way: they measure noise and movement, so the top of their
-# range is the end worth looking at.
+# key and row label only. The hover format and which end is the better one come from the
+# metric registry, which is also where the reports read them: a row that said SNR was better
+# low here and better high there would be a contradiction inside one report. Labels stay
+# local because a heatmap row is a few characters wide and the registry's are sentences.
+#
+# Every key here must carry a direction in the registry. Colour is relative within a row --
+# the worse end of what this recording actually did -- so a descriptive metric with no better
+# end has no worse end either and cannot be drawn; _trial_metric_specs drops it and says so.
 _TRIAL_METRICS = [
-    ("sci_mean",               "SCI",        ".3f", True),
-    ("psp_mean",               "PSP",        ".3f", True),
-    ("cv_mean",                "CV",         ".3f", False),
-    ("snr_mean",               "SNR",        ".1f", True),
-    ("gvtd_mean",              "GVTD",       ".4f", False),
-    ("gvtd_filt_mean",         "GVTD band",  ".4f", False),
-    ("channel_retention_rate", "Retention",  ".2f", True),
+    ("sci_mean",               "SCI"),
+    ("psp_mean",               "PSP"),
+    ("cv_mean",                "CV"),
+    ("snr_mean",               "SNR"),
+    ("gvtd_mean",              "GVTD"),
+    ("gvtd_filt_mean",         "GVTD band"),
+    ("channel_retention_rate", "Retention"),
 ]
+
+
+def _trial_metric_specs() -> list[tuple[str, str, bool]]:
+    """_TRIAL_METRICS resolved against the registry, as (key, label, higher_is_better)."""
+    from fnirs_pipe.qc.boilerplate.vocabulary import higher_is_better
+
+    specs = []
+    for key, label in _TRIAL_METRICS:
+        higher = higher_is_better(key)
+        if higher is None:
+            logger.warning("%s has no direction in the metric registry; "
+                           "leaving it out of the per-trial heatmap", key)
+            continue
+        specs.append((key, label, higher))
+    return specs
 
 
 def trial_quality_heatmap(
@@ -168,13 +192,15 @@ def trial_quality_heatmap(
 
     Returns None when no metric survives on any trial (nothing to draw).
     """
-    present = [m for m in _TRIAL_METRICS
+    from fnirs_pipe.qc.boilerplate.vocabulary import format_metric
+
+    present = [m for m in _trial_metric_specs()
                if any(isinstance(s.get(m[0]), (int, float)) for s in trial_sqms)]
     if not present or not trial_labels:
         return None
 
     z, text = [], []
-    for key, label, fmt, higher_is_better in present:
+    for key, label, better_high in present:
         raw_vals = [s.get(key) for s in trial_sqms]
         vals = [float(v) if isinstance(v, (int, float)) else None for v in raw_vals]
         good = [v for v in vals if v is not None]
@@ -186,9 +212,9 @@ def trial_quality_heatmap(
             z.append([None if v is None else 0.5 for v in vals])
         else:
             z.append([None if v is None
-                      else ((v - lo) / span if higher_is_better else (hi - v) / span)
+                      else ((v - lo) / span if better_high else (hi - v) / span)
                       for v in vals])
-        text.append([f"{label}: —" if v is None else f"{label}: {v:{fmt}}" for v in vals])
+        text.append([f"{label}: {format_metric(key, v)}" for v in vals])
 
     fig = go.Figure(go.Heatmap(
         z=z, text=text,

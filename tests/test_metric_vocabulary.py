@@ -26,7 +26,9 @@ from fnirs_pipe.qc.boilerplate.vocabulary import (
     metric_class,
     metric_summary,
 )
+from fnirs_pipe.qc.boilerplate.vocabulary import higher_is_better, metric_direction
 from fnirs_pipe.qc.channel_table import OD_SPLIT_COLUMNS
+from fnirs_pipe.qc.figures.sci_psp_panel import _TRIAL_METRICS
 from fnirs_pipe.qc.prep_raw_report import _VIEW_SCALAR_KEYS
 
 _QC = Path(qc_pkg.__file__).parent
@@ -201,10 +203,12 @@ def test_a_display_row_is_usable(metric):
     label, fmt, thresholds, direction = METRIC_DISPLAY[metric]
     assert label and label.strip() == label
     assert metric in METRIC_SUMMARY, f"{metric} is printed but not described"
-    # a threshold and a direction are meaningless apart: one without the other either
-    # colours nothing or colours in whichever direction the code happens to default to
-    assert (thresholds is None) == (direction is None), f"{metric}: half a cutoff"
+    assert direction in (None, "higher", "lower"), f"{metric}: {direction!r}"
+    # The two are independent and most metrics have only a direction. A threshold without
+    # one is the combination that cannot mean anything: there is no way to read which side
+    # of the cutoff passes.
     if thresholds is not None:
+        assert direction is not None, f"{metric}: a cutoff with no direction to read it in"
         ok, warn = thresholds
         # ok is the stricter end, so the three bands come out in the right order whichever
         # way the metric is read
@@ -212,6 +216,40 @@ def test_a_display_row_is_usable(metric):
             f"{metric}: ok={ok} warn={warn} reads backwards for direction {direction!r}")
     # the format has to survive a real number, which is the whole point of storing it
     assert format_metric(metric, 0.5, fmt)
+
+
+def test_a_described_direction_is_encoded():
+    """METRIC_SUMMARY states the direction in prose; METRIC_DISPLAY has to agree with it.
+
+    The prose is what a reader sees in the tooltip and the flag is what colours the cell and
+    orients the per-trial heatmap, so the two saying different things is a report that
+    contradicts itself. Only the unambiguous phrasings are checked: several entries are
+    deliberately non-committal ("no universal good value") and those must have no direction.
+    """
+    for metric, text in METRIC_SUMMARY.items():
+        direction = metric_direction(metric)
+        lowered = text.lower()
+        if "no universal good value" in lowered or "descriptive" in lowered:
+            assert direction is None, f"{metric}: described as descriptive but ranked"
+        elif "higher is better" in lowered or "higher is a more" in lowered:
+            assert direction == "higher", f"{metric}: prose says higher, flag says {direction}"
+        elif "lower is better" in lowered or "lower is cleaner" in lowered:
+            assert direction == "lower", f"{metric}: prose says lower, flag says {direction}"
+
+
+def test_the_per_trial_heatmap_can_orient_every_row_it_draws():
+    """Its colour is relative within a row, so a metric with no better end has no worse end.
+
+    `_trial_metric_specs` drops such a metric with a warning rather than drawing it
+    upside down, which means a key added to _TRIAL_METRICS and not to the registry silently
+    vanishes from the panel. This is what notices.
+    """
+    missing = [key for key, _ in _TRIAL_METRICS if higher_is_better(key) is None]
+    assert not missing, (
+        f"the per-trial heatmap would drop {missing}: no direction in METRIC_DISPLAY")
+    for key, label in _TRIAL_METRICS:
+        assert key in METRIC_DISPLAY, f"{key} has no format, so its hover would be bare"
+        assert label and len(label) <= 12, f"{label!r} is too wide for a heatmap row"
 
 
 def test_gvtd_points_at_the_threshold_that_applies_to_it():

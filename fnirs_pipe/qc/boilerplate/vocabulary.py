@@ -327,10 +327,19 @@ def is_key_metric(metric: str) -> bool:
 # GUI, which printed bare record keys.
 #
 # Format is a Python format spec, plus "pct" for a 0-1 fraction written as a percentage.
-# Thresholds are ``(ok, warn)`` read in the given direction; None means no established
-# cutoff, and those print uncoloured rather than coloured against an invented one.
-# "higher" tests ``v >= ok``, "lower" tests ``v < ok``, which is what each of the three
-# call sites already did.
+#
+# Direction and thresholds are separate facts and most metrics have only the first. The
+# direction is which end is the better one, which METRIC_SUMMARY has always stated in prose
+# ("Lower is cleaner"); a threshold is a defensible cutoff, which far fewer metrics have.
+# Keeping them together meant a metric with no published cutoff also had no machine-readable
+# direction, so anything that needs to rank without judging -- the per-trial heatmap, which
+# colours relative to what one recording actually did -- had to hardcode its own copy.
+#
+# So: direction None means descriptive, with no better end, and nothing may colour or rank
+# it. Thresholds None means no established cutoff, and it prints uncoloured rather than
+# against an invented one; a threshold without a direction is meaningless and the tests
+# reject it. "higher" tests ``v >= ok``, "lower" tests ``v < ok``, which is what each of the
+# original three call sites did.
 
 _HIGHER, _LOWER = "higher", "lower"
 
@@ -338,14 +347,14 @@ METRIC_DISPLAY: dict[str, tuple[str, str, "tuple[float, float] | None", "str | N
     # coupling
     "sci_mean":                ("Mean SCI", ".3f", (0.75, 0.5), _HIGHER),
     "channel_retention_rate":  ("Channel retention", "pct", (0.9, 0.7), _HIGHER),
-    "psp_mean":                ("Mean PSP (10 s)", ".3f", None, None),
-    "cp_mean":                 ("Mean CP (exp.)", ".3f", None, None),
-    "cp_pass_rate":            ("CP pass rate (exp.)", "pct", None, None),
+    "psp_mean":                ("Mean PSP (10 s)", ".3f", None, _HIGHER),
+    "cp_mean":                 ("Mean CP (exp.)", ".3f", None, _HIGHER),
+    "cp_pass_rate":            ("CP pass rate (exp.)", "pct", None, _HIGHER),
 
     # raw intensity
-    "cv_mean":                 ("Mean CV", ".3f", None, None),
+    "cv_mean":                 ("Mean CV", ".3f", None, _LOWER),
     "snr_mean":                ("Mean SNR", ".1f", (100, 20), _HIGHER),
-    "snr_pass_rate":           ("SNR pass rate", "pct", None, None),
+    "snr_pass_rate":           ("SNR pass rate", "pct", None, _HIGHER),
     "n_flat_channels":         ("Flat channels", "d", (1, 2), _LOWER),
     "mean_amp_mean":           ("Mean amplitude", ".3e", None, None),
 
@@ -356,40 +365,40 @@ METRIC_DISPLAY: dict[str, tuple[str, str, "tuple[float, float] | None", "str | N
 
     # haemoglobin
     "hbo_hbr_corr_mean":       ("HbO-HbR corr", ".3f", (-0.3, 0.0), _LOWER),
-    "cnr_hbo_mean":            ("CNR HbO", ".3f", None, None),
-    "cnr_hbr_mean":            ("CNR HbR", ".3f", None, None),
+    "cnr_hbo_mean":            ("CNR HbO", ".3f", None, _HIGHER),
+    "cnr_hbr_mean":            ("CNR HbR", ".3f", None, _LOWER),
     "cnr_n_epochs":            ("CNR epochs", "d", None, None),
     "gcor_hbo":                ("Global corr HbO", ".3f", None, None),
     "gcor_hbr":                ("Global corr HbR", ".3f", None, None),
-    "lowfreq_drift_amplitude_hbo": ("Low-freq drift (HbO)", ".3e", None, None),
-    "lowfreq_drift_amplitude_hbr": ("Low-freq drift (HbR)", ".3e", None, None),
+    "lowfreq_drift_amplitude_hbo": ("Low-freq drift (HbO)", ".3e", None, _LOWER),
+    "lowfreq_drift_amplitude_hbr": ("Low-freq drift (HbR)", ".3e", None, _LOWER),
 
     # spectral
     "cardiac_band_power_hbo":  ("Cardiac band power (HbO)", ".3e", None, None),
     "cardiac_band_power_hbr":  ("Cardiac band power (HbR)", ".3e", None, None),
-    "cardiac_band_frac_hbo":   ("Cardiac band (HbO)", "pct", None, None),
-    "cardiac_band_frac_hbr":   ("Cardiac band (HbR)", "pct", None, None),
+    "cardiac_band_frac_hbo":   ("Cardiac band (HbO)", "pct", None, _HIGHER),
+    "cardiac_band_frac_hbr":   ("Cardiac band (HbR)", "pct", None, _HIGHER),
     "resp_band_power_hbo":     ("Resp band power (HbO)", ".3e", None, None),
     "resp_band_power_hbr":     ("Resp band power (HbR)", ".3e", None, None),
     "resp_band_frac_hbo":      ("Resp band (HbO)", "pct", None, None),
     "resp_band_frac_hbr":      ("Resp band (HbR)", "pct", None, None),
 
     # motion and spikes
-    "gvtd_mean":               ("GVTD mean", ".3e", None, None),
-    "gvtd_p95":                ("GVTD p95", ".3e", None, None),
-    "gvtd_filt_mean":          ("GVTD mean 0.01-0.5 Hz", ".3e", None, None),
-    "gvtd_filt_p95":           ("GVTD p95 0.01-0.5 Hz", ".3e", None, None),
-    "gvtd_vstd_mean":          ("GVTD mean (var-normalised)", ".3e", None, None),
-    "gvtd_vstd_p95":           ("GVTD p95 (var-normalised)", ".3e", None, None),
+    "gvtd_mean":               ("GVTD mean", ".3e", None, _LOWER),
+    "gvtd_p95":                ("GVTD p95", ".3e", None, _LOWER),
+    "gvtd_filt_mean":          ("GVTD mean 0.01-0.5 Hz", ".3e", None, _LOWER),
+    "gvtd_filt_p95":           ("GVTD p95 0.01-0.5 Hz", ".3e", None, _LOWER),
+    "gvtd_vstd_mean":          ("GVTD mean (var-normalised)", ".3e", None, _LOWER),
+    "gvtd_vstd_p95":           ("GVTD p95 (var-normalised)", ".3e", None, _LOWER),
     "gvtd_thresh":             ("GVTD threshold", ".3e", None, None),
-    "gvtd_num_above_thresh":   ("GVTD motion frames", "d", None, None),
-    "gvtd_pct_above_thresh":   ("GVTD % motion", "pct", None, None),
-    "gvtd_censor_pct":         ("GVTD censored %", "pct", None, None),
-    "gvtd_censor_retained_s":  ("GVTD retained (s)", ".0f", None, None),
+    "gvtd_num_above_thresh":   ("GVTD motion frames", "d", None, _LOWER),
+    "gvtd_pct_above_thresh":   ("GVTD % motion", "pct", None, _LOWER),
+    "gvtd_censor_pct":         ("GVTD censored %", "pct", None, _LOWER),
+    "gvtd_censor_retained_s":  ("GVTD retained (s)", ".0f", None, _HIGHER),
     "spike_count":             ("Spike count", "d", (1, 10), _LOWER),
-    "spike_pct":               ("Spike % (exp.)", "pct", None, None),
-    "spike_num_frames":        ("Spike frames", "d", None, None),
-    "spike_pct_frames":        ("Spike % frames", "pct", None, None),
+    "spike_pct":               ("Spike % (exp.)", "pct", None, _LOWER),
+    "spike_num_frames":        ("Spike frames", "d", None, _LOWER),
+    "spike_pct_frames":        ("Spike % frames", "pct", None, _LOWER),
     "motion_corrected_frac_mean":  ("Motion corrected fraction (exp.)", ".3f", None, None),
     "motion_corrected_num":        ("Motion corrected frames", "d", None, None),
     "motion_corrected_pct":        ("Motion corrected % (exp.)", "pct", None, None),
@@ -412,6 +421,22 @@ def metric_label(metric: str, fallback: str | None = None) -> str:
 def metric_format(metric: str) -> str:
     spec = METRIC_DISPLAY.get(metric)
     return spec[1] if spec is not None else ".3f"
+
+
+def metric_direction(metric: str) -> "str | None":
+    """"higher", "lower", or None for a metric with no better end.
+
+    None is a real answer and not a gap: mean amplitude, the separations and the GVTD
+    threshold are descriptive, so ranking or colouring them would invent a verdict.
+    """
+    spec = METRIC_DISPLAY.get(metric)
+    return spec[3] if spec is not None else None
+
+
+def higher_is_better(metric: str) -> "bool | None":
+    """The direction as a flag, for callers that scale a value within its own range."""
+    direction = metric_direction(metric)
+    return None if direction is None else direction == _HIGHER
 
 
 def format_metric(metric: str, value: Any, fmt: str | None = None) -> str:

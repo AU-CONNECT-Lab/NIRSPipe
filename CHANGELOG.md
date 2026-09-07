@@ -19,6 +19,9 @@ All notable changes to this project will be documented in this file.
 - **The per-channel PSD shaded the cardiac and respiration bands at fixed frequencies** instead of the run's own, so a study outside the adult range had the stripe drawn over the wrong part of the spectrum. The raw QC report and the interface were affected; the multi-stage PSD figure already used the run's bands
 - **The same metric could read as passing in one view and failing in another.** The three views each carried their own copy of the thresholds, and the interface printed record keys at four decimals with no label, units or verdict
 
+### Changed
+- **The per-trial quality panel prints its numbers the way the rest of the report does.** Channel retention reads as a percentage and GVTD as an exponent; the panel had its own formats and its own record of which way each metric is better
+
 ## [0.29.0] - 2026-09-06
 
 ### Added
