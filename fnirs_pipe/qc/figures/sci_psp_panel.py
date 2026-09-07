@@ -4,6 +4,8 @@ import plotly.graph_objects as go
 from fnirs_pipe.qc.metrics import CV_PASS, PSP_PASS, SCI_PASS, SNR_PASS
 from fnirs_pipe.utils.logging import get_logger
 
+from ._utils import AXIS_TEXT_COLOR
+
 logger = get_logger("qc.figures.sci_psp")
 
 _GOOD_COLOR = "#C5E0B3"
@@ -117,7 +119,7 @@ def channel_quality_heatmap(
         xaxis=dict(
             tickvals=[i * _SPACING for i in range(n_ch)],
             ticktext=ch_names,
-            tickangle=-45, tickfont=dict(size=9),
+            tickangle=-45, tickfont=dict(size=9, color=AXIS_TEXT_COLOR),
             showgrid=False, zeroline=False,
             range=[-_SPACING, n_ch * _SPACING],
         ),
@@ -125,7 +127,7 @@ def channel_quality_heatmap(
             tickvals=[m * _SPACING for m in range(n_met)],
             ticktext=metrics,
             autorange="reversed",
-            tickfont=dict(size=10),
+            tickfont=dict(size=10, color=AXIS_TEXT_COLOR),
             showgrid=False, zeroline=False,
         ),
         plot_bgcolor="white", paper_bgcolor="white",

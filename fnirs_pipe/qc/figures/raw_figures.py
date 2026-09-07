@@ -11,8 +11,10 @@ from fnirs_pipe.qc.metrics import PSP_PASS, SCI_PASS
 from fnirs_pipe.utils.logging import get_logger
 
 from ._brain_utils import mni_trans
-from ._utils import (BAND_COLORS, CONDITION_PALETTE, HBO_COLOR, HBR_COLOR,
-                     decimate as _decimate, epochable_events, physio_bands)
+from ._utils import (AXIS_TEXT_COLOR, BAND_COLORS, CONDITION_PALETTE, HBO_COLOR,
+                     HBR_COLOR, LONG_COLOR, PSD_NFFT, SHORT_COLOR,
+                     UNCLASSIFIED_COLOR, decimate as _decimate, epochable_events,
+                     physio_bands)
 
 logger = get_logger("qc.figures")
 
@@ -40,9 +42,10 @@ def _ch_colors(raw: mne.io.Raw, short_thresh: float) -> list[str]:
     picks = list(range(len(raw.ch_names)))
     try:
         dists = mne.preprocessing.nirs.source_detector_distances(raw.info, picks=picks)
-        return ["#78b1f2" if d <= short_thresh else "rgba(243,125,125,0.78)" for d in dists]
+        return [_hex_to_rgba(SHORT_COLOR, 0.78) if d <= short_thresh
+                else _hex_to_rgba(LONG_COLOR, 0.78) for d in dists]
     except Exception:
-        return ["rgba(243,125,125,0.78)"] * len(raw.ch_names)
+        return [_hex_to_rgba(LONG_COLOR, 0.78)] * len(raw.ch_names)
 
 
 def psd_layout(height: int = 220, cardiac=None, resp=None) -> dict:
@@ -237,8 +240,8 @@ def build_channel_figure(
         from mne.time_frequency import psd_array_welch
         raw_arr = raw_haemo.get_data(picks=[hbo_pick, hbr_pick])
         sfreq = raw_haemo.info["sfreq"]
-        # match the metric-side PSD (MNE compute_psd default Welch, n_fft=256)
-        psds, freqs = psd_array_welch(raw_arr, sfreq, n_fft=min(256, raw_arr.shape[1]), verbose=False)
+        psds, freqs = psd_array_welch(raw_arr, sfreq,
+                                      n_fft=min(PSD_NFFT, raw_arr.shape[1]), verbose=False)
         psd_hbo, psd_hbr = psds[0], psds[1]
         fmax = min(2.0, sfreq / 2)
         mask = freqs <= fmax
@@ -568,58 +571,49 @@ def build_layout_figure(
     return fig_2d, fig_3d
 
 
-def _psd_groups(
-    ch_names: list[str],
-    dists: "np.ndarray | None",
-    bad_channels: "set[str] | None",
-    short_thresh: "float | None",
-) -> list[tuple[str, np.ndarray, dict]]:
-    """Partition the PSD rows into the groups worth averaging separately.
+def _psd_groups(raw_od: mne.io.Raw, ch_names: list[str]) -> list[tuple[str, np.ndarray, dict]]:
+    """Partition the PSD rows by source-detector separation, long first.
 
-    A single mean over every channel pools the ones screening already rejected, so a
-    recording with a few dead optodes reads as a uniformly poor spectrum and the reader
-    cannot tell a coupling failure from a montage-wide problem. Splitting also keeps the
-    short channels out of the long-channel mean, which the rest of the report already does.
+    Short channels sit on a much shorter photon path, so their spectrum is systematically
+    above the long ones; pooling the two into a single mean hides both. The split is the
+    one every other raw-level view uses, read from ``long_short_channels`` so this figure
+    cannot disagree with the per-channel table or the quality heatmap about which channel
+    is which.
 
-    e.g. 30 channels of which 4 are screened out and 6 are short ->
-    [("Long, passed", <20 rows>, ...), ("Screened out", <4 rows>, ...), ("Short", <6 rows>, ...)]
+    e.g. 30 channels of which 6 are short ->
+    [("Long channels", <24 rows>, ...), ("Short channels", <6 rows>, ...)]
 
-    Groups are mutually exclusive and tried in that order, so a short channel that also
-    failed screening is counted once, as a failure. Returns a single "Mean (OD)" group when
-    neither the screening verdict nor the separations are available.
+    A montage whose separations fall in neither range gets a third curve rather than being
+    folded into "long". Returns one unnamed mean when there is no usable split at all.
     """
-    bad = bad_channels or set()
-    if not bad and dists is None:
+    from fnirs_pipe.qc.channel_table import _neither_range_title
+    from fnirs_pipe.qc.metrics import long_short_channels
+
+    try:
+        long_names, short_names = long_short_channels(raw_od)
+    except Exception:
+        long_names, short_names = [], []
+    if not long_names and not short_names:
         return [("Mean (OD)", np.arange(len(ch_names)), dict(color="#2980b9", width=2.5))]
 
-    split = dists is not None and short_thresh is not None
-    is_short = dists <= short_thresh if split else np.zeros(len(ch_names), dtype=bool)
-    failed = np.array([ch in bad for ch in ch_names])
-
+    long_set, short_set = set(long_names), set(short_names)
     groups = [
-        # blue solid is the long-channel mean, the curve this panel is really about. Without
-        # separations the same curve is every passing channel, so it must not claim "long"
-        ("Long, passed" if split else "Passed",
-                         ~failed & ~is_short, dict(color="#2980b9", width=2.5)),
-        ("Screened out", failed,              dict(color="#e74c3c", width=2, dash="dash")),
-        # same light blue the raw signal panel uses for a short channel
-        ("Short",        ~failed & is_short,  dict(color="#78b1f2", width=2)),
+        ("Long channels",  np.array([c in long_set for c in ch_names]),
+         dict(color=LONG_COLOR, width=2.5)),
+        ("Short channels", np.array([c in short_set for c in ch_names]),
+         dict(color=SHORT_COLOR, width=2.5)),
+        (_neither_range_title(),
+         np.array([c not in long_set and c not in short_set for c in ch_names]),
+         dict(color=UNCLASSIFIED_COLOR, width=2, dash="dash")),
     ]
     return [(name, np.flatnonzero(sel), line) for name, sel, line in groups if sel.any()]
 
 
-def build_psd_mean_figure(
-    raw: mne.io.Raw,
-    cardiac=None,
-    resp=None,
-    bad_channels: "set[str] | None" = None,
-    short_thresh: "float | None" = None,
-) -> go.Figure | None:
-    """Channel spectra in optical density, averaged within group, individual channels behind.
+def build_psd_mean_figure(raw: mne.io.Raw, cardiac=None, resp=None) -> go.Figure | None:
+    """Channel spectra in optical density, one mean per separation group, channels behind.
 
-    ``bad_channels`` is the screening verdict and ``short_thresh`` the short-channel cutoff
-    in metres; both are optional and without them the panel falls back to one mean over
-    every channel. See ``_psd_groups`` for why the split is worth drawing.
+    Nothing here is a quality verdict: the panel shows what the spectrum looks like, and
+    the screening result is the quality heatmap's and the per-channel table's job.
     """
     try:
         from mne.time_frequency import psd_array_welch
@@ -629,25 +623,19 @@ def build_psd_mean_figure(
         raw_od = mne.preprocessing.nirs.optical_density(raw.copy(), verbose=False)
         data = raw_od.get_data(picks=picks)
         sfreq = raw_od.info["sfreq"]
-        # match the metric-side PSD (MNE compute_psd default Welch, n_fft=256)
-        psds, freqs = psd_array_welch(data, sfreq, n_fft=min(256, data.shape[1]), verbose=False)
+        psds, freqs = psd_array_welch(data, sfreq,
+                                      n_fft=min(PSD_NFFT, data.shape[1]), verbose=False)
         fmax = min(_PSD_FMAX, sfreq / 2)
         mask = freqs <= fmax
         freqs_list = freqs[mask].tolist()
         band = psds[:, mask]
-
-        # ---- Group the rows ----
-        ch_names = [raw_od.ch_names[i] for i in picks]
-        try:
-            dists = mne.preprocessing.nirs.source_detector_distances(raw_od.info, picks=picks)
-        except Exception:
-            dists = None
-        groups = _psd_groups(ch_names, dists, bad_channels, short_thresh)
+        groups = _psd_groups(raw_od, [raw_od.ch_names[i] for i in picks])
 
         # ---- Individual channels behind, one bold mean per group ----
+        # neutral grey, so a group's own colour is what stands out against it
         traces = [
             go.Scatter(x=freqs_list, y=ch_psd, mode="lines",
-                       line=dict(width=0.6, color="rgba(100,150,200,0.18)"),
+                       line=dict(width=0.6, color="rgba(140,140,140,0.15)"),
                        showlegend=False, hoverinfo="skip")
             for ch_psd in band.tolist()
         ]

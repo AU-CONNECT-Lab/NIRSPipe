@@ -7,6 +7,23 @@ HBR_COLOR      = "#3498db"
 HBO_MEAN_COLOR = "#c0392b"   # darker HbO for bold mean line
 HBR_MEAN_COLOR = "#11629e"   # darker HbR for bold mean line
 
+# By source-detector separation, the split every raw-level view uses.
+LONG_COLOR  = "#f37d7d"
+SHORT_COLOR = "#78b1f2"
+# channels the long and short ranges both leave out; see channel_table._neither_range_title
+UNCLASSIFIED_COLOR = "#95a5a6"
+
+# Tick and axis text. A figure that leaves this unset is coloured by whoever renders it:
+# the CLI gets plotly's template default (#2a3f5f) and the interface gets its own page
+# colour, so one recording's channel labels came out two different colours in two views.
+# The interface keeps whatever a figure sets for itself, so setting it here settles both.
+AXIS_TEXT_COLOR = "#2a3f5f"
+
+# Welch segment length for the single-stage PSD panels. Short segments average more, so the
+# curve shows band structure instead of estimator noise. The multi-stage figure keeps MNE's
+# longer default instead: its cutoffs sit below 0.2 Hz and need the finer bin.
+PSD_NFFT = 256
+
 # Qualitative palette for condition/trigger colors (cycled by index).
 CONDITION_PALETTE = [
     "#e74c3c", "#3498db", "#2ecc71", "#f39c12",

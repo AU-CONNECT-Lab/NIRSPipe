@@ -13,8 +13,9 @@ from scipy.signal import coherence
 
 from fnirs_pipe.qc.figure_io import extract_markers as _extract_markers
 from fnirs_pipe.qc.figures._brain_utils import mni_trans
-from fnirs_pipe.qc.figures._utils import (CONDITION_PALETTE, decimate as _decimate,
-                                          epochable_events, physio_bands)
+from fnirs_pipe.qc.figures._utils import (CONDITION_PALETTE, PSD_NFFT,
+                                          decimate as _decimate, epochable_events,
+                                          physio_bands)
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("qc.figures.hyper")
@@ -340,9 +341,8 @@ def build_psd(
         pick = raw.ch_names.index(hbo_name)
         arr = raw.get_data(picks=[pick])
         sfreq = raw.info["sfreq"]
-        # match the metric-side PSD (MNE compute_psd default Welch, n_fft=256)
         psds, freqs = mne.time_frequency.psd_array_welch(
-            arr, sfreq, n_fft=min(256, arr.shape[1]), verbose=False)
+            arr, sfreq, n_fft=min(PSD_NFFT, arr.shape[1]), verbose=False)
         psd = psds[0]
         fmax = min(2.0, float(sfreq / 2))
         mask = freqs <= fmax

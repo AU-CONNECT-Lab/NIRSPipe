@@ -138,6 +138,26 @@ def _note(notes: list, subject: str, message: str) -> None:
 _EPOCH_TMIN, _EPOCH_TMAX = -5.0, 25.0
 
 
+def _epoch_window_mismatch(raw_haemo: mne.io.Raw, epoch_tmax: float) -> "float | None":
+    """The events' own length when it outruns the window the figures average over.
+
+    The figures average trials together, so they need one window for all of them and cannot
+    follow each event's own duration the way the per-trial scoring can. That makes the
+    fallback a guess, and on a design whose blocks are minutes long it is a wrong one: the
+    epoch figures describe the first ``epoch_tmax`` seconds of a block and nothing says so.
+    Returns the median duration when it exceeds the window, else None.
+
+    A 240 s conversation block against the 25 s fallback -> 240.0; a 5 s trial -> None.
+    """
+    durations = [float(a["duration"]) for a in raw_haemo.annotations
+                 if not str(a["description"]).upper().startswith("BAD")
+                 and float(a["duration"]) > 0]
+    if not durations:
+        return None
+    median = float(np.median(durations))
+    return median if median > epoch_tmax else None
+
+
 def _no_epoch_reason(
     raw_haemo: mne.io.Raw,
     epoch_tmin: float = _EPOCH_TMIN,
@@ -1250,6 +1270,16 @@ def build_subject_report(
     # trial image and topomap on the denoised (bandpassed, pre-regression) haemo so drift/noise
     # is gone and the task response is intact; fall back to preproc only if no post-processing ran.
     epoch_haemo       = after_haemo if after_haemo is not None else raw_haemo
+    if getattr(config, "epoch_tmin", None) is None:
+        outruns = _epoch_window_mismatch(raw_haemo, epoch_tmax)
+        if outruns is not None:
+            _note(notes, subject,
+                  f"The epoch figures average a {epoch_tmin:g} to {epoch_tmax:g} s window "
+                  f"while this run's events are {outruns:g} s long, so they describe the "
+                  f"start of each block rather than the whole of it. Pass --epoch-tmin / "
+                  f"--epoch-tmax to widen it. The per-trial panel below is unaffected: it "
+                  f"scores each event over its own duration.")
+
     epoch_skip        = _no_epoch_reason(raw_haemo, epoch_tmin, epoch_tmax)
     if epoch_skip is not None:
         _note(notes, subject,
