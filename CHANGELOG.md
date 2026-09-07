@@ -6,12 +6,19 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.29.0] - 2026-09-06
+
+### Added
+- **The interface exposes the SCI/PSP window and the epoch window**, and can run the per-trial QC panel, which was reachable only from the command line before
+
 ### Fixed
 - **Short channels lost their HbO–HbR correlation in the per-channel table and the metrics CSV.** The column came back empty for every short channel once the haemoglobin metrics were split by separation
 - **"What each denoising step did" still averaged long and short channels together**, so the same metric read one number there and another in the table above it. On a montage with eight short channels its HbO–HbR correlation sat at −0.18 where the long channels alone gave −0.50. It is measured on the long channels now, as everything else on the page is
 - **A spike on the last sample of a recording was never drawn.** It came out as a span of zero width, which no figure can render
+- **The 3D layout never marked the selected channel.** It looked its channels up by haemoglobin name, and that figure is built on the raw recording, whose channels are named by wavelength
 - **Peaks in the GVTD and per-channel derivative traces were drawn slightly late.** Downsampling kept each peak's height but moved it to the start of its bin
 - **Clicking a cell in the Signal Topo selected a different channel.** Cells were ordered by name read as text, and overlapped wherever channels share an optode. They now follow channel order, no longer overlap, and a click anywhere inside one selects it
+- **The interface drew its per-channel figures at a fixed DPF of 6.** Whatever DPF was set for the run applied to every other panel but not to these, so a montage on any other value read its HbO and HbR off a different scale than the rest of the page
 
 ### Changed
 - **"What each denoising step did" now sits directly under the metrics table**, where the numbers it carries forward are, rather than at the end of the channel quality summary
@@ -19,6 +26,7 @@ All notable changes to this project will be documented in this file.
 - **The provenance diagram says less.** The QC record box reads "quantitative QC metrics" rather than listing every stage it covers, and the recording it all starts from is labelled as such
 - **The correlation matrix draws its lower triangle only.** The upper half repeated the same values read the other way round; the HbO x HbR block that the panel exists for is unaffected, and the colour bar moves into the corner the mask freed
 - **The interface was restyled.** The run picker moved up beside the subject it belongs to, and the Signal Topo shares the viewer row evenly with the layout panels instead of overhanging them
+- **`--epoch-tmin` and `--epoch-tmax` now also set the window the epoch figures are drawn over.** They sized the per-trial QC windows and nothing else, so the evoked topo and the per-channel epoch preview always showed -5 to 25 s whatever was asked for
 - **The motion figures were redrawn.** In both the carpet panel and the per-channel detail figure, spike segments now shade the traces themselves instead of sitting on a band below them, and the motion-correction footprint moved to a strip directly above. Lines are heavier, rows are labelled where the label fits, and the carpet panel's uncorrected GVTD trace is a filled area with the corrected one over it
 
 ### Removed

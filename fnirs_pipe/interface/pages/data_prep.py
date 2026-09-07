@@ -285,13 +285,13 @@ layout = dbc.Container([
                                          className="text-muted d-block mb-1"),
                               html.Div(id="dp-layout-2d-wrap", style=_HIDDEN, children=[
                                   dcc.Graph(id="dp-layout-2d", responsive=True,
-                                            style={"height": "300px"}),
+                                            style={"height": "370px"}),
                               ]),
                               body_class="p-2"),
                         _card("3D (fsaverage)",
                               html.Div(id="dp-layout-3d-wrap", style=_HIDDEN, children=[
                                   dcc.Graph(id="dp-layout-3d", responsive=True,
-                                            style={"height": "390px"}),
+                                            style={"height": "320px"}),
                               ])),
                     ], width=6),
                 ], className="mb-3", align="start"),

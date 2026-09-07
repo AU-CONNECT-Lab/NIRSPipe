@@ -43,6 +43,31 @@ _CORRECTED = "#55a868"
 
 _SPIKE_LABEL = "derivative spikes (≥10% ch)"
 
+# ---- Row geometry ----
+# Both motion figures carry a GVTD row and a correction strip, and the two figures are read
+# against each other, so those rows get a pixel height here instead of a share of two
+# different figure totals.
+_GVTD_ROW_PX = 84
+_STRIP_ROW_PX = 26
+
+
+def _px_rows(heights_px: list[int], vertical_spacing: float, chrome_px: int):
+    """Row-height fractions and a figure height that make ``heights_px`` land as real pixels.
+
+    ``make_subplots`` takes row heights as fractions of what is left of the plotting area
+    after ``vertical_spacing`` has eaten its gaps, so a figure height of
+    ``sum(heights_px) + chrome`` renders every row a little short of what it asked for. This
+    inflates the plotting area by the gaps first::
+
+        _px_rows([26, 84, 218], 0.04, 100)  ->  ([0.08, 0.26, 0.66], 457)
+
+    ``chrome_px`` is the non-plot furniture: top and bottom margins, plus any legend or
+    x-axis title that sits outside them.
+    """
+    total = sum(heights_px)
+    plot_px = total / (1.0 - vertical_spacing * (len(heights_px) - 1))
+    return [h / total for h in heights_px], int(round(plot_px)) + chrome_px
+
 
 def _maxpool_xy(t: np.ndarray, y: np.ndarray, max_pts: int = 2000):
     """Downsample a trace to <= max_pts by taking the max in each bin (keeps spike heights).
@@ -220,11 +245,11 @@ def carpet_gvtd_figure(
     # to draw; prep-raw runs before any and would otherwise get a labelled empty band
     has_strip = bool(corrected_segments)
     n_rows    = 1 + int(has_strip) + n_carpets
-    strip_px  = 26
-    gvtd_px   = 130
     carpet_px = int(max(200, min(n_ch * 13, 700)))
-    heights   = ([strip_px] if has_strip else []) + [gvtd_px] + [carpet_px] * n_carpets
-    total_px  = sum(heights) + 130  # margins, the legend and the shared x-axis title
+    heights   = ([_STRIP_ROW_PX] if has_strip else []) + [_GVTD_ROW_PX] + [carpet_px] * n_carpets
+    vspace    = 0.02
+    # chrome: the margins, the legend and the shared x-axis title
+    row_heights, total_px = _px_rows(heights, vspace, chrome_px=130)
     strip_row = 1 if has_strip else None
     gvtd_row  = 2 if has_strip else 1
 
@@ -234,8 +259,7 @@ def carpet_gvtd_figure(
     carpet_titles = ["Carpet (before)", "Carpet (after)"] if has_after else ["Carpet"]
     fig = make_subplots(
         rows=n_rows, cols=1, shared_xaxes=True,
-        row_heights=[h / sum(heights) for h in heights],
-        vertical_spacing=0.02,
+        row_heights=row_heights, vertical_spacing=vspace,
     )
 
     if has_strip:
@@ -491,12 +515,15 @@ def build_motion_detail_figure(
     strip_row = 1 if has_strip else None
     gvtd_row  = 2 if has_strip else 1
     tvd_row, od_row = gvtd_row + 1, gvtd_row + 2
-    heights = ([0.05] if has_strip else []) + [0.19, 0.19, 0.5]
+    # pixel rows, so the GVTD row is the same height here as in carpet_gvtd_figure; the
+    # derivative row matches it, since the two are read as a pair
+    heights = ([_STRIP_ROW_PX] if has_strip else []) + [_GVTD_ROW_PX, _GVTD_ROW_PX, 218]
+    vspace  = 0.04
+    row_heights, total_px = _px_rows(heights, vspace, chrome_px=100)  # margins t=60, b=40
     fig = make_subplots(
         rows=len(heights), cols=1,
         shared_xaxes=True,
-        row_heights=[h / sum(heights) for h in heights],
-        vertical_spacing=0.04,
+        row_heights=row_heights, vertical_spacing=vspace,
     )
 
     if has_strip:
@@ -593,7 +620,7 @@ def build_motion_detail_figure(
     if has_strip:
         _tighten_strip(fig)
     fig.update_layout(
-        title_text=ch_name, height=560,
+        title_text=ch_name, height=total_px,
         plot_bgcolor="white", paper_bgcolor="white",
         margin=dict(l=60, r=20, t=60, b=40),
         legend=dict(font=dict(size=9)),

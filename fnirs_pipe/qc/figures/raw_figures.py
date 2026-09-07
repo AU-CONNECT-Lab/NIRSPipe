@@ -344,6 +344,9 @@ def _optode_positions(chs, ch_names) -> tuple[dict, dict, list[tuple[str, str]]]
     return src, det, pairs
 
 
+_HEAD_PAD = 0.02   # fraction of the outline's own extent left around it
+
+
 def _head_outline_shapes(outlines: dict | None) -> list[dict]:
     """MNE head / nose / ear polylines as plotly paths, drawn under the montage."""
     if not outlines:
@@ -357,6 +360,26 @@ def _head_outline_shapes(outlines: dict | None) -> list[dict]:
         shapes.append(dict(type="path", path=f"M {pts}", xref="x", yref="y",
                            layer="below", line=dict(color="#b7c0c9", width=1.6)))
     return shapes
+
+
+def _head_extent(outlines: dict | None, ys: "list[float]") -> "list[float] | None":
+    """Vertical range that just holds the head outline, or None to leave autorange alone.
+
+    Plotly pads an autorange by a fixed share of the span, and with `scaleanchor` the head
+    is only ever as large as the height allows, so that padding is the difference between a
+    head that fills the panel and one ringed by white. Falls back to the channel positions
+    when the montage has no outline to measure.
+    """
+    if not outlines:
+        return None
+    vals = [float(v) for key in ("head", "nose", "ear_left", "ear_right")
+            if outlines.get(key) is not None for v in outlines[key][1]]
+    vals += list(ys)
+    if not vals:
+        return None
+    lo, hi = min(vals), max(vals)
+    pad = (hi - lo) * _HEAD_PAD
+    return [lo - pad, hi + pad]
 
 
 def build_layout_figure(
@@ -441,9 +464,10 @@ def build_layout_figure(
             ],
             layout=go.Layout(
                 xaxis=dict(visible=False),
-                yaxis=dict(visible=False, scaleanchor="x"),
+                yaxis=dict(visible=False, scaleanchor="x",
+                           range=_head_extent(outlines, pos2d[:, 1].tolist())),
                 plot_bgcolor="white", paper_bgcolor="white",
-                height=700, margin=dict(l=10, r=10, t=10, b=10),
+                height=700, margin=dict(l=4, r=4, t=4, b=4),
                 shapes=_head_outline_shapes(outlines),
                 hovermode="closest",
             ),

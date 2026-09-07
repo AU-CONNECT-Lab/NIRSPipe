@@ -262,12 +262,16 @@ def _process_run(
     except Exception as exc:
         logger.warning("channel_quality_heatmap failed: %s", exc)
 
+    # the epoch figures need concrete bounds; per-trial QC reads None as "use event duration"
+    fig_tmin = _EPOCH_TMIN if epoch_tmin is None else epoch_tmin
+    fig_tmax = _EPOCH_TMAX if epoch_tmax is None else epoch_tmax
+
     # ── file: evoked topo ──────────────────────────────────────────────────────
     evoked_topo_inline: dict = {}
     if raw_haemo is not None:
         try:
             fig = build_evoked_topo_figure(
-                raw_haemo, markers, _MAX_TS_PTS, _EPOCH_TMIN, _EPOCH_TMAX,
+                raw_haemo, markers, _MAX_TS_PTS, fig_tmin, fig_tmax,
             )
             if fig:
                 fname = f"{label}_desc-evokedtopo_nirs.html"
@@ -284,7 +288,7 @@ def _process_run(
         for pair in channel_pairs:
             try:
                 detail_fig, psd_fig, epoch_fig = build_channel_figure(
-                    raw_haemo, markers, pair, _MAX_TS_PTS, _EPOCH_TMIN, _EPOCH_TMAX,
+                    raw_haemo, markers, pair, _MAX_TS_PTS, fig_tmin, fig_tmax,
                 )
                 fname = f"{label}_desc-ch{_pair_fname(pair)}_nirs.html"
                 _save_multi_fig_html([detail_fig, psd_fig, epoch_fig], fig_dir / fname)

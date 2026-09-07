@@ -38,13 +38,20 @@ def _snirf_options(subject: str, bids_dir: str) -> list[dict]:
 
 
 # bump whenever a cached figure's builder changes, or the disk cache keeps serving the old one
-_CACHE_VERSION = 3
+_CACHE_VERSION = 4
 
 
-def _make_cache_key(snirf_path: str, sci_thresh: float,
-                    cardiac_l: float, cardiac_h: float, dpf: float) -> str:
+def _pair_name(ch_name: str) -> str:
+    """Strip a channel's chromophore or wavelength suffix: 'S1_D1 760' -> 'S1_D1'."""
+    return ch_name.rsplit(" ", 1)[0] if " " in ch_name else ch_name
+
+
+def _make_cache_key(snirf_path: str, sci_thresh: float, cardiac_l: float, cardiac_h: float,
+                    dpf: float, window_s: float, epoch_qc: bool,
+                    epoch_tmin: float, epoch_tmax: float) -> str:
     import hashlib
-    payload = f"v{_CACHE_VERSION}|{snirf_path}|{sci_thresh}|{cardiac_l}|{cardiac_h}|{dpf}"
+    payload = (f"v{_CACHE_VERSION}|{snirf_path}|{sci_thresh}|{cardiac_l}|{cardiac_h}|{dpf}"
+               f"|{window_s}|{epoch_qc}|{epoch_tmin}|{epoch_tmax}")
     return hashlib.md5(payload.encode()).hexdigest()[:16]
 
 
@@ -142,10 +149,15 @@ def populate_runs(subject, bids_dir):
     State("dp-cardiac-l",    "value"),
     State("dp-cardiac-h",    "value"),
     State("dp-dpf",          "value"),
+    State("dp-window-s",     "value"),
+    State("dp-epoch-qc",     "value"),
+    State("dp-epoch-tmin",   "value"),
+    State("dp-epoch-tmax",   "value"),
     State("app-output-dir",  "data"),
     prevent_initial_call=True,
 )
-def load_run(run_path, sci_thresh, cardiac_l, cardiac_h, dpf, output_dir):
+def load_run(run_path, sci_thresh, cardiac_l, cardiac_h, dpf,
+             window_s, epoch_qc, epoch_tmin, epoch_tmax, output_dir):
     import pickle
 
     if not run_path:
@@ -158,9 +170,15 @@ def load_run(run_path, sci_thresh, cardiac_l, cardiac_h, dpf, output_dir):
 
     sci_threshold = float(sci_thresh if sci_thresh is not None else 0.8)
     cardiac_l, cardiac_h, dpf = float(cardiac_l), float(cardiac_h), float(dpf)
-    snirf_path    = run_path
-    cache_key     = _make_cache_key(snirf_path, sci_threshold, cardiac_l, cardiac_h, dpf)
-    disk_path     = Path(output_dir) / ".fnirs_cache" / f"{cache_key}.pkl"
+    from fnirs_pipe.qc.prep_raw_report import _EPOCH_TMAX, _EPOCH_TMIN
+    window_s   = float(window_s if window_s is not None else 10.0)
+    ep_tmin    = float(epoch_tmin if epoch_tmin is not None else _EPOCH_TMIN)
+    ep_tmax    = float(epoch_tmax if epoch_tmax is not None else _EPOCH_TMAX)
+    trial_qc   = bool(epoch_qc)
+    snirf_path = run_path
+    cache_key  = _make_cache_key(snirf_path, sci_threshold, cardiac_l, cardiac_h, dpf,
+                                 window_s, trial_qc, ep_tmin, ep_tmax)
+    disk_path  = Path(output_dir) / ".fnirs_cache" / f"{cache_key}.pkl"
 
     if cache_key in _RESULT_CACHE:
         result = _RESULT_CACHE[cache_key]
@@ -191,32 +209,15 @@ def load_run(run_path, sci_thresh, cardiac_l, cardiac_h, dpf, output_dir):
                 cardiac_l,
                 cardiac_h,
                 [dpf],
+                window_s=window_s,
+                epoch_qc=trial_qc,
+                epoch_tmin=ep_tmin,
+                epoch_tmax=ep_tmax,
             )
-            raw_haemo = result.pop("_raw_haemo", None)
-            if raw_haemo is not None:
-                _HAEMO_CACHE[cache_key] = raw_haemo
-
-            if raw_haemo is not None:
-                from fnirs_pipe.qc.figures import build_channel_figure
-                from fnirs_pipe.qc.prep_raw_report import (
-                    _EPOCH_TMAX, _EPOCH_TMIN, _MAX_TS_PTS,
-                )
-                channels = result.setdefault("channels", {})
-                markers = result.get("ts", {}).get("markers", [])
-                for pair in result.get("channel_pairs", []):
-                    try:
-                        d_fig, p_fig, e_fig = build_channel_figure(
-                            raw_haemo, markers, pair,
-                            _MAX_TS_PTS, _EPOCH_TMIN, _EPOCH_TMAX,
-                        )
-                        channels[pair] = {
-                            "detail_figure": d_fig.to_dict() if d_fig else None,
-                            "psd_figure":    p_fig.to_dict() if p_fig else None,
-                            "epoch_figure":  e_fig.to_dict() if e_fig else None,
-                        }
-                    except Exception as exc:
-                        print(f"[DEBUG load_run] channel {pair!r} failed: {exc}")
-                        channels[pair] = {}
+            result["epoch_window"] = [ep_tmin, ep_tmax]
+            # the per-channel figures are built on demand in update_channel_detail; the DPF
+            # travels with the result so that lazy path converts the same way this one did
+            result["dpf"] = dpf
 
             _RESULT_CACHE[cache_key] = result
             if disk_path:
@@ -234,6 +235,7 @@ def load_run(run_path, sci_thresh, cardiac_l, cardiac_h, dpf, output_dir):
     store = {
         "cache_key":  cache_key,
         "snirf_path": snirf_path,
+        "dpf":        dpf,
     }
     status = dbc.Alert(f"Loaded ({source}): {Path(snirf_path).name}",
                        color="success", className="mb-0 py-2")
@@ -258,6 +260,7 @@ _SHOW = {}
     Output("dp-evoked-topo",            "figure"),
     Output("dp-trigger-timeline",       "figure"),
     Output("dp-carpet-gvtd",            "figure"),
+    Output("dp-trial-qc",               "figure"),
     Output("dp-ts-figure-wrap",         "style"),
     Output("dp-layout-2d-wrap",         "style"),
     Output("dp-layout-3d-wrap",         "style"),
@@ -266,16 +269,17 @@ _SHOW = {}
     Output("dp-evoked-topo-wrap",       "style"),
     Output("dp-trigger-timeline-wrap",  "style"),
     Output("dp-carpet-gvtd-wrap",       "style"),
+    Output("dp-trial-qc-wrap",          "style"),
     Input("dp-run-store",          "data"),
     Input("dp-mount-tick",         "n_intervals"),
     prevent_initial_call="initial_duplicate",
 )
 def restore_from_store(store, _tick):
     if not store:
-        return (no_update,) * 21
+        return (no_update,) * 23
     cached = _RESULT_CACHE.get(store.get("cache_key"), {})
     if not cached:
-        return (no_update,) * 21
+        return (no_update,) * 23
 
     def _fig(nested, *keys):
         d = nested
@@ -316,6 +320,7 @@ def restore_from_store(store, _tick):
 
     carpet_src = cached.get("carpet_gvtd", {}).get("figure")
     carpet_src = style_figure(carpet_src) if carpet_src else no_update
+    trial_qc   = _fig(cached, "trial_qc", "figure")
 
     def _wrap(val):
         return _SHOW if val is not no_update else no_update
@@ -334,6 +339,7 @@ def restore_from_store(store, _tick):
         evoked_topo,
         trigger_tl,
         carpet_src,
+        trial_qc,
         _wrap(ts_fig),
         _wrap(layout_2d),
         _wrap(layout_3d),
@@ -342,6 +348,7 @@ def restore_from_store(store, _tick):
         _wrap(evoked_topo),
         _wrap(trigger_tl),
         _wrap(carpet_src),
+        _wrap(trial_qc),
     )
 
 
@@ -365,7 +372,7 @@ def on_ts_click(click_data, store):
     if curve_num >= len(trace_names):
         return no_update
     trace_name = trace_names[curve_num]
-    pair = trace_name.rsplit(" ", 1)[0] if " " in trace_name else trace_name
+    pair = _pair_name(trace_name)
     print(f"[DEBUG on_ts_click] pair={pair!r}, valid={pair in valid_pairs}")
     return pair if pair in valid_pairs else no_update
 
@@ -387,13 +394,10 @@ def highlight_ts_from_selector(channel_pair, store):
     if not trace_names:
         return no_update
 
-    def _pair(name):
-        return name.rsplit(" ", 1)[0] if " " in name else name
-
     patched = Patch()
     for i, name in enumerate(trace_names):
         patched["data"][i]["opacity"] = 1.0 if (
-            not channel_pair or _pair(name) == channel_pair
+            not channel_pair or _pair_name(name) == channel_pair
         ) else 0.05
     return patched
 
@@ -422,13 +426,14 @@ def highlight_optode_3d(channel_pair, store):
 
         customdata = ch_tr.get("customdata", [])
         xs, ys, zs = ch_tr.get("x", []), ch_tr.get("y", []), ch_tr.get("z", [])
-        target = f"{channel_pair} hbo" if channel_pair else None
 
-        if target and target in customdata:
-            idx = customdata.index(target)
-            hx, hy, hz = [xs[idx]], [ys[idx]], [zs[idx]]
-        else:
+        # this figure is built on the CW object, so its channels are 'S1_D1 760', not ' hbo'
+        idx = next((i for i, ch in enumerate(customdata)
+                    if _pair_name(ch) == channel_pair), None) if channel_pair else None
+        if idx is None:
             hx, hy, hz = [], [], []
+        else:
+            hx, hy, hz = [xs[idx]], [ys[idx]], [zs[idx]]
 
         patched = Patch()
         patched["data"][hl_idx]["x"] = hx
@@ -488,7 +493,8 @@ def update_channel_detail(channel_pair, store):
                 snirf_path = store.get("snirf_path", "")
                 raw = mne.io.read_raw_snirf(snirf_path, preload=True, verbose=False)
                 raw_od = mne.preprocessing.nirs.optical_density(raw, verbose=False)
-                raw_haemo = mne.preprocessing.nirs.beer_lambert_law(raw_od, ppf=6.0)
+                ppf = float(cached.get("dpf") or store.get("dpf") or 6.0)
+                raw_haemo = mne.preprocessing.nirs.beer_lambert_law(raw_od, ppf=ppf)
                 _HAEMO_CACHE[cache_key] = raw_haemo
             except Exception as exc:
                 print(f"[DEBUG update_channel_detail] recompute haemo failed: {exc}")
@@ -498,10 +504,11 @@ def update_channel_detail(channel_pair, store):
                 )
         try:
             from fnirs_pipe.qc.figures import build_channel_figure
-            from fnirs_pipe.qc.prep_raw_report import _MAX_TS_PTS, _EPOCH_TMIN, _EPOCH_TMAX
+            from fnirs_pipe.qc.prep_raw_report import _EPOCH_TMAX, _EPOCH_TMIN, _MAX_TS_PTS
             markers = cached.get("ts", {}).get("markers", [])
+            tmin, tmax = cached.get("epoch_window", [_EPOCH_TMIN, _EPOCH_TMAX])
             detail_fig, psd_fig, epoch_fig = build_channel_figure(
-                raw_haemo, markers, channel_pair, _MAX_TS_PTS, _EPOCH_TMIN, _EPOCH_TMAX,
+                raw_haemo, markers, channel_pair, _MAX_TS_PTS, tmin, tmax,
             )
             channels[channel_pair] = {
                 "detail_figure": detail_fig.to_dict() if detail_fig else None,
@@ -849,13 +856,10 @@ def highlight_optode_2d(channel_pair, store):
         if not customdata:
             return no_update
 
-        def _pair(ch):
-            return ch.rsplit(" ", 1)[0] if " " in ch else ch
-
         sel       = channel_pair or ""
-        sizes     = [15 if _pair(ch) == sel else 10  for ch in customdata]
-        opacities = [1.0 if _pair(ch) == sel else 0.55 for ch in customdata]
-        lw        = [2.0 if _pair(ch) == sel else 0.8  for ch in customdata]
+        sizes     = [15 if _pair_name(ch) == sel else 10  for ch in customdata]
+        opacities = [1.0 if _pair_name(ch) == sel else 0.55 for ch in customdata]
+        lw        = [2.0 if _pair_name(ch) == sel else 0.8  for ch in customdata]
 
         patched = Patch()
         patched["data"][1]["marker"]["size"]          = sizes
@@ -884,7 +888,7 @@ def on_layout_2d_click(click_data, store):
     if not points:
         return no_update
     ch_name = points[0].get("customdata", "")
-    pair    = ch_name.rsplit(" ", 1)[0] if " " in ch_name else ch_name
+    pair    = _pair_name(ch_name)
     print(f"[DEBUG on_layout_2d_click] ch_name={ch_name!r}, pair={pair!r}, valid={pair in valid_pairs}")
     return pair if pair in valid_pairs else no_update
 
