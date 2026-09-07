@@ -11,6 +11,7 @@ from typing import Any
 import mne
 import numpy as np
 
+from fnirs_pipe.qc.metrics._helpers import SNR_PASS_RATE
 from fnirs_pipe.qc.metrics._helpers import _mean_or_none, _safe_metrics
 from fnirs_pipe.utils import is_optical_density
 from fnirs_pipe.utils.logging import get_logger
@@ -121,10 +122,11 @@ def channel_snr(data: np.ndarray) -> np.ndarray:
     "snr_mean", "snr_per_channel", "snr_pass_rate", "n_flat_channels",
     "mean_amp_mean", "mean_amp_per_channel",
 ))
-def _intensity_metrics(raw_intensity: mne.io.Raw, snr_threshold: float = 2.0) -> dict[str, Any]:
+def _intensity_metrics(raw_intensity: mne.io.Raw,
+                       snr_threshold: float = SNR_PASS_RATE) -> dict[str, Any]:
     """Per-channel CV, SNR and mean amplitude from raw intensity (with means; CV also per wavelength).
 
-    snr_pass_rate is the fraction of channels with SNR > snr_threshold (default 2.0,
+    snr_pass_rate is the fraction of channels with SNR > snr_threshold (SNR_PASS_RATE,
     a common channel-pruning cutoff; SNR = mean/std, higher is better). Its denominator is
     every channel, not every channel with a finite SNR: a flat or saturated channel has
     std 0 and no finite SNR at all, and letting it drop out of the denominator would mean a
@@ -182,13 +184,12 @@ def _channel_distance_metrics(raw_intensity: mne.io.Raw) -> dict[str, Any]:
     }
 
 
-@_safe_metrics("PSP", ("psp_mean", "psp_per_channel"))
-def _psp_metrics(
-    raw_intensity: mne.io.Raw,
+def compute_psp_scores(
+    raw: mne.io.Raw,
     cardiac_l_freq: float,
     cardiac_h_freq: float,
-) -> dict[str, Any]:
-    """Peak spectral power per channel, averaged over ``PSP_WINDOW_S`` windows, with mean.
+) -> dict[str, float]:
+    """Peak spectral power per channel, averaged over ``PSP_WINDOW_S`` windows.
 
     Measured on optical density, which is what ``peak_power`` is meant for: the metric
     cross-correlates the two wavelengths, so it has no meaning after Beer-Lambert, and
@@ -199,17 +200,28 @@ def _psp_metrics(
     The window is pinned to ``PSP_WINDOW_S`` rather than following the QC window length; see
     the constant for what changes when it moves. The windowed PSP series is a separate view
     and does follow the QC window, so its colour scale is not on this scalar's scale.
+
+    Separate from the metric wrapper below because channel screening needs the scores and
+    not the record entry, and computing them twice per run would be paying twice for the
+    same measurement.
     """
     import mne_nirs.preprocessing as nirs_prep
-    raw_od = (raw_intensity if is_optical_density(raw_intensity)
-              else mne.preprocessing.nirs.optical_density(raw_intensity.copy()))
+    raw_od = (raw if is_optical_density(raw)
+              else mne.preprocessing.nirs.optical_density(raw.copy()))
     _, psp_scores, _ = nirs_prep.peak_power(
         raw_od.copy(), time_window=PSP_WINDOW_S,
         l_freq=cardiac_l_freq, h_freq=cardiac_h_freq, verbose=False)
-    psp_per_ch = {
-        ch: float(np.mean(psp_scores[i]))
-        for i, ch in enumerate(raw_od.ch_names)
-    }
+    return {ch: float(np.mean(psp_scores[i])) for i, ch in enumerate(raw_od.ch_names)}
+
+
+@_safe_metrics("PSP", ("psp_mean", "psp_per_channel"))
+def _psp_metrics(
+    raw_intensity: mne.io.Raw,
+    cardiac_l_freq: float,
+    cardiac_h_freq: float,
+) -> dict[str, Any]:
+    """The PSP record entry: per-channel scores and their mean."""
+    psp_per_ch = compute_psp_scores(raw_intensity, cardiac_l_freq, cardiac_h_freq)
     return {
         "psp_mean": _mean_or_none(psp_per_ch.values()),
         "psp_per_channel": psp_per_ch,

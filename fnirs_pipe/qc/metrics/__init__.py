@@ -40,14 +40,19 @@ Per-channel dicts always list every channel, in both domains.
 from fnirs_pipe.qc.metrics._helpers import (  # noqa: F401
     SHORT_MAX_DIST, LONG_MIN_DIST, LONG_MAX_DIST, long_short_channels, _mean_or_none,
     _safe_metrics, _mask_to_segments,
+    SCI_PASS, PSP_PASS, CV_PASS, SNR_PASS, SNR_PASS_RATE,
 )
 from fnirs_pipe.qc.metrics.gvtd import (  # noqa: F401
     GVTD_MOTION_BAND, GVTD_N_STD, GVTD_CHANNEL_SETS, gvtd_timetrace, gvtd_threshold,
     gvtd_channel_picks, _motion_metrics, gvtd_censor_spans, _windowed_gvtd,
     compute_windowed_gvtd, compute_windowed_filtered_gvtd,
 )
+from fnirs_pipe.qc.metrics.screening import (  # noqa: F401
+    CRITERIA, Criterion, criterion_cutoffs, screen_channels, screening_scores,
+)
 from fnirs_pipe.qc.metrics.coupling import (  # noqa: F401
-    PSP_WINDOW_S, compute_sci_scores, _sci_metrics, channel_cv, channel_snr, _intensity_metrics,
+    PSP_WINDOW_S, compute_sci_scores, compute_psp_scores, _sci_metrics,
+    channel_cv, channel_snr, _intensity_metrics,
     _channel_distance_metrics, _psp_metrics, _cardiac_power_metrics,
 )
 from fnirs_pipe.qc.metrics.motion import (  # noqa: F401

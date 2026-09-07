@@ -135,6 +135,29 @@ def test_a_method_step_borrows_its_methods_sentence(tmp_path):
     assert line == "Data were resampled to 2.0 Hz."
 
 
+def test_every_citation_key_has_a_reference():
+    """A key with no entry in references.bib prints as the bare key, in the paper text.
+
+    ``_fmt_citations`` falls back to the key itself rather than raising, so a step citing
+    "Pollonini2016" with no such entry renders "(Pollonini et al., 2014; Pollonini2016)"
+    into the Methods paragraph and into the reference list under it. Nothing else notices,
+    and the Methods paragraph is the part of the report that ends up in a manuscript.
+    """
+    from fnirs_pipe.qc.boilerplate.generate import _load_refs, _load_steps
+
+    refs = _load_refs()
+    missing = sorted({
+        key
+        for step in _load_steps().values()
+        for key in (step.get("citations") or [])
+        if key not in refs
+    })
+    assert not missing, (
+        f"steps.toml cites {missing}, which references.bib has no entry for. The Methods "
+        f"paragraph will print the raw key. Add the entry, or drop the citation."
+    )
+
+
 def test_the_table_line_carries_no_citations():
     # the paragraph cites, the table does not: a citation per row is noise
     line = step_sentence("od_conversion", {})

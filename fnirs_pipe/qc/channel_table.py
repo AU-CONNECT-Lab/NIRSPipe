@@ -122,6 +122,20 @@ def channel_rows(
     } for ch in sci_scores]
 
 
+def pair_reasons(reasons: dict[str, list[str]] | None) -> dict[str, list[str]]:
+    """Per-channel failure reasons keyed by S-D pair, for a table that lists pairs.
+
+    {"S1_D1 760": ["SCI"], "S1_D1 850": ["PSP"]} -> {"S1_D1": ["SCI", "PSP"]}
+
+    Either wavelength failing is the pair failing, so the pair carries both reasons.
+    """
+    out: dict[str, list[str]] = {}
+    for ch, why in (reasons or {}).items():
+        bucket = out.setdefault(_pair_of(ch), [])
+        bucket.extend(w for w in why if w not in bucket)
+    return out
+
+
 def pair_rows(rows: list[dict], pairs: list[str] | None = None) -> list[dict[str, Any]]:
     """The same rows collapsed to one per source-detector pair.
 
@@ -335,9 +349,10 @@ def split_table(
 
 def format_rows(
     rows: list[dict],
-    sci_threshold: float = 0.75,
+    sci_threshold: float | None = None,
     *,
     name_key: str = "name",
+    reasons: dict[str, list[str]] | None = None,
 ) -> list[dict[str, Any]]:
     """Rows with the numbers already formatted and the cells already classed.
 
@@ -356,14 +371,24 @@ def format_rows(
     the SCI mean: this column marks the channels that were actually pruned, so colouring it
     against anything else would show a verdict the run did not reach.
     ``name_key`` is ``"pair"`` for rows that came through :func:`pair_rows`.
+
+    ``reasons`` is :func:`~fnirs_pipe.qc.metrics.screening.screen_channels`' second return
+    value, and Status names the criterion when it is given. Screening is a union over
+    several criteria, so a channel can be BAD with a passing SCI cell; without the reason
+    printed beside it that reads as a contradiction rather than as a PSP failure.
     """
     from fnirs_pipe.qc.boilerplate.vocabulary import format_metric
+    from fnirs_pipe.qc.metrics import SCI_PASS
 
+    if sci_threshold is None:
+        sci_threshold = SCI_PASS
     out = []
     for row in rows:
+        why = (reasons or {}).get(row.get(name_key)) or []
         formatted: dict[str, Any] = {
             "name":       row.get(name_key),
-            "status":     "BAD" if row["is_bad"] else "OK",
+            "status":     ("BAD (" + "/".join(why) + ")" if row["is_bad"] and why
+                           else "BAD" if row["is_bad"] else "OK"),
             "status_cls": "bad" if row["is_bad"] else "good",
             "separation": row.get("separation") or "",
             "is_bad":     row["is_bad"],

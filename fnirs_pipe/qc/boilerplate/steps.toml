@@ -22,8 +22,8 @@ plain = "Raw intensity signals were converted to optical density (OD) using MNE-
 citations = ["Gramfort2013"]
 
 [sci_marking]
-plain = "Channel signal quality was assessed using the scalp coupling index (SCI) {citations}. Channels with SCI below {threshold} were {action}."
-citations = ["Pollonini2014"]
+plain = "Channel signal quality was assessed using the scalp coupling index (SCI) and the peak spectral power (PSP) of the cardiac band {citations}. Channels with SCI below {threshold} or PSP below {psp_threshold} were {action}."
+citations = ["Pollonini2014", "Pollonini2016"]
 
 [motion_tddr]
 plain = "Motion artifacts were corrected using temporal derivative distribution repair (TDDR) {citations}."

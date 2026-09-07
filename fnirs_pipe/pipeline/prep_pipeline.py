@@ -64,21 +64,30 @@ def mark_bad_channels(
     cardiac_l_freq: float,
     cardiac_h_freq: float,
 ) -> tuple[mne.io.Raw, list[str], dict[str, float]]:
-    """Mark channels below SCI threshold into raw.info['bads'].
+    """Screen channels into raw.info['bads'].
 
-    Returns raw (modified in-place), list of bad channel names, and SCI scores dict.
-    Raises StageError if the threshold leaves no usable channel.
+    The criteria are :data:`fnirs_pipe.qc.metrics.screening.CRITERIA` and a channel is
+    rejected if it fails any of them, so what gets pruned is decided by that table rather
+    than here. ``threshold`` is the SCI line, which is the one criterion a run sets.
+
+    Returns raw (modified in-place), the rejected channel names, and the SCI scores, which
+    the report and the quality record both want on their own.
+    Raises StageError if the criteria leave no usable channel.
     """
+    from fnirs_pipe.qc.metrics import screen_channels, screening_scores
+
     sci_scores = compute_sci(raw_od, cardiac_l_freq, cardiac_h_freq)
-    bad_chs = [ch for ch, score in sci_scores.items() if score < threshold]
+    scores = screening_scores(raw_od, cardiac_l_freq, cardiac_h_freq,
+                              have={"sci": sci_scores})
+    bad_chs, why = screen_channels(scores, {"sci": threshold})
     # without this the run dies four steps later inside Beer-Lambert, which reports only
-    # that it found no optical density data and never mentions the threshold
+    # that it found no optical density data and never mentions the screening
     if sci_scores and len(bad_chs) == len(sci_scores):
-        best = max(sci_scores.values())
+        failed = sorted({c for reasons in why.values() for c in reasons})
         raise StageError(
-            f"every channel scored below the SCI threshold {threshold}; the best channel "
-            f"scored {best:.3f}. Lower --sci-threshold, or check the recording for "
-            f"scalp coupling."
+            f"every channel failed screening on {', '.join(failed)} (SCI threshold "
+            f"{threshold}; best SCI {max(sci_scores.values()):.3f}). Lower "
+            f"--sci-threshold, or check the recording for scalp coupling."
         )
     raw_od.info["bads"] = bad_chs
     stamp(raw_od, stage="sci", step="sci_pruning", source=raw_od, threshold=threshold)

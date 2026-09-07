@@ -84,8 +84,12 @@ def template_slots(key: str, params: dict[str, Any]) -> dict[str, str]:
     filter templates call ``l_freq``.
     """
     if key == "sci_marking":
+        # both criteria, because screening is a union over them; the PSP line has no flag
+        # so it is read off the screening table rather than the run's parameters
+        from fnirs_pipe.qc.metrics import criterion_cutoffs
         return {
             "threshold": str(params.get("sci_threshold", "")),
+            "psp_threshold": str(criterion_cutoffs().get("psp", "")),
             "action": "marked as bad and excluded from further analysis",
         }
     if key == "beer_lambert":
@@ -166,7 +170,7 @@ METRIC_SUMMARY = {
     "cp_pass_rate": "Fraction of channels with cardiac power at or above 0.5. Higher is better. Experimental.",
 
     # raw intensity
-    "cv_mean": "Noise relative to a channel's own brightness (SD / mean). Lower is cleaner.",
+    "cv_mean": "Noise relative to a channel's own brightness (SD / mean), per wavelength. Lower is cleaner.",
     "snr_mean": "Signal size relative to its fluctuation (mean / SD), the reciprocal of CV. Higher is better.",
     "snr_pass_rate": "Fraction of channels with SNR above 2. Higher is better.",
     "n_flat_channels": "How many channels carry no variation at all, flat or saturated. Zero is what you want; these are counted as failures in snr_pass_rate but cannot enter the SNR and CV means.",

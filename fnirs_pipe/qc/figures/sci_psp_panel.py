@@ -1,6 +1,7 @@
 import numpy as np
 import plotly.graph_objects as go
 
+from fnirs_pipe.qc.metrics import CV_PASS, PSP_PASS, SCI_PASS, SNR_PASS
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("qc.figures.sci_psp")
@@ -56,10 +57,10 @@ def channel_quality_heatmap(
     cv_per_ch: dict[str, float],
     snr_per_ch: dict[str, float],
     psp_per_ch: dict[str, float],
-    sci_thresh: float = 0.75,
-    cv_thresh: float = 0.5,
-    snr_thresh: float = 20.0,
-    psp_thresh: float = 0.1,
+    sci_thresh: float = SCI_PASS,
+    cv_thresh: float = CV_PASS,
+    snr_thresh: float = SNR_PASS,
+    psp_thresh: float = PSP_PASS,
     split_at: int | None = None,
 ) -> go.Figure:
     """Square-marker grid: channels on x-axis, metrics on y-axis. Green=pass, red=fail, gray=missing.
@@ -68,6 +69,9 @@ def channel_quality_heatmap(
     already ordered ``ch_names`` long block first; it draws the divider and names the two
     blocks. The two are pruned by the same threshold but answer different questions, so a
     reader needs to know which side of the line a column is on.
+
+    Status is the screening verdict. The metric rows below it are drawn against the
+    cutoffs in :mod:`fnirs_pipe.qc.metrics._helpers`; CV and SNR prune nothing.
     """
     _MISSING = "#D3D3D3"
     metrics = ["Status", "SCI", "CV", "PSP", "SNR"]

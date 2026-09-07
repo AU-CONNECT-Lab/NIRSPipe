@@ -416,7 +416,8 @@ layout = dbc.Container([
                       ])),
 
                 _card("Channel Quality Summary",
-                      html.Small("status / SCI / CV / PSP / SNR per channel",
+                      html.Small("status / SCI / CV / PSP / SNR per channel · status "
+                                 "screens on SCI and PSP; CV / SNR are reported only",
                                  className="text-muted d-block mb-1"),
                       html.Div(id="dp-ch-summary-figure-wrap", style=_HIDDEN, children=[
                           dcc.Graph(id="dp-ch-summary-figure", style={"minHeight": "400px"}),

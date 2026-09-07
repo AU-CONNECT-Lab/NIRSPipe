@@ -296,9 +296,10 @@ def compute_group_sqm_raw(
             sci_scores[f"{pair} hbo"] = val
             sci_scores[pair] = val
 
-        bad_channels = [
-            ch for ch, s in sci_cw.items() if s < sci_threshold
-        ]
+        from fnirs_pipe.qc.metrics import screen_channels, screening_scores
+        screen = screening_scores(raw_od, cardiac_l_freq, cardiac_h_freq,
+                                  have={"sci": sci_cw})
+        bad_channels, _ = screen_channels(screen, {"sci": sci_threshold})
 
         try:
             sqm = compute_raw_sqm(raw, sci_cw, bad_channels, cardiac_l_freq, cardiac_h_freq)

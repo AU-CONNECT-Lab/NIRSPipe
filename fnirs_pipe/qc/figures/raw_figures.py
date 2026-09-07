@@ -7,6 +7,7 @@ import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
+from fnirs_pipe.qc.metrics import PSP_PASS, SCI_PASS
 from fnirs_pipe.utils.logging import get_logger
 
 from ._brain_utils import mni_trans
@@ -602,8 +603,8 @@ def build_sci_psp_figure(
     sci_scores: dict[str, float],
     psp_per_channel: dict[str, float],
     bad_channels: set[str],
-    sci_threshold: float = 0.75,
-    psp_threshold: float = 0.1,
+    sci_threshold: float = SCI_PASS,
+    psp_threshold: float = PSP_PASS,
     sci_matrix: np.ndarray | None = None,
     sci_win_times: np.ndarray | None = None,
     psp_matrix: np.ndarray | None = None,

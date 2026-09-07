@@ -68,11 +68,15 @@ def trial_sqm(raw, t0: float, t1: float,
     No sliding-window series is attached: a window of a few seconds has no room for the 10 s
     grid the recording-level series uses.
     """
-    from fnirs_pipe.qc.metrics import compute_raw_sqm, compute_sci_scores
+    from fnirs_pipe.qc.metrics import (
+        compute_raw_sqm, compute_sci_scores, screen_channels, screening_scores,
+    )
 
     seg = raw.copy().crop(tmin=t0, tmax=t1)
-    sci_scores, _ = compute_sci_scores(seg, cardiac_l_freq, cardiac_h_freq)
-    bad = [ch for ch, v in sci_scores.items() if v < sci_threshold]
+    sci_scores, seg_od = compute_sci_scores(seg, cardiac_l_freq, cardiac_h_freq)
+    scores = screening_scores(seg_od, cardiac_l_freq, cardiac_h_freq,
+                              have={"sci": sci_scores})
+    bad, _ = screen_channels(scores, {"sci": sci_threshold})
     try:
         return compute_raw_sqm(seg, sci_scores, bad, cardiac_l_freq, cardiac_h_freq)
     except Exception as exc:

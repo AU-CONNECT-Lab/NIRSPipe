@@ -13,7 +13,7 @@ from fnirs_pipe.qc.figure_io import (
     extract_markers, get_channel_pairs,
 )
 from fnirs_pipe.qc.channel_table import (
-    channel_rows, format_rows, heatmap_args, pair_rows, save_channel_csv,
+    channel_rows, format_rows, heatmap_args, pair_reasons, pair_rows, save_channel_csv,
     separation_blocks, separation_notes, split_table,
 )
 from fnirs_pipe.qc.metrics import SHORT_MAX_DIST
@@ -70,6 +70,7 @@ def _process_run(
     from fnirs_pipe.qc.boilerplate.vocabulary import metric_rows
     from fnirs_pipe.qc.metrics import (
         attach_windowed_series, compute_raw_sqm, compute_sci_scores,
+        screen_channels, screening_scores,
     )
     from fnirs_pipe.qc.sqm_record import raw_sections, sqm_record_dict
 
@@ -83,7 +84,10 @@ def _process_run(
     raw = mne.io.read_raw_snirf(run["snirf_path"], preload=True, verbose=False)
 
     sci_scores, raw_od = compute_sci_scores(raw, cardiac_l_freq, cardiac_h_freq)
-    bad_channels: set[str] = {ch for ch, s in sci_scores.items() if s < sci_threshold}
+    screen_scores = screening_scores(raw_od, cardiac_l_freq, cardiac_h_freq,
+                                     have={"sci": sci_scores})
+    bad_list, bad_why = screen_channels(screen_scores, {"sci": sci_threshold})
+    bad_channels: set[str] = set(bad_list)
 
     try:
         sqm = compute_raw_sqm(raw, sci_scores, list(bad_channels), cardiac_l_freq, cardiac_h_freq)
@@ -269,7 +273,7 @@ def _process_run(
     # `channel_pairs or None` so a run whose Beer-Lambert failed still gets a table, built
     # from the pairs the intensity recording carries rather than from an empty list
     pair_cells = format_rows(pair_rows(ch_rows, channel_pairs or None), sci_threshold,
-                             name_key="pair")
+                             name_key="pair", reasons=pair_reasons(bad_why))
 
     # ── file: per-trial QC ─────────────────────────────────────────────────────
     # scored here rather than persisted: a trial is not a BIDS entity, so per-trial records
