@@ -17,7 +17,7 @@ from fnirs_pipe.qc.figures.group_figures import (
     detect_outliers,
     group_metrics,
 )
-from fnirs_pipe.qc.report_shell import footer_vars, page_vars, render
+from fnirs_pipe.qc.report_shell import footer_vars, guard, note, page_vars, render
 from fnirs_pipe.qc.sqm_record import OPTIONAL_SECTIONS, SECTIONS
 from fnirs_pipe.utils.logging import get_logger
 
@@ -158,10 +158,16 @@ def _render_group(
 ) -> Path:
     """Render TSV + HTML for an already-collected group of SQM rows.
 
-    Empty df renders an empty report (logged as warning)."""
+    Every panel is built under its own guard, so a metric one cohort cannot plot costs that
+    panel and not the report. It used to cost the report: this function had no error
+    handling at all, where every other report builder loses a single section.
+    """
     output_dir.mkdir(parents=True, exist_ok=True)
+    errors: list[str] = []
+    notes: list[str] = []
     if df.empty:
-        logger.warning("rendering empty group report: %s", out_stem)
+        note(notes, out_stem, "no quality records found, so the report is empty; run the "
+                              "pipeline or `fnirs-qc prep-raw` first")
 
     tsv_path = output_dir / f"{out_stem}.tsv"
     df.to_csv(tsv_path, sep="\t", index=False)
@@ -182,28 +188,36 @@ def _render_group(
 
     box_panels: list[dict] = []
     if not df.empty and metric_cols:
-        _, ordered_cols = group_metrics(metric_cols)
-        _save("heatmap", "heatmap", build_heatmap(df, ordered_cols))
-        for i, (box_title, fig) in enumerate(build_grouped_boxes(df, ordered_cols)):
-            fname = f"{out_stem}_desc-box{i}_nirs.html"
-            h = _save_figure_html(fig, fig_dir / fname, extra_js=_STRIP_CLICK_JS)
-            box_panels.append({
-                "src": f"{out_stem}/{fname}", "h": h,
-                "w": int(getattr(fig.layout, "width", None) or 300), "title": box_title,
-            })
+        ordered_cols: list[str] = []
+        with guard("Metric ordering", errors, out_stem):
+            _, ordered_cols = group_metrics(metric_cols)
+        with guard("Heatmap", errors, out_stem):
+            _save("heatmap", "heatmap", build_heatmap(df, ordered_cols))
+        with guard("Boxplots", errors, out_stem):
+            for i, (box_title, fig) in enumerate(build_grouped_boxes(df, ordered_cols)):
+                fname = f"{out_stem}_desc-box{i}_nirs.html"
+                h = _save_figure_html(fig, fig_dir / fname, extra_js=_STRIP_CLICK_JS)
+                box_panels.append({
+                    "src": f"{out_stem}/{fname}", "h": h,
+                    "w": int(getattr(fig.layout, "width", None) or 300), "title": box_title,
+                })
 
     windowed_panels: list[dict] = []
     _warn_on_mixed_windows(full_rows)
     for key, val_field, time_field, panel_title in _WINDOWED_METRICS:
         if not any(val_field in r and r[val_field] for r in full_rows):
             continue
-        fig = build_time_subject_heatmap(full_rows, val_field, time_field, panel_title)
-        if fig is None:
-            continue
-        _save(f"window_{key}", f"window{key}", fig)
-        windowed_panels.append({"key": key, "title": panel_title})
+        with guard(f"Time x subject heatmap ({key})", errors, out_stem):
+            fig = build_time_subject_heatmap(full_rows, val_field, time_field, panel_title)
+            if fig is None:
+                continue
+            _save(f"window_{key}", f"window{key}", fig)
+            windowed_panels.append({"key": key, "title": panel_title})
 
-    outliers = detect_outliers(df, metric_cols) if metric_cols else {}
+    outliers: dict = {}
+    if metric_cols:
+        with guard("Outlier detection", errors, out_stem):
+            outliers = detect_outliers(df, metric_cols)
 
     html = render(
         template_name,
@@ -212,7 +226,8 @@ def _render_group(
             heading=title,
             nav_meta=[("rows", len(df)), ("metrics", len(metric_cols))],
         ),
-        **footer_vars(scope=out_stem, versions=collect_software_versions()),
+        **footer_vars(scope=out_stem, errors=errors, notes=notes,
+                     versions=collect_software_versions()),
         title=title,
         n_rows=len(df),
         n_metrics=len(metric_cols),

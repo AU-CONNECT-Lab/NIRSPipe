@@ -35,8 +35,23 @@ def stylesheet(name: str) -> str:
 
 
 _SHEETS: dict[str, str] = {}
+
+# Three sheets, composed in this order by page_vars: what every report agrees on, then the
+# look this one wears, then the footer. Tokens first so a look can override them, the
+# footer last so it can override either.
+TOKENS_CSS = stylesheet("_tokens.css")
 BASE_CSS = stylesheet("_base.css")
 FOOTER_CSS = stylesheet("_footer.css")
+
+
+def dashboard_css() -> str:
+    """Tokens plus the dashboard look, for a page that cannot go through page_vars.
+
+    The raw viewer is the one: a single JavaScript-driven document with its own body, so it
+    takes the sheet rather than the shell. It carried its own copy of these rules until
+    2026-09-07, which is how it drifted from the other three dashboard reports.
+    """
+    return "\n".join((TOKENS_CSS, BASE_CSS, FOOTER_CSS))
 
 
 # ---- Error handling ----
@@ -93,16 +108,19 @@ def page_vars(
 
     ``nav_meta`` prints as ``label: <b>value</b>`` chips in run order; ``nav_note`` is the
     right-aligned line, which is where the parameters a reader needs to judge the numbers
-    belong. ``css`` replaces the base stylesheet, for a report with its own look; the
-    footer's own sheet is appended either way, since the footer comes from the shell and
-    not from either look.
+    belong.
+
+    ``css`` names the look this page wears, replacing the dashboard one; the shared tokens
+    come before it and the footer's own sheet after, either way, because neither belongs to
+    a look.
     """
     return {
         "page_title":   title,
         "page_heading": heading,
         "nav_meta":     list(nav_meta or []),
         "nav_note":     nav_note,
-        "base_css":     (BASE_CSS if css is None else css) + "\n" + FOOTER_CSS,
+        "base_css":     "\n".join(
+            (TOKENS_CSS, BASE_CSS if css is None else css, FOOTER_CSS)),
         "run_date":     date.today().isoformat(),
     }
 
@@ -145,12 +163,15 @@ def provenance_rows(
     return rows
 
 
-def _collapse(messages: list[str]) -> list[str]:
+def collapse_messages(messages: list[str]) -> list[str]:
     """One line per distinct message, in first-seen order, counted when it repeats.
 
     ["Channel S1_D1: no data", "Channel S1_D2: no data"] stays two lines; the same
     message twice becomes one line ending in " (x2)". A per-channel section that fails
     the same way on every channel used to print forty identical lines.
+
+    Public because the raw viewer prints its own lists: it renders in JavaScript and can
+    never share the footer's markup, but the strings it renders come from here.
     """
     counts: dict[str, int] = {}
     for message in messages:
@@ -179,8 +200,8 @@ def footer_vars(
     """
     out: dict[str, Any] = {}
     if errors is not None:
-        out["errors"] = _collapse(errors)
-        out["notes"] = _collapse(notes) if notes is not None else []
+        out["errors"] = collapse_messages(errors)
+        out["notes"] = collapse_messages(notes) if notes is not None else []
     if nirs_dir is not None:
         rows = provenance_rows(nirs_dir, mode, scope=scope, errors=errors, label=label)
         # a tree with no sidecars has no provenance to show, and a heading over an empty

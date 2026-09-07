@@ -9,7 +9,7 @@ import mne
 import pandas as pd
 
 from fnirs_pipe.io.derivatives import group_data_dir, group_report_dir
-from fnirs_pipe.pipeline.hyperscanning import GroupEntry
+from fnirs_pipe.pipeline.hyperscanning import GroupEntry, _hyper_sidecar
 from fnirs_pipe.qc.figure_io import (
     _pair_fname, _save_figure_html, _save_multi_fig_html,
     extract_markers, get_channel_pairs,
@@ -33,6 +33,29 @@ from fnirs_pipe.utils.lineage import path_from
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("qc.hyper_raw_writer")
+
+
+def _write_coherence_tsv(
+    df: pd.DataFrame,
+    path: Path,
+    step: str,
+    aligned_raws: dict[str, mne.io.Raw],
+    **params,
+) -> None:
+    """Write a coherence table beside the report, so its numbers can leave the report.
+
+    The figure and the file are the same DataFrame, which is the point: a reader who wants
+    the coherence of one channel should not have to hover a heatmap for it. An empty frame
+    writes nothing, because a dyad the measure could not be taken on has no table.
+    """
+    if df is None or df.empty:
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    df.to_csv(path, sep="\t", index=False)
+    _hyper_sidecar(path, step,
+                   [p for p in (path_from(raw) for raw in aligned_raws.values()) if p],
+                   **params)
+    logger.info("coherence table -> %s", path)
 
 
 def _hyper_sqm_record(sqm: dict, aligned_raws: dict[str, mne.io.Raw]) -> dict:
@@ -123,6 +146,17 @@ def _process_hyper_raw_group(
             aligned_raws, coherence_fmin, coherence_fmax,
             window_s=coherence_window_s, step_s=coherence_step_s,
         )
+
+    with guard("Coherence tables", errors, label):
+        _write_coherence_tsv(
+            coherence_df, sqm_dir / f"{label}_hyper-coherence.tsv",
+            "hyper_coherence", aligned_raws,
+            coherence_fmin=coherence_fmin, coherence_fmax=coherence_fmax)
+        _write_coherence_tsv(
+            windowed_coh_df, sqm_dir / f"{label}_hyper-coherencewindowed.tsv",
+            "hyper_coherence_windowed", aligned_raws,
+            coherence_fmin=coherence_fmin, coherence_fmax=coherence_fmax,
+            window_s=coherence_window_s, step_s=coherence_step_s)
 
     figure_paths: dict = {}
 

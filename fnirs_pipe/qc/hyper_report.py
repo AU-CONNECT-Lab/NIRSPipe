@@ -203,12 +203,11 @@ def build_hyper_report(
 
     from fnirs_pipe.qc.boilerplate.vocabulary import template_slots
     versions = collect_software_versions()
+    # only the alignment is passed in: it leaves no file, so no sidecar describes it.
+    # The coherence sentence comes off the table the writer just wrote.
     own_steps = [
         ("hyper_alignment", template_slots(
             "hyper_alignment", {"n_subjects": len(meta["subject_ids"])})),
-        ("hyper_coherence", template_slots(
-            "hyper_coherence", {"coherence_fmin": coherence_fmin,
-                                "coherence_fmax": coherence_fmax})),
     ]
     methods = group_methods(output_dir, group, meta["sqm_dir"], own_steps,
                             versions, notes, meta["label"])

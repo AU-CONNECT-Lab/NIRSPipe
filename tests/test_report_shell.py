@@ -21,6 +21,8 @@ from fnirs_pipe.qc.report_shell import (
     BASE_CSS,
     FOOTER_CSS,
     TEMPLATE_DIR,
+    TOKENS_CSS,
+    dashboard_css,
     footer_vars,
     guard,
     note,
@@ -135,12 +137,41 @@ def test_notes_are_kept_apart_from_errors():
 
 # ---- stylesheets ----
 
-def test_the_subject_report_replaces_the_dashboard_stylesheet():
-    subject = stylesheet("subject.css")
-    assert subject != BASE_CSS
-    # the dashboard ground colour reaching a document report is the visible symptom of
-    # the two sheets being concatenated instead of one replacing the other
-    assert "#f5f7fa" not in subject
+def test_a_look_replaces_the_other_look_and_not_the_tokens():
+    sheet = page_vars(title="T", heading="T", css=stylesheet("subject.css"))["base_css"]
+    # the document look, the shared tokens, the footer: all three
+    assert "font-size: 14px" in sheet
+    assert ":root" in sheet
+    assert ".boilerplate-html" in sheet
+    # and not the dashboard look. Its ground colour reaching a document report is the
+    # visible symptom of the sheets stacking instead of one look replacing the other.
+    assert "#f5f7fa" not in sheet
+
+
+def test_the_tokens_carry_what_both_looks_agree_on():
+    for rule in ("h2 {", "table {", "th, td {", "pre {", "img {", ".fig-path {"):
+        assert rule in TOKENS_CSS, f"{rule} belongs to both looks and is in neither"
+
+
+def test_neither_look_keeps_a_copy_of_the_token_rules():
+    # the dashboard used to carry .report-footer-scoped copies of every one of these
+    for name in ("_base.css", "subject.css"):
+        sheet = stylesheet(name)
+        for rule in ("th, td {", ".report-footer table {", ".fig-path {"):
+            assert rule not in sheet, f"{name} has a second copy of {rule}"
+
+
+def test_the_raw_viewer_takes_the_dashboard_sheet_rather_than_copying_it():
+    # the fourth copy of the dashboard look lived here; the viewer cannot extend the shell
+    # (it is one JavaScript-driven document) but it can take the sheet
+    text = (TEMPLATE_DIR / "raw_viewer.html").read_text(encoding="utf-8")
+    assert "{{ base_css }}" in text
+    for rule in ("#qc-nav {", ".card {", ".panel-title {", "box-sizing: border-box"):
+        assert rule not in text, f"the viewer still carries its own {rule}"
+
+
+def test_the_dashboard_sheet_is_the_same_one_page_vars_composes():
+    assert dashboard_css() == page_vars(title="T", heading="T")["base_css"]
 
 
 def test_the_footer_styles_ship_with_the_footer():

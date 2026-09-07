@@ -6,7 +6,6 @@ import json
 from pathlib import Path
 
 import mne
-from jinja2 import Environment, FileSystemLoader
 
 from fnirs_pipe.qc.figure_io import (
     _pair_fname, _save_figure_html, _save_multi_fig_html,
@@ -17,12 +16,14 @@ from fnirs_pipe.qc.channel_table import (
     separation_blocks, separation_notes, split_table,
 )
 from fnirs_pipe.qc.metrics import SHORT_MAX_DIST
+from fnirs_pipe.qc.report_shell import (
+    collapse_messages, dashboard_css, guard, note, render,
+)
 from fnirs_pipe.qc.trial_qc import score_trials
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("qc.prep_raw_report")
 
-_TEMPLATE_DIR = Path(__file__).parent / "templates"
 _MAX_TS_PTS   = 4000
 # the figures colour a channel short or not short, so only the short edge applies here
 _SHORT_THRESH = SHORT_MAX_DIST
@@ -53,7 +54,12 @@ def _process_run(
     epoch_tmax: float | None = None,
     gvtd_channels: str = "long",
 ) -> dict:
-    """Compute all data, save figure HTMLs + SQM JSON. Returns inline dict for HTML."""
+    """Compute all data, save figure HTMLs + SQM JSON. Returns inline dict for HTML.
+
+    A panel that fails costs that panel and lands in the returned ``errors``, which the
+    viewer prints for the selected run. Failures used to reach the log only, so a viewer
+    missing half its figures looked the same as one whose recording had nothing to plot.
+    """
     from fnirs_pipe.qc.figures import (
         build_channel_figure,
         build_evoked_topo_figure,
@@ -81,6 +87,9 @@ def _process_run(
     fig_dir.mkdir(parents=True, exist_ok=True)
     sqm_dir.mkdir(parents=True, exist_ok=True)
 
+    errors: list[str] = []
+    notes: list[str] = []
+
     raw = mne.io.read_raw_snirf(run["snirf_path"], preload=True, verbose=False)
 
     sci_scores, raw_od = compute_sci_scores(raw, cardiac_l_freq, cardiac_h_freq)
@@ -89,11 +98,10 @@ def _process_run(
     bad_list, _why = screen_channels(screen_scores, {"sci": sci_threshold})
     bad_channels: set[str] = set(bad_list)
 
-    try:
-        sqm = compute_raw_sqm(raw, sci_scores, list(bad_channels), cardiac_l_freq, cardiac_h_freq)
-    except Exception as exc:
-        logger.warning("SQM failed: %s", exc)
-        sqm = {}
+    sqm: dict = {}
+    with guard("Quality metrics", errors, label):
+        sqm = compute_raw_sqm(raw, sci_scores, list(bad_channels),
+                              cardiac_l_freq, cardiac_h_freq)
 
     # `sqm` stays the flat all-channel view the per-window figures below read. The record
     # written to disk is the sectioned one, built through the same function the pipeline
@@ -123,11 +131,12 @@ def _process_run(
     psp_matrix, psp_win_times = series["psp_matrix"], series["psp_times"]
 
     raw_haemo = None
-    try:
+    with guard("Beer-Lambert", errors, label):
         ppf = dpf[0] if len(dpf) == 1 else dpf
         raw_haemo = mne.preprocessing.nirs.beer_lambert_law(raw_od.copy(), ppf=ppf)
-    except Exception as exc:
-        logger.warning("Beer-Lambert failed: %s", exc)
+    if raw_haemo is None:
+        note(notes, label, "no haemoglobin conversion, so the epoch, evoked-topography "
+                           "and per-channel detail panels are empty")
 
     markers = extract_markers(raw)
     cond_colors_ = condition_colors(markers)
@@ -139,7 +148,7 @@ def _process_run(
 
     # ── inline: ts figure (kept in-memory for click interactivity) ─────────────
     ts_inline: dict = {}
-    try:
+    with guard("Raw signal", errors, label):
         fig, _mkdata, cond_colors_out, band_shapes, t_start, t_end = build_ts_figure(
             raw, markers, bad_channels, _MAX_TS_PTS, _SHORT_THRESH,
         )
@@ -151,25 +160,21 @@ def _process_run(
             "t_start":     t_start,
             "t_end":       t_end,
         }
-    except Exception as exc:
-        logger.warning("ts_figure failed: %s", exc)
 
     # ── inline: layout figures (kept for click interactivity) ──────────────────
     layout_inline: dict = {}
-    try:
+    with guard("Optode layout", errors, label):
         fig_2d, fig_3d = build_layout_figure(raw, bad_channels, sci_scores, _SHORT_THRESH)
         layout_inline = {
             "layout_2d_figure": fig_2d.to_dict() if fig_2d else None,
             "layout_3d_figure": fig_3d.to_dict() if fig_3d else None,
         }
-    except Exception as exc:
-        logger.warning("layout_figure failed: %s", exc)
 
     # ── file: carpet GVTD ──────────────────────────────────────────────────
     #   an iframe rather than inlined like the panels above: the carpet is a channels x 2000
     #   heatmap, and every run of the viewer would carry one in the page itself
     carpet_inline: dict = {}
-    try:
+    with guard("GVTD carpet", errors, label):
         from fnirs_pipe.qc.metrics import gvtd_channel_picks
         gvtd_picks, gvtd_set = gvtd_channel_picks(raw, gvtd_channels)
         raw_carpet = raw.copy().pick(gvtd_picks)
@@ -178,12 +183,10 @@ def _process_run(
         h     = _save_figure_html(fig, fig_dir / fname)
         figure_paths["carpet"] = {"src": f"figures/{fname}", "h": h}
         carpet_inline = {"figure": fig.to_dict()}
-    except Exception as exc:
-        logger.warning("carpet_gvtd_figure failed: %s", exc)
 
     # ── file: SCI / PSP ────────────────────────────────────────────────────────
     sci_psp_inline: dict = {}
-    try:
+    with guard("SCI / PSP", errors, label):
         fig   = build_sci_psp_figure(
             sci_scores, psp_per_ch, bad_channels, sci_threshold,
             sci_matrix=sci_matrix, sci_win_times=sci_win_times,
@@ -193,34 +196,28 @@ def _process_run(
         h     = _save_figure_html(fig, fig_dir / fname)
         figure_paths["sci_psp"] = {"src": f"figures/{fname}", "h": h}
         sci_psp_inline = {"figure": fig.to_dict()}
-    except Exception as exc:
-        logger.warning("sci_psp_figure failed: %s", exc)
 
     # ── file: PSD mean ─────────────────────────────────────────────────────────
-    try:
+    with guard("PSD", errors, label):
         fig = build_psd_mean_figure(raw, cardiac=(cardiac_l_freq, cardiac_h_freq))
         if fig:
             fname = f"{label}_desc-psd_nirs.html"
             h     = _save_figure_html(fig, fig_dir / fname)
             figure_paths["psd"] = {"src": f"figures/{fname}", "h": h}
-    except Exception as exc:
-        logger.warning("psd_mean_figure failed: %s", exc)
 
     # ── file: trigger timeline ─────────────────────────────────────────────────
     trigger_timeline_inline: dict = {}
-    try:
+    with guard("Trigger timeline", errors, label):
         fig = build_trigger_timeline_single(markers, cond_colors_)
         if fig:
             fname = f"{label}_desc-trigger_nirs.html"
             h     = _save_figure_html(fig, fig_dir / fname)
             figure_paths["trigger"] = {"src": f"figures/{fname}", "h": h}
             trigger_timeline_inline = {"figure": fig.to_dict()}
-    except Exception as exc:
-        logger.warning("trigger_timeline_single failed: %s", exc)
 
     # ── file: channel quality summary ──────────────────────────────────────────
     ch_summary_inline: dict = {}
-    try:
+    with guard("Channel quality summary", errors, label):
         # long block first with the divider between the two, from the same helper the
         # subject report uses, so the grid and the per-channel table below it read in one
         # order and a short channel never lands in a long channel's verdict
@@ -229,8 +226,6 @@ def _process_run(
         h     = _save_figure_html(fig, fig_dir / fname)
         figure_paths["ch_summary"] = {"src": f"figures/{fname}", "h": h}
         ch_summary_inline = {"figure": fig.to_dict()}
-    except Exception as exc:
-        logger.warning("channel_quality_heatmap failed: %s", exc)
 
     # the epoch figures need concrete bounds; per-trial QC reads None as "use event duration"
     fig_tmin = _EPOCH_TMIN if epoch_tmin is None else epoch_tmin
@@ -239,7 +234,7 @@ def _process_run(
     # ── file: evoked topo ──────────────────────────────────────────────────────
     evoked_topo_inline: dict = {}
     if raw_haemo is not None:
-        try:
+        with guard("Evoked topography", errors, label):
             fig = build_evoked_topo_figure(
                 raw_haemo, markers, _MAX_TS_PTS, fig_tmin, fig_tmax,
             )
@@ -248,23 +243,19 @@ def _process_run(
                 h     = _save_figure_html(fig, fig_dir / fname)
                 figure_paths["evoked_topo"] = {"src": f"figures/{fname}", "h": h}
                 evoked_topo_inline = {"figure": fig.to_dict()}
-        except Exception as exc:
-            logger.warning("evoked_topo_figure failed: %s", exc)
 
     # ── file: per-channel detail HTML ──────────────────────────────────────────
     channel_pairs: list[str] = []
     if raw_haemo is not None:
         channel_pairs = get_channel_pairs(raw_haemo)
         for pair in channel_pairs:
-            try:
+            with guard("Channel detail", errors, f"{label} | {pair}"):
                 detail_fig, psd_fig, epoch_fig = build_channel_figure(
                     raw_haemo, markers, pair, _MAX_TS_PTS, fig_tmin, fig_tmax,
                     cardiac=(cardiac_l_freq, cardiac_h_freq),
                 )
                 fname = f"{label}_desc-ch{_pair_fname(pair)}_nirs.html"
                 _save_multi_fig_html([detail_fig, psd_fig, epoch_fig], fig_dir / fname)
-            except Exception as exc:
-                logger.warning("channel_figure %s failed: %s", pair, exc)
         if channel_pairs:
             figure_paths["ch_detail_template"] = (
                 f"figures/{label}_desc-ch{{pair}}_nirs.html"
@@ -280,7 +271,7 @@ def _process_run(
     # have nowhere to live in the derivatives tree without colliding on filename
     trial_qc_inline: dict = {}
     if epoch_qc:
-        try:
+        with guard("Per-trial quality", errors, label):
             labels, sqms = score_trials(raw, markers, sci_threshold,
                                         cardiac_l_freq, cardiac_h_freq,
                                         epoch_tmin, epoch_tmax)
@@ -291,9 +282,8 @@ def _process_run(
                 figure_paths["trial_qc"] = {"src": f"figures/{fname}", "h": h}
                 trial_qc_inline = {"figure": fig.to_dict(), "n_trials": len(labels)}
             elif not labels:
-                logger.warning("%s: no usable trial windows; per-trial QC skipped", label)
-        except Exception as exc:
-            logger.warning("trial_quality_heatmap failed: %s", exc)
+                note(notes, label, "no event window fits inside the recording, so "
+                                   "per-trial quality was skipped")
 
     # ── file: SQM JSON ─────────────────────────────────────────────────────────
     # desc-sqmraw, not desc-sqm: the pipeline writes a record at the latter path for the
@@ -340,6 +330,10 @@ def _process_run(
         # the GUI builds its per-channel figures on demand and needs the run's own band to
         # shade the PSD the way the ones built here are shaded
         "cardiac":       [cardiac_l_freq, cardiac_h_freq],
+        # what this run failed at and what it left out, already collapsed and ready to
+        # print; the viewer renders these itself, in JavaScript
+        "errors": collapse_messages(errors),
+        "notes":  collapse_messages(notes),
     }
 
 
@@ -365,19 +359,24 @@ def build_prep_raw_report(
     for i, run in enumerate(runs):
         label = run["label"]
         logger.info("[%d/%d] processing %s ...", i + 1, len(runs), label)
-        try:
-            d = _process_run(run, sci_threshold, sub_dir, cardiac_l_freq, cardiac_h_freq, dpf,
-                             window_s, epoch_qc, epoch_tmin, epoch_tmax, gvtd_channels)
-            static_data.append(d)
-        except Exception as exc:
-            logger.error("Failed to process run %s: %s", label, exc)
-            static_data.append({})
+        # a run that fails outright still gets an entry, carrying the reason: the viewer's
+        # run selector lists it either way, and an empty panel with no explanation reads as
+        # a broken viewer rather than as a run that could not be read
+        run_errors: list[str] = []
+        d: dict = {}
+        with guard("Processing this run", run_errors, label):
+            d = _process_run(run, sci_threshold, sub_dir, cardiac_l_freq, cardiac_h_freq,
+                             dpf, window_s, epoch_qc, epoch_tmin, epoch_tmax,
+                             gvtd_channels)
+        if run_errors:
+            d = {"errors": run_errors, "notes": []}
+        static_data.append(d)
 
     run_labels = [r["label"] for r in runs]
 
-    env      = Environment(loader=FileSystemLoader(str(_TEMPLATE_DIR)), autoescape=False)
-    template = env.get_template("raw_viewer.html")
-    html     = template.render(
+    html = render(
+        "raw_viewer.html",
+        base_css=dashboard_css(),
         run_labels_json=json.dumps(run_labels),
         run_labels=run_labels,
         stem=output_path.stem,

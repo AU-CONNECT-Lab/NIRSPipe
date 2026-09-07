@@ -5,35 +5,18 @@
 <title>fnirs-pipe Raw Viewer</title>
 <script src="https://cdn.plot.ly/plotly-3.5.0.min.js"></script>
 <style>
-*, *::before, *::after { box-sizing: border-box; }
-body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  font-size: 13px; color: #2c3e50;
-  margin: 0; padding: 0.6rem 0.8rem 2rem;
-  background: #f5f7fa;
-}
-h1 { font-size: 1.05rem; margin: 0; }
+{{ base_css }}
+
+/* The raw viewer's own rules. Everything it shares with the other dashboard reports and
+   with the report footer comes from the sheet injected above
+   (qc.report_shell.dashboard_css), so only what is specific to this page belongs here. */
+
 .hint { font-size: 0.78rem; color: #888; }
 
-/* nav */
-#qc-nav {
-  position: sticky; top: 0; z-index: 100;
-  background: #fff; border-bottom: 1px solid #dde3ea;
-  padding: 0.4rem 0.8rem;
-  display: flex; align-items: center; gap: 1rem;
-  box-shadow: 0 1px 6px rgba(0,0,0,0.07);
-  margin: -0.6rem -0.8rem 0.6rem;
-}
 .nav-right { margin-left: auto; display: flex; align-items: center; gap: 0.5rem; }
 select#run-select {
   font-size: 0.82rem; border: 1px solid #ced4da; border-radius: 4px;
   padding: 0.2rem 0.4rem; background: #f8f9fa;
-}
-
-/* cards */
-.card {
-  background: #fff; border: 1px solid #dde3ea; border-radius: 6px;
-  overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.06);
 }
 
 /* grids */
@@ -115,13 +98,6 @@ select#run-select {
 .cd-chip.cd-good     { background:#d4edda; color:#155724; }
 .cd-chip.cd-bad      { background:#f8d7da; color:#721c24; }
 .cd-chip.cd-disabled { opacity:0.45; pointer-events:none; cursor:not-allowed; }
-
-/* panel titles */
-.panel-title {
-  font-size: 0.78rem; font-weight: 600; color: #6c757d;
-  padding: 0.3rem 0.6rem; border-bottom: 1px solid #dde3ea;
-  background: #f8f9fa;
-}
 </style>
 </head>
 <body>
@@ -296,6 +272,12 @@ select#run-select {
   </div>
 </div>
 
+<!-- Errors and warnings for the selected run -->
+<div class="card" id="issues-card" style="margin-bottom:0.5rem;display:none">
+  <div class="panel-title">Errors &amp; Warnings &nbsp;<span style="font-weight:400;color:#aaa">what this run failed at, and what it left out on purpose</span></div>
+  <div id="issues-body" style="padding:0.5rem 0.7rem"></div>
+</div>
+
 <script>
 // null = Flask mode (fetch API); array = static mode (pre-computed JSON)
 var _STATIC_DATA = {{ data_json | safe }};
@@ -401,6 +383,7 @@ window.addEventListener("DOMContentLoaded", function() {
   loadTrialQc();
   loadEvokedTopo();
   buildChDecisionsTable();
+  loadIssues();
 });
 
 // ─── time series ──────────────────────────────────────────────────────────────
@@ -725,6 +708,35 @@ function selectMk(i) {
 }
 
 // ─── run switcher ─────────────────────────────────────────────────────────────
+// Errors and notes for the selected run. The strings arrive formatted and collapsed
+// from qc.report_shell, so nothing is decided here beyond which list is which colour.
+function loadIssues() {
+  var d     = _STATIC_DATA[_run_idx] || {};
+  var errs  = d.errors || [];
+  var notes = d.notes  || [];
+  var card  = document.getElementById("issues-card");
+  var body  = document.getElementById("issues-body");
+  if (!card || !body) return;
+
+  var html = "";
+  if (notes.length) {
+    html += "<p class='qm-note' style='margin:0 0 0.35rem'>Sections this run left out on "
+          + "purpose, because the recording does not carry what they need. Not failures.</p>"
+          + "<ul class='note-list'>"
+          + notes.map(function(x) { return "<li>" + _esc(x) + "</li>"; }).join("")
+          + "</ul>";
+  }
+  if (errs.length) {
+    html += "<ul class='error-list'>"
+          + errs.map(function(x) { return "<li>" + _esc(x) + "</li>"; }).join("")
+          + "</ul>";
+  } else {
+    html += "<p class='no-errors' style='margin:0'>No errors or warnings.</p>";
+  }
+  body.innerHTML = html;
+  card.style.display = "";
+}
+
 function switchRun(idx) {
   function _reload() {
     _run_idx = parseInt(idx);
@@ -735,6 +747,7 @@ function switchRun(idx) {
     loadTriggerTimeline(); loadCarpetGvtd();
     loadSciPsp(); loadSqm(); loadChannelSummary();
     loadTrialQc(); loadEvokedTopo(); buildChDecisionsTable();
+    loadIssues();
   }
   _reload();
 }

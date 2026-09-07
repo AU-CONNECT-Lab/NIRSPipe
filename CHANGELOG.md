@@ -15,19 +15,23 @@ All notable changes to this project will be documented in this file.
 - **The hyperscanning and group reports now end with the same closing sections the subject report does**: what failed, what was left out on purpose, the provenance table, and the software versions. A panel that failed used to appear only in the run log, so a report could be read as complete when it was not
 - **The hyperscanning reports carry a Methods paragraph**, in the same four tabs the subject report offers. It continues from a member subject's preprocessing into the alignment and the cross-brain measures, so the paragraph describes one pipeline end to end, and it says so when the two members were not preprocessed the same way. **The wavelet coherence, coherence, ISC and alignment citations are placeholders**: they print as `TODO-ADD-...-REFERENCE` until the real references are filled into `references.bib`
 - **The hyperscanning reports carry their provenance**, the post report as a diagram rebuilt from the sidecars its own WTC and ISC passes wrote, and both as the table naming every file and the step behind it
-- **`fnirs-hyper run` writes a run record** to `group-<id>/logs/`, the mirror of a subject's. It holds the verbatim command, the machine, and every option the invocation resolved to, several of which appear nowhere else once the shell history is gone
+- **`fnirs-hyper run` writes a run record** to `group-<id>/logs/`, the mirror of a subject's: the verbatim command, the machine, and every option the invocation resolved to
+- **The raw QC report ends with an errors and warnings panel**, per run. Thirteen of its panels could fail into the log alone, so a viewer missing half its figures looked like a recording with nothing to plot
+- **The hyperscanning raw report writes its coherence tables**, whole-record and windowed, so the numbers behind the bar chart and the heatmap can leave the report
 
 ### Fixed
 - **`--gvtd-censor` failed on any recording that has event markers**, which is every task run. It worked only on a recording with no markers at all
 - **The interface showed no SCI at all in its channel table**, a dash on every row
 - **The per-channel PSD shaded the cardiac and respiration bands at fixed frequencies** instead of the run's own, so a study outside the adult range had the stripe over the wrong part of the spectrum
 - **The same metric could read as passing in one view and failing in another**, and the interface printed record keys with no label, units or verdict
+- **A figure that failed took the whole group report with it.** Every other report loses one panel; this one had no error handling at all
 
 ### Changed
 - **Channel screening rejects a channel that fails SCI *or* PSP**, where it tested SCI alone. Runs will reject at least as many channels as before, and the reports name which criterion failed
 - **The CV pass line in the channel quality grid was 50%**, looser than any published threshold, so the CV row passed almost everything. It is 5% now (Lloyd-Fox 2009), measured per wavelength, and the SNR line is derived from it
 - **The per-trial quality panel prints its numbers the way the rest of the report does**
 - **Every QC report is rendered into one shared page shell**, so the header, the rating bar and the closing sections are the same wherever they appear and a new report cannot ship without them
+- **The reports share one stylesheet for prose, tables and figures**; the dashboard pages and the document pages now differ only in density and chrome. The raw viewer joins the other dashboard pages, so its nav wraps rather than overflowing and its tables and images are framed the way every other report frames them
 
 ## [0.29.0] - 2026-09-06
 

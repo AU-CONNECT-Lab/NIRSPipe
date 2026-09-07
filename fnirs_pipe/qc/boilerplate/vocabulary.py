@@ -23,7 +23,7 @@ from typing import Any
 
 # ---- pipeline step -> steps.toml section ----
 
-_DIRECT = ("od_conversion", "beer_lambert", "resample", "hyper_isc")
+_DIRECT = ("od_conversion", "beer_lambert", "resample", "hyper_isc", "hyper_coherence")
 
 # A dyad's coherence is written once per grouping (channels, ROI means, per condition) and
 # once more for the null; they are one method sentence, and the band is the same for all.
@@ -55,6 +55,9 @@ def boilerplate_key(step: str | None, params: dict[str, Any], mode: str | None =
         return "glm" if mode == "glm" else "confound_regression"
     if step in _WTC_STEPS:
         return "hyper_wtc"
+    if step == "hyper_coherence_windowed":
+        # the same measure, taken in windows; one sentence covers both
+        return "hyper_coherence"
     return None
 
 
@@ -166,6 +169,8 @@ STEP_SUMMARY = {
     "fc_roi": "Connectivity between ROI-averaged signals.",
     "fc_seed": "Correlation of one ROI's mean signal with every channel.",
     "hyper_bads": "The channels excluded for this dyad, over the scope named in the settings.",
+    "hyper_coherence": "Band-averaged coherence of each homologous channel pair, over the whole recording.",
+    "hyper_coherence_windowed": "The same coherence in sliding windows, one value per window and channel.",
     "hyper_sqm": "Quality metrics for the dyad: alignment, coupling and the members' own.",
     "group_sqm_raw": "Quality metrics pooled across the members of a dyad.",
     "group_sqm_raw_channels": "The same pooling, kept per channel.",

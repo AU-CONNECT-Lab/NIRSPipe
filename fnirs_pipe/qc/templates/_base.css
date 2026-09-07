@@ -1,7 +1,7 @@
-/* Shared base styles for every QC report.
-   Loaded once by qc/report_shell.py and injected as {{ base_css }} by _report_base.html.j2. */
-
-*, *::before, *::after { box-sizing: border-box; }
+/* The dashboard look: the hyperscanning reports, the group report and the raw viewer,
+   pages to scan rather than to read. Loaded after _tokens.css, so only what makes this
+   look a dashboard belongs here: the density, the sticky nav, the cards, and the tables
+   those cards carry. The prose and figure rules both looks agree on are in _tokens.css. */
 
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -57,34 +57,8 @@ h1 { font-size: 1.05rem; margin: 0; }
 .subj-metrics-wrap { padding: 0.5rem 0.8rem; }
 
 /* ---- report footer ----
-   The four sections _footer.html.j2 renders. Scoped under .report-footer so the
-   document-style rules the footer needs (h2 rules, plain tables) do not reach the card
-   layout the rest of a dashboard report is built from. */
+   Only what the footer needs from this look. Its prose and tables come from _tokens.css,
+   which is why a document-shaped section reads the same at the end of a dashboard page. */
 
 .report-footer { margin-top: 1.5rem; }
-
-.report-footer h2 {
-  font-size: 1.1rem; font-weight: 600; color: #34495e;
-  border-left: 4px solid #2980b9; padding-left: 0.6rem;
-  margin: 2rem 0 0.75rem;
-}
 .report-footer h4 { margin: 0.8rem 0 0.3rem; }
-
-.report-footer table { border-collapse: collapse; width: 100%; font-size: 0.85rem; }
-.report-footer th, .report-footer td {
-  border: 1px solid #ddd; padding: 0.35rem 0.7rem; text-align: left;
-}
-.report-footer th { background: #f0f3f6; font-weight: 600; }
-
-.report-footer pre {
-  background: #f4f4f4; padding: 0.75rem 1rem; border-radius: 4px;
-  overflow-x: auto; font-size: 0.82rem; white-space: pre-wrap; word-break: break-all;
-}
-.report-footer img.responsive {
-  width: 100%; height: auto; display: block; border: none;
-}
-.report-footer .fig-path {
-  font-size: 0.75rem; color: #888; margin: 0.3rem 0 0;
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
-}
-.report-footer .fig-path::before { content: "file: "; }

@@ -1,27 +1,15 @@
-/* The subject report's own stylesheet. A document to read top to bottom, where the
-   hyper and group reports are dashboards; _base.css is the dashboard one and this
-   replaces it rather than adding to it (see qc.report_shell.page_vars css=). */
+/* The document look: the subject report and its run index, pages to read top to bottom
+   rather than dashboards to scan. Loaded after _tokens.css and instead of _base.css, so
+   only what makes this look a document belongs here; the prose, table and figure rules
+   both looks agree on are in _tokens.css. See qc.report_shell.page_vars css=. */
 
 /* ---- base ---- */
-*, *::before, *::after { box-sizing: border-box; }
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-size: 14px; line-height: 1.5; color: #2c3e50;
   padding: 1.5rem 2rem 4rem;
 }
 h1 { font-size: 1.5rem; margin: 0 0 0.25rem; }
-h2 { font-size: 1.1rem; font-weight: 600; color: #34495e;
-     border-left: 4px solid #2980b9; padding-left: 0.6rem;
-     margin: 2rem 0 0.75rem; }
-h3 { font-size: 0.95rem; margin: 1rem 0 0.4rem; color: #555; }
-pre { background: #f4f4f4; padding: 0.75rem 1rem; border-radius: 4px;
-      overflow-x: auto; font-size: 0.82rem; white-space: pre-wrap;
-      word-break: break-all; }
-img { max-width: 100%; border: 1px solid #ddd; border-radius: 4px;
-      display: block; margin-top: 0.5rem; }
-table { border-collapse: collapse; width: 100%; font-size: 0.85rem; }
-th, td { border: 1px solid #ddd; padding: 0.35rem 0.7rem; text-align: left; }
-th { background: #f0f3f6; font-weight: 600; }
 
 /* ---- header bar ---- */
 .page-header {
@@ -85,9 +73,6 @@ details[open] > summary::before { transform: rotate(90deg); }
 }
 @media (max-width: 900px) { .panel-grid-2 { grid-template-columns: 1fr; } }
 
-/* ---- full-width responsive images ---- */
-img.responsive { width: 100%; height: auto; display: block; border: none; }
-
 /* ---- quantitative metrics ---- */
 .qm-box { margin-bottom: 1.5rem; }
 .qm-list { font-size: 0.88rem; column-count: 2; column-gap: 2.5rem;
@@ -126,13 +111,6 @@ img.responsive { width: 100%; height: auto; display: block; border: none; }
 .glm-beta-table td.neg { color: #27ae60; }
 .glm-beta-table td.chroma-hbo { color: #c0392b; font-weight: 600; }
 .glm-beta-table td.chroma-hbr { color: #2471a3; font-weight: 600; }
-
-/* ---- figure path caption ---- */
-.fig-path {
-  font-size: 0.75rem; color: #888; margin: 0.3rem 0 0;
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
-}
-.fig-path::before { content: "file: "; }
 
 /* ---- plotly iframes ---- */
 .plotly-frame {

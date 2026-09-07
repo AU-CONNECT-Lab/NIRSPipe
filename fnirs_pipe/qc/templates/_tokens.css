@@ -1,0 +1,59 @@
+/* What every QC report agrees on, whichever look it wears.
+ *
+ * Two looks share these: the dashboard (_base.css: hyper, group, the raw viewer) and the
+ * document (subject.css: the subject report and its run index). What differs between them
+ * is density and chrome, and that stays in their own sheets: body, h1, the nav bar, cards.
+ * What they agree on is how prose and data are presented, and it is here, because the
+ * footer puts a document-shaped section at the end of every report either way.
+ *
+ * The custom properties cover the values that already appeared identically in several
+ * places. The remaining greys are still literals on purpose: folding #888, #666 and #555
+ * into one muted colour would be a redesign, not a de-duplication.
+ */
+
+:root {
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --ink: #2c3e50;
+  --ink-heading: #34495e;
+  --accent: #2980b9;
+  --rule: #dde3ea;          /* panel and card borders */
+  --rule-table: #ddd;       /* table cell borders */
+  --surface: #fff;
+  --surface-alt: #f8f9fa;
+  --surface-head: #f0f3f6;  /* table header fill */
+  --surface-code: #f4f4f4;
+  --ok: #27ae60;
+  --warn: #e67e22;
+  --bad: #c0392b;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+/* ---- prose ---- */
+
+h2 { font-size: 1.1rem; font-weight: 600; color: var(--ink-heading);
+     border-left: 4px solid var(--accent); padding-left: 0.6rem;
+     margin: 2rem 0 0.75rem; }
+h3 { font-size: 0.95rem; margin: 1rem 0 0.4rem; color: #555; }
+
+pre { background: var(--surface-code); padding: 0.75rem 1rem; border-radius: 4px;
+      overflow-x: auto; font-size: 0.82rem; white-space: pre-wrap;
+      word-break: break-all; }
+
+/* ---- data ---- */
+
+table { border-collapse: collapse; width: 100%; font-size: 0.85rem; }
+th, td { border: 1px solid var(--rule-table); padding: 0.35rem 0.7rem; text-align: left; }
+th { background: var(--surface-head); font-weight: 600; }
+
+/* ---- figures ---- */
+
+img { max-width: 100%; border: 1px solid var(--rule-table); border-radius: 4px;
+      display: block; margin-top: 0.5rem; }
+img.responsive { width: 100%; height: auto; display: block; border: none; }
+
+.fig-path {
+  font-size: 0.75rem; color: #888; margin: 0.3rem 0 0;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+}
+.fig-path::before { content: "file: "; }
