@@ -177,10 +177,13 @@ def _process_run(
     #   heatmap, and every run of the viewer would carry one in the page itself
     carpet_inline: dict = {}
     with guard("GVTD carpet", errors, label):
-        from fnirs_pipe.qc.metrics import gvtd_channel_picks
-        gvtd_picks, gvtd_set = gvtd_channel_picks(raw, gvtd_channels)
+        from fnirs_pipe.qc.metrics import gvtd_channel_blocks
+        gvtd_blocks = gvtd_channel_blocks(raw, gvtd_channels)
+        gvtd_set = gvtd_blocks[0][0]
+        gvtd_picks = [c for _, names in gvtd_blocks for c in names]
         raw_carpet = raw.copy().pick(gvtd_picks)
-        fig   = carpet_gvtd_figure(raw_carpet, raw_carpet.ch_names, channel_set=gvtd_set)
+        fig   = carpet_gvtd_figure(raw_carpet, raw_carpet.ch_names,
+                                   channel_set=gvtd_set, blocks=gvtd_blocks)
         fname = f"{label}_desc-carpet_nirs.html"
         h     = _save_figure_html(fig, fig_dir / fname)
         figure_paths["carpet"] = {"src": f"figures/{fname}", "h": h}

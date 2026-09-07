@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- **The GVTD panel draws the short channels on their own row**, under the long one and on the same scale, with the carpet split into a long block and a short block beside it. Short-channel quality had no time-resolved view anywhere in the report. The verdict, the threshold and the reported scalars still come from the long row alone, so nothing a run is judged on changes
 - **`--psp-threshold` sets the second screening line**, which was fixed at 0.1 with no way to change it even though a channel failing it is rejected. Taken by `fnirs-pipe`, `fnirs-qc prep-raw` and `fnirs-qc hyper-raw`, and named in the Methods paragraph
 - **`fnirs-qc hyper-raw` exposes the windows its figures use**: `--coh-window-length` and `--coh-window-step` for the sliding-window coherence, `--epoch-tmin` / `--epoch-tmax` for the per-pair evoked panels, and `--gvtd-channels` as the individual reports take it. All four were fixed in the source and unreachable from the command line
 - **`--epoch-tmin` / `--epoch-tmax` set the trial window the subject report works in.** Every epoch figure, the evoked topomap, the trial images and the per-trial scoring were pinned to -5 to 25 s, which suits a single trial and not a 60 s block. `fnirs-qc prep-raw` could already set it. Left unset, the report now says so when the run's events outrun the window the figures average, which is how a 240 s block came to be described by its first 25 s with nothing pointing it out

@@ -371,7 +371,7 @@ output/
 ├── sub-01_task-tapping_raw_channel_decisions.json       # fnirs-rate raw sidecar
 ├── sub-01_task-tapping_raw_ratings.json
 ├── group-G1003_task-tapping_desc-hyperraw_nirs.html     # fnirs-qc hyper-raw
-├── group-G1003_task-tapping_desc-hyperpost_nirs.html    # fnirs-hyper run
+├── group-G1003_task-tapping_hyper-post.html             # fnirs-hyper run
 └── group-G1003/
     └── figures/
 ```

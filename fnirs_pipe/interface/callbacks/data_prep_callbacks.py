@@ -38,7 +38,7 @@ def _snirf_options(subject: str, bids_dir: str) -> list[dict]:
 
 
 # bump whenever a cached figure's builder changes, or the disk cache keeps serving the old one
-_CACHE_VERSION = 7
+_CACHE_VERSION = 8
 
 
 def _pair_name(ch_name: str) -> str:

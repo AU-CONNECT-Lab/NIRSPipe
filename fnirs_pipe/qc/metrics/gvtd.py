@@ -200,6 +200,33 @@ def gvtd_channel_picks(
     return long_names, "long"
 
 
+def gvtd_channel_blocks(
+    raw: mne.io.Raw, channel_set: str = "long",
+) -> "list[tuple[str, list[str]]]":
+    """The GVTD panel's rows, canonical set first, as ``[(set name, channel names), ...]``.
+
+    The canonical block is what :func:`gvtd_channel_picks` selects and is the only one the
+    reported scalars and the verdict come from. A second block follows when the montage has
+    short channels the canonical set left out, so the panel can show their quality without
+    changing the number the run is judged on::
+
+        44-channel montage, 28 long + 16 short  ->  [("long", 28), ("short", 16)]
+        hyper montage, 22 long + 0 short        ->  [("long", 22)]
+        channel_set="all"                       ->  [("all", 40)]
+
+    ``"all"`` gets no second block: it already contains the short channels, and a row for a
+    subset of the row above it would be read as a comparison between two independent sets.
+    """
+    picks, picked_set = gvtd_channel_picks(raw, channel_set)
+    if picked_set != "long":
+        return [(picked_set, picks)]
+    _, short_names = long_short_channels(raw)
+    blocks = [("long", picks)]
+    if short_names:
+        blocks.append(("short", short_names))
+    return blocks
+
+
 @_safe_metrics("GVTD metrics", (
     "gvtd_mean", "gvtd_p95", "gvtd_filt_mean", "gvtd_filt_p95",
     "gvtd_vstd_mean", "gvtd_vstd_p95",

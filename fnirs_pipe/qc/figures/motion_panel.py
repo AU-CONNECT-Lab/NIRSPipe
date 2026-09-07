@@ -14,6 +14,7 @@ import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
+from fnirs_pipe.qc.figures._utils import LONG_COLOR, SHORT_COLOR, UNCLASSIFIED_COLOR
 from fnirs_pipe.qc.figures._utils import decimate as _decimate
 from fnirs_pipe.qc.metrics import (
     GVTD_MOTION_BAND, GVTD_N_STD, _motion_band_diff, gvtd_threshold, gvtd_timetrace,
@@ -176,10 +177,96 @@ def _matched_od_after(
         return None
 
 
-def _gvtd_band_label(ch_names: list[str], channel_set: str | None) -> str:
-    """Band and channel set, e.g. ``0.01-0.5 Hz · 24 ch (long)``."""
-    tail = f" ({channel_set})" if channel_set else ""
-    return f"0.01–0.5 Hz · {len(ch_names)} ch{tail}"
+# ---- GVTD rows ----
+# The trace colours stay with before/after, so the separation class is carried by the row
+# title and the carpet's side bar instead. A set with no separation meaning ("all", or a
+# montage that could not be split) keeps the trace's own grey.
+_SET_COLORS = {"long": LONG_COLOR, "short": SHORT_COLOR, "unclassified": UNCLASSIFIED_COLOR}
+
+# Headroom over the tallest sample. Well above the 1.1 a trace alone would need: the top of
+# every row is where the two stat lines go, and they must not sit on the data.
+_GVTD_HEADROOM = 1.45
+
+
+def _gvtd_row_label(name: str, n_ch: int) -> str:
+    """Row title: the channel set large, its size and band small beside it.
+
+    ``_gvtd_row_label("long", 28)`` -> ``GVTD long   28 ch · 0.01-0.5 Hz``. GVTD is an RMS
+    across channels, so which channels went in changes every value on the row and the
+    threshold with them; a row that does not say cannot be compared against another one.
+    """
+    return (f"<b>GVTD {name}</b>  <span style='font-size:9px;color:#8b95a1'>"
+            f"{n_ch} ch · 0.01–0.5 Hz</span>")
+
+
+def _gvtd_stat_label(g: np.ndarray, thresh: "float | None", prefix: str = "") -> str:
+    """One line of run-level numbers for a GVTD row, e.g. ``max 1.9e-03 · … · 7.1% above``.
+
+    ``thresh`` is dropped from a corrected row's line: it is deliberately the uncorrected
+    run's threshold, so repeating it says nothing and costs the width the rest needs.
+    """
+    if g.size == 0:
+        return ""
+    parts = [f"max {g.max():.2e}", f"mean {g.mean():.2e}"]
+    if thresh is not None:
+        if not prefix:
+            parts.append(f"thresh {thresh:.2e}")
+        parts.append(f"{float(np.mean(g > thresh)) * 100:.1f}% above")
+    return (prefix + " · " if prefix else "") + " · ".join(parts)
+
+
+def _blocked_carpet(z, z_after, blocks):
+    """Stack the blocks' carpet rows with one blank row between them.
+
+    Returns the padded images, the y labels, and ``[(set name, first row, last row), ...]``
+    for the side bars. The gap is a real NaN row rather than a drawn line, so it survives a
+    reader zooming in, and its label is a run of spaces because a heatmap y axis needs every
+    category distinct::
+
+        blocks [("long", [a, b]), ("short", [c])]
+        -> 4 rows, labels [a, b, " ", c], spans [("long", 0, 1), ("short", 3, 3)]
+    """
+    if len(blocks) < 2:
+        labels = [c for _, chs in blocks for c in chs]
+        return z, z_after, labels, [(blocks[0][0], 0, max(0, len(labels) - 1))]
+
+    blank = np.full((1, z.shape[1]), np.nan)
+    parts, parts_after, labels, spans = [], [], [], []
+    src = 0
+    for i, (name, chs) in enumerate(blocks):
+        if i:
+            parts.append(blank)
+            labels.append(" " * i)
+            if z_after is not None:
+                parts_after.append(blank)
+        parts.append(z[src:src + len(chs)])
+        if z_after is not None:
+            parts_after.append(z_after[src:src + len(chs)])
+        spans.append((name, len(labels), len(labels) + len(chs) - 1))
+        labels += list(chs)
+        src += len(chs)
+    return (np.vstack(parts),
+            (np.vstack(parts_after) if z_after is not None else None),
+            labels, spans)
+
+
+def _carpet_band_marks(fig, row: int, spans: list, n_rows: int) -> None:
+    """A colour bar down the left edge of a carpet, one per channel-set block.
+
+    Placed in y-domain fractions rather than by channel name: the axis is categorical and
+    reversed, so row ``i`` of ``n`` runs from ``1 - (i+1)/n`` to ``1 - i/n`` up from the
+    bottom. The bar carries no text: it takes its colour from the GVTD row that averaged
+    those channels, which is directly above and names itself. Skipped for a single block,
+    which the axis title already names.
+    """
+    if len(spans) < 2:
+        return
+    for name, i0, i1 in spans:
+        y0, y1 = 1.0 - (i1 + 1) / n_rows, 1.0 - i0 / n_rows
+        fig.add_shape(type="rect", xref="x domain", yref="y domain",
+                      x0=-0.016, x1=-0.008, y0=y0, y1=y1,
+                      fillcolor=_SET_COLORS.get(name, _GVTD_LINE), line=dict(width=0),
+                      row=row, col=1)
 
 
 def carpet_gvtd_figure(
@@ -191,6 +278,7 @@ def carpet_gvtd_figure(
     spike_segments: "list[tuple[float, float]] | None" = None,
     raw_after: "mne.io.Raw | None" = None,
     channel_set: str | None = None,
+    blocks: "list[tuple[str, list[str]]] | None" = None,
 ) -> go.Figure:
     """Motion-band GVTD + per-channel z-scored OD carpet, on one shared time axis.
 
@@ -205,9 +293,11 @@ def carpet_gvtd_figure(
     derived from the trace: spikes are a per-channel robust outlier test on the same
     band-limited derivative, so shading without a peak over the threshold, or the reverse,
     is a real disagreement between a per-channel and a cross-channel reading rather than a
-    drawing error. The full-height red ``segments`` windows are separate again.
+    drawing error. The full-height red ``segments`` windows are separate again, and stop at
+    the bottom of the last trace: the carpet is a per-channel image and reading a z value
+    off it through a wash of red is harder than looking one row up.
 
-    Given ``raw_after``, the motion-corrected recording, the GVTD panel carries a second
+    Given ``raw_after``, the motion-corrected recording, every GVTD row carries a second
     trace and a second carpet is stacked under the first, so the figure answers whether the
     correction removed what it was there to remove.
 
@@ -218,30 +308,56 @@ def carpet_gvtd_figure(
     unchanged. A ``raw_after`` that does not cover the same channels for the same duration at
     the same rate is dropped rather than drawn (see ``_matched_od_after``).
 
-    ``channel_set`` names the set ``ch_names`` came from, drawn in the GVTD panel beside the
-    band. GVTD is an RMS across channels, so which channels went in changes every value on
-    the panel and the threshold with them; a figure that does not say cannot be compared
-    against another one.
+    ``blocks`` is ``[(set name, channel names), ...]`` with the canonical set first, normally
+    ``[("long", ...), ("short", ...)]`` from :func:`gvtd_channel_blocks`. Each gets its own
+    GVTD row and its own block of carpet rows, so short-channel quality can be read off the
+    same panel without entering the number the verdict is taken from. GVTD is an RMS across
+    channels and the two sets measure different depths, so they stay separate traces rather
+    than one trace over the union. The rows share a y range, which is the point: the sets are
+    the same unit and comparable magnitudes, and scaling each to itself would hide exactly
+    the difference the extra row was added to show. Only the canonical row carries the spike
+    shading and the ``segments`` labels, since it is the one the reported scalars come from.
+    Omitting ``blocks`` draws the single row ``channel_set`` names, over ``ch_names``.
     """
     raw_od = mne.preprocessing.nirs.optical_density(raw.copy())
-    od_data, times = raw_od.get_data(picks=ch_names, return_times=True)
     sfreq = float(raw_od.info["sfreq"])
-    od_after = _matched_od_after(raw_after, ch_names, od_data.shape, sfreq)
+
+    # one block unless the caller split the montage; either way the carpet keeps the block
+    # order, so the rows under a GVTD row are the channels that row averaged
+    present = set(ch_names)
+    blocks = [(name, [c for c in names if c in present])
+              for name, names in (blocks or [(channel_set or "all", list(ch_names))])]
+    blocks = [(name, names) for name, names in blocks if names]
+    if not blocks:
+        blocks = [(channel_set or "all", list(ch_names))]
+
+    ordered = [c for _, names in blocks for c in names]
+    od_data, times = raw_od.get_data(picks=ordered, return_times=True)
+    od_after = _matched_od_after(raw_after, ordered, od_data.shape, sfreq)
     has_after = od_after is not None
 
     # GVTD full-res for the threshold/metric; plotted trace is max-pooled for display only.
     # 0.01-0.5 Hz motion band, the band the threshold is set on.
-    gvtd_filt = gvtd_timetrace(od_data, sfreq, *GVTD_MOTION_BAND)
-    t_gvtd    = times[1:]
-    motion_thresh = gvtd_threshold(gvtd_filt, n_std=GVTD_N_STD)
-    t_filt_ds, gvtd_filt_ds = _maxpool_xy(t_gvtd, gvtd_filt)
-    t_post_ds, gvtd_filt_post_ds = None, None
-    if has_after:
-        t_post_ds, gvtd_filt_post_ds = _maxpool_xy(
-            t_gvtd, gvtd_timetrace(od_after, sfreq, *GVTD_MOTION_BAND))
+    t_gvtd = times[1:]
+    rows: list[dict] = []
+    start = 0
+    for name, names in blocks:
+        rows_slice = slice(start, start + len(names))
+        start += len(names)
+        gvtd_filt = gvtd_timetrace(od_data[rows_slice], sfreq, *GVTD_MOTION_BAND)
+        t_ds, g_ds = _maxpool_xy(t_gvtd, gvtd_filt)
+        after, after_ds = None, None
+        if has_after:
+            after = gvtd_timetrace(od_after[rows_slice], sfreq, *GVTD_MOTION_BAND)
+            after_ds = _maxpool_xy(t_gvtd, after)
+        rows.append({
+            "name": name, "n_ch": len(names), "gvtd": gvtd_filt, "after": after,
+            "t_ds": t_ds, "g_ds": g_ds, "after_ds": after_ds,
+            "thresh": gvtd_threshold(gvtd_filt, n_std=GVTD_N_STD),
+        })
 
-    # carpet: all channels (both wavelengths are positively correlated, safe in one z-scored
-    # image); matches GVTD's channel set. decimate columns for display only
+    # carpet: all channels of every block (both wavelengths are positively correlated, safe
+    # in one z-scored image). decimate columns for display only
     MAX_PTS = 2000
     step     = max(1, od_data.shape[1] // MAX_PTS)
     carpet   = od_data[:, ::step]
@@ -257,15 +373,20 @@ def carpet_gvtd_figure(
     data_z_after = (None if not has_after else
                     np.round(np.clip((od_after[:, ::step] - mean) / std,
                                      -z_threshold, z_threshold), 2))
+    # a blank row between blocks, so where one set ends is visible without counting channels.
+    # the labels are spaces because they still have to be distinct categories on the y axis
+    data_z, data_z_after, carpet_rows, band_spans = _blocked_carpet(
+        data_z, data_z_after, blocks)
 
-    n_ch      = carpet.shape[0]
+    n_ch      = len(carpet_rows)
     n_carpets = 2 if has_after else 1
     # the strip is the correction's own row, so it is there only when there is a correction
     # to draw; prep-raw runs before any and would otherwise get a labelled empty band
     has_strip = bool(corrected_segments)
-    n_rows    = 1 + int(has_strip) + n_carpets
+    n_rows    = int(has_strip) + len(rows) + n_carpets
     carpet_px = int(max(200, min(n_ch * 13, 700)))
-    heights   = ([_STRIP_ROW_PX] if has_strip else []) + [_GVTD_ROW_PX] + [carpet_px] * n_carpets
+    heights   = (([_STRIP_ROW_PX] if has_strip else []) + [_GVTD_ROW_PX] * len(rows)
+                 + [carpet_px] * n_carpets)
     vspace    = 0.02
     # chrome: the margins, the legend and the shared x-axis title
     row_heights, total_px = _px_rows(heights, vspace, chrome_px=130)
@@ -282,67 +403,98 @@ def carpet_gvtd_figure(
     )
 
     if has_strip:
-        xs, ys = _span_polygons(corrected_segments, 0.30, 0.70)
+        xs, ys = _span_polygons(corrected_segments, 0.42, 0.58)
         fig.add_trace(go.Scatter(
             x=xs, y=ys, fill="toself", mode="lines", name="corrected",
             fillcolor=_CORRECTED, line=dict(width=0),
             hovertemplate="corrected: %{x:.1f}s<extra></extra>",
         ), row=strip_row, col=1)
 
-    # a fixed y-range, because the spike shading is drawn as polygons and needs a top edge
-    y_top = float(np.nanmax(gvtd_filt_ds)) if gvtd_filt_ds.size else 1.0
-    if motion_thresh is not None:
-        y_top = max(y_top, float(motion_thresh))
-    y_top *= 1.10
+    # a fixed y-range shared by every GVTD row, because the spike shading is drawn as
+    # polygons and needs a top edge, and because the rows are only comparable on one scale
+    y_top = max([float(np.nanmax(r["g_ds"])) for r in rows if r["g_ds"].size]
+                + [r["thresh"] for r in rows if r["thresh"] is not None] or [1.0])
+    y_top *= _GVTD_HEADROOM
 
-    if spike_segments:
-        xs, ys = _span_polygons(spike_segments, 0.0, y_top)
+    for i, r in enumerate(rows):
+        row_i = gvtd_row + i
+        colour = _SET_COLORS.get(r["name"], _GVTD_LINE)
+        if i == 0 and spike_segments:
+            xs, ys = _span_polygons(spike_segments, 0.0, y_top)
+            fig.add_trace(go.Scatter(
+                x=xs, y=ys, fill="toself", mode="lines", name=_SPIKE_LABEL,
+                fillcolor=_SPIKE_FILL, line=dict(width=0), hoverinfo="skip",
+                showlegend=(i == 0),
+            ), row=row_i, col=1)
+
         fig.add_trace(go.Scatter(
-            x=xs, y=ys, fill="toself", mode="lines", name=_SPIKE_LABEL,
-            fillcolor=_SPIKE_FILL, line=dict(width=0), hoverinfo="skip",
-        ), row=gvtd_row, col=1)
+            x=r["t_ds"], y=r["g_ds"], mode="lines",
+            name="before" if has_after else "GVTD", legendgroup="before",
+            showlegend=(i == 0), line=dict(color=_GVTD_LINE, width=_LW),
+            hovertemplate="t=%{x:.1f}s<br>before=%{y:.3e}<extra></extra>",
+        ), row=row_i, col=1)
 
-    fig.add_trace(go.Scatter(
-        x=t_filt_ds, y=gvtd_filt_ds, mode="lines",
-        name="before" if has_after else "GVTD",
-        line=dict(color=_GVTD_LINE, width=_LW),
-        hovertemplate="t=%{x:.1f}s<br>before=%{y:.3e}<extra></extra>",
-    ), row=gvtd_row, col=1)
+        if r["after_ds"] is not None:
+            t_post_ds, g_post_ds = r["after_ds"]
+            fig.add_trace(go.Scatter(
+                x=t_post_ds, y=g_post_ds, mode="lines", name="after",
+                legendgroup="after", showlegend=(i == 0),
+                line=dict(color=_GVTD_AFTER, width=_LW),
+                hovertemplate="t=%{x:.1f}s<br>after=%{y:.3e}<extra></extra>",
+            ), row=row_i, col=1)
 
-    if gvtd_filt_post_ds is not None:
-        fig.add_trace(go.Scatter(
-            x=t_post_ds, y=gvtd_filt_post_ds, mode="lines", name="after",
-            line=dict(color=_GVTD_AFTER, width=_LW),
-            hovertemplate="t=%{x:.1f}s<br>after=%{y:.3e}<extra></extra>",
-        ), row=gvtd_row, col=1)
+        if r["thresh"] is not None:
+            # each row's own threshold, from its own distribution; the corrected trace is
+            # judged against the uncorrected one, which is the yardstick the % motion in the
+            # metrics table is counted against
+            fig.add_hline(
+                y=r["thresh"], row=row_i, col=1,
+                line=dict(color=_THRESH_RULE, width=_LW_RULE, dash="dash"),
+            )
 
-    if motion_thresh is not None:
-        # the uncorrected recording's threshold, kept for the corrected trace as well: it is
-        # the yardstick the % motion in the metrics table is counted against
-        fig.add_hline(
-            y=motion_thresh, row=gvtd_row, col=1,
-            line=dict(color=_THRESH_RULE, width=_LW_RULE, dash="dash"),
-            annotation_text=f"thresh={motion_thresh:.3e}",
-            annotation_position="top right",
-            annotation_font=dict(size=9, color=_THRESH_RULE),
+        fig.update_yaxes(range=[0, y_top], tickfont=dict(size=8),
+                         gridcolor="#eef1f4", zeroline=False, row=row_i, col=1)
+        fig.add_annotation(
+            x=0.004, xref="x domain", y=0.99, yref="y domain",
+            text=_gvtd_row_label(r["name"], r["n_ch"]), showarrow=False,
+            xanchor="left", yanchor="top", font=dict(size=13, color=colour),
+            row=row_i, col=1,
         )
+        fig.add_annotation(
+            x=0.998, xref="x domain", y=0.99, yref="y domain",
+            text=_gvtd_stat_label(r["gvtd"], r["thresh"]), showarrow=False,
+            xanchor="right", yanchor="top", font=dict(size=9, color=_GVTD_LINE),
+            row=row_i, col=1,
+        )
+        if r["after_ds"] is not None:
+            fig.add_annotation(
+                x=0.998, xref="x domain", y=0.80, yref="y domain",
+                text=_gvtd_stat_label(r["after"], r["thresh"], prefix="corrected"),
+                showarrow=False, xanchor="right", yanchor="top",
+                font=dict(size=9, color=_GVTD_AFTER), row=row_i, col=1,
+            )
 
+    carpet_top = gvtd_row + len(rows)
     for i, z in enumerate([data_z, data_z_after][:n_carpets]):
         fig.add_trace(go.Heatmap(
-            z=z, x=t_carpet, y=ch_names,
+            z=z, x=t_carpet, y=carpet_rows,
             coloraxis="coloraxis",  # one scale and one bar for both carpets
             hovertemplate="%{y}<br>t=%{x:.1f}s<br>z=%{z:.2f}<extra></extra>",
             showlegend=False,
-        ), row=gvtd_row + 1 + i, col=1)
+        ), row=carpet_top + i, col=1)
+        _carpet_band_marks(fig, carpet_top + i, band_spans, len(carpet_rows))
 
     if segments:
         for label, spans in segments.items():
             for onset, duration in spans:
-                fig.add_vrect(
-                    x0=onset, x1=onset + duration,
-                    fillcolor="#e74c3c", opacity=0.15, line_width=0,
-                    layer="below", row="all", col=1,
-                )
+                # traces only: a per-channel image read through a red wash is harder than
+                # looking one row up at the trace the window was derived from
+                for row_i in range(1, carpet_top):
+                    fig.add_vrect(
+                        x0=onset, x1=onset + duration,
+                        fillcolor="#e74c3c", opacity=0.15, line_width=0,
+                        layer="below", row=row_i, col=1,
+                    )
                 fig.add_annotation(
                     x=onset + duration / 2, y=1.0, yref="y domain", row=gvtd_row, col=1,
                     text=label, showarrow=False, yanchor="bottom",
@@ -353,20 +505,12 @@ def carpet_gvtd_figure(
         fig.update_yaxes(title_text="corrected", title_font_size=8, range=[0, 1],
                          showticklabels=False, showgrid=False, zeroline=False,
                          row=strip_row, col=1)
-    fig.update_yaxes(title_text="GVTD", title_font_size=9,
-                     range=[0, y_top], tickfont=dict(size=8),
-                     gridcolor="#eef1f4", zeroline=False, row=gvtd_row, col=1)
-    fig.add_annotation(
-        x=0.004, xref="x domain", y=0.97, yref="y domain",
-        text=_gvtd_band_label(ch_names, channel_set), showarrow=False, xanchor="left", yanchor="top",
-        font=dict(size=8, color="#8b95a1"), row=gvtd_row, col=1,
-    )
     for i in range(n_carpets):
         # the channel names stay in the hover, where they are readable; on the axis a full
         # montage would be an unreadable stack
         fig.update_yaxes(title_text=carpet_titles[i], title_font_size=10,
                          showticklabels=False, autorange="reversed",
-                         row=gvtd_row + 1 + i, col=1)
+                         row=carpet_top + i, col=1)
     fig.update_xaxes(title_text="Time (s)", row=n_rows, col=1)
     fig.update_xaxes(range=[float(times[0]), float(times[-1])])
     if has_strip:

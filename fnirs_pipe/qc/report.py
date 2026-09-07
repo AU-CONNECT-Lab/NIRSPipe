@@ -72,7 +72,7 @@ from fnirs_pipe.qc.figure_io import (
     _figure_height, _pair_fname, _save_multi_fig_html,
     extract_markers, get_channel_pairs,
 )
-from fnirs_pipe.qc.metrics import SCI_PASS, gvtd_channel_picks
+from fnirs_pipe.qc.metrics import SCI_PASS, gvtd_channel_blocks
 from fnirs_pipe.qc.figures import (
     build_trigger_timeline_single,
     condition_colors,
@@ -423,6 +423,7 @@ def _section_motion(
     raw_long: mne.io.Raw,
     raw_gvtd: mne.io.Raw,
     gvtd_set: str,
+    gvtd_blocks: "list[tuple[str, list[str]]]",
     sci_scores: dict,
     config: Any,
     segments: dict | None,
@@ -443,9 +444,11 @@ def _section_motion(
     ``raw_after_motion`` puts the corrected trace and carpet in the same panel as the
     uncorrected one, matching the ``before -> after`` pairs in the metrics table.
 
-    ``raw_gvtd`` is the channel set the GVTD panel covers, which ``--gvtd-channels`` decides
-    and which is not always ``raw_long``. Everything else here stays on the long channels:
-    the zoom below is per-channel optical density, so a wider set would only add rows.
+    ``raw_gvtd`` is every channel the GVTD panel covers and ``gvtd_blocks`` is how it splits
+    them into rows, normally long then short. ``gvtd_set`` names the first block, the one
+    ``--gvtd-channels`` decides and the only one the reported scalars come from; the rest are
+    drawn for comparison. Everything else here stays on the long channels: the zoom below is
+    per-channel optical density, so a wider set would only add rows.
     """
     carpet_gvtd_path = None
     carpet_gvtd_h = 600
@@ -463,7 +466,7 @@ def _section_motion(
                                  corrected_segments=corrected_segments,
                                  spike_segments=spike_spans,
                                  raw_after=raw_after_motion,
-                                 channel_set=gvtd_set)
+                                 channel_set=gvtd_set, blocks=gvtd_blocks)
         carpet_gvtd_path, carpet_gvtd_h = _save_plotly_html(
             fig, figures_dir / "carpet_gvtd.html")
 
@@ -1195,8 +1198,9 @@ def build_subject_report(
     raw_long = _prepare_long_raw(raw_intensity, subject)
     # the GVTD panel's channel set, which config decides and which need not be raw_long
     gvtd_channels = getattr(config, "gvtd_channels", None) or "long"
-    gvtd_picks, gvtd_set = gvtd_channel_picks(raw_intensity, gvtd_channels)
-    raw_gvtd = raw_intensity.copy().pick(gvtd_picks)
+    gvtd_blocks = gvtd_channel_blocks(raw_intensity, gvtd_channels)
+    gvtd_set = gvtd_blocks[0][0]
+    raw_gvtd = raw_intensity.copy().pick([c for _, names in gvtd_blocks for c in names])
 
     figures_dir = out_path.parent / "figures"
     if sqm_label:
@@ -1222,7 +1226,7 @@ def build_subject_report(
                             raw_intensity, sci_scores, bad_channels, config,
                             windowed_section, subject, errors, figures_dir)
     motion_vars       = _section_motion(
-                            raw_long, raw_gvtd, gvtd_set,
+                            raw_long, raw_gvtd, gvtd_set, gvtd_blocks,
                             sci_scores, config, segments, subject, errors,
                             figures_dir, windowed=windowed_section,
                             raw_before_motion=raw_before_motion,
