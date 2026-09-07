@@ -260,6 +260,8 @@ def compute_group_sqm_raw(
     output_dir: Path,
     cardiac_l_freq: float,
     cardiac_h_freq: float,
+    psp_threshold: float | None = None,
+    gvtd_channels: str = "long",
 ) -> dict[str, dict]:
     """Compute raw-level SQM (SCI, bad channels) for each group member.
 
@@ -268,8 +270,18 @@ def compute_group_sqm_raw(
       group-{gid}_task-{task}_hyper-raw_channels.tsv  — one row per subject × channel
 
     Returns {subject_id: sqm_dict} for use in the HTML report.
+
+    The dict is the long-channel verdict, assembled by
+    :func:`~fnirs_pipe.qc.sqm_record.raw_verdict_view` from the same three sections the
+    per-subject record holds. It used to be one all-channel pass, which put a subject's
+    SCI, CV, SNR and GVTD in this table on a different channel set than the same subject's
+    numbers in the individual reports and in `fnirs-hyper run`, so the two could not be
+    read against each other.
     """
-    from fnirs_pipe.qc.metrics import compute_raw_sqm
+    from fnirs_pipe.qc.metrics import resolve_cutoffs, screen_channels, screening_scores
+    from fnirs_pipe.qc.sqm_record import raw_sections, raw_verdict_view
+
+    cutoffs = resolve_cutoffs(sci=sci_threshold, psp=psp_threshold)
 
     gid  = group[0].group_id
     task = group[0].task
@@ -282,13 +294,17 @@ def compute_group_sqm_raw(
     for entry in group:
         raw = raws[entry.subject_id]
 
+        # raw_od stays None when the conversion itself failed, which is the one case where
+        # nothing can be screened: everything below reads optical density
+        raw_od: "mne.io.Raw | None" = None
+        sci_cw = {ch: float("nan") for ch in raw.ch_names}
         try:
             raw_od  = mne.preprocessing.nirs.optical_density(raw.copy(), verbose=False)
             sci_arr = mne.preprocessing.nirs.scalp_coupling_index(
                 raw_od, l_freq=cardiac_l_freq, h_freq=cardiac_h_freq, verbose=False)
             sci_cw  = {ch: float(sci_arr[i]) for i, ch in enumerate(raw.ch_names)}
         except Exception:
-            sci_cw = {ch: float("nan") for ch in raw.ch_names}
+            logger.warning("%s: SCI could not be measured", entry.subject_id, exc_info=True)
 
         sci_scores: dict[str, float] = {}
         for ch, val in sci_cw.items():
@@ -296,16 +312,22 @@ def compute_group_sqm_raw(
             sci_scores[f"{pair} hbo"] = val
             sci_scores[pair] = val
 
-        from fnirs_pipe.qc.metrics import screen_channels, screening_scores
-        screen = screening_scores(raw_od, cardiac_l_freq, cardiac_h_freq,
-                                  have={"sci": sci_cw})
-        bad_channels, _ = screen_channels(screen, {"sci": sci_threshold})
+        bad_channels: list[str] = []
+        if raw_od is not None:
+            screen = screening_scores(raw_od, cardiac_l_freq, cardiac_h_freq,
+                                      have={"sci": sci_cw})
+            bad_channels, _ = screen_channels(screen, cutoffs)
 
         try:
-            sqm = compute_raw_sqm(raw, sci_cw, bad_channels, cardiac_l_freq, cardiac_h_freq)
+            sections, _per_channel = raw_sections(
+                raw, sci_cw, bad_channels, cardiac_l_freq, cardiac_h_freq)
+            sqm = raw_verdict_view(sections, gvtd_channels)
         except Exception:
-            sqm = {}
+            logger.warning("%s: quality metrics failed", entry.subject_id, exc_info=True)
+            sections, sqm = {}, {}
 
+        # which channel set the row above describes, so a table read on its own says so
+        sqm["channel_set"] = "long" if sections.get("raw_long") else "all"
         sqm["sci_per_channel"] = sci_scores
         sqm["bad_channels"]    = bad_channels
         sqm_data[entry.subject_id] = sqm
@@ -317,6 +339,7 @@ def compute_group_sqm_raw(
             "group_id":       gid,
             "subject_id":     entry.subject_id,
             "task":           task,
+            "channel_set":    sqm["channel_set"],
             "n_bad_channels": len(bad_channels),
             **{k: v for k, v in sqm.items()
                if isinstance(v, (int, float)) and not isinstance(v, bool)},
@@ -339,12 +362,15 @@ def compute_group_sqm_raw(
     pd.DataFrame(scalar_rows).to_csv(scalar_path, sep="\t", index=False)
     _hyper_sidecar(scalar_path, "group_sqm_raw", sources,
                    sci_threshold=sci_threshold,
+                   psp_threshold=cutoffs["psp"],
+                   gvtd_channels=gvtd_channels,
                    cardiac_l_freq=cardiac_l_freq, cardiac_h_freq=cardiac_h_freq)
 
     channel_path = data_dir / f"{stem}_channels.tsv"
     pd.DataFrame(channel_rows).to_csv(channel_path, sep="\t", index=False)
     _hyper_sidecar(channel_path, "group_sqm_raw_channels", sources,
                    sci_threshold=sci_threshold,
+                   psp_threshold=cutoffs["psp"],
                    cardiac_l_freq=cardiac_l_freq, cardiac_h_freq=cardiac_h_freq)
 
     return sqm_data
@@ -563,6 +589,8 @@ def load_group_sqm(
     if bads_scope not in ("run", "subject"):
         raise ValueError(f"bads_scope must be 'run' or 'subject', got {bads_scope!r}")
 
+    from fnirs_pipe.qc.sqm_record import raw_verdict_view
+
     result: dict[str, dict] = {}
     for entry in group:
         nirs_dir = output_dir / entry.subject_id / "nirs"
@@ -579,9 +607,10 @@ def load_group_sqm(
             # Whole-file section underneath its long-channel split in both families, rather
             # than replaced by it: the split sections carry only what a channel set can be
             # measured on, so the run-level numbers (the montage counts, the recording's
-            # duration) survive underneath while the long values win where both exist.
-            sqm.update(record.get("raw") or {})
-            sqm.update(record.get("raw_long") or {})
+            # duration) survive underneath while the long values win where both exist. The
+            # raw family goes through raw_verdict_view, which is the same rule the dyad raw
+            # report and the subject report read their scalars by.
+            sqm.update(raw_verdict_view(record))
             sqm.update(record.get("motion") or {})
             sqm.update(record.get("preproc") or {})
             sqm.update(record.get("preproc_long") or {})

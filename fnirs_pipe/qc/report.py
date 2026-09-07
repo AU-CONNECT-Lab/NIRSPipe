@@ -758,6 +758,7 @@ def _section_sqm(
     sqm_label: str | None = None,
     gvtd_channels: str = "long",
     sci_threshold: float = SCI_PASS,
+    psp_threshold: float | None = None,
 ) -> dict:
     """Read this run's SQM record; the report displays, it does not compute.
 
@@ -855,11 +856,12 @@ def _section_sqm(
     rows = channel_rows(record_read, sci_scores, bad_channels)
     if out_dir is not None and sqm:
         with _guard("Channel metrics CSV", errors, subject):
-            save_channel_csv(rows, sqm_label or f"sub-{subject}", out_dir, sci_threshold)
+            save_channel_csv(rows, sqm_label or f"sub-{subject}", out_dir, sci_threshold,
+                             psp_threshold=psp_threshold)
     # the raw rows stay for the CSV and the quality grid, which want the numbers; the
     # template gets them formatted, so the per-channel table prints the same widths and the
     # same SCI verdict as the raw viewer and the GUI
-    cells = format_rows(rows, sci_threshold)
+    cells = format_rows(rows, sci_threshold, psp_threshold=psp_threshold)
     return {
         "sqm": sqm,
         "channel_rows": rows,
@@ -1254,7 +1256,8 @@ def build_subject_report(
                                      out_dir=out_path.parent / "nirs",
                                      sqm_label=sqm_label,
                                      gvtd_channels=gvtd_channels,
-                                     sci_threshold=getattr(config, "sci_threshold", SCI_PASS))
+                                     sci_threshold=getattr(config, "sci_threshold", SCI_PASS),
+                                     psp_threshold=getattr(config, "psp_threshold", None))
     _note_separation(notes, subject, sqm_vars["sqm"], sqm_vars["channel_rows"],
                      short_channel_requested=bool(getattr(config, "short_channel", None)))
     # GCOR before→after the short-channel regression (fNIRS GSR analog): the meaningful

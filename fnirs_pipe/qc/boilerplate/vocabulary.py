@@ -94,12 +94,13 @@ def template_slots(key: str, params: dict[str, Any]) -> dict[str, str]:
     filter templates call ``l_freq``.
     """
     if key == "sci_marking":
-        # both criteria, because screening is a union over them; the PSP line has no flag
-        # so it is read off the screening table rather than the run's parameters
+        # both criteria, because screening is a union over them. The PSP line falls back to
+        # the criteria table for a record written before the run started stamping it
         from fnirs_pipe.qc.metrics import criterion_cutoffs
+        psp = params.get("psp_threshold")
         return {
             "threshold": str(params.get("sci_threshold", "")),
-            "psp_threshold": str(criterion_cutoffs().get("psp", "")),
+            "psp_threshold": str(psp if psp is not None else criterion_cutoffs()["psp"]),
             "action": "marked as bad and excluded from further analysis",
         }
     if key == "beer_lambert":

@@ -39,6 +39,7 @@ def write_wtc_null(
     """
     from fnirs_pipe.io.derivatives import group_data_dir
     from fnirs_pipe.pipeline.hyperscanning import _hyper_sidecar, compute_wtc_pseudo
+    from fnirs_pipe.pipeline.synchrony import wtc_grid_params
     from fnirs_pipe.utils.lineage import path_from
 
     band_fmin = band_fmin if band_fmin is not None else wtc_fmin
@@ -60,6 +61,7 @@ def write_wtc_null(
         [p for p in (path_from(r) for r in aligned_raws.values()) if p],
         band_fmin=band_fmin, band_fmax=band_fmax, mask_coi=mask_coi,
         wtc_fmin=wtc_fmin, wtc_fmax=wtc_fmax, n_iter=n_iter, cross=cross, seed=seed,
+        **wtc_grid_params(aligned_raws),
     )
     logger.info("Pseudo-dyad WTC band means saved: %s", out_path)
     return out_path

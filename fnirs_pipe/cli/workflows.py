@@ -162,6 +162,8 @@ def run_participant_level(args: dict[str, Any]) -> None:
             _jdb.log_run_start(
                 db_path, execution_id, subject,
                 sci_threshold=args["sci_threshold"],
+        **({"psp_threshold": args["psp_threshold"]}
+           if args.get("psp_threshold") is not None else {}),
                 dpf=args["dpf"],
                 motion_correction=_v(args["motion_correction"]),
                 mode=_v(args["mode"]) if args.get("mode") else None,
@@ -356,6 +358,8 @@ def _make_prep_config(subject: str, session: str | None, args: dict[str, Any]) -
         session=session,
         dpf=args["dpf"],
         sci_threshold=args["sci_threshold"],
+        **({"psp_threshold": args["psp_threshold"]}
+           if args.get("psp_threshold") is not None else {}),
         motion_correction=_v(args["motion_correction"]),
         bad_channels=_bad_channels_for(args.get("bad_channels"), subject),
         cardiac_l_freq=args["cardiac_l_freq"],

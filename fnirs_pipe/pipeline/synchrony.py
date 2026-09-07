@@ -101,6 +101,14 @@ class WTCResult:
 # Morlet (w0 = 6) Fourier factor: period = _FLAMBDA * scale, so frequency = 1 / period.
 _FLAMBDA = 4 * np.pi / (6 + np.sqrt(2 + 6 ** 2))
 
+# Sub-octaves per octave on the wavelet scale grid: the frequency-axis resolution, and
+# pycwt's own default. Not configurable, and _SCALE_MARGIN below is why: pycwt smooths
+# across neighbouring scales with a boxcar whose width is round(2 * 0.6 / dj), so a
+# different dj needs a different margin for --wtc-limit-scales to keep returning the same
+# coherences. Reported in every WTC sidecar instead, since it decides how many
+# time-frequency cells a band mean averages over.
+WTC_DJ = 1.0 / 12
+
 # Scales of margin kept on each side of the requested band when limiting the scale range.
 # pycwt smooths the coherence across neighbouring scales with a boxcar of round(2 * 0.6 / dj)
 # points, 14 at the default dj, so the outermost 7 scales of whatever range is computed are
@@ -131,6 +139,32 @@ def _scale_range(dt: float, dj: float, fmin: float, fmax: float, n: int) -> tupl
     # never past what the record length supports, which is where pycwt's own default stops
     j_max = int(round(np.log2(n * dt / s0) / dj))
     return s0, max(min(j_band - k, j_max), 1)
+
+
+def _decim_step(sfreq: float) -> int:
+    """Samples per retained column of a coherence map: one per second, at least one.
+
+    The maps are for reading and for averaging over a band, and neither needs the sampling
+    rate: a 65-minute dyad at 10 Hz is 39000 columns per pair per frequency, which is a
+    hundredfold more than any figure resolves or any band mean moves on. What it does limit
+    is how short a window --wtc-by-condition can describe, so it is reported in the sidecar
+    as the time resolution it produces rather than as this count.
+    """
+    return max(1, int(round(sfreq)))
+
+
+def wtc_grid_params(raws: dict) -> dict:
+    """The wavelet grid the maps sit on, for a sidecar: fixed, but reportable.
+
+    wtc_grid_params(raws_at_10_Hz) -> {"wtc_dj": 0.0833, "wtc_time_step_s": 1.0}
+
+    Neither is configurable, and both change what a band mean is an average over, so a
+    reader comparing two studies' coherences needs them on the file. Read off the
+    recordings rather than passed in, so they cannot disagree with what ran.
+    """
+    sfreq = _shared_sfreq(raws)
+    return {"wtc_dj": round(WTC_DJ, 6),
+            "wtc_time_step_s": round(_decim_step(sfreq) / sfreq, 6)}
 
 
 def _pairwise_wtc(
@@ -185,7 +219,7 @@ def _pairwise_wtc(
     """
     import pycwt
 
-    dj = 1.0 / 12  # 12 sub-octaves per octave (pycwt default; frequency-axis resolution)
+    dj = WTC_DJ
     kwargs: dict = {} if cache else {"cache": False}
     if significance:
         kwargs["mc_count"] = mc_count
@@ -254,7 +288,7 @@ def _wtc_over_pairs(
     ref_raw = raws[subject_ids[0]]
     sfreq   = _shared_sfreq(raws)
     dt      = 1.0 / sfreq
-    step    = max(1, int(round(sfreq)))
+    step    = _decim_step(sfreq)
 
     result_pairs: dict = {}
     shared_freqs: np.ndarray | None = None

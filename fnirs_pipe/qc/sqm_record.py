@@ -260,6 +260,33 @@ def _section_writer(sections: dict[str, Any], per_channel: dict[str, Any]):
     return section
 
 
+def raw_verdict_view(record: dict, gvtd_channels: str = "long") -> dict:
+    """The raw-family scalars a quality verdict is read off, as one flat dict.
+
+    raw_verdict_view({"raw": {"sci_mean": 0.71, "duration_s": 600},
+                      "raw_long": {"sci_mean": 0.86}})
+    -> {"sci_mean": 0.86, "duration_s": 600}
+
+    Two steps. The long-channel split sits on top of the whole-file section rather than
+    replacing it, because the split carries only what a channel set can be measured on and
+    the run-level numbers (montage counts, duration) live underneath. Then
+    ``gvtd_channels="all"`` moves the ``gvtd_*`` keys alone back to the whole-file section:
+    GVTD is an RMS *across* channels, so the set is part of the value, while SCI and PSP are
+    per-channel and widening their set would answer a different question.
+
+    One function because three readers need the same answer: the subject report, the dyad
+    raw report and the dyad analysis. A flat legacy record has no sections and comes back
+    unchanged.
+    """
+    view = {**(record.get("raw") or {})}
+    long_section = record.get("raw_long") or {}
+    view.update(long_section)
+    if gvtd_channels == "all" and long_section:
+        view.update({k: v for k, v in (record.get("raw") or {}).items()
+                     if k.startswith("gvtd_")})
+    return view
+
+
 def raw_sections(
     raw_intensity: mne.io.Raw,
     sci_scores: dict[str, float],

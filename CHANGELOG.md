@@ -7,6 +7,9 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- **`--psp-threshold` sets the second screening line**, which was fixed at 0.1 with no way to change it even though a channel failing it is rejected. Taken by `fnirs-pipe`, `fnirs-qc prep-raw` and `fnirs-qc hyper-raw`, and named in the Methods paragraph
+- **`fnirs-qc hyper-raw` exposes the windows its figures use**: `--coh-window-length` and `--coh-window-step` for the sliding-window coherence, `--epoch-tmin` / `--epoch-tmax` for the per-pair evoked panels, and `--gvtd-channels` as the individual reports take it. All four were fixed in the source and unreachable from the command line
+- **The WTC sidecars record the wavelet grid**, `wtc_dj` and `wtc_time_step_s`. Neither is configurable, and both decide how many time-frequency cells a band mean averages over
 - **The raw QC report and the interface judge long channels separately**, with an All / Long / Short comparison. Averaging short channels in was lifting SCI, PSP and SNR
 - **The raw QC report and the interface show every per-channel metric**, not SCI alone, and write the per-channel metrics CSV
 - **The subject report gained the event timeline and the per-trial quality panel**
@@ -20,6 +23,7 @@ All notable changes to this project will be documented in this file.
 - **The hyperscanning raw report writes its coherence tables**, whole-record and windowed, so the numbers behind the bar chart and the heatmap can leave the report
 
 ### Fixed
+- **`fnirs-qc hyper-raw` scored its per-subject quality table over every channel**, while the individual reports and `fnirs-hyper run` score the long ones, so a subject's SCI, CV, SNR and GVTD could not be read across the two. The dyad table is the long-channel view now, and says which set it describes
 - **`--gvtd-censor` failed on any recording that has event markers**, which is every task run. It worked only on a recording with no markers at all
 - **The interface showed no SCI at all in its channel table**, a dash on every row
 - **The per-channel PSD shaded the cardiac and respiration bands at fixed frequencies** instead of the run's own, so a study outside the adult range had the stripe over the wrong part of the spectrum
@@ -29,6 +33,8 @@ All notable changes to this project will be documented in this file.
 - **A figure that failed took the whole group report with it.** Every other report loses one panel; this one had no error handling at all
 
 ### Changed
+- **`fnirs-qc hyper-raw`'s coherence band is `--coh-fmin` / `--coh-fmax`.** As `--fmin` / `--fmax` it said nothing about which of the report's frequency bands it set, and read like `fnirs-hyper`'s `--wtc-fmin`. The old names still work
+- **The hyperscanning reports print their per-subject metrics through the shared metric registry**, so a number cannot appear to three decimals in a subject report and four in a dyad report
 - **The all-channel PSD panel averages the screened-out, long and short channels separately** instead of pooling every channel into one curve. A recording with a few dead optodes read as a uniformly poor spectrum, with no way to tell that from a montage-wide problem
 - **Every PSD panel says which stage it is measured on**: optical density before Beer-Lambert for the all-channel spectrum, concentration after it for a single channel's. The two look alike and were being read against each other
 - **Channel screening rejects a channel that fails SCI *or* PSP**, where it tested SCI alone. Runs will reject at least as many channels as before, and the reports name which criterion failed

@@ -8,6 +8,7 @@ from pathlib import Path
 
 from flask import Flask, jsonify, request, send_from_directory
 
+from fnirs_pipe.qc.metrics import SCI_PASS
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("qc.rating")
@@ -160,7 +161,7 @@ class FNIRSRatingApp:
 class RawRatingApp:
     """Flask server for rating a single raw QC HTML report and annotating channel decisions."""
 
-    def __init__(self, html_path: Path, output_dir: Path, sci_threshold: float = 0.8):
+    def __init__(self, html_path: Path, output_dir: Path, sci_threshold: float = SCI_PASS):
         self.html_path      = html_path
         self.stem           = html_path.stem          # e.g. "sub-01_task-rest_desc-raw_nirs"
         self.output_dir     = output_dir
@@ -268,7 +269,7 @@ class HyperRatingApp:
         html_path: Path,
         output_dir: Path,
         subject_ids: list[str],
-        sci_threshold: float = 0.8,
+        sci_threshold: float = SCI_PASS,
     ):
         self.html_path     = html_path
         self.output_dir    = output_dir

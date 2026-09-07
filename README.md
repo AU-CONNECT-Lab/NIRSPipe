@@ -66,7 +66,7 @@ fnirs-pipe BIDS_DIR OUTPUT_DIR {participant,group} [OPTIONS]
 
 Required at participant level:
   --dpf FLOAT [FLOAT ...]      Differential pathlength factor. One value or one per wavelength.
-  --sci-threshold FLOAT        SCI threshold for bad channel detection (e.g. 0.8).
+  --sci-threshold FLOAT        Scalp coupling index below which a channel is rejected (e.g. 0.8).
   --cardiac-l-freq FLOAT       Lower cardiac band bound in Hz (population-dependent, no default).
   --cardiac-h-freq FLOAT       Upper cardiac band bound in Hz.
   --resp-l-freq FLOAT          Lower respiration band bound in Hz (population-dependent, no default).
@@ -84,6 +84,11 @@ Preprocessing:
   --bad-channels               S-D labels to mark bad, e.g. "S1_D1,S2_D3", or a table with
                                participant_id + bad_channels columns for one row per subject.
                                Either wavelength marks the pair. (unioned with SCI bads)
+  --psp-threshold FLOAT        Peak spectral power below which a channel is rejected.
+                               [default: 0.1] Screening is a union over the two criteria, so
+                               a channel failing either line goes. PSP catches the movement
+                               that fakes a high SCI, so raising it prunes more than
+                               --sci-threshold alone does.
   --window-length FLOAT        Window (s) for the windowed SCI / PSP / GVTD series. [default: 10.0]
   --gvtd-channels              {long,all}   [default: long]
                                Channels GVTD covers. It is an RMS across channels, so the set
@@ -105,6 +110,14 @@ Postprocessing mode:
 Filtering / resampling (all modes):
   --high-pass FLOAT            High-pass filter cutoff in Hz (e.g. 0.01).
   --low-pass  FLOAT            Low-pass filter cutoff in Hz (e.g. 0.5).
+  --filter-method              {iir,fir}   [default: iir]
+                               'iir' is a zero-phase Butterworth, what the fNIRS toolboxes
+                               use. 'fir' is a hamming-windowed linear-phase filter, which
+                               needs 3.3 * sfreq / transition samples and is refused when
+                               that is longer than the recording.
+  --filter-order INT           Butterworth order, ignored by --filter-method fir. [default: 4]
+                               Applied with filtfilt, so the effective rolloff is twice this
+                               and the cutoff sits at -6 dB.
   --resample-sfreq FLOAT       Target sampling rate in Hz after filtering (e.g. 2.0).
   --combine-runs               Concatenate runs before postprocessing.
 
@@ -224,22 +237,27 @@ fnirs-prep edit-markers apply BIDS_DIR DERIVATIVES_DIR --participant-label SUB .
 
 ### `fnirs-qc` — QC reports
 
-`prep-raw` and `hyper-raw` read raw recordings, so both require `--cardiac-l-freq` / `--cardiac-h-freq`, which are population-dependent and have no default, and `--dpf`, which they use to convert to haemoglobin internally.
+`prep-raw` and `hyper-raw` read raw recordings, so both require `--cardiac-l-freq` / `--cardiac-h-freq`, which are population-dependent and have no default, and `--dpf`, which they use to convert to haemoglobin internally. Both screen channels, so both take the same `--sci-threshold` / `--psp-threshold` as `fnirs-pipe`; pass what the run was prepped with.
 
 ```
 fnirs-qc prep-raw BIDS_DIR OUTPUT_DIR PARTICIPANT_LABEL
                   --dpf FLOAT [FLOAT ...]
                   --cardiac-l-freq FLOAT --cardiac-h-freq FLOAT
                   [--session-label / --task-label]
-                  [--sci-threshold FLOAT] [--skip-bids-validation]
+                  [--sci-threshold FLOAT] [--psp-threshold FLOAT]
+                  [--window-length FLOAT]                       [default: 10.0]
                   [--epoch-qc] [--epoch-tmin/--epoch-tmax FLOAT]
-                  [--gvtd-channels {long,all}]
+                  [--gvtd-channels {long,all}] [--skip-bids-validation]
 
 fnirs-qc hyper-raw BIDS_DIR OUTPUT_DIR --pairs-csv PATH
                    --dpf FLOAT [FLOAT ...]
                    --cardiac-l-freq FLOAT --cardiac-h-freq FLOAT
                    [--group-id / --task-label / --session-label]
-                   [--sci-threshold FLOAT] [--fmin/--fmax FLOAT]
+                   [--sci-threshold FLOAT] [--psp-threshold FLOAT]
+                   [--coh-fmin/--coh-fmax FLOAT]                [default: 0.01 / 0.10]
+                   [--coh-window-length/--coh-window-step FLOAT] [default: 30.0 / 5.0]
+                   [--epoch-tmin/--epoch-tmax FLOAT]            [default: -5.0 / 25.0]
+                   [--gvtd-channels {long,all}]
                    [--normalize] [--no-align] [--tstart/--tend FLOAT]
 
 fnirs-qc group-raw       OUTPUT_DIR
@@ -249,7 +267,11 @@ fnirs-qc provenance      OUTPUT_DIR
 
 `provenance` redraws the graphs from the sidecars already on disk.
 
-The dyad analysis used to live here as `hyper-post`, `hyper-null`, `wtc-band` and `group-hyper-wtc`. It is `fnirs-pipe` now: those four are the `hyper` level, its `--wtc-pseudo` flag, the `wtc-band` level, and the `group` level.
+`hyper-raw`'s per-subject quality table is the long-channel view, the same one the individual reports print, so a subject's SCI, CV, SNR and GVTD can be read against their own `sub-*_desc-raw` page. `--gvtd-channels` moves the GVTD scalars alone, exactly as it does in `fnirs-pipe`.
+
+`hyper-raw`'s coherence band was `--fmin` / `--fmax`, which said nothing about which of the report's frequency bands it set and read as `fnirs-hyper`'s `--wtc-fmin`. The old names still work as aliases.
+
+The dyad analysis used to live here as `hyper-post`, `hyper-null`, `wtc-band` and `group-hyper-wtc`. It is `fnirs-hyper` now: those four are `fnirs-hyper run`, its `--wtc-pseudo` flag, `fnirs-hyper band`, and `fnirs-hyper merge`.
 
 For a cohort report over one time window, crop first and then run the usual pair of commands:
 

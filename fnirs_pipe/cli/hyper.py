@@ -13,6 +13,8 @@ import argparse
 import sys
 from pathlib import Path
 
+from fnirs_pipe.cli import _shared
+from fnirs_pipe.qc.metrics import SCI_PASS
 from fnirs_pipe.utils.logging import get_logger, setup_logging
 
 setup_logging()
@@ -20,9 +22,6 @@ setup_logging()
 logger = get_logger("cli.hyper")
 
 _BADS_SCOPE_CHOICES = ["run", "subject"]
-
-# the hyper report colours its quality table by SCI but detects no bad channels of its own
-_SCI_DEFAULT = 0.8
 
 
 def _select_groups(pairs_csv: Path, group_id: str | None, task_label: list[str] | None) -> dict:
@@ -190,7 +189,7 @@ def cmd_run(
     wtc_by_condition: bool,
     wtc_limit_scales: bool, wtc_save_maps: bool,
     wtc_pseudo: int | None, wtc_pseudo_cross: bool,
-    bads_scope: str, isc_threshold: float, sci_threshold: float | None,
+    bads_scope: str, isc_threshold: float, sci_threshold: float,
     normalize: bool, no_align: bool, tstart: float | None, tend: float | None,
     check_only: bool, verbose: bool,
 ) -> None:
@@ -214,9 +213,6 @@ def cmd_run(
 
     setup_logging(verbose=verbose)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-
-    if sci_threshold is None:
-        sci_threshold = _SCI_DEFAULT
 
     if wtc_channel_cross and roi_mapping is None:
         print("[warn] --wtc-channel-cross without --roi-mapping: the crossed channel table "
@@ -368,6 +364,11 @@ def _build_parser() -> argparse.ArgumentParser:
                         help="fnirs-pipe derivatives directory. No BIDS input is read.")
     common.add_argument("--verbose", action="store_true")
 
+    # the dyad selection and the alignment window are the same parameters `fnirs-qc
+    # hyper-raw` takes, so they are declared once for both scripts
+    pairs = _shared.pairs_selection()
+    window = _shared.alignment_window()
+
     p = argparse.ArgumentParser(
         prog="fnirs-hyper",
         description="Hyperscanning analysis: wavelet coherence, inter-subject correlation "
@@ -377,15 +378,8 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--version", action="version", version=f"fnirs-hyper {__version__}")
     sub = p.add_subparsers(required=True, metavar="COMMAND")
 
-    run = sub.add_parser("run", parents=[common, band_opts],
+    run = sub.add_parser("run", parents=[common, pairs, window, band_opts],
                          help="WTC + ISC report per dyad, and the null with --wtc-pseudo.")
-    run.add_argument("--pairs-csv", type=Path, required=True,
-                     help="CSV with columns: group_id, subject_id, task. Each unique "
-                          "(group_id, task) pair is processed as one session.")
-    run.add_argument("--group-id", default=None,
-                     help="Process only this group_id. Omit to process all groups.")
-    run.add_argument("--task-label", nargs="+", action="extend",
-                     help="Task label(s) to include, filtering the pairs table.")
     run.add_argument("--desc", default="preproc",
                      help="desc entity of the per-subject stage the inter-brain metrics read, "
                           "e.g. 'preproc' (Beer-Lambert output) or 'errts' (confound-regression "
@@ -474,23 +468,12 @@ def _build_parser() -> argparse.ArgumentParser:
                           "computed on, and stop. Nothing is written. Use it to look over a "
                           "cohort's channel budget before committing to a run, which with "
                           "--wtc-pseudo is hours.")
-    run.add_argument("--sci-threshold", type=float, default=None,
-                     help="The SCI line for channel screening, which also applies PSP. "
-                          "Detects "
-                          "nothing here; it only colours the per-subject quality table. "
-                          "Pass what the run was prepped with (default 0.8).")
-    run.add_argument("--normalize", action=argparse.BooleanOptionalAction, default=False,
-                     help="Z-score each channel per subject after alignment.")
-    run.add_argument("--no-align", action="store_true",
-                     help="Skip trigger-based alignment; trim all recordings to the shortest duration.")
-    run.add_argument("--tstart", type=float, default=None,
-                     help="Keep only from this time (s) on the aligned clock, where 0 is the "
-                          "shared trigger. Omit to start at the alignment point.")
-    run.add_argument("--tend", type=float, default=None,
-                     help="Keep only up to this time (s) on the aligned clock. Omit to run to "
-                          "the end; a value past the end is clipped. The window narrows the "
-                          "synchrony metrics only: the per-subject quality record describes "
-                          "the whole recording either way.")
+    # not the shared screening block: nothing is screened here, the rejections were decided
+    # upstream and are read off the sidecars, so a --psp-threshold would do nothing at all
+    run.add_argument("--sci-threshold", type=float, default=SCI_PASS,
+                     help=f"The SCI line the per-subject quality table is coloured against "
+                          f"(default {SCI_PASS}). Detects nothing here: screening happened "
+                          f"in fnirs-pipe. Pass what the run was prepped with.")
     run.set_defaults(func=cmd_run)
 
     band = sub.add_parser(

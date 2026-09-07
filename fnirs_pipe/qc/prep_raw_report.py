@@ -15,7 +15,7 @@ from fnirs_pipe.qc.channel_table import (
     channel_rows, format_rows, heatmap_args, pair_rows, save_channel_csv,
     separation_blocks, separation_notes, split_table,
 )
-from fnirs_pipe.qc.metrics import SHORT_MAX_DIST
+from fnirs_pipe.qc.metrics import SCI_PASS, SHORT_MAX_DIST
 from fnirs_pipe.qc.report_shell import (
     collapse_messages, dashboard_css, guard, note, render,
 )
@@ -53,6 +53,7 @@ def _process_run(
     epoch_tmin: float | None = None,
     epoch_tmax: float | None = None,
     gvtd_channels: str = "long",
+    psp_threshold: float | None = None,
 ) -> dict:
     """Compute all data, save figure HTMLs + SQM JSON. Returns inline dict for HTML.
 
@@ -76,7 +77,7 @@ def _process_run(
     from fnirs_pipe.qc.boilerplate.vocabulary import metric_rows
     from fnirs_pipe.qc.metrics import (
         attach_windowed_series, compute_raw_sqm, compute_sci_scores,
-        screen_channels, screening_scores,
+        resolve_cutoffs, screen_channels, screening_scores,
     )
     from fnirs_pipe.qc.sqm_record import raw_sections, sqm_record_dict
 
@@ -95,7 +96,8 @@ def _process_run(
     sci_scores, raw_od = compute_sci_scores(raw, cardiac_l_freq, cardiac_h_freq)
     screen_scores = screening_scores(raw_od, cardiac_l_freq, cardiac_h_freq,
                                      have={"sci": sci_scores})
-    bad_list, _why = screen_channels(screen_scores, {"sci": sci_threshold})
+    cutoffs = resolve_cutoffs(sci=sci_threshold, psp=psp_threshold)
+    bad_list, _why = screen_channels(screen_scores, cutoffs)
     bad_channels: set[str] = set(bad_list)
 
     sqm: dict = {}
@@ -267,7 +269,7 @@ def _process_run(
     # `channel_pairs or None` so a run whose Beer-Lambert failed still gets a table, built
     # from the pairs the intensity recording carries rather than from an empty list
     pair_cells = format_rows(pair_rows(ch_rows, channel_pairs or None), sci_threshold,
-                             name_key="pair")
+                             name_key="pair", psp_threshold=cutoffs["psp"])
 
     # ── file: per-trial QC ─────────────────────────────────────────────────────
     # scored here rather than persisted: a trial is not a BIDS entity, so per-trial records
@@ -277,7 +279,8 @@ def _process_run(
         with guard("Per-trial quality", errors, label):
             labels, sqms = score_trials(raw, markers, sci_threshold,
                                         cardiac_l_freq, cardiac_h_freq,
-                                        epoch_tmin, epoch_tmax)
+                                        epoch_tmin, epoch_tmax,
+                                        psp_threshold=cutoffs["psp"])
             fig = trial_quality_heatmap(labels, sqms)
             if fig:
                 fname = f"{label}_desc-trialqc_nirs.html"
@@ -299,7 +302,7 @@ def _process_run(
     )
     sqm_path.write_text(json.dumps(record, indent=2, default=str), encoding="utf-8")
     logger.info("SQM JSON → %s", sqm_path)
-    save_channel_csv(ch_rows, label, sqm_dir, sci_threshold)
+    save_channel_csv(ch_rows, label, sqm_dir, sci_threshold, psp_threshold=cutoffs["psp"])
 
     return {
         "ts":           ts_inline,
@@ -347,7 +350,8 @@ def build_prep_raw_report(
     cardiac_l_freq: float,
     cardiac_h_freq: float,
     dpf: list[float],
-    sci_threshold: float = 0.8,
+    sci_threshold: float = SCI_PASS,
+    psp_threshold: float | None = None,
     window_s: float = 10.0,
     epoch_qc: bool = False,
     epoch_tmin: float | None = None,
@@ -371,7 +375,7 @@ def build_prep_raw_report(
         with guard("Processing this run", run_errors, label):
             d = _process_run(run, sci_threshold, sub_dir, cardiac_l_freq, cardiac_h_freq,
                              dpf, window_s, epoch_qc, epoch_tmin, epoch_tmax,
-                             gvtd_channels)
+                             gvtd_channels, psp_threshold)
         if run_errors:
             d = {"errors": run_errors, "notes": []}
         static_data.append(d)

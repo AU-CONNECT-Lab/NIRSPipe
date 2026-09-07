@@ -13,7 +13,11 @@ from fnirs_pipe.io.derivatives import (
 )
 from fnirs_pipe.pipeline.hyperscanning import GroupEntry
 from fnirs_pipe.qc.boilerplate import collect_software_versions
-from fnirs_pipe.qc.boilerplate.vocabulary import metric_summary
+from fnirs_pipe.qc.boilerplate.vocabulary import (
+    MISSING_VALUE, format_metric, metric_class, metric_direction, metric_label,
+    metric_summary,
+)
+from fnirs_pipe.qc.metrics import SCI_PASS
 from fnirs_pipe.qc.figure_io import extract_markers, get_channel_pairs
 from fnirs_pipe.qc.figures.hyper_figures import _cond_colors
 from fnirs_pipe.qc.hyper_raw_writer import _process_hyper_raw_group
@@ -26,35 +30,37 @@ logger = get_logger("qc.hyper_report")
 
 # ---- Per-subject quality metrics ----
 #
-# (key, label, better direction, format). Rendered in both hyper reports, which until now
-# showed SCI and nothing else. Absent keys render as a dash, so one spec serves the raw
-# path (intensity metrics only) and the post path (which adds motion and haemoglobin).
+# Which scalars the table lists, and in what order. Keys only: the label, the format, the
+# better direction and the colour all come from the metric registry, the same one the
+# individual reports read, so a metric cannot print to three decimals in a subject report
+# and four here. Absent keys render as a dash, so one list serves the raw path (intensity
+# metrics only) and the post path (which adds motion and haemoglobin).
 _SUBJECT_METRICS = [
-    ("sci_mean",               "SCI",               "↑", "{:.3f}"),
-    ("psp_mean",               "PSP",               "↑", "{:.2f}"),
-    ("cv_mean",                "CV",                "↓", "{:.3f}"),
-    ("snr_mean",               "SNR",               "↑", "{:.1f}"),
-    ("gvtd_filt_p95",          "GVTD p95",          "↓", "{:.4f}"),
-    ("motion_corrected_pct",   "Motion corrected",  "↓", "{:.3f}"),
-    ("spike_pct_frames",       "Spike frames",      "↓", "{:.3f}"),
-    ("hbo_hbr_corr_mean",      "HbO-HbR r",         "↓", "{:+.3f}"),
-    ("channel_retention_rate", "Channels kept",     "↑", "{:.3f}"),
+    "sci_mean",
+    "psp_mean",
+    "cv_mean",
+    "snr_mean",
+    "gvtd_filt_p95",
+    "motion_corrected_pct",
+    "spike_pct_frames",
+    "hbo_hbr_corr_mean",
+    "channel_retention_rate",
 ]
+
+_ARROW = {"higher": "↑", "lower": "↓"}
 
 
 def _metric_class(key: str, value: float, sci_threshold: float) -> str:
-    """Colour only where a threshold is actually justified.
+    """The registry's verdict, except for SCI, which is judged against the run's own line.
 
-    SCI has one the caller chose. HbO-HbR is judged by sign, because the two chromophores
-    moving together says a shared artifact dominates the channel. The rest are shown plain:
-    the published cut-offs (PSP 0.1, say) sit far below anything a real montage produces,
-    so colouring by them would mark every run as passing.
+    The exception is the same one the per-channel tables make: this run screened at
+    ``--sci-threshold``, so colouring its SCI against the registry's cutoff would show a
+    verdict the run did not reach. Everything else is the registry's, and a metric with no
+    published cutoff there prints uncoloured on purpose.
     """
     if key == "sci_mean":
         return "qm-ok" if value >= sci_threshold else "qm-bad"
-    if key == "hbo_hbr_corr_mean":
-        return "qm-bad" if value >= 0 else "qm-ok"
-    return ""
+    return metric_class(key, value)
 
 
 def subject_metric_rows(
@@ -64,17 +70,19 @@ def subject_metric_rows(
 ) -> list[dict]:
     """One row per metric, one cell per subject, for the per-subject quality table."""
     rows = []
-    for key, label, direction, fmt in _SUBJECT_METRICS:
+    for key in _SUBJECT_METRICS:
         cells = []
         for sid in subject_ids:
             value = (sqm_data.get(sid) or {}).get(key)
             if isinstance(value, (int, float)) and not isinstance(value, bool):
-                cells.append({"text": fmt.format(value),
+                cells.append({"text": format_metric(key, value),
                               "cls": _metric_class(key, value, sci_threshold)})
             else:
-                cells.append({"text": "—", "cls": ""})
-        if any(c["text"] != "—" for c in cells):
-            rows.append({"label": label, "direction": direction, "cells": cells,
+                cells.append({"text": MISSING_VALUE, "cls": ""})
+        if any(c["text"] != MISSING_VALUE for c in cells):
+            rows.append({"label": metric_label(key),
+                         "direction": _ARROW.get(metric_direction(key), ""),
+                         "cells": cells,
                          "summary": metric_summary(key)})
     return rows
 
@@ -170,7 +178,7 @@ def build_hyper_report(
     output_dir: Path,
     raw_raws: dict[str, mne.io.Raw] | None = None,
     session: str | None = None,
-    sci_threshold: float = 0.8,
+    sci_threshold: float = SCI_PASS,
     cardiac_l_freq: float | None = None,
     cardiac_h_freq: float | None = None,
     coherence_fmin: float = 0.01,
@@ -344,7 +352,7 @@ def build_hyper_post_report(
     wtc_mask_coi: bool = False,
     wtc_roi_min_channels: int = 2,
     isc_threshold: float = 0.3,
-    sci_threshold: float = 0.8,
+    sci_threshold: float = SCI_PASS,
 ) -> Path:
     """Build hyperscanning post-QC report.
 
@@ -391,6 +399,7 @@ def build_hyper_post_report(
         roi_mean_of_channels,
         wtc_band_mean,
     )
+    from fnirs_pipe.pipeline.synchrony import wtc_grid_params
     from fnirs_pipe.qc.figures.hyper_post_figures import (
         build_isc_panel,
         build_wtc_channel,
@@ -451,7 +460,8 @@ def build_hyper_post_report(
             tsv_path, step,
             [p for p in (path_from(r) for r in aligned_raws.values()) if p],
             band_fmin=band_fmin, band_fmax=band_fmax, mask_coi=wtc_mask_coi,
-            wtc_fmin=wtc_fmin, wtc_fmax=wtc_fmax, **extra,
+            wtc_fmin=wtc_fmin, wtc_fmax=wtc_fmax,
+            **wtc_grid_params(aligned_raws), **extra,
         )
         return tsv_path
 

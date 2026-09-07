@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 
 from fnirs_pipe import __version__
+from fnirs_pipe.cli import _shared
 from fnirs_pipe.pipeline.denoise import (
     DEFAULT_FILTER_METHOD,
     DEFAULT_FILTER_ORDER,
@@ -49,8 +50,8 @@ def _build_parser() -> argparse.ArgumentParser:
     # extend: accepts space-separated (--dpf 6 6) and repeated (--dpf 6 --dpf 6) forms.
     prep.add_argument("--dpf", nargs="+", type=float, action="extend",
                       help="Differential pathlength factor. One value or one per wavelength.")
-    prep.add_argument("--sci-threshold", type=float,
-                      help="SCI threshold for bad channel detection, e.g. 0.8.")
+    # no default: _LEVEL_REQUIRES makes it required at participant level
+    _shared.add_sci_threshold(prep)
 
     sel = p.add_argument_group("subject / session / task selection")
     sel.add_argument("--participant-label", nargs="+", action="extend", help="Subject ID(s) to process.")
@@ -81,6 +82,9 @@ def _build_parser() -> argparse.ArgumentParser:
     prep_opt.add_argument("--resp-h-freq", type=float,
                           help="Upper bound of respiration band in Hz (required at participant level; "
                                "population-dependent). Adult ~0.5; infants higher.")
+    # the other screening line. Optional, unlike --sci-threshold: PSP has a published
+    # default that holds across populations, so a run that does not name it is not guessing
+    _shared.add_psp_threshold(prep_opt)
     prep_opt.add_argument("--window-length", type=float, default=10.0,
                           help="Sliding-window length (s) for windowed SCI/PSP/GVTD QC series.")
     prep_opt.add_argument("--gvtd-censor", action="store_true",

@@ -366,6 +366,7 @@ def format_rows(
     sci_threshold: float | None = None,
     *,
     name_key: str = "name",
+    psp_threshold: float | None = None,
 ) -> list[dict[str, Any]]:
     """Rows with the numbers already formatted and the cells already classed.
 
@@ -382,20 +383,22 @@ def format_rows(
 
     ``sci_threshold`` is the run's own ``--sci-threshold``, not the registry's cutoff for
     the SCI mean: this column marks the channels that were actually pruned, so colouring it
-    against anything else would show a verdict the run did not reach.
+    against anything else would show a verdict the run did not reach. ``psp_threshold`` is
+    the run's other line, and is here for the same reason: the reason printed beside a
+    rejected channel is re-derived from its scores, so a run that moved the PSP line has to
+    hand that line over or the reason comes out naming the wrong criterion.
     ``name_key`` is ``"pair"`` for rows that came through :func:`pair_rows`.
 
 Status names the criterion a rejected channel failed. Screening is a union, so a channel
     can be BAD with a passing SCI cell; without the reason printed beside it that reads as a
     contradiction rather than as a PSP failure.
     """
-    from fnirs_pipe.qc.metrics import criterion_cutoffs
     from fnirs_pipe.qc.boilerplate.vocabulary import format_metric
-    from fnirs_pipe.qc.metrics import SCI_PASS
+    from fnirs_pipe.qc.metrics import SCI_PASS, resolve_cutoffs
 
     if sci_threshold is None:
         sci_threshold = SCI_PASS
-    cutoffs = {**criterion_cutoffs(), "sci": sci_threshold}
+    cutoffs = resolve_cutoffs(sci=sci_threshold, psp=psp_threshold)
     out = []
     for row in rows:
         why = _failed_criteria(row, cutoffs) if row["is_bad"] else []
@@ -421,7 +424,8 @@ Status names the criterion a rejected channel failed. Screening is a union, so a
 
 
 def save_channel_csv(rows: list[dict], label: str, out_dir: Path,
-                     sci_threshold: float | None = None) -> None:
+                     sci_threshold: float | None = None,
+                     psp_threshold: float | None = None) -> None:
     """Per-channel metrics for one run. The name carries the run's entities, or a subject
     with several tasks would keep only whichever ran last.
 
@@ -430,7 +434,8 @@ def save_channel_csv(rows: list[dict], label: str, out_dir: Path,
     """
     if not rows:
         return
-    reasons = {r["name"]: r["reason"] for r in format_rows(rows, sci_threshold)}
+    reasons = {r["name"]: r["reason"]
+               for r in format_rows(rows, sci_threshold, psp_threshold=psp_threshold)}
     rows = [{**r, "reason": reasons.get(r["name"], "")} for r in rows]
     out_path = Path(out_dir) / f"{label}_channel_metrics.csv"
     out_path.parent.mkdir(parents=True, exist_ok=True)

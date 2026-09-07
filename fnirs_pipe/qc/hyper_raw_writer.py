@@ -28,6 +28,7 @@ from fnirs_pipe.qc.figures.hyper_figures import (
     compute_hyper_sqm,
     compute_windowed_coherence,
 )
+from fnirs_pipe.qc.metrics import SCI_PASS
 from fnirs_pipe.qc.report_shell import guard, note
 from fnirs_pipe.utils.lineage import path_from
 from fnirs_pipe.utils.logging import get_logger
@@ -91,7 +92,7 @@ def _process_hyper_raw_group(
     output_dir: Path,
     raw_raws: dict[str, mne.io.Raw] | None = None,
     session: str | None = None,
-    sci_threshold: float = 0.8,
+    sci_threshold: float = SCI_PASS,
     cardiac_l_freq: float | None = None,
     cardiac_h_freq: float | None = None,
     coherence_fmin: float = 0.01,

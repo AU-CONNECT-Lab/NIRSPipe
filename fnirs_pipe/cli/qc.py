@@ -6,7 +6,8 @@ import argparse
 import sys
 from pathlib import Path
 
-from fnirs_pipe.qc.metrics import GVTD_CHANNEL_SETS
+from fnirs_pipe.cli import _shared
+from fnirs_pipe.qc.metrics import GVTD_CHANNEL_SETS, SCI_PASS
 from fnirs_pipe.utils.logging import get_logger, setup_logging
 
 setup_logging()
@@ -17,7 +18,8 @@ logger = get_logger("cli.qc")
 def cmd_prep_raw(
     bids_dir: Path, output_dir: Path, participant_label: str,
     session_label: list[str] | None, task_label: list[str] | None,
-    dpf: list[float], sci_threshold: float, cardiac_l_freq: float, cardiac_h_freq: float,
+    dpf: list[float], sci_threshold: float, psp_threshold: float | None,
+    cardiac_l_freq: float, cardiac_h_freq: float,
     window_length: float,
     epoch_qc: bool, epoch_tmin: float | None, epoch_tmax: float | None,
     gvtd_channels: str,
@@ -76,6 +78,7 @@ def cmd_prep_raw(
         print(f"Generating raw QC report: {html_path.name} ...")
         try:
             build_prep_raw_report(group_runs, html_path, dpf=dpf, sci_threshold=sci_threshold,
+                                  psp_threshold=psp_threshold,
                                   cardiac_l_freq=cardiac_l_freq, cardiac_h_freq=cardiac_h_freq,
                                   window_s=window_length, epoch_qc=epoch_qc,
                                   epoch_tmin=epoch_tmin, epoch_tmax=epoch_tmax,
@@ -90,8 +93,11 @@ def cmd_prep_raw(
 
 def cmd_hyper_raw(
     bids_dir: Path, output_dir: Path, pairs_csv: Path, group_id: str | None,
-    dpf: list[float], sci_threshold: float, cardiac_l_freq: float, cardiac_h_freq: float,
+    dpf: list[float], sci_threshold: float, psp_threshold: float | None,
+    cardiac_l_freq: float, cardiac_h_freq: float,
     coherence_fmin: float, coherence_fmax: float,
+    coherence_window_s: float, coherence_step_s: float,
+    epoch_tmin: float, epoch_tmax: float, gvtd_channels: str,
     normalize: bool, no_align: bool, tstart: float | None, tend: float | None,
     session_label: list[str] | None, task_label: list[str] | None,
     skip_bids_validation: bool,
@@ -116,7 +122,9 @@ def cmd_hyper_raw(
     def _process(gid, task, members):
         raws_cw = load_group_raw_bids(bids_dir, members)
         sqm_data = compute_group_sqm_raw(members, raws_cw, sci_threshold, output_dir,
-                                         cardiac_l_freq, cardiac_h_freq)
+                                         cardiac_l_freq, cardiac_h_freq,
+                                         psp_threshold=psp_threshold,
+                                         gvtd_channels=gvtd_channels)
         raws_haemo = {sid: _raw_to_haemo(r, dpf) for sid, r in raws_cw.items()}
         if no_align:
             aligned_raws, offsets = trim_to_shortest(raws_haemo)
@@ -144,6 +152,10 @@ def cmd_hyper_raw(
             cardiac_h_freq=cardiac_h_freq,
             coherence_fmin=coherence_fmin,
             coherence_fmax=coherence_fmax,
+            coherence_window_s=coherence_window_s,
+            coherence_step_s=coherence_step_s,
+            epoch_tmin=epoch_tmin,
+            epoch_tmax=epoch_tmax,
         )
 
     _run_groups(groups, _process)
@@ -209,7 +221,8 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     sub = p.add_subparsers(required=True)
 
-    pr = sub.add_parser("prep-raw", help="Static raw QC report for a single participant.")
+    pr = sub.add_parser("prep-raw", parents=[_shared.screening(sci_default=SCI_PASS)],
+                        help="Static raw QC report for a single participant.")
     pr.add_argument("bids_dir",   type=Path, help="BIDS dataset root")
     pr.add_argument("output_dir", type=Path, help="fnirs-pipe derivatives directory")
     pr.add_argument("participant_label", help="Subject ID to inspect, e.g. '01'")
@@ -217,8 +230,6 @@ def _build_parser() -> argparse.ArgumentParser:
     pr.add_argument("--task-label",    nargs="+", action="extend", help="Task label(s) to include.")
     pr.add_argument("--dpf", nargs="+", type=float, action="extend", required=True,
                     help="Differential pathlength factor. One value or one per wavelength.")
-    pr.add_argument("--sci-threshold", type=float, default=0.8,
-                    help="SCI pass/fail threshold for bad channel detection.")
     pr.add_argument("--cardiac-l-freq", type=float, required=True,
                     help="Lower bound of cardiac band in Hz (required; population-dependent).")
     pr.add_argument("--cardiac-h-freq", type=float, required=True,
@@ -240,40 +251,44 @@ def _build_parser() -> argparse.ArgumentParser:
     pr.add_argument("--skip-bids-validation", action=argparse.BooleanOptionalAction, default=False)
     pr.set_defaults(func=cmd_prep_raw)
 
-    hr = sub.add_parser("hyper-raw", help="Hyperscanning raw QC report from BIDS raw data.")
+    hr = sub.add_parser("hyper-raw",
+                        parents=[_shared.pairs_selection(),
+                                 _shared.screening(sci_default=SCI_PASS),
+                                 _shared.alignment_window()],
+                        help="Hyperscanning raw QC report from BIDS raw data.")
     hr.add_argument("bids_dir",   type=Path, help="BIDS dataset root")
     hr.add_argument("output_dir", type=Path, help="fnirs-pipe derivatives directory")
-    hr.add_argument("--pairs-csv", type=Path, required=True,
-                    help="CSV with columns: group_id, subject_id, task. "
-                         "Each unique (group_id, task) pair is processed as one session.")
-    hr.add_argument("--group-id", default=None,
-                    help="Process only this group_id. Omit to process all groups.")
     hr.add_argument("--dpf", nargs="+", type=float, action="extend", required=True,
                     help="Differential pathlength factor. One value or one per wavelength.")
-    hr.add_argument("--sci-threshold", type=float, default=0.8,
-                    help="SCI pass/fail threshold for channel quality comparison.")
     hr.add_argument("--cardiac-l-freq", type=float, required=True,
                     help="Lower bound of cardiac band in Hz (required; population-dependent).")
     hr.add_argument("--cardiac-h-freq", type=float, required=True,
                     help="Upper bound of cardiac band in Hz (required; population-dependent).")
-    hr.add_argument("--fmin", dest="coherence_fmin", type=float, default=0.01,
-                    help="Lower bound (Hz) for coherence frequency band.")
-    hr.add_argument("--fmax", dest="coherence_fmax", type=float, default=0.10,
-                    help="Upper bound (Hz) for coherence frequency band.")
-    hr.add_argument("--normalize", action=argparse.BooleanOptionalAction, default=False,
-                    help="Z-score each channel per subject after alignment.")
-    hr.add_argument("--no-align", action="store_true",
-                    help="Skip trigger-based alignment; trim all recordings to the shortest duration.")
-    hr.add_argument("--tstart", type=float, default=None,
-                    help="Keep only from this time (s) on the aligned clock, where 0 is the "
-                         "shared trigger. Omit to start at the alignment point.")
-    hr.add_argument("--tend", type=float, default=None,
-                    help="Keep only up to this time (s) on the aligned clock. Omit to run to "
-                         "the end; a value past the end is clipped. The window narrows the "
-                         "synchrony metrics only: the per-subject quality record describes "
-                         "the whole recording either way.")
+    # named for what they set. The old --fmin / --fmax stay as aliases: they said nothing
+    # about which of the report's frequency bands they were, and read as the analysis band
+    # that fnirs-hyper spells --wtc-fmin
+    hr.add_argument("--coh-fmin", "--fmin", dest="coherence_fmin", type=float, default=0.01,
+                    help="Lower bound (Hz) of the band the Welch coherence is averaged over.")
+    hr.add_argument("--coh-fmax", "--fmax", dest="coherence_fmax", type=float, default=0.10,
+                    help="Upper bound (Hz) of that band.")
+    hr.add_argument("--coh-window-length", dest="coherence_window_s", type=float, default=30.0,
+                    help="Window (s) the sliding-window coherence heatmap is computed in. "
+                         "A longer window reaches lower frequencies and blurs a coupling "
+                         "that changed partway; it has to hold several cycles of --coh-fmin.")
+    hr.add_argument("--coh-window-step", dest="coherence_step_s", type=float, default=5.0,
+                    help="Step (s) between those windows. Smaller than the window length "
+                         "means they overlap, which smooths the heatmap along time.")
+    hr.add_argument("--epoch-tmin", type=float, default=-5.0,
+                    help="Trial window start relative to event onset (s) for the per-pair "
+                         "evoked figures; negative pulls in a baseline.")
+    hr.add_argument("--epoch-tmax", type=float, default=25.0,
+                    help="Trial window end relative to event onset (s).")
+    hr.add_argument("--gvtd-channels", choices=list(GVTD_CHANNEL_SETS), default="long",
+                    help="Channel set the per-subject GVTD scalars are read off, the same "
+                         "flag the individual reports take. Pass what the run was scored "
+                         "with, or this table and the subject reports describe different "
+                         "channel sets.")
     hr.add_argument("--session-label", nargs="+", action="extend", help="Session label(s) to include.")
-    hr.add_argument("--task-label",    nargs="+", action="extend", help="Task label(s) to include.")
     hr.add_argument("--skip-bids-validation", action=argparse.BooleanOptionalAction, default=False)
     hr.set_defaults(func=cmd_hyper_raw)
 
