@@ -96,6 +96,7 @@ a bare-MNE run of the same chain. Reports are kept with the project notes outsid
 
 ## Pending decisions
 
+- **Remove `--gvtd-channels`** — it picks between the long channels and every channel for the GVTD scalars, for `--gvtd-censor`, and for the first row of the motion panel. Now that one shared constant defines the separation bands for both the metric path and the analysis path, `all` judges a run on channels the analysis never uses, and both values sit in every record anyway (`raw` and `raw_long`), so the flag buys nothing the record does not already carry. Held until the separation bands settle, since they would then be the only thing deciding which channels GVTD covers ([qc/metrics/gvtd.py](fnirs_pipe/qc/metrics/gvtd.py))
 - **Short-channel PCA path unverified** — `--short-channel {none,mean,pca}` is wired end to end and `mean` is in use; the `pca` branch has never been checked against anything ([pipeline/glm.py](fnirs_pipe/pipeline/glm.py), `_short_channel_regressors`)
 - **hyper_post Methods section** — same boilerplate tabs as subject_report ([qc/templates/hyper_post_report.html.j2](fnirs_pipe/qc/templates/hyper_post_report.html.j2))
 
@@ -121,5 +122,6 @@ a bare-MNE run of the same chain. Reports are kept with the project notes outsid
 
 ### Infrastructure
 
+- **Stamp the separation bands in the quality record** if they are ever made configurable. `separation_bands()` is deliberately fixed today, and two runs measured on different bands would otherwise be stacked as equals in the group table ([qc/metrics/_helpers.py](fnirs_pipe/qc/metrics/_helpers.py))
 - **Switch SNIRF IO to pysnirf2** when it supports NumPy 2.x ([io/snirf.py](fnirs_pipe/io/snirf.py))
 - **Replace `dash_table.DataTable`** in the GUI before Dash removes it from the builtin components; four pages use it ([interface/pages/](fnirs_pipe/interface/pages/))

@@ -25,7 +25,7 @@ from fnirs_pipe.pipeline.synchrony import (  # noqa: F401  re-exported
     wtc_band_mean,
 )
 from fnirs_pipe.utils import is_optical_density
-from fnirs_pipe.utils.lineage import lineage_of, path_from
+from fnirs_pipe.utils.lineage import lineage_of, path_from, stage_of
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("pipeline.hyperscanning")
@@ -217,6 +217,41 @@ def warn_outside_passband(raws: dict[str, mne.io.Raw], fmin: float, fmax: float)
             logger.warning("sub-%s | requested %s-%s Hz but %s. Those scales carry what the "
                            "filter removed, not signal",
                            subject_id, fmin, fmax, " and ".join(outside))
+
+
+def unfiltered_stage_note(raws: dict[str, mne.io.Raw]) -> "str | None":
+    """A sentence for the ISC panel when the files record no bandpass, else None.
+
+    ISC is a whole-record zero-lag correlation and so has no frequency axis to keep drift
+    out of. On an unfiltered stage it is dominated by the slowest component present, and two
+    members recorded in one room drift together for instrumental and environmental reasons
+    that are not neural. Excluding the short channels does not help: long channels carry the
+    same drift. WTC is unaffected, since its band mean averages only the cells inside the
+    requested band.
+
+    ``--desc`` defaults to ``preproc``, which is Beer-Lambert output and is not bandpassed,
+    so the default is the case this warns about.
+
+    The passband comes from the sidecar through the lineage stamp, the same route
+    :func:`warn_outside_passband` reads, so a file whose sidecar is missing looks the same as
+    one that was never filtered. The wording says "record no bandpass" rather than "are
+    unfiltered" for that reason.
+    """
+    unrecorded = []
+    for subject_id, raw in sorted(raws.items()):
+        lin = lineage_of(raw)
+        if ((lin.params if lin else None) or {}).get("high_pass") is None:
+            unrecorded.append(subject_id)
+    if not unrecorded:
+        return None
+    stages = sorted({stage_of(raw) or "?" for raw in raws.values()})
+    return (
+        f"The files for {', '.join(unrecorded)} record no bandpass "
+        f"(stage {', '.join(repr(s) for s in stages)}). A whole-record correlation has no "
+        "frequency axis, so drift and systemic physiology enter it directly, and two members "
+        "recorded together drift alike. The wavelet coherence panels are unaffected. Point "
+        "--desc at a filtered stage (filtered, errts) to read these numbers as neural."
+    )
 
 
 def load_group_raw_bids(bids_dir: Path, group: list[GroupEntry]) -> dict[str, mne.io.Raw]:

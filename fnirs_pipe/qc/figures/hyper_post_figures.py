@@ -13,7 +13,7 @@ import mne
 import plotly.graph_objects as go
 
 from fnirs_pipe.io.snirf import long_channel_picks
-from fnirs_pipe.pipeline.synchrony import long_axis_over
+from fnirs_pipe.pipeline.synchrony import _shared_sfreq, long_axis_over
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("qc.figures.hyper_post")
@@ -446,6 +446,9 @@ def compute_isc(
     the WTC path reads them from. This used to take the resolved rejections a second time as
     a ``bad_channels`` argument and never look at it.
 
+    Raises ValueError if the members were recorded at different sampling rates, which is
+    the refusal WTC has always made: alignment equalises duration, not rate.
+
     Args:
         ch_type: "hbo" or "hbr".
     """
@@ -455,6 +458,10 @@ def compute_isc(
     raw2 = aligned_raws.get(subject_ids[1])
     if raw1 is None or raw2 is None:
         return None, None
+    # the same refusal WTC makes: alignment equalises duration, not rate, so at two rates
+    # sample i of one member and sample i of the other are not the same moment and the
+    # correlation between them is a plausible-looking number about nothing
+    _shared_sfreq({subject_ids[0]: raw1, subject_ids[1]: raw2})
 
     def _by_label(raw: mne.io.Raw) -> dict[str, int]:
         """{label: index} over what this member kept, bads dropped: what gets correlated."""

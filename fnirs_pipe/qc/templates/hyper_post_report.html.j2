@@ -159,6 +159,7 @@ select#ch-select-post {
       <span style="color:#27ae60">&#9632;</span> {{ subject_ids[1] }}
     </span>
   </div>
+  {% if isc_unfiltered_note %}<div class="panel-caveat">{{ isc_unfiltered_note }}</div>{% endif %}
   <div style="text-align:center; padding:0.5rem">
     <img src="data:image/png;base64,{{ isc_panel_hbo_b64 }}" style="max-width:100%"/>
   </div>
@@ -177,6 +178,7 @@ select#ch-select-post {
       <span style="color:#27ae60">&#9632;</span> {{ subject_ids[1] }}
     </span>
   </div>
+  {% if isc_unfiltered_note %}<div class="panel-caveat">{{ isc_unfiltered_note }}</div>{% endif %}
   <div style="text-align:center; padding:0.5rem">
     <img src="data:image/png;base64,{{ isc_panel_hbr_b64 }}" style="max-width:100%"/>
   </div>

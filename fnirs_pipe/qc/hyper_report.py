@@ -11,7 +11,7 @@ import pandas as pd
 from fnirs_pipe.io.derivatives import (
     group_data_dir, group_report_dir, subject_report_dir,
 )
-from fnirs_pipe.pipeline.hyperscanning import GroupEntry
+from fnirs_pipe.pipeline.hyperscanning import GroupEntry, unfiltered_stage_note
 from fnirs_pipe.qc.boilerplate import collect_software_versions
 from fnirs_pipe.qc.boilerplate.vocabulary import (
     MISSING_VALUE, format_metric, metric_class, metric_direction, metric_label,
@@ -544,6 +544,13 @@ def build_hyper_post_report(
     isc_panel_hbo_b64 = _isc_panel("hbo")
     isc_panel_hbr_b64 = _isc_panel("hbr")
 
+    # ISC has no frequency axis, so an unfiltered stage reaches the number directly; WTC
+    # does not care. Said on the page as well as in the log, since the two are read by
+    # different people
+    isc_unfiltered_note = unfiltered_stage_note(aligned_raws)
+    if isc_unfiltered_note:
+        logger.warning("ISC: %s", isc_unfiltered_note)
+
     roi_rows: list[dict] = []
     roi_labels: list[str] = []
     per_roi_post: dict[str, dict] = {}
@@ -720,6 +727,7 @@ def build_hyper_post_report(
         per_channel_post_json=json.dumps(per_channel_post),
         ch_pairs_post_json=json.dumps(ch_pairs_post),
         bad_pairs_json=json.dumps(sorted(bad_pairs_all)),
+        isc_unfiltered_note=isc_unfiltered_note,
         isc_panel_hbo_b64=isc_panel_hbo_b64,
         isc_panel_hbr_b64=isc_panel_hbr_b64,
         roi_rows=roi_rows,

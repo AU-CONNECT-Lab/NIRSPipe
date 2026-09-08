@@ -35,6 +35,11 @@ h1 { font-size: 1.05rem; margin: 0; }
   flex-wrap: wrap;
 }
 .panel-hint { font-weight: 400; color: #aaa; }
+/* a caveat about the panel's inputs, not a failure: the figure below is drawn */
+.panel-caveat {
+  color: var(--warn); font-size: 0.82rem; font-weight: 400;
+  padding: 0.3rem 0.6rem; border-left: 3px solid var(--warn); margin: 0.4rem 0;
+}
 
 #align-table { border-collapse: collapse; width: 100%; font-size: 0.82rem; }
 #align-table th, #align-table td {

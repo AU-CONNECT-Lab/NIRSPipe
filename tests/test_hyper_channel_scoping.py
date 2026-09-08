@@ -1,10 +1,14 @@
 """Which channels the inter-brain metrics read, and what a WTC map collapses to.
 
-Two contracts live here. Short channels are not brains: they sample scalp haemodynamics,
+Three contracts live here. Short channels are not brains: they sample scalp haemodynamics,
 so two people sitting in one room share that signal by construction and any inter-brain
 metric computed on them reports shared physiology as coupling. And the band mean written
 to TSV has to agree with the map the report draws, cone of influence included, or the
 figures and the group statistics end up answering different questions.
+
+And the third: ISC and WTC are one code path up to the statistic, so what one of them
+refuses the other refuses. `qc/isc_vs_wtc.md` in the notes tree states the whole contract;
+the tests at the end of this file hold the parts of it that have come apart before.
 
 The band-mean tests build a WTCResult by hand rather than running pycwt: the quantity under
 test is the collapse, and a hand-built map is the only way to know what the right answer is.
@@ -144,6 +148,56 @@ def test_the_blanked_column_is_the_one_that_was_named():
     isc_mat, ch_names = compute_isc(raws, subject_ids, "hbo")
     assert np.isnan(isc_mat[:, ch_names.index("S3_D3")]).all()
     assert not np.isnan(isc_mat[:, ch_names.index("S2_D2")]).any()
+
+
+# ---- what the pair refuses, and what it flags ----
+
+def test_isc_refuses_two_sampling_rates():
+    """WTC raises on this; ISC used to pair sample i with sample i and answer anyway."""
+    from fnirs_pipe.qc.figures.hyper_post_figures import compute_isc
+
+    a, b = _tagged("10031"), _tagged("10032")
+    b.resample(b.info["sfreq"] / 2, verbose="error")
+    with pytest.raises(ValueError, match="differ in sampling rate"):
+        compute_isc({"sub-A": a, "sub-B": b}, ["sub-A", "sub-B"], "hbo")
+
+
+def test_an_unrecorded_bandpass_is_flagged():
+    """--desc defaults to preproc, which is Beer-Lambert output and carries its drift."""
+    from fnirs_pipe.pipeline.hyperscanning import unfiltered_stage_note
+    from fnirs_pipe.utils.lineage import stamp
+
+    raws = {"sub-A": _haemo("10031"), "sub-B": _haemo("10032")}
+    for raw in raws.values():
+        stamp(raw, stage="preproc", step="load")
+
+    note = unfiltered_stage_note(raws)
+    assert note is not None
+    assert "sub-A" in note and "sub-B" in note and "preproc" in note
+
+
+def test_a_recorded_bandpass_is_not_flagged():
+    from fnirs_pipe.pipeline.hyperscanning import unfiltered_stage_note
+    from fnirs_pipe.utils.lineage import stamp
+
+    raws = {"sub-A": _haemo("10031"), "sub-B": _haemo("10032")}
+    for raw in raws.values():
+        stamp(raw, stage="errts", step="load", high_pass=0.01, low_pass=0.5)
+
+    assert unfiltered_stage_note(raws) is None
+
+
+def test_one_filtered_member_is_still_flagged():
+    """A dyad half filtered is worse than one not filtered at all, not better."""
+    from fnirs_pipe.pipeline.hyperscanning import unfiltered_stage_note
+    from fnirs_pipe.utils.lineage import stamp
+
+    raws = {"sub-A": _haemo("10031"), "sub-B": _haemo("10032")}
+    stamp(raws["sub-A"], stage="errts", step="load", high_pass=0.01, low_pass=0.5)
+    stamp(raws["sub-B"], stage="preproc", step="load")
+
+    note = unfiltered_stage_note(raws)
+    assert note is not None and "sub-B" in note and "sub-A" not in note
 
 
 def test_coherence_matches_channels_by_label():

@@ -38,7 +38,8 @@ Per-channel dicts always list every channel, in both domains.
 """
 
 from fnirs_pipe.qc.metrics._helpers import (  # noqa: F401
-    SHORT_MAX_DIST, LONG_MIN_DIST, LONG_MAX_DIST, long_short_channels, _mean_or_none,
+    SHORT_MAX_DIST, LONG_MIN_DIST, LONG_MAX_DIST, long_short_channels,
+    separation_bands, unclaimed_separations, _mean_or_none,
     _safe_metrics, _mask_to_segments,
     SCI_PASS, PSP_PASS, CV_PASS, SNR_PASS,
 )

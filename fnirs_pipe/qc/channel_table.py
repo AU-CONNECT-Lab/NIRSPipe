@@ -165,9 +165,8 @@ def pair_rows(rows: list[dict], pairs: list[str] | None = None) -> list[dict[str
 
 
 def _neither_range_title() -> str:
-    from fnirs_pipe.qc.metrics import LONG_MAX_DIST, LONG_MIN_DIST, SHORT_MAX_DIST
-    return (f"Neither range ({SHORT_MAX_DIST * 1000:.0f}-{LONG_MIN_DIST * 1000:.0f} mm, "
-            f"or over {LONG_MAX_DIST * 1000:.0f} mm)")
+    from fnirs_pipe.qc.metrics import unclaimed_separations
+    return f"Neither range ({unclaimed_separations()})"
 
 
 def separation_blocks(rows: list[dict]) -> list[tuple[str, list[dict]]]:
@@ -239,11 +238,10 @@ def separation_notes(
 
     n_odd = sum(1 for r in rows if r.get("separation") == "unclassified")
     if n_odd:
-        from fnirs_pipe.qc.metrics import LONG_MAX_DIST, LONG_MIN_DIST, SHORT_MAX_DIST
+        from fnirs_pipe.qc.metrics import unclaimed_separations
         notes.append(
             f"{n_odd} channel(s) sit at a separation the long and short ranges leave out "
-            f"({SHORT_MAX_DIST * 1000:.0f}-{LONG_MIN_DIST * 1000:.0f} mm, or over "
-            f"{LONG_MAX_DIST * 1000:.0f} mm). They are in no section, so their row in the "
+            f"({unclaimed_separations()}). They are in no section, so their row in the "
             f"per-channel table is blank apart from status and HbO-HbR correlation, and "
             f"they are in none of the scalar metrics.")
 

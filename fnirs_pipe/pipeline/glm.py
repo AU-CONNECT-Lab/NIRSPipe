@@ -35,16 +35,15 @@ SCRStrategy = Literal["mean", "pca"]
 # May add motion parameters (if available) and/or other confounds in the future
 
 def _short_channel_regressors(haemo: mne.io.Raw, strategy: SCRStrategy) -> dict[str, np.ndarray]:
-    from mne_nirs.channels import get_short_channels
+    from fnirs_pipe.qc.metrics._helpers import long_short_channels
 
-    from fnirs_pipe.qc.metrics._helpers import separation_bands
-
-    short_max, _, _ = separation_bands()
-    try:
-        short = get_short_channels(haemo, max_dist=short_max)
-    except ValueError:
+    # not mne_nirs' get_short_channels: that reads distance 0 as short, so a montage with no
+    # registered positions would build these out of every channel
+    short_names = long_short_channels(haemo)[1]
+    if not short_names:
         logger.warning("no short channels found — skipping short-channel regressors")
         return {}
+    short = haemo.copy().pick(short_names)
     # a rejected short channel would otherwise enter the regressor, and the regressor
     # is in the design matrix, so one bad channel would reach every channel's fit
     good_hbo = mne.pick_types(short.info, fnirs="hbo", exclude="bads")

@@ -111,12 +111,9 @@ def _patch_haemo_wavelengths(raw: mne.io.Raw) -> mne.io.Raw:
 
 def has_short_channels(raw: mne.io.Raw) -> bool:
     """Return True if the recording contains short-distance reference channels."""
-    from mne_nirs.channels import get_short_channels
+    from fnirs_pipe.qc.metrics._helpers import long_short_channels
 
-    from fnirs_pipe.qc.metrics._helpers import separation_bands
-
-    short_max, _, _ = separation_bands()
-    return len(get_short_channels(raw, max_dist=short_max)) > 0
+    return bool(long_short_channels(raw)[1])
 
 
 def long_channel_picks(raw: mne.io.Raw, ch_type: str = "hbo", exclude="bads") -> list[int]:
