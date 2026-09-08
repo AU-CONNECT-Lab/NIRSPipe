@@ -270,6 +270,22 @@ layout = dbc.Container([
                 width=3, className="d-flex align-items-end pb-2",
             ),
         ], className="g-3 mt-1 align-items-end"),
+        dbc.Row([
+            dbc.Col([
+                dbc.Label("Separations (mm)"),
+                dbc.InputGroup([
+                    dbc.InputGroupText("short ≤"),
+                    dbc.Input(id="dp-short-max-dist", type="number", step=0.5,
+                              min=0.1, placeholder="10"),
+                    dbc.InputGroupText("long ≥"),
+                    dbc.Input(id="dp-long-min-dist", type="number", step=0.5,
+                              min=0.1, placeholder="15"),
+                    dbc.InputGroupText("to"),
+                    dbc.Input(id="dp-long-max-dist", type="number", step=0.5,
+                              min=0.1, placeholder="no limit"),
+                ]),
+            ], width=7),
+        ], className="g-3 mt-1 align-items-end"),
         html.Div(id="dp-load-status", className="mt-2 small"),
     ),
 

@@ -486,7 +486,10 @@ def _build_parser() -> argparse.ArgumentParser:
                      help=f"The SCI line the per-subject quality table is coloured against "
                           f"(default {SCI_PASS}). Detects nothing here: screening happened "
                           f"in fnirs-pipe. Pass what the run was prepped with.")
-    _shared.add_separation_bands(run)
+    _shared.add_separation_bands(run, note="Splits nothing new here: the bands are "
+                                 "stamped in each member's record by fnirs-pipe. Pass what "
+                                 "the run was prepped with, or the dyad metrics and the "
+                                 "member reports describe different montages.")
     run.set_defaults(func=cmd_run)
 
     band = sub.add_parser(

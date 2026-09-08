@@ -42,13 +42,15 @@ def add_separation_bands(container, note: str = "") -> None:
         help=f"Separation at or above which a channel is long, in mm (default "
              f"{LONG_MIN_DIST * 1e3:.0f}). The gap above --short-max-dist is deliberate: a "
              f"channel in it is too far to be scalp-only and too near to reach cortex, and "
-             f"screening cannot catch that because such a channel scores well.")
+             f"screening cannot catch that because such a channel scores well."
+             + (f" {note}" if note else ""))
     container.add_argument(
         "--long-max-dist", type=float, default=None, metavar="MM",
         help="Separation above which a channel is too far to be long, in mm. Off by "
              "default, so any separation past --long-min-dist counts as long. Set it on a "
              "montage carrying pairs too far apart to trust, which SCI and PSP catch only "
-             "most of the time.")
+             "most of the time."
+             + (f" {note}" if note else ""))
 
 
 def separation_bands_from_args(args) -> dict:

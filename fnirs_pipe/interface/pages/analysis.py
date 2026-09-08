@@ -192,6 +192,20 @@ layout = dbc.Container([
                           value=0.1, min=0.0, max=1.0, step=0.01),
             ], width=2),
             dbc.Col([
+                dbc.Label("Separations (mm)"),
+                dbc.InputGroup([
+                    dbc.InputGroupText("≤"),
+                    dbc.Input(id="an-short-max-dist", type="number", step=0.5,
+                              min=0.1, placeholder="10"),
+                    dbc.InputGroupText("≥"),
+                    dbc.Input(id="an-long-min-dist", type="number", step=0.5,
+                              min=0.1, placeholder="15"),
+                    dbc.InputGroupText("to"),
+                    dbc.Input(id="an-long-max-dist", type="number", step=0.5,
+                              min=0.1, placeholder="none"),
+                ]),
+            ], width=4),
+            dbc.Col([
                 dbc.Label("Epoch tmin (s)"),
                 dbc.Input(id="an-epoch-tmin", type="number", placeholder="-5"),
             ], width=2),

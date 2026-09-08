@@ -190,6 +190,12 @@ def _build_cli_args(opts: dict) -> list[str]:
         args += ["--sci-threshold", str(opts["sci_thresh"])]
     if opts.get("psp_thresh") is not None:
         args += ["--psp-threshold", str(opts["psp_thresh"])]
+    # each independently optional: omitting --long-max-dist is how "no upper bound" is said
+    for opt_key, flag in (("short_max_dist", "--short-max-dist"),
+                          ("long_min_dist", "--long-min-dist"),
+                          ("long_max_dist", "--long-max-dist")):
+        if opts.get(opt_key) is not None:
+            args += [flag, str(opts[opt_key])]
     # both edges or neither: the CLI refuses half a window, and so does the report
     if opts.get("epoch_tmin") is not None and opts.get("epoch_tmax") is not None:
         args += ["--epoch-tmin", str(opts["epoch_tmin"]),
@@ -269,6 +275,9 @@ def _build_cli_args(opts: dict) -> list[str]:
     State("an-dpf",               "value"),
     State("an-sci-thresh",        "value"),
     State("an-psp-thresh",        "value"),
+    State("an-short-max-dist",    "value"),
+    State("an-long-min-dist",     "value"),
+    State("an-long-max-dist",     "value"),
     State("an-epoch-tmin",        "value"),
     State("an-epoch-tmax",        "value"),
     State("an-motion-correction", "value"),
@@ -301,6 +310,7 @@ def _build_cli_args(opts: dict) -> list[str]:
     prevent_initial_call=True,
 )
 def generate_command(n_clicks, bids_dir, output_dir, subjects, dpf, sci_thresh, psp_thresh,
+                     short_max_dist, long_min_dist, long_max_dist,
                      epoch_tmin, epoch_tmax,
                      motion_correction, cardiac_l, cardiac_h, resp_l, resp_h,
                      post_mode, high_pass, low_pass, filter_method, filter_order,
@@ -324,6 +334,8 @@ def generate_command(n_clicks, bids_dir, output_dir, subjects, dpf, sci_thresh, 
         bids_dir=bids_dir, output_dir=output_dir, subjects=subjects,
         session_label=session_label, task_label=task_label,
         dpf=dpf, sci_thresh=sci_thresh, psp_thresh=psp_thresh,
+        short_max_dist=short_max_dist, long_min_dist=long_min_dist,
+        long_max_dist=long_max_dist,
         epoch_tmin=epoch_tmin, epoch_tmax=epoch_tmax,
         motion_correction=motion_correction, cardiac_l=cardiac_l, cardiac_h=cardiac_h,
         resp_l=resp_l, resp_h=resp_h,
