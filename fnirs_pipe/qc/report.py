@@ -366,17 +366,39 @@ def _section_motion_detail(
     figures_dir: Path,
     segments: dict | None = None,
     corrected_segments: list | None = None,
-    spike_segments: list | None = None,
+    spike_by_set: dict | None = None,
+    gvtd_blocks: "list[tuple[str, list[str]]] | None" = None,
 ) -> dict:
+    """One per-channel motion figure per channel, each with its own class's GVTD on top.
+
+    The GVTD row follows the channel the figure is about rather than staying fixed: it is
+    read against the derivative row directly below it, and the two separation classes are not
+    on one scale. A channel in neither class falls back to the canonical set, which is the
+    only one there is a reported number for.
+    """
     if raw_od_before is None or raw_od_after is None:
         return {"motion_detail_pairs": []}
     shared_chs = [c for c in raw_od_after.ch_names if c in raw_od_before.ch_names]
+
+    # the same blocks the carpet panel drew, so the two figures never name sets differently:
+    # under --gvtd-channels all there is one block and every channel lands in it
+    blocks = gvtd_blocks or [("all", list(raw_od_before.ch_names))]
+    members = [(name, names, set(names)) for name, names in blocks]
+
+    def set_of(ch: str) -> "tuple[str, list[str]]":
+        for name, names, lookup in members:
+            if ch in lookup:
+                return name, names
+        return blocks[0]          # in no block (neither separation range): the canonical set
+
     saved = []
     for ch in shared_chs:
         with _guard(f"Motion detail {ch}", errors, subject):
+            set_name, picks = set_of(ch)
             fig = build_motion_detail_figure(raw_od_before, raw_od_after, ch, segments,
                                              corrected_segments=corrected_segments,
-                                             spike_segments=spike_segments)
+                                             spike_segments=(spike_by_set or {}).get(set_name),
+                                             gvtd_picks=picks, gvtd_set=set_name)
             fname = f"motion_detail_{_pair_fname(ch)}.html"
             h = _save_multi_fig_html([fig], figures_dir / fname)
             saved.append({"pair": ch, "path": _fig_href(figures_dir, fname), "h": h})
@@ -497,6 +519,7 @@ def _section_motion(
         "bad_segment_zoom_path": bad_segment_zoom_path,
         "corrected_segments": corrected_segments,
         "spike_spans": spike_spans,
+        "spike_by_set": spike_by_set,
     }
 
 
@@ -1238,7 +1261,8 @@ def build_subject_report(
                             raw_before_motion, raw_after_motion, subject, errors, figures_dir,
                             segments=segments,
                             corrected_segments=motion_vars.get("corrected_segments"),
-                            spike_segments=motion_vars.get("spike_spans"))
+                            spike_by_set=motion_vars.get("spike_by_set"),
+                            gvtd_blocks=gvtd_blocks)
     haemo_vars        = _section_haemo(raw_haemo, config, subject, errors, figures_dir,
                                        l_freq=l_freq, h_freq=h_freq,
                                        raw_errts=raw_errts, psd_stages=psd_stages,

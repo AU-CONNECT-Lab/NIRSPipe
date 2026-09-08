@@ -26,6 +26,7 @@ All notable changes to this project will be documented in this file.
 - **The hyperscanning raw report writes its coherence tables**, whole-record and windowed, so the numbers behind the bar chart and the heatmap can leave the report
 
 ### Fixed
+- **The per-channel motion figure measured GVTD over every channel**, while the carpet panel above it and the metrics table beside it measured the long ones, so one report carried two different GVTD traces and two different thresholds with nothing saying why. Each figure now takes the GVTD of the separation class its own channel belongs to, names it, and shades the derivative spikes found on that same class
 - **`fnirs-pipe` wrote no SQM record for any run.** The failure was logged and the run carried on, so the group tables and the quality database were left with whatever an earlier run had put on disk
 - **"Long channel" meant two different things**: 15-45 mm to the reports and the GVTD trace, anything over 10 mm to the dyad metrics and the short-channel regressors. A separation past 45 mm was outside the montage in one half of the package and usable in the other. One rule now, and a channel in neither band is named in a warning instead of silently taking part in nothing
 - **Crossing the channels drew both axes from one member of the dyad**, so the crossed WTC table and the ISC matrix were missing every pairing that used a channel the other member kept and this one had rejected. Which member counted depended on the order the pairs table lists them in. The crossed table grows by the pairings it was dropping

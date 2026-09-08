@@ -636,11 +636,13 @@ def build_motion_detail_figure(
     max_pts: int = _LINE_MAX_PTS,
     corrected_segments: "list[tuple[float, float]] | None" = None,
     spike_segments: "list[tuple[float, float]] | None" = None,
+    gvtd_picks: "list[str] | None" = None,
+    gvtd_set: str | None = None,
 ) -> go.Figure:
     """4-row per-channel motion figure: GVTD, this channel's derivative, before/after OD, band strip.
 
     Both inputs must be in OD space (output of optical_density()). The bottom strip shows
-    the (global) motion-correction footprint and spike timepoints, never overlapping the traces.
+    the motion-correction footprint and spike timepoints, never overlapping the traces.
 
     Row 2 is this channel's band-limited |dOD/dt|, the signal the spike marks in the strip are
     detected on, so a peak there and a mark below it refer to the same event. It is a
@@ -648,6 +650,14 @@ def build_motion_detail_figure(
     channels :footcite:`Sherafati2020` and has no single-channel form. Both rows are
     band-limited to ``GVTD_MOTION_BAND`` before differencing, since the unfiltered derivative
     is dominated by the ~1 Hz cardiac component and shows pulse rather than movement.
+
+    ``gvtd_picks`` is the channel set row 1 averages and ``gvtd_set`` names it on the panel.
+    The caller passes the separation class ``ch_name`` itself belongs to, because rows 1 and 2
+    are read as a pair and the two classes are not on one scale: short-channel peaks run
+    around 1.7 times the long-channel ones and their peak-to-resting ratio around twice, so a
+    short channel's derivative under a long-channel GVTD invites a comparison that is not
+    there. ``spike_segments`` has to come from the same class for the same reason. Left
+    unset, row 1 covers every channel, which matches no other panel in the report.
 
     References
     ----------
@@ -657,7 +667,11 @@ def build_motion_detail_figure(
     # plotted trace is max-pooled afterwards (display only), like the carpet figure.
     od_full, t_full = raw_od_before.get_data(return_times=True)
     full_sfreq = float(raw_od_before.info["sfreq"])
-    gvtd_filt_full = gvtd_timetrace(od_full, full_sfreq, *GVTD_MOTION_BAND)
+    present = set(raw_od_before.ch_names)
+    gvtd_names = [c for c in (gvtd_picks or raw_od_before.ch_names) if c in present]
+    gvtd_filt_full = gvtd_timetrace(
+        raw_od_before.get_data(picks=gvtd_names) if gvtd_names else od_full,
+        full_sfreq, *GVTD_MOTION_BAND)
     motion_thresh  = gvtd_threshold(gvtd_filt_full, n_std=GVTD_N_STD)
     t_gvtd_arr, gvtd_filt = _maxpool_xy(t_full[1:], gvtd_filt_full, max_pts)
     t_gvtd = t_gvtd_arr.tolist()
@@ -780,14 +794,20 @@ def build_motion_detail_figure(
                      row=tvd_row, col=1)
     fig.update_yaxes(title_text="OD", tickfont=dict(size=7), row=od_row, col=1)
     # what each row is, written inside it: these rows are short enough that a title over one
-    # lands on the panel above, and an axis title long enough to say it runs past the row
-    for row, label in ((gvtd_row, "global, 0.01–0.5 Hz"),
-                       (tvd_row, f"{ch_name}, 0.01–0.5 Hz"),
-                       (od_row, "before / after")):
+    # lands on the panel above, and an axis title long enough to say it runs past the row.
+    # Row 1 is named the way the carpet panel names its rows, and it used to read "global",
+    # which is what it stopped being once the set followed the channel.
+    for row, label, size, colour in (
+        (gvtd_row,
+         _gvtd_row_label(gvtd_set or "all", len(gvtd_names) or len(raw_od_before.ch_names)),
+         12, _SET_COLORS.get(gvtd_set, _GVTD_LINE)),
+        (tvd_row, f"{ch_name}, 0.01–0.5 Hz", 8, "#8b95a1"),
+        (od_row, "before / after", 8, "#8b95a1"),
+    ):
         fig.add_annotation(
             x=0.004, xref="x domain", y=0.97, yref="y domain",
             text=label, showarrow=False, xanchor="left", yanchor="top",
-            font=dict(size=8, color="#8b95a1"), row=row, col=1,
+            font=dict(size=size, color=colour), row=row, col=1,
         )
     fig.update_xaxes(title_text="Time (s)", gridcolor="#eee", row=od_row, col=1)
     if has_strip:
