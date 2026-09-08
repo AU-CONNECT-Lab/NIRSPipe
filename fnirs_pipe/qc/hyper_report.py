@@ -353,6 +353,7 @@ def build_hyper_post_report(
     wtc_roi_min_channels: int = 2,
     isc_threshold: float = 0.3,
     sci_threshold: float = SCI_PASS,
+    sep_bands=None,
 ) -> Path:
     """Build hyperscanning post-QC report.
 
@@ -485,7 +486,7 @@ def build_hyper_post_report(
         wtc_result = compute_wtc(
             aligned_raws, fmin=wtc_fmin, fmax=wtc_fmax, significance=wtc_significance,
             seed=wtc_seed, mc_count=wtc_mc_count, cross=wtc_channel_cross,
-            limit_scales=wtc_limit_scales)
+            limit_scales=wtc_limit_scales, sep_bands=sep_bands)
 
     chan_band_df = _write_band_tsv(wtc_result, "wtc", "hyper_wtc")
 
@@ -499,7 +500,7 @@ def build_hyper_post_report(
             # channel still gets a matrix of the same shape as one that did not. Both
             # members, since a montage they do not share is still two montages
             members = [aligned_raws[s] for s in subject_ids if s in aligned_raws]
-            chan_labels = long_axis_over(members) if members else sorted(
+            chan_labels = long_axis_over(members, sep_bands=sep_bands) if members else sorted(
                 {*chan_band_df["label"], *chan_band_df["label2"]})
             chan_matrix_b64 = build_wtc_cross_matrix(
                 chan_band_df, chan_labels, subject_ids, band_fmin, band_fmax,
@@ -525,7 +526,8 @@ def build_hyper_post_report(
     def _isc_panel(ch_type: str) -> str:
         panel = ""
         with guard(f"ISC panel ({ch_type})", errors, scope):
-            isc_mat, isc_ch_names = compute_isc(aligned_raws, subject_ids, ch_type)
+            isc_mat, isc_ch_names = compute_isc(aligned_raws, subject_ids, ch_type,
+                                                sep_bands)
             if isc_mat is None:
                 return ""
             write_isc_matrix(
@@ -624,7 +626,7 @@ def build_hyper_post_report(
                 cond_wtc = compute_wtc(
                     cropped, fmin=wtc_fmin, fmax=wtc_fmax, significance=wtc_significance,
                     seed=wtc_seed, mc_count=wtc_mc_count, cross=wtc_channel_cross,
-                    limit_scales=wtc_limit_scales)
+                    limit_scales=wtc_limit_scales, sep_bands=sep_bands)
                 cond_chan = wtc_band_mean(cond_wtc, band_fmin, band_fmax,
                                           mask_coi=wtc_mask_coi)
             if cond_chan is None:

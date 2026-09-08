@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- **`--short-max-dist` / `--long-min-dist` / `--long-max-dist` set what counts as a short and a long channel**, in mm. They were fixed in the source, so a montage the defaults do not describe (infant arrays, high-density ones) could not be measured correctly. The run's values are recorded, so an old record still says which separations produced its split
 - **The dyad report says so when ISC runs on a stage with no bandpass on record.** `--desc` defaults to the Beer-Lambert output, which still carries its drift, and a whole-record correlation has no frequency axis to keep drift out of it: two members recorded in one room drift alike for reasons that are not neural. The wavelet coherence panels are unaffected and get no note
 - **The GVTD panel draws the short channels on their own row**, under the long one and on the same scale, with the carpet split into a long block and a short block beside it. Short-channel quality had no time-resolved view anywhere in the report. The verdict, the threshold and the reported scalars still come from the long row alone, so nothing a run is judged on changes. Each row shades the derivative spikes found on its own channels, which are now detected per separation class rather than on the long ones alone
 - **`--psp-threshold` sets the second screening line.** It was fixed at 0.1 with no way to change it, even though a channel failing it is rejected
@@ -27,7 +28,7 @@ All notable changes to this project will be documented in this file.
 - **The hyperscanning raw report writes its coherence tables**, whole-record and windowed, so the numbers behind the bar chart and the heatmap can leave the report
 
 ### Fixed
-- **`--short-channel` built its regressors from every channel on a recording with no registered optode positions.** Every separation reads as zero there, which counted as short, so the "systemic" signal regressed out of every channel was the whole montage. Such a run now reports no short channel and skips the regression, which is what the reports were already saying about it
+- **`--short-channel` built its regressors from every channel on a recording with no registered optode positions**, so the "systemic" signal regressed out of every channel was the whole montage. Such a run now skips the regression
 - **The per-channel motion figure measured GVTD over every channel**, while the carpet panel above it and the metrics table beside it measured the long ones, so one report carried two different GVTD traces and two different thresholds with nothing saying why. Each figure now takes the GVTD of the separation class its own channel belongs to, names it, and shades the derivative spikes found on that same class
 - **`fnirs-pipe` wrote no SQM record for any run.** The failure was logged and the run carried on, so the group tables and the quality database were left with whatever an earlier run had put on disk
 - **"Long channel" meant two different things**: a bounded band to the reports and the GVTD trace, anything over 10 mm to the dyad metrics and the short-channel regressors, so the same channel could be inside the montage in one half of the package and outside it in the other. One rule now, and a channel in neither band is named in a warning instead of silently taking part in nothing
@@ -45,7 +46,7 @@ All notable changes to this project will be documented in this file.
 - **A figure that failed took the whole group report with it.** Every other report loses one panel; this one had no error handling at all
 
 ### Changed
-- **A channel over 45 mm is a long channel now.** The upper edge of the long band is off by default, where it used to drop those channels out of every section, every metric and the GVTD trace without appearing anywhere as excluded. It stays available for a montage that wants the geometric line, and screening still judges these channels on their own SCI and PSP. **On a montage with channels past 45 mm the long-channel metrics all move, GVTD included**
+- **A channel over 45 mm is a long channel now.** The long band's upper edge is off by default; it used to drop those channels out of every section and metric without appearing anywhere as excluded. Screening still judges them on their own SCI and PSP. **On a montage with channels past 45 mm the long-channel metrics all move, GVTD included**
 - **`fnirs-qc hyper-raw`'s coherence band is `--coh-fmin` / `--coh-fmax`.** As `--fmin` / `--fmax` it said nothing about which of the report's bands it set. The old names still work
 - **The subject report's per-trial panel scores each trial over the event's own duration** when no epoch window is given, which is what the raw viewer has always done. It used a fixed -5 to 25 s window, so on a block design it scored the first 25 s of a block and called that the trial. The panel says which window it used
 - **The analysis page offers the PSP threshold and the epoch window**, so the interface can no longer only produce runs that screen and epoch at the defaults

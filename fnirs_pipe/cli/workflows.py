@@ -11,6 +11,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from fnirs_pipe.cli import _shared
 from fnirs_pipe.io.bids import bids_label, get_layout, get_nirs_files
 from fnirs_pipe.io.derivatives import write_dataset_description
 from fnirs_pipe.io.snirf import read_snirf
@@ -76,6 +77,8 @@ def _build_post_config(subject: str, session: str | None, args: dict[str, Any], 
         fc=bool(pick("fc", default=False)),
         combine_runs=pick("combine_runs"),
         roi_map=roi_map,
+        # the same bands prep split with, so the regression and the reports agree
+        **_shared.separation_bands_from_args(args),
     )
 
 
@@ -374,6 +377,7 @@ def _make_prep_config(subject: str, session: str | None, args: dict[str, Any]) -
         gvtd_censor=bool(args.get("gvtd_censor")),
         gvtd_censor_n_std=args.get("gvtd_censor_n_std", 10.0),
         gvtd_min_epoch_s=args.get("gvtd_min_epoch_s", 30.0),
+        **_shared.separation_bands_from_args(args),
         ignore=[_v(ig) for ig in (args.get("ignore") or [])],
     )
 

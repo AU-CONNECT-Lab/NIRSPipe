@@ -297,6 +297,7 @@ def compute_group_sqm_raw(
     cardiac_h_freq: float,
     psp_threshold: float | None = None,
     gvtd_channels: str = "long",
+    sep_bands=None,
 ) -> dict[str, dict]:
     """Compute raw-level SQM (SCI, bad channels) for each group member.
 
@@ -355,7 +356,7 @@ def compute_group_sqm_raw(
 
         try:
             sections, _per_channel = raw_sections(
-                raw, sci_cw, bad_channels, cardiac_l_freq, cardiac_h_freq)
+                raw, sci_cw, bad_channels, cardiac_l_freq, cardiac_h_freq, sep_bands)
             sqm = raw_verdict_view(sections, gvtd_channels)
         except Exception:
             logger.warning("%s: quality metrics failed", entry.subject_id, exc_info=True)

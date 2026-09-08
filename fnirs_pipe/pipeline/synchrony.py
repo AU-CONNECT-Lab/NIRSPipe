@@ -62,13 +62,13 @@ def _shared_sfreq(raws: dict[str, mne.io.Raw]) -> float:
     return next(iter(rates.values()))
 
 
-def _long_hbo_by_label(raw: mne.io.Raw) -> dict[str, int]:
+def _long_hbo_by_label(raw: mne.io.Raw, sep_bands=None) -> dict[str, int]:
     """{S-D label: channel index} over long HbO channels only, bads already dropped.
 
     The label is the key every inter-brain metric matches on. Position cannot be: two
     participants with different channels rejected no longer agree on what index 3 is.
     """
-    picks = long_channel_picks(raw, "hbo")
+    picks = long_channel_picks(raw, "hbo", sep_bands=sep_bands)
     if not picks:
         raise ValueError(
             "no usable long HbO channel: every one is either short-distance or marked bad"
@@ -76,15 +76,15 @@ def _long_hbo_by_label(raw: mne.io.Raw) -> dict[str, int]:
     return {raw.ch_names[p].rsplit(" ", 1)[0]: p for p in picks}
 
 
-def _long_hbo_signals(raw: mne.io.Raw) -> dict[str, np.ndarray]:
+def _long_hbo_signals(raw: mne.io.Raw, sep_bands=None) -> dict[str, np.ndarray]:
     """{S-D label: HbO time course} over long channels only, bads already dropped."""
     return {
         label: raw.get_data(picks=[p])[0].astype(np.float64)
-        for label, p in _long_hbo_by_label(raw).items()
+        for label, p in _long_hbo_by_label(raw, sep_bands).items()
     }
 
 
-def long_hbo_axis(raw: mne.io.Raw) -> list[str]:
+def long_hbo_axis(raw: mne.io.Raw, sep_bands=None) -> list[str]:
     """The S-D labels a channel-by-channel matrix is indexed by: the montage, bads included.
 
     Distinct from :func:`_long_hbo_by_label`, which drops the rejected channels because it is
@@ -95,10 +95,12 @@ def long_hbo_axis(raw: mne.io.Raw) -> list[str]:
     A 20-channel montage with 2 rejected -> 20 labels, of which 2 index an all-blank row.
     One recording's answer; a dyad's is :func:`long_axis_over`.
     """
-    return long_axis_over([raw])
+    return long_axis_over([raw], sep_bands=sep_bands)
 
 
-def long_axis_over(raws: "Iterable[mne.io.Raw]", ch_type: str = "hbo") -> list[str]:
+def long_axis_over(
+    raws: "Iterable[mne.io.Raw]", ch_type: str = "hbo", sep_bands=None,
+) -> list[str]:
     """The axis a *dyad's* channel-by-channel matrix is indexed by: the union of the members'
     montages, in the first member's order.
 
@@ -113,7 +115,7 @@ def long_axis_over(raws: "Iterable[mne.io.Raw]", ch_type: str = "hbo") -> list[s
     """
     axis: list[str] = []
     for raw in raws:
-        for p in long_channel_picks(raw, ch_type, exclude=[]):
+        for p in long_channel_picks(raw, ch_type, exclude=[], sep_bands=sep_bands):
             label = raw.ch_names[p].rsplit(" ", 1)[0]
             if label not in axis:
                 axis.append(label)
@@ -385,6 +387,7 @@ def compute_wtc(
     mc_count: int = 300,
     cross: bool = False,
     limit_scales: bool = True,
+    sep_bands=None,
 ) -> WTCResult:
     """Compute pairwise WTC per long HbO channel using pycwt Morlet wavelet.
 
@@ -405,7 +408,7 @@ def compute_wtc(
     if len(subject_ids) < 2:
         raise ValueError("Need at least 2 subjects for WTC")
 
-    signals = {sid: _long_hbo_signals(raw) for sid, raw in raws.items()}
+    signals = {sid: _long_hbo_signals(raw, sep_bands) for sid, raw in raws.items()}
 
     return _wtc_over_pairs(
         raws, signals, fmin, fmax, significance, seed, mc_count, cross, limit_scales)
@@ -446,6 +449,7 @@ def compute_wtc_pseudo(
     cross: bool = False,
     limit_scales: bool = True,
     mask_coi: bool = False,
+    sep_bands=None,
 ) -> pd.DataFrame:
     """Pseudo-dyad band means: WTC against a phase-scrambled partner, averaged over ``n_iter``.
 
@@ -475,7 +479,7 @@ def compute_wtc_pseudo(
             "real-against-real pairs in a table labelled null. Run it per dyad."
         )
 
-    true_signals = {sid: _long_hbo_signals(raw) for sid, raw in raws.items()}
+    true_signals = {sid: _long_hbo_signals(raw, sep_bands) for sid, raw in raws.items()}
     # scramble the second subject only: scrambling both would test surrogate against
     # surrogate, which is a different and weaker null
     scrambled_id = subject_ids[1]
@@ -571,6 +575,7 @@ def compute_pairwise_coherence(
     raws: dict[str, mne.io.Raw],
     fmin: float = 0.01,
     fmax: float = 0.10,
+    sep_bands=None,
 ) -> pd.DataFrame:
     r"""Magnitude-squared coherence per HbO channel, averaged over [fmin, fmax] Hz.
 
@@ -595,7 +600,8 @@ def compute_pairwise_coherence(
     rows: list[dict] = []
     for sub1, sub2 in combinations(subject_ids, 2):
         raw1, raw2 = raws[sub1], raws[sub2]
-        map1, map2 = _long_hbo_by_label(raw1), _long_hbo_by_label(raw2)
+        map1, map2 = (_long_hbo_by_label(raw1, sep_bands),
+                      _long_hbo_by_label(raw2, sep_bands))
         data1 = raw1.get_data(picks=list(map1.values()))
         data2 = raw2.get_data(picks=list(map2.values()))
         row_of = {label: i for i, label in enumerate(map2)}

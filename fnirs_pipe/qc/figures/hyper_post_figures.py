@@ -421,6 +421,7 @@ def compute_isc(
     aligned_raws: dict[str, mne.io.Raw],
     subject_ids: list[str],
     ch_type: str = "hbo",
+    sep_bands=None,
 ) -> tuple[np.ndarray, list[str]] | tuple[None, None]:
     """Compute inter-brain Pearson r matrix (n_ch × n_ch) over long channels.
 
@@ -466,12 +467,12 @@ def compute_isc(
     def _by_label(raw: mne.io.Raw) -> dict[str, int]:
         """{label: index} over what this member kept, bads dropped: what gets correlated."""
         return {raw.ch_names[p].rsplit(" ", 1)[0]: p
-                for p in long_channel_picks(raw, ch_type)}
+                for p in long_channel_picks(raw, ch_type, sep_bands=sep_bands)}
 
     # the axis is the montage, the maps are what survived: one shape, blanks where a channel
     # went. The axis rule is shared with the crossed WTC matrix, which drew it from the first
     # member alone until 0.30.0
-    ch_names = long_axis_over([raw1, raw2], ch_type)
+    ch_names = long_axis_over([raw1, raw2], ch_type, sep_bands)
     map1, map2 = _by_label(raw1), _by_label(raw2)
     if not ch_names:
         return None, None

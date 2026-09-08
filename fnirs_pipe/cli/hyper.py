@@ -117,7 +117,7 @@ def _load_aligned_group(output_dir, members, task, desc, no_align, normalize, ba
     return aligned_raws, offsets, group_sqm
 
 
-def _quality_summary(aligned_raws: dict, group_sqm: dict) -> None:
+def _quality_summary(aligned_raws: dict, group_sqm: dict, sep_bands=None) -> None:
     """Print what the metrics are about to be computed on, one line per subject.
 
     ``sub-01  long 12/14  bad 2  mean SCI 0.86  from: tapping``
@@ -133,7 +133,7 @@ def _quality_summary(aligned_raws: dict, group_sqm: dict) -> None:
         pairs = {ch.rsplit(" ", 1)[0] for ch in raw.ch_names
                  if ch.endswith(" hbo") or ch.endswith(" hbr")}
         bad = {ch.rsplit(" ", 1)[0] for ch in raw.info["bads"]}
-        kept = len(long_channel_picks(raw, "hbo"))     # pick_types drops bads already
+        kept = len(long_channel_picks(raw, "hbo", sep_bands=sep_bands))  # bads already dropped
 
         scores = [v for v in (sqm.get("sci_per_channel") or {}).values()
                   if v is not None and v == v]
@@ -191,6 +191,8 @@ def cmd_run(
     wtc_pseudo: int | None, wtc_pseudo_cross: bool,
     bads_scope: str, isc_threshold: float, sci_threshold: float,
     normalize: bool, no_align: bool, tstart: float | None, tend: float | None,
+    short_max_dist: float | None, long_min_dist: float | None,
+    long_max_dist: float | None,
     check_only: bool, verbose: bool,
 ) -> None:
     """Dyad WTC + ISC report per group, plus the pseudo-dyad null when --wtc-pseudo is given.
@@ -201,6 +203,14 @@ def cmd_run(
     # every parameter as resolved, for the run record. Read off locals() before anything
     # else runs, so a new option lands in the record without being listed here as well.
     run_args = dict(locals())
+
+    from fnirs_pipe.cli._shared import separation_bands_from_args
+    from fnirs_pipe.qc.metrics._helpers import separation_bands
+
+    sep_bands = separation_bands(type("Bands", (), separation_bands_from_args({
+        "short_max_dist": short_max_dist, "long_min_dist": long_min_dist,
+        "long_max_dist": long_max_dist,
+    })))
 
     import json
     from datetime import datetime
@@ -232,7 +242,7 @@ def cmd_run(
         aligned_raws, offsets, group_sqm = _load_aligned_group(
             output_dir, members, task, desc, no_align, normalize, bads_scope, tstart, tend,
             passband_check=(wtc_fmin, wtc_fmax))
-        _quality_summary(aligned_raws, group_sqm)
+        _quality_summary(aligned_raws, group_sqm, sep_bands)
         if check_only:
             return None
         bad_channels = {sid: sqm.get("bad_channels", []) for sid, sqm in group_sqm.items()}
@@ -262,6 +272,7 @@ def cmd_run(
             wtc_roi_min_channels=wtc_roi_min_channels,
             isc_threshold=isc_threshold,
             sci_threshold=sci_threshold,
+            sep_bands=sep_bands,
         )
         if wtc_pseudo:
             null_path = write_wtc_null(
@@ -278,6 +289,7 @@ def cmd_run(
                 cross=wtc_pseudo_cross,
                 limit_scales=wtc_limit_scales,
                 mask_coi=wtc_mask_coi,
+                sep_bands=sep_bands,
             )
             print(f"     null   -> {null_path}")
 
@@ -474,6 +486,7 @@ def _build_parser() -> argparse.ArgumentParser:
                      help=f"The SCI line the per-subject quality table is coloured against "
                           f"(default {SCI_PASS}). Detects nothing here: screening happened "
                           f"in fnirs-pipe. Pass what the run was prepped with.")
+    _shared.add_separation_bands(run)
     run.set_defaults(func=cmd_run)
 
     band = sub.add_parser(

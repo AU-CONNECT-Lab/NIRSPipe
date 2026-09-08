@@ -21,6 +21,60 @@ import argparse
 from pathlib import Path
 
 
+def add_separation_bands(container, note: str = "") -> None:
+    """``--short-max-dist`` / ``--long-min-dist`` / ``--long-max-dist``, in mm.
+
+    Three flags rather than one taking three values, because the upper bound defaults to
+    off and a single flag has no natural way to spell that. They are validated together in
+    :func:`separation_bands_from_args`, so moving one and leaving the others cannot produce
+    overlapping bands.
+    """
+    from fnirs_pipe.qc.metrics._helpers import LONG_MIN_DIST, SHORT_MAX_DIST
+
+    container.add_argument(
+        "--short-max-dist", type=float, default=None, metavar="MM",
+        help=f"Separation at or below which a channel is short-distance, in mm "
+             f"(default {SHORT_MAX_DIST * 1e3:.0f}). Short channels see scalp only and are "
+             f"measured, and regressed, separately from the long ones."
+             + (f" {note}" if note else ""))
+    container.add_argument(
+        "--long-min-dist", type=float, default=None, metavar="MM",
+        help=f"Separation at or above which a channel is long, in mm (default "
+             f"{LONG_MIN_DIST * 1e3:.0f}). The gap above --short-max-dist is deliberate: a "
+             f"channel in it is too far to be scalp-only and too near to reach cortex, and "
+             f"screening cannot catch that because such a channel scores well.")
+    container.add_argument(
+        "--long-max-dist", type=float, default=None, metavar="MM",
+        help="Separation above which a channel is too far to be long, in mm. Off by "
+             "default, so any separation past --long-min-dist counts as long. Set it on a "
+             "montage carrying pairs too far apart to trust, which SCI and PSP catch only "
+             "most of the time.")
+
+
+def separation_bands_from_args(args) -> dict:
+    """The three flags as PrepConfig / PostConfig fields, in metres, validated together.
+
+    args with --long-max-dist 55 -> {"short_max_dist": None, "long_min_dist": None,
+                                     "long_max_dist": 0.055}
+
+    Values arrive in mm because that is how a montage is described, and are stored in
+    metres because that is what MNE reports. A flag left off stays None so the config
+    keeps the package default; validation therefore runs on the resolved bands rather
+    than on what was typed.
+    """
+    from fnirs_pipe.qc.metrics._helpers import separation_bands, validate_bands
+
+    def _mm(name):
+        value = getattr(args, name, None) if not isinstance(args, dict) else args.get(name)
+        return None if value is None else float(value) / 1e3
+
+    fields = {name: _mm(name)
+              for name in ("short_max_dist", "long_min_dist", "long_max_dist")}
+    # a class rather than the dict, since separation_bands reads attributes
+    validate_bands(separation_bands(type("Args", (), fields)))
+    return fields
+
+
 def add_sci_threshold(container, default: "float | None" = None, note: str = "") -> None:
     """``--sci-threshold``: the coupling line channel screening rejects on.
 

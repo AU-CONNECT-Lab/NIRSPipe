@@ -139,6 +139,11 @@ class PrepConfig:
     gvtd_censor_n_std: float = 10.0
     gvtd_min_epoch_s: float = 30.0
     motion_correction: str | None = None
+    # separation bands, in metres; None each keeps the package default, and a None
+    # long_max_dist means no upper bound at all
+    short_max_dist: float | None = None
+    long_min_dist: float | None = None
+    long_max_dist: float | None = None
     bad_channels: list[str] = field(default_factory=list)
     ignore: list[str] = field(default_factory=list)
 
@@ -237,9 +242,11 @@ def run_prep(
         logger.info("sub-%s | GVTD censoring (n_std=%s, min epoch %.0fs)",
                     config.subject, config.gvtd_censor_n_std, config.gvtd_min_epoch_s)
         from fnirs_pipe.qc.metrics import gvtd_censor_spans
+        from fnirs_pipe.qc.metrics._helpers import separation_bands
         censor_spans, censor_metrics = gvtd_censor_spans(
             raw_od, n_std=config.gvtd_censor_n_std,
-            min_epoch_s=config.gvtd_min_epoch_s, channel_set=config.gvtd_channels)
+            min_epoch_s=config.gvtd_min_epoch_s, channel_set=config.gvtd_channels,
+            sep_bands=separation_bands(config))
         # BAD_ annotations, so the spans travel with the data instead of being cut out of
         # it: MNE's reject_by_annotation drops the epochs they overlap, a continuous
         # analysis can pick the surviving stretches, and a threshold set too strictly is

@@ -30,6 +30,7 @@ def write_wtc_null(
     cross: bool = False,
     limit_scales: bool = True,
     mask_coi: bool = False,
+    sep_bands=None,
 ) -> Path:
     """Run the phase-scrambled null for one dyad and write its band means beside the real ones.
 
@@ -51,7 +52,7 @@ def write_wtc_null(
     df = compute_wtc_pseudo(
         aligned_raws, band_fmin, band_fmax, n_iter=n_iter,
         fmin=wtc_fmin, fmax=wtc_fmax, seed=seed, cross=cross,
-        limit_scales=limit_scales, mask_coi=mask_coi)
+        limit_scales=limit_scales, mask_coi=mask_coi, sep_bands=sep_bands)
 
     out_path = (group_data_dir(output_dir, group_id)
                 / f"group-{group_id}_task-{task}_hyper-wtc-pseudo.tsv")

@@ -15,7 +15,8 @@ from fnirs_pipe.qc.channel_table import (
     channel_rows, format_rows, heatmap_args, pair_rows, save_channel_csv,
     separation_blocks, separation_notes, split_table,
 )
-from fnirs_pipe.qc.metrics import SCI_PASS, SHORT_MAX_DIST
+from fnirs_pipe.qc.metrics import SCI_PASS
+from fnirs_pipe.qc.metrics._helpers import separation_bands
 from fnirs_pipe.qc.report_shell import (
     collapse_messages, dashboard_css, guard, note, render,
 )
@@ -25,8 +26,6 @@ from fnirs_pipe.utils.logging import get_logger
 logger = get_logger("qc.prep_raw_report")
 
 _MAX_TS_PTS   = 4000
-# the figures colour a channel short or not short, so only the short edge applies here
-_SHORT_THRESH = SHORT_MAX_DIST
 _EPOCH_TMIN   = -5.0
 _EPOCH_TMAX   = 25.0
 # the scalars the viewer's metrics panel lists, in order. Names, formats, thresholds and
@@ -54,6 +53,7 @@ def _process_run(
     epoch_tmax: float | None = None,
     gvtd_channels: str = "long",
     psp_threshold: float | None = None,
+    sep_bands=None,
 ) -> dict:
     """Compute all data, save figure HTMLs + SQM JSON. Returns inline dict for HTML.
 
@@ -110,8 +110,10 @@ def _process_run(
     # uses, and it is now what the panels read too: the flat view averages a short
     # channel's coupling in with the long ones, which lifts SCI, PSP and SNR and can make a
     # poorly coupled recording read as a good one.
+    # the figures colour a channel short or not short, so only the short edge applies
+    short_thresh = (sep_bands if sep_bands is not None else separation_bands())[0]
     raw_secs, raw_pc = raw_sections(
-        raw, sci_scores, list(bad_channels), cardiac_l_freq, cardiac_h_freq)
+        raw, sci_scores, list(bad_channels), cardiac_l_freq, cardiac_h_freq, sep_bands)
     record_view = {**raw_secs, "per_channel": raw_pc}
     ch_rows = channel_rows(record_view, sci_scores, bad_channels)
     # the verdict is read off the long channels wherever the montage was split, exactly as
@@ -152,7 +154,7 @@ def _process_run(
     ts_inline: dict = {}
     with guard("Raw signal", errors, label):
         fig, _mkdata, cond_colors_out, band_shapes, t_start, t_end = build_ts_figure(
-            raw, markers, bad_channels, _MAX_TS_PTS, _SHORT_THRESH,
+            raw, markers, bad_channels, _MAX_TS_PTS, short_thresh,
         )
         ts_inline = {
             "figure":      fig.to_dict(),
@@ -166,7 +168,7 @@ def _process_run(
     # ── inline: layout figures (kept for click interactivity) ──────────────────
     layout_inline: dict = {}
     with guard("Optode layout", errors, label):
-        fig_2d, fig_3d = build_layout_figure(raw, bad_channels, sci_scores, _SHORT_THRESH)
+        fig_2d, fig_3d = build_layout_figure(raw, bad_channels, sci_scores, short_thresh)
         layout_inline = {
             "layout_2d_figure": fig_2d.to_dict() if fig_2d else None,
             "layout_3d_figure": fig_3d.to_dict() if fig_3d else None,
@@ -178,7 +180,7 @@ def _process_run(
     carpet_inline: dict = {}
     with guard("GVTD carpet", errors, label):
         from fnirs_pipe.qc.metrics import gvtd_channel_blocks
-        gvtd_blocks = gvtd_channel_blocks(raw, gvtd_channels)
+        gvtd_blocks = gvtd_channel_blocks(raw, gvtd_channels, sep_bands)
         gvtd_set = gvtd_blocks[0][0]
         gvtd_picks = [c for _, names in gvtd_blocks for c in names]
         raw_carpet = raw.copy().pick(gvtd_picks)
@@ -359,6 +361,7 @@ def build_prep_raw_report(
     epoch_tmin: float | None = None,
     epoch_tmax: float | None = None,
     gvtd_channels: str = "long",
+    sep_bands=None,
 ) -> None:
     """Generate raw QC report: lightweight HTML + per-run folders with figure HTMLs + SQM JSON."""
     # the report sits in the subject's own folder, so its figures are one level in from it
@@ -377,7 +380,7 @@ def build_prep_raw_report(
         with guard("Processing this run", run_errors, label):
             d = _process_run(run, sci_threshold, sub_dir, cardiac_l_freq, cardiac_h_freq,
                              dpf, window_s, epoch_qc, epoch_tmin, epoch_tmax,
-                             gvtd_channels, psp_threshold)
+                             gvtd_channels, psp_threshold, sep_bands)
         if run_errors:
             d = {"errors": run_errors, "notes": []}
         static_data.append(d)

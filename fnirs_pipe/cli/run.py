@@ -85,6 +85,7 @@ def _build_parser() -> argparse.ArgumentParser:
     # the other screening line. Optional, unlike --sci-threshold: PSP has a published
     # default that holds across populations, so a run that does not name it is not guessing
     _shared.add_psp_threshold(prep_opt)
+    _shared.add_separation_bands(prep_opt)
     prep_opt.add_argument("--window-length", type=float, default=10.0,
                           help="Sliding-window length (s) for windowed SCI/PSP/GVTD QC series.")
     prep_opt.add_argument("--epoch-tmin", type=float, default=None,

@@ -27,6 +27,7 @@ from fnirs_pipe.pipeline.denoise import (
 from fnirs_pipe.pipeline.glm import run_glm_pipeline
 from fnirs_pipe.exceptions import StageError
 from fnirs_pipe.utils.lineage import Recorder, lineage_of, stage_of, stamp
+from fnirs_pipe.qc.metrics._helpers import separation_bands
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("post.pipeline")
@@ -69,6 +70,11 @@ class PostConfig:
     events_path:     str | None            = None
     contrast_def:    dict[str, Any] | None = None
     fc:              bool                  = False
+
+    # separation bands, in metres; see PrepConfig
+    short_max_dist: float | None = None
+    long_min_dist: float | None = None
+    long_max_dist: float | None = None
 
     combine_runs: bool | None = None
 
@@ -207,6 +213,7 @@ def run_post(
             drift_order=config.drift_order,
             fir_delays=config.fir_delays,
             short_channel=config.short_channel,
+            sep_bands=separation_bands(config),
             **aux_kwargs,
             events_path=config.events_path,
             contrast_def=config.contrast_def,
@@ -236,6 +243,7 @@ def run_post(
             drift_order=config.drift_order,
             fir_delays=None,
             short_channel=config.short_channel,
+            sep_bands=separation_bands(config),
             **aux_kwargs,
             events=pd.DataFrame({"trial_type": [], "onset": [], "duration": []}),
         )
@@ -304,6 +312,7 @@ def run_post(
                 drift_order=config.drift_order,
                 fir_delays=None,
                 short_channel=config.short_channel,
+                sep_bands=separation_bands(config),
                 **aux_kwargs,
                 events=pd.DataFrame({"trial_type": [], "onset": [], "duration": []}),
                 output_dir=str(output_dir / f"sub-{config.subject}" / "nirs"),
