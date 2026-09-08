@@ -93,20 +93,6 @@ def _long_signals(
     }
 
 
-def long_hbo_axis(raw: mne.io.Raw, sep_bands=None) -> list[str]:
-    """The S-D labels a channel-by-channel matrix is indexed by: the montage, bads included.
-
-    Distinct from :func:`_long_by_label`, which drops the rejected channels because it is
-    choosing what to compute on. An axis has to outlive a rejection: two dyads that lost
-    different channels still have to produce matrices of one shape to be stacked, and a
-    reader has to be able to tell an empty cell from a channel that was never in the montage.
-
-    A 20-channel montage with 2 rejected -> 20 labels, of which 2 index an all-blank row.
-    One recording's answer; a dyad's is :func:`long_axis_over`.
-    """
-    return long_axis_over([raw], sep_bands=sep_bands)
-
-
 def long_axis_over(
     raws: "Iterable[mne.io.Raw]", ch_type: str = "hbo", sep_bands=None,
 ) -> list[str]:
@@ -120,7 +106,16 @@ def long_axis_over(
 
     One member's montage is not the axis. A label only the other member carries still has a
     row or a column of its own, so drawing the axis from the first member alone drops it.
-    Bads are kept, for the reason :func:`long_hbo_axis` gives.
+
+    **Bads are kept**, unlike in :func:`_long_by_label`, which drops them because it is
+    choosing what to compute on. An axis has to outlive a rejection: two dyads that lost
+    different channels still have to produce matrices of one shape to be stacked, and a
+    reader has to be able to tell an empty cell from a channel that was never in the
+    montage. A 20-channel montage with 2 rejected gives 20 labels, of which 2 index an
+    all-blank row or column.
+
+    One recording is a group of one, so ``long_axis_over([raw], ch_type)`` is the same rule
+    over a single montage.
     """
     axis: list[str] = []
     for raw in raws:
