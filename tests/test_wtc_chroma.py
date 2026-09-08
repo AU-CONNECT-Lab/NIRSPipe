@@ -288,3 +288,117 @@ def test_the_flag_refuses_anything_else():
     with pytest.raises(SystemExit):
         _build_parser().parse_args(
             ["run", "out", "--pairs-csv", "pairs.csv", "--wtc-chroma", "hbt"])
+
+
+# ---- the traps the structure exists to avoid ----
+
+def test_tagging_before_the_aggregation_would_lose_the_tag():
+    """Why `_tag` runs after every aggregation and not before. `roi_mean_of_channels`
+    groups on the columns it knows and drops the rest, so a chromophore column added
+    upstream of it vanishes without an error."""
+    from fnirs_pipe.pipeline.synchrony import roi_mean_of_channels
+
+    tagged = pd.DataFrame({
+        "chromophore": ["hbo"] * 2,
+        "sub1": ["a", "a"], "sub2": ["b", "b"],
+        "label": ["S1_D1", "S2_D2"],
+        "coherence": [0.5, 0.6], "coherence_z": [0.55, 0.69], "n_valid_frac": [1.0, 1.0],
+    })
+    out = roi_mean_of_channels(tagged, {"L": ["S1_D1", "S2_D2"]}, min_channels=1)
+    assert "chromophore" not in out.columns
+
+
+def test_the_page_carries_one_chromophore_of_figures(dyad, tmp_path):
+    """Both chromophores reach the tables; only one reaches the page. Every map is a whole
+    frequency-by-time array, which is the same reason `--wtc-channel-cross` keeps the
+    selector on the homologous pairs, so a page carrying two would be twice the weight for
+    no reader who cannot already get the numbers from the TSV."""
+    from fnirs_pipe.pipeline.hyperscanning import GroupEntry
+    from fnirs_pipe.qc.hyper_report import build_hyper_post_report
+
+    def _per_ch(chroma, where):
+        path = build_hyper_post_report(
+            group_id="G1", task="tap",
+            group=[GroupEntry("G1", "sub-01", "tap"), GroupEntry("G1", "sub-02", "tap")],
+            aligned_raws=dyad, offsets={"sub-01": 0.0, "sub-02": 0.0}, output_dir=where,
+            wtc_fmin=0.02, wtc_fmax=0.2, wtc_band_fmin=BAND[0], wtc_band_fmax=BAND[1],
+            wtc_chroma=chroma,
+        )
+        html = path.read_text(encoding="utf-8")
+        start = html.index("var _PER_CH")
+        return html[start:html.index("\n", start)]
+
+    one  = _per_ch(("hbo",), tmp_path / "one")
+    both = _per_ch(("hbo", "hbr"), tmp_path / "both")
+    assert one == both
+
+
+# ---- per condition ----
+
+@pytest.fixture(scope="module")
+def by_condition(dyad, tmp_path_factory):
+    """The same report with two task windows, so the per-condition branch runs.
+
+    A window shorter than one cycle of `--wtc-fmin` is skipped, so at 0.02 Hz these have to
+    be at least 50 s.
+    """
+    from fnirs_pipe.pipeline.hyperscanning import GroupEntry
+    from fnirs_pipe.qc.hyper_report import build_hyper_post_report
+
+    marked = {sid: raw.copy() for sid, raw in dyad.items()}
+    for raw in marked.values():
+        raw.set_annotations(mne.Annotations(onset=[10.0, 200.0], duration=[100.0, 100.0],
+                                            description=["chat", "quiet"]))
+    out = tmp_path_factory.mktemp("bycond")
+    build_hyper_post_report(
+        group_id="G1", task="tap",
+        group=[GroupEntry("G1", "sub-01", "tap"), GroupEntry("G1", "sub-02", "tap")],
+        aligned_raws=marked, offsets={"sub-01": 0.0, "sub-02": 0.0}, output_dir=out,
+        roi_map={"L": ["S1_D1", "S2_D2"], "R": ["S3_D3"]}, wtc_roi_min_channels=1,
+        wtc_fmin=0.02, wtc_fmax=0.2, wtc_band_fmin=BAND[0], wtc_band_fmax=BAND[1],
+        wtc_by_condition=True, wtc_chroma=("hbo", "hbr"),
+    )
+    return out / "group-G1" / "nirs"
+
+
+@pytest.mark.parametrize("kind", ["wtcbycond", "wtcbycond-roichan"])
+def test_the_per_condition_tables_carry_both_chromophores(by_condition, kind):
+    """Its own code path, and the one where the tag is added to a frame that already has a
+    `condition` column: two inserts at position 0, so the order matters."""
+    df = pd.read_csv(by_condition / f"group-G1_task-tap_hyper-{kind}.tsv", sep="\t")
+    assert list(df.columns[:2]) == ["chromophore", "condition"]
+    counts = df.groupby(["chromophore", "condition"]).size().unstack()
+    assert sorted(counts.index) == ["hbo", "hbr"]
+    assert sorted(counts.columns) == ["chat", "quiet"]
+    assert (counts.loc["hbo"] == counts.loc["hbr"]).all()
+
+
+def test_the_whole_run_pass_still_stands_beside_the_conditions(by_condition):
+    """`--wtc-by-condition` adds windows rather than replacing the whole-run analysis."""
+    whole = pd.read_csv(by_condition / "group-G1_task-tap_hyper-wtc.tsv", sep="\t")
+    assert "condition" not in whole.columns
+    assert set(whole["chromophore"]) == {"hbo", "hbr"}
+
+
+def test_the_condition_windows_reach_the_sidecar(by_condition):
+    """The one thing a reader cannot reconstruct from the table."""
+    params = json.loads(
+        (by_condition / "group-G1_task-tap_hyper-wtcbycond.json").read_text())["parameters"]
+    assert sorted(params["condition_windows_s"]) == ["chat", "quiet"]
+    assert params["chroma"] == ["hbo", "hbr"]
+
+
+# ---- the null cannot drift from the run ----
+
+def test_the_null_and_the_report_default_to_the_same_chromophores():
+    """`cmd_run` hands one tuple to both, so a drift would have to come from the defaults.
+    Chroma is inherited unlike crossing: a null missing a chromophore leaves that half of
+    the real table with nothing to be tested against."""
+    import inspect
+
+    from fnirs_pipe.qc.hyper_report import build_hyper_post_report
+    from fnirs_pipe.qc.wtc_null import write_wtc_null
+
+    report = inspect.signature(build_hyper_post_report).parameters["wtc_chroma"].default
+    null = inspect.signature(write_wtc_null).parameters["chroma"].default
+    assert tuple(report) == tuple(null) == ("hbo", "hbr")

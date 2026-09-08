@@ -205,6 +205,7 @@ fnirs-hyper run OUTPUT_DIR --pairs-csv PATH
                 [--wtc-fmin/--wtc-fmax FLOAT]        [default: 0.004 / 0.20]
                 [--wtc-band-fmin/--wtc-band-fmax FLOAT]
                 [--wtc-significance] [--wtc-mc-count INT] [--wtc-seed INT]
+                [--wtc-chroma {hbo,hbr,both}]        [default: both]
                 [--wtc-mask-coi] [--wtc-roi-min-channels N]
                 [--wtc-channel-cross] [--wtc-by-condition] [--wtc-save-maps]
                 [--wtc-pseudo N] [--wtc-pseudo-cross]
@@ -222,6 +223,8 @@ fnirs-hyper merge OUTPUT_DIR
 Every subcommand reads the derivatives tree `fnirs-pipe` wrote and takes no BIDS input, which is why there is one positional and not two.
 
 `run` computes wavelet coherence and inter-subject correlation for each dyad named in the pairs file, and writes one report per group. `--wtc-significance` is slow: it draws `--wtc-mc-count` surrogate series per channel pair, 300 by default, and the runtime scales with that count. `--wtc-channel-cross` pairs every long channel with every other across the two brains, 196 values instead of 14, and adds a channel x channel matrix of the band means to the report, plus the ROI x ROI matrix and the full grid of ROI maps when `--roi-mapping` is given; the interactive heatmaps stay on the homologous pairs, since each is a whole time-frequency array. Every coherence map carries the relative phase as arrows, so a pair that moves together is distinguishable from one that moves together a few seconds apart. `--wtc-by-condition` repeats the analysis inside each task annotation's own window, one result per block.
+
+`--wtc-chroma` picks the chromophore(s). Both by default: HbO and HbR are two parallel passes over the same code, a member's HbO pairing only with the other member's HbO, so nothing is mixed or averaged and the cost is exactly twice. The reason to have both is a consistency check rather than two results. HbO has the larger amplitude and the better SNR; HbR is the less contaminated by scalp and systemic circulation, which matters more here than for a single brain, since what two people in one room share is largely respiration, heart rate and the task structure. A coupling in HbO with nothing in HbR is a caution flag. It is not a quantitative test, though: coherence is unsigned and bounded, so there is no expected relationship between an HbO value and an HbR one. Every band-mean table carries a `chromophore` column, so a study that ran both can still report one with a single filter; the report's coherence figures draw the first chromophore asked for and name it.
 
 `--wtc-pseudo N` adds the pseudo-dyad null: the same band means taken against a phase-scrambled partner, averaged over N iterations. Coherence between two unrelated recordings is not zero, so this is what a real value is read against. Each iteration is a full WTC run, which makes it the expensive half, so nothing is computed unless you ask. It shares this run's stage, band and window by construction, which is what makes it the null for the table it sits beside; its crossing is the one thing it does not share, since crossing squares the pair count and the null would pay that on every iteration. Ask for it separately with `--wtc-pseudo-cross`.
 

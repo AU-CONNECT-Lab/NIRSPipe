@@ -72,7 +72,9 @@ def write_wtc_null(
             fmin=wtc_fmin, fmax=wtc_fmax, seed=seed, cross=cross,
             limit_scales=limit_scales, mask_coi=mask_coi, ch_type=ch_type,
             sep_bands=sep_bands)
-        # after the averaging, which groups on the columns it knows and drops the rest
+        # tagged after the averaging, which groups on the columns it knows and drops the
+        # rest, and on a copy, since the frame is not ours to mutate
+        part = part.copy()
         part.insert(0, "chromophore", ch_type)
         frames.append(part)
     df = pd.concat(frames, ignore_index=True)

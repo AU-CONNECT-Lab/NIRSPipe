@@ -78,6 +78,49 @@ def test_the_sidecar_records_the_iteration_count_and_the_shape(tmp_path, monkeyp
     assert params["cross"] is False
     assert params["mask_coi"] is True
     assert params["band_fmin"] == 0.06
+    assert params["chroma"] == ["hbo", "hbr"]
+
+
+def test_the_null_tags_each_chromophore_without_mutating_the_frame(tmp_path, monkeypatch, make_raw):
+    """One pass per chromophore, and the frame each returns is not the null's to
+    change. Inserting the column in place worked for HbO and raised on HbR as soon as
+    two passes were handed the same object, which a cache or a stub does."""
+    import fnirs_pipe.pipeline.hyperscanning as hyper
+    from fnirs_pipe.qc import wtc_null
+
+    frame = pd.DataFrame({"sub1": ["a"], "sub2": ["b"], "label": ["S1_D1"],
+                          "coherence": [0.3], "coherence_z": [0.31],
+                          "n_valid_frac": [1.0]})
+    monkeypatch.setattr(hyper, "compute_wtc_pseudo", lambda *a, **k: frame)
+
+    raws = {"a": make_raw(n_ch=1), "b": make_raw(n_ch=1)}
+    out = wtc_null.write_wtc_null(
+        group_id="d01", task="baseline", aligned_raws=raws, output_dir=tmp_path,
+        n_iter=1, chroma=("hbo", "hbr"))
+
+    df = pd.read_csv(out, sep="\t")
+    assert list(df["chromophore"]) == ["hbo", "hbr"]
+    assert "chromophore" not in frame.columns
+
+
+def test_one_chromophore_writes_one_set_of_rows(tmp_path, monkeypatch, make_raw):
+    import fnirs_pipe.pipeline.hyperscanning as hyper
+    from fnirs_pipe.qc import wtc_null
+
+    frame = pd.DataFrame({"sub1": ["a"], "sub2": ["b"], "label": ["S1_D1"],
+                          "coherence": [0.3], "coherence_z": [0.31],
+                          "n_valid_frac": [1.0]})
+    monkeypatch.setattr(hyper, "compute_wtc_pseudo", lambda *a, **k: frame)
+
+    raws = {"a": make_raw(n_ch=1), "b": make_raw(n_ch=1)}
+    out = wtc_null.write_wtc_null(
+        group_id="d01", task="baseline", aligned_raws=raws, output_dir=tmp_path,
+        n_iter=1, chroma=("hbr",))
+
+    df = pd.read_csv(out, sep="\t")
+    assert list(df["chromophore"]) == ["hbr"]
+    params = json.loads(out.with_suffix(".json").read_text())["parameters"]
+    assert params["chroma"] == ["hbr"]
 
 
 # ---- the merge guard ----
