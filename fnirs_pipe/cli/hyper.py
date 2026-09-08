@@ -442,10 +442,10 @@ def _build_parser() -> argparse.ArgumentParser:
                           "has the larger amplitude and the better SNR, HbR is the less "
                           "contaminated by scalp and systemic circulation, so a coupling in "
                           "HbO with nothing in HbR is a caution flag. Every band-mean table "
-                          "gains a chromophore column; the figures draw the first "
-                          "chromophore asked for and say which. The null of --wtc-pseudo "
-                          "follows, since a null on one chromophore says nothing about the "
-                          "other.")
+                          "gains a chromophore column, and the report gains a switch "
+                          "that moves every coherence panel between the chromophores at "
+                          "once. The null of --wtc-pseudo follows, since a null on one "
+                          "chromophore says nothing about the other.")
     run.add_argument("--wtc-roi-min-channels", type=int, default=2, metavar="N",
                      help="Drop an ROI cell resting on fewer than N channel pairs, so one "
                           "surviving optode does not stand in for a region (default 2).")

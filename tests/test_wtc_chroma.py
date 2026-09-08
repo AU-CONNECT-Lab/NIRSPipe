@@ -206,24 +206,6 @@ def test_asking_for_one_chromophore_writes_only_that_one(dyad, tmp_path):
     assert df["chromophore"].unique().tolist() == ["hbr"]
 
 
-def test_the_figures_say_which_chromophore_they_are(dyad, tmp_path):
-    """This round draws one chromophore's panels, so the page has to name it rather than
-    leave a reader to assume HbO."""
-    from fnirs_pipe.pipeline.hyperscanning import GroupEntry
-    from fnirs_pipe.qc.hyper_report import build_hyper_post_report
-
-    path = build_hyper_post_report(
-        group_id="G1", task="tap",
-        group=[GroupEntry("G1", "sub-01", "tap"), GroupEntry("G1", "sub-02", "tap")],
-        aligned_raws=dyad, offsets={"sub-01": 0.0, "sub-02": 0.0}, output_dir=tmp_path,
-        wtc_fmin=0.02, wtc_fmax=0.2, wtc_band_fmin=BAND[0], wtc_band_fmax=BAND[1],
-        wtc_chroma=("hbr",),
-    )
-    html = path.read_text(encoding="utf-8")
-    assert "Wavelet Transform Coherence (per channel) &mdash; HbR" in html
-    assert "Wavelet Transform Coherence (per channel) &mdash; HbO" not in html
-
-
 @pytest.mark.parametrize("bad", [(), ("hbt",), ("hbo", "total")])
 def test_an_unknown_chromophore_is_refused(dyad, tmp_path, bad):
     from fnirs_pipe.pipeline.hyperscanning import GroupEntry
@@ -308,31 +290,6 @@ def test_tagging_before_the_aggregation_would_lose_the_tag():
     assert "chromophore" not in out.columns
 
 
-def test_the_page_carries_one_chromophore_of_figures(dyad, tmp_path):
-    """Both chromophores reach the tables; only one reaches the page. Every map is a whole
-    frequency-by-time array, which is the same reason `--wtc-channel-cross` keeps the
-    selector on the homologous pairs, so a page carrying two would be twice the weight for
-    no reader who cannot already get the numbers from the TSV."""
-    from fnirs_pipe.pipeline.hyperscanning import GroupEntry
-    from fnirs_pipe.qc.hyper_report import build_hyper_post_report
-
-    def _per_ch(chroma, where):
-        path = build_hyper_post_report(
-            group_id="G1", task="tap",
-            group=[GroupEntry("G1", "sub-01", "tap"), GroupEntry("G1", "sub-02", "tap")],
-            aligned_raws=dyad, offsets={"sub-01": 0.0, "sub-02": 0.0}, output_dir=where,
-            wtc_fmin=0.02, wtc_fmax=0.2, wtc_band_fmin=BAND[0], wtc_band_fmax=BAND[1],
-            wtc_chroma=chroma,
-        )
-        html = path.read_text(encoding="utf-8")
-        start = html.index("var _PER_CH")
-        return html[start:html.index("\n", start)]
-
-    one  = _per_ch(("hbo",), tmp_path / "one")
-    both = _per_ch(("hbo", "hbr"), tmp_path / "both")
-    assert one == both
-
-
 # ---- per condition ----
 
 @pytest.fixture(scope="module")
@@ -402,3 +359,122 @@ def test_the_null_and_the_report_default_to_the_same_chromophores():
     report = inspect.signature(build_hyper_post_report).parameters["wtc_chroma"].default
     null = inspect.signature(write_wtc_null).parameters["chroma"].default
     assert tuple(report) == tuple(null) == ("hbo", "hbr")
+
+
+# ---- the chromophore switch ----
+
+def _js_var(html: str, name: str):
+    """The JSON literal assigned to one of the page's `var _X = ...;` lines."""
+    start = html.index(f"var {name}")
+    line = html[start:html.index("\n", start)]
+    return json.loads(line.split("=", 1)[1].rsplit(";", 1)[0].strip())
+
+
+def _page(dyad, where, chroma, **kwargs):
+    from fnirs_pipe.pipeline.hyperscanning import GroupEntry
+    from fnirs_pipe.qc.hyper_report import build_hyper_post_report
+
+    path = build_hyper_post_report(
+        group_id="G1", task="tap",
+        group=[GroupEntry("G1", "sub-01", "tap"), GroupEntry("G1", "sub-02", "tap")],
+        aligned_raws=dyad, offsets={"sub-01": 0.0, "sub-02": 0.0}, output_dir=where,
+        wtc_fmin=0.02, wtc_fmax=0.2, wtc_band_fmin=BAND[0], wtc_band_fmax=BAND[1],
+        wtc_chroma=chroma, **kwargs,
+    )
+    return path.read_text(encoding="utf-8")
+
+
+def test_the_titles_name_the_chromophore_in_a_span_the_switch_can_rewrite(dyad, tmp_path):
+    """Every switchable panel title carries a `.chroma-label`, which is both what a reader
+    sees before touching anything and what `_setChroma` rewrites. A screenshot of one panel
+    therefore still says which chromophore it is."""
+    html = _page(dyad, tmp_path, ("hbr",))
+    assert ('(per channel) &mdash; <span class="chroma-label">HbR</span>') in html
+    assert ">HbO</span>" not in html
+
+
+def test_the_page_carries_every_chromophore_that_ran(dyad, tmp_path):
+    """The switch has to have something to switch to, so the figures are keyed by
+    chromophore rather than one chromophore's being embedded. This is the page-weight cost
+    of the toggle and it is the intended one."""
+    html = _page(dyad, tmp_path, ("hbo", "hbr"))
+    per_ch = _js_var(html, "_PER_CH")
+    assert sorted(per_ch) == ["hbo", "hbr"]
+    assert per_ch["hbo"] != per_ch["hbr"]
+
+
+def test_one_chromophore_embeds_only_that_one(dyad, tmp_path):
+    """`--wtc-chroma hbo` costs what it always did: nothing about the toggle makes a
+    single-chromophore run carry a second set of maps."""
+    html = _page(dyad, tmp_path, ("hbo",))
+    assert sorted(_js_var(html, "_PER_CH")) == ["hbo"]
+    assert _js_var(html, "_CHROMA") == ["hbo"]
+
+
+def test_every_switched_figure_is_keyed_by_chromophore(dyad, tmp_path):
+    """One missing key and `_setChroma` would silently leave a panel showing the previous
+    chromophore's picture, which is the worst failure this page could have."""
+    html = _page(dyad, tmp_path, ("hbo", "hbr"),
+                 roi_map={"L": ["S1_D1", "S2_D2"], "R": ["S3_D3"]},
+                 wtc_roi_min_channels=1, wtc_channel_cross=True)
+    for name in ("_PER_CH", "_PER_ROI", "_ROI_MATRIX", "_CHAN_MATRIX", "_ROI_GRID",
+                 "_COND_IMGS"):
+        assert sorted(_js_var(html, name)) == ["hbo", "hbr"], name
+
+
+def test_the_channel_keys_the_selector_uses_exist_for_both_chromophores(dyad, tmp_path):
+    """`_selectCh` indexes `_PER_CH[_chroma][pair]` off `_CH_PAIRS`, so a pair missing from
+    one chromophore's map would blank the plot on switching rather than error."""
+    html = _page(dyad, tmp_path, ("hbo", "hbr"))
+    pairs = _js_var(html, "_CH_PAIRS")
+    per_ch = _js_var(html, "_PER_CH")
+    assert pairs
+    for ch_type in ("hbo", "hbr"):
+        assert set(per_ch[ch_type]) >= set(pairs), ch_type
+
+
+def test_the_roi_keys_the_selector_uses_exist_for_both_chromophores(dyad, tmp_path):
+    html = _page(dyad, tmp_path, ("hbo", "hbr"),
+                 roi_map={"L": ["S1_D1", "S2_D2"], "R": ["S3_D3"]},
+                 wtc_roi_min_channels=1)
+    labels = _js_var(html, "_ROI_LABELS")
+    per_roi = _js_var(html, "_PER_ROI")
+    assert labels
+    for ch_type in ("hbo", "hbr"):
+        assert set(per_roi[ch_type]) >= set(labels), ch_type
+
+
+def test_the_switch_is_declared_and_the_names_are_display_names(dyad, tmp_path):
+    """The buttons are built from `_CHROMA` at load, so what has to be in the page is the
+    container, the order, and a display name per chromophore."""
+    html = _page(dyad, tmp_path, ("hbo", "hbr"))
+    assert 'id="chroma-switch"' in html
+    assert _js_var(html, "_CHROMA") == ["hbo", "hbr"]
+    assert _js_var(html, "_CHROMA_NAME") == {"hbo": "HbO", "hbr": "HbR"}
+
+
+def test_a_single_chromophore_run_has_no_switch_element(dyad, tmp_path):
+    """Not a hidden one: a control that cannot do anything is worse than no control, and the
+    hint would otherwise claim a switch the page does not have."""
+    html = _page(dyad, tmp_path, ("hbo",))
+    assert 'id="chroma-switch"' not in html
+    assert "nothing to switch to" in html
+
+
+def test_the_condition_images_line_up_by_window_across_chromophores(dyad, tmp_path_factory):
+    """`_drawImages` pairs `_COND_IMGS[chroma][i]` with the card `cond-matrix-<i>`, so the
+    lists have to be positional and the same length, one entry per window, even when a
+    guard failed for one chromophore."""
+    marked = {sid: raw.copy() for sid, raw in dyad.items()}
+    for raw in marked.values():
+        raw.set_annotations(mne.Annotations(onset=[10.0, 200.0], duration=[100.0, 100.0],
+                                            description=["chat", "quiet"]))
+    html = _page(marked, tmp_path_factory.mktemp("condswitch"), ("hbo", "hbr"),
+                 roi_map={"L": ["S1_D1", "S2_D2"], "R": ["S3_D3"]},
+                 wtc_roi_min_channels=1, wtc_by_condition=True)
+    cond = _js_var(html, "_COND_IMGS")
+    assert len(cond["hbo"]) == len(cond["hbr"]) == 2
+    assert 'id="cond-grid-0"' in html and 'id="cond-grid-1"' in html
+    for entries in cond.values():
+        for imgs in entries:
+            assert set(imgs) == {"matrix", "grid"}

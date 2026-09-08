@@ -6,9 +6,22 @@
 {%- endblock %}
 
 {% block css %}
-select#ch-select-post {
+select#ch-select-post, select#roi-select-post {
   font-size: 0.78rem; border: 1px solid #ced4da; border-radius: 4px;
   padding: 0.15rem 0.35rem; background: #fff; margin-left: auto; max-width: 220px;
+}
+/* One switch for every coherence panel, so a reader is never comparing an HbO channel
+   against an HbR region without noticing. */
+.chroma-switch { display: flex; gap: 0; margin: 0.35rem 0 0.15rem; }
+.chroma-switch button {
+  font: inherit; font-size: 0.82rem; cursor: pointer;
+  padding: 0.25rem 0.9rem; background: #fff; color: #495057;
+  border: 1px solid #ced4da; border-right-width: 0;
+}
+.chroma-switch button:first-child { border-radius: 4px 0 0 4px; }
+.chroma-switch button:last-child  { border-radius: 0 4px 4px 0; border-right-width: 1px; }
+.chroma-switch button[aria-pressed="true"] {
+  background: #495057; color: #fff; border-color: #495057;
 }
 {% endblock %}
 
@@ -52,16 +65,43 @@ select#ch-select-post {
 {% endcall %}
 {% endif %}
 
+<!-- Chromophore switch: one control for every coherence panel below -->
+<div class="card">
+  <div class="panel-title">
+    Chromophore
+    <span class="panel-hint">
+      {% if wtc_chroma_labels | length > 1 -%}
+      switches every wavelet coherence panel on this page &bull;
+      {%- else -%}
+      this run computed {{ wtc_chroma_labels[0] }} only, so there is nothing to switch to
+      &bull;
+      {%- endif %}
+      <code>hyper-wtc.tsv</code> carries {{ wtc_chroma_labels | join(" and ") }} in a
+      <code>chromophore</code> column
+    </span>
+  </div>
+  {% if wtc_chroma_labels | length > 1 %}
+  <div class="chroma-switch" id="chroma-switch" role="group" aria-label="Chromophore"></div>
+  {% endif %}
+  <div class="panel-caveat">
+    HbO and HbR are two parallel passes, never mixed and never averaged. The reason to have
+    both is a consistency check, not two results: HbO has the larger amplitude and the
+    better SNR, HbR is the less contaminated by scalp and systemic circulation, so a
+    coupling that shows in HbO and not in HbR is a caution flag. It is not a quantitative
+    test &mdash; coherence is unsigned and bounded, so there is no expected relationship
+    between an HbO value and an HbR one. Read it as present or absent. The inter-brain
+    correlation panels further down show both chromophores at once instead, an ISC matrix
+    being small enough to sit side by side.
+  </div>
+</div>
+
 <!-- Per-channel WTC -->
 <div class="card">
   <div class="panel-title">
-    Wavelet Transform Coherence (per channel) &mdash; {{ wtc_fig_chroma }}
+    Wavelet Transform Coherence (per channel) &mdash; <span class="chroma-label">{{ wtc_fig_chroma }}</span>
     <span class="panel-hint">
       Morlet wavelet &bull; white dashed = COI boundary &bull;
-      regions below COI may be affected by edge effects &bull;
-      figures drawn on {{ wtc_fig_chroma }};
-      <code>hyper-wtc.tsv</code> carries {{ wtc_chroma_labels | join(" and ") }} in a
-      <code>chromophore</code> column
+      regions below COI may be affected by edge effects
     </span>
     <select id="ch-select-post"></select>
   </div>
@@ -72,10 +112,9 @@ select#ch-select-post {
 {% if roi_rows %}
 <div class="card">
   <div class="panel-title">
-    Wavelet Transform Coherence (per ROI) &mdash; {{ wtc_fig_chroma }}
+    Wavelet Transform Coherence (per ROI) &mdash; <span class="chroma-label">{{ wtc_fig_chroma }}</span>
     <span class="panel-hint">
-      WTC on {{ wtc_fig_chroma }} averaged within each ROI (bad channels excluded) &bull;
-      white dashed = COI boundary
+      averaged within each ROI (bad channels excluded) &bull; white dashed = COI boundary
     </span>
     <select id="roi-select-post"></select>
   </div>
@@ -84,20 +123,20 @@ select#ch-select-post {
 
 <div class="card" id="wtc-roi-matrix-card" style="display:none">
   <div class="panel-title">
-    Wavelet Transform Coherence (ROI &times; ROI) &mdash; {{ wtc_fig_chroma }}
+    Wavelet Transform Coherence (ROI &times; ROI) &mdash; <span class="chroma-label">{{ wtc_fig_chroma }}</span>
     <span class="panel-hint">
       band mean per ROI pair, inside the COI &bull; diagonal = homologous ROIs, the ones
-      plotted above &bull; the {{ wtc_fig_chroma }} rows of
-      <code>hyper-wtc-roichan.tsv</code>
+      plotted above &bull; the rows of <code>hyper-wtc-roichan.tsv</code> for this
+      chromophore
     </span>
   </div>
   <div id="wtc-roi-matrix-plot"></div>
 </div>
 
-{% if wtc_roi_grid_b64 %}
-<div class="card">
+{% if has_roi_grid %}
+<div class="card" id="wtc-roi-grid-card">
   <div class="panel-title">
-    Wavelet Transform Coherence (ROI maps, with relative phase) &mdash; {{ wtc_fig_chroma }}
+    Wavelet Transform Coherence (ROI maps, with relative phase) &mdash; <span class="chroma-label">{{ wtc_fig_chroma }}</span>
     <span class="panel-hint">
       arrows: right = in phase, left = antiphase, up = {{ subject_ids[0] }} leads by a quarter
       cycle &bull; white dashed = COI boundary &bull; crossed runs get every ROI pair, rows
@@ -105,49 +144,51 @@ select#ch-select-post {
     </span>
   </div>
   <div style="text-align:center; padding:0.5rem">
-    <img src="data:image/png;base64,{{ wtc_roi_grid_b64 }}" style="max-width:100%"/>
+    <img id="wtc-roi-grid-img" alt="ROI coherence maps" style="max-width:100%"/>
   </div>
 </div>
 {% endif %}
 {% endif %}
 
 {% for cond in condition_figs %}
-{% if cond.matrix or cond.grid %}
-<div class="card">
+{% if cond.has_matrix or cond.has_grid %}
+<div class="card" id="cond-card-{{ loop.index0 }}">
   <div class="panel-title">
-    Condition: {{ cond.label }} &mdash; {{ wtc_fig_chroma }}
+    Condition: {{ cond.label }} &mdash; <span class="chroma-label">{{ wtc_fig_chroma }}</span>
     <span class="panel-hint">
       {{ cond.tstart }}&ndash;{{ cond.tstop }} s on the aligned clock &bull; the same analysis
       as the whole run, inside this window only &bull; numbers in
       <code>hyper-wtcbycond.tsv</code>, which carries every chromophore that was run
     </span>
   </div>
-  {% if cond.matrix %}
+  {% if cond.has_matrix %}
   <div style="text-align:center; padding:0.5rem">
-    <img src="data:image/png;base64,{{ cond.matrix }}" style="max-width:100%"/>
+    <img id="cond-matrix-{{ loop.index0 }}" alt="channel coherence matrix, {{ cond.label }}"
+         style="max-width:100%"/>
   </div>
   {% endif %}
-  {% if cond.grid %}
+  {% if cond.has_grid %}
   <div style="text-align:center; padding:0.5rem">
-    <img src="data:image/png;base64,{{ cond.grid }}" style="max-width:100%"/>
+    <img id="cond-grid-{{ loop.index0 }}" alt="ROI coherence maps, {{ cond.label }}"
+         style="max-width:100%"/>
   </div>
   {% endif %}
 </div>
 {% endif %}
 {% endfor %}
 
-{% if wtc_chan_matrix_b64 %}
-<div class="card">
+{% if has_chan_matrix %}
+<div class="card" id="wtc-chan-matrix-card">
   <div class="panel-title">
-    Wavelet Transform Coherence (channel &times; channel) &mdash; {{ wtc_fig_chroma }}
+    Wavelet Transform Coherence (channel &times; channel) &mdash; <span class="chroma-label">{{ wtc_fig_chroma }}</span>
     <span class="panel-hint">
       band mean per channel pair &bull; row = {{ subject_ids[0] }}, column =
       {{ subject_ids[1] }} &bull; diagonal = the homologous pairs the selector plots &bull;
-      the {{ wtc_fig_chroma }} rows of <code>hyper-wtc.tsv</code>
+      the rows of <code>hyper-wtc.tsv</code> for this chromophore
     </span>
   </div>
   <div style="text-align:center; padding:0.5rem">
-    <img src="data:image/png;base64,{{ wtc_chan_matrix_b64 }}" style="max-width:100%"/>
+    <img id="wtc-chan-matrix-img" alt="channel coherence matrix" style="max-width:100%"/>
   </div>
 </div>
 {% endif %}
@@ -191,14 +232,28 @@ select#ch-select-post {
 {% endif %}
 
 <script>
-var _PER_CH     = {{ per_channel_post_json | safe }};
-var _CH_PAIRS   = {{ ch_pairs_post_json | safe }};
-var _BAD_PAIRS  = {{ bad_pairs_json | safe }};
-var _PER_ROI    = {{ per_roi_post_json | safe }};
-var _ROI_LABELS = {{ roi_labels_json | safe }};
-var _ROI_MATRIX = {{ wtc_roi_matrix_json | safe }};
-var _ALIGN      = {{ alignment_json | safe }};
+var _CHROMA       = {{ wtc_chroma_json | safe }};
+var _CHROMA_NAME  = {{ wtc_chroma_names_json | safe }};
+var _PER_CH       = {{ per_channel_post_json | safe }};
+var _CH_PAIRS     = {{ ch_pairs_post_json | safe }};
+var _BAD_PAIRS    = {{ bad_pairs_json | safe }};
+var _PER_ROI      = {{ per_roi_post_json | safe }};
+var _ROI_LABELS   = {{ roi_labels_json | safe }};
+var _ROI_MATRIX   = {{ wtc_roi_matrix_json | safe }};
+var _CHAN_MATRIX  = {{ wtc_chan_matrix_json | safe }};
+var _ROI_GRID     = {{ wtc_roi_grid_json | safe }};
+var _COND_IMGS    = {{ wtc_cond_imgs_json | safe }};
+var _ALIGN        = {{ alignment_json | safe }};
 var _cfg = { responsive: true, displayModeBar: true };
+
+// Every panel below reads this one variable, so the page is one chromophore at a time.
+var _chroma = _CHROMA[0];
+
+function _png(el, b64) {
+  if (!el) return;
+  if (b64) { el.src = "data:image/png;base64," + b64; el.style.display = ""; }
+  else     { el.removeAttribute("src");             el.style.display = "none"; }
+}
 
 // alignment table
 (function() {
@@ -227,7 +282,7 @@ var _cfg = { responsive: true, displayModeBar: true };
 
 function _selectCh(idx) {
   var pair = _CH_PAIRS[idx];
-  var ch   = _PER_CH[pair] || {};
+  var ch   = (_PER_CH[_chroma] || {})[pair] || {};
   if (ch.wtc) Plotly.react("wtc-plot", ch.wtc.data, ch.wtc.layout, _cfg);
   else        Plotly.purge("wtc-plot");
 }
@@ -246,22 +301,70 @@ function _selectCh(idx) {
 
 function _selectRoi(idx) {
   var roi = _ROI_LABELS[idx];
-  var d   = _PER_ROI[roi] || {};
+  var d   = (_PER_ROI[_chroma] || {})[roi] || {};
   if (d.wtc) Plotly.react("wtc-roi-plot", d.wtc.data, d.wtc.layout, _cfg);
   else       Plotly.purge("wtc-roi-plot");
 }
 
-// The ROI x ROI matrix only exists when the ROIs were crossed; its card stays hidden otherwise.
-(function() {
+// The ROI x ROI matrix only exists when the ROIs were crossed; its card stays hidden
+// otherwise, and it is re-drawn rather than re-created when the chromophore changes.
+function _drawRoiMatrix() {
   var card = document.getElementById("wtc-roi-matrix-card");
-  if (!card || !_ROI_MATRIX) return;
+  if (!card) return;
+  var fig = _ROI_MATRIX[_chroma];
+  if (!fig) { card.style.display = "none"; Plotly.purge("wtc-roi-matrix-plot"); return; }
   card.style.display = "";
-  Plotly.react("wtc-roi-matrix-plot", _ROI_MATRIX.data, _ROI_MATRIX.layout, _cfg);
+  Plotly.react("wtc-roi-matrix-plot", fig.data, fig.layout, _cfg);
+}
+
+// The static pictures: one set of nodes, filled from the chromophore in force.
+function _drawImages() {
+  _png(document.getElementById("wtc-chan-matrix-img"), _CHAN_MATRIX[_chroma]);
+  _png(document.getElementById("wtc-roi-grid-img"),    _ROI_GRID[_chroma]);
+  var windows = _COND_IMGS[_chroma] || [];
+  windows.forEach(function(imgs, i) {
+    _png(document.getElementById("cond-matrix-" + i), imgs.matrix);
+    _png(document.getElementById("cond-grid-" + i),   imgs.grid);
+  });
+}
+
+function _setChroma(name) {
+  _chroma = name;
+  document.querySelectorAll("#chroma-switch button").forEach(function(btn) {
+    btn.setAttribute("aria-pressed", String(btn.dataset.chroma === name));
+  });
+  // every panel title carries one, so a screenshot of a single panel still says which
+  // chromophore it is
+  document.querySelectorAll(".chroma-label").forEach(function(el) {
+    el.textContent = _CHROMA_NAME[name];
+  });
+  var chSel  = document.getElementById("ch-select-post");
+  var roiSel = document.getElementById("roi-select-post");
+  if (chSel  && _CH_PAIRS.length)   _selectCh(parseInt(chSel.value) || 0);
+  if (roiSel && _ROI_LABELS.length) _selectRoi(parseInt(roiSel.value) || 0);
+  _drawRoiMatrix();
+  _drawImages();
+}
+
+// One button per chromophore that was run. A single-chromophore run has no switch element
+// at all -- the template leaves it out, since there is nothing to switch to and the panel
+// titles already name the chromophore.
+(function() {
+  var box = document.getElementById("chroma-switch");
+  if (!box) return;
+  _CHROMA.forEach(function(name) {
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.dataset.chroma = name;
+    btn.textContent = _CHROMA_NAME[name];
+    btn.setAttribute("aria-pressed", String(name === _chroma));
+    btn.addEventListener("click", function() { _setChroma(name); });
+    box.appendChild(btn);
+  });
 })();
 
 window.addEventListener("DOMContentLoaded", function() {
-  if (_CH_PAIRS.length > 0)   _selectCh(0);
-  if (_ROI_LABELS.length > 0) _selectRoi(0);
+  _setChroma(_chroma);
 });
 </script>
 
