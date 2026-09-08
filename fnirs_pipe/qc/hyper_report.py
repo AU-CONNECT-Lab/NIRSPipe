@@ -48,6 +48,7 @@ _SUBJECT_METRICS = [
 ]
 
 _ARROW = {"higher": "↑", "lower": "↓"}
+_CHROMA_LABEL = {"hbo": "HbO", "hbr": "HbR"}
 
 
 def _metric_class(key: str, value: float, sci_threshold: float) -> str:
@@ -351,6 +352,7 @@ def build_hyper_post_report(
     wtc_save_maps: bool = False,
     wtc_mask_coi: bool = False,
     wtc_roi_min_channels: int = 2,
+    wtc_chroma: "tuple[str, ...] | list[str]" = ("hbo", "hbr"),
     isc_threshold: float = 0.3,
     sci_threshold: float = SCI_PASS,
     sep_bands=None,
@@ -384,9 +386,18 @@ def build_hyper_post_report(
     ``wtc_mask_coi`` restricts each band mean to the cone of influence. Off by default; the
     share inside the cone is reported either way as ``n_valid_frac``.
 
-    ``wtc_save_maps`` writes the full time-frequency maps beside each TSV as ``.npz``, so a
-    different band can be averaged later without a second wavelet transform. See
-    :mod:`fnirs_pipe.qc.wtc_store`. ``wtc_limit_scales`` computes only the scales inside
+    ``wtc_chroma`` is the chromophores to run, ``("hbo",)``, ``("hbr",)`` or both. Both is
+    the default and costs exactly twice as much, since the two are the same computation run
+    twice: a member's HbO pairs only with the other member's HbO, and the two are never
+    mixed and never averaged. The reason to have both is a consistency check rather than two
+    results, HbO carrying the larger amplitude and HbR the less scalp contamination, so a
+    coupling in HbO with nothing in HbR is a caution flag. Every band-mean table gains a
+    ``chromophore`` column rather than splitting per chromophore, the tables being
+    long-format. The figures still draw one chromophore, the first requested, and say which.
+
+    ``wtc_save_maps`` writes the full time-frequency maps beside the tables as ``.npz``, one
+    per chromophore, so a different band can be averaged later without a second wavelet
+    transform. See :mod:`fnirs_pipe.qc.wtc_store`. ``wtc_limit_scales`` computes only the scales inside
     ``[wtc_fmin, wtc_fmax]`` plus margin, which is most of the runtime and, given that the
     scales land on pycwt's own grid and the margin exceeds its scale-smoothing window,
     reproduces the unrestricted coherences bit for bit.
@@ -414,6 +425,13 @@ def build_hyper_post_report(
     notes: list[str] = []
     scope = f"group-{group_id}_task-{task}"
 
+    chroma = tuple(dict.fromkeys(wtc_chroma))
+    if not chroma or set(chroma) - {"hbo", "hbr"}:
+        raise ValueError(f"wtc_chroma must be some of ('hbo', 'hbr'), got {wtc_chroma!r}")
+    # the chromophore whose panels the page draws. The tables carry every requested one; the
+    # figures are still one chromophore's, labelled as such, until the page gains a toggle
+    fig_chroma = chroma[0]
+
     subject_ids  = [e.subject_id for e in group]
     ref_raw      = aligned_raws.get(subject_ids[0]) if subject_ids else None
     markers_list = extract_markers(ref_raw) if ref_raw else []
@@ -437,22 +455,6 @@ def build_hyper_post_report(
             "WTC band mean taken over the whole %.4f-%.4f Hz axis; name a narrower band "
             "to average over the frequencies the task lives in", band_fmin, band_fmax)
 
-    def _write_band_tsv(result: "WTCResult | None", kind: str, step: str):
-        if result is None or not result.pairs:
-            return None
-        df = None
-        with guard(f"WTC band mean ({kind})", errors, scope):
-            df = wtc_band_mean(result, band_fmin, band_fmax, mask_coi=wtc_mask_coi)
-        if df is None:
-            return None
-        tsv_path = _write_df_tsv(df, kind, step)
-        if wtc_save_maps:
-            from fnirs_pipe.qc.wtc_store import save_wtc
-            with guard(f"Saving WTC maps ({kind})", errors, scope):
-                save_wtc(result, tsv_path.with_suffix(".npz"))
-        logger.info("WTC band means saved: %s", tsv_path)
-        return df
-
     def _write_df_tsv(df, kind: str, step: str, **extra) -> Path:
         tsv_path = (group_data_dir(output_dir, group_id)
                     / f"group-{group_id}_task-{task}_hyper-{kind}.tsv")
@@ -461,7 +463,7 @@ def build_hyper_post_report(
             tsv_path, step,
             [p for p in (path_from(r) for r in aligned_raws.values()) if p],
             band_fmin=band_fmin, band_fmax=band_fmax, mask_coi=wtc_mask_coi,
-            wtc_fmin=wtc_fmin, wtc_fmax=wtc_fmax,
+            wtc_fmin=wtc_fmin, wtc_fmax=wtc_fmax, chroma=list(chroma),
             **wtc_grid_params(aligned_raws), **extra,
         )
         return tsv_path
@@ -473,56 +475,270 @@ def build_hyper_post_report(
             out = fig.to_dict() if fig is not None else None
         return out
 
-    # Compute WTC
-    wtc_result: WTCResult | None = None
-    with guard("WTC computation", errors, scope):
-        if wtc_significance:
-            logger.warning("WTC significance on: %d Monte Carlo surrogates per channel pair, "
-                           "this is slow.", wtc_mc_count)
-        if wtc_channel_cross:
-            logger.warning("WTC channel crossing on: every long channel against every "
-                           "other, so the pair count is squared and so is the runtime.")
-        logger.info("Computing WTC for %d subjects...", len(subject_ids))
-        wtc_result = compute_wtc(
-            aligned_raws, fmin=wtc_fmin, fmax=wtc_fmax, significance=wtc_significance,
-            seed=wtc_seed, mc_count=wtc_mc_count, cross=wtc_channel_cross,
-            limit_scales=wtc_limit_scales, sep_bands=sep_bands)
+    def _tag(df, ch_type: str):
+        """The column saying which chromophore a row is, added after every aggregation.
 
-    chan_band_df = _write_band_tsv(wtc_result, "wtc", "hyper_wtc")
+        ``roi_mean_of_channels`` and ``wtc_band_mean`` group on the columns they know and
+        drop the rest, so tagging before them loses the tag. Same reason ``condition`` is
+        inserted after the band mean rather than carried into it.
+        """
+        df.insert(0, "chromophore", ch_type)
+        return df
 
-    pair_key   = next(iter(wtc_result.pairs)) if wtc_result and wtc_result.pairs else None
-    pair_label = f"{pair_key[0]} × {pair_key[1]}" if pair_key else ""
+    def _save_maps(result, kind: str, ch_type: str) -> None:
+        """The full time-frequency maps beside the table, one archive per chromophore.
 
-    chan_matrix_b64 = ""
-    if wtc_channel_cross and chan_band_df is not None:
-        with guard("WTC channel cross matrix", errors, scope):
-            # the montage, not the labels the table happens to carry: a dyad that lost a
-            # channel still gets a matrix of the same shape as one that did not. Both
-            # members, since a montage they do not share is still two montages
-            members = [aligned_raws[s] for s in subject_ids if s in aligned_raws]
-            chan_labels = long_axis_over(members, sep_bands=sep_bands) if members else sorted(
-                {*chan_band_df["label"], *chan_band_df["label2"]})
-            chan_matrix_b64 = build_wtc_cross_matrix(
-                chan_band_df, chan_labels, subject_ids, band_fmin, band_fmax,
-                kind="channel") or ""
+        Named ``hyper-<kind>-<ch_type>.npz`` rather than after the TSV, because the TSV now
+        holds both chromophores and two archives cannot share one name. ``fnirs-hyper band``
+        globs ``*_hyper-wtc*.npz``, which this still matches.
+        """
+        from fnirs_pipe.qc.wtc_store import save_wtc
+        npz_path = (group_data_dir(output_dir, group_id)
+                    / f"group-{group_id}_task-{task}_hyper-{kind}-{ch_type}.npz")
+        with guard(f"Saving WTC maps ({kind} {ch_type})", errors, scope):
+            save_wtc(result, npz_path)
 
-    # Build per-channel WTC figures
+    def _band_means(result, kind: str, ch_type: str):
+        if result is None or not result.pairs:
+            return None
+        df = None
+        with guard(f"WTC band mean ({kind} {ch_type})", errors, scope):
+            df = wtc_band_mean(result, band_fmin, band_fmax, mask_coi=wtc_mask_coi)
+        return df
+
+    # the channel selector and the ROI grouping table describe the montage, so they are the
+    # same whichever chromophore is drawn and are built once
     ch_pairs_post: list[str] = get_channel_pairs(ref_raw) if ref_raw else []
-    per_channel_post: dict[str, dict] = {}
-    for pair in ch_pairs_post:
-        wtc_fig = None
-        if wtc_result and pair_key:
-            # crossing keys every pair, so the homologous one is the (ch, ch) cell
-            ch_key  = (pair, pair) if wtc_channel_cross else pair
-            ch_data = wtc_result.pairs.get(pair_key, {}).get(ch_key)
-            wtc_fig = _safe_post(
-                "wtc", build_wtc_channel,
-                ch_data, wtc_result.freqs, wtc_result.times,
-                pair_label, markers_list, cond_colors_,
-            )
-        per_channel_post[pair] = {"wtc": wtc_fig}
+    roi_rows: list[dict] = []
+    roi_labels: list[str] = list(roi_map.keys()) if roi_map else []
+    if roi_map:
+        assigned = {ch for chs in roi_map.values() for ch in chs}
+        for roi_name, chs in roi_map.items():
+            roi_rows.append({"roi": roi_name, "channels": chs})
+        unassigned = [c for c in ch_pairs_post if c not in assigned]
+        if unassigned:
+            roi_rows.append({"roi": "Unassigned", "channels": unassigned})
 
-    # Compute ISC panels (HbO and HbR)
+    # the task windows are a property of the annotations, not of the chromophore
+    cond_windows: list[tuple[str, float, float]] = []
+    if wtc_by_condition:
+        cond_windows = (condition_windows(ref_raw, min_duration=1.0 / wtc_fmin)
+                        if ref_raw else [])
+        if not cond_windows:
+            note(notes, scope,
+                 "--wtc-by-condition asked for, but no annotation window is long enough "
+                 f"for one cycle of {wtc_fmin:.4f} Hz: no per-condition figures")
+        else:
+            logger.info("--wtc-by-condition: %d window(s), each a further WTC pass",
+                        len(cond_windows))
+
+    def _wtc_pass(ch_type: str, figures: bool) -> dict:
+        """The whole WTC analysis for one chromophore: rows for the tables, and figures.
+
+        HbO and HbR are two parallel runs of the same code. A member's HbO pairs only with
+        the other member's HbO, the two are never mixed and never averaged, and nothing
+        about the statistic changes, so this is a loop over ``--wtc-chroma`` rather than a
+        branch anywhere inside it. Cost is one full multiple per chromophore.
+
+        Returns the rows each table wants, untagged, plus the figures. The caller
+        concatenates the rows across chromophores and writes one table per kind: the
+        band-mean tables are long-format, so a ``chromophore`` column keeps their filenames
+        stable. ``figures`` is False for every chromophore but the one the page draws. The
+        maps are already computed by then, but rendering them is not free, and this round's
+        page carries one chromophore's panels.
+        """
+        out: dict = {
+            "chan": None, "roichan": None, "cond_chan": [], "cond_roi": [],
+            "chan_matrix_b64": "", "roi_matrix_fig": None, "roi_grid_b64": "",
+            "per_channel": {}, "per_roi": {}, "condition_figs": [],
+        }
+
+        wtc_result: WTCResult | None = None
+        with guard(f"WTC computation ({ch_type})", errors, scope):
+            logger.info("Computing WTC on %s for %d subjects...", ch_type, len(subject_ids))
+            wtc_result = compute_wtc(
+                aligned_raws, fmin=wtc_fmin, fmax=wtc_fmax, significance=wtc_significance,
+                seed=wtc_seed, mc_count=wtc_mc_count, cross=wtc_channel_cross,
+                limit_scales=wtc_limit_scales, ch_type=ch_type, sep_bands=sep_bands)
+
+        chan_band_df = _band_means(wtc_result, "wtc", ch_type)
+        out["chan"] = chan_band_df
+        if chan_band_df is not None and wtc_save_maps:
+            _save_maps(wtc_result, "wtc", ch_type)
+
+        pair_key   = next(iter(wtc_result.pairs)) if wtc_result and wtc_result.pairs else None
+        pair_label = f"{pair_key[0]} × {pair_key[1]}" if pair_key else ""
+
+        if figures and wtc_channel_cross and chan_band_df is not None:
+            with guard(f"WTC channel cross matrix ({ch_type})", errors, scope):
+                # the montage, not the labels the table happens to carry: a dyad that lost a
+                # channel still gets a matrix of the same shape as one that did not. Both
+                # members, since a montage they do not share is still two montages
+                members = [aligned_raws[s] for s in subject_ids if s in aligned_raws]
+                chan_labels = (long_axis_over(members, ch_type, sep_bands) if members
+                               else sorted({*chan_band_df["label"],
+                                            *chan_band_df["label2"]}))
+                out["chan_matrix_b64"] = build_wtc_cross_matrix(
+                    chan_band_df, chan_labels, subject_ids, band_fmin, band_fmax,
+                    kind="channel") or ""
+
+        if figures:
+            for pair in ch_pairs_post:
+                wtc_fig = None
+                if wtc_result and pair_key:
+                    # crossing keys every pair, so the homologous one is the (ch, ch) cell
+                    ch_key  = (pair, pair) if wtc_channel_cross else pair
+                    ch_data = wtc_result.pairs.get(pair_key, {}).get(ch_key)
+                    wtc_fig = _safe_post(
+                        f"wtc ({ch_type})", build_wtc_channel,
+                        ch_data, wtc_result.freqs, wtc_result.times,
+                        pair_label, markers_list, cond_colors_,
+                    )
+                out["per_channel"][pair] = {"wtc": wtc_fig}
+
+        if roi_map:
+            # the ROI number the WTC literature reports: coherence per channel pair, then
+            # averaged
+            roi_band_df = None
+            if chan_band_df is not None:
+                with guard(f"ROI mean of channel WTC ({ch_type})", errors, scope):
+                    roi_band_df = roi_mean_of_channels(
+                        chan_band_df, roi_map, min_channels=wtc_roi_min_channels)
+            out["roichan"] = roi_band_df
+
+            # the maps grouped the same way, so the picture and the table are one average
+            roi_wtc: WTCResult | None = None
+            if wtc_result is not None:
+                with guard(f"ROI WTC maps from channels ({ch_type})", errors, scope):
+                    roi_wtc = roi_maps_from_channels(wtc_result, roi_map)
+            roi_pair_key = next(iter(roi_wtc.pairs)) if roi_wtc and roi_wtc.pairs else None
+
+            if figures:
+                if roi_band_df is not None and wtc_channel_cross:
+                    out["roi_matrix_fig"] = _safe_post(
+                        f"wtc-roi-matrix ({ch_type})", build_wtc_roi_matrix,
+                        roi_band_df, roi_labels, subject_ids, band_fmin, band_fmax,
+                    )
+                # drawn crossed or not: it is the only figure carrying the phase arrows
+                with guard(f"WTC ROI map grid ({ch_type})", errors, scope):
+                    out["roi_grid_b64"] = build_wtc_roi_grid(
+                        roi_wtc, roi_labels, roi_pair_key, subject_ids) or ""
+                for roi_name in roi_labels:
+                    roi_fig = None
+                    if roi_wtc and roi_pair_key:
+                        # crossing keys every pair, so the homologous one is (roi, roi)
+                        roi_key  = (roi_name, roi_name) if wtc_channel_cross else roi_name
+                        roi_data = roi_wtc.pairs.get(roi_pair_key, {}).get(roi_key)
+                        roi_fig = _safe_post(
+                            f"wtc-roichan ({ch_type})", build_wtc_channel,
+                            roi_data, roi_wtc.freqs, roi_wtc.times,
+                            pair_label, markers_list, cond_colors_,
+                        )
+                    out["per_roi"][roi_name] = {"wtc": roi_fig}
+
+        # ---- per condition ----
+        # The whole-run pass above stands; this adds the same analysis inside each task
+        # window, which is the comparison a block design is run for.
+        for label, tstart, tstop in cond_windows:
+            cond_chan = None
+            with guard(f"Condition {label}: WTC ({ch_type})", errors, scope):
+                cropped = crop_aligned_window(aligned_raws, tstart, tstop)
+                cond_wtc = compute_wtc(
+                    cropped, fmin=wtc_fmin, fmax=wtc_fmax, significance=wtc_significance,
+                    seed=wtc_seed, mc_count=wtc_mc_count, cross=wtc_channel_cross,
+                    limit_scales=wtc_limit_scales, ch_type=ch_type, sep_bands=sep_bands)
+                cond_chan = wtc_band_mean(cond_wtc, band_fmin, band_fmax,
+                                          mask_coi=wtc_mask_coi)
+            if cond_chan is None:
+                continue
+
+            if roi_map:
+                with guard(f"Condition {label}: ROI means ({ch_type})", errors, scope):
+                    cond_roi = roi_mean_of_channels(
+                        cond_chan, roi_map, min_channels=wtc_roi_min_channels)
+                    cond_roi.insert(0, "condition", label)
+                    out["cond_roi"].append(_tag(cond_roi, ch_type))
+
+            cond_chan.insert(0, "condition", label)
+            out["cond_chan"].append(_tag(cond_chan.copy(), ch_type))
+
+            if not figures:
+                continue
+            entry: dict = {"label": label, "tstart": round(tstart, 1),
+                           "tstop": round(tstop, 1), "matrix": "", "grid": ""}
+            if wtc_channel_cross:
+                with guard(f"Condition {label}: channel matrix ({ch_type})", errors, scope):
+                    ch_labels = sorted({*cond_chan["label"], *cond_chan["label2"]})
+                    entry["matrix"] = build_wtc_cross_matrix(
+                        cond_chan, ch_labels, subject_ids, band_fmin, band_fmax,
+                        kind="channel") or ""
+            if roi_map:
+                with guard(f"Condition {label}: ROI grid ({ch_type})", errors, scope):
+                    cond_roi_wtc = roi_maps_from_channels(cond_wtc, roi_map)
+                    key = next(iter(cond_roi_wtc.pairs), None)
+                    entry["grid"] = build_wtc_roi_grid(
+                        cond_roi_wtc, list(roi_map), key, subject_ids) or ""
+            out["condition_figs"].append(entry)
+
+        return out
+
+    if wtc_significance:
+        logger.warning("WTC significance on: %d Monte Carlo surrogates per channel pair, "
+                       "this is slow.", wtc_mc_count)
+    if wtc_channel_cross:
+        logger.warning("WTC channel crossing on: every long channel against every other, "
+                       "so the pair count is squared and so is the runtime.")
+    if len(chroma) > 1:
+        logger.info("--wtc-chroma %s: %d full WTC passes, one per chromophore",
+                    "+".join(chroma), len(chroma))
+
+    passes = {ch_type: _wtc_pass(ch_type, figures=ch_type == fig_chroma)
+              for ch_type in chroma}
+    drawn  = passes[fig_chroma]
+
+    def _stack(key: str):
+        """One kind's rows from every chromophore, tagged, or None when nothing ran."""
+        frames = []
+        for ch_type, result in passes.items():
+            df = result[key]
+            if df is not None and not df.empty:
+                frames.append(_tag(df.copy(), ch_type))
+        return pd.concat(frames, ignore_index=True) if frames else None
+
+    chan_band_df = _stack("chan")
+    if chan_band_df is not None:
+        logger.info("WTC band means saved: %s",
+                    _write_df_tsv(chan_band_df, "wtc", "hyper_wtc"))
+    roi_band_df = _stack("roichan")
+    if roi_band_df is not None:
+        logger.info("WTC ROI means from channels saved: %s",
+                    _write_df_tsv(roi_band_df, "wtc-roichan", "hyper_wtc_roichan"))
+
+    # the windows are the one thing a reader cannot reconstruct from the table
+    spans = {label: [round(t0, 3), round(t1, 3)] for label, t0, t1 in cond_windows}
+    cond_chan_frames = [f for r in passes.values() for f in r["cond_chan"]]
+    cond_roi_frames  = [f for r in passes.values() for f in r["cond_roi"]]
+    if cond_chan_frames:
+        logger.info("WTC band means per condition saved: %s",
+                    _write_df_tsv(pd.concat(cond_chan_frames, ignore_index=True),
+                                  "wtcbycond", "hyper_wtc_bycondition",
+                                  condition_windows_s=spans))
+    if cond_roi_frames:
+        logger.info("WTC ROI means per condition saved: %s",
+                    _write_df_tsv(pd.concat(cond_roi_frames, ignore_index=True),
+                                  "wtcbycond-roichan", "hyper_wtc_bycondition_roichan",
+                                  condition_windows_s=spans))
+
+    chan_matrix_b64  = drawn["chan_matrix_b64"]
+    roi_matrix_fig   = drawn["roi_matrix_fig"]
+    roi_grid_b64     = drawn["roi_grid_b64"]
+    per_channel_post = drawn["per_channel"]
+    per_roi_post     = drawn["per_roi"]
+    condition_figs   = drawn["condition_figs"]
+
+    # Compute ISC panels (HbO and HbR). Not driven by --wtc-chroma: ISC is cheap, so it has
+    # always run on both, and an ISC table is a channel-by-channel matrix that cannot share
+    # a file with a second one the way the long-format WTC tables can.
     def _isc_panel(ch_type: str) -> str:
         panel = ""
         with guard(f"ISC panel ({ch_type})", errors, scope):
@@ -552,125 +768,6 @@ def build_hyper_post_report(
     isc_unfiltered_note = unfiltered_stage_note(aligned_raws)
     if isc_unfiltered_note:
         logger.warning("ISC: %s", isc_unfiltered_note)
-
-    roi_rows: list[dict] = []
-    roi_labels: list[str] = []
-    per_roi_post: dict[str, dict] = {}
-    roi_matrix_fig = None
-    roi_grid_b64 = ""
-    if roi_map:
-        assigned = {ch for chs in roi_map.values() for ch in chs}
-        for roi_name, chs in roi_map.items():
-            roi_rows.append({"roi": roi_name, "channels": chs})
-        unassigned = [c for c in ch_pairs_post if c not in assigned]
-        if unassigned:
-            roi_rows.append({"roi": "Unassigned", "channels": unassigned})
-
-        # the ROI number the WTC literature reports: coherence per channel pair, then averaged
-        roi_band_df = None
-        if chan_band_df is not None:
-            with guard("ROI mean of channel WTC", errors, scope):
-                roi_band_df = roi_mean_of_channels(
-                    chan_band_df, roi_map, min_channels=wtc_roi_min_channels)
-                path = _write_df_tsv(roi_band_df, "wtc-roichan", "hyper_wtc_roichan")
-                logger.info("WTC ROI means from channels saved: %s", path)
-
-        # the maps grouped the same way, so the picture and the table are the same average
-        roi_wtc: WTCResult | None = None
-        if wtc_result is not None:
-            with guard("ROI WTC maps from channels", errors, scope):
-                roi_wtc = roi_maps_from_channels(wtc_result, roi_map)
-
-        roi_pair_key = next(iter(roi_wtc.pairs)) if roi_wtc and roi_wtc.pairs else None
-        roi_labels   = list(roi_map.keys())
-        if roi_band_df is not None and wtc_channel_cross:
-            roi_matrix_fig = _safe_post(
-                "wtc-roi-matrix", build_wtc_roi_matrix,
-                roi_band_df, roi_labels, subject_ids, band_fmin, band_fmax,
-            )
-        # drawn crossed or not: it is the only figure carrying the phase arrows
-        with guard("WTC ROI map grid", errors, scope):
-            roi_grid_b64 = build_wtc_roi_grid(
-                roi_wtc, roi_labels, roi_pair_key, subject_ids) or ""
-        for roi_name in roi_labels:
-            roi_fig = None
-            if roi_wtc and roi_pair_key:
-                # crossing keys every pair, so the homologous one is the (roi, roi) cell
-                roi_key  = (roi_name, roi_name) if wtc_channel_cross else roi_name
-                roi_data = roi_wtc.pairs.get(roi_pair_key, {}).get(roi_key)
-                roi_fig = _safe_post(
-                    "wtc-roichan", build_wtc_channel,
-                    roi_data, roi_wtc.freqs, roi_wtc.times,
-                    pair_label, markers_list, cond_colors_,
-                )
-            per_roi_post[roi_name] = {"wtc": roi_fig}
-
-    # ---- per condition ----
-    # The whole-run pass above stands; this adds the same analysis inside each task window,
-    # which is the comparison a block design is run for.
-    condition_figs: list[dict] = []
-    if wtc_by_condition:
-        windows = condition_windows(ref_raw, min_duration=1.0 / wtc_fmin) if ref_raw else []
-        if not windows:
-            note(notes, scope,
-                 "--wtc-by-condition asked for, but no annotation window is long enough "
-                 f"for one cycle of {wtc_fmin:.4f} Hz: no per-condition figures")
-        else:
-            logger.info("--wtc-by-condition: %d window(s), each a further WTC pass",
-                        len(windows))
-        chan_frames, roi_frames = [], []
-        for label, tstart, tstop in windows:
-            cond_chan = None
-            with guard(f"Condition {label}: WTC", errors, scope):
-                cropped = crop_aligned_window(aligned_raws, tstart, tstop)
-                cond_wtc = compute_wtc(
-                    cropped, fmin=wtc_fmin, fmax=wtc_fmax, significance=wtc_significance,
-                    seed=wtc_seed, mc_count=wtc_mc_count, cross=wtc_channel_cross,
-                    limit_scales=wtc_limit_scales, sep_bands=sep_bands)
-                cond_chan = wtc_band_mean(cond_wtc, band_fmin, band_fmax,
-                                          mask_coi=wtc_mask_coi)
-            if cond_chan is None:
-                continue
-
-            cond_chan.insert(0, "condition", label)
-            chan_frames.append(cond_chan)
-
-            entry: dict = {"label": label, "tstart": round(tstart, 1),
-                           "tstop": round(tstop, 1), "matrix": "", "grid": ""}
-            if wtc_channel_cross:
-                with guard(f"Condition {label}: channel matrix", errors, scope):
-                    ch_labels = sorted({*cond_chan["label"], *cond_chan["label2"]})
-                    entry["matrix"] = build_wtc_cross_matrix(
-                        cond_chan, ch_labels, subject_ids, band_fmin, band_fmax,
-                        kind="channel") or ""
-
-            if roi_map:
-                with guard(f"Condition {label}: ROI means", errors, scope):
-                    cond_roi = roi_mean_of_channels(
-                        cond_chan.drop(columns="condition"), roi_map,
-                        min_channels=wtc_roi_min_channels)
-                    cond_roi.insert(0, "condition", label)
-                    roi_frames.append(cond_roi)
-                with guard(f"Condition {label}: ROI grid", errors, scope):
-                    cond_roi_wtc = roi_maps_from_channels(cond_wtc, roi_map)
-                    key = next(iter(cond_roi_wtc.pairs), None)
-                    entry["grid"] = build_wtc_roi_grid(
-                        cond_roi_wtc, list(roi_map), key, subject_ids) or ""
-
-            condition_figs.append(entry)
-
-        # the windows are the one thing a reader cannot reconstruct from the table
-        spans = {label: [round(t0, 3), round(t1, 3)] for label, t0, t1 in windows}
-        if chan_frames:
-            path = _write_df_tsv(pd.concat(chan_frames, ignore_index=True),
-                                 "wtcbycond", "hyper_wtc_bycondition",
-                                 condition_windows_s=spans)
-            logger.info("WTC band means per condition saved: %s", path)
-        if roi_frames:
-            path = _write_df_tsv(pd.concat(roi_frames, ignore_index=True),
-                                 "wtcbycond-roichan", "hyper_wtc_bycondition_roichan",
-                                 condition_windows_s=spans)
-            logger.info("WTC ROI means per condition saved: %s", path)
 
     bad_pairs_all: set[str] = set()
     if bad_channels:
@@ -711,7 +808,8 @@ def build_hyper_post_report(
             heading="fnirs‑pipe   Hyper Post Report",
             nav_meta=[("group", group_id), ("task", task),
                       ("subjects", ", ".join(subject_ids))],
-            nav_note=f"WTC: {wtc_fmin:.3f}–{wtc_fmax:.3f} Hz",
+            nav_note=(f"WTC: {wtc_fmin:.3f}–{wtc_fmax:.3f} Hz · "
+                      f"{'+'.join(_CHROMA_LABEL[c] for c in chroma)}"),
         ),
         **footer_vars(
             scope=f"group-{group_id}_task-{task}", errors=errors, notes=notes,
@@ -724,6 +822,8 @@ def build_hyper_post_report(
         subject_ids=subject_ids,
         wtc_fmin=wtc_fmin,
         wtc_fmax=wtc_fmax,
+        wtc_fig_chroma=_CHROMA_LABEL[fig_chroma],
+        wtc_chroma_labels=[_CHROMA_LABEL[c] for c in chroma],
         isc_threshold=isc_threshold,
         alignment_json=json.dumps(alignment_rows),
         per_channel_post_json=json.dumps(per_channel_post),

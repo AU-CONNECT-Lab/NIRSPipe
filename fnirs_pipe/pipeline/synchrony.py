@@ -62,32 +62,41 @@ def _shared_sfreq(raws: dict[str, mne.io.Raw]) -> float:
     return next(iter(rates.values()))
 
 
-def _long_hbo_by_label(raw: mne.io.Raw, sep_bands=None) -> dict[str, int]:
-    """{S-D label: channel index} over long HbO channels only, bads already dropped.
+def _long_by_label(
+    raw: mne.io.Raw, ch_type: str = "hbo", sep_bands=None,
+) -> dict[str, int]:
+    """{S-D label: channel index} over one chromophore's long channels, bads already dropped.
 
     The label is the key every inter-brain metric matches on. Position cannot be: two
     participants with different channels rejected no longer agree on what index 3 is.
+
+    ``ch_type`` is "hbo" or "hbr", and the two are parallel from here down: a member's HbO
+    pairs only with the other member's HbO, and the two results are never averaged, since
+    HbO and HbR anti-correlate by construction.
     """
-    picks = long_channel_picks(raw, "hbo", sep_bands=sep_bands)
+    picks = long_channel_picks(raw, ch_type, sep_bands=sep_bands)
     if not picks:
         raise ValueError(
-            "no usable long HbO channel: every one is either short-distance or marked bad"
+            f"no usable long {ch_type.upper()} channel: every one is either short-distance "
+            "or marked bad"
         )
     return {raw.ch_names[p].rsplit(" ", 1)[0]: p for p in picks}
 
 
-def _long_hbo_signals(raw: mne.io.Raw, sep_bands=None) -> dict[str, np.ndarray]:
-    """{S-D label: HbO time course} over long channels only, bads already dropped."""
+def _long_signals(
+    raw: mne.io.Raw, ch_type: str = "hbo", sep_bands=None,
+) -> dict[str, np.ndarray]:
+    """{S-D label: time course} over one chromophore's long channels, bads already dropped."""
     return {
         label: raw.get_data(picks=[p])[0].astype(np.float64)
-        for label, p in _long_hbo_by_label(raw, sep_bands).items()
+        for label, p in _long_by_label(raw, ch_type, sep_bands).items()
     }
 
 
 def long_hbo_axis(raw: mne.io.Raw, sep_bands=None) -> list[str]:
     """The S-D labels a channel-by-channel matrix is indexed by: the montage, bads included.
 
-    Distinct from :func:`_long_hbo_by_label`, which drops the rejected channels because it is
+    Distinct from :func:`_long_by_label`, which drops the rejected channels because it is
     choosing what to compute on. An axis has to outlive a rejection: two dyads that lost
     different channels still have to produce matrices of one shape to be stacked, and a
     reader has to be able to tell an empty cell from a channel that was never in the montage.
@@ -387,14 +396,22 @@ def compute_wtc(
     mc_count: int = 300,
     cross: bool = False,
     limit_scales: bool = True,
+    ch_type: str = "hbo",
     sep_bands=None,
 ) -> WTCResult:
-    """Compute pairwise WTC per long HbO channel using pycwt Morlet wavelet.
+    """Compute pairwise WTC per long channel of one chromophore, using pycwt Morlet wavelet.
 
     Channels are matched by S-D label across subjects; time axis decimated to ~1 Hz.
     Short-distance channels are excluded (see long_channel_picks), as are bads.
     significance adds a Monte Carlo significance level per pair (slow; see _wtc_over_pairs),
     and seed makes it reproducible.
+
+    ``ch_type`` is one chromophore, "hbo" or "hbr". Running both is this function called
+    twice and costs exactly twice as much: nothing about the statistic changes, and the two
+    never mix, since a member's HbO pairs only with the other member's HbO. The reason to
+    run both is a consistency check rather than two results -- HbO has the larger amplitude
+    and the better SNR, HbR is the less contaminated by scalp and systemic circulation, so a
+    coupling in HbO with nothing in HbR is a caution flag.
 
     ``cross`` crosses every channel with every other rather than pairing like with like, so
     n channels give n**2 results keyed by ``(label_sub1, label_sub2)`` instead of n keyed by
@@ -408,7 +425,7 @@ def compute_wtc(
     if len(subject_ids) < 2:
         raise ValueError("Need at least 2 subjects for WTC")
 
-    signals = {sid: _long_hbo_signals(raw, sep_bands) for sid, raw in raws.items()}
+    signals = {sid: _long_signals(raw, ch_type, sep_bands) for sid, raw in raws.items()}
 
     return _wtc_over_pairs(
         raws, signals, fmin, fmax, significance, seed, mc_count, cross, limit_scales)
@@ -449,6 +466,7 @@ def compute_wtc_pseudo(
     cross: bool = False,
     limit_scales: bool = True,
     mask_coi: bool = False,
+    ch_type: str = "hbo",
     sep_bands=None,
 ) -> pd.DataFrame:
     """Pseudo-dyad band means: WTC against a phase-scrambled partner, averaged over ``n_iter``.
@@ -464,6 +482,9 @@ def compute_wtc_pseudo(
 
     ``seed`` drives the phase randomisation and nothing else. Passing the same value as the
     real run is what makes the pair reproducible together.
+
+    ``ch_type`` runs the null on one chromophore, and has to match the real table it is
+    compared against: a null computed on HbO says nothing about an HbR coupling.
     """
     if n_iter < 1:
         raise ValueError(f"n_iter must be at least 1, got {n_iter}")
@@ -479,7 +500,7 @@ def compute_wtc_pseudo(
             "real-against-real pairs in a table labelled null. Run it per dyad."
         )
 
-    true_signals = {sid: _long_hbo_signals(raw, sep_bands) for sid, raw in raws.items()}
+    true_signals = {sid: _long_signals(raw, ch_type, sep_bands) for sid, raw in raws.items()}
     # scramble the second subject only: scrambling both would test surrogate against
     # surrogate, which is a different and weaker null
     scrambled_id = subject_ids[1]
@@ -600,8 +621,9 @@ def compute_pairwise_coherence(
     rows: list[dict] = []
     for sub1, sub2 in combinations(subject_ids, 2):
         raw1, raw2 = raws[sub1], raws[sub2]
-        map1, map2 = (_long_hbo_by_label(raw1, sep_bands),
-                      _long_hbo_by_label(raw2, sep_bands))
+        # HbO only, deliberately: this is the raw-report screening coherence, not a result
+        map1, map2 = (_long_by_label(raw1, sep_bands=sep_bands),
+                      _long_by_label(raw2, sep_bands=sep_bands))
         data1 = raw1.get_data(picks=list(map1.values()))
         data2 = raw2.get_data(picks=list(map2.values()))
         row_of = {label: i for i, label in enumerate(map2)}

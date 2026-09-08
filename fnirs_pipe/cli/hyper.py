@@ -186,7 +186,7 @@ def cmd_run(
     wtc_band_fmin: float | None, wtc_band_fmax: float | None,
     wtc_significance: bool, wtc_mc_count: int, wtc_seed: int | None,
     wtc_mask_coi: bool, wtc_roi_min_channels: int, wtc_channel_cross: bool,
-    wtc_by_condition: bool,
+    wtc_by_condition: bool, wtc_chroma: str,
     wtc_limit_scales: bool, wtc_save_maps: bool,
     wtc_pseudo: int | None, wtc_pseudo_cross: bool,
     bads_scope: str, isc_threshold: float, sci_threshold: float,
@@ -205,19 +205,21 @@ def cmd_run(
     run_args = dict(locals())
 
     from fnirs_pipe.cli._shared import separation_bands_from_args
-    from fnirs_pipe.qc.metrics._helpers import separation_bands
 
-    sep_bands = separation_bands(type("Bands", (), separation_bands_from_args({
+    # validated here so a bad triple fails before any dyad is loaded; which of the three the
+    # caller actually named is what resolve_group_bands needs, so the dict is what is kept
+    bands_override = separation_bands_from_args({
         "short_max_dist": short_max_dist, "long_min_dist": long_min_dist,
         "long_max_dist": long_max_dist,
-    })))
+    })
 
     import json
     from datetime import datetime
 
     from fnirs_pipe.io.derivatives import group_report_dir
-    from fnirs_pipe.pipeline.hyperscanning import write_group_bads
+    from fnirs_pipe.pipeline.hyperscanning import resolve_group_bands, write_group_bads
     from fnirs_pipe.qc.hyper_report import build_hyper_post_report
+    from fnirs_pipe.qc.metrics._helpers import bands_to_record
     from fnirs_pipe.qc.wtc_null import write_wtc_null
     from fnirs_pipe.utils.run_record import write_group_run_record
 
@@ -227,6 +229,11 @@ def cmd_run(
     if wtc_channel_cross and roi_mapping is None:
         print("[warn] --wtc-channel-cross without --roi-mapping: the crossed channel table "
               "is written but no ROI x ROI matrix is built from it.", file=sys.stderr)
+
+    chroma = ("hbo", "hbr") if wtc_chroma == "both" else (wtc_chroma,)
+    if len(chroma) > 1:
+        print("[info] --wtc-chroma both: two full WTC passes per dyad, so roughly twice "
+              "the runtime. Pass hbo or hbr for one.", file=sys.stderr)
 
     groups = _select_groups(pairs_csv, group_id, task_label)
 
@@ -242,6 +249,7 @@ def cmd_run(
         aligned_raws, offsets, group_sqm = _load_aligned_group(
             output_dir, members, task, desc, no_align, normalize, bads_scope, tstart, tend,
             passband_check=(wtc_fmin, wtc_fmax))
+        sep_bands = resolve_group_bands(members, group_sqm, bands_override)
         _quality_summary(aligned_raws, group_sqm, sep_bands)
         if check_only:
             return None
@@ -270,6 +278,7 @@ def cmd_run(
             wtc_save_maps=wtc_save_maps,
             wtc_mask_coi=wtc_mask_coi,
             wtc_roi_min_channels=wtc_roi_min_channels,
+            wtc_chroma=chroma,
             isc_threshold=isc_threshold,
             sci_threshold=sci_threshold,
             sep_bands=sep_bands,
@@ -289,13 +298,19 @@ def cmd_run(
                 cross=wtc_pseudo_cross,
                 limit_scales=wtc_limit_scales,
                 mask_coi=wtc_mask_coi,
+                chroma=chroma,
                 sep_bands=sep_bands,
             )
             print(f"     null   -> {null_path}")
 
         try:
+            # the resolved bands under the keys the SQM record stamps them with, so the two
+            # can be compared directly; run_args holds only the flags as typed. An absent
+            # upper bound drops out, TOML having no null and the writer skipping None
+            # throughout, so absent here means off rather than unrecorded
             record = write_group_run_record(
-                run_args, gid, task, timestamp, output_dir,
+                {**run_args, **bands_to_record(sep_bands)},
+                gid, task, timestamp, output_dir,
                 group_report_dir(output_dir, gid),
                 members=[e.subject_id for e in members],
             )
@@ -418,6 +433,19 @@ def _build_parser() -> argparse.ArgumentParser:
                      help="Seed the Monte Carlo surrogates behind --wtc-significance and the "
                           "phase randomisation behind --wtc-pseudo. Also bypasses pycwt's "
                           "on-disk cache, which is not keyed on the seed.")
+    run.add_argument("--wtc-chroma", choices=("hbo", "hbr", "both"), default="both",
+                     help="Chromophore(s) the coherence runs on (default both). HbO and HbR "
+                          "are two parallel passes over the same code: a member's HbO pairs "
+                          "only with the other member's HbO, they are never mixed and never "
+                          "averaged, so 'both' costs exactly twice as much. The reason to "
+                          "run both is a consistency check rather than two results -- HbO "
+                          "has the larger amplitude and the better SNR, HbR is the less "
+                          "contaminated by scalp and systemic circulation, so a coupling in "
+                          "HbO with nothing in HbR is a caution flag. Every band-mean table "
+                          "gains a chromophore column; the figures draw the first "
+                          "chromophore asked for and say which. The null of --wtc-pseudo "
+                          "follows, since a null on one chromophore says nothing about the "
+                          "other.")
     run.add_argument("--wtc-roi-min-channels", type=int, default=2, metavar="N",
                      help="Drop an ROI cell resting on fewer than N channel pairs, so one "
                           "surviving optode does not stand in for a region (default 2).")
@@ -486,10 +514,11 @@ def _build_parser() -> argparse.ArgumentParser:
                      help=f"The SCI line the per-subject quality table is coloured against "
                           f"(default {SCI_PASS}). Detects nothing here: screening happened "
                           f"in fnirs-pipe. Pass what the run was prepped with.")
-    _shared.add_separation_bands(run, note="Splits nothing new here: the bands are "
-                                 "stamped in each member's record by fnirs-pipe. Pass what "
-                                 "the run was prepped with, or the dyad metrics and the "
-                                 "member reports describe different montages.")
+    _shared.add_separation_bands(run, note="An override, not the source: the bands are "
+                                 "read back from what fnirs-pipe stamped in each member's "
+                                 "record, and members prepped with different bands are "
+                                 "refused. Pass this only for a tree prepped before the "
+                                 "stamp existed. A band left off keeps the records' value.")
     run.set_defaults(func=cmd_run)
 
     band = sub.add_parser(

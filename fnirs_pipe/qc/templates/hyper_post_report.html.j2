@@ -55,10 +55,13 @@ select#ch-select-post {
 <!-- Per-channel WTC -->
 <div class="card">
   <div class="panel-title">
-    Wavelet Transform Coherence (per channel)
+    Wavelet Transform Coherence (per channel) &mdash; {{ wtc_fig_chroma }}
     <span class="panel-hint">
       Morlet wavelet &bull; white dashed = COI boundary &bull;
-      regions below COI may be affected by edge effects
+      regions below COI may be affected by edge effects &bull;
+      figures drawn on {{ wtc_fig_chroma }};
+      <code>hyper-wtc.tsv</code> carries {{ wtc_chroma_labels | join(" and ") }} in a
+      <code>chromophore</code> column
     </span>
     <select id="ch-select-post"></select>
   </div>
@@ -69,9 +72,10 @@ select#ch-select-post {
 {% if roi_rows %}
 <div class="card">
   <div class="panel-title">
-    Wavelet Transform Coherence (per ROI)
+    Wavelet Transform Coherence (per ROI) &mdash; {{ wtc_fig_chroma }}
     <span class="panel-hint">
-      WTC on HbO averaged within each ROI (bad channels excluded) &bull; white dashed = COI boundary
+      WTC on {{ wtc_fig_chroma }} averaged within each ROI (bad channels excluded) &bull;
+      white dashed = COI boundary
     </span>
     <select id="roi-select-post"></select>
   </div>
@@ -80,10 +84,11 @@ select#ch-select-post {
 
 <div class="card" id="wtc-roi-matrix-card" style="display:none">
   <div class="panel-title">
-    Wavelet Transform Coherence (ROI &times; ROI)
+    Wavelet Transform Coherence (ROI &times; ROI) &mdash; {{ wtc_fig_chroma }}
     <span class="panel-hint">
       band mean per ROI pair, inside the COI &bull; diagonal = homologous ROIs, the ones
-      plotted above &bull; same numbers as <code>hyper-wtc-roi.tsv</code>
+      plotted above &bull; the {{ wtc_fig_chroma }} rows of
+      <code>hyper-wtc-roichan.tsv</code>
     </span>
   </div>
   <div id="wtc-roi-matrix-plot"></div>
@@ -92,7 +97,7 @@ select#ch-select-post {
 {% if wtc_roi_grid_b64 %}
 <div class="card">
   <div class="panel-title">
-    Wavelet Transform Coherence (ROI maps, with relative phase)
+    Wavelet Transform Coherence (ROI maps, with relative phase) &mdash; {{ wtc_fig_chroma }}
     <span class="panel-hint">
       arrows: right = in phase, left = antiphase, up = {{ subject_ids[0] }} leads by a quarter
       cycle &bull; white dashed = COI boundary &bull; crossed runs get every ROI pair, rows
@@ -110,11 +115,11 @@ select#ch-select-post {
 {% if cond.matrix or cond.grid %}
 <div class="card">
   <div class="panel-title">
-    Condition: {{ cond.label }}
+    Condition: {{ cond.label }} &mdash; {{ wtc_fig_chroma }}
     <span class="panel-hint">
       {{ cond.tstart }}&ndash;{{ cond.tstop }} s on the aligned clock &bull; the same analysis
       as the whole run, inside this window only &bull; numbers in
-      <code>hyper-wtcbycond.tsv</code>
+      <code>hyper-wtcbycond.tsv</code>, which carries every chromophore that was run
     </span>
   </div>
   {% if cond.matrix %}
@@ -134,11 +139,11 @@ select#ch-select-post {
 {% if wtc_chan_matrix_b64 %}
 <div class="card">
   <div class="panel-title">
-    Wavelet Transform Coherence (channel &times; channel)
+    Wavelet Transform Coherence (channel &times; channel) &mdash; {{ wtc_fig_chroma }}
     <span class="panel-hint">
       band mean per channel pair &bull; row = {{ subject_ids[0] }}, column =
       {{ subject_ids[1] }} &bull; diagonal = the homologous pairs the selector plots &bull;
-      same numbers as <code>hyper-wtc.tsv</code>
+      the {{ wtc_fig_chroma }} rows of <code>hyper-wtc.tsv</code>
     </span>
   </div>
   <div style="text-align:center; padding:0.5rem">

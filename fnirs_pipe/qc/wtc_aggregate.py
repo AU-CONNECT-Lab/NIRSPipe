@@ -97,6 +97,28 @@ def _refuse_mixed_shapes(frames: dict[str, pd.DataFrame]) -> None:
         )
 
 
+def _warn_mixed_chromophores(frames: dict[str, pd.DataFrame]) -> None:
+    """Warn, not refuse, when the tables do not all carry the same chromophores.
+
+    Unlike a band or a crossing, a chromophore is a *row* label, so mixing does not corrupt
+    a column: the rows stay readable and separable. It does mean the merged table has a
+    different dyad count per chromophore, which a group model will silently absorb, so it is
+    worth a line in the log.
+    """
+    seen = {name: tuple(sorted(df["chromophore"].dropna().unique()))
+            for name, df in frames.items() if "chromophore" in df.columns}
+    missing = sorted(set(frames) - set(seen))
+    if len(set(seen.values())) > 1 or (seen and missing):
+        spread = ", ".join(f"{name}={'+'.join(chroma) or 'none'}"
+                           for name, chroma in sorted(seen.items()))
+        logger.warning(
+            "the tables do not all carry the same chromophores, so the merged table has a "
+            "different number of dyads per chromophore: %s%s. Nothing is corrupted, since "
+            "the chromophore is a row label, but a group model will not notice.",
+            spread,
+            f"; no chromophore column in {', '.join(missing)}" if missing else "")
+
+
 def aggregate_wtc(output_dir: Path, kind: str = "wtc") -> pd.DataFrame:
     """Concatenate every per-dyad WTC band-mean table under output_dir.
 
@@ -133,9 +155,11 @@ def aggregate_wtc(output_dir: Path, kind: str = "wtc") -> pd.DataFrame:
 
     _refuse_mixed_bands(params)
     _refuse_mixed_shapes(frames)
+    _warn_mixed_chromophores(frames)
 
     merged = pd.concat(frames.values(), ignore_index=True)
-    sort_cols = [c for c in ("group_id", "task", "sub1", "sub2", "label", "label2")
+    sort_cols = [c for c in ("group_id", "task", "chromophore", "sub1", "sub2",
+                             "label", "label2")
                  if c in merged.columns]
     return merged.sort_values(sort_cols, ignore_index=True)
 

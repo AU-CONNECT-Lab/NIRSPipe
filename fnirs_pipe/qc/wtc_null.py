@@ -6,12 +6,17 @@ null for the table it sits beside. Crossing is the one thing it does not inherit
 used to take ``--wtc-channel-cross`` from the real run, so asking for the exploratory
 196-pair channel table also multiplied the surrogate cost by 14; it is now the null's own
 decision, ``--wtc-pseudo-cross``, and defaults to off.
+
+The chromophores are inherited, unlike crossing: a null missing one leaves that half of the
+real table with nothing to be tested against, which is not a saving worth offering.
 """
 
 from __future__ import annotations
 
 import logging
 from pathlib import Path
+
+import pandas as pd
 
 logger = logging.getLogger(__name__)
 
@@ -30,13 +35,19 @@ def write_wtc_null(
     cross: bool = False,
     limit_scales: bool = True,
     mask_coi: bool = False,
+    chroma: "tuple[str, ...] | list[str]" = ("hbo", "hbr"),
     sep_bands=None,
 ) -> Path:
     """Run the phase-scrambled null for one dyad and write its band means beside the real ones.
 
-    Writes ``group-<id>_task-<task>_hyper-wtc-pseudo.tsv``, the name and columns this table
-    has always had, so anything already reading it is unaffected. The sidecar additionally records ``n_iter`` and ``cross``, without which a
-    5-iteration probe and a 100-iteration null are indistinguishable on disk.
+    Writes ``group-<id>_task-<task>_hyper-wtc-pseudo.tsv``, one table with a
+    ``chromophore`` column, matching the real band-mean tables. The sidecar additionally
+    records ``n_iter``, ``cross`` and ``chroma``, without which a 5-iteration probe and a
+    100-iteration null are indistinguishable on disk.
+
+    ``chroma`` has to cover the real run's chromophores: a null computed on HbO says nothing
+    about an HbR coupling, so a table missing one chromophore leaves that half of the real
+    table with nothing to be tested against.
     """
     from fnirs_pipe.io.derivatives import group_data_dir
     from fnirs_pipe.pipeline.hyperscanning import _hyper_sidecar, compute_wtc_pseudo
@@ -46,13 +57,25 @@ def write_wtc_null(
     band_fmin = band_fmin if band_fmin is not None else wtc_fmin
     band_fmax = band_fmax if band_fmax is not None else wtc_fmax
 
+    chroma = tuple(dict.fromkeys(chroma))
+    if not chroma or set(chroma) - {"hbo", "hbr"}:
+        raise ValueError(f"chroma must be some of ('hbo', 'hbr'), got {chroma!r}")
+
     logger.info(
-        "Pseudo-dyad WTC: %d phase-scrambled iterations, %s pairs, one full WTC run each.",
-        n_iter, "crossed" if cross else "homologous")
-    df = compute_wtc_pseudo(
-        aligned_raws, band_fmin, band_fmax, n_iter=n_iter,
-        fmin=wtc_fmin, fmax=wtc_fmax, seed=seed, cross=cross,
-        limit_scales=limit_scales, mask_coi=mask_coi, sep_bands=sep_bands)
+        "Pseudo-dyad WTC: %d phase-scrambled iterations, %s pairs, one full WTC run each, "
+        "per chromophore (%s).",
+        n_iter, "crossed" if cross else "homologous", "+".join(chroma))
+    frames = []
+    for ch_type in chroma:
+        part = compute_wtc_pseudo(
+            aligned_raws, band_fmin, band_fmax, n_iter=n_iter,
+            fmin=wtc_fmin, fmax=wtc_fmax, seed=seed, cross=cross,
+            limit_scales=limit_scales, mask_coi=mask_coi, ch_type=ch_type,
+            sep_bands=sep_bands)
+        # after the averaging, which groups on the columns it knows and drops the rest
+        part.insert(0, "chromophore", ch_type)
+        frames.append(part)
+    df = pd.concat(frames, ignore_index=True)
 
     out_path = (group_data_dir(output_dir, group_id)
                 / f"group-{group_id}_task-{task}_hyper-wtc-pseudo.tsv")
@@ -62,6 +85,7 @@ def write_wtc_null(
         [p for p in (path_from(r) for r in aligned_raws.values()) if p],
         band_fmin=band_fmin, band_fmax=band_fmax, mask_coi=mask_coi,
         wtc_fmin=wtc_fmin, wtc_fmax=wtc_fmax, n_iter=n_iter, cross=cross, seed=seed,
+        chroma=list(chroma),
         **wtc_grid_params(aligned_raws),
     )
     logger.info("Pseudo-dyad WTC band means saved: %s", out_path)

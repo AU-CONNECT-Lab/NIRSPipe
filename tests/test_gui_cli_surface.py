@@ -266,7 +266,7 @@ _QC_FULL_OPTS = dict(
     desc="errts", roi_mapping="/roi.json",
     wtc_fmin=0.004, wtc_fmax=0.2, wtc_band_fmin=0.01, wtc_band_fmax=0.1,
     wtc_mc_count=300, wtc_seed=42, isc_threshold=0.3,
-    wtc_pseudo=100, wtc_roi_min_channels=2,
+    wtc_pseudo=100, wtc_roi_min_channels=2, wtc_chroma="both",
     hyper_task="rest",
     hyper_flags=["wtc_significance", "wtc_mask_coi", "wtc_channel_cross", "wtc_pseudo_cross",
                  "wtc_by_condition", "bads_subject", "wtc_save_maps", "no_align", "normalize",

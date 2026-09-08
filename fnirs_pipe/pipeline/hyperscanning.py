@@ -711,3 +711,100 @@ def load_group_sqm(
         result[entry.subject_id] = sqm
 
     return result
+
+# ---- Separation bands ----
+
+_BANDS_FIELDS = ("short_max_dist", "long_min_dist", "long_max_dist")
+
+
+def resolve_group_bands(
+    group: list[GroupEntry], group_sqm: dict[str, dict], override: dict | None = None,
+) -> "tuple[float, float, float | None]":
+    """The separation bands a dyad's inter-brain metrics run on, read off the members' records.
+
+    ``fnirs-hyper run`` works on derivatives that prep has already split into long and short
+    channels and stamped with the bands it split them by, so being *told* the bands again on
+    the command line is an invitation to type a number that does not match the one on disk.
+    Reading them back makes that mismatch impossible rather than merely documented.
+    ``fnirs-qc hyper-raw`` is not a caller: it reads BIDS raw data and computes the record
+    itself, so there is nothing on disk to read back and its flags stay the source of truth.
+
+    Two members are two prep runs, so they can disagree. **That is refused, not
+    reconciled.** The bands did not only choose which channels are long, they chose what
+    short-channel regression removed from each member upstream, so a band derived from both
+    would be stamped on a table that neither member was processed with. Nothing is lost by
+    refusing: the homologous channel set already intersects on its own, because the metrics
+    pair by S-D label and a label only one member calls long is simply absent from the
+    other's map.
+
+    ``override`` is the three flags as ``{"short_max_dist": ..., "long_min_dist": ...,
+    "long_max_dist": ...}`` in metres, None for one left off. A value given wins and is
+    logged as forced; one left off falls back to the *records*, not to the package default,
+    so capping the long band does not silently re-assert the other two. An upper bound the
+    records carry therefore cannot be switched off from the command line, which needs a
+    re-run of prep.
+
+    A member whose record predates the stamp reads back as today's defaults. That is a guess
+    rather than a fact, so it is warned about and does not count towards agreement.
+    """
+    from fnirs_pipe.qc.metrics._helpers import (
+        bands_from_record,
+        bands_phrase,
+        record_has_bands,
+        separation_bands,
+        validate_bands,
+    )
+
+    stamped: dict[str, tuple] = {}
+    unstamped: list[str] = []
+    for entry in group:
+        label = f"{entry.subject_id} task-{entry.task}"
+        sqm = group_sqm.get(entry.subject_id) or {}
+        if record_has_bands(sqm):
+            stamped[label] = bands_from_record(sqm)
+        else:
+            unstamped.append(label)
+
+    if len(set(stamped.values())) > 1:
+        spread = "\n".join(f"  {label}: {bands_phrase(bands)}"
+                           for label, bands in sorted(stamped.items()))
+        raise ValueError(
+            "the members were prepped with different separation bands, so this dyad has no "
+            f"one definition of a long channel:\n{spread}\n"
+            "Re-run fnirs-pipe on the odd one out so the two match, or pass "
+            "--short-max-dist / --long-min-dist / --long-max-dist to force one set for this "
+            "run. They are not reconciled for you: the bands also chose what short-channel "
+            "regression removed from each member, so a band taken from both would describe "
+            "neither."
+        )
+
+    # a stamped member's bands when there is one, else today's defaults; either way a guess
+    # for the unstamped members, which is what the warning below is about
+    from_records = next(iter(set(stamped.values())), separation_bands())
+
+    if unstamped:
+        logger.warning(
+            "no separation bands stamped for %s, so %s is assumed for %s: the record "
+            "predates the stamp and what it was prepped with is not recoverable from it. "
+            "Re-run fnirs-pipe on it, or pass --short-max-dist / --long-min-dist / "
+            "--long-max-dist to say what it was.",
+            ", ".join(unstamped), bands_phrase(from_records),
+            "it" if len(unstamped) == 1 else "them")
+
+    forced = {k: v for k, v in (override or {}).items() if v is not None}
+    if not forced:
+        logger.info("separation bands from the members' records: %s",
+                    bands_phrase(from_records))
+        return validate_bands(from_records)
+
+    merged = tuple(forced.get(field, current)
+                   for field, current in zip(_BANDS_FIELDS, from_records))
+    if stamped and merged != from_records:
+        logger.warning(
+            "separation bands forced to %s, overriding the %s the members' records stamp. "
+            "The split the inter-brain metrics use now differs from the one prep applied, "
+            "including which channels it regressed out as short.",
+            bands_phrase(merged), bands_phrase(from_records))
+    else:
+        logger.info("separation bands forced to %s", bands_phrase(merged))
+    return validate_bands(merged)

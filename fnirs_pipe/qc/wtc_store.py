@@ -102,6 +102,10 @@ def reband_tree(
 
     The new tables are named after the band so they sit next to the original without
     overwriting it, which is the point: the comparison is between them.
+
+    An archive whose name ends in the chromophore gets its ``chromophore`` column back, so
+    the re-banded table has the shape ``fnirs-hyper run`` writes. An archive written before
+    the chromophore was in the name has no column, and its rows are HbO.
     """
     from fnirs_pipe import __version__
     from fnirs_pipe.io.derivatives import write_sidecar_json
@@ -114,6 +118,12 @@ def reband_tree(
         except Exception as exc:
             logger.warning("skipping %s: %s", npz_path.name, exc)
             continue
+        # the archive is per chromophore and says so in its name; the column puts it back,
+        # so a re-banded table has the same shape as the one `fnirs-hyper run` wrote
+        ch_type = next((c for c in ("hbo", "hbr")
+                        if npz_path.stem.endswith(f"-{c}")), None)
+        if ch_type:
+            df.insert(0, "chromophore", ch_type)
         out_path = npz_path.with_name(f"{npz_path.stem}-{tag}.tsv")
         df.to_csv(out_path, sep="\t", index=False)
         write_sidecar_json(out_path, {

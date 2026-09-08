@@ -1089,6 +1089,7 @@ def _section_rest(
     fc_seed: dict | None = None,
     fc_roi: dict | None = None,
     raw_haemo: "mne.io.Raw | None" = None,
+    sep_bands=None,
 ) -> dict:
     alff_path = alff_topo_path = fc_path = fc_roi_path = fc_circle_path = fc_seed_path = None
     with _guard("ALFF/fALFF figure", errors, subject):
@@ -1360,7 +1361,8 @@ def build_subject_report(
                                               figures_dir)
     glm_vars          = _section_glm(design_matrix, glm_est, raw_haemo, subject, errors, figures_dir, segments=segments)
     rest_vars         = _section_rest(alff_df, fc_df, subject, errors, figures_dir, fc_hbr_df=fc_hbr_df,
-                                      fc_seed=fc_seed, fc_roi=fc_roi, raw_haemo=raw_haemo)
+                                      fc_seed=fc_seed, fc_roi=fc_roi, raw_haemo=raw_haemo,
+                                      sep_bands=sep_bands)
     sqm_vars          = _section_sqm(sci_scores, bad_channels, subject, errors,
                                      out_dir=out_path.parent / "nirs",
                                      sqm_label=sqm_label,

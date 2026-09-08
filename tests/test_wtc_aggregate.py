@@ -15,7 +15,7 @@ from fnirs_pipe.qc.wtc_aggregate import aggregate_wtc, write_aggregate_wtc
 
 
 def _table(root, group_id, task, kind="wtc", band=(0.01, 0.1), mask_coi=True,
-           crossed=False, sidecar=True):
+           crossed=False, sidecar=True, chroma=None):
     """One dyad's band-mean table, laid out the way hyper-post lays it out."""
     directory = root / f"group-{group_id}" / "nirs"
     directory.mkdir(parents=True, exist_ok=True)
@@ -30,7 +30,11 @@ def _table(root, group_id, task, kind="wtc", band=(0.01, 0.1), mask_coi=True,
     }
     if crossed:
         data["label2"] = ["S2_D1 hbo", "S2_D2 hbo"]
-    pd.DataFrame(data).to_csv(path, sep="\t", index=False)
+    df = pd.DataFrame(data)
+    if chroma:
+        df = pd.concat([df.assign(chromophore=c) for c in chroma], ignore_index=True)
+        df.insert(0, "chromophore", df.pop("chromophore"))
+    df.to_csv(path, sep="\t", index=False)
 
     if sidecar:
         path.with_suffix(".json").write_text(json.dumps({"parameters": {
@@ -176,3 +180,49 @@ def test_the_written_table_round_trips(tmp_path):
     out = write_aggregate_wtc(tmp_path)
     from_disk = pd.read_csv(out, sep="\t", dtype={"group_id": str})
     pd.testing.assert_frame_equal(from_disk, aggregate_wtc(tmp_path))
+
+
+# ---- chromophores ----
+# A chromophore is a row label rather than a column-wide parameter, so mixing does not
+# corrupt anything the way a mixed band does. It is warned about, not refused.
+
+def test_the_chromophore_is_a_sort_key(tmp_path):
+    """It is the coarsest grouping in the table, so the merged file groups by it."""
+    _table(tmp_path, "01", "rest", chroma=("hbr", "hbo"))
+    merged = aggregate_wtc(tmp_path)
+    assert "chromophore" in merged.columns
+    assert list(merged["chromophore"]) == ["hbo", "hbo", "hbr", "hbr"]
+
+
+def test_tables_carrying_different_chromophores_merge_with_a_warning(tmp_path, caplog):
+    """One dyad run on both and another on HbO alone is a real study state, and the rows
+    stay separable, so refusing would be wrong. What a group model will not notice on its
+    own is the unequal dyad count per chromophore."""
+    import logging
+
+    _table(tmp_path, "01", "rest", chroma=("hbo", "hbr"))
+    _table(tmp_path, "02", "rest", chroma=("hbo",))
+    with caplog.at_level(logging.WARNING):
+        merged = aggregate_wtc(tmp_path)
+    assert merged["chromophore"].value_counts().to_dict() == {"hbo": 4, "hbr": 2}
+    assert "same chromophores" in caplog.text
+
+
+def test_a_table_predating_the_column_merges_with_a_warning(tmp_path, caplog):
+    import logging
+
+    _table(tmp_path, "01", "rest", chroma=("hbo", "hbr"))
+    _table(tmp_path, "02", "rest")
+    with caplog.at_level(logging.WARNING):
+        aggregate_wtc(tmp_path)
+    assert "no chromophore column" in caplog.text
+
+
+def test_uniform_chromophores_warn_about_nothing(tmp_path, caplog):
+    import logging
+
+    _table(tmp_path, "01", "rest", chroma=("hbo", "hbr"))
+    _table(tmp_path, "02", "rest", chroma=("hbo", "hbr"))
+    with caplog.at_level(logging.WARNING):
+        aggregate_wtc(tmp_path)
+    assert "same chromophores" not in caplog.text

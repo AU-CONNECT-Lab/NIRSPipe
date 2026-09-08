@@ -79,6 +79,15 @@ def _long_band_phrase(long_min: float, long_max: "float | None") -> str:
     return f"long {long_min * 1e3:.0f}-{long_max * 1e3:.0f} mm"
 
 
+def bands_phrase(sep_bands: "Bands | None" = None) -> str:
+    """The whole triple in one line, for a log message or an error.
+
+    (0.01, 0.015, None) -> "short <= 10 mm, long >= 15 mm"
+    """
+    short_max, long_min, long_max = sep_bands if sep_bands is not None else separation_bands()
+    return f"short <= {short_max * 1e3:.0f} mm, {_long_band_phrase(long_min, long_max)}"
+
+
 def unclaimed_separations(sep_bands: "Bands | None" = None) -> str:
     """The separations in neither band: ``"10-15 mm"``, or ``"10-15 mm, or over 45 mm"``."""
     short_max, long_min, long_max = sep_bands if sep_bands is not None else separation_bands()
@@ -120,6 +129,20 @@ def bands_from_record(scalars: dict) -> Bands:
             value = scalars[key]
             out.append(None if value is None else float(value) / 1e3)
     return tuple(out)
+
+
+def record_has_bands(scalars: dict) -> bool:
+    """Whether a record stamps its own bands, rather than predating the stamp.
+
+    {"sep_short_max_mm": 10.0, "sep_long_min_mm": 15.0, "sep_long_max_mm": None} -> True
+
+    :func:`bands_from_record` falls back to today's defaults for a missing key, so a record
+    written before the stamp existed reads back as whatever the defaults happen to be now.
+    A caller comparing two records has to be able to tell that apart from two records that
+    genuinely agree. All three keys or none: the writer always writes the three together,
+    so a partial set is not a stamp.
+    """
+    return all(key in scalars for key in BANDS_RECORD_KEYS)
 
 
 # Per-channel pass/fail lines. Apart from METRIC_DISPLAY, which holds the cutoffs for a

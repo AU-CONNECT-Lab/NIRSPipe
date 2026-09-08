@@ -1,6 +1,6 @@
 """The long/short separation rule: one definition, configurable, and stamped.
 
-Three things are worth pinning here, and they failed independently before 0.30.0.
+Four things are worth pinning here, and the first three failed independently before 0.30.0.
 
 The *rule* itself: two bands that do not meet, so a channel between them belongs to
 neither. Channel screening cannot stand in for the lower edge, because a 12 mm channel
@@ -13,6 +13,10 @@ montage than the regression used. The consistency test at the end is what enforc
 
 The *stamp*: the record carries the bands it was split with, so a reader of an old record
 can tell which separations produced its numbers rather than assuming today's defaults.
+
+The *read-back*: `fnirs-hyper run` takes the bands off the members' records rather than
+off its own flags, so the dyad metrics cannot be split one way while the member reports
+were split another. Two members prepped differently are refused rather than reconciled.
 
 Distances are built by hand rather than taken from `_synth`, whose montage is 8 mm and
 30 mm only and so touches neither edge. An fNIRS channel's `loc` is
@@ -269,6 +273,115 @@ def test_an_upper_bound_switched_off_is_not_the_same_as_one_never_stamped():
 def test_the_writer_and_the_reader_share_one_set_of_keys():
     from fnirs_pipe.qc.metrics._helpers import BANDS_RECORD_KEYS
     assert set(bands_to_record(separation_bands())) == set(BANDS_RECORD_KEYS)
+
+
+# ---- Read back from the members' records ----
+# `fnirs-hyper run` works on derivatives prep already split and stamped, so being told the
+# bands again is an invitation to type a number that does not match the one on disk.
+
+def _dyad():
+    from fnirs_pipe.pipeline.hyperscanning import GroupEntry
+    return [GroupEntry("G1", "sub-01", "tap"), GroupEntry("G1", "sub-02", "tap")]
+
+
+def _sqm(*per_member):
+    """{subject_id: record scalars} from one Bands per member; None means nothing stamped."""
+    return {f"sub-0{i}": ({} if bands is None else bands_to_record(bands))
+            for i, bands in enumerate(per_member, start=1)}
+
+
+def test_agreeing_records_decide_the_bands():
+    from fnirs_pipe.pipeline.hyperscanning import resolve_group_bands
+    bands = (0.012, 0.02, None)
+    assert resolve_group_bands(_dyad(), _sqm(bands, bands)) == bands
+
+
+def test_members_prepped_with_different_bands_are_refused():
+    """Not reconciled: the bands also chose what short-channel regression removed from each
+    member upstream, so a band taken from both would describe neither. Nothing is lost by
+    refusing, since the homologous channel set already intersects by label."""
+    from fnirs_pipe.pipeline.hyperscanning import resolve_group_bands
+    with pytest.raises(ValueError, match="different separation bands"):
+        resolve_group_bands(_dyad(), _sqm((0.01, 0.015, None), (0.012, 0.02, None)))
+
+
+def test_the_refusal_names_both_members_and_their_bands():
+    """A message saying only "they disagree" leaves the operator to grep two records."""
+    from fnirs_pipe.pipeline.hyperscanning import resolve_group_bands
+    with pytest.raises(ValueError) as excinfo:
+        resolve_group_bands(_dyad(), _sqm((0.01, 0.015, None), (0.012, 0.02, 0.055)))
+    message = str(excinfo.value)
+    assert "sub-01 task-tap" in message and "sub-02 task-tap" in message
+    assert "10 mm" in message and "20-55 mm" in message
+
+
+def test_an_unstamped_dyad_falls_back_to_the_defaults_with_a_warning(caplog):
+    """Every tree prepped before 0.30.0. Refusing those outright would make them
+    unanalysable, so it is a warning; the value is a guess and says so."""
+    from fnirs_pipe.pipeline.hyperscanning import resolve_group_bands
+    with caplog.at_level(logging.WARNING):
+        assert resolve_group_bands(_dyad(), _sqm(None, None)) == separation_bands()
+    assert "no separation bands stamped" in caplog.text
+
+
+def test_an_unstamped_member_is_warned_with_the_bands_it_is_being_given(caplog):
+    """The other member's stamp is the best evidence available, so it is what gets applied
+    -- but the warning has to name that value rather than the package defaults, or a reader
+    is told 10 mm was assumed while 12 mm was used."""
+    from fnirs_pipe.pipeline.hyperscanning import resolve_group_bands
+    with caplog.at_level(logging.WARNING):
+        assert resolve_group_bands(_dyad(), _sqm((0.012, 0.02, None), None)) == (0.012, 0.02, None)
+    assert "sub-02 task-tap" in caplog.text
+    assert "short <= 12 mm" in caplog.text
+
+
+def test_a_flag_overrides_the_records_and_says_so(caplog):
+    from fnirs_pipe.pipeline.hyperscanning import resolve_group_bands
+    bands = (0.012, 0.02, None)
+    with caplog.at_level(logging.WARNING):
+        resolved = resolve_group_bands(_dyad(), _sqm(bands, bands),
+                                       {"short_max_dist": 0.008, "long_min_dist": 0.015})
+    assert resolved == (0.008, 0.015, None)
+    assert "overriding" in caplog.text
+
+
+def test_a_flag_left_off_keeps_the_records_value_rather_than_the_package_default():
+    """Capping the long band must not silently re-assert 10 / 15 mm on a dyad prepped at
+    12 / 20 mm, which is what falling back to `separation_bands()` would do."""
+    from fnirs_pipe.pipeline.hyperscanning import resolve_group_bands
+    bands = (0.012, 0.02, None)
+    resolved = resolve_group_bands(_dyad(), _sqm(bands, bands), {"long_max_dist": 0.055})
+    assert resolved == (0.012, 0.02, 0.055)
+
+
+def test_an_override_of_only_none_values_is_not_an_override(caplog):
+    """argparse hands over three Nones when no flag was given, which must not read as a
+    request to force the package defaults."""
+    from fnirs_pipe.pipeline.hyperscanning import resolve_group_bands
+    bands = (0.012, 0.02, None)
+    with caplog.at_level(logging.WARNING):
+        resolved = resolve_group_bands(_dyad(), _sqm(bands, bands), {
+            "short_max_dist": None, "long_min_dist": None, "long_max_dist": None})
+    assert resolved == bands
+    assert "overriding" not in caplog.text
+
+
+def test_a_forced_band_is_still_validated():
+    """The override merges with the records, so the pair it produces was never validated by
+    the CLI: forcing a short edge past the records' long edge has to be caught here."""
+    from fnirs_pipe.pipeline.hyperscanning import resolve_group_bands
+    bands = (0.012, 0.02, None)
+    with pytest.raises(ValueError, match="overlap"):
+        resolve_group_bands(_dyad(), _sqm(bands, bands), {"short_max_dist": 0.03})
+
+
+def test_a_record_stamps_whether_it_carries_bands_at_all():
+    from fnirs_pipe.qc.metrics._helpers import record_has_bands
+    assert record_has_bands(bands_to_record((0.01, 0.015, None)))
+    assert not record_has_bands({"n_long_channels": 28})
+    # partial is not a stamp: the writer always writes the three together, and mixing a
+    # stamped value with a defaulted one is worse than defaulting all three
+    assert not record_has_bands({"sep_short_max_mm": 10.0})
 
 
 # ---- One run, one split ----

@@ -137,6 +137,17 @@ def _hyper_post():
                 dbc.FormText("Below this an ROI cell is dropped rather than resting on one "
                              "optode."),
             ], width=2),
+            dbc.Col([
+                dbc.Label("Chromophore"),
+                dcc.Dropdown(id="qc-wtc-chroma",
+                             options=[{"label": "HbO and HbR", "value": "both"},
+                                      {"label": "HbO only", "value": "hbo"},
+                                      {"label": "HbR only", "value": "hbr"}],
+                             placeholder="both"),
+                dbc.FormText("Two parallel passes, never mixed and never averaged, so both "
+                             "takes twice the time. A coupling in HbO with nothing in HbR "
+                             "is a caution flag."),
+            ], width=2),
         ], className="g-3 mt-1"),
         dbc.Row([
             dbc.Col(dbc.Checklist(

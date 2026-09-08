@@ -89,6 +89,19 @@ Preprocessing:
                                a channel failing either line goes. PSP catches the movement
                                that fakes a high SCI, so raising it prunes more than
                                --sci-threshold alone does.
+  --short-max-dist MM          Separation at or below which a channel is short-distance.
+                               [default: 10] Short channels see scalp only and are
+                               measured, and regressed, separately from the long ones.
+  --long-min-dist MM           Separation at or above which a channel is long. [default: 15]
+                               The gap above --short-max-dist is deliberate: a channel in
+                               it is too far to be scalp-only and too near to reach cortex,
+                               and screening cannot catch that because such a channel
+                               scores well. Those channels are in no section and are named
+                               in a run note.
+  --long-max-dist MM           Separation above which a channel is too far to be long.
+                               Off by default, so anything past --long-min-dist is long.
+                               Set it on a montage carrying pairs too far apart to trust;
+                               SCI and PSP catch most but not all of them.
   --window-length FLOAT        Window (s) for the windowed SCI / PSP / GVTD series. [default: 10.0]
   --epoch-tmin FLOAT           Trial window for the report's epoch figures and per-trial
   --epoch-tmax FLOAT           scoring, relative to each event onset. Given together, or
@@ -103,7 +116,8 @@ Preprocessing:
   --gvtd-channels              {long,all}   [default: long]
                                Channels GVTD covers. It is an RMS across channels, so the set
                                is part of the value; `all` is for montages whose usable
-                               separations do not fall in one band.
+                               separations do not fall in one band, though widening
+                               --long-min-dist / --long-max-dist is usually the better fix.
   --gvtd-censor                Mark the frames GVTD flags as BAD_gvtd annotations. Off by
                                default. Nothing is cut: epoching drops the trials the spans
                                overlap, continuous analyses pick the surviving stretches, and
@@ -196,6 +210,7 @@ fnirs-hyper run OUTPUT_DIR --pairs-csv PATH
                 [--wtc-pseudo N] [--wtc-pseudo-cross]
                 [--bads-scope {run,subject}] [--isc-threshold FLOAT]
                 [--sci-threshold FLOAT]
+                [--short-max-dist/--long-min-dist/--long-max-dist MM]
                 [--normalize] [--no-align] [--tstart/--tend FLOAT]
 
 fnirs-hyper band  OUTPUT_DIR --wtc-band-fmin FLOAT --wtc-band-fmax FLOAT
@@ -247,7 +262,7 @@ fnirs-prep edit-markers apply BIDS_DIR DERIVATIVES_DIR --participant-label SUB .
 
 ### `fnirs-qc` — QC reports
 
-`prep-raw` and `hyper-raw` read raw recordings, so both require `--cardiac-l-freq` / `--cardiac-h-freq`, which are population-dependent and have no default, and `--dpf`, which they use to convert to haemoglobin internally. Both screen channels, so both take the same `--sci-threshold` / `--psp-threshold` as `fnirs-pipe`; pass what the run was prepped with.
+`prep-raw` and `hyper-raw` read raw recordings, so both require `--cardiac-l-freq` / `--cardiac-h-freq`, which are population-dependent and have no default, and `--dpf`, which they use to convert to haemoglobin internally. Both screen channels, so both take the same `--sci-threshold` / `--psp-threshold` as `fnirs-pipe`, and both split the montage, so both take the same `--short-max-dist` / `--long-min-dist` / `--long-max-dist`; pass what the run was prepped with.
 
 ```
 fnirs-qc prep-raw BIDS_DIR OUTPUT_DIR PARTICIPANT_LABEL
@@ -257,7 +272,9 @@ fnirs-qc prep-raw BIDS_DIR OUTPUT_DIR PARTICIPANT_LABEL
                   [--sci-threshold FLOAT] [--psp-threshold FLOAT]
                   [--window-length FLOAT]                       [default: 10.0]
                   [--epoch-qc] [--epoch-tmin/--epoch-tmax FLOAT]
-                  [--gvtd-channels {long,all}] [--skip-bids-validation]
+                  [--gvtd-channels {long,all}]
+                  [--short-max-dist/--long-min-dist/--long-max-dist MM]
+                  [--skip-bids-validation]
 
 fnirs-qc hyper-raw BIDS_DIR OUTPUT_DIR --pairs-csv PATH
                    --dpf FLOAT [FLOAT ...]
@@ -268,6 +285,7 @@ fnirs-qc hyper-raw BIDS_DIR OUTPUT_DIR --pairs-csv PATH
                    [--coh-window-length/--coh-window-step FLOAT] [default: 30.0 / 5.0]
                    [--epoch-tmin/--epoch-tmax FLOAT]            [default: -5.0 / 25.0]
                    [--gvtd-channels {long,all}]
+                   [--short-max-dist/--long-min-dist/--long-max-dist MM]
                    [--normalize] [--no-align] [--tstart/--tend FLOAT]
 
 fnirs-qc group-raw       OUTPUT_DIR

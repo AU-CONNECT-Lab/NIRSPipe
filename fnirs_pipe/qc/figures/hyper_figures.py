@@ -695,7 +695,7 @@ def compute_windowed_coherence(
 
     Returns DataFrame with columns: t_center, ch_name, sub1, sub2, coherence.
     """
-    from fnirs_pipe.pipeline.synchrony import _long_hbo_by_label, _shared_sfreq
+    from fnirs_pipe.pipeline.synchrony import _long_by_label, _shared_sfreq
 
     subject_ids = list(aligned_raws.keys())
     if len(subject_ids) < 2:
@@ -717,7 +717,7 @@ def compute_windowed_coherence(
     rows: list[dict] = []
     for sub1, sub2 in combinations(subject_ids, 2):
         raw1, raw2 = aligned_raws[sub1], aligned_raws[sub2]
-        map1, map2 = _long_hbo_by_label(raw1), _long_hbo_by_label(raw2)
+        map1, map2 = _long_by_label(raw1), _long_by_label(raw2)
         data1  = raw1.get_data(picks=list(map1.values()))
         data2  = raw2.get_data(picks=list(map2.values()))
         row_of = {label: i for i, label in enumerate(map2)}
