@@ -7,7 +7,7 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
-- **The GVTD panel draws the short channels on their own row**, under the long one and on the same scale, with the carpet split into a long block and a short block beside it. Short-channel quality had no time-resolved view anywhere in the report. The verdict, the threshold and the reported scalars still come from the long row alone, so nothing a run is judged on changes
+- **The GVTD panel draws the short channels on their own row**, under the long one and on the same scale, with the carpet split into a long block and a short block beside it. Short-channel quality had no time-resolved view anywhere in the report. The verdict, the threshold and the reported scalars still come from the long row alone, so nothing a run is judged on changes. Each row shades the derivative spikes found on its own channels, which are now detected per separation class rather than on the long ones alone
 - **`--psp-threshold` sets the second screening line.** It was fixed at 0.1 with no way to change it, even though a channel failing it is rejected
 - **`fnirs-qc hyper-raw` exposes the windows its figures use**, and the GVTD channel set. All four were fixed in the source with no way to reach them
 - **`--epoch-tmin` / `--epoch-tmax` set the trial window the subject report works in.** Every epoch figure and the per-trial panel were pinned to -5 to 25 s, which suits a single trial and not a 60 s block. Left unset, the report says so when the run's events outrun the window the figures average

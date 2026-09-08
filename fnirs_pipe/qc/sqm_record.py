@@ -484,10 +484,20 @@ def compute_run_sections(
         try:
             from fnirs_pipe.qc.metrics import spike_segments
             spike_source = raw_intensity if raw_intensity is not None else read_snirf(spike_stage)
-            spike_long, _ = long_short_channels(spike_source)
-            if spike_long:
-                spike_source = spike_source.copy().pick(spike_long)
-            windowed["spike_spans_s"] = [list(span) for span in spike_segments(spike_source)]
+            spike_long, spike_short = long_short_channels(spike_source)
+            # one list per separation class, because the test is ">= 10% of *these* channels
+            # spiking" and the panel draws each class its own row: a span found on the short
+            # channels is not a claim about the long ones. The long list keeps the plain key,
+            # being the one the verdict, the detail figure and every older record read.
+            for key, names in (("spike_spans_s", spike_long),
+                               ("spike_spans_short_s", spike_short)):
+                if names:
+                    picked = spike_source.copy().pick(names)
+                elif key == "spike_spans_s":
+                    picked = spike_source          # unsplit montage: every channel, as before
+                else:
+                    continue
+                windowed[key] = [list(span) for span in spike_segments(picked)]
         except Exception:
             logger.warning("windowed: spike spans failed", exc_info=True)
 

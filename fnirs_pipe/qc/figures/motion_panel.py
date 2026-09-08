@@ -275,7 +275,7 @@ def carpet_gvtd_figure(
     segments: "dict | None" = None,
     z_threshold: float = 3.0,
     corrected_segments: "list[tuple[float, float]] | None" = None,
-    spike_segments: "list[tuple[float, float]] | None" = None,
+    spike_segments: "dict[str, list] | list[tuple[float, float]] | None" = None,
     raw_after: "mne.io.Raw | None" = None,
     channel_set: str | None = None,
     blocks: "list[tuple[str, list[str]]] | None" = None,
@@ -287,8 +287,11 @@ def carpet_gvtd_figure(
     is not worth a panel; ``gvtd_mean`` and ``gvtd_p95`` still report it.
     ``corrected_segments`` (motion-correction footprint) is a bar on a thin strip directly
     above the trace, so what the correction touched sits against what it was aimed at.
-    ``spike_segments`` shades the GVTD panel behind the trace. Both are drawn span by span
-    with no merging,
+    ``spike_segments`` shades the GVTD panel behind the trace, and is either one span list
+    for the canonical row or ``{set name: spans}`` so each row shades what was found on its
+    own channels. The test behind a span is ">= 10% of these channels spiking", so a long-set
+    span is not a statement about the short ones and the two are never shared. Both are drawn
+    span by span with no merging,
     since the gap between two spans is the claim that nothing happened there. Neither is
     derived from the trace: spikes are a per-channel robust outlier test on the same
     band-limited derivative, so shading without a peak over the threshold, or the reverse,
@@ -315,8 +318,8 @@ def carpet_gvtd_figure(
     channels and the two sets measure different depths, so they stay separate traces rather
     than one trace over the union. The rows share a y range, which is the point: the sets are
     the same unit and comparable magnitudes, and scaling each to itself would hide exactly
-    the difference the extra row was added to show. Only the canonical row carries the spike
-    shading and the ``segments`` labels, since it is the one the reported scalars come from.
+    the difference the extra row was added to show. Only the canonical row carries the
+    ``segments`` labels, since it is the one the reported scalars come from.
     Omitting ``blocks`` draws the single row ``channel_set`` names, over ``ch_names``.
     """
     raw_od = mne.preprocessing.nirs.optical_density(raw.copy())
@@ -384,7 +387,10 @@ def carpet_gvtd_figure(
     # to draw; prep-raw runs before any and would otherwise get a labelled empty band
     has_strip = bool(corrected_segments)
     n_rows    = int(has_strip) + len(rows) + n_carpets
-    carpet_px = int(max(200, min(n_ch * 13, 700)))
+    # 6 px a channel, capped: the carpet is a texture read for its stripes, not a per-row
+    # trace, so height past this adds screen and no detail. It also sets the gap between two
+    # blocks, which is one blank row and wants to be a seam rather than a margin
+    carpet_px = int(max(150, min(n_ch * 6, 380)))
     heights   = (([_STRIP_ROW_PX] if has_strip else []) + [_GVTD_ROW_PX] * len(rows)
                  + [carpet_px] * n_carpets)
     vspace    = 0.02
@@ -403,7 +409,7 @@ def carpet_gvtd_figure(
     )
 
     if has_strip:
-        xs, ys = _span_polygons(corrected_segments, 0.42, 0.58)
+        xs, ys = _span_polygons(corrected_segments, 0.30, 0.70)
         fig.add_trace(go.Scatter(
             x=xs, y=ys, fill="toself", mode="lines", name="corrected",
             fillcolor=_CORRECTED, line=dict(width=0),
@@ -416,16 +422,20 @@ def carpet_gvtd_figure(
                 + [r["thresh"] for r in rows if r["thresh"] is not None] or [1.0])
     y_top *= _GVTD_HEADROOM
 
+    spike_legend_drawn = False
     for i, r in enumerate(rows):
         row_i = gvtd_row + i
         colour = _SET_COLORS.get(r["name"], _GVTD_LINE)
-        if i == 0 and spike_segments:
-            xs, ys = _span_polygons(spike_segments, 0.0, y_top)
+        spans = (spike_segments.get(r["name"]) if isinstance(spike_segments, dict)
+                 else (spike_segments if i == 0 else None))
+        if spans:
+            xs, ys = _span_polygons(spans, 0.0, y_top)
             fig.add_trace(go.Scatter(
                 x=xs, y=ys, fill="toself", mode="lines", name=_SPIKE_LABEL,
                 fillcolor=_SPIKE_FILL, line=dict(width=0), hoverinfo="skip",
-                showlegend=(i == 0),
+                legendgroup="spikes", showlegend=not spike_legend_drawn,
             ), row=row_i, col=1)
+            spike_legend_drawn = True
 
         fig.add_trace(go.Scatter(
             x=r["t_ds"], y=r["g_ds"], mode="lines",

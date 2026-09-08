@@ -461,11 +461,13 @@ def _section_motion(
 
     corrected_segments = _spans("motion_corrected_spans_s")
     spike_spans = _spans("spike_spans_s")
+    # keyed by channel set, so each GVTD row shades the spans found on its own channels
+    spike_by_set = {gvtd_set: spike_spans, "short": _spans("spike_spans_short_s")}
 
     with _guard("Carpet + GVTD", errors, subject):
         fig = carpet_gvtd_figure(raw_gvtd, raw_gvtd.ch_names, segments,
                                  corrected_segments=corrected_segments,
-                                 spike_segments=spike_spans,
+                                 spike_segments=spike_by_set,
                                  raw_after=raw_after_motion,
                                  channel_set=gvtd_set, blocks=gvtd_blocks)
         carpet_gvtd_path, carpet_gvtd_h = _save_plotly_html(
