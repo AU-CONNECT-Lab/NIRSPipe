@@ -34,12 +34,14 @@ SCRStrategy = Literal["mean", "pca"]
 
 # May add motion parameters (if available) and/or other confounds in the future
 
-def _short_channel_regressors(haemo: mne.io.Raw, strategy: SCRStrategy) -> dict[str, np.ndarray]:
+def _short_channel_regressors(
+    haemo: mne.io.Raw, strategy: SCRStrategy, sep_bands=None,
+) -> dict[str, np.ndarray]:
     from fnirs_pipe.qc.metrics._helpers import long_short_channels
 
     # not mne_nirs' get_short_channels: that reads distance 0 as short, so a montage with no
     # registered positions would build these out of every channel
-    short_names = long_short_channels(haemo)[1]
+    short_names = long_short_channels(haemo, sep_bands)[1]
     if not short_names:
         logger.warning("no short channels found — skipping short-channel regressors")
         return {}
@@ -270,6 +272,7 @@ def run_glm_pipeline(
     contrast_def: dict[str, Any] | None = None,
     output_dir: str | None = None,
     source_path: str | None = None,
+    sep_bands=None,
 ) -> tuple:
     # explicit events take precedence; then external TSV; then snirf annotations
     if events is None:
@@ -283,7 +286,8 @@ def run_glm_pipeline(
     # data and confounds with the same filter before regressing, which holds here implicitly
     # because both derive from one filtered recording). External confounds do not get that
     # for free, which is what `_aux_regressors` filters them for.
-    confound_cols = _short_channel_regressors(haemo, short_channel) if short_channel else {}
+    confound_cols = (_short_channel_regressors(haemo, short_channel, sep_bands)
+                     if short_channel else {})
     if aux_path:
         confound_cols.update(_aux_regressors(haemo, aux_path, aux_channels, data_band,
                                              data_filter_method, data_filter_order))

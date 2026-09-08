@@ -72,7 +72,8 @@ from fnirs_pipe.qc.figure_io import (
     _figure_height, _pair_fname, _save_multi_fig_html,
     extract_markers, get_channel_pairs,
 )
-from fnirs_pipe.qc.metrics import SCI_PASS, gvtd_channel_blocks
+from fnirs_pipe.qc.metrics import SCI_PASS, gvtd_channel_blocks, separation_bands
+from fnirs_pipe.qc.metrics._helpers import bands_from_record
 from fnirs_pipe.qc.figures._utils import chunk_annotations
 from fnirs_pipe.qc.figures import (
     build_trigger_timeline_single,
@@ -240,11 +241,13 @@ def _save_plotly_html(fig, path: Path, div_id: str | None = None) -> tuple[str, 
 # Shared preprocessing helper
 # ---------------------------------------------------------------------------
 
-def _prepare_long_raw(raw_intensity: mne.io.Raw, subject: str) -> mne.io.Raw:
+def _prepare_long_raw(
+    raw_intensity: mne.io.Raw, subject: str, sep_bands=None,
+) -> mne.io.Raw:
     from fnirs_pipe.qc.metrics import long_short_channels
 
     raw = raw_intensity.copy()
-    long_names, _ = long_short_channels(raw)
+    long_names, _ = long_short_channels(raw, sep_bands)
     if not long_names:
         logger.warning("sub-%s | no long channels by separation; using all", subject)
         return raw
@@ -534,6 +537,7 @@ def _section_haemo(
     raw_errts: mne.io.Raw | None = None,
     psd_stages: "list[tuple[str, mne.io.Raw]] | None" = None,
     record: dict | None = None,
+    sep_bands=None,
 ) -> dict:
     """Beer-Lambert output and what the denoising did to it.
 
@@ -547,13 +551,15 @@ def _section_haemo(
     psd_panel_h = 0
     with _guard("HbO-HbR correlation panel", errors, subject):
         b64 = hbo_hbr_correlation_panel(
-            raw_haemo, title="HbO–HbR Signal Quality — desc-preproc (before denoising)")
+            raw_haemo, title="HbO–HbR Signal Quality — desc-preproc (before denoising)",
+            sep_bands=sep_bands)
         _save_b64_png(b64, figures_dir / "hbo_hbr_corr.png")
         hbo_hbr_path = _fig_href(figures_dir, "hbo_hbr_corr.png")
     if raw_errts is not None:
         with _guard("HbO-HbR correlation panel (after)", errors, subject):
             b64 = hbo_hbr_correlation_panel(
-                raw_errts, title="HbO–HbR Signal Quality — desc-errts (after denoising)")
+                raw_errts, title="HbO–HbR Signal Quality — desc-errts (after denoising)",
+                sep_bands=sep_bands)
             _save_b64_png(b64, figures_dir / "hbo_hbr_corr_after.png")
             hbo_hbr_after_path = _fig_href(figures_dir, "hbo_hbr_corr_after.png")
 
@@ -583,7 +589,7 @@ def _section_haemo(
             average over both moved the correlation that reads as the verdict: on a montage
             with eight short channels it sat at -0.18 where the long channels alone gave -0.50.
             """
-            names, _ = long_short_channels(raw)
+            names, _ = long_short_channels(raw, sep_bands)
             if not names or len(names) == len(raw.ch_names):
                 return raw
             return raw.copy().pick(names)
@@ -927,7 +933,7 @@ def _section_sqm(
         "sqm": sqm,
         "channel_rows": rows,
         "channel_cells": cells,
-        "channel_blocks": separation_blocks(cells),
+        "channel_blocks": separation_blocks(cells, bands_from_record(sqm)),
         "sqm_all": sqm_all,
         "sqm_long": sqm_long,
         "sqm_short": sqm_short,
@@ -953,7 +959,8 @@ def _note_separation(
     the report's notes list and the run log, so a reader who never opens the per-channel
     table still learns the split did not come out the way the metrics assume.
     """
-    for message in separation_notes(sqm, rows, short_channel_requested):
+    for message in separation_notes(sqm, rows, short_channel_requested,
+                                    bands_from_record(sqm)):
         _note(notes, subject, message)
 
 
@@ -1091,7 +1098,7 @@ def _section_rest(
             alff_path = _fig_href(figures_dir, "rest_alff.png")
     with _guard("ALFF topography", errors, subject):
         if alff_df is not None and raw_haemo is not None:
-            b64 = alff_topo_figure(raw_haemo, alff_df)
+            b64 = alff_topo_figure(raw_haemo, alff_df, sep_bands=sep_bands)
             if b64 is not None:   # None means the montage carries no optode positions
                 _save_b64_png(b64, figures_dir / "rest_alff_topo.png")
                 alff_topo_path = _fig_href(figures_dir, "rest_alff_topo.png")
@@ -1113,7 +1120,8 @@ def _section_rest(
             fc_circle_path = _fig_href(figures_dir, "rest_fc_circle.png")
     with _guard("FC seed topography", errors, subject):
         if fc_seed and raw_haemo is not None:
-            b64 = fc_seed_topo_figure(raw_haemo, fc_seed.get("hbo"), fc_seed.get("hbr"))
+            b64 = fc_seed_topo_figure(raw_haemo, fc_seed.get("hbo"), fc_seed.get("hbr"),
+                                      sep_bands=sep_bands)
             if b64 is not None:   # None means the montage carries no optode positions
                 _save_b64_png(b64, figures_dir / "rest_fc_seed.png")
                 fc_seed_path = _fig_href(figures_dir, "rest_fc_seed.png")
@@ -1221,10 +1229,12 @@ def build_subject_report(
     versions = collect_software_versions()
     # raw_long: long-channel-only copy used for OD/motion/SQM figures
     # raw_intensity: full original (all channels) passed to SCI/brain sections
-    raw_long = _prepare_long_raw(raw_intensity, subject)
+    # one resolution for the whole report, so every panel and the record agree
+    sep_bands = separation_bands(config)
+    raw_long = _prepare_long_raw(raw_intensity, subject, sep_bands)
     # the GVTD panel's channel set, which config decides and which need not be raw_long
     gvtd_channels = getattr(config, "gvtd_channels", None) or "long"
-    gvtd_blocks = gvtd_channel_blocks(raw_intensity, gvtd_channels)
+    gvtd_blocks = gvtd_channel_blocks(raw_intensity, gvtd_channels, sep_bands)
     gvtd_set = gvtd_blocks[0][0]
     raw_gvtd = raw_intensity.copy().pick([c for _, names in gvtd_blocks for c in names])
 
@@ -1266,7 +1276,7 @@ def build_subject_report(
     haemo_vars        = _section_haemo(raw_haemo, config, subject, errors, figures_dir,
                                        l_freq=l_freq, h_freq=h_freq,
                                        raw_errts=raw_errts, psd_stages=psd_stages,
-                                       record=record)
+                                       record=record, sep_bands=sep_bands)
     denoise_carpet_path = None
     if after_haemo is not None:
         with _guard("Denoising carpet", errors, subject):

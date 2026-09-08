@@ -39,7 +39,7 @@ def _pair_key(ch_name: str) -> str:
     return ch_name.rsplit(" ", 1)[0]
 
 
-def _pair_group(raw_haemo: mne.io.Raw) -> "dict[str, str]":
+def _pair_group(raw_haemo: mne.io.Raw, sep_bands=None) -> "dict[str, str]":
     """Map each S-D pair to ``long`` / ``mid`` / ``short``.
 
     ``long_short_channels`` returns names with the chromophore suffix and leaves the
@@ -49,7 +49,7 @@ def _pair_group(raw_haemo: mne.io.Raw) -> "dict[str, str]":
     """
     from fnirs_pipe.qc.metrics import long_short_channels
 
-    long_names, short_names = long_short_channels(raw_haemo)
+    long_names, short_names = long_short_channels(raw_haemo, sep_bands)
     groups = {_pair_key(n): "mid" for n in raw_haemo.ch_names}
     groups.update({_pair_key(n): "long" for n in long_names})
     groups.update({_pair_key(n): "short" for n in short_names})
@@ -59,9 +59,10 @@ def _pair_group(raw_haemo: mne.io.Raw) -> "dict[str, str]":
 def hbo_hbr_correlation_panel(
     raw_haemo: mne.io.Raw,
     title: str = "HbO–HbR Signal Quality",
+    sep_bands=None,
 ) -> str:
     """Return base64 PNG of the correlation panel."""
-    groups = _pair_group(raw_haemo)
+    groups = _pair_group(raw_haemo, sep_bands)
     rank = {g: i for i, g in enumerate(_GROUP_ORDER)}
 
     def _by_separation(picks):

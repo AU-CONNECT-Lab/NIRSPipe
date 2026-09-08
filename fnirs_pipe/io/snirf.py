@@ -109,14 +109,16 @@ def _patch_haemo_wavelengths(raw: mne.io.Raw) -> mne.io.Raw:
     return raw
 
 
-def has_short_channels(raw: mne.io.Raw) -> bool:
+def has_short_channels(raw: mne.io.Raw, sep_bands=None) -> bool:
     """Return True if the recording contains short-distance reference channels."""
     from fnirs_pipe.qc.metrics._helpers import long_short_channels
 
-    return bool(long_short_channels(raw)[1])
+    return bool(long_short_channels(raw, sep_bands)[1])
 
 
-def long_channel_picks(raw: mne.io.Raw, ch_type: str = "hbo", exclude="bads") -> list[int]:
+def long_channel_picks(
+    raw: mne.io.Raw, ch_type: str = "hbo", exclude="bads", sep_bands=None,
+) -> list[int]:
     """Picks for one chromophore with short-distance reference channels dropped.
 
     A 6-channel montage whose last pair is short ->
@@ -140,6 +142,6 @@ def long_channel_picks(raw: mne.io.Raw, ch_type: str = "hbo", exclude="bads") ->
     """
     from fnirs_pipe.qc.metrics._helpers import long_short_channels
 
-    long_names = set(long_short_channels(raw)[0])
+    long_names = set(long_short_channels(raw, sep_bands)[0])
     return [p for p in mne.pick_types(raw.info, fnirs=ch_type, exclude=exclude)
             if raw.ch_names[p] in long_names]

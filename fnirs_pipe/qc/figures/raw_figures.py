@@ -571,7 +571,9 @@ def build_layout_figure(
     return fig_2d, fig_3d
 
 
-def _psd_groups(raw_od: mne.io.Raw, ch_names: list[str]) -> list[tuple[str, np.ndarray, dict]]:
+def _psd_groups(
+    raw_od: mne.io.Raw, ch_names: list[str], sep_bands=None,
+) -> list[tuple[str, np.ndarray, dict]]:
     """Partition the PSD rows by source-detector separation, long first.
 
     Short channels sit on a much shorter photon path, so their spectrum is systematically
@@ -590,7 +592,7 @@ def _psd_groups(raw_od: mne.io.Raw, ch_names: list[str]) -> list[tuple[str, np.n
     from fnirs_pipe.qc.metrics import long_short_channels
 
     try:
-        long_names, short_names = long_short_channels(raw_od)
+        long_names, short_names = long_short_channels(raw_od, sep_bands)
     except Exception:
         long_names, short_names = [], []
     if not long_names and not short_names:
@@ -609,7 +611,9 @@ def _psd_groups(raw_od: mne.io.Raw, ch_names: list[str]) -> list[tuple[str, np.n
     return [(name, np.flatnonzero(sel), line) for name, sel, line in groups if sel.any()]
 
 
-def build_psd_mean_figure(raw: mne.io.Raw, cardiac=None, resp=None) -> go.Figure | None:
+def build_psd_mean_figure(
+    raw: mne.io.Raw, cardiac=None, resp=None, sep_bands=None,
+) -> go.Figure | None:
     """Channel spectra in optical density, one mean per separation group, channels behind.
 
     Nothing here is a quality verdict: the panel shows what the spectrum looks like, and
@@ -629,7 +633,7 @@ def build_psd_mean_figure(raw: mne.io.Raw, cardiac=None, resp=None) -> go.Figure
         mask = freqs <= fmax
         freqs_list = freqs[mask].tolist()
         band = psds[:, mask]
-        groups = _psd_groups(raw_od, [raw_od.ch_names[i] for i in picks])
+        groups = _psd_groups(raw_od, [raw_od.ch_names[i] for i in picks], sep_bands)
 
         # ---- Individual channels behind, one bold mean per group ----
         # neutral grey, so a group's own colour is what stands out against it

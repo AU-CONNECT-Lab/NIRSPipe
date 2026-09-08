@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- **The dyad report says so when ISC runs on a stage with no bandpass on record.** `--desc` defaults to the Beer-Lambert output, which still carries its drift, and a whole-record correlation has no frequency axis to keep drift out of it: two members recorded in one room drift alike for reasons that are not neural. The wavelet coherence panels are unaffected and get no note
 - **The GVTD panel draws the short channels on their own row**, under the long one and on the same scale, with the carpet split into a long block and a short block beside it. Short-channel quality had no time-resolved view anywhere in the report. The verdict, the threshold and the reported scalars still come from the long row alone, so nothing a run is judged on changes. Each row shades the derivative spikes found on its own channels, which are now detected per separation class rather than on the long ones alone
 - **`--psp-threshold` sets the second screening line.** It was fixed at 0.1 with no way to change it, even though a channel failing it is rejected
 - **`fnirs-qc hyper-raw` exposes the windows its figures use**, and the GVTD channel set. All four were fixed in the source with no way to reach them
@@ -26,11 +27,13 @@ All notable changes to this project will be documented in this file.
 - **The hyperscanning raw report writes its coherence tables**, whole-record and windowed, so the numbers behind the bar chart and the heatmap can leave the report
 
 ### Fixed
+- **`--short-channel` built its regressors from every channel on a recording with no registered optode positions.** Every separation reads as zero there, which counted as short, so the "systemic" signal regressed out of every channel was the whole montage. Such a run now reports no short channel and skips the regression, which is what the reports were already saying about it
 - **The per-channel motion figure measured GVTD over every channel**, while the carpet panel above it and the metrics table beside it measured the long ones, so one report carried two different GVTD traces and two different thresholds with nothing saying why. Each figure now takes the GVTD of the separation class its own channel belongs to, names it, and shades the derivative spikes found on that same class
 - **`fnirs-pipe` wrote no SQM record for any run.** The failure was logged and the run carried on, so the group tables and the quality database were left with whatever an earlier run had put on disk
-- **"Long channel" meant two different things**: 15-45 mm to the reports and the GVTD trace, anything over 10 mm to the dyad metrics and the short-channel regressors. A separation past 45 mm was outside the montage in one half of the package and usable in the other. One rule now, and a channel in neither band is named in a warning instead of silently taking part in nothing
+- **"Long channel" meant two different things**: a bounded band to the reports and the GVTD trace, anything over 10 mm to the dyad metrics and the short-channel regressors, so the same channel could be inside the montage in one half of the package and outside it in the other. One rule now, and a channel in neither band is named in a warning instead of silently taking part in nothing
 - **Crossing the channels drew both axes from one member of the dyad**, so the crossed WTC table and the ISC matrix were missing every pairing that used a channel the other member kept and this one had rejected. Which member counted depended on the order the pairs table lists them in. The crossed table grows by the pairings it was dropping
 - **The dyad matrices are indexed by the montage**, rejected channels included, so every dyad's matrix has one shape and a group analysis can stack them however their rejections differ. A rejection blanks its own row or its own column, never both
+- **ISC returned a number for two members recorded at different sampling rates.** It paired the nth sample of one with the nth of the other, which are not the same moment. It refuses now, as the wavelet coherence always has
 - **The crossed WTC matrix drew its axis from one member of the dyad**, so a channel only the other member's montage carries never reached the figure. ISC took both montages already; the two share one rule now. Reaches a dyad whose members were not capped alike
 - **`fnirs-qc hyper-raw` scored its per-subject quality table over every channel**, while the individual reports score the long ones, so a subject's SCI, CV, SNR and GVTD could not be read across the two. It is the long-channel view now, and says which set it describes
 - **`--gvtd-censor` failed on any recording that has event markers**, which is every task run. It worked only on a recording with no markers at all
@@ -42,6 +45,7 @@ All notable changes to this project will be documented in this file.
 - **A figure that failed took the whole group report with it.** Every other report loses one panel; this one had no error handling at all
 
 ### Changed
+- **A channel over 45 mm is a long channel now.** The upper edge of the long band is off by default, where it used to drop those channels out of every section, every metric and the GVTD trace without appearing anywhere as excluded. It stays available for a montage that wants the geometric line, and screening still judges these channels on their own SCI and PSP. **On a montage with channels past 45 mm the long-channel metrics all move, GVTD included**
 - **`fnirs-qc hyper-raw`'s coherence band is `--coh-fmin` / `--coh-fmax`.** As `--fmin` / `--fmax` it said nothing about which of the report's bands it set. The old names still work
 - **The subject report's per-trial panel scores each trial over the event's own duration** when no epoch window is given, which is what the raw viewer has always done. It used a fixed -5 to 25 s window, so on a block design it scored the first 25 s of a block and called that the trial. The panel says which window it used
 - **The analysis page offers the PSP threshold and the epoch window**, so the interface can no longer only produce runs that screen and epoch at the defaults

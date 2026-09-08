@@ -22,19 +22,54 @@ LONG_MIN_DIST  = 0.015  # m, >= this is a long channel
 LONG_MAX_DIST  = None   # m, or None for no upper bound
 
 
-# Montages already named in the orphan warning below. `long_short_channels` is a pure
-# function of the montage and is called once per figure, so a dyad run would otherwise print
+Bands = "tuple[float, float, float | None]"
+
+# Montage + bands pairs already named in the orphan warning below. `long_short_channels` is a
+# pure function of both and is called once per figure, so a dyad run would otherwise print
 # the same list a dozen times; the set is for log noise only and nothing reads it.
-_ORPHANS_WARNED: "set[tuple[str, ...]]" = set()
+_ORPHANS_WARNED: "set[tuple]" = set()
 
 
-def separation_bands() -> "tuple[float, float, float | None]":
+def separation_bands(config: object | None = None) -> Bands:
     """``(short_max, long_min, long_max)`` in metres; ``long_max`` None means no upper bound.
 
+    separation_bands(config_with_long_max_dist_0_045) -> (0.01, 0.015, 0.045)
+
     An accessor rather than three imports, so a caller cannot pick up two of the three and
-    silently invent a fourth band.
+    silently invent a fourth band. A config that does not carry a field, or carries None for
+    it, keeps the default; passing None gives the defaults, which is what a caller with no
+    run config has. ``long_max`` is the exception on both counts, since None is a value there
+    rather than an absence, so :func:`bands_from_record` is what reads a stored one back.
     """
-    return SHORT_MAX_DIST, LONG_MIN_DIST, LONG_MAX_DIST
+    values = []
+    for field, default in (("short_max_dist", SHORT_MAX_DIST),
+                           ("long_min_dist", LONG_MIN_DIST),
+                           ("long_max_dist", LONG_MAX_DIST)):
+        got = getattr(config, field, None) if config is not None else None
+        values.append(default if got is None else float(got))
+    return tuple(values)
+
+
+def validate_bands(sep_bands: Bands) -> Bands:
+    """Refuse a set of bands that does not describe two separated ranges.
+
+    validate_bands((0.01, 0.005, None)) -> ValueError
+
+    The three are independent flags, so nothing stops a caller moving one and leaving the
+    others: overlapping bands would put a channel in both lists at once, and an upper bound
+    under the lower one would empty the long list without saying why.
+    """
+    short_max, long_min, long_max = sep_bands
+    if not short_max > 0 or not long_min > 0:
+        raise ValueError(f"separations must be positive, got short_max={short_max}, "
+                         f"long_min={long_min}")
+    if short_max > long_min:
+        raise ValueError(f"the short band ends at {short_max * 1e3:.1f} mm, past where the "
+                         f"long band starts ({long_min * 1e3:.1f} mm); they would overlap")
+    if long_max is not None and long_max <= long_min:
+        raise ValueError(f"the long band's upper bound ({long_max * 1e3:.1f} mm) is not above "
+                         f"its lower one ({long_min * 1e3:.1f} mm), so no channel is long")
+    return sep_bands
 
 
 def _long_band_phrase(long_min: float, long_max: "float | None") -> str:
@@ -44,11 +79,47 @@ def _long_band_phrase(long_min: float, long_max: "float | None") -> str:
     return f"long {long_min * 1e3:.0f}-{long_max * 1e3:.0f} mm"
 
 
-def unclaimed_separations() -> str:
+def unclaimed_separations(sep_bands: "Bands | None" = None) -> str:
     """The separations in neither band: ``"10-15 mm"``, or ``"10-15 mm, or over 45 mm"``."""
-    short_max, long_min, long_max = separation_bands()
+    short_max, long_min, long_max = sep_bands if sep_bands is not None else separation_bands()
     gap = f"{short_max * 1e3:.0f}-{long_min * 1e3:.0f} mm"
     return gap if long_max is None else f"{gap}, or over {long_max * 1e3:.0f} mm"
+
+
+# The record's `raw` section stamps the bands under these, in mm, beside n_long_channels.
+# One tuple so the writer and `bands_from_record` cannot drift on a key name.
+BANDS_RECORD_KEYS = ("sep_short_max_mm", "sep_long_min_mm", "sep_long_max_mm")
+
+
+def bands_to_record(sep_bands: Bands) -> dict:
+    """The bands as record scalars, in mm::
+
+        (0.01, 0.015, None) -> {"sep_short_max_mm": 10.0, "sep_long_min_mm": 15.0,
+                                "sep_long_max_mm": None}
+
+    Stamped so a reader of an old record can tell which bands produced its split, which is
+    otherwise unrecoverable once the defaults move.
+    """
+    return {k: (None if v is None else round(v * 1e3, 1))
+            for k, v in zip(BANDS_RECORD_KEYS, sep_bands)}
+
+
+def bands_from_record(scalars: dict) -> Bands:
+    """The bands a stored record was split with, read back from its ``raw`` section.
+
+    A key the record does not carry falls back to today's default, which is every record
+    written before the bands were stamped. A key present and null is not missing: it is an
+    upper bound deliberately switched off, so the two cases are told apart by presence.
+    """
+    defaults = separation_bands()
+    out = []
+    for key, default in zip(BANDS_RECORD_KEYS, defaults):
+        if key not in scalars:
+            out.append(default)
+        else:
+            value = scalars[key]
+            out.append(None if value is None else float(value) / 1e3)
+    return tuple(out)
 
 
 # Per-channel pass/fail lines. Apart from METRIC_DISPLAY, which holds the cutoffs for a
@@ -65,7 +136,9 @@ CV_PASS  = 0.05
 SNR_PASS = 1.0 / CV_PASS
 
 
-def long_short_channels(raw: mne.io.Raw) -> "tuple[list[str], list[str]]":
+def long_short_channels(
+    raw: mne.io.Raw, sep_bands: "Bands | None" = None,
+) -> "tuple[list[str], list[str]]":
     """Split channel names by source-detector separation, returning ``(long, short)``.
 
     One definition for the whole package, so the report, the prep-raw figures and the SQM
@@ -73,6 +146,10 @@ def long_short_channels(raw: mne.io.Raw) -> "tuple[list[str], list[str]]":
     SHORT_MAX_DIST / LONG_MIN_DIST), the two lists need not cover every channel::
 
         distances 8, 12, 30, 50 mm  ->  long ["30mm", "50mm"], short ["8mm"]
+
+    ``sep_bands`` is this run's separations from :func:`separation_bands`; None takes the
+    package defaults. Every caller in one run has to pass the same value, or the reports
+    would describe a different montage than the regression used.
 
     A montage with no registered optode positions reports every distance as zero, which
     would make every channel short; that case is logged and yields no split at all.
@@ -85,7 +162,7 @@ def long_short_channels(raw: mne.io.Raw) -> "tuple[list[str], list[str]]":
     pick_types drops bads by default, which would leave every metric computed from these
     lists averaging over channels that were selected for being good.
     """
-    short_max, long_min, long_max = separation_bands()
+    short_max, long_min, long_max = sep_bands if sep_bands is not None else separation_bands()
     picks = mne.pick_types(raw.info, meg=False, fnirs=True, exclude=[])
     dists = mne.preprocessing.nirs.source_detector_distances(raw.info, picks=picks)
     names = [raw.ch_names[i] for i in picks]
@@ -98,7 +175,8 @@ def long_short_channels(raw: mne.io.Raw) -> "tuple[list[str], list[str]]":
         return long_names, short_names
     claimed = set(long_names) | set(short_names)
     orphans = {ch: d for ch, d in zip(names, dists) if ch not in claimed}
-    if orphans and (key := tuple(sorted(orphans))) not in _ORPHANS_WARNED:
+    key = (tuple(sorted(orphans)), short_max, long_min, long_max)
+    if orphans and key not in _ORPHANS_WARNED:
         _ORPHANS_WARNED.add(key)
         logger.warning(
             "%d channel(s) fall in neither separation band (short <= %.0f mm, %s) and so take "

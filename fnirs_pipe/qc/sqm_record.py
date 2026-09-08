@@ -293,6 +293,7 @@ def raw_sections(
     bad_channels: list[str],
     cardiac_l_freq: float,
     cardiac_h_freq: float,
+    sep_bands=None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """The three views of the original recording, as ``(sections, per_channel)``.
 
@@ -305,8 +306,12 @@ def raw_sections(
     therefore ambiguous on its own, which is what ``n_long_channels`` and
     ``n_short_channels`` on ``raw`` are for: two zeros means no registered optode
     positions, and any other pair means a montage of one kind.
+
+    The separations that produced the split are stamped beside those counts, since the
+    defaults can move and a reader of an old record cannot otherwise recover them.
     """
     from fnirs_pipe.qc.metrics import compute_raw_sqm, long_short_channels
+    from fnirs_pipe.qc.metrics._helpers import bands_to_record, separation_bands
 
     sections: dict[str, Any] = {}
     per_channel: dict[str, Any] = {}
@@ -315,10 +320,12 @@ def raw_sections(
     section("raw", lambda: compute_raw_sqm(
         raw_intensity, sci_scores, bad_channels, cardiac_l_freq, cardiac_h_freq))
 
-    long_names, short_names = long_short_channels(raw_intensity)
+    sep_bands = sep_bands if sep_bands is not None else separation_bands()
+    long_names, short_names = long_short_channels(raw_intensity, sep_bands)
     if "raw" in sections:
         sections["raw"]["n_long_channels"] = len(long_names)
         sections["raw"]["n_short_channels"] = len(short_names)
+        sections["raw"].update(bands_to_record(sep_bands))
     if long_names and len(long_names) < len(raw_intensity.ch_names):
         def long_section():
             raw_long = raw_intensity.copy().pick(long_names)
@@ -342,6 +349,7 @@ def haemo_sections(
     name: str,
     raw_haemo: mne.io.Raw,
     compute,
+    sep_bands=None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """One haemoglobin file measured over every channel, the long ones, the short ones.
 
@@ -365,7 +373,7 @@ def haemo_sections(
 
     section(name, lambda: compute(raw_haemo))
 
-    long_names, short_names = long_short_channels(raw_haemo)
+    long_names, short_names = long_short_channels(raw_haemo, sep_bands)
     for suffix, names in zip(_SPLIT_SUFFIXES, (long_names, short_names)):
         if not names or len(names) == len(raw_haemo.ch_names):
             continue
@@ -420,6 +428,7 @@ def compute_run_sections(
     resp_h_freq: float,
     qc_window_s: float = 10.0,
     bids_root: Path | None = None,
+    sep_bands=None,
 ) -> dict[str, Any]:
     """Every SQM section for one run, keyed by section name, plus ``per_channel``.
 
@@ -431,6 +440,9 @@ def compute_run_sections(
         attach_windowed_series, compute_haemo_sqm, compute_prep_haemo_sqm,
         long_short_channels,
     )
+    from fnirs_pipe.qc.metrics._helpers import separation_bands
+
+    sep_bands = sep_bands if sep_bands is not None else separation_bands()
 
     sections: dict[str, Any] = {}
     per_channel: dict[str, Any] = {}
@@ -464,7 +476,8 @@ def compute_run_sections(
         raw_intensity.info["bads"] = [c for c in bad_channels if c in raw_intensity.ch_names]
 
         raw_secs, raw_pc = raw_sections(
-            raw_intensity, sci_scores, bad_channels, cardiac_l_freq, cardiac_h_freq)
+            raw_intensity, sci_scores, bad_channels, cardiac_l_freq, cardiac_h_freq,
+            sep_bands)
         sections.update(raw_secs)
         per_channel.update(raw_pc)
 
@@ -484,7 +497,7 @@ def compute_run_sections(
         try:
             from fnirs_pipe.qc.metrics import spike_segments
             spike_source = raw_intensity if raw_intensity is not None else read_snirf(spike_stage)
-            spike_long, spike_short = long_short_channels(spike_source)
+            spike_long, spike_short = long_short_channels(spike_source, sep_bands)
             # one list per separation class, because the test is ">= 10% of *these* channels
             # spiking" and the panel draws each class its own row: a span found on the short
             # channels is not a claim about the long ones. The long list keeps the plain key,
@@ -562,7 +575,7 @@ def compute_run_sections(
         if raw_motcorr is not None:
             section("motion_post", lambda: _motion_post_section(
                 raw_motcorr, cardiac_l_freq, cardiac_h_freq))
-            post_long, post_short = long_short_channels(raw_motcorr)
+            post_long, post_short = long_short_channels(raw_motcorr, sep_bands)
             if post_long and len(post_long) < len(raw_motcorr.ch_names):
                 section("motion_post_long", lambda: _motion_post_section(
                     raw_motcorr.copy().pick(post_long), cardiac_l_freq, cardiac_h_freq))
@@ -589,7 +602,7 @@ def compute_run_sections(
             logger.warning("%s unreadable; its sections are skipped", stages[desc],
                            exc_info=True)
             continue
-        haemo_secs, haemo_pc = haemo_sections(desc, raw_haemo, compute)
+        haemo_secs, haemo_pc = haemo_sections(desc, raw_haemo, compute, sep_bands)
         sections.update(haemo_secs)
         per_channel.update(haemo_pc)
 

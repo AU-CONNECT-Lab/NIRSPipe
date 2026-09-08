@@ -164,12 +164,12 @@ def pair_rows(rows: list[dict], pairs: list[str] | None = None) -> list[dict[str
     return out
 
 
-def _neither_range_title() -> str:
+def _neither_range_title(sep_bands=None) -> str:
     from fnirs_pipe.qc.metrics import unclaimed_separations
-    return f"Neither range ({unclaimed_separations()})"
+    return f"Neither range ({unclaimed_separations(sep_bands)})"
 
 
-def separation_blocks(rows: list[dict]) -> list[tuple[str, list[dict]]]:
+def separation_blocks(rows: list[dict], sep_bands=None) -> list[tuple[str, list[dict]]]:
     """Rows grouped by separation, long first, empty blocks dropped.
 
     A single block back means the montage is of one kind (or was never split), which is the
@@ -177,7 +177,7 @@ def separation_blocks(rows: list[dict]) -> list[tuple[str, list[dict]]]:
     """
     groups = [("Long channels", [r for r in rows if r.get("separation") in ("long", "")]),
               ("Short channels", [r for r in rows if r.get("separation") == "short"]),
-              (_neither_range_title(),
+              (_neither_range_title(sep_bands),
                [r for r in rows if r.get("separation") == "unclassified"])]
     return [(title, block) for title, block in groups if block]
 
@@ -210,6 +210,7 @@ def separation_notes(
     scalars: dict,
     rows: list[dict],
     short_channel_requested: bool = False,
+    sep_bands=None,
 ) -> list[str]:
     """What to say when the montage could not be split the way the metrics assume it was.
 
@@ -241,7 +242,7 @@ def separation_notes(
         from fnirs_pipe.qc.metrics import unclaimed_separations
         notes.append(
             f"{n_odd} channel(s) sit at a separation the long and short ranges leave out "
-            f"({unclaimed_separations()}). They are in no section, so their row in the "
+            f"({unclaimed_separations(sep_bands)}). They are in no section, so their row in the "
             f"per-channel table is blank apart from status and HbO-HbR correlation, and "
             f"they are in none of the scalar metrics.")
 

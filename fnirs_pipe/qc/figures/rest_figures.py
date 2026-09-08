@@ -274,6 +274,7 @@ def fc_seed_topo_figure(
     seed_df: pd.DataFrame,
     seed_hbr_df: pd.DataFrame | None = None,
     title: str = "Seed-to-whole-brain connectivity (Pearson r)",
+    sep_bands=None,
 ) -> str | None:
     """Return base64 PNG of one flat map per seed ROI, or None if the montage has no positions.
 
@@ -307,7 +308,7 @@ def fc_seed_topo_figure(
         logger.warning("seed topography skipped: montage carries no optode positions")
         return None
 
-    long_names, _ = long_short_channels(raw)
+    long_names, _ = long_short_channels(raw, sep_bands)
     drawable = set(ends) & (set(long_names) or set(ends))   # no split at all -> draw everything
     bads = set(raw.info["bads"])
 
@@ -370,6 +371,7 @@ def alff_topo_figure(
     raw: mne.io.Raw,
     alff_df: pd.DataFrame,
     title: str = "ALFF and fALFF on the optode layout",
+    sep_bands=None,
 ) -> str | None:
     """Return base64 PNG of ALFF and fALFF drawn on the flat map, or None with no positions.
 
@@ -391,7 +393,7 @@ def alff_topo_figure(
         logger.warning("ALFF topography skipped: montage carries no optode positions")
         return None
 
-    long_names, _ = long_short_channels(raw)
+    long_names, _ = long_short_channels(raw, sep_bands)
     drawable = set(ends) & (set(long_names) or set(ends))
     values = {str(row["channel"]): row for _, row in alff_df.iterrows()}
     # compute_alff already blanks a rejected channel, but the frame is an argument and may

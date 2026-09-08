@@ -176,7 +176,7 @@ def gvtd_threshold(gvtd: np.ndarray, n_std: float = 3.0) -> float | None:
 
 
 def gvtd_channel_picks(
-    raw: mne.io.Raw, channel_set: str = "long",
+    raw: mne.io.Raw, channel_set: str = "long", sep_bands=None,
 ) -> "tuple[list[str], str]":
     """Channels for the GVTD trace and carpet, plus the name to label the figure with.
 
@@ -193,7 +193,7 @@ def gvtd_channel_picks(
         raise ValueError(f"channel_set must be one of {GVTD_CHANNEL_SETS}, got {channel_set!r}")
     if channel_set == "all":
         return list(raw.ch_names), "all"
-    long_names, _ = long_short_channels(raw)
+    long_names, _ = long_short_channels(raw, sep_bands)
     if not long_names:
         logger.warning("no long channels by separation; GVTD falls back to every channel")
         return list(raw.ch_names), "all"
@@ -201,7 +201,7 @@ def gvtd_channel_picks(
 
 
 def gvtd_channel_blocks(
-    raw: mne.io.Raw, channel_set: str = "long",
+    raw: mne.io.Raw, channel_set: str = "long", sep_bands=None,
 ) -> "list[tuple[str, list[str]]]":
     """The GVTD panel's rows, canonical set first, as ``[(set name, channel names), ...]``.
 
@@ -217,10 +217,10 @@ def gvtd_channel_blocks(
     ``"all"`` gets no second block: it already contains the short channels, and a row for a
     subset of the row above it would be read as a comparison between two independent sets.
     """
-    picks, picked_set = gvtd_channel_picks(raw, channel_set)
+    picks, picked_set = gvtd_channel_picks(raw, channel_set, sep_bands)
     if picked_set != "long":
         return [(picked_set, picks)]
-    _, short_names = long_short_channels(raw)
+    _, short_names = long_short_channels(raw, sep_bands)
     blocks = [("long", picks)]
     if short_names:
         blocks.append(("short", short_names))
@@ -285,6 +285,7 @@ def gvtd_censor_spans(
     n_std: float = 10.0,
     min_epoch_s: float = 30.0,
     channel_set: str = "long",
+    sep_bands=None,
 ) -> "tuple[list[tuple[float, float]], dict[str, Any]]":
     """Spans of a recording to censor on GVTD, and what censoring them costs.
 
@@ -322,7 +323,7 @@ def gvtd_censor_spans(
     ----------
     .. footbibliography::
     """
-    picks, picked_set = gvtd_channel_picks(raw_od, channel_set)
+    picks, picked_set = gvtd_channel_picks(raw_od, channel_set, sep_bands)
     data = np.nan_to_num(raw_od.get_data(picks=picks), nan=0.0, posinf=0.0, neginf=0.0)
     times = raw_od.times
     sfreq = float(raw_od.info["sfreq"])
