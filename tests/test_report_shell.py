@@ -12,13 +12,11 @@ arrangement, and it exists because both halves of it fail quietly:
 """
 
 import re
-from pathlib import Path
 
 import pytest
 from jinja2 import ChainableUndefined, Environment, FileSystemLoader
 
 from fnirs_pipe.qc.report_shell import (
-    BASE_CSS,
     FOOTER_CSS,
     TEMPLATE_DIR,
     TOKENS_CSS,

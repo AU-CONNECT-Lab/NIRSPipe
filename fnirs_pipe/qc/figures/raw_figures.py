@@ -11,10 +11,9 @@ from fnirs_pipe.qc.metrics import PSP_PASS, SCI_PASS
 from fnirs_pipe.utils.logging import get_logger
 
 from ._brain_utils import mni_trans
-from ._utils import (AXIS_TEXT_COLOR, BAND_COLORS, CONDITION_PALETTE, HBO_COLOR,
-                     HBR_COLOR, LONG_COLOR, PSD_NFFT, SHORT_COLOR,
-                     UNCLASSIFIED_COLOR, decimate as _decimate, epochable_events,
-                     physio_bands)
+from ._utils import (BAND_COLORS, CONDITION_PALETTE, HBO_COLOR, HBR_COLOR,
+                     LONG_COLOR, PSD_NFFT, SHORT_COLOR, UNCLASSIFIED_COLOR,
+                     decimate as _decimate, epochable_events, physio_bands)
 
 logger = get_logger("qc.figures")
 

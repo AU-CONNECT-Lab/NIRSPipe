@@ -7,6 +7,7 @@ activation_panel():        per-condition rows of brain projections.
 
 import base64
 import io
+from typing import TYPE_CHECKING
 
 import matplotlib
 matplotlib.use("Agg")
@@ -20,6 +21,9 @@ from fnirs_pipe.utils.logging import get_logger
 
 from ._brain_utils import to_head
 from ._utils import HBO_COLOR, HBR_COLOR
+
+if TYPE_CHECKING:
+    import pandas as pd
 
 logger = get_logger("qc.figures.glm")
 
