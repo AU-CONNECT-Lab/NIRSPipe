@@ -399,7 +399,7 @@ def build_hyper_post_report(
         roi_mean_of_channels,
         wtc_band_mean,
     )
-    from fnirs_pipe.pipeline.synchrony import long_hbo_axis, wtc_grid_params
+    from fnirs_pipe.pipeline.synchrony import long_axis_over, wtc_grid_params
     from fnirs_pipe.qc.figures.hyper_post_figures import (
         build_isc_panel,
         build_wtc_channel,
@@ -496,8 +496,10 @@ def build_hyper_post_report(
     if wtc_channel_cross and chan_band_df is not None:
         with guard("WTC channel cross matrix", errors, scope):
             # the montage, not the labels the table happens to carry: a dyad that lost a
-            # channel still gets a matrix of the same shape as one that did not
-            chan_labels = long_hbo_axis(ref_raw) if ref_raw is not None else sorted(
+            # channel still gets a matrix of the same shape as one that did not. Both
+            # members, since a montage they do not share is still two montages
+            members = [aligned_raws[s] for s in subject_ids if s in aligned_raws]
+            chan_labels = long_axis_over(members) if members else sorted(
                 {*chan_band_df["label"], *chan_band_df["label2"]})
             chan_matrix_b64 = build_wtc_cross_matrix(
                 chan_band_df, chan_labels, subject_ids, band_fmin, band_fmax,
@@ -523,9 +525,7 @@ def build_hyper_post_report(
     def _isc_panel(ch_type: str) -> str:
         panel = ""
         with guard(f"ISC panel ({ch_type})", errors, scope):
-            isc_mat, isc_ch_names = compute_isc(
-                aligned_raws, subject_ids, ch_type, bad_channels=bad_channels
-            )
+            isc_mat, isc_ch_names = compute_isc(aligned_raws, subject_ids, ch_type)
             if isc_mat is None:
                 return ""
             write_isc_matrix(

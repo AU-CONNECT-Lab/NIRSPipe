@@ -180,4 +180,10 @@ def test_the_group_record_carries_every_resolved_option(group_record):
 
 def test_both_records_report_the_same_environment(group_record, record):
     _, group = group_record
-    assert group["environment"] == record["environment"]
+    # free_mem_gb is read when the record is written, so the two disagree by whatever the
+    # machine did in between. The claim is that both kinds of record carry the same fields
+    # from the same builder, not that memory stood still.
+    volatile = {"free_mem_gb"}
+    assert group["environment"].keys() == record["environment"].keys()
+    assert ({k: v for k, v in group["environment"].items() if k not in volatile}
+            == {k: v for k, v in record["environment"].items() if k not in volatile})

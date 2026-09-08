@@ -109,13 +109,39 @@ def test_isc_matches_channels_by_label_not_position():
     assert diag[[0, 2, 3]] == pytest.approx(1.0, abs=1e-6)     # the rest still line up
 
 
-def test_the_blanked_column_is_the_one_that_was_named():
+def test_the_axis_is_the_union_of_the_two_montages():
+    """One member's montage is not the axis: each side can carry a label the other lost."""
+    from fnirs_pipe.pipeline.synchrony import long_axis_over
+
+    a, b = _tagged("10031"), _tagged("10032")
+    a.drop_channels([c for c in a.ch_names if c.startswith("S4_D4")])
+    b.drop_channels([c for c in b.ch_names if c.startswith("S1_D1")])
+
+    assert long_axis_over([a, b]) == ["S1_D1", "S2_D2", "S3_D3", "S4_D4"]
+
+
+def test_isc_keeps_a_channel_only_one_member_has():
     from fnirs_pipe.qc.figures.hyper_post_figures import compute_isc
 
     subject_ids = ["sub-A", "sub-B"]
-    raws = {"sub-A": _tagged("10031"), "sub-B": _tagged("10032")}
-    isc_mat, ch_names = compute_isc(raws, subject_ids, "hbo",
-                                    bad_channels={"sub-B": ["S3_D3 hbo"]})
+    a, b = _tagged("10031"), _tagged("10032")
+    b.drop_channels([c for c in b.ch_names if c.startswith("S1_D1")])
+    isc_mat, ch_names = compute_isc({"sub-A": a, "sub-B": b}, subject_ids, "hbo")
+
+    assert "S1_D1" in ch_names                                 # sub-B lost it, the axis did not
+    col = ch_names.index("S1_D1")
+    assert np.isnan(isc_mat[:, col]).all()                     # nothing of sub-B's to pair
+    assert not np.isnan(isc_mat[col, ch_names.index("S2_D2")])  # sub-A's own row still runs
+
+
+def test_the_blanked_column_is_the_one_that_was_named():
+    from fnirs_pipe.qc.figures.hyper_post_figures import compute_isc
+
+    # rejections reach ISC on info["bads"], the way load_group_haemo leaves them and the
+    # way the WTC path reads them
+    subject_ids = ["sub-A", "sub-B"]
+    raws = {"sub-A": _tagged("10031"), "sub-B": _tagged("10032", drop="S3_D3")}
+    isc_mat, ch_names = compute_isc(raws, subject_ids, "hbo")
     assert np.isnan(isc_mat[:, ch_names.index("S3_D3")]).all()
     assert not np.isnan(isc_mat[:, ch_names.index("S2_D2")]).any()
 

@@ -27,6 +27,7 @@ length and normalised. All of them read long channels only.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from itertools import combinations
 
@@ -50,6 +51,8 @@ def _shared_sfreq(raws: dict[str, mne.io.Raw]) -> float:
     equalises duration, not rate, and the input stage is now the caller's choice, so two
     participants can arrive resampled differently.
     """
+    if not raws:
+        raise ValueError("no recordings to read a sampling rate from")
     rates = {sid: round(float(raw.info["sfreq"]), 4) for sid, raw in raws.items()}
     if len(set(rates.values())) > 1:
         raise ValueError(
@@ -90,9 +93,31 @@ def long_hbo_axis(raw: mne.io.Raw) -> list[str]:
     reader has to be able to tell an empty cell from a channel that was never in the montage.
 
     A 20-channel montage with 2 rejected -> 20 labels, of which 2 index an all-blank row.
+    One recording's answer; a dyad's is :func:`long_axis_over`.
     """
-    return [raw.ch_names[p].rsplit(" ", 1)[0]
-            for p in long_channel_picks(raw, "hbo", exclude=[])]
+    return long_axis_over([raw])
+
+
+def long_axis_over(raws: "Iterable[mne.io.Raw]", ch_type: str = "hbo") -> list[str]:
+    """The axis a *dyad's* channel-by-channel matrix is indexed by: the union of the members'
+    montages, in the first member's order.
+
+    ::
+
+      member A: S1_D1, S2_D2        member B: S2_D2, S3_D3
+      -> ["S1_D1", "S2_D2", "S3_D3"]
+
+    One member's montage is not the axis. A label only the other member carries still has a
+    row or a column of its own, so drawing the axis from the first member alone drops it.
+    Bads are kept, for the reason :func:`long_hbo_axis` gives.
+    """
+    axis: list[str] = []
+    for raw in raws:
+        for p in long_channel_picks(raw, ch_type, exclude=[]):
+            label = raw.ch_names[p].rsplit(" ", 1)[0]
+            if label not in axis:
+                axis.append(label)
+    return axis
 
 
 @dataclass

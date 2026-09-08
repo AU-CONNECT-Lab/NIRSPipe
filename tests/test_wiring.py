@@ -146,7 +146,8 @@ def test_the_bad_channels_survive_to_the_final_output(baseline):
 
 def test_a_threshold_that_rejects_everything_says_so(tmp_path_factory):
     """Without this guard the run dies inside Beer-Lambert, which never names the threshold."""
-    with pytest.raises(StageError, match="SCI threshold"):
+    # the criterion that rejected and the line it rejected against, both in the message
+    with pytest.raises(StageError, match=r"failed screening on SCI .*sci 1\.1"):
         _prep(tmp_path_factory.mktemp("sci_all_bad"), sci_threshold=1.1)
 
 

@@ -53,7 +53,7 @@ def inputs(make_raw):
 def _run(inputs, seed, significance=True, mc_count=300):
     raws, signals = inputs
     return synchrony._wtc_over_pairs(
-        raws, signals, LABELS, fmin=0.004, fmax=0.2,
+        raws, signals, fmin=0.004, fmax=0.2,
         significance=significance, seed=seed, mc_count=mc_count,
     )
 

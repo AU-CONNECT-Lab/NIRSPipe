@@ -56,7 +56,7 @@ def test_the_null_can_be_crossed_on_its_own():
 
 # ---- what lands on disk ----
 
-def test_the_sidecar_records_the_iteration_count_and_the_shape(tmp_path, monkeypatch):
+def test_the_sidecar_records_the_iteration_count_and_the_shape(tmp_path, monkeypatch, make_raw):
     import fnirs_pipe.pipeline.hyperscanning as hyper
     from fnirs_pipe.qc import wtc_null
 
@@ -64,8 +64,11 @@ def test_the_sidecar_records_the_iteration_count_and_the_shape(tmp_path, monkeyp
                           "coherence": [0.3], "coherence_z": [0.31], "n_valid_frac": [1.0]})
     monkeypatch.setattr(hyper, "compute_wtc_pseudo", lambda *a, **k: frame)
 
+    # a real raw even though the WTC itself is stubbed: the sidecar reads the wavelet grid
+    # off the recordings, so an empty map has no sampling rate to report
+    raws = {"a": make_raw(n_ch=1), "b": make_raw(n_ch=1)}
     out = wtc_null.write_wtc_null(
-        group_id="d01", task="baseline", aligned_raws={}, output_dir=tmp_path,
+        group_id="d01", task="baseline", aligned_raws=raws, output_dir=tmp_path,
         n_iter=7, wtc_fmin=0.01, wtc_fmax=0.25, band_fmin=0.06, band_fmax=0.15,
         seed=1, cross=False, mask_coi=True)
 

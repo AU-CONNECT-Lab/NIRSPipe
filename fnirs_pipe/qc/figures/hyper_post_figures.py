@@ -13,6 +13,7 @@ import mne
 import plotly.graph_objects as go
 
 from fnirs_pipe.io.snirf import long_channel_picks
+from fnirs_pipe.pipeline.synchrony import long_axis_over
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("qc.figures.hyper_post")
@@ -420,7 +421,6 @@ def compute_isc(
     aligned_raws: dict[str, mne.io.Raw],
     subject_ids: list[str],
     ch_type: str = "hbo",
-    bad_channels: dict[str, list[str]] | None = None,
 ) -> tuple[np.ndarray, list[str]] | tuple[None, None]:
     """Compute inter-brain Pearson r matrix (n_ch × n_ch) over long channels.
 
@@ -441,12 +441,13 @@ def compute_isc(
     shifts every channel after it, so column j would hold a different pair than its label
     claims. Everything here is looked up by S-D label.
 
+    Rejections arrive on ``raw.info["bads"]``, which is where
+    :func:`fnirs_pipe.pipeline.hyperscanning.load_group_haemo` puts them and the only place
+    the WTC path reads them from. This used to take the resolved rejections a second time as
+    a ``bad_channels`` argument and never look at it.
+
     Args:
         ch_type: "hbo" or "hbr".
-        bad_channels: {subject_id: [bad channel names]}, the rejections the run resolved,
-            which under ``--bads-scope subject`` is the union over the subject's runs and so
-            is wider than any one file's own. Rows and columns not present for a subject are
-            blanked whether or not they appear here.
     """
     if len(subject_ids) < 2:
         return None, None
@@ -455,15 +456,15 @@ def compute_isc(
     if raw1 is None or raw2 is None:
         return None, None
 
-    def _by_label(raw: mne.io.Raw, exclude="bads") -> dict[str, int]:
+    def _by_label(raw: mne.io.Raw) -> dict[str, int]:
+        """{label: index} over what this member kept, bads dropped: what gets correlated."""
         return {raw.ch_names[p].rsplit(" ", 1)[0]: p
-                for p in long_channel_picks(raw, ch_type, exclude=exclude)}
+                for p in long_channel_picks(raw, ch_type)}
 
-    # the axis is the montage, the maps are what survived: one shape, blanks where a
-    # channel went. Both members contribute, since a montage they do not share is still two
-    # montages and a label only one of them carries has a row or a column of its own
-    axis1, axis2 = _by_label(raw1, exclude=[]), _by_label(raw2, exclude=[])
-    ch_names = list(axis1) + [c for c in axis2 if c not in axis1]
+    # the axis is the montage, the maps are what survived: one shape, blanks where a channel
+    # went. The axis rule is shared with the crossed WTC matrix, which drew it from the first
+    # member alone until 0.30.0
+    ch_names = long_axis_over([raw1, raw2], ch_type)
     map1, map2 = _by_label(raw1), _by_label(raw2)
     if not ch_names:
         return None, None
@@ -497,9 +498,7 @@ def compute_isc(
     isc_mat = (d1 @ d2.T) / d1.shape[1]
     np.clip(isc_mat, -1.0, 1.0, out=isc_mat)
 
-    # `bad_channels` needs no second pass: a rejected channel contributed a row of NaN
-    # above, which the products carry. The pass that used to be here looked for sub1's
-    # rejections inside a list that had already excluded them, so it blanked nothing.
+    # a rejected channel contributed a row of NaN above, which the products carry
     return isc_mat, ch_names
 
 

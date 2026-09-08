@@ -26,9 +26,11 @@ All notable changes to this project will be documented in this file.
 - **The hyperscanning raw report writes its coherence tables**, whole-record and windowed, so the numbers behind the bar chart and the heatmap can leave the report
 
 ### Fixed
+- **`fnirs-pipe` wrote no SQM record for any run.** The failure was logged and the run carried on, so the group tables and the quality database were left with whatever an earlier run had put on disk
 - **"Long channel" meant two different things**: 15-45 mm to the reports and the GVTD trace, anything over 10 mm to the dyad metrics and the short-channel regressors. A separation past 45 mm was outside the montage in one half of the package and usable in the other. One rule now, and a channel in neither band is named in a warning instead of silently taking part in nothing
 - **Crossing the channels drew both axes from one member of the dyad**, so the crossed WTC table and the ISC matrix were missing every pairing that used a channel the other member kept and this one had rejected. Which member counted depended on the order the pairs table lists them in. The crossed table grows by the pairings it was dropping
 - **The dyad matrices are indexed by the montage**, rejected channels included, so every dyad's matrix has one shape and a group analysis can stack them however their rejections differ. A rejection blanks its own row or its own column, never both
+- **The crossed WTC matrix drew its axis from one member of the dyad**, so a channel only the other member's montage carries never reached the figure. ISC took both montages already; the two share one rule now. Reaches a dyad whose members were not capped alike
 - **`fnirs-qc hyper-raw` scored its per-subject quality table over every channel**, while the individual reports score the long ones, so a subject's SCI, CV, SNR and GVTD could not be read across the two. It is the long-channel view now, and says which set it describes
 - **`--gvtd-censor` failed on any recording that has event markers**, which is every task run. It worked only on a recording with no markers at all
 - **The interface showed no SCI at all in its channel table**, a dash on every row
