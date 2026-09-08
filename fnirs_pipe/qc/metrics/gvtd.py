@@ -6,9 +6,9 @@ against the trace, the censoring is defined against the threshold, and the chann
 figures print is the one the censoring used.
 
 Which channels and why the flagged fraction runs high are settled in
-``qc/GVTD/gvtd_channel_set_and_threshold.md``, measured on 17 recordings. Two constants
-carry decisions from it: ``GVTD_MOTION_BAND`` does not follow ``--mode``, and
-``GVTD_CHANNEL_SETS`` defaults to the long channels.
+``qc/GVTD/gvtd_channel_set_and_threshold.md``, measured on 17 recordings. Two decisions from
+it are carried here: ``GVTD_MOTION_BAND`` does not follow ``--mode``, and the channel set is
+the long channels, not an option, since the analysis never uses the rest.
 
 ``_motion_metrics`` keeps its name, which predates the split and says "motion" where it
 means GVTD. The other motion measures, spikes and the correction footprint, are in
@@ -31,7 +31,6 @@ logger = get_logger("qc.metrics.gvtd")
 # could not be compared across a cohort.
 GVTD_MOTION_BAND = (0.01, 0.5)
 GVTD_N_STD = 3.0  # one constant: the figures draw this threshold, the record stores it
-GVTD_CHANNEL_SETS = ("long", "all")
 
 
 def gvtd_timetrace(
@@ -176,23 +175,21 @@ def gvtd_threshold(gvtd: np.ndarray, n_std: float = 3.0) -> float | None:
 
 
 def gvtd_channel_picks(
-    raw: mne.io.Raw, channel_set: str = "long", sep_bands=None,
+    raw: mne.io.Raw, sep_bands=None,
 ) -> "tuple[list[str], str]":
     """Channels for the GVTD trace and carpet, plus the name to label the figure with.
 
-    ``"long"`` on a montage with no registered optode positions has no long channels to pick
-    and an empty pick has no trace at all, so it falls back to every channel. The returned
-    label is what actually happened rather than what was asked for, since it is what the
-    figure prints and a wrong label makes two runs look comparable when they are not.
+    The long channels, which is the set the analysis uses, so a run is judged on the
+    channels it is built from. A montage with no registered optode positions has no long
+    channels to pick and an empty pick has no trace at all, so it falls back to every
+    channel. The returned label is what actually happened rather than what was intended,
+    since it is what the figure prints and a wrong label makes two runs look comparable
+    when they are not.
 
     Example: a 40-channel montage with 22 long and 18 out-of-band channels returns
     ``(22 names, "long")``; the same call on an unregistered montage returns
     ``(40 names, "all")``.
     """
-    if channel_set not in GVTD_CHANNEL_SETS:
-        raise ValueError(f"channel_set must be one of {GVTD_CHANNEL_SETS}, got {channel_set!r}")
-    if channel_set == "all":
-        return list(raw.ch_names), "all"
     long_names, _ = long_short_channels(raw, sep_bands)
     if not long_names:
         logger.warning("no long channels by separation; GVTD falls back to every channel")
@@ -201,7 +198,7 @@ def gvtd_channel_picks(
 
 
 def gvtd_channel_blocks(
-    raw: mne.io.Raw, channel_set: str = "long", sep_bands=None,
+    raw: mne.io.Raw, sep_bands=None,
 ) -> "list[tuple[str, list[str]]]":
     """The GVTD panel's rows, canonical set first, as ``[(set name, channel names), ...]``.
 
@@ -212,12 +209,13 @@ def gvtd_channel_blocks(
 
         44-channel montage, 28 long + 16 short  ->  [("long", 28), ("short", 16)]
         hyper montage, 22 long + 0 short        ->  [("long", 22)]
-        channel_set="all"                       ->  [("all", 40)]
+        unregistered montage, no long channels  ->  [("all", 40)]
 
-    ``"all"`` gets no second block: it already contains the short channels, and a row for a
-    subset of the row above it would be read as a comparison between two independent sets.
+    The fallback set gets no second block: it already contains the short channels, and a row
+    for a subset of the row above it would be read as a comparison between two independent
+    sets.
     """
-    picks, picked_set = gvtd_channel_picks(raw, channel_set, sep_bands)
+    picks, picked_set = gvtd_channel_picks(raw, sep_bands)
     if picked_set != "long":
         return [(picked_set, picks)]
     _, short_names = long_short_channels(raw, sep_bands)
@@ -284,7 +282,6 @@ def gvtd_censor_spans(
     raw_od: mne.io.Raw,
     n_std: float = 10.0,
     min_epoch_s: float = 30.0,
-    channel_set: str = "long",
     sep_bands=None,
 ) -> "tuple[list[tuple[float, float]], dict[str, Any]]":
     """Spans of a recording to censor on GVTD, and what censoring them costs.
@@ -323,7 +320,7 @@ def gvtd_censor_spans(
     ----------
     .. footbibliography::
     """
-    picks, picked_set = gvtd_channel_picks(raw_od, channel_set, sep_bands)
+    picks, picked_set = gvtd_channel_picks(raw_od, sep_bands)
     data = np.nan_to_num(raw_od.get_data(picks=picks), nan=0.0, posinf=0.0, neginf=0.0)
     times = raw_od.times
     sfreq = float(raw_od.info["sfreq"])

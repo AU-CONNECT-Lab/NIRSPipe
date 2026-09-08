@@ -384,7 +384,7 @@ def _section_motion_detail(
     shared_chs = [c for c in raw_od_after.ch_names if c in raw_od_before.ch_names]
 
     # the same blocks the carpet panel drew, so the two figures never name sets differently:
-    # under --gvtd-channels all there is one block and every channel lands in it
+    # a montage with no long channels has one block and every channel lands in it
     blocks = gvtd_blocks or [("all", list(raw_od_before.ch_names))]
     members = [(name, names, set(names)) for name, names in blocks]
 
@@ -471,9 +471,9 @@ def _section_motion(
     uncorrected one, matching the ``before -> after`` pairs in the metrics table.
 
     ``raw_gvtd`` is every channel the GVTD panel covers and ``gvtd_blocks`` is how it splits
-    them into rows, normally long then short. ``gvtd_set`` names the first block, the one
-    ``--gvtd-channels`` decides and the only one the reported scalars come from; the rest are
-    drawn for comparison. Everything else here stays on the long channels: the zoom below is
+    them into rows, normally long then short. ``gvtd_set`` names the first block, the
+    canonical one and the only one the reported scalars come from; the rest are drawn for
+    comparison. Everything else here stays on the long channels: the zoom below is
     per-channel optical density, so a wider set would only add rows.
     """
     carpet_gvtd_path = None
@@ -823,7 +823,6 @@ def _section_sqm(
     out_dir: Path | None = None,
     *,
     sqm_label: str | None = None,
-    gvtd_channels: str = "long",
     sci_threshold: float = SCI_PASS,
     psp_threshold: float | None = None,
 ) -> dict:
@@ -893,18 +892,6 @@ def _section_sqm(
         errts_key = "errts_long" if record.get("errts_long") else "errts"
         for k, v in (record.get(errts_key) or {}).items():
             sqm[f"{k}_errts"] = v
-        # `--gvtd-channels all` moves the GVTD scalars alone, not the panel around them: it
-        # names one metric, and SCI and PSP measure coupling per channel rather than across
-        # channels, so widening their set would answer a different question than was asked.
-        # The corrected side moves with it, since a post value read off a different channel
-        # set than its pre value makes the correction look like an effect it is not.
-        gvtd_key = "raw" if gvtd_channels == "all" else raw_key
-        if gvtd_key != raw_key:
-            for src, suffix in ((record.get(gvtd_key), ""),
-                                (record.get("motion_post"), "_post")):
-                for k, v in (src or {}).items():
-                    if k.startswith("gvtd_"):
-                        sqm[f"{k}{suffix}"] = v
         # The same raw file measured over three channel sets, kept as three dicts so the
         # panel can print them side by side. `sqm` above already carries one of them and
         # decides the verdict; these are for the comparison, not for it.
@@ -1233,9 +1220,8 @@ def build_subject_report(
     # one resolution for the whole report, so every panel and the record agree
     sep_bands = separation_bands(config)
     raw_long = _prepare_long_raw(raw_intensity, subject, sep_bands)
-    # the GVTD panel's channel set, which config decides and which need not be raw_long
-    gvtd_channels = getattr(config, "gvtd_channels", None) or "long"
-    gvtd_blocks = gvtd_channel_blocks(raw_intensity, gvtd_channels, sep_bands)
+    # the GVTD panel's channel set, which follows the separation bands and need not be raw_long
+    gvtd_blocks = gvtd_channel_blocks(raw_intensity, sep_bands)
     gvtd_set = gvtd_blocks[0][0]
     raw_gvtd = raw_intensity.copy().pick([c for _, names in gvtd_blocks for c in names])
 
@@ -1366,7 +1352,6 @@ def build_subject_report(
     sqm_vars          = _section_sqm(sci_scores, bad_channels, subject, errors,
                                      out_dir=out_path.parent / "nirs",
                                      sqm_label=sqm_label,
-                                     gvtd_channels=gvtd_channels,
                                      sci_threshold=getattr(config, "sci_threshold", SCI_PASS),
                                      psp_threshold=getattr(config, "psp_threshold", None))
     _note_separation(notes, subject, sqm_vars["sqm"], sqm_vars["channel_rows"],
@@ -1447,6 +1432,7 @@ def build_subject_report(
         **rest_vars,
         **ch_summary_vars,
         denoise_carpet_path=denoise_carpet_path,
+        gvtd_set=gvtd_set,
         mode=mode or "",
     )
     out_path.parent.mkdir(parents=True, exist_ok=True)

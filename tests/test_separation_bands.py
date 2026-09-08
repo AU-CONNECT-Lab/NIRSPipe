@@ -226,6 +226,35 @@ def test_every_cli_that_splits_channels_offers_the_flags():
     assert wanted <= _flags(hyper_parser(), "run")
 
 
+def test_no_cli_offers_a_gvtd_channel_set_any_more():
+    """`--gvtd-channels all` used to widen the GVTD scalars to every channel, which judged
+    a run on channels `long_channel_picks` and the GLM never touch. The bands decide the
+    set now, and both values were in the record either way, so the flag is gone from all
+    three parsers rather than deprecated in one."""
+    from fnirs_pipe.cli.qc import _build_parser as qc_parser
+    from fnirs_pipe.cli.run import _build_parser as run_parser
+
+    def _flags(parser, subcommand=None):
+        target = parser
+        if subcommand:
+            actions = [a for a in parser._actions if hasattr(a, "choices") and a.choices]
+            target = next(a.choices[subcommand] for a in actions if subcommand in a.choices)
+        return {f for a in target._actions for f in a.option_strings}
+
+    for parser, sub in ((run_parser(), None), (qc_parser(), "prep-raw"),
+                        (qc_parser(), "hyper-raw")):
+        assert "--gvtd-channels" not in _flags(parser, sub)
+
+
+def test_the_old_channel_set_argument_cannot_be_passed_by_position():
+    """The second positional is `sep_bands` now. A caller left over from the flag would
+    hand it "long", which has to fail loudly rather than be read as a set of bands."""
+    from fnirs_pipe.qc.metrics import gvtd_channel_picks
+
+    with pytest.raises(ValueError):
+        gvtd_channel_picks(_montage([8, 30]), "long")
+
+
 def test_the_analysis_page_emits_the_flags():
     """The GUI's command builder is a hand-written copy of the CLI surface; this is the
     same contract `test_gui_cli_surface` holds for the postprocessing flags."""
@@ -413,9 +442,9 @@ def test_the_gvtd_channel_set_follows_the_bands():
     from fnirs_pipe.qc.metrics import gvtd_channel_picks
 
     raw = _montage([8, 30, 58])
-    assert gvtd_channel_picks(raw, "long") == (["S2_D2 760", "S3_D3 760"], "long")
+    assert gvtd_channel_picks(raw) == (["S2_D2 760", "S3_D3 760"], "long")
     # an upper bound takes the 58 mm channel out of the trace as well as out of the table
-    assert gvtd_channel_picks(raw, "long", (0.01, 0.015, 0.045)) == (["S2_D2 760"], "long")
+    assert gvtd_channel_picks(raw, (0.01, 0.015, 0.045)) == (["S2_D2 760"], "long")
 
 
 def test_the_orphan_warning_repeats_when_the_bands_change(caplog):

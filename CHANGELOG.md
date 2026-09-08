@@ -6,14 +6,26 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.31.0] - 2026-09-08
+
 ### Added
 - **`--short-max-dist` / `--long-min-dist` / `--long-max-dist` set what counts as a short and a long channel**, in mm. They were fixed in the source, so a montage the defaults do not describe (infant arrays, high-density ones) could not be measured correctly. The run's values are recorded, so an old record still says which separations produced its split
 - **Wavelet coherence runs on both chromophores.** `--wtc-chroma {hbo,hbr,both}`, default both. It was HbO only, so the HbO/HbR consistency check was available on ISC and not on WTC; a coupling in HbO with nothing in HbR is a caution flag. One switch in the report moves every coherence panel between the chromophores at once. Both costs twice the time and roughly doubles the page; pass `hbo` for the old behaviour
 - **`fnirs-hyper run` reads the separation bands off the members' quality records** rather than being told them, so the dyad metrics can no longer be split one way while the member reports were split another. Members preprocessed with different bands are refused. The three flags stay as an override for a tree preprocessed before the bands were recorded
+
+### Changed
+- **The WTC band-mean tables gained a `chromophore` column**, and the saved maps split one archive per chromophore, so tables written either side of this release will not concatenate
+
+### Removed
+- **`--gvtd-channels` is gone.** GVTD always covers the long channels now, the set `--long-min-dist` / `--long-max-dist` define and the only set the rest of the analysis uses.
+
+## [0.30.0] - 2026-09-07
+
+### Added
 - **The dyad report says so when ISC runs on a stage with no bandpass on record.** `--desc` defaults to the Beer-Lambert output, which still carries its drift, and a whole-record correlation has no frequency axis to keep drift out of it: two members recorded in one room drift alike for reasons that are not neural. The wavelet coherence panels are unaffected and get no note
 - **The GVTD panel draws the short channels on their own row**, under the long one and on the same scale, with the carpet split into a long block and a short block beside it. Short-channel quality had no time-resolved view anywhere in the report. The verdict, the threshold and the reported scalars still come from the long row alone, so nothing a run is judged on changes. Each row shades the derivative spikes found on its own channels, which are now detected per separation class rather than on the long ones alone
 - **`--psp-threshold` sets the second screening line.** It was fixed at 0.1 with no way to change it, even though a channel failing it is rejected
-- **`fnirs-qc hyper-raw` exposes the windows its figures use**, and the GVTD channel set. All four were fixed in the source with no way to reach them
+- **`fnirs-qc hyper-raw` exposes the windows its figures use**. All three were fixed in the source with no way to reach them
 - **`--epoch-tmin` / `--epoch-tmax` set the trial window the subject report works in.** Every epoch figure and the per-trial panel were pinned to -5 to 25 s, which suits a single trial and not a 60 s block. Left unset, the report says so when the run's events outrun the window the figures average
 - **`--epoch-chunk-duration` cuts a long task annotation into trials the epoch figures can average.** A block design marks one 240 s annotation per condition and nothing can average a single 240 s trial, so that half of the report described the start of each block. Cutting at 25 s gives 9 trials
 - **The WTC sidecars record the wavelet grid.** Neither value is configurable, and both decide how many time-frequency cells a band mean averages over
@@ -48,7 +60,6 @@ All notable changes to this project will be documented in this file.
 - **A figure that failed took the whole group report with it.** Every other report loses one panel; this one had no error handling at all
 
 ### Changed
-- **The WTC band-mean tables gained a `chromophore` column**, and the saved maps split one archive per chromophore, so tables written either side of this release will not concatenate
 - **A channel over 45 mm is a long channel now.** The long band's upper edge is off by default; it used to drop those channels out of every section and metric without appearing anywhere as excluded. Screening still judges them on their own SCI and PSP. **On a montage with channels past 45 mm the long-channel metrics all move, GVTD included**
 - **`fnirs-qc hyper-raw`'s coherence band is `--coh-fmin` / `--coh-fmax`.** As `--fmin` / `--fmax` it said nothing about which of the report's bands it set. The old names still work
 - **The subject report's per-trial panel scores each trial over the event's own duration** when no epoch window is given, which is what the raw viewer has always done. It used a fixed -5 to 25 s window, so on a block design it scored the first 25 s of a block and called that the trial. The panel says which window it used

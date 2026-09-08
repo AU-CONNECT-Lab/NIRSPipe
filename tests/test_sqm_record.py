@@ -53,8 +53,7 @@ _RESAMPLE_SFREQ = SFREQ / 2
 # PrepConfig's defaults are gvtd_censor_spans' defaults, so a config value that never
 # reached the function would still produce a plausible record. These do not match, which
 # turns "the kwarg went somewhere else" into a failing assertion.
-_CENSOR = dict(gvtd_censor=True, gvtd_censor_n_std=8.0, gvtd_min_epoch_s=20.0,
-               gvtd_channels="all")
+_CENSOR = dict(gvtd_censor=True, gvtd_censor_n_std=8.0, gvtd_min_epoch_s=20.0)
 
 
 def _run(out_dir, subject="01", task="tapping", post=True, censor=None):
@@ -283,7 +282,9 @@ def test_the_config_the_run_was_given_is_what_censored_it(censored_run):
     censor = sections["censor"]
     assert censor["gvtd_censor_n_std"] == _CENSOR["gvtd_censor_n_std"]
     assert censor["gvtd_censor_min_epoch_s"] == _CENSOR["gvtd_min_epoch_s"]
-    assert censor["gvtd_censor_channel_set"] == _CENSOR["gvtd_channels"]
+    # not a config value any more: the set follows the separation bands, and the record
+    # stores which one the picks actually landed on
+    assert censor["gvtd_censor_channel_set"] == "long"
     assert censor["gvtd_censor_n_spans"] == len(prep.censor_spans)
 
 

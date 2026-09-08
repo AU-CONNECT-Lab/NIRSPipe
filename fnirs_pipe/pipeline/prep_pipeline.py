@@ -134,7 +134,6 @@ class PrepConfig:
     epoch_tmax: float | None = None
     # cut each task annotation into trials this long first, for a block design
     epoch_chunk_duration: float | None = None
-    gvtd_channels: str = "long"              # channel set the GVTD trace and carpet cover
     gvtd_censor: bool = False                # mark the frames GVTD flags as BAD_gvtd
     gvtd_censor_n_std: float = 10.0
     gvtd_min_epoch_s: float = 30.0
@@ -245,7 +244,7 @@ def run_prep(
         from fnirs_pipe.qc.metrics._helpers import separation_bands
         censor_spans, censor_metrics = gvtd_censor_spans(
             raw_od, n_std=config.gvtd_censor_n_std,
-            min_epoch_s=config.gvtd_min_epoch_s, channel_set=config.gvtd_channels,
+            min_epoch_s=config.gvtd_min_epoch_s,
             sep_bands=separation_bands(config))
         # BAD_ annotations, so the spans travel with the data instead of being cut out of
         # it: MNE's reject_by_annotation drops the epochs they overlap, a continuous

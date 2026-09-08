@@ -113,11 +113,6 @@ Preprocessing:
                                than one per block. A 240 s block at 25 s gives 9 trials and
                                drops the remainder. Nothing can average a single 240 s trial,
                                so without this the epoch figures describe the start of a block.
-  --gvtd-channels              {long,all}   [default: long]
-                               Channels GVTD covers. It is an RMS across channels, so the set
-                               is part of the value; `all` is for montages whose usable
-                               separations do not fall in one band, though widening
-                               --long-min-dist / --long-max-dist is usually the better fix.
   --gvtd-censor                Mark the frames GVTD flags as BAD_gvtd annotations. Off by
                                default. Nothing is cut: epoching drops the trials the spans
                                overlap, continuous analyses pick the surviving stretches, and
@@ -275,7 +270,6 @@ fnirs-qc prep-raw BIDS_DIR OUTPUT_DIR PARTICIPANT_LABEL
                   [--sci-threshold FLOAT] [--psp-threshold FLOAT]
                   [--window-length FLOAT]                       [default: 10.0]
                   [--epoch-qc] [--epoch-tmin/--epoch-tmax FLOAT]
-                  [--gvtd-channels {long,all}]
                   [--short-max-dist/--long-min-dist/--long-max-dist MM]
                   [--skip-bids-validation]
 
@@ -287,7 +281,6 @@ fnirs-qc hyper-raw BIDS_DIR OUTPUT_DIR --pairs-csv PATH
                    [--coh-fmin/--coh-fmax FLOAT]                [default: 0.01 / 0.10]
                    [--coh-window-length/--coh-window-step FLOAT] [default: 30.0 / 5.0]
                    [--epoch-tmin/--epoch-tmax FLOAT]            [default: -5.0 / 25.0]
-                   [--gvtd-channels {long,all}]
                    [--short-max-dist/--long-min-dist/--long-max-dist MM]
                    [--normalize] [--no-align] [--tstart/--tend FLOAT]
 
@@ -298,7 +291,7 @@ fnirs-qc provenance      OUTPUT_DIR
 
 `provenance` redraws the graphs from the sidecars already on disk.
 
-`hyper-raw`'s per-subject quality table is the long-channel view, the same one the individual reports print, so a subject's SCI, CV, SNR and GVTD can be read against their own `sub-*_desc-raw` page. `--gvtd-channels` moves the GVTD scalars alone, exactly as it does in `fnirs-pipe`.
+`hyper-raw`'s per-subject quality table is the long-channel view, the same one the individual reports print, so a subject's SCI, CV, SNR and GVTD can be read against their own `sub-*_desc-raw` page.
 
 `hyper-raw`'s coherence band was `--fmin` / `--fmax`, which said nothing about which of the report's frequency bands it set and read as `fnirs-hyper`'s `--wtc-fmin`. The old names still work as aliases.
 
@@ -420,7 +413,7 @@ output/
 
 - Executive summary with traffic-light badges (bad channel rate, mean SCI, HbO–HbR corr, GVTD p95), and a metrics panel whose tooltips say which stage each number was measured on
 - SCI / PSP probe layout + windowed heatmap
-- Carpet plot before / after motion correction, with the spike spans and the correction footprint drawn beneath. The GVTD trace covers the long channels by default (`--gvtd-channels`) and names its channel set and count on the figure; censored spans, if any, are drawn over it
+- Carpet plot before / after motion correction, with the spike spans and the correction footprint drawn beneath. The GVTD trace covers the long channels, the set `--long-min-dist` / `--long-max-dist` define, and names its channel set and count on the figure; censored spans, if any, are drawn over it
 - Per-channel motion panel with SCI-coloured traces
 - PSD before / after bandpass (cardiac + Mayer wave peaks annotated)
 - HbO–HbR correlation panel

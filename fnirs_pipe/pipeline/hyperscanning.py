@@ -296,7 +296,6 @@ def compute_group_sqm_raw(
     cardiac_l_freq: float,
     cardiac_h_freq: float,
     psp_threshold: float | None = None,
-    gvtd_channels: str = "long",
     sep_bands=None,
 ) -> dict[str, dict]:
     """Compute raw-level SQM (SCI, bad channels) for each group member.
@@ -357,7 +356,7 @@ def compute_group_sqm_raw(
         try:
             sections, _per_channel = raw_sections(
                 raw, sci_cw, bad_channels, cardiac_l_freq, cardiac_h_freq, sep_bands)
-            sqm = raw_verdict_view(sections, gvtd_channels)
+            sqm = raw_verdict_view(sections)
         except Exception:
             logger.warning("%s: quality metrics failed", entry.subject_id, exc_info=True)
             sections, sqm = {}, {}
@@ -399,7 +398,6 @@ def compute_group_sqm_raw(
     _hyper_sidecar(scalar_path, "group_sqm_raw", sources,
                    sci_threshold=sci_threshold,
                    psp_threshold=cutoffs["psp"],
-                   gvtd_channels=gvtd_channels,
                    cardiac_l_freq=cardiac_l_freq, cardiac_h_freq=cardiac_h_freq)
 
     channel_path = data_dir / f"{stem}_channels.tsv"

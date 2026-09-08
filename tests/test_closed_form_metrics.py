@@ -174,7 +174,9 @@ def _surviving(spans, duration=300.0):
 
 
 def _censor(raw, min_epoch_s):
-    return gvtd_censor_spans(raw, n_std=10.0, min_epoch_s=min_epoch_s, channel_set="all")
+    # `_od_with_bursts` registers no optode positions, so the picks fall back to every
+    # channel and the recorded set reads "all"
+    return gvtd_censor_spans(raw, n_std=10.0, min_epoch_s=min_epoch_s)
 
 
 def test_the_short_island_between_two_artifacts_is_censored_with_them():
@@ -259,7 +261,7 @@ def test_a_montage_with_no_long_channels_falls_back_to_all_and_says_so():
                            bad_pair=None, motion_onset=None)
     assert long_short_channels(short_only) == ([], short_only.ch_names)
 
-    picks, label = gvtd_channel_picks(short_only, "long")
+    picks, label = gvtd_channel_picks(short_only)
     assert picks == short_only.ch_names
     assert label == "all"
 
@@ -268,11 +270,7 @@ def test_a_normal_montage_picks_the_long_channels_and_keeps_the_label():
     normal = synth_raw("01", "rest", duration=60.0, bad_pair=None, motion_onset=None)
     long_names, short_names = long_short_channels(normal)
     assert long_names and short_names           # the fallback above is not what runs here
-    assert gvtd_channel_picks(normal, "long") == (long_names, "long")
-    assert gvtd_channel_picks(normal, "all") == (normal.ch_names, "all")
-
-
-def test_an_unknown_channel_set_is_refused_rather_than_guessed():
-    normal = synth_raw("01", "rest", duration=60.0, bad_pair=None, motion_onset=None)
-    with pytest.raises(ValueError, match="channel_set"):
-        gvtd_channel_picks(normal, "short")
+    assert gvtd_channel_picks(normal) == (long_names, "long")
+    # the short channels are on this montage and stay out of the pick: the set is the long
+    # channels, and there is no longer an input that can widen it
+    assert not set(short_names) & set(gvtd_channel_picks(normal)[0])

@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 from fnirs_pipe.cli import _shared
-from fnirs_pipe.qc.metrics import GVTD_CHANNEL_SETS, SCI_PASS
+from fnirs_pipe.qc.metrics import SCI_PASS
 from fnirs_pipe.utils.logging import get_logger, setup_logging
 
 setup_logging()
@@ -22,7 +22,6 @@ def cmd_prep_raw(
     cardiac_l_freq: float, cardiac_h_freq: float,
     window_length: float,
     epoch_qc: bool, epoch_tmin: float | None, epoch_tmax: float | None,
-    gvtd_channels: str,
     short_max_dist: float | None, long_min_dist: float | None,
     long_max_dist: float | None,
     skip_bids_validation: bool,
@@ -92,7 +91,7 @@ def cmd_prep_raw(
                                   cardiac_l_freq=cardiac_l_freq, cardiac_h_freq=cardiac_h_freq,
                                   window_s=window_length, epoch_qc=epoch_qc,
                                   epoch_tmin=epoch_tmin, epoch_tmax=epoch_tmax,
-                                  gvtd_channels=gvtd_channels, sep_bands=sep_bands)
+                                  sep_bands=sep_bands)
             print(f"  -> {html_path}")
         except Exception as exc:
             logger.exception("Raw report generation failed for %s", html_path.name)
@@ -107,7 +106,7 @@ def cmd_hyper_raw(
     cardiac_l_freq: float, cardiac_h_freq: float,
     coherence_fmin: float, coherence_fmax: float,
     coherence_window_s: float, coherence_step_s: float,
-    epoch_tmin: float, epoch_tmax: float, gvtd_channels: str,
+    epoch_tmin: float, epoch_tmax: float,
     normalize: bool, no_align: bool, tstart: float | None, tend: float | None,
     session_label: list[str] | None, task_label: list[str] | None,
     short_max_dist: float | None, long_min_dist: float | None,
@@ -144,7 +143,6 @@ def cmd_hyper_raw(
         sqm_data = compute_group_sqm_raw(members, raws_cw, sci_threshold, output_dir,
                                          cardiac_l_freq, cardiac_h_freq,
                                          psp_threshold=psp_threshold,
-                                         gvtd_channels=gvtd_channels,
                                          sep_bands=sep_bands)
         raws_haemo = {sid: _raw_to_haemo(r, dpf) for sid, r in raws_cw.items()}
         if no_align:
@@ -267,10 +265,6 @@ def _build_parser() -> argparse.ArgumentParser:
     pr.add_argument("--epoch-tmax", type=float, default=None,
                     help="Trial window end relative to event onset in s. Given together with "
                          "--epoch-tmin, or neither.")
-    pr.add_argument("--gvtd-channels", choices=list(GVTD_CHANNEL_SETS), default="long",
-                    help="Channel set the GVTD scalars are read off, and the first row of its "
-                         "panel. 'long' keeps one separation band and the panel adds a second row "
-                         "for the short channels; 'all' uses every channel in one row.")
     _shared.add_separation_bands(pr)
     pr.add_argument("--skip-bids-validation", action=argparse.BooleanOptionalAction, default=False)
     pr.set_defaults(func=cmd_prep_raw)
@@ -307,11 +301,6 @@ def _build_parser() -> argparse.ArgumentParser:
                          "evoked figures; negative pulls in a baseline.")
     hr.add_argument("--epoch-tmax", type=float, default=25.0,
                     help="Trial window end relative to event onset (s).")
-    hr.add_argument("--gvtd-channels", choices=list(GVTD_CHANNEL_SETS), default="long",
-                    help="Channel set the per-subject GVTD scalars are read off, the same "
-                         "flag the individual reports take. Pass what the run was scored "
-                         "with, or this table and the subject reports describe different "
-                         "channel sets.")
     _shared.add_separation_bands(hr)
     hr.add_argument("--session-label", nargs="+", action="extend", help="Session label(s) to include.")
     hr.add_argument("--skip-bids-validation", action=argparse.BooleanOptionalAction, default=False)

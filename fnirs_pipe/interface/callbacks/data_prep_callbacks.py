@@ -38,7 +38,7 @@ def _snirf_options(subject: str, bids_dir: str) -> list[dict]:
 
 
 # bump whenever a cached figure's builder changes, or the disk cache keeps serving the old one
-_CACHE_VERSION = 8
+_CACHE_VERSION = 9
 
 
 def _pair_name(ch_name: str) -> str:
@@ -48,11 +48,11 @@ def _pair_name(ch_name: str) -> str:
 
 def _make_cache_key(snirf_path: str, sci_thresh: float, cardiac_l: float, cardiac_h: float,
                     dpf: float, window_s: float, epoch_qc: bool,
-                    epoch_tmin: float, epoch_tmax: float, gvtd_channels: str,
+                    epoch_tmin: float, epoch_tmax: float,
                     sep_bands=None) -> str:
     import hashlib
     payload = (f"v{_CACHE_VERSION}|{snirf_path}|{sci_thresh}|{cardiac_l}|{cardiac_h}|{dpf}"
-               f"|{window_s}|{epoch_qc}|{epoch_tmin}|{epoch_tmax}|{gvtd_channels}"
+               f"|{window_s}|{epoch_qc}|{epoch_tmin}|{epoch_tmax}"
                f"|{sep_bands}")
     return hashlib.md5(payload.encode()).hexdigest()[:16]
 
@@ -155,7 +155,6 @@ def populate_runs(subject, bids_dir):
     State("dp-epoch-qc",     "value"),
     State("dp-epoch-tmin",   "value"),
     State("dp-epoch-tmax",   "value"),
-    State("dp-gvtd-channels", "value"),
     State("dp-short-max-dist", "value"),
     State("dp-long-min-dist",  "value"),
     State("dp-long-max-dist",  "value"),
@@ -163,7 +162,7 @@ def populate_runs(subject, bids_dir):
     prevent_initial_call=True,
 )
 def load_run(run_path, sci_thresh, cardiac_l, cardiac_h, dpf,
-             window_s, epoch_qc, epoch_tmin, epoch_tmax, gvtd_channels,
+             window_s, epoch_qc, epoch_tmin, epoch_tmax,
              short_max_dist, long_min_dist, long_max_dist, output_dir):
     import pickle
 
@@ -182,7 +181,6 @@ def load_run(run_path, sci_thresh, cardiac_l, cardiac_h, dpf,
     ep_tmin    = float(epoch_tmin if epoch_tmin is not None else _EPOCH_TMIN)
     ep_tmax    = float(epoch_tmax if epoch_tmax is not None else _EPOCH_TMAX)
     trial_qc   = bool(epoch_qc)
-    gvtd_channels = gvtd_channels or "long"
     from fnirs_pipe.cli._shared import separation_bands_from_args
     from fnirs_pipe.qc.metrics._helpers import separation_bands
     try:
@@ -194,7 +192,7 @@ def load_run(run_path, sci_thresh, cardiac_l, cardiac_h, dpf,
         return no_update, dbc.Alert(str(exc), color="warning")
     snirf_path = run_path
     cache_key  = _make_cache_key(snirf_path, sci_threshold, cardiac_l, cardiac_h, dpf,
-                                 window_s, trial_qc, ep_tmin, ep_tmax, gvtd_channels,
+                                 window_s, trial_qc, ep_tmin, ep_tmax,
                                  sep_bands)
     disk_path  = Path(output_dir) / ".fnirs_cache" / f"{cache_key}.pkl"
 
@@ -231,7 +229,6 @@ def load_run(run_path, sci_thresh, cardiac_l, cardiac_h, dpf,
                 epoch_qc=trial_qc,
                 epoch_tmin=ep_tmin,
                 epoch_tmax=ep_tmax,
-                gvtd_channels=gvtd_channels,
                 sep_bands=sep_bands,
             )
             result["epoch_window"] = [ep_tmin, ep_tmax]

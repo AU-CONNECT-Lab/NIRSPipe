@@ -51,7 +51,6 @@ def _process_run(
     epoch_qc: bool = False,
     epoch_tmin: float | None = None,
     epoch_tmax: float | None = None,
-    gvtd_channels: str = "long",
     psp_threshold: float | None = None,
     sep_bands=None,
 ) -> dict:
@@ -180,7 +179,7 @@ def _process_run(
     carpet_inline: dict = {}
     with guard("GVTD carpet", errors, label):
         from fnirs_pipe.qc.metrics import gvtd_channel_blocks
-        gvtd_blocks = gvtd_channel_blocks(raw, gvtd_channels, sep_bands)
+        gvtd_blocks = gvtd_channel_blocks(raw, sep_bands)
         gvtd_set = gvtd_blocks[0][0]
         gvtd_picks = [c for _, names in gvtd_blocks for c in names]
         raw_carpet = raw.copy().pick(gvtd_picks)
@@ -360,7 +359,6 @@ def build_prep_raw_report(
     epoch_qc: bool = False,
     epoch_tmin: float | None = None,
     epoch_tmax: float | None = None,
-    gvtd_channels: str = "long",
     sep_bands=None,
 ) -> None:
     """Generate raw QC report: lightweight HTML + per-run folders with figure HTMLs + SQM JSON."""
@@ -380,7 +378,7 @@ def build_prep_raw_report(
         with guard("Processing this run", run_errors, label):
             d = _process_run(run, sci_threshold, sub_dir, cardiac_l_freq, cardiac_h_freq,
                              dpf, window_s, epoch_qc, epoch_tmin, epoch_tmax,
-                             gvtd_channels, psp_threshold, sep_bands)
+                             psp_threshold, sep_bands)
         if run_errors:
             d = {"errors": run_errors, "notes": []}
         static_data.append(d)

@@ -6,7 +6,6 @@ import dash
 import dash_bootstrap_components as dbc
 from dash import dash_table, dcc, html
 
-from fnirs_pipe.qc.metrics import GVTD_CHANNEL_SETS
 
 dash.register_page(__name__, path="/", name="Data Preparation")
 
@@ -248,11 +247,6 @@ layout = dbc.Container([
                 dbc.Label("SCI / PSP Window (s)"),
                 dbc.Input(id="dp-window-s", type="number", value=10.0, min=1.0, step=1.0),
             ], width=3),
-            dbc.Col([
-                dbc.Label("GVTD Channels"),
-                dbc.Select(id="dp-gvtd-channels", value="long",
-                           options=[{"label": c, "value": c} for c in GVTD_CHANNEL_SETS]),
-            ], width=2),
             dbc.Col([
                 dbc.Label("Epoch Window (s)"),
                 dbc.InputGroup([
