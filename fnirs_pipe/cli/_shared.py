@@ -118,6 +118,19 @@ def add_min_good_frac(container, note: str = "") -> None:
              + (f" {note}" if note else ""))
 
 
+def add_screen_scope(container, note: str = "") -> None:
+    """``--screen-scope``: which part of the recording the coupled windows are counted over."""
+    container.add_argument(
+        "--screen-scope", choices=["run", "task"], default="run",
+        help="Which windows count toward --min-good-frac. 'run' (default) counts the whole "
+             "recording. 'task' counts only the annotated task blocks, so the lead-in "
+             "before the first block and the gaps between them stop being held against a "
+             "channel that is coupled throughout every block. 'task' falls back to 'run' "
+             "when no annotation is long enough to hold two screening windows, which is "
+             "what a recording carrying only short triggers looks like."
+             + (f" {note}" if note else ""))
+
+
 def screening(sci_default: "float | None" = None, note: str = "") -> argparse.ArgumentParser:
     """The screening lines as a parent parser.
 
@@ -129,6 +142,7 @@ def screening(sci_default: "float | None" = None, note: str = "") -> argparse.Ar
     add_sci_threshold(p, sci_default, note)
     add_psp_threshold(p, note)
     add_min_good_frac(p, note)
+    add_screen_scope(p, note)
     return p
 
 

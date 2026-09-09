@@ -186,6 +186,86 @@ def attach_windowed_series(
 SCREEN_WINDOW_S = 10.0
 
 
+def window_centers(times) -> "np.ndarray":
+    """Mid-time of each window, from the ``[start, end]`` pairs mne_nirs returns.
+
+    ::
+
+      [[0, 10], [10, 20]]  ->  array([5., 15.])
+
+    A window belongs at its middle, and a scope is decided on that one time rather than on
+    overlap, so a window straddling the edge of a task block counts for the side it mostly
+    sits in and is never counted twice.
+    """
+    a = np.asarray(times, dtype=float)
+    return a.mean(axis=1) if a.ndim == 2 and a.shape[1] == 2 else a.ravel()
+
+
+def task_scope_windows(
+    raw: mne.io.Raw, min_duration: float = 2 * SCREEN_WINDOW_S,
+) -> "list[tuple[str, float, float]]":
+    """[(label, tstart, tstop)] over the annotations long enough to hold screening windows.
+
+    ::
+
+      "rest" at 20 s for 300 s, plus a 5 s trigger  ->  [("rest", 20.0, 320.0)]
+
+    The annotation's own duration is the window, so a recording carrying only zero-length
+    or short triggers yields nothing here and the caller keeps whatever scope it had. That
+    is the case worth knowing about: scoping to five 10 s triggers out of an hour would
+    count one minute of the recording and still read like a verdict on the whole thing.
+
+    Clamped to the recording, and on the data axis: a cropped Raw keeps its annotations on
+    the original axis while its samples restart at zero.
+    """
+    origin = float(raw.first_time)
+    end = float(raw.times[-1])
+    out = []
+    for onset, dur, desc in zip(raw.annotations.onset, raw.annotations.duration,
+                                raw.annotations.description):
+        start = float(onset) - origin
+        stop = min(start + float(dur), end)
+        if stop - start >= float(min_duration):
+            out.append((str(desc), max(0.0, start), stop))
+    return out
+
+
+def _coupled_mask(
+    raw_od: mne.io.Raw,
+    cardiac_l_freq: float,
+    cardiac_h_freq: float,
+    sci_cutoff: float,
+    psp_cutoff: float,
+    window_s: float,
+):
+    """(mask, centers): mask is channel x window, True where the channel is coupled."""
+    try:
+        sci, times = compute_windowed_sci(raw_od, cardiac_l_freq, cardiac_h_freq, window_s)
+        psp, _ = compute_windowed_psp(raw_od, cardiac_l_freq, cardiac_h_freq, window_s)
+    except Exception as exc:
+        logger.warning("windowed screening could not be measured (%s); it screens nothing",
+                       exc)
+        return None, None
+
+    sci, psp = np.asarray(sci, dtype=float), np.asarray(psp, dtype=float)
+    if sci.shape != psp.shape or sci.ndim != 2 or sci.shape[1] == 0:
+        logger.warning("windowed SCI %s and PSP %s do not share a grid; screening nothing",
+                       sci.shape, psp.shape)
+        return None, None
+    return (sci >= float(sci_cutoff)) & (psp >= float(psp_cutoff)), window_centers(times)
+
+
+def _in_scope(centers, scope) -> "np.ndarray":
+    """Which windows a scope keeps, by window centre. No scope keeps every window."""
+    if not scope:
+        return np.ones(len(centers), dtype=bool)
+    keep = np.zeros(len(centers), dtype=bool)
+    for window in scope:
+        t0, t1 = float(window[-2]), float(window[-1])
+        keep |= (centers >= t0) & (centers <= t1)
+    return keep
+
+
 def good_window_fraction(
     raw_od: mne.io.Raw,
     cardiac_l_freq: float,
@@ -193,6 +273,7 @@ def good_window_fraction(
     sci_cutoff: float,
     psp_cutoff: float,
     window_s: float = SCREEN_WINDOW_S,
+    scope: "list[tuple[str, float, float]] | None" = None,
 ) -> dict[str, float]:
     """Share of windows in which a channel is coupled, per channel.
 
@@ -207,29 +288,37 @@ def good_window_fraction(
     whole-run SCI against a whole-run PSP cannot see that, since it no longer knows whether
     the good SCI and the bad PSP happened at the same time.
 
-    Counting windows rather than averaging them is the other half. An average can be
-    carried over the line by the part of the recording where the channel was fine, so a
-    channel that is excellent for half the run and dead for the other half passes; a count
-    cannot be rescued that way.
+    Counting windows rather than averaging them is the other half. An average can be carried
+    over the line by the part of the recording where the channel was fine, so a channel that
+    is excellent for half the run and dead for the other half passes; a count cannot be
+    rescued that way.
 
-    Returns an empty dict when either metric cannot be measured, which screens nothing
-    rather than rejecting everything.
+    ``scope`` restricts the **denominator** to the windows whose centres fall inside those
+    stretches. A run usually holds time no analysis reads, a lead-in before the first block
+    and the gaps between blocks, and a channel coupled throughout every block should not be
+    rejected for what it did while nobody was doing anything. None counts the whole
+    recording.
+
+    The scope masks one whole-record pass rather than cutting the recording and measuring
+    each piece: SCI and PSP filter to the cardiac band, so a cut piece is filtered against
+    its own edges and lands on its own window grid. Masking keeps one grid and one filter.
+
+    Returns an empty dict when either metric cannot be measured, or when the scope keeps no
+    window, which screens nothing rather than rejecting everything.
     """
-    try:
-        sci, _ = compute_windowed_sci(raw_od, cardiac_l_freq, cardiac_h_freq, window_s)
-        psp, _ = compute_windowed_psp(raw_od, cardiac_l_freq, cardiac_h_freq, window_s)
-    except Exception as exc:
-        logger.warning("windowed screening could not be measured (%s); it screens nothing", exc)
+    mask, centers = _coupled_mask(raw_od, cardiac_l_freq, cardiac_h_freq,
+                                  sci_cutoff, psp_cutoff, window_s)
+    if mask is None:
         return {}
-
-    sci, psp = np.asarray(sci, dtype=float), np.asarray(psp, dtype=float)
-    if sci.shape != psp.shape or sci.ndim != 2 or sci.shape[1] == 0:
-        logger.warning("windowed SCI %s and PSP %s do not share a grid; screening nothing",
-                       sci.shape, psp.shape)
+    keep = _in_scope(centers, scope)
+    if not keep.any():
+        logger.warning("the screening scope keeps none of the %d windows; screening nothing",
+                       len(centers))
         return {}
-
-    good = (sci >= float(sci_cutoff)) & (psp >= float(psp_cutoff))
-    frac = good.mean(axis=1)
+    if scope:
+        logger.info("channel screening counts %d of %d windows, %.0f%% of the recording",
+                    int(keep.sum()), len(centers), 100 * keep.mean())
+    frac = mask[:, keep].mean(axis=1)
     return {ch: float(frac[i]) for i, ch in enumerate(raw_od.ch_names) if i < len(frac)}
 
 
@@ -242,7 +331,7 @@ def condition_window_fractions(
     psp_cutoff: float,
     window_s: float = SCREEN_WINDOW_S,
 ) -> "dict[str, dict[str, float]]":
-    """:func:`good_window_fraction` restricted to each named stretch of the recording.
+    """:func:`good_window_fraction` restricted to each named stretch, one share per stretch.
 
     ::
 
@@ -251,15 +340,23 @@ def condition_window_fractions(
     Reported, never screened on. One channel set has to serve every condition or a contrast
     between two conditions is also a contrast between two montages, so this answers "when
     was this channel bad" without changing what is dropped.
+
+    One windowed pass masked per condition, for the reason
+    :func:`good_window_fraction` gives: cutting each condition out first would filter each
+    piece against its own edges and put each on its own grid, so the conditions would be
+    comparable neither with each other nor with the run-wide share.
     """
+    mask, centers = _coupled_mask(raw_od, cardiac_l_freq, cardiac_h_freq,
+                                  sci_cutoff, psp_cutoff, window_s)
+    if mask is None:
+        return {}
+    names = list(raw_od.ch_names)
     out: dict[str, dict[str, float]] = {}
-    for label, tstart, tstop in windows:
-        try:
-            segment = raw_od.copy().crop(tmin=max(0.0, float(tstart)),
-                                         tmax=min(float(raw_od.times[-1]), float(tstop)))
-        except Exception as exc:
-            logger.warning("condition %s could not be cut for screening (%s)", label, exc)
+    for window in windows:
+        keep = _in_scope(centers, [window])
+        if not keep.any():
+            logger.warning("condition %s holds no whole screening window", window[0])
             continue
-        out[label] = good_window_fraction(
-            segment, cardiac_l_freq, cardiac_h_freq, sci_cutoff, psp_cutoff, window_s)
+        frac = mask[:, keep].mean(axis=1)
+        out[window[0]] = {ch: float(frac[i]) for i, ch in enumerate(names) if i < len(frac)}
     return out

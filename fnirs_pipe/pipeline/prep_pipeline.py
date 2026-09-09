@@ -66,6 +66,7 @@ def mark_bad_channels(
     cardiac_h_freq: float,
     psp_threshold: float | None = None,
     min_good_frac: float | None = None,
+    screen_scope: str = "run",
 ) -> tuple[mne.io.Raw, list[str], dict[str, float], dict[str, float]]:
     """Screen channels into raw.info['bads'].
 
@@ -73,7 +74,8 @@ def mark_bad_channels(
     rejected if it fails any of them, so what gets pruned is decided by that table rather
     than here. ``threshold`` is the SCI line and ``psp_threshold`` the PSP one, both applied
     inside a window; ``min_good_frac`` is the share of windows that has to clear both, and it
-    is the line that rejects. None keeps the criterion's own default.
+    is the line that rejects. None keeps the criterion's own default. ``screen_scope`` is
+    "run" or "task" and decides which windows are counted; see :func:`resolve_screen_scope`.
 
     Returns raw (modified in-place), the rejected channel names, the SCI scores, and the
     coupled-window shares, the last two because the report and the quality record both want
@@ -81,11 +83,13 @@ def mark_bad_channels(
     Raises StageError if the criteria leave no usable channel.
     """
     from fnirs_pipe.qc.metrics import resolve_cutoffs, screen_channels, screening_scores
+    from fnirs_pipe.qc.screen_scope import resolve_screen_scope
 
     cutoffs = resolve_cutoffs(sci=threshold, psp=psp_threshold, good_frac=min_good_frac)
+    scope = resolve_screen_scope(raw_od, screen_scope)
     sci_scores = compute_sci(raw_od, cardiac_l_freq, cardiac_h_freq)
     scores = screening_scores(raw_od, cardiac_l_freq, cardiac_h_freq,
-                              have={"sci": sci_scores}, cutoffs=cutoffs)
+                              have={"sci": sci_scores}, cutoffs=cutoffs, scope=scope)
     bad_chs, why = screen_channels(scores, cutoffs)
     # without this the run dies four steps later inside Beer-Lambert, which reports only
     # that it found no optical density data and never mentions the screening
@@ -100,7 +104,8 @@ def mark_bad_channels(
         )
     raw_od.info["bads"] = bad_chs
     stamp(raw_od, stage="sci", step="sci_pruning", source=raw_od, threshold=threshold,
-          psp_threshold=cutoffs["psp"], min_good_frac=cutoffs["good_frac"])
+          psp_threshold=cutoffs["psp"], min_good_frac=cutoffs["good_frac"],
+          screen_scope=screen_scope, screen_scope_windows=len(scope or []))
     return raw_od, bad_chs, sci_scores, scores.get("good_frac") or {}
 
 # Step 4: Beer-Lambert
@@ -132,6 +137,7 @@ class PrepConfig:
     session: str | None = None
     psp_threshold: float = PSP_PASS         # the other per-window line; SCI is the required one
     min_good_frac: float = GOOD_FRAC_PASS   # share of coupled windows a kept channel needs
+    screen_scope: str = "run"               # count those windows over "run" or "task" only
     qc_window_s: float = 10.0               # sliding-window length (s) for windowed SCI/PSP/GVTD
     # trial window for the report's epoch figures and per-trial scoring; None means the
     # report's own -5 to 25 s for the figures and each event's own duration for the scoring
@@ -219,7 +225,7 @@ def run_prep(
     logger.info("sub-%s | step 2: SCI marking (threshold=%.2f, %d ch)", config.subject, config.sci_threshold, len(raw_od.ch_names))
     raw_od, bad_chs, sci_scores, good_frac_scores = mark_bad_channels(
         raw_od, threshold=config.sci_threshold, psp_threshold=config.psp_threshold,
-        min_good_frac=config.min_good_frac,
+        min_good_frac=config.min_good_frac, screen_scope=config.screen_scope,
         cardiac_l_freq=config.cardiac_l_freq, cardiac_h_freq=config.cardiac_h_freq)
     if config.bad_channels:
         manual = _expand_bad_pairs(raw_od, config.bad_channels)
@@ -349,6 +355,7 @@ def _config_dict(config: PrepConfig) -> dict:
         "sci_threshold": config.sci_threshold,
         "psp_threshold": config.psp_threshold,
         "min_good_frac": config.min_good_frac,
+        "screen_scope": config.screen_scope,
         "cardiac_l_freq": config.cardiac_l_freq,
         "cardiac_h_freq": config.cardiac_h_freq,
         "resp_l_freq": config.resp_l_freq,

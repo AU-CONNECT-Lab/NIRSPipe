@@ -26,15 +26,22 @@ from fnirs_pipe.qc.metrics.windowed import (
 
 @pytest.fixture
 def stub_windows(monkeypatch):
-    """Replace the two windowed measurements with fixed channel x window matrices."""
+    """Replace the two windowed measurements with fixed channel x window matrices.
+
+    The grid comes back too, laid out as consecutive 10 s windows, because the scope is
+    decided on window centres and a stub without times cannot be scoped.
+    """
     from fnirs_pipe.qc.metrics import windowed
 
-    def _install(sci, psp):
+    def _install(sci, psp, window_s=SCREEN_WINDOW_S):
         sci, psp = np.asarray(sci, float), np.asarray(psp, float)
+        grid = np.array([[i * window_s, (i + 1) * window_s]
+                         for i in range(sci.shape[1])], float)
         monkeypatch.setattr(windowed, "compute_windowed_sci",
-                            lambda *a, **k: (sci, None))
+                            lambda *a, **k: (sci, grid))
         monkeypatch.setattr(windowed, "compute_windowed_psp",
-                            lambda *a, **k: (psp, None))
+                            lambda *a, **k: (psp, grid))
+        return grid
 
     return _install
 
@@ -44,9 +51,9 @@ class _Raw:
         self.ch_names = list(names)
 
 
-def _frac(sci, psp, sci_cut=0.8, psp_cut=0.1):
+def _frac(sci, psp, sci_cut=0.8, psp_cut=0.1, scope=None):
     names = [f"ch{i}" for i in range(len(sci))]
-    return good_window_fraction(_Raw(names), 0.7, 1.5, sci_cut, psp_cut)
+    return good_window_fraction(_Raw(names), 0.7, 1.5, sci_cut, psp_cut, scope=scope)
 
 
 # ---- the count ----
@@ -138,24 +145,121 @@ def test_the_screening_window_is_the_one_the_lines_were_set_at():
 
 # ---- per condition, reported and never screened on ----
 
-def test_conditions_are_counted_separately(monkeypatch):
+def test_conditions_are_counted_separately(stub_windows):
     """One channel set still serves every condition, so this answers "when was it bad"
-    without changing what is dropped."""
+    without changing what is dropped. Coupled in the first two windows only, so the first
+    condition reads 1.0 and the second 0.0."""
+    stub_windows(sci=[[0.9, 0.9, 0.2, 0.2]], psp=[[0.5] * 4])
+    out = condition_window_fractions(
+        _Raw(["ch0"]), [("rest", 0.0, 20.0), ("talk", 20.0, 40.0)], 0.7, 1.5, 0.8, 0.1)
+    assert list(out) == ["rest", "talk"]
+    assert out["rest"]["ch0"] == pytest.approx(1.0)
+    assert out["talk"]["ch0"] == pytest.approx(0.0)
+
+
+def test_one_windowed_pass_serves_every_condition(stub_windows):
+    """Cutting each condition out first would filter each piece against its own edges and
+    put each on its own grid, so the conditions would be comparable neither with each other
+    nor with the run-wide share."""
     from fnirs_pipe.qc.metrics import windowed
 
-    seen = []
+    calls = []
+    stub_windows(sci=[[0.9] * 4], psp=[[0.5] * 4])
+    real = windowed.compute_windowed_sci
+    windowed.compute_windowed_sci = lambda *a, **k: (calls.append(1), real(*a, **k))[1]
+    try:
+        condition_window_fractions(
+            _Raw(["ch0"]), [("a", 0.0, 10.0), ("b", 10.0, 20.0), ("c", 20.0, 40.0)],
+            0.7, 1.5, 0.8, 0.1)
+    finally:
+        windowed.compute_windowed_sci = real
+    assert len(calls) == 1
 
-    def _fake(segment, *a, **k):
-        seen.append(round(float(segment.times[-1] - segment.times[0]), 1))
-        return {"ch0": 0.5 * len(seen)}
 
-    monkeypatch.setattr(windowed, "good_window_fraction", _fake)
+# ---- the scope: which windows go in the denominator ----
+#
+# A run holds time no analysis reads, the lead-in before the first block and the gaps
+# between them. Counting those holds a channel responsible for what it did while nobody was
+# doing anything. Restricting the denominator is one channel set either way, which is what
+# separates it from screening each condition on its own.
 
+def test_no_scope_counts_the_whole_recording(stub_windows):
+    stub_windows(sci=[[0.9, 0.9, 0.2, 0.2]], psp=[[0.5] * 4])
+    assert _frac([[0]], [[0]])["ch0"] == pytest.approx(0.5)
+
+
+def test_a_scope_drops_the_windows_outside_it(stub_windows):
+    """The same channel, judged only on the stretch the study reads. Coupled in the first
+    two windows and dead in the last two: over the run that is a half, over a scope holding
+    only the first two it is all of them."""
+    stub_windows(sci=[[0.9, 0.9, 0.2, 0.2]], psp=[[0.5] * 4])
+    assert _frac([[0]], [[0]])["ch0"] == pytest.approx(0.5)
+    assert _frac([[0]], [[0]], scope=[("block", 0.0, 20.0)])["ch0"] == pytest.approx(1.0)
+
+
+def test_a_window_is_placed_by_its_centre(stub_windows):
+    """Decided on one time rather than on overlap, so a window straddling a block edge
+    counts for the side it mostly sits in and never for both."""
+    from fnirs_pipe.qc.metrics.windowed import _in_scope, window_centers
+
+    centers = window_centers([[0, 10], [10, 20], [20, 30]])
+    keep = _in_scope(centers, [("a", 0.0, 12.0), ("b", 12.0, 30.0)])
+    assert keep.tolist() == [True, True, True]
+    assert _in_scope(centers, [("a", 0.0, 12.0)]).tolist() == [True, False, False]
+
+
+def test_a_scope_that_keeps_nothing_screens_nothing(stub_windows):
+    """Rejecting the whole montage because a scope missed every window would read as a
+    verdict on the recording."""
+    stub_windows(sci=[[0.9, 0.9]], psp=[[0.5, 0.5]])
+    assert _frac([[0]], [[0]], scope=[("late", 900.0, 1000.0)]) == {}
+
+
+# ---- resolving the scope from the annotations ----
+
+def _annotated(onsets, durations, descs, dur=600.0):
     import mne
-    info = mne.create_info(["S1_D1 hbo"], 10.0, ["hbo"])
-    raw = mne.io.RawArray(np.zeros((1, 600)), info, verbose="error")
 
-    out = condition_window_fractions(
-        raw, [("rest", 0.0, 20.0), ("talk", 20.0, 50.0)], 0.7, 1.5, 0.8, 0.1)
-    assert list(out) == ["rest", "talk"]
-    assert seen == [20.0, 30.0]
+    info = mne.create_info(["S1_D1 hbo"], 10.0, ["hbo"])
+    raw = mne.io.RawArray(np.zeros((1, int(10.0 * dur))), info, verbose="error")
+    raw.set_annotations(mne.Annotations(onsets, durations, descs))
+    return raw
+
+
+def test_task_scope_takes_the_blocks_and_leaves_the_triggers():
+    from fnirs_pipe.qc.metrics.windowed import task_scope_windows
+
+    raw = _annotated([20.0, 400.0], [300.0, 0.0], ["rest", "trigger"])
+    assert task_scope_windows(raw) == [("rest", 20.0, 320.0)]
+
+
+def test_run_scope_is_the_whole_recording():
+    from fnirs_pipe.qc.screen_scope import resolve_screen_scope
+
+    assert resolve_screen_scope(_annotated([20.0], [300.0], ["rest"]), "run") is None
+
+
+def test_task_scope_falls_back_when_only_triggers_are_annotated(caplog):
+    """The case the fallback exists for: scoping to a handful of short triggers would count
+    a minute of an hour and still read as a verdict on the run."""
+    from fnirs_pipe.qc.screen_scope import resolve_screen_scope
+
+    raw = _annotated([20.0, 100.0, 200.0], [10.0, 10.0, 10.0], ["t", "t", "t"])
+    with caplog.at_level("WARNING"):
+        assert resolve_screen_scope(raw, "task") is None
+    assert "counting the whole recording" in caplog.text
+
+
+def test_task_scope_returns_the_blocks_when_there_are_blocks():
+    from fnirs_pipe.qc.screen_scope import resolve_screen_scope
+
+    raw = _annotated([20.0, 400.0], [300.0, 100.0], ["rest", "talk"])
+    assert resolve_screen_scope(raw, "task") == [("rest", 20.0, 320.0),
+                                                 ("talk", 400.0, 500.0)]
+
+
+def test_an_unknown_scope_is_refused():
+    from fnirs_pipe.qc.screen_scope import resolve_screen_scope
+
+    with pytest.raises(ValueError, match="screen scope"):
+        resolve_screen_scope(_annotated([20.0], [300.0], ["rest"]), "poi")

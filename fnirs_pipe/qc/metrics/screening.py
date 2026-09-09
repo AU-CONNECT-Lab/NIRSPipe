@@ -40,9 +40,10 @@ class Criterion:
     ``fails_below`` records; a criterion that fails high would set it False.
 
     ``screens`` is whether failing this criterion rejects the channel. False means measured
-    and reported only. ``needs_cutoffs`` marks a scorer that is handed the resolved cutoffs
-    as a fourth argument, which is how a criterion built out of other criteria's lines gets
-    them without reaching for a global.
+    and reported only. ``needs_context`` marks a scorer that is handed a fourth argument,
+    the run's screening context: the resolved cutoffs under ``cutoffs`` and the stretches of
+    the recording that count under ``scope``. That is how a criterion built out of other
+    criteria's lines gets them without reaching for a global.
     """
 
     name: str
@@ -52,7 +53,7 @@ class Criterion:
     config_field: str | None = None
     fails_below: bool = True
     screens: bool = True
-    needs_cutoffs: bool = False
+    needs_context: bool = False
 
     def failures(self, scores: dict[str, float], cutoff: float | None = None) -> list[str]:
         line = self.cutoff if cutoff is None else cutoff
@@ -72,12 +73,14 @@ def _psp_scorer(raw_od: mne.io.Raw, cardiac_l_freq: float, cardiac_h_freq: float
 
 
 def _good_frac_scorer(raw_od: mne.io.Raw, cardiac_l_freq: float, cardiac_h_freq: float,
-                      cutoffs: dict[str, float]) -> dict:
+                      context: dict) -> dict:
     from fnirs_pipe.qc.metrics.windowed import good_window_fraction
+    cutoffs = context.get("cutoffs") or {}
     return good_window_fraction(
         raw_od, cardiac_l_freq, cardiac_h_freq,
         sci_cutoff=cutoffs.get("sci", SCI_PASS),
-        psp_cutoff=cutoffs.get("psp", PSP_PASS))
+        psp_cutoff=cutoffs.get("psp", PSP_PASS),
+        scope=context.get("scope"))
 
 
 # The criteria, in the order a report lists them. SCI and PSP both measure optode-scalp
@@ -91,7 +94,7 @@ CRITERIA: tuple[Criterion, ...] = (
     Criterion("psp", "PSP", PSP_PASS, _psp_scorer,
               config_field="psp_threshold", screens=False),
     Criterion("good_frac", "coupled windows", GOOD_FRAC_PASS, _good_frac_scorer,
-              config_field="min_good_frac", needs_cutoffs=True),
+              config_field="min_good_frac", needs_context=True),
 )
 
 
@@ -136,6 +139,7 @@ def screening_scores(
     cardiac_h_freq: float,
     have: dict[str, dict[str, float]] | None = None,
     cutoffs: dict[str, float] | None = None,
+    scope: "list[tuple[str, float, float]] | None" = None,
 ) -> dict[str, dict[str, float]]:
     """Every criterion's per-channel scores, measured on optical density.
 
@@ -146,15 +150,19 @@ def screening_scores(
     ``cutoffs`` is only read by criteria built out of other criteria's lines, and defaults
     to the table's own. Pass the same dict here and to :func:`screen_channels`, or a run
     would count windows against one SCI line and colour its report against another.
+
+    ``scope`` is the stretches of the recording that count, ``[(label, tstart, tstop)]``, and
+    None counts all of it. It reaches the window-counting criterion only; nothing else in
+    the table has a time axis to restrict.
     """
     scores = dict(have or {})
-    lines = cutoffs or criterion_cutoffs()
+    context = {"cutoffs": cutoffs or criterion_cutoffs(), "scope": scope}
     for c in CRITERIA:
         if c.name in scores:
             continue
         try:
             args = (raw_od, cardiac_l_freq, cardiac_h_freq)
-            scores[c.name] = c.scorer(*args, lines) if c.needs_cutoffs else c.scorer(*args)
+            scores[c.name] = c.scorer(*args, context) if c.needs_context else c.scorer(*args)
         except Exception as exc:
             # a criterion that cannot be measured must not silently reject every channel
             logger.warning("%s could not be measured (%s); it screens nothing this run",

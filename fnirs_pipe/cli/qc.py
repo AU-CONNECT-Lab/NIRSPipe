@@ -19,6 +19,7 @@ def cmd_prep_raw(
     bids_dir: Path, output_dir: Path, participant_label: str,
     session_label: list[str] | None, task_label: list[str] | None,
     dpf: list[float], sci_threshold: float, psp_threshold: float | None,
+    min_good_frac: float | None, screen_scope: str,
     cardiac_l_freq: float, cardiac_h_freq: float,
     window_length: float,
     epoch_qc: bool, epoch_tmin: float | None, epoch_tmax: float | None,
@@ -88,6 +89,8 @@ def cmd_prep_raw(
         try:
             build_prep_raw_report(group_runs, html_path, dpf=dpf, sci_threshold=sci_threshold,
                                   psp_threshold=psp_threshold,
+                                  min_good_frac=min_good_frac,
+                                  screen_scope=screen_scope,
                                   cardiac_l_freq=cardiac_l_freq, cardiac_h_freq=cardiac_h_freq,
                                   window_s=window_length, epoch_qc=epoch_qc,
                                   epoch_tmin=epoch_tmin, epoch_tmax=epoch_tmax,
@@ -103,6 +106,7 @@ def cmd_prep_raw(
 def cmd_hyper_raw(
     bids_dir: Path, output_dir: Path, pairs_csv: Path, group_id: str | None,
     dpf: list[float], sci_threshold: float, psp_threshold: float | None,
+    min_good_frac: float | None, screen_scope: str,
     cardiac_l_freq: float, cardiac_h_freq: float,
     coherence_fmin: float, coherence_fmax: float,
     coherence_window_s: float, coherence_step_s: float,
@@ -143,6 +147,8 @@ def cmd_hyper_raw(
         sqm_data = compute_group_sqm_raw(members, raws_cw, sci_threshold, output_dir,
                                          cardiac_l_freq, cardiac_h_freq,
                                          psp_threshold=psp_threshold,
+                                         min_good_frac=min_good_frac,
+                                         screen_scope=screen_scope,
                                          sep_bands=sep_bands)
         raws_haemo = {sid: _raw_to_haemo(r, dpf) for sid, r in raws_cw.items()}
         if no_align:

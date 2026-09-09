@@ -53,6 +53,8 @@ def _process_run(
     epoch_tmax: float | None = None,
     psp_threshold: float | None = None,
     sep_bands=None,
+    min_good_frac: float | None = None,
+    screen_scope: str = "run",
 ) -> dict:
     """Compute all data, save figure HTMLs + SQM JSON. Returns inline dict for HTML.
 
@@ -78,6 +80,7 @@ def _process_run(
         attach_windowed_series, compute_raw_sqm, compute_sci_scores,
         resolve_cutoffs, screen_channels, screening_scores,
     )
+    from fnirs_pipe.qc.screen_scope import resolve_screen_scope
     from fnirs_pipe.qc.sqm_record import raw_sections, sqm_record_dict
 
     label   = run["label"]
@@ -93,9 +96,12 @@ def _process_run(
     raw = mne.io.read_raw_snirf(run["snirf_path"], preload=True, verbose=False)
 
     sci_scores, raw_od = compute_sci_scores(raw, cardiac_l_freq, cardiac_h_freq)
-    cutoffs = resolve_cutoffs(sci=sci_threshold, psp=psp_threshold)
+    cutoffs = resolve_cutoffs(sci=sci_threshold, psp=psp_threshold,
+                              good_frac=min_good_frac)
+    scope = resolve_screen_scope(raw, screen_scope)
     screen_scores = screening_scores(raw_od, cardiac_l_freq, cardiac_h_freq,
-                                     have={"sci": sci_scores}, cutoffs=cutoffs)
+                                     have={"sci": sci_scores}, cutoffs=cutoffs,
+                                     scope=scope)
     bad_list, _why = screen_channels(screen_scores, cutoffs)
     bad_channels: set[str] = set(bad_list)
 
@@ -378,6 +384,8 @@ def build_prep_raw_report(
     dpf: list[float],
     sci_threshold: float = SCI_PASS,
     psp_threshold: float | None = None,
+    min_good_frac: float | None = None,
+    screen_scope: str = "run",
     window_s: float = 10.0,
     epoch_qc: bool = False,
     epoch_tmin: float | None = None,
@@ -401,7 +409,7 @@ def build_prep_raw_report(
         with guard("Processing this run", run_errors, label):
             d = _process_run(run, sci_threshold, sub_dir, cardiac_l_freq, cardiac_h_freq,
                              dpf, window_s, epoch_qc, epoch_tmin, epoch_tmax,
-                             psp_threshold, sep_bands)
+                             psp_threshold, sep_bands, min_good_frac, screen_scope)
         if run_errors:
             d = {"errors": run_errors, "notes": []}
         static_data.append(d)
