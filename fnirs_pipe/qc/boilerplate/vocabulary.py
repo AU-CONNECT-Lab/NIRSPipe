@@ -204,6 +204,7 @@ METRIC_SUMMARY = {
     "sci_mean": "Scalp coupling: how well the two wavelengths share a pulse. Near 1 is good; low means poor optode contact.",
     "channel_retention_rate": "Fraction of channels that survived screening. Higher is better.",
     "psp_mean": "Strength of the shared cardiac peak across the two wavelengths, averaged over 10 s windows and then over channels. Higher is a more clearly detected heartbeat.",
+    "good_frac_mean": "Share of 10 s windows in which a channel is coupled, meaning SCI and PSP both pass inside that window, averaged over channels. This is the line a channel is rejected on. Higher is better.",
     "cp_mean": "How sharply cardiac power concentrates at the pulse frequency, 0 to 1. Closer to 1 is a cleaner peak. Experimental, overlaps PSP.",
     "cp_pass_rate": "Fraction of channels with cardiac power at or above 0.5. Higher is better. Experimental.",
 
@@ -275,6 +276,7 @@ KEY_METRICS = frozenset({
     "pct_data_retained",        # enough time
     "gvtd_pct_above_thresh",    # ... and how much of it is motion
     "sci_mean",                 # the optodes were coupled
+    "good_frac_mean",           # ... and stayed coupled, which is what rejects a channel
     "hbo_hbr_corr_mean",        # what came out looks like haemodynamics
 })
 
@@ -308,6 +310,10 @@ _STAGE_RAW_AND_CORRECTED = (
 )
 
 _RAW_METRICS = (
+    # good_frac_mean sits here and not with sci/psp, which it is built from: those two are
+    # measured again on the corrected file, and the coupled-window count is taken once, at
+    # screening, on the optical density as it arrived
+    "good_frac_mean",
     "channel_retention_rate", "cp_mean", "cp_pass_rate", "n_flat_channels",
     "cv_mean", "snr_mean", "snr_pass_rate", "mean_amp_mean",
     "ch_dist_mean", "ch_dist_min", "ch_dist_max",
@@ -390,6 +396,7 @@ METRIC_DISPLAY: dict[str, tuple[str, str, "tuple[float, float] | None", "str | N
     "sci_mean":                ("Mean SCI", ".3f", (0.75, 0.5), _HIGHER),
     "channel_retention_rate":  ("Channel retention", "pct", (0.9, 0.7), _HIGHER),
     "psp_mean":                ("Mean PSP (10 s)", ".3f", None, _HIGHER),
+    "good_frac_mean":          ("Coupled windows", "pct", (0.75, 0.5), _HIGHER),
     "cp_mean":                 ("Mean CP (exp.)", ".3f", None, _HIGHER),
     "cp_pass_rate":            ("CP pass rate (exp.)", "pct", None, _HIGHER),
 

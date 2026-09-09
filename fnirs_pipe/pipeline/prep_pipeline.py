@@ -71,10 +71,10 @@ def mark_bad_channels(
     """Screen channels into raw.info['bads'].
 
     The criteria are :data:`fnirs_pipe.qc.metrics.screening.CRITERIA` and a channel is
-    rejected if it fails any of them, so what gets pruned is decided by that table rather
-    than here. ``threshold`` is the SCI line and ``psp_threshold`` the PSP one, both applied
-    inside a window; ``min_good_frac`` is the share of windows that has to clear both, and it
-    is the line that rejects. None keeps the criterion's own default. ``screen_scope`` is
+    rejected if it fails any criterion that screens, so what gets pruned is decided by that
+    table rather than here. ``threshold`` is the SCI line and ``psp_threshold`` the PSP one,
+    both applied inside a window; ``min_good_frac`` is the share of windows that has to clear
+    both, and it is the line that rejects. None keeps the criterion's own default. ``screen_scope`` is
     "run" or "task" and decides which windows are counted; see :func:`resolve_screen_scope`.
 
     Returns raw (modified in-place), the rejected channel names, the SCI scores, and the
@@ -272,11 +272,15 @@ def run_prep(
                 ["BAD_gvtd"] * len(censor_spans),
                 orig_time=raw_od.annotations.orig_time))
 
-    # sci_scores go in the sidecar because the SQM record is assembled from disk after the
-    # run, and SCI is the one input to it that no output file carries
+    # These go in the sidecar because the SQM record is assembled from disk after the run,
+    # and they are the inputs to it that no output file carries. `good_frac_scores` is the
+    # second of them and the more important one: it is the line a channel is rejected on,
+    # and unlike SCI it cannot be recomputed from the OD file alone, since the count depends
+    # on both thresholds and on the screening scope this run used.
     _save(raw_od, "sci", extra_provenance={
         "bad_channels": bad_chs,
         "sci_scores": {k: float(v) for k, v in sci_scores.items()},
+        "good_frac_scores": {k: float(v) for k, v in good_frac_scores.items()},
         **({"gvtd_censor": censor_metrics} if censor_metrics else {}),
     })
 

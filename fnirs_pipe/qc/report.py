@@ -692,6 +692,7 @@ def _section_trial_qc(
             config.cardiac_l_freq, config.cardiac_h_freq,
             tmin, tmax,
             psp_threshold=getattr(config, "psp_threshold", None),
+            min_good_frac=getattr(config, "min_good_frac", None),
         )
         fig = trial_quality_heatmap(labels, sqms)
         if fig is not None:
@@ -1026,6 +1027,7 @@ def _section_glm(
     glm_design_path = None
     glm_design_heatmap_path = None
     glm_activation_path = None
+    glm_activation_conditions: list[dict] = []
 
     conditions: list[str] = []
     if design_matrix is not None:
@@ -1043,9 +1045,13 @@ def _section_glm(
             _save_b64_png(b64, figures_dir / "glm_design_heatmap.png")
             glm_design_heatmap_path = _fig_href(figures_dir, "glm_design_heatmap.png")
 
+    # One file per condition behind a switch, not one tall image: five conditions stacked
+    # reach ~3500 px, where a condition cannot be looked at on its own and two cannot be
+    # compared. The colour scale is still shared across them, which is what keeps the
+    # switch a comparison rather than five separate pictures.
     if glm_est is not None and conditions and raw_haemo is not None:
         with _guard("GLM activation panel", errors, subject):
-            from fnirs_pipe.qc.figures import activation_panel
+            from fnirs_pipe.qc.figures import activation_condition_figures
             df = glm_est.to_dataframe().reset_index()
             if "Contrast" not in df.columns:
                 for alt in ("contrast", "Regressor", "regressor", "condition", "Condition"):
@@ -1055,14 +1061,29 @@ def _section_glm(
             if "Contrast" in df.columns:
                 df["Contrast"] = df["Contrast"].astype(str)
                 results_dict = {c: df[df["Contrast"] == c] for c in conditions}
-                b64 = activation_panel(raw_haemo, results_dict)
-                _save_b64_png(b64, figures_dir / "glm_activation.png")
-                glm_activation_path = _fig_href(figures_dir, "glm_activation.png")
+                # _pair_fname strips everything but alphanumerics, so "game-1" and
+                # "game 1" would land on one file and the switcher would offer two labels
+                # pointing at the same picture
+                used: set[str] = set()
+                for label, b64 in activation_condition_figures(raw_haemo, results_dict):
+                    slug = _pair_fname(label) or "cond"
+                    if slug in used:
+                        slug = f"{slug}{len(used) + 1}"
+                    used.add(slug)
+                    name = f"glm_activation_{slug}.png"
+                    _save_b64_png(b64, figures_dir / name)
+                    glm_activation_conditions.append(
+                        {"label": label, "path": _fig_href(figures_dir, name)})
+                # the first condition is what the img element loads before anything is
+                # picked, and it is also what still gates the GLM section being open
+                if glm_activation_conditions:
+                    glm_activation_path = glm_activation_conditions[0]["path"]
 
     return {
         "glm_design_path": glm_design_path,
         "glm_design_heatmap_path": glm_design_heatmap_path,
         "glm_activation_path": glm_activation_path,
+        "glm_activation_conditions": glm_activation_conditions,
     }
 
 

@@ -460,7 +460,28 @@
       <div class="placeholder">Design matrix not available — pass design_matrix to build_subject_report.</div>
     {% endif %}
 
-    {% if glm_activation_path %}
+    {% if glm_activation_conditions %}
+      <h3>Activation by condition</h3>
+      <p style="font-size:0.82rem;color:#666;margin:0 0 0.3rem;">
+        HbO betas projected onto the surface, three views per condition. The colour scale is
+        shared across every condition, so this switch is a comparison rather than five
+        separate pictures: a condition that barely activated reads as weak instead of being
+        stretched to fill its own scale. One model over the whole recording, so every
+        condition here rests on the same channel set. Select a condition.
+      </p>
+      {% if glm_activation_conditions | length > 1 %}
+      <select class="ch-select"
+              onchange="document.getElementById('glm-activation-img').src=this.value;
+                        document.getElementById('glm-activation-path').textContent=this.value;">
+        {% for cond in glm_activation_conditions %}
+        <option value="{{ cond.path }}">{{ cond.label }}</option>
+        {% endfor %}
+      </select>
+      {% endif %}
+      <img id="glm-activation-img" src="{{ glm_activation_conditions[0].path }}"
+           alt="Activation by condition" style="max-width:100%;display:block;" />
+      <p class="fig-path" id="glm-activation-path">{{ glm_activation_conditions[0].path }}</p>
+    {% elif glm_activation_path %}
       <h3>Activation by condition</h3>
       <img src="{{ glm_activation_path }}" alt="Activation by condition" style="max-width:100%;" />
       <p class="fig-path">{{ glm_activation_path }}</p>
@@ -555,6 +576,7 @@
   <ul class="qm-list">
     {{ qm_li('channel_retention_rate', 'Channel retention') }}
     {{ qm_li('sci_mean', 'Mean SCI') }}
+    {{ qm_li('good_frac_mean', 'Coupled windows') }}
     {{ qm_li('psp_mean', 'Mean PSP (10 s windows)') }}
     {{ qm_li('snr_mean', 'Mean SNR (intensity)') }}
   </ul>
@@ -706,9 +728,11 @@
 <p style="font-size:0.82rem;color:#666;margin:0 0 0.6rem;">
   Per-channel pass/fail for Status, SCI, CV, PSP, and SNR, long channels then short ones.
   Green&nbsp;=&nbsp;pass, red&nbsp;=&nbsp;fail, grey&nbsp;=&nbsp;missing data.
-  Status is the screening verdict: a channel is rejected if it fails SCI
-  (<code>--sci-threshold</code> {{ "%.2f"|format(config.sci_threshold) }}) or PSP. The CV
-  and SNR rows are reported and not acted on.
+  Status is the screening verdict, and it rests on the coupled-window share: a window counts
+  when SCI (<code>--sci-threshold</code> {{ "%.2f"|format(config.sci_threshold) }}) and PSP
+  both pass <em>inside that window</em>, and a channel is rejected when it clears fewer than
+  <code>--min-good-frac</code> of them. The SCI, PSP, CV and SNR rows are reported; none of
+  them rejects a channel on its own.
 </p>
 <div style="overflow-x:auto;">
   <iframe src="{{ channel_summary_path }}"

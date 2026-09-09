@@ -206,6 +206,22 @@ def _sci_scores(stages: dict[str, Path]) -> dict[str, float]:
     return scores
 
 
+def _good_frac_scores(stages: dict[str, Path]) -> dict[str, float]:
+    """Per-channel coupled-window share from the sci sidecar, or empty.
+
+    Not recomputed when it is absent, unlike :func:`_sci_scores`. The share is a count
+    against two thresholds over a scope, so recomputing it here would need this run's
+    ``--sci-threshold``, ``--psp-threshold``, ``--min-good-frac`` and ``--screen-scope``,
+    and guessing any of them would put a number in the record that no channel was actually
+    judged by. A tree written before the share was stored has none, and the report says so
+    by leaving the row out.
+    """
+    if "sci" not in stages:
+        return {}
+    scores = _sidecar(stages["sci"]).get("good_frac_scores") or {}
+    return {k: float(v) for k, v in scores.items()}
+
+
 def _split_scalars(record: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
     """Separate the scalar metrics from the per-channel dicts and windowed lists."""
     scalars, nested = {}, {}
@@ -221,22 +237,31 @@ def _short_section(
     bad_channels: list[str],
     cardiac_l_freq: float,
     cardiac_h_freq: float,
+    good_frac_scores: "dict[str, float] | None" = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """Only the metrics that answer "are the short-channel regressors trustworthy".
 
-    Coupling (SCI, PSP) and amplitude (SNR, CV) transfer to short channels; GVTD, spikes
-    and drift do not, because they aggregate over a montage and a handful of scalp
-    channels has no reference distribution to read them against.
+    Coupling (SCI, PSP, the coupled-window share) and amplitude (SNR, CV) transfer to short
+    channels; GVTD, spikes and drift do not, because they aggregate over a montage and a
+    handful of scalp channels has no reference distribution to read them against.
+
+    The share is a value here and not a verdict. Nothing colours a short channel's row,
+    because a short channel's coupling is high by construction and the published cutoffs
+    were never set for it; the long section is where the number is read against a line.
     """
     from fnirs_pipe.qc.metrics import _intensity_metrics, _psp_metrics, _sci_metrics
+    from fnirs_pipe.qc.metrics.coupling import _good_frac_metrics
 
     raw_short = raw_intensity.copy().pick(short_names)
-    short_sci = {k: v for k, v in sci_scores.items() if k in set(short_names)}
-    short_bad = [c for c in bad_channels if c in set(short_names)]
+    short_set = set(short_names)
+    short_sci = {k: v for k, v in sci_scores.items() if k in short_set}
+    short_bad = [c for c in bad_channels if c in short_set]
+    short_frac = {k: v for k, v in (good_frac_scores or {}).items() if k in short_set}
 
     record: dict[str, Any] = {"n_channels": len(short_names), "n_bad": len(short_bad)}
     record.update(_sci_metrics(short_sci, short_bad))
     record.update(_psp_metrics(raw_short, cardiac_l_freq, cardiac_h_freq))
+    record.update(_good_frac_metrics(short_frac))
     intensity = _intensity_metrics(raw_short)
     record.update({k: v for k, v in intensity.items()
                    if k.startswith(("snr_", "cv_", "mean_amp_"))})
@@ -340,7 +365,7 @@ def raw_sections(
         try:
             sections["raw_short"], per_channel["raw_short"] = _short_section(
                 raw_intensity, short_names, sci_scores, bad_channels,
-                cardiac_l_freq, cardiac_h_freq)
+                cardiac_l_freq, cardiac_h_freq, good_frac_scores)
         except Exception:
             logger.warning("raw_short: section failed", exc_info=True)
     return sections, per_channel
@@ -478,7 +503,7 @@ def compute_run_sections(
 
         raw_secs, raw_pc = raw_sections(
             raw_intensity, sci_scores, bad_channels, cardiac_l_freq, cardiac_h_freq,
-            sep_bands)
+            sep_bands, _good_frac_scores(stages))
         sections.update(raw_secs)
         per_channel.update(raw_pc)
 

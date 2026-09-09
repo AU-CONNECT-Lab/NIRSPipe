@@ -58,7 +58,8 @@ def trial_windows(
 
 def trial_sqm(raw, t0: float, t1: float,
               sci_threshold: float, cardiac_l_freq: float, cardiac_h_freq: float,
-              psp_threshold: float | None = None) -> dict:
+              psp_threshold: float | None = None,
+              min_good_frac: float | None = None) -> dict:
     """SQM scalars for one trial window, scored the way the whole recording was.
 
     The intensity recording is what gets cropped, not the optical density derived from it,
@@ -67,7 +68,10 @@ def trial_sqm(raw, t0: float, t1: float,
     one conversion per trial but would put the two sets of figures on different footings.
 
     No sliding-window series is attached: a window of a few seconds has no room for the 10 s
-    grid the recording-level series uses.
+    grid the recording-level series uses. For the same reason a trial shorter than two
+    screening windows gets no coupled-window share, and since that share is the only
+    criterion that screens, such a trial's status row screens nothing rather than rejecting
+    everything. A block design is long enough; an event-related one is not.
     """
     from fnirs_pipe.qc.metrics import (
         compute_raw_sqm, compute_sci_scores, resolve_cutoffs, screen_channels,
@@ -76,7 +80,8 @@ def trial_sqm(raw, t0: float, t1: float,
 
     seg = raw.copy().crop(tmin=t0, tmax=t1)
     sci_scores, seg_od = compute_sci_scores(seg, cardiac_l_freq, cardiac_h_freq)
-    cutoffs = resolve_cutoffs(sci=sci_threshold, psp=psp_threshold)
+    cutoffs = resolve_cutoffs(sci=sci_threshold, psp=psp_threshold,
+                              good_frac=min_good_frac)
     scores = screening_scores(seg_od, cardiac_l_freq, cardiac_h_freq,
                               have={"sci": sci_scores}, cutoffs=cutoffs)
     bad, _ = screen_channels(scores, cutoffs)
@@ -97,6 +102,7 @@ def score_trials(
     tmin: float | None = None,
     tmax: float | None = None,
     psp_threshold: float | None = None,
+    min_good_frac: float | None = None,
 ) -> tuple[list[str], list[dict]]:
     """Every trial window scored, as ``(labels, sqms)`` ready for the heatmap.
 
@@ -107,6 +113,6 @@ def score_trials(
     windows = trial_windows(markers, tmin, tmax, float(raw.times[-1]))
     labels = [w[0] for w in windows]
     sqms = [trial_sqm(raw, t0, t1, sci_threshold, cardiac_l_freq, cardiac_h_freq,
-                      psp_threshold)
+                      psp_threshold, min_good_frac)
             for _, t0, t1 in windows]
     return labels, sqms

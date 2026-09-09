@@ -295,6 +295,7 @@ CHANNEL_COLUMNS = (
 OD_SPLIT_COLUMNS = (
     ("channel_retention_rate", "Channel retention"),
     ("sci_mean",               "Mean SCI"),
+    ("good_frac_mean",         "Coupled windows"),
     ("psp_mean",               "Mean PSP (10 s)"),
     ("snr_mean",               "Mean SNR"),
     ("cv_mean",                "Mean CV"),

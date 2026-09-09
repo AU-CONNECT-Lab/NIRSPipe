@@ -23,6 +23,7 @@ def cmd_prep_raw(
     cardiac_l_freq: float, cardiac_h_freq: float,
     window_length: float,
     epoch_qc: bool, epoch_tmin: float | None, epoch_tmax: float | None,
+    by_condition: bool,
     short_max_dist: float | None, long_min_dist: float | None,
     long_max_dist: float | None,
     skip_bids_validation: bool,
@@ -94,7 +95,7 @@ def cmd_prep_raw(
                                   cardiac_l_freq=cardiac_l_freq, cardiac_h_freq=cardiac_h_freq,
                                   window_s=window_length, epoch_qc=epoch_qc,
                                   epoch_tmin=epoch_tmin, epoch_tmax=epoch_tmax,
-                                  sep_bands=sep_bands)
+                                  sep_bands=sep_bands, by_condition=by_condition)
             print(f"  -> {html_path}")
         except Exception as exc:
             logger.exception("Raw report generation failed for %s", html_path.name)
@@ -272,6 +273,16 @@ def _build_parser() -> argparse.ArgumentParser:
                     help="Trial window end relative to event onset in s. Given together with "
                          "--epoch-tmin, or neither.")
     _shared.add_separation_bands(pr)
+    pr.add_argument("--by-condition", action="store_true",
+                    help="Also write one report per annotated condition, beside the run's "
+                         "own and named the way `fnirs-prep crop` names a segment: the "
+                         "condition becomes the task- entity. Their numbers are sliced out "
+                         "of the run's windowed pass, so every condition sits on the same "
+                         "window grid and the same filter as the run; nothing is cut and "
+                         "nothing is re-measured. The rejected channels stay the run's "
+                         "verdict, since one channel set has to serve every condition. CV, "
+                         "SNR and the PSD are left out of these, having no windowed series "
+                         "to slice.")
     pr.add_argument("--skip-bids-validation", action=argparse.BooleanOptionalAction, default=False)
     pr.set_defaults(func=cmd_prep_raw)
 

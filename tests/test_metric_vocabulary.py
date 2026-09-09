@@ -149,6 +149,7 @@ def test_the_decisive_metrics_are_described_and_real():
     # never appears
     assert KEY_METRICS <= _scalar_metric_keys() | {
         "sci_mean", "channel_retention_rate", "hbo_hbr_corr_mean",  # undecorated functions
+        "good_frac_mean",  # same: _good_frac_metrics is handed its scores, not decorated
     }
 
 

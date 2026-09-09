@@ -292,6 +292,48 @@ def activation_brain_figure(
     return _b64_to_figure(b64, title, size[1])
 
 
+def _shared_clim(results_dict: "dict[str, pd.DataFrame]") -> dict:
+    """One colour scale over every condition, so two of them can be read against each other.
+
+    Scaling each condition to its own maximum would make a condition that barely activated
+    look like one that activated strongly, since both would fill their own scale.
+    """
+    def _coef_col(df):
+        return "Coef." if "Coef." in df.columns else (
+               "theta" if "theta" in df.columns else df.columns[-1])
+    all_vals = np.concatenate([df[_coef_col(df)].values for df in results_dict.values()])
+    v = max(float(np.abs(all_vals).max()) if len(all_vals) else 10.0, 1e-6)
+    return dict(kind="value", pos_lims=(0, v / 2, v))
+
+
+def activation_condition_figures(
+    raw_haemo: mne.io.Raw,
+    results_dict: "dict[str, pd.DataFrame]",
+    clim: dict | None = None,
+    view: str = "dorsal",
+    size: tuple[int, int] = (800, 700),
+) -> "list[tuple[str, str]]":
+    """One brain render per condition, as ``[(label, png_b64), ...]``.
+
+    activation_condition_figures(haemo, {"rest": df1, "talk": df2})
+    -> [("rest", "iVBOR..."), ("talk", "iVBOR...")]
+
+    The report shows these behind one switch rather than stacked, so a condition can be
+    looked at on its own. The colour scale is shared, see :func:`_shared_clim`.
+
+    A condition whose render failed is left out rather than kept as a blank panel, so the
+    switcher never offers a label with nothing behind it.
+    """
+    if clim is None:
+        clim = _shared_clim(results_dict)
+    rendered: list[tuple[str, str]] = []
+    for cond, df in results_dict.items():
+        b64 = _save_glm_brain(raw_haemo, df, clim, view, size, str(cond))
+        if b64 is not None:
+            rendered.append((str(cond), b64))
+    return rendered
+
+
 def activation_panel(
     raw_haemo: mne.io.Raw,
     results_dict: "dict[str, pd.DataFrame]",
@@ -300,30 +342,23 @@ def activation_panel(
     view: str = "dorsal",
     size: tuple[int, int] = (800, 700),
 ) -> str | None:
-    if clim is None:
-        def _coef_col(df):
-            return "Coef." if "Coef." in df.columns else (
-                   "theta" if "theta" in df.columns else df.columns[-1])
-        all_vals = np.concatenate([df[_coef_col(df)].values for df in results_dict.values()])
-        v = max(float(np.abs(all_vals).max()) if len(all_vals) else 10.0, 1e-6)
-        clim = dict(kind="value", pos_lims=(0, v / 2, v))
+    """Every condition's render stacked into one image, for a caller that wants one file.
+
+    The subject report does not use this any more: five conditions stack to roughly 3500 px,
+    where no single condition can be looked at and two cannot be compared without scrolling
+    between them. It renders each condition through
+    :func:`activation_condition_figures` and switches between them instead.
+    """
+    rendered = activation_condition_figures(raw_haemo, results_dict, clim, view, size)
+    if not rendered:
+        return None
 
     import matplotlib.pyplot as plt
     from PIL import Image as _PILImage
 
-    row_imgs = []
-    row_labels = []
-    for cond, df in results_dict.items():
-        b64 = _save_glm_brain(raw_haemo, df, clim, view, size, str(cond))
-        if b64 is None:
-            continue
-        img_bytes = base64.b64decode(b64)
-        arr = np.array(_PILImage.open(io.BytesIO(img_bytes)))
-        row_imgs.append(arr)
-        row_labels.append(str(cond))
-
-    if not row_imgs:
-        return None
+    row_labels = [label for label, _ in rendered]
+    row_imgs = [np.array(_PILImage.open(io.BytesIO(base64.b64decode(b64))))
+                for _, b64 in rendered]
 
     label_px = 30
     row_h = row_imgs[0].shape[0] + label_px

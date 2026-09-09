@@ -298,6 +298,8 @@ def compute_group_sqm_raw(
     cardiac_h_freq: float,
     psp_threshold: float | None = None,
     sep_bands=None,
+    min_good_frac: float | None = None,
+    screen_scope: str = "run",
 ) -> dict[str, dict]:
     """Compute raw-level SQM (SCI, bad channels) for each group member.
 
@@ -315,9 +317,11 @@ def compute_group_sqm_raw(
     read against each other.
     """
     from fnirs_pipe.qc.metrics import resolve_cutoffs, screen_channels, screening_scores
+    from fnirs_pipe.qc.screen_scope import resolve_screen_scope
     from fnirs_pipe.qc.sqm_record import raw_sections, raw_verdict_view
 
-    cutoffs = resolve_cutoffs(sci=sci_threshold, psp=psp_threshold)
+    cutoffs = resolve_cutoffs(sci=sci_threshold, psp=psp_threshold,
+                              good_frac=min_good_frac)
 
     gid  = group[0].group_id
     task = group[0].task
@@ -352,7 +356,8 @@ def compute_group_sqm_raw(
         screen: dict = {}
         if raw_od is not None:
             screen = screening_scores(raw_od, cardiac_l_freq, cardiac_h_freq,
-                                      have={"sci": sci_cw}, cutoffs=cutoffs)
+                                      have={"sci": sci_cw}, cutoffs=cutoffs,
+                                      scope=resolve_screen_scope(raw, screen_scope))
             bad_channels, _ = screen_channels(screen, cutoffs)
 
         try:

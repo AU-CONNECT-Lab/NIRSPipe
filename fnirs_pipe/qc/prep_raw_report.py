@@ -33,7 +33,8 @@ _EPOCH_TMAX   = 25.0
 # in what order: the same ones the subject report prints, minus what a raw recording has no
 # later stage to measure.
 _VIEW_SCALAR_KEYS = (
-    "channel_retention_rate", "sci_mean", "psp_mean", "snr_mean", "cv_mean",
+    "channel_retention_rate", "sci_mean", "good_frac_mean", "psp_mean",
+    "snr_mean", "cv_mean",
     "cp_mean", "n_flat_channels", "mean_amp_mean",
     "gvtd_mean", "gvtd_filt_p95", "gvtd_thresh",
     "gvtd_pct_above_thresh", "gvtd_num_above_thresh", "spike_count",
@@ -55,12 +56,17 @@ def _process_run(
     sep_bands=None,
     min_good_frac: float | None = None,
     screen_scope: str = "run",
-) -> dict:
-    """Compute all data, save figure HTMLs + SQM JSON. Returns inline dict for HTML.
+) -> "tuple[dict, dict]":
+    """Compute all data, save figure HTMLs + SQM JSON. Returns (inline dict, context).
 
     A panel that fails costs that panel and lands in the returned ``errors``, which the
     viewer prints for the selected run. Failures used to reach the log only, so a viewer
     missing half its figures looked the same as one whose recording had nothing to plot.
+
+    The second return value is what the per-condition views need and the viewer must never
+    see: the windowed matrices, the record and the condition windows. It is kept out of the
+    payload because that one is serialised with ``json.dumps`` and a numpy array is not
+    serialisable, so folding these in would turn a working report into a crash.
     """
     from fnirs_pipe.qc.figures import (
         build_channel_figure,
@@ -126,7 +132,10 @@ def _process_run(
     # montages. This is what says "the channel was fine in rest and dead in the second
     # game" without changing which channels the analysis gets. A window shorter than two
     # screening windows has too few to count, so it is not offered a share at all.
+    # both bound before the guard: it swallows the exception, and the per-condition views
+    # read these afterwards
     cond_frac: dict = {}
+    cond_windows: list = []
     with guard("Coupled windows per condition", errors, label):
         from fnirs_pipe.qc.hyper_report import condition_windows
         from fnirs_pipe.qc.metrics.windowed import (
@@ -312,7 +321,8 @@ def _process_run(
             labels, sqms = score_trials(raw, markers, sci_threshold,
                                         cardiac_l_freq, cardiac_h_freq,
                                         epoch_tmin, epoch_tmax,
-                                        psp_threshold=cutoffs["psp"])
+                                        psp_threshold=cutoffs["psp"],
+                                        min_good_frac=cutoffs["good_frac"])
             fig = trial_quality_heatmap(labels, sqms)
             if fig:
                 fname = f"{label}_desc-trialqc_nirs.html"
@@ -373,7 +383,48 @@ def _process_run(
         # print; the viewer renders these itself, in JavaScript
         "errors": collapse_messages(errors),
         "notes":  collapse_messages(notes),
+    }, {
+        "record_view":            record_view,
+        "sci_scores":             sci_scores,
+        "bad_channels":           bad_channels,
+        "od_ch_names":            list(raw_od.ch_names),
+        "channel_pairs":          channel_pairs,
+        "series":                 series,
+        "windows":                cond_windows,
+        "good_frac_by_condition": cond_frac,
+        "cutoffs":                cutoffs,
+        "gvtd_series":            (windowed.get("gvtd_per_window"),
+                                   windowed.get("gvtd_window_times_s")),
     }
+
+
+def _write_condition_views(payload: dict, ctx: dict, output_path: Path, run_label: str,
+                           sci_threshold: float) -> None:
+    """One report file per condition, beside the run's own.
+
+    Each is the same viewer with a single entry, so nothing about how these are read has to
+    be learned twice. The file name comes from :func:`condition_stems`, which follows the
+    rule ``fnirs-prep crop`` set for a segment: the condition becomes the ``task-`` entity.
+    """
+    from fnirs_pipe.qc.condition_views import condition_payloads, condition_stem, condition_stems
+
+    views = condition_payloads(payload, sci_threshold=sci_threshold, **ctx)
+    if not views:
+        return
+    stems = condition_stems(output_path.stem, [label for label, _ in views])
+    for i, ((label, view), stem) in enumerate(zip(views, stems), start=1):
+        view_label = condition_stem(run_label, label, i)
+        html = render(
+            "raw_viewer.html",
+            base_css=dashboard_css(),
+            run_labels_json=json.dumps([view_label]),
+            run_labels=[view_label],
+            stem=stem,
+            data_json=json.dumps([view]),
+        )
+        out = output_path.with_name(f"{stem}.html")
+        out.write_text(html, encoding="utf-8")
+        logger.info("condition %s → %s", label, out.name)
 
 
 def build_prep_raw_report(
@@ -391,8 +442,16 @@ def build_prep_raw_report(
     epoch_tmin: float | None = None,
     epoch_tmax: float | None = None,
     sep_bands=None,
+    by_condition: bool = False,
 ) -> None:
-    """Generate raw QC report: lightweight HTML + per-run folders with figure HTMLs + SQM JSON."""
+    """Generate raw QC report: lightweight HTML + per-run folders with figure HTMLs + SQM JSON.
+
+    ``by_condition`` writes one extra report per annotated condition beside the run's own,
+    named the way ``fnirs-prep crop`` names a segment. They are separate files rather than a
+    switch inside this one because this report is already long, and their numbers are sliced
+    out of the run's windowed pass rather than measured on a cut of it. See
+    :mod:`fnirs_pipe.qc.condition_views`.
+    """
     # the report sits in the subject's own folder, so its figures are one level in from it
     # rather than a sibling tree, and sub-<id>/ can be moved or copied whole
     sub_dir     = output_path.parent
@@ -406,13 +465,17 @@ def build_prep_raw_report(
         # a broken viewer rather than as a run that could not be read
         run_errors: list[str] = []
         d: dict = {}
+        ctx: dict = {}
         with guard("Processing this run", run_errors, label):
-            d = _process_run(run, sci_threshold, sub_dir, cardiac_l_freq, cardiac_h_freq,
-                             dpf, window_s, epoch_qc, epoch_tmin, epoch_tmax,
-                             psp_threshold, sep_bands, min_good_frac, screen_scope)
+            d, ctx = _process_run(run, sci_threshold, sub_dir, cardiac_l_freq, cardiac_h_freq,
+                                  dpf, window_s, epoch_qc, epoch_tmin, epoch_tmax,
+                                  psp_threshold, sep_bands, min_good_frac, screen_scope)
         if run_errors:
             d = {"errors": run_errors, "notes": []}
         static_data.append(d)
+        if by_condition and ctx:
+            with guard("Per-condition views", run_errors, label):
+                _write_condition_views(d, ctx, output_path, label, sci_threshold)
 
     run_labels = [r["label"] for r in runs]
 

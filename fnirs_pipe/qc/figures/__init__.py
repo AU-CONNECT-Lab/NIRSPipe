@@ -30,7 +30,7 @@ from .denoise_compare import (
 )
 from .glm_figures import (
     design_matrix_figure, design_matrix_static_figure,
-    activation_brain_figure, activation_panel,
+    activation_brain_figure, activation_condition_figures, activation_panel,
     per_channel_hrf_figure, design_matrix_heatmap, glm_betas_figure,
 )
 from .correlation_panel import hbo_hbr_correlation_panel
@@ -75,6 +75,7 @@ __all__ = [
     "design_matrix_figure",
     "design_matrix_static_figure",
     "activation_brain_figure",
+    "activation_condition_figures",
     "activation_panel",
     "per_channel_hrf_figure",
     "design_matrix_heatmap",

@@ -322,6 +322,52 @@ def good_window_fraction(
     return {ch: float(frac[i]) for i, ch in enumerate(raw_od.ch_names) if i < len(frac)}
 
 
+def condition_window_means(
+    matrix: "np.ndarray",
+    centers: "np.ndarray",
+    windows: "list[tuple[str, float, float]]",
+) -> "dict[str, np.ndarray]":
+    """Per-condition means of an already-computed windowed metric, by slicing it.
+
+    ::
+
+      matrix (44, 390) on a 10 s grid, a condition running 543.7 to 1443.7 s
+      -> {"game1": (44,) means over the 90 columns whose centres fall inside it}
+
+    ``matrix`` is reduced over its last axis, so a per-channel metric (channels x windows)
+    gives one value per channel and a single series (windows,) gives one scalar.
+
+    A condition keeps the windows whose **centre** falls inside it, the same rule
+    :func:`condition_window_fractions` and the screening scope use, so every per-condition
+    number in a report comes off one grid and one filter.
+
+    Slicing rather than cutting the recording is the point, and it is not only cheaper. A
+    condition cut into its own file is filtered against its own two edges and lands on a
+    grid starting at its own onset, so its windows are not the run's windows and its numbers
+    are comparable neither with the other conditions nor with the whole run.
+
+    A condition holding no whole window is left out rather than given an empty mean, which
+    is what an annotation shorter than one window looks like.
+
+    ``centers`` may be either the window centres or the mne-nirs ``[start, end]`` pairs that
+    :func:`attach_windowed_series` returns alongside each matrix; a pair array is collapsed
+    to midpoints here by the same rule that function records. Without that, an (n, 2) array
+    would broadcast against the window bounds and mask nothing correctly.
+    """
+    matrix, centers = np.asarray(matrix), np.asarray(centers)
+    if centers.ndim == 2 and centers.shape[1] == 2:
+        centers = centers.mean(axis=1)
+    out: dict[str, np.ndarray] = {}
+    for window in windows:
+        keep = _in_scope(centers, [window])
+        if not keep.any():
+            logger.warning("condition %s holds no whole window of the metric grid",
+                           window[0])
+            continue
+        out[window[0]] = matrix[..., keep].mean(axis=-1)
+    return out
+
+
 def condition_window_fractions(
     raw_od: mne.io.Raw,
     windows: "list[tuple[str, float, float]]",
