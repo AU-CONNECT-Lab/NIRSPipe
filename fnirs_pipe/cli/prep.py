@@ -43,10 +43,10 @@ def cmd_crop(
     bids_dir: Path, derivatives_dir: Path, participant_label: list[str],
     ses: str | None, task: str | None, run: str | None,
     tmin: float | None, tmax: float | None, segments_path: Path | None,
-    combine: bool, align: str, trigger_name: str | None,
+    combine: bool, align: str, trigger_name: str | None, input_desc: str | None,
     n_jobs: int, skip_bids_validation: bool,
 ) -> None:
-    """Crop raw SNIRFs and write to derivatives/cropped/."""
+    """Crop SNIRFs and write to derivatives/cropped/."""
     if segments_path is not None and (tmin is not None or tmax is not None):
         print("[error] --segments-path and --tmin/--tmax are mutually exclusive.", file=sys.stderr)
         raise SystemExit(1)
@@ -70,6 +70,7 @@ def cmd_crop(
             segments_path=segments_path,
             combine=combine,
             align=align, trigger_name=trigger_name,
+            input_desc=input_desc,
             validate=not skip_bids_validation,
         )
 
@@ -228,8 +229,9 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     sub = p.add_subparsers(required=True)
 
-    crop = sub.add_parser("crop", help="Crop raw SNIRFs to a time window or segments.")
-    crop.add_argument("bids_dir",        type=Path, help="BIDS dataset root.")
+    crop = sub.add_parser("crop", help="Crop SNIRFs to a time window or segments.")
+    crop.add_argument("bids_dir",        type=Path, help="BIDS dataset root, or a "
+                                                         "derivatives tree with --input-desc.")
     crop.add_argument("derivatives_dir", type=Path, help="Derivatives output directory.")
     _add_selection(crop)
     crop.add_argument("--tmin", type=float, default=None, help="Start time in seconds (single segment).")
@@ -244,6 +246,13 @@ def _build_parser() -> argparse.ArgumentParser:
                            "A recording without it falls back to the recording start.")
     crop.add_argument("--combine", action=argparse.BooleanOptionalAction, default=False,
                       help="Concatenate multi-segment output into one file.")
+    crop.add_argument("--input-desc", default=None, metavar="DESC",
+                      help="Cut a processed stage instead of a recording, e.g. 'errts' or "
+                           "'filtered'. bids_dir is then a derivatives tree. This is the "
+                           "order to prefer: motion correction and the bandpass read "
+                           "whatever series they are handed, so cutting first makes each "
+                           "of them see one condition. The desc- entity is kept on the "
+                           "output.")
     crop.set_defaults(func=cmd_crop)
 
     align = sub.add_parser("align", help="Align multi-subject recordings by shared trigger.")

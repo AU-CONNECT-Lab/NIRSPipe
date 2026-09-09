@@ -6,6 +6,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- **`fnirs-prep crop` can cut a processed stage instead of a recording**, with `--input-desc`. Cutting a recording into one condition per file first means motion correction and the bandpass each see only one condition, which on a 300 s condition moves them by 23% and 10 to 17%; padding the crop fixes only the bandpass. Preprocessing the whole recording and cutting the result avoids both. A cut of a stage keeps that stage's `desc-` entity, its bandpass and its bad-channel marks
+
+### Changed
+- **A run whose input was written by `fnirs-prep crop` now stops** instead of preprocessing each condition on its own. The message names the order to use instead. `--allow-cropped-input` runs it anyway, for reproducing an older analysis
+
 ### Removed
 - **`--short-channel pca` is gone**, leaving `none` and `mean`. No reference implementation regresses short channels on a principal component, and the first one weights by variance: on three short channels where one carried a rhythm of its own at 100x the amplitude, it followed that channel and not what the three shared, where the mean stays diluted by the channel count. A run still asking for it stops and says so, rather than averaging instead
 

@@ -19,7 +19,15 @@ def find_snirf(
     task: str | None,
     run: str | None,
     validate: bool = False,
+    desc: str | None = None,
 ) -> Path:
+    """The one SNIRF matching the entities, raising if there is none or several.
+
+    ``desc`` selects a pipeline stage inside a derivatives tree, e.g. "errts". Matched on
+    the filename rather than through the layout, which is how the post-processing loop
+    already finds its inputs: the layout is built without a derivatives config, so a
+    ``desc=`` query returns nothing.
+    """
     from fnirs_pipe.io.bids import get_layout
     layout = get_layout(bids_dir, validate=validate)
     kwargs: dict = {"subject": sub, "extension": ".snirf"}
@@ -27,14 +35,18 @@ def find_snirf(
     if task: kwargs["task"] = task
     if run:  kwargs["run"] = run
     files = [Path(f.path) for f in layout.get(**kwargs)]
+    if desc:
+        files = [f for f in files if f"desc-{desc}_" in f.name]
     if not files:
         raise FileNotFoundError(
             f"No SNIRF found for sub-{sub} ses={ses} task={task} run={run}"
+            + (f" desc={desc}" if desc else "")
         )
     if len(files) > 1:
         paths = "\n".join(f"  {f}" for f in files)
+        hint = "--ses/--task/--run" if desc else "--ses/--task/--run/--input-desc"
         raise ValueError(
-            f"Multiple SNIRFs found; narrow down with --ses/--task/--run:\n{paths}"
+            f"Multiple SNIRFs found; narrow down with {hint}:\n{paths}"
         )
     return files[0]
 

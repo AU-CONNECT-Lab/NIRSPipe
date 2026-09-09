@@ -1,14 +1,23 @@
-"""Raw SNIRF cropping: single-segment and multi-segment to BIDS derivatives."""
+"""SNIRF cropping: single-segment and multi-segment to BIDS derivatives.
+
+Crops a raw recording, or with ``input_desc`` a pipeline stage inside a derivatives tree.
+The second is the order the pipeline wants: motion correction and the bandpass both read
+whatever series they are handed, so they belong on the whole recording and the cut belongs
+after them.
+"""
 
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 
 import pandas as pd
 
+from fnirs_pipe import __version__
 from fnirs_pipe.io.auxiliary import write_aux_window
-from fnirs_pipe.io.snirf import write_snirf
+from fnirs_pipe.io.derivatives import data_state, write_sidecar_json
+from fnirs_pipe.io.snirf import read_snirf, write_snirf
 from fnirs_pipe.io.tables import read_table
 from fnirs_pipe.utils.logging import get_logger
 from fnirs_pipe.utils.snirf_prep import (
@@ -70,6 +79,34 @@ def _write_segment(raw_seg, out_snirf: Path, snirf_path: Path,
     annotations_to_df(raw_seg).to_csv(events_path, sep="\t", index=False)
 
 
+def _write_crop_sidecar(out_snirf: Path, raw_seg, source_path: Path,
+                        windows: list[tuple[float, float]]) -> None:
+    """Replace the copied sidecar with one describing the crop, for a derivative input.
+
+    Two things would otherwise be lost or wrong. `copy_sidecars` brings the source stage's
+    JSON across verbatim, so a 300 s cut of a 3900 s file would claim that file's duration
+    and name the bandpass as its own step. And SNIRF has no bad-channel field, so a segment
+    whose sidecar does not list them reaches the next stage with none marked.
+
+    The source's `parameters` are carried forward rather than replaced: `read_snirf` reads
+    the bandpass off them, so dropping them would leave the segment not knowing its own band.
+    """
+    src = source_path.with_suffix(".json")
+    try:
+        parameters = (json.loads(src.read_text(encoding="utf-8")).get("parameters") or {})
+    except (OSError, json.JSONDecodeError):
+        parameters = {}
+    write_sidecar_json(out_snirf, {
+        "pipeline_version": __version__,
+        "step": "crop",
+        "Sources": [source_path.as_posix()],
+        "parameters": {**parameters,
+                       "crop_windows_s": [[round(a, 3), round(b, 3)] for a, b in windows]},
+        "data": data_state(raw_seg),
+        "bad_channels": list(raw_seg.info["bads"]),
+    })
+
+
 def _setup_deriv_dir(derivatives_dir: Path, sub: str, ses: str | None) -> Path:
     out_nirs_dir = deriv_nirs_dir(derivatives_dir, _DERIV_NAME, sub, ses)
     ensure_dataset_description(derivatives_dir / _DERIV_NAME, _DERIV_NAME, "fnirs-prep crop")
@@ -88,6 +125,7 @@ def _crop_raw(
     segments_df: pd.DataFrame | None,
     combine: bool,
     t0: float = 0.0,
+    derivative: bool = False,
 ) -> list[Path]:
     import mne
 
@@ -113,6 +151,10 @@ def _crop_raw(
         out = out_nirs_dir / f"{name}_nirs.snirf"
         _write_segment(seg, out, snirf_path, windows)
         copy_sidecars(snirf_path, stem, out_nirs_dir, name)
+        # after copy_sidecars, which writes the same filename: the copied one describes the
+        # source stage over the whole recording, and this segment is neither
+        if derivative:
+            _write_crop_sidecar(out, seg, snirf_path, windows)
         return out
 
     if segments_df is not None:
@@ -157,17 +199,23 @@ def crop_snirf_from_path(
     combine: bool = False,
     align: str = "none",
     trigger_name: str | None = None,
+    derivative: bool = False,
 ) -> list[Path]:
     """Crop a SNIRF given its path directly (no BIDS layout lookup).
 
-    Public entry point shared by the interface. Returns list of written SNIRF paths.
+    Public entry point shared by the interface. ``derivative`` says the input is a pipeline
+    stage rather than a recording, which changes how the output's sidecar is written.
+    Returns list of written SNIRF paths.
     """
     stem = bids_stem(snirf_path)
     out_nirs_dir = _setup_deriv_dir(derivatives_dir, sub, ses)
-    raw = read_raw_snirf(snirf_path)
+    # read_snirf restores the bad-channel marks from the sidecar, which a derivative carries
+    # and a raw recording does not
+    raw = read_snirf(snirf_path) if derivative else read_raw_snirf(snirf_path)
     t0 = _trigger_origin(raw, trigger_name) if align == "trigger" else 0.0
     return _crop_raw(raw, snirf_path, out_nirs_dir, stem,
-                     tmin=tmin, tmax=tmax, segments_df=segments_df, combine=combine, t0=t0)
+                     tmin=tmin, tmax=tmax, segments_df=segments_df, combine=combine, t0=t0,
+                     derivative=derivative)
 
 
 def crop_snirf(
@@ -185,8 +233,9 @@ def crop_snirf(
     align: str = "none",
     trigger_name: str | None = None,
     validate: bool = False,
+    input_desc: str | None = None,
 ) -> list[Path]:
-    """Crop a raw SNIRF via BIDS layout lookup and write to derivatives/cropped/.
+    """Crop a SNIRF via BIDS layout lookup and write to derivatives/cropped/.
 
     Single segment: use tmin/tmax.
     Multi-segment: use segments_path (table with onset/duration columns).
@@ -199,15 +248,24 @@ def crop_snirf(
     named `trigger_name` rather than from the recording start, so one window selects the same
     stretch of task in subjects whose recordings started at different moments.
 
+    ``input_desc`` cuts a pipeline stage instead of a recording: `bids_dir` is then a
+    derivatives tree and the file carrying that desc- entity is the input, e.g. "errts" for
+    the residual. This is the order the pipeline wants, since motion correction and the
+    bandpass both read whatever series they are handed. The desc- entity is kept on the
+    output, so a cut of the residual is `..._task-baseline_desc-errts_nirs.snirf`.
+
     Returns list of written SNIRF paths.
     """
-    snirf_path = find_snirf(bids_dir, sub, ses, task, run, validate=validate)
+    derivative = input_desc is not None
+    snirf_path = find_snirf(bids_dir, sub, ses, task, run,
+                            validate=validate and not derivative, desc=input_desc)
     stem = bids_stem(snirf_path)
     out_nirs_dir = _setup_deriv_dir(derivatives_dir, sub, ses)
     copy_dataset_root(bids_dir, derivatives_dir / _DERIV_NAME)
-    raw = read_raw_snirf(snirf_path)
+    raw = read_snirf(snirf_path) if derivative else read_raw_snirf(snirf_path)
 
     segments_df = read_table(segments_path) if segments_path is not None else None
     t0 = _trigger_origin(raw, trigger_name) if align == "trigger" else 0.0
     return _crop_raw(raw, snirf_path, out_nirs_dir, stem,
-                     tmin=tmin, tmax=tmax, segments_df=segments_df, combine=combine, t0=t0)
+                     tmin=tmin, tmax=tmax, segments_df=segments_df, combine=combine, t0=t0,
+                     derivative=derivative)

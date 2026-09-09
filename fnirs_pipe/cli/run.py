@@ -189,6 +189,13 @@ def _build_parser() -> argparse.ArgumentParser:
     esc.add_argument("--ignore", nargs="+", action="extend", choices=_IGNORE_CHOICES,
                      help="Processing aspects to skip.")
     esc.add_argument("--skip-bids-validation", action="store_true", help="Skip BIDS validation.")
+    esc.add_argument("--allow-cropped-input", action="store_true",
+                     help="Run on a `fnirs-prep crop` tree, which is otherwise refused. "
+                          "Every condition is then preprocessed on its own, and motion "
+                          "correction and the bandpass each see one segment: on a 300 s "
+                          "condition that moves them by 23% and 10-17%. Preprocess the "
+                          "uncut recording and crop the result instead "
+                          "(`fnirs-prep crop --input-desc`).")
     esc.add_argument("--dry-run", action="store_true", help="Write pipeline script without executing.")
     esc.add_argument("--verbose", action="store_true")
     return p

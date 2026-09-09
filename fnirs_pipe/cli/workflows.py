@@ -5,6 +5,7 @@ into PrepConfig/PostConfig, and drives the per-subject prep → post → report 
 Does no signal processing itself.
 """
 
+import json
 import sys
 import time
 from datetime import datetime
@@ -82,6 +83,40 @@ def _build_post_config(subject: str, session: str | None, args: dict[str, Any], 
     )
 
 
+def _refuse_cropped_input(bids_dir: Path, allow: bool) -> None:
+    """Stop a run whose input was cut into one file per condition before preprocessing.
+
+    Motion correction fits its weighting over whatever series it is handed and the bandpass
+    pads whatever it is given, so each condition preprocessed alone gets a different answer:
+    measured on an 1800 s record cut to 300 s, TDDR moves 23% and the bandpass 10 to 17%,
+    the latter a baseline invented at the segment edges. Padding the crop fixes only the
+    bandpass. The right order is to preprocess the recording and cut afterwards.
+
+    Detected from the input tree's own `dataset_description.json`, which `fnirs-prep crop`
+    stamps with its name, so nothing new has to be recorded for this to work.
+    """
+    if allow:
+        return
+    desc_path = Path(bids_dir) / "dataset_description.json"
+    try:
+        generated_by = json.loads(desc_path.read_text(encoding="utf-8")).get("GeneratedBy") or []
+    except (OSError, json.JSONDecodeError):
+        return
+    names = {str(entry.get("Name", "")) for entry in generated_by if isinstance(entry, dict)}
+    if "fnirs-prep crop" not in names:
+        return
+    raise SystemExit(
+        f"[error] {bids_dir} was written by `fnirs-prep crop`, so every condition would be "
+        "preprocessed on its own. Motion correction and the bandpass both read whatever "
+        "series they are handed, which on a 300 s condition moves them by 23% and 10-17%.\n"
+        "        Run this on the uncut recording instead, then cut what you need out of the "
+        "result:\n"
+        "          fnirs-pipe <bids> <out> participant ...\n"
+        "          fnirs-prep crop <out> <out> --input-desc errts --segments-path <tsv> ...\n"
+        "        Pass --allow-cropped-input to run on the cropped tree anyway."
+    )
+
+
 def run_participant_level(args: dict[str, Any]) -> None:
     bids_dir: Path             = args["bids_dir"]
     output_dir: Path           = args["output_dir"]
@@ -94,6 +129,8 @@ def run_participant_level(args: dict[str, Any]) -> None:
 
     setup_logging(verbose=verbose)
     logger.info("fnirs-pipe starting — output: %s", output_dir)
+
+    _refuse_cropped_input(bids_dir, allow=bool(args.get("allow_cropped_input")))
 
     skip_validation = (
         args.get("skip_bids_validation", False)
