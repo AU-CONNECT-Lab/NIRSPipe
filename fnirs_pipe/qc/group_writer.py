@@ -18,7 +18,12 @@ from fnirs_pipe.qc.figures.group_figures import (
     group_metrics,
 )
 from fnirs_pipe.qc.report_shell import footer_vars, guard, note, page_vars, render
-from fnirs_pipe.qc.sqm_record import OPTIONAL_SECTIONS, SECTIONS
+from fnirs_pipe.qc.sqm_record import (
+    OPTIONAL_SECTIONS,
+    POST_BANDPASS_HAEMO_STAGES,
+    PRE_BANDPASS_HAEMO_STAGE,
+    SECTIONS,
+)
 from fnirs_pipe.utils.logging import get_logger
 
 # Click a strip point -> open that subject's raw report, which lives in sub-<id>/ next to
@@ -63,6 +68,26 @@ def _warn_on_mixed_windows(rows: list) -> None:
             "different window grids in one column",
             sorted(lengths),
         )
+
+
+def _bandpass_span_metrics(columns: list) -> list:
+    """Metric stems this table carries on both sides of the bandpass, sorted.
+
+    ::
+
+        ["preproc_gcor_hbo", "errts_gcor_hbo", "raw_sci_mean"]  ->  ["gcor_hbo"]
+
+    A stem lands here when the table holds a ``preproc_`` column for it and at least one
+    column from a stage after the filter, which is exactly the pair a reader can line up and
+    subtract. The split lists say which stage is on which side; nothing is inferred from the
+    name. The suffixed sections come along for free, since ``preproc_long_gcor_hbo`` and
+    ``errts_long_gcor_hbo`` share the stem ``long_gcor_hbo``.
+    """
+    def stems(stage: str) -> set:
+        return {c[len(stage) + 1:] for c in columns if c.startswith(f"{stage}_")}
+
+    post = set().union(*(stems(s) for s in POST_BANDPASS_HAEMO_STAGES))
+    return sorted(stems(PRE_BANDPASS_HAEMO_STAGE) & post)
 
 
 def _scalars(sqm: dict) -> dict:
@@ -174,6 +199,24 @@ def _render_group(
     logger.info("group TSV  -> %s (rows=%d, cols=%d)", tsv_path, len(df), len(df.columns))
 
     metric_cols = [c for c in df.columns if c != "bids_name"]
+
+    # The subject report compares stages through `comparable_stage_metrics`, which re-applies
+    # the passband at every stage first. This table cannot: it is assembled from records
+    # rather than recordings, and a record stores each stage as it stands, which is the right
+    # thing to store and the wrong thing to subtract. So the pairs are named instead.
+    spanning = _bandpass_span_metrics(list(df.columns))
+    if spanning:
+        shown = ", ".join(spanning[:6])
+        more = f", and {len(spanning) - 6} more" if len(spanning) > 6 else ""
+        note(notes, out_stem,
+             f"{PRE_BANDPASS_HAEMO_STAGE}_* was measured before the bandpass and "
+             f"{'/'.join(POST_BANDPASS_HAEMO_STAGES)}_* after it, so the difference between "
+             f"such a pair is mostly the filter and not what the step did. "
+             f"{len(spanning)} metrics sit on both sides ({shown}{more}). The subject "
+             f"report's stage comparison re-applies the passband before comparing; this "
+             f"table stores each stage as it stands and does not. *_band_frac carries the "
+             f"same trap with a denominator that moves, so read *_band_power instead.")
+
     fig_dir = output_dir / out_stem
     fig_dir.mkdir(parents=True, exist_ok=True)
 

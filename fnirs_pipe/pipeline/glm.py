@@ -222,6 +222,12 @@ def build_design_matrix(
         duration = stim_dur * np.ones(len(conditions))
         events = pd.DataFrame({"trial_type": conditions, "onset": onsets, "duration": duration})
 
+    # nilearn reads these four and warns about every other column. A BIDS events.tsv
+    # legitimately carries more, `sample` and `value` among them, so the warning fired on
+    # every run that passed one through.
+    events = events[[c for c in ("trial_type", "onset", "duration", "modulation")
+                     if c in events.columns]]
+
     return make_first_level_design_matrix(
         frame_times,
         events,
