@@ -9,6 +9,9 @@ All notable changes to this project will be documented in this file.
 ### Removed
 - **`--short-channel pca` is gone**, leaving `none` and `mean`. No reference implementation regresses short channels on a principal component, and the first one weights by variance: on three short channels where one carried a rhythm of its own at 100x the amplitude, it followed that channel and not what the three shared, where the mean stays diluted by the channel count. A run still asking for it stops and says so, rather than averaging instead
 
+### Fixed
+- **Censored spans no longer enter the GLM as a task condition.** With `--gvtd-censor` on, a run fitted an extra HRF-convolved regressor over the frames the censoring had flagged as unusable
+
 ## [0.31.0] - 2026-09-08
 
 ### Added

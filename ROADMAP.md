@@ -100,7 +100,7 @@ a bare-MNE run of the same chain. Reports are kept with the project notes outsid
 
 - **Spline motion correction** — still raises `NotImplementedError`; TDDR and wavelet are implemented ([pipeline/motion.py](fnirs_pipe/pipeline/motion.py))
 - **External regressors in confound regression** — accept extra nuisance regressors alongside the short-channel ones, e.g. accelerometer traces from the SNIRF `aux` group. The two blocks are not orthogonal, so measure the collinearity before choosing between joint regression and a tCCA-style orthogonalisation ([pipeline/glm.py](fnirs_pipe/pipeline/glm.py))
-- **Filter before crop** — each cropped condition is filtered on its own, so a long filter can span much of a short segment. Filtering the whole recording first would fix that, at the cost of inverting the crop and prep stages ([cli/prep.py](fnirs_pipe/cli/prep.py))
+- **Preprocess the whole recording, then split by condition** — cropping into one file per condition first leaves every stage seeing only its own segment. On an 1800 s record cut into 300 s conditions, motion correction differs by 23% and the bandpass by 17%, the latter entirely a fabricated baseline subtracted at the segment edges. Padding the crop fixes only the bandpass: motion correction fits its robust weighting over whatever series it is handed, so more edge does not help. Whether confound regression should stay per condition is a separate question and still open ([cli/prep.py](fnirs_pipe/cli/prep.py), [pipeline/post_pipeline.py](fnirs_pipe/pipeline/post_pipeline.py))
 
 ### QC enhancements
 

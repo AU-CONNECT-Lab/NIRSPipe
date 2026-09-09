@@ -199,7 +199,8 @@ def build_design_matrix(
       stim_dur     required when events is None (annotation fallback)
       high_pass    only used when drift_model='cosine'
       drift_order  only used when drift_model='polynomial'
-      events       columns 'onset', 'duration', 'trial_type'; None → read from snirf annotations
+      events       columns 'onset', 'duration', 'trial_type'; None → read from snirf
+                   annotations, skipping the BAD_/EDGE_ spans
 
     Refs:
       https://mne.tools/mne-nirs/dev/_modules/mne_nirs/experimental_design/_experimental_design.html#make_first_level_design_matrix
@@ -213,8 +214,11 @@ def build_design_matrix(
     if events is None:
         if stim_dur is None:
             raise ValueError("stim_dur required when no events DataFrame provided")
-        conditions = raw.annotations.description
-        onsets = raw.annotations.onset - raw.first_time
+        # BAD_/EDGE_ spans mark unusable frames, not conditions
+        keep = [i for i, d in enumerate(raw.annotations.description)
+                if not str(d).lower().startswith(("bad", "edge"))]
+        conditions = raw.annotations.description[keep]
+        onsets = raw.annotations.onset[keep] - raw.first_time
         duration = stim_dur * np.ones(len(conditions))
         events = pd.DataFrame({"trial_type": conditions, "onset": onsets, "duration": duration})
 
