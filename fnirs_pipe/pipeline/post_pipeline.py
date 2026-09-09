@@ -8,6 +8,7 @@ With dry_run=True the pipeline writes an inspectable Python script instead of ex
 """
 
 from __future__ import annotations
+import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
@@ -500,6 +501,43 @@ def _write_rest_derivatives(
     return alff_df, fc_hbo_df, fc_hbr_df, fc_roi, fc_seed
 
 
+# the parameters that make two runs off one recording two different analyses rather than
+# one repeated. Named here so the check below cannot drift from what the sidecar records.
+_ANALYSIS_KEYS = ("high_pass", "low_pass", "filter_method", "filter_order", "resample_sfreq")
+
+
+def _warn_if_replacing_another_analysis(out_path: Path, parameters: dict, subject: str) -> None:
+    """Say so when this write replaces an output made with a different passband.
+
+    One output directory holds one analysis. A recording serving both a rest band and a task
+    band is two runs, and pointing both at the same output_dir replaces the first silently:
+    not this file alone but the residual, the design matrix, the quality record and the
+    report, none of which carry the band in their name. Two output directories are the
+    answer, and this is what makes the collision visible when they are not used.
+
+    A warning rather than a refusal: rerunning after changing a parameter is the normal way
+    to work, and only the caller knows whether the earlier output was still wanted.
+    """
+    sidecar = out_path.with_suffix(".json")
+    if not sidecar.exists():
+        return
+    try:
+        old = (json.loads(sidecar.read_text(encoding="utf-8")).get("parameters") or {})
+    except (OSError, json.JSONDecodeError):
+        return
+    changed = {k: (old.get(k), parameters.get(k))
+               for k in _ANALYSIS_KEYS if k in old and old.get(k) != parameters.get(k)}
+    if not changed:
+        return
+    logger.warning(
+        "sub-%s | %s already holds an analysis with %s; replacing it. Everything that run "
+        "wrote is being overwritten, including its residual, quality record and report, so "
+        "use a second output directory to keep both",
+        subject, out_path.name,
+        ", ".join(f"{k} {was} -> {now}" for k, (was, now) in changed.items()),
+    )
+
+
 def _write_step_snirf(haemo: mne.io.Raw, config: PostConfig, output_dir: Path, desc: str, rec: Recorder, source_entities: dict[str, str] | None = None) -> Path:
     from fnirs_pipe import __version__
     from fnirs_pipe.io.derivatives import build_output_path, carry_entities, data_state, write_sidecar_json
@@ -518,21 +556,24 @@ def _write_step_snirf(haemo: mne.io.Raw, config: PostConfig, output_dir: Path, d
         suffix="nirs",
         extension=".snirf",
     )
+    # on every stage, not just desc-filtered: a later stage is what downstream tools read,
+    # and it is the one that has to name its own passband
+    parameters = {
+        "high_pass": config.high_pass,
+        "low_pass": config.low_pass,
+        "filter_method": config.filter_method,
+        "filter_order": config.filter_order if config.filter_method == "iir" else None,
+        "resample_sfreq": config.resample_sfreq,
+        **(lin.params if lin else {}),
+    }
+    # before the write, while the previous run's sidecar is still the one on disk
+    _warn_if_replacing_another_analysis(out_path, parameters, config.subject)
     write_snirf(haemo, out_path)
     write_sidecar_json(out_path, {
         "pipeline_version": __version__,
         "step": lin.step if lin else None,
         "Sources": rec.sources_of(haemo),
-        # on every stage, not just desc-filtered: a later stage is what downstream tools
-        # read, and it is the one that has to name its own passband
-        "parameters": {
-            "high_pass": config.high_pass,
-            "low_pass": config.low_pass,
-            "filter_method": config.filter_method,
-            "filter_order": config.filter_order if config.filter_method == "iir" else None,
-            "resample_sfreq": config.resample_sfreq,
-            **(lin.params if lin else {}),
-        },
+        "parameters": parameters,
         "data": data_state(haemo),
         # read back by read_snirf: SNIRF itself cannot carry the marks
         "bad_channels": list(haemo.info["bads"]),

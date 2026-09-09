@@ -178,6 +178,21 @@ def test_a_window_is_clipped_to_the_recording(windows):
     assert out[0][2] <= 900.0
 
 
+def test_a_window_is_on_the_aligned_clock_not_the_original_one(windows):
+    """The regression test for windows landing late by the alignment offset.
+
+    `align_recordings` crops every member from its first shared trigger, and a cropped Raw
+    keeps its annotations on the original recording's axis while its data axis restarts at
+    zero. Cropping to a window measured on the wrong one of those selects the wrong stretch.
+    Invisible while each input file held one condition already cropped to its own start.
+    """
+    raw = _raw_with(["baseline", "game1"], [22, 500], [300, 100], end=1000.0)
+    aligned = raw.copy().crop(tmin=22.0)
+
+    assert windows(aligned, min_duration=50.0) == [("baseline", 0.0, 300.0),
+                                                   ("game1", 478.0, 578.0)]
+
+
 # ---- the merged table names ----
 
 def test_no_table_name_matches_two_merge_kinds():

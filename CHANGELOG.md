@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 - **A run whose input was written by `fnirs-prep crop` now stops** instead of preprocessing each condition on its own. The message names the order to use instead. `--allow-cropped-input` runs it anyway, for reproducing an older analysis
+- **A run that replaces an earlier one made with a different passband now says so.** One output directory holds one analysis, and nothing it writes carries the band in its name, so serving a rest band and a task band off one recording means two output directories
 
 ### Removed
 - **`--short-channel pca` is gone**, leaving `none` and `mean`. No reference implementation regresses short channels on a principal component, and the first one weights by variance: on three short channels where one carried a rhythm of its own at 100x the amplitude, it followed that channel and not what the three shared, where the mean stays diluted by the channel count. A run still asking for it stops and says so, rather than averaging instead
@@ -19,6 +20,7 @@ All notable changes to this project will be documented in this file.
 - **Censored spans no longer enter the GLM as a task condition.** With `--gvtd-censor` on, a run fitted an extra HRF-convolved regressor over the frames the censoring had flagged as unusable
 - **Editing markers no longer drops the recording's auxiliary channels.** The edited copy had no aux group at all, so `--aux-regressors` further down had nothing to read
 - **Editing markers no longer fails on a derivatives directory that does not exist yet.** A dataset with a `participants.tsv` stopped on the first subject
+- **`--wtc-by-condition` no longer takes every window late.** Aligning a dyad crops each member from its first shared trigger, and the condition windows were still measured from the original recording's start, so each one selected a stretch offset by that trigger's onset. Only reachable on a recording holding several conditions, which is why it went unseen
 
 ## [0.31.0] - 2026-09-08
 

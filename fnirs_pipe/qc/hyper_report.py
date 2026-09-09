@@ -294,6 +294,15 @@ def condition_windows(
     if not markers:
         return []
 
+    # Annotations of a cropped recording still sit on the original recording's axis, with
+    # the offset held in first_time, while the data axis starts at zero. `align_recordings`
+    # crops every member from its first shared trigger, so without this every window comes
+    # back late by that trigger's onset. Invisible while each input file held one condition
+    # cropped to its own start, where the offset is zero.
+    origin = float(raw.first_time)
+    if origin:
+        markers = [{**m, "onset": float(m["onset"]) - origin} for m in markers]
+
     end = float(raw.times[-1])
     counts: dict[str, int] = {}
     for m in markers:
