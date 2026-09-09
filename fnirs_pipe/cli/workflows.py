@@ -201,12 +201,6 @@ def run_participant_level(args: dict[str, Any]) -> None:
             _jdb.log_run_start(
                 db_path, execution_id, subject,
                 sci_threshold=args["sci_threshold"],
-        **({"psp_threshold": args["psp_threshold"]}
-           if args.get("psp_threshold") is not None else {}),
-        **({"min_good_frac": args["min_good_frac"]}
-           if args.get("min_good_frac") is not None else {}),
-        **({"screen_scope": args["screen_scope"]}
-           if args.get("screen_scope") is not None else {}),
                 dpf=args["dpf"],
                 motion_correction=_v(args["motion_correction"]),
                 mode=_v(args["mode"]) if args.get("mode") else None,
