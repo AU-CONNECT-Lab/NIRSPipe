@@ -6,34 +6,51 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.33.0] - 2026-09-09
+
 ### Added
-- **`fnirs-pipe --by-condition` writes one QC report page per annotated condition**, beside the run's own as `desc-<condition>`. Separate pages rather than a switch inside one report, which is already long. Every number comes from slicing the windowed pass the quality record already stores, so each condition sits on the same window grid and the same filter as the run and as every other condition, and the recording is never cut or measured again. Every panel is that condition's and each page says at the top what it is. How a panel gets there depends on what it computes: the quality tables and the SCI/PSP panel are sliced out of the stored windowed matrices, the carpet is measured over the run and only its view narrowed, since it derives its own GVTD filter, colour scale and threshold from whatever it is handed, and the haemoglobin, spectral and epoch panels are cut, none of them band-passing anything. The rejected channels stay the run's verdict, as one channel set has to serve every condition, and CV and SNR are absent rather than zero, having no windowed series to slice
-- **`fnirs-qc prep-raw --by-condition` writes one raw QC report per annotated condition**, beside the run's own and named the way `fnirs-prep crop` names a segment: the condition becomes the `task-` entity. Separate files rather than a switch inside one report, which is already long. Every number in them is sliced out of the run's windowed pass, so each condition sits on the same window grid and the same filter as the run and as every other condition; cutting the recording per condition instead would filter each piece against its own two edges and put each on a grid starting at its own onset. The rejected channels stay the run's verdict, since one channel set has to serve every condition. CV, SNR and the PSD are left out, having no windowed series to slice
-- **`--min-good-frac` sets how much of a recording a channel has to be coupled for**, as a share of windows, default 0.75. `--sci-threshold` and `--psp-threshold` now say what a coupled window is; this says how many of them a kept channel needs
-- **`--screen-scope task` counts coupled windows only inside the annotated task blocks**, so the lead-in before the first block and the gaps between them stop being held against a channel that is coupled throughout every block. Default stays `run`, the whole recording. It falls back to `run`, and says so, when no annotation is long enough to hold two screening windows, which is what a recording carrying only short triggers looks like
-- **The raw QC record carries the coupled-window share per condition.** Reported only: one channel set still serves every condition, since otherwise a contrast between two conditions is also a contrast between two montages
-- **The pseudo-dyad null follows `--wtc-by-condition`.** It was computed on the whole recording however the real table was read, so a short condition was tested against a null built from a longer stretch and looked further above chance than it was. The null now uses the same windows and lands in its own table, at no extra iterations
-- **`fnirs-prep crop` can cut a processed stage instead of a recording**, with `--input-desc`. Cutting a recording into one condition per file first means motion correction and the bandpass each see only one condition, and both move when they do; padding the crop fixes only the bandpass. Preprocessing the whole recording and cutting the result avoids both. A cut of a stage keeps that stage's `desc-` entity, its bandpass and its bad-channel marks
+- **`fnirs-pipe --by-condition` writes one QC report page per annotated condition**, beside the run's own as `desc-<condition>`. Every number is sliced out of the run's own windowed pass, so the conditions share one window grid and one filter. The rejected channels stay the run's verdict, and CV and SNR are left out
+- **`fnirs-qc prep-raw --by-condition` does the same for the raw QC report**, with the condition as the `task-` entity. CV, SNR and the PSD are left out
 
 ### Changed
-- **The GLM activation panel switches between conditions instead of stacking them.** Five conditions reached roughly 3500 px in one image, where no single condition could be looked at and two could not be compared without scrolling between them. The colour scale stays shared across the conditions, so the switch is still a comparison and not five separate pictures
-- **Channel screening counts coupled windows instead of comparing two whole-run averages.** SCI and PSP are now thresholded inside the same short window and combined there, which is how the two were defined: movement inflates SCI and flattens PSP, so only a comparison made inside one window can tell the two apart, and the old rule no longer knew whether a good SCI and a poor PSP happened at the same time. Counting windows also stops a channel that was usable for part of a long recording and dead for the rest from passing on the average. **Rejected-channel sets will differ from earlier runs**, in both directions
-- **`--wtc-by-condition` reads each window off the whole-run transform instead of transforming it on its own**, which changes its numbers. A window transformed alone has two edges of its own and keeps a smaller share of its band cells, so transforming each condition separately inflated the band mean by an amount that tracks window length, which in a design whose conditions differ in length is confounded with the contrast. The channel pattern is unaffected. It is also faster, since the whole-run transform is computed either way
-- **A run whose input was written by `fnirs-prep crop` now stops** instead of preprocessing each condition on its own. The message names the order to use instead. `--allow-cropped-input` runs it anyway, for reproducing an older analysis
-- **A run that replaces an earlier one made with a different passband now says so.** One output directory holds one analysis, and nothing it writes carries the band in its name, so serving a rest band and a task band off one recording means two output directories
-
-### Removed
-- **`--short-channel pca` is gone**, leaving `none` and `mean`. No reference implementation regresses short channels on a principal component, and the first one weights by variance: on three short channels where one carried a rhythm of its own at 100x the amplitude, it followed that channel and not what the three shared, where the mean stays diluted by the channel count. A run still asking for it stops and says so, rather than averaging instead
+- **The GLM activation panel switches between conditions instead of stacking them**, on a colour scale shared across them so the switch is still a comparison. Five conditions in one image could not be read or compared without scrolling
 
 ### Fixed
-- **The pipeline records the coupled-window share it screened on.** `fnirs-pipe` counted it, rejected channels by it and then dropped it, so the quality record and every report built from it carried no trace of the number the run's channel set was decided by. `fnirs-qc prep-raw` had it all along, which is why the two tools' records disagreed. Records written before this have none and the reports leave the row out rather than recomputing it, since the count depends on both thresholds and on the screening scope the run used. The short-channel half of the record was missing it too, separately: that section carries SCI and PSP and the share is built from those two, so a short channel had a coupling column its own section could not fill
-- **The coupled-window share now appears in the reports at all.** It is the metric a channel is rejected on, and it had no entry in the metric registry, so the scalar panels dropped it silently rather than printing it uncoloured: the channel table showed it per channel while no report said what the run's figure was
-- **`--min-good-frac` now reaches the per-trial quality panel.** Every trial's status row was screened at the default share whatever the flag was set to
-- **The channel quality summary no longer describes a rule it stopped using.** It said a channel is rejected for failing SCI or PSP; rejection has been on the coupled-window share since neither of those screens on its own. The report, the raw QC viewer and the interface all said it
+- **The optode, flat-map and brain figures colour channels by the run's own SCI threshold** instead of a fixed 0.75, which could put a channel on the wrong side of the verdict the same report printed
+- **The per-channel timeseries on a per-condition page no longer draws its data and its condition shading in different time frames**, which squeezed the trace into a corner of the panel
+- **The per-channel epoch panel is no longer empty on a per-condition page**, which made a page report no trials on a condition that has them
+- **The GVTD panel scales to the bulk of its trace rather than its largest spike.** The rows still share one scale and each row's true maximum is still printed in its label
+- **The epoch and HRF preview draws one panel per condition, with HbO red and HbR blue.** Colour used to carry the condition and line style the chromophore
+- **A run no longer warns about the columns of its own events file.** A BIDS events table legitimately carries columns the design matrix does not read
+- **The group quality table names the metric pairs that straddle the bandpass**, since subtracting such a pair measures the filter rather than the stage
+- **`fnirs-pipe` records the coupled-window share it screened on**, which it had been counting, rejecting channels by, and then dropping, so its records disagreed with `fnirs-qc prep-raw`. Records written before this leave the row out rather than recomputing it
+- **The coupled-window share appears in the reports' scalar panels.** It is the metric a channel is rejected on, and no report said what the run's own figure was
+- **`--min-good-frac` now reaches the per-trial quality panel**, which screened at the default share whatever the flag was set to
+- **The channel quality summary no longer describes a rule it stopped using.** It said a channel is rejected for failing SCI or PSP; rejection has been on the coupled-window share
+
+## [0.32.0] - 2026-09-09
+
+### Added
+- **`--min-good-frac` sets how much of a recording a channel has to be coupled for**, as a share of windows, default 0.75. `--sci-threshold` and `--psp-threshold` say what a coupled window is; this says how many of them a kept channel needs
+- **`--screen-scope task` counts coupled windows only inside the annotated task blocks**, so the lead-in and the gaps between blocks stop being held against a channel that is coupled throughout. Default stays `run`, and a recording carrying only short triggers falls back to it and says so
+- **The raw QC record carries the coupled-window share per condition.** Reported only: one channel set still serves every condition, since otherwise a contrast between two conditions is also a contrast between two montages
+- **The pseudo-dyad null follows `--wtc-by-condition`.** It was built on the whole recording however the real table was read, so a short condition looked further above chance than it was. It lands in its own table, at no extra iterations
+- **`fnirs-prep crop` can cut a processed stage instead of a recording**, with `--input-desc`, so motion correction and the bandpass still see the whole recording. The cut keeps that stage's `desc-` entity, its bandpass and its bad-channel marks
+
+### Changed
+- **Channel screening counts coupled windows instead of comparing two whole-run averages.** SCI and PSP are now thresholded inside the same short window and combined there, which is how the two were defined, and a channel that was usable for part of a long recording no longer passes on the average. **Rejected-channel sets will differ from earlier runs**, in both directions
+- **`--wtc-by-condition` reads each window off the whole-run transform instead of transforming it on its own**, which changes its numbers. Transforming a window alone inflated the band mean by an amount that tracks window length, and is slower. The channel pattern is unaffected
+- **A run whose input was written by `fnirs-prep crop` now stops** instead of preprocessing each condition on its own, and names the order to use. `--allow-cropped-input` runs it anyway, for reproducing an older analysis
+- **A run that replaces an earlier one made with a different passband now says so.** Nothing an output directory holds carries the band in its name, so a rest band and a task band mean two directories
+
+### Removed
+- **`--short-channel pca` is gone**, leaving `none` and `mean`. Weighting by variance follows the loudest short channel rather than what the short channels share. A run still asking for it stops and says so
+
+### Fixed
 - **Censored spans no longer enter the GLM as a task condition.** With `--gvtd-censor` on, a run fitted an extra HRF-convolved regressor over the frames the censoring had flagged as unusable
-- **Editing markers no longer drops the recording's auxiliary channels.** The edited copy had no aux group at all, so `--aux-regressors` further down had nothing to read
+- **Editing markers no longer drops the recording's auxiliary channels**, which left `--aux-regressors` further down nothing to read
 - **Editing markers no longer fails on a derivatives directory that does not exist yet.** A dataset with a `participants.tsv` stopped on the first subject
-- **`--wtc-by-condition` no longer takes every window late.** Aligning a dyad crops each member from its first shared trigger, and the condition windows were still measured from the original recording's start, so each one selected a stretch offset by that trigger's onset. Only reachable on a recording holding several conditions, which is why it went unseen
+- **`--wtc-by-condition` no longer takes every window late** on a dyad aligned to its first shared trigger. Only reachable on a recording holding several conditions, which is why it went unseen
 
 ## [0.31.0] - 2026-09-08
 

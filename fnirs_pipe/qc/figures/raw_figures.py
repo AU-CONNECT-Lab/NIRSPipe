@@ -76,14 +76,29 @@ def psd_layout(height: int = 220, cardiac=None, resp=None) -> dict:
     )
 
 
-def sci_color(sci: float | None) -> str:
+SCI_WARN_RATIO = 0.625   # amber band as a share of the run's line; 0.5 at the 0.8 default
+
+
+def sci_color(sci: float | None, threshold: float = SCI_PASS) -> str:
+    """Green at or above the run's SCI line, amber approaching it, red below.
+
+    The line is the run's rather than a constant, so a channel cannot be drawn green on the
+    wrong side of the verdict the same report prints.
+    """
     if sci is None:
         return "#aaa"
-    if sci >= 0.75:
+    if sci >= threshold:
         return "#27ae60"
-    if sci >= 0.5:
+    if sci >= SCI_WARN_RATIO * threshold:
         return "#f39c12"
     return "#e74c3c"
+
+
+def sci_legend(threshold: float = SCI_PASS) -> str:
+    """Caption for :func:`sci_color`, from the same two numbers it colours by."""
+    warn = SCI_WARN_RATIO * threshold
+    return (f"SCI (green ≥ {threshold:.2f} / yellow ≥ {warn:.2f} "
+            f"/ red < {warn:.2f})")
 
 
 def condition_colors(markers: list[dict]) -> dict[str, str]:
@@ -194,9 +209,12 @@ def build_channel_figure(
 
     hbo_pick = haemo_names.index(hbo_name)
     hbr_pick = haemo_names.index(hbr_name)
+    # after a crop `times` restarts at 0 while `markers` stay absolute; shapes want absolute
+    # and set_annotations below wants relative, so both need t0, in opposite directions
+    t0 = float(raw_haemo.first_time)
     haemo_data, times = raw_haemo.get_data(picks=[hbo_pick, hbr_pick], return_times=True)
     haemo_data, times_d = _decimate(haemo_data, times, max_ts_pts)
-    times_list = times_d.tolist()
+    times_list = (times_d + t0).tolist()
     hbo = (haemo_data[0] * 1e6).tolist()
     hbr = (haemo_data[1] * 1e6).tolist()
 
@@ -259,9 +277,9 @@ def build_channel_figure(
     epoch_fig = None
     if markers:
         try:
-            colors10 = CONDITION_PALETTE
+            # relative onsets: an absolute one lands a second first_time past the data
             anns = mne.Annotations(
-                onset=[m["onset"] for m in markers],
+                onset=[m["onset"] - t0 for m in markers],
                 duration=[m["duration"] for m in markers],
                 description=[m["description"] for m in markers],
             )
@@ -275,44 +293,46 @@ def build_channel_figure(
                     baseline=(epoch_tmin, 0),
                     preload=True, verbose=False,
                 )
-                epoch_traces = []
-                for ci, (cond, _) in enumerate(event_id.items()):
+                # one panel per condition, HbO/HbR in their usual red and blue
+                panels = []
+                for cond in event_id:
                     try:
                         ep_subset = epochs[cond]
-                        if len(ep_subset) == 0:
-                            continue
-                        ep = ep_subset.get_data()
-                        base_color = cond_colors_.get(cond, colors10[ci % len(colors10)])
-                        epoch_traces += [
-                            go.Scatter(x=epochs.times.tolist(),
-                                       y=(ep[:, 0, :].mean(axis=0) * 1e6).tolist(),
-                                       name=f"{cond} HbO (n={ep.shape[0]})", mode="lines",
-                                       line=dict(color=base_color, width=2)),
-                            go.Scatter(x=epochs.times.tolist(),
-                                       y=(ep[:, 1, :].mean(axis=0) * 1e6).tolist(),
-                                       name=f"{cond} HbR", mode="lines",
-                                       line=dict(color=base_color, width=1.2, dash="dot")),
-                        ]
                     except Exception:
-                        pass
-                epoch_fig = go.Figure(
-                    data=epoch_traces,
-                    layout=go.Layout(
-                        xaxis=dict(title="Time rel. onset (s)", gridcolor="#eeeeee",
-                                   zerolinecolor="#cccccc"),
-                        yaxis=dict(title="Conc. (µmol/L)", gridcolor="#eeeeee"),
-                        shapes=[dict(type="line", xref="x", yref="paper",
-                                     x0=0, x1=0, y0=0, y1=1,
-                                     line=dict(color="#7f8c8d", width=1, dash="dash"))],
-                        annotations=[dict(x=0, y=1.0, xref="x", yref="paper",
-                                          text="onset", showarrow=False,
-                                          font=dict(size=8, color="#7f8c8d"),
-                                          xanchor="left")],
+                        continue
+                    if len(ep_subset) == 0:
+                        continue
+                    panels.append((cond, ep_subset.get_data()))
+                if panels:
+                    epoch_fig = make_subplots(
+                        rows=1, cols=len(panels), shared_yaxes=True,
+                        horizontal_spacing=0.03,
+                        subplot_titles=[f"{c} (n={e.shape[0]})" for c, e in panels],
+                    )
+                    for i, (_cond, ep) in enumerate(panels, start=1):
+                        for row_i, color, label in ((0, HBO_COLOR, "HbO"),
+                                                    (1, HBR_COLOR, "HbR")):
+                            epoch_fig.add_trace(go.Scatter(
+                                x=epochs.times.tolist(),
+                                y=(ep[:, row_i, :].mean(axis=0) * 1e6).tolist(),
+                                name=label, mode="lines", legendgroup=label,
+                                showlegend=(i == 1),
+                                line=dict(color=color, width=2),
+                            ), row=1, col=i)
+                        epoch_fig.add_vline(
+                            x=0, line=dict(color="#7f8c8d", width=1, dash="dash"),
+                            row=1, col=i)
+                        epoch_fig.update_xaxes(title_text="Time rel. onset (s)",
+                                               gridcolor="#eeeeee",
+                                               zerolinecolor="#cccccc", row=1, col=i)
+                    epoch_fig.update_yaxes(title_text="Conc. (µmol/L)",
+                                           gridcolor="#eeeeee", row=1, col=1)
+                    epoch_fig.update_annotations(font_size=9)
+                    epoch_fig.update_layout(
                         plot_bgcolor="white", paper_bgcolor="white",
-                        height=220, margin=dict(l=60, r=15, t=8, b=38),
-                        legend=dict(font=dict(size=8), tracegroupgap=0),
-                    ),
-                )
+                        height=220, margin=dict(l=60, r=15, t=30, b=38),
+                        legend=dict(font=dict(size=8), orientation="h", y=1.18),
+                    )
         except Exception as exc:
             logger.warning("epoch preview failed for %s: %s", ch_pair, exc)
 
@@ -407,6 +427,7 @@ def build_layout_figure(
     bad_channels: set[str],
     sci_scores: dict[str, float],
     short_thresh: float,
+    sci_threshold: float = SCI_PASS,
 ) -> tuple[go.Figure | None, go.Figure | None]:
     chs = raw.info["chs"]
     ch_names = raw.ch_names
@@ -452,7 +473,8 @@ def build_layout_figure(
                 lines_y += [float(opt_xy[s_name][1]), float(opt_xy[d_name][1]), None]
 
         marker_colors_2d = [
-            "#949e9f" if n in bad_channels else sci_color(sci_scores.get(n))
+            "#949e9f" if n in bad_channels
+            else sci_color(sci_scores.get(n), sci_threshold)
             for n in names_2d
         ]
 
@@ -962,8 +984,6 @@ def build_epoch_preview_figure(
     if not markers:
         return None
 
-    cond_colors_ = condition_colors(markers)
-    colors10 = CONDITION_PALETTE
     try:
         events_mne, event_id = epochable_events(raw_haemo, epoch_tmin, epoch_tmax)
         if len(events_mne) == 0:
@@ -978,49 +998,47 @@ def build_epoch_preview_figure(
         hbo_picks = mne.pick_types(epochs.info, fnirs="hbo")
         hbr_picks = mne.pick_types(epochs.info, fnirs="hbr")
 
-        traces = []
-        for ci, cond in enumerate(event_id):
+        # one panel per condition, so HbO and HbR can keep the red/blue they carry in every
+        # other panel; colouring by condition instead needed a second cue for chromophore
+        panels = []
+        for cond in event_id:
             try:
                 ep = epochs[cond].get_data()
-                base_color = cond_colors_.get(cond, colors10[ci % len(colors10)])
-                if len(hbo_picks) > 0:
-                    grand_hbo = ep[:, hbo_picks, :].mean(axis=(0, 1)) * 1e6
-                    traces.append(go.Scatter(
-                        x=epochs.times.tolist(), y=grand_hbo.tolist(),
-                        name=f"{cond} HbO (n={ep.shape[0]})", mode="lines",
-                        line=dict(color=base_color, width=2),
-                    ))
-                if len(hbr_picks) > 0:
-                    grand_hbr = ep[:, hbr_picks, :].mean(axis=(0, 1)) * 1e6
-                    traces.append(go.Scatter(
-                        x=epochs.times.tolist(), y=grand_hbr.tolist(),
-                        name=f"{cond} HbR", mode="lines",
-                        line=dict(color=base_color, width=1.5, dash="dot"),
-                    ))
             except Exception:
-                pass
-
-        if not traces:
+                continue
+            if not ep.size:
+                continue
+            panels.append((cond, ep))
+        if not panels:
             return None
 
-        return go.Figure(
-            data=traces,
-            layout=go.Layout(
-                xaxis=dict(title="Time rel. onset (s)", gridcolor="#eeeeee",
-                           zerolinecolor="#cccccc"),
-                yaxis=dict(title="Conc. (µmol/L)", gridcolor="#eeeeee"),
-                shapes=[dict(type="line", xref="x", yref="paper",
-                             x0=0, x1=0, y0=0, y1=1,
-                             line=dict(color="#7f8c8d", width=1, dash="dash"))],
-                annotations=[dict(x=0, y=1.0, xref="x", yref="paper",
-                                  text="onset", showarrow=False,
-                                  font=dict(size=8, color="#7f8c8d"),
-                                  xanchor="left")],
-                plot_bgcolor="white", paper_bgcolor="white",
-                height=300, margin=dict(l=60, r=15, t=20, b=38),
-                legend=dict(font=dict(size=9)),
-            ),
+        fig = make_subplots(
+            rows=1, cols=len(panels), shared_yaxes=True, horizontal_spacing=0.03,
+            subplot_titles=[f"{c} (n={e.shape[0]})" for c, e in panels],
         )
+        for i, (_cond, ep) in enumerate(panels, start=1):
+            for picks, color, label in ((hbo_picks, HBO_COLOR, "HbO"),
+                                        (hbr_picks, HBR_COLOR, "HbR")):
+                if not len(picks):
+                    continue
+                fig.add_trace(go.Scatter(
+                    x=epochs.times.tolist(),
+                    y=(ep[:, picks, :].mean(axis=(0, 1)) * 1e6).tolist(),
+                    name=label, mode="lines", legendgroup=label,
+                    showlegend=(i == 1), line=dict(color=color, width=2),
+                ), row=1, col=i)
+            fig.add_vline(x=0, line=dict(color="#7f8c8d", width=1, dash="dash"),
+                          row=1, col=i)
+            fig.update_xaxes(title_text="Time rel. onset (s)", gridcolor="#eeeeee",
+                             zerolinecolor="#cccccc", row=1, col=i)
+        fig.update_yaxes(title_text="Conc. (µmol/L)", gridcolor="#eeeeee", row=1, col=1)
+        fig.update_annotations(font_size=10)
+        fig.update_layout(
+            plot_bgcolor="white", paper_bgcolor="white",
+            height=300, margin=dict(l=60, r=15, t=32, b=38),
+            legend=dict(font=dict(size=9), orientation="h", y=1.14),
+        )
+        return fig
     except Exception as exc:
         logger.warning("epoch preview failed: %s", exc)
         return None

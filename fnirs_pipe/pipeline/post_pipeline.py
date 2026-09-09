@@ -150,11 +150,8 @@ def run_post(
 
     Returns (result, glm_est, design_matrix, alff_df, fc_df, fc_hbr_df, gcor_reg, fc_seed,
     fc_roi).
-    glm_est / design_matrix are None only when no regression ran. denoise and rest both
-    return them: they fit a confound model on empty events, so the design matrix holds the
-    short-channel and drift columns and no condition column. That is what makes the report's
-    GLM section a picture of what was regressed out rather than an activation panel, which
-    it skips for want of a condition.
+    glm_est / design_matrix are None only when no regression ran; denoise and rest return
+    them too, fitted on empty events, so the design holds confound columns and no condition.
     alff_df is None outside rest mode. The FC products are written by rest mode, and by glm
     and denoise mode under ``config.fc``; fc_df holds the HbO matrix.
     fc_seed and fc_roi are {chromophore: frame}, both empty without --roi-mapping.

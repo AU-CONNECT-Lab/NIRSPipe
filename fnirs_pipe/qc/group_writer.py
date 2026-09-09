@@ -76,12 +76,6 @@ def _bandpass_span_metrics(columns: list) -> list:
     ::
 
         ["preproc_gcor_hbo", "errts_gcor_hbo", "raw_sci_mean"]  ->  ["gcor_hbo"]
-
-    A stem lands here when the table holds a ``preproc_`` column for it and at least one
-    column from a stage after the filter, which is exactly the pair a reader can line up and
-    subtract. The split lists say which stage is on which side; nothing is inferred from the
-    name. The suffixed sections come along for free, since ``preproc_long_gcor_hbo`` and
-    ``errts_long_gcor_hbo`` share the stem ``long_gcor_hbo``.
     """
     def stems(stage: str) -> set:
         return {c[len(stage) + 1:] for c in columns if c.startswith(f"{stage}_")}
@@ -200,10 +194,8 @@ def _render_group(
 
     metric_cols = [c for c in df.columns if c != "bids_name"]
 
-    # The subject report compares stages through `comparable_stage_metrics`, which re-applies
-    # the passband at every stage first. This table cannot: it is assembled from records
-    # rather than recordings, and a record stores each stage as it stands, which is the right
-    # thing to store and the wrong thing to subtract. So the pairs are named instead.
+    # the subject report re-applies the passband before comparing stages; this table is built
+    # from records rather than recordings and cannot, so it names the pairs instead
     spanning = _bandpass_span_metrics(list(df.columns))
     if spanning:
         shown = ", ".join(spanning[:6])

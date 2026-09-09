@@ -80,11 +80,8 @@ _DESC_RE = re.compile(r"_desc-([A-Za-z0-9]+)_nirs\.snirf$")
 # confounds had its actual endpoint (`errts`) sitting outside it.
 _HAEMO_STAGES = ("filtered", "resampled", "errts")
 
-# ---- Which side of the bandpass a stage sits on ----
-# `preproc` is measured before the bandpass and every stage after it afterwards, so one
-# metric read across that line is dominated by the filter rather than by what the step did.
-# Named here, beside the list it is derived from, so a stage added to `_HAEMO_STAGES`
-# cannot land on the wrong side of it in silence.
+# Which side of the bandpass a stage sits on, named beside the list it comes from so a new
+# stage cannot land on the wrong side in silence. Crossing the line measures the filter.
 PRE_BANDPASS_HAEMO_STAGE = "preproc"
 POST_BANDPASS_HAEMO_STAGES = _HAEMO_STAGES
 

@@ -186,6 +186,11 @@ _SET_COLORS = {"long": LONG_COLOR, "short": SHORT_COLOR, "unclassified": UNCLASS
 # Headroom over the tallest sample. Well above the 1.1 a trace alone would need: the top of
 # every row is where the two stat lines go, and they must not sit on the data.
 _GVTD_HEADROOM = 1.45
+# One brief spike used to set the scale for every row, which left the threshold line and the
+# ordinary variation flat against the axis. The rows still share one scale, since that is what
+# makes them comparable; it is the top that is a high percentile rather than the maximum.
+# Each row's true maximum stays printed in its label, so nothing is hidden by the cap.
+_GVTD_CAP_PCTL = 99.5
 
 
 def _gvtd_row_label(name: str, n_ch: int) -> str:
@@ -418,8 +423,12 @@ def carpet_gvtd_figure(
 
     # a fixed y-range shared by every GVTD row, because the spike shading is drawn as
     # polygons and needs a top edge, and because the rows are only comparable on one scale
-    y_top = max([float(np.nanmax(r["g_ds"])) for r in rows if r["g_ds"].size]
-                + [r["thresh"] for r in rows if r["thresh"] is not None] or [1.0])
+    traces = [r["g_ds"] for r in rows if r["g_ds"].size]
+    traces += [r["after_ds"][1] for r in rows
+               if r["after_ds"] is not None and np.size(r["after_ds"][1])]
+    caps = [float(np.nanpercentile(np.concatenate(traces), _GVTD_CAP_PCTL))] if traces else []
+    # never below a threshold: the line a row is judged against has to stay on the canvas
+    y_top = max(caps + [r["thresh"] for r in rows if r["thresh"] is not None] or [1.0])
     y_top *= _GVTD_HEADROOM
 
     spike_legend_drawn = False

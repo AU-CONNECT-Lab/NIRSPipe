@@ -6,13 +6,17 @@ import mne
 import numpy as np
 import plotly.graph_objects as go
 
+from fnirs_pipe.qc.metrics import SCI_PASS
+
 from ._utils import head_outline
+from .raw_figures import sci_color, sci_legend
 
 
 def optode_layout_static(
     raw: mne.io.Raw,
     sci_scores: dict[str, float],
     bad_channels: list[str],
+    sci_threshold: float = SCI_PASS,
 ) -> str | None:
     """Matplotlib static optode flat map. Returns base64 PNG or None."""
     import base64
@@ -55,10 +59,7 @@ def optode_layout_static(
         return None
 
     def _color(sci):
-        if sci is None: return "#95a5a6"
-        if sci >= 0.75: return "#27ae60"
-        if sci >= 0.5:  return "#f39c12"
-        return "#e74c3c"
+        return "#95a5a6" if sci is None else sci_color(sci, sci_threshold)
 
     fig, ax = plt.subplots(figsize=(6, 6))
     ax.set_aspect("equal")
@@ -91,7 +92,7 @@ def optode_layout_static(
             ax.text(x, y, did, fontsize=6, ha="center", va="top", color="#1a5276", zorder=4)
 
     ax.legend(fontsize=8, loc="upper right", framealpha=0.7)
-    ax.set_title("Optode flat map — SCI (green≥0.75 / yellow≥0.5 / red<0.5)", fontsize=8)
+    ax.set_title(f"Optode flat map — {sci_legend(sci_threshold)}", fontsize=8)
 
     buf = io.BytesIO()
     fig.savefig(buf, format="png", dpi=300, bbox_inches="tight")
@@ -104,6 +105,7 @@ def optode_layout_figure(
     raw: mne.io.Raw,
     sci_scores: dict[str, float],
     bad_channels: list[str],
+    sci_threshold: float = SCI_PASS,
 ) -> go.Figure | None:
     """Top-down 2-D projection of sources (red) and detectors (blue).
 
@@ -157,13 +159,7 @@ def optode_layout_figure(
         return None
 
     def _sci_color(mean_sci: float | None) -> str:
-        if mean_sci is None:
-            return "#95a5a6"
-        if mean_sci >= 0.75:
-            return "#27ae60"
-        if mean_sci >= 0.5:
-            return "#f39c12"
-        return "#e74c3c"
+        return "#95a5a6" if mean_sci is None else sci_color(mean_sci, sci_threshold)
 
     fig = go.Figure()
 
@@ -263,7 +259,7 @@ def optode_layout_figure(
             )
 
     fig.update_layout(
-        title="Optode flat map — channel SCI (green ≥ 0.75 / yellow ≥ 0.5 / red < 0.5)",
+        title=f"Optode flat map — channel {sci_legend(sci_threshold)}",
         xaxis=dict(showgrid=False, zeroline=False, showticklabels=False,
                    constrain="domain"),
         yaxis=dict(showgrid=False, zeroline=False, showticklabels=False,

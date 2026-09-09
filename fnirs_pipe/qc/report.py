@@ -1691,7 +1691,8 @@ def _cropped_sections(
     out.update(_section_psd_detail(haemo, subject, errors, figures_dir,
                                    l_freq=l_freq, h_freq=h_freq, psd_stages=stages,
                                    suffix=suffix, **bands))
-    out.update(_section_channel_detail(crop(raw_haemo_uncorr) or haemo, subject, errors,
+    # epoch_pad here too: this section's third panel epochs, like the two below it
+    out.update(_section_channel_detail(crop(raw_haemo_uncorr, epoch_pad) or haemo, subject, errors,
                                        figures_dir, epoch_tmin=epoch_tmin,
                                        epoch_tmax=epoch_tmax, suffix=suffix, **bands))
     out.update(_section_epoch_preview(crop(raw_haemo, epoch_pad) or haemo, subject, errors,

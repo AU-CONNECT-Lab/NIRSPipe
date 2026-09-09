@@ -19,8 +19,10 @@ import plotly.graph_objects as go
 import plotly.io as pio
 from PIL import Image as _PILImage
 
+from fnirs_pipe.qc.metrics import SCI_PASS
 from fnirs_pipe.utils.logging import get_logger
 from ._brain_utils import CAMERAS, VIEW_LABELS, load_mesh_traces, to_mni
+from .raw_figures import SCI_WARN_RATIO
 
 logger = get_logger("qc.figures.brain_views")
 
@@ -46,12 +48,12 @@ def _trim_white(arr: np.ndarray, pad: int = 6, threshold: int = 252) -> np.ndarr
     return arr[:, max(0, c0 - pad): c1 + pad + 1]
 
 
-def _link_color(sci: float | None, good: bool | None) -> str:
+def _link_color(sci: float | None, good: bool | None, threshold: float = SCI_PASS) -> str:
     """SCI thresholds first (matches the flat map), pass/fail as fallback."""
     if sci is not None and not np.isnan(sci):
-        if sci >= 0.75:
+        if sci >= threshold:
             return _GOOD_COLOR
-        return _MID_COLOR if sci >= 0.5 else _BAD_COLOR
+        return _MID_COLOR if sci >= SCI_WARN_RATIO * threshold else _BAD_COLOR
     if good is not None:
         return _GOOD_COLOR if good else _BAD_COLOR
     return _NA_COLOR
@@ -103,7 +105,8 @@ def _collect_pairs(raw: mne.io.Raw, sci_scores: dict, good_by_base: dict) -> tup
     return ends, scis, goods
 
 
-def _link_traces(raw: mne.io.Raw, sci_scores: dict, good_by_base: dict) -> list[go.Scatter3d]:
+def _link_traces(raw: mne.io.Raw, sci_scores: dict, good_by_base: dict,
+                 sci_threshold: float = SCI_PASS) -> list[go.Scatter3d]:
     """S-D segments grouped into one trace per quality colour, plus optode dots."""
     ends, scis, goods = _collect_pairs(raw, sci_scores, good_by_base)
     if not ends:
@@ -120,7 +123,7 @@ def _link_traces(raw: mne.io.Raw, sci_scores: dict, good_by_base: dict) -> list[
         s, d = mni[2 * i], mni[2 * i + 1]
         vals = scis.get(pair_id)
         sci  = float(np.mean(vals)) if vals else None
-        color = _link_color(sci, goods.get(pair_id))
+        color = _link_color(sci, goods.get(pair_id), sci_threshold)
         g = groups.setdefault(color, {"x": [], "y": [], "z": [], "t": []})
         g["x"] += [float(s[0]), float(d[0]), None]
         g["y"] += [float(s[1]), float(d[1]), None]
@@ -198,6 +201,7 @@ def quality_brain_views(
     good_mask: np.ndarray,
     raw: mne.io.Raw | None = None,
     sci_scores: dict[str, float] | None = None,
+    sci_threshold: float = SCI_PASS,
 ) -> str | None:
     """Render 3-view brain figure and return as base64 PNG string, or None on failure.
 
@@ -209,7 +213,8 @@ def quality_brain_views(
     data_traces: list = []
     if raw is not None:
         try:
-            data_traces = _link_traces(raw, sci_scores or {}, good_by_base)
+            data_traces = _link_traces(raw, sci_scores or {}, good_by_base,
+                                       sci_threshold)
         except Exception as exc:
             logger.warning("channel links failed: %s", exc)
     if not data_traces:
