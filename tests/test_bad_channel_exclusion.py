@@ -69,6 +69,20 @@ def _regressors(raw, bads=(), spike=None):
     return _short_channel_regressors(raw, "mean")
 
 
+def test_the_pca_strategy_is_refused_rather_than_quietly_averaged(haemo):
+    """`--short-channel` no longer offers it, but a `--config` TOML reaches the function
+    past the parser's own choices. Averaging instead of what was asked for would put a
+    different regressor in the design matrix than the run record says ran.
+
+    It went because no reference implementation regresses short channels on a principal
+    component, and because PC1 weights by variance: measured on three short channels where
+    one carried a rhythm of its own at 100x the amplitude, PC1 correlated 1.000 with that
+    one channel and 0.009 with what the three shared, where the mean stays diluted by the
+    channel count."""
+    with pytest.raises(ValueError, match="must be 'mean'"):
+        _short_channel_regressors(haemo, "pca")
+
+
 def test_a_bad_short_channel_does_not_reach_the_regressor(haemo):
     clean = _regressors(haemo, bads=[SHORT_HBO])
     spiked = _regressors(haemo, bads=[SHORT_HBO], spike=SHORT_HBO)

@@ -94,13 +94,6 @@ a bare-MNE run of the same chain. Reports are kept with the project notes outsid
 
 ---
 
-## Pending decisions
-
-- **Short-channel PCA path unverified** — `--short-channel {none,mean,pca}` is wired end to end and `mean` is in use; the `pca` branch has never been checked against anything ([pipeline/glm.py](fnirs_pipe/pipeline/glm.py), `_short_channel_regressors`)
-- **hyper_post Methods section** — same boilerplate tabs as subject_report ([qc/templates/hyper_post_report.html.j2](fnirs_pipe/qc/templates/hyper_post_report.html.j2))
-
----
-
 ## Backlog
 
 ### Algorithms / numerical validation

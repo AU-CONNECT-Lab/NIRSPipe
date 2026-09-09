@@ -30,7 +30,7 @@ HRFModel   = Literal[
 # arN (e.g. "ar2", "ar3") is also valid but cannot be expressed as a Literal
 NoiseModel = Literal["ols", "ar1", "ar2", "ar3", "ar4", "ar5", "auto"]
 DriftModel = Literal["cosine", "polynomial", "none"]
-SCRStrategy = Literal["mean", "pca"]
+SCRStrategy = Literal["mean"]
 
 # May add motion parameters (if available) and/or other confounds in the future
 
@@ -39,6 +39,13 @@ def _short_channel_regressors(
 ) -> dict[str, np.ndarray]:
     from fnirs_pipe.qc.metrics._helpers import long_short_channels
 
+    # a --config TOML reaches this past the CLI's own choices
+    if strategy is not True and strategy != "mean":
+        raise ValueError(
+            f"short-channel strategy must be 'mean', got {strategy!r}. The 'pca' strategy "
+            "was removed: no reference implementation regresses short channels on a "
+            "principal component, and the first one tracks whichever short channel has the "
+            "most variance rather than what they share.")
     # not mne_nirs' get_short_channels: that reads distance 0 as short, so a montage with no
     # registered positions would build these out of every channel
     short_names = long_short_channels(haemo, sep_bands)[1]
@@ -61,13 +68,6 @@ def _short_channel_regressors(
     if n_dropped:
         logger.info("short-channel regressors: %d of %d short channels excluded as bad",
                     n_dropped, len(short.ch_names))
-    if strategy == "pca":
-        # TODO: check PCA
-        from sklearn.decomposition import PCA
-        return {
-            "short_ch_hbo_pc1": PCA(n_components=1).fit_transform(hbo_data.T)[:, 0],
-            "short_ch_hbr_pc1": PCA(n_components=1).fit_transform(hbr_data.T)[:, 0],
-        }
     return {
         "short_ch_hbo_mean": hbo_data.mean(axis=0),
         "short_ch_hbr_mean": hbr_data.mean(axis=0),

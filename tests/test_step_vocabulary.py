@@ -179,7 +179,6 @@ def test_an_unknown_step_says_nothing():
 
 @pytest.mark.parametrize("params, expected", [
     ({"short_channel": "mean"}, "the mean short-channel time course of each chromophore"),
-    ({"short_channel": "pca"}, "the first principal component of the short channels"),
     ({"drift_model": "cosine", "drift_high_pass": 0.01}, "cosine drift basis (high-pass cutoff: 0.01 Hz)"),
     ({"drift_model": "polynomial", "drift_order": 3}, "an order-3 polynomial drift basis"),
 ])

@@ -20,7 +20,7 @@ _HRF_CHOICES           = [
 ]
 _NOISE_CHOICES         = ["ols", "ar1", "ar2", "ar3", "ar4", "ar5"]
 _DRIFT_CHOICES         = ["cosine", "polynomial", "none"]
-_SHORT_CHANNEL_CHOICES = ["none", "mean", "pca"]
+_SHORT_CHANNEL_CHOICES = ["none", "mean"]
 _IGNORE_CHOICES        = ["events", "bids-validation"]
 # analysis levels and the flags each one cannot run without. One table, so a level added
 # here cannot reach the parser without also declaring what it needs

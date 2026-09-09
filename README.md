@@ -148,7 +148,7 @@ GLM (--mode glm):
   --drift-high-pass FLOAT      Cosine drift high-pass cutoff in Hz.
   --drift-order INT            Polynomial drift order.                                [default: 1]
   --fir-delays STR             FIR delay bins in scans, e.g. "0,1,2,3,4,5"
-  --short-channel              {none,mean,pca}                                        [default: none]
+  --short-channel              {none,mean}                                             [default: none]
   --aux-regressors             Add the recording's auxiliary channels to the confound
                                regression (accelerometers, gyroscopes, pulse trace).
                                Preprocessing extracts them to desc-aux_timeseries.tsv.gz.
