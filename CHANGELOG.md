@@ -17,6 +17,8 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 - **Censored spans no longer enter the GLM as a task condition.** With `--gvtd-censor` on, a run fitted an extra HRF-convolved regressor over the frames the censoring had flagged as unusable
+- **Editing markers no longer drops the recording's auxiliary channels.** The edited copy had no aux group at all, so `--aux-regressors` further down had nothing to read
+- **Editing markers no longer fails on a derivatives directory that does not exist yet.** A dataset with a `participants.tsv` stopped on the first subject
 
 ## [0.31.0] - 2026-09-08
 

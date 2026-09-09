@@ -7,6 +7,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from fnirs_pipe.io.auxiliary import write_aux_window
 from fnirs_pipe.io.snirf import write_snirf
 from fnirs_pipe.io.tables import read_table
 from fnirs_pipe.utils.logging import get_logger
@@ -60,6 +61,11 @@ def apply_markers_from_df(
 
     out_snirf = out_nirs_dir / f"{stem}_nirs.snirf"
     write_snirf(raw, out_snirf)
+    # write_snirf goes through the Raw, which has nowhere to hold an aux channel, so the
+    # output would carry none. Nothing is cut here, so the window is the whole recording.
+    names = write_aux_window(snirf_path, out_snirf, [(0.0, float(raw.times[-1]))])
+    if names:
+        logger.info("Carried %d aux channels into %s", len(names), out_snirf.name)
     annotations_to_df(raw).to_csv(out_nirs_dir / f"{stem}_events.tsv", sep="\t", index=False)
 
     logger.info("Written to %s", out_nirs_dir)

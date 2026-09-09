@@ -93,10 +93,15 @@ def ensure_dataset_description(deriv_root: Path, name: str, generated_by: str) -
 
 
 def copy_dataset_root(bids_dir: Path, deriv_root: Path) -> None:
-    """Carry participants.tsv and README across so a derivative stands on its own as BIDS."""
+    """Carry participants.tsv and README across so a derivative stands on its own as BIDS.
+
+    Creates the destination: one caller reaches here before anything else has made it, and
+    a dataset root with a participants.tsv would otherwise fail on the copy.
+    """
     for name in ("participants.tsv", "participants.json", "README"):
         src = bids_dir / name
         if src.exists():
+            deriv_root.mkdir(parents=True, exist_ok=True)
             shutil.copy2(src, deriv_root / name)
 
 
