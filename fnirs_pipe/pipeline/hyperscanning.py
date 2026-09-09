@@ -22,6 +22,7 @@ from fnirs_pipe.pipeline.synchrony import (  # noqa: F401  re-exported
     compute_wtc_pseudo,
     roi_maps_from_channels,
     roi_mean_of_channels,
+    window_result,
     wtc_band_mean,
 )
 from fnirs_pipe.utils import is_optical_density

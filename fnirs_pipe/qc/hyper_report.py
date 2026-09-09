@@ -285,8 +285,8 @@ def condition_windows(
 
     ``min_duration`` drops windows shorter than that, in seconds. One cycle of the lowest
     frequency asked for is the sensible floor, and it is why an event-related design with
-    two-second trials yields nothing here: no crop can carry a frequency whose period is
-    longer than the crop.
+    two-second trials yields nothing here: a window holding less than one cycle has no
+    average of that frequency to report, however the coherence was computed.
     """
     from fnirs_pipe.qc.figure_io import extract_markers
 
@@ -413,13 +413,14 @@ def build_hyper_post_report(
     scales land on pycwt's own grid and the margin exceeds its scale-smoothing window,
     reproduces the unrestricted coherences bit for bit.
     """
+    from fnirs_pipe.exceptions import StageError
     from fnirs_pipe.pipeline.hyperscanning import (
         WTCResult,
         _hyper_sidecar,
         compute_wtc,
-        crop_aligned_window,
         roi_maps_from_channels,
         roi_mean_of_channels,
+        window_result,
         wtc_band_mean,
     )
     from fnirs_pipe.pipeline.synchrony import long_axis_over, wtc_grid_params
@@ -541,8 +542,8 @@ def build_hyper_post_report(
                  "--wtc-by-condition asked for, but no annotation window is long enough "
                  f"for one cycle of {wtc_fmin:.4f} Hz: no per-condition figures")
         else:
-            logger.info("--wtc-by-condition: %d window(s), each a further WTC pass",
-                        len(cond_windows))
+            logger.info("--wtc-by-condition: %d window(s), each read off the whole-run "
+                        "transform", len(cond_windows))
 
     def _wtc_pass(ch_type: str) -> dict:
         """The whole WTC analysis for one chromophore: rows for the tables, and figures.
@@ -647,19 +648,26 @@ def build_hyper_post_report(
                 out["per_roi"][roi_name] = {"wtc": roi_fig}
 
         # ---- per condition ----
-        # The whole-run pass above stands; this adds the same analysis inside each task
-        # window, which is the comparison a block design is run for. One entry per window
+        # Each task window read out of the whole-run pass above rather than transformed on
+        # its own, which is the comparison a block design is run for. One entry per window
         # either way, so the chromophores' lists line up positionally for the switch.
+        #
+        # Windowed, not recomputed: a window transformed alone has two edges of its own and
+        # the cone of influence reaches further at longer periods, so a short condition
+        # keeps a smaller share of its band cells and the ones it keeps anyway are padded
+        # against those edges. Recomputing inflated the band mean by an amount that tracked
+        # window length, which in a design whose conditions differ in length is confounded
+        # with the contrast. See `window_result`. It is also cheaper: the whole-run
+        # transform is computed either way, and this adds no second one.
         for label, tstart, tstop in cond_windows:
             imgs = {"matrix": "", "grid": ""}
             out["cond_imgs"].append(imgs)
-            cond_chan = None
+            cond_chan = cond_wtc = None
             with guard(f"Condition {label}: WTC ({ch_type})", errors, scope):
-                cropped = crop_aligned_window(aligned_raws, tstart, tstop)
-                cond_wtc = compute_wtc(
-                    cropped, fmin=wtc_fmin, fmax=wtc_fmax, significance=wtc_significance,
-                    seed=wtc_seed, mc_count=wtc_mc_count, cross=wtc_channel_cross,
-                    limit_scales=wtc_limit_scales, ch_type=ch_type, sep_bands=sep_bands)
+                if wtc_result is None:
+                    raise StageError("the whole-run WTC failed, so no window can be read "
+                                     "out of it")
+                cond_wtc = window_result(wtc_result, tstart, tstop)
                 cond_chan = wtc_band_mean(cond_wtc, band_fmin, band_fmax,
                                           mask_coi=wtc_mask_coi)
             if cond_chan is None:

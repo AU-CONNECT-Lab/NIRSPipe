@@ -537,6 +537,48 @@ def _mean_phase(phases: "list[np.ndarray]") -> "np.ndarray | None":
     return np.angle(np.exp(1j * stack).mean(axis=0)).astype(np.float32)
 
 
+def window_result(result: WTCResult, tstart: float, tstop: float) -> WTCResult:
+    """The same WTC restricted to a time window, so a band mean over it describes one condition.
+
+    ::
+
+      a 3900 s result + (543, 1443)  ->  the same maps holding only those 900 s
+
+    This is how a condition is read out of a whole-record transform, and it is not the same
+    number as transforming that condition on its own. A cut window has two edges of its own,
+    and the cone of influence reaches further at longer periods, so a short condition
+    transformed alone has a larger share of its band cells sitting outside the cone: measured
+    on 300 s against 900 s conditions, 89.8% against 96.6% inside. Those cells are
+    coefficients padded against the window's own edges, near 1 whatever the data does, so
+    transforming each condition separately inflates the band mean by an amount that tracks
+    window length, +0.016 on 300 s against +0.005 on 900 s. Windowing carries the whole
+    record's cone instead, which only reaches into the ends of the recording.
+
+    ``sig`` is carried through unchanged: a Monte Carlo level is per frequency and constant
+    over time, so a window of it is itself.
+    """
+    times = np.asarray(result.times, dtype=float)
+    keep = (times >= float(tstart)) & (times <= float(tstop))
+    if not keep.any():
+        raise ValueError(
+            f"window [{tstart}, {tstop}] holds no sample of a result spanning "
+            f"{times.min():.1f}-{times.max():.1f} s"
+        )
+    pairs = {
+        pair_key: {
+            label: (None if data is None else {
+                "wtc": np.asarray(data["wtc"])[:, keep],
+                "coi": np.asarray(data["coi"])[keep],
+                "sig": data.get("sig"),
+                "phase": np.asarray(data["phase"])[:, keep],
+            })
+            for label, data in labels.items()
+        }
+        for pair_key, labels in result.pairs.items()
+    }
+    return WTCResult(pairs=pairs, freqs=result.freqs, times=times[keep])
+
+
 def roi_maps_from_channels(
     result: WTCResult,
     roi_map: dict[str, list[str]],

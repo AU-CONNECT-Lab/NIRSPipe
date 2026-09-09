@@ -459,14 +459,15 @@ def _build_parser() -> argparse.ArgumentParser:
                           "as exploratory and correct for the number of tests. Does not "
                           "affect the null: see --wtc-pseudo-cross.")
     run.add_argument("--wtc-by-condition", action="store_true",
-                     help="Also run the coherence inside each task annotation's own window, "
+                     help="Also read the coherence out of each task annotation's own window, "
                           "so a block design gets one result per block rather than one over "
                           "the whole recording. Band means land in hyper-wtcbycond.tsv with "
                           "a condition column, and each window gets its own figures. A "
                           "trigger with a duration uses it; one without runs to the next "
                           "trigger, and the last to the end. Windows shorter than one cycle "
-                          "of --wtc-fmin are skipped. The whole-run analysis still runs, so "
-                          "expect roughly double the time.")
+                          "of --wtc-fmin are skipped. Each window is read off the whole-run "
+                          "transform rather than transformed on its own, so it costs almost "
+                          "nothing and a short condition is not inflated by its own edges.")
     run.add_argument("--wtc-limit-scales", action=argparse.BooleanOptionalAction, default=True,
                      help="Compute only the wavelet scales inside --wtc-fmin/--wtc-fmax "
                           "plus margin, instead of every scale the record length allows "
