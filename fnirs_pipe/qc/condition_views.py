@@ -111,8 +111,8 @@ def slice_record(record_view: dict, sliced: "dict[str, dict[str, float]]") -> di
             "per_channel": out_pc}
 
 
-def zoom_to_condition(figure: dict, t0: float, t1: float) -> dict:
-    """A copy of a time-axis figure viewing only one condition, without recomputing it.
+def zoom_to_condition(figure, t0: float, t1: float):
+    """A time-axis figure viewing only one condition, without recomputing it.
 
     ::
 
@@ -131,7 +131,17 @@ def zoom_to_condition(figure: dict, t0: float, t1: float) -> dict:
     So the run is measured once and the view is narrowed. Every x axis in the layout is set,
     because the carpet is stacked subplots sharing a time axis and leaving one unset would
     show a panel at a different span from the one above it.
+
+    Takes either a plotly figure or its dict form, since the two report paths hold different
+    ones: the raw viewer inlines figure dicts, and the subject report keeps plotly objects
+    to save as files. One function rather than an ``update_xaxes`` call at one call site and
+    this loop at the other, which would be two spellings of one decision and free to drift.
+    A figure object is narrowed in place and returned; a dict is returned narrowed as a copy,
+    because the run's own dict is written out as well.
     """
+    if hasattr(figure, "update_xaxes"):
+        figure.update_xaxes(range=[float(t0), float(t1)], autorange=False)
+        return figure
     layout = dict(figure.get("layout") or {})
     axes = [k for k in layout if k == "xaxis" or k.startswith("xaxis")]
     if not axes:

@@ -268,8 +268,14 @@ def _section_sci(
     subject: str,
     errors: list,
     figures_dir: Path,
+    suffix: str = "",
 ) -> dict:
     """The SCI/PSP panel, per channel and per window.
+
+    ``suffix`` names the figure, so a per-condition page writes its own instead of
+    overwriting the run's. Handed a ``windowed`` whose matrices are already sliced to one
+    condition, this panel is that condition's: nothing inside it filters or re-measures,
+    which is why a real slice works here where the carpet has to be narrowed instead.
 
     ``windowed`` is the record's section of that name; the series are read from it rather
     than recomputed, so the panel and the stored numbers cannot disagree. An absent section
@@ -306,7 +312,7 @@ def _section_sci(
             psp_win_times=psp_win_times,
         )
         sci_psp_panel_path, sci_psp_panel_h = _save_plotly_html(
-            fig, figures_dir / "sci_psp_panel.html"
+            fig, figures_dir / f"sci_psp_panel{suffix}.html"
         )
 
     return {"sci_psp_panel_path": sci_psp_panel_path, "sci_psp_panel_h": sci_psp_panel_h}
@@ -459,8 +465,18 @@ def _section_motion(
     windowed: dict | None = None,
     raw_before_motion: mne.io.Raw | None = None,
     raw_after_motion: mne.io.Raw | None = None,
+    suffix: str = "",
+    xrange: "tuple[float, float] | None" = None,
 ) -> dict:
     """The carpet and GVTD panel, with the flagged spans drawn over it.
+
+    ``suffix`` names both figures, so a per-condition page writes its own rather than
+    overwriting the run's. ``xrange`` narrows the view to one condition **after** the panel
+    is built, which is the only correct way to make this figure per condition: it derives
+    its GVTD (filtered 0.01-0.5 Hz), its per-channel z-scoring and its threshold from
+    whatever recording it is handed, so a cropped one would get filter edges on a short
+    piece, a colour scale no other condition shares, and a threshold of its own. The same
+    argument this docstring already makes for the corrected-versus-uncorrected pair.
 
     Both span lists come from the record's ``windowed`` section rather than being detected
     here. They were measured on the same channel set this panel draws, so reading them back
@@ -495,8 +511,11 @@ def _section_motion(
                                  spike_segments=spike_by_set,
                                  raw_after=raw_after_motion,
                                  channel_set=gvtd_set, blocks=gvtd_blocks)
+        if xrange is not None:
+            from fnirs_pipe.qc.condition_views import zoom_to_condition
+            zoom_to_condition(fig, *xrange)
         carpet_gvtd_path, carpet_gvtd_h = _save_plotly_html(
-            fig, figures_dir / "carpet_gvtd.html")
+            fig, figures_dir / f"carpet_gvtd{suffix}.html")
 
     with _guard("Bad segment zoom", errors, subject):
         all_spans = [
@@ -513,8 +532,9 @@ def _section_motion(
                 ch_names=rep_chs or raw_long.ch_names[:3],
                 raw_before=raw_before_motion,
             )
-            _save_b64_png(b64, figures_dir / "bad_segment_zoom.png")
-            bad_segment_zoom_path = _fig_href(figures_dir, "bad_segment_zoom.png")
+            _save_b64_png(b64, figures_dir / f"bad_segment_zoom{suffix}.png")
+            bad_segment_zoom_path = _fig_href(figures_dir,
+                                              f"bad_segment_zoom{suffix}.png")
 
     return {
         "carpet_gvtd_path": carpet_gvtd_path,
@@ -1478,7 +1498,18 @@ def build_subject_report(
                 raw_intensity=raw_intensity, config=config, subject=subject,
                 out_path=out_path, out_dir=nirs_dir, sqm_label=sqm_label,
                 figures_dir=figures_dir, sci_scores=sci_scores,
-                bad_channels=bad_channels, errors=errors)
+                bad_channels=bad_channels, errors=errors,
+                # closures rather than another ten parameters: both panels take a long
+                # arg list that already exists here, and only the suffix, the slice and
+                # the view span differ per condition
+                remake_sci=lambda suffix, windowed_slice, sci_pc: _section_sci(
+                    raw_intensity, sci_pc, bad_channels, config, windowed_slice,
+                    subject, errors, figures_dir, suffix=suffix),
+                remake_motion=lambda suffix, span: _section_motion(
+                    raw_long, raw_gvtd, gvtd_set, gvtd_blocks, sci_scores, config,
+                    segments, subject, errors, figures_dir, windowed=windowed_section,
+                    raw_before_motion=raw_before_motion,
+                    raw_after_motion=raw_after_motion, suffix=suffix, xrange=span))
 
     _build_mne_report(subject, raw_intensity, raw_haemo, out_path, errors)
     return notes
@@ -1509,10 +1540,10 @@ def _blanked(section_vars: tuple) -> dict:
 
 # Figures a per-condition page may point at whatever the condition. Only the provenance
 # graph qualifies: it describes the run's file lineage, which is the same for every
-# condition by definition. The condition's own quality grid is allowed by the label check
-# in `_figure_leaks` and deliberately not by a prefix here, since a prefix would also pass
-# a *different* condition's grid, which is worse than a run-wide figure: the page would
-# look per-condition and be the wrong condition.
+# condition by definition. Everything else has to carry the condition's own name, which
+# `_figure_leaks` checks by suffix rather than by listing the panels: a per-panel prefix
+# list would also pass a *different* condition's figure, which is worse than a run-wide one
+# because the page would look per-condition and be the wrong condition.
 _CONDITION_PAGE_FIGURES = ("provenance.",)
 
 
@@ -1529,12 +1560,39 @@ def _figure_leaks(page: dict, label_slug: str) -> "list[str]":
         if not isinstance(value, str) or "figures/" not in value:
             continue
         name = value.rsplit("/", 1)[-1]
-        if name.startswith(f"channel_summary_{label_slug}"):
+        # every per-condition figure is written as <panel>_<slug>.<ext>
+        if name.rsplit(".", 1)[0].endswith(f"_{label_slug}"):
             continue
         if any(name.startswith(ok) for ok in _CONDITION_PAGE_FIGURES):
             continue
         leaks.append(f"{key}={name}")
     return leaks
+
+
+def _windowed_slice(record: dict, windows: list, label: str) -> dict:
+    """The record's ``windowed`` section with its matrices cut to one condition's columns.
+
+    Only the four keys the SCI/PSP panel reads. The rest of that section is spans and
+    channel-averaged series measured over the run, and handing those to a per-condition
+    panel would put run-wide stripes over per-condition columns.
+    """
+    import numpy as np
+
+    from fnirs_pipe.qc.metrics.windowed import _in_scope, window_centers
+
+    windowed = record.get("windowed") or {}
+    out: dict = {}
+    for matrix_key, times_key in (("sci_matrix", "sci_times"), ("psp_matrix", "psp_times")):
+        matrix, times = windowed.get(matrix_key), windowed.get(times_key)
+        if not matrix or times is None:
+            continue
+        keep = _in_scope(window_centers(np.asarray(times)),
+                         [w for w in windows if w[0] == label])
+        if not keep.any():
+            continue
+        out[matrix_key] = np.asarray(matrix)[:, keep]
+        out[times_key] = np.asarray(times)[keep]
+    return out
 
 
 def _write_condition_reports(
@@ -1551,6 +1609,8 @@ def _write_condition_reports(
     sci_scores: dict,
     bad_channels: list,
     errors: list,
+    remake_sci=None,
+    remake_motion=None,
 ) -> None:
     """One subject-report page per annotated condition, sliced out of the quality record.
 
@@ -1558,11 +1618,18 @@ def _write_condition_reports(
     channel-by-window SCI and PSP matrices, so a condition is a column selection out of the
     pass the run made; see :mod:`fnirs_pipe.qc.condition_views`.
 
-    Each page carries the quality half only: the scalar panel and the channel table, both
-    over that condition. The response half (epochs, topographies, trial images, the GLM) is
-    blank, because the epoch figures work in a window set for a trial rather than a block
-    and would describe the first seconds of each condition rather than the condition. The
-    channel set is the run's throughout, since one set has to serve every condition.
+    Four panels are per condition. The scalar panel and the channel table come off the
+    sliced record; the SCI/PSP panel is rebuilt from the matrices sliced to the condition's
+    columns, which is a real slice because nothing inside that figure filters; and the
+    carpet is rebuilt over the whole run and *narrowed* to the condition, because that
+    figure derives its GVTD, its z-scoring and its threshold from whatever it is handed.
+
+    What stays blank is the response half: epochs, topographies, trial images and the GLM.
+    The epoch window is set for a trial rather than a block, so those panels would describe
+    the first seconds of each condition instead of the condition. The PSD stays blank for a
+    different reason: it is one spectrum rather than a matrix, so there is nothing to slice.
+
+    The channel set is the run's throughout, since one set has to serve every condition.
     """
     from fnirs_pipe.qc.condition_views import (
         condition_scalars, condition_slices_from_record, slice_record,
@@ -1594,18 +1661,29 @@ def _write_condition_reports(
     ) if gvtd.get("gvtd_per_window") else {}
 
     blanked = _blanked(section_vars)
+    window_of = {w[0]: w for w in windows}
     for label, sliced in sliced_all.items():
         cond_record = slice_record(record, sliced)
         rows = channel_rows(cond_record, sci_scores, bad_channels)
         cells = format_rows(rows, cutoffs["sci"], psp_threshold=cutoffs["psp"])
         scalars = condition_scalars(
             sliced, None if label not in gvtd_by_cond else float(gvtd_by_cond[label]))
+        slug = _pair_fname(label)
         summary = _section_channel_summary(
             rows, subject, errors, figures_dir, cutoffs["sci"],
-            name=f"channel_summary_{_pair_fname(label)}.html")
+            name=f"channel_summary_{slug}.html")
+        # the SCI/PSP panel over this condition's columns: a real slice, since the figure
+        # is handed its matrices and derives nothing from a recording
+        panels: dict = {}
+        if remake_sci is not None:
+            panels.update(remake_sci(f"_{slug}", _windowed_slice(record, windows, label),
+                                     sliced.get("sci_per_channel") or {}))
+        # and the carpet narrowed to it: measured over the run, viewed over the condition
+        if remake_motion is not None:
+            panels.update(remake_motion(f"_{slug}", (window_of[label][1], window_of[label][2])))
         stem = f"{out_path.stem.removesuffix('_qc')}_desc-{_pair_fname(label)}_qc"
         page = {
-            **report_vars, **blanked, **summary,
+            **report_vars, **blanked, **summary, **panels,
             "sqm": scalars,
             "channel_rows": rows,
             "channel_cells": cells,

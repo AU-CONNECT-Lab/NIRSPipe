@@ -43,9 +43,20 @@ def test_a_flag_blanks_to_none_not_to_zero():
 
 # ---- and the guard for what blanking never saw ----
 
-def test_the_conditions_own_grid_is_not_a_leak():
-    page = {"channel_summary_path": "figures/sub-01_task-full/channel_summary_game1.html"}
+def test_the_conditions_own_figures_are_not_leaks():
+    # every panel a condition page rebuilds is written as <panel>_<slug>, so the check is a
+    # suffix rather than a list of panel names nobody would remember to extend
+    page = {"channel_summary_path": "figures/x/channel_summary_game1.html",
+            "sci_psp_panel_path":   "figures/x/sci_psp_panel_game1.html",
+            "carpet_gvtd_path":     "figures/x/carpet_gvtd_game1.html",
+            "bad_segment_zoom_path": "figures/x/bad_segment_zoom_game1.png"}
     assert _figure_leaks(page, "game1") == []
+
+
+def test_a_longer_label_starting_with_this_one_is_still_a_leak():
+    # "game1" must not accept "game10"'s figures, nor the other way round
+    assert _figure_leaks({"a": "figures/x/carpet_gvtd_game10.html"}, "game1")
+    assert _figure_leaks({"a": "figures/x/carpet_gvtd_game1.html"}, "game10")
 
 
 def test_the_provenance_graph_is_not_a_leak():
@@ -59,11 +70,12 @@ def test_a_run_wide_figure_is_reported():
     assert leaks == ["denoise_carpet_path=denoise_carpet.png"]
 
 
-def test_another_conditions_grid_is_a_leak():
-    # a copied payload pointing at the neighbour's grid is worse than a run-wide figure,
-    # since the page would look per-condition and be the wrong condition
+def test_another_conditions_figure_is_a_leak():
+    # a copied payload pointing at the neighbour's is worse than a run-wide figure, since
+    # the page would look per-condition and be the wrong condition
     assert _figure_leaks(
         {"channel_summary_path": "figures/x/channel_summary_video.html"}, "game1")
+    assert _figure_leaks({"carpet_gvtd_path": "figures/x/carpet_gvtd_video.html"}, "game1")
 
 
 def test_values_that_are_not_figure_paths_are_ignored():

@@ -69,7 +69,9 @@ def test_every_condition_is_rendered_against_the_same_scale(monkeypatch):
     out = activation_condition_figures(None, _results(weak=[0.01], strong=[4.0]))
 
     assert [label for label, _ in out] == ["weak", "strong"]
-    assert {limit for _, limit in seen} == {pytest.approx(4.0)}
+    # both conditions, and both against the strong one's limit rather than their own
+    assert [title for title, _ in seen] == ["weak", "strong"]
+    assert [limit for _, limit in seen] == pytest.approx([4.0, 4.0])
 
 
 def test_a_condition_that_failed_to_render_is_left_out(monkeypatch):
