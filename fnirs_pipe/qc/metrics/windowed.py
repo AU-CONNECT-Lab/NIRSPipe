@@ -174,3 +174,92 @@ def attach_windowed_series(
     series.update(sci_matrix=sci_matrix, sci_times=sci_times,
                   psp_matrix=psp_matrix, psp_times=psp_times)
     return series
+
+
+# The window the SCI and PSP pass lines were established at. Deliberately not the report's
+# `window_s`, which a user may set freely: PSP is a power and moves with window length (a
+# well-coupled channel's rises, an uncoupled channel's falls), so 0.1 selects a different
+# set of channels at every length, and a screening line that follows a display setting is a
+# screening line that silently stops meaning what it was calibrated to mean. SCI is a
+# correlation and is window-free, so only PSP forces this, and one window for both keeps the
+# two on one grid.
+SCREEN_WINDOW_S = 10.0
+
+
+def good_window_fraction(
+    raw_od: mne.io.Raw,
+    cardiac_l_freq: float,
+    cardiac_h_freq: float,
+    sci_cutoff: float,
+    psp_cutoff: float,
+    window_s: float = SCREEN_WINDOW_S,
+) -> dict[str, float]:
+    """Share of windows in which a channel is coupled, per channel.
+
+    ::
+
+      a channel passing both lines in 300 of 391 windows  ->  0.767
+
+    A window counts when SCI **and** PSP both pass in *that* window. The two are paired
+    inside the window rather than judged separately over the recording because they are
+    only informative together: movement inflates SCI, and PSP is what catches it, so a
+    window with high SCI and near-zero PSP is movement rather than coupling. Comparing a
+    whole-run SCI against a whole-run PSP cannot see that, since it no longer knows whether
+    the good SCI and the bad PSP happened at the same time.
+
+    Counting windows rather than averaging them is the other half. An average can be
+    carried over the line by the part of the recording where the channel was fine, so a
+    channel that is excellent for half the run and dead for the other half passes; a count
+    cannot be rescued that way.
+
+    Returns an empty dict when either metric cannot be measured, which screens nothing
+    rather than rejecting everything.
+    """
+    try:
+        sci, _ = compute_windowed_sci(raw_od, cardiac_l_freq, cardiac_h_freq, window_s)
+        psp, _ = compute_windowed_psp(raw_od, cardiac_l_freq, cardiac_h_freq, window_s)
+    except Exception as exc:
+        logger.warning("windowed screening could not be measured (%s); it screens nothing", exc)
+        return {}
+
+    sci, psp = np.asarray(sci, dtype=float), np.asarray(psp, dtype=float)
+    if sci.shape != psp.shape or sci.ndim != 2 or sci.shape[1] == 0:
+        logger.warning("windowed SCI %s and PSP %s do not share a grid; screening nothing",
+                       sci.shape, psp.shape)
+        return {}
+
+    good = (sci >= float(sci_cutoff)) & (psp >= float(psp_cutoff))
+    frac = good.mean(axis=1)
+    return {ch: float(frac[i]) for i, ch in enumerate(raw_od.ch_names) if i < len(frac)}
+
+
+def condition_window_fractions(
+    raw_od: mne.io.Raw,
+    windows: "list[tuple[str, float, float]]",
+    cardiac_l_freq: float,
+    cardiac_h_freq: float,
+    sci_cutoff: float,
+    psp_cutoff: float,
+    window_s: float = SCREEN_WINDOW_S,
+) -> "dict[str, dict[str, float]]":
+    """:func:`good_window_fraction` restricted to each named stretch of the recording.
+
+    ::
+
+      [("rest", 0, 300), ("talk", 300, 600)]  ->  {"rest": {ch: 0.98}, "talk": {ch: 0.41}}
+
+    Reported, never screened on. One channel set has to serve every condition or a contrast
+    between two conditions is also a contrast between two montages, so this answers "when
+    was this channel bad" without changing what is dropped.
+    """
+    out: dict[str, dict[str, float]] = {}
+    for label, tstart, tstop in windows:
+        try:
+            segment = raw_od.copy().crop(tmin=max(0.0, float(tstart)),
+                                         tmax=min(float(raw_od.times[-1]), float(tstop)))
+        except Exception as exc:
+            logger.warning("condition %s could not be cut for screening (%s)", label, exc)
+            continue
+        out[label] = good_window_fraction(
+            segment, cardiac_l_freq, cardiac_h_freq, sci_cutoff, psp_cutoff, window_s)
+    return out

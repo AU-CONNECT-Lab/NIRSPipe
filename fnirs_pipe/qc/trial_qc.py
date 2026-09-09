@@ -76,11 +76,13 @@ def trial_sqm(raw, t0: float, t1: float,
 
     seg = raw.copy().crop(tmin=t0, tmax=t1)
     sci_scores, seg_od = compute_sci_scores(seg, cardiac_l_freq, cardiac_h_freq)
+    cutoffs = resolve_cutoffs(sci=sci_threshold, psp=psp_threshold)
     scores = screening_scores(seg_od, cardiac_l_freq, cardiac_h_freq,
-                              have={"sci": sci_scores})
-    bad, _ = screen_channels(scores, resolve_cutoffs(sci=sci_threshold, psp=psp_threshold))
+                              have={"sci": sci_scores}, cutoffs=cutoffs)
+    bad, _ = screen_channels(scores, cutoffs)
     try:
-        return compute_raw_sqm(seg, sci_scores, bad, cardiac_l_freq, cardiac_h_freq)
+        return compute_raw_sqm(seg, sci_scores, bad, cardiac_l_freq, cardiac_h_freq,
+                               scores.get("good_frac"))
     except Exception as exc:
         logger.warning("trial SQM failed: %s", exc)
         return {}

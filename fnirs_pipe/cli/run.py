@@ -84,6 +84,7 @@ def _build_parser() -> argparse.ArgumentParser:
     # the other screening line. Optional, unlike --sci-threshold: PSP has a published
     # default that holds across populations, so a run that does not name it is not guessing
     _shared.add_psp_threshold(prep_opt)
+    _shared.add_min_good_frac(prep_opt)
     _shared.add_separation_bands(prep_opt)
     prep_opt.add_argument("--window-length", type=float, default=10.0,
                           help="Sliding-window length (s) for windowed SCI/PSP/GVTD QC series.")
@@ -192,9 +193,8 @@ def _build_parser() -> argparse.ArgumentParser:
     esc.add_argument("--allow-cropped-input", action="store_true",
                      help="Run on a `fnirs-prep crop` tree, which is otherwise refused. "
                           "Every condition is then preprocessed on its own, and motion "
-                          "correction and the bandpass each see one segment: on a 300 s "
-                          "condition that moves them by 23%% and 10-17%%. Preprocess the "
-                          "uncut recording and crop the result instead "
+                          "correction and the bandpass each see one segment, which moves "
+                          "both. Preprocess the uncut recording and crop the result instead "
                           "(`fnirs-prep crop --input-desc`).")
     esc.add_argument("--dry-run", action="store_true", help="Write pipeline script without executing.")
     esc.add_argument("--verbose", action="store_true")

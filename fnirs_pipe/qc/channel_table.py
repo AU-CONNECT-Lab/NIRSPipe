@@ -26,7 +26,8 @@ logger = get_logger("qc.channel_table")
 
 # the per-channel families that decide whether a channel was measured by a section at all
 _PER_CHANNEL_KEYS = (
-    "sci_per_channel", "psp_per_channel", "snr_per_channel", "cv_per_channel",
+    "sci_per_channel", "psp_per_channel", "good_frac_per_channel",
+    "snr_per_channel", "cv_per_channel",
 )
 
 # the sections whose per-channel dicts describe the long channels, merged in this order so
@@ -35,7 +36,8 @@ _PER_CHANNEL_KEYS = (
 _LONG_MERGE_SECTIONS = ("motion", "preproc", "preproc_long", "censor")
 
 # CSV column order, also the column order every view prints
-CSV_FIELDS = ("name", "sci", "psp", "snr", "cv", "corr", "is_bad", "reason", "separation")
+CSV_FIELDS = ("name", "sci", "psp", "good_frac", "snr", "cv", "corr", "is_bad", "reason",
+              "separation")
 
 
 def _pair_of(ch: str) -> str:
@@ -114,6 +116,7 @@ def channel_rows(
         "name":       ch,
         "sci":        value_of("sci_per_channel", ch),
         "psp":        value_of("psp_per_channel", ch),
+        "good_frac":  value_of("good_frac_per_channel", ch),
         "snr":        value_of("snr_per_channel", ch),
         "cv":         value_of("cv_per_channel", ch),
         "corr":       corr_pc.get(_pair_of(ch)),
@@ -347,6 +350,9 @@ def _failed_criteria(row: dict, cutoffs: dict[str, float]) -> list[str]:
 
     failed, scored = [], True
     for c in CRITERIA:
+        # a criterion that rejects nothing is not a reason a channel went
+        if not c.screens:
+            continue
         value = row.get(c.name)
         if value is None:
             scored = False

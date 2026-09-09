@@ -150,6 +150,11 @@ def record_has_bands(scalars: dict) -> bool:
 # reading 20.
 SCI_PASS = 0.8        # also the --sci-threshold default
 PSP_PASS = 0.1
+# Share of windows in which a channel must pass both lines above to be kept. SCI's 0.8 and
+# PSP's 0.1 are the values their authors established; this one is not theirs. The tool that
+# defines the rule leaves the percentage to the user and states no default, so 0.75 is
+# borrowed from the one worked example that names a number.
+GOOD_FRAC_PASS = 0.75
 # CV is measured per channel name, and intensity names are per wavelength, so it is the
 # per-wavelength CV and takes its threshold: 5% (Lloyd-Fox 2009). Alternatives are 7.5%
 # (Hocke 2018) and 15% (Piper 2014), both on whole-channel CV. SNR is 1/CV by construction,

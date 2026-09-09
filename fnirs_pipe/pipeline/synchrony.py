@@ -190,8 +190,8 @@ def _decim_step(sfreq: float) -> int:
     """Samples per retained column of a coherence map: one per second, at least one.
 
     The maps are for reading and for averaging over a band, and neither needs the sampling
-    rate: a 65-minute dyad at 10 Hz is 39000 columns per pair per frequency, which is a
-    hundredfold more than any figure resolves or any band mean moves on. What it does limit
+    rate: a long recording at 10 Hz runs to tens of thousands of columns per pair per
+    frequency, far more than any figure resolves or any band mean moves on. What it does limit
     is how short a window --wtc-by-condition can describe, so it is reported in the sidecar
     as the time resolution it produces rather than as this count.
     """
@@ -577,17 +577,17 @@ def window_result(result: WTCResult, tstart: float, tstop: float) -> WTCResult:
 
     ::
 
-      a 3900 s result + (543, 1443)  ->  the same maps holding only those 900 s
+      a 1200 s result + (300, 600)  ->  the same maps holding only those 300 s
 
     This is how a condition is read out of a whole-record transform, and it is not the same
     number as transforming that condition on its own. A cut window has two edges of its own,
     and the cone of influence reaches further at longer periods, so a short condition
-    transformed alone has a larger share of its band cells sitting outside the cone: measured
-    on 300 s against 900 s conditions, 89.8% against 96.6% inside. Those cells are
-    coefficients padded against the window's own edges, near 1 whatever the data does, so
-    transforming each condition separately inflates the band mean by an amount that tracks
-    window length, +0.016 on 300 s against +0.005 on 900 s. Windowing carries the whole
-    record's cone instead, which only reaches into the ends of the recording.
+    transformed alone has a larger share of its band cells sitting outside the cone. Those
+    cells are coefficients padded against the window's own edges, near 1 whatever the data
+    does, so transforming each condition separately inflates the band mean by an amount that
+    tracks window length, which in a design whose conditions differ in length is confounded
+    with the contrast. Windowing carries the whole record's cone instead, which only reaches
+    into the ends of the recording.
 
     ``sig`` is carried through unchanged: a Monte Carlo level is per frequency and constant
     over time, so a window of it is itself.

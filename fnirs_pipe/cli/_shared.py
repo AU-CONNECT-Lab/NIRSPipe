@@ -86,7 +86,7 @@ def add_sci_threshold(container, default: "float | None" = None, note: str = "")
 
     container.add_argument(
         "--sci-threshold", type=float, default=default,
-        help="Scalp coupling index below which a channel is rejected"
+        help="Scalp coupling index a window must reach"
              + (f" (default {SCI_PASS})." if default is not None else ", e.g. 0.8.")
              + (f" {note}" if note else ""))
 
@@ -97,22 +97,38 @@ def add_psp_threshold(container, note: str = "") -> None:
 
     container.add_argument(
         "--psp-threshold", type=float, default=None,
-        help=f"Peak spectral power below which a channel is rejected (default {PSP_PASS}). "
-             f"Screening is a union, so a channel failing either line goes. PSP catches the "
-             f"movement that fakes a high SCI, so raising it prunes more than "
-             f"--sci-threshold alone does."
+        help=f"Peak spectral power a window must reach (default {PSP_PASS}). PSP catches "
+             f"the movement that fakes a high SCI, so a window counts as coupled only when "
+             f"it clears this line and --sci-threshold together."
+             + (f" {note}" if note else ""))
+
+
+def add_min_good_frac(container, note: str = "") -> None:
+    """``--min-good-frac``: how much of the recording a channel has to be coupled for."""
+    from fnirs_pipe.qc.metrics import GOOD_FRAC_PASS
+
+    container.add_argument(
+        "--min-good-frac", type=float, default=None,
+        help=f"Share of windows a channel must be coupled in to be kept, 0 to 1 (default "
+             f"{GOOD_FRAC_PASS}). A window counts when SCI and PSP both clear their lines "
+             f"in it. This is the criterion that rejects; the two lines above set what a "
+             f"coupled window is. Counting windows rather than averaging them is what stops "
+             f"a channel that was fine for the first half of a long recording and dead for "
+             f"the second half from passing."
              + (f" {note}" if note else ""))
 
 
 def screening(sci_default: "float | None" = None, note: str = "") -> argparse.ArgumentParser:
-    """Both screening lines as a parent parser.
+    """The screening lines as a parent parser.
 
-    One block for both, because screening is a union over the criteria table and a command
-    that can move one line has no reason not to move the other.
+    One block for all three, because they are one decision: SCI and PSP say what a coupled
+    window is, and the third says how many of them a channel needs. A command that can move
+    one has no reason not to move the others.
     """
     p = argparse.ArgumentParser(add_help=False)
     add_sci_threshold(p, sci_default, note)
     add_psp_threshold(p, note)
+    add_min_good_frac(p, note)
     return p
 
 

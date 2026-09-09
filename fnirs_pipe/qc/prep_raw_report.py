@@ -16,7 +16,7 @@ from fnirs_pipe.qc.channel_table import (
     separation_blocks, separation_notes, split_table,
 )
 from fnirs_pipe.qc.metrics import SCI_PASS
-from fnirs_pipe.qc.metrics._helpers import separation_bands
+from fnirs_pipe.qc.metrics._helpers import _mean_or_none, separation_bands
 from fnirs_pipe.qc.report_shell import (
     collapse_messages, dashboard_css, guard, note, render,
 )
@@ -93,16 +93,17 @@ def _process_run(
     raw = mne.io.read_raw_snirf(run["snirf_path"], preload=True, verbose=False)
 
     sci_scores, raw_od = compute_sci_scores(raw, cardiac_l_freq, cardiac_h_freq)
-    screen_scores = screening_scores(raw_od, cardiac_l_freq, cardiac_h_freq,
-                                     have={"sci": sci_scores})
     cutoffs = resolve_cutoffs(sci=sci_threshold, psp=psp_threshold)
+    screen_scores = screening_scores(raw_od, cardiac_l_freq, cardiac_h_freq,
+                                     have={"sci": sci_scores}, cutoffs=cutoffs)
     bad_list, _why = screen_channels(screen_scores, cutoffs)
     bad_channels: set[str] = set(bad_list)
 
     sqm: dict = {}
     with guard("Quality metrics", errors, label):
         sqm = compute_raw_sqm(raw, sci_scores, list(bad_channels),
-                              cardiac_l_freq, cardiac_h_freq)
+                              cardiac_l_freq, cardiac_h_freq,
+                              screen_scores.get("good_frac"))
 
     # `sqm` stays the flat all-channel view the per-window figures below read. The record
     # written to disk is the sectioned one, built through the same function the pipeline
@@ -112,7 +113,29 @@ def _process_run(
     # the figures colour a channel short or not short, so only the short edge applies
     short_thresh = (sep_bands if sep_bands is not None else separation_bands())[0]
     raw_secs, raw_pc = raw_sections(
-        raw, sci_scores, list(bad_channels), cardiac_l_freq, cardiac_h_freq, sep_bands)
+        raw, sci_scores, list(bad_channels), cardiac_l_freq, cardiac_h_freq, sep_bands,
+        screen_scores.get("good_frac"))
+    # Reported per condition, never screened on: one channel set has to serve every
+    # condition, or a contrast between two conditions is also a contrast between two
+    # montages. This is what says "the channel was fine in rest and dead in the second
+    # game" without changing which channels the analysis gets. A window shorter than two
+    # screening windows has too few to count, so it is not offered a share at all.
+    cond_frac: dict = {}
+    with guard("Coupled windows per condition", errors, label):
+        from fnirs_pipe.qc.hyper_report import condition_windows
+        from fnirs_pipe.qc.metrics.windowed import (
+            SCREEN_WINDOW_S, condition_window_fractions,
+        )
+        cond_windows = condition_windows(raw, min_duration=2 * SCREEN_WINDOW_S)
+        if cond_windows:
+            cond_frac = condition_window_fractions(
+                raw_od, cond_windows, cardiac_l_freq, cardiac_h_freq,
+                sci_cutoff=cutoffs["sci"], psp_cutoff=cutoffs["psp"])
+    if cond_frac and "raw" in raw_secs:
+        raw_secs["raw"]["good_frac_by_condition"] = {
+            label_: _mean_or_none(shares.values()) for label_, shares in cond_frac.items()}
+        raw_pc.setdefault("raw", {})["good_frac_by_condition_per_channel"] = cond_frac
+
     record_view = {**raw_secs, "per_channel": raw_pc}
     ch_rows = channel_rows(record_view, sci_scores, bad_channels)
     # the verdict is read off the long channels wherever the montage was split, exactly as

@@ -89,6 +89,20 @@ def _sci_metrics(
     }
 
 
+def _good_frac_metrics(good_frac_scores: dict[str, float] | None) -> dict[str, Any]:
+    """The coupled-window share per channel and its mean, or empty when nothing measured it.
+
+    Handed in rather than measured here: the screening already counted these windows, and
+    counting them twice is a second pass of windowed SCI and PSP over the whole recording.
+    """
+    if not good_frac_scores:
+        return {"good_frac_mean": None, "good_frac_per_channel": {}}
+    return {
+        "good_frac_mean": _mean_or_none(good_frac_scores.values()),
+        "good_frac_per_channel": {k: float(v) for k, v in good_frac_scores.items()},
+    }
+
+
 def channel_cv(data: np.ndarray) -> np.ndarray:
     r"""Coefficient of variation per channel: relative noise level (lower = cleaner).
 

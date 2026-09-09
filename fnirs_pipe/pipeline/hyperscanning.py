@@ -349,14 +349,16 @@ def compute_group_sqm_raw(
             sci_scores[pair] = val
 
         bad_channels: list[str] = []
+        screen: dict = {}
         if raw_od is not None:
             screen = screening_scores(raw_od, cardiac_l_freq, cardiac_h_freq,
-                                      have={"sci": sci_cw})
+                                      have={"sci": sci_cw}, cutoffs=cutoffs)
             bad_channels, _ = screen_channels(screen, cutoffs)
 
         try:
             sections, _per_channel = raw_sections(
-                raw, sci_cw, bad_channels, cardiac_l_freq, cardiac_h_freq, sep_bands)
+                raw, sci_cw, bad_channels, cardiac_l_freq, cardiac_h_freq, sep_bands,
+                screen.get("good_frac"))
             sqm = raw_verdict_view(sections)
         except Exception:
             logger.warning("%s: quality metrics failed", entry.subject_id, exc_info=True)

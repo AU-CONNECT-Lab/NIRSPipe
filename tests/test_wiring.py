@@ -63,15 +63,35 @@ def test_dpf_reaches_beer_lambert(tmp_path_factory):
 
 
 def test_sci_threshold_reaches_the_comparison(tmp_path_factory):
-    """Raising the threshold can only add channels, and on this data it must add some.
+    """Raising the per-window line can only add channels, and past a point it takes them all.
 
-    0.9 rather than 0.99: the good pairs sit at about 0.976, and a threshold above that
-    marks every channel, which Beer-Lambert cannot run on at all.
+    The line is applied inside each window now, so a threshold between two channels'
+    whole-run values no longer separates them: the synthetic signal is stationary, so a
+    channel that clears the line clears it in every window and one that does not clears it
+    in none. What still moves with the setting is where the whole montage goes: the good
+    pairs sit at about 0.976, so 0.95 keeps them and 0.98 leaves no channel coupled for
+    enough of the run, which is refused rather than handed to Beer-Lambert.
     """
-    lenient, _ = _prep(tmp_path_factory.mktemp("sci_low"), sci_threshold=0.01)
-    strict, _ = _prep(tmp_path_factory.mktemp("sci_high"), sci_threshold=0.9)
-    assert set(lenient.bad_channels) <= set(strict.bad_channels)
-    assert len(strict.bad_channels) > len(lenient.bad_channels)
+    kept, _ = _prep(tmp_path_factory.mktemp("sci_ok"), sci_threshold=0.95)
+    assert len(kept.bad_channels) < len(kept.sci_scores)
+    with pytest.raises(StageError, match="every channel failed screening"):
+        _prep(tmp_path_factory.mktemp("sci_high"), sci_threshold=0.98)
+
+
+def test_min_good_frac_reaches_the_comparison(tmp_path_factory):
+    """The share of coupled windows is what rejects, so moving it has to move the verdict.
+
+    Measured with the SCI line effectively off, so PSP alone decides which windows count:
+    the bad pairs are coupled in 0.45 of them and the good ones in all. A line under 0.45
+    therefore keeps everything and a line over it drops the bad pairs, which is the whole
+    behaviour the criterion exists for.
+    """
+    lenient, _ = _prep(tmp_path_factory.mktemp("frac_low"),
+                       sci_threshold=0.01, min_good_frac=0.4)
+    strict, _ = _prep(tmp_path_factory.mktemp("frac_high"),
+                      sci_threshold=0.01, min_good_frac=0.5)
+    assert lenient.bad_channels == []
+    assert set(strict.bad_channels) > set(lenient.bad_channels)
 
 
 def test_the_cardiac_band_reaches_the_sci_computation(baseline):
@@ -146,8 +166,11 @@ def test_the_bad_channels_survive_to_the_final_output(baseline):
 
 def test_a_threshold_that_rejects_everything_says_so(tmp_path_factory):
     """Without this guard the run dies inside Beer-Lambert, which never names the threshold."""
-    # the criterion that rejected and the line it rejected against, both in the message
-    with pytest.raises(StageError, match=r"failed screening on SCI .*sci 1\.1"):
+    # the criterion that rejected and the lines it rejected against, both in the message.
+    # The criterion is the window count; the SCI line is what made every window fail, so the
+    # message has to carry it too or it names a share with no way to see what caused it.
+    with pytest.raises(StageError,
+                       match=r"failed screening on coupled windows .*sci 1\.1"):
         _prep(tmp_path_factory.mktemp("sci_all_bad"), sci_threshold=1.1)
 
 

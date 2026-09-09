@@ -87,10 +87,9 @@ def _refuse_cropped_input(bids_dir: Path, allow: bool) -> None:
     """Stop a run whose input was cut into one file per condition before preprocessing.
 
     Motion correction fits its weighting over whatever series it is handed and the bandpass
-    pads whatever it is given, so each condition preprocessed alone gets a different answer:
-    measured on an 1800 s record cut to 300 s, TDDR moves 23% and the bandpass 10 to 17%,
-    the latter a baseline invented at the segment edges. Padding the crop fixes only the
-    bandpass. The right order is to preprocess the recording and cut afterwards.
+    pads whatever it is given, so each condition preprocessed alone gets a different answer,
+    the bandpass's being a baseline invented at the segment edges. Padding the crop fixes
+    only the bandpass. The right order is to preprocess the recording and cut afterwards.
 
     Detected from the input tree's own `dataset_description.json`, which `fnirs-prep crop`
     stamps with its name, so nothing new has to be recorded for this to work.
@@ -108,7 +107,7 @@ def _refuse_cropped_input(bids_dir: Path, allow: bool) -> None:
     raise SystemExit(
         f"[error] {bids_dir} was written by `fnirs-prep crop`, so every condition would be "
         "preprocessed on its own. Motion correction and the bandpass both read whatever "
-        "series they are handed, which on a 300 s condition moves them by 23% and 10-17%.\n"
+        "series they are handed, so a short condition moves both.\n"
         "        Run this on the uncut recording instead, then cut what you need out of the "
         "result:\n"
         "          fnirs-pipe <bids> <out> participant ...\n"
@@ -204,6 +203,8 @@ def run_participant_level(args: dict[str, Any]) -> None:
                 sci_threshold=args["sci_threshold"],
         **({"psp_threshold": args["psp_threshold"]}
            if args.get("psp_threshold") is not None else {}),
+        **({"min_good_frac": args["min_good_frac"]}
+           if args.get("min_good_frac") is not None else {}),
                 dpf=args["dpf"],
                 motion_correction=_v(args["motion_correction"]),
                 mode=_v(args["mode"]) if args.get("mode") else None,
@@ -400,6 +401,8 @@ def _make_prep_config(subject: str, session: str | None, args: dict[str, Any]) -
         sci_threshold=args["sci_threshold"],
         **({"psp_threshold": args["psp_threshold"]}
            if args.get("psp_threshold") is not None else {}),
+        **({"min_good_frac": args["min_good_frac"]}
+           if args.get("min_good_frac") is not None else {}),
         motion_correction=_v(args["motion_correction"]),
         bad_channels=_bad_channels_for(args.get("bad_channels"), subject),
         cardiac_l_freq=args["cardiac_l_freq"],

@@ -25,7 +25,7 @@ from fnirs_pipe.io.derivatives import build_output_path, carry_entities, data_st
 from fnirs_pipe.io.snirf import write_snirf
 from fnirs_pipe.pipeline.motion import MotionMethod, correct_motion  # noqa: F401  re-exported
 from fnirs_pipe.exceptions import StageError
-from fnirs_pipe.qc.metrics._helpers import PSP_PASS
+from fnirs_pipe.qc.metrics._helpers import GOOD_FRAC_PASS, PSP_PASS
 from fnirs_pipe.utils import is_optical_density
 from fnirs_pipe.utils.lineage import Recorder, lineage_of, stage_of, stamp
 from fnirs_pipe.utils.logging import get_logger
@@ -65,24 +65,27 @@ def mark_bad_channels(
     cardiac_l_freq: float,
     cardiac_h_freq: float,
     psp_threshold: float | None = None,
-) -> tuple[mne.io.Raw, list[str], dict[str, float]]:
+    min_good_frac: float | None = None,
+) -> tuple[mne.io.Raw, list[str], dict[str, float], dict[str, float]]:
     """Screen channels into raw.info['bads'].
 
     The criteria are :data:`fnirs_pipe.qc.metrics.screening.CRITERIA` and a channel is
     rejected if it fails any of them, so what gets pruned is decided by that table rather
-    than here. ``threshold`` is the SCI line and ``psp_threshold`` the PSP one; None keeps
-    the criterion's own default.
+    than here. ``threshold`` is the SCI line and ``psp_threshold`` the PSP one, both applied
+    inside a window; ``min_good_frac`` is the share of windows that has to clear both, and it
+    is the line that rejects. None keeps the criterion's own default.
 
-    Returns raw (modified in-place), the rejected channel names, and the SCI scores, which
-    the report and the quality record both want on their own.
+    Returns raw (modified in-place), the rejected channel names, the SCI scores, and the
+    coupled-window shares, the last two because the report and the quality record both want
+    them on their own.
     Raises StageError if the criteria leave no usable channel.
     """
     from fnirs_pipe.qc.metrics import resolve_cutoffs, screen_channels, screening_scores
 
-    cutoffs = resolve_cutoffs(sci=threshold, psp=psp_threshold)
+    cutoffs = resolve_cutoffs(sci=threshold, psp=psp_threshold, good_frac=min_good_frac)
     sci_scores = compute_sci(raw_od, cardiac_l_freq, cardiac_h_freq)
     scores = screening_scores(raw_od, cardiac_l_freq, cardiac_h_freq,
-                              have={"sci": sci_scores})
+                              have={"sci": sci_scores}, cutoffs=cutoffs)
     bad_chs, why = screen_channels(scores, cutoffs)
     # without this the run dies four steps later inside Beer-Lambert, which reports only
     # that it found no optical density data and never mentions the screening
@@ -91,13 +94,14 @@ def mark_bad_channels(
         lines = ", ".join(f"{k} {v}" for k, v in sorted(cutoffs.items()))
         raise StageError(
             f"every channel failed screening on {', '.join(failed)} (cutoffs {lines}; "
-            f"best SCI {max(sci_scores.values()):.3f}). Lower --sci-threshold or "
-            f"--psp-threshold, or check the recording for scalp coupling."
+            f"best SCI {max(sci_scores.values()):.3f}). Lower --min-good-frac, or the "
+            f"--sci-threshold / --psp-threshold a window has to clear, or check the "
+            f"recording for scalp coupling."
         )
     raw_od.info["bads"] = bad_chs
     stamp(raw_od, stage="sci", step="sci_pruning", source=raw_od, threshold=threshold,
-          psp_threshold=cutoffs["psp"])
-    return raw_od, bad_chs, sci_scores
+          psp_threshold=cutoffs["psp"], min_good_frac=cutoffs["good_frac"])
+    return raw_od, bad_chs, sci_scores, scores.get("good_frac") or {}
 
 # Step 4: Beer-Lambert
 def od_to_haemo(raw_od: mne.io.Raw, dpf: list[float]) -> mne.io.Raw:
@@ -126,7 +130,8 @@ class PrepConfig:
     resp_l_freq: float
     resp_h_freq: float
     session: str | None = None
-    psp_threshold: float = PSP_PASS         # the other screening line; SCI is the required one
+    psp_threshold: float = PSP_PASS         # the other per-window line; SCI is the required one
+    min_good_frac: float = GOOD_FRAC_PASS   # share of coupled windows a kept channel needs
     qc_window_s: float = 10.0               # sliding-window length (s) for windowed SCI/PSP/GVTD
     # trial window for the report's epoch figures and per-trial scoring; None means the
     # report's own -5 to 25 s for the figures and each event's own duration for the scoring
@@ -212,8 +217,9 @@ def run_prep(
 
     # step 2: SCI channel marking
     logger.info("sub-%s | step 2: SCI marking (threshold=%.2f, %d ch)", config.subject, config.sci_threshold, len(raw_od.ch_names))
-    raw_od, bad_chs, sci_scores = mark_bad_channels(
+    raw_od, bad_chs, sci_scores, good_frac_scores = mark_bad_channels(
         raw_od, threshold=config.sci_threshold, psp_threshold=config.psp_threshold,
+        min_good_frac=config.min_good_frac,
         cardiac_l_freq=config.cardiac_l_freq, cardiac_h_freq=config.cardiac_h_freq)
     if config.bad_channels:
         manual = _expand_bad_pairs(raw_od, config.bad_channels)
@@ -341,6 +347,8 @@ def _config_dict(config: PrepConfig) -> dict:
         "dpf": config.dpf,
         "motion_correction": config.motion_correction,
         "sci_threshold": config.sci_threshold,
+        "psp_threshold": config.psp_threshold,
+        "min_good_frac": config.min_good_frac,
         "cardiac_l_freq": config.cardiac_l_freq,
         "cardiac_h_freq": config.cardiac_h_freq,
         "resp_l_freq": config.resp_l_freq,

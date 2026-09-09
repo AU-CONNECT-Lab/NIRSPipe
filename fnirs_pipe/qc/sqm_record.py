@@ -287,6 +287,7 @@ def raw_sections(
     cardiac_l_freq: float,
     cardiac_h_freq: float,
     sep_bands=None,
+    good_frac_scores: dict[str, float] | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """The three views of the original recording, as ``(sections, per_channel)``.
 
@@ -302,6 +303,10 @@ def raw_sections(
 
     The separations that produced the split are stamped beside those counts, since the
     defaults can move and a reader of an old record cannot otherwise recover them.
+
+    ``good_frac_scores`` is the coupled-window share the screening already counted, passed
+    in rather than recounted: it is two windowed passes over the recording, and a caller
+    that screened has it. None leaves the entry empty rather than paying for it again.
     """
     from fnirs_pipe.qc.metrics import compute_raw_sqm, long_short_channels
     from fnirs_pipe.qc.metrics._helpers import bands_to_record, separation_bands
@@ -311,7 +316,8 @@ def raw_sections(
     section = _section_writer(sections, per_channel)
 
     section("raw", lambda: compute_raw_sqm(
-        raw_intensity, sci_scores, bad_channels, cardiac_l_freq, cardiac_h_freq))
+        raw_intensity, sci_scores, bad_channels, cardiac_l_freq, cardiac_h_freq,
+        good_frac_scores))
 
     sep_bands = sep_bands if sep_bands is not None else separation_bands()
     long_names, short_names = long_short_channels(raw_intensity, sep_bands)
@@ -324,8 +330,10 @@ def raw_sections(
             raw_long = raw_intensity.copy().pick(long_names)
             long_sci = {k: v for k, v in sci_scores.items() if k in set(long_names)}
             long_bad = [c for c in bad_channels if c in set(long_names)]
+            long_frac = {k: v for k, v in (good_frac_scores or {}).items()
+                         if k in set(long_names)}
             return compute_raw_sqm(
-                raw_long, long_sci, long_bad, cardiac_l_freq, cardiac_h_freq)
+                raw_long, long_sci, long_bad, cardiac_l_freq, cardiac_h_freq, long_frac)
         section("raw_long", long_section)
     if short_names:
         # already returns the (scalars, nested) split, so it bypasses `section`

@@ -84,7 +84,7 @@ def _write_crop_sidecar(out_snirf: Path, raw_seg, source_path: Path,
     """Replace the copied sidecar with one describing the crop, for a derivative input.
 
     Two things would otherwise be lost or wrong. `copy_sidecars` brings the source stage's
-    JSON across verbatim, so a 300 s cut of a 3900 s file would claim that file's duration
+    JSON across verbatim, so a short cut of a long file would claim that file's duration
     and name the bandpass as its own step. And SNIRF has no bad-channel field, so a segment
     whose sidecar does not list them reaches the next stage with none marked.
 

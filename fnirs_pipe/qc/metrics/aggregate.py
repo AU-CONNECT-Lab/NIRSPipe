@@ -12,8 +12,8 @@ import mne
 import numpy as np
 
 from fnirs_pipe.qc.metrics.coupling import (
-    _cardiac_power_metrics, _channel_distance_metrics, _intensity_metrics, _psp_metrics,
-    _sci_metrics,
+    _cardiac_power_metrics, _channel_distance_metrics, _good_frac_metrics,
+    _intensity_metrics, _psp_metrics, _sci_metrics,
 )
 from fnirs_pipe.qc.metrics.gvtd import _motion_metrics
 from fnirs_pipe.qc.metrics.haemo import (
@@ -34,6 +34,7 @@ def compute_raw_sqm(
     bad_channels: list[str],
     cardiac_l_freq: float,
     cardiac_h_freq: float,
+    good_frac_scores: dict[str, float] | None = None,
 ) -> dict[str, Any]:
     """Metrics computable from raw intensity data (no haemo required).
 
@@ -47,12 +48,15 @@ def compute_raw_sqm(
         Channel names marked bad.
     cardiac_l_freq, cardiac_h_freq : float
         Cardiac band edges in Hz.
+    good_frac_scores : dict[str, float] or None, optional
+        Per-channel share of coupled windows, as the screening already counted it. None
+        stores no such entry rather than paying for a second windowed pass.
 
     Returns
     -------
     dict
-        Flat dict of SCI, channel distance, PSP, CP, and (intensity input only)
-        CV/SNR/amplitude plus motion metrics.
+        Flat dict of SCI, channel distance, PSP, CP, the coupled-window share, and
+        (intensity input only) CV/SNR/amplitude plus motion metrics.
 
     Notes
     -----
@@ -61,6 +65,7 @@ def compute_raw_sqm(
     """
     record: dict[str, Any] = {}
     record.update(_sci_metrics(sci_scores, bad_channels))
+    record.update(_good_frac_metrics(good_frac_scores))
     record.update(_channel_distance_metrics(raw_intensity))
     record.update(_psp_metrics(raw_intensity, cardiac_l_freq, cardiac_h_freq))
     # CP works in the OD domain, so it runs for both intensity and already-OD input
