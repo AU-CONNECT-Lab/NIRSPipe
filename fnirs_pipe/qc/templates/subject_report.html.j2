@@ -61,6 +61,31 @@
 
 {% block content %}
 
+{% if condition_label %}
+{#- What this page is, said before anything else. Most of the sections below are empty on a
+    per-condition page, and an empty section with no explanation reads as a broken report. -#}
+<div class="summary-box" style="border-left:4px solid #2c7fb8;">
+  <p style="margin:0 0 0.4rem;"><strong>This page describes the condition
+    &ldquo;{{ condition_label }}&rdquo; only.</strong> Its numbers are sliced out of the
+    windowed pass the whole recording was measured with, not measured on a cut of it, so
+    they sit on the same window grid and the same filter as the run and as every other
+    condition.</p>
+  <p style="margin:0 0 0.4rem;font-size:0.86rem;color:#555;">
+    The rejected channels are the run&rsquo;s verdict, unchanged: one channel set has to
+    serve every condition, or a contrast between two conditions is also a contrast between
+    two montages. Only the metrics with a windowed series behind them can be given per
+    condition, so CV, SNR, the spike count and the GVTD threshold are absent rather than
+    zero.</p>
+  <p style="margin:0;font-size:0.86rem;color:#555;">
+    The preprocessing, epoch, topography and GLM sections below are <em>deliberately
+    empty</em> here. The epoch window is set for a trial rather than a block, so a
+    per-condition version of those panels would describe the first seconds of the condition
+    instead of the condition.
+    {% if index_href %}The full report for the whole run is
+    <a href="{{ index_href }}">{{ index_href }}</a>.{% endif %}</p>
+</div>
+{% endif %}
+
 <!-- ============================================================== summary -->
 <h2 id="Final">Summary</h2>
 <div class="summary-box">

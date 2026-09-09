@@ -104,6 +104,18 @@ def _build_parser() -> argparse.ArgumentParser:
                                "drops the remainder, which is what MNE does. Nothing can "
                                "average a single 240 s trial, so without this the epoch "
                                "figures describe the start of each block.")
+    prep_opt.add_argument("--by-condition", action="store_true",
+                          help="Also write one QC report page per annotated condition, "
+                               "beside the run's own, as desc-<condition>. Their numbers "
+                               "are sliced out of the windowed pass already in the quality "
+                               "record, so every condition sits on the same window grid and "
+                               "the same filter as the run; nothing is cut and nothing is "
+                               "measured again. Each page carries the scalar panel and the "
+                               "channel table for that condition; the epoch, topography and "
+                               "GLM panels are left blank, since the epoch window is set for "
+                               "a trial and would describe the start of a block. The rejected "
+                               "channels stay the run's, as one channel set has to serve "
+                               "every condition.")
     prep_opt.add_argument("--gvtd-censor", action="store_true",
                           help="Mark the frames GVTD flags as BAD_gvtd. The data is annotated, "
                                "never cut, so epoching drops the trials they overlap and a "

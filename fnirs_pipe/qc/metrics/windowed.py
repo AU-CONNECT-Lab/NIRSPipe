@@ -247,12 +247,33 @@ def _coupled_mask(
                        exc)
         return None, None
 
-    sci, psp = np.asarray(sci, dtype=float), np.asarray(psp, dtype=float)
+    mask = coupled_mask_from_matrices(sci, psp, sci_cutoff, psp_cutoff)
+    return (None, None) if mask is None else (mask, window_centers(times))
+
+
+def coupled_mask_from_matrices(
+    sci_matrix, psp_matrix, sci_cutoff: float, psp_cutoff: float,
+) -> "np.ndarray | None":
+    """Channel x window, True where a channel is coupled in that window. None if unusable.
+
+    ::
+
+      sci 0.85 psp 0.30 against 0.8 / 0.1  ->  True
+      sci 0.92 psp 0.04 against 0.8 / 0.1  ->  False   (movement, not coupling)
+
+    The AND is applied inside the window, which is the whole of what the screening change
+    was about, and it lives here alone so the two callers cannot drift apart: the screening
+    measures the matrices off a recording, while a per-condition view reads the ones the
+    quality record already stored. A second copy of this comparison would let a report
+    disagree with the verdict the run was screened by.
+    """
+    sci = np.asarray(sci_matrix, dtype=float)
+    psp = np.asarray(psp_matrix, dtype=float)
     if sci.shape != psp.shape or sci.ndim != 2 or sci.shape[1] == 0:
         logger.warning("windowed SCI %s and PSP %s do not share a grid; screening nothing",
                        sci.shape, psp.shape)
-        return None, None
-    return (sci >= float(sci_cutoff)) & (psp >= float(psp_cutoff)), window_centers(times)
+        return None
+    return (sci >= float(sci_cutoff)) & (psp >= float(psp_cutoff))
 
 
 def _in_scope(centers, scope) -> "np.ndarray":

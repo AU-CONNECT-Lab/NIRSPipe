@@ -958,11 +958,13 @@ def _section_channel_summary(
     errors: list,
     figures_dir: Path,
     sci_thresh: float = SCI_PASS,
+    name: str = "channel_summary.html",
 ) -> dict:
+    """``name`` so a per-condition page writes its own grid instead of overwriting the run's."""
     path, h = None, 0
     with _guard("Channel quality summary", errors, subject):
         fig = channel_quality_heatmap(sci_thresh=sci_thresh, **heatmap_args(rows))
-        path, h = _save_plotly_html(fig, figures_dir / "channel_summary.html")
+        path, h = _save_plotly_html(fig, figures_dir / name)
     return {"channel_summary_path": path, "channel_summary_h": h}
 
 
@@ -1212,6 +1214,7 @@ def build_subject_report(
     l_freq: float | None = None,
     h_freq: float | None = None,
     mode: str | None = None,
+    by_condition: bool = False,
     alff_df: "Any | None" = None,
     fc_df: "Any | None" = None,
     fc_hbr_df: "Any | None" = None,
@@ -1402,8 +1405,11 @@ def build_subject_report(
     from fnirs_pipe.qc.sqm_record import entities_of
 
     run_label_text = sqm_label or f"sub-{subject}"
-    html = render(
-        "subject_report.html.j2",
+    # figures that reach the template as loose keywords rather than inside a section dict.
+    # They live in one here so `_blanked` can empty them: passed loose, a whole-run figure
+    # survives onto a per-condition page, which is how denoise_carpet first got there.
+    loose_figure_vars = {"denoise_carpet_path": denoise_carpet_path}
+    report_vars = dict(
         **page_vars(
             title=f"fnirs-pipe QC \u2014 sub-{subject}",
             heading=f"fnirs-pipe QC Report \u2014 {run_label_text}",
@@ -1452,17 +1458,177 @@ def build_subject_report(
         **glm_vars,
         **rest_vars,
         **ch_summary_vars,
-        denoise_carpet_path=denoise_carpet_path,
+        **loose_figure_vars,
         gvtd_set=gvtd_set,
         mode=mode or "",
     )
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(html, encoding="utf-8")
+    out_path.write_text(render("subject_report.html.j2", **report_vars), encoding="utf-8")
     logger.info("sub-%s | QC report saved: %s", subject, out_path)
     logger.info("sub-%s | figures saved: %s", subject, figures_dir)
 
+    if by_condition:
+        with _guard("Per-condition reports", errors, subject):
+            _write_condition_reports(
+                report_vars,
+                section_vars=(sci_vars, motion_vars, motion_det_vars, trial_image_vars,
+                              topomap_vars, haemo_vars, channel_det_vars, psd_det_vars,
+                              brain_vars, epoch_vars, trigger_vars, trial_qc_vars,
+                              glm_vars, rest_vars, loose_figure_vars),
+                raw_intensity=raw_intensity, config=config, subject=subject,
+                out_path=out_path, out_dir=nirs_dir, sqm_label=sqm_label,
+                figures_dir=figures_dir, sci_scores=sci_scores,
+                bad_channels=bad_channels, errors=errors)
+
     _build_mne_report(subject, raw_intensity, raw_haemo, out_path, errors)
     return notes
+
+
+def _blanked(section_vars: tuple) -> dict:
+    """Every section variable emptied, keeping its type.
+
+    A per-condition page blanks by exclusion rather than listing what it shows. The other
+    way round, a section added later would keep its whole-run figure on a page whose
+    numbers describe one condition, and nothing would say so; this way a new section goes
+    blank there until somebody decides what its per-condition form is.
+
+    A string blanks to "" and not to None, even where the rest of the package spells an
+    absent figure None. Both are falsy so every ``{% if path %}`` gate behaves the same,
+    but Jinja prints None as the word "None", so an unguarded ``{{ }}`` would put it in the
+    page; "" puts nothing there. A number blanks to 0 rather than None because the markup
+    adds to the heights.
+    """
+    out: dict = {}
+    for group in section_vars:
+        for key, value in group.items():
+            out[key] = (type(value)() if isinstance(value, (list, dict, str))
+                        else 0 if isinstance(value, (int, float)) and not isinstance(value, bool)
+                        else None)
+    return out
+
+
+# Figures a per-condition page may point at whatever the condition. Only the provenance
+# graph qualifies: it describes the run's file lineage, which is the same for every
+# condition by definition. The condition's own quality grid is allowed by the label check
+# in `_figure_leaks` and deliberately not by a prefix here, since a prefix would also pass
+# a *different* condition's grid, which is worse than a run-wide figure: the page would
+# look per-condition and be the wrong condition.
+_CONDITION_PAGE_FIGURES = ("provenance.",)
+
+
+def _figure_leaks(page: dict, label_slug: str) -> "list[str]":
+    """Whole-run figures that survived onto a condition page, by value rather than by name.
+
+    `_blanked` empties the section variables it is given, so a figure passed to the template
+    some other way slips through it. That is not a hypothetical: `denoise_carpet_path` was
+    a loose keyword and appeared on every per-condition page. Checking the assembled values
+    catches the next one without anybody remembering to extend a list.
+    """
+    leaks = []
+    for key, value in page.items():
+        if not isinstance(value, str) or "figures/" not in value:
+            continue
+        name = value.rsplit("/", 1)[-1]
+        if name.startswith(f"channel_summary_{label_slug}"):
+            continue
+        if any(name.startswith(ok) for ok in _CONDITION_PAGE_FIGURES):
+            continue
+        leaks.append(f"{key}={name}")
+    return leaks
+
+
+def _write_condition_reports(
+    report_vars: dict,
+    *,
+    section_vars: tuple,
+    raw_intensity: mne.io.Raw,
+    config: "PrepConfig",
+    subject: str,
+    out_path: Path,
+    out_dir: Path | None,
+    sqm_label: str | None,
+    figures_dir: Path,
+    sci_scores: dict,
+    bad_channels: list,
+    errors: list,
+) -> None:
+    """One subject-report page per annotated condition, sliced out of the quality record.
+
+    Nothing is measured again and the recording is never cut. The record already stores the
+    channel-by-window SCI and PSP matrices, so a condition is a column selection out of the
+    pass the run made; see :mod:`fnirs_pipe.qc.condition_views`.
+
+    Each page carries the quality half only: the scalar panel and the channel table, both
+    over that condition. The response half (epochs, topographies, trial images, the GLM) is
+    blank, because the epoch figures work in a window set for a trial rather than a block
+    and would describe the first seconds of each condition rather than the condition. The
+    channel set is the run's throughout, since one set has to serve every condition.
+    """
+    from fnirs_pipe.qc.condition_views import (
+        condition_scalars, condition_slices_from_record, slice_record,
+    )
+    from fnirs_pipe.qc.hyper_report import condition_windows
+    from fnirs_pipe.qc.metrics import resolve_cutoffs
+    from fnirs_pipe.qc.metrics.windowed import SCREEN_WINDOW_S, condition_window_means
+
+    if out_dir is None or sqm_label is None:
+        logger.warning("sub-%s | no quality record location; no per-condition pages", subject)
+        return
+    windows = condition_windows(raw_intensity, min_duration=2 * SCREEN_WINDOW_S)
+    if not windows:
+        logger.info("sub-%s | no annotation holds two screening windows; no per-condition "
+                    "pages", subject)
+        return
+    record = json.loads(_sqm_record_path(out_dir, sqm_label).read_text(encoding="utf-8"))
+    cutoffs = resolve_cutoffs(config)
+    ch_names = list(((record.get("per_channel") or {}).get("raw") or {})
+                    .get("sci_per_channel") or {})
+    sliced_all = condition_slices_from_record(
+        record, ch_names, windows, cutoffs["sci"], cutoffs["psp"])
+    if not sliced_all:
+        return
+
+    gvtd = (record.get("windowed") or {})
+    gvtd_by_cond = condition_window_means(
+        gvtd.get("gvtd_per_window") or [], gvtd.get("gvtd_window_times_s") or [], windows
+    ) if gvtd.get("gvtd_per_window") else {}
+
+    blanked = _blanked(section_vars)
+    for label, sliced in sliced_all.items():
+        cond_record = slice_record(record, sliced)
+        rows = channel_rows(cond_record, sci_scores, bad_channels)
+        cells = format_rows(rows, cutoffs["sci"], psp_threshold=cutoffs["psp"])
+        scalars = condition_scalars(
+            sliced, None if label not in gvtd_by_cond else float(gvtd_by_cond[label]))
+        summary = _section_channel_summary(
+            rows, subject, errors, figures_dir, cutoffs["sci"],
+            name=f"channel_summary_{_pair_fname(label)}.html")
+        stem = f"{out_path.stem.removesuffix('_qc')}_desc-{_pair_fname(label)}_qc"
+        page = {
+            **report_vars, **blanked, **summary,
+            "sqm": scalars,
+            "channel_rows": rows,
+            "channel_cells": cells,
+            "channel_blocks": separation_blocks(cells),
+            # no All / Long / Short columns: each would need its own slice, and the run's
+            # split is one page away
+            "sqm_all": {}, "sqm_long": {}, "sqm_short": {},
+            "hb_all": {}, "hb_long": {}, "hb_short": {},
+            "sqm_split": False, "hb_split": False,
+            "heading": f"{report_vars.get('heading', '')} \u2014 {label}",
+            "condition_label": label,
+            "index_href": out_path.name,
+        }
+        leaks = _figure_leaks(page, _pair_fname(label))
+        if leaks:
+            # loud rather than silent: a run-wide figure under per-condition numbers reads
+            # as that condition's, and nothing on the page would say otherwise
+            logger.warning("sub-%s | condition %s still points at run-wide figures (%s); "
+                           "they are being dropped", subject, label, ", ".join(leaks))
+            page = {**page, **{k.split("=")[0]: None for k in leaks}}
+        out = out_path.with_name(f"{stem}.html")
+        out.write_text(render("subject_report.html.j2", **page), encoding="utf-8")
+        logger.info("sub-%s | condition %s \u2192 %s", subject, label, out.name)
 
 
 

@@ -330,3 +330,85 @@ def _condition_sci_psp(build, sci_pc, psp_pc, bad_channels, sci_threshold, serie
         psp_win_times=None if psp_times is None else np.asarray(psp_times)[keep],
     )
     return {"figure": fig.to_dict()}
+
+
+def condition_slices_from_record(
+    record: dict,
+    ch_names: "list[str]",
+    windows: "list[tuple[str, float, float]]",
+    sci_cutoff: float,
+    psp_cutoff: float,
+) -> "dict[str, dict[str, dict[str, float]]]":
+    """Per-condition per-channel metrics read out of a quality record, nothing recomputed.
+
+    ::
+
+      {"game1": {"sci_per_channel": {...}, "psp_per_channel": {...},
+                 "good_frac_per_channel": {...}}, ...}
+
+    The record's ``windowed`` section already stores the channel-by-window SCI and PSP
+    matrices and their window bounds, so a condition is a column selection out of what the
+    run measured once. This is the whole reason the subject report can go per condition
+    without touching the recording again.
+
+    The coupled-window share is rebuilt here rather than read, because the record stores
+    only its whole-run value. It goes through
+    :func:`~fnirs_pipe.qc.metrics.windowed.coupled_mask_from_matrices`, the same AND the
+    screening applied, so a condition's share cannot disagree with the verdict the run was
+    screened by. Both cutoffs have to be the run's own; passing anything else produces a
+    number no channel was judged against.
+
+    Returns an empty dict when the record predates the stored matrices, which is the honest
+    answer: the values cannot be recovered from the whole-run scalars.
+    """
+    from fnirs_pipe.qc.metrics.windowed import (
+        condition_window_means, coupled_mask_from_matrices,
+    )
+
+    windowed = record.get("windowed") or {}
+    sci_matrix, psp_matrix = windowed.get("sci_matrix"), windowed.get("psp_matrix")
+    sci_times, psp_times = windowed.get("sci_times"), windowed.get("psp_times")
+    if not sci_matrix or sci_times is None:
+        logger.warning("the quality record carries no windowed matrices, so no "
+                       "per-condition view can be built from it")
+        return {}
+
+    def _named(vals) -> "dict[str, float]":
+        return {ch: float(vals[i]) for i, ch in enumerate(ch_names) if i < len(vals)}
+
+    out: dict[str, dict[str, dict[str, float]]] = {}
+    sci_by_cond = condition_window_means(sci_matrix, sci_times, windows)
+    psp_by_cond = ({} if not psp_matrix or psp_times is None
+                   else condition_window_means(psp_matrix, psp_times, windows))
+    mask = coupled_mask_from_matrices(sci_matrix, psp_matrix, sci_cutoff, psp_cutoff) \
+        if psp_matrix else None
+    frac_by_cond = ({} if mask is None
+                    else condition_window_means(mask.astype(float), sci_times, windows))
+
+    for window in windows:
+        label = window[0]
+        if label not in sci_by_cond:
+            continue
+        out[label] = {
+            "sci_per_channel": _named(sci_by_cond[label]),
+            "psp_per_channel": _named(psp_by_cond[label]) if label in psp_by_cond else {},
+            "good_frac_per_channel": (_named(frac_by_cond[label])
+                                      if label in frac_by_cond else {}),
+        }
+    return out
+
+
+def condition_scalars(sliced: "dict[str, dict[str, float]]",
+                      gvtd_mean: "float | None" = None) -> "dict[str, float | None]":
+    """The scalars a condition's panel prints, averaged over the channels it has.
+
+    Only the four with a windowed series behind them, see :data:`COND_SCALAR_KEYS`. A key
+    the condition has no values for comes back None, which the metric registry prints as a
+    dash rather than as a zero.
+    """
+    return {
+        "sci_mean":       _mean_or_none((sliced.get("sci_per_channel") or {}).values()),
+        "psp_mean":       _mean_or_none((sliced.get("psp_per_channel") or {}).values()),
+        "good_frac_mean": _mean_or_none((sliced.get("good_frac_per_channel") or {}).values()),
+        "gvtd_mean":      gvtd_mean,
+    }

@@ -462,6 +462,9 @@ def _emit_subject_report(subject, sub_dir, last_raw, last_result, prep_config, a
         l_freq=high_pass,
         h_freq=low_pass,
         mode=_v(args.get("mode")) if args.get("mode") else None,
+        # read straight off args like `mode`, deliberately not through either PrepConfig
+        # splat: this is a report option and PrepConfig has no field for it
+        by_condition=bool(args.get("by_condition")),
         alff_df=alff_df,
         fc_df=fc_df,
         fc_hbr_df=fc_hbr_df,
