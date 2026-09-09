@@ -463,7 +463,8 @@ def compute_wtc_pseudo(
     mask_coi: bool = False,
     ch_type: str = "hbo",
     sep_bands=None,
-) -> pd.DataFrame:
+    windows: "list[tuple[str, float, float]] | None" = None,
+) -> "tuple[pd.DataFrame, pd.DataFrame | None]":
     """Pseudo-dyad band means: WTC against a phase-scrambled partner, averaged over ``n_iter``.
 
     One subject's signals are replaced by surrogates and the whole pairwise WTC is rerun, once
@@ -480,6 +481,16 @@ def compute_wtc_pseudo(
 
     ``ch_type`` runs the null on one chromophore, and has to match the real table it is
     compared against: a null computed on HbO says nothing about an HbR coupling.
+
+    ``windows`` is ``[(label, tstart, tstop)]``, and turns the second return value into a
+    per-condition null with a ``condition`` column. Each window is read off the same
+    whole-run transform the whole-run table is averaged from, by :func:`window_result`, so
+    one pass of ``n_iter`` transforms produces both tables and the null is windowed exactly
+    the way the real table it is compared against was.
+
+    A whole-run null against a windowed real table is anticonservative on the short windows,
+    because a long record's surrogate coherence is lower than a short window's. Passing
+    ``windows`` is what removes that.
     """
     if n_iter < 1:
         raise ValueError(f"n_iter must be at least 1, got {n_iter}")
@@ -502,6 +513,7 @@ def compute_wtc_pseudo(
     rng = np.random.default_rng(seed)
 
     frames: list[pd.DataFrame] = []
+    cond_frames: list[pd.DataFrame] = []
     for i in range(n_iter):
         signals = dict(true_signals)
         signals[scrambled_id] = {
@@ -512,10 +524,33 @@ def compute_wtc_pseudo(
             raws, signals, fmin, fmax, significance=False, seed=None,
             cross=cross, limit_scales=limit_scales)
         frames.append(wtc_band_mean(result, band_fmin, band_fmax, mask_coi=mask_coi))
+        # windowed off this iteration's own transform, never recomputed on the cut: the
+        # real table is windowed the same way, and a null built differently from the table
+        # it is subtracted from measures the difference between the two routes
+        for label, tstart, tstop in (windows or []):
+            part = wtc_band_mean(window_result(result, tstart, tstop),
+                                 band_fmin, band_fmax, mask_coi=mask_coi)
+            part.insert(0, "condition", label)
+            cond_frames.append(part)
         if (i + 1) % 10 == 0:
             logger.info("pseudo-dyad WTC: %d/%d iterations", i + 1, n_iter)
 
     keys = ["sub1", "sub2", "label"] + (["label2"] if "label2" in frames[0].columns else [])
+    out = _average_iterations(frames, keys)
+    by_cond = _average_iterations(cond_frames, ["condition"] + keys) if cond_frames else None
+    return out, by_cond
+
+
+def _average_iterations(frames: "list[pd.DataFrame]", keys: "list[str]") -> pd.DataFrame:
+    """Mean of one band-mean table over the iterations that produced it, plus its Fisher z.
+
+    ::
+
+      [iter1 rows, iter2 rows], ["sub1", "sub2", "label"]  ->  one row per channel pair
+
+    ``coherence_z`` is taken from the averaged coherence rather than averaged itself, which
+    is what the whole-run null did before there was a second table to keep consistent.
+    """
     stacked = pd.concat(frames, ignore_index=True)
     out = (stacked.groupby(keys, sort=False)
                   .agg(coherence=("coherence", "mean"),

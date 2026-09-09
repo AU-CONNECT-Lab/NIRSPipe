@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- **The pseudo-dyad null follows `--wtc-by-condition`.** It was computed on the whole recording however the real table was read, so a short condition was tested against a null built from a longer stretch and looked further above chance than it was. The null now uses the same windows and lands in its own table, at no extra iterations
 - **`fnirs-prep crop` can cut a processed stage instead of a recording**, with `--input-desc`. Cutting a recording into one condition per file first means motion correction and the bandpass each see only one condition, which on a 300 s condition moves them by 23% and 10 to 17%; padding the crop fixes only the bandpass. Preprocessing the whole recording and cutting the result avoids both. A cut of a stage keeps that stage's `desc-` entity, its bandpass and its bad-channel marks
 
 ### Changed

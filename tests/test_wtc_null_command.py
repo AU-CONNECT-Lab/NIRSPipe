@@ -62,7 +62,7 @@ def test_the_sidecar_records_the_iteration_count_and_the_shape(tmp_path, monkeyp
 
     frame = pd.DataFrame({"sub1": ["a"], "sub2": ["b"], "label": ["S1_D1"],
                           "coherence": [0.3], "coherence_z": [0.31], "n_valid_frac": [1.0]})
-    monkeypatch.setattr(hyper, "compute_wtc_pseudo", lambda *a, **k: frame)
+    monkeypatch.setattr(hyper, "compute_wtc_pseudo", lambda *a, **k: (frame, None))
 
     # a real raw even though the WTC itself is stubbed: the sidecar reads the wavelet grid
     # off the recordings, so an empty map has no sampling rate to report
@@ -91,7 +91,7 @@ def test_the_null_tags_each_chromophore_without_mutating_the_frame(tmp_path, mon
     frame = pd.DataFrame({"sub1": ["a"], "sub2": ["b"], "label": ["S1_D1"],
                           "coherence": [0.3], "coherence_z": [0.31],
                           "n_valid_frac": [1.0]})
-    monkeypatch.setattr(hyper, "compute_wtc_pseudo", lambda *a, **k: frame)
+    monkeypatch.setattr(hyper, "compute_wtc_pseudo", lambda *a, **k: (frame, None))
 
     raws = {"a": make_raw(n_ch=1), "b": make_raw(n_ch=1)}
     out = wtc_null.write_wtc_null(
@@ -110,7 +110,7 @@ def test_one_chromophore_writes_one_set_of_rows(tmp_path, monkeypatch, make_raw)
     frame = pd.DataFrame({"sub1": ["a"], "sub2": ["b"], "label": ["S1_D1"],
                           "coherence": [0.3], "coherence_z": [0.31],
                           "n_valid_frac": [1.0]})
-    monkeypatch.setattr(hyper, "compute_wtc_pseudo", lambda *a, **k: frame)
+    monkeypatch.setattr(hyper, "compute_wtc_pseudo", lambda *a, **k: (frame, None))
 
     raws = {"a": make_raw(n_ch=1), "b": make_raw(n_ch=1)}
     out = wtc_null.write_wtc_null(
@@ -216,3 +216,79 @@ def test_the_reminder_counts_what_the_merge_would_take(tmp_path, capsys):
     out = capsys.readouterr().out
     assert "1 wtc table(s)" in out
     assert "1 wtc-pseudo table(s)" in out
+
+
+# ---- the per-condition null ----
+
+def _null_frames():
+    whole = pd.DataFrame({"sub1": ["a"], "sub2": ["b"], "label": ["S1_D1"],
+                          "coherence": [0.3], "coherence_z": [0.31], "n_valid_frac": [1.0]})
+    by_cond = pd.DataFrame({"condition": ["rest", "talk"], "sub1": ["a", "a"],
+                            "sub2": ["b", "b"], "label": ["S1_D1", "S1_D1"],
+                            "coherence": [0.35, 0.28], "coherence_z": [0.36, 0.29],
+                            "n_valid_frac": [1.0, 1.0]})
+    return whole, by_cond
+
+
+def test_windows_add_a_second_table_beside_the_whole_run_one(tmp_path, monkeypatch, make_raw):
+    """Two files rather than one, mirroring the real side, where the whole-run and
+    per-condition tables are also merged separately."""
+    import fnirs_pipe.pipeline.hyperscanning as hyper
+    from fnirs_pipe.qc import wtc_null
+
+    whole, by_cond = _null_frames()
+    monkeypatch.setattr(hyper, "compute_wtc_pseudo", lambda *a, **k: (whole, by_cond))
+
+    raws = {"a": make_raw(n_ch=1), "b": make_raw(n_ch=1)}
+    out = wtc_null.write_wtc_null(
+        group_id="d01", task="full", aligned_raws=raws, output_dir=tmp_path,
+        n_iter=2, chroma=("hbo",), windows=[("rest", 0.0, 30.0), ("talk", 30.0, 60.0)])
+
+    assert out.name == "group-d01_task-full_hyper-wtc-pseudo.tsv"
+    cond_path = out.with_name("group-d01_task-full_hyper-wtcbycond-pseudo.tsv")
+    assert cond_path.exists()
+    df = pd.read_csv(cond_path, sep="\t")
+    assert list(df.columns[:2]) == ["chromophore", "condition"]
+    assert set(df["condition"]) == {"rest", "talk"}
+
+
+def test_the_windowed_sidecar_names_the_conditions(tmp_path, monkeypatch, make_raw):
+    """Without them a table of five conditions and a table of two read the same on disk."""
+    import fnirs_pipe.pipeline.hyperscanning as hyper
+    from fnirs_pipe.qc import wtc_null
+
+    whole, by_cond = _null_frames()
+    monkeypatch.setattr(hyper, "compute_wtc_pseudo", lambda *a, **k: (whole, by_cond))
+
+    raws = {"a": make_raw(n_ch=1), "b": make_raw(n_ch=1)}
+    out = wtc_null.write_wtc_null(
+        group_id="d01", task="full", aligned_raws=raws, output_dir=tmp_path,
+        n_iter=2, chroma=("hbo",), windows=[("rest", 0.0, 30.0), ("talk", 30.0, 60.0)])
+
+    cond_path = out.with_name("group-d01_task-full_hyper-wtcbycond-pseudo.tsv")
+    params = json.loads(cond_path.with_suffix(".json").read_text())["parameters"]
+    assert params["conditions"] == ["rest", "talk"]
+    assert params["n_iter"] == 2
+
+
+def test_no_windows_writes_only_the_whole_run_table(tmp_path, monkeypatch, make_raw):
+    import fnirs_pipe.pipeline.hyperscanning as hyper
+    from fnirs_pipe.qc import wtc_null
+
+    whole, _ = _null_frames()
+    monkeypatch.setattr(hyper, "compute_wtc_pseudo", lambda *a, **k: (whole, None))
+
+    raws = {"a": make_raw(n_ch=1), "b": make_raw(n_ch=1)}
+    out = wtc_null.write_wtc_null(
+        group_id="d01", task="full", aligned_raws=raws, output_dir=tmp_path,
+        n_iter=1, chroma=("hbo",))
+
+    assert not out.with_name("group-d01_task-full_hyper-wtcbycond-pseudo.tsv").exists()
+
+
+def test_the_per_condition_null_is_its_own_merge_kind():
+    """Merging it into the whole-run null would average five conditions into one row."""
+    from fnirs_pipe.qc.wtc_aggregate import _KINDS
+
+    assert _KINDS["wtcbycond-pseudo"] == "group_hyper_wtc_bycondition_pseudo"
+    assert _KINDS["wtc-pseudo"] != _KINDS["wtcbycond-pseudo"]

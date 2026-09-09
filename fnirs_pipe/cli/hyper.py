@@ -218,7 +218,7 @@ def cmd_run(
 
     from fnirs_pipe.io.derivatives import group_report_dir
     from fnirs_pipe.pipeline.hyperscanning import resolve_group_bands, write_group_bads
-    from fnirs_pipe.qc.hyper_report import build_hyper_post_report
+    from fnirs_pipe.qc.hyper_report import build_hyper_post_report, condition_windows
     from fnirs_pipe.qc.metrics._helpers import bands_to_record
     from fnirs_pipe.qc.wtc_null import write_wtc_null
     from fnirs_pipe.utils.run_record import write_group_run_record
@@ -255,6 +255,11 @@ def cmd_run(
             return None
         bad_channels = {sid: sqm.get("bad_channels", []) for sid, sqm in group_sqm.items()}
         write_group_bads(output_dir, members, group_sqm, bads_scope)
+        # resolved here rather than twice downstream: the report and the null have to agree
+        # on the windows or their tables cannot be subtracted row by row
+        ref = next(iter(aligned_raws.values()), None)
+        cond_windows = (condition_windows(ref, min_duration=1.0 / wtc_fmin)
+                        if wtc_by_condition and ref is not None else [])
         report_path = build_hyper_post_report(
             group_id=gid,
             task=task,
@@ -274,6 +279,7 @@ def cmd_run(
             wtc_mc_count=wtc_mc_count,
             wtc_channel_cross=wtc_channel_cross,
             wtc_by_condition=wtc_by_condition,
+            cond_windows=cond_windows,
             wtc_limit_scales=wtc_limit_scales,
             wtc_save_maps=wtc_save_maps,
             wtc_mask_coi=wtc_mask_coi,
@@ -300,6 +306,7 @@ def cmd_run(
                 mask_coi=wtc_mask_coi,
                 chroma=chroma,
                 sep_bands=sep_bands,
+                windows=cond_windows,
             )
             print(f"     null   -> {null_path}")
 
@@ -488,7 +495,11 @@ def _build_parser() -> argparse.ArgumentParser:
                           "published work uses). Coherence between two unrelated recordings "
                           "is not zero, so this is what a real value is read against. Omit "
                           "it and no null is computed: each iteration costs a full WTC run, "
-                          "so this is the expensive half of a hyper run.")
+                          "so this is the expensive half of a hyper run. With "
+                          "--wtc-by-condition the null follows the same windows and lands in "
+                          "a second table, at no extra transform: a short condition tested "
+                          "against a whole-record null looks further above chance than it "
+                          "is.")
     run.add_argument("--wtc-pseudo-cross", action="store_true",
                      help="Cross the channels for the null too. Deliberately separate from "
                           "--wtc-channel-cross: crossing squares the pair count, and the null "

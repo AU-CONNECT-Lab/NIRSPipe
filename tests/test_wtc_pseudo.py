@@ -186,3 +186,77 @@ def test_a_group_of_three_is_refused_rather_than_half_scrambled():
 
     with pytest.raises(ValueError, match="exactly 2 subjects"):
         compute_wtc_pseudo({"s1": None, "s2": None, "s3": None}, 0.06, 0.15, n_iter=1)
+
+
+# ---- the null follows the windows the real table was read at ----
+#
+# A whole-run null against a per-condition real table is anticonservative on the short
+# conditions: a long record's surrogate coherence is lower than a short window's, so the
+# real value looks further above chance than it is. These pin that the null is windowed off
+# the same transform rather than recomputed on the cut, which is the same decision
+# `window_result` records for the real side.
+
+def _ramp_map(first_half, second_half):
+    """A map that is `first_half` over the first half of TIMES and `second_half` over the rest.
+
+    Flat in frequency, so a band mean over any window is just the value that window holds.
+    """
+    wtc = np.empty((len(FREQS), len(TIMES)))
+    mid = len(TIMES) // 2
+    wtc[:, :mid] = float(first_half)
+    wtc[:, mid:] = float(second_half)
+    return {"wtc": wtc, "coi": np.full(len(TIMES), 1e6),
+            "phase": np.zeros_like(wtc), "sig": None}
+
+
+@pytest.fixture
+def stub_pseudo(monkeypatch):
+    """compute_wtc_pseudo with the transform and the channel picking replaced.
+
+    Neither is what these tests are about, and stubbing both keeps them exact: the map is
+    fixed, so every number below is arithmetic rather than a coherence estimate.
+    """
+    from fnirs_pipe.pipeline import synchrony
+
+    result = _result({"S1_D1": _ramp_map(0.2, 0.8)})
+    monkeypatch.setattr(synchrony, "_long_signals",
+                        lambda raw, ch_type, sep_bands: {"S1_D1": np.arange(8.0)})
+    monkeypatch.setattr(synchrony, "_wtc_over_pairs", lambda *a, **k: result)
+    return synchrony
+
+
+def test_no_windows_leaves_the_second_table_unbuilt(stub_pseudo):
+    whole, by_cond = stub_pseudo.compute_wtc_pseudo(
+        {"s1": None, "s2": None}, 0.02, 0.30, n_iter=1)
+    assert by_cond is None
+    assert whole["coherence"].iloc[0] == pytest.approx(0.5)
+
+
+def test_a_window_spanning_the_record_reproduces_the_whole_run_number(stub_pseudo):
+    """The one identity that says "windowed, not recomputed": a window over everything is
+    the whole run. Recomputing on a cut would not give this back, because a cut has edges
+    of its own."""
+    whole, by_cond = stub_pseudo.compute_wtc_pseudo(
+        {"s1": None, "s2": None}, 0.02, 0.30, n_iter=1,
+        windows=[("all", float(TIMES[0]), float(TIMES[-1]))])
+    assert by_cond["condition"].tolist() == ["all"]
+    assert by_cond["coherence"].iloc[0] == pytest.approx(whole["coherence"].iloc[0])
+
+
+def test_each_window_gets_its_own_null_level(stub_pseudo):
+    mid = float(TIMES[len(TIMES) // 2])
+    _, by_cond = stub_pseudo.compute_wtc_pseudo(
+        {"s1": None, "s2": None}, 0.02, 0.30, n_iter=2,
+        windows=[("early", float(TIMES[0]), mid - 1e-9),
+                 ("late", mid, float(TIMES[-1]))])
+    levels = dict(zip(by_cond["condition"], by_cond["coherence"]))
+    assert levels["early"] == pytest.approx(0.2)
+    assert levels["late"] == pytest.approx(0.8)
+
+
+def test_the_windowed_null_carries_the_same_columns_as_the_whole_run_one(stub_pseudo):
+    """So a real per-condition table and this one subtract cell by cell, `condition` aside."""
+    whole, by_cond = stub_pseudo.compute_wtc_pseudo(
+        {"s1": None, "s2": None}, 0.02, 0.30, n_iter=1,
+        windows=[("all", float(TIMES[0]), float(TIMES[-1]))])
+    assert list(by_cond.columns) == ["condition"] + list(whole.columns)

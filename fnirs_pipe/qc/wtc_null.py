@@ -37,6 +37,7 @@ def write_wtc_null(
     mask_coi: bool = False,
     chroma: "tuple[str, ...] | list[str]" = ("hbo", "hbr"),
     sep_bands=None,
+    windows: "list[tuple[str, float, float]] | None" = None,
 ) -> Path:
     """Run the phase-scrambled null for one dyad and write its band means beside the real ones.
 
@@ -48,6 +49,12 @@ def write_wtc_null(
     ``chroma`` has to cover the real run's chromophores: a null computed on HbO says nothing
     about an HbR coupling, so a table missing one chromophore leaves that half of the real
     table with nothing to be tested against.
+
+    ``windows`` adds a second table, ``...hyper-wtcbycond-pseudo.tsv``, with a ``condition``
+    column: the null for what ``--wtc-by-condition`` wrote. It mirrors the real side, where
+    the whole-run and per-condition tables are also two files merged separately. Both come
+    out of one pass of ``n_iter`` transforms. Returns the whole-run path either way; the
+    per-condition one sits beside it.
     """
     from fnirs_pipe.io.derivatives import group_data_dir
     from fnirs_pipe.pipeline.hyperscanning import _hyper_sidecar, compute_wtc_pseudo
@@ -65,30 +72,42 @@ def write_wtc_null(
         "Pseudo-dyad WTC: %d phase-scrambled iterations, %s pairs, one full WTC run each, "
         "per chromophore (%s).",
         n_iter, "crossed" if cross else "homologous", "+".join(chroma))
-    frames = []
+    frames, cond_frames = [], []
     for ch_type in chroma:
-        part = compute_wtc_pseudo(
+        part, cond_part = compute_wtc_pseudo(
             aligned_raws, band_fmin, band_fmax, n_iter=n_iter,
             fmin=wtc_fmin, fmax=wtc_fmax, seed=seed, cross=cross,
             limit_scales=limit_scales, mask_coi=mask_coi, ch_type=ch_type,
-            sep_bands=sep_bands)
+            sep_bands=sep_bands, windows=windows)
         # tagged after the averaging, which groups on the columns it knows and drops the
         # rest, and on a copy, since the frame is not ours to mutate
         part = part.copy()
         part.insert(0, "chromophore", ch_type)
         frames.append(part)
-    df = pd.concat(frames, ignore_index=True)
+        if cond_part is not None:
+            cond_part = cond_part.copy()
+            cond_part.insert(0, "chromophore", ch_type)
+            cond_frames.append(cond_part)
 
-    out_path = (group_data_dir(output_dir, group_id)
-                / f"group-{group_id}_task-{task}_hyper-wtc-pseudo.tsv")
-    df.to_csv(out_path, sep="\t", index=False)
-    _hyper_sidecar(
-        out_path, "hyper_wtc_pseudo",
-        [p for p in (path_from(r) for r in aligned_raws.values()) if p],
+    sources = [p for p in (path_from(r) for r in aligned_raws.values()) if p]
+    params = dict(
         band_fmin=band_fmin, band_fmax=band_fmax, mask_coi=mask_coi,
         wtc_fmin=wtc_fmin, wtc_fmax=wtc_fmax, n_iter=n_iter, cross=cross, seed=seed,
-        chroma=list(chroma),
-        **wtc_grid_params(aligned_raws),
+        chroma=list(chroma), **wtc_grid_params(aligned_raws),
     )
+    data_dir = group_data_dir(output_dir, group_id)
+    stem = f"group-{group_id}_task-{task}_hyper"
+
+    out_path = data_dir / f"{stem}-wtc-pseudo.tsv"
+    pd.concat(frames, ignore_index=True).to_csv(out_path, sep="\t", index=False)
+    _hyper_sidecar(out_path, "hyper_wtc_pseudo", sources, **params)
     logger.info("Pseudo-dyad WTC band means saved: %s", out_path)
+
+    if cond_frames:
+        cond_path = data_dir / f"{stem}-wtcbycond-pseudo.tsv"
+        pd.concat(cond_frames, ignore_index=True).to_csv(cond_path, sep="\t", index=False)
+        _hyper_sidecar(cond_path, "hyper_wtc_bycondition_pseudo", sources,
+                       conditions=[w[0] for w in (windows or [])], **params)
+        logger.info("Pseudo-dyad WTC per condition saved: %s", cond_path)
+
     return out_path

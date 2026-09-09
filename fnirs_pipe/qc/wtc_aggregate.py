@@ -36,6 +36,8 @@ _KINDS = {
     # `condition` column and are merged separately, never into the whole-run table
     "wtcbycond":          "group_hyper_wtc_bycondition",
     "wtcbycond-roichan":  "group_hyper_wtc_bycondition_roichan",
+    # the null for the pair above, windowed off the same transform they are
+    "wtcbycond-pseudo":   "group_hyper_wtc_bycondition_pseudo",
 }
 
 
@@ -123,9 +125,9 @@ def aggregate_wtc(output_dir: Path, kind: str = "wtc") -> pd.DataFrame:
     """Concatenate every per-dyad WTC band-mean table under output_dir.
 
     kind is "wtc" for the channel-level tables, "wtc-roichan" for the ROI-level ones,
-    "wtc-pseudo" for the phase-scrambled null, or the "wtcbycond" pair for what
-    ``--wtc-by-condition`` wrote. Returns an empty frame when nothing matches, so a study
-    that never ran WTC is not an error.
+    "wtc-pseudo" for the phase-scrambled null, or the "wtcbycond" trio for what
+    ``--wtc-by-condition`` wrote, its ROI means and its own null. Returns an empty frame
+    when nothing matches, so a study that never ran WTC is not an error.
     """
     if kind not in _KINDS:
         raise ValueError(f"kind must be one of {sorted(_KINDS)}, got {kind!r}")

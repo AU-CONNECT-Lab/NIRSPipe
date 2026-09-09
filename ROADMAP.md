@@ -100,7 +100,7 @@ a bare-MNE run of the same chain. Reports are kept with the project notes outsid
 
 - **Spline motion correction** — still raises `NotImplementedError`; TDDR and wavelet are implemented ([pipeline/motion.py](fnirs_pipe/pipeline/motion.py))
 - **External regressors in confound regression** — accept extra nuisance regressors alongside the short-channel ones, e.g. accelerometer traces from the SNIRF `aux` group. The two blocks are not orthogonal, so measure the collinearity before choosing between joint regression and a tCCA-style orthogonalisation ([pipeline/glm.py](fnirs_pipe/pipeline/glm.py))
-- **Preprocess the whole recording, then split by condition** — cropping into one file per condition first leaves every stage seeing only its own segment, which changes what motion correction and the bandpass do. Whether confound regression should stay per condition is still open ([cli/prep.py](fnirs_pipe/cli/prep.py), [pipeline/post_pipeline.py](fnirs_pipe/pipeline/post_pipeline.py))
+- **Window the pseudo-dyad null by condition** — `--wtc-by-condition` reads each condition out of the whole-record coherence, but the phase-scrambled null it is compared against is still built from the whole recording. A short condition is therefore judged against a narrower spread than its own length warrants, which is anticonservative. `compute_wtc_pseudo` returns band means rather than maps, so it has to be told the window rather than windowed afterwards ([pipeline/synchrony.py](fnirs_pipe/pipeline/synchrony.py))
 
 ### QC enhancements
 

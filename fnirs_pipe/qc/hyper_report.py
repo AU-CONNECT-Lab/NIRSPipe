@@ -365,6 +365,7 @@ def build_hyper_post_report(
     isc_threshold: float = 0.3,
     sci_threshold: float = SCI_PASS,
     sep_bands=None,
+    cond_windows: "list[tuple[str, float, float]] | None" = None,
 ) -> Path:
     """Build hyperscanning post-QC report.
 
@@ -391,6 +392,11 @@ def build_hyper_post_report(
     gets its own figures. See :func:`condition_windows` for how a window is decided, and note
     that the runtime is roughly doubled: the windows together are about one more pass over
     the recording.
+
+    ``cond_windows`` supplies those windows instead of resolving them here. The caller passes
+    the same list to the pseudo-dyad null, and the two tables can only be subtracted row by
+    row if they describe the same windows. Left at None the windows are resolved here, which
+    is what a caller that writes no null wants.
 
     ``wtc_mask_coi`` restricts each band mean to the cone of influence. Off by default; the
     share inside the cone is reported either way as ``n_valid_frac``.
@@ -533,10 +539,12 @@ def build_hyper_post_report(
             roi_rows.append({"roi": "Unassigned", "channels": unassigned})
 
     # the task windows are a property of the annotations, not of the chromophore
-    cond_windows: list[tuple[str, float, float]] = []
-    if wtc_by_condition:
-        cond_windows = (condition_windows(ref_raw, min_duration=1.0 / wtc_fmin)
-                        if ref_raw else [])
+    if not wtc_by_condition:
+        cond_windows = []
+    else:
+        if cond_windows is None:
+            cond_windows = (condition_windows(ref_raw, min_duration=1.0 / wtc_fmin)
+                            if ref_raw else [])
         if not cond_windows:
             note(notes, scope,
                  "--wtc-by-condition asked for, but no annotation window is long enough "
