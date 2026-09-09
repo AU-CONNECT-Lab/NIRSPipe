@@ -1,29 +1,40 @@
 """Metrics whose answer can be worked out by hand, checked against the hand-worked answer.
 
-These four have no library between the input and the output, so a closed-form input pins
-them exactly rather than approximately. That matters most for `_gcor`, whose value on
+Most of these have no library between the input and the output, so a closed-form input
+pins them exactly rather than approximately. That matters most for `_gcor`, whose value on
 uncorrelated channels is not the 0 an intuition about "no correlation" suggests: the
 statistic averages *normalised* channels and then squares the norm, so n mutually
 orthogonal channels give exactly 1/n. A test written against 0 would fail on correct code,
 and a test written against "small" would pass on a version that had lost the normalisation.
 
-The two GVTD sections at the end are deterministic rather than closed form, and they say so
-where they start: a bandpass sits between their input and their output. They are here for
-the determinism, since neither needs a recording or a seed.
+The GVTD sections are deterministic rather than closed form, and they say so where they
+start: a bandpass sits between the censoring input and its output, and a histogram between
+the threshold's. They are here for the determinism, since none of them needs a recording
+or a seed.
+
+Three of the sections carry a **negative control** rather than only a positive assertion,
+because each function exists to beat a simpler statistic that would pass a naive test:
+`gvtd_threshold` against mean + n*std, `_spike_mask` against a std threshold, and `_gcor`
+against the 0 an unnormalised version would give. The control is what stops the test from
+passing on the simpler thing.
 """
 
 import mne
 import numpy as np
+import pandas as pd
 import pytest
 from numpy.testing import assert_allclose
 
+from fnirs_pipe.pipeline.restingstate import fisher_z
 from fnirs_pipe.qc.metrics import (
     _gcor,
     _mask_to_segments,
+    _spike_mask,
     channel_cv,
     channel_snr,
     gvtd_censor_spans,
     gvtd_channel_picks,
+    gvtd_threshold,
     long_short_channels,
 )
 
@@ -274,3 +285,132 @@ def test_a_normal_montage_picks_the_long_channels_and_keeps_the_label():
     # the short channels are on this montage and stay out of the pick: the set is the long
     # channels, and there is no longer an input that can widen it
     assert not set(short_names) & set(gvtd_channel_picks(normal)[0])
+
+
+# ---- Fisher r-to-z ----
+
+def test_the_transform_is_arctanh():
+    z = fisher_z(pd.DataFrame([[0.0, 0.5], [-0.5, 0.0]]))
+    assert_allclose(z.to_numpy()[0, 1], 0.5493061443340549, atol=1e-15)
+    assert_allclose(z.to_numpy()[1, 0], -0.5493061443340549, atol=1e-15)
+
+
+def test_a_perfect_correlation_is_clipped_rather_than_infinite():
+    """arctanh(1) diverges, and one perfect pair would take a whole group mean with it.
+    The clip is what makes r = 1 and r = 0.999999 the same finite number."""
+    z = fisher_z(pd.DataFrame([[1.0, 1.0], [-1.0, 1.0]]))
+    assert np.isfinite(z.to_numpy()).all()
+    assert_allclose(z.to_numpy()[1, 0], -7.254328619247669, atol=1e-12)
+    assert_allclose(fisher_z(pd.DataFrame([[0.999999]])).to_numpy(),
+                    fisher_z(pd.DataFrame([[1.0]])).to_numpy())
+
+
+def test_a_square_matrix_loses_its_self_correlation_diagonal():
+    z = fisher_z(pd.DataFrame(np.full((3, 3), 0.5)))
+    assert_allclose(np.diag(z.to_numpy()), 0.0)
+    assert (z.to_numpy()[~np.eye(3, dtype=bool)] > 0).all()
+
+
+def test_a_seed_map_keeps_its_diagonal_because_it_is_not_one():
+    """ROI x channel, where position (i, i) is an ordinary pair. Zeroing it would delete a
+    real value, so the diagonal is only cleared when the frame is square."""
+    z = fisher_z(pd.DataFrame(np.full((2, 4), 0.5)))
+    assert (z.to_numpy() > 0).all()
+
+
+def test_the_labels_survive():
+    fc = pd.DataFrame(np.eye(2) * 0.5, index=["a", "b"], columns=["a", "b"])
+    z = fisher_z(fc)
+    assert list(z.index) == ["a", "b"] and list(z.columns) == ["a", "b"]
+
+
+# ---- GVTD threshold: deterministic, and robust by construction ----
+# A histogram sits between input and output, so the mode is only located to a bin width.
+# What is pinned here is the behaviour the histogram-mode rule exists for.
+
+_REST = np.abs(np.random.default_rng(0).normal(0.0, 1.0, size=2000)) + 5.0
+
+
+@pytest.mark.parametrize("trace", [np.zeros(100), np.array([]), np.full(100, -1.0)])
+def test_a_trace_with_no_positive_value_has_no_threshold(trace):
+    assert gvtd_threshold(trace) is None
+
+
+def test_the_threshold_is_linear_in_n_std():
+    t0, t1, t2 = (gvtd_threshold(_REST, n) for n in (0.0, 1.0, 2.0))
+    assert t0 < t1 < t2
+    assert_allclose(t2 - t1, t1 - t0, rtol=1e-12)
+
+
+def test_spikes_do_not_move_the_threshold_the_way_they_move_mean_plus_3std():
+    """The whole reason for the histogram mode and the left-tail std. The naive statistic
+    is computed here as the control: 50 spikes quadruple it and barely touch this one, so
+    a version that had quietly become mean + n*std could not pass."""
+    few, many = _REST.copy(), _REST.copy()
+    few[:5] += 50.0
+    many[:50] += 50.0
+
+    clean, spiked = gvtd_threshold(_REST), gvtd_threshold(many)
+    assert abs(spiked - clean) / clean < 0.10
+
+    naive = lambda g: g.mean() + 3.0 * g.std()          # noqa: E731
+    assert naive(many) > 3.0 * naive(_REST)
+    assert gvtd_threshold(few) < naive(few) / 2
+
+
+def test_the_threshold_sits_above_the_resting_level_and_below_the_spikes():
+    spiked = _REST.copy()
+    spiked[:5] += 50.0
+    t = gvtd_threshold(spiked)
+    assert np.median(_REST) < t < spiked[:5].min()
+
+
+def test_a_trace_with_no_spread_below_its_mode_gets_no_noise_margin():
+    """`below` is empty, so there is no left-tail std to scale. The mode is returned as it
+    is, which makes the threshold independent of n_std for this input alone."""
+    flat = np.full(100, 2.0)
+    assert gvtd_threshold(flat, 0.0) == gvtd_threshold(flat, 100.0)
+    assert 2.0 - gvtd_threshold(flat, 3.0) < 0.1      # a bin width below the value itself
+
+
+# ---- spike mask: MAD, per channel ----
+
+def test_one_outlier_among_identical_samples_is_the_only_flag():
+    assert _spike_mask(np.array([[0.0, 0.0, 0.0, 0.0, 10.0]])).tolist() == \
+        [[False, False, False, False, True]]
+
+
+def test_a_constant_channel_has_nothing_to_flag():
+    assert not _spike_mask(np.array([[1.0, 1.0, 1.0, 1.0, 1.0]])).any()
+
+
+def test_the_flag_is_symmetric_in_sign():
+    up = _spike_mask(np.array([[0.0, 0.0, 0.0, 0.0, 10.0]]))
+    down = _spike_mask(np.array([[0.0, 0.0, 0.0, 0.0, -10.0]]))
+    assert (up == down).all()
+
+
+def test_a_loud_channel_does_not_set_the_threshold_for_a_quiet_one():
+    """The scale is per channel, so a high-dynamic-range channel cannot hide the quiet
+    channel's spikes by raising a shared threshold."""
+    rng = np.random.default_rng(1)
+    quiet = rng.normal(0.0, 1.0, size=400)
+    quiet[100] = 20.0
+    loud = rng.normal(0.0, 1000.0, size=400)
+
+    alone = _spike_mask(quiet[None, :])
+    together = _spike_mask(np.vstack([quiet, loud]))
+    assert (alone[0] == together[0]).all()
+    assert together[0, 100]
+
+
+def test_the_mad_threshold_resists_the_spikes_it_is_measuring():
+    """std is taken over the derivative including the spikes, so enough of them lift the
+    threshold above the very samples it should flag. MAD is the fix, and this pins it."""
+    rng = np.random.default_rng(2)
+    data = rng.normal(0.0, 1.0, size=(1, 1000))
+    data[0, :100] = 30.0                                # 10% of the channel is spike
+
+    assert _spike_mask(data)[0, :100].all()
+    naive = np.abs(data - data.mean()) > 3.0 * data.std()
+    assert not naive[0, :100].any()                     # the control: std misses every one
