@@ -6,6 +6,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+- **CV and SNR are measured over short windows and averaged, instead of over the whole recording.** A whole-run CV grows with recording length rather than with noise, so stored CV, SNR and `snr_pass_rate` will differ from earlier runs, in the direction of passing more channels
+- **The quality record carries CV and SNR per window**, so the group report draws them as heatmaps alongside SCI, PSP and GVTD
+
 ## [0.33.0] - 2026-09-09
 
 ### Added

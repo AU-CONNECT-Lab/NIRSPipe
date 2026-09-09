@@ -85,6 +85,29 @@ def compute_windowed_psp(
     return scores, times
 
 
+def compute_windowed_cv(
+    raw_intensity: mne.io.Raw,
+    window_s: float = 10.0,
+) -> "tuple[np.ndarray, np.ndarray]":
+    """CV per channel in each non-overlapping window, and each window's [start, end] times.
+
+    Returned on the same grid and in the same shape as the SCI and PSP series, so the three
+    line up column for column. Measured on raw intensity, which is what CV is defined on:
+    after the optical-density conversion sigma/mu no longer means relative brightness.
+    """
+    data = raw_intensity.get_data()
+    sfreq = float(raw_intensity.info["sfreq"])
+    n = int(round(window_s * sfreq))
+    if n < 2 or data.shape[1] < n:
+        raise ValueError(f"window of {window_s} s does not fit the recording")
+    m = data.shape[1] // n
+    w = data[:, :m * n].reshape(data.shape[0], m, n)
+    mu, sd = w.mean(axis=2), w.std(axis=2)
+    cv = np.divide(sd, mu, out=np.full_like(sd, np.nan), where=mu != 0)
+    starts = np.arange(m) * (n / sfreq)
+    return cv, np.stack([starts, starts + n / sfreq], axis=1)
+
+
 def attach_windowed_series(
     sqm: dict,
     raw_od: mne.io.Raw,
@@ -93,6 +116,7 @@ def attach_windowed_series(
     window_s: float = 10.0,
     *,
     gvtd_od: "mne.io.Raw | None" = None,
+    raw_intensity: "mne.io.Raw | None" = None,
 ) -> dict:
     """Compute sliding-window SCI/PSP/GVTD series, attach summaries to sqm, return raw series.
 
@@ -133,7 +157,8 @@ def attach_windowed_series(
         a = np.asarray(t)
         return (a.mean(axis=1) if a.ndim == 2 and a.shape[1] == 2 else a).tolist()
 
-    series = {"sci_matrix": None, "sci_times": None, "psp_matrix": None, "psp_times": None}
+    series = {"sci_matrix": None, "sci_times": None, "psp_matrix": None, "psp_times": None,
+              "cv_matrix": None, "cv_times": None}
     # recorded even when every series below fails: it describes the request, not the result,
     # and without it a stored series cannot be told apart from one binned at another length
     sqm["qc_window_s"] = float(window_s)
@@ -146,6 +171,14 @@ def attach_windowed_series(
         psp_matrix, psp_times = compute_windowed_psp(raw_od, cardiac_l_freq, cardiac_h_freq, window_s)
     except Exception as exc:
         logger.warning("windowed SCI/PSP failed: %s", exc)
+
+    # a third try block: CV is the only one measured on intensity, so it fails on its own
+    cv_matrix = cv_times = None
+    if raw_intensity is not None:
+        try:
+            cv_matrix, cv_times = compute_windowed_cv(raw_intensity, window_s)
+        except Exception as exc:
+            logger.warning("windowed CV failed: %s", exc)
 
     gvtd_per_window = gvtd_p95_per_window = gvtd_t = None
     gvtd_filt_per_window = gvtd_filt_p95_per_window = None
@@ -163,6 +196,14 @@ def attach_windowed_series(
     if psp_matrix is not None and psp_times is not None:
         sqm["psp_per_window"]      = np.asarray(psp_matrix).mean(axis=0).tolist()
         sqm["psp_window_times_s"]  = _center_times(psp_times)
+    if cv_matrix is not None and cv_times is not None:
+        with np.errstate(invalid="ignore", divide="ignore"):
+            cv_mean = np.nanmean(np.asarray(cv_matrix), axis=0)
+        sqm["cv_per_window"]      = cv_mean.tolist()
+        # 1/CV rather than a second aggregation, so the pair stays exact reciprocals
+        sqm["snr_per_window"]     = np.where(cv_mean > 0, 1.0 / cv_mean, np.nan).tolist()
+        sqm["cv_window_times_s"]  = _center_times(cv_times)
+
     if gvtd_per_window is not None and len(gvtd_per_window):
         sqm["gvtd_per_window"]     = np.asarray(gvtd_per_window).tolist()
         sqm["gvtd_p95_per_window"] = np.asarray(gvtd_p95_per_window).tolist()
@@ -172,7 +213,8 @@ def attach_windowed_series(
         sqm["gvtd_filt_p95_per_window"] = np.asarray(gvtd_filt_p95_per_window).tolist()
 
     series.update(sci_matrix=sci_matrix, sci_times=sci_times,
-                  psp_matrix=psp_matrix, psp_times=psp_times)
+                  psp_matrix=psp_matrix, psp_times=psp_times,
+                  cv_matrix=cv_matrix, cv_times=cv_times)
     return series
 
 

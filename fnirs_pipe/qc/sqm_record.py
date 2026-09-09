@@ -561,7 +561,7 @@ def compute_run_sections(
                            else read_snirf(gvtd_source))
             series = attach_windowed_series(
                 windowed, raw_sci_od, cardiac_l_freq, cardiac_h_freq, qc_window_s,
-                gvtd_od=raw_gvtd_od)
+                gvtd_od=raw_gvtd_od, raw_intensity=raw_intensity)
             # the channel by window matrices as well as the channel-averaged series: the
             # report's per-channel heatmap needs them, and it must not recompute
             for key in ("sci_matrix", "psp_matrix"):

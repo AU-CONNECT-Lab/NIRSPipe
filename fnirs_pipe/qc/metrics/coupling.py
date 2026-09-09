@@ -21,6 +21,11 @@ logger = get_logger("qc.metrics.coupling")
 
 # part of what PSP measures, not smoothing: it moves the spread between good and bad channels
 PSP_WINDOW_S = 10.0
+# CV is sigma/mu, so a longer window admits slower variation into sigma and the number grows
+# with the recording: measured over one recording it reads 1.34% at 10 s and 8.71% whole-run,
+# which is the drift, not the noise CV_PASS was set for. Pinned for the same reason PSP is,
+# and to the same length so the two scalars describe the same stretch of recording.
+CV_WINDOW_S = 10.0
 
 
 def compute_sci_scores(
@@ -103,6 +108,25 @@ def _good_frac_metrics(good_frac_scores: dict[str, float] | None) -> dict[str, A
     }
 
 
+def channel_cv_windowed(data: np.ndarray, sfreq: float,
+                        window_s: float = CV_WINDOW_S) -> np.ndarray:
+    """Per-channel CV averaged over non-overlapping windows; whole-run if one does not fit.
+
+    ::
+
+        3900 s at 10 Hz, 10 s windows  ->  mean of 390 CVs per channel
+    """
+    n = int(round(window_s * float(sfreq)))
+    if n < 2 or data.shape[1] < n:
+        return channel_cv(data)
+    m = data.shape[1] // n
+    w = data[:, :m * n].reshape(data.shape[0], m, n)
+    mu, sd = w.mean(axis=2), w.std(axis=2)
+    cv = np.divide(sd, mu, out=np.full_like(sd, np.nan), where=mu != 0)
+    with np.errstate(invalid="ignore"):
+        return np.nanmean(cv, axis=1)
+
+
 def channel_cv(data: np.ndarray) -> np.ndarray:
     r"""Coefficient of variation per channel: relative noise level (lower = cleaner).
 
@@ -150,8 +174,9 @@ def _intensity_metrics(raw_intensity: mne.io.Raw,
     """
     int_data = raw_intensity.get_data()
     names = raw_intensity.ch_names
-    cv = channel_cv(int_data)
-    snr = channel_snr(int_data)
+    cv = channel_cv_windowed(int_data, raw_intensity.info["sfreq"])
+    # 1/CV rather than a second windowed pass, so the two stay exact reciprocals
+    snr = np.divide(1.0, cv, out=np.full_like(cv, np.nan), where=np.isfinite(cv) & (cv > 0))
     mean_amp = int_data.mean(axis=1)
     cv_per_ch = {ch: float(cv[i]) for i, ch in enumerate(names) if np.isfinite(cv[i])}
     snr_per_ch = {ch: float(snr[i]) for i, ch in enumerate(names) if np.isfinite(snr[i])}

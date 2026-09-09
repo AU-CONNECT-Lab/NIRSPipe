@@ -43,6 +43,8 @@ _STRIP_CLICK_JS = (
 _WINDOWED_METRICS = [
     ("sci",  "sci_per_window",  "sci_window_times_s",  "SCI per window"),
     ("psp",  "psp_per_window",  "psp_window_times_s",  "PSP per window"),
+    ("cv",   "cv_per_window",   "cv_window_times_s",   "CV per window"),
+    ("snr",  "snr_per_window",  "cv_window_times_s",   "SNR per window"),
     ("gvtd", "gvtd_per_window", "gvtd_window_times_s", "GVTD mean per window"),
     ("gvtd_p95", "gvtd_p95_per_window", "gvtd_window_times_s", "GVTD p95 (worst-moment) per window"),
     ("gvtd_filt", "gvtd_filt_per_window", "gvtd_window_times_s", "GVTD filtered (0.01-0.5 Hz) mean per window"),
