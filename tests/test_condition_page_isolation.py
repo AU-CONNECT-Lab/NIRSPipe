@@ -64,6 +64,21 @@ def test_the_provenance_graph_is_not_a_leak():
     assert _figure_leaks({"provenance_path": "figures/x/provenance.png"}, "game1") == []
 
 
+def test_the_glm_design_matrix_is_not_a_leak():
+    # one model over the whole recording with every condition drawn as a column of it, so
+    # it reads as the model rather than as this condition
+    assert _figure_leaks(
+        {"glm_design_path": "figures/x/glm_design_timeseries.png",
+         "glm_design_heatmap_path": "figures/x/glm_design_heatmap.png"}, "game1") == []
+
+
+def test_the_glm_activation_still_has_to_be_this_conditions():
+    # unlike the design matrix, an activation map is one condition's and nothing on it says
+    # which, so the run's own must not survive
+    assert _figure_leaks({"glm_activation_path": "figures/x/glm_activation_video.png"},
+                         "game1")
+
+
 def test_a_run_wide_figure_is_reported():
     # the case that actually happened
     leaks = _figure_leaks({"denoise_carpet_path": "figures/x/denoise_carpet.png"}, "game1")

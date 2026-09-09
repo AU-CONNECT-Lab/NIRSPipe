@@ -351,6 +351,7 @@ def _section_channel_detail(
     max_pts: int = 4000,
     cardiac: "tuple[float, float] | None" = None,
     resp: "tuple[float, float] | None" = None,
+    suffix: str = "",
 ) -> dict:
     markers = extract_markers(raw_haemo)
     pairs = get_channel_pairs(raw_haemo)
@@ -361,7 +362,7 @@ def _section_channel_detail(
                 raw_haemo, markers, pair, max_pts, epoch_tmin, epoch_tmax,
                 cardiac=cardiac, resp=resp,
             )
-            fname = f"ch_detail_{_pair_fname(pair)}.html"
+            fname = f"ch_detail_{_pair_fname(pair)}{suffix}.html"
             h = _save_multi_fig_html([detail_fig, psd_fig, epoch_fig], figures_dir / fname)
             saved.append({"pair": pair, "path": _fig_href(figures_dir, fname), "h": h})
     return {"channel_pairs": saved}
@@ -424,6 +425,7 @@ def _section_psd_detail(
     cardiac: "tuple[float, float] | None" = None,
     resp: "tuple[float, float] | None" = None,
     psd_stages: "list[tuple[str, mne.io.Raw]] | None" = None,
+    suffix: str = "",
 ) -> dict:
     pairs = get_channel_pairs(raw_haemo)
     saved = []
@@ -445,7 +447,7 @@ def _section_psd_detail(
             fig = psd_figure(raw_sub, l_freq=l_freq, h_freq=h_freq, fmax=2.0,
                              title=f"PSD — {pair}", cardiac=cardiac, resp=resp,
                              stages=stages_sub)
-            fname = f"psd_detail_{_pair_fname(pair)}.html"
+            fname = f"psd_detail_{_pair_fname(pair)}{suffix}.html"
             path, h = _save_plotly_html(fig, figures_dir / fname)
             saved.append({"pair": pair, "path": path, "h": h})
     return {"psd_detail_pairs": saved}
@@ -558,6 +560,8 @@ def _section_haemo(
     psd_stages: "list[tuple[str, mne.io.Raw]] | None" = None,
     record: dict | None = None,
     sep_bands=None,
+    suffix: str = "",
+    crop: "tuple[float, float] | None" = None,
 ) -> dict:
     """Beer-Lambert output and what the denoising did to it.
 
@@ -566,22 +570,48 @@ def _section_haemo(
     is the confound-regression residual, the stage the denoising before/after is taken
     against; it is absent on a prep-only run and on a denoise run with nothing to regress,
     and then only the before panel is drawn.
+
+    ``crop`` narrows every panel here to one condition, and it is a parameter rather than a
+    cropped input because the order matters and only this function knows it. The correlation
+    panels and the spectra can be cut and then measured: a correlation is over whatever
+    samples it gets, and ``compute_psd`` is Welch, which segments and tapers but does not
+    band-pass. The stage comparison cannot, because it band-limits every stage to the
+    analysis passband before subtracting them, deliberately (see
+    :func:`~fnirs_pipe.qc.metrics.comparable_stage_metrics`), and at a 0.01 Hz high-pass
+    that FIR runs about 330 s, longer than a 300 s condition. Cut first and it is filtered
+    against its own two edges, which is the mismatch the old 0.02 Hz workaround existed for.
+
+    So the stages are band-limited over the whole run and cut afterwards, the order the
+    pipeline itself uses, and ``comparable_stage_metrics`` is then told not to filter again.
     """
     hbo_hbr_path = hbo_hbr_after_path = psd_panel_path = None
     psd_panel_h = 0
+
+    def _cut(raw):
+        """The span `crop` names, or the recording unchanged when there is no crop."""
+        if raw is None or crop is None:
+            return raw
+        t0, t1 = max(0.0, float(crop[0])), min(float(raw.times[-1]), float(crop[1]))
+        return raw if t1 <= t0 else raw.copy().crop(tmin=t0, tmax=t1)
+
+    raw_haemo_cut, raw_errts_cut = _cut(raw_haemo), _cut(raw_errts)
+    psd_stages_cut = [(label, _cut(raw)) for label, raw in (psd_stages or [])] or None
+
     with _guard("HbO-HbR correlation panel", errors, subject):
         b64 = hbo_hbr_correlation_panel(
-            raw_haemo, title="HbO–HbR Signal Quality — desc-preproc (before denoising)",
+            raw_haemo_cut,
+            title="HbO–HbR Signal Quality — desc-preproc (before denoising)",
             sep_bands=sep_bands)
-        _save_b64_png(b64, figures_dir / "hbo_hbr_corr.png")
-        hbo_hbr_path = _fig_href(figures_dir, "hbo_hbr_corr.png")
+        _save_b64_png(b64, figures_dir / f"hbo_hbr_corr{suffix}.png")
+        hbo_hbr_path = _fig_href(figures_dir, f"hbo_hbr_corr{suffix}.png")
     if raw_errts is not None:
         with _guard("HbO-HbR correlation panel (after)", errors, subject):
             b64 = hbo_hbr_correlation_panel(
-                raw_errts, title="HbO–HbR Signal Quality — desc-errts (after denoising)",
+                raw_errts_cut,
+                title="HbO–HbR Signal Quality — desc-errts (after denoising)",
                 sep_bands=sep_bands)
-            _save_b64_png(b64, figures_dir / "hbo_hbr_corr_after.png")
-            hbo_hbr_after_path = _fig_href(figures_dir, "hbo_hbr_corr_after.png")
+            _save_b64_png(b64, figures_dir / f"hbo_hbr_corr_after{suffix}.png")
+            hbo_hbr_after_path = _fig_href(figures_dir, f"hbo_hbr_corr_after{suffix}.png")
 
     # Recomputed rather than read from the record: the record measures each stage on the
     # signal as it stands there, which cannot be compared across the bandpass. See
@@ -615,24 +645,38 @@ def _section_haemo(
             return raw.copy().pick(names)
 
         with _guard("Denoising stage metrics", errors, subject):
-            stage_metrics = comparable_stage_metrics(
-                [(label, _long_only(raw)) for label, raw in stages], l_freq, h_freq,
-                config.cardiac_l_freq, config.cardiac_h_freq,
-                config.resp_l_freq, config.resp_h_freq)
-            stage_banded = bool(stage_metrics["banded"])
+            banded_here = crop is not None and (l_freq is not None or h_freq is not None)
+            if banded_here:
+                # filter over the whole run, cut after: the reverse gives a 330 s FIR two
+                # edges of its own on a 300 s condition
+                staged = [(label, _cut(_long_only(raw).copy()
+                                       .filter(l_freq, h_freq, verbose=False)))
+                          for label, raw in stages]
+                stage_metrics = comparable_stage_metrics(
+                    staged, None, None,
+                    config.cardiac_l_freq, config.cardiac_h_freq,
+                    config.resp_l_freq, config.resp_h_freq)
+            else:
+                stage_metrics = comparable_stage_metrics(
+                    [(label, _long_only(raw)) for label, raw in stages], l_freq, h_freq,
+                    config.cardiac_l_freq, config.cardiac_h_freq,
+                    config.resp_l_freq, config.resp_h_freq)
+            # the rows are band-limited either way; `banded` only reports whether that
+            # function did it, and here it was done before the cut instead
+            stage_banded = banded_here or bool(stage_metrics["banded"])
             fig = stage_metrics_figure(stage_metrics["labels"],
                                        denoise_stage_panels(stage_metrics))
             if fig is not None:
                 stage_metrics_path, stage_metrics_h = _save_plotly_html(
-                    fig, figures_dir / "denoise_stage_metrics.html")
+                    fig, figures_dir / f"denoise_stage_metrics{suffix}.html")
 
     with _guard("PSD figure", errors, subject):
         fig_psd_custom = psd_figure(
-            raw_haemo, l_freq=l_freq, h_freq=h_freq, fmax=2.0,
+            raw_haemo_cut, l_freq=l_freq, h_freq=h_freq, fmax=2.0,
             cardiac=(config.cardiac_l_freq, config.cardiac_h_freq),
             resp=(config.resp_l_freq, config.resp_h_freq),
-            stages=psd_stages)
-        psd_panel_path, psd_panel_h = _save_plotly_html(fig_psd_custom, figures_dir / "psd_panel.html")
+            stages=psd_stages_cut)
+        psd_panel_path, psd_panel_h = _save_plotly_html(fig_psd_custom, figures_dir / f"psd_panel{suffix}.html")
     return {
         "hbo_hbr_path":   hbo_hbr_path,
         "hbo_hbr_after_path": hbo_hbr_after_path,
@@ -650,6 +694,7 @@ def _section_epoch_preview(
     figures_dir: Path,
     epoch_tmin: float = -5.0,
     epoch_tmax: float = 25.0,
+    suffix: str = "",
 ) -> dict:
     epoch_preview_path = None
     epoch_preview_h = 0
@@ -657,7 +702,7 @@ def _section_epoch_preview(
         fig = build_epoch_preview_figure(raw_haemo, epoch_tmin=epoch_tmin, epoch_tmax=epoch_tmax)
         if fig is not None:
             epoch_preview_path, epoch_preview_h = _save_plotly_html(
-                fig, figures_dir / "epoch_preview.html"
+                fig, figures_dir / f"epoch_preview{suffix}.html"
             )
     return {"epoch_preview_path": epoch_preview_path, "epoch_preview_h": epoch_preview_h}
 
@@ -727,13 +772,14 @@ def _section_evoked_topomap(
     figures_dir: Path,
     epoch_tmin: float = -5.0,
     epoch_tmax: float = 25.0,
+    suffix: str = "",
 ) -> dict:
     path = None
     with _guard("Evoked topomap", errors, subject):
         b64 = evoked_topomap_static(raw_haemo, epoch_tmin=epoch_tmin, epoch_tmax=epoch_tmax)
         if b64:
-            _save_b64_png(b64, figures_dir / "evoked_topomap.png")
-            path = _fig_href(figures_dir, "evoked_topomap.png")
+            _save_b64_png(b64, figures_dir / f"evoked_topomap{suffix}.png")
+            path = _fig_href(figures_dir, f"evoked_topomap{suffix}.png")
     return {"evoked_topomap_path": path}
 
 
@@ -1509,7 +1555,14 @@ def build_subject_report(
                     raw_long, raw_gvtd, gvtd_set, gvtd_blocks, sci_scores, config,
                     segments, subject, errors, figures_dir, windowed=windowed_section,
                     raw_before_motion=raw_before_motion,
-                    raw_after_motion=raw_after_motion, suffix=suffix, xrange=span))
+                    raw_after_motion=raw_after_motion, suffix=suffix, xrange=span),
+                remake_cropped=lambda suffix, span: _cropped_sections(
+                    span, suffix, raw_haemo=raw_haemo, epoch_haemo=epoch_haemo,
+                    raw_haemo_uncorr=raw_haemo_uncorr, raw_errts=raw_errts,
+                    psd_stages=psd_stages, record=record, config=config,
+                    l_freq=l_freq, h_freq=h_freq, sep_bands=sep_bands,
+                    epoch_tmin=epoch_tmin, epoch_tmax=epoch_tmax,
+                    subject=subject, errors=errors, figures_dir=figures_dir))
 
     _build_mne_report(subject, raw_intensity, raw_haemo, out_path, errors)
     return notes
@@ -1538,13 +1591,22 @@ def _blanked(section_vars: tuple) -> dict:
     return out
 
 
-# Figures a per-condition page may point at whatever the condition. Only the provenance
-# graph qualifies: it describes the run's file lineage, which is the same for every
-# condition by definition. Everything else has to carry the condition's own name, which
-# `_figure_leaks` checks by suffix rather than by listing the panels: a per-panel prefix
-# list would also pass a *different* condition's figure, which is worse than a run-wide one
-# because the page would look per-condition and be the wrong condition.
-_CONDITION_PAGE_FIGURES = ("provenance.",)
+# Figures a per-condition page may point at whatever the condition. The rule for being
+# here is narrow: the figure has to describe the *run* and be unmistakable for the
+# condition, so a reader cannot take it as this condition's. Two qualify. The provenance
+# graph is one file lineage and identical on every page. The GLM design matrix is one model
+# fitted over the whole recording with every condition as a column of it, all of them drawn
+# and labelled, so it reads as the model and not as one condition's; a per-condition design
+# matrix would be a different model, not a view of this one.
+#
+# Nothing else belongs. The carpet, the spectra and the correlation panels would all look
+# like the condition's, which is why they are rebuilt per condition instead.
+#
+# Everything not listed has to carry the condition's own name, which `_figure_leaks` checks
+# by suffix rather than by listing the panels: a per-panel prefix list would also pass a
+# *different* condition's figure, worse than a run-wide one because the page would look
+# per-condition and be the wrong condition.
+_CONDITION_PAGE_FIGURES = ("provenance.", "glm_design_")
 
 
 def _figure_leaks(page: dict, label_slug: str) -> "list[str]":
@@ -1567,6 +1629,95 @@ def _figure_leaks(page: dict, label_slug: str) -> "list[str]":
             continue
         leaks.append(f"{key}={name}")
     return leaks
+
+
+def _cropped_sections(
+    span: "tuple[float, float]",
+    suffix: str,
+    *,
+    raw_haemo, epoch_haemo, raw_haemo_uncorr, raw_errts, psd_stages, record, config,
+    l_freq, h_freq, sep_bands, epoch_tmin, epoch_tmax, subject, errors, figures_dir,
+) -> dict:
+    """The panels that are safe to rebuild on a cropped copy, over one condition.
+
+    Cropping is the right move for exactly these and the wrong one for the carpet and the
+    SCI/PSP panel, and the line between them is whether the panel filters. It does not here:
+    the haemoglobin timeseries are drawn as they are, the HbO-HbR correlation is a
+    correlation over whatever samples it is given, and ``compute_psd`` is Welch, which
+    segments and tapers but does not band-pass. So a cropped condition carries no filter
+    edge that the whole run would not have had. A shorter span costs frequency resolution
+    (1/900 Hz against 1/3900 Hz here) and averages fewer Welch segments, which makes the
+    spectrum noisier and leaves it unbiased.
+
+    The stage files handed to the PSD panels are cropped too, and they were filtered over
+    the whole run before being written, so cutting them adds no filtering either.
+
+    Cropping also drops the annotations outside the span, which is what makes the epoch and
+    topography panels this condition's without being told which one it is. They stay honest
+    only as far as the epoch window does: on a 900 s block in a -5 to 25 s window they
+    describe its first seconds, the same limitation the run's own report carries, and
+    ``--epoch-chunk-duration`` is what fixes it for both.
+    """
+    def crop(raw, pad: "tuple[float, float]" = (0.0, 0.0)):
+        if raw is None:
+            return None
+        t0 = max(0.0, float(span[0]) + pad[0])
+        t1 = min(float(raw.times[-1]), float(span[1]) + pad[1])
+        return None if t1 <= t0 else raw.copy().crop(tmin=t0, tmax=t1)
+
+    # The epoch panels get the window's own room on either side. A block annotation starts
+    # exactly where the condition starts, so a crop on the bare span puts the event at t=0
+    # with nothing before it, MNE drops the epoch for want of a baseline, and the panel
+    # reports "no stimulus events found" on a recording that has five. Padding is only
+    # about having samples to average; nothing here filters, so it carries no edge of its
+    # own the way padding a crop before the bandpass would.
+    epoch_pad = (min(0.0, float(epoch_tmin or 0.0)), max(0.0, float(epoch_tmax or 0.0)))
+
+    haemo = crop(raw_haemo)
+    if haemo is None:
+        return {}
+    stages = [(name, cropped) for name, raw in (psd_stages or [])
+              if (cropped := crop(raw)) is not None] or None
+    bands = {"cardiac": (config.cardiac_l_freq, config.cardiac_h_freq),
+             "resp": (config.resp_l_freq, config.resp_h_freq)}
+    out: dict = {}
+    # the one panel handed a span rather than a cropped recording: it holds the stage list,
+    # so only it can band-limit the whole run before cutting, which is the order its stage
+    # comparison needs. See its docstring.
+    out.update(_section_haemo(raw_haemo, config, subject, errors, figures_dir,
+                              l_freq=l_freq, h_freq=h_freq, raw_errts=raw_errts,
+                              psd_stages=psd_stages, record=record, sep_bands=sep_bands,
+                              suffix=suffix, crop=span))
+    out.update(_section_psd_detail(haemo, subject, errors, figures_dir,
+                                   l_freq=l_freq, h_freq=h_freq, psd_stages=stages,
+                                   suffix=suffix, **bands))
+    out.update(_section_channel_detail(crop(raw_haemo_uncorr) or haemo, subject, errors,
+                                       figures_dir, epoch_tmin=epoch_tmin,
+                                       epoch_tmax=epoch_tmax, suffix=suffix, **bands))
+    out.update(_section_epoch_preview(crop(raw_haemo, epoch_pad) or haemo, subject, errors,
+                                      figures_dir, epoch_tmin=epoch_tmin,
+                                      epoch_tmax=epoch_tmax, suffix=suffix))
+    out.update(_section_evoked_topomap(crop(epoch_haemo, epoch_pad) or haemo, subject,
+                                       errors, figures_dir, epoch_tmin=epoch_tmin,
+                                       epoch_tmax=epoch_tmax, suffix=suffix))
+    return out
+
+
+def _condition_glm(report_vars: dict, label: str) -> dict:
+    """The run's GLM panel narrowed to one condition's activation figure.
+
+    Nothing is recomputed. ``_section_glm`` already rendered one figure per condition
+    against a colour scale shared across them, so a condition page shows the one that is
+    already on disk and drops the switcher, which would have one option.
+    """
+    conditions = [c for c in (report_vars.get("glm_activation_conditions") or [])
+                  if c.get("label") == label]
+    return {
+        "glm_design_path": report_vars.get("glm_design_path"),
+        "glm_design_heatmap_path": report_vars.get("glm_design_heatmap_path"),
+        "glm_activation_conditions": conditions,
+        "glm_activation_path": conditions[0]["path"] if conditions else None,
+    }
 
 
 def _windowed_slice(record: dict, windows: list, label: str) -> dict:
@@ -1611,6 +1762,7 @@ def _write_condition_reports(
     errors: list,
     remake_sci=None,
     remake_motion=None,
+    remake_cropped=None,
 ) -> None:
     """One subject-report page per annotated condition, sliced out of the quality record.
 
@@ -1679,8 +1831,19 @@ def _write_condition_reports(
             panels.update(remake_sci(f"_{slug}", _windowed_slice(record, windows, label),
                                      sliced.get("sci_per_channel") or {}))
         # and the carpet narrowed to it: measured over the run, viewed over the condition
+        span = (window_of[label][1], window_of[label][2])
         if remake_motion is not None:
-            panels.update(remake_motion(f"_{slug}", (window_of[label][1], window_of[label][2])))
+            panels.update(remake_motion(f"_{slug}", span))
+        # and everything a crop is safe for: the haemoglobin panels, the spectra and the
+        # per-channel detail. See _cropped_sections for where that line falls and why
+        if remake_cropped is not None:
+            panels.update(remake_cropped(f"_{slug}", span))
+        # The GLM is already per condition and needs nothing rebuilt: one model is fitted
+        # over the whole recording and each condition is a contrast of it, so this page
+        # keeps its own activation figure out of the set the run rendered. The design
+        # matrix stays whole, because every condition is a column of that one model and a
+        # per-condition version of it would be a different model.
+        panels.update(_condition_glm(report_vars, label))
         stem = f"{out_path.stem.removesuffix('_qc')}_desc-{_pair_fname(label)}_qc"
         page = {
             **report_vars, **blanked, **summary, **panels,
