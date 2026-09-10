@@ -681,6 +681,51 @@
      The GVTD threshold and the spike count are the run's and are not sliced; the threshold is
      a mode of the whole recording's histogram, and this condition is counted against it.</p>
   {% endif %}
+
+  {#- GVTD over the three channel sets. It is an RMS *across* channels, so these are three
+      measurements and not three groupings of one, which is why they are here rather than as
+      columns of the table above: that table's rows are groupings of per-channel numbers. -#}
+  {% if motion_split %}
+  <p class="qm-note">GVTD is an RMS across channels, so each set is measured on its own and a
+     set's value cannot be averaged out of another's. <b>Long</b> is the set the verdict is
+     read off, and the only one coloured. <b>Short</b> carries the magnitudes only: the cutoff
+     is the mode of a distribution, and a handful of scalp channels has none to set one
+     from, so nothing short-channel is counted against a threshold anywhere.
+     {% if condition_label %}The share and the frame count are the long set's on this page:
+     the run stores that flag for the set the verdict is read off and this condition counts
+     the part of it inside its own stretch.{% endif %}</p>
+  {%- set motion_rows = [('gvtd_mean', 'GVTD mean'),
+                         ('gvtd_p95', 'GVTD p95'),
+                         ('gvtd_filt_mean', 'GVTD mean 0.01-0.5 Hz'),
+                         ('gvtd_filt_p95', 'GVTD p95 0.01-0.5 Hz'),
+                         ('gvtd_pct_above_thresh', 'GVTD % motion'),
+                         ('gvtd_num_above_thresh', 'GVTD motion frames'),
+                         ('gvtd_thresh', 'GVTD threshold')] %}
+  {%- macro motion_cell(d, key, is_long) %}
+    {%- set before = d.get(key) %}{% set after = d.get(key ~ '_post') -%}
+    <td class="qv {{ metric_class(key, after if after is not none else before) if is_long }}">
+      {%- if before is none and after is none %}<span style="color:#aaa">&mdash;</span>
+      {%- elif after is none %}{{ mv(key, before) }}
+      {%- else %}{{ mv(key, before) }} &rarr; {{ mv(key, after) }}{% endif -%}
+    </td>
+  {%- endmacro %}
+  <div style="overflow-x:auto;">
+  <table class="qm-table qm-split">
+    <thead><tr><th>Metric{% if not condition_label %} (before&nbsp;&rarr;&nbsp;after){% endif %}</th>
+      <th>All</th><th>Long</th><th>Short</th></tr></thead>
+    <tbody>
+      {% for key, text in motion_rows %}
+      {% if not (condition_label and key == 'gvtd_thresh') %}
+      <tr><td>{{ ql(key, text) }}</td>
+          {{ motion_cell(motion_sets.get('all') or {}, key, false) }}
+          {{ motion_cell(motion_sets.get('long') or {}, key, true) }}
+          {{ motion_cell(motion_sets.get('short') or {}, key, false) }}</tr>
+      {% endif %}
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
   <ul class="qm-list">
     {{ qm_li('gvtd_mean', 'GVTD mean' ~ after_note, '_post', motion_note) }}
     {{ qm_li('gvtd_p95', 'GVTD p95' ~ after_note, '_post', motion_note) }}
@@ -691,6 +736,10 @@
     {% if not condition_label %}
     {{ qm_li('gvtd_thresh', 'GVTD threshold', '_post', motion_note) }}
     {% endif %}
+  </ul>
+  {% endif %}
+
+  <ul class="qm-list">
     {% if sqm.get('gvtd_censor_pct') is not none %}
     {{ qm_li('gvtd_censor_pct', 'GVTD censored % (n_std ' ~ sqm.get('gvtd_censor_n_std') ~ ')') }}
     {{ qm_li('gvtd_censor_retained_s', 'GVTD retained (s in ' ~ sqm.get('gvtd_censor_n_epochs') ~ ' epoch(s))') }}

@@ -530,7 +530,6 @@ def condition_set_scalars(
     bad_channels: "set[str]",
     long_names: "list[str]",
     short_names: "list[str]",
-    gvtd_by_set: "dict[str, dict[str, float]] | None" = None,
 ) -> "dict[str, dict[str, float | None]]":
     """The condition's optical-density averages over each channel set, for the split table.
 
@@ -539,10 +538,10 @@ def condition_set_scalars(
         sliced["sci_per_channel"] over 44 channels, 28 long and 16 short
         -> {"all": {...}, "long": {...}, "short": {...}}
 
-    The per-channel metrics are grouped and averaged, which is all a set is for them. GVTD is
-    not: it is an RMS **across** channels, so a set's GVTD is its own measurement rather than
-    an average over a subset, and it comes in already measured per set from
-    ``gvtd_by_set``. That is the reason the record stores three series instead of one.
+    Every metric here is a mean over the row's channels, which is the whole of what a set
+    means for them. GVTD is not one of them and does not belong here: it is an RMS *across*
+    channels, so its sets are three separate measurements rather than three groupings of one,
+    and it is reported in the motion panel where its before and after sit side by side.
 
     A set with no channels comes back with every value None rather than being left out, so
     the table keeps its three rows on a montage that has only long channels.
@@ -567,8 +566,6 @@ def condition_set_scalars(
             "snr_mean":       _mean("snr_per_channel"),
             "cv_mean":        _mean("cv_per_channel"),
         }
-        row.update((gvtd_by_set or {}).get(set_name) or
-                   {"gvtd_mean": None, "gvtd_filt_mean": None})
         out[set_name] = row
     return out
 

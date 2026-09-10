@@ -968,6 +968,7 @@ def _section_sqm(
     hb_all: dict = {}
     hb_long: dict = {}
     hb_short: dict = {}
+    motion_sets: dict = {}
     record_read: dict = {}
     with _guard("SQM record", errors, subject):
         if out_dir is None or sqm_label is None:
@@ -1015,6 +1016,17 @@ def _section_sqm(
         for key in ("n_long_channels", "n_short_channels"):
             if sqm_all.get(key) is not None:
                 sqm[key] = sqm_all[key]
+        # the motion panel over the same three sets, each carrying both sides of the
+        # correction. GVTD is an RMS across channels, so these are three measurements and
+        # not three groupings of one, which is why they cannot come out of the table above.
+        motion_sets = {
+            name: {**(record.get(raw_name) or {}),
+                   **{f"{k}_post": v
+                      for k, v in (record.get(post_name) or {}).items()}}
+            for name, raw_name, post_name in (("all", "raw", "motion_post"),
+                                              ("long", "raw_long", "motion_post_long"),
+                                              ("short", "raw_short", "motion_post_short"))
+        }
 
     rows = channel_rows(record_read, sci_scores, bad_channels)
     if out_dir is not None and sqm:
@@ -1036,9 +1048,11 @@ def _section_sqm(
         "hb_all": hb_all,
         "hb_long": hb_long,
         "hb_short": hb_short,
+        "motion_sets": motion_sets,
         # three columns are worth printing only when all three are real
         "sqm_split": bool(sqm_long and sqm_short),
         "hb_split": bool(hb_long and hb_short),
+        "motion_split": bool(motion_sets.get("long") and motion_sets.get("short")),
     }
 
 
@@ -2071,10 +2085,19 @@ def _write_condition_reports(
         # the same three-row table the run's own page prints, over this condition. The
         # per-channel metrics are grouped and averaged; GVTD comes in already measured per
         # set, being an RMS across channels rather than something a subset average recovers
-        od_by_set = condition_set_scalars(
-            sliced, cond_bad, long_names, short_names,
-            {name: {k: float(v[label]) for k, v in series.items() if label in v}
-             for name, series in gvtd_sets.items()})
+        od_by_set = condition_set_scalars(sliced, cond_bad, long_names, short_names)
+        # GVTD over the three sets, from the three stored series. No `_post` half: the
+        # windowed series is measured on the corrected file, which the panel says. The share
+        # and the frame count join the long column alone, being counted off a span list the
+        # run stored for the canonical set only.
+        cond_motion_sets = {
+            name: {k: float(v[label]) for k, v in series.items() if label in v}
+            for name, series in gvtd_sets.items()
+        }
+        cond_motion_sets.setdefault("long", {}).update(
+            {k: v for k, v in (("gvtd_pct_above_thresh", shares.get("gvtd_pct_above_thresh")),
+                               ("gvtd_num_above_thresh", n_frames.get("gvtd_num_above_thresh")))
+             if v is not None})
         scalars["n_long_channels"] = len(long_names)
         scalars["n_short_channels"] = len(short_names)
         # The GLM is already per condition and needs nothing rebuilt: one model is fitted
@@ -2098,6 +2121,9 @@ def _write_condition_reports(
             "hb_short": haemo_by_set.get("short") or {},
             "sqm_split": bool(od_by_set.get("short")),
             "hb_split": bool(haemo_by_set.get("short")),
+            "motion_sets": cond_motion_sets,
+            "motion_split": bool(cond_motion_sets.get("long")
+                                 and cond_motion_sets.get("short")),
             # mean amplitude and low-frequency drift are dropped from the columns rather
             # than left blank in all three rows: neither has a windowed series to slice, and
             # drift measures the span it is shown rather than the recording
