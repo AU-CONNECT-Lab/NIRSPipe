@@ -564,10 +564,10 @@ def compute_run_sections(
                 gvtd_od=raw_gvtd_od, raw_intensity=raw_intensity)
             # the channel by window matrices as well as the channel-averaged series: the
             # report's per-channel heatmap needs them, and it must not recompute
-            for key in ("sci_matrix", "psp_matrix"):
+            for key in ("sci_matrix", "psp_matrix", "cv_matrix"):
                 if series.get(key) is not None:
                     windowed[key] = np.asarray(series[key]).tolist()
-            for key in ("sci_times", "psp_times"):
+            for key in ("sci_times", "psp_times", "cv_times"):
                 if series.get(key) is not None:
                     windowed[key] = np.asarray(series[key]).tolist()
         except Exception:

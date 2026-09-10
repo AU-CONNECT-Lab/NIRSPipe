@@ -280,9 +280,8 @@ def _build_parser() -> argparse.ArgumentParser:
                          "of the run's windowed pass, so every condition sits on the same "
                          "window grid and the same filter as the run; nothing is cut and "
                          "nothing is re-measured. The rejected channels stay the run's "
-                         "verdict, since one channel set has to serve every condition. CV, "
-                         "SNR and the PSD are left out of these, having no windowed series "
-                         "to slice.")
+                         "verdict, since one channel set has to serve every condition. The "
+                         "PSD is left out of these, having no windowed series to slice.")
     pr.add_argument("--skip-bids-validation", action=argparse.BooleanOptionalAction, default=False)
     pr.set_defaults(func=cmd_prep_raw)
 

@@ -7,14 +7,9 @@ filtered against its own two edges and lands on a window grid starting at its ow
 its numbers are comparable neither with the other conditions nor with the run. See
 :func:`~fnirs_pipe.qc.metrics.windowed.condition_window_means`.
 
-Two things are deliberately *not* per condition:
-
-* **The rejected-channel set.** One channel set serves every condition, or a contrast
-  between two conditions is also a contrast between two montages. Each view carries the
-  run's verdict and says so.
-* **CV and SNR.** Neither has a windowed series to slice, so a per-condition view leaves
-  them out rather than printing a whole-run number in a column the rest of which describes
-  one condition.
+One thing is deliberately *not* per condition: **the rejected-channel set**. One channel set
+serves every condition, or a contrast between two conditions is also a contrast between two
+montages. Each view carries the run's verdict and says so.
 """
 
 from __future__ import annotations
@@ -26,15 +21,17 @@ from fnirs_pipe.utils.logging import get_logger
 logger = get_logger("qc.condition_views")
 
 # what a per-condition view can honestly fill, because each has a windowed series behind it
-SLICEABLE = ("sci_per_channel", "psp_per_channel", "good_frac_per_channel")
+SLICEABLE = ("sci_per_channel", "psp_per_channel", "good_frac_per_channel",
+             "cv_per_channel", "snr_per_channel")
 
 # and what it therefore has to drop, so no column mixes two time scopes
-UNSLICEABLE = ("snr_per_channel", "cv_per_channel")
+UNSLICEABLE = ()
 
 # the scalars a condition can be given, in print order. Short of the run's list on purpose:
-# CV, SNR, flat channels, mean amplitude and the spike count have no windowed series to
-# slice, and the GVTD threshold is derived from the whole run's distribution by definition.
-COND_SCALAR_KEYS = ("sci_mean", "good_frac_mean", "psp_mean", "gvtd_mean")
+# flat channels, mean amplitude and the spike count have no windowed series to slice, and
+# the GVTD threshold is derived from the whole run's distribution by definition.
+COND_SCALAR_KEYS = ("sci_mean", "good_frac_mean", "psp_mean", "gvtd_mean",
+                    "cv_mean", "snr_mean")
 
 
 def condition_stem(stem: str, label: str | None, index: int) -> str:
@@ -258,10 +255,9 @@ def condition_payloads(
             "The rejected channels are the whole run's verdict, unchanged. One channel set "
             "has to serve every condition, or a contrast between two conditions is also a "
             "contrast between two montages.",
-            "CV, SNR and the PSD are absent rather than zero. Neither metric has a windowed "
-            "series to slice, and the PSD is one spectrum rather than a matrix, so a "
-            "per-condition value would have to be recomputed on a cut. The full report has "
-            "all three for the run.",
+            "The PSD is absent rather than zero: it is one spectrum rather than a matrix, "
+            "so a per-condition value would have to be recomputed on a cut. The full report "
+            "has it for the run.",
         ]
         out.append((label, d))
     return out
@@ -378,6 +374,7 @@ def condition_slices_from_record(
     windowed = record.get("windowed") or {}
     sci_matrix, psp_matrix = windowed.get("sci_matrix"), windowed.get("psp_matrix")
     sci_times, psp_times = windowed.get("sci_times"), windowed.get("psp_times")
+    cv_matrix, cv_times = windowed.get("cv_matrix"), windowed.get("cv_times")
     if not sci_matrix or sci_times is None:
         logger.warning("the quality record carries no windowed matrices, so no "
                        "per-condition view can be built from it")
@@ -394,6 +391,9 @@ def condition_slices_from_record(
         if psp_matrix else None
     frac_by_cond = ({} if mask is None
                     else condition_window_means(mask.astype(float), sci_times, windows))
+    # records written before CV was windowed have no matrix; those pages leave it out
+    cv_by_cond = ({} if not cv_matrix or cv_times is None
+                  else condition_window_means(cv_matrix, cv_times, windows))
 
     for window in windows:
         label = window[0]
@@ -404,6 +404,10 @@ def condition_slices_from_record(
             "psp_per_channel": _named(psp_by_cond[label]) if label in psp_by_cond else {},
             "good_frac_per_channel": (_named(frac_by_cond[label])
                                       if label in frac_by_cond else {}),
+            "cv_per_channel": _named(cv_by_cond[label]) if label in cv_by_cond else {},
+            # 1/CV, as the run's own pair is, so the two cannot disagree on one page
+            "snr_per_channel": ({ch: 1.0 / v for ch, v in _named(cv_by_cond[label]).items()
+                                 if v} if label in cv_by_cond else {}),
         }
     return out
 
@@ -412,13 +416,15 @@ def condition_scalars(sliced: "dict[str, dict[str, float]]",
                       gvtd_mean: "float | None" = None) -> "dict[str, float | None]":
     """The scalars a condition's panel prints, averaged over the channels it has.
 
-    Only the four with a windowed series behind them, see :data:`COND_SCALAR_KEYS`. A key
-    the condition has no values for comes back None, which the metric registry prints as a
-    dash rather than as a zero.
+    Only those with a windowed series behind them, see :data:`COND_SCALAR_KEYS`. A key the
+    condition has no values for comes back None, which the metric registry prints as a dash
+    rather than as a zero.
     """
     return {
         "sci_mean":       _mean_or_none((sliced.get("sci_per_channel") or {}).values()),
         "psp_mean":       _mean_or_none((sliced.get("psp_per_channel") or {}).values()),
         "good_frac_mean": _mean_or_none((sliced.get("good_frac_per_channel") or {}).values()),
         "gvtd_mean":      gvtd_mean,
+        "cv_mean":        _mean_or_none((sliced.get("cv_per_channel") or {}).values()),
+        "snr_mean":       _mean_or_none((sliced.get("snr_per_channel") or {}).values()),
     }
