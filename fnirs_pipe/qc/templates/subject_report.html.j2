@@ -578,7 +578,11 @@
      <b>Short</b> answers a different question, whether the regressors those channels feed are
      trustworthy, and carries no colouring because a short channel's coupling is high by
      construction and has no established threshold. Rejection itself is per channel, against the
-     screening criteria, over the whole montage, and is not read off any of these averages.</p>
+     screening criteria, over the whole montage, and is not read off any of these averages.
+     The two GVTD columns are not averages of the row's channels: GVTD is an RMS across
+     channels, so each set is measured on its own and a set's value cannot be recovered from
+     another's.{% if condition_label %} On this page every column is this condition's, and the
+     channel sets are the run's, since one montage has to serve every condition.{% endif %}</p>
 
   {#- one column per metric, one row per channel set. Both halves are measured before
       denoising, so they share one table; the domain changes at the divider, and the two
@@ -591,8 +595,9 @@
                      ('gcor_hbr', 'Global corr HbR')]
                     + ([('cnr_hbo_mean', 'CNR HbO'), ('cnr_hbr_mean', 'CNR HbR')]
                        if hb_split and hb_all.get('cnr_hbo_mean') is not none else [])
-                    + [('cardiac_band_frac_hbo', 'Cardiac band (HbO)'),
-                       ('lowfreq_drift_amplitude_hbo', 'Low-freq drift (HbO)')] %}
+                    + [('cardiac_band_frac_hbo', 'Cardiac band (HbO)')]
+                    + ([] if condition_label
+                       else [('lowfreq_drift_amplitude_hbo', 'Low-freq drift (HbO)')]) %}
   {#- colour is read off the long channels alone, and only where the registry has a cutoff -#}
   {%- macro cell_class(key, v, is_long) %}{% if is_long %}{{ metric_class(key, v) }}{% endif %}{% endmacro -%}
   {%- macro qm_cells(d, cols, is_long, first_class='') %}{% for key, text in cols %}{% set v = d.get(key) %}<td class="qv {{ first_class if loop.first }} {{ cell_class(key, v, is_long) }}">{{ mv(key, v) }}</td>{% endfor %}{% endmacro -%}

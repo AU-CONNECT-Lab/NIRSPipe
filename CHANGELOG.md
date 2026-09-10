@@ -6,6 +6,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+- **Per-condition pages carry the same All / Long / Short table as the run's own page.** Mean amplitude and low-frequency drift are left out of it, having no per-condition value
+- **The channel-set table reports GVTD**, which is measured on each set rather than averaged from another's. Short channels get the magnitudes only, not the cutoff or the share above it
+
+## [0.34.0] - 2026-09-10
+
 ### Added
 - **The raw signal quality panel draws the coefficient of variation per channel and per window**, beside SCI and PSP. SNR is 1/CV, so it appears in that row's hover rather than in a row of its own
 

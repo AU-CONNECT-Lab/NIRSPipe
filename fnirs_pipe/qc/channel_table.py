@@ -300,6 +300,11 @@ OD_SPLIT_COLUMNS = (
     ("snr_mean",               "Mean SNR"),
     ("cv_mean",                "Mean CV"),
     ("mean_amp_mean",          "Mean amplitude"),
+    # GVTD is an RMS across channels, so a set's value is its own measurement and not an
+    # average over a subset. That is why it belongs in a table whose rows are channel sets,
+    # and why the record stores a series per set rather than one it could subset.
+    ("gvtd_mean",              "GVTD mean"),
+    ("gvtd_filt_mean",         "GVTD 0.01-0.5 Hz"),
 )
 
 

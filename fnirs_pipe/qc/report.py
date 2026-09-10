@@ -1622,7 +1622,7 @@ def build_subject_report(
                 raw_intensity=raw_intensity, config=config, subject=subject,
                 out_path=out_path, out_dir=nirs_dir, sqm_label=sqm_label,
                 figures_dir=figures_dir, sci_scores=sci_scores,
-                bad_channels=bad_channels, errors=errors,
+                bad_channels=bad_channels, errors=errors, sep_bands=sep_bands,
                 # closures rather than another ten parameters: both panels take a long
                 # arg list that already exists here, and only the suffix, the slice and
                 # the view span differ per condition
@@ -1803,8 +1803,26 @@ def _cropped_sections(
     with _guard("Condition scalars", errors, subject):
         from fnirs_pipe.qc.condition_views import condition_haemo_scalars
         n_fft_floor = min(_PSD_NFFT_CAP, len(raw_haemo.times))
+        errts_cut = crop(raw_errts)
         out["cond_haemo_scalars"] = condition_haemo_scalars(
-            haemo, crop(raw_errts), n_fft_floor, bands)
+            haemo, errts_cut, n_fft_floor, bands)
+        # and once per channel set, for the split table. Every one of these is a mean over
+        # whatever channels it is given, so picking first is the whole of what a set means
+        # here; GVTD, which is not, comes from the record instead.
+        from fnirs_pipe.qc.metrics import long_short_channels as _split
+        long_names, short_names = _split(haemo, sep_bands)
+        by_set = {"all": out["cond_haemo_scalars"]}
+        for set_name, names in (("long", long_names), ("short", short_names)):
+            picks = [c for c in names if c in haemo.ch_names]
+            if not picks:
+                by_set[set_name] = {}
+                continue
+            errts_pick = (None if errts_cut is None else
+                          errts_cut.copy().pick([c for c in picks
+                                                 if c in errts_cut.ch_names]))
+            by_set[set_name] = condition_haemo_scalars(
+                haemo.copy().pick(picks), errts_pick, n_fft_floor, bands)
+        out["cond_haemo_by_set"] = by_set
     return out
 
 
@@ -1886,6 +1904,7 @@ def _write_condition_reports(
     sci_scores: dict,
     bad_channels: list,
     errors: list,
+    sep_bands=None,
     remake_sci=None,
     remake_motion=None,
     remake_brain=None,
@@ -1924,8 +1943,10 @@ def _write_condition_reports(
     *verdict* is not: each page screens on its own stretch.
     """
     from fnirs_pipe.qc.condition_views import (
-        condition_scalars, condition_slices_from_record, slice_record, span_counts,
+        condition_scalars, condition_set_scalars, condition_slices_from_record,
+        slice_record, span_counts,
     )
+    from fnirs_pipe.qc.metrics import long_short_channels
     from fnirs_pipe.qc.hyper_report import condition_windows
     from fnirs_pipe.qc.metrics import resolve_cutoffs
     from fnirs_pipe.qc.metrics.windowed import SCREEN_WINDOW_S, condition_window_means
@@ -1951,14 +1972,23 @@ def _write_condition_reports(
     # the four GVTD series the run stored, each sliced to the condition's columns. They are
     # measured on the corrected file, which is what the report says on the rows it prints.
     gvtd_times = windowed.get("gvtd_window_times_s") or []
-    gvtd_by_cond = {
-        key: condition_window_means(windowed[series], gvtd_times, windows)
-        for key, series in (("gvtd_mean", "gvtd_per_window"),
-                            ("gvtd_p95", "gvtd_p95_per_window"),
-                            ("gvtd_filt_mean", "gvtd_filt_per_window"),
-                            ("gvtd_filt_p95", "gvtd_filt_p95_per_window"))
-        if windowed.get(series) and gvtd_times
-    }
+    _GVTD_SERIES = (("gvtd_mean", "gvtd_per_window"),
+                    ("gvtd_p95", "gvtd_p95_per_window"),
+                    ("gvtd_filt_mean", "gvtd_filt_per_window"),
+                    ("gvtd_filt_p95", "gvtd_filt_p95_per_window"))
+
+    def _gvtd_slices(suffix: str) -> dict:
+        """The four series of one separation set, each cut to every condition."""
+        return {key: condition_window_means(windowed[series + suffix], gvtd_times, windows)
+                for key, series in _GVTD_SERIES
+                if windowed.get(series + suffix) and gvtd_times}
+
+    # the plain keys are the long channels; `_short` and `_all` name the others, and the
+    # three are separate measurements rather than subsets, GVTD being an RMS over channels
+    gvtd_by_cond = _gvtd_slices("")
+    gvtd_sets = {"long": gvtd_by_cond,
+                 "short": _gvtd_slices("_short"),
+                 "all": _gvtd_slices("_all")}
 
     # the run's booleans, kept as spans, so a condition counts them over its own stretch.
     # gvtd_above is the corrected file's; the other two are the uncorrected one's.
@@ -1974,6 +2004,10 @@ def _write_condition_reports(
 
     blanked = _blanked(section_vars)
     window_of = {w[0]: w for w in windows}
+    # the montage's own split, which is the run's throughout: one channel set has to serve
+    # every condition or a contrast between two conditions is also a contrast between two
+    # montages. Only the verdict is the condition's.
+    long_names, short_names = long_short_channels(raw_intensity, sep_bands)
     for label, sliced in sliced_all.items():
         cond_record = slice_record(record, sliced)
         # this condition's own verdict, on the run's line. The page is a view of one
@@ -2026,11 +2060,23 @@ def _write_condition_reports(
             panels.update(remake_denoise_carpet(f"_{slug}", span))
         # and everything a crop is safe for: the haemoglobin panels, the spectra and the
         # per-channel detail. See _cropped_sections for where that line falls and why
+        haemo_by_set: dict = {}
         if remake_cropped is not None:
             cropped = remake_cropped(f"_{slug}", span)
-            # recomputed rather than sliced, so it joins the scalars and not the figures
+            # recomputed rather than sliced, so these join the scalars and not the figures
             scalars.update(cropped.pop("cond_haemo_scalars", None) or {})
+            haemo_by_set = cropped.pop("cond_haemo_by_set", None) or {}
             panels.update(cropped)
+
+        # the same three-row table the run's own page prints, over this condition. The
+        # per-channel metrics are grouped and averaged; GVTD comes in already measured per
+        # set, being an RMS across channels rather than something a subset average recovers
+        od_by_set = condition_set_scalars(
+            sliced, cond_bad, long_names, short_names,
+            {name: {k: float(v[label]) for k, v in series.items() if label in v}
+             for name, series in gvtd_sets.items()})
+        scalars["n_long_channels"] = len(long_names)
+        scalars["n_short_channels"] = len(short_names)
         # The GLM is already per condition and needs nothing rebuilt: one model is fitted
         # over the whole recording and each condition is a contrast of it, so this page
         # keeps its own activation figure out of the set the run rendered. The design
@@ -2044,11 +2090,19 @@ def _write_condition_reports(
             "channel_rows": rows,
             "channel_cells": cells,
             "channel_blocks": separation_blocks(cells),
-            # no All / Long / Short columns: each would need its own slice, and the run's
-            # split is one page away
-            "sqm_all": {}, "sqm_long": {}, "sqm_short": {},
-            "hb_all": {}, "hb_long": {}, "hb_short": {},
-            "sqm_split": False, "hb_split": False,
+            "sqm_all": od_by_set.get("all") or {},
+            "sqm_long": od_by_set.get("long") or {},
+            "sqm_short": od_by_set.get("short") or {},
+            "hb_all": haemo_by_set.get("all") or {},
+            "hb_long": haemo_by_set.get("long") or {},
+            "hb_short": haemo_by_set.get("short") or {},
+            "sqm_split": bool(od_by_set.get("short")),
+            "hb_split": bool(haemo_by_set.get("short")),
+            # mean amplitude and low-frequency drift are dropped from the columns rather
+            # than left blank in all three rows: neither has a windowed series to slice, and
+            # drift measures the span it is shown rather than the recording
+            "od_split_columns": tuple(
+                (key, text) for key, text in OD_SPLIT_COLUMNS if key != "mean_amp_mean"),
             "heading": f"{report_vars.get('heading', '')} \u2014 {label}",
             "condition_label": label,
             "index_href": out_path.name,

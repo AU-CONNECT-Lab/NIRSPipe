@@ -525,6 +525,53 @@ def condition_scalars(sliced: "dict[str, dict[str, float]]",
     return out
 
 
+def condition_set_scalars(
+    sliced: "dict[str, dict[str, float]]",
+    bad_channels: "set[str]",
+    long_names: "list[str]",
+    short_names: "list[str]",
+    gvtd_by_set: "dict[str, dict[str, float]] | None" = None,
+) -> "dict[str, dict[str, float | None]]":
+    """The condition's optical-density averages over each channel set, for the split table.
+
+    ::
+
+        sliced["sci_per_channel"] over 44 channels, 28 long and 16 short
+        -> {"all": {...}, "long": {...}, "short": {...}}
+
+    The per-channel metrics are grouped and averaged, which is all a set is for them. GVTD is
+    not: it is an RMS **across** channels, so a set's GVTD is its own measurement rather than
+    an average over a subset, and it comes in already measured per set from
+    ``gvtd_by_set``. That is the reason the record stores three series instead of one.
+
+    A set with no channels comes back with every value None rather than being left out, so
+    the table keeps its three rows on a montage that has only long channels.
+    """
+    members = {"all": None, "long": set(long_names), "short": set(short_names)}
+    out: dict = {}
+    for set_name, keep in members.items():
+        def _mean(metric: str, keep=keep) -> "float | None":
+            values = sliced.get(metric) or {}
+            return _mean_or_none([v for ch, v in values.items()
+                                  if keep is None or ch in keep])
+
+        frac = sliced.get("good_frac_per_channel") or {}
+        in_set = [ch for ch in frac if keep is None or ch in keep]
+        retention = (None if not in_set else
+                     1.0 - sum(1 for ch in in_set if ch in bad_channels) / len(in_set))
+        row = {
+            "channel_retention_rate": retention,
+            "sci_mean":       _mean("sci_per_channel"),
+            "good_frac_mean": _mean("good_frac_per_channel"),
+            "psp_mean":       _mean("psp_per_channel"),
+            "snr_mean":       _mean("snr_per_channel"),
+            "cv_mean":        _mean("cv_per_channel"),
+        }
+        row.update((gvtd_by_set or {}).get(set_name) or
+                   {"gvtd_mean": None, "gvtd_filt_mean": None})
+        out[set_name] = row
+    return out
+
 def span_counts(spans, t0: float, t1: float) -> "tuple[float | None, int]":
     """``span_share`` again, with the number of spans that touch the window.
 

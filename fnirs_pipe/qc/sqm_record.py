@@ -247,14 +247,21 @@ def _short_section(
     """Only the metrics that answer "are the short-channel regressors trustworthy".
 
     Coupling (SCI, PSP, the coupled-window share) and amplitude (SNR, CV) transfer to short
-    channels; GVTD, spikes and drift do not, because they aggregate over a montage and a
-    handful of scalp channels has no reference distribution to read them against.
+    channels. Spikes and drift do not. GVTD splits: it is an RMS across whatever channels it
+    is given, so a short-channel *magnitude* is a real measurement of that set and not a
+    subset of the long one, and the four magnitudes are reported here. What does not transfer
+    is the cutoff and everything counted against it, which is what the earlier version of
+    this docstring was about: the threshold is the mode of a distribution, and a handful of
+    scalp channels has no reference distribution to read it against. So no ``gvtd_thresh``
+    and no motion share in this section, on either side of the correction.
 
-    The share is a value here and not a verdict. Nothing colours a short channel's row,
+    Every value here is a value and not a verdict. Nothing colours a short channel's row,
     because a short channel's coupling is high by construction and the published cutoffs
     were never set for it; the long section is where the number is read against a line.
     """
-    from fnirs_pipe.qc.metrics import _intensity_metrics, _psp_metrics, _sci_metrics
+    from fnirs_pipe.qc.metrics import (
+        _intensity_metrics, _motion_metrics, _psp_metrics, _sci_metrics,
+    )
     from fnirs_pipe.qc.metrics.coupling import _good_frac_metrics
 
     raw_short = raw_intensity.copy().pick(short_names)
@@ -270,7 +277,20 @@ def _short_section(
     intensity = _intensity_metrics(raw_short)
     record.update({k: v for k, v in intensity.items()
                    if k.startswith(("snr_", "cv_", "mean_amp_"))})
+    record.update(_gvtd_magnitudes(_motion_metrics(raw_short)))
     return _split_scalars(record)
+
+
+# the GVTD keys a short-channel section may carry: magnitudes only. See `_short_section`.
+_GVTD_MAGNITUDES = ("gvtd_mean", "gvtd_p95", "gvtd_filt_mean", "gvtd_filt_p95")
+
+
+def _gvtd_magnitudes(metrics: dict) -> dict:
+    """``metrics`` with every cutoff-derived GVTD key dropped, the rest untouched."""
+    dropped = {"gvtd_thresh", "gvtd_thresh_applied",
+               "gvtd_num_above_thresh", "gvtd_pct_above_thresh"}
+    return {k: v for k, v in metrics.items()
+            if not k.startswith("gvtd_") or k not in dropped}
 
 
 def _section_writer(sections: dict[str, Any], per_channel: dict[str, Any]):
@@ -636,9 +656,11 @@ def compute_run_sections(
                     raw_motcorr.copy().pick(post_long), cardiac_l_freq, cardiac_h_freq,
                     _raw_thresh("raw_long")))
             if post_short:
-                section("motion_post_short", lambda: _motion_post_section(
-                    raw_motcorr.copy().pick(post_short), cardiac_l_freq, cardiac_h_freq,
-                    _raw_thresh("raw_short")))
+                # magnitudes only, matching `raw_short`: the correction's effect on the
+                # short channels is a change in level, not a share above a cutoff they have
+                # no distribution to set
+                section("motion_post_short", lambda: _gvtd_magnitudes(_motion_post_section(
+                    raw_motcorr.copy().pick(post_short), cardiac_l_freq, cardiac_h_freq)))
 
     # One family per haemo stage the run actually wrote, each measured with the same
     # metrics as `preproc` so any of them subtracts against it. Band power and drift are
