@@ -552,7 +552,8 @@ def compute_run_sections(
         try:
             from fnirs_pipe.qc.metrics import gvtd_above_segments
             windowed["gvtd_above_spans_s"] = [
-                list(span) for span in gvtd_above_segments(read_snirf(gvtd_span_source))]
+                list(span) for span in gvtd_above_segments(read_snirf(gvtd_span_source),
+                                                            sep_bands)]
         except Exception:
             logger.warning("windowed: GVTD above-threshold spans failed", exc_info=True)
 
@@ -572,7 +573,7 @@ def compute_run_sections(
                            else read_snirf(gvtd_source))
             series = attach_windowed_series(
                 windowed, raw_sci_od, cardiac_l_freq, cardiac_h_freq, qc_window_s,
-                gvtd_od=raw_gvtd_od, raw_intensity=raw_intensity)
+                gvtd_od=raw_gvtd_od, raw_intensity=raw_intensity, sep_bands=sep_bands)
             # the channel by window matrices as well as the channel-averaged series: the
             # report's per-channel heatmap needs them, and it must not recompute
             for key in ("sci_matrix", "psp_matrix", "cv_matrix"):

@@ -9,7 +9,11 @@ drift apart over a long run.
 import mne
 import numpy as np
 
-from fnirs_pipe.qc.metrics.gvtd import compute_windowed_filtered_gvtd, compute_windowed_gvtd
+from fnirs_pipe.qc.metrics._helpers import long_short_channels
+from fnirs_pipe.qc.metrics.gvtd import (
+    compute_windowed_filtered_gvtd,
+    compute_windowed_gvtd,
+)
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("qc.metrics.windowed")
@@ -117,6 +121,7 @@ def attach_windowed_series(
     *,
     gvtd_od: "mne.io.Raw | None" = None,
     raw_intensity: "mne.io.Raw | None" = None,
+    sep_bands=None,
 ) -> dict:
     """Compute sliding-window SCI/PSP/GVTD series, attach summaries to sqm, return raw series.
 
@@ -183,11 +188,36 @@ def attach_windowed_series(
     gvtd_per_window = gvtd_p95_per_window = gvtd_t = None
     gvtd_filt_per_window = gvtd_filt_p95_per_window = None
     raw_gvtd = raw_od if gvtd_od is None else gvtd_od
+    # One series per separation set, because GVTD is an RMS *across* channels: a long-channel
+    # series cannot be recovered from an all-channel one the way an SCI column can be picked
+    # out of the stored matrix. The plain keys are the long channels, following
+    # `spike_spans_s`, and `_short` / `_all` name the others.
+    gvtd_sets: "dict[str, list[str] | None]" = {"": None, "_short": None, "_all": None}
     try:
-        gvtd_per_window, gvtd_p95_per_window, gvtd_t = compute_windowed_gvtd(raw_gvtd, window_s)
-        gvtd_filt_per_window, gvtd_filt_p95_per_window, _ = compute_windowed_filtered_gvtd(raw_gvtd, window_s)
+        long_names, short_names = long_short_channels(raw_gvtd, sep_bands)
+        gvtd_sets = {"": long_names or None, "_short": short_names or None, "_all": None}
     except Exception as exc:
-        logger.warning("windowed GVTD failed: %s", exc)
+        logger.warning("GVTD separation split failed (%s); only the pooled series is stored", exc)
+
+    for suffix, names in gvtd_sets.items():
+        if suffix != "_all" and not names:
+            continue
+        try:
+            picked = raw_gvtd.copy().pick(names) if names else raw_gvtd
+            means, p95s, times = compute_windowed_gvtd(picked, window_s)
+            f_means, f_p95s, _ = compute_windowed_filtered_gvtd(picked, window_s)
+        except Exception as exc:
+            logger.warning("windowed GVTD%s failed: %s", suffix or " (long)", exc)
+            continue
+        if suffix == "":
+            gvtd_per_window, gvtd_p95_per_window, gvtd_t = means, p95s, times
+            gvtd_filt_per_window, gvtd_filt_p95_per_window = f_means, f_p95s
+            continue
+        if means is not None and len(means):
+            sqm[f"gvtd_per_window{suffix}"] = np.asarray(means).tolist()
+            sqm[f"gvtd_p95_per_window{suffix}"] = np.asarray(p95s).tolist()
+            sqm[f"gvtd_filt_per_window{suffix}"] = np.asarray(f_means).tolist()
+            sqm[f"gvtd_filt_p95_per_window{suffix}"] = np.asarray(f_p95s).tolist()
 
     # SCI/PSP matrices are channel × window; collapse to a per-window mean over channels
     if sci_matrix is not None and sci_times is not None:

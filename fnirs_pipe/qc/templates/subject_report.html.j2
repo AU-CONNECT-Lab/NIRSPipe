@@ -635,8 +635,9 @@
 
   <h3 class="qm-sub">Motion and spikes</h3>
   <p class="qm-note">Optical density. GVTD and the spike counts are measured on
-     {% if sqm_split %}long channels only{% else %}every channel{% endif %}; the correction
-     footprint is over every channel, since it counts what the correction touched.</p>
+     {% if gvtd_channel_set == 'long' %}long channels only{% else %}every channel{% endif %};
+     the correction footprint is over every channel, since it counts what the correction
+     touched.</p>
   {%- set motion_note = ' (motion before&rarr;after)' %}
   <ul class="qm-list">
     {{ qm_li('gvtd_mean', 'GVTD mean', '_post', motion_note) }}

@@ -1526,6 +1526,9 @@ def build_subject_report(
         **ch_summary_vars,
         **loose_figure_vars,
         gvtd_set=gvtd_set,
+        # the set GVTD was actually measured on, so the note says so on a per-condition page
+        # too, where the column-split flag it used to read is False by design
+        gvtd_channel_set=gvtd_set,
         mode=mode or "",
     )
     out_path.parent.mkdir(parents=True, exist_ok=True)

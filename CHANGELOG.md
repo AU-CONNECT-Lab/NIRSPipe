@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 - **The quality record carries CV and SNR per window**, so the group report draws them as heatmaps alongside SCI, PSP and GVTD
 - **A per-condition page screens on its own stretch**, so a channel loose in one condition and coupled in another is named in the one it was loose in. The recording is still processed under the run's verdict, which its own page carries
 - **Per-condition pages report the GVTD above-threshold share and the spike share**, counted from the run's own flags over that condition's span rather than re-decided on it
+- **The windowed GVTD series is measured on the long channels**, the set its own scalars and figures already use, so a heatmap or a per-condition value can be read against them. Stored `gvtd_*_per_window` will differ from earlier runs
 
 ## [0.33.0] - 2026-09-09
 

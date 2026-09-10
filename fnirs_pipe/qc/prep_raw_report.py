@@ -168,7 +168,7 @@ def _process_run(
     # section, since `_split_scalars` would file every one of these lists under per_channel.
     windowed: dict = {}
     series = attach_windowed_series(windowed, raw_od, cardiac_l_freq, cardiac_h_freq,
-                                    window_s, raw_intensity=raw)
+                                    window_s, raw_intensity=raw, sep_bands=sep_bands)
     sci_matrix, sci_win_times = series["sci_matrix"], series["sci_times"]
     psp_matrix, psp_win_times = series["psp_matrix"], series["psp_times"]
 
