@@ -419,6 +419,7 @@ def _motion_post_section(
     raw_od: mne.io.Raw,
     cardiac_l_freq: float,
     cardiac_h_freq: float,
+    gvtd_thresh: "float | None" = None,
 ) -> dict[str, Any]:
     """Did the correction work, and did it cost anything.
 
@@ -429,6 +430,11 @@ def _motion_post_section(
     drop means the correction ate physiology along with the artifact, which is the failure
     mode wavelet correction has and TDDR largely does not.
 
+    ``gvtd_thresh`` is the matching ``raw*`` section's cutoff, and it is what makes the
+    first question answerable: the cutoff is derived from whatever trace it is shown, so
+    counting each side against its own turns the pair into two shape statistics of two
+    different distributions rather than a before and an after. See ``_motion_metrics``.
+
     Hand-picked rather than ``compute_raw_sqm``: this file is optical density, so that
     would set the whole intensity family to None and add CP and channel distance on top,
     twenty-odd keys of which half would be empty.
@@ -438,7 +444,7 @@ def _motion_post_section(
     )
 
     record: dict[str, Any] = {}
-    record.update(_motion_metrics(raw_od))
+    record.update(_motion_metrics(raw_od, thresh=gvtd_thresh))
     record.update(_spike_metrics(raw_od))
     # the mean over every channel, bads included, so it is comparable with `raw`
     scores, _ = compute_sci_scores(raw_od, cardiac_l_freq, cardiac_h_freq)
@@ -616,15 +622,23 @@ def compute_run_sections(
             logger.warning("%s unreadable; motion_post sections skipped",
                            stages["motcorrected"], exc_info=True)
         if raw_motcorr is not None:
+            # each post section counts against the cutoff of the `raw` section on the same
+            # channels, so a pair shares one yardstick and one channel set. Absent when the
+            # matching raw section failed, and the post section then falls back to its own.
+            def _raw_thresh(name: str) -> "float | None":
+                return (sections.get(name) or {}).get("gvtd_thresh")
+
             section("motion_post", lambda: _motion_post_section(
-                raw_motcorr, cardiac_l_freq, cardiac_h_freq))
+                raw_motcorr, cardiac_l_freq, cardiac_h_freq, _raw_thresh("raw")))
             post_long, post_short = long_short_channels(raw_motcorr, sep_bands)
             if post_long and len(post_long) < len(raw_motcorr.ch_names):
                 section("motion_post_long", lambda: _motion_post_section(
-                    raw_motcorr.copy().pick(post_long), cardiac_l_freq, cardiac_h_freq))
+                    raw_motcorr.copy().pick(post_long), cardiac_l_freq, cardiac_h_freq,
+                    _raw_thresh("raw_long")))
             if post_short:
                 section("motion_post_short", lambda: _motion_post_section(
-                    raw_motcorr.copy().pick(post_short), cardiac_l_freq, cardiac_h_freq))
+                    raw_motcorr.copy().pick(post_short), cardiac_l_freq, cardiac_h_freq,
+                    _raw_thresh("raw_short")))
 
     # One family per haemo stage the run actually wrote, each measured with the same
     # metrics as `preproc` so any of them subtracts against it. Band power and drift are

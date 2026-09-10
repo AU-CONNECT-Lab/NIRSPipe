@@ -1899,18 +1899,29 @@ def _write_condition_reports(
     channel-by-window SCI and PSP matrices, so a condition is a column selection out of the
     pass the run made; see :mod:`fnirs_pipe.qc.condition_views`.
 
-    Four panels are per condition. The scalar panel and the channel table come off the
-    sliced record; the SCI/PSP panel is rebuilt from the matrices sliced to the condition's
-    columns, which is a real slice because nothing inside that figure filters; and the
-    carpet is rebuilt over the whole run and *narrowed* to the condition, because that
-    figure derives its GVTD, its z-scoring and its threshold from whatever it is handed.
+    A panel gets here one of four ways, and which one is a property of the panel:
 
-    What stays blank is the response half: epochs, topographies, trial images and the GLM.
-    The epoch window is set for a trial rather than a block, so those panels would describe
-    the first seconds of each condition instead of the condition. The PSD stays blank for a
-    different reason: it is one spectrum rather than a matrix, so there is nothing to slice.
+    - **sliced out of the record**: the scalar panel, the channel table, and the SCI/PSP/CV
+      panel, whose matrices are cut to the condition's columns. A real slice, because
+      nothing inside those filters or re-measures
+    - **measured over the run, narrowed to the condition**: the GVTD carpet, the per-channel
+      motion figures and the denoising carpet. Each derives something run-wide from what it
+      is handed -- a filtered GVTD, a threshold, a per-channel z-scale -- so a cut recording
+      would give every condition a scale no other condition could be read against
+    - **rebuilt on a cropped copy**: the haemoglobin panels, the spectra, the per-channel
+      detail, the epoch preview and the topography. Safe because none of them filters; see
+      :func:`_cropped_sections`
+    - **rebuilt from the condition's own verdict**: the 3D quality views and the optode flat
+      map, which carry that condition's SCI and its own rejected channels
 
-    The channel set is the run's throughout, since one set has to serve every condition.
+    What stays blank is the trial half, the trial images and the per-trial panel, and the
+    event timeline. Those are the ones nobody has decided the per-condition form of yet.
+
+    The GLM needs nothing rebuilt: one model is fitted over the whole recording and each
+    condition is a column of it.
+
+    The channel set is the run's throughout, since one set has to serve every condition. The
+    *verdict* is not: each page screens on its own stretch.
     """
     from fnirs_pipe.qc.condition_views import (
         condition_scalars, condition_slices_from_record, slice_record, span_counts,

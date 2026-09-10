@@ -317,9 +317,11 @@ def build_channel_figure(
                         continue
                     panels.append((cond, ep_subset.get_data()))
                 if panels:
+                    # stacked, for the same reason the grand mean is: five conditions across
+                    # one short row leaves each a few centimetres of a slow curve
+                    n = len(panels)
                     epoch_fig = make_subplots(
-                        rows=1, cols=len(panels), shared_yaxes=True,
-                        horizontal_spacing=0.03,
+                        rows=n, cols=1, shared_xaxes=True, vertical_spacing=0.06,
                         subplot_titles=[f"{c} (n={e.shape[0]})" for c, e in panels],
                     )
                     for i, (_cond, ep) in enumerate(panels, start=1):
@@ -331,20 +333,24 @@ def build_channel_figure(
                                 name=label, mode="lines", legendgroup=label,
                                 showlegend=(i == 1),
                                 line=dict(color=color, width=2),
-                            ), row=1, col=i)
+                            ), row=i, col=1)
                         epoch_fig.add_vline(
                             x=0, line=dict(color="#7f8c8d", width=1, dash="dash"),
-                            row=1, col=i)
-                        epoch_fig.update_xaxes(title_text="Time rel. onset (s)",
-                                               gridcolor="#eeeeee",
-                                               zerolinecolor="#cccccc", row=1, col=i)
-                    epoch_fig.update_yaxes(title_text="Conc. (µmol/L)",
-                                           gridcolor="#eeeeee", row=1, col=1)
+                            row=i, col=1)
+                        # one scale over the rows, which the side-by-side layout had from
+                        # shared_yaxes; without it each condition autoscales to itself
+                        epoch_fig.update_yaxes(
+                            title_text="Conc. (µmol/L)", gridcolor="#eeeeee",
+                            row=i, col=1, **({} if i == 1 else {"matches": "y"}))
+                    epoch_fig.update_xaxes(title_text="Time rel. onset (s)",
+                                           gridcolor="#eeeeee",
+                                           zerolinecolor="#cccccc", row=n, col=1)
                     epoch_fig.update_annotations(font_size=9)
                     epoch_fig.update_layout(
                         plot_bgcolor="white", paper_bgcolor="white",
-                        height=220, margin=dict(l=60, r=15, t=30, b=38),
-                        legend=dict(font=dict(size=8), orientation="h", y=1.18),
+                        height=50 + 130 * n, margin=dict(l=60, r=15, t=42, b=42),
+                        legend=dict(font=dict(size=8), orientation="h",
+                                    x=1, xanchor="right", y=1.0, yanchor="bottom"),
                     )
         except Exception as exc:
             logger.warning("epoch preview failed for %s: %s", ch_pair, exc)

@@ -228,21 +228,41 @@ def gvtd_channel_blocks(
 @_safe_metrics("GVTD metrics", (
     "gvtd_mean", "gvtd_p95", "gvtd_filt_mean", "gvtd_filt_p95",
     "gvtd_vstd_mean", "gvtd_vstd_p95",
-    "gvtd_thresh", "gvtd_num_above_thresh", "gvtd_pct_above_thresh",
+    "gvtd_thresh", "gvtd_thresh_applied",
+    "gvtd_num_above_thresh", "gvtd_pct_above_thresh",
 ))
-def _motion_metrics(raw_intensity: mne.io.Raw) -> dict[str, Any]:
+def _motion_metrics(raw_intensity: mne.io.Raw,
+                    thresh: "float | None" = None) -> dict[str, Any]:
     """GVTD motion metrics from OD: mean/p95, motion-band and vstd variants, and threshold.
 
     Parameters
     ----------
     raw_intensity : mne.io.Raw
         Raw intensity recording, or one already in optical density.
+    thresh : float, optional
+        Count the above-threshold timepoints against this cutoff instead of this
+        recording's own. Given by the caller for the motion-corrected file, so that the
+        before and after halves of a pair are counted against one yardstick.
+
+        Without it the pair is not a comparison. The threshold is the mode of the trace's
+        own histogram plus 3 SD, so it tracks whatever distribution it is handed: on
+        ``sub-p1d01`` it rises 1.54x across the correction (4.81e-04 to 7.39e-04), and the
+        share above it falls 52.4% to 4.0% while the share above the *original* cutoff only
+        falls to 33.1%. Most of that 13x was the cutoff moving. It is the same rule the
+        per-condition views follow, which the project already states: fix the yardstick over
+        the run and count the mask, never re-derive it on the part being compared.
+
+        ``gvtd_thresh`` still reports this recording's own cutoff either way, because the
+        report has a row for exactly that and its movement is worth seeing;
+        ``gvtd_thresh_applied`` names the one the counts used, so a record can never be read
+        as counting against a cutoff it did not use.
 
     Returns
     -------
     dict
         gvtd_mean/p95 (canonical), gvtd_filt_* (motion-band), gvtd_vstd_*
-        (channel-standardized), gvtd_thresh, and the num/pct of timepoints above it.
+        (channel-standardized), gvtd_thresh, gvtd_thresh_applied, and the num/pct of
+        timepoints above the applied one.
 
     Notes
     -----
@@ -258,9 +278,10 @@ def _motion_metrics(raw_intensity: mne.io.Raw) -> dict[str, Any]:
     gvtd_ts = gvtd_timetrace(od_data, sfreq)                           # canonical (unfiltered)
     gvtd_filt = gvtd_timetrace(od_data, sfreq, *GVTD_MOTION_BAND)  # motion-band
     gvtd_vstd = gvtd_timetrace(od_data, sfreq, standardize_channels=True)  # channel-equalized
-    motion_thresh = gvtd_threshold(gvtd_filt, n_std=GVTD_N_STD)
-    if motion_thresh is not None:
-        above = gvtd_filt > motion_thresh
+    own_thresh = gvtd_threshold(gvtd_filt, n_std=GVTD_N_STD)
+    applied = own_thresh if thresh is None else float(thresh)
+    if applied is not None:
+        above = gvtd_filt > applied
         pct_above = float(np.mean(above))
         num_above = int(np.sum(above))
     else:
@@ -272,7 +293,8 @@ def _motion_metrics(raw_intensity: mne.io.Raw) -> dict[str, Any]:
         "gvtd_filt_p95": float(np.percentile(gvtd_filt, 95)),
         "gvtd_vstd_mean": float(gvtd_vstd.mean()),
         "gvtd_vstd_p95": float(np.percentile(gvtd_vstd, 95)),
-        "gvtd_thresh": motion_thresh,
+        "gvtd_thresh": own_thresh,
+        "gvtd_thresh_applied": applied,
         "gvtd_num_above_thresh": num_above,
         "gvtd_pct_above_thresh": pct_above,
     }

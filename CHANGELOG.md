@@ -7,24 +7,24 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
-- **The raw signal quality panel draws the coefficient of variation per channel and per window**, on the same window grid and the same optical density as SCI and PSP. SNR is 1/CV, so it rides that row's hover rather than taking a second one, and the row's colour is pinned to its cutoff instead of to the recording's worst window
+- **The raw signal quality panel draws the coefficient of variation per channel and per window**, beside SCI and PSP. SNR is 1/CV, so it appears in that row's hover rather than in a row of its own
 
 ### Fixed
-- **The channel quality maps show the screening verdict, not the SCI alone.** A channel rejected for being loose through most of the recording was drawn green beside a table calling it BAD, because both the 3D views and the optode flat map coloured by whole-run SCI and screening has been on the coupled-window share. A rejected channel is red now whatever its SCI; the rest are still graded by theirs
-- **A per-condition page shows the channel quality maps**, carrying that condition's own SCI and its own rejected channels
-- **The grand-mean panel draws one condition per row** instead of squeezing them into one row side by side, on a shared time and concentration scale. Its legend no longer sits on the first panel's title
-- **A per-condition page shows the per-channel before/after motion figures and the denoising carpet.** Both sections were blank on it. Each is measured over the whole recording and viewed over the condition, so the conditions stay on one scale
-- **A per-condition page reports the GVTD percentiles, the motion-band GVTD, the frame counts and how much of the condition motion correction touched.** All of them read n/a although the run had already measured them per window
-- **A per-condition page names the stage each motion row is measured on.** Its GVTD comes from the corrected recording and its spike share from the uncorrected one, and the two stood side by side as bare numbers. The GVTD threshold and the spike count are the run's, and the page says so rather than showing them empty
-- **A per-condition page prints its mean CV**, which it had been computing and dropping
+- **The before → after GVTD motion share is counted against one cutoff.** Each half used to derive its own, so much of the reported improvement was the cutoff following the recording rather than motion being removed
+- **The channel quality maps show the screening verdict.** A rejected channel was drawn green when its SCI was high, because the maps coloured by SCI alone; a rejected channel is red now whatever its SCI
+- **The epoch and grand-mean panels draw one condition per row** instead of squeezing them side by side, on a shared scale
+- **Per-condition pages show the channel quality maps, the per-channel motion figures and the denoising carpet**, which were blank on them
+- **Per-condition pages report the GVTD percentiles, the frame counts, the correction footprint and the mean CV**, which read n/a although the run had already measured them
+- **Per-condition pages name the stage each motion row is measured on**, and say which rows are the run's rather than showing them empty
+- **`gvtd_filt_p95` is marked as a metric that decides whether a run is usable**
 
 ### Changed
 - **CV and SNR are measured over short windows and averaged, instead of over the whole recording.** A whole-run CV grows with recording length rather than with noise, so stored CV, SNR and `snr_pass_rate` will differ from earlier runs, in the direction of passing more channels
 - **The quality record carries CV and SNR per window**, so the group report draws them as heatmaps alongside SCI, PSP and GVTD
 - **A per-condition page screens on its own stretch**, so a channel loose in one condition and coupled in another is named in the one it was loose in. The recording is still processed under the run's verdict, which its own page carries
 - **Per-condition pages report the GVTD above-threshold share and the spike share**, counted from the run's own flags over that condition's span rather than re-decided on it
-- **The windowed GVTD series is stored per separation set**, long, short and all, the way its scalars already are. GVTD averages across channels, so a set's series cannot be recovered from another's. The unsuffixed keys are the long channels now, so stored `gvtd_*_per_window` will differ from earlier runs
-- **Per-condition pages carry the global correlation, the HbO-HbR correlation and the cardiac and respiration bands**, recomputed on that condition's own cut. The band metrics are left out for a condition too short to transform on the run's frequency grid, rather than reported on a coarser one
+- **The windowed GVTD series is stored per separation set**, long, short and all, the way its scalars already are. The unsuffixed keys are the long channels now, so stored `gvtd_*_per_window` will differ from earlier runs
+- **Per-condition pages carry the global correlation, the HbO-HbR correlation and the cardiac and respiration bands**, recomputed on that condition's own cut. The band metrics are left out for a condition too short to transform on the run's frequency grid
 
 ## [0.33.0] - 2026-09-09
 

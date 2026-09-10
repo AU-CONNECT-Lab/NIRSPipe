@@ -662,6 +662,13 @@
       is, where the run's page says it once with an arrow. -#}
   {%- set after_note  = ' (after correction)' if condition_label else '' %}
   {%- set before_note = ' (before correction)' if condition_label else '' %}
+  {% if not condition_label and sqm.get('gvtd_pct_above_thresh_post') is not none %}
+  <p class="qm-note">The GVTD threshold is the only row whose two halves are each derived
+     from their own recording, which is what that row is for: it is a mode of the trace's own
+     histogram, so it follows the recording. Every count above it, on both halves, is taken
+     against the <b>uncorrected</b> cutoff, so the fall in % motion is motion removed rather
+     than the cutoff moving. It is the yardstick the carpet above draws, so the two agree.</p>
+  {% endif %}
   {% if condition_label %}
   <p class="qm-note">One side of the motion step, not both: this condition's GVTD comes off
      the corrected recording and its spike share off the uncorrected one, so each row names
@@ -724,8 +731,17 @@
     {{ qm_li('pct_data_retained', '% data retained') }}
     {{ qm_li('cardiac_band_power_hbo', 'Cardiac band power (HbO)') }}
     {{ qm_li('cardiac_band_frac_hbo', 'Cardiac band fraction (HbO)') }}
+    {% if not condition_label %}
     {{ qm_li('lowfreq_drift_amplitude_hbo', 'Low-freq drift (HbO)') }}
+    {% endif %}
   </ul>
+  {% if condition_label %}
+  <p class="qm-note">Low-frequency drift is not among these. It is the peak-to-peak of a
+     cubic fitted over whatever span it is shown, so it measures how far the baseline
+     wandered and that grows with the span: on this dataset it rises 3.3&times; from a 150 s
+     window to a 900 s one on identical data. A per-condition value would be a comparison of
+     the conditions' durations. The run's own page carries it.</p>
+  {% endif %}
 
 </div>
 
