@@ -72,7 +72,7 @@ from fnirs_pipe.qc.figure_io import (
     _figure_height, _pair_fname, _save_multi_fig_html,
     extract_markers, get_channel_pairs,
 )
-from fnirs_pipe.qc.metrics import SCI_PASS, gvtd_channel_blocks, separation_bands
+from fnirs_pipe.qc.metrics import CV_PASS, SCI_PASS, gvtd_channel_blocks, separation_bands
 from fnirs_pipe.qc.metrics._helpers import bands_from_record
 from fnirs_pipe.qc.figures._utils import chunk_annotations
 from fnirs_pipe.qc.figures import (
@@ -270,7 +270,7 @@ def _section_sci(
     figures_dir: Path,
     suffix: str = "",
 ) -> dict:
-    """The SCI/PSP panel, per channel and per window.
+    """The SCI/PSP/CV panel, per channel and per window.
 
     ``suffix`` names the figure, so a per-condition page writes its own instead of
     overwriting the run's. Handed a ``windowed`` whose matrices are already sliced to one
@@ -294,13 +294,21 @@ def _section_sci(
     sci_win_times     = _series("sci_times")
     psp_scores_matrix = _series("psp_matrix")
     psp_win_times     = _series("psp_times")
+    cv_scores_matrix  = _series("cv_matrix")
+    cv_win_times      = _series("cv_times")
     ch_names = list(sci_scores.keys())
     sci_psp_panel_path = None
     sci_psp_panel_h = 0
 
-    psp_per_ch: dict = {}
-    if psp_scores_matrix is not None and psp_scores_matrix.shape[0] == len(ch_names):
-        psp_per_ch = dict(zip(ch_names, psp_scores_matrix.mean(axis=1)))
+    def _per_channel(matrix) -> dict:
+        if matrix is None or matrix.shape[0] != len(ch_names):
+            return {}
+        return dict(zip(ch_names, np.nanmean(matrix, axis=1)))
+
+    psp_per_ch = _per_channel(psp_scores_matrix)
+    cv_per_ch  = _per_channel(cv_scores_matrix)
+    if cv_scores_matrix is not None and not cv_per_ch:
+        cv_scores_matrix = None       # a matrix on a different channel set is not this panel's
 
     with _guard("SCI/PSP panel", errors, subject):
         fig = build_sci_psp_figure(
@@ -310,12 +318,16 @@ def _section_sci(
             sci_win_times=sci_win_times,
             psp_matrix=psp_scores_matrix,
             psp_win_times=psp_win_times,
+            cv_per_channel=cv_per_ch,
+            cv_matrix=cv_scores_matrix,
+            cv_win_times=cv_win_times,
         )
         sci_psp_panel_path, sci_psp_panel_h = _save_plotly_html(
             fig, figures_dir / f"sci_psp_panel{suffix}.html"
         )
 
-    return {"sci_psp_panel_path": sci_psp_panel_path, "sci_psp_panel_h": sci_psp_panel_h}
+    return {"sci_psp_panel_path": sci_psp_panel_path, "sci_psp_panel_h": sci_psp_panel_h,
+            "cv_threshold": CV_PASS}
 
 
 def _uncorrected_haemo(
@@ -368,26 +380,30 @@ def _section_channel_detail(
     return {"channel_pairs": saved}
 
 
-def _section_motion_detail(
+def _motion_detail_figures(
     raw_od_before: mne.io.Raw | None,
     raw_od_after: mne.io.Raw | None,
     subject: str,
     errors: list,
-    figures_dir: Path,
     segments: dict | None = None,
     corrected_segments: list | None = None,
     spike_by_set: dict | None = None,
     gvtd_blocks: "list[tuple[str, list[str]]] | None" = None,
-) -> dict:
+) -> "list[tuple[str, Any]]":
     """One per-channel motion figure per channel, each with its own class's GVTD on top.
 
     The GVTD row follows the channel the figure is about rather than staying fixed: it is
     read against the derivative row directly below it, and the two separation classes are not
     on one scale. A channel in neither class falls back to the canonical set, which is the
     only one there is a reported number for.
+
+    Built here and saved by :func:`_section_motion_detail`, because a per-condition page
+    shows the same figures narrowed rather than remeasured: the GVTD row on each of them is
+    filtered and thresholded over the whole run, so rebuilding on a cut would give every
+    condition a trace of its own that no other condition could be read against.
     """
     if raw_od_before is None or raw_od_after is None:
-        return {"motion_detail_pairs": []}
+        return []
     shared_chs = [c for c in raw_od_after.ch_names if c in raw_od_before.ch_names]
 
     # the same blocks the carpet panel drew, so the two figures never name sets differently:
@@ -401,15 +417,41 @@ def _section_motion_detail(
                 return name, names
         return blocks[0]          # in no block (neither separation range): the canonical set
 
-    saved = []
+    built = []
     for ch in shared_chs:
         with _guard(f"Motion detail {ch}", errors, subject):
             set_name, picks = set_of(ch)
-            fig = build_motion_detail_figure(raw_od_before, raw_od_after, ch, segments,
-                                             corrected_segments=corrected_segments,
-                                             spike_segments=(spike_by_set or {}).get(set_name),
-                                             gvtd_picks=picks, gvtd_set=set_name)
-            fname = f"motion_detail_{_pair_fname(ch)}.html"
+            built.append((ch, build_motion_detail_figure(
+                raw_od_before, raw_od_after, ch, segments,
+                corrected_segments=corrected_segments,
+                spike_segments=(spike_by_set or {}).get(set_name),
+                gvtd_picks=picks, gvtd_set=set_name)))
+    return built
+
+
+def _section_motion_detail(
+    figures: "list[tuple[str, Any]]",
+    subject: str,
+    errors: list,
+    figures_dir: Path,
+    suffix: str = "",
+    xrange: "tuple[float, float] | None" = None,
+) -> dict:
+    """The built per-channel motion figures written out, optionally narrowed to one condition.
+
+    ``xrange`` narrows the time axis the way ``_section_motion`` narrows the carpet, and for
+    the same reason: everything in these figures is measured over the run and only the view
+    moves. The figures are narrowed in place, so each condition's save must follow its own
+    zoom, which is the order this is called in.
+    """
+    from fnirs_pipe.qc.condition_views import zoom_to_condition
+
+    saved = []
+    for ch, fig in figures:
+        with _guard(f"Motion detail {ch}", errors, subject):
+            if xrange is not None:
+                zoom_to_condition(fig, *xrange)
+            fname = f"motion_detail_{_pair_fname(ch)}{suffix}.html"
             h = _save_multi_fig_html([fig], figures_dir / fname)
             saved.append({"pair": ch, "path": _fig_href(figures_dir, fname), "h": h})
     return {"motion_detail_pairs": saved}
@@ -1344,12 +1386,13 @@ def build_subject_report(
                             figures_dir, windowed=windowed_section,
                             raw_before_motion=raw_before_motion,
                             raw_after_motion=raw_after_motion)
-    motion_det_vars   = _section_motion_detail(
-                            raw_before_motion, raw_after_motion, subject, errors, figures_dir,
+    motion_det_figs   = _motion_detail_figures(
+                            raw_before_motion, raw_after_motion, subject, errors,
                             segments=segments,
                             corrected_segments=motion_vars.get("corrected_segments"),
                             spike_by_set=motion_vars.get("spike_by_set"),
                             gvtd_blocks=gvtd_blocks)
+    motion_det_vars   = _section_motion_detail(motion_det_figs, subject, errors, figures_dir)
     haemo_vars        = _section_haemo(raw_haemo, config, subject, errors, figures_dir,
                                        l_freq=l_freq, h_freq=h_freq,
                                        raw_errts=raw_errts, psd_stages=psd_stages,
@@ -1559,6 +1602,12 @@ def build_subject_report(
                     segments, subject, errors, figures_dir, windowed=windowed_section,
                     raw_before_motion=raw_before_motion,
                     raw_after_motion=raw_after_motion, suffix=suffix, xrange=span),
+                remake_motion_detail=lambda suffix, span: _section_motion_detail(
+                    motion_det_figs, subject, errors, figures_dir,
+                    suffix=suffix, xrange=span),
+                remake_denoise_carpet=lambda suffix, span: _condition_denoise_carpet(
+                    raw_haemo, after_haemo, roi_map, span, suffix,
+                    subject, errors, figures_dir),
                 remake_cropped=lambda suffix, span: _cropped_sections(
                     span, suffix, raw_haemo=raw_haemo, epoch_haemo=epoch_haemo,
                     raw_haemo_uncorr=raw_haemo_uncorr, raw_errts=raw_errts,
@@ -1720,6 +1769,26 @@ def _cropped_sections(
     return out
 
 
+def _condition_denoise_carpet(
+    raw_haemo, after_haemo, roi_map, span, suffix, subject, errors, figures_dir,
+) -> dict:
+    """The before/after denoising carpet over one condition's stretch.
+
+    The greyscale is the run's, set from each channel's whole-recording SD, and only the
+    columns drawn are cut; see ``carpet_compare_figure``'s ``xlim``. This is the third figure
+    on a per-condition page that is measured run-wide and viewed narrow, after the GVTD
+    carpet and the per-channel motion figures.
+    """
+    if after_haemo is None:
+        return {}
+    with _guard("Denoising carpet", errors, subject):
+        b64 = carpet_compare_figure(raw_haemo, after_haemo, roi_map=roi_map, xlim=span)
+        name = f"denoise_carpet{suffix}.png"
+        _save_b64_png(b64, figures_dir / name)
+        return {"denoise_carpet_path": _fig_href(figures_dir, name)}
+    return {}
+
+
 def _condition_glm(report_vars: dict, label: str) -> dict:
     """The run's GLM panel narrowed to one condition's activation figure.
 
@@ -1740,7 +1809,7 @@ def _condition_glm(report_vars: dict, label: str) -> dict:
 def _windowed_slice(record: dict, windows: list, label: str) -> dict:
     """The record's ``windowed`` section with its matrices cut to one condition's columns.
 
-    Only the four keys the SCI/PSP panel reads. The rest of that section is spans and
+    Only the six keys the SCI/PSP/CV panel reads. The rest of that section is spans and
     channel-averaged series measured over the run, and handing those to a per-condition
     panel would put run-wide stripes over per-condition columns.
     """
@@ -1750,7 +1819,8 @@ def _windowed_slice(record: dict, windows: list, label: str) -> dict:
 
     windowed = record.get("windowed") or {}
     out: dict = {}
-    for matrix_key, times_key in (("sci_matrix", "sci_times"), ("psp_matrix", "psp_times")):
+    for matrix_key, times_key in (("sci_matrix", "sci_times"), ("psp_matrix", "psp_times"),
+                                  ("cv_matrix", "cv_times")):
         matrix, times = windowed.get(matrix_key), windowed.get(times_key)
         if not matrix or times is None:
             continue
@@ -1779,6 +1849,8 @@ def _write_condition_reports(
     errors: list,
     remake_sci=None,
     remake_motion=None,
+    remake_motion_detail=None,
+    remake_denoise_carpet=None,
     remake_cropped=None,
 ) -> None:
     """One subject-report page per annotated condition, sliced out of the quality record.
@@ -1801,7 +1873,7 @@ def _write_condition_reports(
     The channel set is the run's throughout, since one set has to serve every condition.
     """
     from fnirs_pipe.qc.condition_views import (
-        condition_scalars, condition_slices_from_record, slice_record, span_share,
+        condition_scalars, condition_slices_from_record, slice_record, span_counts,
     )
     from fnirs_pipe.qc.hyper_report import condition_windows
     from fnirs_pipe.qc.metrics import resolve_cutoffs
@@ -1824,14 +1896,30 @@ def _write_condition_reports(
     if not sliced_all:
         return
 
-    gvtd = (record.get("windowed") or {})
-    gvtd_by_cond = condition_window_means(
-        gvtd.get("gvtd_per_window") or [], gvtd.get("gvtd_window_times_s") or [], windows
-    ) if gvtd.get("gvtd_per_window") else {}
+    windowed = record.get("windowed") or {}
+    # the four GVTD series the run stored, each sliced to the condition's columns. They are
+    # measured on the corrected file, which is what the report says on the rows it prints.
+    gvtd_times = windowed.get("gvtd_window_times_s") or []
+    gvtd_by_cond = {
+        key: condition_window_means(windowed[series], gvtd_times, windows)
+        for key, series in (("gvtd_mean", "gvtd_per_window"),
+                            ("gvtd_p95", "gvtd_p95_per_window"),
+                            ("gvtd_filt_mean", "gvtd_filt_per_window"),
+                            ("gvtd_filt_p95", "gvtd_filt_p95_per_window"))
+        if windowed.get(series) and gvtd_times
+    }
 
-    # the run's booleans, kept as spans, so a condition counts them over its own stretch
-    gvtd_above_spans = (record.get("windowed") or {}).get("gvtd_above_spans_s") or []
-    spike_spans = (record.get("windowed") or {}).get("spike_spans_s") or []
+    # the run's booleans, kept as spans, so a condition counts them over its own stretch.
+    # gvtd_above is the corrected file's; the other two are the uncorrected one's.
+    span_lists = {
+        "gvtd_pct_above_thresh": windowed.get("gvtd_above_spans_s") or [],
+        "spike_pct_frames":      windowed.get("spike_spans_s") or [],
+        "motion_corrected_pct":  windowed.get("motion_corrected_spans_s") or [],
+    }
+    count_key = {"gvtd_pct_above_thresh": "gvtd_num_above_thresh",
+                 "spike_pct_frames": "spike_num_frames",
+                 "motion_corrected_pct": "motion_corrected_num"}
+    sfreq = float(raw_intensity.info["sfreq"])
 
     blanked = _blanked(section_vars)
     window_of = {w[0]: w for w in windows}
@@ -1847,10 +1935,20 @@ def _write_condition_reports(
         rows = channel_rows(cond_record, sci_scores, cond_bad)
         cells = format_rows(rows, cutoffs["sci"], psp_threshold=cutoffs["psp"])
         t0, t1 = window_of[label][1], window_of[label][2]
+        # a share is a fraction of this stretch, so the frame count that goes with it is
+        # that share of the samples in it rather than a second pass over the spans
+        shares, n_frames, n_segments = {}, {}, {}
+        for share_key, spans in span_lists.items():
+            share, n_seg = span_counts(spans, t0, t1)
+            shares[share_key] = share
+            n_frames[count_key[share_key]] = (
+                None if share is None else int(round(share * (t1 - t0) * sfreq)))
+            if share_key == "motion_corrected_pct":
+                n_segments["motion_corrected_n_segments"] = n_seg
         scalars = condition_scalars(
-            sliced, None if label not in gvtd_by_cond else float(gvtd_by_cond[label]),
-            gvtd_above=span_share(gvtd_above_spans, t0, t1),
-            spike_share=span_share(spike_spans, t0, t1),
+            sliced,
+            {k: float(v[label]) for k, v in gvtd_by_cond.items() if label in v},
+            shares=shares, n_frames=n_frames, n_segments=n_segments,
             retention=retention)
         slug = _pair_fname(label)
         summary = _section_channel_summary(
@@ -1866,6 +1964,12 @@ def _write_condition_reports(
         span = (t0, t1)
         if remake_motion is not None:
             panels.update(remake_motion(f"_{slug}", span))
+        # the per-channel motion figures and the denoising carpet, both narrowed the same
+        # way: built once over the run above, written again here viewing this stretch
+        if remake_motion_detail is not None:
+            panels.update(remake_motion_detail(f"_{slug}", span))
+        if remake_denoise_carpet is not None:
+            panels.update(remake_denoise_carpet(f"_{slug}", span))
         # and everything a crop is safe for: the haemoglobin panels, the spectra and the
         # per-channel detail. See _cropped_sections for where that line falls and why
         if remake_cropped is not None:

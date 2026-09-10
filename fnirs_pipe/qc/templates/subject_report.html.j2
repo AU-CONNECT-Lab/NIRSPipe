@@ -159,13 +159,17 @@
 
 <!-- step b: SCI / PSP quality panels -->
 <details id="Signal" open>
-  <summary>b. Raw Signal Quality (SCI / PSP / Short Channel)</summary>
+  <summary>b. Raw Signal Quality (SCI / PSP / CV / Short Channel)</summary>
   <div class="details-body">
     <p class="step-desc">
-      Scalp coupling index (SCI) and peak spectral power (PSP) per channel and per window,
-      both measured on <code>desc-sci</code>, the optical density before motion correction.
-      Both metrics cross-correlate the two wavelengths, so they exist only in the optical
-      density domain and have no counterpart after Beer-Lambert.
+      Scalp coupling index (SCI), peak spectral power (PSP) and coefficient of variation (CV)
+      per channel and per window, all measured on <code>desc-sci</code>, the optical density
+      before motion correction. SCI and PSP cross-correlate the two wavelengths, so they exist
+      only in the optical density domain and have no counterpart after Beer-Lambert.
+      CV is the row where low is good, and it carries SNR in its hover rather than in a row of
+      its own, SNR being 1/CV exactly; its colour is pinned to twice the
+      <strong>{{ '%.3f'|format(cv_threshold) }}</strong> line
+      rather than to the recording's worst window.
       SCI threshold: <strong>{{ config.sci_threshold }}</strong>.
     </p>
 
@@ -215,6 +219,9 @@
     <h3>Per-channel before / after motion correction</h3>
     <p style="font-size:0.82rem;color:#666;margin:0 0 0.3rem;">
       Select a channel to compare the OD signal before and after motion correction.
+      {% if condition_label %}Measured over the whole recording and viewed over this
+      condition, like the carpet above it: the GVTD row on each figure is filtered and
+      thresholded run-wide, so it is the run's trace with the axis narrowed.{% endif %}
     </p>
     <select class="ch-select"
             onchange="document.getElementById('mot-det-frame').src=this.value">
@@ -258,6 +265,9 @@
       <p class="step-desc">
         Per-channel z-scored haemoglobin carpet, both stages scaled by the before SD:
         reduced fluctuation after denoising renders paler. HbO and HbR shown separately.
+        {% if condition_label %}The scaling is the whole recording's and only the columns
+        drawn are this condition's, so every condition's carpet is on one greyscale and the
+        darker stretch is the noisier one.{% endif %}
       </p>
       <img class="responsive" src="{{ denoise_carpet_path }}" alt="Denoising before/after carpet" />
       <p class="fig-path">{{ denoise_carpet_path }}</p>
@@ -604,6 +614,7 @@
     {{ qm_li('good_frac_mean', 'Coupled windows') }}
     {{ qm_li('psp_mean', 'Mean PSP (10 s windows)') }}
     {{ qm_li('snr_mean', 'Mean SNR (intensity)') }}
+    {{ qm_li('cv_mean', 'Mean CV (intensity)') }}
   </ul>
   {% endif %}
 
@@ -639,14 +650,29 @@
      the correction footprint is over every channel, since it counts what the correction
      touched.</p>
   {%- set motion_note = ' (motion before&rarr;after)' %}
+  {#- A condition has one side of the motion step rather than both, and the two sides are
+      not the same side for every row: the GVTD series is stored off the corrected file and
+      the spike and footprint spans off the uncorrected one. So each row says which stage it
+      is, where the run's page says it once with an arrow. -#}
+  {%- set after_note  = ' (after correction)' if condition_label else '' %}
+  {%- set before_note = ' (before correction)' if condition_label else '' %}
+  {% if condition_label %}
+  <p class="qm-note">One side of the motion step, not both: this condition's GVTD comes off
+     the corrected recording and its spike share off the uncorrected one, so each row names
+     its stage. The run's own page has the before&nbsp;&rarr;&nbsp;after pair for all of them.
+     The GVTD threshold and the spike count are the run's and are not sliced; the threshold is
+     a mode of the whole recording's histogram, and this condition is counted against it.</p>
+  {% endif %}
   <ul class="qm-list">
-    {{ qm_li('gvtd_mean', 'GVTD mean', '_post', motion_note) }}
-    {{ qm_li('gvtd_p95', 'GVTD p95', '_post', motion_note) }}
-    {{ qm_li('gvtd_filt_mean', 'GVTD mean 0.01-0.5 Hz', '_post', motion_note) }}
-    {{ qm_li('gvtd_filt_p95', 'GVTD p95 0.01-0.5 Hz', '_post', motion_note) }}
-    {{ qm_li('gvtd_pct_above_thresh', 'GVTD % motion', '_post', motion_note) }}
-    {{ qm_li('gvtd_num_above_thresh', 'GVTD motion frames', '_post', motion_note) }}
+    {{ qm_li('gvtd_mean', 'GVTD mean' ~ after_note, '_post', motion_note) }}
+    {{ qm_li('gvtd_p95', 'GVTD p95' ~ after_note, '_post', motion_note) }}
+    {{ qm_li('gvtd_filt_mean', 'GVTD mean 0.01-0.5 Hz' ~ after_note, '_post', motion_note) }}
+    {{ qm_li('gvtd_filt_p95', 'GVTD p95 0.01-0.5 Hz' ~ after_note, '_post', motion_note) }}
+    {{ qm_li('gvtd_pct_above_thresh', 'GVTD % motion' ~ after_note, '_post', motion_note) }}
+    {{ qm_li('gvtd_num_above_thresh', 'GVTD motion frames' ~ after_note, '_post', motion_note) }}
+    {% if not condition_label %}
     {{ qm_li('gvtd_thresh', 'GVTD threshold', '_post', motion_note) }}
+    {% endif %}
     {% if sqm.get('gvtd_censor_pct') is not none %}
     {{ qm_li('gvtd_censor_pct', 'GVTD censored % (n_std ' ~ sqm.get('gvtd_censor_n_std') ~ ')') }}
     {{ qm_li('gvtd_censor_retained_s', 'GVTD retained (s in ' ~ sqm.get('gvtd_censor_n_epochs') ~ ' epoch(s))') }}
@@ -656,8 +682,11 @@
     {{ qm_li('motion_corrected_num', 'Motion corrected frames') }}
     {{ qm_li('motion_corrected_n_segments', 'Motion corrected segments') }}
     {% endif %}
+    {% if not condition_label %}
     {{ qm_li('spike_count', 'Spike count') }}
-    {{ qm_li('spike_pct_frames', 'Spike % frames') }}
+    {% endif %}
+    {{ qm_li('spike_pct_frames', 'Spike % frames' ~ before_note) }}
+    {{ qm_li('spike_num_frames', 'Spike frames' ~ before_note) }}
     {% if sqm.get('spike_pct') is not none %}
     {{ qm_li('spike_pct', 'Spike % (exp.)') }}
     {% endif %}

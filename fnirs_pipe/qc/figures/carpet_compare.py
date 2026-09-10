@@ -35,6 +35,7 @@ def carpet_compare_figure(
     after_haemo: mne.io.Raw,
     roi_map: "dict | None" = None,
     z_threshold: float = 2.5,
+    xlim: "tuple[float, float] | None" = None,
 ) -> str:
     """Before/after denoising carpet: HbO and HbR columns, before/after rows, shared per-channel scaling.
 
@@ -42,6 +43,12 @@ def carpet_compare_figure(
     denoising renders paler. roi_map ({ROI label: [channel names]}, project convention) groups
     rows by ROI (argsort + colour strip) when provided, else channel order. HbR is kept separate
     from HbO (they are anti-correlated). Returns a base64-encoded PNG.
+
+    ``xlim`` is (t0, t1) in seconds and narrows the view to one condition. The scaling is
+    still taken over the whole recording and only the columns drawn are cut, so a condition's
+    carpet is on the same greyscale as every other condition's and as the run's. Scaling a
+    900 s piece by its own SD would make each condition's darkest patch equally dark and the
+    panel would stop saying which stretch was the noisy one.
     """
     after_set = set(after_haemo.ch_names)
     hbo_names = [c for c in before_haemo.ch_names if c.endswith(" hbo") and c in after_set]
@@ -70,9 +77,17 @@ def carpet_compare_figure(
         order = np.argsort(codes, kind="stable")
         roi_codes = codes[order]
 
+    # the scaling above is run-wide; only what is drawn is cut. See xlim in the docstring
+    times = before_haemo.times
+    keep = slice(None)
+    if xlim is not None:
+        i0 = int(np.searchsorted(times, float(xlim[0])))
+        i1 = int(np.searchsorted(times, float(xlim[1])))
+        keep = slice(i0, max(i1, i0 + 1))
+
     def _prep(arr):
         arr = arr[order] if arr.shape[0] == len(order) and len(order) else arr
-        return _decimate_cols(arr, _MAX_PTS)
+        return _decimate_cols(arr[:, keep], _MAX_PTS)
 
     panels = {
         (0, 0): _prep(hbo_bz), (0, 1): _prep(hbr_bz),

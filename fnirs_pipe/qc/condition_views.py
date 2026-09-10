@@ -32,9 +32,20 @@ UNSLICEABLE = ("cp_per_channel", "temporal_derivative_variance")
 
 # the scalars a condition can be given, in print order. Short of the run's list on purpose:
 # flat channels, mean amplitude and the spike count have no windowed series to slice, and
-# the GVTD threshold is derived from the whole run's distribution by definition.
-COND_SCALAR_KEYS = ("sci_mean", "good_frac_mean", "psp_mean", "gvtd_mean",
-                    "cv_mean", "snr_mean", "gvtd_pct_above_thresh", "spike_pct_frames",
+# the GVTD threshold is a mode of the whole run's histogram by definition, so a condition
+# is counted against the run's line rather than given one of its own.
+#
+# The four GVTD means come off the stored per-window series and are therefore the corrected
+# file, the stage that series is measured on; the spike and correction-footprint shares come
+# off spans found on the uncorrected file. Two stages in one list, which is why the report
+# names the stage on each row rather than printing nine bare numbers.
+COND_SCALAR_KEYS = ("sci_mean", "good_frac_mean", "psp_mean",
+                    "gvtd_mean", "gvtd_p95", "gvtd_filt_mean", "gvtd_filt_p95",
+                    "cv_mean", "snr_mean",
+                    "gvtd_pct_above_thresh", "gvtd_num_above_thresh",
+                    "spike_pct_frames", "spike_num_frames",
+                    "motion_corrected_pct", "motion_corrected_num",
+                    "motion_corrected_n_segments",
                     "channel_retention_rate")
 
 
@@ -476,25 +487,55 @@ def condition_slices_from_record(
 
 
 def condition_scalars(sliced: "dict[str, dict[str, float]]",
-                      gvtd_mean: "float | None" = None,
+                      gvtd_means: "dict[str, float] | None" = None,
                       *,
-                      gvtd_above: "float | None" = None,
-                      spike_share: "float | None" = None,
+                      shares: "dict[str, float | None] | None" = None,
+                      n_frames: "dict[str, int | None] | None" = None,
+                      n_segments: "dict[str, int] | None" = None,
                       retention: "float | None" = None) -> "dict[str, float | None]":
     """The scalars a condition's panel prints, averaged over the channels it has.
 
-    Only those with a windowed series behind them, see :data:`COND_SCALAR_KEYS`. A key the
-    condition has no values for comes back None, which the metric registry prints as a dash
-    rather than as a zero.
+    Only those with a windowed series or a stored span list behind them, see
+    :data:`COND_SCALAR_KEYS`. A key the condition has no values for comes back None, which
+    the metric registry prints as a dash rather than as a zero.
+
+    ``gvtd_means`` are per-window series already averaged over the condition's columns;
+    ``shares``, ``n_frames`` and ``n_segments`` are the same span lists counted three ways,
+    because the report prints a fraction, a frame count and a segment count off one boolean.
     """
-    return {
+    gvtd_means = gvtd_means or {}
+    shares = shares or {}
+    n_frames = n_frames or {}
+    n_segments = n_segments or {}
+    out: "dict[str, float | None]" = {
         "sci_mean":       _mean_or_none((sliced.get("sci_per_channel") or {}).values()),
         "psp_mean":       _mean_or_none((sliced.get("psp_per_channel") or {}).values()),
         "good_frac_mean": _mean_or_none((sliced.get("good_frac_per_channel") or {}).values()),
-        "gvtd_mean":      gvtd_mean,
         "cv_mean":        _mean_or_none((sliced.get("cv_per_channel") or {}).values()),
         "snr_mean":       _mean_or_none((sliced.get("snr_per_channel") or {}).values()),
-        "gvtd_pct_above_thresh": gvtd_above,
-        "spike_pct_frames":      spike_share,
         "channel_retention_rate": retention,
     }
+    for key in ("gvtd_mean", "gvtd_p95", "gvtd_filt_mean", "gvtd_filt_p95"):
+        out[key] = gvtd_means.get(key)
+    for key in ("gvtd_pct_above_thresh", "spike_pct_frames", "motion_corrected_pct"):
+        out[key] = shares.get(key)
+    for key in ("gvtd_num_above_thresh", "spike_num_frames", "motion_corrected_num"):
+        out[key] = n_frames.get(key)
+    out["motion_corrected_n_segments"] = n_segments.get("motion_corrected_n_segments")
+    return out
+
+
+def span_counts(spans, t0: float, t1: float) -> "tuple[float | None, int]":
+    """``span_share`` again, with the number of spans that touch the window.
+
+    ::
+
+        [(5.0, 2.0), (20.0, 4.0)], 0.0, 10.0  ->  (0.2, 1)
+
+    The report prints a fraction and a segment count off the same boolean, and counting the
+    spans here keeps the two from being derived in two places.
+    """
+    share = span_share(spans, t0, t1)
+    n = sum(1 for onset, duration in (spans or [])
+            if min(t1, float(onset) + float(duration)) > max(t0, float(onset)))
+    return share, n

@@ -6,6 +6,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- **The raw signal quality panel draws the coefficient of variation per channel and per window**, on the same window grid and the same optical density as SCI and PSP. SNR is 1/CV, so it rides that row's hover rather than taking a second one, and the row's colour is pinned to its cutoff instead of to the recording's worst window
+
+### Fixed
+- **A per-condition page shows the per-channel before/after motion figures and the denoising carpet.** Both sections were blank on it. Each is measured over the whole recording and viewed over the condition, so the conditions stay on one scale
+- **A per-condition page reports the GVTD percentiles, the motion-band GVTD, the frame counts and how much of the condition motion correction touched.** All of them read n/a although the run had already measured them per window
+- **A per-condition page names the stage each motion row is measured on.** Its GVTD comes from the corrected recording and its spike share from the uncorrected one, and the two stood side by side as bare numbers. The GVTD threshold and the spike count are the run's, and the page says so rather than showing them empty
+- **A per-condition page prints its mean CV**, which it had been computing and dropping
+
 ### Changed
 - **CV and SNR are measured over short windows and averaged, instead of over the whole recording.** A whole-run CV grows with recording length rather than with noise, so stored CV, SNR and `snr_pass_rate` will differ from earlier runs, in the direction of passing more channels
 - **The quality record carries CV and SNR per window**, so the group report draws them as heatmaps alongside SCI, PSP and GVTD
