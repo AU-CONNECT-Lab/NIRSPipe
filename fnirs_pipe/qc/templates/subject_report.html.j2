@@ -686,14 +686,13 @@
       measurements and not three groupings of one, which is why they are here rather than as
       columns of the table above: that table's rows are groupings of per-channel numbers. -#}
   {% if motion_split %}
-  <p class="qm-note">GVTD is an RMS across channels, so each set is measured on its own and a
-     set's value cannot be averaged out of another's. <b>Long</b> is the set the verdict is
-     read off, and the only one coloured. <b>Short</b> carries the magnitudes only: the cutoff
-     is the mode of a distribution, and a handful of scalp channels has none to set one
-     from, so nothing short-channel is counted against a threshold anywhere.
-     {% if condition_label %}The share and the frame count are the long set's on this page:
-     the run stores that flag for the set the verdict is read off and this condition counts
-     the part of it inside its own stretch.{% endif %}</p>
+  <p class="qm-note">GVTD is an RMS across channels, so each set is its own trace, with its
+     own cutoff and its own share above it. <b>Long</b> is the set the verdict is read off and
+     the only one coloured. <b>Read the last three rows down a column, not across one:</b> a
+     short share is counted against the short trace's cutoff and a long share against the
+     long trace's, so the two are not two readings of one quantity. Short channels sit
+     quieter between events and jump about twice as far during one, which moves both the
+     cutoff and the share and in opposite directions.</p>
   {%- set motion_rows = [('gvtd_mean', 'GVTD mean'),
                          ('gvtd_p95', 'GVTD p95'),
                          ('gvtd_filt_mean', 'GVTD mean 0.01-0.5 Hz'),

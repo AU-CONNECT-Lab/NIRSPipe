@@ -8,7 +8,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 - **Per-condition pages carry the same All / Long / Short table as the run's own page.** Mean amplitude and low-frequency drift are left out of it, having no per-condition value
-- **The motion panel reports GVTD over the three channel sets**, each keeping its before → after pair. Short channels get the magnitudes only, not the cutoff or the share above it
+- **The motion panel reports GVTD over the three channel sets**, each keeping its before → after pair. Every set carries its own cutoff and its own share above it, so that row reads down a column rather than across one
 
 ## [0.34.0] - 2026-09-10
 

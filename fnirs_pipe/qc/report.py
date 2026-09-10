@@ -2011,6 +2011,12 @@ def _write_condition_reports(
         "spike_pct_frames":      windowed.get("spike_spans_s") or [],
         "motion_corrected_pct":  windowed.get("motion_corrected_spans_s") or [],
     }
+    # one flag per other set, kept apart from the canonical one because each was set by its
+    # own trace against its own cutoff; they fill that set's column of the motion panel
+    other_above_spans = {
+        "short": windowed.get("gvtd_above_spans_short_s") or [],
+        "all":   windowed.get("gvtd_above_spans_all_s") or [],
+    }
     count_key = {"gvtd_pct_above_thresh": "gvtd_num_above_thresh",
                  "spike_pct_frames": "spike_num_frames",
                  "motion_corrected_pct": "motion_corrected_num"}
@@ -2098,6 +2104,16 @@ def _write_condition_reports(
             {k: v for k, v in (("gvtd_pct_above_thresh", shares.get("gvtd_pct_above_thresh")),
                                ("gvtd_num_above_thresh", n_frames.get("gvtd_num_above_thresh")))
              if v is not None})
+        for set_name, spans in other_above_spans.items():
+            if not spans:
+                continue
+            share, _ = span_counts(spans, t0, t1)
+            if share is None:
+                continue
+            cond_motion_sets.setdefault(set_name, {}).update({
+                "gvtd_pct_above_thresh": share,
+                "gvtd_num_above_thresh": int(round(share * (t1 - t0) * sfreq)),
+            })
         scalars["n_long_channels"] = len(long_names)
         scalars["n_short_channels"] = len(short_names)
         # The GLM is already per condition and needs nothing rebuilt: one model is fitted

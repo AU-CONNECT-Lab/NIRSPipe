@@ -300,18 +300,23 @@ def _motion_metrics(raw_intensity: mne.io.Raw,
     }
 
 
-def gvtd_above_segments(raw_intensity: mne.io.Raw,
-                        sep_bands=None) -> "list[tuple[float, float]]":
+def gvtd_above_segments(raw_intensity: mne.io.Raw, sep_bands=None,
+                        picks: "list[str] | None" = None) -> "list[tuple[float, float]]":
     """Time spans above the run's own GVTD threshold, as (onset, duration) pairs.
 
     The same boolean :func:`_motion_metrics` counts for ``gvtd_pct_above_thresh``, kept as
     spans so a view of part of the recording can count its own share against the threshold
     the whole run set. Recomputing the threshold on a piece would give each piece its own
     yardstick; see :func:`gvtd_threshold`.
+
+    ``picks`` names the channel set; without it the canonical one. GVTD is an RMS across
+    channels, so each set has its own trace and its own threshold and the spans of one set
+    cannot be derived from another's.
     """
     raw_od = (raw_intensity if is_optical_density(raw_intensity)
               else mne.preprocessing.nirs.optical_density(raw_intensity.copy()))
-    picks, _ = gvtd_channel_picks(raw_od, sep_bands)
+    if picks is None:
+        picks, _ = gvtd_channel_picks(raw_od, sep_bands)
     if picks and len(picks) < len(raw_od.ch_names):
         raw_od = raw_od.copy().pick(picks)
     sfreq = float(raw_od.info["sfreq"])

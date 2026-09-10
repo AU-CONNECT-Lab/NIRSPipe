@@ -247,13 +247,22 @@ def _short_section(
     """Only the metrics that answer "are the short-channel regressors trustworthy".
 
     Coupling (SCI, PSP, the coupled-window share) and amplitude (SNR, CV) transfer to short
-    channels. Spikes and drift do not. GVTD splits: it is an RMS across whatever channels it
-    is given, so a short-channel *magnitude* is a real measurement of that set and not a
-    subset of the long one, and the four magnitudes are reported here. What does not transfer
-    is the cutoff and everything counted against it, which is what the earlier version of
-    this docstring was about: the threshold is the mode of a distribution, and a handful of
-    scalp channels has no reference distribution to read it against. So no ``gvtd_thresh``
-    and no motion share in this section, on either side of the correction.
+    channels. Spikes and drift do not. GVTD does, in full, threshold included: it is an RMS
+    across whatever channels it is given, so a short set is its own measurement rather than a
+    subset of the long one, and its threshold is the mode of *its own trace over time*, which
+    has as many samples as any other trace of the same recording.
+
+    Two earlier versions of this docstring said otherwise, that a handful of scalp channels
+    has no distribution to set a cutoff from. `qc/GVTD/gvtd_channel_set_and_threshold.md`
+    refutes it: H8 computes both the threshold and the flagged fraction for short channels
+    across 11 runs, and subsampling the long set to the short channel count moves the
+    spikiness by 0.97x, so the channel count is not what does the work. The package reads
+    long everywhere for the reason recorded there, H7, which is about ``all`` not being a
+    stable definition across montages and says nothing about short.
+
+    What the same file does warn about is comparison: each set's share is counted against its
+    own set's threshold, so a short share and a long share are not two readings of one thing.
+    That is a labelling problem and the panel labels it.
 
     Every value here is a value and not a verdict. Nothing colours a short channel's row,
     because a short channel's coupling is high by construction and the published cutoffs
@@ -277,20 +286,8 @@ def _short_section(
     intensity = _intensity_metrics(raw_short)
     record.update({k: v for k, v in intensity.items()
                    if k.startswith(("snr_", "cv_", "mean_amp_"))})
-    record.update(_gvtd_magnitudes(_motion_metrics(raw_short)))
+    record.update(_motion_metrics(raw_short))
     return _split_scalars(record)
-
-
-# the GVTD keys a short-channel section may carry: magnitudes only. See `_short_section`.
-_GVTD_MAGNITUDES = ("gvtd_mean", "gvtd_p95", "gvtd_filt_mean", "gvtd_filt_p95")
-
-
-def _gvtd_magnitudes(metrics: dict) -> dict:
-    """``metrics`` with every cutoff-derived GVTD key dropped, the rest untouched."""
-    dropped = {"gvtd_thresh", "gvtd_thresh_applied",
-               "gvtd_num_above_thresh", "gvtd_pct_above_thresh"}
-    return {k: v for k, v in metrics.items()
-            if not k.startswith("gvtd_") or k not in dropped}
 
 
 def _section_writer(sections: dict[str, Any], per_channel: dict[str, Any]):
@@ -577,9 +574,19 @@ def compute_run_sections(
     if gvtd_span_source is not None:
         try:
             from fnirs_pipe.qc.metrics import gvtd_above_segments
+            span_raw = read_snirf(gvtd_span_source)
             windowed["gvtd_above_spans_s"] = [
-                list(span) for span in gvtd_above_segments(read_snirf(gvtd_span_source),
-                                                            sep_bands)]
+                list(span) for span in gvtd_above_segments(span_raw, sep_bands)]
+            # and one list per other set, each against its own threshold, following
+            # `spike_spans_short_s`. Three sets, three traces, three cutoffs: one set's share
+            # is not a second reading of another's, and the panel says so
+            _, span_short = long_short_channels(span_raw, sep_bands)
+            for key, span_picks in (("gvtd_above_spans_short_s", span_short),
+                                    ("gvtd_above_spans_all_s", list(span_raw.ch_names))):
+                if span_picks:
+                    windowed[key] = [
+                        list(span) for span in
+                        gvtd_above_segments(span_raw, sep_bands, picks=span_picks)]
         except Exception:
             logger.warning("windowed: GVTD above-threshold spans failed", exc_info=True)
 
@@ -656,11 +663,9 @@ def compute_run_sections(
                     raw_motcorr.copy().pick(post_long), cardiac_l_freq, cardiac_h_freq,
                     _raw_thresh("raw_long")))
             if post_short:
-                # magnitudes only, matching `raw_short`: the correction's effect on the
-                # short channels is a change in level, not a share above a cutoff they have
-                # no distribution to set
-                section("motion_post_short", lambda: _gvtd_magnitudes(_motion_post_section(
-                    raw_motcorr.copy().pick(post_short), cardiac_l_freq, cardiac_h_freq)))
+                section("motion_post_short", lambda: _motion_post_section(
+                    raw_motcorr.copy().pick(post_short), cardiac_l_freq, cardiac_h_freq,
+                    _raw_thresh("raw_short")))
 
     # One family per haemo stage the run actually wrote, each measured with the same
     # metrics as `preproc` so any of them subtracts against it. Band power and drift are
