@@ -7,9 +7,10 @@ filtered against its own two edges and lands on a window grid starting at its ow
 its numbers are comparable neither with the other conditions nor with the run. See
 :func:`~fnirs_pipe.qc.metrics.windowed.condition_window_means`.
 
-One thing is deliberately *not* per condition: **the rejected-channel set**. One channel set
-serves every condition, or a contrast between two conditions is also a contrast between two
-montages. Each view carries the run's verdict and says so.
+Each view screens on its own stretch, so a channel coupled through one condition and loose
+through another is named in the one it was loose in. That is what a per-condition page is
+for. It is a *view*, not what the run did: the recording was processed under the run's
+verdict, and the run's own page carries it, one click away through the run index.
 """
 
 from __future__ import annotations
@@ -24,14 +25,35 @@ logger = get_logger("qc.condition_views")
 SLICEABLE = ("sci_per_channel", "psp_per_channel", "good_frac_per_channel",
              "cv_per_channel", "snr_per_channel")
 
-# and what it therefore has to drop, so no column mixes two time scopes
-UNSLICEABLE = ()
+# and what it therefore has to drop, so no column mixes two time scopes. Neither is drawn
+# today; they are dropped rather than carried so that a column added later shows a gap
+# instead of a whole-run number under a condition's heading.
+UNSLICEABLE = ("cp_per_channel", "temporal_derivative_variance")
 
 # the scalars a condition can be given, in print order. Short of the run's list on purpose:
 # flat channels, mean amplitude and the spike count have no windowed series to slice, and
 # the GVTD threshold is derived from the whole run's distribution by definition.
 COND_SCALAR_KEYS = ("sci_mean", "good_frac_mean", "psp_mean", "gvtd_mean",
-                    "cv_mean", "snr_mean")
+                    "cv_mean", "snr_mean", "gvtd_pct_above_thresh", "spike_pct_frames",
+                    "channel_retention_rate")
+
+
+def span_share(spans, t0: float, t1: float) -> "float | None":
+    """Share of ``[t0, t1)`` covered by ``(onset, duration)`` spans, or None without a window.
+
+    ::
+
+        [(5.0, 2.0), (20.0, 4.0)], 0.0, 10.0  ->  0.2
+
+    The spans come from a boolean the whole run set, so restricting them to a window counts
+    the run's own verdict over that stretch rather than re-deciding it there.
+    """
+    if t1 <= t0:
+        return None
+    covered = 0.0
+    for onset, duration in spans or []:
+        covered += max(0.0, min(t1, float(onset) + float(duration)) - max(t0, float(onset)))
+    return covered / (t1 - t0)
 
 
 def condition_stem(stem: str, label: str | None, index: int) -> str:
@@ -252,9 +274,9 @@ def condition_payloads(
             f"This view describes {label} only. Its numbers are sliced out of the whole "
             f"recording's windowed pass, not measured on a cut of it, so they sit on the "
             f"same window grid and the same filter as every other condition and as the run.",
-            "The rejected channels are the whole run's verdict, unchanged. One channel set "
-            "has to serve every condition, or a contrast between two conditions is also a "
-            "contrast between two montages.",
+            "The verdict here is this condition's own, screened on its windows against the "
+            "run's line. The recording was processed under the run's verdict, not this one; "
+            "the run's page carries it.",
             "The PSD is absent rather than zero: it is one spectrum rather than a matrix, "
             "so a per-condition value would have to be recomputed on a cut. The full report "
             "has it for the run.",
@@ -413,7 +435,11 @@ def condition_slices_from_record(
 
 
 def condition_scalars(sliced: "dict[str, dict[str, float]]",
-                      gvtd_mean: "float | None" = None) -> "dict[str, float | None]":
+                      gvtd_mean: "float | None" = None,
+                      *,
+                      gvtd_above: "float | None" = None,
+                      spike_share: "float | None" = None,
+                      retention: "float | None" = None) -> "dict[str, float | None]":
     """The scalars a condition's panel prints, averaged over the channels it has.
 
     Only those with a windowed series behind them, see :data:`COND_SCALAR_KEYS`. A key the
@@ -427,4 +453,7 @@ def condition_scalars(sliced: "dict[str, dict[str, float]]",
         "gvtd_mean":      gvtd_mean,
         "cv_mean":        _mean_or_none((sliced.get("cv_per_channel") or {}).values()),
         "snr_mean":       _mean_or_none((sliced.get("snr_per_channel") or {}).values()),
+        "gvtd_pct_above_thresh": gvtd_above,
+        "spike_pct_frames":      spike_share,
+        "channel_retention_rate": retention,
     }

@@ -9,6 +9,8 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - **CV and SNR are measured over short windows and averaged, instead of over the whole recording.** A whole-run CV grows with recording length rather than with noise, so stored CV, SNR and `snr_pass_rate` will differ from earlier runs, in the direction of passing more channels
 - **The quality record carries CV and SNR per window**, so the group report draws them as heatmaps alongside SCI, PSP and GVTD
+- **A per-condition page screens on its own stretch**, so a channel loose in one condition and coupled in another is named in the one it was loose in. The recording is still processed under the run's verdict, which its own page carries
+- **Per-condition pages report the GVTD above-threshold share and the spike share**, counted from the run's own flags over that condition's span rather than re-decided on it
 
 ## [0.33.0] - 2026-09-09
 

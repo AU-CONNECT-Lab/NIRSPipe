@@ -71,10 +71,11 @@
     they sit on the same window grid and the same filter as the run and as every other
     condition.</p>
   <p style="margin:0 0 0.4rem;font-size:0.86rem;color:#555;">
-    The rejected channels are the run&rsquo;s verdict, unchanged: one channel set has to
-    serve every condition, or a contrast between two conditions is also a contrast between
-    two montages. Only the metrics with a windowed series behind them can be given per
-    condition, so the spike count and the GVTD threshold are absent rather than zero.</p>
+    The verdict here is this condition&rsquo;s own, screened on its own windows against the
+    run&rsquo;s line, so a channel loose in one condition and coupled in another is named in
+    the one it was loose in. The recording was processed under the run&rsquo;s verdict, which
+    its own page carries. Metrics with no windowed series behind them are absent rather than
+    zero.</p>
   <p style="margin:0;font-size:0.86rem;color:#555;">
     The preprocessing, epoch, topography and GLM sections below are <em>deliberately
     empty</em> here. The epoch window is set for a trial rather than a block, so a
@@ -655,9 +656,9 @@
     {{ qm_li('motion_corrected_n_segments', 'Motion corrected segments') }}
     {% endif %}
     {{ qm_li('spike_count', 'Spike count') }}
+    {{ qm_li('spike_pct_frames', 'Spike % frames') }}
     {% if sqm.get('spike_pct') is not none %}
     {{ qm_li('spike_pct', 'Spike % (exp.)') }}
-    {{ qm_li('spike_pct_frames', 'Spike % frames') }}
     {% endif %}
   </ul>
 

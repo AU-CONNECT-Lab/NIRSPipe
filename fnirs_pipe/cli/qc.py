@@ -279,9 +279,10 @@ def _build_parser() -> argparse.ArgumentParser:
                          "condition becomes the task- entity. Their numbers are sliced out "
                          "of the run's windowed pass, so every condition sits on the same "
                          "window grid and the same filter as the run; nothing is cut and "
-                         "nothing is re-measured. The rejected channels stay the run's "
-                         "verdict, since one channel set has to serve every condition. The "
-                         "PSD is left out of these, having no windowed series to slice.")
+                         "nothing is re-measured. Each page screens on its own stretch, so "
+                         "the verdict on it is that condition's; the recording was processed "
+                         "under the run's, which its own page carries. The PSD is left out "
+                         "of these, having no windowed series to slice.")
     pr.add_argument("--skip-bids-validation", action=argparse.BooleanOptionalAction, default=False)
     pr.set_defaults(func=cmd_prep_raw)
 

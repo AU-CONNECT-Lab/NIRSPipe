@@ -545,6 +545,17 @@ def compute_run_sections(
         except Exception:
             logger.warning("windowed: spike spans failed", exc_info=True)
 
+    # the same, for the samples above the run's GVTD threshold. Kept as spans rather than a
+    # per-window share so a condition counts the run's own boolean over its own stretch
+    gvtd_span_source = stages.get("motcorrected") or stages.get("sci") or stages.get("od")
+    if gvtd_span_source is not None:
+        try:
+            from fnirs_pipe.qc.metrics import gvtd_above_segments
+            windowed["gvtd_above_spans_s"] = [
+                list(span) for span in gvtd_above_segments(read_snirf(gvtd_span_source))]
+        except Exception:
+            logger.warning("windowed: GVTD above-threshold spans failed", exc_info=True)
+
     # SCI, PSP and GVTD per window, all three on the same grid, but not off the same file.
     #
     # SCI and PSP come from the uncorrected OD, which is where the per-channel scores in

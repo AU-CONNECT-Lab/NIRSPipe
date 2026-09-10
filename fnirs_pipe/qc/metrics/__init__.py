@@ -45,7 +45,8 @@ from fnirs_pipe.qc.metrics._helpers import (  # noqa: F401
 )
 from fnirs_pipe.qc.metrics.gvtd import (  # noqa: F401
     GVTD_MOTION_BAND, GVTD_N_STD, gvtd_timetrace, gvtd_threshold,
-    gvtd_channel_picks, gvtd_channel_blocks, _motion_metrics, gvtd_censor_spans, _windowed_gvtd,
+    gvtd_channel_picks, gvtd_channel_blocks, _motion_metrics, gvtd_above_segments,
+    gvtd_censor_spans, _windowed_gvtd,
     compute_windowed_gvtd, compute_windowed_filtered_gvtd,
 )
 from fnirs_pipe.qc.metrics.screening import (  # noqa: F401

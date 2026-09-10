@@ -278,6 +278,25 @@ def _motion_metrics(raw_intensity: mne.io.Raw) -> dict[str, Any]:
     }
 
 
+def gvtd_above_segments(raw_intensity: mne.io.Raw) -> "list[tuple[float, float]]":
+    """Time spans above the run's own GVTD threshold, as (onset, duration) pairs.
+
+    The same boolean :func:`_motion_metrics` counts for ``gvtd_pct_above_thresh``, kept as
+    spans so a view of part of the recording can count its own share against the threshold
+    the whole run set. Recomputing the threshold on a piece would give each piece its own
+    yardstick; see :func:`gvtd_threshold`.
+    """
+    raw_od = (raw_intensity if is_optical_density(raw_intensity)
+              else mne.preprocessing.nirs.optical_density(raw_intensity.copy()))
+    sfreq = float(raw_od.info["sfreq"])
+    od_data = np.nan_to_num(raw_od.get_data(), nan=0.0, posinf=0.0, neginf=0.0)
+    gvtd_filt = gvtd_timetrace(od_data, sfreq, *GVTD_MOTION_BAND)
+    thresh = gvtd_threshold(gvtd_filt, n_std=GVTD_N_STD)
+    if thresh is None:
+        return []
+    return _mask_to_segments(gvtd_filt > thresh, raw_od.times[1:])
+
+
 def gvtd_censor_spans(
     raw_od: mne.io.Raw,
     n_std: float = 10.0,

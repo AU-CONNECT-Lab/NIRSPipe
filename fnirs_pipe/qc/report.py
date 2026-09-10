@@ -1785,7 +1785,7 @@ def _write_condition_reports(
     The channel set is the run's throughout, since one set has to serve every condition.
     """
     from fnirs_pipe.qc.condition_views import (
-        condition_scalars, condition_slices_from_record, slice_record,
+        condition_scalars, condition_slices_from_record, slice_record, span_share,
     )
     from fnirs_pipe.qc.hyper_report import condition_windows
     from fnirs_pipe.qc.metrics import resolve_cutoffs
@@ -1813,14 +1813,29 @@ def _write_condition_reports(
         gvtd.get("gvtd_per_window") or [], gvtd.get("gvtd_window_times_s") or [], windows
     ) if gvtd.get("gvtd_per_window") else {}
 
+    # the run's booleans, kept as spans, so a condition counts them over its own stretch
+    gvtd_above_spans = (record.get("windowed") or {}).get("gvtd_above_spans_s") or []
+    spike_spans = (record.get("windowed") or {}).get("spike_spans_s") or []
+
     blanked = _blanked(section_vars)
     window_of = {w[0]: w for w in windows}
     for label, sliced in sliced_all.items():
         cond_record = slice_record(record, sliced)
-        rows = channel_rows(cond_record, sci_scores, bad_channels)
+        # this condition's own verdict, on the run's line. The page is a view of one
+        # condition and says so; the run's verdict, which is what the data was processed
+        # under, is one click away on the run's own page
+        cond_frac = sliced.get("good_frac_per_channel") or {}
+        cond_bad = ({ch for ch, v in cond_frac.items() if v < cutoffs["good_frac"]}
+                    if cond_frac else set(bad_channels))
+        retention = (1.0 - len(cond_bad) / len(cond_frac)) if cond_frac else None
+        rows = channel_rows(cond_record, sci_scores, cond_bad)
         cells = format_rows(rows, cutoffs["sci"], psp_threshold=cutoffs["psp"])
+        t0, t1 = window_of[label][1], window_of[label][2]
         scalars = condition_scalars(
-            sliced, None if label not in gvtd_by_cond else float(gvtd_by_cond[label]))
+            sliced, None if label not in gvtd_by_cond else float(gvtd_by_cond[label]),
+            gvtd_above=span_share(gvtd_above_spans, t0, t1),
+            spike_share=span_share(spike_spans, t0, t1),
+            retention=retention)
         slug = _pair_fname(label)
         summary = _section_channel_summary(
             rows, subject, errors, figures_dir, cutoffs["sci"],
@@ -1832,7 +1847,7 @@ def _write_condition_reports(
             panels.update(remake_sci(f"_{slug}", _windowed_slice(record, windows, label),
                                      sliced.get("sci_per_channel") or {}))
         # and the carpet narrowed to it: measured over the run, viewed over the condition
-        span = (window_of[label][1], window_of[label][2])
+        span = (t0, t1)
         if remake_motion is not None:
             panels.update(remake_motion(f"_{slug}", span))
         # and everything a crop is safe for: the haemoglobin panels, the spectra and the

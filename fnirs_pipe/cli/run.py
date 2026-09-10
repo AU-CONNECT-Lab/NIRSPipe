@@ -113,9 +113,9 @@ def _build_parser() -> argparse.ArgumentParser:
                                "measured again. Each page carries the scalar panel and the "
                                "channel table for that condition; the epoch, topography and "
                                "GLM panels are left blank, since the epoch window is set for "
-                               "a trial and would describe the start of a block. The rejected "
-                               "channels stay the run's, as one channel set has to serve "
-                               "every condition.")
+                               "a trial and would describe the start of a block. Each page "
+                               "screens on its own stretch, so its verdict is that "
+                               "condition's; the run was processed under the run's.")
     prep_opt.add_argument("--gvtd-censor", action="store_true",
                           help="Mark the frames GVTD flags as BAD_gvtd. The data is annotated, "
                                "never cut, so epoching drops the trials they overlap and a "
