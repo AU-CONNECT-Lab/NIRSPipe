@@ -1634,6 +1634,11 @@ def _figure_leaks(page: dict, label_slug: str) -> "list[str]":
     return leaks
 
 
+# mne's Raw.compute_psd default caps n_fft here, so a cut shorter than this is transformed
+# on a coarser grid than the run and its band metrics are not comparable with it
+_PSD_NFFT_CAP = 2048
+
+
 def _cropped_sections(
     span: "tuple[float, float]",
     suffix: str,
@@ -1704,6 +1709,14 @@ def _cropped_sections(
     out.update(_section_evoked_topomap(crop(epoch_haemo, epoch_pad) or haemo, subject,
                                        errors, figures_dir, epoch_tmin=epoch_tmin,
                                        epoch_tmax=epoch_tmax, suffix=suffix))
+    # the scalars that can only be had by recomputing, off the same cut the panels above use.
+    # Handed back separately because they belong in the condition's metric panel, not among
+    # its figures; the caller merges them.
+    with _guard("Condition scalars", errors, subject):
+        from fnirs_pipe.qc.condition_views import condition_haemo_scalars
+        n_fft_floor = min(_PSD_NFFT_CAP, len(raw_haemo.times))
+        out["cond_haemo_scalars"] = condition_haemo_scalars(
+            haemo, crop(raw_errts), n_fft_floor, bands)
     return out
 
 
@@ -1856,7 +1869,10 @@ def _write_condition_reports(
         # and everything a crop is safe for: the haemoglobin panels, the spectra and the
         # per-channel detail. See _cropped_sections for where that line falls and why
         if remake_cropped is not None:
-            panels.update(remake_cropped(f"_{slug}", span))
+            cropped = remake_cropped(f"_{slug}", span)
+            # recomputed rather than sliced, so it joins the scalars and not the figures
+            scalars.update(cropped.pop("cond_haemo_scalars", None) or {})
+            panels.update(cropped)
         # The GLM is already per condition and needs nothing rebuilt: one model is fitted
         # over the whole recording and each condition is a contrast of it, so this page
         # keeps its own activation figure out of the set the run rendered. The design

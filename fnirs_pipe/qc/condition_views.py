@@ -130,6 +130,47 @@ def slice_record(record_view: dict, sliced: "dict[str, dict[str, float]]") -> di
             "per_channel": out_pc}
 
 
+def condition_haemo_scalars(haemo, errts, n_fft_floor: int, bands: dict) -> dict:
+    """Scalars a condition can be given by recomputing on its own cut, not by slicing.
+
+    ``haemo`` and ``errts`` are already cropped to the condition. None of these filters, so a
+    cut carries no edge the whole run would not have had; ``compute_psd`` is Welch, which
+    segments and tapers. What a cut does change is the spectrum's resolution, and only once
+    the cut is shorter than the transform: below ``n_fft_floor`` samples the band metrics are
+    computed over a coarser frequency grid than the run's and are left out instead.
+
+    ::
+
+        3053 samples, floor 2048  ->  band metrics included
+        1200 samples, floor 2048  ->  band metrics absent
+    """
+    from fnirs_pipe.qc.metrics.haemo import (
+        _retention_metrics, _spectral_metrics, gcor_metrics, haemo_quality_metrics,
+    )
+
+    out: dict = {}
+    # gcor's before/after is stored under _prereg / _postreg rather than as an _errts suffix,
+    # and those two stages are exactly this cut's haemo and errts, so it fills the same pair
+    # the run's page prints instead of a lone number beside it
+    for raw, suffix, gcor_suffix in ((haemo, "", "_prereg"), (errts, "_errts", "_postreg")):
+        if raw is None:
+            continue
+        gcor = gcor_metrics(raw)
+        out.update({f"{k}{gcor_suffix}": v for k, v in gcor.items()})
+        if suffix == "":
+            out.update(gcor)          # the plain key too, for a run with no errts stage
+        quality = haemo_quality_metrics(raw)
+        if "hbo_hbr_corr_mean" in quality:
+            out[f"hbo_hbr_corr_mean{suffix}"] = quality["hbo_hbr_corr_mean"]
+    if haemo is not None:
+        out.update(_retention_metrics(haemo))
+        # the band metrics live at preproc only: after the bandpass they measure the filter
+        if len(haemo.times) >= n_fft_floor:
+            out.update(_spectral_metrics(haemo, bands["cardiac"][0], bands["cardiac"][1],
+                                         bands["resp"][0], bands["resp"][1]))
+    return out
+
+
 def zoom_to_condition(figure, t0: float, t1: float):
     """A time-axis figure viewing only one condition, without recomputing it.
 
