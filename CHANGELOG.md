@@ -10,6 +10,9 @@ All notable changes to this project will be documented in this file.
 - **The raw signal quality panel draws the coefficient of variation per channel and per window**, on the same window grid and the same optical density as SCI and PSP. SNR is 1/CV, so it rides that row's hover rather than taking a second one, and the row's colour is pinned to its cutoff instead of to the recording's worst window
 
 ### Fixed
+- **The channel quality maps show the screening verdict, not the SCI alone.** A channel rejected for being loose through most of the recording was drawn green beside a table calling it BAD, because both the 3D views and the optode flat map coloured by whole-run SCI and screening has been on the coupled-window share. A rejected channel is red now whatever its SCI; the rest are still graded by theirs
+- **A per-condition page shows the channel quality maps**, carrying that condition's own SCI and its own rejected channels
+- **The grand-mean panel draws one condition per row** instead of squeezing them into one row side by side, on a shared time and concentration scale. Its legend no longer sits on the first panel's title
 - **A per-condition page shows the per-channel before/after motion figures and the denoising carpet.** Both sections were blank on it. Each is measured over the whole recording and viewed over the condition, so the conditions stay on one scale
 - **A per-condition page reports the GVTD percentiles, the motion-band GVTD, the frame counts and how much of the condition motion correction touched.** All of them read n/a although the run had already measured them per window
 - **A per-condition page names the stage each motion row is measured on.** Its GVTD comes from the corrected recording and its spike share from the uncorrected one, and the two stood side by side as bare numbers. The GVTD threshold and the spike count are the run's, and the page says so rather than showing them empty

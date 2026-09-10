@@ -49,7 +49,15 @@ def _trim_white(arr: np.ndarray, pad: int = 6, threshold: int = 252) -> np.ndarr
 
 
 def _link_color(sci: float | None, good: bool | None, threshold: float = SCI_PASS) -> str:
-    """SCI thresholds first (matches the flat map), pass/fail as fallback."""
+    """The screening verdict first, then the SCI ladder (which matches the flat map).
+
+    ``good`` used to be a fallback for a missing SCI, which made this an SCI map that never
+    showed a rejection: channels are screened on how many windows they were coupled in, so a
+    channel at SCI 0.96 can be dropped and was still drawn green. See ``sci_color``, which
+    carries the same rule for the flat map beside this one.
+    """
+    if good is False:
+        return _BAD_COLOR
     if sci is not None and not np.isnan(sci):
         if sci >= threshold:
             return _GOOD_COLOR

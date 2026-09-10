@@ -79,12 +79,25 @@ def psd_layout(height: int = 220, cardiac=None, resp=None) -> dict:
 SCI_WARN_RATIO = 0.625   # amber band as a share of the run's line; 0.5 at the 0.8 default
 
 
-def sci_color(sci: float | None, threshold: float = SCI_PASS) -> str:
-    """Green at or above the run's SCI line, amber approaching it, red below.
+def sci_color(sci: float | None, threshold: float = SCI_PASS,
+              rejected: bool | None = None) -> str:
+    """Red if the channel was rejected; otherwise green above the run's SCI line, amber near it.
 
-    The line is the run's rather than a constant, so a channel cannot be drawn green on the
-    wrong side of the verdict the same report prints.
+    ::
+
+      sci_color(0.96, 0.80)                  -> green
+      sci_color(0.96, 0.80, rejected=True)   -> red
+
+    ``rejected`` outranks SCI because the two are not the same question. Screening counts how
+    many windows a channel was coupled in, so a channel whose whole-run SCI is 0.96 can still
+    be loose through most of a condition and be dropped. Colouring by SCI alone drew that
+    channel green on a page whose table called it BAD, which is the same class of defect as
+    colouring against a fixed 0.75: the picture and the verdict beside it disagreeing.
+
+    Passing None keeps the SCI-only ladder, for the callers that have no verdict to hand.
     """
+    if rejected:
+        return "#e74c3c"
     if sci is None:
         return "#aaa"
     if sci >= threshold:
@@ -97,7 +110,7 @@ def sci_color(sci: float | None, threshold: float = SCI_PASS) -> str:
 def sci_legend(threshold: float = SCI_PASS) -> str:
     """Caption for :func:`sci_color`, from the same two numbers it colours by."""
     warn = SCI_WARN_RATIO * threshold
-    return (f"SCI (green ≥ {threshold:.2f} / yellow ≥ {warn:.2f} "
+    return (f"red = rejected, else SCI (green ≥ {threshold:.2f} / yellow ≥ {warn:.2f} "
             f"/ red < {warn:.2f})")
 
 
@@ -1040,8 +1053,12 @@ def build_epoch_preview_figure(
         if not panels:
             return None
 
+        # stacked, one row per condition, rather than side by side. Five conditions across
+        # one 300 px row left each panel a few centimetres wide, and the thing this figure
+        # is read for is the shape of a slow haemodynamic curve
+        n = len(panels)
         fig = make_subplots(
-            rows=1, cols=len(panels), shared_yaxes=True, horizontal_spacing=0.03,
+            rows=n, cols=1, shared_xaxes=True, vertical_spacing=min(0.06, 0.9 / n),
             subplot_titles=[f"{c} (n={e.shape[0]})" for c, e in panels],
         )
         for i, (_cond, ep) in enumerate(panels, start=1):
@@ -1054,17 +1071,23 @@ def build_epoch_preview_figure(
                     y=(ep[:, picks, :].mean(axis=(0, 1)) * 1e6).tolist(),
                     name=label, mode="lines", legendgroup=label,
                     showlegend=(i == 1), line=dict(color=color, width=2),
-                ), row=1, col=i)
+                ), row=i, col=1)
             fig.add_vline(x=0, line=dict(color="#7f8c8d", width=1, dash="dash"),
-                          row=1, col=i)
-            fig.update_xaxes(title_text="Time rel. onset (s)", gridcolor="#eeeeee",
-                             zerolinecolor="#cccccc", row=1, col=i)
-        fig.update_yaxes(title_text="Conc. (µmol/L)", gridcolor="#eeeeee", row=1, col=1)
+                          row=i, col=1)
+            # one y scale for every row, which the side-by-side layout got for free from
+            # shared_yaxes: without it each condition autoscales and the panel stops being
+            # a comparison
+            fig.update_yaxes(title_text="Conc. (µmol/L)", gridcolor="#eeeeee",
+                             row=i, col=1, **({} if i == 1 else {"matches": "y"}))
+        fig.update_xaxes(title_text="Time rel. onset (s)", gridcolor="#eeeeee",
+                         zerolinecolor="#cccccc", row=n, col=1)
         fig.update_annotations(font_size=10)
         fig.update_layout(
             plot_bgcolor="white", paper_bgcolor="white",
-            height=300, margin=dict(l=60, r=15, t=32, b=38),
-            legend=dict(font=dict(size=9), orientation="h", y=1.14),
+            height=60 + 150 * n, margin=dict(l=60, r=15, t=46, b=44),
+            # top right rather than centred: a centred legend sits on the first row's title
+            legend=dict(font=dict(size=9), orientation="h",
+                        x=1, xanchor="right", y=1.0, yanchor="bottom"),
         )
         return fig
     except Exception as exc:

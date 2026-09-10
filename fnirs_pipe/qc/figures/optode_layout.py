@@ -18,7 +18,12 @@ def optode_layout_static(
     bad_channels: list[str],
     sci_threshold: float = SCI_PASS,
 ) -> str | None:
-    """Matplotlib static optode flat map. Returns base64 PNG or None."""
+    """Matplotlib static optode flat map. Returns base64 PNG or None.
+
+    ``bad_channels`` was accepted and ignored until 2026-09-09, which made this an SCI map
+    rather than a quality map: a channel rejected on its coupled-window share was drawn
+    green beside a table calling it BAD. A rejected pair is red now whatever its SCI.
+    """
     import base64
     import io
     import matplotlib.pyplot as plt
@@ -58,7 +63,17 @@ def optode_layout_static(
     if not pair_xy:
         return None
 
-    def _color(sci):
+    # matched on the source-detector pair, since screening names intensity channels and
+    # this figure draws one line per pair
+    bad_pairs = set()
+    for name in bad_channels or []:
+        m = _ch_re.search(str(name))
+        if m is not None:
+            bad_pairs.add(f"{m.group(1).upper()}_{m.group(2).upper()}")
+
+    def _color(sci, rejected=False):
+        if rejected:
+            return sci_color(None, sci_threshold, rejected=True)
         return "#95a5a6" if sci is None else sci_color(sci, sci_threshold)
 
     fig, ax = plt.subplots(figsize=(6, 6))
@@ -67,7 +82,7 @@ def optode_layout_static(
 
     for pair_id, (s, d) in pair_xy.items():
         vals = pair_sci.get(pair_id)
-        c = _color(float(np.mean(vals)) if vals else None)
+        c = _color(float(np.mean(vals)) if vals else None, pair_id in bad_pairs)
         ax.plot([s[0], d[0]], [s[1], d[1]], color=c, lw=2.0, zorder=1)
 
     sources: dict = {}
@@ -109,8 +124,8 @@ def optode_layout_figure(
 ) -> go.Figure | None:
     """Top-down 2-D projection of sources (red) and detectors (blue).
 
-    Channel lines are coloured green→yellow→red by mean SCI score of that
-    source-detector pair. Useful for diagnosing whether a bad region is due
+    A rejected channel's line is red; the rest are coloured green→yellow→red by the mean SCI
+    of that source-detector pair. Useful for diagnosing whether a bad region is due
     to a single bad source or detector rather than an individual channel.
 
     Returns None if no valid channel positions are found.
@@ -158,7 +173,15 @@ def optode_layout_figure(
     if not pair_xy:
         return None
 
-    def _sci_color(mean_sci: float | None) -> str:
+    bad_pairs = set()
+    for name in bad_channels or []:
+        m = _ch_re.search(str(name))
+        if m is not None:
+            bad_pairs.add(f"{m.group(1).upper()}_{m.group(2).upper()}")
+
+    def _sci_color(mean_sci: float | None, rejected: bool = False) -> str:
+        if rejected:
+            return sci_color(None, sci_threshold, rejected=True)
         return "#95a5a6" if mean_sci is None else sci_color(mean_sci, sci_threshold)
 
     fig = go.Figure()
@@ -167,7 +190,7 @@ def optode_layout_figure(
     for pair_id, (src_xy, det_xy) in pair_xy.items():
         sci_vals = pair_sci.get(pair_id)
         mean_sci = float(np.mean(sci_vals)) if sci_vals else None
-        color = _sci_color(mean_sci)
+        color = _sci_color(mean_sci, pair_id in bad_pairs)
         sci_str = f"{mean_sci:.3f}" if mean_sci is not None else "N/A"
         fig.add_trace(go.Scatter(
             x=[src_xy[0], det_xy[0]],

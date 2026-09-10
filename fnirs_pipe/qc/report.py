@@ -1076,6 +1076,30 @@ def _section_channel_summary(
     return {"channel_summary_path": path, "channel_summary_h": h}
 
 
+def _good_mask_for(
+    bad_channels: "set[str] | list[str]",
+    ch_names_brain: "list[str] | None",
+    sci_scores: dict,
+    fallback: "np.ndarray | None",
+) -> "np.ndarray | None":
+    """The kept/rejected flag per brain-figure channel, for one condition's own verdict.
+
+    ::
+
+      {"S1_D1 760"}, ["S1_D1 hbo", "S1_D2 hbo"]  ->  array([False, True])
+
+    The brain figures are drawn over haemoglobin channel names and screening is decided on
+    intensity ones, so the two are matched on the source-detector pair they share, which is
+    how the run's own mask is built at the call site in the workflow. Returns the run's mask
+    unchanged when there is no channel list to match against.
+    """
+    names = ch_names_brain if ch_names_brain is not None else list(sci_scores.keys())
+    if not names:
+        return fallback
+    bad_bases = {str(ch).rsplit(" ", 1)[0] for ch in bad_channels}
+    return np.array([n.rsplit(" ", 1)[0] not in bad_bases for n in names])
+
+
 def _section_brain(
     sci_scores: dict,
     bad_channels: list,
@@ -1086,7 +1110,15 @@ def _section_brain(
     errors: list,
     figures_dir: Path,
     ch_names_brain: list[str] | None = None,
+    suffix: str = "",
 ) -> dict:
+    """The 3D quality views and the optode flat map, side by side in one PNG.
+
+    ``suffix`` names the file, so a per-condition page writes its own. Both figures colour a
+    channel by its SCI against the run's line and mark the rejected ones, and a condition has
+    both of those of its own, so this is a real per-condition figure rather than a narrowed
+    view: nothing in it is a time series.
+    """
     brain_views_path = None
     if coords_head is not None and good_mask is not None and sci_scores:
         with _guard("Brain views", errors, subject):
@@ -1114,13 +1146,13 @@ def _section_brain(
                 out.convert("RGB").save(buf, format="PNG", optimize=True)
                 buf.seek(0)
                 combined_b64 = base64.b64encode(buf.read()).decode()
-                _save_b64_png(combined_b64, figures_dir / "brain_views.png")
+                _save_b64_png(combined_b64, figures_dir / f"brain_views{suffix}.png")
             elif brain_b64:
-                _save_b64_png(brain_b64, figures_dir / "brain_views.png")
+                _save_b64_png(brain_b64, figures_dir / f"brain_views{suffix}.png")
             else:
                 raise RuntimeError("brain_b64 is None")
 
-            brain_views_path = _fig_href(figures_dir, "brain_views.png")
+            brain_views_path = _fig_href(figures_dir, f"brain_views{suffix}.png")
     return {"brain_views_path": brain_views_path}
 
 
@@ -1602,6 +1634,13 @@ def build_subject_report(
                     segments, subject, errors, figures_dir, windowed=windowed_section,
                     raw_before_motion=raw_before_motion,
                     raw_after_motion=raw_after_motion, suffix=suffix, xrange=span),
+                # the condition's own SCI and its own rejected set, so the maps show the
+                # verdict printed beside them rather than the run's
+                remake_brain=lambda suffix, sci_pc, cond_bad: _section_brain(
+                    sci_pc, sorted(cond_bad), coords_head,
+                    _good_mask_for(cond_bad, ch_names_brain, sci_pc, good_mask),
+                    raw_intensity, subject, errors, figures_dir,
+                    ch_names_brain=ch_names_brain, suffix=suffix),
                 remake_motion_detail=lambda suffix, span: _section_motion_detail(
                     motion_det_figs, subject, errors, figures_dir,
                     suffix=suffix, xrange=span),
@@ -1849,6 +1888,7 @@ def _write_condition_reports(
     errors: list,
     remake_sci=None,
     remake_motion=None,
+    remake_brain=None,
     remake_motion_detail=None,
     remake_denoise_carpet=None,
     remake_cropped=None,
@@ -1966,6 +2006,9 @@ def _write_condition_reports(
             panels.update(remake_motion(f"_{slug}", span))
         # the per-channel motion figures and the denoising carpet, both narrowed the same
         # way: built once over the run above, written again here viewing this stretch
+        if remake_brain is not None:
+            panels.update(remake_brain(f"_{slug}", sliced.get("sci_per_channel") or {},
+                                       cond_bad))
         if remake_motion_detail is not None:
             panels.update(remake_motion_detail(f"_{slug}", span))
         if remake_denoise_carpet is not None:

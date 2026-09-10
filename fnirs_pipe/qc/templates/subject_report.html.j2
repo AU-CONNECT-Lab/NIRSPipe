@@ -183,7 +183,13 @@
 
     {% if brain_views_path %}
       <h3>Channel quality — 3D &amp; optode map</h3>
-      <p style="font-size:0.82rem; color:#666; margin:0 0 0.3rem;">Green = good, red = below threshold.</p>
+      <p style="font-size:0.82rem; color:#666; margin:0 0 0.3rem;">Red = rejected by the
+        screening, whatever its SCI; every channel that survived is then graded green to
+        amber by its own SCI against the run's line. The two are different questions: a
+        channel is rejected on how many windows it was coupled in, so one can be dropped at
+        an SCI of 0.96.{% if condition_label %} Both maps carry this condition's own SCI and its own
+        rejected channels, which is the verdict printed on this page. The recording was
+        processed under the run's; its page has that map.{% endif %}</p>
       <img class="responsive" src="{{ brain_views_path }}" alt="Brain views + optode" />
       <p class="fig-path">{{ brain_views_path }}</p>
     {% endif %}
