@@ -354,6 +354,7 @@ def cmd_run(
                 chroma=chroma,
                 sep_bands=sep_bands,
                 windows=cond_windows,
+                analysis_window=analysis_window,
             )
             print(f"     null   -> {null_path}")
 

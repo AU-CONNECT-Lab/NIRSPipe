@@ -149,11 +149,15 @@ def get_channel_pairs(raw: mne.io.Raw) -> list[str]:
 
 
 def extract_markers(raw: mne.io.Raw) -> list[dict]:
-    """Return non-BAD annotations as marker dicts (onset, duration, description)."""
+    """Return non-BAD annotations as marker dicts (onset, duration, description).
+
+    Unrounded: ``condition_windows`` builds window bounds from these, and a rounded bound
+    no longer matches the annotation it came from.
+    """
     return [
         {
-            "onset":       round(float(a["onset"]), 4),
-            "duration":    round(float(a["duration"]), 4),
+            "onset":       float(a["onset"]),
+            "duration":    float(a["duration"]),
             "description": str(a["description"]),
         }
         for a in raw.annotations

@@ -12,6 +12,7 @@ inside the cone, the Fisher z column, and the ROI grouping that replaced the ROI
 """
 
 import numpy as np
+import pandas as pd
 import pytest
 
 from fnirs_pipe.pipeline.synchrony import (
@@ -86,23 +87,25 @@ def test_white_noise_decorrelates_but_a_dominant_rhythm_does_not():
 
 # ---- wtc_band_mean ----
 
-def test_the_cone_is_not_masked_by_default():
-    """Half the record outside the cone: masking would change the number, and must not."""
-    coi = np.where(np.arange(len(TIMES)) < 15, 1e6, 1e-12)
+def _half_outside_the_cone():
+    """A map whose second half is padding: 0.5 inside the cone, 1.0 outside it."""
     data = _map(0.5)
-    data["coi"] = coi
+    data["coi"] = np.where(np.arange(len(TIMES)) < 15, 1e6, 1e-12)
     data["wtc"][:, 15:] = 1.0
-    df = wtc_band_mean(_result({"A": data}), 0.06, 0.15)
-    assert df["coherence"].iloc[0] == pytest.approx(0.75)
+    return data
 
 
-def test_masking_the_cone_drops_the_padded_half():
-    coi = np.where(np.arange(len(TIMES)) < 15, 1e6, 1e-12)
-    data = _map(0.5)
-    data["coi"] = coi
-    data["wtc"][:, 15:] = 1.0
-    df = wtc_band_mean(_result({"A": data}), 0.06, 0.15, mask_coi=True)
+def test_the_cone_is_masked_by_default():
+    """The padded half is dropped without being asked for. The default flipped on
+    2026-09-10; this used to assert the other way and was not updated with it."""
+    df = wtc_band_mean(_result({"A": _half_outside_the_cone()}), 0.06, 0.15)
     assert df["coherence"].iloc[0] == pytest.approx(0.5)
+
+
+def test_the_mask_can_still_be_turned_off():
+    """Off, the padded cells average in and pull the number up by half their distance."""
+    df = wtc_band_mean(_result({"A": _half_outside_the_cone()}), 0.06, 0.15, mask_coi=False)
+    assert df["coherence"].iloc[0] == pytest.approx(0.75)
 
 
 def test_the_cone_share_is_reported_even_when_it_is_not_applied():
@@ -221,6 +224,9 @@ def stub_pseudo(monkeypatch):
     result = _result({"S1_D1": _ramp_map(0.2, 0.8)})
     monkeypatch.setattr(synchrony, "_long_signals",
                         lambda raw, ch_type, sep_bands: {"S1_D1": np.arange(8.0)})
+    # evaluated as an argument to the stubbed `_wtc_over_pairs`, so stubbing that one is not
+    # enough: it reads the montage off recordings these tests do not have
+    monkeypatch.setattr(synchrony, "long_axis_over", lambda *a, **k: ["S1_D1"])
     monkeypatch.setattr(synchrony, "_wtc_over_pairs", lambda *a, **k: result)
     return synchrony
 
@@ -260,3 +266,71 @@ def test_the_windowed_null_carries_the_same_columns_as_the_whole_run_one(stub_ps
         {"s1": None, "s2": None}, 0.02, 0.30, n_iter=1,
         windows=[("all", float(TIMES[0]), float(TIMES[-1]))])
     assert list(by_cond.columns) == ["condition"] + list(whole.columns)
+
+
+# ---- --tstart/--tend reaches the whole-run row too ----
+#
+# `windows` fixed the per-condition rows; the whole-run row had the same defect and no
+# parameter to fix it. With `--tstart`/`--tend` the real whole-run table describes the
+# window, and the null described the whole recording: one row, compared against a row
+# measuring a different span, with nothing saying so. The ramp map makes the arithmetic
+# exact, 0.2 over the first half and 0.8 over the second.
+
+def test_without_an_analysis_window_the_whole_run_row_covers_the_record(stub_pseudo):
+    whole, _ = stub_pseudo.compute_wtc_pseudo({"s1": None, "s2": None}, 0.02, 0.30, n_iter=1)
+    assert whole["coherence"].iloc[0] == pytest.approx(0.5)
+
+
+@pytest.mark.parametrize("half, expected", [("first", 0.2), ("second", 0.8)])
+def test_the_whole_run_row_is_the_window_when_one_is_given(stub_pseudo, half, expected):
+    mid = float(TIMES[len(TIMES) // 2])
+    window = ((float(TIMES[0]), mid - 1e-9) if half == "first"
+              else (mid, float(TIMES[-1])))
+    whole, _ = stub_pseudo.compute_wtc_pseudo(
+        {"s1": None, "s2": None}, 0.02, 0.30, n_iter=1, analysis_window=window)
+    assert whole["coherence"].iloc[0] == pytest.approx(expected)
+
+
+def test_a_window_spanning_everything_is_the_unwindowed_number(stub_pseudo):
+    """The same identity the per-condition side is pinned by: windowed off the transform,
+    never recomputed on a cut."""
+    whole, _ = stub_pseudo.compute_wtc_pseudo(
+        {"s1": None, "s2": None}, 0.02, 0.30, n_iter=1,
+        analysis_window=(float(TIMES[0]), float(TIMES[-1])))
+    assert whole["coherence"].iloc[0] == pytest.approx(0.5)
+
+
+def test_the_conditions_are_unaffected_by_the_analysis_window(stub_pseudo):
+    """Condition windows are absolute times and already lie inside the analysis window, so
+    they are read off the same transform either way. Windowing twice would move them."""
+    mid = float(TIMES[len(TIMES) // 2])
+    args = dict(n_iter=1, windows=[("late", mid, float(TIMES[-1]))])
+    _, plain = stub_pseudo.compute_wtc_pseudo({"s1": None, "s2": None}, 0.02, 0.30, **args)
+    _, windowed = stub_pseudo.compute_wtc_pseudo(
+        {"s1": None, "s2": None}, 0.02, 0.30,
+        analysis_window=(mid, float(TIMES[-1])), **args)
+    assert windowed["coherence"].iloc[0] == pytest.approx(plain["coherence"].iloc[0])
+    assert plain["coherence"].iloc[0] == pytest.approx(0.8)
+
+
+def test_the_writer_passes_the_window_down(monkeypatch, tmp_path):
+    """The wiring, which is where this bug lived: both functions had the parameter for the
+    conditions and neither had it for the run."""
+    from fnirs_pipe.qc import wtc_null
+    seen = {}
+
+    def _spy(*args, **kwargs):
+        seen.update(kwargs)
+        return pd.DataFrame({"label": ["S1_D1"], "label2": ["S1_D1"],
+                             "coherence": [0.5], "coherence_z": [0.55]}), None
+
+    monkeypatch.setattr("fnirs_pipe.pipeline.hyperscanning.compute_wtc_pseudo", _spy)
+    monkeypatch.setattr("fnirs_pipe.pipeline.hyperscanning._hyper_sidecar",
+                        lambda *a, **k: None)
+    monkeypatch.setattr("fnirs_pipe.utils.lineage.path_from", lambda r: None)
+    # both read the montage off the recordings, which these stubs do not have
+    monkeypatch.setattr("fnirs_pipe.pipeline.synchrony.wtc_grid_params", lambda raws: {})
+    wtc_null.write_wtc_null(
+        group_id="G1", task="tap", aligned_raws={"s1": None, "s2": None},
+        output_dir=tmp_path, n_iter=1, chroma=("hbo",), analysis_window=(60.0, 300.0))
+    assert seen["analysis_window"] == (60.0, 300.0)

@@ -38,6 +38,7 @@ def write_wtc_null(
     chroma: "tuple[str, ...] | list[str]" = ("hbo", "hbr"),
     sep_bands=None,
     windows: "list[tuple[str, float, float]] | None" = None,
+    analysis_window: "tuple[float, float] | None" = None,
 ) -> Path:
     """Run the phase-scrambled null for one dyad and write its band means beside the real ones.
 
@@ -49,6 +50,10 @@ def write_wtc_null(
     ``chroma`` has to cover the real run's chromophores: a null computed on HbO says nothing
     about an HbR coupling, so a table missing one chromophore leaves that half of the real
     table with nothing to be tested against.
+
+    ``analysis_window`` is ``--tstart``/``--tend``. The whole-run table has to be windowed
+    the same way the real whole-run table was, or the two describe different spans of the
+    recording and the comparison between them is not one.
 
     ``windows`` adds a second table, ``...hyper-wtcbycond-pseudo.tsv``, with a ``condition``
     column: the null for what ``--wtc-by-condition`` wrote. It mirrors the real side, where
@@ -78,7 +83,7 @@ def write_wtc_null(
             aligned_raws, band_fmin, band_fmax, n_iter=n_iter,
             fmin=wtc_fmin, fmax=wtc_fmax, seed=seed, cross=cross,
             limit_scales=limit_scales, mask_coi=mask_coi, ch_type=ch_type,
-            sep_bands=sep_bands, windows=windows)
+            sep_bands=sep_bands, windows=windows, analysis_window=analysis_window)
         # tagged after the averaging, which groups on the columns it knows and drops the
         # rest, and on a copy, since the frame is not ours to mutate
         part = part.copy()
@@ -92,6 +97,8 @@ def write_wtc_null(
     sources = [p for p in (path_from(r) for r in aligned_raws.values()) if p]
     params = dict(
         band_fmin=band_fmin, band_fmax=band_fmax, mask_coi=mask_coi,
+        **({"analysis_window_s": [round(t, 3) for t in analysis_window]}
+           if analysis_window is not None else {}),
         wtc_fmin=wtc_fmin, wtc_fmax=wtc_fmax, n_iter=n_iter, cross=cross, seed=seed,
         chroma=list(chroma), **wtc_grid_params(aligned_raws),
     )

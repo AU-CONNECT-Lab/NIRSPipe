@@ -621,7 +621,9 @@ def condition_sections(
                 "gvtd_num_above_thresh": int(round(share * (t1 - t0) * sfreq))})
 
         out[label] = {
-            "window_s": [round(t0, 3), round(t1, 3)],
+            # unrounded, so a reader can pair these bounds back to the annotations they
+            # came from; rounding them is what silently dropped conditions before
+            "window_s": [float(t0), float(t1)],
             "bad_channels": cond_bad,
             "scalars": scalars,
             "od_by_set": condition_set_scalars(sliced, set(cond_bad), long_names,
@@ -649,12 +651,12 @@ def _condition_cnr(haemo, t0, t1, picks=None) -> dict:
     if hi <= lo:
         return {}
     cut = haemo.copy().crop(lo, hi)
-    # half a sample: the window bounds are rounded, so an onset sits either side of its own
-    # condition's start by a few tens of microseconds. An exact test dropped three of five
-    # conditions here. Still far below the gap between blocks, so no neighbour is let in.
+    # the window is on the data axis and an onset is not, so a recording cropped from
+    # anywhere but zero needs the offset off before the two compare
+    origin = float(haemo.first_time)
     tol = 0.5 / float(haemo.info["sfreq"])
     keep = [i for i, a in enumerate(cut.annotations)
-            if float(t0) - tol <= float(a["onset"]) <= float(t1) + tol]
+            if float(t0) - tol <= float(a["onset"]) - origin <= float(t1) + tol]
     if not keep:
         return {}
     if len(keep) < len(cut.annotations):

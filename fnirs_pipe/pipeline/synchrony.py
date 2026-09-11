@@ -528,6 +528,7 @@ def compute_wtc_pseudo(
     ch_type: str = "hbo",
     sep_bands=None,
     windows: "list[tuple[str, float, float]] | None" = None,
+    analysis_window: "tuple[float, float] | None" = None,
 ) -> "tuple[pd.DataFrame, pd.DataFrame | None]":
     """Pseudo-dyad band means: WTC against a phase-scrambled partner, averaged over ``n_iter``.
 
@@ -552,9 +553,13 @@ def compute_wtc_pseudo(
     one pass of ``n_iter`` transforms produces both tables and the null is windowed exactly
     the way the real table it is compared against was.
 
+    ``analysis_window`` is ``--tstart``/``--tend``, and does the same job for the whole-run
+    row that ``windows`` does for the per-condition ones: the real whole-run table describes
+    that stretch, so its null has to as well.
+
     A whole-run null against a windowed real table is anticonservative on the short windows,
     because a long record's surrogate coherence is lower than a short window's. Passing
-    ``windows`` is what removes that.
+    ``windows`` and ``analysis_window`` is what removes that.
     """
     if n_iter < 1:
         raise ValueError(f"n_iter must be at least 1, got {n_iter}")
@@ -590,7 +595,12 @@ def compute_wtc_pseudo(
             # the same axis the real table is built on, without which the null cannot be
             # subtracted from it row by row
             axis=long_axis_over(raws.values(), ch_type, sep_bands))
-        frames.append(wtc_band_mean(result, band_fmin, band_fmax, mask_coi=mask_coi))
+        # --tstart/--tend, read off this iteration's transform the way the real table reads
+        # it off its own. Without it the whole-run row of the null describes the recording
+        # while the row it is compared against describes the window
+        run_result = (result if analysis_window is None
+                      else window_result(result, *analysis_window))
+        frames.append(wtc_band_mean(run_result, band_fmin, band_fmax, mask_coi=mask_coi))
         # windowed off this iteration's own transform, never recomputed on the cut: the
         # real table is windowed the same way, and a null built differently from the table
         # it is subtracted from measures the difference between the two routes
