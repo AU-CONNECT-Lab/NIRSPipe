@@ -59,9 +59,14 @@ def line_xy(times: np.ndarray, values: np.ndarray) -> dict:
     The uniformity test is what keeps this honest. ``decimate`` strides, so its timestamps
     pass; ``_maxpool_xy`` keeps the timestamp each bin's peak was found at, so a peak sits
     where it happened rather than on a bin edge, and those fail the test and keep their x.
+
+    Values go out as float32, which is a display cast and not a measurement one: it is 7
+    significant figures, the relative error is 6e-8 whatever the magnitude, and across every
+    trace in a motion panel that is at most 5e-5 of a pixel. Timestamps stay float64, since
+    those are what the uniformity test and the peak positions are read off.
     """
     t = np.asarray(times, dtype=float)
-    y = np.asarray(values, dtype=float)
+    y = np.asarray(values, dtype=np.float32)
     if t.size > 2:
         d = np.diff(t)
         if np.allclose(d, d[0], rtol=1e-6, atol=0.0):

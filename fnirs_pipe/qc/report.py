@@ -454,14 +454,20 @@ def _section_motion_detail(
     the same reason: everything in these figures is measured over the run and only the view
     moves. The figures are narrowed in place, so each condition's save must follow its own
     zoom, which is the order this is called in.
+
+    The y axes follow the window as well, which the carpet's do not: its colour scale is one
+    scale across conditions by design, while these rows are read for the shape of a trace and
+    a quiet condition under the run's scale is a flat line. ``rescale_y_to_window`` says why
+    at length, and writes each row's own maximum beside the run's on the panel.
     """
-    from fnirs_pipe.qc.condition_views import zoom_to_condition
+    from fnirs_pipe.qc.condition_views import rescale_y_to_window, zoom_to_condition
 
     saved = []
     for ch, fig in figures:
         with _guard(f"Motion detail {ch}", errors, subject):
             if xrange is not None:
                 zoom_to_condition(fig, *xrange)
+                rescale_y_to_window(fig, *xrange)
             fname = f"motion_detail_{_pair_fname(ch)}{suffix}.html"
             h = _save_multi_fig_html([fig], figures_dir / fname)
             saved.append({"pair": ch, "path": _fig_href(figures_dir, fname), "h": h})

@@ -17,6 +17,8 @@ from __future__ import annotations
 
 import re
 
+import numpy as np
+
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("qc.condition_views")
@@ -252,6 +254,100 @@ def zoom_to_condition(figure, t0: float, t1: float):
         layout[key] = {**(layout[key] or {}), "range": [float(t0), float(t1)],
                        "autorange": False}
     return {**figure, "layout": layout}
+
+
+_SCALE_NOTE = "qc-scale-note"
+
+
+def _trace_x(trace):
+    """A trace's timestamps, whether it carries them or a start and a step."""
+    y = getattr(trace, "y", None)
+    if y is None:
+        return None
+    x = getattr(trace, "x", None)
+    if x is not None:
+        return np.asarray(x, dtype=float)
+    x0, dx = getattr(trace, "x0", None), getattr(trace, "dx", None)
+    if x0 is None or dx is None:
+        return None
+    return float(x0) + float(dx) * np.arange(len(y))
+
+
+def rescale_y_to_window(figure, t0: float, t1: float):
+    """Re-fit every y axis of a time-axis figure to what is inside ``t0``-``t1``.
+
+    ::
+
+      rescale_y_to_window(motion_detail_fig, 22.4, 322.4)
+
+    The companion of :func:`zoom_to_condition`, which narrows the view along time and leaves
+    the y axes pinned to the whole run. That pinning is what a quiet condition runs into:
+    measured on this dataset, baseline's GVTD peaks reach 18% of an axis set by video's, so
+    the row reads as a flat line and the threshold rule sits at 3% of the row height, and the
+    panel stops answering the question it is on the page for.
+
+    What the run-wide axis bought is a comparison between conditions by eye. Each page
+    already carries that comparison as a number, per condition and to three figures, so this
+    trades a worse copy of it for a panel that works. The row labels carry this window's
+    maximum and the run's beside it, so a reader is told which scale they are on.
+
+    Shaded spans follow the new range instead of setting it: they are frames drawn to the
+    row's height, not measurements. A row with no trace inside the window is left alone.
+    """
+    if not hasattr(figure, "update_yaxes"):
+        return figure
+    # the caller narrows one figure object once per condition, so the last condition's notes
+    # have to go before this one's are written or every page carries every page's
+    figure.layout.annotations = tuple(
+        a for a in (figure.layout.annotations or ()) if a.name != _SCALE_NOTE)
+    lines, bands = {}, {}
+    for tr in figure.data:
+        axis = getattr(tr, "yaxis", None) or "y"
+        group = bands if getattr(tr, "fill", None) == "toself" else lines
+        group.setdefault(axis, []).append(tr)
+
+    for axis, traces in lines.items():
+        lo, hi, run_hi = np.inf, -np.inf, -np.inf
+        x_axis = "x"
+        for tr in traces:
+            x = _trace_x(tr)
+            if x is None:
+                continue
+            x_axis = getattr(tr, "xaxis", None) or x_axis
+            y = np.asarray(tr.y, dtype=float)
+            y = y[np.isfinite(y)]
+            if y.size:
+                run_hi = max(run_hi, float(y.max()))
+            inside = np.asarray(tr.y, dtype=float)[(x >= t0) & (x <= t1)]
+            inside = inside[np.isfinite(inside)]
+            if inside.size:
+                lo, hi = min(lo, float(inside.min())), max(hi, float(inside.max()))
+        if not np.isfinite(lo) or hi <= lo:
+            continue
+        # a row the builder pinned to zero keeps its floor there. Those rows hold magnitudes,
+        # GVTD and |dOD/dt|, and a peak on them is read as a height: lifting the floor to the
+        # window's own minimum would draw a quiet condition's ripple as though it were one.
+        # A row that autoranged (OD, which goes negative) gets a floor fitted to the window.
+        key = "yaxis" + axis[1:]
+        was = figure.layout[key].range if key in figure.layout else None
+        if was is not None and float(was[0]) == 0.0:
+            floor = 0.0
+        else:
+            floor = lo - 0.04 * (hi - lo)
+        top = hi + 0.1 * (hi - floor)
+        if key in figure.layout:
+            figure.layout[key].update(range=[floor, top], autorange=False)
+        for band in bands.get(axis, []):
+            band.y = [None if v is None else (floor if v <= floor else top) for v in band.y]
+        # which scale the row is on, since it is no longer the one the run's page draws
+        if np.isfinite(run_hi) and run_hi > hi:
+            figure.add_annotation(
+                x=0.996, xref=f"{x_axis} domain", y=0.97, yref=f"{axis} domain",
+                text=f"max {hi:.3g} \u00b7 run {run_hi:.3g}", showarrow=False,
+                xanchor="right", yanchor="top", font=dict(size=7, color="#98a2ad"),
+                name=_SCALE_NOTE,
+            )
+    return figure
 
 
 def condition_payloads(
