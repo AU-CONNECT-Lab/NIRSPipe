@@ -209,3 +209,71 @@ def test_the_roi_thumbnail_grid_is_gone(pages):
     for page in pages:
         html = page.read_text(encoding="utf-8")
         assert "_ROI_GRID" not in html and "wtc-roi-grid-img" not in html, page.name
+
+
+# ---- how many cycles of the slowest analysed frequency a window holds ----
+#
+# Not a cone and not contamination: the count stays the same however clean the edges are.
+# A coherence at `--wtc-band-fmin` is a claim about a phase relationship, and a window
+# holding one cycle of that frequency has seen the relationship once. Lowering the band
+# without lengthening the blocks is the way into that, and nothing used to say so.
+
+# the count is always printed; this sentence only appears when it is below it
+COUNT = "cycles of the slowest"
+CAVEAT = "Four to six cycles is the usual minimum"
+
+
+@pytest.mark.parametrize("window, band_fmin, expected", [
+    ((3580.0, 3880.0), 0.06, 18.0),      # d01's conversation as it is run
+    ((3580.0, 3880.0), 0.01, 3.0),       # the same block with the band lowered
+    ((0.0, 900.0), 0.06, 54.0),
+    ((0.0, 60.0), 0.02, 1.2),
+])
+def test_the_count_is_the_window_in_units_of_the_slowest_period(window, band_fmin, expected):
+    from fnirs_pipe.qc.hyper_report import _band_cycles
+
+    assert _band_cycles(window, band_fmin) == pytest.approx(expected, abs=0.05)
+
+
+def test_a_run_with_no_window_has_no_count():
+    """The whole-run page describes the recording, which has no block to be short."""
+    from fnirs_pipe.qc.hyper_report import _band_cycles
+
+    assert _band_cycles(None, 0.06) is None
+
+
+def test_a_long_enough_condition_prints_the_count_without_the_caveat(pages):
+    """The fixture's blocks are 180 s against a 0.03 Hz floor, so 5.4 cycles: above the
+    minimum, and the reader still gets the number."""
+    for page in pages:
+        html = page.read_text(encoding="utf-8")
+        assert CAVEAT not in html, page.name
+        if _window_of(page):
+            assert COUNT in html, page.name
+
+
+def test_a_condition_too_short_for_the_band_says_so(dyad, tmp_path_factory):
+    """The same blocks against a 0.01 Hz floor: 1.8 cycles, and the page has to say it."""
+    from fnirs_pipe.qc.hyper_report import build_hyper_post_report
+
+    out = tmp_path_factory.mktemp("hyper_short")
+    path = build_hyper_post_report(
+        group_id="G1", task="tap",
+        group=[GroupEntry("G1", "sub-01", "tap"), GroupEntry("G1", "sub-02", "tap")],
+        aligned_raws=dyad, offsets={"sub-01": 0.0, "sub-02": 0.0}, output_dir=out,
+        wtc_fmin=0.008, wtc_fmax=0.2, wtc_band_fmin=0.01, wtc_band_fmax=0.10,
+        wtc_chroma=("hbo",), wtc_by_condition=True,
+    )
+    condition_pages = [p for p in path.parent.glob("*.html")
+                       if "index" not in p.name and _window_of(p)]
+    assert condition_pages, "no condition page was written"
+    for page in condition_pages:
+        html = page.read_text(encoding="utf-8")
+        assert CAVEAT in html, page.name
+        assert "1.8 cycles" in html, page.name
+
+    # and the run's own page, which describes no block, carries neither
+    run = next(p for p in path.parent.glob("*.html")
+               if "index" not in p.name and not _window_of(p))
+    run_html = run.read_text(encoding="utf-8")
+    assert COUNT not in run_html and CAVEAT not in run_html

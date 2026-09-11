@@ -40,15 +40,29 @@
       {% if condition_label -%}
       {{ condition_window }} &bull; every panel below is this window read out of the whole-run
       transform, so it carries the recording's cone of influence and not two edges of its own
+      {%- if window_cycles %} &bull; {{ "%.0f"|format(window_cycles) }} cycles of the slowest
+      band frequency{% endif %}
       {%- elif analysis_window -%}
       restricted to {{ analysis_window }} by <code>--tstart</code>/<code>--tend</code>, taken
       out of the transform of the whole recording rather than cut from it &bull; the coherence
       is averaged across every condition inside that window
+      {%- if window_cycles %} &bull; {{ "%.0f"|format(window_cycles) }} cycles of the slowest
+      band frequency{% endif %}
       {%- else -%}
       the coherence over the whole recording, averaged across every condition in it &bull;
       the per-condition pages are the ones to read for a block design
       {%- endif %}
     </span>
+    {% if window_cycles and window_cycles < min_band_cycles %}
+    <div class="panel-caveat">
+      This window holds only {{ "%.1f"|format(window_cycles) }} cycles of
+      <code>--wtc-band-fmin</code>, the slowest frequency being averaged. A coherence there is
+      a statement about a phase relationship this window has seen about that many times, so
+      the low-frequency end of every number below rests on very few independent looks at it.
+      Four to six cycles is the usual minimum. Raise <code>--wtc-band-fmin</code>, or read
+      that end as indicative. Nothing is masked or dropped on account of this.
+    </div>
+    {% endif %}
   </div>
   <div class="cond-nav">
     {% for link in nav_links %}

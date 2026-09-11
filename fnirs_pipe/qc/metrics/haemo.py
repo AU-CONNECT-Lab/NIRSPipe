@@ -17,6 +17,8 @@ from fnirs_pipe.qc.metrics._helpers import _mean_or_none, _safe_metrics
 # fixed rather than derived from stimulus duration, so two runs stay comparable
 CNR_BASELINE_S = (-5.0, 0.0)
 CNR_RESPONSE_S = (5.0, 15.0)
+DRIFT_ORDER_PER_S = 150.0  # one polynomial degree per this many seconds
+DRIFT_ORDER_MAX = 30
 
 
 def haemo_quality_metrics(raw_haemo: mne.io.Raw) -> dict[str, Any]:
@@ -270,16 +272,21 @@ def gcor_metrics(raw_haemo: mne.io.Raw) -> dict[str, Any]:
 
 
 @_safe_metrics("Drift amplitude", ("lowfreq_drift_amplitude_hbo", "lowfreq_drift_amplitude_hbr"))
-def _drift_metrics(raw_haemo: mne.io.Raw) -> dict[str, Any]:
+def _drift_metrics(raw_haemo: mne.io.Raw, order: "int | None" = None) -> dict[str, Any]:
     r"""Low-frequency baseline drift amplitude per chromophore (peak-to-peak of a slow trend).
 
-    A low-order (cubic) polynomial trend is fitted per channel; drift is the mean
-    peak-to-peak of that trend.
+    A polynomial trend is fitted per channel; drift is the mean peak-to-peak of that trend.
+    Its order follows the recording length, one degree per ``DRIFT_ORDER_PER_S`` seconds,
+    so what counts as drift is a period (about twice that) rather than a shape. A fixed
+    order cannot do this: the same wander is two cycles in a 300 s run and fourteen in a
+    1800 s one, and only the first is something a cubic can follow.
 
     Parameters
     ----------
     raw_haemo : mne.io.Raw
         Haemoglobin recording.
+    order : int, optional
+        Polynomial order. None derives it from the duration.
 
     Returns
     -------
@@ -288,21 +295,21 @@ def _drift_metrics(raw_haemo: mne.io.Raw) -> dict[str, Any]:
 
     Notes
     -----
-    Non-standard homegrown metric; may be removed. A polynomial is used instead of
-    a 0.01 Hz low-pass, whose FIR length would exceed most recordings.
+    Non-standard homegrown metric. A polynomial is used instead of a 0.01 Hz low-pass,
+    whose FIR length would exceed most recordings. The order rule is AFNI 3dDeconvolve's
+    ``1 + floor(run_time / 150)``. Peak-to-peak grows with duration whatever the order, so
+    the number is not comparable between recordings of different length.
     """
-    # NOTE: non-standard homegrown metric; may remove.
     hbo_picks = mne.pick_types(raw_haemo.info, fnirs="hbo")
     hbr_picks = mne.pick_types(raw_haemo.info, fnirs="hbr")
     n = len(raw_haemo.times)
-    # Low-frequency drift amplitude = peak-to-peak of a slow trend fitted per channel.
-    # We fit a low-order (cubic) polynomial rather than low-passing at 0.01 Hz: an
-    # 0.01 Hz FIR needs a filter ~hundreds of seconds long (roughly several / 0.01),
-    # which exceeds most recordings -> MNE errors, or leaves heavy edge ringing that
-    # corrupts the ptp. The polynomial captures the same slow drift with no filter.
-    #   trend = V @ lstsq(V, x),  V = [t^3 t^2 t 1] ;  drift = ptp(trend) mean over channels
+    if order is None:
+        order = int(min(DRIFT_ORDER_MAX,
+                        1 + np.floor(raw_haemo.times[-1] / DRIFT_ORDER_PER_S)))
+    order = max(1, min(order, n - 1))
+    #   trend = V @ lstsq(V, x) ;  drift = ptp(trend) mean over channels
     t = np.linspace(-1.0, 1.0, n)
-    vander = np.vander(t, 4)
+    vander = np.vander(t, order + 1)
 
     def _drift_ptp(picks) -> "float | None":
         if not len(picks):

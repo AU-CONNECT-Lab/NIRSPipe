@@ -193,6 +193,29 @@ def write_isc_matrix(
         logger.warning("ISC matrix (%s) not written: %s", ch_type, exc)
 
 
+# Oscillations of the slowest analysed frequency a window needs before its coherence is
+# worth reading. Reported, never enforced.
+MIN_BAND_CYCLES = 4.0
+
+
+def _band_cycles(window: "tuple[float, float] | None", band_fmin: float) -> "float | None":
+    """How many cycles of the slowest analysed frequency a window holds.
+
+    ::
+
+      a 300 s condition with band_fmin 0.06 Hz -> 18.0
+      the same condition with band_fmin 0.01   ->  3.0, below MIN_BAND_CYCLES
+
+    A coherence is a statement about the phase relationship at a frequency, and a window
+    holding one cycle of it has seen that relationship once. This is the count, not the cone:
+    it stays the same however clean the edges are, and it is the number that moves when
+    ``--wtc-band-fmin`` is lowered without lengthening the blocks.
+    """
+    if not window or not band_fmin:
+        return None
+    return (float(window[1]) - float(window[0])) * float(band_fmin)
+
+
 def _member_nirs_dir(output_dir: Path, entry: GroupEntry) -> Path:
     """A member's ``nirs/``, laid out the way :func:`group_data_dir` lays out a group's.
 
@@ -1220,6 +1243,8 @@ def build_hyper_post_report(
                               if window else ""),
             analysis_window=(f"{analysis_window[0]:.1f}–{analysis_window[1]:.1f} s"
                              if analysis_window else ""),
+            window_cycles=_band_cycles(window or analysis_window, wtc_band_fmin),
+            min_band_cycles=MIN_BAND_CYCLES,
             run_href=_page_path(None).name,
             nav_links=[{"label": text, "href": _page_path(lab).name,
                         "current": lab == label} for lab, text in nav_pages],
