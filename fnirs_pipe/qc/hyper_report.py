@@ -58,7 +58,7 @@ _SUBJECT_METRICS = [
 # themselves would share one dict between every call, so each figure set would write into
 # its predecessor's and every page would end up pointing at the last window's figures.
 _FIGURE_SET: dict = {"per_channel": dict, "per_roi": dict,
-                     "chan_matrix": str, "roi_matrix": str, "roi_grid": str}
+                     "chan_matrix": str, "roi_matrix": str}
 
 
 def _empty_figures() -> dict:
@@ -338,6 +338,31 @@ def build_hyper_report(
     return output_path
 
 
+def markers_on_data_axis(raw: "mne.io.Raw") -> list[dict]:
+    """Non-BAD annotations with their onsets moved onto the data axis, which starts at zero.
+
+    ::
+
+      a raw cropped from 22.4 s, annotation "talk" at onset 3602.4  ->  onset 3580.0
+
+    Annotations of a cropped recording still sit on the original recording's axis, with the
+    offset held in ``first_time``, while the data axis and everything computed from it start
+    at zero. :func:`~fnirs_pipe.pipeline.hyperscanning.align_recordings` crops every member
+    from its first shared trigger, so raw annotation onsets are late by that trigger's onset
+    against any figure or window drawn on the aligned clock.
+
+    Every consumer of the aligned markers goes through this. The condition windows did the
+    subtraction and the figures' block boundaries did not, which drew every boundary line on
+    every coherence map late by that same offset. It is invisible on a tree whose input
+    files each held one condition cropped to its own start, where the offset is zero.
+    """
+    origin = float(raw.first_time)
+    markers = extract_markers(raw)
+    if not origin:
+        return markers
+    return [{**m, "onset": float(m["onset"]) - origin} for m in markers]
+
+
 def condition_windows(
     raw: "mne.io.Raw",
     min_duration: float,
@@ -363,20 +388,9 @@ def condition_windows(
     two-second trials yields nothing here: a window holding less than one cycle has no
     average of that frequency to report, however the coherence was computed.
     """
-    from fnirs_pipe.qc.figure_io import extract_markers
-
-    markers = sorted(extract_markers(raw), key=lambda m: m["onset"])
+    markers = sorted(markers_on_data_axis(raw), key=lambda m: m["onset"])
     if not markers:
         return []
-
-    # Annotations of a cropped recording still sit on the original recording's axis, with
-    # the offset held in first_time, while the data axis starts at zero. `align_recordings`
-    # crops every member from its first shared trigger, so without this every window comes
-    # back late by that trigger's onset. Invisible while each input file held one condition
-    # cropped to its own start, where the offset is zero.
-    origin = float(raw.first_time)
-    if origin:
-        markers = [{**m, "onset": float(m["onset"]) - origin} for m in markers]
 
     end = float(raw.times[-1])
     counts: dict[str, int] = {}
@@ -515,7 +529,6 @@ def build_hyper_post_report(
         build_isc_panel,
         build_wtc_channel,
         build_wtc_cross_matrix,
-        build_wtc_roi_grid,
         compute_isc,
     )
 
@@ -533,7 +546,7 @@ def build_hyper_post_report(
 
     subject_ids  = [e.subject_id for e in group]
     ref_raw      = aligned_raws.get(subject_ids[0]) if subject_ids else None
-    markers_list = extract_markers(ref_raw) if ref_raw else []
+    markers_list = markers_on_data_axis(ref_raw) if ref_raw else []
     all_descs    = list(dict.fromkeys(m["description"] for m in markers_list))
     cond_colors_ = _cond_colors(all_descs)
 
@@ -588,6 +601,46 @@ def build_hyper_post_report(
             out = _fig(fn(*args), fname)
         return out
 
+    def _maps(dest: dict, result, pair_key, pair_label: str, axis: list[str],
+              stem: str, ch_type: str, suffix: str, what: str) -> None:
+        """Fill ``dest`` with one coherence map per pairing of ``axis`` against itself.
+
+        ::
+
+          axis ["S1_D1", "S1_D2"], crossed
+            -> dest["S1_D1"]["S1_D2"] = {"wtc": "figures/.../wtc_hbo_S1D1_x_S1D2.png"}
+
+        Both map panels are built here, the channels with the channel axis and the ROIs with
+        the ROI labels, so the two cannot drift in how they key or name their files. The
+        nesting is ``[label of the first member][label of the second]`` and is written even
+        for an uncrossed run, which fills only the diagonal: the page then reads one shape
+        and shows one selector instead of two.
+
+        A pairing the result has no entry for, or whose builder failed, lands as ``None``
+        and the page hides its image. That is the rejected channel's blank row arriving on
+        the figure side of the same rule the tables follow.
+        """
+        for label1 in axis:
+            row: dict = {}
+            for label2 in (axis if wtc_channel_cross else [label1]):
+                fig = None
+                if result and pair_key:
+                    key = (label1, label2) if wtc_channel_cross else label1
+                    data = result.pairs.get(pair_key, {}).get(key)
+                    site = label1 if label1 == label2 else f"{label1} × {label2}"
+                    fname = (f"{stem}_{_pair_fname(label1)}{suffix}.png"
+                             if label1 == label2 else
+                             f"{stem}_{_pair_fname(label1)}_x_{_pair_fname(label2)}"
+                             f"{suffix}.png")
+                    fig = _safe_post(
+                        f"wtc map {site} ({what}, {ch_type})", fname,
+                        build_wtc_channel,
+                        data, result.freqs, result.times,
+                        pair_label, markers_list, cond_colors_, site,
+                    )
+                row[label2] = {"wtc": fig}
+            dest[label1] = row
+
     def _tag(df, ch_type: str):
         """The column saying which chromophore a row is, added after every aggregation.
 
@@ -622,6 +675,16 @@ def build_hyper_post_report(
     # the channel selector and the ROI grouping table describe the montage, so they are the
     # same whichever chromophore is drawn and are built once
     ch_pairs_post: list[str] = get_channel_pairs(ref_raw) if ref_raw else []
+
+    # ---- the axis both channel panels are indexed by ----
+    # The union of the members' long channels, rejections kept, which is the axis the
+    # cross matrix is drawn on: selector and matrix have to name the same set or a reader
+    # cannot find a matrix cell in the selector. `ch_pairs_post` above is the whole montage
+    # including the short channels, which have no coherence and left the old selector with
+    # eight dead entries. Labels do not carry the chromophore, so one pass serves both.
+    _members = [aligned_raws[s] for s in subject_ids if s in aligned_raws]
+    chan_axis: list[str] = (long_axis_over(_members, fig_chroma, sep_bands) if _members
+                            else ch_pairs_post)
     roi_rows: list[dict] = []
     roi_labels: list[str] = list(roi_map.keys()) if roi_map else []
     if roi_map:
@@ -659,10 +722,13 @@ def build_hyper_post_report(
         same rule a per-condition subject page names its panels by. That is what lets both
         sets sit in one ``figures/`` directory without the window overwriting the run.
 
-        Returns ``{"per_channel", "per_roi", "chan_matrix", "roi_matrix", "roi_grid",
-        "roichan"}``. ``roichan`` is the ROI band-mean frame, untagged: the caller adds the
-        chromophore and, for a window, the condition, because the aggregations inside drop
-        columns they do not know.
+        Returns ``{"per_channel", "per_roi", "chan_matrix", "roi_matrix", "roichan"}``.
+        The two map sets are nested ``{label_sub1: {label_sub2: {"wtc": url}}}`` whether or
+        not the run crossed, an uncrossed one holding only the diagonal, so the page reads
+        one shape and the pair of selectors above each panel is the only difference.
+        ``roichan`` is the ROI band-mean frame, untagged: the caller adds the chromophore
+        and, for a window, the condition, because the aggregations inside drop columns they
+        do not know.
         """
         out: dict = {**_empty_figures(), "roichan": None}
         what = f"condition {suffix.lstrip('_')}" if suffix else "whole run"
@@ -673,30 +739,15 @@ def build_hyper_post_report(
         if wtc_channel_cross and chan_band_df is not None:
             with guard(f"WTC channel cross matrix ({what}, {ch_type})", errors, scope):
                 # the montage, not the labels the table happens to carry: a dyad that lost a
-                # channel still gets a matrix of the same shape as one that did not. Both
-                # members, since a montage they do not share is still two montages
-                members = [aligned_raws[s] for s in subject_ids if s in aligned_raws]
-                chan_labels = (long_axis_over(members, ch_type, sep_bands) if members
-                               else sorted({*chan_band_df["label"],
-                                            *chan_band_df["label2"]}))
+                # channel still gets a matrix of the same shape as one that did not
+                chan_labels = chan_axis or sorted({*chan_band_df["label"],
+                                                   *chan_band_df["label2"]})
                 out["chan_matrix"] = _fig(build_wtc_cross_matrix(
                     chan_band_df, chan_labels, subject_ids, band_fmin, band_fmax,
                     kind="channel"), f"wtc_chanmatrix_{ch_type}{suffix}.png") or ""
 
-        for pair in ch_pairs_post:
-            wtc_fig = None
-            if result and pair_key:
-                # crossing keys every pair, so the homologous one is the (ch, ch) cell
-                ch_key  = (pair, pair) if wtc_channel_cross else pair
-                ch_data = result.pairs.get(pair_key, {}).get(ch_key)
-                wtc_fig = _safe_post(
-                    f"wtc ({what}, {ch_type})",
-                    f"wtc_{ch_type}_{_pair_fname(pair)}{suffix}.png",
-                    build_wtc_channel,
-                    ch_data, result.freqs, result.times,
-                    pair_label, markers_list, cond_colors_, pair,
-                )
-            out["per_channel"][pair] = {"wtc": wtc_fig}
+        _maps(out["per_channel"], result, pair_key, pair_label, chan_axis,
+              f"wtc_{ch_type}", ch_type, suffix, what)
 
         if not roi_map:
             return out
@@ -726,25 +777,8 @@ def build_hyper_post_report(
                 build_wtc_cross_matrix,
                 roi_band_df, roi_labels, subject_ids, band_fmin, band_fmax, "ROI",
             ) or ""
-        with guard(f"WTC ROI map grid ({what}, {ch_type})", errors, scope):
-            out["roi_grid"] = _fig(build_wtc_roi_grid(
-                roi_wtc, roi_labels, roi_pair_key, subject_ids),
-                f"wtc_roigrid_{ch_type}{suffix}.png") or ""
-
-        for roi_name in roi_labels:
-            roi_fig = None
-            if roi_wtc and roi_pair_key:
-                # crossing keys every pair, so the homologous one is (roi, roi)
-                roi_key  = (roi_name, roi_name) if wtc_channel_cross else roi_name
-                roi_data = roi_wtc.pairs.get(roi_pair_key, {}).get(roi_key)
-                roi_fig = _safe_post(
-                    f"wtc-roichan ({what}, {ch_type})",
-                    f"wtcroi_{ch_type}_{_pair_fname(roi_name)}{suffix}.png",
-                    build_wtc_channel,
-                    roi_data, roi_wtc.freqs, roi_wtc.times,
-                    pair_label, markers_list, cond_colors_, roi_name,
-                )
-            out["per_roi"][roi_name] = {"wtc": roi_fig}
+        _maps(out["per_roi"], roi_wtc, roi_pair_key, pair_label, roi_labels,
+              f"wtcroi_{ch_type}", ch_type, suffix, what)
 
         return out
 
@@ -1005,7 +1039,6 @@ def build_hyper_post_report(
         per_roi     = _by_chroma("per_roi")
         roi_matrix  = _by_chroma("roi_matrix")
         chan_matrix = _by_chroma("chan_matrix")
-        roi_grid    = _by_chroma("roi_grid")
 
         out_path = _page_path(label)
         heading = "fnirs‑pipe   Hyper Post Report"
@@ -1043,18 +1076,22 @@ def build_hyper_post_report(
             isc_threshold=isc_threshold,
             alignment_json=json.dumps(alignment_rows),
             per_channel_post_json=json.dumps(per_channel),
-            ch_pairs_post_json=json.dumps(ch_pairs_post),
+            # the long axis, not `ch_pairs_post`: the selector has to name the set the
+            # matrix beside it is drawn on, and the short channels have no coherence
+            ch_pairs_post_json=json.dumps(chan_axis),
             bad_pairs_json=json.dumps(sorted(bad_pairs_all)),
             roi_rows=roi_rows,
             roi_labels_json=json.dumps(roi_labels),
             per_roi_post_json=json.dumps(per_roi),
             wtc_roi_matrix_json=json.dumps(roi_matrix),
             wtc_chan_matrix_json=json.dumps(chan_matrix),
-            wtc_roi_grid_json=json.dumps(roi_grid),
             # the cards these guard exist when any chromophore produced the picture
             has_chan_matrix=any(chan_matrix.values()),
             has_roi_matrix=any(roi_matrix.values()),
-            has_roi_grid=any(roi_grid.values()),
+            # a second selector on each map panel, which an uncrossed run has no pairings
+            # for: it holds the diagonal alone
+            chan_crossed=wtc_channel_cross,
+            roi_crossed=wtc_channel_cross,
             # ---- what tells the two kinds of page apart ----
             condition_label=label,
             condition_window=(f"{window[0]:.1f}–{window[1]:.1f} s on the aligned clock"

@@ -2,10 +2,14 @@
 {% from "_macros.html.j2" import card, subject_metrics %}
 
 {% block css %}
-select#ch-select-post, select#roi-select-post {
+.map-pick { display: flex; align-items: center; gap: 0.3rem; margin-left: auto; }
+.map-pick select {
   font-size: 0.78rem; border: 1px solid #ced4da; border-radius: 4px;
-  padding: 0.15rem 0.35rem; background: #fff; margin-left: auto; max-width: 220px;
+  padding: 0.15rem 0.35rem; background: #fff; max-width: 200px;
 }
+/* The two sides of a crossed pairing read left to right, so the separator has to say
+   which member each selector belongs to rather than just sitting between them. */
+.map-pick .pick-x { font-size: 0.78rem; color: #868e96; }
 /* One switch for every coherence panel, so a reader is never comparing an HbO channel
    against an HbR region without noticing. */
 .chroma-switch { display: flex; gap: 0; margin: 0.35rem 0 0.15rem; }
@@ -163,8 +167,16 @@ select#ch-select-post, select#roi-select-post {
       Morlet wavelet &bull; arrows = relative phase, right in phase and up
       {{ subject_ids[0] }} leading &bull; washed-out band below the white dash sits outside
       the cone of influence
+      {%- if chan_crossed %} &bull; left selector = {{ subject_ids[0] }}, right =
+      {{ subject_ids[1] }}, the order the map title reads in{% endif %}
     </span>
-    <select id="ch-select-post"></select>
+    <span class="map-pick">
+      <select id="ch-select-post" aria-label="{{ subject_ids[0] }} channel"></select>
+      {% if chan_crossed %}
+      <span class="pick-x">&times;</span>
+      <select id="ch-select-post-2" aria-label="{{ subject_ids[1] }} channel"></select>
+      {% endif %}
+    </span>
   </div>
   <div style="text-align:center; padding:0.5rem">
     <img id="wtc-chan-img" alt="channel coherence map" style="max-width:100%"/>
@@ -179,8 +191,17 @@ select#ch-select-post, select#roi-select-post {
     <span class="panel-hint">
       the member channels' maps averaged cell by cell, bad channels excluded &bull; arrows
       and cone as above
+      {%- if roi_crossed %} &bull; left selector = {{ subject_ids[0] }}, right =
+      {{ subject_ids[1] }}, so an off-diagonal pairing reads at the size of a homologous
+      one{% endif %}
     </span>
-    <select id="roi-select-post"></select>
+    <span class="map-pick">
+      <select id="roi-select-post" aria-label="{{ subject_ids[0] }} region"></select>
+      {% if roi_crossed %}
+      <span class="pick-x">&times;</span>
+      <select id="roi-select-post-2" aria-label="{{ subject_ids[1] }} region"></select>
+      {% endif %}
+    </span>
   </div>
   <div style="text-align:center; padding:0.5rem">
     <img id="wtc-roi-img" alt="ROI coherence map" style="max-width:100%"/>
@@ -192,29 +213,12 @@ select#ch-select-post, select#roi-select-post {
   <div class="panel-title">
     Wavelet Transform Coherence (ROI &times; ROI) &mdash; <span class="chroma-label">{{ wtc_fig_chroma }}</span>
     <span class="panel-hint">
-      band mean per ROI pair, inside the COI &bull; diagonal = homologous ROIs, the ones
-      plotted above &bull; the rows of <code>hyper-wtc-roichan.tsv</code> for this
-      chromophore
+      band mean per ROI pair, inside the COI &bull; one number per map the selectors above
+      reach &bull; the rows of <code>hyper-wtc-roichan.tsv</code> for this chromophore
     </span>
   </div>
   <div style="text-align:center; padding:0.5rem">
     <img id="wtc-roi-matrix-img" alt="ROI by ROI coherence matrix" style="max-width:100%"/>
-  </div>
-</div>
-{% endif %}
-
-{% if has_roi_grid %}
-<div class="card" id="wtc-roi-grid-card">
-  <div class="panel-title">
-    Wavelet Transform Coherence (ROI maps, with relative phase) &mdash; <span class="chroma-label">{{ wtc_fig_chroma }}</span>
-    <span class="panel-hint">
-      arrows: right = in phase, left = antiphase, up = {{ subject_ids[0] }} leads by a quarter
-      cycle &bull; white dashed = COI boundary &bull; crossed runs get every ROI pair, rows
-      {{ subject_ids[0] }} and columns {{ subject_ids[1] }}
-    </span>
-  </div>
-  <div style="text-align:center; padding:0.5rem">
-    <img id="wtc-roi-grid-img" alt="ROI coherence maps" style="max-width:100%"/>
   </div>
 </div>
 {% endif %}
@@ -226,7 +230,7 @@ select#ch-select-post, select#roi-select-post {
     Wavelet Transform Coherence (channel &times; channel) &mdash; <span class="chroma-label">{{ wtc_fig_chroma }}</span>
     <span class="panel-hint">
       band mean per channel pair &bull; row = {{ subject_ids[0] }}, column =
-      {{ subject_ids[1] }} &bull; diagonal = the homologous pairs the selector plots &bull;
+      {{ subject_ids[1] }} &bull; one number per map the selectors above reach &bull;
       the rows of <code>hyper-wtc.tsv</code> for this chromophore
     </span>
   </div>
@@ -288,7 +292,6 @@ var _PER_ROI      = {{ per_roi_post_json | safe }};
 var _ROI_LABELS   = {{ roi_labels_json | safe }};
 var _ROI_MATRIX   = {{ wtc_roi_matrix_json | safe }};
 var _CHAN_MATRIX  = {{ wtc_chan_matrix_json | safe }};
-var _ROI_GRID     = {{ wtc_roi_grid_json | safe }};
 var _ALIGN        = {{ alignment_json | safe }};
 
 // Every panel below reads this one variable, so the page is one chromophore at a time.
@@ -317,41 +320,49 @@ function _img(el, src) {
   });
 })();
 
-// channel selector
-(function() {
-  var sel = document.getElementById("ch-select-post");
-  _CH_PAIRS.forEach(function(pair, i) {
+// Both map panels are a pair of selectors over one nested {sub1: {sub2: {...}}} table.
+// An uncrossed run has only the diagonal and the template leaves the second selector out,
+// so `_pick` falls back to the first one's label and the lookup is the same either way.
+function _fill(sel, labels, mark) {
+  if (!sel) return;
+  labels.forEach(function(label, i) {
     var opt = document.createElement("option");
     opt.value = i;
-    opt.textContent = (_BAD_PAIRS.indexOf(pair) >= 0) ? pair + " (bad)" : pair;
+    opt.textContent = (mark && mark.indexOf(label) >= 0) ? label + " (bad)" : label;
     sel.appendChild(opt);
   });
-  sel.addEventListener("change", function() { _selectCh(parseInt(this.value)); });
-})();
-
-function _selectCh(idx) {
-  var pair = _CH_PAIRS[idx];
-  var ch   = (_PER_CH[_chroma] || {})[pair] || {};
-  _img(document.getElementById("wtc-chan-img"), ch.wtc);
 }
 
-// ROI selector
+function _pick(maps, labels, id1, id2, imgId) {
+  var sel1 = document.getElementById(id1);
+  var sel2 = document.getElementById(id2);
+  if (!sel1 || !labels.length) return;
+  var a = labels[parseInt(sel1.value) || 0];
+  var b = sel2 ? labels[parseInt(sel2.value) || 0] : a;
+  var d = ((maps[_chroma] || {})[a] || {})[b] || {};
+  _img(document.getElementById(imgId), d.wtc);
+}
+
+function _selectCh() {
+  _pick(_PER_CH, _CH_PAIRS, "ch-select-post", "ch-select-post-2", "wtc-chan-img");
+}
+
+function _selectRoi() {
+  _pick(_PER_ROI, _ROI_LABELS, "roi-select-post", "roi-select-post-2", "wtc-roi-img");
+}
+
 (function() {
-  var sel = document.getElementById("roi-select-post");
-  if (!sel) return;
-  _ROI_LABELS.forEach(function(roi, i) {
-    var opt = document.createElement("option");
-    opt.value = i; opt.textContent = roi;
-    sel.appendChild(opt);
+  ["ch-select-post", "ch-select-post-2"].forEach(function(id) {
+    var sel = document.getElementById(id);
+    _fill(sel, _CH_PAIRS, _BAD_PAIRS);
+    if (sel) sel.addEventListener("change", _selectCh);
   });
-  sel.addEventListener("change", function() { _selectRoi(parseInt(this.value)); });
+  ["roi-select-post", "roi-select-post-2"].forEach(function(id) {
+    var sel = document.getElementById(id);
+    _fill(sel, _ROI_LABELS, null);
+    if (sel) sel.addEventListener("change", _selectRoi);
+  });
 })();
-
-function _selectRoi(idx) {
-  var roi = _ROI_LABELS[idx];
-  var d   = (_PER_ROI[_chroma] || {})[roi] || {};
-  _img(document.getElementById("wtc-roi-img"), d.wtc);
-}
 
 // Every panel that is not behind a selector: one set of nodes, pointed at the chromophore
 // in force. A chromophore whose guard failed on one figure leaves that img hidden and the
@@ -359,7 +370,6 @@ function _selectRoi(idx) {
 function _drawImages() {
   _img(document.getElementById("wtc-roi-matrix-img"), _ROI_MATRIX[_chroma]);
   _img(document.getElementById("wtc-chan-matrix-img"), _CHAN_MATRIX[_chroma]);
-  _img(document.getElementById("wtc-roi-grid-img"),    _ROI_GRID[_chroma]);
 }
 
 function _setChroma(name) {
@@ -372,10 +382,8 @@ function _setChroma(name) {
   document.querySelectorAll(".chroma-label").forEach(function(el) {
     el.textContent = _CHROMA_NAME[name];
   });
-  var chSel  = document.getElementById("ch-select-post");
-  var roiSel = document.getElementById("roi-select-post");
-  if (chSel  && _CH_PAIRS.length)   _selectCh(parseInt(chSel.value) || 0);
-  if (roiSel && _ROI_LABELS.length) _selectRoi(parseInt(roiSel.value) || 0);
+  _selectCh();
+  _selectRoi();
   _drawImages();
 }
 

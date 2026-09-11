@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- **The coherence map panels take a selector per brain**, so a crossed run can read any channel-against-channel or region-against-region pairing at full size. The selectors used to offer the homologous pairings alone, with everything else reachable only as a thumbnail in a grid of every ROI pair; that grid is gone, its diagonal having been the same pictures the selector already held. The channel selector now lists the long channels rather than the whole montage, which is the set the matrix beside it is drawn on
 - **`--epoch-single-trial`** draws the epoch section on a design where no condition repeats, which is skipped by default. It waives that reason and no other: a run with no events, or none leaving room for the window, is not epochable whatever the flag says
 - **A dyad landing page, `group-<id>_index.html`**, with one row per analysed window linking to that window's report: the coherence, the share of band cells inside the cone of influence and the inter-brain correlation side by side, so the conditions can be read against each other without opening five pages. `fnirs-hyper index` rebuilds it over a tree produced earlier
 - **Each condition of a dyad gets a report page of its own**, carrying the panels the run's page carries rather than the two pictures a window used to get at the bottom of one long page. Every page links the whole set
@@ -14,6 +15,7 @@ All notable changes to this project will be documented in this file.
 - **Each condition page reports its own channel quality**: SCI, PSP, CV, SNR and the share of channels that would pass, sliced out of the channel-by-window matrices each member's quality record already holds. It reports rather than re-decides, and the page says so: the coherence still rests on the channel set the whole recording was screened into, because the window is read out of a transform of the whole recording and because screening each condition apart would make a contrast between conditions a contrast between montages
 
 ### Fixed
+- **The condition boundaries on a dyad coherence map are drawn where the conditions are.** Every line sat late by the recording's alignment offset, 22 s on a typical dyad, so a block appeared to start well after the window plotted for it
 - **The dyad analysis finds each member's quality record on a multi-session tree.** It looked for it without the session directory, so the recording was found and the record beside it was not: no channel was rejected, every quality column read n/a, and nothing failed
 - **An ROI's reported share of cells inside the cone of influence no longer falls with the number of channels rejected in it.** A pairing with no map behind it counted as a share of zero rather than as nothing to average
 - **The condition blocks show on the dyad coherence maps.** They were shaded underneath an opaque map, so nothing appeared

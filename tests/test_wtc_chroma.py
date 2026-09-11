@@ -417,14 +417,13 @@ def test_every_switched_figure_is_keyed_by_chromophore(dyad, tmp_path):
     html = _page(dyad, tmp_path, ("hbo", "hbr"),
                  roi_map={"L": ["S1_D1", "S2_D2"], "R": ["S3_D3"]},
                  wtc_roi_min_channels=1, wtc_channel_cross=True)
-    for name in ("_PER_CH", "_PER_ROI", "_ROI_MATRIX", "_CHAN_MATRIX", "_ROI_GRID",
-                 "_COND_IMGS"):
+    for name in ("_PER_CH", "_PER_ROI", "_ROI_MATRIX", "_CHAN_MATRIX"):
         assert sorted(_js_var(html, name)) == ["hbo", "hbr"], name
 
 
 def test_the_channel_keys_the_selector_uses_exist_for_both_chromophores(dyad, tmp_path):
-    """`_selectCh` indexes `_PER_CH[_chroma][pair]` off `_CH_PAIRS`, so a pair missing from
-    one chromophore's map would blank the plot on switching rather than error."""
+    """`_pick` indexes `_PER_CH[_chroma][a][b]` off `_CH_PAIRS`, so a label missing from one
+    chromophore's map would blank the plot on switching rather than error."""
     html = _page(dyad, tmp_path, ("hbo", "hbr"))
     pairs = _js_var(html, "_CH_PAIRS")
     per_ch = _js_var(html, "_PER_CH")
@@ -442,6 +441,55 @@ def test_the_roi_keys_the_selector_uses_exist_for_both_chromophores(dyad, tmp_pa
     assert labels
     for ch_type in ("hbo", "hbr"):
         assert set(per_roi[ch_type]) >= set(labels), ch_type
+
+
+def test_an_uncrossed_run_fills_the_diagonal_and_shows_one_selector(dyad, tmp_path):
+    """The map tables are nested both ways whether or not the run crossed, so the page reads
+    one shape. Without crossing there is nothing off the diagonal to pick, and a second
+    selector that could only blank the panel is worse than no second selector."""
+    html = _page(dyad, tmp_path, ("hbo",),
+                 roi_map={"L": ["S1_D1", "S2_D2"], "R": ["S3_D3"]},
+                 wtc_roi_min_channels=1)
+    per_ch = _js_var(html, "_PER_CH")["hbo"]
+    for label, row in per_ch.items():
+        assert list(row) == [label], label
+    assert 'id="ch-select-post-2"' not in html
+    assert 'id="roi-select-post-2"' not in html
+
+
+def test_a_crossed_run_reaches_every_pairing_from_two_selectors(dyad, tmp_path):
+    """The point of the pair: an off-diagonal pairing is what says whether two sites couple
+    at a different time or frequency from the homologous one, and it used to be readable
+    only as a thumbnail in a grid of every ROI pair."""
+    html = _page(dyad, tmp_path, ("hbo",), wtc_channel_cross=True,
+                 roi_map={"L": ["S1_D1", "S2_D2"], "R": ["S3_D3"]},
+                 wtc_roi_min_channels=1)
+    labels = _js_var(html, "_CH_PAIRS")
+    per_ch = _js_var(html, "_PER_CH")["hbo"]
+    assert len(labels) > 1
+    for a in labels:
+        assert sorted(per_ch[a]) == sorted(labels), a
+    rois = _js_var(html, "_ROI_LABELS")
+    per_roi = _js_var(html, "_PER_ROI")["hbo"]
+    for a in rois:
+        assert sorted(per_roi[a]) == sorted(rois), a
+    assert 'id="ch-select-post-2"' in html
+    assert 'id="roi-select-post-2"' in html
+
+
+def test_a_condition_boundary_is_drawn_on_the_axis_the_window_was_cut_on(dyad, tmp_path):
+    """An aligned recording keeps its crop offset in `first_time` while everything computed
+    from it starts at zero, so the two have to be read through one function. They were not,
+    and every boundary line on every coherence map came out late by that offset."""
+    from fnirs_pipe.qc.hyper_report import condition_windows, markers_on_data_axis
+
+    raw = dyad["sub-01"].copy()
+    raw.set_annotations(mne.Annotations([20.0, 210.0], [180.0, 180.0], ["rest", "talk"]))
+    cropped = raw.copy().crop(tmin=20.0)
+    assert cropped.first_time == 20.0
+    onsets = [m["onset"] for m in markers_on_data_axis(cropped)]
+    assert onsets == [0.0, 190.0]
+    assert [w[1] for w in condition_windows(cropped, min_duration=50.0)] == onsets
 
 
 def test_the_switch_is_declared_and_the_names_are_display_names(dyad, tmp_path):
