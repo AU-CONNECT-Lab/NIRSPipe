@@ -22,7 +22,7 @@ def _tukey_fences(values: np.ndarray, k: float = 1.5) -> tuple[float, float]:
 # Each metric in a group gets its own colour (subgroup).
 _METRIC_GROUPS: list[tuple[str, list[str]]] = [
     ("Coupling & cardiac (0-1)",
-     ["sci_mean", "psp_mean", "cp_mean", "cp_pass_rate",
+     ["sci_mean", "psp_mean", "cp_mean",
       "channel_retention_rate", "pct_data_retained"]),
     ("GVTD amplitude",
      ["gvtd_mean", "gvtd_p95", "gvtd_filt_mean", "gvtd_filt_p95", "gvtd_thresh"]),

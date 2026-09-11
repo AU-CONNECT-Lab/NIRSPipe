@@ -218,8 +218,7 @@ METRIC_SUMMARY = {
     "channel_retention_rate": "Fraction of channels that survived screening. Higher is better.",
     "psp_mean": "Strength of the shared cardiac peak across the two wavelengths, averaged over 10 s windows and then over channels. Higher is a more clearly detected heartbeat.",
     "good_frac_mean": "Share of 10 s windows in which a channel is coupled, meaning SCI and PSP both pass inside that window, averaged over channels. This is the line a channel is rejected on. Higher is better.",
-    "cp_mean": "How sharply cardiac power concentrates at the pulse frequency, 0 to 1. Closer to 1 is a cleaner peak. Experimental, overlaps PSP.",
-    "cp_pass_rate": "Fraction of channels with cardiac power at or above 0.5. Higher is better. Experimental.",
+    "cp_mean": "How peaked one channel's spectrum is inside the cardiac band, 0 to 1. Higher is a sharper peak. It describes one channel and never compares the two wavelengths, so it is not a coupling measure: read SCI and PSP for that. Experimental, and it tracks PSP closely.",
 
     # raw intensity
     "cv_mean": "Noise relative to a channel's own brightness (SD / mean), per wavelength. Lower is cleaner.",
@@ -329,7 +328,7 @@ _RAW_METRICS = (
     # measured again on the corrected file, and the coupled-window count is taken once, at
     # screening, on the optical density as it arrived
     "good_frac_mean",
-    "channel_retention_rate", "cp_mean", "cp_pass_rate", "n_flat_channels",
+    "channel_retention_rate", "cp_mean", "n_flat_channels",
     "cv_mean", "snr_mean", "snr_pass_rate", "mean_amp_mean",
     "ch_dist_mean", "ch_dist_min", "ch_dist_max",
 )
@@ -413,7 +412,6 @@ METRIC_DISPLAY: dict[str, tuple[str, str, "tuple[float, float] | None", "str | N
     "psp_mean":                ("Mean PSP (10 s)", ".3f", None, _HIGHER),
     "good_frac_mean":          ("Coupled windows", "pct", (0.75, 0.5), _HIGHER),
     "cp_mean":                 ("Mean CP (exp.)", ".3f", None, _HIGHER),
-    "cp_pass_rate":            ("CP pass rate (exp.)", "pct", None, _HIGHER),
 
     # raw intensity
     "cv_mean":                 ("Mean CV", ".3f", None, _LOWER),

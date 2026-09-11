@@ -17,6 +17,7 @@ All notable changes to this project will be documented in this file.
 - **The per-condition report pages read those numbers rather than computing their own.** A record written before this section gets no condition pages, instead of a second copy of the numbers with nothing keeping the two in agreement
 
 ### Removed
+- **The Cardiac Power pass rate, and the CP >= 0.5 line behind it.** The line comes from a fixed cardiac band and this pipeline lets you choose the band, so it was being applied where it was not calibrated; on 11,280 recorded channels it fell below the line on 3.7% of them while screening rejected 24%, so it decided nothing either. `cp_mean` and `cp_per_channel` stay, now described as what they measure: how peaked one channel's spectrum is inside the band, which is not a statement about the two wavelengths agreeing
 - **The dotted reference cone on a condition's coherence map.** It marked the cone a block would have had if it had been cut out and transformed on its own, which is a question about a route this pipeline does not take, and it sat on the same axes and in the same shape as the real cone
 
 ### Fixed

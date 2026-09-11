@@ -267,12 +267,11 @@ def _psp_metrics(
     }
 
 
-@_safe_metrics("Cardiac Power", ("cp_mean", "cp_per_channel", "cp_pass_rate"))
+@_safe_metrics("Cardiac Power", ("cp_mean", "cp_per_channel"))
 def _cardiac_power_metrics(
     raw: mne.io.Raw,
     cardiac_l_freq: float,
     cardiac_h_freq: float,
-    cp_threshold: float = 0.5,
 ) -> dict[str, Any]:
     r"""Cardiac Power (CP): within-band power concentrated at the per-channel cardiac peak :footcite:`Bizzego2022`.
 
@@ -281,8 +280,14 @@ def _cardiac_power_metrics(
         \text{CP} = \frac{P(f_c \pm 0.2\,\text{Hz})}{P(f_c \pm 0.5\,\text{Hz})},
 
     where :math:`f_c` is the peak frequency in ``[cardiac_l_freq, cardiac_h_freq]``.
-    Experimental: overlaps PSP and its 0.5 gate is calibrated on the 0.83-2.5 Hz
-    band; may be removed. SCI + PSP are the primary cardiac quality metrics.
+
+    Reported without a pass/fail line. CP measures the *shape* of one channel's spectrum
+    inside the band and never compares the two wavelengths, so it is not a coupling metric
+    despite the company it keeps: rotating the cardiac phase of one wavelength until SCI
+    inverts leaves CP unmoved. Its source defines a CP >= 0.5 gate on a fixed 0.83-2.5 Hz
+    band, which does not survive a user-chosen band, and argues against fixed thresholds on
+    these indicators in the same paper. Experimental, and it tracks PSP closely
+    (Spearman rho 0.83). SCI + PSP are the primary cardiac quality metrics.
 
     Parameters
     ----------
@@ -290,13 +295,11 @@ def _cardiac_power_metrics(
         Raw intensity or optical-density recording.
     cardiac_l_freq, cardiac_h_freq : float
         Cardiac band edges in Hz.
-    cp_threshold : float, optional
-        Good-quality gate (CP >= 0.5 in the reference band).
 
     Returns
     -------
     dict
-        cp_mean, cp_per_channel and cp_pass_rate.
+        cp_mean and cp_per_channel.
 
     References
     ----------
@@ -333,5 +336,4 @@ def _cardiac_power_metrics(
     return {
         "cp_mean": _mean_or_none(valid),
         "cp_per_channel": cp_per_ch,
-        "cp_pass_rate": _mean_or_none([v >= cp_threshold for v in valid]),
     }
