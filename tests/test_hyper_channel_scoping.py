@@ -249,9 +249,11 @@ def _result(wtc=WTC, coi=COI) -> WTCResult:
 
 
 def test_cells_outside_the_cone_of_influence_do_not_enter_the_mean():
-    # the four corner cells hold the 1.0s; masking them leaves 8 cells holding two of them
+    # the four corner cells hold the 1.0s; masking them leaves 8 cells holding two of them.
+    # Both calls name the mask: masking is the default since 2026-09-10, so the unmasked
+    # side has to ask for it and this test used to get the masked number twice
     masked   = wtc_band_mean(_result(), 0.04, 0.25, mask_coi=True).iloc[0]
-    unmasked = wtc_band_mean(_result(), 0.04, 0.25).iloc[0]
+    unmasked = wtc_band_mean(_result(), 0.04, 0.25, mask_coi=False).iloc[0]
     assert masked["coherence"] == pytest.approx(2 / 8)
     assert unmasked["coherence"] == pytest.approx(6 / 12)
     # n_valid_frac is the share inside the cone, measured whether or not the mask is
@@ -273,10 +275,13 @@ def test_a_band_outside_the_computed_axis_is_an_error():
 
 
 def test_a_label_that_failed_keeps_its_row():
+    """Every measured column is NaN, `n_valid_frac` included. A 0 there would be averaged
+    as a real share by `roi_mean_of_channels`, pulling an ROI's reported cone share down by
+    however many of its channels were rejected."""
     result = WTCResult(pairs={("sub-A", "sub-B"): {"S1_D1": None}}, freqs=FREQS, times=TIMES)
     row = wtc_band_mean(result, 0.04, 0.25).iloc[0]
     assert np.isnan(row["coherence"])
-    assert row["n_valid_frac"] == 0.0
+    assert np.isnan(row["n_valid_frac"])
 
 
 def test_every_pair_and_label_gets_one_row():
@@ -388,17 +393,24 @@ def test_a_rejected_pair_is_marked_at_both_chromophores():
 
 
 def test_a_rejected_pair_never_reaches_the_coherence():
-    """desc-errts carries no bads, so nothing but this marking keeps a rejected pair out."""
+    """desc-errts carries no bads, so nothing but this marking keeps a rejected pair out.
+
+    It keeps its label and loses its map, rather than leaving the axis: `long_axis_over`
+    holds every label the montage has so two dyads that lost different channels still stack,
+    and a reader can tell a blank cell from a channel that was never there.
+    """
     from fnirs_pipe.pipeline.hyperscanning import apply_group_bads
 
     raws = {"sub-10031": _haemo("10031"), "sub-10032": _haemo("10032")}
     assert all(not r.info["bads"] for r in raws.values())          # the state on disk
 
     apply_group_bads(raws, {"sub-10031": {"bad_channels": ["S2_D2 760"]}})
-    labels = set(next(iter(compute_wtc(raws, fmin=0.02, fmax=0.5).pairs.values())))
+    maps = next(iter(compute_wtc(raws, fmin=0.02, fmax=0.5).pairs.values()))
 
-    assert "S2_D2" not in labels
-    assert labels == {"S1_D1", "S3_D3", "S4_D4"}
+    assert maps["S2_D2"] is None, "a rejected pair must carry no map"
+    assert set(maps) == {"S1_D1", "S2_D2", "S3_D3", "S4_D4"}
+    # the other half, without which blanking everything would pass the line above
+    assert all(maps[label] is not None for label in ("S1_D1", "S3_D3", "S4_D4"))
 
 
 def test_a_subject_with_nothing_rejected_keeps_every_channel():

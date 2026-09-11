@@ -21,7 +21,7 @@ logger = get_logger("interface.qc_callbacks")
 _AGGREGATE = ("group-raw", "group-hyper-raw", "provenance")
 
 # fnirs-hyper subcommands, which take one output_dir and their own flags
-_HYPER = ("run", "band", "merge")
+_HYPER = ("run", "band", "merge", "index")
 
 # which form sections each command needs; anything not listed here is hidden
 _SECTIONS = {

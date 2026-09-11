@@ -259,9 +259,26 @@ QC_NOT_EXPOSED = {
             "--short-max-dist", "--long-min-dist", "--long-max-dist",
             # display only: it decides where a phase arrow is drawn on the WTC maps and
             # changes no table or figure value, so the page has nothing to preview for it
-            "--wtc-arrow-min"},
-    "band":  {"--verbose"},
+            "--wtc-arrow-min",
+            # the positive half of a paired flag, and it is the default; the checkbox emits
+            # the negative one. See memory/project_mask_coi_default_on
+            "--wtc-mask-coi",
+            # four spellings of one switch. The per-condition pass is the default and the
+            # checkbox turns it off with the canonical --no-by-condition; offering the
+            # aliases would be three controls doing one thing
+            "--by-condition", "--wtc-by-condition", "--no-wtc-by-condition",
+            # route P: transform each condition on its own instead of reading it out of the
+            # whole-run transform. With the default padding it reproduces the default route
+            # to four decimals, and without it the cone eats a share that grows as the
+            # condition shortens. It exists to reproduce a published result, which is not a
+            # thing to put in front of someone filling in a form
+            "--wtc-cond-transform", "--wtc-cond-pad-s"},
+    "band":  {"--verbose",
+              # as above: the default, and the checkbox emits --no-wtc-mask-coi
+              "--wtc-mask-coi"},
     "merge": {"--verbose"},
+    # every group-* directory by default, which is the whole shape of the aggregate form
+    "index": {"--verbose", "--group-id"},
 }
 
 _QC_FULL_OPTS = dict(

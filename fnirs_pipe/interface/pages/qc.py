@@ -28,6 +28,7 @@ _AGGREGATE_COMMANDS = [
     {"label": "Group QC (individual subjects)", "value": "group-raw"},
     {"label": "Group QC (hyperscanning dyads)", "value": "group-hyper-raw"},
     {"label": "Merge WTC tables across dyads", "value": "merge"},
+    {"label": "Rebuild the dyad landing pages", "value": "index"},
     {"label": "Provenance graphs", "value": "provenance"},
 ]
 

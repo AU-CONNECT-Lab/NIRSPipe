@@ -334,6 +334,41 @@ def raw_verdict_view(record: dict) -> dict:
     return view
 
 
+def fill_skipped_long_sections(record: dict) -> dict:
+    """The record with every ``_long`` section an all-long montage skipped filled back in.
+
+    fill_skipped_long_sections({"raw": {"cv_mean": 0.02, "n_long_channels": 40}})
+    -> {"raw": {...}, "raw_long": {"cv_mean": 0.02, "n_long_channels": 40}}
+
+    A ``_long`` section is not written when the long set is the whole file, because it would
+    repeat the section above it. That is a storage rule and not a measurement one: on such a
+    montage the whole-file section *is* the long-channel one. A reader comparing a cohort on
+    ``raw_long_cv_mean`` would otherwise drop every all-long run rather than compare it, and
+    drop it silently, since an absent section and a failed one look the same from outside.
+    :func:`raw_verdict_view` is the same rule for one section at a time.
+
+    Absence plus a positive long count is what identifies the case, and it is exact: a
+    montage whose long channels are only part of it has the section written, and one with no
+    long channels at all has nothing to fill from. The per-channel dicts are filled with it,
+    so a filled record stays readable by everything that reads an unfilled one.
+    """
+    if not (record.get("raw") or {}).get("n_long_channels"):
+        return record
+    filled = dict(record)
+    per_channel = dict(record.get("per_channel") or {})
+    for name in SECTIONS:
+        base = name.removesuffix("_long")
+        if base == name:
+            continue
+        if name not in filled and isinstance(filled.get(base), dict):
+            filled[name] = dict(filled[base])
+        if name not in per_channel and isinstance(per_channel.get(base), dict):
+            per_channel[name] = dict(per_channel[base])
+    if per_channel:
+        filled["per_channel"] = per_channel
+    return filled
+
+
 def raw_sections(
     raw_intensity: mne.io.Raw,
     sci_scores: dict[str, float],

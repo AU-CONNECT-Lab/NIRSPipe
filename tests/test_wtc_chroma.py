@@ -390,7 +390,10 @@ def test_each_stacked_figure_is_labelled_with_its_chromophore(dyad, tmp_path):
     one-chromophore run names no other."""
     html = _page(dyad, tmp_path, ("hbr",))
     assert '<span class="chroma-name">HbR</span>' in html
-    assert "HbO" not in html
+    # the label, not the word: the stylesheet explains the stack in a comment that names
+    # both chromophores, and a bare `"HbO" not in html` caught that instead
+    assert '<span class="chroma-name">HbO</span>' not in html
+    assert "hbo" not in _js_var(html, "_PER_CH")
 
 
 def test_the_page_carries_every_chromophore_that_ran(dyad, tmp_path):
@@ -496,7 +499,12 @@ def test_both_chromophores_are_on_the_page_at_once(dyad, tmp_path):
     """There is no chromophore control any more: every panel stacks one labelled image per
     chromophore, in `_CHROMA` order, which is the order the template laid them out in. A
     reader can compare HbO against HbR without operating anything, and nothing is hidden."""
-    html = _page(dyad, tmp_path, ("hbo", "hbr"))
+    # the ROI panel needs an ROI map and the channel matrix needs crossing, so a page built
+    # without them has nothing to stack there and the loop below asserted against panels
+    # that were never asked for
+    html = _page(dyad, tmp_path, ("hbo", "hbr"),
+                 roi_map={"L": ["S1_D1", "S2_D2"], "R": ["S3_D3"]},
+                 wtc_roi_min_channels=1, wtc_channel_cross=True)
     assert _js_var(html, "_CHROMA") == ["hbo", "hbr"]
     assert 'id="chroma-switch"' not in html
     for base in ("wtc-chan-img", "wtc-roi-img", "wtc-chan-matrix-img"):
@@ -513,20 +521,10 @@ def test_a_single_chromophore_run_stacks_only_that_one(dyad, tmp_path):
     assert 'id="wtc-chan-img-1"' not in html
 
 
-def test_the_condition_images_line_up_by_window_across_chromophores(dyad, tmp_path_factory):
-    """`_drawImages` pairs `_COND_IMGS[chroma][i]` with the card `cond-matrix-<i>`, so the
-    lists have to be positional and the same length, one entry per window, even when a
-    guard failed for one chromophore and left that entry empty."""
-    marked = {sid: raw.copy() for sid, raw in dyad.items()}
-    for raw in marked.values():
-        raw.set_annotations(mne.Annotations(onset=[10.0, 200.0], duration=[100.0, 100.0],
-                                            description=["chat", "quiet"]))
-    html = _page(marked, tmp_path_factory.mktemp("condswitch"), ("hbo", "hbr"),
-                 roi_map={"L": ["S1_D1", "S2_D2"], "R": ["S3_D3"]},
-                 wtc_roi_min_channels=1, wtc_by_condition=True)
-    cond = _js_var(html, "_COND_IMGS")
-    assert len(cond["hbo"]) == len(cond["hbr"]) == 2
-    assert 'id="cond-grid-0"' in html and 'id="cond-grid-1"' in html
-    for entries in cond.values():
-        for imgs in entries:
-            assert set(imgs) == {"matrix", "grid"}
+# `test_the_condition_images_line_up_by_window_across_chromophores` was removed here. It
+# pinned `_COND_IMGS[chroma][i]` against the card `cond-matrix-<i>`, a positional pairing
+# that existed while every condition shared the run's page. Conditions are their own pages
+# now and neither name is emitted, so the test could only fail. What it was protecting, that
+# both chromophores reach every condition's figures, is covered on the built pages by
+# `test_hyper_page_contract.py`: `test_every_pairing_of_the_axis_is_present_at_both_levels`
+# and `test_the_two_chromophores_are_two_tables` both run over the condition pages.

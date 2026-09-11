@@ -23,6 +23,7 @@ from fnirs_pipe.qc.sqm_record import (
     POST_BANDPASS_HAEMO_STAGES,
     PRE_BANDPASS_HAEMO_STAGE,
     SECTIONS,
+    fill_skipped_long_sections,
 )
 from fnirs_pipe.utils.logging import get_logger
 
@@ -124,9 +125,12 @@ def _sqm_row(bids_name: str, sqm: dict) -> dict:
     A legacy record is flat: every scalar sits at the top level and describes every
     channel. That is exactly the sectioned record's ``raw`` view, so it takes the same
     ``raw_`` prefix and a cohort holding both shapes compares in one set of columns.
+
+    The ``_long`` sections an all-long montage skipped are filled in first, or a cohort
+    compared on a ``_long`` column would drop those runs without saying so.
     """
     if any(isinstance(sqm.get(section), dict) for section in SECTIONS):
-        row = {"bids_name": bids_name, **sqm}
+        row = {"bids_name": bids_name, **fill_skipped_long_sections(sqm)}
         # the record keeps the series in a `windowed` section and the heatmaps below look
         # them up by their bare names. Lifting here means one shape reaches the panels;
         # the section stays as written on disk
