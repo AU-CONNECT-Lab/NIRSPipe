@@ -175,26 +175,46 @@ def gvtd_threshold(gvtd: np.ndarray, n_std: float = 3.0) -> float | None:
 
 
 def gvtd_channel_picks(
-    raw: mne.io.Raw, sep_bands=None,
+    raw: mne.io.Raw, sep_bands=None, channel_set: "str | None" = None,
 ) -> "tuple[list[str], str]":
     """Channels for the GVTD trace and carpet, plus the name to label the figure with.
 
-    The long channels, which is the set the analysis uses, so a run is judged on the
-    channels it is built from. A montage with no registered optode positions has no long
-    channels to pick and an empty pick has no trace at all, so it falls back to every
-    channel. The returned label is what actually happened rather than what was intended,
-    since it is what the figure prints and a wrong label makes two runs look comparable
-    when they are not.
+    Defaults to the long channels, which is the set the analysis uses, so a run is judged on
+    the channels it is built from. ``channel_set`` overrides that with ``"short"`` or
+    ``"all"`` for a caller that has been told which set to use; only ``--gvtd-censor`` does,
+    since which frames get marked BAD_gvtd is a choice a study can reasonably make either
+    way. Nothing else passes it, and in particular the carpet does not: it draws every set it
+    has and an override there would collapse two rows into one.
+
+    The fallback is about **missing optode positions**, not about a montage without long
+    channels. An unregistered montage reports every separation as zero, so neither band
+    claims anything and there is no split to make; with no distances there is no
+    separation-based choice to be had, and every channel is the only honest pick.
+
+    The returned label is what actually happened rather than what was asked for, since it is
+    what the figure prints and what the record stores, and a wrong label makes two runs look
+    comparable when they are not.
 
     Example: a 40-channel montage with 22 long and 18 out-of-band channels returns
     ``(22 names, "long")``; the same call on an unregistered montage returns
     ``(40 names, "all")``.
     """
-    long_names, _ = long_short_channels(raw, sep_bands)
-    if not long_names:
-        logger.warning("no long channels by separation; GVTD falls back to every channel")
+    long_names, short_names = long_short_channels(raw, sep_bands)
+    wanted = channel_set or "long"
+    # refused rather than defaulted: the label is returned to be stored and printed, so an
+    # unrecognised set that quietly picked the long channels would label them as itself
+    if wanted not in ("long", "short", "all"):
+        raise ValueError(f"unknown GVTD channel set {channel_set!r}; "
+                         "expected 'long', 'short', 'all' or None")
+    if wanted == "all":
         return list(raw.ch_names), "all"
-    return long_names, "long"
+    names = short_names if wanted == "short" else long_names
+    if not names:
+        logger.warning("no %s channels by separation, which usually means the montage has "
+                       "no registered optode positions; GVTD falls back to every channel",
+                       wanted)
+        return list(raw.ch_names), "all"
+    return names, wanted
 
 
 def gvtd_channel_blocks(
@@ -333,6 +353,7 @@ def gvtd_censor_spans(
     n_std: float = 10.0,
     min_epoch_s: float = 30.0,
     sep_bands=None,
+    channel_set: "str | None" = None,
 ) -> "tuple[list[tuple[float, float]], dict[str, Any]]":
     """Spans of a recording to censor on GVTD, and what censoring them costs.
 
@@ -370,7 +391,7 @@ def gvtd_censor_spans(
     ----------
     .. footbibliography::
     """
-    picks, picked_set = gvtd_channel_picks(raw_od, sep_bands)
+    picks, picked_set = gvtd_channel_picks(raw_od, sep_bands, channel_set)
     data = np.nan_to_num(raw_od.get_data(picks=picks), nan=0.0, posinf=0.0, neginf=0.0)
     times = raw_od.times
     sfreq = float(raw_od.info["sfreq"])

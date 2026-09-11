@@ -64,6 +64,22 @@ def test_participant_label_repeated_flag():
     assert args.participant_label == ["01", "02", "03"]
 
 
+def test_gvtd_censor_is_off_present_or_given_a_channel_set():
+    """One flag carries both the switch and the set, so `--gvtd-censor` keeps meaning what
+    it always did and `--gvtd-censor all` is the conservative variant. Absent must be None
+    rather than a falsy string, since the pipeline gates censoring on the field itself."""
+    assert _parse(_MIN).gvtd_censor is None
+    assert _parse(_MIN + ["--gvtd-censor"]).gvtd_censor == "long"
+    assert _parse(_MIN + ["--gvtd-censor", "all"]).gvtd_censor == "all"
+    assert _parse(_MIN + ["--gvtd-censor", "short"]).gvtd_censor == "short"
+
+
+def test_gvtd_censor_rejects_a_set_it_does_not_have(capsys):
+    with pytest.raises(SystemExit):
+        _parse(_MIN + ["--gvtd-censor", "medium"])
+    assert "invalid choice" in capsys.readouterr().err
+
+
 def test_dpf_accepts_multiple_values():
     args = _parse(["bids", "out", "participant", "--dpf", "6.0", "6.0",
                    "--sci-threshold", "0.8", *_BANDS])

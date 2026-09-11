@@ -53,7 +53,9 @@ _RESAMPLE_SFREQ = SFREQ / 2
 # PrepConfig's defaults are gvtd_censor_spans' defaults, so a config value that never
 # reached the function would still produce a plausible record. These do not match, which
 # turns "the kwarg went somewhere else" into a failing assertion.
-_CENSOR = dict(gvtd_censor=True, gvtd_censor_n_std=8.0, gvtd_min_epoch_s=20.0)
+# gvtd_censor carries the channel set as well as the switch, so this is "long" and
+# not True; the assertion below on gvtd_censor_channel_set is what pins that
+_CENSOR = dict(gvtd_censor="long", gvtd_censor_n_std=8.0, gvtd_min_epoch_s=20.0)
 
 
 def _run(out_dir, subject="01", task="tapping", post=True, censor=None):

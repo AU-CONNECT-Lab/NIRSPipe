@@ -116,11 +116,18 @@ def _build_parser() -> argparse.ArgumentParser:
                                "a trial and would describe the start of a block. Each page "
                                "screens on its own stretch, so its verdict is that "
                                "condition's; the run was processed under the run's.")
-    prep_opt.add_argument("--gvtd-censor", action="store_true",
+    prep_opt.add_argument("--gvtd-censor", nargs="?", const="long", default=None,
+                          choices=("long", "short", "all"), metavar="SET",
                           help="Mark the frames GVTD flags as BAD_gvtd. The data is annotated, "
                                "never cut, so epoching drops the trials they overlap and a "
                                "threshold set too strictly is undone by rerunning. Off by "
-                               "default: on a high-motion recording this can flag everything.")
+                               "default: on a high-motion recording this can flag everything. "
+                               "Takes the channel set to flag on, defaulting to long, the set "
+                               "the analysis uses; `all` is the conservative choice, since a "
+                               "movement seen only on the scalp channels still marks the "
+                               "frame. It changes which frames are censored and nothing else: "
+                               "the QC panels still draw every set, and the metrics that "
+                               "decide whether a run is usable stay on the long channels.")
     prep_opt.add_argument("--gvtd-censor-n-std", type=float, default=10.0,
                           help="Threshold for --gvtd-censor, in left-tail SDs above the GVTD "
                                "mode. 10 is the lenient value used for censoring; the reports "

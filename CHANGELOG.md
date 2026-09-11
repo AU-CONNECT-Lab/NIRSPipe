@@ -26,6 +26,9 @@ All notable changes to this project will be documented in this file.
 - **The motion panel reports GVTD over the three channel sets**, each keeping its before → after pair. Every set carries its own cutoff and its own share above it, so that row reads down a column rather than across one
 - **The stage-metric panel says which of its columns the metrics table will not match**, rather than warning about all of them: only the stage the bandpass has not reached disagrees
 - **The per-trial heatmap says it reports whole-montage numbers**, so it is read against the All row of the table rather than the Long one
+- **`--gvtd-censor` takes the channel set to censor on**, `long` (the default, unchanged), `short` or `all`. `all` is the conservative choice, flagging a frame that moved on the scalp channels alone. It changes which frames are marked and nothing else: the QC panels still draw every set, and the metrics that decide whether a run is usable stay on the long channels
+- **Per-condition pages carry the event timeline**, labelled as the whole run's. A condition that stopped being delivered partway through is visible only against the conditions around it, so this panel is one that should not be sliced
+- **Per-condition pages say why the trial image and the per-trial quality heatmap are not on them**, instead of leaving two gaps with no note
 
 ## [0.34.0] - 2026-09-10
 

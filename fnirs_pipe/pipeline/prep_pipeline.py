@@ -145,7 +145,9 @@ class PrepConfig:
     epoch_tmax: float | None = None
     # cut each task annotation into trials this long first, for a block design
     epoch_chunk_duration: float | None = None
-    gvtd_censor: bool = False                # mark the frames GVTD flags as BAD_gvtd
+    # the channel set to censor on, or None for no censoring: "long", "short" or "all".
+    # It is one field rather than a flag plus a set because --gvtd-censor carries both
+    gvtd_censor: str | None = None
     gvtd_censor_n_std: float = 10.0
     gvtd_min_epoch_s: float = 30.0
     motion_correction: str | None = None
@@ -250,14 +252,16 @@ def run_prep(
     censor_spans: list[tuple[float, float]] = []
     censor_metrics: dict = {}
     if config.gvtd_censor:
-        logger.info("sub-%s | GVTD censoring (n_std=%s, min epoch %.0fs)",
-                    config.subject, config.gvtd_censor_n_std, config.gvtd_min_epoch_s)
+        logger.info("sub-%s | GVTD censoring on %s channels (n_std=%s, min epoch %.0fs)",
+                    config.subject, config.gvtd_censor, config.gvtd_censor_n_std,
+                    config.gvtd_min_epoch_s)
         from fnirs_pipe.qc.metrics import gvtd_censor_spans
         from fnirs_pipe.qc.metrics._helpers import separation_bands
         censor_spans, censor_metrics = gvtd_censor_spans(
             raw_od, n_std=config.gvtd_censor_n_std,
             min_epoch_s=config.gvtd_min_epoch_s,
-            sep_bands=separation_bands(config))
+            sep_bands=separation_bands(config),
+            channel_set=config.gvtd_censor)
         # BAD_ annotations, so the spans travel with the data instead of being cut out of
         # it: MNE's reject_by_annotation drops the epochs they overlap, a continuous
         # analysis can pick the surviving stretches, and a threshold set too strictly is

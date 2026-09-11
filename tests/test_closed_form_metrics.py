@@ -282,9 +282,36 @@ def test_a_normal_montage_picks_the_long_channels_and_keeps_the_label():
     long_names, short_names = long_short_channels(normal)
     assert long_names and short_names           # the fallback above is not what runs here
     assert gvtd_channel_picks(normal) == (long_names, "long")
-    # the short channels are on this montage and stay out of the pick: the set is the long
-    # channels, and there is no longer an input that can widen it
+    # the short channels are on this montage and stay out of the default pick
     assert not set(short_names) & set(gvtd_channel_picks(normal)[0])
+
+
+def test_the_channel_set_can_be_overridden_and_the_label_follows():
+    """`--gvtd-censor SET` is the only caller that asks for a set, and the label it gets back
+    is what the record stores, so an override that kept saying "long" would make two runs
+    censored on different channels look like the same measurement."""
+    normal = synth_raw("01", "rest", duration=60.0, bad_pair=None, motion_onset=None)
+    long_names, short_names = long_short_channels(normal)
+
+    assert gvtd_channel_picks(normal, None, "short") == (short_names, "short")
+    picks, label = gvtd_channel_picks(normal, None, "all")
+    assert label == "all" and set(picks) == set(long_names) | set(short_names)
+    # None and "long" are the same request, so the default is not a fourth behaviour
+    assert gvtd_channel_picks(normal, None, "long") == gvtd_channel_picks(normal)
+
+
+def test_the_carpet_draws_every_set_whatever_the_censor_was_told_to_use():
+    """The blocks the carpet draws are deliberately not wired to the censor's channel set.
+
+    `gvtd_channel_blocks` reaches the default pick, so if it ever grew the override it would
+    take the `picked_set != "long"` branch and collapse its two rows into one: asking to
+    censor on every channel would silently remove the short row, which is the row that says
+    whether the movement was scalp-only. The panel shows all of it; only the censoring
+    choice is a choice.
+    """
+    from fnirs_pipe.qc.metrics import gvtd_channel_blocks
+    normal = synth_raw("01", "rest", duration=60.0, bad_pair=None, motion_onset=None)
+    assert [name for name, _ in gvtd_channel_blocks(normal)] == ["long", "short"]
 
 
 # ---- Fisher r-to-z ----

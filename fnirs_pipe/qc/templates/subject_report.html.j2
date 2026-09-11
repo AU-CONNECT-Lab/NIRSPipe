@@ -80,7 +80,14 @@
     The preprocessing, epoch, topography and GLM sections below are <em>deliberately
     empty</em> here. The epoch window is set for a trial rather than a block, so a
     per-condition version of those panels would describe the first seconds of the condition
-    instead of the condition.
+    instead of the condition.</p>
+  <p style="margin:0.4rem 0 0;font-size:0.86rem;color:#555;">
+    The trial image and the per-trial quality heatmap are absent for a different reason, and
+    it is worth stating rather than leaving as a gap: their rows are trials rather than
+    windows, so a per-condition form is perfectly well defined and would simply hold this
+    condition&rsquo;s own trials. It is not built, because on a block design that is one row,
+    and one row is not a comparison. An event-related design is where it would earn its
+    place. The run&rsquo;s own page carries both over every trial it has.
     {% if index_href %}The full report for the whole run is
     <a href="{{ index_href }}">{{ index_href }}</a>.{% endif %}</p>
 </div>
@@ -339,6 +346,11 @@
       Every event on one axis, one row per condition. The averages below cannot show a
       condition that stopped being delivered partway through or a block that was started
       twice; this can. Same panel the raw QC viewer opens with.
+      {%- if condition_label %}
+      <strong>This is the whole run, not just &ldquo;{{ condition_label }}&rdquo;</strong>, and
+      deliberately so: both of those failures are visible only against the conditions around
+      the one you are reading, so a timeline cut to one condition could show neither.
+      {%- endif %}
     </p>
     <iframe class="plotly-frame" src="{{ trigger_timeline_path }}" title="Event timeline"
             style="height:{{ trigger_timeline_h }}px"></iframe>

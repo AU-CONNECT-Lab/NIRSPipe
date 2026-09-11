@@ -1760,7 +1760,7 @@ def _blanked(section_vars: tuple) -> dict:
 # by suffix rather than by listing the panels: a per-panel prefix list would also pass a
 # *different* condition's figure, worse than a run-wide one because the page would look
 # per-condition and be the wrong condition.
-_CONDITION_PAGE_FIGURES = ("provenance.", "glm_design_")
+_CONDITION_PAGE_FIGURES = ("provenance.", "glm_design_", "trigger_timeline.")
 
 
 def _figure_leaks(page: dict, label_slug: str) -> "list[str]":
@@ -1917,6 +1917,24 @@ def _condition_denoise_carpet(
         _save_b64_png(b64, figures_dir / name)
         return {"denoise_carpet_path": _fig_href(figures_dir, name)}
     return {}
+
+
+def _condition_timeline(report_vars: dict) -> dict:
+    """The run's event timeline, kept whole on a condition page.
+
+    Run-wide and legitimate on every page, like the design matrix and for the same reason:
+    it is the one panel that shows a condition in the context of the others, and what it is
+    read for cannot be sliced. Its use is catching a condition that stopped being delivered
+    partway through or a block that was started twice, and a timeline cut to one condition
+    can show neither, since both are visible only against the conditions around them.
+
+    It carries no per-condition figure, so nothing is recomputed: the same file the run's
+    page points at. ``_CONDITION_PAGE_FIGURES`` lets it past the leak check.
+    """
+    return {
+        "trigger_timeline_path": report_vars.get("trigger_timeline_path"),
+        "trigger_timeline_h": report_vars.get("trigger_timeline_h") or 0,
+    }
 
 
 def _condition_glm(report_vars: dict, label: str) -> dict:
@@ -2186,6 +2204,7 @@ def _write_condition_reports(
         # matrix stays whole, because every condition is a column of that one model and a
         # per-condition version of it would be a different model.
         panels.update(_condition_glm(report_vars, label))
+        panels.update(_condition_timeline(report_vars))
         stem = f"{out_path.stem.removesuffix('_qc')}_desc-{_pair_fname(label)}_qc"
         page = {
             **report_vars, **blanked, **summary, **panels,
