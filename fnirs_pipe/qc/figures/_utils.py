@@ -43,6 +43,32 @@ def decimate(arr: np.ndarray, times: np.ndarray, max_pts: int):
     return arr[:, ::step], times[::step]
 
 
+def line_xy(times: np.ndarray, values: np.ndarray) -> dict:
+    """Scatter x/y kwargs for a long trace, sized for the file it is written to.
+
+    Two things, both invisible on screen::
+
+        line_xy([0, .5, 1], [3, 4, 5])   -> {"x0": 0.0, "dx": 0.5, "y": array([3., 4., 5.])}
+        line_xy([0, .5, 9], [3, 4, 5])   -> {"x": array([0., .5, 9.]), "y": array([3., 4., 5.])}
+
+    Plotly writes a numpy array as base64 and a Python list as one full-precision decimal per
+    element, so the arrays have to reach it as arrays: ``0.6881280000000001`` is eighteen
+    characters for a number that occupies eight bytes. A uniformly sampled x is then not sent
+    at all, ``x0``/``dx`` saying the same thing in two numbers.
+
+    The uniformity test is what keeps this honest. ``decimate`` strides, so its timestamps
+    pass; ``_maxpool_xy`` keeps the timestamp each bin's peak was found at, so a peak sits
+    where it happened rather than on a bin edge, and those fail the test and keep their x.
+    """
+    t = np.asarray(times, dtype=float)
+    y = np.asarray(values, dtype=float)
+    if t.size > 2:
+        d = np.diff(t)
+        if np.allclose(d, d[0], rtol=1e-6, atol=0.0):
+            return {"x0": float(t[0]), "dx": float(d[0]), "y": y}
+    return {"x": t, "y": y}
+
+
 def physio_bands(cardiac=None, resp=None):
     """PSD annotation bands as (name, f_lo, f_hi). Single source so every PSD figure agrees.
 

@@ -16,6 +16,7 @@ from plotly.subplots import make_subplots
 
 from fnirs_pipe.qc.figures._utils import LONG_COLOR, SHORT_COLOR, UNCLASSIFIED_COLOR
 from fnirs_pipe.qc.figures._utils import decimate as _decimate
+from fnirs_pipe.qc.figures._utils import line_xy as _line_xy
 from fnirs_pipe.qc.metrics import (
     GVTD_MOTION_BAND, GVTD_N_STD, _motion_band_diff, gvtd_threshold, gvtd_timetrace,
 )
@@ -682,8 +683,7 @@ def build_motion_detail_figure(
         raw_od_before.get_data(picks=gvtd_names) if gvtd_names else od_full,
         full_sfreq, *GVTD_MOTION_BAND)
     motion_thresh  = gvtd_threshold(gvtd_filt_full, n_std=GVTD_N_STD)
-    t_gvtd_arr, gvtd_filt = _maxpool_xy(t_full[1:], gvtd_filt_full, max_pts)
-    t_gvtd = t_gvtd_arr.tolist()
+    t_gvtd, gvtd_filt = _maxpool_xy(t_full[1:], gvtd_filt_full, max_pts)
 
     # This channel's |dOD/dt|, on full-res OD and through the same band-limited derivative
     # the spike marks come from. Differencing the decimated trace instead would alias the
@@ -693,14 +693,13 @@ def build_motion_detail_figure(
         tvd_full = np.abs(_motion_band_diff(od_full[[ch_idx]], full_sfreq)[0])
     else:
         tvd_full = np.zeros(len(t_full) - 1)
-    t_tvd_arr, tvd_ds = _maxpool_xy(t_full[1:], tvd_full, max_pts)
-    t_tvd, tvd = t_tvd_arr.tolist(), tvd_ds.tolist()
+    t_tvd, tvd = _maxpool_xy(t_full[1:], tvd_full, max_pts)
 
     def _get_ch(raw, ch):
         idx = raw.ch_names.index(ch)
         d, t = raw.get_data(picks=[idx], return_times=True)
         d, t = _decimate(d, t, max_pts)
-        return t.tolist(), d[0].tolist()
+        return t, d[0]
 
     t_b, y_b = _get_ch(raw_od_before, ch_name)
     t_a, y_a = _get_ch(raw_od_after,  ch_name)
@@ -732,7 +731,7 @@ def build_motion_detail_figure(
 
     # polygons rather than one vrect per span: a busy channel carries a few hundred of them
     gvtd_top = float(np.nanmax(gvtd_filt)) * 1.1 if len(gvtd_filt) else 1.0
-    tvd_top  = float(np.nanmax(tvd)) * 1.1 if tvd else 1.0
+    tvd_top  = float(np.nanmax(tvd)) * 1.1 if len(tvd) else 1.0
     for row, top in ((gvtd_row, gvtd_top), (tvd_row, tvd_top)):
         if not spike_segments:
             break
@@ -744,7 +743,7 @@ def build_motion_detail_figure(
         ), row=row, col=1)
 
     fig.add_trace(go.Scatter(
-        x=t_gvtd, y=gvtd_filt.tolist(), mode="lines",
+        **_line_xy(t_gvtd, gvtd_filt), mode="lines",
         line=dict(color=_GVTD_LINE, width=_LW), name="GVTD 0.01–0.5 Hz",
     ), row=gvtd_row, col=1)
     if motion_thresh is not None:
@@ -762,16 +761,16 @@ def build_motion_detail_figure(
         )
 
     fig.add_trace(go.Scatter(
-        x=t_tvd, y=tvd, mode="lines",
+        **_line_xy(t_tvd, tvd), mode="lines",
         line=dict(color=_DERIVATIVE, width=_LW), name="|dOD/dt|",
     ), row=tvd_row, col=1)
 
     fig.add_trace(go.Scatter(
-        x=t_b, y=y_b, mode="lines",
+        **_line_xy(t_b, y_b), mode="lines",
         line=dict(color=_OD_BEFORE, width=_LW), name="Before",
     ), row=od_row, col=1)
     fig.add_trace(go.Scatter(
-        x=t_a, y=y_a, mode="lines",
+        **_line_xy(t_a, y_a), mode="lines",
         line=dict(color=_GVTD_AFTER, width=_LW), name="After",
     ), row=od_row, col=1)
 
