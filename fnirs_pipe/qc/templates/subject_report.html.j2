@@ -345,7 +345,10 @@
     {% endif %}
     <p class="step-desc">
       Grand-mean HbO and HbR responses averaged across good channels, baseline-corrected
-      to the pre-stimulus window (−5 to 0&thinsp;s). Each condition is shown separately.
+      to the pre-stimulus window (−5 to 0&thinsp;s). Each condition is shown separately, on
+      one shared y scale, with the task block shaded. Short channels are drawn dotted: they
+      are too shallow to reach cortex, so a dotted line that rises with the solid one means
+      the response is scalp haemodynamics rather than activation.
     </p>
     {% if epoch_preview_path %}
       <iframe class="plotly-frame" src="{{ epoch_preview_path }}" title="Epoch preview" style="height:{{ epoch_preview_h }}px"></iframe>

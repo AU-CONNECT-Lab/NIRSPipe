@@ -16,7 +16,9 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 - **The evoked response is drawn per channel instead of interpolated across the scalp.** Each channel is painted along its own source-detector path, one head per condition, with a slider through the epoch window; nothing is invented between channels
-- **Short channels get their own row in that map**, on the long row's colour scale. They cannot reach cortex, so a short row coloured as strongly as the long one marks the response as systemic scalp signal
+- **Short channels get their own row in that map**, on the long row's colour scale and captioned with the share of the long peak they reach. They cannot reach cortex, so a share near 100% marks the response as systemic scalp signal rather than activation
+- **The grand mean draws its short channels dotted** instead of averaging them in with the long ones, so the trace carries its own answer to whether it can be believed
+- **The grand mean shades the task block, draws a zero line, and gives each condition a taller panel.** A single-condition run had 120 px of plot across the full report width, which flattened every curve it drew
 - **Per-condition pages carry the same All / Long / Short table as the run's own page.** Mean amplitude and low-frequency drift are left out of it, having no per-condition value
 - **The motion panel reports GVTD over the three channel sets**, each keeping its before → after pair. Every set carries its own cutoff and its own share above it, so that row reads down a column rather than across one
 - **The stage-metric panel says which of its columns the metrics table will not match**, rather than warning about all of them: only the stage the bandpass has not reached disagrees
