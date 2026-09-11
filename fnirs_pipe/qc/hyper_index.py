@@ -197,7 +197,9 @@ def _window_of(bycond_path: Path, label: "str | None") -> str:
         lo, hi = spans[label]
     except (OSError, json.JSONDecodeError, KeyError, TypeError, ValueError):
         return ""
-    return f"{lo:.0f}–{hi:.0f} s"
+    # `+ 0.0` so a window starting at the recording's own zero does not print as "-0":
+    # `condition_windows` subtracts the trigger offset, which lands on a negative zero
+    return f"{lo + 0.0:.0f}–{hi + 0.0:.0f} s"
 
 
 def write_hyper_index(
