@@ -1,0 +1,114 @@
+{% extends "_report_base.html.j2" %}
+
+{# Shares the subject index's stylesheet and its table rules: the two are the same kind of
+   page, one over a subject's runs and one over a dyad's windows, and only what differs
+   is here. #}
+{% block css %}
+.subtitle { color: #7f8c8d; font-size: 0.85rem; }
+.page-header {
+  display: block;
+  border-bottom: 2px solid #2980b9; padding-bottom: 0.6rem; margin-bottom: 1.2rem;
+}
+th, td { padding: 0.4rem 0.7rem; white-space: nowrap; }
+tbody tr:hover { background: #f8fafc; }
+td a { color: #2980b9; font-weight: 600; text-decoration: none; }
+td a:hover { text-decoration: underline; }
+.muted { color: #95a5a6; }
+.num { text-align: right; font-variant-numeric: tabular-nums; }
+td.flag { background: #fdf0e3; font-weight: 600; color: #b9591a; }
+td.flag::after { content: " *"; color: #e08b3f; }
+/* the whole-run row is the average over every condition below it, so it reads as a
+   heading for them rather than as one more window */
+tr.whole td { background: #f4f6f8; font-weight: 600; }
+tr.whole td.num { font-weight: 600; }
+.scroll { overflow-x: auto; }
+{% endblock %}
+
+{% block header %}
+<div class="page-header">
+  <h1>{{ page_heading }}</h1>
+  <span class="subtitle">
+    {{ rows | length }} window{{ "s" if rows | length != 1 }} over
+    {{ n_tasks }} task{{ "s" if n_tasks != 1 }}
+    {%- if subject_ids %} &bull; {{ subject_ids | join(" &times; ") }}{% endif %}
+    {%- if band %} &bull; band {{ band }}{% endif %}
+    &bull; v{{ versions.get('fnirs-pipe', 'unknown') }} &bull; {{ run_date }}
+  </span>
+</div>
+{% endblock %}
+
+{% block content %}
+
+<h2>Windows</h2>
+<div class="scroll">
+<table>
+  <thead>
+    <tr>
+      <th>Window</th>
+      <th>Task</th>
+      <th>Span</th>
+      {% for c in chroma %}<th>WTC {{ chroma_labels[c] }}</th>{% endfor %}
+      {% for c in chroma %}<th>inside COI {{ chroma_labels[c] }}</th>{% endfor %}
+      {% for c in chroma %}<th>ISC {{ chroma_labels[c] }}</th>{% endfor %}
+    </tr>
+  </thead>
+  <tbody>
+  {% for row in rows %}
+    <tr{% if row.condition is none %} class="whole"{% endif %}>
+      <td>
+        {% if row.href %}
+          <a href="{{ row.href }}">{{ row.condition or "whole run" }}</a>
+        {% else %}
+          {{ row.condition or "whole run" }} <span class="muted">(no page)</span>
+        {% endif %}
+      </td>
+      <td>{{ row.task }}</td>
+      <td class="num">{% if row.window %}{{ row.window }}{% else %}<span class="muted">&mdash;</span>{% endif %}</td>
+      {% for c in chroma %}
+      <td class="num{% if row.flagged.get(c) %} flag{% endif %}">
+        {%- if c in row.coherence %}{{ "%.3f"|format(row.coherence[c]) }}
+        {%- else %}<span class="muted">n/a</span>{% endif -%}
+      </td>
+      {% endfor %}
+      {% for c in chroma %}
+      <td class="num">
+        {%- if c in row.valid_frac %}{{ "%.0f%%"|format(row.valid_frac[c] * 100) }}
+        {%- else %}<span class="muted">n/a</span>{% endif -%}
+      </td>
+      {% endfor %}
+      {% for c in chroma %}
+      <td class="num">
+        {%- if c in row.isc %}{{ "%+.3f"|format(row.isc[c]) }}
+        {%- else %}<span class="muted">&mdash;</span>{% endif -%}
+      </td>
+      {% endfor %}
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+
+<p class="subtitle" style="margin-top:0.6rem;">
+  Coherence is the mean over the homologous channel pairs, the band mean each window's own
+  table holds; a crossed run's off-diagonal pairings are in the tables and on each page, not
+  averaged into this column. <b>inside COI</b> is the share of band cells that fell inside
+  the cone of influence, so a window near either end of the recording keeps fewer.
+  <b>ISC</b> is the mean same-channel inter-brain correlation and is measured over the whole
+  record, which is why only the whole-run row carries one. Open a window for its coherence
+  maps, its matrices and the phase arrows.
+  {% if rows | length >= 4 %}
+  A marked cell sits more than {{ outlier_z }} median absolute deviations from this dyad's
+  other windows on that chromophore. It says the window differs from its neighbours, not
+  that it failed.
+  {% endif %}
+</p>
+
+<p class="subtitle">
+  The whole-run row averages across every condition under it, so for a block design it is a
+  summary and not a result. Rows marked as windows were read out of the whole-run wavelet
+  transform, which is what keeps a short condition from being inflated by edges of its own;
+  a tree whose conditions were cropped to separate files before the analysis shows them as
+  separate tasks instead, each with a whole-run row of its own.
+</p>
+
+{% endblock %}

@@ -8,6 +8,8 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 - **`--epoch-single-trial`** draws the epoch section on a design where no condition repeats, which is skipped by default. It waives that reason and no other: a run with no events, or none leaving room for the window, is not epochable whatever the flag says
+- **A dyad landing page, `group-<id>_index.html`**, with one row per analysed window linking to that window's report: the coherence, the share of band cells inside the cone of influence and the inter-brain correlation side by side, so the conditions can be read against each other without opening five pages. `fnirs-hyper index` rebuilds it over a tree produced earlier
+- **Each condition of a dyad gets a report page of its own**, carrying the panels the run's page carries rather than the two pictures a window used to get at the bottom of one long page. Every page links the whole set
 
 ### Fixed
 - **The condition blocks show on the dyad coherence maps.** They were shaded underneath an opaque map, so nothing appeared
@@ -20,6 +22,7 @@ All notable changes to this project will be documented in this file.
 - **The Methods paragraph describes the screening rule the pipeline actually applies.** It named SCI and PSP as if either could reject a channel on its own, which stopped being true when screening moved to counting coupled windows, and it omitted the coupled-window threshold that does the rejecting
 
 ### Changed
+- **The whole-run dyad page says it is a summary.** For a block design the coherence over the whole recording averages across every condition in it, which is not the number the analysis exists to produce
 - **The dyad report links its figures instead of carrying them.** One dyad's page came to 174 MB, nearly all of it coherence maps embedded one per channel per chromophore; the page is now a few hundred kB and the browser fetches the map being looked at
 - **The coherence maps carry the relative-phase arrows.** They say which brain led, which is half of what a coherence map is read for, and only the ROI grid used to show them
 - **The cells outside the cone of influence are washed out** rather than only bounded by a dashed line. They are coefficients padded against the recording's edges, near 1 whatever the data did, so the ends of every recording read as strongly coupled

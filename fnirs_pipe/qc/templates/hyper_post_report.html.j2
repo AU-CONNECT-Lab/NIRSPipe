@@ -19,9 +19,42 @@ select#ch-select-post, select#roi-select-post {
 .chroma-switch button[aria-pressed="true"] {
   background: #495057; color: #fff; border-color: #495057;
 }
+/* The run and its conditions are one set of pages; every one of them carries the whole
+   strip, so any page reaches any other in a click. */
+.cond-nav { display: flex; flex-wrap: wrap; gap: 0.3rem; margin: 0.4rem 0 0.1rem; }
+.cond-nav a, .cond-nav span {
+  font-size: 0.82rem; padding: 0.22rem 0.7rem; border-radius: 4px;
+  border: 1px solid #ced4da; text-decoration: none; color: #495057; background: #fff;
+}
+.cond-nav a:hover { background: #f1f3f5; }
+.cond-nav span.current { background: #495057; color: #fff; border-color: #495057; }
 {% endblock %}
 
 {% block content %}
+
+<!-- The run and its conditions -->
+{% if nav_links | length > 1 %}
+<div class="card">
+  <div class="panel-title">
+    {% if condition_label %}Condition: {{ condition_label }}{% else %}Whole run{% endif %}
+    <span class="panel-hint">
+      {% if condition_label -%}
+      {{ condition_window }} &bull; every panel below is this window read out of the whole-run
+      transform, so it carries the recording's cone of influence and not two edges of its own
+      {%- else -%}
+      the coherence over the whole recording, averaged across every condition in it &bull;
+      the per-condition pages are the ones to read for a block design
+      {%- endif %}
+    </span>
+  </div>
+  <div class="cond-nav">
+    {% for link in nav_links %}
+      {% if link.current %}<span class="current">{{ link.label }}</span>
+      {% else %}<a href="{{ link.href }}">{{ link.label }}</a>{% endif %}
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
 
 <!-- Alignment table -->
 {% call card("Time Alignment", hint="crop offset from first shared trigger &bull; all recordings trimmed to shortest") %}
@@ -38,6 +71,16 @@ select#ch-select-post, select#roi-select-post {
 {% call card("Per-subject Quality Metrics", hint="↑ / ↓ = better direction &bull; SCI coloured against the threshold, HbO-HbR by sign") %}
 <div class="subj-metrics-wrap">
   {{ subject_metrics(subject_metrics_rows, subject_ids) }}
+</div>
+{% endcall %}
+{% elif condition_label %}
+{% call card("Per-subject Quality Metrics", hint="measured over the whole recording") %}
+<div class="panel-caveat">
+  These are measured over the whole recording, so they are not this condition's and are not
+  repeated here. They are on the
+  <a href="{{ run_href }}">whole-run page</a>. A channel that held up through one condition
+  and came loose in another is judged once, over the recording, and the coherence on this
+  page rests on that one verdict; per-condition screening is not in yet.
 </div>
 {% endcall %}
 {% endif %}
@@ -156,33 +199,6 @@ select#ch-select-post, select#roi-select-post {
 {% endif %}
 {% endif %}
 
-{% for cond in condition_figs %}
-{% if cond.has_matrix or cond.has_grid %}
-<div class="card" id="cond-card-{{ loop.index0 }}">
-  <div class="panel-title">
-    Condition: {{ cond.label }} &mdash; <span class="chroma-label">{{ wtc_fig_chroma }}</span>
-    <span class="panel-hint">
-      {{ cond.tstart }}&ndash;{{ cond.tstop }} s on the aligned clock &bull; the same analysis
-      as the whole run, inside this window only &bull; numbers in
-      <code>hyper-wtcbycond.tsv</code>, which carries every chromophore that was run
-    </span>
-  </div>
-  {% if cond.has_matrix %}
-  <div style="text-align:center; padding:0.5rem">
-    <img id="cond-matrix-{{ loop.index0 }}" alt="channel coherence matrix, {{ cond.label }}"
-         style="max-width:100%"/>
-  </div>
-  {% endif %}
-  {% if cond.has_grid %}
-  <div style="text-align:center; padding:0.5rem">
-    <img id="cond-grid-{{ loop.index0 }}" alt="ROI coherence maps, {{ cond.label }}"
-         style="max-width:100%"/>
-  </div>
-  {% endif %}
-</div>
-{% endif %}
-{% endfor %}
-
 {% if has_chan_matrix %}
 <div class="card" id="wtc-chan-matrix-card">
   <div class="panel-title">
@@ -197,6 +213,19 @@ select#ch-select-post, select#roi-select-post {
     <img id="wtc-chan-matrix-img" alt="channel coherence matrix" style="max-width:100%"/>
   </div>
 </div>
+{% endif %}
+
+<!-- Inter-brain correlation. The run's alone: a whole-record zero-lag correlation has
+     no windowed form in the package yet, so a condition page says where it is instead of
+     printing the run's number under its own heading. -->
+{% if condition_label %}
+{% call card("Inter-brain Synchrony", hint="whole-record correlation") %}
+<div class="panel-caveat">
+  ISC is a zero-lag correlation over the whole record and has no per-condition form here
+  yet, so this page leaves it out rather than showing the run's. It is on the
+  <a href="{{ run_href }}">whole-run page</a>.
+</div>
+{% endcall %}
 {% endif %}
 
 <!-- ISC panel — HbO -->
@@ -248,7 +277,6 @@ var _ROI_LABELS   = {{ roi_labels_json | safe }};
 var _ROI_MATRIX   = {{ wtc_roi_matrix_json | safe }};
 var _CHAN_MATRIX  = {{ wtc_chan_matrix_json | safe }};
 var _ROI_GRID     = {{ wtc_roi_grid_json | safe }};
-var _COND_IMGS    = {{ wtc_cond_imgs_json | safe }};
 var _ALIGN        = {{ alignment_json | safe }};
 
 // Every panel below reads this one variable, so the page is one chromophore at a time.
@@ -320,11 +348,6 @@ function _drawImages() {
   _img(document.getElementById("wtc-roi-matrix-img"), _ROI_MATRIX[_chroma]);
   _img(document.getElementById("wtc-chan-matrix-img"), _CHAN_MATRIX[_chroma]);
   _img(document.getElementById("wtc-roi-grid-img"),    _ROI_GRID[_chroma]);
-  var windows = _COND_IMGS[_chroma] || [];
-  windows.forEach(function(imgs, i) {
-    _img(document.getElementById("cond-matrix-" + i), imgs.matrix);
-    _img(document.getElementById("cond-grid-" + i),   imgs.grid);
-  });
 }
 
 function _setChroma(name) {
