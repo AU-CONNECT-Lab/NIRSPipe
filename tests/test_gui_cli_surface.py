@@ -256,7 +256,10 @@ QC_NOT_EXPOSED = {
             # by prep, so a second control could split the dyad metrics one way while the
             # member reports were split another. The CLI keeps the flags for a tree prepped
             # before they were stamped
-            "--short-max-dist", "--long-min-dist", "--long-max-dist"},
+            "--short-max-dist", "--long-min-dist", "--long-max-dist",
+            # display only: it decides where a phase arrow is drawn on the WTC maps and
+            # changes no table or figure value, so the page has nothing to preview for it
+            "--wtc-arrow-min"},
     "band":  {"--verbose"},
     "merge": {"--verbose"},
 }

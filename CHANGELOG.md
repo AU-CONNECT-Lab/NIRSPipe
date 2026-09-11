@@ -6,8 +6,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- **`fnirs-hyper run --wtc-arrow-min`** sets the coherence a cell has to reach before its phase arrow is drawn on the coherence maps, when `--wtc-significance` was not asked for (default 0.5). Display only: no table or figure value changes with it
+
 ### Fixed
-- **A condition page no longer prints the whole recording's HbO-HbR correlation beside that condition's numbers.** Every channel carried the run's value, in the same table as a condition-specific scalar of the same name. The column is gone from those pages; the condition's own value stays in the metric panel above
+- **A dyad analysis runs on a multi-session tree.** Each member's recording was looked for in the flat `sub-XX/nirs`, which a session tree does not have, so the run stopped at its first member saying the directory was missing. The quality record beside it and the Methods paragraph were read the same way
+- **A condition page's HbO-HbR correlation column is measured on that condition.** Every channel carried the whole recording's value instead, beside a scalar of the same name that was already being recomputed on the cut. On a five-condition run the two disagreed on 15 of 22 pairs, several of them by a change of sign
 - **A condition too short to transform leaves its spectra out instead of drawing them on a coarser frequency grid than the run's.** Its band scalars already stopped there, so the page was describing one measurement two ways
 
 ## [0.35.0] - 2026-09-11

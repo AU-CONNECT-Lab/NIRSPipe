@@ -27,10 +27,14 @@ SLICEABLE = ("sci_per_channel", "psp_per_channel", "good_frac_per_channel",
 
 # and what it therefore has to drop, so no column mixes two time scopes. They are dropped
 # rather than carried so that a column added later shows a gap instead of a whole-run number
-# under a condition's heading. `hbo_hbr_corr_per_channel` is what a miss looks like: it was
-# in neither list, so `channel_rows` read it straight off `preproc` and printed the run's
-# value in every condition's last column, beside a scalar of the same name that the
-# condition had recomputed on its own cut.
+# under a condition's heading.
+#
+# `hbo_hbr_corr_per_channel` is here for a different reason than the rest: it has no
+# windowed series to slice, but it is a correlation over whatever samples it is given, so a
+# cut can measure it directly. Dropping it here is the safe default and
+# :func:`with_condition_corr` puts the recomputed value back. A condition whose recompute
+# failed then shows dashes rather than the run's number, which it printed in every column
+# for as long as this key was in neither list.
 UNSLICEABLE = ("cp_per_channel", "temporal_derivative_variance",
                "hbo_hbr_corr_per_channel", "cnr_per_channel")
 
@@ -145,6 +149,30 @@ def slice_record(record_view: dict, sliced: "dict[str, dict[str, float]]") -> di
             "per_channel": out_pc}
 
 
+def with_condition_corr(record: dict, corr_per_channel: "dict[str, float]") -> dict:
+    """The record with ``preproc``'s HbO-HbR correlation replaced by the condition's own.
+
+    ::
+
+        with_condition_corr(cond_record, {"S1_D1": -0.293, ...})
+
+    :func:`~fnirs_pipe.qc.channel_table.channel_rows` reads that column straight off the
+    whole-file ``preproc`` section rather than through the long/short merge, because it is
+    the one column short channels have too. So a value measured on the cut has to land there
+    for the table to print it, and nowhere else would be read.
+
+    An empty dict returns the record untouched, leaving the column dashed: the correlation
+    is recomputed rather than sliced, and a page that could not recompute it says so instead
+    of falling back on the run's.
+    """
+    if not corr_per_channel:
+        return record
+    per_channel = {**(record.get("per_channel") or {})}
+    per_channel["preproc"] = {**(per_channel.get("preproc") or {}),
+                              "hbo_hbr_corr_per_channel": dict(corr_per_channel)}
+    return {**record, "per_channel": per_channel}
+
+
 def condition_haemo_scalars(haemo, errts, n_fft_floor: int, bands: dict) -> dict:
     """Scalars a condition can be given by recomputing on its own cut, not by slicing.
 
@@ -158,6 +186,10 @@ def condition_haemo_scalars(haemo, errts, n_fft_floor: int, bands: dict) -> dict
 
         3053 samples, floor 2048  ->  band metrics included
         1200 samples, floor 2048  ->  band metrics absent
+
+    Returns the scalars plus ``hbo_hbr_corr_per_channel``, the one per-channel dict in here.
+    The channel table's correlation column is measured the same way and on the same cut, so
+    it comes back rather than being recomputed a second time by the caller.
     """
     from fnirs_pipe.qc.metrics.haemo import (
         _retention_metrics, _spectral_metrics, gcor_metrics, haemo_quality_metrics,
@@ -177,6 +209,11 @@ def condition_haemo_scalars(haemo, errts, n_fft_floor: int, bands: dict) -> dict
         quality = haemo_quality_metrics(raw)
         if "hbo_hbr_corr_mean" in quality:
             out[f"hbo_hbr_corr_mean{suffix}"] = quality["hbo_hbr_corr_mean"]
+        # the channel table's correlation column, off the same cut as the mean beside it.
+        # It rides along in this dict because the caller already has it; `metric_rows` reads
+        # a fixed key list, so a per-channel dict here never reaches the scalar panel
+        if suffix == "" and quality.get("hbo_hbr_corr_per_channel"):
+            out["hbo_hbr_corr_per_channel"] = quality["hbo_hbr_corr_per_channel"]
     if haemo is not None:
         out.update(_retention_metrics(haemo))
         # the band metrics live at preproc only: after the bandpass they measure the filter

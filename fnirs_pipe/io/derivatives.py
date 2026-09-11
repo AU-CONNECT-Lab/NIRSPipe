@@ -181,6 +181,27 @@ def select_one_run(
     )
 
 
+def subject_nirs_dirs(
+    output_dir: Path, subject_id: str, session: str | None = None,
+) -> list[Path]:
+    """Every ``nirs/`` a subject's derivatives can sit in, session level included.
+
+    ::
+
+      sub-01/nirs and sub-01/ses-a/nirs on disk, session=None -> both
+      the same tree, session="a"                              -> the ses-a one only
+
+    :func:`derivatives_path` writes a session to its own folder, so a subject recorded over
+    two sessions has no ``sub-01/nirs`` at all. Readers that build the path by hand find
+    nothing there and report the subject as missing. Only directories that exist are
+    returned, so a caller that gets an empty list is looking at a subject with no output.
+    """
+    subject = output_dir / f"sub-{subject_id.removeprefix('sub-')}"
+    candidates = ([subject / f"ses-{session}" / "nirs"] if session
+                  else [subject / "nirs", *sorted(subject.glob("ses-*/nirs"))])
+    return [d for d in candidates if d.is_dir()]
+
+
 def find_preproc_snirf(
     output_dir: Path, subject_id: str, task: str, desc: str = "preproc",
     session: str | None = None, run: str | None = None,
@@ -190,26 +211,36 @@ def find_preproc_snirf(
     Every pipeline step writes one snirf per desc, so desc is what selects a stage:
     "preproc" is Beer-Lambert output, "filtered" the bandpassed one, "errts" the GLM
     residual. Raises MissingDerivativesError if the directory or the file is absent.
-    """
-    nirs_dir = output_dir / subject_id / "nirs"
-    if not nirs_dir.exists():
-        raise MissingDerivativesError(f"Derivatives directory not found: {nirs_dir}")
 
-    candidates = sorted(nirs_dir.glob(f"{subject_id}_task-{task}_*desc-{desc}_nirs.snirf"))
+    Searched across :func:`subject_nirs_dirs`, so a session either names its folder or,
+    unnamed, has every session's folder offered to ``select_one_run`` at once. That is what
+    lets a multi-session tree raise "which session" rather than "no such directory".
+    """
+    nirs_dirs = subject_nirs_dirs(output_dir, subject_id, session)
+    if not nirs_dirs:
+        raise MissingDerivativesError(
+            "Derivatives directory not found: "
+            f"{output_dir / subject_id / (f'ses-{session}/nirs' if session else 'nirs')}")
+
+    def _glob(pattern: str) -> list[Path]:
+        return sorted((p for d in nirs_dirs for p in d.glob(pattern)), key=lambda p: p.name)
+
+    candidates = _glob(f"{subject_id}_*task-{task}_*desc-{desc}_nirs.snirf")
     if not candidates:
         # only when this stage carries no task entity anywhere: a subject who has the stage
         # for other tasks but not this one is missing data, and handing back another task's
         # recording would analyse the wrong condition without saying so
-        untasked = sorted(nirs_dir.glob(f"{subject_id}_*desc-{desc}_nirs.snirf"))
+        untasked = _glob(f"{subject_id}_*desc-{desc}_nirs.snirf")
         if untasked and not any("_task-" in p.name for p in untasked):
             candidates = untasked
     if not candidates:
-        available = sorted({m.group(1) for p in nirs_dir.glob(f"{subject_id}_*_nirs.snirf")
+        available = sorted({m.group(1) for p in _glob(f"{subject_id}_*_nirs.snirf")
                             if (m := _DESC_RE.search(p.name))})
-        tasks = sorted({m.group(1) for p in nirs_dir.glob(f"{subject_id}_*desc-{desc}_nirs.snirf")
+        tasks = sorted({m.group(1) for p in _glob(f"{subject_id}_*desc-{desc}_nirs.snirf")
                         if (m := re.search(r"_task-([A-Za-z0-9]+)", p.name))})
+        where = ", ".join(str(d) for d in nirs_dirs)
         raise MissingDerivativesError(
-            f"No desc-{desc} snirf found for {subject_id} (task={task}) in {nirs_dir}. "
+            f"No desc-{desc} snirf found for {subject_id} (task={task}) in {where}. "
             f"Available desc: {', '.join(available) if available else 'none'}. "
             + (f"desc-{desc} exists for task: {', '.join(tasks)}. " if tasks else "")
             + "Run fnirs-pipe preprocessing first."

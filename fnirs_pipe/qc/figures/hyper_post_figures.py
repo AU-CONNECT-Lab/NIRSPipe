@@ -75,15 +75,11 @@ def _apply_log_freq_axis(ax, freqs: np.ndarray) -> None:
     ax.yaxis.set_minor_formatter(NullFormatter())
 
 
-# Coherence a cell has to reach before its phase arrow is drawn, when no Monte Carlo level
-# was computed. **A display threshold, not a test**: --wtc-significance is what produces a
-# real one, and this is what keeps a map from being covered in arrows over cells whose phase
-# is the phase of noise. Chosen to sit above the band means these recordings produce (0.25 to
-# 0.30) by enough that what survives is the visible structure rather than the background.
+# Display threshold for phase arrows when no Monte Carlo level was computed; not a test.
 ARROW_MIN_COHERENCE = 0.5
 
 
-def _arrow_mask(wtc_arr, sig, freqs, freq_coi):
+def _arrow_mask(wtc_arr, sig, freqs, freq_coi, arrow_min: float = ARROW_MIN_COHERENCE):
     """Where a phase arrow is worth drawing: inside the cone, and above the noise.
 
     ::
@@ -93,15 +89,15 @@ def _arrow_mask(wtc_arr, sig, freqs, freq_coi):
     Two conditions, and both matter. **Inside the cone**, because a coefficient built against
     the padding has a phase built against the padding too, and the old figure drew those
     arrows at the same weight as the rest. **Above the level**, the Monte Carlo one when
-    ``--wtc-significance`` produced it and :data:`ARROW_MIN_COHERENCE` otherwise, because the
-    relative phase of two uncorrelated series is a uniformly random direction and a field of
-    those reads as structure to the eye.
+    ``--wtc-significance`` produced it and ``arrow_min`` otherwise, because the relative
+    phase of two uncorrelated series is a uniformly random direction and a field of those
+    reads as structure to the eye.
     """
     inside = freqs[:, None] >= freq_coi[None, :]
     if sig is not None and len(np.asarray(sig)) == wtc_arr.shape[0]:
         above = wtc_arr >= np.asarray(sig, dtype=float)[:, None]
     else:
-        above = wtc_arr >= ARROW_MIN_COHERENCE
+        above = wtc_arr >= float(arrow_min)
     return inside & above
 
 
@@ -114,6 +110,7 @@ def build_wtc_channel(
     cond_colors: dict[str, str],
     site_label: str = "",
     cut_reference: bool = False,
+    arrow_min: float = ARROW_MIN_COHERENCE,
 ) -> "str | None":
     """WTC map for one channel or ROI pair, as a base64 PNG: time x log-frequency, colour 0-1.
 
@@ -197,7 +194,7 @@ def build_wtc_channel(
     # thumbnails elsewhere do
     _phase_arrows(ax, times, freqs, wtc_data.get("phase"),
                   n_time=34, n_freq=13, scale=52, width=0.0022,
-                  mask=_arrow_mask(wtc_arr, sig, freqs, freq_coi))
+                  mask=_arrow_mask(wtc_arr, sig, freqs, freq_coi, arrow_min))
 
     lead = (pair_label.split("×")[0].strip() or "the first member"
             if pair_label else "the first member")
@@ -208,7 +205,7 @@ def build_wtc_channel(
     fig.colorbar(mesh, ax=ax, pad=0.015, label="WTC")
     caption = (f"arrows: right = in phase, left = antiphase, up = {lead} leads by a quarter "
                f"cycle, drawn only where coherence clears "
-               f"{'the Monte Carlo level' if sig is not None else f'{ARROW_MIN_COHERENCE:g}'}"
+               f"{'the Monte Carlo level' if sig is not None else f'{arrow_min:g}'}"
                "    washed-out band: outside the cone of influence")
     if cut_reference:
         caption += "    dotted red: the cone this block would have had if cut out on its own"

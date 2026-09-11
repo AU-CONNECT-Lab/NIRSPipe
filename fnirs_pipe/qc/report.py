@@ -1911,6 +1911,13 @@ def _cropped_sections(
             by_set[set_name] = condition_haemo_scalars(
                 haemo.copy().pick(picks), errts_pick, n_fft_floor, bands)
         out["cond_haemo_by_set"] = by_set
+        # the channel table's correlation column, taken off the all-channel pass and lifted
+        # out of every set's scalars: those print from a fixed key list, and a per-channel
+        # dict sitting among them is one wrong loop away from being printed as a metric
+        out["cond_corr_per_channel"] = (
+            out["cond_haemo_scalars"].get("hbo_hbr_corr_per_channel") or {})
+        for scalars in by_set.values():
+            scalars.pop("hbo_hbr_corr_per_channel", None)
     return out
 
 
@@ -2050,7 +2057,7 @@ def _write_condition_reports(
     """
     from fnirs_pipe.qc.condition_views import (
         condition_scalars, condition_set_scalars, condition_slices_from_record,
-        slice_record, span_counts,
+        slice_record, span_counts, with_condition_corr,
     )
     from fnirs_pipe.qc.metrics import long_short_channels
     from fnirs_pipe.qc.hyper_report import condition_windows
@@ -2129,9 +2136,30 @@ def _write_condition_reports(
         cond_bad = ({ch for ch, v in cond_frac.items() if v < cutoffs["good_frac"]}
                     if cond_frac else set(bad_channels))
         retention = (1.0 - len(cond_bad) / len(cond_frac)) if cond_frac else None
+        t0, t1 = window_of[label][1], window_of[label][2]
+        span = (t0, t1)
+        slug = _pair_fname(label)
+        # everything a crop is safe for: the haemoglobin panels, the spectra and the
+        # per-channel detail. First in the loop because the correlation it recomputes is a
+        # column of the channel table below; see _cropped_sections for where that line falls
+        cropped: dict = {}
+        all_scalars: dict = {}
+        haemo_by_set: dict = {}
+        if remake_cropped is not None:
+            cropped = remake_cropped(f"_{slug}", span)
+            # recomputed rather than sliced, so these join the scalars and not the figures.
+            # The long set, matching the run's own page, whose haemoglobin rows come off
+            # `preproc_long` / `errts_long` and whose note says so: the all-channel dict
+            # beside it is the table's `All` column and not what the panel is read as. A
+            # montage with no split has only the one set and falls back to it.
+            all_scalars = cropped.pop("cond_haemo_scalars", None) or {}
+            haemo_by_set = cropped.pop("cond_haemo_by_set", None) or {}
+            # back into the record rather than into the rows, because `channel_rows` is
+            # what reads this column and it reads it from there
+            cond_record = with_condition_corr(
+                cond_record, cropped.pop("cond_corr_per_channel", None) or {})
         rows = channel_rows(cond_record, sci_scores, cond_bad)
         cells = format_rows(rows, cutoffs["sci"], psp_threshold=cutoffs["psp"])
-        t0, t1 = window_of[label][1], window_of[label][2]
         # a share is a fraction of this stretch, so the frame count that goes with it is
         # that share of the samples in it rather than a second pass over the spans
         shares, n_frames, n_segments = {}, {}, {}
@@ -2147,7 +2175,7 @@ def _write_condition_reports(
             {k: float(v[label]) for k, v in gvtd_by_cond.items() if label in v},
             shares=shares, n_frames=n_frames, n_segments=n_segments,
             retention=retention)
-        slug = _pair_fname(label)
+        scalars.update(haemo_by_set.get("long") or all_scalars)
         summary = _section_channel_summary(
             rows, subject, errors, figures_dir, cutoffs["sci"],
             name=f"channel_summary_{slug}.html")
@@ -2158,7 +2186,6 @@ def _write_condition_reports(
             panels.update(remake_sci(f"_{slug}", _windowed_slice(record, windows, label),
                                      sliced.get("sci_per_channel") or {}))
         # and the carpet narrowed to it: measured over the run, viewed over the condition
-        span = (t0, t1)
         if remake_motion is not None:
             panels.update(remake_motion(f"_{slug}", span))
         # the per-channel motion figures and the denoising carpet, both narrowed the same
@@ -2170,20 +2197,7 @@ def _write_condition_reports(
             panels.update(remake_motion_detail(f"_{slug}", span))
         if remake_denoise_carpet is not None:
             panels.update(remake_denoise_carpet(f"_{slug}", span))
-        # and everything a crop is safe for: the haemoglobin panels, the spectra and the
-        # per-channel detail. See _cropped_sections for where that line falls and why
-        haemo_by_set: dict = {}
-        if remake_cropped is not None:
-            cropped = remake_cropped(f"_{slug}", span)
-            # recomputed rather than sliced, so these join the scalars and not the figures.
-            # The long set, matching the run's own page, whose haemoglobin rows come off
-            # `preproc_long` / `errts_long` and whose note says so: the all-channel dict
-            # beside it is the table's `All` column and not what the panel is read as. A
-            # montage with no split has only the one set and falls back to it.
-            all_scalars = cropped.pop("cond_haemo_scalars", None) or {}
-            haemo_by_set = cropped.pop("cond_haemo_by_set", None) or {}
-            scalars.update(haemo_by_set.get("long") or all_scalars)
-            panels.update(cropped)
+        panels.update(cropped)
 
         # the same three-row table the run's own page prints, over this condition. The
         # per-channel metrics are grouped and averaged; GVTD comes in already measured per

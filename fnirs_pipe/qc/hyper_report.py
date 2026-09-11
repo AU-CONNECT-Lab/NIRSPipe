@@ -194,7 +194,16 @@ def write_isc_matrix(
 
 
 def _member_nirs_dir(output_dir: Path, entry: GroupEntry) -> Path:
-    """A member's ``nirs/``, laid out the way :func:`group_data_dir` lays out a group's."""
+    """A member's ``nirs/``, laid out the way :func:`group_data_dir` lays out a group's.
+
+    An entry naming no session still finds a session folder, so a tree with one unnamed
+    session yields a Methods paragraph rather than the "no sidecars found" note.
+    """
+    from fnirs_pipe.io.derivatives import subject_nirs_dirs
+
+    found = subject_nirs_dirs(output_dir, entry.subject_id, entry.session)
+    if found:
+        return found[0]
     folder = subject_report_dir(output_dir, entry.subject_id)
     if entry.session:
         folder = folder / f"ses-{entry.session}"
@@ -485,6 +494,7 @@ def build_hyper_post_report(
     wtc_save_maps: bool = False,
     wtc_mask_coi: bool = True,
     wtc_roi_min_channels: int = 2,
+    wtc_arrow_min: "float | None" = None,
     wtc_chroma: "tuple[str, ...] | list[str]" = ("hbo", "hbr"),
     isc_threshold: float = 0.3,
     sci_threshold: float = SCI_PASS,
@@ -555,6 +565,10 @@ def build_hyper_post_report(
     ``[wtc_fmin, wtc_fmax]`` plus margin, which is most of the runtime and, given that the
     scales land on pycwt's own grid and the margin exceeds its scale-smoothing window,
     reproduces the unrestricted coherences bit for bit.
+
+    ``wtc_arrow_min`` is the coherence a cell has to reach before its phase arrow is drawn
+    when no Monte Carlo level was computed. Display only: no table or figure value changes
+    with it. ``None`` takes :data:`~fnirs_pipe.qc.figures.hyper_post_figures.ARROW_MIN_COHERENCE`.
     """
     from fnirs_pipe.exceptions import StageError
     from fnirs_pipe.pipeline.hyperscanning import (
@@ -568,11 +582,14 @@ def build_hyper_post_report(
     )
     from fnirs_pipe.pipeline.synchrony import long_axis_over, wtc_grid_params
     from fnirs_pipe.qc.figures.hyper_post_figures import (
+        ARROW_MIN_COHERENCE,
         build_isc_panel,
         build_wtc_channel,
         build_wtc_cross_matrix,
         compute_isc,
     )
+
+    arrow_min = ARROW_MIN_COHERENCE if wtc_arrow_min is None else float(wtc_arrow_min)
 
     errors: list[str] = []
     notes: list[str] = []
@@ -662,11 +679,11 @@ def build_hyper_post_report(
         )
         return tsv_path
 
-    def _safe_post(name: str, fname: str, fn, *args) -> "str | None":
+    def _safe_post(name: str, fname: str, fn, *args, **kwargs) -> "str | None":
         """Build one figure, write it to ``figures/``, and hand back its URL."""
         out = None
         with guard(f"{name} figure", errors, scope):
-            out = _fig(fn(*args), fname)
+            out = _fig(fn(*args, **kwargs), fname)
         return out
 
     def _maps(dest: dict, result, pair_key, pair_label: str, axis: list[str],
@@ -709,6 +726,7 @@ def build_hyper_post_report(
                         # its own, so it carries the one a cut would have given it instead.
                         # The run's own page has the recording's real cone already
                         bool(suffix),
+                        arrow_min=arrow_min,
                     )
                 row[label2] = {"wtc": fig}
             dest[label1] = row

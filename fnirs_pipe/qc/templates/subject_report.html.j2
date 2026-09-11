@@ -896,12 +896,6 @@
 <!-- ------------------------------------------ per-channel, its own panel -->
 <h3 class="qm-sub qm-panel-title">Per-channel metrics</h3>
 <div class="qm-box">
-  {#- the correlation column is dropped on a condition page rather than left as a column of
-      dashes: it has no windowed series to slice, so it is one of the UNSLICEABLE keys in
-      fnirs_pipe.qc.condition_views and the condition's own value is in the scalar panel
-      above under the same name -#}
-  {%- set show_corr = not condition_label %}
-  {%- set n_ch_cols = 7 if show_corr else 6 %}
   {#- values and cell classes come pre-formatted from fnirs_pipe.qc.channel_table, so this
       table, the raw viewer's and the GUI's print one number one way, and the SCI column is
       marked against the run's own --sci-threshold rather than a copy of it -#}
@@ -913,7 +907,7 @@
         <td>{{ row.psp }}</td>
         <td>{{ row.snr }}</td>
         <td>{{ row.cv }}</td>
-        {% if show_corr %}<td class="{{ row.corr_cls }}">{{ row.corr }}</td>{% endif %}
+        <td class="{{ row.corr_cls }}">{{ row.corr }}</td>
       </tr>
   {% endmacro %}
   {#- the montage split, long first, grouped by fnirs_pipe.qc.channel_table so this table
@@ -932,14 +926,13 @@
       <thead>
         <tr>
           <th>Channel</th><th>Status</th><th>SCI</th><th>PSP</th>
-          <th>SNR (intensity)</th><th>CV</th>
-          {%- if show_corr %}<th>HbO&ndash;HbR corr</th>{% endif %}
+          <th>SNR (intensity)</th><th>CV</th><th>HbO&ndash;HbR corr</th>
         </tr>
       </thead>
       {% if n_blocks > 1 %}
       {% for title, rows in channel_blocks %}
       <tbody>
-        <tr><td colspan="{{ n_ch_cols }}" class="ch-group">{{ title }} ({{ rows | length }})</td></tr>
+        <tr><td colspan="7" class="ch-group">{{ title }} ({{ rows | length }})</td></tr>
         {% for row in rows %}{{ ch_row(row) }}{% endfor %}
       </tbody>
       {% endfor %}

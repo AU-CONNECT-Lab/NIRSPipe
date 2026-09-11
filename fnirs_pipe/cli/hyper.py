@@ -188,7 +188,8 @@ def cmd_run(
     wtc_fmin: float, wtc_fmax: float,
     wtc_band_fmin: float | None, wtc_band_fmax: float | None,
     wtc_significance: bool, wtc_mc_count: int, wtc_seed: int | None,
-    wtc_mask_coi: bool, wtc_roi_min_channels: int, wtc_channel_cross: bool,
+    wtc_mask_coi: bool, wtc_roi_min_channels: int, wtc_arrow_min: float,
+    wtc_channel_cross: bool,
     wtc_by_condition: bool, wtc_chroma: str,
     wtc_cond_transform: bool, wtc_cond_pad_s: "float | None",
     wtc_limit_scales: bool, wtc_save_maps: bool,
@@ -328,6 +329,7 @@ def cmd_run(
             wtc_save_maps=wtc_save_maps,
             wtc_mask_coi=wtc_mask_coi,
             wtc_roi_min_channels=wtc_roi_min_channels,
+            wtc_arrow_min=wtc_arrow_min,
             wtc_chroma=chroma,
             isc_threshold=isc_threshold,
             sci_threshold=sci_threshold,
@@ -546,6 +548,14 @@ def _build_parser() -> argparse.ArgumentParser:
     run.add_argument("--wtc-roi-min-channels", type=int, default=2, metavar="N",
                      help="Drop an ROI cell resting on fewer than N channel pairs, so one "
                           "surviving optode does not stand in for a region (default 2).")
+    run.add_argument("--wtc-arrow-min", type=float, default=0.5, metavar="R",
+                     help="Coherence a cell has to reach before its phase arrow is drawn on "
+                          "the WTC maps, when --wtc-significance was not asked for "
+                          "(default 0.5). Display only: no table or figure value changes "
+                          "with it, and with --wtc-significance the Monte Carlo level is "
+                          "used instead. The relative phase of two uncorrelated series is a "
+                          "uniformly random direction, so a map drawn with no threshold "
+                          "fills with arrows that read as structure.")
     run.add_argument("--wtc-channel-cross", action="store_true",
                      help="Cross every long channel with every other across the two brains "
                           "instead of pairing each channel with its counterpart, so n "

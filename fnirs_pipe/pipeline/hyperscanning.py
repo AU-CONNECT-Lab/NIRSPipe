@@ -12,7 +12,7 @@ import numpy as np
 import pandas as pd
 
 from fnirs_pipe.exceptions import AlignmentError, GroupCSVError, StageError
-from fnirs_pipe.io.derivatives import find_preproc_snirf, group_data_dir
+from fnirs_pipe.io.derivatives import find_preproc_snirf, group_data_dir, subject_nirs_dirs
 from fnirs_pipe.io.snirf import read_snirf
 from fnirs_pipe.io.tables import read_table
 from fnirs_pipe.pipeline.synchrony import (  # noqa: F401  re-exported
@@ -660,18 +660,21 @@ def _bad_from_csv(csv_path: Path) -> list[str]:
     ].tolist()
 
 
-def _member_sqm_dir(output_dir: Path, entry: GroupEntry) -> Path:
-    """A member's ``nirs/``, session level included.
+def _member_sqm_files(output_dir: Path, entry: GroupEntry, pattern: str) -> list[Path]:
+    """The member's quality files matching ``pattern``, session folders included.
 
-    ``find_preproc_snirf`` and the report's own ``_member_nirs_dir`` both take the session
-    into account, and this did not, so on a multi-session tree the SNIRF was found and the
-    quality record beside it was not: no channel was rejected, every quality column read
-    n/a, and nothing failed.
+    ::
+
+      sub-01/ses-a/nirs/sub-01_ses-a_task-hold_desc-sci_nirs.json, entry with no session
+        -> that file, rather than nothing
+
+    Reads the same folders :func:`~fnirs_pipe.io.derivatives.find_preproc_snirf` reads the
+    recording itself from. Built by hand as ``output_dir/sub-XX/nirs`` before, which on a
+    session tree named a folder that does not exist: no channel was rejected, every quality
+    column read n/a, and nothing failed.
     """
-    folder = output_dir / entry.subject_id
-    if entry.session:
-        folder = folder / f"ses-{entry.session}"
-    return folder / "nirs"
+    return sorted((f for d in subject_nirs_dirs(output_dir, entry.subject_id, entry.session)
+                   for f in d.glob(pattern)), key=lambda f: f.name)
 
 
 def load_group_sqm(
@@ -716,12 +719,10 @@ def load_group_sqm(
 
     result: dict[str, dict] = {}
     for entry in group:
-        nirs_dir = _member_sqm_dir(output_dir, entry)
-
         sqm: dict = {}
         # the long-channel view is the one a quality judgement wants, with raw standing in
         # when the montage has no short channels to exclude
-        records = sorted(nirs_dir.glob(f"{entry.subject_id}*_desc-sqm_nirs.json"))
+        records = _member_sqm_files(output_dir, entry, f"{entry.subject_id}*_desc-sqm_nirs.json")
         for record_path in _for_task(records, entry.task):
             try:
                 record = json.loads(record_path.read_text(encoding="utf-8"))
@@ -751,8 +752,10 @@ def load_group_sqm(
         # CSV holds the same set, but the report writes that one, so a tree produced with
         # --no-report has the sidecars and no CSV and used to end up with nothing rejected
         # at all, silently.
-        sidecars = sorted(nirs_dir.glob(f"{entry.subject_id}*_desc-sci_nirs.json"))
-        csvs     = sorted(nirs_dir.glob(f"{entry.subject_id}*_channel_metrics.csv"))
+        sidecars = _member_sqm_files(output_dir, entry,
+                                     f"{entry.subject_id}*_desc-sci_nirs.json")
+        csvs     = _member_sqm_files(output_dir, entry,
+                                     f"{entry.subject_id}*_channel_metrics.csv")
         marks, read_bads = ((sidecars, _bad_from_sidecar) if sidecars
                             else (csvs, _bad_from_csv))
         kind = "desc-sci sidecar" if sidecars else "channel metrics CSV"

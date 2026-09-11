@@ -152,3 +152,47 @@ def test_the_summary_says_nothing_it_does_not_know(capsys):
     out = capsys.readouterr().out
     assert "mean SCI n/a" in out
     assert "from:" not in out
+
+
+# ---- session trees ----
+# A session goes in its own folder (`sub-01/ses-a/nirs`), and every reader that built that
+# path by hand instead looked in `sub-01/nirs` and found nothing there. The recording itself
+# raised "directory not found", so a dyad analysis on a session tree did not start at all;
+# with the session folder reached but the quality record still read from the flat path, it
+# started and rejected no channel. Both halves are pinned here.
+
+def _ses_sidecar(root, session, task, bads):
+    d = root / "sub-01" / f"ses-{session}" / "nirs"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / f"sub-01_ses-{session}_task-{task}_desc-sci_nirs.json").write_text(
+        json.dumps({"step": "sci", "bad_channels": bads,
+                    "sci_scores": {"S1_D1 760": 0.9, "S6_D5 760": 0.2}}))
+
+
+def test_a_session_tree_rejects_channels_when_the_entry_names_the_session(tmp_path):
+    _ses_sidecar(tmp_path, "a", "tap", BADS_TAP)
+    sqm = load_group_sqm(tmp_path, [GroupEntry("G1", "sub-01", "tap", session="a")])["sub-01"]
+    assert sqm["bad_channels"] == BADS_TAP
+
+
+def test_one_unnamed_session_is_still_found(tmp_path):
+    """The group CSV has no session column, which is the common case: there is only one, and
+    nothing about the study needs naming it. The record is still the subject's own."""
+    _ses_sidecar(tmp_path, "a", "tap", BADS_TAP)
+    sqm = load_group_sqm(tmp_path, [GroupEntry("G1", "sub-01", "tap")])["sub-01"]
+    assert sqm["bad_channels"] == BADS_TAP
+
+
+def test_a_named_session_does_not_read_the_other_ones_rejections(tmp_path):
+    _ses_sidecar(tmp_path, "a", "tap", BADS_TAP)
+    _ses_sidecar(tmp_path, "b", "tap", BADS_REST)
+    for session, expected in (("a", BADS_TAP), ("b", BADS_REST)):
+        sqm = load_group_sqm(
+            tmp_path, [GroupEntry("G1", "sub-01", "tap", session=session)])["sub-01"]
+        assert sqm["bad_channels"] == expected, session
+
+
+def test_the_flat_tree_is_unchanged(tmp_path):
+    """The layout almost every dataset here uses. It must not have moved."""
+    _sidecar(tmp_path, "tap", BADS_TAP)
+    assert _load(tmp_path)["bad_channels"] == BADS_TAP

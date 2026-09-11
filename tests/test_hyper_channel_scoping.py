@@ -408,3 +408,47 @@ def test_a_subject_with_nothing_rejected_keeps_every_channel():
     apply_group_bads({"sub-A": raw}, {"sub-A": {"bad_channels": []}})
     assert raw.info["bads"] == []
     assert _labels(raw) == {"S1_D1", "S2_D2", "S3_D3", "S4_D4"}
+
+
+# ---- session trees ----
+# `derivatives_path` writes a session to its own folder, and this used to build
+# `sub-01/nirs` by hand: a session tree raised "Derivatives directory not found" and the
+# dyad analysis stopped at its first member. The `ses-` entity also sorts before `task-` in
+# a BIDS filename, so the old `{subject}_task-{task}_*` glob missed those names as well.
+
+def test_a_named_session_is_found_in_its_own_folder(tmp_path):
+    nirs = tmp_path / "sub-01" / "ses-a" / "nirs"
+    nirs.mkdir(parents=True)
+    (nirs / "sub-01_ses-a_task-hold_desc-preproc_nirs.snirf").touch()
+
+    found = find_preproc_snirf(tmp_path, "sub-01", "hold", session="a")
+    assert found.name == "sub-01_ses-a_task-hold_desc-preproc_nirs.snirf"
+
+
+def test_one_session_is_found_without_being_named(tmp_path):
+    """The group CSV names a session only when it has to. One session never has to."""
+    nirs = tmp_path / "sub-01" / "ses-a" / "nirs"
+    nirs.mkdir(parents=True)
+    (nirs / "sub-01_ses-a_task-hold_desc-preproc_nirs.snirf").touch()
+
+    assert find_preproc_snirf(tmp_path, "sub-01", "hold").name.startswith("sub-01_ses-a_")
+
+
+def test_two_unnamed_sessions_are_refused_by_name(tmp_path):
+    """Ambiguity is the caller's to resolve, and the message has to say what to resolve it
+    with. Picking the first in sorted order is what `select_one_run` exists to prevent."""
+    for session in ("a", "b"):
+        nirs = tmp_path / "sub-01" / f"ses-{session}" / "nirs"
+        nirs.mkdir(parents=True)
+        (nirs / f"sub-01_ses-{session}_task-hold_desc-preproc_nirs.snirf").touch()
+
+    with pytest.raises(MissingDerivativesError, match="ses: a, b"):
+        find_preproc_snirf(tmp_path, "sub-01", "hold")
+
+    assert find_preproc_snirf(tmp_path, "sub-01", "hold", session="b").name.startswith(
+        "sub-01_ses-b_")
+
+
+def test_a_subject_with_no_output_at_all_still_says_so(tmp_path):
+    with pytest.raises(MissingDerivativesError, match="Derivatives directory not found"):
+        find_preproc_snirf(tmp_path, "sub-99", "hold")
