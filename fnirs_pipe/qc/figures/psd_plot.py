@@ -19,6 +19,7 @@ from fnirs_pipe.pipeline.denoise import (
 from fnirs_pipe.utils.lineage import lineage_of
 
 from ._utils import HBO_COLOR as _HBO_COLOR, HBR_COLOR as _HBR_COLOR
+from ._utils import line_xy
 from ._utils import HBO_MEAN_COLOR as _HBO_MEAN_COLOR, HBR_MEAN_COLOR as _HBR_MEAN_COLOR
 from ._utils import add_band_shading as _add_band_shading
 from ._utils import physio_bands as _physio_bands
@@ -166,17 +167,16 @@ def psd_figure(
             if result is None:
                 continue
             freqs, db = result
-            x = freqs.tolist()
             for channel in db:
                 fig.add_trace(go.Scatter(
-                    x=x, y=channel.tolist(), mode="lines",
+                    **line_xy(freqs, channel), mode="lines",
                     line=dict(width=0.6, color=color), opacity=0.2,
                     showlegend=False, hoverinfo="skip",
                 ), row=row, col=1)
             mean_db = db.mean(axis=0)
             name = "HbO" if ch_type == "hbo" else "HbR"
             fig.add_trace(go.Scatter(
-                x=x, y=mean_db.tolist(), mode="lines",
+                **line_xy(freqs, mean_db), mode="lines",
                 line=dict(width=2.0, color=mean_color),
                 name=name, legendgroup=name, showlegend=(row == 1),
                 hovertemplate=f"{label} {name}<br>%{{x:.3f}} Hz<br>%{{y:.1f}} dB<extra></extra>",
@@ -192,10 +192,9 @@ def psd_figure(
         inside = freqs <= fmax
         attenuation = np.maximum(db[inside], _RESPONSE_FLOOR)
         fig.add_trace(go.Scatter(
-            x=freqs[inside].tolist(),
             # clipped to the data's own floor rather than extending the axis to reach it:
             # the filter's stopband runs tens of dB below anything the PSD can measure
-            y=np.maximum(attenuation + anchor, lo).tolist(),
+            **line_xy(freqs[inside], np.maximum(attenuation + anchor, lo)),
             mode="lines", line=dict(width=1.5, color=_RESPONSE_COLOR, dash="dash"),
             name="Filter response", legendgroup="Filter response",
             hovertemplate="filter<br>%{x:.3f} Hz<br>%{text:.1f} dB<extra></extra>",

@@ -13,7 +13,8 @@ from fnirs_pipe.utils.logging import get_logger
 from ._brain_utils import mni_trans
 from ._utils import (BAND_COLORS, CONDITION_PALETTE, HBO_COLOR, HBR_COLOR,
                      LONG_COLOR, PSD_NFFT, SHORT_COLOR, UNCLASSIFIED_COLOR,
-                     decimate as _decimate, epochable_events, physio_bands)
+                     decimate as _decimate, epochable_events, line_xy,
+                     physio_bands)
 
 logger = get_logger("qc.figures")
 
@@ -284,9 +285,9 @@ def build_channel_figure(
         mask = freqs <= fmax
         psd_fig = go.Figure(
             data=[
-                go.Scatter(x=freqs[mask].tolist(), y=psd_hbo[mask].tolist(),
+                go.Scatter(**line_xy(freqs[mask], psd_hbo[mask]),
                            name="HbO", mode="lines", line=dict(color=HBO_COLOR, width=2)),
-                go.Scatter(x=freqs[mask].tolist(), y=psd_hbr[mask].tolist(),
+                go.Scatter(**line_xy(freqs[mask], psd_hbr[mask]),
                            name="HbR", mode="lines", line=dict(color=HBR_COLOR, width=2)),
             ],
             layout=go.Layout(**psd_layout(cardiac=cardiac, resp=resp)),
@@ -678,21 +679,21 @@ def build_psd_mean_figure(
                                       n_fft=min(PSD_NFFT, data.shape[1]), verbose=False)
         fmax = min(_PSD_FMAX, sfreq / 2)
         mask = freqs <= fmax
-        freqs_list = freqs[mask].tolist()
+        freqs_masked = freqs[mask]
         band = psds[:, mask]
         groups = _psd_groups(raw_od, [raw_od.ch_names[i] for i in picks], sep_bands)
 
         # ---- Individual channels behind, one bold mean per group ----
         # neutral grey, so a group's own colour is what stands out against it
         traces = [
-            go.Scatter(x=freqs_list, y=ch_psd, mode="lines",
+            go.Scatter(**line_xy(freqs_masked, ch_psd), mode="lines",
                        line=dict(width=0.6, color="rgba(140,140,140,0.15)"),
                        showlegend=False, hoverinfo="skip")
-            for ch_psd in band.tolist()
+            for ch_psd in band
         ]
         for name, rows, line in groups:
             traces.append(go.Scatter(
-                x=freqs_list, y=band[rows].mean(axis=0).tolist(), mode="lines",
+                **line_xy(freqs_masked, band[rows].mean(axis=0)), mode="lines",
                 name=f"{name} (n={len(rows)})", line=dict(**line),
                 hovertemplate=f"{name}<br>%{{x:.3f}} Hz<br>%{{y:.3g}}<extra></extra>",
             ))
