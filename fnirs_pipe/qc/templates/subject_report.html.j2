@@ -914,18 +914,15 @@
 <!-- ------------------------------------------ per-channel, its own panel -->
 <h3 class="qm-sub qm-panel-title">Per-channel metrics</h3>
 <div class="qm-box">
-  {#- values and cell classes come pre-formatted from fnirs_pipe.qc.channel_table, so this
-      table, the raw viewer's and the GUI's print one number one way, and the SCI column is
-      marked against the run's own --sci-threshold rather than a copy of it -#}
+  {#- columns, values and cell classes all come pre-formatted from
+      fnirs_pipe.qc.channel_table, so this table, the raw viewer's and the GUI's list the
+      same things left to right and print one number one way, and the SCI column is marked
+      against the run's own --sci-threshold rather than a copy of it -#}
   {% macro ch_row(row) %}
       <tr>
-        <td>{{ row.name }}</td>
-        <td class="{{ row.status_cls }}">{{ row.status }}</td>
-        <td class="{{ row.sci_cls }}">{{ row.sci }}</td>
-        <td>{{ row.psp }}</td>
-        <td>{{ row.snr }}</td>
-        <td>{{ row.cv }}</td>
-        <td class="{{ row.corr_cls }}">{{ row.corr }}</td>
+        {%- for key, _label in channel_columns %}
+        <td class="{{ row.get(key ~ '_cls', '') }}">{{ row[key] }}</td>
+        {%- endfor %}
       </tr>
   {% endmacro %}
   {#- the montage split, long first, grouped by fnirs_pipe.qc.channel_table so this table
@@ -943,14 +940,13 @@
     <table class="qm-table">
       <thead>
         <tr>
-          <th>Channel</th><th>Status</th><th>SCI</th><th>PSP</th>
-          <th>SNR (intensity)</th><th>CV</th><th>HbO&ndash;HbR corr</th>
+          {%- for _key, label in channel_columns %}<th>{{ label }}</th>{% endfor %}
         </tr>
       </thead>
       {% if n_blocks > 1 %}
       {% for title, rows in channel_blocks %}
       <tbody>
-        <tr><td colspan="7" class="ch-group">{{ title }} ({{ rows | length }})</td></tr>
+        <tr><td colspan="{{ channel_columns | length }}" class="ch-group">{{ title }} ({{ rows | length }})</td></tr>
         {% for row in rows %}{{ ch_row(row) }}{% endfor %}
       </tbody>
       {% endfor %}

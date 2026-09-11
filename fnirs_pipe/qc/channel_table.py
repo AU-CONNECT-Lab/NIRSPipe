@@ -289,7 +289,7 @@ CHANNEL_COLUMNS = (
     ("snr",        "SNR (intensity)"),
     ("cv",         "CV"),
     ("spike",      "Spike % (exp.)"),
-    ("corr",       "HbO-HbR corr"),
+    ("corr",       "HbO–HbR corr"),
     ("separation", "Separation"),
 )
 

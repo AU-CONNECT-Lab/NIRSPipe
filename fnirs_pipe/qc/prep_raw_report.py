@@ -12,7 +12,7 @@ from fnirs_pipe.qc.figure_io import (
     extract_markers, get_channel_pairs,
 )
 from fnirs_pipe.qc.channel_table import (
-    channel_rows, format_rows, heatmap_args, pair_rows, save_channel_csv,
+    channel_columns, channel_rows, format_rows, heatmap_args, pair_rows, save_channel_csv,
     separation_blocks, separation_notes, split_table,
 )
 from fnirs_pipe.qc.metrics import SCI_PASS
@@ -39,6 +39,15 @@ _VIEW_SCALAR_KEYS = (
     "gvtd_mean", "gvtd_filt_p95", "gvtd_thresh",
     "gvtd_pct_above_thresh", "gvtd_num_above_thresh", "spike_count",
 )
+
+# ---- Channel decisions table ----
+# Its columns, like every other view's, come from channel_table. It draws the decision chip
+# itself, that being the one column that is not a measurement, and the HbO-HbR correlation
+# is a haemoglobin measurement this intensity view has no stage for. The keys go over as
+# JSON because the table body is built in the browser.
+_CH_COLUMNS     = channel_columns(("corr", "separation"))
+_CH_COLUMN_VARS = {"ch_columns": _CH_COLUMNS,
+                   "ch_column_keys_json": json.dumps([key for key, _ in _CH_COLUMNS])}
 
 
 def _process_run(
@@ -422,6 +431,7 @@ def _write_condition_views(payload: dict, ctx: dict, output_path: Path, run_labe
             run_labels=[view_label],
             stem=stem,
             data_json=json.dumps([view]),
+            **_CH_COLUMN_VARS,
         )
         out = output_path.with_name(f"{stem}.html")
         out.write_text(html, encoding="utf-8")
@@ -487,6 +497,7 @@ def build_prep_raw_report(
         run_labels=run_labels,
         stem=output_path.stem,
         data_json=json.dumps(static_data),
+        **_CH_COLUMN_VARS,
     )
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(html, encoding="utf-8")

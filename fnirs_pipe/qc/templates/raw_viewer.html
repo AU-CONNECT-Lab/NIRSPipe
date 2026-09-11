@@ -263,8 +263,8 @@ select#run-select {
     <div style="overflow-x:auto">
     <table id="ch-decisions-table" class="qm-table">
       <thead><tr>
-        <th>Channel</th><th>Status</th><th>SCI</th><th>PSP</th>
-        <th>SNR (intensity)</th><th>CV</th><th>Decision</th>
+        {%- for _key, label in ch_columns %}<th>{{ label }}</th>{% endfor %}
+        <th>Decision</th>
       </tr></thead>
       <tbody id="ch-decisions-tbody"></tbody>
     </table>
@@ -770,13 +770,13 @@ fetch("/load_channel_decisions")
 
 // ─── channel decisions ────────────────────────────────────────────────────────
 
-var _CH_COLUMNS = ["status", "sci", "psp", "snr", "cv"];
+// same list the <thead> above was built from, so the cells cannot drift from the headers
+var _CH_COLUMNS = {{ ch_column_keys_json }};
 var _CD_LABELS   = {unrated: "—", good: "good", bad: "bad"};
 
-// Rows come from fnirs_pipe.qc.channel_table with the numbers formatted and the cells
-// classed, so this table, the subject report's and the GUI's cannot print one channel three
-// ways. The only thing added here is the decision chip, which is the one column that is not
-// a measurement.
+// Columns, values and cell classes all come from fnirs_pipe.qc.channel_table, so this table,
+// the subject report's and the GUI's cannot list one channel three ways. The only thing
+// added here is the decision chip, which is the one column that is not a measurement.
 function buildChDecisionsTable() {
   var tbody = document.getElementById("ch-decisions-tbody");
   if (!tbody) return;
@@ -785,7 +785,7 @@ function buildChDecisionsTable() {
   var d        = (_STATIC_DATA || [])[_run_idx] || {};
   var chans    = d.channels || {};
   var blocks   = chans.blocks || [];
-  var nCols    = _CH_COLUMNS.length + 2;
+  var nCols    = _CH_COLUMNS.length + 1;  // the columns, plus the decision chip
 
   renderChNotes(chans.notes || []);
 
@@ -838,9 +838,6 @@ function buildChDecisionsTable() {
     rows.forEach(function(row) {
       var tr = document.createElement("tr");
       if (row.is_bad) tr.style.background = "#fff8f8";
-      var name = document.createElement("td");
-      name.textContent = row.name;
-      tr.appendChild(name);
       _CH_COLUMNS.forEach(function(col) {
         var td = document.createElement("td");
         td.className   = row[col + "_cls"] || "";

@@ -30,7 +30,10 @@ SLICEABLE = ("sci_per_channel", "psp_per_channel", "good_frac_per_channel",
 # `hbo_hbr_corr_per_channel` is dropped but recoverable: `with_condition_corr` puts back a
 # value measured on the cut, and a failed recompute leaves dashes rather than the run's.
 UNSLICEABLE = ("cp_per_channel", "temporal_derivative_variance",
-               "hbo_hbr_corr_per_channel", "cnr_per_channel")
+               "hbo_hbr_corr_per_channel", "cnr_per_channel",
+               # the spike mask is per sample, but only its whole-run share per channel is
+               # stored, so there is nothing on disk to count over one condition's window
+               "spike_pct_per_channel")
 
 # the scalars a condition can be given, in print order. Short of the run's list on purpose:
 # flat channels, mean amplitude and the spike count have no windowed series to slice, and

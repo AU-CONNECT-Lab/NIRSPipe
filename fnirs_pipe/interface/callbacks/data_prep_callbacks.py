@@ -11,6 +11,7 @@ import dash_bootstrap_components as dbc
 from dash import ALL, Input, Output, Patch, State, callback, ctx, dcc, html, no_update
 
 from fnirs_pipe.interface.theme import style_figure
+from fnirs_pipe.qc.channel_table import channel_columns
 
 # Server-side cache: cache_key -> _process_run result dict (large figures stay here)
 _RESULT_CACHE: dict[str, dict] = {}
@@ -1151,9 +1152,10 @@ def _cd_btn(pair: str, state: str) -> dbc.Button:
     )
 
 
-# the metric columns, in the order the subject report and the raw viewer print them
-_CH_COLUMNS = (("status", "Status"), ("sci", "SCI"), ("psp", "PSP"),
-               ("snr", "SNR (intensity)"), ("cv", "CV"))
+# the same columns the subject report and the raw viewer print, in the same order: the
+# decision chip is added beside them here, and the HbO-HbR correlation is a haemoglobin
+# measurement this intensity view has no stage for
+_CH_COLUMNS = channel_columns(("corr", "separation"))
 _CELL_COLOR = {"bad": "#c0392b", "good": "#27ae60", "neg": "#27ae60", "pos": "#c0392b"}
 _TH_STYLE = {"padding": "4px 8px", "fontWeight": "600", "fontSize": "0.8rem",
              "borderBottom": "2px solid #dde3ea", "background": "#f8f9fa"}
@@ -1205,25 +1207,27 @@ def _build_decisions_table(pair_cells: list[dict], blocks: list, notes: list,
     channel three ways. It used to show SCI alone, looked up under a key the raw recording
     does not use, so every row read as a dash.
     """
-    n_cols = len(_CH_COLUMNS) + 2
+    n_cols = len(_CH_COLUMNS) + 1  # the columns, plus the decision chip
 
-    def _row(cell: dict) -> html.Tr:
+    def _cell(cell: dict, key: str) -> html.Td:
+        # the name identifies the row rather than scoring it, so it carries the rejection
+        # highlight instead of a metric colour
+        if key == "name":
+            return html.Td(cell["name"],
+                           style={**_TD_STYLE, "fontWeight": "500",
+                                  "background": "#fff8f8" if cell["is_bad"] else ""})
         # the verdict, not one of its inputs: screening is a union, so a channel rejected on
         # PSP alone still has to be marked
-        name = html.Td(cell["name"],
-                       style={**_TD_STYLE, "fontWeight": "500",
-                              "background": "#fff8f8" if cell["is_bad"] else ""})
-        metrics = [
-            html.Td(cell[key],
-                    style={**_TD_STYLE,
-                           "color": _CELL_COLOR.get(cell.get(f"{key}_cls", ""), "#6c757d")})
-            for key, _ in _CH_COLUMNS
-        ]
+        return html.Td(cell[key],
+                       style={**_TD_STYLE,
+                              "color": _CELL_COLOR.get(cell.get(f"{key}_cls", ""), "#6c757d")})
+
+    def _row(cell: dict) -> html.Tr:
         decision = html.Td(_cd_btn(cell["name"],
                                    run_decisions.get(f"{cell['name']} hbo", "unrated")),
                            style={"padding": "2px 6px",
                                   "borderBottom": "1px solid #f0f0f0"})
-        return html.Tr([name, *metrics, decision])
+        return html.Tr([*(_cell(cell, key) for key, _ in _CH_COLUMNS), decision])
 
     body_rows: list = []
     # group headers only when the montage split into more than one block
@@ -1235,8 +1239,7 @@ def _build_decisions_table(pair_cells: list[dict], blocks: list, notes: list,
         body_rows.extend(_row(cell) for cell in block)
 
     table = html.Table(
-        [html.Thead(html.Tr([html.Th("Channel", style=_TH_STYLE)]
-                            + [html.Th(label, style=_TH_STYLE) for _, label in _CH_COLUMNS]
+        [html.Thead(html.Tr([html.Th(label, style=_TH_STYLE) for _, label in _CH_COLUMNS]
                             + [html.Th("Decision", style=_TH_STYLE)])),
          html.Tbody(body_rows)],
         style={"borderCollapse": "collapse", "width": "100%", "fontSize": "0.82rem"},
