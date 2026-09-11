@@ -6,6 +6,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- **`--epoch-single-trial`** draws the epoch section on a design where no condition repeats, which is skipped by default. It waives that reason and no other: a run with no events, or none leaving room for the window, is not epochable whatever the flag says
+
 ### Fixed
 - **The condition blocks show on the dyad coherence maps.** They were shaded underneath an opaque map, so nothing appeared
 - **A condition of one or two trials no longer sets the scale for the real ones.** A stray trigger left a two-trial condition running three times the amplitude of the rest, which flattened every other panel in the grand mean and washed the evoked map to white. Such a condition is still drawn, and its panel says it is off the shared scale; when no condition clears the bar every one of them keeps it
@@ -20,7 +23,7 @@ All notable changes to this project will be documented in this file.
 - **The dyad report links its figures instead of carrying them.** One dyad's page came to 174 MB, nearly all of it coherence maps embedded one per channel per chromophore; the page is now a few hundred kB and the browser fetches the map being looked at
 - **The coherence maps carry the relative-phase arrows.** They say which brain led, which is half of what a coherence map is read for, and only the ROI grid used to show them
 - **The cells outside the cone of influence are washed out** rather than only bounded by a dashed line. They are coefficients padded against the recording's edges, near 1 whatever the data did, so the ends of every recording read as strongly coupled
-- **A design of one long block per condition skips the epoch section instead of drawing it.** Nothing there repeats, so every figure in it averaged one trial with itself and drew a 30 s slice of a block running for minutes, which reads as a response and is not one. The note says so, and the condition pages skip it on the same grounds
+- **A design of one long block per condition skips the epoch section instead of drawing it**, unless `--epoch-single-trial` says otherwise. Nothing there repeats, so every figure in it averaged one trial with itself and drew a 30 s slice of a block running for minutes, which reads as a response and is not one. The note says so, and the condition pages skip it on the same grounds
 - **The grand mean is drawn on the denoised signal**, the stage the trial images and channel map beside it already used. On the unfiltered signal it carried cardiac ripple on a curve the section is read for the shape of
 - **The evoked response is drawn per channel instead of interpolated across the scalp.** Each channel is painted along its own source-detector path, one head per condition, with a slider through the epoch window; nothing is invented between channels
 - **Short channels get their own row in that map**, on the long row's colour scale and captioned with the share of the long peak they reach. They cannot reach cortex, so a share near 100% marks the response as systemic scalp signal rather than activation

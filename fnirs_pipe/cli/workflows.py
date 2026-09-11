@@ -465,6 +465,7 @@ def _emit_subject_report(subject, sub_dir, last_raw, last_result, prep_config, a
         # read straight off args like `mode`, deliberately not through either PrepConfig
         # splat: this is a report option and PrepConfig has no field for it
         by_condition=bool(args.get("by_condition")),
+        epoch_single_trial=bool(args.get("epoch_single_trial")),
         alff_df=alff_df,
         fc_df=fc_df,
         fc_hbr_df=fc_hbr_df,

@@ -164,6 +164,7 @@ def _no_epoch_reason(
     raw_haemo: mne.io.Raw,
     epoch_tmin: float = _EPOCH_TMIN,
     epoch_tmax: float = _EPOCH_TMAX,
+    single_trial: bool = False,
 ) -> "str | None":
     """Why nothing can be epoched over the report's window, or None when something can.
 
@@ -176,6 +177,11 @@ def _no_epoch_reason(
     events survive the window check, but no condition repeats, so every figure in the
     section averages one trial with itself and draws a 30 s slice of a block that runs for
     minutes. That reads as a response and is not one, so the section is skipped.
+
+    ``single_trial`` (``--epoch-single-trial``) waives that last one, for a run where the
+    one trial is the thing to look at: a block onset does evoke a transient, and n=1 makes it
+    noisy rather than absent. It waives nothing else. The other two reasons are a run with no
+    events and a window that fits inside none of them, and no flag makes either epochable.
     """
     from fnirs_pipe.qc.figures._utils import epochable_events
 
@@ -183,7 +189,7 @@ def _no_epoch_reason(
     if len(events) > 0:
         counts = {name: int((events[:, 2] == code).sum()) for name, code in event_id.items()}
         counts = {k: v for k, v in counts.items() if v}
-        if counts and max(counts.values()) < 2:
+        if counts and max(counts.values()) < 2 and not single_trial:
             return (f"no condition repeats ({len(counts)} condition(s), one event each), so "
                     f"nothing in this section would be averaged")
         return None
@@ -1396,6 +1402,7 @@ def build_subject_report(
     h_freq: float | None = None,
     mode: str | None = None,
     by_condition: bool = False,
+    epoch_single_trial: bool = False,
     alff_df: "Any | None" = None,
     fc_df: "Any | None" = None,
     fc_hbr_df: "Any | None" = None,
@@ -1521,7 +1528,8 @@ def build_subject_report(
     # left cardiac ripple on a curve the section is read for the shape of, and made the three
     # figures under one heading describe two different stages.
     epoch_haemo       = after_haemo if after_haemo is not None else raw_haemo
-    epoch_skip        = _no_epoch_reason(raw_haemo, epoch_tmin, epoch_tmax)
+    epoch_skip        = _no_epoch_reason(raw_haemo, epoch_tmin, epoch_tmax,
+                                         single_trial=epoch_single_trial)
     # the window note only matters to figures that get drawn; asked before the skip it told a
     # reader to widen a window for a section that is not there
     if epoch_skip is None and getattr(config, "epoch_tmin", None) is None:
@@ -1697,6 +1705,7 @@ def build_subject_report(
                     psd_stages=psd_stages, record=record, config=config,
                     l_freq=l_freq, h_freq=h_freq, sep_bands=sep_bands,
                     epoch_tmin=epoch_tmin, epoch_tmax=epoch_tmax,
+                    epoch_single_trial=epoch_single_trial,
                     subject=subject, errors=errors, figures_dir=figures_dir))
 
     _build_mne_report(subject, raw_intensity, raw_haemo, out_path, errors)
@@ -1777,6 +1786,7 @@ def _cropped_sections(
     *,
     raw_haemo, epoch_haemo, raw_haemo_uncorr, raw_errts, psd_stages, record, config,
     l_freq, h_freq, sep_bands, epoch_tmin, epoch_tmax, subject, errors, figures_dir,
+    epoch_single_trial=False,
 ) -> dict:
     """The panels that are safe to rebuild on a cropped copy, over one condition.
 
@@ -1840,7 +1850,8 @@ def _cropped_sections(
     # one condition, so a design of one block per condition leaves it a single event and
     # nothing here to average
     epoch_src = crop(epoch_haemo, epoch_pad) or haemo
-    if _no_epoch_reason(epoch_src, epoch_tmin, epoch_tmax) is None:
+    if _no_epoch_reason(epoch_src, epoch_tmin, epoch_tmax,
+                        single_trial=epoch_single_trial) is None:
         out.update(_section_epoch_preview(epoch_src, subject, errors,
                                           figures_dir, epoch_tmin=epoch_tmin,
                                           epoch_tmax=epoch_tmax, suffix=suffix,

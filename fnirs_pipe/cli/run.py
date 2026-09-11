@@ -104,6 +104,15 @@ def _build_parser() -> argparse.ArgumentParser:
                                "drops the remainder, which is what MNE does. Nothing can "
                                "average a single 240 s trial, so without this the epoch "
                                "figures describe the start of each block.")
+    prep_opt.add_argument("--epoch-single-trial", action="store_true",
+                          help="Draw the epoch section even when no condition repeats. It "
+                               "is skipped by default there: with one trial per condition "
+                               "nothing is averaged, and a 30 s window off a block running "
+                               "for minutes reads as a response without being one. Pass "
+                               "this when the single trial is the thing to look at, such as "
+                               "a block-onset transient. Has no effect when the run carries "
+                               "no events or no event leaves room for the window, which no "
+                               "flag can fix.")
     prep_opt.add_argument("--by-condition", action="store_true",
                           help="Also write one QC report page per annotated condition, "
                                "beside the run's own, as desc-<condition>. Their numbers "
