@@ -70,8 +70,9 @@ def psd_layout(height: int = 220, cardiac=None, resp=None) -> dict:
         xaxis=dict(title="Frequency (Hz)", range=[0, _PSD_FMAX], gridcolor="#eeeeee"),
         yaxis=dict(title="Power", type="log", gridcolor="#eeeeee"),
         plot_bgcolor="white", paper_bgcolor="white",
-        height=height, margin=dict(l=60, r=15, t=8, b=38),
-        legend=dict(font=dict(size=9)),
+        height=height, margin=dict(l=60, r=15, t=22, b=38),
+        legend=dict(font=dict(size=9), orientation="h",
+                    x=1, xanchor="right", y=1.0, yanchor="bottom"),
         shapes=shapes, annotations=annotations,
     )
 
@@ -264,8 +265,9 @@ def build_channel_figure(
             xaxis=dict(title="Time (s)", gridcolor="#eeeeee", zerolinecolor="#cccccc"),
             yaxis=dict(title="Conc. (µmol/L)", gridcolor="#eeeeee"),
             plot_bgcolor="white", paper_bgcolor="white",
-            height=160, margin=dict(l=55, r=15, t=8, b=38),
-            legend=dict(font=dict(size=9), orientation="h", y=1.12),
+            height=160, margin=dict(l=55, r=15, t=22, b=38),
+            legend=dict(font=dict(size=9), orientation="h",
+                        x=1, xanchor="right", y=1.0, yanchor="bottom"),
             shapes=_mk_shapes(),
         ),
     )

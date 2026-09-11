@@ -221,6 +221,7 @@ def psd_figure(
         margin=dict(l=70, r=30, t=95, b=50),
         plot_bgcolor="white",
         paper_bgcolor="white",
-        legend=dict(font=dict(size=11)),
+        legend=dict(font=dict(size=11), orientation="h",
+                    x=1, xanchor="right", y=1.0, yanchor="bottom"),
     )
     return fig

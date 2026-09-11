@@ -362,8 +362,9 @@ def build_psd(
             xaxis=dict(title="Frequency (Hz)", range=[0, 2], gridcolor="#eeeeee"),
             yaxis=dict(title="Power (HbO)", type="log", gridcolor="#eeeeee"),
             plot_bgcolor="white", paper_bgcolor="white",
-            height=200, margin=dict(l=60, r=15, t=8, b=38),
-            legend=dict(font=dict(size=9)),
+            height=200, margin=dict(l=60, r=15, t=22, b=38),
+            legend=dict(font=dict(size=9), orientation="h",
+                        x=1, xanchor="right", y=1.0, yanchor="bottom"),
             shapes=shapes, annotations=annots,
         ),
     )

@@ -188,6 +188,15 @@ def test_the_chromophore_pairs_are_complete():
             assert metric[:-4] + "_hbo" in METRIC_SUMMARY, f"{metric} has no HbO entry"
 
 
+def test_a_tooltip_stays_short_enough_to_read():
+    # a native title tooltip is a hover, not a paragraph: past about three sentences readers
+    # stop opening them, and the long ones used to repeat the same stage line on every metric
+    for metric in METRIC_SUMMARY:
+        text = metric_summary(metric)
+        n = len([p for p in re.split(r"(?<=[.!?])\s+", text) if p.strip()])
+        assert n <= 3, f"{metric} tooltip runs to {n} sentences: {text}"
+
+
 def test_an_unknown_metric_reads_as_empty_rather_than_raising():
     # the template calls these for every row, so a lookup miss has to degrade to a plain
     # number with no tooltip and no verdict, never to an exception mid-render

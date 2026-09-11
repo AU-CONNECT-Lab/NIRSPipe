@@ -216,15 +216,15 @@ METRIC_SUMMARY = {
     # coupling
     "sci_mean": "Scalp coupling: how well the two wavelengths share a pulse. Near 1 is good; low means poor optode contact.",
     "channel_retention_rate": "Fraction of channels that survived screening. Higher is better.",
-    "psp_mean": "Strength of the shared cardiac peak across the two wavelengths, averaged over 10 s windows and then over channels. Higher is a more clearly detected heartbeat.",
-    "good_frac_mean": "Share of 10 s windows in which a channel is coupled, meaning SCI and PSP both pass inside that window, averaged over channels. This is the line a channel is rejected on. Higher is better.",
-    "cp_mean": "How peaked one channel's spectrum is inside the cardiac band, 0 to 1. Higher is a sharper peak. It describes one channel and never compares the two wavelengths, so it is not a coupling measure: read SCI and PSP for that. Experimental, and it tracks PSP closely.",
+    "psp_mean": "Strength of the shared cardiac peak across the two wavelengths, averaged over 10 s windows and then over channels; higher is a more clearly detected heartbeat.",
+    "good_frac_mean": "Share of 10 s windows in which SCI and PSP both pass, averaged over channels; higher is better. This is the line a channel is rejected on.",
+    "cp_mean": "How peaked one channel's spectrum is inside the cardiac band, 0 to 1; higher is sharper. Experimental, and it never compares the two wavelengths, so read SCI and PSP for coupling.",
 
     # raw intensity
     "cv_mean": "Noise relative to a channel's own brightness (SD / mean), per wavelength. Lower is cleaner.",
     "snr_mean": "Signal size relative to its fluctuation (mean / SD), the reciprocal of CV. Higher is better.",
     "snr_pass_rate": "Fraction of channels whose SNR clears the per-channel line. Higher is better.",
-    "n_flat_channels": "How many channels carry no variation at all, flat or saturated. Zero is what you want; these are counted as failures in snr_pass_rate but cannot enter the SNR and CV means.",
+    "n_flat_channels": "How many channels carry no variation at all, flat or saturated; zero is what you want. They count as failures in snr_pass_rate but cannot enter the SNR and CV means.",
     "mean_amp_mean": "Average light level reaching the detectors. No universal good value; use it to spot channels far dimmer than their neighbours.",
 
     # geometry
@@ -234,19 +234,19 @@ METRIC_SUMMARY = {
 
     # haemoglobin
     "hbo_hbr_corr_mean": "Correlation between HbO and HbR. Strongly negative is physiologically expected; near zero or positive suggests artifact.",
-    "cnr_hbo_mean": "How far the evoked HbO response clears its own noise, averaged over channels. Higher is better. Absent on a run with no stimulus annotations.",
+    "cnr_hbo_mean": "How far the evoked HbO response clears its own noise, averaged over channels; higher is better. Absent on a run with no stimulus annotations.",
     "cnr_hbr_mean": "The same for HbR. HbR falls with a response, so this one runs negative and more negative is better.",
     "cnr_n_epochs": "How many stimulus epochs the CNR was averaged over. Descriptive; a handful of epochs makes the value noisy.",
-    "gcor_hbo": "How much every HbO channel moves together. Higher means a stronger shared systemic or global component rather than localised activity. Across a before → after pair the before side is the bandpassed signal rather than the unfiltered one: the bandpass alone raises this, and the regression is the step the pair exists to measure.",
+    "gcor_hbo": "How much every HbO channel moves together, higher meaning a stronger shared systemic or global component rather than localised activity. A pair's before side is the bandpassed signal, since the bandpass alone raises this.",
     "gcor_hbr": "The same for HbR.",
-    "lowfreq_drift_amplitude_hbo": "Peak-to-peak of a cubic trend fitted to HbO: how far the baseline travelled. Lower is a more stable baseline. It answers how far, not how slowly, so a baseline step moves it more than a slow sag does, and a cubic over a long recording cannot follow wander that repeats within it. Non-standard, and not comparable between recordings of different length.",
+    "lowfreq_drift_amplitude_hbo": "Peak-to-peak of a fitted trend: how far the HbO baseline travelled, not how slowly, so a step moves it more than a slow sag does and lower is more stable. Non-standard, and not comparable between recordings of different length.",
     "lowfreq_drift_amplitude_hbr": "The same for HbR.",
 
     # spectral. Power is a mean PSD level inside the band, fraction is a sum over the band
     # against the sum over the whole spectrum; they are not the same quantity rescaled.
     "cardiac_band_power_hbo": "Average HbO spectral density inside the cardiac band. Scales with signal amplitude, so it does not compare across subjects, and it rises with any broadband artifact.",
     "cardiac_band_power_hbr": "The same for HbR.",
-    "cardiac_band_frac_hbo": "Share of this chromophore's total HbO power that sits in the cardiac band, 0 to 1, comparable across subjects. Describes spectral content, not quality: motion is broadband and lifts every band, so a high value can be contamination rather than a clear pulse. Read SCI and PSP for whether the pulse is real.",
+    "cardiac_band_frac_hbo": "Share of total HbO power sitting in the cardiac band, 0 to 1, comparable across subjects. Spectral content, not quality: motion lifts every band, so read SCI and PSP for whether the pulse is real.",
     "cardiac_band_frac_hbr": "The same for HbR.",
     "resp_band_power_hbo": "Average HbO spectral density inside the respiration band.",
     "resp_band_power_hbr": "The same for HbR.",
@@ -256,19 +256,19 @@ METRIC_SUMMARY = {
     # motion and spikes, all measured on optical density.
     # Note which trace gvtd_thresh belongs to: it is computed from the band-passed trace
     # and compared against it, so it is not a cutoff for the unfiltered gvtd_mean/p95.
-    "gvtd_mean": "Average whole-montage movement over the run, unfiltered. Lower is less motion. No absolute cutoff, and gvtd_thresh does not apply to it.",
+    "gvtd_mean": "Average whole-montage movement over the run, unfiltered; lower is less motion. No absolute cutoff, and gvtd_thresh does not apply to it.",
     "gvtd_p95": "The same at the worst moments, the 95th percentile.",
     "gvtd_filt_mean": "Average movement after band-passing to 0.01-0.5 Hz, where head motion lives. This is the trace gvtd_thresh applies to.",
     "gvtd_filt_p95": "The same at the worst moments. Above gvtd_thresh means motion.",
     "gvtd_vstd_mean": "Average movement with each channel scaled by its own SD first, so a few loud channels cannot dominate.",
     "gvtd_vstd_p95": "The same at the worst moments.",
-    "gvtd_thresh": "Motion cutoff derived from this recording's own band-passed GVTD histogram. Compare it with gvtd_filt_p95, not with gvtd_mean. Each side of a before → after pair derives its own, so a fall here is the cutoff following the recording, not motion being removed; that is why the counts below are not taken against it on the corrected side.",
-    "gvtd_thresh_applied": "The cutoff the counts below were actually taken against. It is the uncorrected recording's on both sides of a before → after pair, so the two are counted against one yardstick, and equals gvtd_thresh wherever there is no pair.",
+    "gvtd_thresh": "Motion cutoff derived from this recording's own band-passed GVTD histogram; compare it with gvtd_filt_p95, not gvtd_mean. Each side of a pair derives its own, so a fall here is the cutoff following the recording rather than motion being removed.",
+    "gvtd_thresh_applied": "The cutoff the counts below were actually taken against: the uncorrected recording's on both sides of a pair, so the two share one yardstick.",
     "gvtd_num_above_thresh": "Timepoints whose band-passed GVTD exceeds gvtd_thresh_applied.",
-    "gvtd_pct_above_thresh": "Those timepoints as a fraction of the recording, roughly how much is motion-contaminated. Lower is cleaner. Across a before → after pair both sides are counted against the uncorrected cutoff, so the fall is motion removed rather than the cutoff moving.",
-    "gvtd_censor_pct": "Fraction of the recording marked BAD_gvtd, so larger than gvtd_pct_above_thresh: it also takes the surviving stretches too short to analyse. Nothing was deleted, and a different --gvtd-censor-n-std changes this on a rerun.",
-    "gvtd_censor_retained_s": "Seconds left after censoring, held in gvtd_censor_n_epochs continuous stretches. This, not the censored fraction, is what an analysis has to work with.",
-    "spike_count": "Sudden jumps across all channels, counted on the motion-band-filtered derivative so they reflect movement rather than pulse. Lower is better.",
+    "gvtd_pct_above_thresh": "Those timepoints as a fraction of the recording, roughly how much is motion-contaminated; lower is cleaner. Both sides of a pair are counted against the uncorrected cutoff, so a fall is motion removed rather than the cutoff moving.",
+    "gvtd_censor_pct": "Fraction of the recording marked BAD_gvtd, larger than gvtd_pct_above_thresh because it also takes the surviving stretches too short to analyse. Nothing was deleted.",
+    "gvtd_censor_retained_s": "Seconds left after censoring, in gvtd_censor_n_epochs continuous stretches; this, not the censored fraction, is what an analysis has to work with.",
+    "spike_count": "Sudden jumps across all channels, counted on the motion-band-filtered derivative so they reflect movement rather than pulse; lower is better.",
     "spike_pct": "Those jumps as a fraction of all channel-samples. Experimental.",
     "spike_num_frames": "Timepoints where at least a tenth of channels jumped together. Experimental.",
     "spike_pct_frames": "Those timepoints as a fraction of the recording. Experimental.",
@@ -278,7 +278,7 @@ METRIC_SUMMARY = {
     "motion_corrected_n_segments": "How many separate stretches those timepoints form. Experimental.",
 
     # time
-    "pct_data_retained": "Fraction of the recording not covered by BAD annotations. Higher is more usable data. A share of duration rather than of channels, so it is one number for every channel set.",
+    "pct_data_retained": "Fraction of the recording not covered by BAD annotations; higher is more usable data. A share of duration rather than of channels, so it is one number for every channel set.",
 }
 
 # The few that decide whether a subject is usable at all. Everything else is context for
@@ -311,16 +311,12 @@ _STAGE_PREPROC = (
     "measuring itself."
 )
 _STAGE_BOTH = (
-    "Measured on every haemoglobin file the run wrote, so there is one of these per stage: "
-    "Beer-Lambert output, then the bandpass, the resample and the confound regression as "
-    "each of those ran. Which one you are reading is the section it sits in."
+    "Measured on every haemoglobin file the run wrote, so which stage you are reading is the "
+    "section it sits in."
 )
 _STAGE_RAW_AND_CORRECTED = (
-    "Measured on the recording as it arrived, and again on the motion-corrected file, over "
-    "the same channels both times. A pair written before → after is those two "
-    "numbers: the left one is the recording, the right one is what motion correction left "
-    "behind, so the pair says whether the correction removed what it was there to remove. "
-    "A single number means this run has no corrected file to compare against."
+    "Measured on the recording as it arrived and again on the motion-corrected file, over the "
+    "same channels both times."
 )
 
 _RAW_METRICS = (
