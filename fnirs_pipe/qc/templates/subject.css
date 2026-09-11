@@ -79,10 +79,11 @@ details[open] > summary::before { transform: rotate(90deg); }
            margin: 0; padding: 0; list-style: none; }
 .qm-list li { display: flex; justify-content: space-between; padding: 0.18rem 0;
               border-bottom: 1px solid #eef0f3; break-inside: avoid; gap: 1rem; }
-.qm-list .ql { color: #666; white-space: nowrap; }
+.ql { color: #666; }
+.qm-list .ql, .qm-narrow .ql { white-space: nowrap; }
 /* dotted underline is the only cue that a native title tooltip is there */
-.qm-list .ql[title]:not([title=""]) { cursor: help; border-bottom: 1px dotted #b8c2cc; }
-.qm-list .ql-key { color: #34495e; font-weight: 600; }
+.ql[title]:not([title=""]) { cursor: help; border-bottom: 1px dotted #b8c2cc; }
+.ql-key { color: #34495e; font-weight: 600; }
 .ql-dot { color: #2980b9; font-size: 0.62em; vertical-align: 0.35em; margin-left: 0.3rem; }
 .qm-note { font-size: 0.78rem; color: #8a949e; margin: 0 0 0.55rem; }
 .qm-sub { font-size: 0.9rem; font-weight: 600; margin: 1rem 0 0.3rem; }
@@ -104,7 +105,12 @@ details[open] > summary::before { transform: rotate(90deg); }
 /* no cell grid on any of them. A row is separated by the hairline the metric lists used and
    a value column by being right-aligned, neither of which needs a rule of its own */
 .qm-flat th, .qm-flat td { border: none; border-bottom: 1px solid #eef0f3;
-                           padding: 0.18rem 0.9rem 0.18rem 0; }
+                           padding: 0.18rem 0.9rem 0.18rem 0;
+                           /* so a column of numbers lines up digit under digit */
+                           font-variant-numeric: tabular-nums; }
+/* right-aligned columns are what separates them once the cell borders are gone, so this
+   does not wait for .qm-split the way it used to */
+.qm-flat th:not(:first-child), .qm-flat td:not(:first-child) { text-align: right; }
 .qm-flat th { background: none; color: #8a949e; font-weight: 600; font-size: 0.75rem;
               text-transform: uppercase; letter-spacing: 0.04em;
               border-bottom: 1px solid #d8dee5; }
@@ -112,9 +118,7 @@ details[open] > summary::before { transform: rotate(90deg); }
    weight of a title; where the group ends is already marked down the table by .dom-split */
 .qm-flat th.ch-group { color: #34495e; font-size: 0.78rem; text-transform: none;
                        letter-spacing: 0; border-bottom: 1px solid #d8dee5; }
-.qm-flat td:first-child { color: #666; }
-/* tabular figures so a column of numbers lines up on the decimal point */
-.qm-flat td.qv { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.qm-flat td.qv { font-weight: 600; white-space: nowrap; }
 .qm-table td.bad  { color: #c0392b; }
 .qm-table td.good { color: #27ae60; }
 .qm-table td.neg  { color: #27ae60; }
