@@ -10,18 +10,13 @@
 /* The two sides of a crossed pairing read left to right, so the separator has to say
    which member each selector belongs to rather than just sitting between them. */
 .map-pick .pick-x { font-size: 0.78rem; color: #868e96; }
-/* One switch for every coherence panel, so a reader is never comparing an HbO channel
-   against an HbR region without noticing. */
-.chroma-switch { display: flex; gap: 0; margin: 0.35rem 0 0.15rem; }
-.chroma-switch button {
-  font: inherit; font-size: 0.82rem; cursor: pointer;
-  padding: 0.25rem 0.9rem; background: #fff; color: #495057;
-  border: 1px solid #ced4da; border-right-width: 0;
-}
-.chroma-switch button:first-child { border-radius: 4px 0 0 4px; }
-.chroma-switch button:last-child  { border-radius: 0 4px 4px 0; border-right-width: 1px; }
-.chroma-switch button[aria-pressed="true"] {
-  background: #495057; color: #fff; border-color: #495057;
+/* Both chromophores are on the page at once, stacked, so nothing is behind a control and
+   a reader cannot be comparing an HbO channel against an HbR region without noticing. */
+.chroma-stack { padding: 0.25rem 0 0.1rem; }
+.chroma-stack + .chroma-stack { border-top: 1px solid #e9ecef; margin-top: 0.4rem; }
+.chroma-stack > .chroma-name {
+  display: inline-block; font-size: 0.78rem; font-weight: 600; color: #495057;
+  letter-spacing: 0.03em; margin: 0 0 0.1rem 0.1rem;
 }
 /* The run and its conditions are one set of pages; every one of them carries the whole
    strip, so any page reaches any other in a click. */
@@ -129,24 +124,16 @@
 {% endcall %}
 {% endif %}
 
-<!-- Chromophore switch: one control for every coherence panel below -->
+<!-- Chromophore note: every coherence panel below carries all of them at once -->
 <div class="card">
   <div class="panel-title">
     Chromophore
     <span class="panel-hint">
-      {% if wtc_chroma_labels | length > 1 -%}
-      switches every wavelet coherence panel on this page &bull;
-      {%- else -%}
-      this run computed {{ wtc_chroma_labels[0] }} only, so there is nothing to switch to
-      &bull;
-      {%- endif %}
+      every coherence panel below shows {{ wtc_chroma_labels | join(" above ") }} &bull;
       <code>hyper-wtc.tsv</code> carries {{ wtc_chroma_labels | join(" and ") }} in a
       <code>chromophore</code> column
     </span>
   </div>
-  {% if wtc_chroma_labels | length > 1 %}
-  <div class="chroma-switch" id="chroma-switch" role="group" aria-label="Chromophore"></div>
-  {% endif %}
   <div class="panel-caveat">
     HbO and HbR are two parallel passes, never mixed and never averaged. The reason to have
     both is a consistency check, not two results: HbO has the larger amplitude and the
@@ -162,7 +149,7 @@
 <!-- Per-channel WTC -->
 <div class="card">
   <div class="panel-title">
-    Wavelet Transform Coherence (per channel) &mdash; <span class="chroma-label">{{ wtc_fig_chroma }}</span>
+    Wavelet Transform Coherence (per channel)
     <span class="panel-hint">
       Morlet wavelet &bull; arrows = relative phase, right in phase and up
       {{ subject_ids[0] }} leading &bull; washed-out band below the white dash sits outside
@@ -179,7 +166,13 @@
     </span>
   </div>
   <div style="text-align:center; padding:0.5rem">
-    <img id="wtc-chan-img" alt="channel coherence map" style="max-width:100%"/>
+    {% for c in wtc_chroma_labels %}
+    <div class="chroma-stack">
+      <span class="chroma-name">{{ c }}</span>
+      <img id="wtc-chan-img-{{ loop.index0 }}" alt="channel coherence map ({{ c }})"
+           style="max-width:100%"/>
+    </div>
+    {% endfor %}
   </div>
 </div>
 
@@ -187,7 +180,7 @@
 {% if roi_rows %}
 <div class="card">
   <div class="panel-title">
-    Wavelet Transform Coherence (per ROI) &mdash; <span class="chroma-label">{{ wtc_fig_chroma }}</span>
+    Wavelet Transform Coherence (per ROI)
     <span class="panel-hint">
       the member channels' maps averaged cell by cell, bad channels excluded &bull; arrows
       and cone as above
@@ -204,21 +197,33 @@
     </span>
   </div>
   <div style="text-align:center; padding:0.5rem">
-    <img id="wtc-roi-img" alt="ROI coherence map" style="max-width:100%"/>
+    {% for c in wtc_chroma_labels %}
+    <div class="chroma-stack">
+      <span class="chroma-name">{{ c }}</span>
+      <img id="wtc-roi-img-{{ loop.index0 }}" alt="ROI coherence map ({{ c }})"
+           style="max-width:100%"/>
+    </div>
+    {% endfor %}
   </div>
 </div>
 
 {% if has_roi_matrix %}
 <div class="card" id="wtc-roi-matrix-card">
   <div class="panel-title">
-    Wavelet Transform Coherence (ROI &times; ROI) &mdash; <span class="chroma-label">{{ wtc_fig_chroma }}</span>
+    Wavelet Transform Coherence (ROI &times; ROI)
     <span class="panel-hint">
       band mean per ROI pair, inside the COI &bull; one number per map the selectors above
       reach &bull; the rows of <code>hyper-wtc-roichan.tsv</code> for this chromophore
     </span>
   </div>
   <div style="text-align:center; padding:0.5rem">
-    <img id="wtc-roi-matrix-img" alt="ROI by ROI coherence matrix" style="max-width:100%"/>
+    {% for c in wtc_chroma_labels %}
+    <div class="chroma-stack">
+      <span class="chroma-name">{{ c }}</span>
+      <img id="wtc-roi-matrix-img-{{ loop.index0 }}" alt="ROI by ROI coherence matrix ({{ c }})"
+           style="max-width:100%"/>
+    </div>
+    {% endfor %}
   </div>
 </div>
 {% endif %}
@@ -227,7 +232,7 @@
 {% if has_chan_matrix %}
 <div class="card" id="wtc-chan-matrix-card">
   <div class="panel-title">
-    Wavelet Transform Coherence (channel &times; channel) &mdash; <span class="chroma-label">{{ wtc_fig_chroma }}</span>
+    Wavelet Transform Coherence (channel &times; channel)
     <span class="panel-hint">
       band mean per channel pair &bull; row = {{ subject_ids[0] }}, column =
       {{ subject_ids[1] }} &bull; one number per map the selectors above reach &bull;
@@ -235,7 +240,13 @@
     </span>
   </div>
   <div style="text-align:center; padding:0.5rem">
-    <img id="wtc-chan-matrix-img" alt="channel coherence matrix" style="max-width:100%"/>
+    {% for c in wtc_chroma_labels %}
+    <div class="chroma-stack">
+      <span class="chroma-name">{{ c }}</span>
+      <img id="wtc-chan-matrix-img-{{ loop.index0 }}" alt="channel coherence matrix ({{ c }})"
+           style="max-width:100%"/>
+    </div>
+    {% endfor %}
   </div>
 </div>
 {% endif %}
@@ -284,7 +295,6 @@
 
 <script>
 var _CHROMA       = {{ wtc_chroma_json | safe }};
-var _CHROMA_NAME  = {{ wtc_chroma_names_json | safe }};
 var _PER_CH       = {{ per_channel_post_json | safe }};
 var _CH_PAIRS     = {{ ch_pairs_post_json | safe }};
 var _BAD_PAIRS    = {{ bad_pairs_json | safe }};
@@ -294,13 +304,10 @@ var _ROI_MATRIX   = {{ wtc_roi_matrix_json | safe }};
 var _CHAN_MATRIX  = {{ wtc_chan_matrix_json | safe }};
 var _ALIGN        = {{ alignment_json | safe }};
 
-// Every panel below reads this one variable, so the page is one chromophore at a time.
-var _chroma = _CHROMA[0];
-
-// Each of the variables above holds a path under figures/, never the figure itself, so
-// switching a chromophore or a channel points an img somewhere else and the browser
-// fetches that one file. The page used to carry the figures themselves, which on a
-// 14-channel dyad with both chromophores came to 174 MB.
+// Nothing on this page is behind a chromophore control any more: every panel carries one
+// image per chromophore, stacked and labelled, and _CHROMA is the order they sit in. What a
+// variable below holds is a path under figures/, never the figure, so picking a channel
+// points an img somewhere else and the browser fetches that one file.
 function _img(el, src) {
   if (!el) return;
   if (src) { el.src = src;               el.style.display = ""; }
@@ -333,14 +340,17 @@ function _fill(sel, labels, mark) {
   });
 }
 
-function _pick(maps, labels, id1, id2, imgId) {
+// One image per chromophore, in _CHROMA order, which is the order the template stacked them.
+function _pick(maps, labels, id1, id2, imgBase) {
   var sel1 = document.getElementById(id1);
   var sel2 = document.getElementById(id2);
   if (!sel1 || !labels.length) return;
   var a = labels[parseInt(sel1.value) || 0];
   var b = sel2 ? labels[parseInt(sel2.value) || 0] : a;
-  var d = ((maps[_chroma] || {})[a] || {})[b] || {};
-  _img(document.getElementById(imgId), d.wtc);
+  _CHROMA.forEach(function(c, i) {
+    var d = ((maps[c] || {})[a] || {})[b] || {};
+    _img(document.getElementById(imgBase + "-" + i), d.wtc);
+  });
 }
 
 function _selectCh() {
@@ -364,48 +374,19 @@ function _selectRoi() {
   });
 })();
 
-// Every panel that is not behind a selector: one set of nodes, pointed at the chromophore
-// in force. A chromophore whose guard failed on one figure leaves that img hidden and the
-// rest of the page intact.
+// The panels behind no selector. A chromophore whose guard failed on one figure leaves that
+// one img hidden and the rest of the page intact.
 function _drawImages() {
-  _img(document.getElementById("wtc-roi-matrix-img"), _ROI_MATRIX[_chroma]);
-  _img(document.getElementById("wtc-chan-matrix-img"), _CHAN_MATRIX[_chroma]);
+  _CHROMA.forEach(function(c, i) {
+    _img(document.getElementById("wtc-roi-matrix-img-" + i), _ROI_MATRIX[c]);
+    _img(document.getElementById("wtc-chan-matrix-img-" + i), _CHAN_MATRIX[c]);
+  });
 }
 
-function _setChroma(name) {
-  _chroma = name;
-  document.querySelectorAll("#chroma-switch button").forEach(function(btn) {
-    btn.setAttribute("aria-pressed", String(btn.dataset.chroma === name));
-  });
-  // every panel title carries one, so a screenshot of a single panel still says which
-  // chromophore it is
-  document.querySelectorAll(".chroma-label").forEach(function(el) {
-    el.textContent = _CHROMA_NAME[name];
-  });
+window.addEventListener("DOMContentLoaded", function() {
   _selectCh();
   _selectRoi();
   _drawImages();
-}
-
-// One button per chromophore that was run. A single-chromophore run has no switch element
-// at all -- the template leaves it out, since there is nothing to switch to and the panel
-// titles already name the chromophore.
-(function() {
-  var box = document.getElementById("chroma-switch");
-  if (!box) return;
-  _CHROMA.forEach(function(name) {
-    var btn = document.createElement("button");
-    btn.type = "button";
-    btn.dataset.chroma = name;
-    btn.textContent = _CHROMA_NAME[name];
-    btn.setAttribute("aria-pressed", String(name === _chroma));
-    btn.addEventListener("click", function() { _setChroma(name); });
-    box.appendChild(btn);
-  });
-})();
-
-window.addEventListener("DOMContentLoaded", function() {
-  _setChroma(_chroma);
 });
 </script>
 

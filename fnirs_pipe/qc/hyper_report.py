@@ -705,6 +705,10 @@ def build_hyper_post_report(
                         build_wtc_channel,
                         data, result.freqs, result.times,
                         pair_label, markers_list, cond_colors_, site,
+                        # a condition's figure shows no cone, the window having no edge of
+                        # its own, so it carries the one a cut would have given it instead.
+                        # The run's own page has the recording's real cone already
+                        bool(suffix),
                     )
                 row[label2] = {"wtc": fig}
             dest[label1] = row
@@ -1175,11 +1179,8 @@ def build_hyper_post_report(
             subject_ids=subject_ids,
             wtc_fmin=wtc_fmin,
             wtc_fmax=wtc_fmax,
-            wtc_fig_chroma=_CHROMA_LABEL[fig_chroma],
             wtc_chroma_labels=[_CHROMA_LABEL[c] for c in chroma],
             wtc_chroma_json=json.dumps(list(chroma)),
-            wtc_chroma_names_json=json.dumps(
-                {c: _CHROMA_LABEL[c] for c in chroma}),
             isc_threshold=isc_threshold,
             alignment_json=json.dumps(alignment_rows),
             per_channel_post_json=json.dumps(per_channel),

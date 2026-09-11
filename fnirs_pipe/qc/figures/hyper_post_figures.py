@@ -75,6 +75,36 @@ def _apply_log_freq_axis(ax, freqs: np.ndarray) -> None:
     ax.yaxis.set_minor_formatter(NullFormatter())
 
 
+# Coherence a cell has to reach before its phase arrow is drawn, when no Monte Carlo level
+# was computed. **A display threshold, not a test**: --wtc-significance is what produces a
+# real one, and this is what keeps a map from being covered in arrows over cells whose phase
+# is the phase of noise. Chosen to sit above the band means these recordings produce (0.25 to
+# 0.30) by enough that what survives is the visible structure rather than the background.
+ARROW_MIN_COHERENCE = 0.5
+
+
+def _arrow_mask(wtc_arr, sig, freqs, freq_coi):
+    """Where a phase arrow is worth drawing: inside the cone, and above the noise.
+
+    ::
+
+      a 51 x 3962 map -> a boolean of the same shape, usually a few percent True
+
+    Two conditions, and both matter. **Inside the cone**, because a coefficient built against
+    the padding has a phase built against the padding too, and the old figure drew those
+    arrows at the same weight as the rest. **Above the level**, the Monte Carlo one when
+    ``--wtc-significance`` produced it and :data:`ARROW_MIN_COHERENCE` otherwise, because the
+    relative phase of two uncorrelated series is a uniformly random direction and a field of
+    those reads as structure to the eye.
+    """
+    inside = freqs[:, None] >= freq_coi[None, :]
+    if sig is not None and len(np.asarray(sig)) == wtc_arr.shape[0]:
+        above = wtc_arr >= np.asarray(sig, dtype=float)[:, None]
+    else:
+        above = wtc_arr >= ARROW_MIN_COHERENCE
+    return inside & above
+
+
 def build_wtc_channel(
     wtc_data: dict,
     freqs: np.ndarray,
@@ -83,6 +113,7 @@ def build_wtc_channel(
     markers_list: list[dict],
     cond_colors: dict[str, str],
     site_label: str = "",
+    cut_reference: bool = False,
 ) -> "str | None":
     """WTC map for one channel or ROI pair, as a base64 PNG: time x log-frequency, colour 0-1.
 
@@ -108,6 +139,12 @@ def build_wtc_channel(
       computed.
     - one **boundary line per condition**, labelled above the axes. The interactive version
       shaded each block instead, under an opaque heatmap, so nothing showed.
+    - with ``cut_reference``, the cone this window **would** have had if it had been cut out
+      and transformed on its own, as a dotted line. Nothing is masked by it and no number
+      changes: it answers "how short is this block against my band" on a figure that
+      otherwise shows no cone at all, because a window read out of a whole-record transform
+      has no edge of its own. A condition page gets it; the run's own page does not, its
+      edges being the recording's and already drawn.
     """
     if wtc_data is None or len(freqs) == 0 or len(times) == 0:
         return None
@@ -129,6 +166,16 @@ def build_wtc_channel(
     ax.fill_between(times, freq_coi, freqs.min(), color="white", alpha=0.45, lw=0, zorder=2)
     ax.plot(times, freq_coi, color="white", lw=1.3, ls="--", zorder=3)
 
+    # what a cut would have cost. The cone reaches sqrt(2) * P in from an edge, so at
+    # distance d the lowest frequency still clear of it is sqrt(2) / d; the arch is that
+    # read from whichever edge of this window is nearer. Drawn, never applied.
+    if cut_reference and len(times) > 1:
+        edge = np.minimum(times - times[0], times[-1] - times)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            ref = np.where(edge > 1e-9, np.sqrt(2.0) / edge, freqs.max())
+        ax.plot(times, np.clip(ref, freqs.min(), freqs.max()),
+                color="#ffb3b3", lw=1.2, ls=":", zorder=3)
+
     if sig is not None and len(sig) == wtc_arr.shape[0]:
         with np.errstate(divide="ignore", invalid="ignore"):
             ratio = wtc_arr / np.asarray(sig, dtype=float)[:, None]
@@ -147,9 +194,10 @@ def build_wtc_channel(
                 ha="left", va="bottom", fontsize=7, color=colour, rotation=0)
 
     # this panel is full width, so it takes more arrows and much smaller ones than the
-    # thumbnails in the ROI grid do
+    # thumbnails elsewhere do
     _phase_arrows(ax, times, freqs, wtc_data.get("phase"),
-                  n_time=34, n_freq=13, scale=52, width=0.0022)
+                  n_time=34, n_freq=13, scale=52, width=0.0022,
+                  mask=_arrow_mask(wtc_arr, sig, freqs, freq_coi))
 
     lead = (pair_label.split("×")[0].strip() or "the first member"
             if pair_label else "the first member")
@@ -158,16 +206,77 @@ def build_wtc_channel(
     heading = f"{site_label}   {pair_label}".strip() if site_label else pair_label
     ax.set_title(heading, fontsize=10, pad=16)
     fig.colorbar(mesh, ax=ax, pad=0.015, label="WTC")
-    fig.text(0.5, -0.06,
-             f"arrows: right = in phase, left = antiphase, up = {lead} leads by a quarter "
-             "cycle    washed-out band: outside the cone of influence",
-             ha="center", fontsize=8, color="#444444")
+    caption = (f"arrows: right = in phase, left = antiphase, up = {lead} leads by a quarter "
+               f"cycle, drawn only where coherence clears "
+               f"{'the Monte Carlo level' if sig is not None else f'{ARROW_MIN_COHERENCE:g}'}"
+               "    washed-out band: outside the cone of influence")
+    if cut_reference:
+        caption += "    dotted red: the cone this block would have had if cut out on its own"
+    fig.text(0.5, -0.06, caption, ha="center", fontsize=8, color="#444444")
     return _png_b64(fig)
 
 
-# Above this many sites a matrix keeps its cells bare: the text stops fitting, and a
-# reader after single values has the TSV the figure was drawn from.
-_ANNOTATE_MAX = 8
+def draw_site_matrix(ax, z, row_labels, col_labels, *, cmap, vmin, vmax,
+                     row_title="", col_title="", annotate=True):
+    """One site-by-site heatmap with its labels and its numbers. Every matrix here uses it.
+
+    ::
+
+      a 14 x 14 of band means -> the cells, both axes named by channel, each cell's value
+                                 printed in it
+
+    The report draws three of these -- channel by channel coherence, ROI by ROI coherence,
+    and the inter-brain correlation -- and they used to be two separate blocks of drawing
+    code with different tick rules and only one of them printing values. One function means
+    a change to how a matrix reads happens once.
+
+    **Every cell gets its number.** A fixed colour scale is what lets two dyads or two
+    conditions be compared by eye, and the cost is that a matrix whose values all sit near
+    0.25 renders as one flat square; the printed value is what makes such a matrix readable
+    at all. The font follows the cell size, and the ink is chosen from **the cell's own
+    colour** rather than from its value: viridis is dark at its low end and bright at its
+    high one while a diverging map is dark at both ends and pale in the middle, so any rule
+    written against the value serves one of them and fails the other. Asking the colormap and
+    taking the luminance serves both, and any colormap added later.
+
+    ``vmin``/``vmax`` and ``cmap`` stay the caller's: coherence is 0 to 1 on viridis and a
+    correlation is -1 to 1 on a diverging map, and collapsing that distinction would be
+    worse than the duplication this replaces.
+    """
+    n_rows, n_cols = len(row_labels), len(col_labels)
+    cmap = plt.get_cmap(cmap).copy()
+    cmap.set_bad("#d5d5d5")
+    im = ax.imshow(z, cmap=cmap, vmin=vmin, vmax=vmax, aspect="equal",
+                   interpolation="nearest")
+
+    tick_size = float(np.clip(150.0 / max(n_rows, n_cols, 1), 4.0, 8.0))
+    ax.set_xticks(range(n_cols))
+    ax.set_xticklabels(col_labels, rotation=90, fontsize=tick_size)
+    ax.set_yticks(range(n_rows))
+    ax.set_yticklabels(row_labels, fontsize=tick_size)
+    if col_title:
+        ax.set_xlabel(col_title, fontsize=9)
+    if row_title:
+        ax.set_ylabel(row_title, fontsize=9)
+    for spine in ax.spines.values():
+        spine.set_visible(False)
+
+    if annotate:
+        # the cell is as wide as the axes divided by the count, and a two-decimal number
+        # needs about a third of that in points before it starts colliding
+        value_size = float(np.clip(110.0 / max(n_rows, n_cols, 1), 3.5, 9.0))
+        span = (vmax - vmin) or 1.0
+        for i in range(n_rows):
+            for j in range(n_cols):
+                value = z[i, j]
+                if not np.isfinite(value):
+                    continue
+                r, g, b, _ = cmap((value - vmin) / span)
+                luminance = 0.299 * r + 0.587 * g + 0.114 * b
+                ax.text(j, i, f"{value:.2f}".replace("0.", "."),
+                        ha="center", va="center", fontsize=value_size,
+                        color="white" if luminance < 0.55 else "#111111")
+    return im
 
 
 def _png_b64(fig) -> str:
@@ -215,37 +324,13 @@ def build_wtc_cross_matrix(
     sub2 = subject_ids[1] if len(subject_ids) > 1 else "sub2"
 
     n = len(labels)
-    side = max(4.0, min(0.34 * n + 1.6, 11.0))
+    side = max(4.0, min(0.42 * n + 1.8, 13.0))
     fig, ax = plt.subplots(figsize=(side + 1.4, side))
 
-    cmap = plt.get_cmap("viridis").copy()
-    cmap.set_bad("#dddddd")
-    im = ax.imshow(z, cmap=cmap, vmin=0, vmax=1, interpolation="nearest", aspect="equal")
-
-    ax.set_xticks(range(n))
-    ax.set_xticklabels(labels, rotation=90, fontsize=max(5, min(8, 120 // max(n, 1))))
-    ax.set_yticks(range(n))
-    ax.set_yticklabels(labels, fontsize=max(5, min(8, 120 // max(n, 1))))
+    im = draw_site_matrix(ax, z, labels, labels, cmap="viridis", vmin=0, vmax=1,
+                          row_title=f"{sub1} {kind}", col_title=f"{sub2} {kind}")
     ax.xaxis.set_label_position("top")
     ax.xaxis.tick_top()
-    ax.set_xlabel(f"{sub2} {kind}", fontsize=9, labelpad=8)
-    ax.set_ylabel(f"{sub1} {kind}", fontsize=9)
-    for spine in ax.spines.values():
-        spine.set_visible(False)
-
-    # A few sites get the numbers printed in the cells. The scale is fixed 0 to 1, which is
-    # what lets two dyads or two conditions be compared by eye, and the cost is that a
-    # matrix whose values all sit near 0.25 renders as one flat square. A 4-ROI matrix has
-    # room to say what those values are; a 14-channel one does not and stays a picture,
-    # its numbers being in the TSV.
-    if n <= _ANNOTATE_MAX:
-        for i in range(n):
-            for j in range(n):
-                if not np.isfinite(z[i, j]):
-                    continue
-                # dark cells take white text: the low end of viridis is nearly black
-                ax.text(j, i, f"{z[i, j]:.2f}", ha="center", va="center", fontsize=8,
-                        color="white" if z[i, j] < 0.55 else "#111111")
 
     mean = float(np.nanmean(z))
     ax.set_title(f"Band mean {band_fmin:.3g}-{band_fmax:.3g} Hz   (grand mean {mean:.3f})",
@@ -255,7 +340,8 @@ def build_wtc_cross_matrix(
 
 
 def _phase_arrows(ax, times: np.ndarray, freqs: np.ndarray, phase, n_time: int = 14,
-                  n_freq: int = 10, scale: float = 22, width: float = 0.006) -> None:
+                  n_freq: int = 10, scale: float = 22, width: float = 0.006,
+                  mask=None) -> None:
     """Draw the relative-phase field over a coherence map, thinned to a readable grid.
 
     Right means in phase, left antiphase, and up means the row's subject leads by a quarter
@@ -267,6 +353,10 @@ def _phase_arrows(ax, times: np.ndarray, freqs: np.ndarray, phase, n_time: int =
     per panel rather than fixed here: the defaults suit a thumbnail, and the same numbers on
     a full-width single map draw arrows tall enough to hide the map under them. Larger
     ``scale`` is shorter arrows.
+
+    ``mask`` keeps only the grid points it marks True, which is how :func:`_arrow_mask` stops
+    the field being drawn over noise and over padding. Sampled on the same coarse grid as the
+    phase, so a point is kept on its own cell's verdict and not its neighbours'.
     """
     if phase is None:
         return
@@ -278,7 +368,15 @@ def _phase_arrows(ax, times: np.ndarray, freqs: np.ndarray, phase, n_time: int =
     ti = np.unique(np.linspace(0, len(times) - 1, min(n_time, len(times))).astype(int))
     grid_t, grid_f = np.meshgrid(times[ti], freqs[fi])
     angle = phase[np.ix_(fi, ti)]
-    ax.quiver(grid_t, grid_f, np.cos(angle), np.sin(angle),
+    u, v = np.cos(angle), np.sin(angle)
+    if mask is not None:
+        keep = np.asarray(mask)[np.ix_(fi, ti)]
+        if not keep.any():
+            return
+        # NaN is quiver's own way of skipping an arrow, and it keeps the grid rectangular
+        u = np.where(keep, u, np.nan)
+        v = np.where(keep, v, np.nan)
+    ax.quiver(grid_t, grid_f, u, v,
               color="black", scale=scale, width=width, headwidth=4, headlength=5,
               pivot="mid", zorder=3)
 
@@ -440,20 +538,12 @@ def build_isc_panel(
     ax_matrix = fig.add_subplot(gs[0])
     ax_circle = fig.add_subplot(gs[1])
 
-    # left: channel × channel ISC heatmap (bad channels masked to grey)
-    cmap = plt.get_cmap("RdBu_r").copy()
-    cmap.set_bad("#d0d0d0")
-    im = ax_matrix.imshow(isc_mat, cmap=cmap, vmin=-1, vmax=1,
-                           aspect="equal", interpolation="nearest")
-    step = max(1, n // 20)
-    idxs = list(range(0, n, step))
-    ax_matrix.set_xticks(idxs)
-    ax_matrix.set_xticklabels([ch_names[i] for i in idxs],
-                               fontsize=6, rotation=45, ha="right")
-    ax_matrix.set_yticks(idxs)
-    ax_matrix.set_yticklabels([ch_names[i] for i in idxs], fontsize=6)
-    ax_matrix.set_xlabel(sub2_label, fontsize=8)
-    ax_matrix.set_ylabel(sub1_label, fontsize=8)
+    # left: channel by channel ISC heatmap, through the same drawing the coherence matrices
+    # use, so the two read alike and both carry their values. The colormap and the -1 to 1
+    # range stay this panel's: a correlation is signed and coherence is not.
+    im = draw_site_matrix(ax_matrix, isc_mat, ch_names, ch_names,
+                          cmap="RdBu_r", vmin=-1, vmax=1,
+                          row_title=sub1_label, col_title=sub2_label)
     ax_matrix.set_title(f"ISC matrix ({type_label})", fontsize=9, pad=4)
     plt.colorbar(im, ax=ax_matrix, shrink=0.75, label="Pearson r", pad=0.02)
 

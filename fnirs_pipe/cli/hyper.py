@@ -555,10 +555,12 @@ def _build_parser() -> argparse.ArgumentParser:
                           "channels are noisier than ROI averages, so treat the off-diagonal "
                           "as exploratory and correct for the number of tests. Does not "
                           "affect the null: see --wtc-pseudo-cross.")
-    run.add_argument("--wtc-by-condition", action="store_true",
-                     help="Also read the coherence out of each task annotation's own window, "
-                          "so a block design gets one result per block rather than one over "
-                          "the whole recording. Band means land in hyper-wtcbycond.tsv with "
+    run.add_argument("--by-condition", "--wtc-by-condition", dest="wtc_by_condition",
+                     action=argparse.BooleanOptionalAction, default=True,
+                     help="Read the coherence out of each task annotation's own window, "
+                          "so a block design gets one result per block as well as the one "
+                          "over the whole recording (default on; --no-by-condition turns it "
+                          "off). Band means land in hyper-wtcbycond.tsv with "
                           "a condition column, and each window gets its own figures. A "
                           "trigger with a duration uses it; one without runs to the next "
                           "trigger, and the last to the end. Windows shorter than one cycle "

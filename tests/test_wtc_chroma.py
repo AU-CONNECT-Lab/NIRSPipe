@@ -384,13 +384,13 @@ def _page(dyad, where, chroma, **kwargs):
     return path.read_text(encoding="utf-8")
 
 
-def test_the_titles_name_the_chromophore_in_a_span_the_switch_can_rewrite(dyad, tmp_path):
-    """Every switchable panel title carries a `.chroma-label`, which is both what a reader
-    sees before touching anything and what `_setChroma` rewrites. A screenshot of one panel
-    therefore still says which chromophore it is."""
+def test_each_stacked_figure_is_labelled_with_its_chromophore(dyad, tmp_path):
+    """The label moved from the panel title to the figure, because a panel now holds more
+    than one. A screenshot of a single image still says which chromophore it is, and a
+    one-chromophore run names no other."""
     html = _page(dyad, tmp_path, ("hbr",))
-    assert ('(per channel) &mdash; <span class="chroma-label">HbR</span>') in html
-    assert ">HbO</span>" not in html
+    assert '<span class="chroma-name">HbR</span>' in html
+    assert "HbO" not in html
 
 
 def test_the_page_carries_every_chromophore_that_ran(dyad, tmp_path):
@@ -492,21 +492,25 @@ def test_a_condition_boundary_is_drawn_on_the_axis_the_window_was_cut_on(dyad, t
     assert [w[1] for w in condition_windows(cropped, min_duration=50.0)] == onsets
 
 
-def test_the_switch_is_declared_and_the_names_are_display_names(dyad, tmp_path):
-    """The buttons are built from `_CHROMA` at load, so what has to be in the page is the
-    container, the order, and a display name per chromophore."""
+def test_both_chromophores_are_on_the_page_at_once(dyad, tmp_path):
+    """There is no chromophore control any more: every panel stacks one labelled image per
+    chromophore, in `_CHROMA` order, which is the order the template laid them out in. A
+    reader can compare HbO against HbR without operating anything, and nothing is hidden."""
     html = _page(dyad, tmp_path, ("hbo", "hbr"))
-    assert 'id="chroma-switch"' in html
     assert _js_var(html, "_CHROMA") == ["hbo", "hbr"]
-    assert _js_var(html, "_CHROMA_NAME") == {"hbo": "HbO", "hbr": "HbR"}
-
-
-def test_a_single_chromophore_run_has_no_switch_element(dyad, tmp_path):
-    """Not a hidden one: a control that cannot do anything is worse than no control, and the
-    hint would otherwise claim a switch the page does not have."""
-    html = _page(dyad, tmp_path, ("hbo",))
     assert 'id="chroma-switch"' not in html
-    assert "nothing to switch to" in html
+    for base in ("wtc-chan-img", "wtc-roi-img", "wtc-chan-matrix-img"):
+        assert f'id="{base}-0"' in html, base
+        assert f'id="{base}-1"' in html, base
+    assert html.count('class="chroma-name"') >= 2
+
+
+def test_a_single_chromophore_run_stacks_only_that_one(dyad, tmp_path):
+    """The stack follows what ran, so a one-chromophore run has one image per panel and no
+    empty slot claiming a chromophore that was never computed."""
+    html = _page(dyad, tmp_path, ("hbo",))
+    assert 'id="wtc-chan-img-0"' in html
+    assert 'id="wtc-chan-img-1"' not in html
 
 
 def test_the_condition_images_line_up_by_window_across_chromophores(dyad, tmp_path_factory):
