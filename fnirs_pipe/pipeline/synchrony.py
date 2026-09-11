@@ -162,6 +162,40 @@ WTC_DJ = 1.0 / 12
 _SCALE_MARGIN = 12
 
 
+def cone_margin_s(band_fmin: float, factor: float = 2.0) -> float:
+    r"""Seconds of recording to keep either side of a window so its band is inside the cone.
+
+    ::
+
+      cone_margin_s(0.06)  ->  47.1     cone_margin_s(0.02)  ->  141.4
+
+    A wavelet coefficient near the end of a series is computed partly against the padding
+    beyond it, and the cone of influence is where that contamination has decayed to
+    :math:`e^{-2}`. For the Morlet wavelet the cone reaches :math:`\sqrt{2}\,P` in from each
+    edge at period :math:`P`, so the lowest frequency a band mean uses, ``band_fmin``, is the
+    one that reaches furthest:
+
+    .. math::
+
+        \mathrm{margin} = \mathrm{factor} \times \frac{\sqrt{2}}{f_{\min}}
+
+    Checked against d01's own COI array: at 0.06, 0.03, 0.02 and 0.01 Hz the cone first covers
+    the band at 23.6, 46.2, 68.8 and 137.6 s from the edge, against :math:`\sqrt{2}/f` of
+    23.6, 47.1, 70.7 and 141.4 s.
+
+    ``factor`` is 2 rather than 1 because the cone is a contour and not a wall: contamination
+    is small past it, not absent. Measured by sweeping the padding on d01 and comparing each
+    condition's band mean against a 400 s-padded reference, one margin gets within 0.0009 and
+    two within 0.0001, which is below anything reported.
+
+    Returned in seconds, so a caller crops ``[t0 - margin, t1 + margin]`` and windows the
+    result back to ``[t0, t1]``.
+    """
+    if band_fmin <= 0:
+        raise ValueError(f"band_fmin must be positive, got {band_fmin}")
+    return float(factor) * np.sqrt(2.0) / float(band_fmin)
+
+
 def _scale_range(dt: float, dj: float, fmin: float, fmax: float, n: int) -> tuple[float, int]:
     """(s0, J) covering [fmin, fmax] plus margin, on pycwt's own default scale grid.
 

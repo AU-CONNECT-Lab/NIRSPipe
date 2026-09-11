@@ -80,7 +80,9 @@ def _write_segment(raw_seg, out_snirf: Path, snirf_path: Path,
 
 
 def _write_crop_sidecar(out_snirf: Path, raw_seg, source_path: Path,
-                        windows: list[tuple[float, float]]) -> None:
+                        windows: list[tuple[float, float]],
+                        analysis_windows: "list[tuple[float, float]] | None" = None,
+                        margin_s: float = 0.0) -> None:
     """Replace the copied sidecar with one describing the crop, for a derivative input.
 
     Two things would otherwise be lost or wrong. `copy_sidecars` brings the source stage's
@@ -90,6 +92,13 @@ def _write_crop_sidecar(out_snirf: Path, raw_seg, source_path: Path,
 
     The source's `parameters` are carried forward rather than replaced: `read_snirf` reads
     the bandpass off them, so dropping them would leave the segment not knowing its own band.
+
+    With a margin the file holds more than the segment that was asked for, so the two spans
+    are recorded separately: ``crop_windows_s`` is what the file contains and
+    ``crop_analysis_windows_s`` is the stretch it was cut for. A reader that averages the
+    whole file would otherwise average the margin too, which is the opposite of why it is
+    there. They cannot be derived from each other, since a segment at the start of a recording
+    gets no left margin however much was asked for.
     """
     src = source_path.with_suffix(".json")
     try:
@@ -101,7 +110,11 @@ def _write_crop_sidecar(out_snirf: Path, raw_seg, source_path: Path,
         "step": "crop",
         "Sources": [source_path.as_posix()],
         "parameters": {**parameters,
-                       "crop_windows_s": [[round(a, 3), round(b, 3)] for a, b in windows]},
+                       "crop_windows_s": [[round(a, 3), round(b, 3)] for a, b in windows],
+                       **({"crop_analysis_windows_s":
+                           [[round(a, 3), round(b, 3)] for a, b in analysis_windows],
+                           "crop_margin_s": round(float(margin_s), 3)}
+                          if analysis_windows is not None else {})},
         "data": data_state(raw_seg),
         "bad_channels": list(raw_seg.info["bads"]),
     })
@@ -126,10 +139,12 @@ def _crop_raw(
     combine: bool,
     t0: float = 0.0,
     derivative: bool = False,
+    margin_s: float = 0.0,
 ) -> list[Path]:
     import mne
 
     duration = float(raw.times[-1])
+    margin_s = max(0.0, float(margin_s))
 
     def _clip(a: float | None, b: float | None) -> tuple[float, float]:
         """Shift a window onto the recording and keep it inside it.
@@ -147,25 +162,36 @@ def _crop_raw(
                            a, b, snirf_path.name, duration)
         return lo, hi
 
-    def _write(seg, name: str, windows: list[tuple[float, float]]) -> Path:
+    def _write(seg, name: str, windows: list[tuple[float, float]],
+               analysis: "list[tuple[float, float]] | None" = None) -> Path:
         out = out_nirs_dir / f"{name}_nirs.snirf"
         _write_segment(seg, out, snirf_path, windows)
         copy_sidecars(snirf_path, stem, out_nirs_dir, name)
         # after copy_sidecars, which writes the same filename: the copied one describes the
         # source stage over the whole recording, and this segment is neither
         if derivative:
-            _write_crop_sidecar(out, seg, snirf_path, windows)
+            _write_crop_sidecar(out, seg, snirf_path, windows, analysis, margin_s)
         return out
 
     if segments_df is not None:
-        segs = [
-            raw.copy().crop(*_clip(row.onset, row.onset + row.duration))
-            for _, row in segments_df.iterrows()
-        ]
+        # the span asked for, and the wider span actually cut. A wavelet coefficient near a
+        # cut edge is computed partly against padding, so a segment cut to its own boundaries
+        # cannot be analysed at its own edges; the margin is what a later stage windows back
+        # off. See `cone_margin_s` for how wide it has to be.
+        asked = [_clip(row.onset, row.onset + row.duration)
+                 for _, row in segments_df.iterrows()]
+        cut = [_clip(row.onset - margin_s, row.onset + row.duration + margin_s)
+               for _, row in segments_df.iterrows()]
+        segs = [raw.copy().crop(lo, hi) for lo, hi in cut]
+        if margin_s:
+            short = sum(1 for (a, b), (c, d) in zip(asked, cut)
+                        if (a - c) < margin_s - 1e-6 or (d - b) < margin_s - 1e-6)
+            logger.info("margin %.1fs kept on each side of %d segment(s); %d ran into the "
+                        "ends of the recording and got less", margin_s, len(segs), short)
         if combine:
             # taken before concatenating: mne.concatenate_raws appends into segs[0]
             windows = [_window(seg) for seg in segs]
-            out = _write(mne.concatenate_raws(segs), stem, windows)
+            out = _write(mne.concatenate_raws(segs), stem, windows, asked or None)
             logger.info("Written combined: %s", out)
             return [out]
         tasks = segments_df["task"] if "task" in segments_df.columns else None
@@ -175,14 +201,16 @@ def _crop_raw(
                 name = f"{stem}_seg-{i:02d}"
             else:
                 name = re.sub(r"task-[^_]+", f"task-{tasks.iloc[i - 1]}", stem)
-            out = _write(seg, name, [_window(seg)])
+            out = _write(seg, name, [_window(seg)], [asked[i - 1]])
             logger.info("Written segment %d: %s", i, out)
             out_paths.append(out)
         return out_paths
 
     lo, hi = _clip(tmin, tmax)
-    seg = raw.copy().crop(tmin=lo, tmax=hi)
-    out = _write(seg, stem, [_window(seg)])
+    cut_lo, cut_hi = _clip(None if tmin is None else tmin - margin_s,
+                           None if tmax is None else tmax + margin_s)
+    seg = raw.copy().crop(tmin=cut_lo, tmax=cut_hi)
+    out = _write(seg, stem, [_window(seg)], [(lo, hi)] if margin_s else None)
     logger.info("Written: %s", out)
     return [out]
 
@@ -200,12 +228,14 @@ def crop_snirf_from_path(
     align: str = "none",
     trigger_name: str | None = None,
     derivative: bool = False,
+    margin_s: float = 0.0,
 ) -> list[Path]:
     """Crop a SNIRF given its path directly (no BIDS layout lookup).
 
     Public entry point shared by the interface. ``derivative`` says the input is a pipeline
     stage rather than a recording, which changes how the output's sidecar is written.
-    Returns list of written SNIRF paths.
+    ``margin_s`` widens every cut by that many seconds on each side and records the
+    unwidened span in the sidecar. Returns list of written SNIRF paths.
     """
     stem = bids_stem(snirf_path)
     out_nirs_dir = _setup_deriv_dir(derivatives_dir, sub, ses)
@@ -215,7 +245,7 @@ def crop_snirf_from_path(
     t0 = _trigger_origin(raw, trigger_name) if align == "trigger" else 0.0
     return _crop_raw(raw, snirf_path, out_nirs_dir, stem,
                      tmin=tmin, tmax=tmax, segments_df=segments_df, combine=combine, t0=t0,
-                     derivative=derivative)
+                     derivative=derivative, margin_s=margin_s)
 
 
 def crop_snirf(
@@ -234,6 +264,7 @@ def crop_snirf(
     trigger_name: str | None = None,
     validate: bool = False,
     input_desc: str | None = None,
+    margin_s: float = 0.0,
 ) -> list[Path]:
     """Crop a SNIRF via BIDS layout lookup and write to derivatives/cropped/.
 
@@ -247,6 +278,12 @@ def crop_snirf(
     align="trigger" measures tmin/tmax (and every segment onset) from the first annotation
     named `trigger_name` rather than from the recording start, so one window selects the same
     stretch of task in subjects whose recordings started at different moments.
+
+    ``margin_s`` keeps that many extra seconds on each side of every segment and records the
+    span that was asked for as ``crop_analysis_windows_s``. A segment cut to its own
+    boundaries cannot be analysed at those boundaries by anything that convolves, which is
+    every wavelet method; the margin is what a later stage windows back off. See
+    :func:`~fnirs_pipe.pipeline.synchrony.cone_margin_s` for the width that suffices.
 
     ``input_desc`` cuts a pipeline stage instead of a recording: `bids_dir` is then a
     derivatives tree and the file carrying that desc- entity is the input, e.g. "errts" for
@@ -268,4 +305,4 @@ def crop_snirf(
     t0 = _trigger_origin(raw, trigger_name) if align == "trigger" else 0.0
     return _crop_raw(raw, snirf_path, out_nirs_dir, stem,
                      tmin=tmin, tmax=tmax, segments_df=segments_df, combine=combine, t0=t0,
-                     derivative=derivative)
+                     derivative=derivative, margin_s=margin_s)

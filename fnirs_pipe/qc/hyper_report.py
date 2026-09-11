@@ -338,6 +338,40 @@ def build_hyper_report(
     return output_path
 
 
+def crop_provenance(raw: "mne.io.Raw") -> "dict | None":
+    """What a cropped input's sidecar says about the cut, or None if it is a whole recording.
+
+    ::
+
+      a file cut to [3555, 3927] with a 47 s margin
+        -> {"window": [3555.0, 3927.0], "analysis": [3602.4, 3902.5], "margin_s": 47.1}
+
+    ``fnirs-prep crop`` records the span it wrote and, with ``--margin``, the narrower span
+    the cut was made for. Nothing downstream had read either, so a segment and a whole
+    recording were treated identically and the tool said nothing about it. That is the one
+    way into edge-inflated coherence that a user cannot see, since the numbers look ordinary.
+
+    The sidecar is read off disk rather than the lineage stamp, which carries only the filter
+    keys across a SNIRF round trip.
+    """
+    path = path_from(raw)
+    if not path:
+        return None
+    try:
+        side = json.loads(Path(path).with_suffix(".json").read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    params = (side.get("parameters") or {})
+    windows = params.get("crop_windows_s")
+    if not windows:
+        return None
+    analysis = params.get("crop_analysis_windows_s")
+    return {"window": windows[0] if len(windows) == 1 else windows,
+            "analysis": (analysis[0] if analysis and len(analysis) == 1 else analysis),
+            "margin_s": float(params.get("crop_margin_s") or 0.0),
+            "n_windows": len(windows)}
+
+
 def markers_on_data_axis(raw: "mne.io.Raw") -> list[dict]:
     """Non-BAD annotations with their onsets moved onto the data axis, which starts at zero.
 
@@ -446,6 +480,7 @@ def build_hyper_post_report(
     wtc_mc_count: int = 300,
     wtc_channel_cross: bool = False,
     wtc_by_condition: bool = False,
+    wtc_cond_pad_s: "float | None" = None,
     wtc_limit_scales: bool = True,
     wtc_save_maps: bool = False,
     wtc_mask_coi: bool = True,
@@ -492,6 +527,13 @@ def build_hyper_post_report(
     on. It is taken out of the transform of the whole recording, the way a condition window
     is, so a run restricted to a window carries the recording's cone of influence rather than
     two edges of its own. The recordings themselves are never cut.
+
+    ``wtc_cond_pad_s`` transforms each condition on its own instead of reading it out of the
+    whole-run transform, over a cut padded by that many seconds on each side. Left at None,
+    which is the default, conditions are windowed out of the whole-run transform. See
+    :func:`_transform_condition`: with adequate padding the two give the same number, so this
+    exists for a caller who wants per-condition transforms, and 0 reproduces the unpadded cut
+    other pipelines take. Costs one transform per condition per chromophore.
 
     ``wtc_mask_coi`` restricts each band mean to the cone of influence. On by default; the
     share inside the cone is reported either way as ``n_valid_frac``.
@@ -544,8 +586,34 @@ def build_hyper_post_report(
     # what a reader with JavaScript off sees named in the titles
     fig_chroma = chroma[0]
 
+    cond_pad_s   = None if wtc_cond_pad_s is None else max(0.0, float(wtc_cond_pad_s))
     subject_ids  = [e.subject_id for e in group]
     ref_raw      = aligned_raws.get(subject_ids[0]) if subject_ids else None
+
+    # ---- is this a segment rather than a recording? ----
+    # A cut carries two edges of its own, and everything this report computes from a wavelet
+    # transform loses a share of its band at them that grows as the cut shortens. The tool
+    # used to treat a segment and a whole recording identically and say nothing, which is the
+    # one way into inflated numbers a reader cannot see. It still computes; it now says so.
+    crop_info = crop_provenance(ref_raw) if ref_raw else None
+    if crop_info:
+        span = crop_info["window"]
+        where = (f"{span[0]:.1f}-{span[1]:.1f} s of the source recording"
+                 if isinstance(span, list) and len(span) == 2 and not isinstance(span[0], list)
+                 else f"{crop_info['n_windows']} separate windows of the source recording")
+        if crop_info["margin_s"] > 0:
+            note(notes, scope,
+                 f"Input is a cut ({where}), made with a {crop_info['margin_s']:.1f} s "
+                 f"margin on each side. --wtc-by-condition windows each block out of the "
+                 f"transform, so the margin is what absorbs the cone and is not averaged.")
+        else:
+            note(notes, scope,
+                 f"Input is a cut ({where}), made with no margin. A wavelet transform of a "
+                 f"segment has two edges of its own, so this run's band means are inflated "
+                 f"by an amount that grows as the segment shortens; n_valid_frac reports the "
+                 f"share of band cells that survived. Re-cut with "
+                 f"`fnirs-prep crop --margin auto --band-fmin <f>` to avoid it.")
+        logger.warning("cropped input: %s, margin %.1f s", where, crop_info["margin_s"])
     markers_list = markers_on_data_axis(ref_raw) if ref_raw else []
     all_descs    = list(dict.fromkeys(m["description"] for m in markers_list))
     cond_colors_ = _cond_colors(all_descs)
@@ -640,6 +708,42 @@ def build_hyper_post_report(
                     )
                 row[label2] = {"wtc": fig}
             dest[label1] = row
+
+    def _transform_condition(tstart: float, tstop: float, ch_type: str):
+        """One condition's own transform, taken over a padded cut and windowed back.
+
+        ::
+
+          condition [3580, 3880] with cond_pad_s 47
+            -> transform [3533, 3927], then window the result to [3580, 3880]
+
+        The alternative to reading the window out of the whole-run transform, for a caller
+        who wants each condition transformed on its own. **It is the same number**, to four
+        decimal places, as long as the padding is wide enough: measured on d01, a padded cut
+        and the whole-record transform agree per map cell to 0.00014 at a correlation of
+        1.00000, and a condition's band mean stops moving once the padding passes
+        :func:`~fnirs_pipe.pipeline.synchrony.cone_margin_s`. What the padding buys is the
+        cone: it lands in the margin instead of eating the condition's own edges, which is
+        the whole difference between this and cutting a condition to its own boundaries.
+
+        ``cond_pad_s`` of 0 does cut to the boundaries, which reproduces the route most
+        published per-condition pipelines take and is biased upward by an amount that grows
+        as the condition shortens. It is here to reproduce such a result, not to produce one.
+
+        Costs one transform per condition per chromophore on top of the whole-run pass, which
+        is why it is not the default.
+        """
+        lo = max(0.0, tstart - cond_pad_s)
+        hi = min(min(float(r.times[-1]) for r in aligned_raws.values()), tstop + cond_pad_s)
+        cut = {sid: raw.copy().crop(tmin=lo, tmax=hi)
+               for sid, raw in aligned_raws.items()}
+        res = compute_wtc(cut, fmin=wtc_fmin, fmax=wtc_fmax,
+                          significance=wtc_significance, seed=wtc_seed,
+                          mc_count=wtc_mc_count, cross=wtc_channel_cross,
+                          limit_scales=wtc_limit_scales, ch_type=ch_type,
+                          sep_bands=sep_bands)
+        # the cut's own clock starts at zero, so the condition sits `tstart - lo` into it
+        return window_result(res, tstart - lo, tstart - lo + (tstop - tstart))
 
     def _tag(df, ch_type: str):
         """The column saying which chromophore a row is, added after every aggregation.
@@ -841,10 +945,13 @@ def build_hyper_post_report(
             out["cond_figs"].append({})
             cond_chan = cond_wtc = None
             with guard(f"Condition {label}: WTC ({ch_type})", errors, scope):
-                if wtc_result is None:
-                    raise StageError("the whole-run WTC failed, so no window can be read "
-                                     "out of it")
-                cond_wtc = window_result(wtc_result, tstart, tstop)
+                if cond_pad_s is None:
+                    if wtc_result is None:
+                        raise StageError("the whole-run WTC failed, so no window can be "
+                                         "read out of it")
+                    cond_wtc = window_result(wtc_result, tstart, tstop)
+                else:
+                    cond_wtc = _transform_condition(tstart, tstop, ch_type)
                 cond_chan = wtc_band_mean(cond_wtc, band_fmin, band_fmax,
                                           mask_coi=wtc_mask_coi)
             if cond_chan is None:

@@ -44,7 +44,8 @@ def cmd_crop(
     ses: str | None, task: str | None, run: str | None,
     tmin: float | None, tmax: float | None, segments_path: Path | None,
     combine: bool, align: str, trigger_name: str | None, input_desc: str | None,
-    n_jobs: int, skip_bids_validation: bool,
+    n_jobs: int, skip_bids_validation: bool, margin_s: str | None = None,
+    band_fmin: float | None = None,
 ) -> None:
     """Crop SNIRFs and write to derivatives/cropped/."""
     if segments_path is not None and (tmin is not None or tmax is not None):
@@ -60,6 +61,21 @@ def cmd_crop(
         print("[error] --align trigger requires --trigger-name.", file=sys.stderr)
         raise SystemExit(1)
 
+    # "auto" is the width the lowest analysed frequency needs, so it can only be resolved
+    # once that frequency is known; a crop made for a band nobody has chosen yet keeps none
+    margin = 0.0
+    if margin_s not in (None, "", "0"):
+        if str(margin_s).lower() == "auto":
+            if not band_fmin:
+                print("[error] --margin auto requires --band-fmin (the lowest frequency the "
+                      "analysis will average over).", file=sys.stderr)
+                raise SystemExit(1)
+            from fnirs_pipe.pipeline.synchrony import cone_margin_s
+            margin = cone_margin_s(band_fmin)
+        else:
+            margin = float(margin_s)
+        print(f"[info] keeping a {margin:.1f}s margin on each side of every segment")
+
     from fnirs_pipe.pipeline.crop import crop_snirf
 
     def _crop_one(sub):
@@ -72,6 +88,7 @@ def cmd_crop(
             align=align, trigger_name=trigger_name,
             input_desc=input_desc,
             validate=not skip_bids_validation,
+            margin_s=margin,
         )
 
     _report(_run_parallel(_crop_one, participant_label, n_jobs))
@@ -246,6 +263,18 @@ def _build_parser() -> argparse.ArgumentParser:
                            "A recording without it falls back to the recording start.")
     crop.add_argument("--combine", action=argparse.BooleanOptionalAction, default=False,
                       help="Concatenate multi-segment output into one file.")
+    crop.add_argument("--margin", dest="margin_s", default=None, metavar="SEC|auto",
+                      help="Keep this many extra seconds on each side of every segment, and "
+                           "record the span that was asked for in the sidecar. A segment cut "
+                           "to its own boundaries cannot be analysed at those boundaries by "
+                           "anything that convolves, and a wavelet coherence over a short "
+                           "segment loses a share of its band that grows as the segment "
+                           "shortens. 'auto' asks --band-fmin for the width that suffices. "
+                           "Off by default, which is the behaviour cropping has always had.")
+    crop.add_argument("--band-fmin", type=float, default=None, metavar="HZ",
+                      help="Lowest frequency the later analysis will average over, used only "
+                           "to resolve --margin auto. Give the same value as "
+                           "fnirs-hyper --wtc-band-fmin.")
     crop.add_argument("--input-desc", default=None, metavar="DESC",
                       help="Cut a processed stage instead of a recording, e.g. 'errts' or "
                            "'filtered'. bids_dir is then a derivatives tree. This is the "

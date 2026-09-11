@@ -190,6 +190,7 @@ def cmd_run(
     wtc_significance: bool, wtc_mc_count: int, wtc_seed: int | None,
     wtc_mask_coi: bool, wtc_roi_min_channels: int, wtc_channel_cross: bool,
     wtc_by_condition: bool, wtc_chroma: str,
+    wtc_cond_transform: bool, wtc_cond_pad_s: "float | None",
     wtc_limit_scales: bool, wtc_save_maps: bool,
     wtc_pseudo: int | None, wtc_pseudo_cross: bool,
     bads_scope: str, isc_threshold: float, sci_threshold: float,
@@ -252,6 +253,29 @@ def cmd_run(
 
     scope_tasks = sorted({key[1] for key in groups})
 
+    # ---- how each condition is read: windowed out of the run, or transformed on its own ----
+    # Resolved once, not per dyad: it depends only on the band, and a run whose conditions
+    # were read two different ways would put incomparable rows in one table.
+    cond_pad = None
+    if wtc_cond_transform:
+        if not wtc_by_condition:
+            print("[error] --wtc-cond-transform needs --wtc-by-condition; there are no "
+                  "conditions to transform without it.", file=sys.stderr)
+            raise SystemExit(1)
+        if str(wtc_cond_pad_s).lower() == "auto":
+            from fnirs_pipe.pipeline.synchrony import cone_margin_s
+            # the band the means are taken over, which is what the cone has to clear;
+            # --wtc-band-fmin falls back to --wtc-fmin exactly as the report resolves it
+            cond_pad = cone_margin_s(wtc_band_fmin or wtc_fmin)
+        else:
+            cond_pad = float(wtc_cond_pad_s)
+        logger.info("each condition transformed on its own over a cut padded by %.1f s "
+                    "per side%s", cond_pad,
+                    "" if cond_pad else " (none: cut to its own boundaries, which inflates "
+                                        "a short condition)")
+    elif str(wtc_cond_pad_s).lower() != "auto":
+        logger.warning("--wtc-cond-pad-s is ignored without --wtc-cond-transform")
+
     def _process(gid, task, members):
         aligned_raws, offsets, group_sqm = _load_aligned_group(
             output_dir, members, task, desc, no_align, normalize, bads_scope,
@@ -298,6 +322,7 @@ def cmd_run(
             wtc_mc_count=wtc_mc_count,
             wtc_channel_cross=wtc_channel_cross,
             wtc_by_condition=wtc_by_condition,
+            wtc_cond_pad_s=cond_pad,
             cond_windows=cond_windows,
             wtc_limit_scales=wtc_limit_scales,
             wtc_save_maps=wtc_save_maps,
@@ -540,6 +565,21 @@ def _build_parser() -> argparse.ArgumentParser:
                           "of --wtc-fmin are skipped. Each window is read off the whole-run "
                           "transform rather than transformed on its own, so it costs almost "
                           "nothing and a short condition is not inflated by its own edges.")
+    run.add_argument("--wtc-cond-transform", action="store_true",
+                     help="Transform each condition on its own instead of reading it out of "
+                          "the whole-run transform. With the margin below this gives the "
+                          "same numbers as the default route, so it is a form a methods "
+                          "section can describe rather than a different result; it costs one "
+                          "extra transform per condition per chromophore. Requires "
+                          "--wtc-by-condition.")
+    run.add_argument("--wtc-cond-pad-s", type=str, default="auto", metavar="SEC|auto",
+                     help="Seconds kept on each side of a condition under "
+                          "--wtc-cond-transform, then windowed back off. 'auto' is "
+                          "2*sqrt(2)/--wtc-band-fmin, the width at which a condition's band "
+                          "mean stops moving (47 s at 0.06 Hz). 0 cuts each condition to its "
+                          "own boundaries, which is what most published per-condition "
+                          "pipelines do and is biased upward by an amount that grows as the "
+                          "condition shortens; it is here to reproduce such a result.")
     run.add_argument("--wtc-limit-scales", action=argparse.BooleanOptionalAction, default=True,
                      help="Compute only the wavelet scales inside --wtc-fmin/--wtc-fmax "
                           "plus margin, instead of every scale the record length allows "
