@@ -23,7 +23,7 @@ from fnirs_pipe.qc.figures.rest_figures import _channel_endpoints, fc_seed_topo_
 from ._synth import synth_raw
 
 _BANDS = dict(cardiac_l_freq=0.7, cardiac_h_freq=1.5, resp_l_freq=0.2, resp_h_freq=0.5)
-_FC_SEED = 7  # run_post: (result, glm_est, dm, alff_df, fc_df, fc_hbr_df, gcor_reg, fc_seed, fc_roi)
+_FC_SEED = 6  # run_post: (result, glm_est, dm, alff_df, fc_df, fc_hbr_df, fc_seed, fc_roi)
 
 
 @pytest.fixture(scope="module")

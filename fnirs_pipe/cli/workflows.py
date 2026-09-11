@@ -306,7 +306,7 @@ def run_participant_level(args: dict[str, Any]) -> None:
                         fc_hbr_df=post.get("fc_hbr_df"), fc_seed=post.get("fc_seed") or {},
                         fc_roi=post.get("fc_roi") or {},
                         high_pass=cfg_high_pass, low_pass=cfg_low_pass,
-                        after_haemo=post.get("denoised"), gcor_reg=post.get("gcor_reg"),
+                        after_haemo=post.get("denoised"),
                         roi_map=roi_map, provenance_path=provenance_path, sqm_label=label,
                     ) or []]
 
@@ -419,7 +419,7 @@ def _make_prep_config(subject: str, session: str | None, args: dict[str, Any]) -
     )
 
 
-def _emit_subject_report(subject, sub_dir, last_raw, last_result, prep_config, args, glm_est, dm, alff_df=None, fc_df=None, fc_hbr_df=None, fc_seed=None, fc_roi=None, high_pass=None, low_pass=None, after_haemo=None, gcor_reg=None, roi_map=None, provenance_path=None, sqm_label=None):
+def _emit_subject_report(subject, sub_dir, last_raw, last_result, prep_config, args, glm_est, dm, alff_df=None, fc_df=None, fc_hbr_df=None, fc_seed=None, fc_roi=None, high_pass=None, low_pass=None, after_haemo=None, roi_map=None, provenance_path=None, sqm_label=None):
     import mne
     import numpy as np
     from fnirs_pipe.qc.report import build_subject_report
@@ -471,7 +471,6 @@ def _emit_subject_report(subject, sub_dir, last_raw, last_result, prep_config, a
         fc_seed=fc_seed,
         fc_roi=fc_roi,
         after_haemo=after_haemo,
-        gcor_reg=gcor_reg,
         roi_map=roi_map,
         provenance_path=provenance_path,
         sqm_label=sqm_label,
@@ -480,7 +479,7 @@ def _emit_subject_report(subject, sub_dir, last_raw, last_result, prep_config, a
 
 # What post leaves behind for one run, in the order the report section builders want it.
 _POST_FIELDS = ("glm_est", "design_matrix", "alff_df", "fc_df", "fc_hbr_df",
-                "denoised", "gcor_reg", "fc_seed", "fc_roi")
+                "denoised", "fc_seed", "fc_roi")
 
 
 def _run_post_for_subject(
@@ -527,13 +526,13 @@ def _run_post_for_subject(
                 logger.info("post (%s): %s", mode, snirf_path.name)
                 try:
                     raw_haemo = read_snirf(snirf_path)
-                    denoised, glm_est, dm, alff_df, fc_df, fc_hbr_df, gcor_reg, fc_seed, fc_roi = run_post(raw_haemo, post_config, output_dir=output_dir, mode=mode, source_entities=src_entities, source_path=snirf_path)
+                    denoised, glm_est, dm, alff_df, fc_df, fc_hbr_df, fc_seed, fc_roi = run_post(raw_haemo, post_config, output_dir=output_dir, mode=mode, source_entities=src_entities, source_path=snirf_path)
                 except Exception:
                     logger.exception("post failed for %s", snirf_path)
                     raise
                 post_runs[bids_label(subject, src_entities)] = dict(zip(
                     _POST_FIELDS,
-                    (glm_est, dm, alff_df, fc_df, fc_hbr_df, denoised, gcor_reg, fc_seed, fc_roi),
+                    (glm_est, dm, alff_df, fc_df, fc_hbr_df, denoised, fc_seed, fc_roi),
                 ))
 
     return post_runs

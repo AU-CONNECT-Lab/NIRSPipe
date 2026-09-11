@@ -726,6 +726,11 @@ def _section_haemo(
         "stage_banded": stage_banded,
         "psd_panel_path": psd_panel_path, "psd_panel_h": psd_panel_h,
         "psd_stage_labels": [label for label, _ in (psd_stages or [])],
+        # the caption names the same two bands `physio_bands` shades and the band scalars
+        # integrate over. It used to spell them out, and said cardiac 0.7-1.5 Hz on a run
+        # configured for 0.7-2.0
+        "psd_cardiac_band": (config.cardiac_l_freq, config.cardiac_h_freq),
+        "psd_resp_band": (config.resp_l_freq, config.resp_h_freq),
     }
 
 
@@ -1002,6 +1007,19 @@ def _section_sqm(
         errts_key = "errts_long" if record.get("errts_long") else "errts"
         for k, v in (record.get(errts_key) or {}).items():
             sqm[f"{k}_errts"] = v
+        # ---- GCOR either side of the confound regression ----
+        # `filtered` rather than `preproc` on the before side: the bandpass alone raises
+        # GCOR, so the regression is the only step here whose effect is worth a number.
+        # Both sides come off the record's own sections, so this pair is the same channel
+        # set as every row beside it; it used to be handed in from the pipeline, measured
+        # over every channel while the rows around it were long, and the two disagreed on
+        # whether the regression lowered HbR global correlation at all.
+        filtered_key = "filtered_long" if record.get("filtered_long") else "filtered"
+        for key in ("gcor_hbo", "gcor_hbr"):
+            pre = (record.get(filtered_key) or {}).get(key)
+            post = (record.get(errts_key) or {}).get(key)
+            if pre is not None and post is not None:
+                sqm[f"{key}_prereg"], sqm[f"{key}_postreg"] = pre, post
         # The same raw file measured over three channel sets, kept as three dicts so the
         # panel can print them side by side. `sqm` above already carries one of them and
         # decides the verdict; these are for the comparison, not for it.
@@ -1375,7 +1393,6 @@ def build_subject_report(
     fc_seed: dict | None = None,
     fc_roi: dict | None = None,
     after_haemo: mne.io.Raw | None = None,
-    gcor_reg: dict | None = None,
     roi_map: dict | None = None,
     provenance_path: str | None = None,
     sqm_label: str | None = None,
@@ -1535,10 +1552,6 @@ def build_subject_report(
                                      psp_threshold=getattr(config, "psp_threshold", None))
     _note_separation(notes, subject, sqm_vars["sqm"], sqm_vars["channel_rows"],
                      short_channel_requested=bool(getattr(config, "short_channel", None)))
-    # GCOR before→after the short-channel regression (fNIRS GSR analog): the meaningful
-    # comparison (expected to drop). Bandpass alone raises GCOR, so we do not compare that.
-    if gcor_reg and sqm_vars.get("sqm") is not None:
-        sqm_vars["sqm"].update(gcor_reg)
     trigger_vars      = _section_trigger_timeline(raw_intensity, subject, errors, figures_dir)
     ch_summary_vars   = _section_channel_summary(
                             sqm_vars["channel_rows"], subject, errors, figures_dir,
@@ -2083,9 +2096,14 @@ def _write_condition_reports(
         haemo_by_set: dict = {}
         if remake_cropped is not None:
             cropped = remake_cropped(f"_{slug}", span)
-            # recomputed rather than sliced, so these join the scalars and not the figures
-            scalars.update(cropped.pop("cond_haemo_scalars", None) or {})
+            # recomputed rather than sliced, so these join the scalars and not the figures.
+            # The long set, matching the run's own page, whose haemoglobin rows come off
+            # `preproc_long` / `errts_long` and whose note says so: the all-channel dict
+            # beside it is the table's `All` column and not what the panel is read as. A
+            # montage with no split has only the one set and falls back to it.
+            all_scalars = cropped.pop("cond_haemo_scalars", None) or {}
             haemo_by_set = cropped.pop("cond_haemo_by_set", None) or {}
+            scalars.update(haemo_by_set.get("long") or all_scalars)
             panels.update(cropped)
 
         # the same three-row table the run's own page prints, over this condition. The

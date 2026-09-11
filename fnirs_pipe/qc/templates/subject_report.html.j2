@@ -287,7 +287,10 @@
   <div class="details-body">
     <p class="step-desc">
       One row per chromophore, one line per stage file on disk. Coloured bands: Mayer wave
-      (~0.1&thinsp;Hz), respiration (0.1–0.5&thinsp;Hz), cardiac (0.7–1.5&thinsp;Hz).
+      (~0.1&thinsp;Hz){#- Mayer alone is a fixed visual reference with no metric behind it;
+      the other two are the configured bands the shading and the band scalars both use -#}
+      {%- if psd_resp_band %}, respiration ({{ '%g'|format(psd_resp_band[0]) }}–{{ '%g'|format(psd_resp_band[1]) }}&thinsp;Hz){% endif %}
+      {%- if psd_cardiac_band %}, cardiac ({{ '%g'|format(psd_cardiac_band[0]) }}–{{ '%g'|format(psd_cardiac_band[1]) }}&thinsp;Hz){% endif %}.
       Faint lines are the individual channels of the first stage; dashed verticals mark the
       filter cutoffs.
       {% if psd_stage_labels %}
@@ -762,9 +765,12 @@
   <p class="qm-note">Measured after Beer-Lambert, on
      {% if hb_split %}long channels{% else %}every channel{% endif %}. These rows are the
      stage comparison: what the denoising did, not what the recording arrived as. The
-     table above holds the same metrics before denoising, split by channel set. % data
-     retained is a share of the recording's duration, not of its channels, so it is one
-     number for every channel set.</p>
+     table above holds the same metrics before denoising, split by channel set, and each
+     before value here is that table's row. The global correlations are the one exception:
+     their before side is the bandpassed signal rather than the unfiltered one, because the
+     bandpass alone raises global correlation and the regression is the step this pair
+     exists to measure. % data retained is a share of the recording's duration, not of its
+     channels, so it is one number for every channel set.</p>
   <ul class="qm-list">
     {{ qm_li('hbo_hbr_corr_mean', 'Mean HbO&ndash;HbR corr', '_errts', ' (denoise before&rarr;after)') }}
     {% if sqm.get('cnr_hbo_mean') is not none or sqm.get('cnr_hbo_mean_errts') is not none %}

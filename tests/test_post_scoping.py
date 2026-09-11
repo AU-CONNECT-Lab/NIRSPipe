@@ -33,7 +33,7 @@ def post_calls(monkeypatch):
 
     def _fake_run_post(raw, config, **kwargs):
         seen.append(kwargs["source_path"])
-        return (None,) * 9
+        return (None,) * 8
 
     monkeypatch.setattr(post_pipeline, "run_post", _fake_run_post)
     monkeypatch.setattr(workflows, "get_layout", lambda *a, **k: _FakeLayout())

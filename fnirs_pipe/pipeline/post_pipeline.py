@@ -148,14 +148,12 @@ def run_post(
 ) -> tuple:
     """Run post-processing pipeline.
 
-    Returns (result, glm_est, design_matrix, alff_df, fc_df, fc_hbr_df, gcor_reg, fc_seed,
-    fc_roi).
+    Returns (result, glm_est, design_matrix, alff_df, fc_df, fc_hbr_df, fc_seed, fc_roi).
     glm_est / design_matrix are None only when no regression ran; denoise and rest return
     them too, fitted on empty events, so the design holds confound columns and no condition.
     alff_df is None outside rest mode. The FC products are written by rest mode, and by glm
     and denoise mode under ``config.fc``; fc_df holds the HbO matrix.
     fc_seed and fc_roi are {chromophore: frame}, both empty without --roi-mapping.
-    gcor_reg (pre/post short-channel regression GCOR) is None unless short_channel ran.
     """
 
     rec = Recorder()
@@ -330,21 +328,12 @@ def run_post(
                 raw_resid if raw_resid is not None else result,
                 config, output_dir, rec, source_entities=source_entities)
 
-    # GCOR around the short-channel regression (the fNIRS GSR analog): pre-regression vs
-    # residuals. Expected to drop if the regression removed global/systemic signal.
-    gcor_reg = None
-    if raw_resid is not None and config.short_channel:
-        try:
-            from fnirs_pipe.qc.metrics import gcor_metrics
-            pre, post = gcor_metrics(result), gcor_metrics(raw_resid)
-            gcor_reg = {
-                "gcor_hbo_prereg": pre["gcor_hbo"], "gcor_hbr_prereg": pre["gcor_hbr"],
-                "gcor_hbo_postreg": post["gcor_hbo"], "gcor_hbr_postreg": post["gcor_hbr"],
-            }
-        except Exception:
-            logger.warning("sub-%s | regression GCOR failed", config.subject, exc_info=True)
-
-    return result, glm_est, dm, alff_df, fc_df, fc_hbr_df, gcor_reg, fc_seed, fc_roi
+    # GCOR around the confound regression is not measured here. Both of its stages are
+    # written to disk, and the SQM record measures each one per channel set; computing it a
+    # second time in memory gave the report a number over every channel to print beside
+    # rows that were long-channel, which reversed the direction the regression appeared to
+    # move HbR global correlation in. The report reads `filtered` -> `errts` instead.
+    return result, glm_est, dm, alff_df, fc_df, fc_hbr_df, fc_seed, fc_roi
 
 def _deriv_sidecar(path: Path, step: str, source: str | None, bads: list[str], **params) -> None:
     from fnirs_pipe import __version__

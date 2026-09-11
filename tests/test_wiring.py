@@ -199,15 +199,3 @@ def test_the_windowed_metrics_actually_ran(baseline):
     assert len(windowed["sci_matrix"]) == n_ch
     assert len(windowed["sci_matrix"][0]) == len(windowed["sci_times"])
 
-
-def test_the_regression_gcor_actually_ran(baseline, tmp_path_factory):
-    """post_pipeline swallows any failure here and the SQM record loses four metrics."""
-    config = PostConfig(subject="01", high_pass=0.01, low_pass=0.1, short_channel=True,
-                        drift_model="cosine", drift_high_pass=0.01, drift_order=1, **_BANDS)
-    gcor_reg = run_post(baseline[0].raw_haemo.copy(), config,
-                        output_dir=tmp_path_factory.mktemp("gcor"), mode="rest",
-                        source_entities={"task": "tapping"})[6]
-    assert gcor_reg is not None
-    assert set(gcor_reg) == {"gcor_hbo_prereg", "gcor_hbr_prereg",
-                             "gcor_hbo_postreg", "gcor_hbr_postreg"}
-    assert all(np.isfinite(v) for v in gcor_reg.values())

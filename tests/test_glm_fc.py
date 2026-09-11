@@ -19,8 +19,8 @@ from fnirs_pipe.pipeline.prep_pipeline import PrepConfig, run_prep
 from ._synth import synth_raw
 
 _BANDS = dict(cardiac_l_freq=0.7, cardiac_h_freq=1.5, resp_l_freq=0.2, resp_h_freq=0.5)
-# run_post: (result, glm_est, dm, alff_df, fc_df, fc_hbr_df, gcor_reg, fc_seed, fc_roi)
-_ALFF_DF, _FC_DF, _FC_SEED, _FC_ROI = 3, 4, 7, 8
+# run_post: (result, glm_est, dm, alff_df, fc_df, fc_hbr_df, fc_seed, fc_roi)
+_ALFF_DF, _FC_DF, _FC_SEED, _FC_ROI = 3, 4, 6, 7
 
 
 @pytest.fixture(scope="module")

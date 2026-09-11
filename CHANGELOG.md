@@ -6,6 +6,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- **The global correlations either side of the confound regression are measured on the same channel set as the rows beside them.** They were measured over every channel while their panel reported the long ones, which reversed the direction the regression appeared to move HbR global correlation in
+- **The per-condition haemoglobin panel reports the long channels**, matching its own note and the run's page; it was reporting every channel
+- **The PSD panel's caption names the configured cardiac and respiration bands** instead of a fixed 0.7-1.5 Hz, which disagreed with the shading beside it on any run that moved the band
+
 ### Changed
 - **Per-condition pages carry the same All / Long / Short table as the run's own page.** Mean amplitude and low-frequency drift are left out of it, having no per-condition value
 - **The motion panel reports GVTD over the three channel sets**, each keeping its before → after pair. Every set carries its own cutoff and its own share above it, so that row reads down a column rather than across one

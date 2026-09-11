@@ -20,8 +20,8 @@ from fnirs_pipe.pipeline.prep_pipeline import PrepConfig, run_prep
 from ._synth import synth_raw
 
 _BANDS = dict(cardiac_l_freq=0.7, cardiac_h_freq=1.5, resp_l_freq=0.2, resp_h_freq=0.5)
-# run_post: (result, glm_est, dm, alff_df, fc_df, fc_hbr_df, gcor_reg, fc_seed, fc_roi)
-_ALFF_DF, _FC_DF, _GCOR_REG, _FC_SEED, _FC_ROI = 3, 4, 6, 7, 8
+# run_post: (result, glm_est, dm, alff_df, fc_df, fc_hbr_df, fc_seed, fc_roi)
+_ALFF_DF, _FC_DF, _FC_SEED, _FC_ROI = 3, 4, 6, 7
 
 
 @pytest.fixture(scope="module")
@@ -80,15 +80,6 @@ def test_a_drift_model_is_enough_on_its_own(haemo, tmp_path):
 def test_an_explicit_none_drift_model_is_not_a_reason_to_regress(haemo, tmp_path):
     _denoise(haemo, tmp_path, drift_model="none")
     assert _names(tmp_path, "*desc-errts*.snirf") == []
-
-
-def test_regression_gcor_arrives_only_with_a_short_channel_strategy(haemo, tmp_path):
-    """It measures what the short-channel regression removed, so a drift-only run has none."""
-    with_sc = _denoise(haemo, tmp_path / "sc", short_channel="mean")
-    drift   = _denoise(haemo, tmp_path / "drift", drift_model="polynomial", drift_order=1)
-    assert sorted(with_sc[_GCOR_REG]) == [
-        "gcor_hbo_postreg", "gcor_hbo_prereg", "gcor_hbr_postreg", "gcor_hbr_prereg"]
-    assert drift[_GCOR_REG] is None
 
 
 # ---- the --fc half ----
