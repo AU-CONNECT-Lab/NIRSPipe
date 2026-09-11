@@ -92,6 +92,8 @@ from fnirs_pipe.qc.figures import (
     build_epoch_preview_figure,
     build_trial_image_figure,
     build_roi_trial_image_figure,
+    build_trial_image_by_condition,
+    build_roi_trial_image_by_condition,
     build_sci_psp_figure,
     denoise_stage_panels,
     stage_metrics_figure,
@@ -109,7 +111,7 @@ from fnirs_pipe.qc.report_shell import (
     footer_vars, guard, note, page_vars, render, stylesheet,
 )
 from fnirs_pipe.qc.sqm_record import record_path as _sqm_record_path
-from fnirs_pipe.qc.trial_qc import score_trials
+from fnirs_pipe.qc.trial_qc import score_trials, trial_windows
 from fnirs_pipe.utils.logging import get_logger
 
 if TYPE_CHECKING:
@@ -808,24 +810,119 @@ def _section_trial_qc(
     ``_EPOCH_TMIN`` / ``_EPOCH_TMAX`` while the scoring uses each event's own duration,
     which is what a block design records and a fixed window would cut off.
     """
+    from fnirs_pipe.qc.hyper_report import markers_on_data_axis
+
     tmin = getattr(config, "epoch_tmin", None)
     tmax = getattr(config, "epoch_tmax", None)
     window = (f"{tmin:g} to {tmax:g} s from each onset" if tmin is not None and tmax is not None
               else "each event's own duration")
     path, h = None, 0
+    rows: list = []
     with _guard("Per-trial quality", errors, subject):
+        # the data axis, because trial_sqm crops on it; extract_markers leaves the onsets on
+        # the original recording's axis, which is the same offset for every trial and zero
+        # only when the input was never cropped
+        markers = markers_on_data_axis(raw_intensity)
         labels, sqms = score_trials(
-            raw_intensity, extract_markers(raw_intensity),
+            raw_intensity, markers,
             getattr(config, "sci_threshold", SCI_PASS),
             config.cardiac_l_freq, config.cardiac_h_freq,
             tmin, tmax,
             psp_threshold=getattr(config, "psp_threshold", None),
             min_good_frac=getattr(config, "min_good_frac", None),
         )
+        # the onset beside each scored trial, so a condition page can take its own rows out
+        # of this table rather than scoring the same windows a second time
+        windows = trial_windows(markers, tmin, tmax, float(raw_intensity.times[-1]))
+        rows = [(onset, label, sqm)
+                for (_, _, _, onset), label, sqm in zip(windows, labels, sqms)]
         fig = trial_quality_heatmap(labels, sqms)
         if fig is not None:
             path, h = _save_plotly_html(fig, figures_dir / "trial_qc.html")
-    return {"trial_qc_path": path, "trial_qc_h": h, "trial_qc_window": window}
+    return {"trial_qc_path": path, "trial_qc_h": h, "trial_qc_window": window,
+            "trial_qc_rows": rows}
+
+
+def _condition_trial_qc(
+    rows: list,
+    span: "tuple[float, float]",
+    suffix: str,
+    subject: str,
+    errors: list,
+    figures_dir: Path,
+    min_trials: int,
+) -> dict:
+    """The run's per-trial table cut to the trials whose onset falls in one condition.
+
+    Nothing is rescored. A trial's SQM is measured on a crop of its own window and reads
+    nothing outside it, so a condition's rows are the run's rows and recomputing them could
+    only produce a second copy free to disagree.
+
+    ``min_trials`` is the whole reason a block design sees nothing here: its condition window
+    holds the single annotation that defines it, and one row is not a comparison. The test on
+    ``t0`` is strict for the same reason it is in ``_trial_image_by_span``, so the two panels
+    on one page always describe the same set of trials.
+
+    The reason a page has no panel travels back with the result. An empty section explains
+    nothing, and this one is empty on every recording the package has been run on so far.
+    """
+    t0, t1 = float(span[0]), float(span[1])
+    keep = [(label, sqm) for onset, label, sqm in rows if t0 < onset < t1]
+    if len(keep) < min_trials:
+        reason = ("the run carries no per-trial table to take rows from" if not rows else
+                  f"this condition holds {_n_trials(len(keep))} inside its window, and one "
+                  f"row is not a comparison")
+        return {"trial_qc_path": None, "trial_qc_h": 0, "condition_trial_reason": reason}
+    path, h = None, 0
+    with _guard("Per-trial quality", errors, subject):
+        fig = trial_quality_heatmap([label for label, _ in keep], [sqm for _, sqm in keep])
+        if fig is not None:
+            path, h = _save_plotly_html(fig, figures_dir / f"trial_qc{suffix}.html")
+    return {"trial_qc_path": path, "trial_qc_h": h, "condition_trial_reason": ""}
+
+
+def _section_condition_trial_images(
+    epoch_haemo: mne.io.Raw,
+    spans: "list[tuple[str, float, float]]",
+    subject: str,
+    errors: list,
+    figures_dir: Path,
+    roi_map: dict | None = None,
+    epoch_tmin: float = -5.0,
+    epoch_tmax: float = 25.0,
+    min_trials: int = 2,
+) -> dict:
+    """Every condition's trial images, built in one pass so they share a colour scale.
+
+    Returns ``{condition label: section vars}``. The pass is run-wide and the split is by
+    condition window, which is why it cannot sit in :func:`_cropped_sections` with the other
+    rebuilt panels: a scale taken on one cropped condition at a time would differ from page
+    to page, and these pages are read against each other.
+    """
+    out: dict = {}
+
+    def _collect(figs_by_label, prefix, key, name):
+        for label, figs in (figs_by_label or {}).items():
+            fname = f"{prefix}_{_pair_fname(name)}_{_pair_fname(label)}.html"
+            h = _save_multi_fig_html(figs, figures_dir / fname)
+            entry = out.setdefault(label, {"trial_image_pairs": [], "trial_image_roi_pairs": []})
+            entry[key].append({"pair": name, "path": _fig_href(figures_dir, fname), "h": h})
+
+    for roi_name, chans in (roi_map or {}).items():
+        with _guard(f"condition trial image ROI {roi_name}", errors, subject):
+            _collect(build_roi_trial_image_by_condition(
+                epoch_haemo, str(roi_name), chans, spans, epoch_tmin, epoch_tmax,
+                min_trials=min_trials), "trialimage_roi", "trial_image_roi_pairs",
+                str(roi_name))
+
+    # HbO only, as the run's own trial image is, and for the same reason: single-trial HbR
+    # is too low-amplitude to read as an image
+    for ch in [c for c in epoch_haemo.ch_names if c.endswith(" hbo")]:
+        with _guard(f"condition trial image {ch}", errors, subject):
+            _collect(build_trial_image_by_condition(
+                epoch_haemo, ch, spans, epoch_tmin, epoch_tmax,
+                min_trials=min_trials), "trialimage", "trial_image_pairs", ch)
+    return out
 
 
 def _section_evoked_topomap(
@@ -1559,7 +1656,8 @@ def build_subject_report(
         epoch_vars       = {"epoch_preview_path": None, "epoch_preview_h": 0}
         trial_image_vars = {"trial_image_pairs": [], "trial_image_roi_pairs": []}
         topomap_vars     = {"evoked_topomap_path": None, "evoked_topomap_h": 0}
-        trial_qc_vars    = {"trial_qc_path": None, "trial_qc_h": 0, "trial_qc_window": ""}
+        trial_qc_vars    = {"trial_qc_path": None, "trial_qc_h": 0, "trial_qc_window": "",
+                            "trial_qc_rows": []}
     else:
         epoch_vars        = _section_epoch_preview(epoch_haemo, subject, errors, figures_dir,
                                                    epoch_tmin=epoch_tmin,

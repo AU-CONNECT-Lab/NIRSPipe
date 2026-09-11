@@ -1020,6 +1020,147 @@ def build_trial_image_figure(
         res, lambda label, n: f"Trial image — {ch_name} / {label} ({_n_trials(n)})", trial_smooth)
 
 
+def _roi_picks(raw_haemo: mne.io.Raw, channels: "list[str]") -> "list[int]":
+    """ROI members as HbO channel indices. Names or S-D pair labels both resolve."""
+    hbo = {c for c in raw_haemo.ch_names if c.endswith(" hbo")}
+    return [raw_haemo.ch_names.index(c if c in hbo else f"{c} hbo")
+            for c in channels if (c in hbo or f"{c} hbo" in hbo)]
+
+
+# ---- Trial images, one condition window at a time ----
+
+def _trial_image_by_span(
+    raw_haemo: mne.io.Raw,
+    picks: "list[int]",
+    spans: "list[tuple[str, float, float]]",
+    epoch_tmin: float,
+    epoch_tmax: float,
+) -> "dict[str, tuple[np.ndarray, np.ndarray, list[str]]] | None":
+    """Epoch once, then give each condition window the trials whose onset falls inside it.
+
+    ``spans`` is ``[(label, t0, t1)]`` on the data axis, the windows the quality record was
+    written against. A trial belongs to the window its *onset* sits in, which is how the
+    record assigns everything else. Its epoch window is free to run past the edge of the
+    condition and usually does, since the response outlasts the event.
+
+    Example: blocks ``("talk", 0, 120)`` and ``("listen", 120, 240)`` with six 8 s trials
+    inside each give ``{"talk": (6, n_times), "listen": (6, n_times)}``.
+
+    Returns None for a recording with nothing to epoch, and omits a window that caught no
+    trial rather than giving it an empty entry.
+
+    The annotation that *defines* a window is not one of its trials, which is why the test
+    on ``t0`` is strict. On a blocked event-related design the block is itself an event,
+    sitting at ``t0``, so counting it would put a row describing the whole block beside the
+    trials inside it. A genuine trial starting in the same sample as its block is lost with
+    it, and that is the cheaper error: the two are indistinguishable from the annotations.
+    """
+    if not picks or not spans:
+        return None
+    try:
+        events, event_id = epochable_events(raw_haemo, epoch_tmin, epoch_tmax)
+        if len(events) == 0:
+            return None
+        epochs = mne.Epochs(
+            raw_haemo, events, event_id, tmin=epoch_tmin, tmax=epoch_tmax,
+            picks=picks, baseline=(epoch_tmin, 0), preload=True, verbose=False,
+        )
+        data = epochs.get_data()  # (n_trials, n_picks, n_times)
+        if data.shape[0] == 0:
+            return None
+        by_code = {v: k for k, v in event_id.items()}
+        sfreq = float(raw_haemo.info["sfreq"])
+        # the data axis, the one condition_windows measures on; an event's sample index is
+        # against the original recording and a cropped input puts the two a first_time apart
+        onsets = (epochs.events[:, 0] - raw_haemo.first_samp) / sfreq
+        descs = [str(by_code.get(int(c), "")) for c in epochs.events[:, 2]]
+        # an event lands on a sample and a window bound does not, so the two agree only to
+        # within half a sample
+        eps = 0.5 / sfreq
+        out: "dict[str, tuple[np.ndarray, np.ndarray, list[str]]]" = {}
+        for label, t0, t1 in spans:
+            keep = [i for i, onset in enumerate(onsets) if t0 + eps < onset < t1 - eps]
+            if not keep:
+                continue
+            out[str(label)] = (data[keep].mean(axis=1) * 1e6, epochs.times,
+                               [descs[i] for i in keep])
+        return out or None
+    except Exception:
+        return None
+
+
+def _condition_trial_images(
+    raw_haemo: mne.io.Raw,
+    picks: "list[int]",
+    spans: "list[tuple[str, float, float]]",
+    epoch_tmin: float,
+    epoch_tmax: float,
+    title_for: "callable",
+    trial_smooth: "int | None",
+    min_trials: int,
+) -> "dict[str, list[go.Figure]] | None":
+    """One figure per condition window, on a colour scale shared across the windows.
+
+    Shared because the panels are read against each other: they land on separate pages, one
+    per condition, and a scale taken per page would make two conditions with different
+    responses look alike. The run's own trial image shares a scale across its conditions for
+    the same reason; this is that figure split by window instead of by event name.
+    """
+    res = _trial_image_by_span(raw_haemo, picks, spans, epoch_tmin, epoch_tmax)
+    if res is None:
+        return None
+    kept = [(label, data, times, rows) for label, (data, times, rows) in res.items()
+            if data.shape[0] >= min_trials]
+    if not kept:
+        return None
+    figs = _trial_image_figures(kept, title_for, trial_smooth)
+    return {label: [fig] for (label, *_), fig in zip(kept, figs)}
+
+
+def build_trial_image_by_condition(
+    raw_haemo: mne.io.Raw,
+    ch_name: str,
+    spans: "list[tuple[str, float, float]]",
+    epoch_tmin: float = -5.0,
+    epoch_tmax: float = 25.0,
+    trial_smooth: "int | None" = None,
+    min_trials: int = 2,
+) -> "dict[str, list[go.Figure]] | None":
+    """One HbO channel's trial image, split by condition window rather than by event name.
+
+    ``min_trials`` is why a block design gets nothing: its condition window holds the one
+    annotation that defines it, and a one-row heatmap is a colour strip above a copy of its
+    own average.
+    """
+    if ch_name not in raw_haemo.ch_names:
+        return None
+    return _condition_trial_images(
+        raw_haemo, [raw_haemo.ch_names.index(ch_name)], spans, epoch_tmin, epoch_tmax,
+        lambda label, n: f"Trial image — {ch_name} / {label} ({_n_trials(n)})",
+        trial_smooth, min_trials)
+
+
+def build_roi_trial_image_by_condition(
+    raw_haemo: mne.io.Raw,
+    roi_name: str,
+    channels: "list[str]",
+    spans: "list[tuple[str, float, float]]",
+    epoch_tmin: float = -5.0,
+    epoch_tmax: float = 25.0,
+    trial_smooth: "int | None" = None,
+    min_trials: int = 2,
+) -> "dict[str, list[go.Figure]] | None":
+    """The ROI trial image split by condition window. Channels averaged first, as the run's is."""
+    picks = _roi_picks(raw_haemo, channels)
+    if not picks:
+        return None
+    return _condition_trial_images(
+        raw_haemo, picks, spans, epoch_tmin, epoch_tmax,
+        lambda label, n: (f"Trial image — ROI {roi_name} / {label} "
+                          f"({len(picks)} ch, {_n_trials(n)})"),
+        trial_smooth, min_trials)
+
+
 def build_roi_trial_image_figure(
     raw_haemo: mne.io.Raw,
     roi_name: str,
@@ -1033,9 +1174,7 @@ def build_roi_trial_image_figure(
     ``channels`` are channel names or S-D pair labels; matched to their HbO channels.
     One figure per condition, pooled panel first.
     """
-    hbo = {c for c in raw_haemo.ch_names if c.endswith(" hbo")}
-    picks = [raw_haemo.ch_names.index(c if c in hbo else f"{c} hbo")
-             for c in channels if (c in hbo or f"{c} hbo" in hbo)]
+    picks = _roi_picks(raw_haemo, channels)
     if not picks:
         return None
     res = _trial_image_data(raw_haemo, picks, epoch_tmin, epoch_tmax)

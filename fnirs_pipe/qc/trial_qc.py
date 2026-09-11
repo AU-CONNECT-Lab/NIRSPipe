@@ -21,22 +21,26 @@ def trial_windows(
     tmin: float | None,
     tmax: float | None,
     duration: float,
-) -> list[tuple[str, float, float]]:
-    """Turn the event list into (label, t0, t1) windows to score one at a time.
+) -> list[tuple[str, float, float, float]]:
+    """Turn the event list into (label, t0, t1, onset) windows to score one at a time.
 
     Two ways to size a window, chosen by whether tmin/tmax were given:
     fixed, `[onset+tmin, onset+tmax]`, which lets a negative tmin pull in a baseline; or the
     event's own duration, `[onset, onset+duration]`, for block designs that record one.
 
     Example: an event at 30.0 s of 8 s with tmin/tmax unset yields
-    ``("trial-001_30s_speak", 30.0, 38.0)``.
+    ``("trial-001_30s_speak", 30.0, 38.0, 30.0)``.
+
+    The onset travels beside the bounds because it is what says which condition a trial
+    belongs to, and with a fixed window it is not recoverable from ``t0``: a negative tmin
+    puts ``t0`` before the event and a clamp at either edge of the recording moves it again.
 
     Events that describe no window are dropped rather than guessed at: a zero duration with
     no tmin/tmax has no extent, and a window starting past the end of the recording has no
     data.
     """
     fixed = tmin is not None and tmax is not None
-    windows: list[tuple[str, float, float]] = []
+    windows: list[tuple[str, float, float, float]] = []
     for i, m in enumerate(markers, start=1):
         onset = float(m["onset"])
         if fixed:
@@ -52,7 +56,8 @@ def trial_windows(
             logger.warning("trial %d at %.1fs falls outside the recording; skipping", i, onset)
             continue
         cond = str(m.get("description", "")).strip()
-        windows.append((f"trial-{i:03d}_{onset:.0f}s" + (f"_{cond}" if cond else ""), t0, t1))
+        windows.append((f"trial-{i:03d}_{onset:.0f}s" + (f"_{cond}" if cond else ""),
+                        t0, t1, onset))
     return windows
 
 
@@ -114,5 +119,5 @@ def score_trials(
     labels = [w[0] for w in windows]
     sqms = [trial_sqm(raw, t0, t1, sci_threshold, cardiac_l_freq, cardiac_h_freq,
                       psp_threshold, min_good_frac)
-            for _, t0, t1 in windows]
+            for _, t0, t1, _ in windows]
     return labels, sqms
