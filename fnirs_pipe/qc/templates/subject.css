@@ -97,20 +97,24 @@ details[open] > summary::before { transform: rotate(90deg); }
 .qm-warn { color: #e67e22; }
 .qm-bad  { color: #c0392b; }
 .qm-table { font-size: 0.82rem; margin-top: 0.5rem; }
-/* ---- narrow metric tables ---- */
+/* ---- metric tables ---- */
 /* tables default to the full page width, which a two- or three-column one does not
    want: the label column swallows the row and the values end up at the far edge */
 .qm-table.qm-narrow { width: auto; min-width: 22rem; }
-/* and they inherit the cell borders the wide tables need, which on three columns reads as
-   a grid; a row keeps the hairline the metric lists used instead */
-.qm-narrow th, .qm-narrow td { border: none; border-bottom: 1px solid #eef0f3;
-                               padding: 0.18rem 0.9rem 0.18rem 0; }
-.qm-narrow th { background: none; color: #8a949e; font-weight: 600; font-size: 0.75rem;
-                text-transform: uppercase; letter-spacing: 0.04em;
-                border-bottom: 1px solid #d8dee5; }
-.qm-narrow td:first-child { color: #666; }
+/* no cell grid on any of them. A row is separated by the hairline the metric lists used and
+   a value column by being right-aligned, neither of which needs a rule of its own */
+.qm-flat th, .qm-flat td { border: none; border-bottom: 1px solid #eef0f3;
+                           padding: 0.18rem 0.9rem 0.18rem 0; }
+.qm-flat th { background: none; color: #8a949e; font-weight: 600; font-size: 0.75rem;
+              text-transform: uppercase; letter-spacing: 0.04em;
+              border-bottom: 1px solid #d8dee5; }
+/* the spanning header names a group rather than a column, so it keeps sentence case and the
+   weight of a title; where the group ends is already marked down the table by .dom-split */
+.qm-flat th.ch-group { color: #34495e; font-size: 0.78rem; text-transform: none;
+                       letter-spacing: 0; border-bottom: 1px solid #d8dee5; }
+.qm-flat td:first-child { color: #666; }
 /* tabular figures so a column of numbers lines up on the decimal point */
-.qm-narrow td.qv { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.qm-flat td.qv { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .qm-table td.bad  { color: #c0392b; }
 .qm-table td.good { color: #27ae60; }
 .qm-table td.neg  { color: #27ae60; }

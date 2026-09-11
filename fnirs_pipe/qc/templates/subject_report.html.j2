@@ -648,7 +648,7 @@
   {%- macro qm_cells(d, cols, is_long, first_class='') %}{% for key, text in cols %}{% set v = d.get(key) %}<td class="qv {{ first_class if loop.first }} {{ cell_class(key, v, is_long) }}">{{ mv(key, v) }}</td>{% endfor %}{% endmacro -%}
   {%- macro qm_row(name, d_od, d_hb, is_long, lead) %}<tr><td>{{ name }}</td><td>{{ lead }}</td>{{ qm_cells(d_od, od_cols, is_long) }}{% if hb_split %}{{ qm_cells(d_hb, hb_cols, is_long, 'dom-split') }}{% endif %}</tr>{% endmacro -%}
   <div style="overflow-x:auto;">
-  <table class="qm-table qm-split">
+  <table class="qm-table qm-split qm-flat">
     <thead>
       <tr><th colspan="{{ od_cols | length + 2 }}" class="ch-group">Original recording &mdash; optical density</th>
           {% if hb_split %}<th colspan="{{ hb_cols | length }}" class="ch-group dom-split">Haemoglobin &mdash; before denoising</th>{% endif %}</tr>
@@ -756,7 +756,7 @@
     </td>
   {%- endmacro %}
   <div style="overflow-x:auto;">
-  <table class="qm-table qm-split">
+  <table class="qm-table qm-split qm-flat">
     <thead><tr><th>Metric{% if not condition_label %} (before&nbsp;&rarr;&nbsp;after){% endif %}</th>
       <th>All</th><th>Long</th><th>Short</th></tr></thead>
     <tbody>
@@ -787,7 +787,7 @@
 
   {#- one value per row, with no channel-set dimension: censoring and the correction
       footprint are counted over the recording rather than per set -#}
-  <table class="qm-table qm-split qm-narrow">
+  <table class="qm-table qm-split qm-narrow qm-flat">
     <thead><tr><th>Metric</th><th>Value</th></tr></thead>
     <tbody>
     {% if sqm.get('gvtd_censor_pct') is not none %}
@@ -822,7 +822,7 @@
      channels, so it is one number for every channel set.</p>
   {#- the parenthetical on a row names which step its two columns straddle, since the
       global correlations straddle the confound regression and the rest the denoising -#}
-  <table class="qm-table qm-split qm-narrow">
+  <table class="qm-table qm-split qm-narrow qm-flat">
     <thead><tr><th>Metric</th><th>Before</th><th>After</th></tr></thead>
     <tbody>
     {{ qm_tr_pair('hbo_hbr_corr_mean', 'Mean HbO&ndash;HbR corr', '_errts', ' (denoising)') }}
