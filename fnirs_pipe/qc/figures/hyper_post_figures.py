@@ -137,8 +137,9 @@ def build_wtc_channel(
       recording as strongly coupled.
     - the **significance contour**, where coherence beats the Monte Carlo level, when one was
       computed.
-    - one **span bar per condition** above the axes, carrying its label, with a line at its
-      onset. The bar runs the block's actual length, so the gaps between blocks are visible:
+    - one **span bar per condition** above the axes, carrying its label, with a line at each
+      end of it. The bar runs the block's actual length, so the gaps between blocks are
+      visible:
       a recording is continuous and its untasked stretches are data like any other, which a
       set of onset lines alone made look like block boundaries. The interactive version
       shaded each block on the map instead, under an opaque heatmap, so nothing showed;
@@ -170,17 +171,22 @@ def build_wtc_channel(
         ax.contour(times, freqs, ratio, levels=[1.0], colors="black", linewidths=1.1,
                    zorder=4)
 
-    # one span bar per block above the axes, plus a line at its onset. A block whose onset
-    # sits off the windowed axis is skipped rather than clamped to its edge, which would
-    # label the wrong moment; a block that *ends* past the right edge keeps its bar and has
-    # it cut there, the bar being about where the block is rather than how long it is
+    # one span bar per block above the axes, and a line at each end of it on the map itself.
+    # The bar says where the block is and the lines say where it starts and stops; without
+    # the closing line a reader inside the heatmap has to look up at the bar to find the end.
+    # A line is a claim about one moment, so an end past the right edge is dropped rather
+    # than drawn at the edge, the same rule the onset already followed. The bar is cut there
+    # instead, being about where the block sits rather than how long it is
     for m in markers_list:
         onset, duration = float(m["onset"]), float(m["duration"])
         if duration <= 0.1 or not (times[0] <= onset <= times[-1]):
             continue
         colour = cond_colors.get(m["description"], "#f39c12")
+        offset = onset + duration
         ax.axvline(onset, color=colour, lw=1.1, ls=":", zorder=5)
-        ax.plot([onset, min(onset + duration, float(times[-1]))], [1.012, 1.012],
+        if times[0] <= offset <= times[-1]:
+            ax.axvline(offset, color=colour, lw=1.1, ls=":", zorder=5)
+        ax.plot([onset, min(offset, float(times[-1]))], [1.012, 1.012],
                 transform=ax.get_xaxis_transform(), color=colour, lw=3.0,
                 solid_capstyle="butt", clip_on=False, zorder=5)
         ax.text(onset, 1.035, m["description"], transform=ax.get_xaxis_transform(),

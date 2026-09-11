@@ -248,7 +248,9 @@ def _short_section(
     """Only the metrics that answer "are the short-channel regressors trustworthy".
 
     Coupling (SCI, PSP, the coupled-window share) and amplitude (SNR, CV) transfer to short
-    channels. Spikes and drift do not. GVTD does, in full, threshold included: it is an RMS
+    channels, and so does the per-channel spike rate: the spike mask is a per-channel MAD
+    test, so a short channel's rate is its own measurement wherever it is computed. The
+    pooled spike counts and drift do not. GVTD does, in full, threshold included: it is an RMS
     across whatever channels it is given, so a short set is its own measurement rather than a
     subset of the long one, and its threshold is the mode of *its own trace over time*, which
     has as many samples as any other trace of the same recording.
@@ -270,7 +272,7 @@ def _short_section(
     were never set for it; the long section is where the number is read against a line.
     """
     from fnirs_pipe.qc.metrics import (
-        _intensity_metrics, _motion_metrics, _psp_metrics, _sci_metrics,
+        _intensity_metrics, _motion_metrics, _psp_metrics, _sci_metrics, _spike_metrics,
     )
     from fnirs_pipe.qc.metrics.coupling import _good_frac_metrics
 
@@ -288,6 +290,10 @@ def _short_section(
     record.update({k: v for k, v in intensity.items()
                    if k.startswith(("snr_", "cv_", "mean_amp_"))})
     record.update(_motion_metrics(raw_short))
+    # the per-channel rate alone: the pooled counts are a montage-level measure, and a short
+    # subset's version of one would read as a second opinion on the run's motion
+    record["spike_pct_per_channel"] = (
+        _spike_metrics(raw_short).get("spike_pct_per_channel") or {})
     return _split_scalars(record)
 
 

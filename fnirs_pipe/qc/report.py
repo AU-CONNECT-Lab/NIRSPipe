@@ -64,8 +64,8 @@ import mne.io
 
 from fnirs_pipe.qc.boilerplate import collect_software_versions, generate_methods_text
 from fnirs_pipe.qc.channel_table import (
-    OD_SPLIT_COLUMNS, channel_rows, format_rows, heatmap_args, save_channel_csv,
-    separation_blocks, separation_notes,
+    OD_SPLIT_COLUMNS, channel_columns, channel_rows, format_rows, heatmap_args,
+    save_channel_csv, separation_blocks, separation_notes,
 )
 from fnirs_pipe.qc.figure_io import (
     CENTER_FIGURE_CSS, PLOTLY_CDN_URL, _IFRAME_CSS, _RESIZE_JS,
@@ -1197,6 +1197,8 @@ def _section_sqm(
         "channel_rows": rows,
         "channel_cells": cells,
         "channel_blocks": separation_blocks(cells, bands_from_record(sqm)),
+        # the table groups by separation, so the block header says which side a row is on
+        "channel_columns": channel_columns(("separation",)),
         "sqm_all": sqm_all,
         "sqm_long": sqm_long,
         "sqm_short": sqm_short,
@@ -2231,6 +2233,7 @@ def _write_condition_reports(
             "channel_rows": rows,
             "channel_cells": cells,
             "channel_blocks": separation_blocks(cells),
+            "channel_columns": channel_columns(("separation",)),
             "sqm_all": od_by_set.get("all") or {},
             "sqm_long": od_by_set.get("long") or {},
             "sqm_short": od_by_set.get("short") or {},

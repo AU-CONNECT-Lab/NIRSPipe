@@ -35,10 +35,6 @@ _PER_CHANNEL_KEYS = (
 # report's SQM section; a raw-only record simply carries none of the later ones.
 _LONG_MERGE_SECTIONS = ("motion", "preproc", "preproc_long", "censor")
 
-# CSV column order, also the column order every view prints
-CSV_FIELDS = ("name", "sci", "psp", "good_frac", "snr", "cv", "corr", "is_bad", "reason",
-              "separation")
-
 
 def _pair_of(ch: str) -> str:
     """Channel name without its wavelength or chromophore suffix.
@@ -119,6 +115,7 @@ def channel_rows(
         "good_frac":  value_of("good_frac_per_channel", ch),
         "snr":        value_of("snr_per_channel", ch),
         "cv":         value_of("cv_per_channel", ch),
+        "spike":      value_of("spike_pct_per_channel", ch),
         "corr":       corr_pc.get(_pair_of(ch)),
         "is_bad":     ch in bad,
         "separation": separation_of(ch),
@@ -159,6 +156,7 @@ def pair_rows(rows: list[dict], pairs: list[str] | None = None) -> list[dict[str
             "psp":        _first(group, "psp"),
             "snr":        _first(group, "snr"),
             "cv":         _first(group, "cv"),
+            "spike":      _first(group, "spike"),
             "corr":       _first(group, "corr"),
             # either wavelength failing is the pair failing, which is how screening treats it
             "is_bad":     any(row["is_bad"] for row in group),
@@ -267,16 +265,22 @@ def separation_notes(
 # number format comes from. A per-channel SCI printed to three decimals in one view and two
 # in the next is the drift this mapping exists to stop.
 _COLUMN_METRIC = {
-    "sci":  "sci_mean",
-    "psp":  "psp_mean",
-    "snr":  "snr_mean",
-    "cv":   "cv_mean",
-    "corr": "hbo_hbr_corr_mean",
+    "sci":   "sci_mean",
+    "psp":   "psp_mean",
+    "snr":   "snr_mean",
+    "cv":    "cv_mean",
+    "spike": "spike_pct",
+    "corr":  "hbo_hbr_corr_mean",
 }
 
-# Column order and headers, shared so the three tables list the same things left to right.
-# ``separation`` is last because the subject report drops it: it groups by separation
-# instead, and the block header already says which side a row is on.
+# ---- Columns ----
+# Column order and headers for every view that prints per-channel rows. This is the only
+# place they are written: the subject report, the raw viewer, the GUI and the CSV all take
+# their columns from here through :func:`channel_columns`, so a column added once is added
+# everywhere and cannot come out in a different order in the next table down.
+#
+# ``separation`` is last because most views drop it: they group by separation instead, and
+# the block header already says which side a row is on.
 CHANNEL_COLUMNS = (
     ("name",       "Channel"),
     ("status",     "Status"),
@@ -284,9 +288,29 @@ CHANNEL_COLUMNS = (
     ("psp",        "PSP"),
     ("snr",        "SNR (intensity)"),
     ("cv",         "CV"),
+    ("spike",      "Spike % (exp.)"),
     ("corr",       "HbO-HbR corr"),
     ("separation", "Separation"),
 )
+
+
+def channel_columns(drop: "Sequence[str]" = ()) -> list[tuple[str, str]]:
+    """:data:`CHANNEL_COLUMNS` without the columns a view does not print.
+
+    channel_columns(("corr", "separation")) -> [("name", "Channel"), ..., ("spike", ...)]
+
+    A view drops a column rather than listing the ones it wants, so a new column reaches it
+    by default and the lists cannot silently fall out of step.
+    """
+    dropped = set(drop)
+    return [(key, label) for key, label in CHANNEL_COLUMNS if key not in dropped]
+
+
+# Every column a table prints, minus the derived Status, plus the three raw values no table
+# has room for: the coupled-window share the verdict rests on, the verdict itself as a flag,
+# and the criterion it failed.
+CSV_FIELDS = (*(key for key, _ in channel_columns(("status",))),
+              "good_frac", "is_bad", "reason")
 
 
 # The optical-density metrics the "one file, three channel sets" table prints, in column
