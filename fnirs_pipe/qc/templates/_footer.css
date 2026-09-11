@@ -6,21 +6,21 @@
 
 .section-hint { font-size: 0.85rem; color: #666; }
 
-.error-list { background: #fff3f3; border: 1px solid #f5c6cb;
-              border-radius: 4px; padding: 0.75rem 1rem; }
-.error-list li { color: #c0392b; font-size: 0.85rem; }
+/* ---- notes, errors, missing figures ----
+   Lists rather than boxes. A note is prose, and a filled box around prose reads as a widget
+   the reader is meant to do something with. Errors keep a rule down their left edge, which is
+   the one of the three that has to be found by someone scanning the page. */
+
+.note-list { margin: 0.3rem 0 1.2rem; padding-left: 1.2rem; }
+.note-list li { color: #46596b; font-size: 0.85rem; margin-bottom: 0.2rem; }
+.error-list { margin: 0.3rem 0 1.2rem; padding-left: 1.2rem;
+              border-left: 2px solid var(--bad); }
+.error-list li { color: #c0392b; font-size: 0.85rem; margin-bottom: 0.2rem; }
 .no-errors { color: #27ae60; font-weight: 600; }
-.note-list { background: #f4f7fa; border: 1px solid #cfd9e2;
-             border-radius: 4px; padding: 0.75rem 1rem; margin-bottom: 1rem; }
-.note-list li { color: #46596b; font-size: 0.85rem; }
 
 .placeholder {
-  background: repeating-linear-gradient(
-    45deg, #f9f9f9, #f9f9f9 10px, #f1f1f1 10px, #f1f1f1 20px
-  );
-  border: 1px dashed #ccc; border-radius: 4px;
-  padding: 1.5rem; text-align: center; color: #aaa;
-  font-style: italic; font-size: 0.85rem; margin-top: 0.5rem;
+  border-left: 2px solid var(--rule); padding: 0.4rem 0 0.4rem 0.8rem;
+  color: #aaa; font-style: italic; font-size: 0.85rem; margin-top: 0.5rem;
 }
 
 /* ---- methods tabs ---- */

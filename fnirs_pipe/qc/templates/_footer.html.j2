@@ -9,10 +9,7 @@
 {% if errors is defined %}
 <h2 id="Errors">Errors &amp; Warnings</h2>
 {% if notes %}
-  <p class="section-hint" style="margin-bottom:0.35rem;">
-    Sections this run left out on purpose, because the data does not carry what they need.
-    Not failures.
-  </p>
+  <h3>Notes</h3>
   <ul class="note-list">
     {% for n in notes %}<li>{{ n }}</li>{% endfor %}
   </ul>

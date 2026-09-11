@@ -61,56 +61,6 @@
 
 {% block content %}
 
-{% if condition_label %}
-{#- What this page is, said before anything else. Most of the sections below are empty on a
-    per-condition page, and an empty section with no explanation reads as a broken report. -#}
-<div class="summary-box" style="border-left:4px solid #2c7fb8;">
-  <p style="margin:0 0 0.4rem;"><strong>This page describes the condition
-    &ldquo;{{ condition_label }}&rdquo; only.</strong> Its numbers are sliced out of the
-    windowed pass the whole recording was measured with, not measured on a cut of it, so
-    they sit on the same window grid and the same filter as the run and as every other
-    condition.</p>
-  <p style="margin:0 0 0.4rem;font-size:0.86rem;color:#555;">
-    The verdict here is this condition&rsquo;s own, screened on its own windows against the
-    run&rsquo;s line, so a channel loose in one condition and coupled in another is named in
-    the one it was loose in. The recording was processed under the run&rsquo;s verdict, which
-    its own page carries. Metrics with no windowed series behind them are absent rather than
-    zero.</p>
-  {% if epoch_preview_path %}
-  <p style="margin:0;font-size:0.86rem;color:#555;">
-    The epoch and topography panels below are this condition&rsquo;s own, rebuilt on a crop
-    of it. They average the report&rsquo;s epoch window around each event, so on a condition
-    that is one long block they describe its first seconds rather than the whole of it, which
-    is the limitation the run&rsquo;s own page carries too. The preprocessing and GLM sections
-    are <em>deliberately empty</em>: one model is fitted over the whole recording, and this
-    page keeps only its own activation figure out of it.</p>
-  {% else %}
-  <p style="margin:0;font-size:0.86rem;color:#555;">
-    The preprocessing, epoch, topography and GLM sections below are <em>deliberately
-    empty</em> here. The epoch window is set for a trial rather than a block, so a
-    per-condition version of those panels would describe the first seconds of the condition
-    instead of the condition.</p>
-  {% endif %}
-  <p style="margin:0.4rem 0 0;font-size:0.86rem;color:#555;">
-    {%- if trial_qc_path or trial_image_pairs or trial_image_roi_pairs %}
-    The trial image and the per-trial quality heatmap hold this condition&rsquo;s own trials,
-    the events that start inside its window; the annotation that defines the window is not
-    one of them. Neither panel is measured again. The heatmap&rsquo;s rows are taken from the
-    run&rsquo;s per-trial table, and the images are drawn in one pass over every condition, so
-    their colour scale is shared and two condition pages can be read against each other.
-    {%- else %}
-    The trial image and the per-trial quality heatmap are absent, and it is worth saying why
-    rather than leaving a gap: their rows are trials rather than windows, and
-    {{ condition_trial_reason or 'this condition holds too few trials to compare' }}. They
-    fill in on a blocked event-related design, where a long annotation names the condition and
-    shorter events sit inside it. The run&rsquo;s own page carries both over every trial it
-    has.
-    {%- endif %}
-    {% if index_href %}The full report for the whole run is
-    <a href="{{ index_href }}">{{ index_href }}</a>.{% endif %}</p>
-</div>
-{% endif %}
-
 <!-- ============================================================== summary -->
 <h2 id="Final">Summary</h2>
 <div class="summary-box">
@@ -120,6 +70,9 @@
       {% for key, val in (run_entities or {}).items() %}
       <tr><th>{{ {'ses': 'Session', 'task': 'Task', 'run': 'Run'}.get(key, key) }}</th><td>{{ val }}</td></tr>
       {% endfor %}
+      {% if condition_label %}
+      <tr><th>Scope</th><td>condition &ldquo;{{ condition_label }}&rdquo;</td></tr>
+      {% endif %}
       <tr><th>Date</th><td>{{ run_date }}</td></tr>
       <tr><th>fnirs-pipe</th><td>v{{ versions.get('fnirs-pipe', 'n/a') }}</td></tr>
       <tr><th>MNE</th><td>v{{ versions.get('mne', 'n/a') }}</td></tr>
@@ -138,6 +91,24 @@
   {% if bad_channels %}
   <p style="margin: 0.75rem 0 0; font-size:0.85rem;">
     <strong>Bad channels:</strong> {{ bad_channels | join(', ') }}
+  </p>
+  {% endif %}
+  {% if condition_label %}
+  {#- a per-condition page leaves several sections empty, and an empty section with no
+      explanation reads as a broken report; it belongs to Summary rather than above it -#}
+  <p class="qm-note" style="margin-top:0.75rem;">
+    Sliced out of the windowed pass the whole recording was measured with, so this page sits on
+    the same window grid and the same filter as the run and as every other condition. The
+    verdict is this condition&rsquo;s own; the recording was processed under the run&rsquo;s.
+    {% if epoch_preview_path %}The epoch and topography panels are rebuilt on a crop of this
+    condition, and preprocessing and GLM are deliberately empty, one model being fitted over the
+    whole recording.{% else %}Preprocessing, epoch, topography and GLM are deliberately empty:
+    the epoch window is set for a trial rather than a block.{% endif %}
+    {%- if not (trial_qc_path or trial_image_pairs or trial_image_roi_pairs) %}
+    The trial panels are absent because
+    {{ condition_trial_reason or 'this condition holds too few trials to compare' }}.
+    {%- endif %}
+    {% if index_href %}<a href="{{ index_href }}">Full report for the run</a>.{% endif %}
   </p>
   {% endif %}
   <h3 style="margin-top:1rem;">Run command</h3>
@@ -629,31 +600,28 @@
 
 <h2 id="Metrics">Quantitative Metrics</h2>
 <div class="qm-box">
-  <p class="qm-note">Hover a metric for what it means and which way is good.
-     <span class="ql-dot" aria-hidden="true">&#9679;</span> marks the ones that decide whether the run is usable.</p>
+  {#- Everything that is per-metric is in the hover text, which comes from the registry; the
+      notes here carry only what a single metric's tooltip cannot say. -#}
+  <p class="qm-note">Hover a metric for what it means, which way is good and what it was
+     measured on. <span class="ql-dot" aria-hidden="true">&#9679;</span> marks the ones that
+     decide whether the run is usable. A pair written <b>a &rarr; b</b> is one metric measured
+     either side of a processing step; a single number means that step did not run.</p>
   {% if sqm_long and not sqm_split %}
-  <p class="qm-note">These are measured on <b>long channels only</b>. A short channel sits a few
-     millimetres from its source, so it returns far more light and a far stronger pulse than any
-     long channel; averaging the two together lifts SCI, PSP and SNR and can make a poorly coupled
-     recording read as a good one. The short channels are judged separately, in the per-channel
-     table at the end of this section.</p>
+  <p class="qm-note">Long channels only. Short channels return far more light and a far
+     stronger pulse, so averaging the two lifts SCI, PSP and SNR; they are judged on their own
+     in the per-channel table below.</p>
   {% endif %}
-  <p class="qm-note">A pair written <b>a &rarr; b</b> is the same metric measured twice, over the same
-     channels: <b>a</b> before a processing step and <b>b</b> after it, so the pair shows what the step
-     did. GVTD is measured either side of motion correction; global correlation, HbO&ndash;HbR
-     correlation and CNR either side of the confound regression. A single number means that
-     step did not run for this recording.</p>
 
   {% if sqm_split %}
-  <p class="qm-note">Measured over three channel sets. <b>Long</b> is what the verdict is read off;
-     <b>Short</b> answers a different question, whether the regressors those channels feed are
-     trustworthy, and carries no colouring because a short channel's coupling is high by
-     construction and has no established threshold. Rejection itself is per channel, against the
-     screening criteria, over the whole montage, and is not read off any of these averages.
-     The two GVTD columns are not averages of the row's channels: GVTD is an RMS across
-     channels, so each set is measured on its own and a set's value cannot be recovered from
-     another's.{% if condition_label %} On this page every column is this condition's, and the
-     channel sets are the run's, since one montage has to serve every condition.{% endif %}</p>
+  {#- what used to be a paragraph above the table: it is about the Channel set column rather
+      than about any one metric, so it hangs off that column's header -#}
+  {%- set set_help = "Long is the set the verdict is read off. Short is left uncoloured: a"
+      ~ " short channel's coupling is high by construction and has no established threshold,"
+      ~ " so the column answers whether the regressors those channels feed are trustworthy"
+      ~ " rather than whether the run is usable. Rejection is per channel, against the"
+      ~ " screening criteria over the whole montage, and is not read off these averages."
+      ~ (" On this page every column is this condition's, and the channel sets are the run's,"
+         ~ " since one montage has to serve every condition." if condition_label else "") %}
 
   {#- one column per metric, one row per channel set. Both halves are measured before
       denoising, so they share one table; the domain changes at the divider, and the two
@@ -681,7 +649,7 @@
   <div style="overflow-x:auto;">
   <table class="qm-table qm-split qm-flat">
     <thead>
-      <tr><th>Channel set</th><th>Channels</th>
+      <tr><th><span class="ql" title="{{ set_help }}">Channel set</span></th><th>Channels</th>
           {%- for key, text in od_cols %}<th>{{ ql(key, text) }}</th>{% endfor %}</tr>
     </thead>
     <tbody>
@@ -696,7 +664,7 @@
   <div style="overflow-x:auto;">
   <table class="qm-table qm-split qm-flat">
     <thead>
-      <tr><th>Channel set</th>
+      <tr><th><span class="ql" title="{{ set_help }}">Channel set</span></th>
           {%- for key, text in hb_cols %}<th>{{ ql(key, text) }}</th>{% endfor %}</tr>
     </thead>
     <tbody>
@@ -752,38 +720,31 @@
      the correction footprint is over every channel, since it counts what the correction
      touched.</p>
   {%- set motion_note = ' (motion before&rarr;after)' %}
+  {#- the GVTD-threshold paragraph that used to sit here says what the gvtd_thresh tooltip
+      already says, and is left to it -#}
   {#- A condition has one side of the motion step rather than both, and the two sides are
       not the same side for every row: the GVTD series is stored off the corrected file and
       the spike and footprint spans off the uncorrected one. So each row says which stage it
       is, where the run's page says it once with an arrow. -#}
   {%- set after_note  = ' (after correction)' if condition_label else '' %}
   {%- set before_note = ' (before correction)' if condition_label else '' %}
-  {% if not condition_label and sqm.get('gvtd_pct_above_thresh_post') is not none %}
-  <p class="qm-note">The GVTD threshold is the only row whose two halves are each derived
-     from their own recording, which is what that row is for: it is a mode of the trace's own
-     histogram, so it follows the recording. Every count above it, on both halves, is taken
-     against the <b>uncorrected</b> cutoff, so the fall in % motion is motion removed rather
-     than the cutoff moving. It is the yardstick the carpet above draws, so the two agree.</p>
-  {% endif %}
   {% if condition_label %}
-  <p class="qm-note">One side of the motion step, not both: this condition's GVTD comes off
-     the corrected recording and its spike share off the uncorrected one, so each row names
-     its stage. The run's own page has the before&nbsp;&rarr;&nbsp;after pair for all of them.
-     The GVTD threshold and the spike count are the run's and are not sliced; the threshold is
-     a mode of the whole recording's histogram, and this condition is counted against it.</p>
+  <p class="qm-note">One side of the motion step, not both, and not the same side for every
+     row, so each row names its stage. The run's own page has the
+     before&nbsp;&rarr;&nbsp;after pair.</p>
   {% endif %}
 
   {#- GVTD over the three channel sets. It is an RMS *across* channels, so these are three
       measurements and not three groupings of one, which is why they are here rather than as
       columns of the table above: that table's rows are groupings of per-channel numbers. -#}
   {% if motion_split %}
-  <p class="qm-note">GVTD is an RMS across channels, so each set is its own trace, with its
-     own cutoff and its own share above it. <b>Long</b> is the set the verdict is read off and
-     the only one coloured. <b>Read the last three rows down a column, not across one:</b> a
-     short share is counted against the short trace's cutoff and a long share against the
-     long trace's, so the two are not two readings of one quantity. Short channels sit
-     quieter between events and jump about twice as far during one, which moves both the
-     cutoff and the share and in opposite directions.</p>
+  <p class="qm-note">GVTD is an RMS across channels, so each set is its own trace with its own
+     cutoff. <b>Read the rows down a column, not across one:</b> two sets' shares are counted
+     against different cutoffs and are not two readings of one quantity.</p>
+  {%- set gvtd_set_help = "Long is the set the verdict is read off and the only one coloured."
+      ~ " Each set is a separate GVTD trace rather than a grouping of one: short channels sit"
+      ~ " quieter between events and jump about twice as far during one, which moves both the"
+      ~ " cutoff and the share above it, in opposite directions." %}
   {%- set motion_rows = [('gvtd_mean', 'GVTD mean'),
                          ('gvtd_p95', 'GVTD p95'),
                          ('gvtd_filt_mean', 'GVTD mean 0.01-0.5 Hz'),
@@ -807,7 +768,7 @@
   {%- endfor %}
   <div style="overflow-x:auto;">
   <table class="qm-table qm-split qm-flat">
-    <thead><tr><th>Channel set{% if not condition_label %} (before&nbsp;&rarr;&nbsp;after){% endif %}</th>
+    <thead><tr><th><span class="ql" title="{{ gvtd_set_help }}">Channel set</span>{% if not condition_label %} (before&nbsp;&rarr;&nbsp;after){% endif %}</th>
       {%- for key, text in motion_cols %}<th>{{ ql(key, text) }}</th>{% endfor %}</tr></thead>
     <tbody>
       {% for name, set_key, is_long in [('All', 'all', false), ('Long', 'long', true),
@@ -859,14 +820,10 @@
 
   <h3 class="qm-sub">Haemoglobin and timing</h3>
   <p class="qm-note">Measured after Beer-Lambert, on
-     {% if hb_split %}long channels{% else %}every channel{% endif %}. These rows are the
-     stage comparison: what the denoising did, not what the recording arrived as. The
-     table above holds the same metrics before denoising, split by channel set, and each
-     before value here is that table's row. The global correlations are the one exception:
-     their before side is the bandpassed signal rather than the unfiltered one, because the
-     bandpass alone raises global correlation and the regression is the step this pair
-     exists to measure. % data retained is a share of the recording's duration, not of its
-     channels, so it is one number for every channel set.</p>
+     {% if hb_split %}long channels{% else %}every channel{% endif %}: what the denoising did,
+     not what the recording arrived as, so each <b>before</b> value is that channel set's row
+     in the table above. The global correlations are the exception, their before side being
+     the bandpassed signal rather than the unfiltered one.</p>
   {#- the parenthetical on a row names which step its two columns straddle, since the
       global correlations straddle the confound regression and the rest the denoising -#}
   <table class="qm-table qm-split qm-narrow qm-flat">
@@ -901,11 +858,9 @@
     </tbody>
   </table>
   {% if condition_label %}
-  <p class="qm-note">Low-frequency drift is not among these. It is the peak-to-peak of a
-     cubic fitted over whatever span it is shown, so it measures how far the baseline
-     wandered and that grows with the span: on this dataset it rises 3.3&times; from a 150 s
-     window to a 900 s one on identical data. A per-condition value would be a comparison of
-     the conditions' durations. The run's own page carries it.</p>
+  <p class="qm-note">Low-frequency drift is not among these: it grows with the span it is
+     fitted over, so a per-condition value would compare the conditions' durations. The run's
+     own page carries it.</p>
   {% endif %}
 
 </div>
@@ -930,11 +885,9 @@
       one block, which is what a montage of one kind looks like. -#}
   {% set n_blocks = channel_blocks | length %}
   {% if n_blocks > 1 %}
-  <p class="qm-note">Grouped by source-detector separation. Every block is screened by the same
-     criteria, so Status is a verdict for short channels too, and a short channel marked BAD is
-     one that should not be used as a regressor. Screening is a union of SCI and PSP, so a row can
-     be BAD with a passing SCI. Channels in neither range are measured by no section and show
-     dashes.</p>
+  <p class="qm-note">Grouped by source-detector separation, every block screened by the same
+     criteria, so a short channel marked BAD should not be used as a regressor. Screening is a
+     union of SCI and PSP, so a row can be BAD with a passing SCI.</p>
   {% endif %}
   <div style="overflow-x:auto;">
     <table class="qm-table">
@@ -963,14 +916,12 @@
 {% if channel_summary_path %}
 <!-- ===================================================== channel summary -->
 <h2 id="ChannelSummary">Channel Quality Summary</h2>
-<p style="font-size:0.82rem;color:#666;margin:0 0 0.6rem;">
-  Per-channel pass/fail for Status, SCI, CV, PSP, and SNR, long channels then short ones.
-  Green&nbsp;=&nbsp;pass, red&nbsp;=&nbsp;fail, grey&nbsp;=&nbsp;missing data.
-  Status is the screening verdict, and it rests on the coupled-window share: a window counts
-  when SCI (<code>--sci-threshold</code> {{ "%.2f"|format(config.sci_threshold) }}) and PSP
-  both pass <em>inside that window</em>, and a channel is rejected when it clears fewer than
-  <code>--min-good-frac</code> of them. The SCI, PSP, CV and SNR rows are reported; none of
-  them rejects a channel on its own.
+<p class="qm-note">
+  Per-channel pass/fail, long channels then short ones. Green&nbsp;=&nbsp;pass,
+  red&nbsp;=&nbsp;fail, grey&nbsp;=&nbsp;missing data. Only Status rejects a channel: it is the
+  share of windows in which SCI (<code>--sci-threshold</code>
+  {{ "%.2f"|format(config.sci_threshold) }}) and PSP both pass, against
+  <code>--min-good-frac</code>; the other rows are reported, not enforced.
 </p>
 <div style="overflow-x:auto;">
   <iframe src="{{ channel_summary_path }}"
@@ -982,15 +933,11 @@
 {% if trial_qc_path %}
 <!-- ==================================================== per-trial quality -->
 <h2 id="TrialQC">Per-trial Quality</h2>
-<p style="font-size:0.82rem;color:#666;margin:0 0 0.6rem;">
-  Every trial window scored on its own, over {{ trial_qc_window }}, on the intensity
-  recording, and screened by the same criteria the whole recording was. Colour is relative within a metric
-  row, not a threshold: red marks the worse end of what this recording did. A run whose
-  mean SCI looks fine can still hold a handful of trials where the cap moved, and that is
-  what this is for. Hover a cell for the value.
-  These are whole-montage numbers, so read them against the table's All row rather than its
-  Long one: the short channels are in every value here, and they couple better and return
-  more light than the long ones.
+<p class="qm-note">
+  Every trial window scored on its own, over {{ trial_qc_window }}, on the intensity recording.
+  Colour is relative within a row rather than a threshold: red marks the worse end of what this
+  recording did, so a run with a fine mean SCI can still show the few trials where the cap
+  moved. Whole-montage numbers, so read them against the metrics table's <b>All</b> row.
 </p>
 <div style="overflow-x:auto;">
   <iframe class="plotly-frame" src="{{ trial_qc_path }}" title="Per-trial quality"

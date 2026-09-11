@@ -237,7 +237,7 @@ METRIC_SUMMARY = {
     "cnr_hbo_mean": "How far the evoked HbO response clears its own noise, averaged over channels. Higher is better. Absent on a run with no stimulus annotations.",
     "cnr_hbr_mean": "The same for HbR. HbR falls with a response, so this one runs negative and more negative is better.",
     "cnr_n_epochs": "How many stimulus epochs the CNR was averaged over. Descriptive; a handful of epochs makes the value noisy.",
-    "gcor_hbo": "How much every HbO channel moves together. Higher means a stronger shared systemic or global component rather than localised activity.",
+    "gcor_hbo": "How much every HbO channel moves together. Higher means a stronger shared systemic or global component rather than localised activity. Across a before → after pair the before side is the bandpassed signal rather than the unfiltered one: the bandpass alone raises this, and the regression is the step the pair exists to measure.",
     "gcor_hbr": "The same for HbR.",
     "lowfreq_drift_amplitude_hbo": "Peak-to-peak of a cubic trend fitted to HbO: how far the baseline travelled. Lower is a more stable baseline. It answers how far, not how slowly, so a baseline step moves it more than a slow sag does, and a cubic over a long recording cannot follow wander that repeats within it. Non-standard, and not comparable between recordings of different length.",
     "lowfreq_drift_amplitude_hbr": "The same for HbR.",
@@ -278,7 +278,7 @@ METRIC_SUMMARY = {
     "motion_corrected_n_segments": "How many separate stretches those timepoints form. Experimental.",
 
     # time
-    "pct_data_retained": "Fraction of the recording not covered by BAD annotations. Higher is more usable data.",
+    "pct_data_retained": "Fraction of the recording not covered by BAD annotations. Higher is more usable data. A share of duration rather than of channels, so it is one number for every channel set.",
 }
 
 # The few that decide whether a subject is usable at all. Everything else is context for
