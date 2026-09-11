@@ -14,6 +14,8 @@ All notable changes to this project will be documented in this file.
 - **The motion-correction footprint is split by separation**, `motion_long` and `motion_short` beside `motion`, the way the corrected-side sections already were. Its frame counts ask how many channels were corrected at once, so they are a different measurement over a different channel set rather than the same one regrouped
 
 ### Changed
+- **The cardiac band fraction is shown as a description, not as a quality reading.** It carried a "higher is better" arrow, and injected motion raises it sevenfold: motion is broadband and lifts every band, so the arrow was marking contaminated channels as the good ones. The number is unchanged and so is the respiration band, which never carried one
+- **The low-frequency drift entry says what it measures.** It is the peak-to-peak of a cubic trend, so it answers how far the baseline travelled rather than how slowly, and a baseline step moves it more than a slow sag does. It is also not comparable between recordings of different length, which the entry now says
 - **The per-condition report pages read those numbers rather than computing their own.** A record written before this section gets no condition pages, instead of a second copy of the numbers with nothing keeping the two in agreement
 
 ### Removed

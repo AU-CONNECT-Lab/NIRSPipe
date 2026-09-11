@@ -239,14 +239,14 @@ METRIC_SUMMARY = {
     "cnr_n_epochs": "How many stimulus epochs the CNR was averaged over. Descriptive; a handful of epochs makes the value noisy.",
     "gcor_hbo": "How much every HbO channel moves together. Higher means a stronger shared systemic or global component rather than localised activity.",
     "gcor_hbr": "The same for HbR.",
-    "lowfreq_drift_amplitude_hbo": "Peak-to-peak size of the slow HbO baseline wander. Lower is a more stable baseline. Non-standard, may be removed.",
+    "lowfreq_drift_amplitude_hbo": "Peak-to-peak of a cubic trend fitted to HbO: how far the baseline travelled. Lower is a more stable baseline. It answers how far, not how slowly, so a baseline step moves it more than a slow sag does, and a cubic over a long recording cannot follow wander that repeats within it. Non-standard, and not comparable between recordings of different length.",
     "lowfreq_drift_amplitude_hbr": "The same for HbR.",
 
     # spectral. Power is a mean PSD level inside the band, fraction is a sum over the band
     # against the sum over the whole spectrum; they are not the same quantity rescaled.
-    "cardiac_band_power_hbo": "Average HbO spectral density inside the cardiac band. Scales with signal amplitude, so it does not compare across subjects.",
+    "cardiac_band_power_hbo": "Average HbO spectral density inside the cardiac band. Scales with signal amplitude, so it does not compare across subjects, and it rises with any broadband artifact.",
     "cardiac_band_power_hbr": "The same for HbR.",
-    "cardiac_band_frac_hbo": "Share of this chromophore's total HbO power that sits in the cardiac band, 0 to 1, comparable across subjects. Visible cardiac content confirms real physiology.",
+    "cardiac_band_frac_hbo": "Share of this chromophore's total HbO power that sits in the cardiac band, 0 to 1, comparable across subjects. Describes spectral content, not quality: motion is broadband and lifts every band, so a high value can be contamination rather than a clear pulse. Read SCI and PSP for whether the pulse is real.",
     "cardiac_band_frac_hbr": "The same for HbR.",
     "resp_band_power_hbo": "Average HbO spectral density inside the respiration band.",
     "resp_band_power_hbr": "The same for HbR.",
@@ -438,8 +438,10 @@ METRIC_DISPLAY: dict[str, tuple[str, str, "tuple[float, float] | None", "str | N
     # spectral
     "cardiac_band_power_hbo":  ("Cardiac band power (HbO)", ".3e", None, None),
     "cardiac_band_power_hbr":  ("Cardiac band power (HbR)", ".3e", None, None),
-    "cardiac_band_frac_hbo":   ("Cardiac band (HbO)", "pct", None, _HIGHER),
-    "cardiac_band_frac_hbr":   ("Cardiac band (HbR)", "pct", None, _HIGHER),
+    # descriptive, not a quality reading: injected motion raises this sevenfold, so a
+    # "higher is better" arrow would mark a contaminated channel as the good one
+    "cardiac_band_frac_hbo":   ("Cardiac band (HbO)", "pct", None, None),
+    "cardiac_band_frac_hbr":   ("Cardiac band (HbR)", "pct", None, None),
     "resp_band_power_hbo":     ("Resp band power (HbO)", ".3e", None, None),
     "resp_band_power_hbr":     ("Resp band power (HbR)", ".3e", None, None),
     "resp_band_frac_hbo":      ("Resp band (HbO)", "pct", None, None),
