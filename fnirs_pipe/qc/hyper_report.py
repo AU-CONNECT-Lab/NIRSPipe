@@ -106,6 +106,63 @@ def subject_metric_rows(
     return rows
 
 
+def condition_subject_metrics(
+    subject_sqm: dict,
+    subject_ids: "list[str]",
+    windows: "list[tuple[str, float, float]]",
+    sci_threshold: float,
+) -> dict:
+    """``{condition: rows}`` for the per-subject quality table, one entry per window.
+
+    Each member's quality record already holds the channel-by-window SCI, PSP and CV
+    matrices, so a condition is a column selection out of the pass prep made; nothing is
+    measured again and no recording is read. This is the same slice the subject report's own
+    per-condition pages are built from, through the same function, so a channel's SCI under
+    one condition cannot differ between a subject page and a dyad page.
+
+    **It reports, it does not re-decide.** The coherence on a condition's page was computed
+    on the channel set the whole recording was screened into, because the window is read out
+    of a transform of the whole recording and a per-condition channel set would need a
+    transform of its own. Screening each condition separately would also make a contrast
+    between two conditions a contrast between two montages. So these rows say how the
+    channels held up over this stretch, and the set they were drawn from is the run's.
+
+    A member whose record predates the stored matrices contributes nothing and its column
+    reads as absent, which is the honest answer: the values cannot be recovered from the
+    whole-run scalars.
+    """
+    from fnirs_pipe.qc.condition_views import condition_scalars, condition_slices_from_record
+    from fnirs_pipe.qc.metrics import resolve_cutoffs
+
+    if not windows:
+        return {}
+
+    per_subject: dict = {}
+    for sid in subject_ids:
+        sqm = subject_sqm.get(sid) or {}
+        order = sqm.get("channel_order") or []
+        if not sqm.get("windowed") or not order:
+            logger.info("%s: no windowed matrices in the quality record, so the "
+                        "per-condition quality table has no column for it", sid)
+            continue
+        # that subject's own lines, falling back to the dyad page's SCI threshold only for
+        # a sidecar too old to record them
+        cutoffs = resolve_cutoffs(None, **(sqm.get("screen_cutoffs")
+                                           or {"sci": sci_threshold}))
+        sliced = condition_slices_from_record(
+            {"windowed": sqm["windowed"]}, order, windows,
+            cutoffs["sci"], cutoffs["psp"])
+        for label, values in sliced.items():
+            frac = values.get("good_frac_per_channel") or {}
+            retention = (sum(v >= cutoffs["good_frac"] for v in frac.values()) / len(frac)
+                         if frac else None)
+            per_subject.setdefault(label, {})[sid] = condition_scalars(
+                values, retention=retention)
+
+    return {label: subject_metric_rows(by_sid, subject_ids, sci_threshold)
+            for label, by_sid in per_subject.items()}
+
+
 def write_isc_matrix(
     tsv_path: Path,
     isc_mat,
@@ -384,6 +441,7 @@ def build_hyper_post_report(
     sci_threshold: float = SCI_PASS,
     sep_bands=None,
     cond_windows: "list[tuple[str, float, float]] | None" = None,
+    analysis_window: "tuple[float, float] | None" = None,
 ) -> Path:
     """Build hyperscanning post-QC report.
 
@@ -415,6 +473,11 @@ def build_hyper_post_report(
     the same list to the pseudo-dyad null, and the two tables can only be subtracted row by
     row if they describe the same windows. Left at None the windows are resolved here, which
     is what a caller that writes no null wants.
+
+    ``analysis_window`` is ``--tstart``/``--tend``: the stretch the whole-run pass reports
+    on. It is taken out of the transform of the whole recording, the way a condition window
+    is, so a run restricted to a window carries the recording's cone of influence rather than
+    two edges of its own. The recordings themselves are never cut.
 
     ``wtc_mask_coi`` restricts each band mean to the cone of influence. Off by default; the
     share inside the cone is reported either way as ``n_valid_frac``.
@@ -714,6 +777,13 @@ def build_hyper_post_report(
                 seed=wtc_seed, mc_count=wtc_mc_count, cross=wtc_channel_cross,
                 limit_scales=wtc_limit_scales, ch_type=ch_type, sep_bands=sep_bands)
 
+        # --tstart/--tend: the window is read out of the transform, never cut from the
+        # recording, so the whole-run pass below is the window's and the conditions inside
+        # it are windows of the same transform. One route for both.
+        if wtc_result is not None and analysis_window is not None:
+            with guard(f"Analysis window ({ch_type})", errors, scope):
+                wtc_result = window_result(wtc_result, *analysis_window)
+
         chan_band_df = _band_means(wtc_result, "wtc", ch_type)
         out["chan"] = chan_band_df
         if chan_band_df is not None and wtc_save_maps:
@@ -843,7 +913,8 @@ def build_hyper_post_report(
         return panel
 
     # {label or None: {chromophore: href}}, one entry per page below
-    isc_panels: dict = {None: {c: _isc_panel(c) for c in ("hbo", "hbr")}}
+    isc_panels: dict = {None: {c: _isc_panel(c, window=analysis_window)
+                               for c in ("hbo", "hbr")}}
     for label, tstart, tstop in cond_windows:
         isc_panels[label] = {c: _isc_panel(c, label, (tstart, tstop))
                              for c in ("hbo", "hbr")}
@@ -854,6 +925,14 @@ def build_hyper_post_report(
     isc_unfiltered_note = unfiltered_stage_note(aligned_raws)
     if isc_unfiltered_note:
         logger.warning("ISC: %s", isc_unfiltered_note)
+
+    # the quality table: the run's over the whole recording, and each window's sliced out
+    # of the same stored matrices
+    run_metric_rows = subject_metric_rows(subject_sqm or {}, subject_ids, sci_threshold)
+    cond_metric_rows: dict = {}
+    with guard("Per-condition quality table", errors, scope):
+        cond_metric_rows = condition_subject_metrics(
+            subject_sqm or {}, subject_ids, cond_windows, sci_threshold)
 
     bad_pairs_all: set[str] = set()
     if bad_channels:
@@ -980,14 +1059,16 @@ def build_hyper_post_report(
             condition_label=label,
             condition_window=(f"{window[0]:.1f}–{window[1]:.1f} s on the aligned clock"
                               if window else ""),
+            analysis_window=(f"{analysis_window[0]:.1f}–{analysis_window[1]:.1f} s"
+                             if analysis_window else ""),
             run_href=_page_path(None).name,
             nav_links=[{"label": text, "href": _page_path(lab).name,
                         "current": lab == label} for lab, text in nav_pages],
             isc_unfiltered_note=isc_unfiltered_note,
             isc_panel_hbo_path=isc_panels.get(label, {}).get("hbo", ""),
             isc_panel_hbr_path=isc_panels.get(label, {}).get("hbr", ""),
-            subject_metrics_rows=(subject_metric_rows(
-                subject_sqm or {}, subject_ids, sci_threshold) if label is None else []),
+            subject_metrics_rows=(run_metric_rows if label is None
+                                  else cond_metric_rows.get(label, [])),
         )
         out_path.write_text(html, encoding="utf-8")
         return out_path

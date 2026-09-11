@@ -80,7 +80,7 @@ def _run_groups(groups: dict, process) -> None:
 
 
 def _load_aligned_group(output_dir, members, task, desc, no_align, normalize, bads_scope,
-                        tstart=None, tend=None, passband_check=None):
+                        passband_check=None, scope_tasks=None):
     """Load one dyad, put both recordings on one time axis, and mark the rejected channels.
 
     Returns (aligned_raws, offsets, group_sqm). The rejections are applied here rather than
@@ -88,13 +88,16 @@ def _load_aligned_group(output_dir, members, task, desc, no_align, normalize, ba
     whatever that one file's sidecar recorded, which is the run's own rejections and not
     the union over the subject's runs that `subject` scope asks for.
 
+    --tstart/--tend are not applied here. They name a window of the analysis, and the report
+    takes it out of the transform of the whole recording rather than cutting the recording
+    to it; see `resolve_analysis_window`.
+
     `passband_check` is the (fmin, fmax) a metric is about to ask for, checked against the
     bandpass the files record while the sidecars are still in hand.
     """
     from fnirs_pipe.pipeline.hyperscanning import (
         align_recordings,
         apply_group_bads,
-        crop_aligned_window,
         load_group_haemo,
         load_group_sqm,
         warn_outside_passband,
@@ -105,13 +108,13 @@ def _load_aligned_group(output_dir, members, task, desc, no_align, normalize, ba
     raws = load_group_haemo(output_dir, members, desc=desc)
     if passband_check is not None:
         warn_outside_passband(raws, *passband_check)
-    group_sqm = load_group_sqm(output_dir, members, bads_scope=bads_scope)
+    group_sqm = load_group_sqm(output_dir, members, bads_scope=bads_scope,
+                               scope_tasks=scope_tasks)
     apply_group_bads(raws, group_sqm)
     if no_align:
         aligned_raws, offsets = trim_to_shortest(raws)
     else:
         aligned_raws, offsets = align_recordings(raws, task)
-    aligned_raws = crop_aligned_window(aligned_raws, tstart, tend)
     if normalize:
         aligned_raws = normalize_raws(aligned_raws)
     return aligned_raws, offsets, group_sqm
@@ -217,7 +220,9 @@ def cmd_run(
     from datetime import datetime
 
     from fnirs_pipe.io.derivatives import group_report_dir
-    from fnirs_pipe.pipeline.hyperscanning import resolve_group_bands, write_group_bads
+    from fnirs_pipe.pipeline.hyperscanning import (
+        resolve_analysis_window, resolve_group_bands, write_group_bads,
+    )
     from fnirs_pipe.qc.hyper_report import build_hyper_post_report, condition_windows
     from fnirs_pipe.qc.metrics._helpers import bands_to_record
     from fnirs_pipe.qc.wtc_null import write_wtc_null
@@ -245,10 +250,13 @@ def cmd_run(
             print(f"[error] failed to load ROI mapping: {exc}", file=sys.stderr)
             raise SystemExit(1)
 
+    scope_tasks = sorted({key[1] for key in groups})
+
     def _process(gid, task, members):
         aligned_raws, offsets, group_sqm = _load_aligned_group(
-            output_dir, members, task, desc, no_align, normalize, bads_scope, tstart, tend,
-            passband_check=(wtc_fmin, wtc_fmax))
+            output_dir, members, task, desc, no_align, normalize, bads_scope,
+            passband_check=(wtc_fmin, wtc_fmax), scope_tasks=scope_tasks)
+        analysis_window = resolve_analysis_window(aligned_raws, tstart, tend)
         sep_bands = resolve_group_bands(members, group_sqm, bands_override)
         _quality_summary(aligned_raws, group_sqm, sep_bands)
         if check_only:
@@ -260,6 +268,17 @@ def cmd_run(
         ref = next(iter(aligned_raws.values()), None)
         cond_windows = (condition_windows(ref, min_duration=1.0 / wtc_fmin)
                         if wtc_by_condition and ref is not None else [])
+        if analysis_window is not None:
+            # a condition outside the analysis window has nothing in it to report, and one
+            # straddling an edge would be reported as a full block while only part of it
+            # was read. Dropped rather than clipped, so no page claims a span it did not get
+            lo, hi = analysis_window
+            inside = [w for w in cond_windows if w[1] >= lo and w[2] <= hi]
+            if len(inside) != len(cond_windows):
+                dropped = [w[0] for w in cond_windows if w not in inside]
+                print(f"     [info] {len(dropped)} condition(s) outside "
+                      f"--tstart/--tend: {', '.join(dropped)}")
+            cond_windows = inside
         report_path = build_hyper_post_report(
             group_id=gid,
             task=task,
@@ -288,6 +307,7 @@ def cmd_run(
             isc_threshold=isc_threshold,
             sci_threshold=sci_threshold,
             sep_bands=sep_bands,
+            analysis_window=analysis_window,
         )
         if wtc_pseudo:
             null_path = write_wtc_null(
@@ -553,10 +573,13 @@ def _build_parser() -> argparse.ArgumentParser:
     run.add_argument("--bads-scope", choices=_BADS_SCOPE_CHOICES, default="run",
                      help="Which rejected channels are excluded from the inter-brain "
                           "metrics. 'run' (default) uses this task's own rejections. "
-                          "'subject' unions them over every run of the subject, so all "
-                          "conditions rest on the same channel set, which is what comparing "
-                          "conditions needs; the cost is losing a channel everywhere because "
-                          "one segment was bad.")
+                          "'subject' unions them over the subject's runs that the pairs "
+                          "table names, so all conditions rest on the same channel set. "
+                          "The two differ only where the conditions were cropped to "
+                          "separate tasks before preprocessing: a recording preprocessed "
+                          "whole is screened once, so its conditions already rest on one "
+                          "channel set and the union is that one run's own rejections. A "
+                          "line in the log says which case a given run is.")
     run.add_argument("--isc-threshold", type=float, default=0.3,
                      help="Minimum mean ISC to draw an arc in the connectivity circle.")
     run.add_argument("--check-only", action="store_true",

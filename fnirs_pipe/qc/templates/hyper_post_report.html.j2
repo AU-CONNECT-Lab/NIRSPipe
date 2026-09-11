@@ -41,6 +41,10 @@ select#ch-select-post, select#roi-select-post {
       {% if condition_label -%}
       {{ condition_window }} &bull; every panel below is this window read out of the whole-run
       transform, so it carries the recording's cone of influence and not two edges of its own
+      {%- elif analysis_window -%}
+      restricted to {{ analysis_window }} by <code>--tstart</code>/<code>--tend</code>, taken
+      out of the transform of the whole recording rather than cut from it &bull; the coherence
+      is averaged across every condition inside that window
       {%- else -%}
       the coherence over the whole recording, averaged across every condition in it &bull;
       the per-condition pages are the ones to read for a block design
@@ -68,19 +72,36 @@ select#ch-select-post, select#roi-select-post {
 
 <!-- Per-subject quality metrics -->
 {% if subject_metrics_rows %}
-{% call card("Per-subject Quality Metrics", hint="↑ / ↓ = better direction &bull; SCI coloured against the threshold, HbO-HbR by sign") %}
+{% call card("Per-subject Quality Metrics",
+             hint="↑ / ↓ = better direction &bull; SCI coloured against the threshold, HbO-HbR by sign") %}
 <div class="subj-metrics-wrap">
   {{ subject_metrics(subject_metrics_rows, subject_ids) }}
 </div>
+{% if condition_label %}
+<div class="panel-caveat">
+  Over this window only, read out of the channel-by-window matrices each member's quality
+  record already holds, so nothing was measured again. The rows with no windowed series
+  behind them are on the <a href="{{ run_href }}">whole-run page</a> instead of being
+  filled with the recording's numbers here.
+  <br /><br />
+  <b>This reports, it does not re-decide.</b> The coherence above was computed on the
+  channel set the whole recording was screened into, and stays that way for two reasons:
+  the window is read out of a transform of the whole recording, so a channel set of its own
+  would need a transform of its own; and screening each condition separately would make a
+  contrast between two conditions a contrast between two montages as well. So a channel that
+  held up here and came loose elsewhere is still in, and one that came loose <i>here</i> is
+  still in too &mdash; these numbers are how to see which.
+</div>
+{% endif %}
 {% endcall %}
 {% elif condition_label %}
-{% call card("Per-subject Quality Metrics", hint="measured over the whole recording") %}
+{% call card("Per-subject Quality Metrics", hint="not available for this window") %}
 <div class="panel-caveat">
-  These are measured over the whole recording, so they are not this condition's and are not
-  repeated here. They are on the
-  <a href="{{ run_href }}">whole-run page</a>. A channel that held up through one condition
-  and came loose in another is judged once, over the recording, and the coherence on this
-  page rests on that one verdict; per-condition screening is not in yet.
+  Neither member's quality record carries the channel-by-window matrices a per-condition
+  view is sliced out of, so there is nothing to show here rather than the whole recording's
+  numbers under this condition's heading. Those are on the
+  <a href="{{ run_href }}">whole-run page</a>. Re-running <code>fnirs-pipe</code> on these
+  subjects writes the matrices.
 </div>
 {% endcall %}
 {% endif %}

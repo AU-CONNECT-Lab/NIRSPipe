@@ -13,7 +13,7 @@ Report sections
     Subject metadata, bad-channel badge, run command.
 
   a. Raw Signal
-    Per-channel HbO/HbR timeseries + PSD + epoch preview (dropdown selector).
+    Per-channel HbO/HbR timeseries + PSD (dropdown selector).
 
   b. Raw Signal Quality (SCI / PSP)
     Windowed SCI/PSP heatmap + lollipop summary (build_sci_psp_figure), all on the
@@ -355,8 +355,6 @@ def _section_channel_detail(
     subject: str,
     errors: list,
     figures_dir: Path,
-    epoch_tmin: float = -5.0,
-    epoch_tmax: float = 25.0,
     max_pts: int = 4000,
     cardiac: "tuple[float, float] | None" = None,
     resp: "tuple[float, float] | None" = None,
@@ -374,12 +372,15 @@ def _section_channel_detail(
     saved = []
     for pair in pairs:
         with _guard(f"Channel detail {pair}", errors, subject):
-            detail_fig, psd_fig, epoch_fig = build_channel_figure(
-                raw_haemo, markers, pair, max_pts, epoch_tmin, epoch_tmax,
-                cardiac=cardiac, resp=resp,
+            # no epoch panel: this stage is unfiltered, so an epoch average here draws
+            # cardiac ripple where a slow curve should be. The epoch section carries the
+            # per-channel response on the denoised stage, in the trial image
+            detail_fig, psd_fig, _ = build_channel_figure(
+                raw_haemo, markers, pair, max_pts,
+                cardiac=cardiac, resp=resp, epoch=False,
             )
             fname = f"ch_detail_{_pair_fname(pair)}{suffix}.html"
-            h = _save_multi_fig_html([detail_fig, psd_fig, epoch_fig], figures_dir / fname)
+            h = _save_multi_fig_html([detail_fig, psd_fig], figures_dir / fname)
             is_short = pair in short_pairs
             saved.append({"pair": pair, "path": _fig_href(figures_dir, fname), "h": h,
                           "label": f"{pair} (short)" if is_short else pair,
@@ -1508,7 +1509,6 @@ def build_subject_report(
     channel_det_vars  = _section_channel_detail(
                             raw_haemo_uncorr if raw_haemo_uncorr is not None else raw_haemo,
                             subject, errors, figures_dir,
-                            epoch_tmin=epoch_tmin, epoch_tmax=epoch_tmax,
                             cardiac=(config.cardiac_l_freq, config.cardiac_h_freq),
                             resp=(config.resp_l_freq, config.resp_h_freq),
                             sep_bands=sep_bands)
@@ -1841,10 +1841,10 @@ def _cropped_sections(
     out.update(_section_psd_detail(haemo, subject, errors, figures_dir,
                                    l_freq=l_freq, h_freq=h_freq, psd_stages=stages,
                                    suffix=suffix, **bands))
-    # epoch_pad here too: this section's third panel epochs, like the two below it
-    out.update(_section_channel_detail(crop(raw_haemo_uncorr, epoch_pad) or haemo, subject, errors,
-                                       figures_dir, epoch_tmin=epoch_tmin,
-                                       epoch_tmax=epoch_tmax, suffix=suffix,
+    # the bare span, unlike the epoch panels below: nothing in this section epochs any more,
+    # so the pad would only show the neighbouring condition's last seconds
+    out.update(_section_channel_detail(crop(raw_haemo_uncorr) or haemo, subject, errors,
+                                       figures_dir, suffix=suffix,
                                        sep_bands=sep_bands, **bands))
     # the same question the run's own page asks, re-asked on the crop: a condition page holds
     # one condition, so a design of one block per condition leaves it a single event and

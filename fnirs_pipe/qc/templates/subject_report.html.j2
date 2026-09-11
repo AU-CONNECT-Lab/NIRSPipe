@@ -134,7 +134,7 @@
   <summary>a. Raw Signal</summary>
   <div class="details-body">
     <p class="step-desc">
-      Per-channel HbO/HbR timeseries, PSD, and epoch-averaged response, on
+      Per-channel HbO/HbR timeseries and PSD, on
       <code>{{ channel_detail_stage or 'desc-sci' }}</code> converted with
       DPF = {{ config.dpf | join(', ') }}. This is the recording before motion correction
       ({{ config.motion_correction }}) and before any filtering, the same stage the
@@ -145,9 +145,11 @@
     </p>
 
     {% if channel_pairs %}
-    <h3>Per-channel HbO / HbR &amp; PSD &amp; Epoch</h3>
+    <h3>Per-channel HbO / HbR &amp; PSD</h3>
     <p style="font-size:0.82rem;color:#666;margin:0 0 0.3rem;">
-      Select a channel to view its HbO/HbR timeseries, PSD, and epoch-averaged response.
+      Select a channel to view its HbO/HbR timeseries and its PSD. This channel's epoch
+      average is in the epoch section below, on the denoised signal: an epoch average on
+      this unfiltered stage shows cardiac ripple rather than the shape of a response.
       Pairs marked <em>(short)</em> are short-separation: too shallow to reach cortex, so
       what they show is scalp haemodynamics.
     </p>

@@ -499,22 +499,55 @@ def crop_aligned_window(
     tstart: float | None,
     tend: float | None,
 ) -> dict[str, mne.io.Raw]:
-    """Cut every aligned recording down to [tstart, tend] on the shared post-alignment clock.
+    """Actually cut every aligned recording down to ``[tstart, tend]``.
+
+    For a metric with no frequency axis of its own, where a window carries no edge the whole
+    record would not have had: the Welch coherence and the signal overlays of the raw dyad
+    report. ``fnirs-hyper run`` does **not** use this. Its window goes through
+    :func:`resolve_analysis_window` instead and is taken out of the wavelet transform, a cut
+    stretch transformed alone having two edges and a cone of influence of its own.
+
+    ``tend`` past the end of the data is clipped rather than refused: recordings differ in
+    length and an over-long window is a request for "to the end", not a mistake.
+    """
+    window = resolve_analysis_window(raws, tstart, tend)
+    if window is None:
+        return raws
+    t0, t1 = window
+    return {sid: raw.copy().crop(tmin=t0, tmax=t1) for sid, raw in raws.items()}
+
+
+def resolve_analysis_window(
+    raws: dict[str, mne.io.Raw],
+    tstart: float | None,
+    tend: float | None,
+) -> "tuple[float, float] | None":
+    """Validate ``--tstart``/``--tend`` against the aligned recordings and return the window.
 
     Runs after `align_recordings` / `trim_to_shortest`, where t=0 is the shared trigger
     (or the common start) and all recordings already have one length. That is what makes a
     single window valid for the whole group: the same [tstart, tend] names the same moment
     of the task in every subject, which it would not on the raw per-subject clocks.
 
-    Example: a 600 s aligned dyad with tstart=60, tend=300 returns both recordings cut to
-    the 240 s of task between them, so the coherence never sees the baseline or the wrap-up.
+    Example: a 600 s aligned dyad with tstart=60, tend=300 gives ``(60.0, 300.0)``, and the
+    coherence reported is the 240 s between them.
 
-    `tend` past the end of the data is clipped rather than refused: recordings differ in
-    length and an over-long window is a request for "to the end", not a mistake. A `tstart`
+    **It returns a window; it does not cut.** The recordings stay whole and the window is
+    taken out of the wavelet transform afterwards, which is the same route
+    ``--wtc-by-condition`` takes and for the reason recorded in
+    :func:`~fnirs_pipe.pipeline.synchrony.window_result`: a cut stretch transformed on its
+    own has two edges of its own, and its cone of influence eats a share of the band that
+    grows as the window shortens, so the coherence over a 300 s cut comes out higher than
+    the same 300 s read out of the whole record. This used to cut, so it was the one entry in
+    this pipeline still paying that cost. Numbers from before that change are not
+    reproducible with it.
+
+    ``tend`` past the end of the data is clipped rather than refused: recordings differ in
+    length and an over-long window is a request for "to the end", not a mistake. A ``tstart``
     at or past the end has no data to describe and raises.
     """
     if tstart is None and tend is None:
-        return raws
+        return None
 
     duration = min(float(r.times[-1]) for r in raws.values())
     t0 = 0.0 if tstart is None else float(tstart)
@@ -528,8 +561,8 @@ def crop_aligned_window(
     if tend is not None and tend > duration:
         logger.warning("--tend %gs exceeds the aligned length %gs; using %gs",
                        tend, duration, duration)
-
-    return {sid: raw.copy().crop(tmin=t0, tmax=t1) for sid, raw in raws.items()}
+    logger.info("window %.1f-%.1f s of %.1f s", t0, t1, duration)
+    return t0, t1
 
 
 def normalize_raws(raws: dict[str, mne.io.Raw]) -> dict[str, mne.io.Raw]:
@@ -596,6 +629,25 @@ def _sci_from_sidecar(json_path: Path) -> dict[str, float]:
     return {str(k): float(v) for k, v in scores.items()}
 
 
+def _screen_cutoffs(json_path: Path) -> dict:
+    """The screening lines a run used, off its ``desc-sci`` sidecar.
+
+    ``{"sci": 0.8, "psp": 0.1, "good_frac": 0.75}``, or an empty dict when the sidecar
+    predates them. A per-condition view rebuilds the coupled-window share from the stored
+    matrices, and it has to apply the lines that subject was actually screened by: the
+    registry defaults would produce a share no channel of theirs was ever judged against,
+    and ``fnirs-hyper``'s own ``--sci-threshold`` is a colouring threshold for the dyad
+    page, not the one prep ran.
+    """
+    try:
+        params = json.loads(json_path.read_text(encoding="utf-8")).get("parameters") or {}
+    except (OSError, json.JSONDecodeError):
+        return {}
+    named = {"sci": params.get("sci_threshold"), "psp": params.get("psp_threshold"),
+             "good_frac": params.get("min_good_frac")}
+    return {k: float(v) for k, v in named.items() if v is not None}
+
+
 def _bad_from_csv(csv_path: Path) -> list[str]:
     try:
         ch_df = pd.read_csv(csv_path)
@@ -608,8 +660,23 @@ def _bad_from_csv(csv_path: Path) -> list[str]:
     ].tolist()
 
 
+def _member_sqm_dir(output_dir: Path, entry: GroupEntry) -> Path:
+    """A member's ``nirs/``, session level included.
+
+    ``find_preproc_snirf`` and the report's own ``_member_nirs_dir`` both take the session
+    into account, and this did not, so on a multi-session tree the SNIRF was found and the
+    quality record beside it was not: no channel was rejected, every quality column read
+    n/a, and nothing failed.
+    """
+    folder = output_dir / entry.subject_id
+    if entry.session:
+        folder = folder / f"ses-{entry.session}"
+    return folder / "nirs"
+
+
 def load_group_sqm(
     output_dir: Path, group: list[GroupEntry], bads_scope: str = "run",
+    scope_tasks: "list[str] | None" = None,
 ) -> dict[str, dict]:
     """Load per-subject SQM scalars and channel metrics from derivatives.
 
@@ -621,12 +688,26 @@ def load_group_sqm(
     ``bads_scope`` decides what counts as a bad channel:
 
     - ``"run"``: this task's own rejections, matching the rest of the metrics returned here.
-    - ``"subject"``: the union over every run of the subject, so a channel rejected in any
+    - ``"subject"``: the union over the subject's runs, so a channel rejected in any
       condition is rejected in all of them. Conditions then rest on the same channel set,
       which is what a comparison between them needs; the cost is losing a channel everywhere
       because one segment was bad.
 
-    Returns {subject_id: sqm_dict}.
+    ``scope_tasks`` bounds that union to the tasks the analysis covers, normally the ones the
+    pairs table names. Without it the union is every ``desc-sci`` sidecar in the folder, so a
+    subject who also sat a resting run, or a second experiment, loses channels here for a
+    recording nobody asked about.
+
+    Which scope is worth using depends on how the tree was produced, and the two are not
+    always different. A recording preprocessed whole is screened once, so the subject has one
+    run per task and the union over it is itself: ``subject`` and ``run`` then name the same
+    set, and a line in the log says so. They differ when the conditions were cropped to
+    separate tasks before prep, which is the case ``subject`` was added for.
+
+    Returns {subject_id: sqm_dict}. Alongside the flattened scalars each dict carries
+    ``windowed`` (the record's channel-by-window matrices), ``channel_order`` (their row
+    order) and ``screen_cutoffs`` (the lines that run screened by), which is what a
+    per-condition view of the dyad pages is built from.
     """
     if bads_scope not in ("run", "subject"):
         raise ValueError(f"bads_scope must be 'run' or 'subject', got {bads_scope!r}")
@@ -635,7 +716,7 @@ def load_group_sqm(
 
     result: dict[str, dict] = {}
     for entry in group:
-        nirs_dir = output_dir / entry.subject_id / "nirs"
+        nirs_dir = _member_sqm_dir(output_dir, entry)
 
         sqm: dict = {}
         # the long-channel view is the one a quality judgement wants, with raw standing in
@@ -656,6 +737,14 @@ def load_group_sqm(
             sqm.update(record.get("motion") or {})
             sqm.update(record.get("preproc") or {})
             sqm.update(record.get("preproc_long") or {})
+            # the channel-by-window matrices, kept whole rather than flattened: they are
+            # what a per-condition view is a column selection out of, and without them the
+            # dyad pages can only print the whole recording's numbers under a condition's
+            # heading. Nested under one key so they cannot collide with a scalar name.
+            sqm["windowed"] = record.get("windowed") or {}
+            sqm["channel_order"] = list(
+                ((record.get("per_channel") or {}).get("raw") or {})
+                .get("sci_per_channel") or {})
 
         # Rejection is read from the desc-sci sidecars, which prep writes on every run and
         # which name every channel the run rejected whatever came after. The channel-metrics
@@ -695,6 +784,8 @@ def load_group_sqm(
                 except Exception:
                     pass
             sqm["bad_channels"] = read_bads(path)
+            if sidecars:
+                sqm["screen_cutoffs"] = _screen_cutoffs(path)
             logger.info("%s task-%s: %d rejected channel(s) from %s (%s)",
                         entry.subject_id, entry.task, len(sqm["bad_channels"]), kind, path.name)
 
@@ -704,14 +795,31 @@ def load_group_sqm(
             ch: [entry.task] for ch in (sqm.get("bad_channels") or [])
         }
         if bads_scope == "subject":
-            for path in marks:
+            in_scope = ([p for p in marks
+                         if (m := re.search(r"_task-([A-Za-z0-9]+)", p.name))
+                         and m.group(1) in scope_tasks]
+                        if scope_tasks else marks)
+            for path in in_scope:
                 from_task = m.group(1) if (m := re.search(r"_task-([A-Za-z0-9]+)", path.name)) else entry.task
                 for ch in read_bads(path):
                     if from_task not in sources.setdefault(ch, []):
                         sources[ch].append(from_task)
             sqm["bad_channels"] = sorted(sources)
-            logger.info("%s: --bads-scope subject unions %d channel(s) over %d run(s) of %s",
-                        entry.subject_id, len(sources), len(marks), kind)
+            if len(in_scope) <= 1:
+                # loud, because it reads as a choice that was made and was not. The union
+                # over one run is that run, so the flag did nothing; a caller who passed it
+                # expecting conditions to be unioned is looking at a tree where they are
+                # not separate runs, and the union they wanted is already what prep did
+                logger.warning(
+                    "%s: --bads-scope subject found %d run(s) in scope, so the union is "
+                    "just that run's own rejections and the flag changed nothing. That is "
+                    "what a whole-recording analysis looks like: prep screened the "
+                    "recording once, so every condition already rests on one channel set. "
+                    "The flag matters only where the conditions were cropped to separate "
+                    "tasks before prep.", entry.subject_id, len(in_scope))
+            else:
+                logger.info("%s: --bads-scope subject unions %d channel(s) over %d run(s) "
+                            "of %s", entry.subject_id, len(sources), len(in_scope), kind)
         sqm["bad_channel_sources"] = {ch: sorted(t) for ch, t in sources.items()}
 
         result[entry.subject_id] = sqm

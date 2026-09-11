@@ -168,11 +168,17 @@ def alignment_window() -> argparse.ArgumentParser:
                    help="Skip trigger-based alignment; trim all recordings to the shortest "
                         "duration.")
     p.add_argument("--tstart", type=float, default=None,
-                   help="Keep only from this time (s) on the aligned clock, where 0 is the "
-                        "shared trigger. Omit to start at the alignment point.")
+                   help="Report on this time (s) onward, on the aligned clock, where 0 is "
+                        "the shared trigger. Omit to start at the alignment point.")
     p.add_argument("--tend", type=float, default=None,
-                   help="Keep only up to this time (s) on the aligned clock. Omit to run to "
+                   help="Report up to this time (s) on the aligned clock. Omit to run to "
                         "the end; a value past the end is clipped. The window narrows the "
                         "synchrony metrics only: the per-subject quality record describes "
-                        "the whole recording either way.")
+                        "the whole recording either way. For `fnirs-hyper run` this selects "
+                        "rather than cuts: the wavelet transform is computed over the whole "
+                        "recording and the window read out of it, so the window carries the "
+                        "recording's cone of influence rather than two edges of its own, "
+                        "and a condition falling outside it is dropped from the run. This "
+                        "cut the recording until now, so numbers from before are not "
+                        "reproducible with it.")
     return p

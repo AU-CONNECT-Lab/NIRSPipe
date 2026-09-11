@@ -201,17 +201,22 @@ def build_channel_figure(
     markers: list[dict],
     ch_pair: str,
     max_ts_pts: int,
-    epoch_tmin: float,
-    epoch_tmax: float,
+    epoch_tmin: float = -5.0,
+    epoch_tmax: float = 25.0,
     cardiac: "tuple[float, float] | None" = None,
     resp: "tuple[float, float] | None" = None,
+    epoch: bool = True,
 ) -> tuple[go.Figure, go.Figure | None, go.Figure | None]:
-    """One channel pair as three panels: HbO/HbR over time, its PSD, its epoch average.
+    """One channel pair as up to three panels: HbO/HbR over time, its PSD, its epoch average.
 
     ``cardiac`` and ``resp`` are the run's own band edges, taken from the CLI, and shade the
     PSD panel the way the multi-stage PSD figure shades its rows. Without them the panel is
     a bare spectrum, and a reader judging whether a channel carries a pulse has to hold the
     band edges in their head; passing None omits that band rather than guessing a default.
+
+    ``epoch=False`` returns None for the third panel. An epoch average is read for the shape
+    of a slow curve, and on an unfiltered stage that shape is buried under cardiac ripple, so
+    a caller with a denoised view of the same channel elsewhere asks for the first two only.
     """
     hbo_name = f"{ch_pair} hbo"
     hbr_name = f"{ch_pair} hbr"
@@ -288,7 +293,7 @@ def build_channel_figure(
         logger.warning("channel PSD failed for %s: %s", ch_pair, exc)
 
     epoch_fig = None
-    if markers:
+    if epoch and markers:
         try:
             # relative onsets: an absolute one lands a second first_time past the data
             anns = mne.Annotations(
@@ -865,12 +870,13 @@ def build_sci_psp_figure(
 
 def _trial_image_data(
     raw_haemo: mne.io.Raw, picks: "list[int]", epoch_tmin: float, epoch_tmax: float,
-) -> "list[tuple[str, np.ndarray, np.ndarray]] | None":
-    """Epoch on (non-BAD) events, average over picks -> [(label, (n_trials, n_times) µM, times)].
+) -> "list[tuple[str, np.ndarray, np.ndarray, list[str] | None]] | None":
+    """Epoch on (non-BAD) events, average over picks -> [(label, (n_trials, n_times) µM, times, rows)].
 
     One entry per condition, e.g. two conditions with 20 trials each give
     [("all conditions", (40, n_times)), ("rest", (20, ...)), ("task", (20, ...))].
-    The pooled entry leads so a condition with few trials can be read against it.
+    The pooled entry leads so a condition with few trials can be read against it, and is the
+    only one carrying ``rows``, the condition each of its rows came from.
     """
     if not any(not str(a["description"]).upper().startswith("BAD") for a in raw_haemo.annotations):
         return None
@@ -887,10 +893,15 @@ def _trial_image_data(
         data = epochs.get_data()  # (n_trials, n_picks, n_times)
         if data.shape[0] == 0:
             return None
-        out: "list[tuple[str, np.ndarray, np.ndarray]]" = []
-        if len(event_id) > 1:
+        out: "list[tuple[str, np.ndarray, np.ndarray, list[str] | None]]" = []
+        pooled = len(event_id) > 1
+        if pooled:
+            # the pooled panel stacks conditions in event order, so without the name of each
+            # row a reader cannot tell which row belongs to which condition
+            by_code = {v: k for k, v in event_id.items()}
+            rows = [str(by_code.get(int(c), "")) for c in epochs.events[:, 2]]
             # average over channels → (n_trials, n_times)
-            out.append(("all conditions", data.mean(axis=1) * 1e6, epochs.times))
+            out.append(("all conditions", data.mean(axis=1) * 1e6, epochs.times, rows))
         for cond in event_id:
             try:
                 cond_data = epochs[cond].get_data()
@@ -898,7 +909,11 @@ def _trial_image_data(
                 continue
             if cond_data.shape[0] == 0:
                 continue
-            out.append((str(cond), cond_data.mean(axis=1) * 1e6, epochs.times))
+            # a one-row heatmap is a colour strip above a copy of its own average; the
+            # pooled panel already carries that trial, named
+            if cond_data.shape[0] < 2 and pooled:
+                continue
+            out.append((str(cond), cond_data.mean(axis=1) * 1e6, epochs.times, None))
         return out or None
     except Exception:
         return None
@@ -911,7 +926,10 @@ def _smooth_trials(data: np.ndarray, trial_smooth: int) -> np.ndarray:
     return data
 
 
-def _trial_image_plot(data: np.ndarray, times: np.ndarray, title: str, zmax: float) -> "go.Figure":
+def _trial_image_plot(
+    data: np.ndarray, times: np.ndarray, title: str, zmax: float,
+    row_labels: "list[str] | None" = None,
+) -> "go.Figure":
     """Trial x time heatmap + trial average. ``data`` is already trial-smoothed."""
     fig = make_subplots(
         rows=2, cols=1, shared_xaxes=True, row_heights=[0.75, 0.25], vertical_spacing=0.06,
@@ -919,7 +937,10 @@ def _trial_image_plot(data: np.ndarray, times: np.ndarray, title: str, zmax: flo
     )
     fig.add_trace(go.Heatmap(
         z=data, x=times.tolist(), colorscale="RdBu_r", zmid=0, zmin=-zmax, zmax=zmax,
-        zsmooth="best",  # bilinear interpolation → continuous look (fNIRS has few, wide time cells)
+        # no zsmooth: it interpolates both axes, and adjacent rows are separate trials, in
+        # the pooled panel separate conditions, so blending them invents a gradient between
+        # things that are not neighbours. The time axis needs none at fNIRS sampling rates,
+        # ~300 samples across a 30 s window
         colorbar=dict(title="µM", len=0.7, y=0.62),
     ), row=1, col=1)
     fig.add_trace(go.Scatter(
@@ -928,6 +949,9 @@ def _trial_image_plot(data: np.ndarray, times: np.ndarray, title: str, zmax: flo
     ), row=2, col=1)
     fig.add_vline(x=0.0, line=dict(color="#333", width=1, dash="dash"))
     fig.update_yaxes(title_text="trial", row=1, col=1)
+    if row_labels and len(row_labels) <= _TRIAL_ROW_LABEL_MAX:
+        fig.update_yaxes(tickmode="array", tickvals=list(range(len(row_labels))),
+                         ticktext=row_labels, tickfont=dict(size=9), row=1, col=1)
     fig.update_yaxes(title_text="µM", row=2, col=1)
     fig.update_xaxes(title_text="Time from onset (s)", row=2, col=1)
     fig.update_layout(
@@ -941,8 +965,16 @@ def _auto_trial_smooth(n_trials: int) -> int:
     return max(1, n_trials // 15)
 
 
+# above this every row label would be drawn and they collide; the axis stays numeric instead
+_TRIAL_ROW_LABEL_MAX = 12
+
+
+def _n_trials(n: int) -> str:
+    return "1 trial" if n == 1 else f"{n} trials"
+
+
 def _trial_image_figures(
-    res: "list[tuple[str, np.ndarray, np.ndarray]]",
+    res: "list[tuple[str, np.ndarray, np.ndarray, list[str] | None]]",
     title_for: "callable",
     trial_smooth: "int | None",
 ) -> "list[go.Figure]":
@@ -952,16 +984,16 @@ def _trial_image_figures(
     single-trial spike would otherwise wash out every panel.
     """
     panels = []
-    for label, data, times in res:
+    for label, data, times, rows in res:
         sm = trial_smooth if trial_smooth is not None else _auto_trial_smooth(data.shape[0])
-        panels.append((label, _smooth_trials(data, sm), times))
+        panels.append((label, _smooth_trials(data, sm), times, rows))
     zmax = max(
-        (float(np.nanpercentile(np.abs(d), 97)) for _, d, _ in panels),
+        (float(np.nanpercentile(np.abs(d), 97)) for _, d, _, _ in panels),
         default=0.0,
     ) or 1.0
     return [
-        _trial_image_plot(data, times, title_for(label, data.shape[0]), zmax)
-        for label, data, times in panels
+        _trial_image_plot(data, times, title_for(label, data.shape[0]), zmax, rows)
+        for label, data, times, rows in panels
     ]
 
 
@@ -985,7 +1017,7 @@ def build_trial_image_figure(
     if res is None:
         return None
     return _trial_image_figures(
-        res, lambda label, n: f"Trial image — {ch_name} / {label} ({n} trials)", trial_smooth)
+        res, lambda label, n: f"Trial image — {ch_name} / {label} ({_n_trials(n)})", trial_smooth)
 
 
 def build_roi_trial_image_figure(
@@ -1011,7 +1043,7 @@ def build_roi_trial_image_figure(
         return None
     return _trial_image_figures(
         res,
-        lambda label, n: f"Trial image — ROI {roi_name} / {label} ({len(picks)} ch, {n} trials)",
+        lambda label, n: f"Trial image — ROI {roi_name} / {label} ({len(picks)} ch, {_n_trials(n)})",
         trial_smooth,
     )
 
@@ -1103,9 +1135,12 @@ def build_epoch_preview_figure(
             subplot_titles=titles,
         )
         # the task's own length, so the curve can be read against when the task stopped
-        # rather than against the onset alone
-        durations = [float(m["duration"]) for m in markers if float(m["duration"]) > 0]
-        block = float(np.median(durations)) if durations else 0.0
+        # rather than against the onset alone. Per condition, not one median over all of
+        # them: a run of 300 s and 900 s blocks shaded every panel with the same 900 s
+        by_cond: "dict[str, list[float]]" = {}
+        for m in markers:
+            if float(m["duration"]) > 0:
+                by_cond.setdefault(m["description"], []).append(float(m["duration"]))
 
         yrange = _shared_yrange(scaling, traces)
 
@@ -1120,9 +1155,13 @@ def build_epoch_preview_figure(
                     showlegend=(i == 1),
                     line=dict(color=color, width=2, dash=dash),
                 ), row=i, col=1)
+            # clamped to the window: an unclamped shape drives the autorange, and a 900 s
+            # block left the -5 to 25 s traces in the leftmost 3% of the panel
+            block = float(np.median(by_cond.get(_cond, []))) if by_cond.get(_cond) else 0.0
             if block > 0:
-                fig.add_vrect(x0=0, x1=block, line_width=0, fillcolor="#f1c40f",
-                              opacity=0.16, layer="below", row=i, col=1)
+                fig.add_vrect(x0=0, x1=min(block, epoch_tmax), line_width=0,
+                              fillcolor="#f1c40f", opacity=0.16, layer="below",
+                              row=i, col=1)
             fig.add_hline(y=0, line=dict(color="#cccccc", width=1), row=i, col=1)
             fig.add_vline(x=0, line=dict(color="#7f8c8d", width=1, dash="dash"),
                           row=i, col=1)
@@ -1132,6 +1171,7 @@ def build_epoch_preview_figure(
             fig.update_yaxes(title_text="Conc. (µmol/L)", gridcolor="#eeeeee",
                              row=i, col=1,
                              **({"range": yrange} if i == 1 else {"matches": "y"}))
+        fig.update_xaxes(range=[epoch_tmin, epoch_tmax])
         fig.update_xaxes(title_text="Time rel. onset (s)", gridcolor="#eeeeee",
                          zerolinecolor="#cccccc", row=n, col=1)
         fig.update_annotations(font_size=10)

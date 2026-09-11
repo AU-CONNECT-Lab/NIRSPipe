@@ -181,6 +181,9 @@ def _trial_metric_specs() -> list[tuple[str, str, bool]]:
     return specs
 
 
+_TRIAL_CELL_PX = 26
+
+
 def trial_quality_heatmap(
     trial_labels: list[str],
     trial_sqms: list[dict],
@@ -220,23 +223,37 @@ def trial_quality_heatmap(
             z.append([None if v is None
                       else ((v - lo) / span if better_high else (hi - v) / span)
                       for v in vals])
-        text.append([f"{label}: {format_metric(key, v)}" for v in vals])
+        # the trial name rides in the cell text: the x axis is numeric so that the cells can
+        # be kept square, which leaves %{x} an index rather than a label
+        text.append([f"{t}<br>{label}: {format_metric(key, v)}"
+                     for t, v in zip(trial_labels, vals)])
 
     fig = go.Figure(go.Heatmap(
         z=z, text=text,
-        x=trial_labels,
-        y=[m[1] for m in present],
+        x=list(range(len(trial_labels))),
+        y=list(range(len(present))),
         colorscale=[[0.0, _BAD_COLOR], [0.5, "#FFD966"], [1.0, _GOOD_COLOR]],
         showscale=False,
-        hovertemplate="%{x}<br>%{text}<extra></extra>",
+        hovertemplate="%{text}<extra></extra>",
         xgap=1, ygap=1,
     ))
+    # square cells at any container width. Without the constraint the figure stretches to the
+    # width it is given and only a run of a few dozen trials lands near square: five trials
+    # across a wide page came out as five bands a few hundred pixels wide and 26 px tall.
+    # Both axes are numeric for this, since the constraint needs them on a common scale
     fig.update_layout(
-        xaxis=dict(tickangle=-45, tickfont=dict(size=8), showgrid=False),
-        yaxis=dict(autorange="reversed", tickfont=dict(size=10), showgrid=False),
+        xaxis=dict(tickmode="array", tickvals=list(range(len(trial_labels))),
+                   ticktext=trial_labels, tickangle=-45, tickfont=dict(size=8),
+                   showgrid=False, constrain="domain"),
+        yaxis=dict(tickmode="array", tickvals=list(range(len(present))),
+                   ticktext=[m[1] for m in present], autorange="reversed",
+                   tickfont=dict(size=10), showgrid=False,
+                   scaleanchor="x", scaleratio=1, constrain="domain"),
         plot_bgcolor="white", paper_bgcolor="white",
         margin=dict(l=70, r=20, t=20, b=90),
-        height=60 + 26 * len(present),
+        # the margins sit outside the plot area, and with square cells it is the plot area
+        # that sets how wide a cell is, so the row height is named here rather than netted off
+        height=110 + _TRIAL_CELL_PX * len(present),
     )
     return fig
 
