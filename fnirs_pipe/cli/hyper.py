@@ -449,13 +449,14 @@ def _build_parser() -> argparse.ArgumentParser:
     band_opts.add_argument("--wtc-band-fmax", type=float, default=None,
                            help="Upper bound (Hz) of that band. Defaults to --wtc-fmax for "
                                 "`run`; required for `band`.")
-    band_opts.add_argument("--wtc-mask-coi", action="store_true",
+    band_opts.add_argument("--wtc-mask-coi", action=argparse.BooleanOptionalAction,
+                           default=True,
                            help="Average each band mean only over cells inside the cone of "
-                                "influence. Off by default, which is what the field does; "
-                                "the share inside the cone is reported as n_valid_frac "
-                                "either way. Masking discards more of a short segment than "
-                                "of a long one, so it moves conditions of different length "
-                                "by different amounts.")
+                                "influence. On by default: cells outside it are wavelet "
+                                "coefficients padded against the edges of the record, near "
+                                "1 whatever the data did. --no-wtc-mask-coi averages the "
+                                "whole band instead; the share inside the cone is reported "
+                                "as n_valid_frac either way.")
 
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("output_dir", type=Path,

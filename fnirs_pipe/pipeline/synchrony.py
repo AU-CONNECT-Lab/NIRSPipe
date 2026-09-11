@@ -490,7 +490,7 @@ def compute_wtc_pseudo(
     seed: int | None = None,
     cross: bool = False,
     limit_scales: bool = True,
-    mask_coi: bool = False,
+    mask_coi: bool = True,
     ch_type: str = "hbo",
     sep_bands=None,
     windows: "list[tuple[str, float, float]] | None" = None,
@@ -759,7 +759,7 @@ def wtc_band_mean(
     result: WTCResult,
     fmin: float,
     fmax: float,
-    mask_coi: bool = False,
+    mask_coi: bool = True,
 ) -> pd.DataFrame:
     r"""Collapse each WTC map to one number per pair and label: the band mean.
 
@@ -777,11 +777,15 @@ def wtc_band_mean(
     it are wavelet coefficients padded against the edges of the record: near 1 whatever the
     data does, and enough of them at the low-frequency end to carry a whole row.
 
-    ``mask_coi`` is **off by default**, which is what the hyperscanning literature does: almost
-    no published study masks, and the pipelines that ship code average the whole time axis.
-    Masking is the more conservative choice and discards more of a short segment than of a long
-    one, so it moves conditions of different length by different amounts; that is a reason to
-    report ``n_valid_frac``, not a reason to mask by default.
+    ``mask_coi`` is **on by default**. Cells outside the cone are padding, so averaging them
+    reports the record's edges as coupling, which is the whole reason the cone is drawn. Very
+    few published studies say either way, and that is a gap in reporting rather than a
+    consensus to average everything: of 30 WTC studies extracted, one mentions the cone at all
+    and it excludes. Masking does discard more of a short segment than of a long one, so it
+    moves conditions of different length by different amounts, which is why ``n_valid_frac`` is
+    reported either way and why the windowing in :func:`window_result` matters more than this
+    flag: on a whole-record transform there is almost nothing outside the cone to drop.
+    ``--no-wtc-mask-coi`` averages the whole band.
 
     ``n_valid_frac`` is the share of band cells that lie inside the cone of influence. **It is
     reported whether or not the mask is applied**, so the share is visible as a quality number

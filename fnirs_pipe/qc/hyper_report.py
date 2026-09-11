@@ -448,7 +448,7 @@ def build_hyper_post_report(
     wtc_by_condition: bool = False,
     wtc_limit_scales: bool = True,
     wtc_save_maps: bool = False,
-    wtc_mask_coi: bool = False,
+    wtc_mask_coi: bool = True,
     wtc_roi_min_channels: int = 2,
     wtc_chroma: "tuple[str, ...] | list[str]" = ("hbo", "hbr"),
     isc_threshold: float = 0.3,
@@ -493,7 +493,7 @@ def build_hyper_post_report(
     is, so a run restricted to a window carries the recording's cone of influence rather than
     two edges of its own. The recordings themselves are never cut.
 
-    ``wtc_mask_coi`` restricts each band mean to the cone of influence. Off by default; the
+    ``wtc_mask_coi`` restricts each band mean to the cone of influence. On by default; the
     share inside the cone is reported either way as ``n_valid_frac``.
 
     ``wtc_chroma`` is the chromophores to run, ``("hbo",)``, ``("hbr",)`` or both. Both is

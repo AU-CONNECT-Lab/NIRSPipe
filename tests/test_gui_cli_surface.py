@@ -268,11 +268,11 @@ _QC_FULL_OPTS = dict(
     wtc_mc_count=300, wtc_seed=42, isc_threshold=0.3,
     wtc_pseudo=100, wtc_roi_min_channels=2, wtc_chroma="both",
     hyper_task="rest",
-    hyper_flags=["wtc_significance", "wtc_mask_coi", "wtc_channel_cross", "wtc_pseudo_cross",
+    hyper_flags=["wtc_significance", "wtc_no_mask_coi", "wtc_channel_cross", "wtc_pseudo_cross",
                  "wtc_by_condition", "bads_subject", "wtc_save_maps", "no_align", "normalize",
                  "check_only"],
     band_fmin=0.05, band_fmax=0.2, band_suffix="band0p05-0p2",
-    band_flags=["band_mask_coi"],
+    band_flags=["band_no_mask_coi"],
     tstart=0.0, tend=60.0,
 )
 

@@ -201,7 +201,7 @@ fnirs-hyper run OUTPUT_DIR --pairs-csv PATH
                 [--wtc-band-fmin/--wtc-band-fmax FLOAT]
                 [--wtc-significance] [--wtc-mc-count INT] [--wtc-seed INT]
                 [--wtc-chroma {hbo,hbr,both}]        [default: both]
-                [--wtc-mask-coi] [--wtc-roi-min-channels N]
+                [--wtc-mask-coi | --no-wtc-mask-coi] [--wtc-roi-min-channels N]
                 [--wtc-channel-cross] [--wtc-by-condition] [--wtc-save-maps]
                 [--wtc-pseudo N] [--wtc-pseudo-cross]
                 [--bads-scope {run,subject}] [--isc-threshold FLOAT]
@@ -210,7 +210,7 @@ fnirs-hyper run OUTPUT_DIR --pairs-csv PATH
                 [--normalize] [--no-align] [--tstart/--tend FLOAT]
 
 fnirs-hyper band  OUTPUT_DIR --wtc-band-fmin FLOAT --wtc-band-fmax FLOAT
-                             [--wtc-mask-coi] [--wtc-suffix TEXT]
+                             [--wtc-mask-coi | --no-wtc-mask-coi] [--wtc-suffix TEXT]
 
 fnirs-hyper merge OUTPUT_DIR
 ```

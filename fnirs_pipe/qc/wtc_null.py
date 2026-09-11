@@ -34,7 +34,7 @@ def write_wtc_null(
     seed: int | None = None,
     cross: bool = False,
     limit_scales: bool = True,
-    mask_coi: bool = False,
+    mask_coi: bool = True,
     chroma: "tuple[str, ...] | list[str]" = ("hbo", "hbr"),
     sep_bands=None,
     windows: "list[tuple[str, float, float]] | None" = None,

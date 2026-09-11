@@ -154,7 +154,8 @@ def _hyper_post():
                 id="qc-hyper-flags",
                 options=[
                     {"label": "Significance testing (slow)", "value": "wtc_significance"},
-                    {"label": "Mask cone of influence",      "value": "wtc_mask_coi"},
+                    {"label": "Average the whole band (no COI mask)",
+                                                             "value": "wtc_no_mask_coi"},
                     {"label": "Cross channels between brains (slow)",
                                                              "value": "wtc_channel_cross"},
                     {"label": "Cross channels for the null too (very slow)",
@@ -198,7 +199,8 @@ def _wtc_band():
         dbc.Row([
             dbc.Col(dbc.Checklist(
                 id="qc-band-flags",
-                options=[{"label": "Mask cone of influence", "value": "band_mask_coi"}],
+                options=[{"label": "Average the whole band (no COI mask)",
+                          "value": "band_no_mask_coi"}],
                 value=[], inline=True, switch=True,
             )),
         ], className="g-3 mt-1"),

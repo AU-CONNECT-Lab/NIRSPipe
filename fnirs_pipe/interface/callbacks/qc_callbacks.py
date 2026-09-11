@@ -70,8 +70,9 @@ def build_qc_args(command: str, opts: dict) -> list[str]:
     if command == "band":
         args += _num("--wtc-band-fmin", opts.get("band_fmin"))
         args += _num("--wtc-band-fmax", opts.get("band_fmax"))
-        if "band_mask_coi" in (opts.get("band_flags") or []):
-            args.append("--wtc-mask-coi")
+        # the switch turns masking off, masking being the default
+        if "band_no_mask_coi" in (opts.get("band_flags") or []):
+            args.append("--no-wtc-mask-coi")
         args += _text("--wtc-suffix", opts.get("band_suffix"))
         return args
 
@@ -94,8 +95,8 @@ def build_qc_args(command: str, opts: dict) -> list[str]:
         flags = opts.get("hyper_flags") or []
         if "wtc_significance" in flags:
             args.append("--wtc-significance")
-        if "wtc_mask_coi" in flags:
-            args.append("--wtc-mask-coi")
+        if "wtc_no_mask_coi" in flags:
+            args.append("--no-wtc-mask-coi")
         if "wtc_channel_cross" in flags:
             args.append("--wtc-channel-cross")
         if "wtc_pseudo_cross" in flags:

@@ -85,7 +85,7 @@ def load_wtc(path: Path) -> WTCResult:
     return WTCResult(pairs=pairs, freqs=freqs, times=times)
 
 
-def reband(path: Path, fmin: float, fmax: float, mask_coi: bool = False) -> pd.DataFrame:
+def reband(path: Path, fmin: float, fmax: float, mask_coi: bool = True) -> pd.DataFrame:
     """Band means over a new band, from saved maps rather than a new wavelet transform.
 
     The band has to sit inside the range the maps were computed over: what was filtered out
@@ -96,7 +96,7 @@ def reband(path: Path, fmin: float, fmax: float, mask_coi: bool = False) -> pd.D
 
 def reband_tree(
     output_dir: Path, fmin: float, fmax: float, suffix: str | None = None,
-    mask_coi: bool = False,
+    mask_coi: bool = True,
 ) -> list[Path]:
     """Re-average every saved map under output_dir, writing one TSV beside each npz.
 

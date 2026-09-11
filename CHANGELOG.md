@@ -6,6 +6,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+- **The cone of influence is masked by default.** Cells outside it are wavelet coefficients padded against the edges of the record, near 1 whatever the data did, so averaging them reports the ends of a recording as coupling. `--no-wtc-mask-coi` averages the whole band, and the share inside the cone is reported as `n_valid_frac` either way. On a whole-record transform the flag moves the number by well under 0.001, so this changes little on the default route and a lot on a cropped one
+
 ### Added
 - **The coherence map panels take a selector per brain**, so a crossed run can read any channel-against-channel or region-against-region pairing at full size. The selectors used to offer the homologous pairings alone, with everything else reachable only as a thumbnail in a grid of every ROI pair; that grid is gone, its diagonal having been the same pictures the selector already held. The channel selector now lists the long channels rather than the whole montage, which is the set the matrix beside it is drawn on
 - **`--epoch-single-trial`** draws the epoch section on a design where no condition repeats, which is skipped by default. It waives that reason and no other: a run with no events, or none leaving room for the window, is not epochable whatever the flag says
