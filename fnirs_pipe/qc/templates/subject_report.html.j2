@@ -76,18 +76,36 @@
     the one it was loose in. The recording was processed under the run&rsquo;s verdict, which
     its own page carries. Metrics with no windowed series behind them are absent rather than
     zero.</p>
+  {% if epoch_preview_path %}
+  <p style="margin:0;font-size:0.86rem;color:#555;">
+    The epoch and topography panels below are this condition&rsquo;s own, rebuilt on a crop
+    of it. They average the report&rsquo;s epoch window around each event, so on a condition
+    that is one long block they describe its first seconds rather than the whole of it, which
+    is the limitation the run&rsquo;s own page carries too. The preprocessing and GLM sections
+    are <em>deliberately empty</em>: one model is fitted over the whole recording, and this
+    page keeps only its own activation figure out of it.</p>
+  {% else %}
   <p style="margin:0;font-size:0.86rem;color:#555;">
     The preprocessing, epoch, topography and GLM sections below are <em>deliberately
     empty</em> here. The epoch window is set for a trial rather than a block, so a
     per-condition version of those panels would describe the first seconds of the condition
     instead of the condition.</p>
+  {% endif %}
   <p style="margin:0.4rem 0 0;font-size:0.86rem;color:#555;">
-    The trial image and the per-trial quality heatmap are absent for a different reason, and
-    it is worth stating rather than leaving as a gap: their rows are trials rather than
-    windows, so a per-condition form is perfectly well defined and would simply hold this
-    condition&rsquo;s own trials. It is not built, because on a block design that is one row,
-    and one row is not a comparison. An event-related design is where it would earn its
-    place. The run&rsquo;s own page carries both over every trial it has.
+    {%- if trial_qc_path or trial_image_pairs or trial_image_roi_pairs %}
+    The trial image and the per-trial quality heatmap hold this condition&rsquo;s own trials,
+    the events that start inside its window; the annotation that defines the window is not
+    one of them. Neither panel is measured again. The heatmap&rsquo;s rows are taken from the
+    run&rsquo;s per-trial table, and the images are drawn in one pass over every condition, so
+    their colour scale is shared and two condition pages can be read against each other.
+    {%- else %}
+    The trial image and the per-trial quality heatmap are absent, and it is worth saying why
+    rather than leaving a gap: their rows are trials rather than windows, and
+    {{ condition_trial_reason or 'this condition holds too few trials to compare' }}. They
+    fill in on a blocked event-related design, where a long annotation names the condition and
+    shorter events sit inside it. The run&rsquo;s own page carries both over every trial it
+    has.
+    {%- endif %}
     {% if index_href %}The full report for the whole run is
     <a href="{{ index_href }}">{{ index_href }}</a>.{% endif %}</p>
 </div>

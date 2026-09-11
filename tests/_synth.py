@@ -12,6 +12,7 @@ round trip a test exercises is the real one.
 
     bids = make_bids_dataset(tmp_path)              # 2 subjects x 2 tasks
     bids, pairs = make_hyper_dataset(tmp_path)      # 1 dyad x 2 tasks + pairs.csv
+    bids = make_bids_dataset(tmp_path, tasks=("mixed",))   # blocks with trials inside them
 
 Two requirements of ``write_snirf`` are easy to miss when building a Raw by hand:
 ``meas_date`` and ``subject_info`` must both be set, or it fails inside mne_nirs
@@ -43,6 +44,21 @@ BAD_PAIR = 2              # 0-based index of the long pair with no wavelength co
 
 _TASKS_WITH_EVENTS = ("tapping", "hold", "nohold")
 
+# ---- Two annotation levels ----
+# A condition window is built from one annotation, so a single-level design gives every
+# window exactly one trial however many events it has. The per-condition trial panels need a
+# long annotation naming the condition with shorter ones inside it, which is what this task
+# is for and the only design in this file that has it.
+_TASKS_BLOCKED = ("mixed",)
+
+# (name, onset, duration, the boxcar height its trials evoke). The two differ so a reader can
+# tell two condition pages apart, which is the thing a shared colour scale is there to show.
+_BLOCKS = (("talk", 20.0, 150.0, 1.0), ("listen", 190.0, 150.0, 0.35))
+_TRIALS_PER_BLOCK = 6
+_TRIAL_DURATION = 8.0
+_TRIAL_LEAD_IN = 10.0     # room for the epoch window's baseline at the block's own start
+_TRIAL_SPACING = 25.0
+
 
 def _channel_layout(n_long: int, short: bool) -> tuple[list[str], list[np.ndarray], list[bool]]:
     """Names, MNE loc arrays, and an is-short flag per channel (two per pair)."""
@@ -70,12 +86,45 @@ def _channel_layout(n_long: int, short: bool) -> tuple[list[str], list[np.ndarra
     return names, locs, is_short
 
 
-def _events(task: str, duration: float) -> tuple[np.ndarray, np.ndarray, list[str]]:
-    """Block design for task runs, nothing at all for rest."""
+def _events(
+    task: str, duration: float,
+) -> tuple[np.ndarray, np.ndarray, list[str], np.ndarray]:
+    """Event table as (onsets, durations, labels, amplitudes).
+
+    Block design for task runs, two levels for ``mixed``, nothing at all for rest.
+
+    Amplitude is the boxcar height each event evokes. It is zero for a block marker, so a
+    two-level design's response comes from the trials inside a block rather than from the
+    block itself, and every trial in one block shares a height while the two blocks differ.
+    """
+    if task in _TASKS_BLOCKED:
+        onsets: list[float] = []
+        durations: list[float] = []
+        labels: list[str] = []
+        amps: list[float] = []
+        for name, start, span, amp in _BLOCKS:
+            onsets.append(start)
+            durations.append(span)
+            labels.append(name)
+            amps.append(0.0)
+            for k in range(_TRIALS_PER_BLOCK):
+                onset = start + _TRIAL_LEAD_IN + k * _TRIAL_SPACING
+                if onset + _TRIAL_DURATION > min(start + span, duration):
+                    break
+                onsets.append(onset)
+                durations.append(_TRIAL_DURATION)
+                # one description for every trial in the run: which condition a trial belongs
+                # to is its window's answer, not its name's
+                labels.append("trial")
+                amps.append(amp)
+        order = np.argsort(onsets)
+        return (np.asarray(onsets)[order], np.asarray(durations)[order],
+                [labels[i] for i in order], np.asarray(amps)[order])
     if task not in _TASKS_WITH_EVENTS:
-        return np.array([]), np.array([]), []
+        return np.array([]), np.array([]), [], np.array([])
     onsets = np.arange(20.0, duration - 20.0, 40.0)
-    return onsets, np.full(onsets.shape, 10.0), [task] * len(onsets)
+    return (onsets, np.full(onsets.shape, 10.0), [task] * len(onsets),
+            np.ones(onsets.shape))
 
 
 def synth_raw(
@@ -105,12 +154,13 @@ def synth_raw(
 
     names, locs, is_short = _channel_layout(n_long_pairs, short_channels)
     cardiac = np.sin(2 * np.pi * CARDIAC_FREQ * t)
-    onsets, durations, labels = _events(task, duration)
+    onsets, durations, labels, amps = _events(task, duration)
 
-    # Boxcar response at the events, so GLM has something to fit.
+    # Boxcar response at the events, so GLM has something to fit. Added rather than assigned:
+    # a two-level design has a block annotation spanning its own trials, and it contributes 0.
     response = np.zeros(n)
-    for onset, dur in zip(onsets, durations):
-        response[int(onset * SFREQ):int((onset + dur) * SFREQ)] = 1.0
+    for onset, dur, amp in zip(onsets, durations, amps):
+        response[int(onset * SFREQ):int((onset + dur) * SFREQ)] += amp
 
     data = np.empty((len(names), n))
     for i, name in enumerate(names):
@@ -185,7 +235,8 @@ def make_bids_dataset(
     """Write a BIDS dataset under root/name and return its path.
 
     Defaults give two subjects and two tasks: ``tapping`` carries events, ``rest``
-    carries none, which is the recordings-without-triggers case.
+    carries none, which is the recordings-without-triggers case. ``mixed`` is the two-level
+    design, and the only one whose per-condition pages carry a trial panel.
     """
     bids_dir = Path(root) / name
     _write_dataset_root(bids_dir, list(subjects))

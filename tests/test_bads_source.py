@@ -192,7 +192,8 @@ def test_a_named_session_does_not_read_the_other_ones_rejections(tmp_path):
         assert sqm["bad_channels"] == expected, session
 
 
-def test_the_flat_tree_is_unchanged(tmp_path):
+def test_the_flat_tree_is_unchanged(nirs_dir):
     """The layout almost every dataset here uses. It must not have moved."""
-    _sidecar(tmp_path, "tap", BADS_TAP)
-    assert _load(tmp_path)["bad_channels"] == BADS_TAP
+    # nirs_dir, not tmp_path: `_sidecar` does not create the directory, `_ses_sidecar` does
+    _sidecar(nirs_dir, "tap", BADS_TAP)
+    assert _load(nirs_dir)["bad_channels"] == BADS_TAP

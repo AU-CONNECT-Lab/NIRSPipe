@@ -137,8 +137,12 @@ def build_wtc_channel(
       recording as strongly coupled.
     - the **significance contour**, where coherence beats the Monte Carlo level, when one was
       computed.
-    - one **boundary line per condition**, labelled above the axes. The interactive version
-      shaded each block instead, under an opaque heatmap, so nothing showed.
+    - one **span bar per condition** above the axes, carrying its label, with a line at its
+      onset. The bar runs the block's actual length, so the gaps between blocks are visible:
+      a recording is continuous and its untasked stretches are data like any other, which a
+      set of onset lines alone made look like block boundaries. The interactive version
+      shaded each block on the map instead, under an opaque heatmap, so nothing showed;
+      moving the span outside the axes is that information back where it cannot be covered.
     """
     if wtc_data is None or len(freqs) == 0 or len(times) == 0:
         return None
@@ -166,15 +170,20 @@ def build_wtc_channel(
         ax.contour(times, freqs, ratio, levels=[1.0], colors="black", linewidths=1.1,
                    zorder=4)
 
-    # one line per block, named above the axes. A block whose onset sits off the windowed
-    # axis is skipped rather than clamped to its edge, which would label the wrong moment
+    # one span bar per block above the axes, plus a line at its onset. A block whose onset
+    # sits off the windowed axis is skipped rather than clamped to its edge, which would
+    # label the wrong moment; a block that *ends* past the right edge keeps its bar and has
+    # it cut there, the bar being about where the block is rather than how long it is
     for m in markers_list:
-        onset = float(m["onset"])
-        if float(m["duration"]) <= 0.1 or not (times[0] <= onset <= times[-1]):
+        onset, duration = float(m["onset"]), float(m["duration"])
+        if duration <= 0.1 or not (times[0] <= onset <= times[-1]):
             continue
         colour = cond_colors.get(m["description"], "#f39c12")
         ax.axvline(onset, color=colour, lw=1.1, ls=":", zorder=5)
-        ax.text(onset, 1.01, m["description"], transform=ax.get_xaxis_transform(),
+        ax.plot([onset, min(onset + duration, float(times[-1]))], [1.012, 1.012],
+                transform=ax.get_xaxis_transform(), color=colour, lw=3.0,
+                solid_capstyle="butt", clip_on=False, zorder=5)
+        ax.text(onset, 1.035, m["description"], transform=ax.get_xaxis_transform(),
                 ha="left", va="bottom", fontsize=7, color=colour, rotation=0)
 
     # this panel is full width, so it takes more arrows and much smaller ones than the
@@ -188,7 +197,7 @@ def build_wtc_channel(
     ax.set_xlabel("Time (s)", fontsize=9)
     ax.tick_params(labelsize=8)
     heading = f"{site_label}   {pair_label}".strip() if site_label else pair_label
-    ax.set_title(heading, fontsize=10, pad=16)
+    ax.set_title(heading, fontsize=10, pad=20)
     fig.colorbar(mesh, ax=ax, pad=0.015, label="WTC")
     caption = (f"arrows: right = in phase, left = antiphase, up = {lead} leads by a quarter "
                f"cycle, drawn only where coherence clears "

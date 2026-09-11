@@ -863,15 +863,22 @@ def _condition_trial_qc(
     ``t0`` is strict for the same reason it is in ``_trial_image_by_span``, so the two panels
     on one page always describe the same set of trials.
 
-    The reason a page has no panel travels back with the result. An empty section explains
-    nothing, and this one is empty on every recording the package has been run on so far.
+    The reason a page has no panel travels back with the result, because an empty section
+    explains nothing and this one is empty on every real recording the package has been run
+    on so far: the reason is what a reader will actually see here.
     """
     t0, t1 = float(span[0]), float(span[1])
     keep = [(label, sqm) for onset, label, sqm in rows if t0 < onset < t1]
     if len(keep) < min_trials:
-        reason = ("the run carries no per-trial table to take rows from" if not rows else
-                  f"this condition holds {_n_trials(len(keep))} inside its window, and one "
-                  f"row is not a comparison")
+        if not rows:
+            reason = "the run carries no per-trial table to take rows from"
+        elif not keep:
+            reason = ("the only event inside this window is the annotation that defines it, "
+                      "which is what a block design looks like")
+        else:
+            reason = (f"this condition holds {len(keep)} trial"
+                      f"{'' if len(keep) == 1 else 's'} inside its window, and one row is "
+                      f"not a comparison")
         return {"trial_qc_path": None, "trial_qc_h": 0, "condition_trial_reason": reason}
     path, h = None, 0
     with _guard("Per-trial quality", errors, subject):
@@ -899,6 +906,14 @@ def _section_condition_trial_images(
     rebuilt panels: a scale taken on one cropped condition at a time would differ from page
     to page, and these pages are read against each other.
     """
+    from fnirs_pipe.qc.hyper_report import markers_on_data_axis
+
+    # the annotations alone say whether any window could fill a panel, and answering from
+    # them costs nothing; the pass below epochs the recording once per channel
+    onsets = [float(m["onset"]) for m in markers_on_data_axis(epoch_haemo)]
+    if not any(sum(1 for o in onsets if t0 < o < t1) >= min_trials for _, t0, t1 in spans):
+        return {}
+
     out: dict = {}
 
     def _collect(figs_by_label, prefix, key, name):
@@ -1805,6 +1820,19 @@ def build_subject_report(
                 remake_denoise_carpet=lambda suffix, span: _condition_denoise_carpet(
                     raw_haemo, after_haemo, roi_map, span, suffix,
                     subject, errors, figures_dir),
+                # --epoch-single-trial waives the "one row is not a comparison" floor
+                # here as well, for the same reason it waives it on the epoch section
+                remake_trial_qc=lambda suffix, span: _condition_trial_qc(
+                    trial_qc_vars.get("trial_qc_rows") or [], span, suffix,
+                    subject, errors, figures_dir,
+                    min_trials=1 if epoch_single_trial else 2),
+                # a run with nothing to epoch has no trial images on its own page either,
+                # and the pass costs one figure per HbO channel per condition
+                remake_trial_images=None if epoch_skip is not None else (
+                    lambda spans: _section_condition_trial_images(
+                        epoch_haemo, spans, subject, errors, figures_dir, roi_map=roi_map,
+                        epoch_tmin=epoch_tmin, epoch_tmax=epoch_tmax,
+                        min_trials=1 if epoch_single_trial else 2)),
                 remake_cropped=lambda suffix, span: _cropped_sections(
                     span, suffix, raw_haemo=raw_haemo, epoch_haemo=epoch_haemo,
                     raw_haemo_uncorr=raw_haemo_uncorr, raw_errts=raw_errts,
@@ -2080,6 +2108,8 @@ def _write_condition_reports(
     remake_motion_detail=None,
     remake_denoise_carpet=None,
     remake_cropped=None,
+    remake_trial_qc=None,
+    remake_trial_images=None,
 ) -> None:
     """One subject-report page per annotated condition, read out of the quality record.
 
@@ -2103,9 +2133,17 @@ def _write_condition_reports(
     - **rebuilt from the condition's own verdict**: the 3D quality views and the optode flat
       map, which carry that condition's SCI and its own rejected channels
 
-    What stays blank is the trial half, the trial images and the per-trial panel: the ones
-    nobody has decided the per-condition form of yet. The event timeline is not among them;
-    it is kept whole, see :func:`_condition_timeline`.
+    The trial half is a fifth way and the reason it took so long to build. Both panels have
+    rows that are trials rather than windows, so they need the trials *inside* a condition,
+    and a condition window is built from one annotation: on a block design that annotation
+    is the only event in it and the panels would hold one row. They fill in on a blocked
+    event-related design, where a block names the condition and shorter events sit inside it.
+    The per-trial table is sliced out of the run's, and the trial images are drawn in one
+    run-wide pass so every condition page shares a colour scale; neither is recomputed per
+    page. A page with nothing to show says which of the two reasons applies.
+
+    The event timeline is not among the blanked panels; it is kept whole, see
+    :func:`_condition_timeline`.
 
     The GLM needs nothing rebuilt: one model is fitted over the whole recording and each
     condition is a column of it.
@@ -2131,6 +2169,9 @@ def _write_condition_reports(
     windows = [(label, *entry["window_s"]) for label, entry in by_condition.items()]
 
     blanked = _blanked(section_vars)
+    # one pass for every condition, so the panels land on a shared colour scale; per page it
+    # would be one scale each and the pages are read against each other
+    trial_images = remake_trial_images(windows) if remake_trial_images is not None else {}
     for label, entry in by_condition.items():
         sliced = entry.get("per_channel") or {}
         cond_bad = set(entry.get("bad_channels") or ())
@@ -2167,6 +2208,11 @@ def _write_condition_reports(
             panels.update(remake_motion_detail(f"_{slug}", span))
         if remake_denoise_carpet is not None:
             panels.update(remake_denoise_carpet(f"_{slug}", span))
+        # the trial half: rows are this condition's own trials, taken from the run's table
+        # and from the run-wide image pass rather than measured again
+        if remake_trial_qc is not None:
+            panels.update(remake_trial_qc(f"_{slug}", span))
+        panels.update(trial_images.get(label) or {})
         panels.update(cropped)
 
         od_by_set = entry.get("od_by_set") or {}
