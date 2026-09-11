@@ -16,6 +16,8 @@ All notable changes to this project will be documented in this file.
 - **The Methods paragraph describes the screening rule the pipeline actually applies.** It named SCI and PSP as if either could reject a channel on its own, which stopped being true when screening moved to counting coupled windows, and it omitted the coupled-window threshold that does the rejecting
 
 ### Changed
+- **A design of one long block per condition skips the epoch section instead of drawing it.** Nothing there repeats, so every figure in it averaged one trial with itself and drew a 30 s slice of a block running for minutes, which reads as a response and is not one. The note says so, and the condition pages skip it on the same grounds
+- **The grand mean is drawn on the denoised signal**, the stage the trial images and channel map beside it already used. On the unfiltered signal it carried cardiac ripple on a curve the section is read for the shape of
 - **The evoked response is drawn per channel instead of interpolated across the scalp.** Each channel is painted along its own source-detector path, one head per condition, with a slider through the epoch window; nothing is invented between channels
 - **Short channels get their own row in that map**, on the long row's colour scale and captioned with the share of the long peak they reach. They cannot reach cortex, so a share near 100% marks the response as systemic scalp signal rather than activation
 - **The grand mean draws its short channels dotted** instead of averaging them in with the long ones, so the trace carries its own answer to whether it can be believed

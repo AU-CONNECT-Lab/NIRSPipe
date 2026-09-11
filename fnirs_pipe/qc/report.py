@@ -171,11 +171,21 @@ def _no_epoch_reason(
     but no trials: both windows run off an edge of the run. Asking first is what keeps the
     epoch sections from rendering empty and MNE from warning once per figure. The window is
     the run's own, so the reason it prints names the window that was actually asked for.
+
+    A design of one long block per condition is the other way to have nothing to epoch. The
+    events survive the window check, but no condition repeats, so every figure in the
+    section averages one trial with itself and draws a 30 s slice of a block that runs for
+    minutes. That reads as a response and is not one, so the section is skipped.
     """
     from fnirs_pipe.qc.figures._utils import epochable_events
 
-    events, _ = epochable_events(raw_haemo, epoch_tmin, epoch_tmax)
+    events, event_id = epochable_events(raw_haemo, epoch_tmin, epoch_tmax)
     if len(events) > 0:
+        counts = {name: int((events[:, 2] == code).sum()) for name, code in event_id.items()}
+        counts = {k: v for k, v in counts.items() if v}
+        if counts and max(counts.values()) < 2:
+            return (f"no condition repeats ({len(counts)} condition(s), one event each), so "
+                    f"nothing in this section would be averaged")
         return None
     n_marks = sum(1 for a in raw_haemo.annotations
                   if not str(a["description"]).upper().startswith("BAD"))
@@ -1524,10 +1534,16 @@ def build_subject_report(
     brain_vars        = _section_brain(
                             sci_scores, bad_channels, coords_head, good_mask, raw_intensity,
                             subject, errors, figures_dir, ch_names_brain=ch_names_brain)
-    # trial image and topomap on the denoised (bandpassed, pre-regression) haemo so drift/noise
-    # is gone and the task response is intact; fall back to preproc only if no post-processing ran.
+    # every figure in the epoch section on the denoised (bandpassed, pre-regression) haemo so
+    # drift/noise is gone and the task response is intact; fall back to preproc only if no
+    # post-processing ran. The grand mean read the unfiltered preproc until 2026-09-10, which
+    # left cardiac ripple on a curve the section is read for the shape of, and made the three
+    # figures under one heading describe two different stages.
     epoch_haemo       = after_haemo if after_haemo is not None else raw_haemo
-    if getattr(config, "epoch_tmin", None) is None:
+    epoch_skip        = _no_epoch_reason(raw_haemo, epoch_tmin, epoch_tmax)
+    # the window note only matters to figures that get drawn; asked before the skip it told a
+    # reader to widen a window for a section that is not there
+    if epoch_skip is None and getattr(config, "epoch_tmin", None) is None:
         outruns = _epoch_window_mismatch(raw_haemo, epoch_tmax)
         if outruns is not None:
             _note(notes, subject,
@@ -1537,18 +1553,17 @@ def build_subject_report(
                   f"--epoch-tmax to widen it. The per-trial panel below is unaffected: it "
                   f"scores each event over its own duration.")
 
-    epoch_skip        = _no_epoch_reason(raw_haemo, epoch_tmin, epoch_tmax)
     if epoch_skip is not None:
         _note(notes, subject,
-              f"Epoch preview, evoked topomap, trial images and per-trial quality were "
-              f"skipped because {epoch_skip}. The per-channel and layout figures show the "
-              f"continuous signal instead.")
+              f"Grand mean, evoked channel map, trial images and per-trial quality were "
+              f"skipped because {epoch_skip}. The per-channel, carpet and layout figures "
+              f"show the continuous signal instead.")
         epoch_vars       = {"epoch_preview_path": None, "epoch_preview_h": 0}
         trial_image_vars = {"trial_image_pairs": [], "trial_image_roi_pairs": []}
         topomap_vars     = {"evoked_topomap_path": None, "evoked_topomap_h": 0}
         trial_qc_vars    = {"trial_qc_path": None, "trial_qc_h": 0, "trial_qc_window": ""}
     else:
-        epoch_vars        = _section_epoch_preview(raw_haemo, subject, errors, figures_dir,
+        epoch_vars        = _section_epoch_preview(epoch_haemo, subject, errors, figures_dir,
                                                    epoch_tmin=epoch_tmin,
                                                    epoch_tmax=epoch_tmax,
                                                    sep_bands=sep_bands)
@@ -1840,14 +1855,21 @@ def _cropped_sections(
                                        figures_dir, epoch_tmin=epoch_tmin,
                                        epoch_tmax=epoch_tmax, suffix=suffix,
                                        sep_bands=sep_bands, **bands))
-    out.update(_section_epoch_preview(crop(raw_haemo, epoch_pad) or haemo, subject, errors,
-                                      figures_dir, epoch_tmin=epoch_tmin,
-                                      epoch_tmax=epoch_tmax, suffix=suffix,
-                                      sep_bands=sep_bands))
-    out.update(_section_evoked_topomap(crop(epoch_haemo, epoch_pad) or haemo, subject,
-                                       errors, figures_dir, epoch_tmin=epoch_tmin,
-                                       epoch_tmax=epoch_tmax, suffix=suffix,
-                                       sep_bands=sep_bands))
+    # the same question the run's own page asks, re-asked on the crop: a condition page holds
+    # one condition, so a design of one block per condition leaves it a single event and
+    # nothing here to average
+    epoch_src = crop(epoch_haemo, epoch_pad) or haemo
+    if _no_epoch_reason(epoch_src, epoch_tmin, epoch_tmax) is None:
+        out.update(_section_epoch_preview(epoch_src, subject, errors,
+                                          figures_dir, epoch_tmin=epoch_tmin,
+                                          epoch_tmax=epoch_tmax, suffix=suffix,
+                                          sep_bands=sep_bands))
+        out.update(_section_evoked_topomap(epoch_src, subject, errors, figures_dir,
+                                           epoch_tmin=epoch_tmin, epoch_tmax=epoch_tmax,
+                                           suffix=suffix, sep_bands=sep_bands))
+    else:
+        out.update({"epoch_preview_path": None, "epoch_preview_h": 0,
+                    "evoked_topomap_path": None, "evoked_topomap_h": 0})
     # the scalars that can only be had by recomputing, off the same cut the panels above use.
     # Handed back separately because they belong in the condition's metric panel, not among
     # its figures; the caller merges them.
