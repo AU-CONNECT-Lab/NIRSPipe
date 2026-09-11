@@ -70,7 +70,11 @@ def _apply_log_freq_axis(ax, freqs: np.ndarray) -> None:
     if not major:
         return
     ax.yaxis.set_major_locator(FixedLocator(major))
-    ax.yaxis.set_major_formatter(FixedFormatter([_freq_label(f, "tex") for f in major]))
+    # 10^-1 beside 0.02 and 0.05 reads as two different scales, and the 1-2-5 fallback axis
+    # is where that happens: one of its ticks is a whole power of ten and the rest are not
+    on_decades = all(abs(np.log10(f) - round(np.log10(f))) < 1e-9 for f in major)
+    ax.yaxis.set_major_formatter(FixedFormatter(
+        [_freq_label(f, "tex") if on_decades else f"{f:.3g}" for f in major]))
     ax.yaxis.set_minor_locator(FixedLocator(minor))
     ax.yaxis.set_minor_formatter(NullFormatter())
 

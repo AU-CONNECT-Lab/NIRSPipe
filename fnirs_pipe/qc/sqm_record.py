@@ -473,6 +473,205 @@ def _motion_post_section(
     return record
 
 
+def _cutoffs_from_sidecar(stages: dict[str, Path]) -> dict[str, float]:
+    """The lines the run screened by, so a condition's verdict is on the same ones."""
+    from fnirs_pipe.qc.metrics import resolve_cutoffs
+    params = (_sidecar(stages["sci"]).get("parameters") or {}) if "sci" in stages else {}
+    return resolve_cutoffs(sci=params.get("sci_threshold"),
+                           psp=params.get("psp_threshold"),
+                           good_frac=params.get("min_good_frac"))
+
+
+def condition_sections(
+    sections: dict[str, Any],
+    raw_intensity: "mne.io.Raw",
+    stages: dict[str, Path],
+    *,
+    cardiac_l_freq: float,
+    cardiac_h_freq: float,
+    resp_l_freq: float,
+    resp_h_freq: float,
+    sep_bands=None,
+) -> dict[str, Any]:
+    """One entry per annotated condition, sliced from ``windowed`` and recomputed on a crop.
+
+    Written whenever the recording carries conditions: ``--by-condition`` decides what a
+    report shows, not what the record measures. Anything deriving a scale from the recording
+    it is handed (the filtered GVTD trace, per-channel z-scores, a threshold off a
+    distribution) stays whole-run and is absent here. ``{}`` when no annotation holds two
+    screening windows.
+    """
+    from fnirs_pipe.io.snirf import read_snirf
+    from fnirs_pipe.qc.condition_views import (
+        PSD_NFFT_CAP, condition_haemo_scalars, condition_scalars, condition_set_scalars,
+        condition_slices_from_record, span_counts,
+    )
+    from fnirs_pipe.qc.hyper_report import condition_windows
+    from fnirs_pipe.qc.metrics import long_short_channels
+    from fnirs_pipe.qc.metrics.windowed import SCREEN_WINDOW_S, condition_window_means
+
+    windows = condition_windows(raw_intensity, min_duration=2 * SCREEN_WINDOW_S)
+    if not windows:
+        logger.info("no annotation holds two screening windows; no by_condition section")
+        return {}
+
+    cutoffs = _cutoffs_from_sidecar(stages)
+    per_channel = sections.get("per_channel") or {}
+    ch_names = list((per_channel.get("raw") or {}).get("sci_per_channel") or {})
+    sliced_all = condition_slices_from_record(
+        sections, ch_names, windows, cutoffs["sci"], cutoffs["psp"])
+    if not sliced_all:
+        return {}
+
+    windowed = sections.get("windowed") or {}
+    gvtd_times = windowed.get("gvtd_window_times_s") or []
+    # measured on the corrected file, which is what the report says on the rows it prints
+    _GVTD_SERIES = (("gvtd_mean", "gvtd_per_window"),
+                    ("gvtd_p95", "gvtd_p95_per_window"),
+                    ("gvtd_filt_mean", "gvtd_filt_per_window"),
+                    ("gvtd_filt_p95", "gvtd_filt_p95_per_window"))
+
+    def _gvtd_slices(suffix: str) -> dict:
+        return {key: condition_window_means(windowed[series + suffix], gvtd_times, windows)
+                for key, series in _GVTD_SERIES
+                if windowed.get(series + suffix) and gvtd_times}
+
+    # separate measurements rather than subsets, GVTD being an RMS across channels
+    gvtd_sets = {"long": _gvtd_slices(""),
+                 "short": _gvtd_slices("_short"),
+                 "all": _gvtd_slices("_all")}
+    # the run's booleans kept as spans, so a condition counts them over its own stretch
+    span_lists = {
+        "gvtd_pct_above_thresh": windowed.get("gvtd_above_spans_s") or [],
+        "spike_pct_frames":      windowed.get("spike_spans_s") or [],
+        "motion_corrected_pct":  windowed.get("motion_corrected_spans_s") or [],
+    }
+    other_above_spans = {"short": windowed.get("gvtd_above_spans_short_s") or [],
+                         "all":   windowed.get("gvtd_above_spans_all_s") or []}
+    count_key = {"gvtd_pct_above_thresh": "gvtd_num_above_thresh",
+                 "spike_pct_frames": "spike_num_frames",
+                 "motion_corrected_pct": "motion_corrected_num"}
+    sfreq = float(raw_intensity.info["sfreq"])
+    long_names, short_names = long_short_channels(raw_intensity, sep_bands)
+
+    def _read(desc: str):
+        path = stages.get(desc)
+        if path is None:
+            return None
+        try:
+            return read_snirf(path)
+        except Exception:
+            logger.warning("%s unreadable; conditions get no %s metrics", path, desc,
+                           exc_info=True)
+            return None
+
+    haemo, errts = _read("preproc"), _read("errts")
+    bands = {"cardiac": (cardiac_l_freq, cardiac_h_freq),
+             "resp": (resp_l_freq, resp_h_freq)}
+    n_fft_floor = min(PSD_NFFT_CAP, len(haemo.times)) if haemo is not None else 0
+
+    window_of = {w[0]: w for w in windows}
+    out: dict[str, Any] = {}
+    for label, sliced in sliced_all.items():
+        t0, t1 = window_of[label][1], window_of[label][2]
+        # this condition's own verdict on the run's line; the data was processed under the
+        # run's, which the run's own section carries
+        cond_frac = sliced.get("good_frac_per_channel") or {}
+        cond_bad = sorted(ch for ch, v in cond_frac.items() if v < cutoffs["good_frac"])
+        retention = (1.0 - len(cond_bad) / len(cond_frac)) if cond_frac else None
+
+        # the frame count is that share of this stretch's samples, not a second pass
+        shares, n_frames, n_segments = {}, {}, {}
+        for share_key, spans in span_lists.items():
+            share, n_seg = span_counts(spans, t0, t1)
+            shares[share_key] = share
+            n_frames[count_key[share_key]] = (
+                None if share is None else int(round(share * (t1 - t0) * sfreq)))
+            if share_key == "motion_corrected_pct":
+                n_segments["motion_corrected_n_segments"] = n_seg
+
+        scalars = condition_scalars(
+            sliced, {k: float(v[label]) for k, v in gvtd_sets["long"].items() if label in v},
+            shares=shares, n_frames=n_frames, n_segments=n_segments, retention=retention)
+        scalars["n_long_channels"] = len(long_names)
+        scalars["n_short_channels"] = len(short_names)
+
+        haemo_by_set, corr_per_channel = _condition_haemo(
+            haemo, errts, t0, t1, n_fft_floor, bands, sep_bands,
+            condition_haemo_scalars, long_short_channels)
+        # the long set, matching what the run's own haemoglobin rows report
+        scalars.update(haemo_by_set.get("long") or haemo_by_set.get("all") or {})
+
+        # no `_post` half: the series is measured on the corrected file. The share and the
+        # count join the long column alone, the run storing spans for that set only.
+        motion_by_set = {name: {k: float(v[label]) for k, v in series.items() if label in v}
+                         for name, series in gvtd_sets.items()}
+        motion_by_set.setdefault("long", {}).update(
+            {k: v for k, v in (("gvtd_pct_above_thresh", shares.get("gvtd_pct_above_thresh")),
+                               ("gvtd_num_above_thresh", n_frames.get("gvtd_num_above_thresh")))
+             if v is not None})
+        for set_name, spans in other_above_spans.items():
+            if not spans:
+                continue
+            share, _ = span_counts(spans, t0, t1)
+            if share is None:
+                continue
+            motion_by_set.setdefault(set_name, {}).update({
+                "gvtd_pct_above_thresh": share,
+                "gvtd_num_above_thresh": int(round(share * (t1 - t0) * sfreq))})
+
+        out[label] = {
+            "window_s": [round(t0, 3), round(t1, 3)],
+            "bad_channels": cond_bad,
+            "scalars": scalars,
+            "od_by_set": condition_set_scalars(sliced, set(cond_bad), long_names,
+                                               short_names),
+            "haemo_by_set": haemo_by_set,
+            "motion_by_set": motion_by_set,
+            "per_channel": {**sliced,
+                            **({"hbo_hbr_corr_per_channel": corr_per_channel}
+                               if corr_per_channel else {})},
+        }
+    logger.info("by_condition: %d condition(s)", len(out))
+    return out
+
+
+def _condition_haemo(haemo, errts, t0, t1, n_fft_floor, bands, sep_bands,
+                     condition_haemo_scalars, long_short_channels):
+    """One condition's haemoglobin scalars per channel set, plus its correlation column.
+
+    Safe to crop because nothing here filters. The per-channel dict is lifted out of the
+    scalars, which flatten into a table of numbers.
+    """
+    if haemo is None:
+        return {}, {}
+
+    def _cut(raw):
+        if raw is None:
+            return None
+        lo, hi = max(0.0, float(t0)), min(float(raw.times[-1]), float(t1))
+        return None if hi <= lo else raw.copy().crop(tmin=lo, tmax=hi)
+
+    haemo_cut, errts_cut = _cut(haemo), _cut(errts)
+    if haemo_cut is None:
+        return {}, {}
+    by_set = {"all": condition_haemo_scalars(haemo_cut, errts_cut, n_fft_floor, bands)}
+    long_names, short_names = long_short_channels(haemo_cut, sep_bands)
+    for set_name, names in (("long", long_names), ("short", short_names)):
+        picks = [c for c in names if c in haemo_cut.ch_names]
+        if not picks:
+            by_set[set_name] = {}
+            continue
+        errts_pick = (None if errts_cut is None else
+                      errts_cut.copy().pick([c for c in picks if c in errts_cut.ch_names]))
+        by_set[set_name] = condition_haemo_scalars(
+            haemo_cut.copy().pick(picks), errts_pick, n_fft_floor, bands)
+    corr = (by_set["all"].get("hbo_hbr_corr_per_channel") or {})
+    for scalars in by_set.values():
+        scalars.pop("hbo_hbr_corr_per_channel", None)
+    return by_set, corr
+
+
 def compute_run_sections(
     stages: dict[str, Path],
     *,
@@ -694,6 +893,21 @@ def compute_run_sections(
         sections["windowed"] = windowed
 
     sections["per_channel"] = per_channel
+
+    # last, because it reads the matrices and the per-channel dicts above rather than the
+    # recordings. Written whether or not any report will ask for per-condition pages: what
+    # is measured is the record's business, what is shown is the report's.
+    if raw_intensity is not None:
+        try:
+            by_condition = condition_sections(
+                sections, raw_intensity, stages,
+                cardiac_l_freq=cardiac_l_freq, cardiac_h_freq=cardiac_h_freq,
+                resp_l_freq=resp_l_freq, resp_h_freq=resp_h_freq, sep_bands=sep_bands)
+        except Exception:
+            logger.warning("by_condition section failed", exc_info=True)
+            by_condition = {}
+        if by_condition:
+            sections["by_condition"] = by_condition
     return sections
 
 

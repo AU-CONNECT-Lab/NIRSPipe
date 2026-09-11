@@ -636,9 +636,8 @@ def _section_haemo(
     So the stages are band-limited over the whole run and cut afterwards, the order the
     pipeline itself uses, and ``comparable_stage_metrics`` is then told not to filter again.
 
-    ``psd`` False leaves the spectrum out and keeps the rest. The caller decides, because
-    what disqualifies a spectrum is the length of the cut against mne's ``n_fft`` and only a
-    caller that knows both spans can compare them; see :func:`_cropped_sections`.
+    ``psd`` False leaves the spectrum out and keeps the rest; only a caller holding both
+    spans can tell whether the cut clears mne's ``n_fft``. See :func:`_cropped_sections`.
     """
     hbo_hbr_path = hbo_hbr_after_path = psd_panel_path = None
     psd_panel_h = 0
@@ -1680,10 +1679,9 @@ def build_subject_report(
                               topomap_vars, haemo_vars, channel_det_vars, psd_det_vars,
                               brain_vars, epoch_vars, trigger_vars, trial_qc_vars,
                               glm_vars, rest_vars, loose_figure_vars),
-                raw_intensity=raw_intensity, config=config, subject=subject,
+                config=config, subject=subject,
                 out_path=out_path, out_dir=nirs_dir, sqm_label=sqm_label,
-                figures_dir=figures_dir, sci_scores=sci_scores,
-                bad_channels=bad_channels, errors=errors, sep_bands=sep_bands,
+                figures_dir=figures_dir, sci_scores=sci_scores, errors=errors,
                 # closures rather than another ten parameters: both panels take a long
                 # arg list that already exists here, and only the suffix, the slice and
                 # the view span differ per condition
@@ -1784,11 +1782,6 @@ def _figure_leaks(page: dict, label_slug: str) -> "list[str]":
     return leaks
 
 
-# mne's Raw.compute_psd default caps n_fft here, so a cut shorter than this is transformed
-# on a coarser grid than the run and its band metrics are not comparable with it
-_PSD_NFFT_CAP = 2048
-
-
 def _cropped_sections(
     span: "tuple[float, float]",
     suffix: str,
@@ -1808,10 +1801,10 @@ def _cropped_sections(
     (1/900 Hz against 1/3900 Hz here) and averages fewer Welch segments, which makes the
     spectrum noisier and leaves it unbiased.
 
-    Noisier up to a point. Below ``_PSD_NFFT_CAP`` samples the cut is transformed on a
-    coarser grid than the run rather than on the same grid with fewer segments, and then it
-    is not a noisier view of the run's spectrum but a different measurement. That is where
-    the band scalars already stop, so the figures stop there too.
+    Noisier up to a point. Below ``PSD_NFFT_CAP`` samples the cut lands on a coarser grid
+    than the run instead, which is a different measurement rather than a noisier view of the
+    same one. That is where the record stops writing the band scalars, so the figures stop
+    there too.
 
     The stage files handed to the PSD panels are cropped too, and they were filtered over
     the whole run before being written, so cutting them adds no filtering either.
@@ -1844,11 +1837,10 @@ def _cropped_sections(
               if (cropped := crop(raw)) is not None] or None
     bands = {"cardiac": (config.cardiac_l_freq, config.cardiac_h_freq),
              "resp": (config.resp_l_freq, config.resp_h_freq)}
-    # the floor the band scalars below are already held to, applied to the figures as well:
-    # under it the cut is transformed on a coarser grid than the run and the two spectra are
-    # not readable against each other. Leaving the figures out while dropping the scalars
-    # was the page saying two things about one measurement.
-    n_fft_floor = min(_PSD_NFFT_CAP, len(raw_haemo.times))
+    # the same floor the record holds the band scalars to, so a page cannot show a spectrum
+    # for a number the record refused to write
+    from fnirs_pipe.qc.condition_views import PSD_NFFT_CAP
+    n_fft_floor = min(PSD_NFFT_CAP, len(raw_haemo.times))
     psd_ok = len(haemo.times) >= n_fft_floor
     if not psd_ok:
         logger.info("sub-%s | %s holds %d samples against a transform of %d; no spectra",
@@ -1886,38 +1878,6 @@ def _cropped_sections(
     else:
         out.update({"epoch_preview_path": None, "epoch_preview_h": 0,
                     "evoked_topomap_path": None, "evoked_topomap_h": 0})
-    # the scalars that can only be had by recomputing, off the same cut the panels above use.
-    # Handed back separately because they belong in the condition's metric panel, not among
-    # its figures; the caller merges them.
-    with _guard("Condition scalars", errors, subject):
-        from fnirs_pipe.qc.condition_views import condition_haemo_scalars
-        errts_cut = crop(raw_errts)
-        out["cond_haemo_scalars"] = condition_haemo_scalars(
-            haemo, errts_cut, n_fft_floor, bands)
-        # and once per channel set, for the split table. Every one of these is a mean over
-        # whatever channels it is given, so picking first is the whole of what a set means
-        # here; GVTD, which is not, comes from the record instead.
-        from fnirs_pipe.qc.metrics import long_short_channels as _split
-        long_names, short_names = _split(haemo, sep_bands)
-        by_set = {"all": out["cond_haemo_scalars"]}
-        for set_name, names in (("long", long_names), ("short", short_names)):
-            picks = [c for c in names if c in haemo.ch_names]
-            if not picks:
-                by_set[set_name] = {}
-                continue
-            errts_pick = (None if errts_cut is None else
-                          errts_cut.copy().pick([c for c in picks
-                                                 if c in errts_cut.ch_names]))
-            by_set[set_name] = condition_haemo_scalars(
-                haemo.copy().pick(picks), errts_pick, n_fft_floor, bands)
-        out["cond_haemo_by_set"] = by_set
-        # the channel table's correlation column, taken off the all-channel pass and lifted
-        # out of every set's scalars: those print from a fixed key list, and a per-channel
-        # dict sitting among them is one wrong loop away from being printed as a metric
-        out["cond_corr_per_channel"] = (
-            out["cond_haemo_scalars"].get("hbo_hbr_corr_per_channel") or {})
-        for scalars in by_set.values():
-            scalars.pop("hbo_hbr_corr_per_channel", None)
     return out
 
 
@@ -2007,7 +1967,6 @@ def _write_condition_reports(
     report_vars: dict,
     *,
     section_vars: tuple,
-    raw_intensity: mne.io.Raw,
     config: "PrepConfig",
     subject: str,
     out_path: Path,
@@ -2015,9 +1974,7 @@ def _write_condition_reports(
     sqm_label: str | None,
     figures_dir: Path,
     sci_scores: dict,
-    bad_channels: list,
     errors: list,
-    sep_bands=None,
     remake_sci=None,
     remake_motion=None,
     remake_brain=None,
@@ -2025,17 +1982,18 @@ def _write_condition_reports(
     remake_denoise_carpet=None,
     remake_cropped=None,
 ) -> None:
-    """One subject-report page per annotated condition, sliced out of the quality record.
+    """One subject-report page per annotated condition, read out of the quality record.
 
-    Nothing is measured again and the recording is never cut. The record already stores the
-    channel-by-window SCI and PSP matrices, so a condition is a column selection out of the
-    pass the run made; see :mod:`fnirs_pipe.qc.condition_views`.
+    Every number on these pages comes from the record's ``by_condition`` section, which
+    :func:`~fnirs_pipe.qc.sqm_record.condition_sections` wrote. Nothing is measured here;
+    a run whose record predates that section gets no pages rather than a second, possibly
+    disagreeing, copy of the numbers.
 
     A panel gets here one of four ways, and which one is a property of the panel:
 
-    - **sliced out of the record**: the scalar panel, the channel table, and the SCI/PSP/CV
-      panel, whose matrices are cut to the condition's columns. A real slice, because
-      nothing inside those filters or re-measures
+    - **read from the record**: the scalar panel and the channel table. The SCI/PSP/CV panel
+      still cuts the stored matrices to this condition's columns, being a figure over the
+      same windows those scalars were averaged over
     - **measured over the run, narrowed to the condition**: the GVTD carpet, the per-channel
       motion figures and the denoising carpet. Each derives something run-wide from what it
       is handed -- a filtered GVTD, a threshold, a per-channel z-scale -- so a cut recording
@@ -2046,8 +2004,9 @@ def _write_condition_reports(
     - **rebuilt from the condition's own verdict**: the 3D quality views and the optode flat
       map, which carry that condition's SCI and its own rejected channels
 
-    What stays blank is the trial half, the trial images and the per-trial panel, and the
-    event timeline. Those are the ones nobody has decided the per-condition form of yet.
+    What stays blank is the trial half, the trial images and the per-trial panel: the ones
+    nobody has decided the per-condition form of yet. The event timeline is not among them;
+    it is kept whole, see :func:`_condition_timeline`.
 
     The GLM needs nothing rebuilt: one model is fitted over the whole recording and each
     condition is a column of it.
@@ -2055,127 +2014,39 @@ def _write_condition_reports(
     The channel set is the run's throughout, since one set has to serve every condition. The
     *verdict* is not: each page screens on its own stretch.
     """
-    from fnirs_pipe.qc.condition_views import (
-        condition_scalars, condition_set_scalars, condition_slices_from_record,
-        slice_record, span_counts, with_condition_corr,
-    )
-    from fnirs_pipe.qc.metrics import long_short_channels
-    from fnirs_pipe.qc.hyper_report import condition_windows
+    from fnirs_pipe.qc.condition_views import slice_record, with_condition_corr
     from fnirs_pipe.qc.metrics import resolve_cutoffs
-    from fnirs_pipe.qc.metrics.windowed import SCREEN_WINDOW_S, condition_window_means
 
     if out_dir is None or sqm_label is None:
         logger.warning("sub-%s | no quality record location; no per-condition pages", subject)
         return
-    windows = condition_windows(raw_intensity, min_duration=2 * SCREEN_WINDOW_S)
-    if not windows:
-        logger.info("sub-%s | no annotation holds two screening windows; no per-condition "
+    record = json.loads(_sqm_record_path(out_dir, sqm_label).read_text(encoding="utf-8"))
+    by_condition = record.get("by_condition") or {}
+    if not by_condition:
+        logger.info("sub-%s | the record carries no by_condition section; no per-condition "
                     "pages", subject)
         return
-    record = json.loads(_sqm_record_path(out_dir, sqm_label).read_text(encoding="utf-8"))
     cutoffs = resolve_cutoffs(config)
-    ch_names = list(((record.get("per_channel") or {}).get("raw") or {})
-                    .get("sci_per_channel") or {})
-    sliced_all = condition_slices_from_record(
-        record, ch_names, windows, cutoffs["sci"], cutoffs["psp"])
-    if not sliced_all:
-        return
-
-    windowed = record.get("windowed") or {}
-    # the four GVTD series the run stored, each sliced to the condition's columns. They are
-    # measured on the corrected file, which is what the report says on the rows it prints.
-    gvtd_times = windowed.get("gvtd_window_times_s") or []
-    _GVTD_SERIES = (("gvtd_mean", "gvtd_per_window"),
-                    ("gvtd_p95", "gvtd_p95_per_window"),
-                    ("gvtd_filt_mean", "gvtd_filt_per_window"),
-                    ("gvtd_filt_p95", "gvtd_filt_p95_per_window"))
-
-    def _gvtd_slices(suffix: str) -> dict:
-        """The four series of one separation set, each cut to every condition."""
-        return {key: condition_window_means(windowed[series + suffix], gvtd_times, windows)
-                for key, series in _GVTD_SERIES
-                if windowed.get(series + suffix) and gvtd_times}
-
-    # the plain keys are the long channels; `_short` and `_all` name the others, and the
-    # three are separate measurements rather than subsets, GVTD being an RMS over channels
-    gvtd_by_cond = _gvtd_slices("")
-    gvtd_sets = {"long": gvtd_by_cond,
-                 "short": _gvtd_slices("_short"),
-                 "all": _gvtd_slices("_all")}
-
-    # the run's booleans, kept as spans, so a condition counts them over its own stretch.
-    # gvtd_above is the corrected file's; the other two are the uncorrected one's.
-    span_lists = {
-        "gvtd_pct_above_thresh": windowed.get("gvtd_above_spans_s") or [],
-        "spike_pct_frames":      windowed.get("spike_spans_s") or [],
-        "motion_corrected_pct":  windowed.get("motion_corrected_spans_s") or [],
-    }
-    # one flag per other set, kept apart from the canonical one because each was set by its
-    # own trace against its own cutoff; they fill that set's column of the motion panel
-    other_above_spans = {
-        "short": windowed.get("gvtd_above_spans_short_s") or [],
-        "all":   windowed.get("gvtd_above_spans_all_s") or [],
-    }
-    count_key = {"gvtd_pct_above_thresh": "gvtd_num_above_thresh",
-                 "spike_pct_frames": "spike_num_frames",
-                 "motion_corrected_pct": "motion_corrected_num"}
-    sfreq = float(raw_intensity.info["sfreq"])
+    # the windows the record was written against, so the panels that still slice a matrix
+    # here cut the same columns the stored scalars were averaged over
+    windows = [(label, *entry["window_s"]) for label, entry in by_condition.items()]
 
     blanked = _blanked(section_vars)
-    window_of = {w[0]: w for w in windows}
-    # the montage's own split, which is the run's throughout: one channel set has to serve
-    # every condition or a contrast between two conditions is also a contrast between two
-    # montages. Only the verdict is the condition's.
-    long_names, short_names = long_short_channels(raw_intensity, sep_bands)
-    for label, sliced in sliced_all.items():
-        cond_record = slice_record(record, sliced)
-        # this condition's own verdict, on the run's line. The page is a view of one
-        # condition and says so; the run's verdict, which is what the data was processed
-        # under, is one click away on the run's own page
-        cond_frac = sliced.get("good_frac_per_channel") or {}
-        cond_bad = ({ch for ch, v in cond_frac.items() if v < cutoffs["good_frac"]}
-                    if cond_frac else set(bad_channels))
-        retention = (1.0 - len(cond_bad) / len(cond_frac)) if cond_frac else None
-        t0, t1 = window_of[label][1], window_of[label][2]
+    for label, entry in by_condition.items():
+        sliced = entry.get("per_channel") or {}
+        cond_bad = set(entry.get("bad_channels") or ())
+        scalars = dict(entry.get("scalars") or {})
+        haemo_by_set = entry.get("haemo_by_set") or {}
+        cond_record = with_condition_corr(slice_record(record, sliced),
+                                          sliced.get("hbo_hbr_corr_per_channel") or {})
+        t0, t1 = entry["window_s"]
         span = (t0, t1)
         slug = _pair_fname(label)
-        # everything a crop is safe for: the haemoglobin panels, the spectra and the
-        # per-channel detail. First in the loop because the correlation it recomputes is a
-        # column of the channel table below; see _cropped_sections for where that line falls
         cropped: dict = {}
-        all_scalars: dict = {}
-        haemo_by_set: dict = {}
         if remake_cropped is not None:
             cropped = remake_cropped(f"_{slug}", span)
-            # recomputed rather than sliced, so these join the scalars and not the figures.
-            # The long set, matching the run's own page, whose haemoglobin rows come off
-            # `preproc_long` / `errts_long` and whose note says so: the all-channel dict
-            # beside it is the table's `All` column and not what the panel is read as. A
-            # montage with no split has only the one set and falls back to it.
-            all_scalars = cropped.pop("cond_haemo_scalars", None) or {}
-            haemo_by_set = cropped.pop("cond_haemo_by_set", None) or {}
-            # back into the record rather than into the rows, because `channel_rows` is
-            # what reads this column and it reads it from there
-            cond_record = with_condition_corr(
-                cond_record, cropped.pop("cond_corr_per_channel", None) or {})
         rows = channel_rows(cond_record, sci_scores, cond_bad)
         cells = format_rows(rows, cutoffs["sci"], psp_threshold=cutoffs["psp"])
-        # a share is a fraction of this stretch, so the frame count that goes with it is
-        # that share of the samples in it rather than a second pass over the spans
-        shares, n_frames, n_segments = {}, {}, {}
-        for share_key, spans in span_lists.items():
-            share, n_seg = span_counts(spans, t0, t1)
-            shares[share_key] = share
-            n_frames[count_key[share_key]] = (
-                None if share is None else int(round(share * (t1 - t0) * sfreq)))
-            if share_key == "motion_corrected_pct":
-                n_segments["motion_corrected_n_segments"] = n_seg
-        scalars = condition_scalars(
-            sliced,
-            {k: float(v[label]) for k, v in gvtd_by_cond.items() if label in v},
-            shares=shares, n_frames=n_frames, n_segments=n_segments,
-            retention=retention)
-        scalars.update(haemo_by_set.get("long") or all_scalars)
         summary = _section_channel_summary(
             rows, subject, errors, figures_dir, cutoffs["sci"],
             name=f"channel_summary_{slug}.html")
@@ -2199,34 +2070,8 @@ def _write_condition_reports(
             panels.update(remake_denoise_carpet(f"_{slug}", span))
         panels.update(cropped)
 
-        # the same three-row table the run's own page prints, over this condition. The
-        # per-channel metrics are grouped and averaged; GVTD comes in already measured per
-        # set, being an RMS across channels rather than something a subset average recovers
-        od_by_set = condition_set_scalars(sliced, cond_bad, long_names, short_names)
-        # GVTD over the three sets, from the three stored series. No `_post` half: the
-        # windowed series is measured on the corrected file, which the panel says. The share
-        # and the frame count join the long column alone, being counted off a span list the
-        # run stored for the canonical set only.
-        cond_motion_sets = {
-            name: {k: float(v[label]) for k, v in series.items() if label in v}
-            for name, series in gvtd_sets.items()
-        }
-        cond_motion_sets.setdefault("long", {}).update(
-            {k: v for k, v in (("gvtd_pct_above_thresh", shares.get("gvtd_pct_above_thresh")),
-                               ("gvtd_num_above_thresh", n_frames.get("gvtd_num_above_thresh")))
-             if v is not None})
-        for set_name, spans in other_above_spans.items():
-            if not spans:
-                continue
-            share, _ = span_counts(spans, t0, t1)
-            if share is None:
-                continue
-            cond_motion_sets.setdefault(set_name, {}).update({
-                "gvtd_pct_above_thresh": share,
-                "gvtd_num_above_thresh": int(round(share * (t1 - t0) * sfreq)),
-            })
-        scalars["n_long_channels"] = len(long_names)
-        scalars["n_short_channels"] = len(short_names)
+        od_by_set = entry.get("od_by_set") or {}
+        cond_motion_sets = entry.get("motion_by_set") or {}
         # The GLM is already per condition and needs nothing rebuilt: one model is fitted
         # over the whole recording and each condition is a contrast of it, so this page
         # keeps its own activation figure out of the set the run rendered. The design

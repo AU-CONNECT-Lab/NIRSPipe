@@ -25,16 +25,10 @@ logger = get_logger("qc.condition_views")
 SLICEABLE = ("sci_per_channel", "psp_per_channel", "good_frac_per_channel",
              "cv_per_channel", "snr_per_channel")
 
-# and what it therefore has to drop, so no column mixes two time scopes. They are dropped
-# rather than carried so that a column added later shows a gap instead of a whole-run number
-# under a condition's heading.
-#
-# `hbo_hbr_corr_per_channel` is here for a different reason than the rest: it has no
-# windowed series to slice, but it is a correlation over whatever samples it is given, so a
-# cut can measure it directly. Dropping it here is the safe default and
-# :func:`with_condition_corr` puts the recomputed value back. A condition whose recompute
-# failed then shows dashes rather than the run's number, which it printed in every column
-# for as long as this key was in neither list.
+# and what it therefore has to drop, so no column mixes two time scopes, and a column added
+# later shows a gap instead of a whole-run number under a condition's heading.
+# `hbo_hbr_corr_per_channel` is dropped but recoverable: `with_condition_corr` puts back a
+# value measured on the cut, and a failed recompute leaves dashes rather than the run's.
 UNSLICEABLE = ("cp_per_channel", "temporal_derivative_variance",
                "hbo_hbr_corr_per_channel", "cnr_per_channel")
 
@@ -55,6 +49,10 @@ COND_SCALAR_KEYS = ("sci_mean", "good_frac_mean", "psp_mean",
                     "motion_corrected_pct", "motion_corrected_num",
                     "motion_corrected_n_segments",
                     "channel_retention_rate")
+
+# mne's compute_psd caps n_fft here, so a shorter cut lands on a coarser grid than the run.
+# One floor for the record and the report, or a page shows a figure for a number it refused.
+PSD_NFFT_CAP = 2048
 
 
 def span_share(spans, t0: float, t1: float) -> "float | None":
@@ -152,18 +150,8 @@ def slice_record(record_view: dict, sliced: "dict[str, dict[str, float]]") -> di
 def with_condition_corr(record: dict, corr_per_channel: "dict[str, float]") -> dict:
     """The record with ``preproc``'s HbO-HbR correlation replaced by the condition's own.
 
-    ::
-
-        with_condition_corr(cond_record, {"S1_D1": -0.293, ...})
-
-    :func:`~fnirs_pipe.qc.channel_table.channel_rows` reads that column straight off the
-    whole-file ``preproc`` section rather than through the long/short merge, because it is
-    the one column short channels have too. So a value measured on the cut has to land there
-    for the table to print it, and nowhere else would be read.
-
-    An empty dict returns the record untouched, leaving the column dashed: the correlation
-    is recomputed rather than sliced, and a page that could not recompute it says so instead
-    of falling back on the run's.
+    ``channel_rows`` reads that column off the whole-file ``preproc`` section, so that is
+    where a value measured on the cut has to land. An empty dict leaves the column dashed.
     """
     if not corr_per_channel:
         return record
@@ -187,9 +175,8 @@ def condition_haemo_scalars(haemo, errts, n_fft_floor: int, bands: dict) -> dict
         3053 samples, floor 2048  ->  band metrics included
         1200 samples, floor 2048  ->  band metrics absent
 
-    Returns the scalars plus ``hbo_hbr_corr_per_channel``, the one per-channel dict in here.
-    The channel table's correlation column is measured the same way and on the same cut, so
-    it comes back rather than being recomputed a second time by the caller.
+    Returns the scalars plus ``hbo_hbr_corr_per_channel``, measured on the same cut so the
+    caller does not pay for it twice.
     """
     from fnirs_pipe.qc.metrics.haemo import (
         _retention_metrics, _spectral_metrics, gcor_metrics, haemo_quality_metrics,
@@ -209,9 +196,8 @@ def condition_haemo_scalars(haemo, errts, n_fft_floor: int, bands: dict) -> dict
         quality = haemo_quality_metrics(raw)
         if "hbo_hbr_corr_mean" in quality:
             out[f"hbo_hbr_corr_mean{suffix}"] = quality["hbo_hbr_corr_mean"]
-        # the channel table's correlation column, off the same cut as the mean beside it.
-        # It rides along in this dict because the caller already has it; `metric_rows` reads
-        # a fixed key list, so a per-channel dict here never reaches the scalar panel
+        # rides along because the caller already has it; `metric_rows` reads a fixed key
+        # list, so a per-channel dict here never reaches the scalar panel
         if suffix == "" and quality.get("hbo_hbr_corr_per_channel"):
             out["hbo_hbr_corr_per_channel"] = quality["hbo_hbr_corr_per_channel"]
     if haemo is not None:

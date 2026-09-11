@@ -8,6 +8,10 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 - **`fnirs-hyper run --wtc-arrow-min`** sets the coherence a cell has to reach before its phase arrow is drawn on the coherence maps, when `--wtc-significance` was not asked for (default 0.5). Display only: no table or figure value changes with it
+- **The quality record carries a `by_condition` section**, one entry per annotated condition: its window, its own rejected channels, and every scalar and per-channel value a condition page prints. Written whenever the recording has conditions, so the numbers behind a page can be checked against the data whether or not the page was built
+
+### Changed
+- **The per-condition report pages read those numbers rather than computing their own.** A record written before this section gets no condition pages, instead of a second copy of the numbers with nothing keeping the two in agreement
 
 ### Fixed
 - **A dyad analysis runs on a multi-session tree.** Each member's recording was looked for in the flat `sub-XX/nirs`, which a session tree does not have, so the run stopped at its first member saying the directory was missing. The quality record beside it and the Methods paragraph were read the same way
