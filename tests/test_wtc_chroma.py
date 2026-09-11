@@ -394,9 +394,9 @@ def test_the_titles_name_the_chromophore_in_a_span_the_switch_can_rewrite(dyad, 
 
 
 def test_the_page_carries_every_chromophore_that_ran(dyad, tmp_path):
-    """The switch has to have something to switch to, so the figures are keyed by
-    chromophore rather than one chromophore's being embedded. This is the page-weight cost
-    of the toggle and it is the intended one."""
+    """The switch has to have something to switch to, so the figure URLs are keyed by
+    chromophore. What the page carries is a path per figure, not the figure, so a second
+    chromophore costs two lines of JSON here and a second set of files under figures/."""
     html = _page(dyad, tmp_path, ("hbo", "hbr"))
     per_ch = _js_var(html, "_PER_CH")
     assert sorted(per_ch) == ["hbo", "hbr"]
@@ -404,8 +404,8 @@ def test_the_page_carries_every_chromophore_that_ran(dyad, tmp_path):
 
 
 def test_one_chromophore_embeds_only_that_one(dyad, tmp_path):
-    """`--wtc-chroma hbo` costs what it always did: nothing about the toggle makes a
-    single-chromophore run carry a second set of maps."""
+    """`--wtc-chroma hbo` names no second chromophore anywhere on the page, so nothing
+    points at a set of maps that was never drawn."""
     html = _page(dyad, tmp_path, ("hbo",))
     assert sorted(_js_var(html, "_PER_CH")) == ["hbo"]
     assert _js_var(html, "_CHROMA") == ["hbo"]
@@ -464,7 +464,7 @@ def test_a_single_chromophore_run_has_no_switch_element(dyad, tmp_path):
 def test_the_condition_images_line_up_by_window_across_chromophores(dyad, tmp_path_factory):
     """`_drawImages` pairs `_COND_IMGS[chroma][i]` with the card `cond-matrix-<i>`, so the
     lists have to be positional and the same length, one entry per window, even when a
-    guard failed for one chromophore."""
+    guard failed for one chromophore and left that entry empty."""
     marked = {sid: raw.copy() for sid, raw in dyad.items()}
     for raw in marked.values():
         raw.set_annotations(mne.Annotations(onset=[10.0, 200.0], duration=[100.0, 100.0],

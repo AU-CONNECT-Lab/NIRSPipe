@@ -1,10 +1,6 @@
 {% extends "_report_base.html.j2" %}
 {% from "_macros.html.j2" import card, subject_metrics %}
 
-{% block head_extra %}
-<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
-{%- endblock %}
-
 {% block css %}
 select#ch-select-post, select#roi-select-post {
   font-size: 0.78rem; border: 1px solid #ced4da; border-radius: 4px;
@@ -100,12 +96,15 @@ select#ch-select-post, select#roi-select-post {
   <div class="panel-title">
     Wavelet Transform Coherence (per channel) &mdash; <span class="chroma-label">{{ wtc_fig_chroma }}</span>
     <span class="panel-hint">
-      Morlet wavelet &bull; white dashed = COI boundary &bull;
-      regions below COI may be affected by edge effects
+      Morlet wavelet &bull; arrows = relative phase, right in phase and up
+      {{ subject_ids[0] }} leading &bull; washed-out band below the white dash sits outside
+      the cone of influence
     </span>
     <select id="ch-select-post"></select>
   </div>
-  <div id="wtc-plot"></div>
+  <div style="text-align:center; padding:0.5rem">
+    <img id="wtc-chan-img" alt="channel coherence map" style="max-width:100%"/>
+  </div>
 </div>
 
 <!-- Per-ROI WTC -->
@@ -114,14 +113,18 @@ select#ch-select-post, select#roi-select-post {
   <div class="panel-title">
     Wavelet Transform Coherence (per ROI) &mdash; <span class="chroma-label">{{ wtc_fig_chroma }}</span>
     <span class="panel-hint">
-      averaged within each ROI (bad channels excluded) &bull; white dashed = COI boundary
+      the member channels' maps averaged cell by cell, bad channels excluded &bull; arrows
+      and cone as above
     </span>
     <select id="roi-select-post"></select>
   </div>
-  <div id="wtc-roi-plot"></div>
+  <div style="text-align:center; padding:0.5rem">
+    <img id="wtc-roi-img" alt="ROI coherence map" style="max-width:100%"/>
+  </div>
 </div>
 
-<div class="card" id="wtc-roi-matrix-card" style="display:none">
+{% if has_roi_matrix %}
+<div class="card" id="wtc-roi-matrix-card">
   <div class="panel-title">
     Wavelet Transform Coherence (ROI &times; ROI) &mdash; <span class="chroma-label">{{ wtc_fig_chroma }}</span>
     <span class="panel-hint">
@@ -130,8 +133,11 @@ select#ch-select-post, select#roi-select-post {
       chromophore
     </span>
   </div>
-  <div id="wtc-roi-matrix-plot"></div>
+  <div style="text-align:center; padding:0.5rem">
+    <img id="wtc-roi-matrix-img" alt="ROI by ROI coherence matrix" style="max-width:100%"/>
+  </div>
 </div>
+{% endif %}
 
 {% if has_roi_grid %}
 <div class="card" id="wtc-roi-grid-card">
@@ -194,7 +200,7 @@ select#ch-select-post, select#roi-select-post {
 {% endif %}
 
 <!-- ISC panel — HbO -->
-{% if isc_panel_hbo_b64 %}
+{% if isc_panel_hbo_path %}
 <div class="card">
   <div class="panel-title">
     Inter-brain Synchrony — HbO
@@ -207,13 +213,13 @@ select#ch-select-post, select#roi-select-post {
   </div>
   {% if isc_unfiltered_note %}<div class="panel-caveat">{{ isc_unfiltered_note }}</div>{% endif %}
   <div style="text-align:center; padding:0.5rem">
-    <img src="data:image/png;base64,{{ isc_panel_hbo_b64 }}" style="max-width:100%"/>
+    <img src="{{ isc_panel_hbo_path }}" alt="inter-brain synchrony, HBO" style="max-width:100%"/>
   </div>
 </div>
 {% endif %}
 
 <!-- ISC panel — HbR -->
-{% if isc_panel_hbr_b64 %}
+{% if isc_panel_hbr_path %}
 <div class="card">
   <div class="panel-title">
     Inter-brain Synchrony — HbR
@@ -226,7 +232,7 @@ select#ch-select-post, select#roi-select-post {
   </div>
   {% if isc_unfiltered_note %}<div class="panel-caveat">{{ isc_unfiltered_note }}</div>{% endif %}
   <div style="text-align:center; padding:0.5rem">
-    <img src="data:image/png;base64,{{ isc_panel_hbr_b64 }}" style="max-width:100%"/>
+    <img src="{{ isc_panel_hbr_path }}" alt="inter-brain synchrony, HBR" style="max-width:100%"/>
   </div>
 </div>
 {% endif %}
@@ -244,15 +250,18 @@ var _CHAN_MATRIX  = {{ wtc_chan_matrix_json | safe }};
 var _ROI_GRID     = {{ wtc_roi_grid_json | safe }};
 var _COND_IMGS    = {{ wtc_cond_imgs_json | safe }};
 var _ALIGN        = {{ alignment_json | safe }};
-var _cfg = { responsive: true, displayModeBar: true };
 
 // Every panel below reads this one variable, so the page is one chromophore at a time.
 var _chroma = _CHROMA[0];
 
-function _png(el, b64) {
+// Each of the variables above holds a path under figures/, never the figure itself, so
+// switching a chromophore or a channel points an img somewhere else and the browser
+// fetches that one file. The page used to carry the figures themselves, which on a
+// 14-channel dyad with both chromophores came to 174 MB.
+function _img(el, src) {
   if (!el) return;
-  if (b64) { el.src = "data:image/png;base64," + b64; el.style.display = ""; }
-  else     { el.removeAttribute("src");             el.style.display = "none"; }
+  if (src) { el.src = src;               el.style.display = ""; }
+  else     { el.removeAttribute("src");  el.style.display = "none"; }
 }
 
 // alignment table
@@ -283,8 +292,7 @@ function _png(el, b64) {
 function _selectCh(idx) {
   var pair = _CH_PAIRS[idx];
   var ch   = (_PER_CH[_chroma] || {})[pair] || {};
-  if (ch.wtc) Plotly.react("wtc-plot", ch.wtc.data, ch.wtc.layout, _cfg);
-  else        Plotly.purge("wtc-plot");
+  _img(document.getElementById("wtc-chan-img"), ch.wtc);
 }
 
 // ROI selector
@@ -302,29 +310,20 @@ function _selectCh(idx) {
 function _selectRoi(idx) {
   var roi = _ROI_LABELS[idx];
   var d   = (_PER_ROI[_chroma] || {})[roi] || {};
-  if (d.wtc) Plotly.react("wtc-roi-plot", d.wtc.data, d.wtc.layout, _cfg);
-  else       Plotly.purge("wtc-roi-plot");
+  _img(document.getElementById("wtc-roi-img"), d.wtc);
 }
 
-// The ROI x ROI matrix only exists when the ROIs were crossed; its card stays hidden
-// otherwise, and it is re-drawn rather than re-created when the chromophore changes.
-function _drawRoiMatrix() {
-  var card = document.getElementById("wtc-roi-matrix-card");
-  if (!card) return;
-  var fig = _ROI_MATRIX[_chroma];
-  if (!fig) { card.style.display = "none"; Plotly.purge("wtc-roi-matrix-plot"); return; }
-  card.style.display = "";
-  Plotly.react("wtc-roi-matrix-plot", fig.data, fig.layout, _cfg);
-}
-
-// The static pictures: one set of nodes, filled from the chromophore in force.
+// Every panel that is not behind a selector: one set of nodes, pointed at the chromophore
+// in force. A chromophore whose guard failed on one figure leaves that img hidden and the
+// rest of the page intact.
 function _drawImages() {
-  _png(document.getElementById("wtc-chan-matrix-img"), _CHAN_MATRIX[_chroma]);
-  _png(document.getElementById("wtc-roi-grid-img"),    _ROI_GRID[_chroma]);
+  _img(document.getElementById("wtc-roi-matrix-img"), _ROI_MATRIX[_chroma]);
+  _img(document.getElementById("wtc-chan-matrix-img"), _CHAN_MATRIX[_chroma]);
+  _img(document.getElementById("wtc-roi-grid-img"),    _ROI_GRID[_chroma]);
   var windows = _COND_IMGS[_chroma] || [];
   windows.forEach(function(imgs, i) {
-    _png(document.getElementById("cond-matrix-" + i), imgs.matrix);
-    _png(document.getElementById("cond-grid-" + i),   imgs.grid);
+    _img(document.getElementById("cond-matrix-" + i), imgs.matrix);
+    _img(document.getElementById("cond-grid-" + i),   imgs.grid);
   });
 }
 
@@ -342,7 +341,6 @@ function _setChroma(name) {
   var roiSel = document.getElementById("roi-select-post");
   if (chSel  && _CH_PAIRS.length)   _selectCh(parseInt(chSel.value) || 0);
   if (roiSel && _ROI_LABELS.length) _selectRoi(parseInt(roiSel.value) || 0);
-  _drawRoiMatrix();
   _drawImages();
 }
 

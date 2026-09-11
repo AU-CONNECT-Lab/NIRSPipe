@@ -10,7 +10,6 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 import mne
-import plotly.graph_objects as go
 
 from fnirs_pipe.io.snirf import long_channel_picks
 from fnirs_pipe.pipeline.synchrony import _shared_sfreq, long_axis_over
@@ -19,23 +18,16 @@ from fnirs_pipe.utils.logging import get_logger
 logger = get_logger("qc.figures.hyper_post")
 
 
-def _hex_to_rgba(hex_color: str, alpha: float = 1.0) -> str:
-    h = hex_color.lstrip("#")
-    r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
-    return f"rgba({r},{g},{b},{alpha})"
-
-
 def _log_freq_ticks(freqs: np.ndarray) -> "tuple[list[float], list[float]]":
     """(labelled ticks, unlabelled ticks) for a WTC frequency axis, in Hz.
 
     e.g. a 0.004-0.2 Hz axis gives ([0.01, 0.1], [0.005 ... 0.09]): the decades carry the
     labels and every intermediate digit gets a bare tick.
 
-    Left to itself plotly picks "D1" over a range of that width, which labels all nine digits
-    of every decade: 0.008 and 0.009 then sit a fifth as far apart as 0.1 and 0.2 and the text
-    collides. Worse, the rule flips to "D2" once the band is a little narrower, so two figures
-    from one report disagree about what a tick means. Naming the ticks fixes both, and the
-    same list drives the matplotlib panels so the two kinds of figure agree.
+    Named rather than left to a locator, which over a range of this width labels all nine
+    digits of every decade: 0.008 and 0.009 then sit a fifth as far apart as 0.1 and 0.2 and
+    the text collides. One list drives every figure in the report, so two of them cannot
+    disagree about what a tick means.
     """
     lo, hi = float(np.min(freqs)), float(np.max(freqs))
     if not (lo > 0 and hi > lo):
@@ -46,7 +38,7 @@ def _log_freq_ticks(freqs: np.ndarray) -> "tuple[list[float], list[float]]":
     major = [f for f in steps if f == 10.0 ** round(np.log10(f)) and lo <= f <= hi]
     # a band narrower than two decades carries at most one of them, which is not an axis:
     # fall back to the 1-2-5 pattern, and to the band's own ends when even that is empty.
-    # Still one rule the whole way down, rather than plotly's two
+    # Still one rule the whole way down
     if len(major) < 2:
         major = [f for f in steps if round(f / 10.0 ** np.floor(np.log10(f))) in (1, 2, 5)
                  and lo <= f <= hi]
@@ -64,27 +56,12 @@ def _freq_label(f: float, superscript: str = "html") -> str:
     return f"10<sup>{e}</sup>" if superscript == "html" else f"$10^{{{e}}}$"
 
 
-def _log_freq_axis(freqs: np.ndarray) -> dict:
-    """plotly y-axis for a WTC map: log frequency, decades labelled, low frequency at the top.
+def _apply_log_freq_axis(ax, freqs: np.ndarray) -> None:
+    """Put :func:`_log_freq_ticks` on an axis, low frequency at the top.
 
     Reversed so frequency increases downward, which is how the wavelet coherence figures in
-    the literature are drawn. Ticks come from :func:`_log_freq_ticks`.
+    the literature are drawn.
     """
-    major, minor = _log_freq_ticks(freqs)
-    axis = dict(title="Frequency (Hz)", type="log", autorange="reversed", gridcolor="#444")
-    if not major:
-        return axis
-    axis.update(
-        tickmode="array",
-        tickvals=major,
-        ticktext=[_freq_label(f) for f in major],
-        minor=dict(tickvals=minor, ticks="outside", ticklen=3, showgrid=False),
-    )
-    return axis
-
-
-def _apply_log_freq_axis(ax, freqs: np.ndarray) -> None:
-    """The matplotlib half of :func:`_log_freq_axis`, so both kinds of figure tick alike."""
     from matplotlib.ticker import FixedFormatter, FixedLocator, NullFormatter
 
     major, minor = _log_freq_ticks(freqs)
@@ -105,137 +82,90 @@ def build_wtc_channel(
     pair_label: str,
     markers_list: list[dict],
     cond_colors: dict[str, str],
-) -> go.Figure | None:
-    """WTC heatmap for one channel pair: time × log-frequency, colour = coherence [0–1].
-
-    Frequency runs downward on a log axis labelled at the decades; see :func:`_log_freq_axis`.
+    site_label: str = "",
+) -> "str | None":
+    """WTC map for one channel or ROI pair, as a base64 PNG: time x log-frequency, colour 0-1.
 
     ::
 
       wtc_data: {"wtc": ndarray(n_freqs, n_times), "coi": ndarray(n_times),
-                 "sig": ndarray(n_freqs) | None}
+                 "phase": ndarray(n_freqs, n_times), "sig": ndarray(n_freqs) | None}
 
-    COI boundary drawn as a white dashed line; regions below it may be edge-affected.
-    When "sig" is present, a black contour outlines where coherence exceeds the
-    Monte Carlo significance level (WTC / sig > 1).
+    Frequency runs downward on a log axis labelled at the decades, the same ticks
+    :func:`build_wtc_roi_grid` uses. Four things are drawn on top of the map:
+
+    - the **phase arrows**, thinned onto a coarse grid by :func:`_phase_arrows`. Right is in
+      phase, left antiphase, up means the first member leads by a quarter cycle. This is why
+      the panel is matplotlib: a quiver field is the half of a coherence map that says which
+      brain led, and the interactive version of this figure could not draw one.
+    - the region **outside the cone of influence**, washed out rather than only bounded by
+      the dashed line. Those cells are coefficients padded against the record's edges, near 1
+      whatever the data did, so a reader who takes them for signal reads the ends of every
+      recording as strongly coupled.
+    - the **significance contour**, where coherence beats the Monte Carlo level, when one was
+      computed.
+    - one **boundary line per condition**, labelled above the axes. The interactive version
+      shaded each block instead, under an opaque heatmap, so nothing showed.
     """
     if wtc_data is None or len(freqs) == 0 or len(times) == 0:
         return None
 
-    wtc_arr = wtc_data["wtc"]   # (n_freqs, n_times)
-    coi     = wtc_data["coi"]   # (n_times) — max reliable period in seconds
-    sig     = wtc_data.get("sig")  # (n_freqs) per-frequency significance level, or None
+    wtc_arr = np.asarray(wtc_data["wtc"], dtype=float)
+    coi     = np.asarray(wtc_data["coi"], dtype=float)
+    sig     = wtc_data.get("sig")
+    freqs, times = np.asarray(freqs, dtype=float), np.asarray(times, dtype=float)
 
-    # COI → minimum reliable frequency at each time point
+    fig, ax = plt.subplots(figsize=(11.0, 3.6))
+    mesh = ax.pcolormesh(times, freqs, wtc_arr, cmap="viridis", vmin=0, vmax=1,
+                         shading="nearest")
+    _apply_log_freq_axis(ax, freqs)
+
+    # COI -> the lowest frequency each time point can still be measured at
     with np.errstate(divide="ignore", invalid="ignore"):
         freq_coi = np.where(coi > 1e-10, 1.0 / coi, freqs.max())
-    freq_coi = np.clip(freq_coi, float(freqs.min()), float(freqs.max()))
+    freq_coi = np.clip(freq_coi, freqs.min(), freqs.max())
+    ax.fill_between(times, freq_coi, freqs.min(), color="white", alpha=0.45, lw=0, zorder=2)
+    ax.plot(times, freq_coi, color="white", lw=1.3, ls="--", zorder=3)
 
-    fig = go.Figure()
-
-    fig.add_trace(go.Heatmap(
-        x=times.tolist(),
-        y=freqs.tolist(),
-        z=np.round(wtc_arr, 3).tolist(),
-        zmin=0, zmax=1,
-        colorscale="Viridis",
-        colorbar=dict(title="WTC", thickness=12, len=0.6, y=0.5),
-        hovertemplate="t=%{x:.1f}s<br>f=%{y:.4f}Hz<br>WTC=%{z:.3f}<extra></extra>",
-    ))
-
-    fig.add_trace(go.Scatter(
-        x=times.tolist(),
-        y=freq_coi.tolist(),
-        mode="lines",
-        line=dict(color="white", width=1.5, dash="dot"),
-        name="COI",
-        showlegend=True,
-        hoverinfo="skip",
-    ))
-
-    # Significance contour: outline where coherence beats the Monte Carlo level (WTC / sig > 1).
     if sig is not None and len(sig) == wtc_arr.shape[0]:
         with np.errstate(divide="ignore", invalid="ignore"):
             ratio = wtc_arr / np.asarray(sig, dtype=float)[:, None]
-        fig.add_trace(go.Contour(
-            x=times.tolist(),
-            y=freqs.tolist(),
-            z=ratio.tolist(),
-            contours=dict(type="constraint", operation=">", value=1.0),
-            line=dict(color="black", width=1.2),
-            fillcolor="rgba(0,0,0,0)",
-            showscale=False,
-            name="p<0.05",
-            showlegend=True,
-            hoverinfo="skip",
-        ))
+        ax.contour(times, freqs, ratio, levels=[1.0], colors="black", linewidths=1.1,
+                   zorder=4)
 
-    shapes = []
+    # one line per block, named above the axes. A block whose onset sits off the windowed
+    # axis is skipped rather than clamped to its edge, which would label the wrong moment
     for m in markers_list:
-        color = cond_colors.get(m["description"], "#f39c12")
-        if m["duration"] > 0.1:
-            shapes.append(dict(
-                type="rect", xref="x", yref="paper",
-                x0=m["onset"], x1=m["onset"] + m["duration"], y0=0, y1=1,
-                fillcolor=_hex_to_rgba(color, 0.12),
-                line=dict(width=0), layer="below",
-            ))
+        onset = float(m["onset"])
+        if float(m["duration"]) <= 0.1 or not (times[0] <= onset <= times[-1]):
+            continue
+        colour = cond_colors.get(m["description"], "#f39c12")
+        ax.axvline(onset, color=colour, lw=1.1, ls=":", zorder=5)
+        ax.text(onset, 1.01, m["description"], transform=ax.get_xaxis_transform(),
+                ha="left", va="bottom", fontsize=7, color=colour, rotation=0)
 
-    fig.update_layout(
-        shapes=shapes,
-        xaxis=dict(title=f"Time (s)  [{pair_label}]", gridcolor="#444"),
-        yaxis=_log_freq_axis(freqs),
-        height=300,
-        margin=dict(l=60, r=80, t=10, b=40),
-        plot_bgcolor="#1a1a2e",
-        paper_bgcolor="white",
-        showlegend=True,
-        legend=dict(font=dict(size=9)),
-    )
-    return fig
+    # this panel is full width, so it takes more arrows and much smaller ones than the
+    # thumbnails in the ROI grid do
+    _phase_arrows(ax, times, freqs, wtc_data.get("phase"),
+                  n_time=34, n_freq=13, scale=52, width=0.0022)
+
+    lead = (pair_label.split("×")[0].strip() or "the first member"
+            if pair_label else "the first member")
+    ax.set_xlabel("Time (s)", fontsize=9)
+    ax.tick_params(labelsize=8)
+    heading = f"{site_label}   {pair_label}".strip() if site_label else pair_label
+    ax.set_title(heading, fontsize=10, pad=16)
+    fig.colorbar(mesh, ax=ax, pad=0.015, label="WTC")
+    fig.text(0.5, -0.06,
+             f"arrows: right = in phase, left = antiphase, up = {lead} leads by a quarter "
+             "cycle    washed-out band: outside the cone of influence",
+             ha="center", fontsize=8, color="#444444")
+    return _png_b64(fig)
 
 
-def build_wtc_roi_matrix(
-    band_df,
-    roi_labels: list[str],
-    subject_ids: list[str],
-    band_fmin: float,
-    band_fmax: float,
-) -> go.Figure | None:
-    """ROI x ROI heatmap of band-mean coherence, rows sub1's ROIs, columns sub2's.
-
-    The crossed result is n**2 pairings and only the homologous ones reach the page as
-    heatmaps. This carries the rest: one cell per ROI pair holding the number already written
-    to `hyper-wtc-roichan.tsv`, so the off-diagonal pairs are visible without embedding their
-    maps. Reads the `label` / `label2` columns, so it needs a crossed frame; an uncrossed one
-    has no `label2` and returns None.
-    """
-    if band_df is None or "label2" not in getattr(band_df, "columns", []):
-        return None
-
-    lookup = {(r.label, r.label2): r.coherence for r in band_df.itertuples()}
-    z = [[lookup.get((row, col)) for col in roi_labels] for row in roi_labels]
-    if all(v is None for line in z for v in line):
-        return None
-
-    sub1 = subject_ids[0] if subject_ids else "sub1"
-    sub2 = subject_ids[1] if len(subject_ids) > 1 else "sub2"
-
-    fig = go.Figure(go.Heatmap(
-        z=z, x=roi_labels, y=roi_labels,
-        colorscale="Viridis", zmin=0, zmax=1,
-        colorbar=dict(title="coherence"),
-        hovertemplate=f"{sub1} %{{y}} × {sub2} %{{x}}<br>coherence %{{z:.3f}}<extra></extra>",
-    ))
-    fig.update_layout(
-        xaxis=dict(title=f"{sub2} ROI", side="top"),
-        yaxis=dict(title=f"{sub1} ROI", autorange="reversed"),
-        title=dict(text=f"Band mean {band_fmin:.3g}-{band_fmax:.3g} Hz", font=dict(size=12)),
-        height=380,
-        margin=dict(l=90, r=40, t=70, b=40),
-        paper_bgcolor="white",
-    )
-    return fig
+# Above this many sites a matrix keeps its cells bare: the text stops fitting, and a
+# reader after single values has the TSV the figure was drawn from.
+_ANNOTATE_MAX = 8
 
 
 def _png_b64(fig) -> str:
@@ -301,6 +231,20 @@ def build_wtc_cross_matrix(
     for spine in ax.spines.values():
         spine.set_visible(False)
 
+    # A few sites get the numbers printed in the cells. The scale is fixed 0 to 1, which is
+    # what lets two dyads or two conditions be compared by eye, and the cost is that a
+    # matrix whose values all sit near 0.25 renders as one flat square. A 4-ROI matrix has
+    # room to say what those values are; a 14-channel one does not and stays a picture,
+    # its numbers being in the TSV.
+    if n <= _ANNOTATE_MAX:
+        for i in range(n):
+            for j in range(n):
+                if not np.isfinite(z[i, j]):
+                    continue
+                # dark cells take white text: the low end of viridis is nearly black
+                ax.text(j, i, f"{z[i, j]:.2f}", ha="center", va="center", fontsize=8,
+                        color="white" if z[i, j] < 0.55 else "#111111")
+
     mean = float(np.nanmean(z))
     ax.set_title(f"Band mean {band_fmin:.3g}-{band_fmax:.3g} Hz   (grand mean {mean:.3f})",
                  fontsize=10, pad=26)
@@ -309,13 +253,18 @@ def build_wtc_cross_matrix(
 
 
 def _phase_arrows(ax, times: np.ndarray, freqs: np.ndarray, phase, n_time: int = 14,
-                  n_freq: int = 10) -> None:
+                  n_freq: int = 10, scale: float = 22, width: float = 0.006) -> None:
     """Draw the relative-phase field over a coherence map, thinned to a readable grid.
 
     Right means in phase, left antiphase, and up means the row's subject leads by a quarter
     cycle. The map carries one phase per pixel, tens of thousands of them, so it is sampled
     onto a coarse grid; the arrows are directions and not magnitudes, so every one is the
     same length and drawing fewer loses nothing.
+
+    ``scale`` and ``width`` are quiver's, in axes-relative units, so they have to be given
+    per panel rather than fixed here: the defaults suit a thumbnail in the ROI grid, and the
+    same numbers on a full-width single map draw arrows tall enough to hide the map under
+    them. Larger ``scale`` is shorter arrows.
     """
     if phase is None:
         return
@@ -328,7 +277,7 @@ def _phase_arrows(ax, times: np.ndarray, freqs: np.ndarray, phase, n_time: int =
     grid_t, grid_f = np.meshgrid(times[ti], freqs[fi])
     angle = phase[np.ix_(fi, ti)]
     ax.quiver(grid_t, grid_f, np.cos(angle), np.sin(angle),
-              color="black", scale=22, width=0.006, headwidth=4, headlength=5,
+              color="black", scale=scale, width=width, headwidth=4, headlength=5,
               pivot="mid", zorder=3)
 
 
@@ -385,8 +334,10 @@ def build_wtc_roi_grid(
             coi = np.asarray(data["coi"], dtype=float)
             with np.errstate(divide="ignore", invalid="ignore"):
                 freq_coi = np.where(coi > 1e-10, 1.0 / coi, freqs.max())
-            ax.plot(times, np.clip(freq_coi, freqs.min(), freqs.max()),
-                    color="white", lw=1.2, ls="--")
+            freq_coi = np.clip(freq_coi, freqs.min(), freqs.max())
+            ax.fill_between(times, freq_coi, freqs.min(), color="white", alpha=0.45,
+                            lw=0, zorder=2)
+            ax.plot(times, freq_coi, color="white", lw=1.2, ls="--", zorder=3)
             _phase_arrows(ax, times, freqs, data.get("phase"))
 
             ax.tick_params(labelsize=7)

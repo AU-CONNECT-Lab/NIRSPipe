@@ -69,7 +69,7 @@ from fnirs_pipe.qc.channel_table import (
 )
 from fnirs_pipe.qc.figure_io import (
     PLOTLY_CDN_URL, _IFRAME_CSS, _RESIZE_JS,
-    _figure_height, _pair_fname, _save_multi_fig_html,
+    _fig_href, _figure_height, _pair_fname, _save_b64_png, _save_multi_fig_html,
     extract_markers, get_channel_pairs,
 )
 from fnirs_pipe.qc.metrics import CV_PASS, SCI_PASS, gvtd_channel_blocks, separation_bands
@@ -199,20 +199,6 @@ def _no_epoch_reason(
 # Serialisation helpers
 # ---------------------------------------------------------------------------
 
-def _fig_href(figures_dir: Path, name: str) -> str:
-    """URL of a figure as the report must link to it, the report sitting above ``figures/``.
-
-    figures/            + carpet_gvtd.html -> "figures/carpet_gvtd.html"
-    figures/sub-01_task-rest/ + same       -> "figures/sub-01_task-rest/carpet_gvtd.html"
-
-    Per-run reports put their figures in a subdirectory so several runs of one subject stop
-    overwriting each other; a caller that passes a bare ``figures/`` still gets the old URL.
-    """
-    if figures_dir.parent.name == "figures":
-        return f"figures/{figures_dir.name}/{name}"
-    return f"figures/{name}"
-
-
 def _save_mpl_fig(fig, path: Path) -> None:
     import matplotlib.figure
     if not isinstance(fig, matplotlib.figure.Figure):
@@ -223,11 +209,6 @@ def _save_mpl_fig(fig, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(path, dpi=300, bbox_inches="tight")
     plt.close(fig)
-
-
-def _save_b64_png(b64: str, path: Path) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(base64.b64decode(b64))
 
 
 def _save_plotly_html(fig, path: Path, div_id: str | None = None) -> tuple[str, int]:

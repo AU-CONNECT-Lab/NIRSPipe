@@ -1,7 +1,15 @@
-"""Shared helpers for writing Plotly figures to standalone HTML files."""
+"""Shared helpers for getting a figure out of memory and onto disk.
+
+Two families, because the package draws with two libraries. Plotly figures become
+standalone iframe-ready HTML; matplotlib figures arrive already encoded and are decoded
+to a PNG file. Both end in ``figures/`` beside the report, which is what keeps a report
+page small: the page carries a URL per figure and the browser fetches the one being
+looked at. Embedding them instead is what took one hyperscanning report to 174 MB.
+"""
 
 from __future__ import annotations
 
+import base64
 import re
 from pathlib import Path
 
@@ -77,6 +85,44 @@ def _save_multi_fig_html(figs: list, path: Path) -> int:
     parts.append("</body></html>")
     path.write_text("\n".join(parts), encoding="utf-8")
     return max(total_h, 100)
+
+
+def _fig_href(figures_dir: Path, name: str) -> str:
+    """URL of a figure as the report must link to it, the report sitting above ``figures/``.
+
+    figures/            + carpet_gvtd.html -> "figures/carpet_gvtd.html"
+    figures/sub-01_task-rest/ + same       -> "figures/sub-01_task-rest/carpet_gvtd.html"
+
+    Per-run reports put their figures in a subdirectory so several runs of one subject stop
+    overwriting each other; a caller that passes a bare ``figures/`` still gets the old URL.
+    """
+    if figures_dir.parent.name == "figures":
+        return f"figures/{figures_dir.name}/{name}"
+    return f"figures/{name}"
+
+
+def _save_b64_png(b64: str, path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(base64.b64decode(b64))
+
+
+def save_png(b64: str, figures_dir: Path, name: str) -> "str | None":
+    """Decode one base64 PNG into ``figures_dir/name`` and return the report's URL for it.
+
+    ::
+
+      save_png(b64, .../group-d01/figures, "wtc_hbo_S1D1.png")
+      -> "figures/wtc_hbo_S1D1.png"
+
+    The two halves of writing a matplotlib figure out, in one call, because every caller
+    does both and a caller that saved without taking the href back used to be how a figure
+    reached disk and never reached the page. An empty or absent b64 returns None, so a
+    builder that declined to draw leaves the page's ``{% if %}`` gate closed.
+    """
+    if not b64:
+        return None
+    _save_b64_png(b64, figures_dir / name)
+    return _fig_href(figures_dir, name)
 
 
 def _pair_fname(pair: str) -> str:
