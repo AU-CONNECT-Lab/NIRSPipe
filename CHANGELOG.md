@@ -12,12 +12,15 @@ All notable changes to this project will be documented in this file.
 - **The global correlations either side of the confound regression are measured on the same channel set as the rows beside them.** They were measured over every channel while their panel reported the long ones, which reversed the direction the regression appeared to move HbR global correlation in
 - **The per-condition haemoglobin panel reports the long channels**, matching its own note and the run's page; it was reporting every channel
 - **The PSD panel's caption names the configured cardiac and respiration bands** instead of a fixed 0.7-1.5 Hz, which disagreed with the shading beside it on any run that moved the band
+- **The Methods paragraph describes the screening rule the pipeline actually applies.** It named SCI and PSP as if either could reject a channel on its own, which stopped being true when screening moved to counting coupled windows, and it omitted the coupled-window threshold that does the rejecting
 
 ### Changed
 - **The evoked response is drawn per channel instead of interpolated across the scalp.** Each channel is painted along its own source-detector path, one head per condition, with a slider through the epoch window; nothing is invented between channels
 - **Short channels get their own row in that map**, on the long row's colour scale. They cannot reach cortex, so a short row coloured as strongly as the long one marks the response as systemic scalp signal
 - **Per-condition pages carry the same All / Long / Short table as the run's own page.** Mean amplitude and low-frequency drift are left out of it, having no per-condition value
 - **The motion panel reports GVTD over the three channel sets**, each keeping its before → after pair. Every set carries its own cutoff and its own share above it, so that row reads down a column rather than across one
+- **The stage-metric panel says which of its columns the metrics table will not match**, rather than warning about all of them: only the stage the bandpass has not reached disagrees
+- **The per-trial heatmap says it reports whole-montage numbers**, so it is read against the All row of the table rather than the Long one
 
 ## [0.34.0] - 2026-09-10
 

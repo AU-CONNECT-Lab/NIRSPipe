@@ -217,8 +217,28 @@ def evoked_channel_map_figure(
         v = float(np.nanpercentile(np.abs(vals), _SCALE_PCT)) if np.any(np.isfinite(vals)) else 0.0
         vlim[chromo] = v or 1.0
 
+    # the short row's question is not spatial: eight scattered discs carry no pattern, and
+    # the one thing wanted from them is how big the scalp response is next to the brain one.
+    # Stated per panel as a share of the long peak, taken over the window rather than at the
+    # frame on screen, so the verdict does not change as the slider moves
+    verdicts = {}
+    for chromo, scope in rows:
+        if scope != "short" or "long" not in scoped:
+            continue
+        for cond in conds:
+            peak_s = _window_peak(row_values, chromo, "short", cond, times)
+            peak_l = _window_peak(row_values, chromo, "long", cond, times)
+            if peak_l and peak_s is not None:
+                verdicts[(chromo, cond)] = peak_s / peak_l
+
     return _assemble(rows, conds, times, open_at, geometry, outlines, opt_xy,
-                     row_values, vlim, chromos)
+                     row_values, vlim, chromos, verdicts)
+
+
+def _window_peak(row_values, chromo, scope, cond, times) -> "float | None":
+    """Largest absolute value this row reaches anywhere in the window, None if all NaN."""
+    vals = np.concatenate([np.abs(row_values(chromo, scope, cond, t)) for t in times])
+    return None if not np.any(np.isfinite(vals)) else float(np.nanmax(vals))
 
 
 # ---- Layout ----
@@ -248,7 +268,7 @@ def _skeleton(pairs, opt_xy):
 
 
 def _assemble(rows, conds, times, open_at, geometry, outlines, opt_xy,
-              row_values, vlim, chromos) -> go.Figure:
+              row_values, vlim, chromos, verdicts) -> go.Figure:
     """Build the subplot grid, the frames and the slider from the per-row value function."""
     n_rows, n_cols = len(rows), len(conds)
     fig = make_subplots(rows=n_rows, cols=n_cols,
@@ -340,9 +360,25 @@ def _assemble(rows, conds, times, open_at, geometry, outlines, opt_xy,
         fig.add_annotation(x=0, xref="paper", y=(dom[0] + dom[1]) / 2, yref="paper",
                            text=f"<b>{chromo.upper()}</b><br>{scope}", showarrow=False,
                            xanchor="right", xshift=-8, font=dict(size=11), align="right")
+        for ci, cond in enumerate(conds):
+            share = verdicts.get((chromo, cond)) if scope == "short" else None
+            if share is None:
+                continue
+            xdom = fig.layout[_xaxis_key(ri, ci, n_cols)].domain
+            fig.add_annotation(
+                x=(xdom[0] + xdom[1]) / 2, xref="paper", y=dom[1], yref="paper",
+                text=f"scalp {share:.0%} of brain peak", showarrow=False,
+                yanchor="bottom", yshift=2,
+                font=dict(size=10, color="#c0392b" if share >= 0.5 else "#7f8c8d"))
     fig.for_each_annotation(
         lambda a: a.update(font=dict(size=12)) if a.text in conds else None)
     return fig
+
+
+def _xaxis_key(row_idx: int, col_idx: int, n_cols: int) -> str:
+    """Layout key of the x axis at (row, col), both 0-based: xaxis, xaxis2, ..."""
+    n = row_idx * n_cols + col_idx + 1
+    return "xaxis" if n == 1 else f"xaxis{n}"
 
 
 def _yaxis_key(row_idx: int, n_cols: int) -> str:

@@ -1020,7 +1020,19 @@ def build_epoch_preview_figure(
     raw_haemo: mne.io.Raw,
     epoch_tmin: float = -5.0,
     epoch_tmax: float = 25.0,
+    sep_bands=None,
 ) -> go.Figure | None:
+    """Grand mean per condition: every long channel averaged, with the short ones dotted.
+
+    The short trace is the reason this figure can be trusted or not. Short channels are too
+    shallow to reach cortex, so when the dotted line rises with the solid one the response is
+    scalp haemodynamics, not activation, and the solid line means nothing on its own. They
+    are drawn rather than dropped: dropping them makes the figure look identical and quietly
+    removes the only thing that says whether to believe it.
+
+    ``sep_bands`` is this run's separations from :func:`separation_bands`; None takes the
+    package defaults.
+    """
     anns = raw_haemo.annotations
     markers = [
         {"onset": float(a["onset"]), "duration": float(a["duration"]),
@@ -1042,8 +1054,27 @@ def build_epoch_preview_figure(
             baseline=(epoch_tmin, 0),
             preload=True, verbose=False,
         )
-        hbo_picks = mne.pick_types(epochs.info, fnirs="hbo")
-        hbr_picks = mne.pick_types(epochs.info, fnirs="hbr")
+        from fnirs_pipe.qc.metrics import long_short_channels
+        long_names, short_names = long_short_channels(raw_haemo, sep_bands)
+
+        def _picks(names, chromo):
+            keep = {n for n in names if n.endswith(chromo)}
+            return [i for i, n in enumerate(epochs.ch_names) if n in keep]
+
+        # every channel when the montage has no split to make, so a probe without short
+        # channels keeps the figure it always had
+        traces = []
+        for chromo, color in (("hbo", HBO_COLOR), ("hbr", HBR_COLOR)):
+            lp, sp = _picks(long_names, chromo), _picks(short_names, chromo)
+            if not lp and not sp:
+                lp = list(mne.pick_types(epochs.info, fnirs=chromo))
+                traces.append((lp, color, chromo.upper(), "solid"))
+                continue
+            if lp:
+                label = f"{chromo.upper()} long" if sp else chromo.upper()
+                traces.append((lp, color, label, "solid"))
+            if sp:
+                traces.append((sp, color, f"{chromo.upper()} short (scalp)", "dot"))
 
         # one panel per condition, so HbO and HbR can keep the red/blue they carry in every
         # other panel; colouring by condition instead needed a second cue for chromophore
@@ -1067,17 +1098,26 @@ def build_epoch_preview_figure(
             rows=n, cols=1, shared_xaxes=True, vertical_spacing=min(0.06, 0.9 / n),
             subplot_titles=[f"{c} (n={e.shape[0]})" for c, e in panels],
         )
+        # the task's own length, so the curve can be read against when the task stopped
+        # rather than against the onset alone
+        durations = [float(m["duration"]) for m in markers if float(m["duration"]) > 0]
+        block = float(np.median(durations)) if durations else 0.0
+
         for i, (_cond, ep) in enumerate(panels, start=1):
-            for picks, color, label in ((hbo_picks, HBO_COLOR, "HbO"),
-                                        (hbr_picks, HBR_COLOR, "HbR")):
+            for picks, color, label, dash in traces:
                 if not len(picks):
                     continue
                 fig.add_trace(go.Scatter(
                     x=epochs.times.tolist(),
                     y=(ep[:, picks, :].mean(axis=(0, 1)) * 1e6).tolist(),
                     name=label, mode="lines", legendgroup=label,
-                    showlegend=(i == 1), line=dict(color=color, width=2),
+                    showlegend=(i == 1),
+                    line=dict(color=color, width=2, dash=dash),
                 ), row=i, col=1)
+            if block > 0:
+                fig.add_vrect(x0=0, x1=block, line_width=0, fillcolor="#f1c40f",
+                              opacity=0.16, layer="below", row=i, col=1)
+            fig.add_hline(y=0, line=dict(color="#cccccc", width=1), row=i, col=1)
             fig.add_vline(x=0, line=dict(color="#7f8c8d", width=1, dash="dash"),
                           row=i, col=1)
             # one y scale for every row, which the side-by-side layout got for free from
@@ -1090,7 +1130,7 @@ def build_epoch_preview_figure(
         fig.update_annotations(font_size=10)
         fig.update_layout(
             plot_bgcolor="white", paper_bgcolor="white",
-            height=60 + 150 * n, margin=dict(l=60, r=15, t=46, b=44),
+            height=60 + 260 * n, margin=dict(l=60, r=15, t=46, b=44),
             # top right rather than centred: a centred legend sits on the first row's title
             legend=dict(font=dict(size=9), orientation="h",
                         x=1, xanchor="right", y=1.0, yanchor="bottom"),

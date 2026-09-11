@@ -742,11 +742,13 @@ def _section_epoch_preview(
     epoch_tmin: float = -5.0,
     epoch_tmax: float = 25.0,
     suffix: str = "",
+    sep_bands=None,
 ) -> dict:
     epoch_preview_path = None
     epoch_preview_h = 0
     with _guard("Epoch preview", errors, subject):
-        fig = build_epoch_preview_figure(raw_haemo, epoch_tmin=epoch_tmin, epoch_tmax=epoch_tmax)
+        fig = build_epoch_preview_figure(raw_haemo, epoch_tmin=epoch_tmin,
+                                         epoch_tmax=epoch_tmax, sep_bands=sep_bands)
         if fig is not None:
             epoch_preview_path, epoch_preview_h = _save_plotly_html(
                 fig, figures_dir / f"epoch_preview{suffix}.html"
@@ -1537,7 +1539,8 @@ def build_subject_report(
     else:
         epoch_vars        = _section_epoch_preview(raw_haemo, subject, errors, figures_dir,
                                                    epoch_tmin=epoch_tmin,
-                                                   epoch_tmax=epoch_tmax)
+                                                   epoch_tmax=epoch_tmax,
+                                                   sep_bands=sep_bands)
         trial_image_vars  = _section_trial_image(epoch_haemo, subject, errors, figures_dir,
                                                  roi_map=roi_map,
                                                  epoch_tmin=epoch_tmin,
@@ -1827,7 +1830,8 @@ def _cropped_sections(
                                        epoch_tmax=epoch_tmax, suffix=suffix, **bands))
     out.update(_section_epoch_preview(crop(raw_haemo, epoch_pad) or haemo, subject, errors,
                                       figures_dir, epoch_tmin=epoch_tmin,
-                                      epoch_tmax=epoch_tmax, suffix=suffix))
+                                      epoch_tmax=epoch_tmax, suffix=suffix,
+                                      sep_bands=sep_bands))
     out.update(_section_evoked_topomap(crop(epoch_haemo, epoch_pad) or haemo, subject,
                                        errors, figures_dir, epoch_tmin=epoch_tmin,
                                        epoch_tmax=epoch_tmax, suffix=suffix,
