@@ -35,7 +35,7 @@ from .glm_figures import (
 )
 from .correlation_panel import hbo_hbr_correlation_panel
 from .optode_layout import optode_layout_static
-from .topomap import evoked_topomap_static
+from .topomap import evoked_channel_map_figure
 from .rest_figures import (
     alff_falff_figure,
     alff_topo_figure,
@@ -82,7 +82,7 @@ __all__ = [
     "glm_betas_figure",
     "hbo_hbr_correlation_panel",
     "optode_layout_static",
-    "evoked_topomap_static",
+    "evoked_channel_map_figure",
     "alff_falff_figure",
     "alff_topo_figure",
     "fc_matrix_figure",

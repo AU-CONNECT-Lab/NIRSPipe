@@ -22,7 +22,7 @@ plain = "Raw intensity signals were converted to optical density (OD) using MNE-
 citations = ["Gramfort2013"]
 
 [sci_marking]
-plain = "Channel signal quality was assessed using the scalp coupling index (SCI) {citations} together with the peak spectral power (PSP) of the cardiac band. Channels with SCI below {threshold} or PSP below {psp_threshold} were {action}."
+plain = "Channel signal quality was assessed by pairing the scalp coupling index (SCI) {citations} with the peak spectral power (PSP) of the cardiac band within each {window_s} s window: a window was counted as well coupled when its SCI was at least {threshold} and its PSP at least {psp_threshold}. Channels well coupled in fewer than {min_good_frac} of their windows were {action}."
 citations = ["Pollonini2014"]
 
 [motion_tddr]

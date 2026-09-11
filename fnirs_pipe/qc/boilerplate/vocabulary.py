@@ -92,13 +92,26 @@ def template_slots(key: str, params: dict[str, Any]) -> dict[str, str]:
     filter templates call ``l_freq``.
     """
     if key == "sci_marking":
-        # both criteria, because screening is a union over them. The PSP line falls back to
-        # the criteria table for a record written before the run started stamping it
+        # All three numbers the screening uses, because none of them describes it alone:
+        # SCI and PSP are the per-window lines and `min_good_frac` is what actually rejects
+        # a channel. The sentence used to name the first two and read as though either could
+        # reject on its own, which is the rule this replaced. Each falls back to the criteria
+        # table for a record written before the run started stamping it.
         from fnirs_pipe.qc.metrics import criterion_cutoffs
+        from fnirs_pipe.qc.metrics.windowed import SCREEN_WINDOW_S
+        cutoffs = criterion_cutoffs()
         psp = params.get("psp_threshold")
+        good_frac = params.get("min_good_frac")
+        good_frac = cutoffs["good_frac"] if good_frac is None else good_frac
         return {
             "threshold": str(params.get("sci_threshold", "")),
-            "psp_threshold": str(psp if psp is not None else criterion_cutoffs()["psp"]),
+            "psp_threshold": str(psp if psp is not None else cutoffs["psp"]),
+            # a share reads as a percentage in a Methods paragraph, and it is formatted from
+            # the same value the screening used rather than written out beside it
+            "min_good_frac": f"{float(good_frac) * 100:g}%",
+            # the screening window, which is pinned and does not follow --window-length. The
+            # record's `qc_window_s` is the QC grid and would be the wrong number to quote
+            "window_s": f"{SCREEN_WINDOW_S:g}",
             "action": "marked as bad and excluded from further analysis",
         }
     if key == "beer_lambert":

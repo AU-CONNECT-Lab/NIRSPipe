@@ -355,14 +355,17 @@
     {% endif %}
 
     {% if evoked_topomap_path %}
-    <h3>Topographic maps</h3>
+    <h3>Channel maps</h3>
     <p style="font-size:0.82rem;color:#666;margin:0 0 0.3rem;">
-      The condition-averaged response interpolated across the montage, at time points after
-      onset. One row per condition and chromophore; the colour scale is shared across the
-      conditions of a chromophore. Interpolation stays inside the optode coverage, so bare
-      scalp is left blank rather than painted.
+      The condition-averaged response painted along each channel's own source-detector path,
+      one head per condition; drag the slider to step through the epoch window. Nothing is
+      interpolated between channels, so bare scalp stays bare. Short channels get their own
+      row on the chromophore's colour scale: they are too shallow to reach cortex, so a short
+      row as strongly coloured as the long row above it means the response is systemic scalp
+      signal rather than activation.
     </p>
-    <img src="{{ evoked_topomap_path }}" alt="Evoked topomaps" style="max-width:100%;" />
+    <iframe class="plotly-frame" src="{{ evoked_topomap_path }}" title="Evoked channel maps"
+            style="height:{{ evoked_topomap_h }}px"></iframe>
     <p class="fig-path">{{ evoked_topomap_path }}</p>
     {% endif %}
 
@@ -370,8 +373,8 @@
     <h3>Trial image — ROI (channel-averaged)</h3>
     <p style="font-size:0.82rem;color:#666;margin:0 0 0.3rem;">
       Per ROI, HbO channels averaged first (higher SNR), then each trial stacked as a row.
-      Denoised signal; smoothed across adjacent trials. One panel per condition, pooled
-      panel first. Select an ROI.
+      Denoised signal; runs with enough repetitions are also smoothed across adjacent trials.
+      One panel per condition, pooled panel first. Select an ROI.
     </p>
     <select class="ch-select"
             onchange="document.getElementById('trialimg-roi-frame').src=this.value">
@@ -388,8 +391,9 @@
     <h3>Trial image — single-channel trials</h3>
     <p style="font-size:0.82rem;color:#666;margin:0 0 0.3rem;">
       Each stimulus repetition is a row (trial × time from onset), coloured by HbO — the
-      un-averaged view of the response (denoised, trial-smoothed). One panel per condition,
-      pooled panel first. Select a channel.
+      un-averaged view of the response, on the denoised signal. Runs with enough repetitions
+      are also smoothed across adjacent trials. One panel per condition, pooled panel first.
+      Select a channel.
     </p>
     <select class="ch-select"
             onchange="document.getElementById('trialimg-frame').src=this.value">
@@ -643,7 +647,9 @@
       the columns measure the same thing: a stage before the bandpass and one after it carry
       different frequency content, and the raw difference between their metrics is mostly the
       filter. They will not match the per-stage values in the metrics table, which are
-      measured on each stage as stored.
+      measured on each stage as stored, and the gap is almost entirely on the one stage the
+      bandpass has not reached: measured on this dataset, the stages after it agree with the
+      table to three decimals while the unfiltered one moves by a factor of two or more.
     {% else %}
       No passband was requested, so every panel is measured on each stage as stored and
       differences across a filtering step should be read with that in mind.
@@ -886,6 +892,9 @@
   row, not a threshold: red marks the worse end of what this recording did. A run whose
   mean SCI looks fine can still hold a handful of trials where the cap moved, and that is
   what this is for. Hover a cell for the value.
+  These are whole-montage numbers, so read them against the table's All row rather than its
+  Long one: the short channels are in every value here, and they couple better and return
+  more light than the long ones.
 </p>
 <div style="overflow-x:auto;">
   <iframe class="plotly-frame" src="{{ trial_qc_path }}" title="Per-trial quality"

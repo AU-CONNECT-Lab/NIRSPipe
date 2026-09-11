@@ -97,6 +97,36 @@ def test_resample_accepts_either_key():
     assert template_slots("resample", {"resample_sfreq": 2.0})["sfreq"] == "2.0"
 
 
+def test_the_screening_sentence_names_every_cutoff_that_rejects_a_channel():
+    """Yucel 2021 asks the Methods to state the thresholds a channel was rejected on, and
+    this is the sentence a paper copies. It named SCI and PSP alone for one release after
+    the two stopped deciding anything on their own, so it described a rule the code had
+    replaced: `min_good_frac` is what rejects, and it was not in the paragraph at all.
+
+    Driven off CRITERIA rather than a list written here, so a new screening criterion that
+    never reaches the prose fails instead of shipping silently.
+    """
+    from fnirs_pipe.qc.metrics import CRITERIA, criterion_cutoffs
+
+    cutoffs = criterion_cutoffs()
+    sentence = step_sentence("sci_pruning", {"sci_threshold": 0.8, "psp_threshold": 0.1,
+                                             "min_good_frac": 0.75})
+    for criterion in CRITERIA:
+        if not criterion.screens:
+            continue
+        value = cutoffs[criterion.name]
+        assert f"{value * 100:g}%" in sentence or f"{value:g}" in sentence,             f"{criterion.name} rejects channels but its cutoff is not in the Methods sentence"
+
+
+def test_the_screening_sentence_quotes_the_pinned_window_not_the_qc_grid():
+    """The screening window does not follow --window-length; `qc_window_s` does. Quoting
+    the record's value would print a window the screening never used."""
+    from fnirs_pipe.qc.metrics.windowed import SCREEN_WINDOW_S
+
+    slots = template_slots("sci_marking", {"sci_threshold": 0.8, "qc_window_s": 30.0})
+    assert slots["window_s"] == f"{SCREEN_WINDOW_S:g}"
+
+
 # ---- what a run actually did ----
 
 def test_the_steps_follow_the_data_not_the_filenames(tmp_path):

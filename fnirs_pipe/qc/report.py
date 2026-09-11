@@ -86,7 +86,7 @@ from fnirs_pipe.qc.figures import (
     psd_figure,
     quality_brain_views,
     optode_layout_static,
-    evoked_topomap_static,
+    evoked_channel_map_figure,
     design_matrix_static_figure,
     design_matrix_heatmap,
     build_epoch_preview_figure,
@@ -820,14 +820,20 @@ def _section_evoked_topomap(
     epoch_tmin: float = -5.0,
     epoch_tmax: float = 25.0,
     suffix: str = "",
+    sep_bands=None,
 ) -> dict:
-    path = None
-    with _guard("Evoked topomap", errors, subject):
-        b64 = evoked_topomap_static(raw_haemo, epoch_tmin=epoch_tmin, epoch_tmax=epoch_tmax)
-        if b64:
-            _save_b64_png(b64, figures_dir / f"evoked_topomap{suffix}.png")
-            path = _fig_href(figures_dir, f"evoked_topomap{suffix}.png")
-    return {"evoked_topomap_path": path}
+    """The evoked response per channel, long and short rows, with a time slider.
+
+    ``sep_bands`` has to be the run's own separations: the short row is only a contamination
+    check if it holds the channels the regression treated as short.
+    """
+    path, h = None, 0
+    with _guard("Evoked channel map", errors, subject):
+        fig = evoked_channel_map_figure(raw_haemo, epoch_tmin=epoch_tmin,
+                                        epoch_tmax=epoch_tmax, sep_bands=sep_bands)
+        if fig is not None:
+            path, h = _save_plotly_html(fig, figures_dir / f"evoked_topomap{suffix}.html")
+    return {"evoked_topomap_path": path, "evoked_topomap_h": h}
 
 
 def _section_trial_image(
@@ -1526,7 +1532,7 @@ def build_subject_report(
               f"continuous signal instead.")
         epoch_vars       = {"epoch_preview_path": None, "epoch_preview_h": 0}
         trial_image_vars = {"trial_image_pairs": [], "trial_image_roi_pairs": []}
-        topomap_vars     = {"evoked_topomap_path": None}
+        topomap_vars     = {"evoked_topomap_path": None, "evoked_topomap_h": 0}
         trial_qc_vars    = {"trial_qc_path": None, "trial_qc_h": 0, "trial_qc_window": ""}
     else:
         epoch_vars        = _section_epoch_preview(raw_haemo, subject, errors, figures_dir,
@@ -1538,7 +1544,8 @@ def build_subject_report(
                                                  epoch_tmax=epoch_tmax)
         topomap_vars      = _section_evoked_topomap(epoch_haemo, subject, errors, figures_dir,
                                                     epoch_tmin=epoch_tmin,
-                                                    epoch_tmax=epoch_tmax)
+                                                    epoch_tmax=epoch_tmax,
+                                                    sep_bands=sep_bands)
         trial_qc_vars     = _section_trial_qc(raw_intensity, config, subject, errors,
                                               figures_dir)
     glm_vars          = _section_glm(design_matrix, glm_est, raw_haemo, subject, errors, figures_dir, segments=segments)
@@ -1823,7 +1830,8 @@ def _cropped_sections(
                                       epoch_tmax=epoch_tmax, suffix=suffix))
     out.update(_section_evoked_topomap(crop(epoch_haemo, epoch_pad) or haemo, subject,
                                        errors, figures_dir, epoch_tmin=epoch_tmin,
-                                       epoch_tmax=epoch_tmax, suffix=suffix))
+                                       epoch_tmax=epoch_tmax, suffix=suffix,
+                                       sep_bands=sep_bands))
     # the scalars that can only be had by recomputing, off the same cut the panels above use.
     # Handed back separately because they belong in the condition's metric panel, not among
     # its figures; the caller merges them.
