@@ -50,8 +50,8 @@ def _motion_band_diff(od_data: np.ndarray, sfreq: float) -> np.ndarray:
 
 
 @_safe_metrics("Spike metrics", (
-    "spike_count", "spike_pct", "spike_num_frames", "spike_pct_frames",
-    "temporal_derivative_variance",
+    "spike_count", "spike_pct", "spike_pct_per_channel",
+    "spike_num_frames", "spike_pct_frames", "temporal_derivative_variance",
 ))
 def _spike_metrics(raw_intensity: mne.io.Raw, ch_frac: float = 0.1) -> dict[str, Any]:
     """Spike diagnostics and temporal-derivative variance from the OD derivative.
@@ -68,8 +68,9 @@ def _spike_metrics(raw_intensity: mne.io.Raw, ch_frac: float = 0.1) -> dict[str,
     -------
     dict
         spike_count (total outliers), spike_pct (fraction of all channel-samples that are
-        outliers, an outlier-ratio), spike_num_frames / spike_pct_frames (timepoints with
-        >= ch_frac of channels spiking), and temporal_derivative_variance (per channel).
+        outliers, an outlier-ratio), spike_pct_per_channel (the same ratio before it is
+        pooled), spike_num_frames / spike_pct_frames (timepoints with >= ch_frac of channels
+        spiking), and temporal_derivative_variance (per channel).
 
     Notes
     -----
@@ -89,6 +90,11 @@ def _spike_metrics(raw_intensity: mne.io.Raw, ch_frac: float = 0.1) -> dict[str,
     return {
         "spike_count": int(spikes.sum()),
         "spike_pct": float(spikes.mean()) if spikes.size else None,
+        # the same mask before pooling, so no weighting by the montage's short fraction
+        "spike_pct_per_channel": {
+            raw_od.ch_names[i]: float(spikes[i].mean())
+            for i in range(len(raw_od.ch_names))
+        } if spikes.size else {},
         "spike_num_frames": int(flagged.sum()),
         "spike_pct_frames": float(flagged.mean()) if flagged.size else None,
         "temporal_derivative_variance": {

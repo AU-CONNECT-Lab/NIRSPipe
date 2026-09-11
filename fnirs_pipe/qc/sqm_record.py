@@ -94,8 +94,9 @@ _HAEMO_SECTIONS = tuple(
     for name in (stage, *(f"{stage}_{s}" for s in _SPLIT_SUFFIXES))
 )
 
-SECTIONS = ("raw", "raw_long", "raw_short", "motion", "motion_post",
-            "motion_post_long", "motion_post_short", "windowed",
+SECTIONS = ("raw", "raw_long", "raw_short",
+            "motion", "motion_long", "motion_short",
+            "motion_post", "motion_post_long", "motion_post_short", "windowed",
             *_HAEMO_SECTIONS)
 
 # Sections only some runs have. Kept out of SECTIONS, which means "every run writes this" and
@@ -870,8 +871,23 @@ def compute_run_sections(
         from fnirs_pipe.qc.metrics import (
             motion_corrected_segments, motion_correction_metrics,
         )
-        section("motion", lambda: motion_correction_metrics(
-            read_snirf(stages["sci"]), read_snirf(stages["motcorrected"])))
+        # split like `motion_post`: the frame counts are defined over a channel set
+        try:
+            mc_before = read_snirf(stages["sci"])
+            mc_after = read_snirf(stages["motcorrected"])
+        except Exception:
+            mc_before = mc_after = None
+            logger.warning("motion sections skipped; %s or %s unreadable",
+                           stages["sci"], stages["motcorrected"], exc_info=True)
+        if mc_before is not None and mc_after is not None:
+            section("motion", lambda: motion_correction_metrics(mc_before, mc_after))
+            mc_long, mc_short = long_short_channels(mc_before, sep_bands)
+            if mc_long and len(mc_long) < len(mc_before.ch_names):
+                section("motion_long", lambda: motion_correction_metrics(
+                    mc_before.copy().pick(mc_long), mc_after.copy().pick(mc_long)))
+            if mc_short:
+                section("motion_short", lambda: motion_correction_metrics(
+                    mc_before.copy().pick(mc_short), mc_after.copy().pick(mc_short)))
         # `motion` counts the spans; this is where they are, for the figures that draw them
         try:
             windowed["motion_corrected_spans_s"] = [

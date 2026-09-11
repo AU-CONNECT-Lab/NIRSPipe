@@ -10,11 +10,18 @@ All notable changes to this project will be documented in this file.
 - **`fnirs-hyper run --wtc-arrow-min`** sets the coherence a cell has to reach before its phase arrow is drawn on the coherence maps, when `--wtc-significance` was not asked for (default 0.5). Display only: no table or figure value changes with it
 - **The quality record carries a `by_condition` section**, one entry per annotated condition: its window, its own rejected channels, and every scalar and per-channel value a condition page prints. Written whenever the recording has conditions, so the numbers behind a page can be checked against the data whether or not the page was built
 - **CNR is measured per condition**, over that condition's own events and per channel set, so a condition page carries the two CNR columns the run's page has. The epoch count travels with it: a block design gives each condition one trial
+- **A per-channel spike rate in the quality record.** The pooled rate is an average over every channel, so on a montage with short channels it moves with how many of them there are; the per-channel entry does not, and any grouping can be read off it
+- **The motion-correction footprint is split by separation**, `motion_long` and `motion_short` beside `motion`, the way the corrected-side sections already were. Its frame counts ask how many channels were corrected at once, so they are a different measurement over a different channel set rather than the same one regrouped
 
 ### Changed
 - **The per-condition report pages read those numbers rather than computing their own.** A record written before this section gets no condition pages, instead of a second copy of the numbers with nothing keeping the two in agreement
 
+### Removed
+- **The dotted reference cone on a condition's coherence map.** It marked the cone a block would have had if it had been cut out and transformed on its own, which is a question about a route this pipeline does not take, and it sat on the same axes and in the same shape as the real cone
+
 ### Fixed
+- **`--tstart`/`--tend` reaches the pseudo-dyad null.** Its whole-run row described the entire recording while the real row it is compared against described the window, so the two were not comparable and nothing said so
+- **A frequency axis narrower than two decades labels all its ticks the same way.** One tick came out as a power of ten beside neighbours written as decimals, which reads as two different scales on one axis
 - **A dyad analysis runs on a multi-session tree.** Each member's recording was looked for in the flat `sub-XX/nirs`, which a session tree does not have, so the run stopped at its first member saying the directory was missing. The quality record beside it and the Methods paragraph were read the same way
 - **A condition page's HbO-HbR correlation column is measured on that condition.** Every channel carried the whole recording's value instead, beside a scalar of the same name that was already being recomputed on the cut. On a five-condition run the two disagreed on 15 of 22 pairs, several of them by a change of sign
 - **A condition too short to transform leaves its spectra out instead of drawing them on a coarser frequency grid than the run's.** Its band scalars already stopped there, so the page was describing one measurement two ways
