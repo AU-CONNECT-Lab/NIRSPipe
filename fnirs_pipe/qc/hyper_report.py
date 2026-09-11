@@ -722,10 +722,6 @@ def build_hyper_post_report(
                         build_wtc_channel,
                         data, result.freqs, result.times,
                         pair_label, markers_list, cond_colors_, site,
-                        # a condition's figure shows no cone, the window having no edge of
-                        # its own, so it carries the one a cut would have given it instead.
-                        # The run's own page has the recording's real cone already
-                        bool(suffix),
                         arrow_min=arrow_min,
                     )
                 row[label2] = {"wtc": fig}

@@ -596,7 +596,7 @@ def condition_sections(
         scalars["n_long_channels"] = len(long_names)
         scalars["n_short_channels"] = len(short_names)
 
-        haemo_by_set, corr_per_channel = _condition_haemo(
+        haemo_by_set, haemo_per_channel = _condition_haemo(
             haemo, errts, t0, t1, n_fft_floor, bands, sep_bands,
             condition_haemo_scalars, long_short_channels)
         # the long set, matching what the run's own haemoglobin rows report
@@ -628,19 +628,50 @@ def condition_sections(
                                                short_names),
             "haemo_by_set": haemo_by_set,
             "motion_by_set": motion_by_set,
-            "per_channel": {**sliced,
-                            **({"hbo_hbr_corr_per_channel": corr_per_channel}
-                               if corr_per_channel else {})},
+            "per_channel": {**sliced, **haemo_per_channel},
         }
     logger.info("by_condition: %d condition(s)", len(out))
     return out
 
 
+def _condition_cnr(haemo, t0, t1, picks=None) -> dict:
+    """CNR over one condition's own events, on a cut widened for the epoch windows.
+
+    The bare span puts a block's onset at t=0 with no baseline before it, and mne drops the
+    epoch for want of one. Widening can reach the next condition's onset, hence the filter:
+    the events kept are this condition's, the extra samples only give them room.
+    """
+    from fnirs_pipe.qc.metrics.haemo import (
+        CNR_BASELINE_S, CNR_RESPONSE_S, _cnr_metrics,
+    )
+    lo = max(0.0, float(t0) + min(0.0, CNR_BASELINE_S[0]))
+    hi = min(float(haemo.times[-1]), float(t1) + max(0.0, CNR_RESPONSE_S[1]))
+    if hi <= lo:
+        return {}
+    cut = haemo.copy().crop(lo, hi)
+    # half a sample: the window bounds are rounded, so an onset sits either side of its own
+    # condition's start by a few tens of microseconds. An exact test dropped three of five
+    # conditions here. Still far below the gap between blocks, so no neighbour is let in.
+    tol = 0.5 / float(haemo.info["sfreq"])
+    keep = [i for i, a in enumerate(cut.annotations)
+            if float(t0) - tol <= float(a["onset"]) <= float(t1) + tol]
+    if not keep:
+        return {}
+    if len(keep) < len(cut.annotations):
+        cut.set_annotations(cut.annotations[keep])
+    if picks is not None:
+        names = [c for c in picks if c in cut.ch_names]
+        if not names:
+            return {}
+        cut = cut.pick(names)
+    return _cnr_metrics(cut) or {}
+
+
 def _condition_haemo(haemo, errts, t0, t1, n_fft_floor, bands, sep_bands,
                      condition_haemo_scalars, long_short_channels):
-    """One condition's haemoglobin scalars per channel set, plus its correlation column.
+    """One condition's haemoglobin scalars per channel set, plus its per-channel dicts.
 
-    Safe to crop because nothing here filters. The per-channel dict is lifted out of the
+    Safe to crop because nothing here filters. The per-channel dicts are lifted out of the
     scalars, which flatten into a table of numbers.
     """
     if haemo is None:
@@ -666,10 +697,24 @@ def _condition_haemo(haemo, errts, t0, t1, n_fft_floor, bands, sep_bands,
                       errts_cut.copy().pick([c for c in picks if c in errts_cut.ch_names]))
         by_set[set_name] = condition_haemo_scalars(
             haemo_cut.copy().pick(picks), errts_pick, n_fft_floor, bands)
-    corr = (by_set["all"].get("hbo_hbr_corr_per_channel") or {})
+
+    # CNR needs room either side of each onset, so it cuts the uncropped file itself
+    def _scalars_of(cnr):
+        return {k: v for k, v in cnr.items() if k != "cnr_per_channel"}
+
+    cnr_all = _condition_cnr(haemo, t0, t1)
+    by_set["all"].update(_scalars_of(cnr_all))
+    for set_name, names in (("long", long_names), ("short", short_names)):
+        if by_set.get(set_name):
+            by_set[set_name].update(_scalars_of(_condition_cnr(haemo, t0, t1, names)))
+
+    per_channel = {key: source[key]
+                   for key, source in (("hbo_hbr_corr_per_channel", by_set["all"]),
+                                       ("cnr_per_channel", cnr_all))
+                   if source.get(key)}
     for scalars in by_set.values():
         scalars.pop("hbo_hbr_corr_per_channel", None)
-    return by_set, corr
+    return by_set, per_channel
 
 
 def compute_run_sections(

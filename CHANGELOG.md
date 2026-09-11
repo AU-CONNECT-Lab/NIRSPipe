@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 - **`fnirs-hyper run --wtc-arrow-min`** sets the coherence a cell has to reach before its phase arrow is drawn on the coherence maps, when `--wtc-significance` was not asked for (default 0.5). Display only: no table or figure value changes with it
 - **The quality record carries a `by_condition` section**, one entry per annotated condition: its window, its own rejected channels, and every scalar and per-channel value a condition page prints. Written whenever the recording has conditions, so the numbers behind a page can be checked against the data whether or not the page was built
+- **CNR is measured per condition**, over that condition's own events and per channel set, so a condition page carries the two CNR columns the run's page has. The epoch count travels with it: a block design gives each condition one trial
 
 ### Changed
 - **The per-condition report pages read those numbers rather than computing their own.** A record written before this section gets no condition pages, instead of a second copy of the numbers with nothing keeping the two in agreement

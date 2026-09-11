@@ -113,7 +113,6 @@ def build_wtc_channel(
     markers_list: list[dict],
     cond_colors: dict[str, str],
     site_label: str = "",
-    cut_reference: bool = False,
     arrow_min: float = ARROW_MIN_COHERENCE,
 ) -> "str | None":
     """WTC map for one channel or ROI pair, as a base64 PNG: time x log-frequency, colour 0-1.
@@ -140,12 +139,6 @@ def build_wtc_channel(
       computed.
     - one **boundary line per condition**, labelled above the axes. The interactive version
       shaded each block instead, under an opaque heatmap, so nothing showed.
-    - with ``cut_reference``, the cone this window **would** have had if it had been cut out
-      and transformed on its own, as a dotted line. Nothing is masked by it and no number
-      changes: it answers "how short is this block against my band" on a figure that
-      otherwise shows no cone at all, because a window read out of a whole-record transform
-      has no edge of its own. A condition page gets it; the run's own page does not, its
-      edges being the recording's and already drawn.
     """
     if wtc_data is None or len(freqs) == 0 or len(times) == 0:
         return None
@@ -166,16 +159,6 @@ def build_wtc_channel(
     freq_coi = np.clip(freq_coi, freqs.min(), freqs.max())
     ax.fill_between(times, freq_coi, freqs.min(), color="white", alpha=0.45, lw=0, zorder=2)
     ax.plot(times, freq_coi, color="white", lw=1.3, ls="--", zorder=3)
-
-    # what a cut would have cost. The cone reaches sqrt(2) * P in from an edge, so at
-    # distance d the lowest frequency still clear of it is sqrt(2) / d; the arch is that
-    # read from whichever edge of this window is nearer. Drawn, never applied.
-    if cut_reference and len(times) > 1:
-        edge = np.minimum(times - times[0], times[-1] - times)
-        with np.errstate(divide="ignore", invalid="ignore"):
-            ref = np.where(edge > 1e-9, np.sqrt(2.0) / edge, freqs.max())
-        ax.plot(times, np.clip(ref, freqs.min(), freqs.max()),
-                color="#ffb3b3", lw=1.2, ls=":", zorder=3)
 
     if sig is not None and len(sig) == wtc_arr.shape[0]:
         with np.errstate(divide="ignore", invalid="ignore"):
@@ -211,8 +194,6 @@ def build_wtc_channel(
                f"cycle, drawn only where coherence clears "
                f"{'the Monte Carlo level' if sig is not None else f'{arrow_min:g}'}"
                "    washed-out band: outside the cone of influence")
-    if cut_reference:
-        caption += "    dotted red: the cone this block would have had if cut out on its own"
     fig.text(0.5, -0.06, caption, ha="center", fontsize=8, color="#444444")
     return _png_b64(fig)
 
