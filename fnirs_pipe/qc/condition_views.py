@@ -25,10 +25,14 @@ logger = get_logger("qc.condition_views")
 SLICEABLE = ("sci_per_channel", "psp_per_channel", "good_frac_per_channel",
              "cv_per_channel", "snr_per_channel")
 
-# and what it therefore has to drop, so no column mixes two time scopes. Neither is drawn
-# today; they are dropped rather than carried so that a column added later shows a gap
-# instead of a whole-run number under a condition's heading.
-UNSLICEABLE = ("cp_per_channel", "temporal_derivative_variance")
+# and what it therefore has to drop, so no column mixes two time scopes. They are dropped
+# rather than carried so that a column added later shows a gap instead of a whole-run number
+# under a condition's heading. `hbo_hbr_corr_per_channel` is what a miss looks like: it was
+# in neither list, so `channel_rows` read it straight off `preproc` and printed the run's
+# value in every condition's last column, beside a scalar of the same name that the
+# condition had recomputed on its own cut.
+UNSLICEABLE = ("cp_per_channel", "temporal_derivative_variance",
+               "hbo_hbr_corr_per_channel", "cnr_per_channel")
 
 # the scalars a condition can be given, in print order. Short of the run's list on purpose:
 # flat channels, mean amplitude and the spike count have no windowed series to slice, and

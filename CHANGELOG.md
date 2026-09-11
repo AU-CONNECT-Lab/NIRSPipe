@@ -6,6 +6,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- **A condition page's HbO-HbR correlation column reports that condition.** Every channel carried the whole recording's value, in the same table as a condition-specific scalar of the same name
+- **A condition too short to transform leaves its spectra out instead of drawing them on a coarser frequency grid than the run's.** Its band scalars already stopped there, so the page was describing one measurement two ways
+
 ## [0.35.0] - 2026-09-11
 
 ### Added

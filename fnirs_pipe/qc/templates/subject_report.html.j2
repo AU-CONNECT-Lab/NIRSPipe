@@ -315,6 +315,14 @@
     {% if psd_panel_path %}
       <iframe class="plotly-frame" src="{{ psd_panel_path }}" title="PSD panel" style="height:{{ psd_panel_h }}px"></iframe>
       <p class="fig-path">{{ psd_panel_path }}</p>
+    {% elif psd_too_short %}
+      <div class="placeholder">
+        {% if condition_label %}&ldquo;{{ condition_label }}&rdquo; holds{% else %}This cut holds{% endif %}
+        fewer samples than the transform, so its spectrum would sit on a coarser frequency
+        grid than the run's rather than being a noisier view of it. Absent rather than
+        misleading: the run's own page carries the spectrum, and the sliced PSP row above
+        carries what a per-condition page reads a spectrum for.
+      </div>
     {% else %}
       <div class="placeholder">Figure generation failed — see Errors section.</div>
     {% endif %}

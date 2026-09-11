@@ -613,6 +613,7 @@ def _section_haemo(
     sep_bands=None,
     suffix: str = "",
     crop: "tuple[float, float] | None" = None,
+    psd: bool = True,
 ) -> dict:
     """Beer-Lambert output and what the denoising did to it.
 
@@ -634,6 +635,10 @@ def _section_haemo(
 
     So the stages are band-limited over the whole run and cut afterwards, the order the
     pipeline itself uses, and ``comparable_stage_metrics`` is then told not to filter again.
+
+    ``psd`` False leaves the spectrum out and keeps the rest. The caller decides, because
+    what disqualifies a spectrum is the length of the cut against mne's ``n_fft`` and only a
+    caller that knows both spans can compare them; see :func:`_cropped_sections`.
     """
     hbo_hbr_path = hbo_hbr_after_path = psd_panel_path = None
     psd_panel_h = 0
@@ -721,13 +726,14 @@ def _section_haemo(
                 stage_metrics_path, stage_metrics_h = _save_plotly_html(
                     fig, figures_dir / f"denoise_stage_metrics{suffix}.html")
 
-    with _guard("PSD figure", errors, subject):
-        fig_psd_custom = psd_figure(
-            raw_haemo_cut, l_freq=l_freq, h_freq=h_freq, fmax=2.0,
-            cardiac=(config.cardiac_l_freq, config.cardiac_h_freq),
-            resp=(config.resp_l_freq, config.resp_h_freq),
-            stages=psd_stages_cut)
-        psd_panel_path, psd_panel_h = _save_plotly_html(fig_psd_custom, figures_dir / f"psd_panel{suffix}.html")
+    if psd:
+        with _guard("PSD figure", errors, subject):
+            fig_psd_custom = psd_figure(
+                raw_haemo_cut, l_freq=l_freq, h_freq=h_freq, fmax=2.0,
+                cardiac=(config.cardiac_l_freq, config.cardiac_h_freq),
+                resp=(config.resp_l_freq, config.resp_h_freq),
+                stages=psd_stages_cut)
+            psd_panel_path, psd_panel_h = _save_plotly_html(fig_psd_custom, figures_dir / f"psd_panel{suffix}.html")
     return {
         "hbo_hbr_path":   hbo_hbr_path,
         "hbo_hbr_after_path": hbo_hbr_after_path,
@@ -1802,6 +1808,11 @@ def _cropped_sections(
     (1/900 Hz against 1/3900 Hz here) and averages fewer Welch segments, which makes the
     spectrum noisier and leaves it unbiased.
 
+    Noisier up to a point. Below ``_PSD_NFFT_CAP`` samples the cut is transformed on a
+    coarser grid than the run rather than on the same grid with fewer segments, and then it
+    is not a noisier view of the run's spectrum but a different measurement. That is where
+    the band scalars already stop, so the figures stop there too.
+
     The stage files handed to the PSD panels are cropped too, and they were filtered over
     the whole run before being written, so cutting them adds no filtering either.
 
@@ -1833,17 +1844,27 @@ def _cropped_sections(
               if (cropped := crop(raw)) is not None] or None
     bands = {"cardiac": (config.cardiac_l_freq, config.cardiac_h_freq),
              "resp": (config.resp_l_freq, config.resp_h_freq)}
-    out: dict = {}
+    # the floor the band scalars below are already held to, applied to the figures as well:
+    # under it the cut is transformed on a coarser grid than the run and the two spectra are
+    # not readable against each other. Leaving the figures out while dropping the scalars
+    # was the page saying two things about one measurement.
+    n_fft_floor = min(_PSD_NFFT_CAP, len(raw_haemo.times))
+    psd_ok = len(haemo.times) >= n_fft_floor
+    if not psd_ok:
+        logger.info("sub-%s | %s holds %d samples against a transform of %d; no spectra",
+                    subject, suffix.lstrip("_") or "the cut", len(haemo.times), n_fft_floor)
+    out: dict = {"psd_too_short": not psd_ok}
     # the one panel handed a span rather than a cropped recording: it holds the stage list,
     # so only it can band-limit the whole run before cutting, which is the order its stage
     # comparison needs. See its docstring.
     out.update(_section_haemo(raw_haemo, config, subject, errors, figures_dir,
                               l_freq=l_freq, h_freq=h_freq, raw_errts=raw_errts,
                               psd_stages=psd_stages, record=record, sep_bands=sep_bands,
-                              suffix=suffix, crop=span))
-    out.update(_section_psd_detail(haemo, subject, errors, figures_dir,
-                                   l_freq=l_freq, h_freq=h_freq, psd_stages=stages,
-                                   suffix=suffix, **bands))
+                              suffix=suffix, crop=span, psd=psd_ok))
+    if psd_ok:
+        out.update(_section_psd_detail(haemo, subject, errors, figures_dir,
+                                       l_freq=l_freq, h_freq=h_freq, psd_stages=stages,
+                                       suffix=suffix, **bands))
     # the bare span, unlike the epoch panels below: nothing in this section epochs any more,
     # so the pad would only show the neighbouring condition's last seconds
     out.update(_section_channel_detail(crop(raw_haemo_uncorr) or haemo, subject, errors,
@@ -1870,7 +1891,6 @@ def _cropped_sections(
     # its figures; the caller merges them.
     with _guard("Condition scalars", errors, subject):
         from fnirs_pipe.qc.condition_views import condition_haemo_scalars
-        n_fft_floor = min(_PSD_NFFT_CAP, len(raw_haemo.times))
         errts_cut = crop(raw_errts)
         out["cond_haemo_scalars"] = condition_haemo_scalars(
             haemo, errts_cut, n_fft_floor, bands)
