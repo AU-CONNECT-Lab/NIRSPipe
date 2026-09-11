@@ -39,6 +39,8 @@ _OPEN_AT     = 6.0     # canonical HbO peak, so the figure opens on the informat
 # a percentile, not the max: one stray condition (a mis-triggered event with two trials) used
 # to set the scale for every panel and washed the real conditions out to white
 _SCALE_PCT   = 99.5
+# below this a condition is single-trial noise: drawn, but not consulted for the range
+_SCALE_MIN_TRIALS = 3
 
 
 def _condition_evokeds(
@@ -207,12 +209,17 @@ def evoked_channel_map_figure(
         return _pair_values(evokeds[cond], pairs, per_pair, chromo, t)
 
     # one scale per chromophore, spanning both separations: a short row only reads as a
-    # contamination check when its colour means the same as the long row's
+    # contamination check when its colour means the same as the long row's. A condition of
+    # one or two trials is single-trial noise and is drawn but kept out of the range, the
+    # way the grand mean keeps it out of its y scale
+    n_trials = {c: int(getattr(evokeds[c], "nave", 0) or 0) for c in conds}
+    scaling = [c for c in conds if n_trials[c] >= _SCALE_MIN_TRIALS] or list(conds)
+
     vlim = {}
     for chromo in chromos:
         vals = np.concatenate([row_values(chromo, scope, cond, t)
                                for scope in scoped
-                               for cond in conds for t in times
+                               for cond in scaling for t in times
                                ] or [np.array([0.0])])
         v = float(np.nanpercentile(np.abs(vals), _SCALE_PCT)) if np.any(np.isfinite(vals)) else 0.0
         vlim[chromo] = v or 1.0
@@ -232,7 +239,7 @@ def evoked_channel_map_figure(
                 verdicts[(chromo, cond)] = peak_s / peak_l
 
     return _assemble(rows, conds, times, open_at, geometry, outlines, opt_xy,
-                     row_values, vlim, chromos, verdicts)
+                     row_values, vlim, chromos, verdicts, scaling)
 
 
 def _window_peak(row_values, chromo, scope, cond, times) -> "float | None":
@@ -268,11 +275,14 @@ def _skeleton(pairs, opt_xy):
 
 
 def _assemble(rows, conds, times, open_at, geometry, outlines, opt_xy,
-              row_values, vlim, chromos, verdicts) -> go.Figure:
+              row_values, vlim, chromos, verdicts, scaling) -> go.Figure:
     """Build the subplot grid, the frames and the slider from the per-row value function."""
     n_rows, n_cols = len(rows), len(conds)
+    titles = [c if c in scaling or len(scaling) == len(conds)
+              else f"{c}<br><span style='font-size:9px'>off the shared scale</span>"
+              for c in conds]
     fig = make_subplots(rows=n_rows, cols=n_cols,
-                        subplot_titles=list(conds) + [""] * (n_cols * (n_rows - 1)),
+                        subplot_titles=titles + [""] * (n_cols * (n_rows - 1)),
                         horizontal_spacing=_H_SPACE, vertical_spacing=_V_SPACE)
 
     if outlines:

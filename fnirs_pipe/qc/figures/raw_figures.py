@@ -1094,14 +1094,20 @@ def build_epoch_preview_figure(
         # one 300 px row left each panel a few centimetres wide, and the thing this figure
         # is read for is the shape of a slow haemodynamic curve
         n = len(panels)
+        scaling = _scale_setting_conditions(panels)
+        titles = [f"{c} (n={e.shape[0]})" +
+                  ("" if (c, e) in scaling or len(scaling) == n else ", off the shared scale")
+                  for c, e in panels]
         fig = make_subplots(
             rows=n, cols=1, shared_xaxes=True, vertical_spacing=min(0.06, 0.9 / n),
-            subplot_titles=[f"{c} (n={e.shape[0]})" for c, e in panels],
+            subplot_titles=titles,
         )
         # the task's own length, so the curve can be read against when the task stopped
         # rather than against the onset alone
         durations = [float(m["duration"]) for m in markers if float(m["duration"]) > 0]
         block = float(np.median(durations)) if durations else 0.0
+
+        yrange = _shared_yrange(scaling, traces)
 
         for i, (_cond, ep) in enumerate(panels, start=1):
             for picks, color, label, dash in traces:
@@ -1124,7 +1130,8 @@ def build_epoch_preview_figure(
             # shared_yaxes: without it each condition autoscales and the panel stops being
             # a comparison
             fig.update_yaxes(title_text="Conc. (µmol/L)", gridcolor="#eeeeee",
-                             row=i, col=1, **({} if i == 1 else {"matches": "y"}))
+                             row=i, col=1,
+                             **({"range": yrange} if i == 1 else {"matches": "y"}))
         fig.update_xaxes(title_text="Time rel. onset (s)", gridcolor="#eeeeee",
                          zerolinecolor="#cccccc", row=n, col=1)
         fig.update_annotations(font_size=10)
@@ -1139,6 +1146,40 @@ def build_epoch_preview_figure(
     except Exception as exc:
         logger.warning("epoch preview failed: %s", exc)
         return None
+
+
+_SCALE_MIN_TRIALS = 3
+
+
+def _scale_setting_conditions(panels):
+    """Conditions allowed to set the shared y scale, which is not every condition.
+
+    A stray trigger leaves a condition of one or two trials whose average is single-trial
+    noise; on one recording it ran three times the amplitude of the real conditions and
+    flattened all of them onto its scale. Below ``_SCALE_MIN_TRIALS`` a condition is still
+    drawn, just not consulted for the range.
+
+    e.g. panels of 30, 30 and 2 trials -> the two 30-trial ones. When nothing clears the bar
+    (a block design with one block per condition) every panel is kept, since a figure with
+    no scale at all is worse than one set by few trials.
+    """
+    kept = [p for p in panels if p[1].shape[0] >= _SCALE_MIN_TRIALS]
+    return kept or list(panels)
+
+
+def _shared_yrange(scaling, traces, pad: float = 0.08):
+    """Symmetric-padded range over the traces the scale-setting conditions actually draw."""
+    lo, hi = np.inf, -np.inf
+    for _cond, ep in scaling:
+        for picks, _c, _l, _d in traces:
+            if not len(picks):
+                continue
+            y = ep[:, picks, :].mean(axis=(0, 1)) * 1e6
+            lo, hi = min(lo, float(np.nanmin(y))), max(hi, float(np.nanmax(y)))
+    if not np.isfinite(lo) or not np.isfinite(hi) or hi <= lo:
+        return None
+    margin = (hi - lo) * pad
+    return [lo - margin, hi + margin]
 
 
 def build_trigger_timeline_single(

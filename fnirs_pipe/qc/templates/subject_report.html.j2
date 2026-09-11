@@ -141,11 +141,13 @@
     <h3>Per-channel HbO / HbR &amp; PSD &amp; Epoch</h3>
     <p style="font-size:0.82rem;color:#666;margin:0 0 0.3rem;">
       Select a channel to view its HbO/HbR timeseries, PSD, and epoch-averaged response.
+      Pairs marked <em>(short)</em> are short-separation: too shallow to reach cortex, so
+      what they show is scalp haemodynamics.
     </p>
     <select class="ch-select"
             onchange="document.getElementById('ch-det-frame').src=this.value">
       {% for ch in channel_pairs %}
-      <option value="{{ ch.path }}">{{ ch.pair }}</option>
+      <option value="{{ ch.path }}">{{ ch.label or ch.pair }}</option>
       {% endfor %}
     </select>
     <iframe id="ch-det-frame" class="plotly-frame"

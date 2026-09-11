@@ -7,7 +7,8 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Fixed
-- **The evoked spatial map no longer loses its colour scale to a stray condition.** A mis-triggered event with a couple of trials set the scale for every panel, leaving the real conditions near white
+- **A condition of one or two trials no longer sets the scale for the real ones.** A stray trigger left a two-trial condition running three times the amplitude of the rest, which flattened every other panel in the grand mean and washed the evoked map to white. Such a condition is still drawn, and its panel says it is off the shared scale; when no condition clears the bar every one of them keeps it
+- **The channel selector marks short-separation pairs.** The two separations were mixed under names that do not distinguish them, so picking a short pair showed scalp haemodynamics with nothing on the page saying so
 - **The trial image caption no longer claims trials were smoothed on runs too short for it to engage**
 - **The global correlations either side of the confound regression are measured on the same channel set as the rows beside them.** They were measured over every channel while their panel reported the long ones, which reversed the direction the regression appeared to move HbR global correlation in
 - **The per-condition haemoglobin panel reports the long channels**, matching its own note and the run's page; it was reporting every channel

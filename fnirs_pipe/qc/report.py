@@ -364,9 +364,16 @@ def _section_channel_detail(
     cardiac: "tuple[float, float] | None" = None,
     resp: "tuple[float, float] | None" = None,
     suffix: str = "",
+    sep_bands=None,
 ) -> dict:
+    from fnirs_pipe.qc.metrics import long_short_channels
+
     markers = extract_markers(raw_haemo)
     pairs = get_channel_pairs(raw_haemo)
+    # the selector mixed the two separations under names that do not say which is which, so
+    # picking a short pair showed scalp haemodynamics with nothing on the page saying so
+    _, short_names = long_short_channels(raw_haemo, sep_bands)
+    short_pairs = {n.split(" ")[0] for n in short_names}
     saved = []
     for pair in pairs:
         with _guard(f"Channel detail {pair}", errors, subject):
@@ -376,7 +383,10 @@ def _section_channel_detail(
             )
             fname = f"ch_detail_{_pair_fname(pair)}{suffix}.html"
             h = _save_multi_fig_html([detail_fig, psd_fig, epoch_fig], figures_dir / fname)
-            saved.append({"pair": pair, "path": _fig_href(figures_dir, fname), "h": h})
+            is_short = pair in short_pairs
+            saved.append({"pair": pair, "path": _fig_href(figures_dir, fname), "h": h,
+                          "label": f"{pair} (short)" if is_short else pair,
+                          "short": is_short})
     return {"channel_pairs": saved}
 
 
@@ -1502,7 +1512,8 @@ def build_subject_report(
                             subject, errors, figures_dir,
                             epoch_tmin=epoch_tmin, epoch_tmax=epoch_tmax,
                             cardiac=(config.cardiac_l_freq, config.cardiac_h_freq),
-                            resp=(config.resp_l_freq, config.resp_h_freq))
+                            resp=(config.resp_l_freq, config.resp_h_freq),
+                            sep_bands=sep_bands)
     channel_det_vars["channel_detail_stage"] = (
         "desc-sci" if raw_haemo_uncorr is not None else "desc-preproc")
     psd_det_vars      = _section_psd_detail(raw_haemo, subject, errors, figures_dir,
@@ -1827,7 +1838,8 @@ def _cropped_sections(
     # epoch_pad here too: this section's third panel epochs, like the two below it
     out.update(_section_channel_detail(crop(raw_haemo_uncorr, epoch_pad) or haemo, subject, errors,
                                        figures_dir, epoch_tmin=epoch_tmin,
-                                       epoch_tmax=epoch_tmax, suffix=suffix, **bands))
+                                       epoch_tmax=epoch_tmax, suffix=suffix,
+                                       sep_bands=sep_bands, **bands))
     out.update(_section_epoch_preview(crop(raw_haemo, epoch_pad) or haemo, subject, errors,
                                       figures_dir, epoch_tmin=epoch_tmin,
                                       epoch_tmax=epoch_tmax, suffix=suffix,
