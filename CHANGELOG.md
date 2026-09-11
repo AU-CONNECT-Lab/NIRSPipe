@@ -27,6 +27,7 @@ All notable changes to this project will be documented in this file.
 - **The grand mean no longer squeezes its curves into a sliver at the left of each panel.** The task shading was drawn to the block's full length, so a 900 s block stretched the axis over 900 s to hold a 30 s window. Each condition is shaded with its own block length now, clipped to the window
 - **The trial image no longer blends neighbouring trials into each other.** Interpolation ran across the trial axis as well as time, so the pooled panel smeared each condition into whichever one was recorded next to it
 - **The per-trial quality heatmap keeps square cells on a run of few trials.** Five trials across the width of the report came out as five bands rather than a grid
+- **A per-condition page's channel map is the size of the run page's.** The panel was derived from a fixed canvas divided by the number of conditions, so a page holding one condition blew a single head up to 958 px across and the figure to 4550 px tall. The panel is capped and the canvas follows it; a multi-condition page is unchanged
 
 ### Changed
 - **A rejected channel keeps its row in the coherence tables, blank.** Its pairings used to be absent, so a merged cohort table was missing rows for one dyad and nothing in it could say whether those pairs were rejected or never in the montage, and a table could not be subtracted row by row from its null. Every dyad's table now has the shape of the montage, the convention the inter-brain correlation matrix already followed. On a crossed run a channel one member lost blanks its row and one the other lost blanks its column, never both
@@ -50,6 +51,9 @@ All notable changes to this project will be documented in this file.
 - **Per-condition pages carry the event timeline**, labelled as the whole run's. A condition that stopped being delivered partway through is visible only against the conditions around it, so this panel is one that should not be sliced
 - **Per-condition pages say why the trial image and the per-trial quality heatmap are not on them**, instead of leaving two gaps with no note
 - **The pooled trial image names the condition each row came from**, and a condition of a single trial no longer gets a panel to itself: a one-row heatmap only repeats what the pooled panel already shows, named
+- **The channel map is centred** rather than sitting against the left edge of a page wider than it is
+- **The per-trial quality panel is drawn the way the channel quality grid above it is**, square markers on a fixed grid, so the two line up at the same left edge and carry the same size of cell
+- **The last two metric lists in Quantitative Metrics are tables**, like everything else in that section: one of metric against value, one of metric against before and after, with the values in a column of their own rather than run together with an arrow
 - **The Raw Signal section drops its epoch panel.** An epoch average is read for the shape of a slow curve and that section is the recording before any filtering, so it drew cardiac ripple; the epoch section carries the same channel's response on the denoised signal. On a per-condition page the section no longer reaches past the condition either
 
 ## [0.34.0] - 2026-09-10

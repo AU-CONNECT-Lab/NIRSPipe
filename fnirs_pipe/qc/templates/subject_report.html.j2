@@ -582,6 +582,25 @@
         </span></li>
 {%- endmacro %}
 
+{#- The same row as table cells. ``suffix`` names the second half of a before -> after pair;
+    a metric that has no pair gets one cell across both value columns, so a lone number is
+    never read as the after side of something that was not measured twice. -#}
+{% macro qm_tr_pair(key, text, suffix='', note='') %}
+    {%- set after = sqm.get(key ~ suffix) if suffix else none -%}
+    <tr><td>{{ ql(key, text ~ (note if after is not none else '')) }}</td>
+    {%- if after is not none -%}
+      <td class="qv">{{ mv(key, sqm.get(key)) }}</td><td class="qv {{ metric_class(key, after) }}">{{ mv(key, after) }}</td>
+    {%- else -%}
+      <td class="qv {{ metric_class(key, sqm.get(key)) }}" colspan="2">{{ mv(key, sqm.get(key)) }}</td>
+    {%- endif -%}
+    </tr>
+{%- endmacro %}
+
+{% macro qm_tr(key, text) %}
+    <tr><td>{{ ql(key, text) }}</td>
+        <td class="qv {{ metric_class(key, sqm.get(key)) }}">{{ mv(key, sqm.get(key)) }}</td></tr>
+{%- endmacro %}
+
 <h2 id="Metrics">Quantitative Metrics</h2>
 <div class="qm-box">
   <p class="qm-note">Hover a metric for what it means and which way is good.
@@ -766,25 +785,30 @@
   </ul>
   {% endif %}
 
-  <ul class="qm-list">
+  {#- one value per row, with no channel-set dimension: censoring and the correction
+      footprint are counted over the recording rather than per set -#}
+  <table class="qm-table qm-split qm-narrow">
+    <thead><tr><th>Metric</th><th>Value</th></tr></thead>
+    <tbody>
     {% if sqm.get('gvtd_censor_pct') is not none %}
-    {{ qm_li('gvtd_censor_pct', 'GVTD censored % (n_std ' ~ sqm.get('gvtd_censor_n_std') ~ ')') }}
-    {{ qm_li('gvtd_censor_retained_s', 'GVTD retained (s in ' ~ sqm.get('gvtd_censor_n_epochs') ~ ' epoch(s))') }}
+    {{ qm_tr('gvtd_censor_pct', 'GVTD censored % (n_std ' ~ sqm.get('gvtd_censor_n_std') ~ ')') }}
+    {{ qm_tr('gvtd_censor_retained_s', 'GVTD retained (s in ' ~ sqm.get('gvtd_censor_n_epochs') ~ ' epoch(s))') }}
     {% endif %}
     {% if sqm.get('motion_corrected_pct') is not none %}
-    {{ qm_li('motion_corrected_pct', 'Motion corrected % (exp.)') }}
-    {{ qm_li('motion_corrected_num', 'Motion corrected frames') }}
-    {{ qm_li('motion_corrected_n_segments', 'Motion corrected segments') }}
+    {{ qm_tr('motion_corrected_pct', 'Motion corrected % (exp.)') }}
+    {{ qm_tr('motion_corrected_num', 'Motion corrected frames') }}
+    {{ qm_tr('motion_corrected_n_segments', 'Motion corrected segments') }}
     {% endif %}
     {% if not condition_label %}
-    {{ qm_li('spike_count', 'Spike count') }}
+    {{ qm_tr('spike_count', 'Spike count') }}
     {% endif %}
-    {{ qm_li('spike_pct_frames', 'Spike % frames' ~ before_note) }}
-    {{ qm_li('spike_num_frames', 'Spike frames' ~ before_note) }}
+    {{ qm_tr('spike_pct_frames', 'Spike % frames' ~ before_note) }}
+    {{ qm_tr('spike_num_frames', 'Spike frames' ~ before_note) }}
     {% if sqm.get('spike_pct') is not none %}
-    {{ qm_li('spike_pct', 'Spike % (exp.)') }}
+    {{ qm_tr('spike_pct', 'Spike % (exp.)') }}
     {% endif %}
-  </ul>
+    </tbody>
+  </table>
 
   <h3 class="qm-sub">Haemoglobin and timing</h3>
   <p class="qm-note">Measured after Beer-Lambert, on
@@ -796,29 +820,39 @@
      bandpass alone raises global correlation and the regression is the step this pair
      exists to measure. % data retained is a share of the recording's duration, not of its
      channels, so it is one number for every channel set.</p>
-  <ul class="qm-list">
-    {{ qm_li('hbo_hbr_corr_mean', 'Mean HbO&ndash;HbR corr', '_errts', ' (denoise before&rarr;after)') }}
+  {#- the parenthetical on a row names which step its two columns straddle, since the
+      global correlations straddle the confound regression and the rest the denoising -#}
+  <table class="qm-table qm-split qm-narrow">
+    <thead><tr><th>Metric</th><th>Before</th><th>After</th></tr></thead>
+    <tbody>
+    {{ qm_tr_pair('hbo_hbr_corr_mean', 'Mean HbO&ndash;HbR corr', '_errts', ' (denoising)') }}
     {% if sqm.get('cnr_hbo_mean') is not none or sqm.get('cnr_hbo_mean_errts') is not none %}
     {% for chroma, key in [('HbO', 'cnr_hbo_mean'), ('HbR', 'cnr_hbr_mean')] %}
-    {{ qm_li(key, 'CNR ' ~ chroma
+    {{ qm_tr_pair(key, 'CNR ' ~ chroma
                   ~ (' — %d epochs'|format(sqm.get('cnr_n_epochs')) if sqm.get('cnr_n_epochs') else ''),
-             '_errts', ' (denoise before&rarr;after)') }}
+                  '_errts', ' (denoising)') }}
     {% endfor %}
     {% endif %}
     {#- the regression's own before/after, which is stored under its own two keys rather
-        than as a suffix on gcor_hbo, so it does not go through qm_li -#}
+        than as a suffix on gcor_hbo, so it does not go through qm_tr_pair -#}
     {% for chroma, key in [('HbO', 'gcor_hbo'), ('HbR', 'gcor_hbr')] %}
     {% set reg_after = sqm.get(key ~ '_postreg') %}
-    <li>{{ ql(key, 'Global corr ' ~ chroma ~ (' (reg before&rarr;after)' if reg_after is not none else '')) }}
-        <span class="qv">{% if reg_after is not none %}{{ mv(key, sqm.get(key ~ '_prereg')) }} &rarr; {{ mv(key, reg_after) }}{% else %}{{ mv(key, sqm.get(key)) }}{% endif %}</span></li>
+    <tr><td>{{ ql(key, 'Global corr ' ~ chroma ~ (' (regression)' if reg_after is not none else '')) }}</td>
+      {%- if reg_after is not none -%}
+        <td class="qv">{{ mv(key, sqm.get(key ~ '_prereg')) }}</td><td class="qv">{{ mv(key, reg_after) }}</td>
+      {%- else -%}
+        <td class="qv" colspan="2">{{ mv(key, sqm.get(key)) }}</td>
+      {%- endif -%}
+    </tr>
     {% endfor %}
-    {{ qm_li('pct_data_retained', '% data retained') }}
-    {{ qm_li('cardiac_band_power_hbo', 'Cardiac band power (HbO)') }}
-    {{ qm_li('cardiac_band_frac_hbo', 'Cardiac band fraction (HbO)') }}
+    {{ qm_tr_pair('pct_data_retained', '% data retained') }}
+    {{ qm_tr_pair('cardiac_band_power_hbo', 'Cardiac band power (HbO)') }}
+    {{ qm_tr_pair('cardiac_band_frac_hbo', 'Cardiac band fraction (HbO)') }}
     {% if not condition_label %}
-    {{ qm_li('lowfreq_drift_amplitude_hbo', 'Low-freq drift (HbO)') }}
+    {{ qm_tr_pair('lowfreq_drift_amplitude_hbo', 'Low-freq drift (HbO)') }}
     {% endif %}
-  </ul>
+    </tbody>
+  </table>
   {% if condition_label %}
   <p class="qm-note">Low-frequency drift is not among these. It is the peak-to-peak of a
      cubic fitted over whatever span it is shown, so it measures how far the baseline

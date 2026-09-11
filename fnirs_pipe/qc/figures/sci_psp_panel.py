@@ -181,7 +181,9 @@ def _trial_metric_specs() -> list[tuple[str, str, bool]]:
     return specs
 
 
-_TRIAL_CELL_PX = 26
+# the grid pitch, in pixels. Named rather than derived because the figure sets its own
+# width from it, which is what keeps a cell square on a run of five trials
+_TRIAL_CELL_PX = 28
 
 
 def trial_quality_heatmap(
@@ -223,37 +225,41 @@ def trial_quality_heatmap(
             z.append([None if v is None
                       else ((v - lo) / span if better_high else (hi - v) / span)
                       for v in vals])
-        # the trial name rides in the cell text: the x axis is numeric so that the cells can
-        # be kept square, which leaves %{x} an index rather than a label
-        text.append([f"{t}<br>{label}: {format_metric(key, v)}"
+        text.append([f"{t} \u2014 {label}: {format_metric(key, v)}"
                      for t, v in zip(trial_labels, vals)])
 
-    fig = go.Figure(go.Heatmap(
-        z=z, text=text,
-        x=list(range(len(trial_labels))),
-        y=list(range(len(present))),
-        colorscale=[[0.0, _BAD_COLOR], [0.5, "#FFD966"], [1.0, _GOOD_COLOR]],
-        showscale=False,
+    n_trials, n_met = len(trial_labels), len(present)
+    xs = [i * _SPACING for _ in range(n_met) for i in range(n_trials)]
+    ys = [m * _SPACING for m in range(n_met) for _ in range(n_trials)]
+    fig = go.Figure(go.Scatter(
+        x=xs, y=ys,
+        mode="markers",
+        marker=dict(symbol="square", size=12,
+                    color=[v if v is not None else np.nan for row in z for v in row],
+                    colorscale=[[0.0, _BAD_COLOR], [0.5, "#FFD966"], [1.0, _GOOD_COLOR]],
+                    cmin=0.0, cmax=1.0, showscale=False, line=dict(width=0)),
+        text=[t for row in text for t in row],
         hovertemplate="%{text}<extra></extra>",
-        xgap=1, ygap=1,
+        showlegend=False,
     ))
-    # square cells at any container width. Without the constraint the figure stretches to the
-    # width it is given and only a run of a few dozen trials lands near square: five trials
-    # across a wide page came out as five bands a few hundred pixels wide and 26 px tall.
-    # Both axes are numeric for this, since the constraint needs them on a common scale
+    # square markers on a fixed pitch, the form the channel quality grid above this panel
+    # uses, so the two line up at the same left edge and carry the same size of cell. The
+    # width is the figure's own: stretched to the page, five trials came out as five bands
+    _MARGIN = dict(l=70, r=20, t=20, b=100)
     fig.update_layout(
-        xaxis=dict(tickmode="array", tickvals=list(range(len(trial_labels))),
-                   ticktext=trial_labels, tickangle=-45, tickfont=dict(size=8),
-                   showgrid=False, constrain="domain"),
-        yaxis=dict(tickmode="array", tickvals=list(range(len(present))),
-                   ticktext=[m[1] for m in present], autorange="reversed",
-                   tickfont=dict(size=10), showgrid=False,
-                   scaleanchor="x", scaleratio=1, constrain="domain"),
+        xaxis=dict(tickvals=[i * _SPACING for i in range(n_trials)], ticktext=trial_labels,
+                   tickangle=-45, tickfont=dict(size=8, color=AXIS_TEXT_COLOR),
+                   showgrid=False, zeroline=False,
+                   range=[-_SPACING, n_trials * _SPACING]),
+        yaxis=dict(tickvals=[m * _SPACING for m in range(n_met)],
+                   ticktext=[m[1] for m in present],
+                   tickfont=dict(size=10, color=AXIS_TEXT_COLOR),
+                   showgrid=False, zeroline=False,
+                   range=[n_met * _SPACING, -_SPACING]),
         plot_bgcolor="white", paper_bgcolor="white",
-        margin=dict(l=70, r=20, t=20, b=90),
-        # the margins sit outside the plot area, and with square cells it is the plot area
-        # that sets how wide a cell is, so the row height is named here rather than netted off
-        height=110 + _TRIAL_CELL_PX * len(present),
+        margin=_MARGIN,
+        width=_MARGIN["l"] + _MARGIN["r"] + (n_trials + 1) * _TRIAL_CELL_PX,
+        height=_MARGIN["t"] + _MARGIN["b"] + (n_met + 1) * _TRIAL_CELL_PX,
     )
     return fig
 

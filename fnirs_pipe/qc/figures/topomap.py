@@ -252,7 +252,10 @@ def _window_peak(row_values, chromo, scope, cond, times) -> "float | None":
 _MARGIN   = dict(l=56, r=86, t=46, b=70)
 _H_SPACE  = 0.02
 _V_SPACE  = 0.05
-_FIG_W    = 1100
+# the canvas follows the panel, not the other way round: a fixed canvas divided by the
+# column count gave a one-condition page a head 958 px across and a figure 4550 px tall
+_FIG_W_MAX   = 1100
+_PANEL_W_MAX = 200
 
 
 def _outline_traces(fig, outlines, row, col):
@@ -332,8 +335,11 @@ def _assemble(rows, conds, times, open_at, geometry, outlines, opt_xy,
 
     # the canvas is sized so a panel lands at the head's own aspect; scaleanchor would honour
     # the aspect too but leaves the slack as dead space inside each panel
-    panel_w = (_FIG_W - _MARGIN["l"] - _MARGIN["r"]) * (1 - _H_SPACE * (n_cols - 1)) / n_cols
+    spread = 1 - _H_SPACE * (n_cols - 1)
+    panel_w = min(_PANEL_W_MAX,
+                  (_FIG_W_MAX - _MARGIN["l"] - _MARGIN["r"]) * spread / n_cols)
     panel_h = panel_w * (yr[1] - yr[0]) / (xr[1] - xr[0])
+    fig_w = round(panel_w * n_cols / spread + _MARGIN["l"] + _MARGIN["r"])
     fig_h = round(panel_h * n_rows / (1 - _V_SPACE * max(n_rows - 1, 1)) +
                   _MARGIN["t"] + _MARGIN["b"])
 
@@ -353,7 +359,7 @@ def _assemble(rows, conds, times, open_at, geometry, outlines, opt_xy,
         )
 
     fig.update_layout(
-        height=fig_h, width=_FIG_W, plot_bgcolor="white", paper_bgcolor="white",
+        height=fig_h, width=fig_w, plot_bgcolor="white", paper_bgcolor="white",
         margin=_MARGIN, **coloraxes,
         sliders=[dict(active=open_at, x=0.06, len=0.88, y=-0.02, pad=dict(t=6),
                       currentvalue=dict(prefix="t = ", suffix=" s from onset",

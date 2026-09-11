@@ -19,6 +19,11 @@ PLOTLY_CDN_URL = "https://cdn.plot.ly/plotly-3.5.0.min.js"
 
 _IFRAME_CSS = "html,body{margin:0;padding:0;width:100%;}"
 
+# A figure that sets its own width does not stretch to the iframe and sits at the left edge,
+# which is right for a panel meant to line up with the one above it and wrong for a single
+# head on a wide page. Passed per figure rather than folded into _IFRAME_CSS for that reason.
+CENTER_FIGURE_CSS = ".plotly-graph-div{margin-left:auto;margin-right:auto;}"
+
 _RESIZE_JS = (
     "<script>(function(){"
     "function _h(){parent.postMessage({type:'iframe-resize',h:document.body.scrollHeight},'*');}"
@@ -41,7 +46,7 @@ def _figure_height(fig, default: int = 500) -> int:
     return default
 
 
-def _save_figure_html(fig, path: Path, extra_js: str = "") -> int:
+def _save_figure_html(fig, path: Path, extra_js: str = "", extra_css: str = "") -> int:
     """Save a single Plotly figure as standalone iframe-ready HTML. Returns height px."""
     h = _figure_height(fig)
     fig.update_layout(height=h)
@@ -51,7 +56,7 @@ def _save_figure_html(fig, path: Path, extra_js: str = "") -> int:
     )
     html = html.replace(
         "<head>",
-        f'<head>\n<style>{_IFRAME_CSS}</style>\n<script src="{PLOTLY_CDN_URL}"></script>\n{_RESIZE_JS}',
+        f'<head>\n<style>{_IFRAME_CSS}{extra_css}</style>\n<script src="{PLOTLY_CDN_URL}"></script>\n{_RESIZE_JS}',
         1,
     )
     if extra_js:

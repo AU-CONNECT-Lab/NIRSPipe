@@ -68,7 +68,7 @@ from fnirs_pipe.qc.channel_table import (
     separation_blocks, separation_notes,
 )
 from fnirs_pipe.qc.figure_io import (
-    PLOTLY_CDN_URL, _IFRAME_CSS, _RESIZE_JS,
+    CENTER_FIGURE_CSS, PLOTLY_CDN_URL, _IFRAME_CSS, _RESIZE_JS,
     _fig_href, _figure_height, _pair_fname, _save_b64_png, _save_multi_fig_html,
     extract_markers, get_channel_pairs,
 )
@@ -217,7 +217,8 @@ def _save_mpl_fig(fig, path: Path) -> None:
     plt.close(fig)
 
 
-def _save_plotly_html(fig, path: Path, div_id: str | None = None) -> tuple[str, int]:
+def _save_plotly_html(fig, path: Path, div_id: str | None = None,
+                      extra_css: str = "") -> tuple[str, int]:
     """Save Plotly figure as standalone iframe-ready HTML. Returns (relative_path, height_px)."""
     h = _figure_height(fig)
     fig.update_layout(height=h)
@@ -227,7 +228,7 @@ def _save_plotly_html(fig, path: Path, div_id: str | None = None) -> tuple[str, 
                        config={"responsive": True}, **kwargs)
     html = html.replace(
         "<head>",
-        f'<head>\n<style>{_IFRAME_CSS}</style>\n<script src="{PLOTLY_CDN_URL}"></script>\n{_RESIZE_JS}',
+        f'<head>\n<style>{_IFRAME_CSS}{extra_css}</style>\n<script src="{PLOTLY_CDN_URL}"></script>\n{_RESIZE_JS}',
         1,
     )
     path.write_text(html, encoding="utf-8")
@@ -842,7 +843,9 @@ def _section_evoked_topomap(
         fig = evoked_channel_map_figure(raw_haemo, epoch_tmin=epoch_tmin,
                                         epoch_tmax=epoch_tmax, sep_bands=sep_bands)
         if fig is not None:
-            path, h = _save_plotly_html(fig, figures_dir / f"evoked_topomap{suffix}.html")
+            # it sets its own width, so without this it sits at the left of a wide page
+            path, h = _save_plotly_html(fig, figures_dir / f"evoked_topomap{suffix}.html",
+                                        extra_css=CENTER_FIGURE_CSS)
     return {"evoked_topomap_path": path, "evoked_topomap_h": h}
 
 
