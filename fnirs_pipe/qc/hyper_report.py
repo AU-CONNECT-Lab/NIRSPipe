@@ -49,12 +49,21 @@ _SUBJECT_METRICS = [
     "channel_retention_rate",
 ]
 
-# What one WTC result yields, and the empty value of each. Declared once because two
-# places read it: `_figure_set` fills it, and a page renderer falls back to it for a window
-# whose figures failed. A key added to only one of the two would leave a panel on a
-# condition page showing the whole run's picture with nothing saying so.
-_FIGURE_SET: dict = {"per_channel": {}, "per_roi": {},
-                     "chan_matrix": "", "roi_matrix": "", "roi_grid": ""}
+# What one WTC result yields, keyed to the type of each. Declared once because two places
+# read it: `_figure_set` fills a fresh one, and a page renderer falls back to an empty value
+# for a window whose figures failed. A key added to only one of the two would leave a panel
+# on a condition page showing the whole run's picture with nothing saying so.
+#
+# Types rather than values, and `_empty_figures` calls them. Holding the empty containers
+# themselves would share one dict between every call, so each figure set would write into
+# its predecessor's and every page would end up pointing at the last window's figures.
+_FIGURE_SET: dict = {"per_channel": dict, "per_roi": dict,
+                     "chan_matrix": str, "roi_matrix": str, "roi_grid": str}
+
+
+def _empty_figures() -> dict:
+    """A figure set with every key present and its own empty value."""
+    return {key: factory() for key, factory in _FIGURE_SET.items()}
 
 _ARROW = {"higher": "↑", "lower": "↓"}
 _CHROMA_LABEL = {"hbo": "HbO", "hbr": "HbR"}
@@ -592,7 +601,7 @@ def build_hyper_post_report(
         chromophore and, for a window, the condition, because the aggregations inside drop
         columns they do not know.
         """
-        out: dict = {**_FIGURE_SET, "roichan": None}
+        out: dict = {**_empty_figures(), "roichan": None}
         what = f"condition {suffix.lstrip('_')}" if suffix else "whole run"
 
         pair_key   = next(iter(result.pairs)) if result and result.pairs else None
@@ -798,19 +807,31 @@ def build_hyper_post_report(
                                   "wtcbycond-roichan", "hyper_wtc_bycondition_roichan",
                                   condition_windows_s=spans))
 
-    # Compute ISC panels (HbO and HbR). Not driven by --wtc-chroma: ISC is cheap, so it has
-    # always run on both, and an ISC table is a channel-by-channel matrix that cannot share
-    # a file with a second one the way the long-format WTC tables can.
-    def _isc_panel(ch_type: str) -> str:
+    # ISC panels, for the whole run and for each window. Not driven by --wtc-chroma: ISC is
+    # cheap, so it has always run on both, and an ISC table is a channel-by-channel matrix
+    # that cannot share a file with a second one the way the long-format WTC tables can.
+    #
+    # A window here is a real cut of the recording, unlike the coherence, which is sliced out
+    # of the whole-run transform. Both are right: a correlation has no frequency axis and
+    # nothing in it filters, so a cut window carries no edge the record would not have had,
+    # while a wavelet transform of a cut window has two edges and a cone of its own. See
+    # `compute_isc` and `window_result`, which each say why they do it their way.
+    def _isc_panel(ch_type: str, label: "str | None" = None,
+                   window: "tuple[float, float] | None" = None) -> str:
+        what = f"condition {label}" if label else "whole run"
+        suffix = f"_{_pair_fname(label)}" if label else ""
         panel = ""
-        with guard(f"ISC panel ({ch_type})", errors, scope):
+        with guard(f"ISC panel ({what}, {ch_type})", errors, scope):
             isc_mat, isc_ch_names = compute_isc(aligned_raws, subject_ids, ch_type,
-                                                sep_bands)
+                                                sep_bands, window=window)
             if isc_mat is None:
                 return ""
+            # the desc- entity a condition's page takes, so its table is named the way its
+            # page is and a reader can pair the two without a rule of their own
+            desc = f"_desc-{_pair_fname(label)}" if label else ""
             write_isc_matrix(
                 group_data_dir(output_dir, group_id)
-                / f"group-{group_id}_task-{task}_hyper-isc-{ch_type}.tsv",
+                / f"group-{group_id}_task-{task}{desc}_hyper-isc-{ch_type}.tsv",
                 isc_mat, isc_ch_names, ch_type,
                 [p for p in (path_from(r) for r in aligned_raws.values()) if p],
                 subject_ids,
@@ -818,11 +839,14 @@ def build_hyper_post_report(
             panel = _fig(build_isc_panel(
                 isc_mat, isc_ch_names, subject_ids,
                 ch_type=ch_type, isc_threshold=isc_threshold,
-            ), f"isc_{ch_type}.png") or ""
+            ), f"isc_{ch_type}{suffix}.png") or ""
         return panel
 
-    isc_panel_hbo = _isc_panel("hbo")
-    isc_panel_hbr = _isc_panel("hbr")
+    # {label or None: {chromophore: href}}, one entry per page below
+    isc_panels: dict = {None: {c: _isc_panel(c) for c in ("hbo", "hbr")}}
+    for label, tstart, tstop in cond_windows:
+        isc_panels[label] = {c: _isc_panel(c, label, (tstart, tstop))
+                             for c in ("hbo", "hbr")}
 
     # ISC has no frequency axis, so an unfiltered stage reaches the number directly; WTC
     # does not care. Said on the page as well as in the log, since the two are read by
@@ -884,11 +908,10 @@ def build_hyper_post_report(
         ``{chromophore: figure set}`` and is the only thing that differs between them, the
         figure sets having been built by one function.
 
-        Two panels are the run's alone and are left out rather than repeated here. The ISC
-        matrices are a whole-record zero-lag correlation, with no windowed form yet; the
-        per-subject quality table is measured over the whole recording, and printing it
-        under a condition's heading would read as that condition's numbers. Both are a
-        click away on the run's own page, and the page says so.
+        One panel is the run's alone and is left out rather than repeated: the per-subject
+        quality table is measured over the whole recording, and printing it under a
+        condition's heading would read as that condition's numbers. It is a click away on
+        the run's own page, and the page says so.
         """
         # Every figure's URL keyed by chromophore, which is what the page's chromophore
         # switch reads. The panels are one set of DOM nodes filled from these, not one set
@@ -897,7 +920,7 @@ def build_hyper_post_report(
         # travels is a path under figures/, so the switch changes an img src and the
         # browser fetches one file.
         def _by_chroma(key: str) -> dict:
-            return {c: (figs.get(c) or {}).get(key, _FIGURE_SET[key]) for c in chroma}
+            return {c: (figs.get(c) or {}).get(key) or _FIGURE_SET[key]() for c in chroma}
 
         per_channel = _by_chroma("per_channel")
         per_roi     = _by_chroma("per_roi")
@@ -960,10 +983,9 @@ def build_hyper_post_report(
             run_href=_page_path(None).name,
             nav_links=[{"label": text, "href": _page_path(lab).name,
                         "current": lab == label} for lab, text in nav_pages],
-            # the run's alone; a condition page gets them blank and a note saying where
-            isc_unfiltered_note=(isc_unfiltered_note if label is None else ""),
-            isc_panel_hbo_path=(isc_panel_hbo if label is None else ""),
-            isc_panel_hbr_path=(isc_panel_hbr if label is None else ""),
+            isc_unfiltered_note=isc_unfiltered_note,
+            isc_panel_hbo_path=isc_panels.get(label, {}).get("hbo", ""),
+            isc_panel_hbr_path=isc_panels.get(label, {}).get("hbr", ""),
             subject_metrics_rows=(subject_metric_rows(
                 subject_sqm or {}, subject_ids, sci_threshold) if label is None else []),
         )
@@ -979,6 +1001,5 @@ def build_hyper_post_report(
         logger.info("group-%s | condition %s → %s", group_id, label, written.name)
 
     output_path = _render_page({c: passes[c]["run_figs"] for c in chroma}, None, None)
-    output_path.write_text(html, encoding="utf-8")
     logger.info("Hyper post report saved: %s", output_path)
     return output_path

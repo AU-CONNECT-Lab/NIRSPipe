@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
 - **Each condition of a dyad gets a report page of its own**, carrying the panels the run's page carries rather than the two pictures a window used to get at the bottom of one long page. Every page links the whole set
 
 ### Fixed
+- **An ROI's reported share of cells inside the cone of influence no longer falls with the number of channels rejected in it.** A pairing with no map behind it counted as a share of zero rather than as nothing to average
 - **The condition blocks show on the dyad coherence maps.** They were shaded underneath an opaque map, so nothing appeared
 - **A condition of one or two trials no longer sets the scale for the real ones.** A stray trigger left a two-trial condition running three times the amplitude of the rest, which flattened every other panel in the grand mean and washed the evoked map to white. Such a condition is still drawn, and its panel says it is off the shared scale; when no condition clears the bar every one of them keeps it
 - **The channel selector marks short-separation pairs.** The two separations were mixed under names that do not distinguish them, so picking a short pair showed scalp haemodynamics with nothing on the page saying so
@@ -22,6 +23,7 @@ All notable changes to this project will be documented in this file.
 - **The Methods paragraph describes the screening rule the pipeline actually applies.** It named SCI and PSP as if either could reject a channel on its own, which stopped being true when screening moved to counting coupled windows, and it omitted the coupled-window threshold that does the rejecting
 
 ### Changed
+- **A rejected channel keeps its row in the coherence tables, blank.** Its pairings used to be absent, so a merged cohort table was missing rows for one dyad and nothing in it could say whether those pairs were rejected or never in the montage, and a table could not be subtracted row by row from its null. Every dyad's table now has the shape of the montage, the convention the inter-brain correlation matrix already followed. On a crossed run a channel one member lost blanks its row and one the other lost blanks its column, never both
 - **The whole-run dyad page says it is a summary.** For a block design the coherence over the whole recording averages across every condition in it, which is not the number the analysis exists to produce
 - **The dyad report links its figures instead of carrying them.** One dyad's page came to 174 MB, nearly all of it coherence maps embedded one per channel per chromophore; the page is now a few hundred kB and the browser fetches the map being looked at
 - **The coherence maps carry the relative-phase arrows.** They say which brain led, which is half of what a coherence map is read for, and only the ROI grid used to show them

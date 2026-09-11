@@ -305,6 +305,7 @@ def _wtc_over_pairs(
     mc_count: int = 300,
     cross: bool = False,
     limit_scales: bool = True,
+    axis: "list[str] | None" = None,
 ) -> WTCResult:
     """Run pairwise Morlet WTC over precomputed per-subject {label: signal} maps.
 
@@ -312,6 +313,16 @@ def _wtc_over_pairs(
     ``S1_D1``, and nothing else, so the homologous set is the labels both subjects kept.
     ``cross`` instead crosses every label of one with every label of the other, keyed by the
     ``(label_sub1, label_sub2)`` tuple, of which the homologous ones are the diagonal.
+
+    ``axis`` is the montage's labels, rejections included, and is what the keys are drawn
+    from: a label one member has no usable channel at gets its key with ``None`` behind it
+    rather than no key at all. That is the package's one rule for a channel-by-channel
+    result, the same ``exclude=[]`` against ``exclude="bads"`` split
+    :func:`~fnirs_pipe.io.snirf.long_channel_picks` documents, and it is what gives every
+    dyad a table of one shape: a cohort table missing thirty rows for one dyad cannot say
+    whether those pairs were rejected or never in the montage, and a merged frame cannot be
+    subtracted row by row from its null. Left at None the keys come from the surviving
+    channels, which is the shape a caller with no montage to hand can produce.
 
     **Each side contributes its own surviving channels.** Crossing used to draw both axes
     from the first subject's list, which dropped every pairing involving a channel the
@@ -351,12 +362,27 @@ def _wtc_over_pairs(
     try:
         for sub1, sub2 in combinations(subject_ids, 2):
             sig_map1, sig_map2 = signals[sub1], signals[sub2]
-            label_pairs = ([(a, b) for a in sig_map1 for b in sig_map2] if cross
-                           else [(a, a) for a in sig_map1 if a in sig_map2])
+            # the montage when it was given, so a rejection blanks a row or a column of the
+            # result instead of shrinking it. Each side keeps its own axis in the fallback:
+            # crossing used to draw both from the first subject's list, which dropped every
+            # pairing involving a channel only the second subject had
+            axis1 = axis if axis is not None else list(sig_map1)
+            axis2 = axis if axis is not None else list(sig_map2)
+            label_pairs = ([(a, b) for a in axis1 for b in axis2] if cross
+                           else [(a, a) for a in axis1
+                                 if axis is not None or a in sig_map2])
             pair_data: dict[str | tuple[str, str], dict | None] = {}
+            n_blank = 0
             for label1, label2 in label_pairs:
                 key = (label1, label2) if cross else label1
-                sig1, sig2 = sig_map1[label1], sig_map2[label2]
+                sig1, sig2 = sig_map1.get(label1), sig_map2.get(label2)
+                if sig1 is None or sig2 is None:
+                    # a rejection, not a failure: the key is kept so the row survives, and
+                    # counted rather than warned about one pair at a time, since crossing
+                    # turns two rejected channels into fifty-odd blank pairings
+                    pair_data[key] = None
+                    n_blank += 1
+                    continue
                 try:
                     WCT_band, freqs_band, coi_dec, sig_band, phase_band = _pairwise_wtc(
                         sig1, sig2, dt, step, fmin, fmax, significance,
@@ -370,6 +396,9 @@ def _wtc_over_pairs(
                 except Exception as exc:
                     logger.warning("WTC failed %s-%s label %s: %s", sub1, sub2, key, exc)
                     pair_data[key] = None
+            if n_blank:
+                logger.info("%s-%s: %d of %d pairing(s) left blank, one side having no "
+                            "usable channel there", sub1, sub2, n_blank, len(label_pairs))
             result_pairs[(sub1, sub2)] = pair_data
     finally:
         if rng_state is not None:
@@ -423,7 +452,8 @@ def compute_wtc(
     signals = {sid: _long_signals(raw, ch_type, sep_bands) for sid, raw in raws.items()}
 
     return _wtc_over_pairs(
-        raws, signals, fmin, fmax, significance, seed, mc_count, cross, limit_scales)
+        raws, signals, fmin, fmax, significance, seed, mc_count, cross, limit_scales,
+        axis=long_axis_over(raws.values(), ch_type, sep_bands))
 
 
 def phase_scramble(sig: np.ndarray, rng: np.random.Generator) -> np.ndarray:
@@ -522,7 +552,10 @@ def compute_wtc_pseudo(
         }
         result = _wtc_over_pairs(
             raws, signals, fmin, fmax, significance=False, seed=None,
-            cross=cross, limit_scales=limit_scales)
+            cross=cross, limit_scales=limit_scales,
+            # the same axis the real table is built on, without which the null cannot be
+            # subtracted from it row by row
+            axis=long_axis_over(raws.values(), ch_type, sep_bands))
         frames.append(wtc_band_mean(result, band_fmin, band_fmax, mask_coi=mask_coi))
         # windowed off this iteration's own transform, never recomputed on the cut: the
         # real table is windowed the same way, and a null built differently from the table
@@ -762,7 +795,12 @@ def wtc_band_mean(
     n_valid_frac. A crossed result is keyed by a label pair rather than one label, and gains a
     ``label2`` column after ``label``: ``label`` is what sub1 contributed, ``label2`` what sub2
     did, and the homologous rows are the ones where they agree.
-    Labels that failed to compute keep their row, with NaN coherence and n_valid_frac 0.
+    A label with no map behind it keeps its row, with NaN in every measured column. That
+    covers both a pairing one member had no usable channel at and one the transform failed
+    on. ``n_valid_frac`` is NaN there rather than 0: the share of band cells inside the cone
+    is undefined when there are no cells, and a 0 would be averaged as a real share by
+    :func:`roi_mean_of_channels`, pulling an ROI's reported share down by however many of
+    its channels were rejected.
     """
     freqs = np.asarray(result.freqs, dtype=float)
     band  = (freqs >= fmin) & (freqs <= fmax)
@@ -786,7 +824,8 @@ def wtc_band_mean(
                 head["label2"] = label2
             if data is None:
                 rows.append({**head, "coherence": float("nan"),
-                             "coherence_z": float("nan"), "n_valid_frac": 0.0})
+                             "coherence_z": float("nan"),
+                             "n_valid_frac": float("nan")})
                 continue
 
             wtc = np.asarray(data["wtc"], dtype=float)[band]

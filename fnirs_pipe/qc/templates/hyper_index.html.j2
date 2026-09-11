@@ -93,9 +93,13 @@ tr.whole td.num { font-weight: 600; }
   table holds; a crossed run's off-diagonal pairings are in the tables and on each page, not
   averaged into this column. <b>inside COI</b> is the share of band cells that fell inside
   the cone of influence, so a window near either end of the recording keeps fewer.
-  <b>ISC</b> is the mean same-channel inter-brain correlation and is measured over the whole
-  record, which is why only the whole-run row carries one. Open a window for its coherence
-  maps, its matrices and the phase arrows.
+  <b>ISC</b> is the mean same-channel inter-brain correlation. Unlike the coherence it is
+  cut from the recording rather than read out of a whole-record transform, and both are
+  right: a correlation has no frequency axis and nothing in it filters, so a window carries
+  no edge the record would not have had, while a wavelet transform of a cut window would
+  have two edges and a cone of its own. Each window is z-scored inside itself, the
+  correlation over a stretch being against that stretch's mean. Open a window for its
+  coherence maps, its matrices and the phase arrows.
   {% if rows | length >= 4 %}
   A marked cell sits more than {{ outlier_z }} median absolute deviations from this dyad's
   other windows on that chromophore. It says the window differs from its neighbours, not

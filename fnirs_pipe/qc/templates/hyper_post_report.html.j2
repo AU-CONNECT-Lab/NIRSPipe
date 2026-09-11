@@ -215,19 +215,6 @@ select#ch-select-post, select#roi-select-post {
 </div>
 {% endif %}
 
-<!-- Inter-brain correlation. The run's alone: a whole-record zero-lag correlation has
-     no windowed form in the package yet, so a condition page says where it is instead of
-     printing the run's number under its own heading. -->
-{% if condition_label %}
-{% call card("Inter-brain Synchrony", hint="whole-record correlation") %}
-<div class="panel-caveat">
-  ISC is a zero-lag correlation over the whole record and has no per-condition form here
-  yet, so this page leaves it out rather than showing the run's. It is on the
-  <a href="{{ run_href }}">whole-run page</a>.
-</div>
-{% endcall %}
-{% endif %}
-
 <!-- ISC panel — HbO -->
 {% if isc_panel_hbo_path %}
 <div class="card">
@@ -236,6 +223,8 @@ select#ch-select-post, select#roi-select-post {
     <span class="panel-hint">
       topomap (per-channel ISC) &bull; ISC matrix (channel &times; channel Pearson r) &bull;
       connectogram (|ISC| &ge; {{ "%.2f"|format(isc_threshold) }}) &bull;
+      {% if condition_label %}over this window only, z-scored inside it
+      {%- else %}over the whole recording{% endif %} &bull;
       <span style="color:#8e44ad">&#9632;</span> {{ subject_ids[0] }}
       <span style="color:#27ae60">&#9632;</span> {{ subject_ids[1] }}
     </span>
@@ -255,6 +244,8 @@ select#ch-select-post, select#roi-select-post {
     <span class="panel-hint">
       topomap (per-channel ISC) &bull; ISC matrix (channel &times; channel Pearson r) &bull;
       connectogram (|ISC| &ge; {{ "%.2f"|format(isc_threshold) }}) &bull;
+      {% if condition_label %}over this window only, z-scored inside it
+      {%- else %}over the whole recording{% endif %} &bull;
       <span style="color:#8e44ad">&#9632;</span> {{ subject_ids[0] }}
       <span style="color:#27ae60">&#9632;</span> {{ subject_ids[1] }}
     </span>

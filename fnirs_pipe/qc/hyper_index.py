@@ -87,16 +87,21 @@ def _mean_by_chroma(df: "pd.DataFrame | None", column: str,
     return {str(c): float(v) for c, v in df.groupby("chromophore")[column].mean().items()}
 
 
-def _isc_mean(nirs_dir: Path, stem: str) -> dict:
-    """``{chromophore: mean same-channel ISC}`` from the two ISC matrices of one task.
+def _isc_mean(nirs_dir: Path, stem: str, label: "str | None" = None) -> dict:
+    """``{chromophore: mean same-channel ISC}`` from the two ISC matrices of one window.
 
     The diagonal, which is a channel against the other member's copy of the same channel.
     The off-diagonal is every site against every other and belongs to the connectogram, not
     to a single number. NaN cells are the channels a member lost and are skipped.
+
+    ``label`` reads a condition's own matrices, written under the ``desc-`` entity its page
+    takes. A window analysed before per-condition ISC existed has none, and the row shows a
+    dash rather than the run's number.
     """
     out: dict = {}
+    desc = f"_desc-{_pair_fname(label)}" if label else ""
     for chroma in ("hbo", "hbr"):
-        df = _read_tsv(nirs_dir / f"{stem}_hyper-isc-{chroma}.tsv")
+        df = _read_tsv(nirs_dir / f"{stem}{desc}_hyper-isc-{chroma}.tsv")
         if df is None or df.empty:
             continue
         values = df.set_index(df.columns[0]).to_numpy(dtype=float)
@@ -164,8 +169,7 @@ def collect_rows(group_dir: Path, group_id: str) -> "list[dict]":
                 "href": report.name if report.exists() else None,
                 "coherence": _mean_by_chroma(source, "coherence", where),
                 "valid_frac": _mean_by_chroma(source, "n_valid_frac", where),
-                # ISC is measured over the record, so only the whole-run row carries it
-                "isc": _isc_mean(nirs_dir, stem) if label is None else {},
+                "isc": _isc_mean(nirs_dir, stem, label),
                 "window": _window_of(nirs_dir / f"{stem}_hyper-wtcbycond.tsv", label),
             }
 

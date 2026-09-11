@@ -373,11 +373,25 @@ def compute_isc(
     subject_ids: list[str],
     ch_type: str = "hbo",
     sep_bands=None,
+    window: "tuple[float, float] | None" = None,
 ) -> tuple[np.ndarray, list[str]] | tuple[None, None]:
     """Compute inter-brain Pearson r matrix (n_ch × n_ch) over long channels.
 
     matrix[i, j] = Pearson r between sub1_ch_i and sub2_ch_j.
     Diagonal = same-channel ISC.
+
+    ``window`` restricts it to ``(tstart, tstop)`` on the aligned clock, which is how a
+    condition gets a correlation of its own. Unlike the wavelet coherence this really is a
+    cut and not a slice of a whole-record computation, and it is sound for the reason the
+    subject report's own per-condition panels are: a correlation has no frequency axis and
+    nothing here filters, so a window carries no edge that the whole record would not have
+    had. What it does carry is its own mean and its own standard deviation, and it has to:
+    both sides are z-scored inside the window, because the correlation over a stretch is
+    against that stretch's mean, not the recording's.
+
+    Cutting the wavelet coherence the same way would be wrong, and that asymmetry is the
+    whole of why the two are treated differently here. See
+    :func:`~fnirs_pipe.pipeline.synchrony.window_result`.
 
     Both axes are the *montage's* long channels, rejected ones included, so every dyad's
     matrix has one shape and a group analysis can stack them however their rejections
@@ -446,6 +460,22 @@ def compute_isc(
     data1 = _rows(raw1, map1, subject_ids[0])
     data2 = _rows(raw2, map2, subject_ids[1])
 
+    if window is not None:
+        sfreq = float(raw1.info["sfreq"])
+        first = max(0, int(round(float(window[0]) * sfreq)))
+        last  = min(n_times, int(round(float(window[1]) * sfreq)))
+        # two samples is the least a correlation can be computed from at all; a window this
+        # short is a trigger artefact rather than a condition, and returning nothing leaves
+        # the panel out instead of printing a coefficient over three points
+        if last - first < 2:
+            logger.warning("ISC (%s): window %.1f-%.1f s holds %d sample(s) of %d, "
+                           "no correlation computed",
+                           ch_type, window[0], window[1], max(0, last - first), n_times)
+            return None, None
+        data1, data2 = data1[:, first:last], data2[:, first:last]
+
+    # z-scored after the window is taken, so the correlation is against that stretch's own
+    # mean and deviation
     def _zscore(x: np.ndarray) -> np.ndarray:
         mu  = x.mean(axis=1, keepdims=True)
         std = x.std(axis=1, keepdims=True)
