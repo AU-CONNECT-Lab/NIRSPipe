@@ -645,24 +645,42 @@
                        else [('lowfreq_drift_amplitude_hbo', 'Low-freq drift (HbO)')]) %}
   {#- colour is read off the long channels alone, and only where the registry has a cutoff -#}
   {%- macro cell_class(key, v, is_long) %}{% if is_long %}{{ metric_class(key, v) }}{% endif %}{% endmacro -%}
-  {%- macro qm_cells(d, cols, is_long, first_class='') %}{% for key, text in cols %}{% set v = d.get(key) %}<td class="qv {{ first_class if loop.first }} {{ cell_class(key, v, is_long) }}">{{ mv(key, v) }}</td>{% endfor %}{% endmacro -%}
-  {%- macro qm_row(name, d_od, d_hb, is_long, lead) %}<tr><td>{{ name }}</td><td>{{ lead }}</td>{{ qm_cells(d_od, od_cols, is_long) }}{% if hb_split %}{{ qm_cells(d_hb, hb_cols, is_long, 'dom-split') }}{% endif %}</tr>{% endmacro -%}
+  {%- macro qm_cells(d, cols, is_long) %}{% for key, text in cols %}{% set v = d.get(key) %}<td class="qv {{ cell_class(key, v, is_long) }}">{{ mv(key, v) }}</td>{% endfor %}{% endmacro -%}
+  {#- ``lead`` is the channel count, which only the optical-density table carries -#}
+  {%- macro qm_row(name, d, cols, is_long, lead=none) %}<tr><td>{{ name }}</td>{% if lead is not none %}<td>{{ lead }}</td>{% endif %}{{ qm_cells(d, cols, is_long) }}</tr>{% endmacro -%}
+  {#- one table per signal domain. They used to share one, with a spanning header over each
+      half and a rule down the join; two tables say the same thing without a reader having to
+      find the join, and each gets the column spacing of its own content -#}
+  <h3 class="qm-sub">Original recording &mdash; optical density</h3>
   <div style="overflow-x:auto;">
   <table class="qm-table qm-split qm-flat">
     <thead>
-      <tr><th colspan="{{ od_cols | length + 2 }}" class="ch-group">Original recording &mdash; optical density</th>
-          {% if hb_split %}<th colspan="{{ hb_cols | length }}" class="ch-group dom-split">Haemoglobin &mdash; before denoising</th>{% endif %}</tr>
       <tr><th>Channel set</th><th>Channels</th>
-          {%- for key, text in od_cols %}<th>{{ ql(key, text) }}</th>{% endfor %}
-          {%- if hb_split %}{% for key, text in hb_cols %}<th class="{{ 'dom-split' if loop.first }}">{{ ql(key, text) }}</th>{% endfor %}{% endif %}</tr>
+          {%- for key, text in od_cols %}<th>{{ ql(key, text) }}</th>{% endfor %}</tr>
     </thead>
     <tbody>
-      {{ qm_row('All', sqm_all, hb_all, false, channel_rows | length) }}
-      {{ qm_row('Long', sqm_long, hb_long, true, sqm.get('n_long_channels') if sqm.get('n_long_channels') is not none else '—') }}
-      {{ qm_row('Short', sqm_short, hb_short, false, sqm.get('n_short_channels') if sqm.get('n_short_channels') is not none else '—') }}
+      {{ qm_row('All', sqm_all, od_cols, false, channel_rows | length) }}
+      {{ qm_row('Long', sqm_long, od_cols, true, sqm.get('n_long_channels') if sqm.get('n_long_channels') is not none else '—') }}
+      {{ qm_row('Short', sqm_short, od_cols, false, sqm.get('n_short_channels') if sqm.get('n_short_channels') is not none else '—') }}
     </tbody>
   </table>
   </div>
+  {% if hb_split %}
+  <h3 class="qm-sub">Haemoglobin &mdash; before denoising</h3>
+  <div style="overflow-x:auto;">
+  <table class="qm-table qm-split qm-flat">
+    <thead>
+      <tr><th>Channel set</th>
+          {%- for key, text in hb_cols %}<th>{{ ql(key, text) }}</th>{% endfor %}</tr>
+    </thead>
+    <tbody>
+      {{ qm_row('All', hb_all, hb_cols, false) }}
+      {{ qm_row('Long', hb_long, hb_cols, true) }}
+      {{ qm_row('Short', hb_short, hb_cols, false) }}
+    </tbody>
+  </table>
+  </div>
+  {% endif %}
   {% else %}
   <ul class="qm-list">
     {{ qm_li('channel_retention_rate', 'Channel retention') }}
@@ -755,18 +773,21 @@
       {%- else %}{{ mv(key, before) }} &rarr; {{ mv(key, after) }}{% endif -%}
     </td>
   {%- endmacro %}
+  {#- channel set per row and metric per column, the way the two tables above read. The
+      threshold is dropped as a column on a condition page, where it has no value -#}
+  {%- set motion_cols = [] %}
+  {%- for key, text in motion_rows %}
+  {%- if not (condition_label and key == 'gvtd_thresh') %}{{ motion_cols.append((key, text)) or '' }}{% endif %}
+  {%- endfor %}
   <div style="overflow-x:auto;">
   <table class="qm-table qm-split qm-flat">
-    <thead><tr><th>Metric{% if not condition_label %} (before&nbsp;&rarr;&nbsp;after){% endif %}</th>
-      <th>All</th><th>Long</th><th>Short</th></tr></thead>
+    <thead><tr><th>Channel set{% if not condition_label %} (before&nbsp;&rarr;&nbsp;after){% endif %}</th>
+      {%- for key, text in motion_cols %}<th>{{ ql(key, text) }}</th>{% endfor %}</tr></thead>
     <tbody>
-      {% for key, text in motion_rows %}
-      {% if not (condition_label and key == 'gvtd_thresh') %}
-      <tr><td>{{ ql(key, text) }}</td>
-          {{ motion_cell(motion_sets.get('all') or {}, key, false) }}
-          {{ motion_cell(motion_sets.get('long') or {}, key, true) }}
-          {{ motion_cell(motion_sets.get('short') or {}, key, false) }}</tr>
-      {% endif %}
+      {% for name, set_key, is_long in [('All', 'all', false), ('Long', 'long', true),
+                                        ('Short', 'short', false)] %}
+      <tr><td>{{ name }}</td>
+          {%- for key, text in motion_cols %}{{ motion_cell(motion_sets.get(set_key) or {}, key, is_long) }}{% endfor %}</tr>
       {% endfor %}
     </tbody>
   </table>
@@ -893,7 +914,7 @@
      dashes.</p>
   {% endif %}
   <div style="overflow-x:auto;">
-    <table class="qm-table qm-flat">
+    <table class="qm-table">
       <thead>
         <tr>
           <th>Channel</th><th>Status</th><th>SCI</th><th>PSP</th>
