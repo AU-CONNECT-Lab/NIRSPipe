@@ -39,10 +39,10 @@ _EPOCH_TMAX   = 25.0
 # later stage to measure.
 #
 # Two lists, as the subject report has two cases. A montage that splits gets the two tables
-# instead, and the flat list then keeps only what has no channel-set dimension. What that
-# leaves is not a taste: `_short_section` computes neither cardiac power nor the flat-channel
-# count, and it keeps the per-channel spike rate and its mean while dropping the pooled
-# counts, a short subset's version of one reading as a second opinion on the run's motion.
+# instead, and the flat list then keeps what the tables have no column for. `_short_section`
+# computes neither cardiac power nor the flat-channel count, so those have nothing to put in
+# a Short row; the spike frame counts do split but are printed for one set, each set's count
+# being against its own tenth-of-the-channels bar and so not a reading of another's.
 # A montage with no short channels has no table to put anything in and gets one list.
 #
 # Derived by subtracting what the tables carry rather than written out again, so a column
