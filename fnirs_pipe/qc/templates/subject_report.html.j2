@@ -701,8 +701,9 @@
   </ul>
   {% endif %}
 
-  {#- one value per row, with no channel-set dimension: censoring and the correction
-      footprint are counted over the recording rather than per set -#}
+  {#- one value per row, with no channel-set dimension: censoring and the frame counts are
+      counted over the recording rather than per set. The two per-channel shares are per set
+      and sit in the tables above wherever those are drawn -#}
   <table class="qm-table qm-split qm-narrow qm-flat">
     <thead><tr><th>Metric</th><th>Value</th></tr></thead>
     <tbody>
@@ -720,7 +721,7 @@
     {% endif %}
     {{ qm_tr('spike_pct_frames', 'Spike % frames' ~ before_note) }}
     {{ qm_tr('spike_num_frames', 'Spike frames' ~ before_note) }}
-    {% if sqm.get('spike_pct') is not none %}
+    {% if not sqm_split and sqm.get('spike_pct') is not none %}
     {{ qm_tr('spike_pct', 'Spike % (exp.)') }}
     {% endif %}
     </tbody>

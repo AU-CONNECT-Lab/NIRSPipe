@@ -325,6 +325,7 @@ OD_SPLIT_COLUMNS = (
     ("snr_mean",               "Mean SNR (10 s)"),
     ("cv_mean",                "Mean CV (10 s)"),
     ("mean_amp_mean",          "Mean amplitude"),
+    ("spike_pct",              "Spike share"),
 )
 
 # The motion table's columns, which are a separate table rather than more of the one above
@@ -340,7 +341,18 @@ MOTION_SPLIT_COLUMNS = (
     ("gvtd_pct_above_thresh", "GVTD % motion"),
     ("gvtd_num_above_thresh", "GVTD motion frames"),
     ("gvtd_thresh",           "GVTD threshold"),
+    # the one grouping of per-channel numbers here, and the only footprint column that
+    # compares across sets; the frame counts beside it in the record do not
+    ("motion_corrected_frac_mean", "Corrected share"),
 )
+
+# What a per-condition page drops from the two lists above rather than leaving blank in all
+# three rows: none of these has a windowed series to slice, and the GVTD threshold is a mode
+# of the whole run's histogram by definition, so a condition is counted against the run's
+# line. Shared so the subject report's condition pages and the raw viewer's drop the same.
+WHOLE_RUN_ONLY_COLUMNS = frozenset({
+    "mean_amp_mean", "spike_pct", "gvtd_thresh", "motion_corrected_frac_mean",
+})
 
 
 def _cell(key: str, scalars: dict, colour: bool) -> dict:
@@ -353,6 +365,24 @@ def _cell(key: str, scalars: dict, colour: bool) -> dict:
     if after is not None:
         cell["post"] = format_metric(key, after)
     return cell
+
+
+def measured_columns(
+    columns: "Sequence[tuple[str, str]]", *scalar_sets: dict,
+) -> "tuple[tuple[str, str], ...]":
+    """The columns at least one channel set has a value for.
+
+    ::
+
+      measured_columns([("gvtd_mean", "GVTD"), ("motion_corrected_frac_mean", "Corrected")],
+                       {"gvtd_mean": 0.004}, {"gvtd_mean": 0.009})
+      -> (("gvtd_mean", "GVTD"),)
+
+    A column nothing measured is dropped rather than printed as a row of dashes: the
+    correction footprint is there only when a correction ran.
+    """
+    return tuple((key, label) for key, label in columns
+                 if any((s or {}).get(key) is not None for s in scalar_sets))
 
 
 def split_table(
@@ -375,6 +405,7 @@ def split_table(
         format_metric, is_key_metric, metric_class, metric_summary,
     )
 
+    columns = measured_columns(columns, *(s for _, _, s, _ in channel_sets))
     return {
         "columns": [{"key": key, "label": label, "tip": metric_summary(key),
                      "key_metric": is_key_metric(key)} for key, label in columns],

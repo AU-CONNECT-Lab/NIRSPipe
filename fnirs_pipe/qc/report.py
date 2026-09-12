@@ -65,7 +65,7 @@ import mne.io
 from fnirs_pipe.qc.boilerplate import collect_software_versions, generate_methods_text
 from fnirs_pipe.qc.channel_table import (
     MOTION_SPLIT_COLUMNS, OD_SPLIT_COLUMNS, WHOLE_RUN_ONLY_COLUMNS, channel_columns,
-    channel_rows, format_rows, heatmap_args,
+    channel_rows, format_rows, heatmap_args, measured_columns,
     save_channel_csv, separation_blocks, separation_notes,
 )
 from fnirs_pipe.qc.figure_io import (
@@ -1811,8 +1811,11 @@ def build_subject_report(
         is_key_metric=is_key_metric,
         format_metric=format_metric,
         metric_class=metric_class,
-        od_split_columns=OD_SPLIT_COLUMNS,
-        motion_split_columns=MOTION_SPLIT_COLUMNS,
+        od_split_columns=measured_columns(
+            OD_SPLIT_COLUMNS, sqm_vars["sqm_all"], sqm_vars["sqm_long"],
+            sqm_vars["sqm_short"]),
+        motion_split_columns=measured_columns(
+            MOTION_SPLIT_COLUMNS, *(sqm_vars["motion_sets"] or {}).values()),
         subject=subject,
         run_label=sqm_label,
         run_entities={k: v for k, v in entities_of(sqm_label or "").items() if v},

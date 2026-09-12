@@ -464,7 +464,7 @@ METRIC_DISPLAY: dict[str, tuple[str, str, "tuple[float, float] | None", "str | N
     "spike_pct":               ("Spike % (exp.)", "pct", None, _LOWER),
     "spike_num_frames":        ("Spike frames", "d", None, _LOWER),
     "spike_pct_frames":        ("Spike % frames", "pct", None, _LOWER),
-    "motion_corrected_frac_mean":  ("Motion corrected fraction (exp.)", ".3f", None, None),
+    "motion_corrected_frac_mean":  ("Motion corrected fraction (exp.)", "pct", None, None),
     "motion_corrected_num":        ("Motion corrected frames", "d", None, None),
     "motion_corrected_pct":        ("Motion corrected % (exp.)", "pct", None, None),
     "motion_corrected_n_segments": ("Motion corrected segments", "d", None, None),

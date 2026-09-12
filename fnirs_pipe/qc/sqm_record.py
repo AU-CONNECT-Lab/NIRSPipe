@@ -27,10 +27,12 @@ from its source: it returns far more light, a far stronger pulse, and it sees sc
 than cortex, so an average over both sets describes neither. Two kinds of metric are the
 exception, and both are exceptions for a reason that can be stated:
 
-    montage-wide     GVTD, the spike counts, the motion-correction footprint. These
-                     aggregate across channels, and a handful of scalp channels has no
-                     reference distribution to read them against. A short-channel GVTD
-                     would be a number without a meaning.
+    pooled spikes    ``spike_count`` is a sum over channels and the spike frame counts ask
+                     how many channels spiked at once, so only ``all`` and ``long`` carry
+                     them. ``spike_pct`` and the per-channel rate are per-channel and do
+                     split. GVTD and the correction footprint split in full, each set being
+                     its own measurement rather than a regrouping of one; read either
+                     against its own set's cutoff and never across sets.
     not channel-based  ``pct_data_retained`` is a share of the recording's duration. It is
                      the same number for every channel set, so it stays on the whole-file
                      section alone (see ``_WHOLE_FILE_KEYS``); repeating it under ``_long``
@@ -248,9 +250,9 @@ def _short_section(
     """Only the metrics that answer "are the short-channel regressors trustworthy".
 
     Coupling (SCI, PSP, the coupled-window share) and amplitude (SNR, CV) transfer to short
-    channels, and so does the per-channel spike rate: the spike mask is a per-channel MAD
-    test, so a short channel's rate is its own measurement wherever it is computed. The
-    pooled spike counts and drift do not. GVTD does, in full, threshold included: it is an RMS
+    channels, and so do the per-channel spike rate and its mean over the set: the spike mask
+    is a per-channel MAD test, so a short channel's rate is its own measurement wherever it
+    is computed. The frame-level spike counts and drift do not. GVTD does, in full, threshold included: it is an RMS
     across whatever channels it is given, so a short set is its own measurement rather than a
     subset of the long one, and its threshold is the mode of *its own trace over time*, which
     has as many samples as any other trace of the same recording.
@@ -292,10 +294,11 @@ def _short_section(
     record.update({k: v for k, v in intensity.items()
                    if k.startswith(("snr_", "cv_", "mean_amp_"))})
     record.update(_motion_metrics(raw_short))
-    # the per-channel rate alone: the pooled counts are a montage-level measure, and a short
-    # subset's version of one would read as a second opinion on the run's motion
-    record["spike_pct_per_channel"] = (
-        _spike_metrics(raw_short).get("spike_pct_per_channel") or {})
+    # the per-channel rate and its mean over the set; the frame-level counts are left out
+    # for the reason the module docstring gives
+    spike = _spike_metrics(raw_short)
+    record["spike_pct_per_channel"] = spike.get("spike_pct_per_channel") or {}
+    record["spike_pct"] = spike.get("spike_pct")
     return _split_scalars(record)
 
 
