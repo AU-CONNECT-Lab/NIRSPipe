@@ -563,6 +563,27 @@ def _section_psd_detail(
     return {"psd_detail_pairs": saved}
 
 
+def _segments_in_window(segments: dict | None,
+                        window: "tuple[float, float] | None") -> "list[tuple[float, float]]":
+    """The flagged spans a page should draw, flattened out of the annotation groups.
+
+    ::
+
+      _segments_in_window({"BAD_gvtd": [(10, 5), (150, 40)]}, (100, 300))
+      -> [(150, 40)]
+
+    ``window`` None is the run, which draws all of them. A condition draws the ones that
+    touch its window, a span across the boundary included: it is a movement the condition
+    sat through whichever side it began on.
+    """
+    return [
+        (onset, dur)
+        for spans in (segments or {}).values()
+        for onset, dur in spans
+        if window is None or (onset < window[1] and onset + dur > window[0])
+    ]
+
+
 def _carpet_views(spans: "list[tuple[str, float, float]]") -> "dict | None":
     """Each condition's window on the carpet, which moves along time and nothing else.
 
@@ -598,6 +619,7 @@ def _section_motion(
     suffix: str = "",
     condition_spans: "list[tuple[str, float, float]] | None" = None,
     skip_carpet: bool = False,
+    window: "tuple[float, float] | None" = None,
 ) -> dict:
     """The carpet and GVTD panel, with the flagged spans drawn over it.
 
@@ -621,6 +643,12 @@ def _section_motion(
 
     ``raw_after_motion`` puts the corrected trace and carpet in the same panel as the
     uncorrected one, matching the ``before -> after`` pairs in the metrics table.
+
+    ``window`` keeps the bad-segment zoom to the segments inside one condition. Without it a
+    condition page showed the ten longest in the recording, which on a censored run are
+    mostly the ones GVTD censoring flagged and are as likely as not to have happened during
+    another condition entirely, under a heading that read as this one's. A condition nothing
+    was flagged in now has no zoom rather than the run's.
 
     ``raw_gvtd`` is every channel the GVTD panel covers and ``gvtd_blocks`` is how it splits
     them into rows, normally long then short. ``gvtd_set`` names the first block, the
@@ -653,11 +681,7 @@ def _section_motion(
                 views=_carpet_views(condition_spans or []))
 
     with _guard("Bad segment zoom", errors, subject):
-        all_spans = [
-            (onset, dur)
-            for spans in (segments or {}).values()
-            for onset, dur in spans
-        ]
+        all_spans = _segments_in_window(segments, window)
         if all_spans:
             sorted_chs = sorted(sci_scores.keys(), key=lambda c: sci_scores.get(c, 0), reverse=True)
             rep_chs = [c for c in sorted_chs if c in raw_long.ch_names][:3]
@@ -1886,13 +1910,13 @@ def build_subject_report(
                 remake_sci=lambda suffix, windowed_slice, sci_pc: _section_sci(
                     raw_intensity, sci_pc, bad_channels, config, windowed_slice,
                     subject, errors, figures_dir, suffix=suffix),
-                remake_motion=lambda slug: {
+                remake_motion=lambda slug, span: {
                     **_section_motion(
                         raw_long, raw_gvtd, gvtd_set, gvtd_blocks, sci_scores, config,
                         segments, subject, errors, figures_dir, windowed=windowed_section,
                         raw_before_motion=raw_before_motion,
                         raw_after_motion=raw_after_motion, suffix=f"_{slug}",
-                        skip_carpet=True),
+                        skip_carpet=True, window=span),
                     **_condition_carpet(motion_vars, slug),
                 },
                 # the condition's own SCI and its own rejected set, so the maps show the
@@ -2304,10 +2328,10 @@ def _write_condition_reports(
         if remake_sci is not None:
             panels.update(remake_sci(f"_{slug}", _windowed_slice(record, windows, label),
                                      sliced.get("sci_per_channel") or {}))
-        # the bad-segment zoom on this condition's own name, and the carpet narrowed to it
-        # without being written again: measured over the run, viewed over the condition
+        # the bad-segment zoom over this condition's own flagged segments, and the carpet
+        # narrowed to it without being written again: measured over the run, viewed over it
         if remake_motion is not None:
-            panels.update(remake_motion(slug))
+            panels.update(remake_motion(slug, span))
         # the denoising carpet is narrowed the same way but written again here, being a PNG
         # with no view to pick. The carpet and the per-channel motion figures are not: the
         # run's files carry every condition's window and this page addresses one by fragment

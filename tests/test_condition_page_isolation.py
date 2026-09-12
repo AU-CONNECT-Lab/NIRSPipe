@@ -13,6 +13,7 @@ names somebody has to remember to extend.
 
 from fnirs_pipe.qc.report import (
     _blanked, _carpet_views, _condition_carpet, _figure_leaks,
+    _segments_in_window,
 )
 
 
@@ -158,3 +159,34 @@ def test_the_carpet_view_carries_the_window_and_nothing_else():
 
 def test_a_run_with_no_conditions_bakes_no_view_table():
     assert _carpet_views([]) is None
+
+
+# ---- the bad-segment zoom belongs to the condition it is printed under ----
+
+SEGMENTS = {"BAD_gvtd": [(10.0, 5.0), (150.0, 40.0), (900.0, 30.0)],
+            "BAD_manual": [(95.0, 20.0)]}
+
+
+def test_the_zoom_shows_only_what_happened_during_this_condition():
+    # it used to show the ten longest in the recording whatever the page, so a quiet
+    # condition's page carried the segments another condition was censored for
+    assert _segments_in_window(SEGMENTS, (100.0, 300.0)) == [(150.0, 40.0), (95.0, 20.0)]
+
+
+def test_a_segment_across_the_boundary_counts():
+    # 95-115 s straddles the start: the condition sat through it whichever side it began on
+    assert (95.0, 20.0) in _segments_in_window(SEGMENTS, (100.0, 300.0))
+
+
+def test_a_segment_ending_exactly_at_the_window_start_does_not():
+    assert _segments_in_window({"BAD": [(80.0, 20.0)]}, (100.0, 300.0)) == []
+
+
+def test_the_run_keeps_every_segment():
+    assert len(_segments_in_window(SEGMENTS, None)) == 4
+
+
+def test_a_condition_with_nothing_flagged_gets_no_zoom():
+    # the template gates the panel on the path, so an empty list means no panel rather than
+    # the run's figure under this condition's heading
+    assert _segments_in_window(SEGMENTS, (400.0, 800.0)) == []
