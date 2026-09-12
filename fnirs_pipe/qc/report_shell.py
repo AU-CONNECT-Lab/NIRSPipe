@@ -85,7 +85,13 @@ def note(notes: list, scope: str, message: str) -> None:
 def render(template_name: str, **variables: Any) -> str:
     from jinja2 import Environment, FileSystemLoader
 
+    from fnirs_pipe.qc.boilerplate.notes import section_note
+
     env = Environment(loader=FileSystemLoader(str(TEMPLATE_DIR)), autoescape=False)
+    # a global rather than a variable each builder passes, so the hyper and group templates
+    # can use a paragraph the subject report already has without being wired for it. Not to
+    # be confused with `note` above, which collects what a section skipped.
+    env.globals["section_note"] = section_note
     return env.get_template(template_name).render(**variables)
 
 
