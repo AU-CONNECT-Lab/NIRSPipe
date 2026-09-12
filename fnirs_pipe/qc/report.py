@@ -450,36 +450,41 @@ def _motion_detail_figures(
     return built
 
 
+# names the empty annotation a condition's scale note is written into, one per row
+_SCALE_SLOT = "qc-scale-"
+
+
 def _condition_views(fig, spans: "list[tuple[str, float, float]]") -> "dict | None":
     """Every condition's view of one run-wide figure, keyed by slug for the page to pick.
 
     The scale notes go on as empty annotations first, one per row any condition writes one
-    on, so a view has only to fill in the text: a relayout addresses an annotation by index
-    and cannot append one. A row no condition annotates gets no slot, and a condition that
-    reaches the run's own maximum leaves the slot it shares with the others empty.
+    on, so a view has only to fill in the text: a relayout cannot append an annotation. Each
+    carries the row's name, which is what the page matches on, so an annotation added to the
+    figure later shifts no note onto the wrong row. A row no condition annotates gets no
+    slot, and a condition that reaches the run's own maximum leaves its slot empty.
     """
     if not spans or not hasattr(fig, "add_annotation"):
         return None
     from fnirs_pipe.qc.condition_views import window_view_spec
 
     specs = [(_pair_fname(label), window_view_spec(fig, t0, t1)) for label, t0, t1 in spans]
-    slot: dict = {}
+    placed: set = set()
     for _slug, spec in specs:
         for note in spec["notes"]:
-            row = (note["xref"], note["yref"])
-            if row in slot:
+            if note["yref"] in placed:
                 continue
-            slot[row] = len(fig.layout.annotations or ())
+            placed.add(note["yref"])
             fig.add_annotation(
                 x=0.996, xref=f"{note['xref']} domain", y=0.97,
                 yref=f"{note['yref']} domain", text="", showarrow=False,
-                xanchor="right", yanchor="top", font=dict(size=7, color="#98a2ad"))
+                xanchor="right", yanchor="top", font=dict(size=7, color="#98a2ad"),
+                name=f"{_SCALE_SLOT}{note['yref']}")
     return {
         slug: {
             "x": spec["x"],
             "y": {key: [floor, top] for key, (floor, top) in spec["y"].items()},
             "bands": spec["bands"],
-            "ann": {str(slot[(n["xref"], n["yref"])]): n["text"] for n in spec["notes"]},
+            "ann": {f"{_SCALE_SLOT}{n['yref']}": n["text"] for n in spec["notes"]},
         }
         for slug, spec in specs
     }

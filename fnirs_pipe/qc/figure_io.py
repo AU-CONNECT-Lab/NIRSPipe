@@ -51,7 +51,11 @@ _HASH_VIEW_JS = (
     "if(/^xaxis[0-9]*$/.test(a)){up[a+'.range']=v.x.slice();up[a+'.autorange']=false;}});"
     "Object.keys(v.y||{}).forEach(function(a){"
     "up[a+'.range']=v.y[a].slice();up[a+'.autorange']=false;});"
-    "Object.keys(v.ann||{}).forEach(function(i){up['annotations['+i+'].text']=v.ann[i];});"
+    # by the annotation's own name rather than by an index measured when the file was
+    # written: an annotation added to the figure in between would shift every index
+    # and land a row's note on another row, with nothing to say so
+    "(gd.layout.annotations||[]).forEach(function(a,i){"
+    "if(a.name&&(v.ann||{})[a.name]!==undefined)up['annotations['+i+'].text']=v.ann[a.name];});"
     "Plotly.relayout(gd,up).then(function(){"
     "(v.bands||[]).forEach(function(b){"
     "Plotly.restyle(gd,{y:[gd.data[b.i].y.map(function(q){"
