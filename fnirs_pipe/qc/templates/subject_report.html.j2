@@ -701,14 +701,21 @@
   </ul>
   {% endif %}
 
-  {#- one value per row, with no channel-set dimension: censoring and the frame counts are
-      counted over the recording rather than per set. The two per-channel shares are per set
-      and sit in the tables above wherever those are drawn -#}
+  {#- one value per row: these count timepoints rather than channels, so the channel set has
+      to be named in prose. The per-channel shares they pair with are columns of the tables
+      above, which carry all three sets -#}
+  <p class="qm-note">Counted on
+     {% if sqm_split %}<b>long channels</b>{% else %}every channel{% endif %}, and over the
+     recording rather than per channel: a timepoint counts when at least a tenth of the set
+     was flagged. A smaller set clears a tenth more easily, so a second set's count would
+     not be a second reading of this one and only the one is printed.</p>
   <table class="qm-table qm-split qm-narrow qm-flat">
     <thead><tr><th>Metric</th><th>Value</th></tr></thead>
     <tbody>
     {% if sqm.get('gvtd_censor_pct') is not none %}
-    {{ qm_tr('gvtd_censor_pct', 'GVTD censored % (n_std ' ~ sqm.get('gvtd_censor_n_std') ~ ')') }}
+    {#- censoring names its own set: `--gvtd-censor` picks it, so it need not be the long one -#}
+    {{ qm_tr('gvtd_censor_pct', 'GVTD censored % (' ~ (sqm.get('gvtd_censor_channel_set') or 'long')
+                                ~ ' channels, n_std ' ~ sqm.get('gvtd_censor_n_std') ~ ')') }}
     {{ qm_tr('gvtd_censor_retained_s', 'GVTD retained (s in ' ~ sqm.get('gvtd_censor_n_epochs') ~ ' epoch(s))') }}
     {% endif %}
     {% if sqm.get('motion_corrected_pct') is not none %}

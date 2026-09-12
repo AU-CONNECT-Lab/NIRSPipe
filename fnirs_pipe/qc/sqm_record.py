@@ -570,11 +570,18 @@ def motion_sections(
             section("motion_short", lambda: motion_correction_metrics(
                 before_od.copy().pick(mc_short), after_od.copy().pick(mc_short)))
 
-        # `motion` counts the spans; this is where they are, for the figures that draw them
-        # and for a condition counting the run's own boolean over its own stretch
+        # `motion_long` counts the spans; this is where they are, for the figures that draw
+        # them and for a condition counting the run's own boolean over its own stretch. The
+        # long set under the plain key, the convention `spike_spans_s` follows: a condition's
+        # share has to be the same measurement as the run's row above it, and the figures
+        # draw this strip beside a spike row that is already the long set's.
+        span_picks = (mc_long if mc_long and len(mc_long) < len(before_od.ch_names)
+                      else None)
         try:
             windowed["motion_corrected_spans_s"] = [
-                list(span) for span in motion_corrected_segments(before_od, after_od)]
+                list(span) for span in motion_corrected_segments(
+                    before_od if span_picks is None else before_od.copy().pick(span_picks),
+                    after_od if span_picks is None else after_od.copy().pick(span_picks))]
         except Exception:
             logger.warning("windowed: correction spans failed", exc_info=True)
 
