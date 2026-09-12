@@ -79,19 +79,31 @@ def _figure_height(fig, default: int = 500) -> int:
     return default
 
 
-def _save_figure_html(fig, path: Path, extra_js: str = "", extra_css: str = "") -> int:
-    """Save a single Plotly figure as standalone iframe-ready HTML. Returns height px."""
+def _save_figure_html(fig, path: Path, extra_js: str = "", extra_css: str = "",
+                      div_id: str | None = None, views: "dict | None" = None) -> int:
+    """Save a single Plotly figure as standalone iframe-ready HTML. Returns height px.
+
+    ``views`` maps a condition key to the window the page should open on, so one file serves
+    the run and every condition off a URL fragment. See ``_HASH_VIEW_JS``.
+    """
     h = _figure_height(fig)
     fig.update_layout(height=h)
     path.parent.mkdir(parents=True, exist_ok=True)
+    kwargs = {"div_id": div_id} if div_id else {}
     html = fig.to_html(
-        full_html=True, include_plotlyjs=False, config={"responsive": True}
+        full_html=True, include_plotlyjs=False, config={"responsive": True}, **kwargs
     )
     html = html.replace(
         "<head>",
         f'<head>\n<style>{_IFRAME_CSS}{extra_css}</style>\n<script src="{PLOTLY_CDN_URL}"></script>\n{_RESIZE_JS}',
         1,
     )
+    if views:
+        html = html.replace(
+            "</body>",
+            f"<script>window.__COND_VIEWS__={json.dumps(views)};</script>{_HASH_VIEW_JS}</body>",
+            1,
+        )
     if extra_js:
         html = html.replace("</body>", f"{extra_js}\n</body>", 1)
     path.write_text(html, encoding="utf-8")

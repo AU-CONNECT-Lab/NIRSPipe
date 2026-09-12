@@ -655,13 +655,9 @@
       ~ " Each set is a separate GVTD trace rather than a grouping of one: short channels sit"
       ~ " quieter between events and jump about twice as far during one, which moves both the"
       ~ " cutoff and the share above it, in opposite directions." %}
-  {%- set motion_rows = [('gvtd_mean', 'GVTD mean'),
-                         ('gvtd_p95', 'GVTD p95'),
-                         ('gvtd_filt_mean', 'GVTD mean 0.01-0.5 Hz'),
-                         ('gvtd_filt_p95', 'GVTD p95 0.01-0.5 Hz'),
-                         ('gvtd_pct_above_thresh', 'GVTD % motion'),
-                         ('gvtd_num_above_thresh', 'GVTD motion frames'),
-                         ('gvtd_thresh', 'GVTD threshold')] %}
+  {#- from fnirs_pipe.qc.channel_table, so this table and the raw viewer's cannot end up
+      listing different metrics for the same recording -#}
+  {%- set motion_rows = motion_split_columns %}
   {%- macro motion_cell(d, key, is_long) %}
     {%- set before = d.get(key) %}{% set after = d.get(key ~ '_post') -%}
     <td class="qv {{ metric_class(key, after if after is not none else before) if is_long }}">

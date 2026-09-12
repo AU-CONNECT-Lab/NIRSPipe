@@ -326,6 +326,21 @@ OD_SPLIT_COLUMNS = (
     ("mean_amp_mean",          "Mean amplitude"),
 )
 
+# The motion table's columns, which are a separate table rather than more of the one above
+# because GVTD is an RMS *across* channels: each set is its own trace with its own cutoff,
+# so these rows are three measurements and not three groupings of one. Read down a column,
+# never across one. Here rather than in either template, so the raw viewer and the subject
+# report cannot end up listing different metrics for the same recording.
+MOTION_SPLIT_COLUMNS = (
+    ("gvtd_mean",             "GVTD mean"),
+    ("gvtd_p95",              "GVTD p95"),
+    ("gvtd_filt_mean",        "GVTD mean 0.01-0.5 Hz"),
+    ("gvtd_filt_p95",         "GVTD p95 0.01-0.5 Hz"),
+    ("gvtd_pct_above_thresh", "GVTD % motion"),
+    ("gvtd_num_above_thresh", "GVTD motion frames"),
+    ("gvtd_thresh",           "GVTD threshold"),
+)
+
 
 def split_table(
     channel_sets: list[tuple[str, Any, dict, bool]],

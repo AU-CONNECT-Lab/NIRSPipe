@@ -87,6 +87,7 @@ select#run-select {
 .qm-table td.ch-group { font-weight: 600; background: #f2f4f6;
                         font-variant-numeric: normal; }
 .qm-note { font-size: 0.75rem; color: #777; margin: 0 0 0.4rem; line-height: 1.45; }
+.qm-sub  { font-size: 0.8rem; margin: 0 0 0.25rem; color: #34495e; }
 
 /* bad channel list */
 #bad-list { font-size: 0.78rem; color: #c0392b; margin-top: 0.3rem; }
@@ -102,18 +103,37 @@ select#run-select {
 </head>
 <body>
 
+{# One section list drives both rows of the top bar, as the subject report's does: the
+   anchor links and the rating pills under them. Rating ids carry the run label so a
+   subject's runs do not share a key, and the three that existed before this bar listed
+   every panel keep their spelling, an id being what a saved rating is filed under.
+   `group` is the run index, so a viewer holding several shows one run's cells at a time. #}
 {% set ns = namespace(modules=[]) %}
 {% for label in run_labels %}
+  {% set g = loop.index0 %}
   {% set _ = ns.modules.append([
-    {"id": label ~ "_Raw_Signal", "name": "Raw Signal", "href": false},
-    {"id": label ~ "_SCI_PSP",    "name": "SCI PSP",    "href": false},
-    {"id": label ~ "_Final",      "name": "FINAL",      "href": false},
+    {"id": label ~ "_Raw_Signal",     "name": "Raw",         "href": "#RawSignal",      "group": g},
+    {"id": label ~ "_Events",         "name": "Events",      "href": "#Events",         "group": g},
+    {"id": label ~ "_SCI_PSP",        "name": "SCI/PSP",     "href": "#SciPsp",         "group": g},
+    {"id": label ~ "_Motion",         "name": "Motion",      "href": "#Motion",         "group": g},
+    {"id": label ~ "_PSD",            "name": "PSD",         "href": "#PSD",            "group": g},
+    {"id": label ~ "_Layout",         "name": "Layout",      "href": "#Layout",         "group": g},
+    {"id": label ~ "_ChannelDetail",  "name": "Ch. detail",  "href": "#ChannelDetail",  "group": g},
+    {"sep": true, "group": g},
+    {"id": label ~ "_Metrics",        "name": "Metrics",     "href": "#Metrics",        "group": g},
+    {"id": label ~ "_ChannelSummary", "name": "Ch. Summary", "href": "#ChannelSummary", "group": g},
+    {"id": label ~ "_TrialQC",        "name": "Per-trial",   "href": "#TrialQC",        "group": g},
+    {"id": label ~ "_Channels",       "name": "Channels",    "href": "#Channels",       "group": g},
+    {"id": label ~ "_Errors",         "name": "Errors",      "href": "#Errors",         "group": g},
   ]) %}
 {% endfor %}
 {% set rating_subject = stem %}
 {% set rating_modules = ns.modules %}
+{# no Summary section to link to, so the overall verdict is a plain label over its pill #}
+{% set rating_pinned = [{"id": run_labels[0] ~ "_Final", "name": "FINAL", "href": false}] %}
+{% set rating_chip = stem %}
 {% set rating_save_endpoint = "/save_raw_ratings" %}
-{% set rating_load_endpoint = "/load_raw_ratings" %}
+{% set rating_load_endpoint = "/load_raw_ratings/" ~ stem %}
 {% include "_rating_bar.html.j2" %}
 
 <nav id="qc-nav">
@@ -125,7 +145,7 @@ select#run-select {
 </nav>
 
 <!-- Row 1: time series + marker editor -->
-<div class="row row-main">
+<div class="row row-main" id="RawSignal">
   <div class="card">
     <div class="panel-title">Raw signal &nbsp;<span style="font-weight:400;color:#aaa">blue = short channel &bull; orange = long &bull; click trace = select channel &bull; double-click = reset</span></div>
     <div id="ts-plot"></div>
@@ -149,7 +169,7 @@ select#run-select {
 </div>
 
 <!-- Row 2: single-channel detail -->
-<div class="row row-detail">
+<div class="row row-detail" id="ChannelDetail">
   <div class="card" id="detail-card">
     <div class="panel-title" id="detail-title">Channel detail &nbsp;<span style="font-weight:400;color:#aaa">click a channel in the signal panel &bull; HbO / HbR concentration, after Beer-Lambert</span></div>
     <div id="detail-placeholder">click a channel to view HbO &amp; HbR</div>
@@ -159,7 +179,7 @@ select#run-select {
 
 <!-- Row 3: PSD -->
 <div class="row" style="margin-bottom:0.5rem;">
-  <div class="card">
+  <div class="card" id="PSD">
     <div class="panel-title">PSD &nbsp;<span style="font-weight:400;color:#aaa">mean across channels &bull; optical density, before Beer-Lambert</span></div>
     <div id="psd-plot"></div>
   </div>
@@ -167,30 +187,14 @@ select#run-select {
 
 <!-- Row 3b: Trigger Timeline -->
 <div class="row" style="margin-bottom:0.5rem;">
-  <div class="card">
+  <div class="card" id="Events">
     <div class="panel-title">Trigger Timeline &nbsp;<span style="font-weight:400;color:#aaa">event onsets colored by condition</span></div>
     <div id="trigger-timeline-plot"></div>
   </div>
 </div>
 
-<!-- Row 3c: Epoch preview (Flask mode only; in static mode epochs are bundled in channel detail) -->
-<div class="row" id="epoch-row" style="margin-bottom:0.5rem;">
-  <div class="card">
-    <div class="panel-title">Epoch preview &nbsp;<span style="font-weight:400;color:#aaa" id="epoch-subtitle">select a channel to view</span></div>
-    <div id="epoch-plot"></div>
-  </div>
-</div>
-
-<!-- Row 3d: Evoked topo (static mode only) -->
-<div class="row" id="evoked-topo-row" style="margin-bottom:0.5rem;display:none;">
-  <div class="card">
-    <div class="panel-title">Evoked response &nbsp;<span style="font-weight:400;color:#aaa">condition average per channel, laid out on the head</span></div>
-    <div id="evoked-topo-panel"></div>
-  </div>
-</div>
-
 <!-- Row 4: 2D layout + 3D brain -->
-<div class="row row-layout">
+<div class="row row-layout" id="Layout">
   <div class="card">
     <div class="panel-title">Optode layout (2D top-down) &nbsp;<span style="font-weight:400;color:#aaa">head-projected &bull; red square = source &bull; blue dot = detector &bull; channel colour = SCI &bull; click = highlight</span></div>
     <div id="layout-2d-plot"></div>
@@ -203,7 +207,7 @@ select#run-select {
 
 <!-- Row 4b: Carpet / GVTD -->
 <div class="row" style="margin-bottom:0.5rem;">
-  <div class="card">
+  <div class="card" id="Motion">
     <div class="panel-title">Carpet / GVTD &nbsp;<span style="font-weight:400;color:#aaa">z-score carpet (all channels) with global variance of temporal derivative</span></div>
     <div id="carpet-gvtd-panel" style="padding:0.4rem 0.6rem;text-align:center;"></div>
   </div>
@@ -211,19 +215,20 @@ select#run-select {
 
 <!-- Row 5: SCI / PSP -->
 <div class="row" style="margin-bottom:0.5rem;">
-  <div class="card">
+  <div class="card" id="SciPsp">
     <div class="panel-title">SCI / PSP &nbsp;<span style="font-weight:400;color:#aaa">scalp coupling index and peak spectral power per channel &bull; red = below threshold</span></div>
     <div id="sci-psp-plot"></div>
   </div>
 </div>
 
 <!-- Row 6: SQM -->
-<div class="card" style="margin-bottom:0.5rem">
+<div class="card" id="Metrics" style="margin-bottom:0.5rem">
   <div id="sqm-panel">
     <h3>Image Quality Metrics &nbsp;<span style="font-weight:400;font-size:0.78rem;color:#adb5bd">(raw intensity)</span></h3>
     <p class="qm-note" id="sqm-scope"></p>
     <ul id="sqm-list" class="qm-list"></ul>
     <div id="sqm-split-wrap" style="display:none;margin-top:0.6rem">
+      <h4 class="qm-sub">Original recording &mdash; optical density</h4>
       <p class="qm-note">The same recording measured over three channel sets.
          <b>Long</b> is what the verdict above is read off; <b>Short</b> answers a different
          question, whether the regressors those channels feed are trustworthy, and carries no
@@ -231,24 +236,31 @@ select#run-select {
          established threshold.</p>
       <div style="overflow-x:auto"><table class="qm-table" id="sqm-split-table"></table></div>
     </div>
+    <div id="motion-split-wrap" style="display:none;margin-top:0.6rem">
+      <h4 class="qm-sub">Motion and spikes</h4>
+      <p class="qm-note">GVTD is an RMS across channels, so each set is its own trace with
+         its own cutoff. <b>Read the rows down a column, not across one:</b> two sets' shares
+         are counted against different cutoffs and are not two readings of one quantity.</p>
+      <div style="overflow-x:auto"><table class="qm-table" id="motion-split-table"></table></div>
+    </div>
     <div id="bad-list"></div>
   </div>
 </div>
 
 <!-- Row 7: Channel quality summary heatmap -->
-<div class="card" style="margin-bottom:0.5rem">
+<div class="card" id="ChannelSummary" style="margin-bottom:0.5rem">
   <div class="panel-title">Channel Quality Summary &nbsp;<span style="font-weight:400;color:#aaa">Status / SCI / CV / PSP / SNR per channel &bull; green&nbsp;=&nbsp;pass, red&nbsp;=&nbsp;fail &bull; Status screens on the coupled-window share; SCI / PSP / CV / SNR are reported only</span></div>
   <div id="ch-summary-plot"></div>
 </div>
 
 <!-- Row 7b: per-trial QC (hidden unless --epoch-qc was asked for) -->
-<div class="card" id="trial-qc-card" style="margin-bottom:0.5rem;display:none">
+<div class="card" id="TrialQC" data-card="trial-qc-card" style="margin-bottom:0.5rem;display:none">
   <div class="panel-title">Per-trial Quality &nbsp;<span style="font-weight:400;color:#aaa" id="trial-qc-hint">each event window scored on its own &bull; colour is relative within a metric row, not a threshold</span></div>
   <div id="trial-qc-plot"></div>
 </div>
 
 <!-- Row 8: per-channel metrics, with the rating decision as its last column -->
-<div class="card" style="margin-bottom:0.5rem" id="ch-decisions-card">
+<div class="card" style="margin-bottom:0.5rem" id="Channels" data-card="ch-decisions-card">
   <div class="panel-title">
     <span>Per-channel Metrics &nbsp;<span id="ch-decisions-hint" style="font-weight:400;color:#aaa">one row per source-detector pair &bull; good / bad / unrated</span></span>
   </div>
@@ -273,7 +285,7 @@ select#run-select {
 </div>
 
 <!-- Errors and warnings for the selected run -->
-<div class="card" id="issues-card" style="margin-bottom:0.5rem;display:none">
+<div class="card" id="Errors" data-card="issues-card" style="margin-bottom:0.5rem;display:none">
   <div class="panel-title">Errors &amp; Warnings &nbsp;<span style="font-weight:400;color:#aaa">what this run failed at, and what it left out on purpose</span></div>
   <div id="issues-body" style="padding:0.5rem 0.7rem"></div>
 </div>
@@ -370,8 +382,6 @@ function _syncMkHeight() {
 
 // ─── initial load ─────────────────────────────────────────────────────────────
 window.addEventListener("DOMContentLoaded", function() {
-  var epochRow = document.getElementById("epoch-row");
-  if (epochRow) epochRow.style.display = "none";
   loadTimeSeries();
   loadLayout();
   loadPsdMean();
@@ -381,9 +391,9 @@ window.addEventListener("DOMContentLoaded", function() {
   loadSqm();
   loadChannelSummary();
   loadTrialQc();
-  loadEvokedTopo();
   buildChDecisionsTable();
   loadIssues();
+  if (window.qcShowGroup) window.qcShowGroup(_run_idx);
 });
 
 // ─── time series ──────────────────────────────────────────────────────────────
@@ -599,7 +609,7 @@ function loadChannelSummary() {
 
 // ─── Per-trial QC (absent unless --epoch-qc was asked for) ────────────────────
 function loadTrialQc() {
-  var card = document.getElementById("trial-qc-card");
+  var card = document.getElementById("TrialQC");
   var d = (_STATIC_DATA[_run_idx] || {}).trial_qc || {};
   var p = ((_STATIC_DATA[_run_idx] || {}).figure_paths || {}).trial_qc;
   if (card) card.style.display = (p && p.src) ? "" : "none";
@@ -609,14 +619,6 @@ function loadTrialQc() {
     hint.textContent = d.n_trials + " trials • colour is relative within a metric row, not a threshold";
   }
   _setIframeSrc("trial-qc-plot", p.src, p.h || 260);
-}
-
-// ─── Evoked topo ──────────────────────────────────────────────────────────────
-function loadEvokedTopo() {
-  var p   = ((_STATIC_DATA[_run_idx] || {}).figure_paths || {}).evoked_topo;
-  var row = document.getElementById("evoked-topo-row");
-  if (row) row.style.display = (p && p.src) ? "" : "none";
-  if (p && p.src) _setIframeSrc("evoked-topo-panel", p.src, p.h || 400);
 }
 
 // ─── SQM ──────────────────────────────────────────────────────────────────────
@@ -654,12 +656,14 @@ function renderSqm(d) {
     scope.textContent = "Measured on every channel: this montage carries no short channels "
       + "to judge separately.";
   }
-  renderSqmSplit(d.split || {});
+  renderSqmSplit(d.split || {},        "sqm-split-wrap",    "sqm-split-table");
+  renderSqmSplit(d.motion_split || {}, "motion-split-wrap", "motion-split-table");
 }
 
-function renderSqmSplit(split) {
-  var wrap  = document.getElementById("sqm-split-wrap");
-  var table = document.getElementById("sqm-split-table");
+// one renderer for both tables: they are the same shape, built by channel_table.split_table
+function renderSqmSplit(split, wrapId, tableId) {
+  var wrap  = document.getElementById(wrapId);
+  var table = document.getElementById(tableId);
   if (!split.rows || !split.rows.length) { wrap.style.display = "none"; return; }
   wrap.style.display = "";
   var head = "<thead><tr><th>Channel set</th><th>Channels</th>"
@@ -715,7 +719,7 @@ function loadIssues() {
   var d     = _STATIC_DATA[_run_idx] || {};
   var errs  = d.errors || [];
   var notes = d.notes  || [];
-  var card  = document.getElementById("issues-card");
+  var card  = document.getElementById("Errors");
   var body  = document.getElementById("issues-body");
   if (!card || !body) return;
 
@@ -747,8 +751,9 @@ function switchRun(idx) {
     loadTimeSeries(); loadLayout(); loadPsdMean();
     loadTriggerTimeline(); loadCarpetGvtd();
     loadSciPsp(); loadSqm(); loadChannelSummary();
-    loadTrialQc(); loadEvokedTopo(); buildChDecisionsTable();
+    loadTrialQc(); buildChDecisionsTable();
     loadIssues();
+    if (window.qcShowGroup) window.qcShowGroup(_run_idx);
   }
   _reload();
 }

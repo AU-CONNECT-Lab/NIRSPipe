@@ -7,7 +7,7 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Changed
-- **A report page is titled by the run, not by the words "QC Report".** A condition page appends its own condition, so the heading and the browser tab say which page you are on; the condition used to appear only in the Scope row
+- **A report page is titled by the run, not by the words "QC Report".** A condition page appends its own condition and a subject index is titled by its subject, so the heading and the browser tab say which page you are on; the condition used to appear only in the Scope row
 
 ## [0.36.0] - 2026-09-11
 
@@ -22,7 +22,7 @@ All notable changes to this project will be documented in this file.
 - **A condition page carries the trial image and the per-trial quality heatmap**, over the events that start inside it. Both need more than one trial in a condition, and a page with nothing to show says which reason applies
 
 ### Changed
-- **A condition page shares the run's carpet and per-channel motion figures instead of copying them.** Every condition shows the same traces and only the axes move, so one file carries every window and the page picks one. On a two-subject tree, 434 MB down to about 72 MB
+- **A condition page shares the run's carpet and per-channel motion figures instead of copying them.** Every condition shows the same traces and only the axes move, so one file carries every window and the page picks one. Measured on a two-subject tree: 455 MB down to 76 MB
 - **The motion and PSD figures are a third and a fifth of their old size** (2.1 MB to 0.7 MB, 1.9 MB to 0.4 MB), with no pixel changed: traces reach Plotly as binary arrays at display precision, and a uniformly sampled axis as a start and a step
 - **A condition page's per-channel motion figure is scaled to that condition**, not to the whole run: baseline reached 18% of the run's axis here and drew as a flat line. Each row states its own maximum and the run's beside it
 - **A condition page's bad-segment zoom shows that condition's flagged segments**, rather than the ten longest in the recording, which could be the movements another condition was censored for. A condition nothing was flagged in carries no zoom

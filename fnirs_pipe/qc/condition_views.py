@@ -385,86 +385,188 @@ def window_view_spec(figure, t0: float, t1: float) -> dict:
     return out
 
 
+# the annotation a view fills in with its scale note. One slot per row, named after the row,
+# so a note cannot land on a neighbour when the figure gains an annotation later.
+SCALE_SLOT = "qc-scale-"
+
+
+def carpet_view_table(spans: "list[tuple[str, float, float]]") -> "dict | None":
+    """Each condition's window on a carpet, which moves along time and nothing else.
+
+    Shorter than :func:`condition_view_table`: a carpet's colour scale is one scale across
+    conditions by design, so there is no y range and no shaded span to carry.
+    """
+    from fnirs_pipe.qc.figure_io import _pair_fname
+
+    return {_pair_fname(label): {"x": [float(t0), float(t1)]}
+            for label, t0, t1 in spans} or None
+
+
+def condition_view_table(fig, spans: "list[tuple[str, float, float]]") -> "dict | None":
+    """Every condition's view of one run-wide figure, keyed by slug for a page to pick.
+
+    ::
+
+      condition_view_table(detail_fig, [("video", 60.0, 300.0)])
+      -> {"video": {"x": [60.0, 300.0], "y": {...}, "bands": [...], "ann": {...}}}
+
+    The result is what ``_HASH_VIEW_JS`` spends: the file is written once and a condition
+    page addresses it as ``…/figure.html#video``, so the run's figure and a condition's view
+    of it cannot disagree.
+
+    The scale notes go on as *empty* annotations first, one per row any condition writes one
+    on, because a relayout cannot append an annotation. A row no condition annotates gets no
+    slot, and a condition reaching the run's own maximum leaves its slot empty.
+
+    ``spans`` must be on the same axis the figure was drawn on. Most figures here are drawn
+    on the data axis; a caller whose figure is on the original recording's axis shifts the
+    spans by ``first_time`` before calling.
+    """
+    if not spans or not hasattr(fig, "add_annotation"):
+        return None
+    from fnirs_pipe.qc.figure_io import _pair_fname
+
+    specs = [(_pair_fname(label), window_view_spec(fig, t0, t1)) for label, t0, t1 in spans]
+    placed: set = set()
+    for _slug, spec in specs:
+        for note in spec["notes"]:
+            if note["yref"] in placed:
+                continue
+            placed.add(note["yref"])
+            fig.add_annotation(
+                x=0.996, xref=f"{note['xref']} domain", y=0.97,
+                yref=f"{note['yref']} domain", text="", showarrow=False,
+                xanchor="right", yanchor="top", font=dict(size=7, color="#98a2ad"),
+                name=f"{SCALE_SLOT}{note['yref']}")
+    return {
+        slug: {
+            "x": spec["x"],
+            "y": {key: [floor, top] for key, (floor, top) in spec["y"].items()},
+            "bands": spec["bands"],
+            "ann": {f"{SCALE_SLOT}{n['yref']}": n["text"] for n in spec["notes"]},
+        }
+        for slug, spec in specs
+    }
+
+
+# figures a condition page keeps whole, because they describe the run rather than any one
+# condition: the event timeline is the design, the optode layout is the montage.
+CONDITION_PAGE_FIGURES = ("trigger", "layout")
+
+
+def figure_leaks(figure_paths: dict, slug: str) -> "list[str]":
+    """Whole-run figures that survived onto a condition page, by value rather than by name.
+
+    ::
+
+      {"psd": {"src": "figures/sub-01_desc-psd_nirs.html"}}, "video"  ->  ["psd"]
+
+    A figure reaches a condition page one of three ways, and each leaves a mark: rewritten
+    for the condition (``…_<slug>_nirs.html``), addressed at the condition's window
+    (``…#<slug>``), or kept whole on purpose (:data:`CONDITION_PAGE_FIGURES`). Anything else
+    is the run's figure sitting under this condition's numbers with nothing to say so, which
+    is what happened to every panel here before the pages read the record.
+
+    Checking the assembled values rather than a list of keys is what catches the next one
+    without anybody remembering to extend a list.
+    """
+    leaks = []
+    for key, value in (figure_paths or {}).items():
+        src = value.get("src") if isinstance(value, dict) else value
+        if not isinstance(src, str) or "figures/" not in src:
+            continue
+        if key in CONDITION_PAGE_FIGURES:
+            continue
+        name, _, fragment = src.rsplit("/", 1)[-1].partition("#")
+        if fragment == slug:
+            continue
+        if name.rsplit(".", 1)[0].endswith(f"_{slug}_nirs"):
+            continue
+        leaks.append(key)
+    return leaks
+
+
 def condition_payloads(
     payload: dict,
     *,
-    record_view: dict,
+    record: dict,
+    by_condition: dict,
     sci_scores: "dict[str, float]",
     bad_channels: "set[str]",
-    od_ch_names: "list[str]",
     channel_pairs: "list[str] | None",
     series: dict,
-    windows: "list[tuple[str, float, float]]",
-    good_frac_by_condition: "dict[str, dict[str, float]]",
     sci_threshold: float,
     cutoffs: "dict[str, float]",
-    gvtd_series: "tuple | None" = None,
+    trial_rows: "list | None" = None,
+    save_figure=None,
 ) -> "list[tuple[str, dict]]":
-    """One viewer payload per condition, built by slicing the run's own pass.
+    """One viewer payload per condition, read out of the quality record.
+
+    Every number here comes from ``by_condition``, which
+    :func:`~fnirs_pipe.qc.sqm_record.raw_condition_sections` wrote; nothing is measured. A
+    record with no such section gets no pages rather than a second copy of the numbers free
+    to disagree with the first.
 
     ``payload`` is the run's payload, whose parts that do not vary by condition (the optode
-    layout, the separation notes, the per-channel figure paths) are carried over untouched.
-    Everything that does vary is rebuilt from ``series``, the windowed matrices
-    :func:`~fnirs_pipe.qc.metrics.windowed.attach_windowed_series` returned, and from
-    ``good_frac_by_condition``, which the run already counted per condition.
+    layout, the separation notes) are carried over untouched. A figure gets here one of
+    three ways, and which one is a property of the figure:
 
-    The two time-axis figures are narrowed rather than redrawn, see
-    :func:`zoom_to_condition`. The PSD is dropped: it is one spectrum rather than a
-    time-by-frequency matrix, so there is nothing to slice, and recomputing it on a cut
-    condition is the thing this module exists to avoid. What a per-condition report actually
-    wants from it, whether the cardiac peak survived, is the sliced PSP row.
+    - **rewritten for the condition**: the SCI/PSP panel and the channel-quality grid. Both
+      are handed their data and derive nothing from a recording, so a real slice is correct
+      and ``save_figure`` writes each under a name carrying the condition's slug.
+    - **addressed at the condition's window**: the carpet and the per-channel detail. Each
+      derives something run-wide from what it is handed, a filtered GVTD, a per-channel
+      z-scale, a colour range, so a cut would give every condition a scale no other one can
+      be read against. The run's file carries every window and this page asks for one by URL
+      fragment.
+    - **dropped**: the spectrum. It is one spectrum rather than a time-by-frequency matrix,
+      so there is nothing to slice, and recomputing it on a cut is what this module exists
+      to avoid. What a condition page wants from it is the sliced PSP row.
+
+    The event timeline is kept whole, being the run's design rather than one condition's.
+    The per-trial table is cut to the trials whose onset falls inside the window; nothing is
+    rescored, a trial's SQM reading nothing outside its own crop.
 
     Each payload carries three notes, because each is a way a reader could be misled: what
-    the view is, that the rejected channels are the run's verdict and not this condition's,
-    and that the columns with no windowed series behind them are absent rather than zero.
+    the view is, that the rejected channels are this condition's own verdict and not the
+    run's, and that the columns with no windowed series behind them are absent rather than
+    zero.
     """
     from fnirs_pipe.qc.boilerplate.vocabulary import metric_rows
     from fnirs_pipe.qc.channel_table import (
-        channel_rows, format_rows, heatmap_args, pair_rows, separation_blocks,
+        OD_SPLIT_COLUMNS, channel_rows, format_rows, heatmap_args, pair_rows,
+        separation_blocks, split_table,
     )
+    from fnirs_pipe.qc.figure_io import _pair_fname
     from fnirs_pipe.qc.figures import build_sci_psp_figure, channel_quality_heatmap
-    from fnirs_pipe.qc.metrics.windowed import condition_window_means
 
-    def _per_channel(matrix, times, window) -> "dict[str, float]":
-        if matrix is None or times is None:
-            return {}
-        vals = condition_window_means(matrix, times, [window]).get(window[0])
-        if vals is None:
-            return {}
-        return {ch: float(vals[i]) for i, ch in enumerate(od_ch_names) if i < len(vals)}
+    # mean amplitude has no windowed series to slice, so the column is dropped rather than
+    # left blank in all three rows
+    od_cols = tuple((k, t) for k, t in OD_SPLIT_COLUMNS if k != "mean_amp_mean")
 
     out: list[tuple[str, dict]] = []
-    for window in windows:
-        label = window[0]
-        sci_pc = _per_channel(series.get("sci_matrix"), series.get("sci_times"), window)
-        psp_pc = _per_channel(series.get("psp_matrix"), series.get("psp_times"), window)
-        frac_pc = good_frac_by_condition.get(label) or {}
-        if not (sci_pc or psp_pc or frac_pc):
-            logger.warning("condition %s has no windowed metric inside it; no view written",
-                           label)
-            continue
+    for label, entry in by_condition.items():
+        sliced = entry.get("per_channel") or {}
+        cond_bad = set(entry.get("bad_channels") or ())
+        scalars = entry.get("scalars") or {}
+        od_by_set = entry.get("od_by_set") or {}
+        t0, t1 = entry["window_s"]
+        window = (label, float(t0), float(t1))
+        slug = _pair_fname(label)
 
-        cond_record = slice_record(record_view, {
-            "sci_per_channel": sci_pc,
-            "psp_per_channel": psp_pc,
-            "good_frac_per_channel": frac_pc,
-        })
-        rows = channel_rows(cond_record, sci_scores, bad_channels)
+        rows = channel_rows(slice_record(record, sliced), sci_scores, cond_bad)
         pair_cells = format_rows(pair_rows(rows, channel_pairs or None), sci_threshold,
                                  name_key="pair", psp_threshold=cutoffs["psp"])
-        scalars = {
-            "sci_mean":       _mean_or_none(sci_pc.values()),
-            "psp_mean":       _mean_or_none(psp_pc.values()),
-            "good_frac_mean": _mean_or_none(frac_pc.values()),
-            "gvtd_mean":      _gvtd_mean(gvtd_series, window),
-        }
+        split = split_table([
+            ("All",   len(rows),                        od_by_set.get("all") or {},   False),
+            ("Long",  scalars.get("n_long_channels"),   od_by_set.get("long") or {},  True),
+            ("Short", scalars.get("n_short_channels"),  od_by_set.get("short") or {}, False),
+        ], od_cols) if od_by_set.get("short") else {}
 
         d = dict(payload)
         d["sqm"] = {
             "rows": metric_rows(scalars, COND_SCALAR_KEYS, skip_missing=True),
-            # no All/Long/Short split: it would need the same slice per channel set, and the
-            # run's split is one file away in the full report
-            "split": {},
+            "split": split,
             "channel_set": "every channel",
         }
         d["channels"] = {
@@ -474,48 +576,87 @@ def condition_payloads(
             "notes":  (payload.get("channels") or {}).get("notes") or [],
         }
         d["ts"] = _narrowed_ts(payload.get("ts"), window)
-        d["carpet_gvtd"] = _narrowed(payload.get("carpet_gvtd"), window)
+        # not read by the viewer and heavy to carry: it draws these from `figure_paths`
+        d["carpet_gvtd"] = {}
         d["psd"] = {}
-        d["trial_qc"] = {}
-        d["sci_psp"] = _condition_sci_psp(build_sci_psp_figure, sci_pc, psp_pc,
-                                          bad_channels, sci_threshold, series, window)
-        d["ch_summary"] = {
-            "figure": channel_quality_heatmap(sci_thresh=sci_threshold,
-                                              **heatmap_args(rows)).to_dict(),
-        }
+        d["evoked_topo"] = {}
+
+        paths = dict(payload.get("figure_paths") or {})
+        paths.pop("psd", None)
+        paths.pop("evoked_topo", None)
+        for key in ("carpet", "ch_detail_template"):
+            entry_path = paths.get(key)
+            if isinstance(entry_path, dict) and entry_path.get("src"):
+                paths[key] = {**entry_path, "src": f"{entry_path['src']}#{slug}"}
+            elif isinstance(entry_path, str):
+                paths[key] = f"{entry_path}#{slug}"
+        if save_figure is not None:
+            sci_fig = _condition_sci_psp(
+                build_sci_psp_figure, sliced.get("sci_per_channel") or {},
+                sliced.get("psp_per_channel") or {}, bad_channels, sci_threshold,
+                series, window)
+            for key, fig in (("sci_psp", sci_fig),
+                             ("ch_summary", channel_quality_heatmap(
+                                 sci_thresh=sci_threshold, **heatmap_args(rows)))):
+                saved = save_figure(key, slug, fig) if fig is not None else None
+                if saved:
+                    paths[key] = saved
+                else:
+                    paths.pop(key, None)
+            trial = _condition_trial_figure(trial_rows, window, slug, save_figure)
+            paths.pop("trial_qc", None)
+            d["trial_qc"] = {}
+            if trial:
+                paths["trial_qc"], d["trial_qc"] = trial
+        leaks = figure_leaks(paths, slug)
+        if leaks:
+            # loud rather than silent: a run-wide figure under per-condition numbers reads
+            # as that condition's, and nothing on the page would say otherwise
+            logger.warning("condition %s still points at run-wide figures (%s); they are "
+                           "being dropped", label, ", ".join(leaks))
+            for key in leaks:
+                paths.pop(key, None)
+        d["figure_paths"] = paths
+
         d["notes"] = list(payload.get("notes") or []) + [
-            f"This view describes {label} only. Its numbers are sliced out of the whole "
-            f"recording's windowed pass, not measured on a cut of it, so they sit on the "
-            f"same window grid and the same filter as every other condition and as the run.",
+            f"This view describes {label} only. Its numbers are read out of the quality "
+            f"record, sliced there out of the whole recording's windowed pass rather than "
+            f"measured on a cut of it, so they sit on the same window grid and the same "
+            f"filter as every other condition and as the run.",
             "The verdict here is this condition's own, screened on its windows against the "
             "run's line. The recording was processed under the run's verdict, not this one; "
             "the run's page carries it.",
-            "The PSD is absent rather than zero: it is one spectrum rather than a matrix, "
-            "so a per-condition value would have to be recomputed on a cut. The full report "
-            "has it for the run.",
+            "The spectrum is absent rather than zero: it is one spectrum rather than a "
+            "matrix, so a per-condition value would have to be recomputed on a cut. The "
+            "run's own page has it.",
         ]
         out.append((label, d))
     return out
 
 
+def _condition_trial_figure(trial_rows, window, slug, save_figure):
+    """The run's per-trial table cut to the trials whose onset falls in one condition.
+
+    Nothing is rescored: a trial's SQM is measured on a crop of its own window and reads
+    nothing outside it, so a condition's rows are the run's rows. A block design gets
+    nothing here, its condition window holding only the annotation that defines it.
+    """
+    from fnirs_pipe.qc.figures import trial_quality_heatmap
+
+    t0, t1 = window[1], window[2]
+    keep = [(lab, sqm) for onset, lab, sqm in (trial_rows or []) if t0 < onset < t1]
+    if len(keep) < 2:
+        return None
+    fig = trial_quality_heatmap([lab for lab, _ in keep], [sqm for _, sqm in keep])
+    if fig is None:
+        return None
+    saved = save_figure("trial_qc", slug, fig)
+    return (saved, {"n_trials": len(keep)}) if saved else None
+
+
 def _mean_or_none(values) -> "float | None":
     vals = [float(v) for v in values if v is not None]
     return sum(vals) / len(vals) if vals else None
-
-
-def _gvtd_mean(gvtd_series, window) -> "float | None":
-    """The condition's GVTD, sliced off the run's windowed trace.
-
-    ``gvtd_series`` is ``(per_window, centre_times)``. The 0.01-0.5 Hz filter behind that
-    trace ran once over the whole recording, which is why this slices rather than
-    recomputing: a 900 s piece filtered at 0.01 Hz is the same length mismatch the old
-    0.02 Hz high-pass workaround existed for.
-    """
-    from fnirs_pipe.qc.metrics.windowed import condition_window_means
-    if not gvtd_series or gvtd_series[0] is None or gvtd_series[1] is None:
-        return None
-    val = condition_window_means(gvtd_series[0], gvtd_series[1], [window]).get(window[0])
-    return None if val is None else float(val)
 
 
 def _narrowed(inline: "dict | None", window) -> dict:

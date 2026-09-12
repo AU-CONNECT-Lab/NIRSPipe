@@ -64,12 +64,13 @@ import mne.io
 
 from fnirs_pipe.qc.boilerplate import collect_software_versions, generate_methods_text
 from fnirs_pipe.qc.channel_table import (
-    OD_SPLIT_COLUMNS, channel_columns, channel_rows, format_rows, heatmap_args,
+    MOTION_SPLIT_COLUMNS, OD_SPLIT_COLUMNS, channel_columns, channel_rows,
+    format_rows, heatmap_args,
     save_channel_csv, separation_blocks, separation_notes,
 )
 from fnirs_pipe.qc.figure_io import (
-    CENTER_FIGURE_CSS, PLOTLY_CDN_URL, _HASH_VIEW_JS, _IFRAME_CSS, _RESIZE_JS,
-    _fig_href, _figure_height, _pair_fname, _save_b64_png, _save_multi_fig_html,
+    CENTER_FIGURE_CSS, _fig_href, _pair_fname, _save_b64_png,
+    _save_figure_html, _save_multi_fig_html,
     extract_markers, get_channel_pairs,
 )
 from fnirs_pipe.qc.metrics import CV_PASS, SCI_PASS, gvtd_channel_blocks, separation_bands
@@ -221,29 +222,8 @@ def _save_mpl_fig(fig, path: Path) -> None:
 
 def _save_plotly_html(fig, path: Path, div_id: str | None = None,
                       extra_css: str = "", views: "dict | None" = None) -> tuple[str, int]:
-    """Save Plotly figure as standalone iframe-ready HTML. Returns (relative_path, height_px).
-
-    ``views`` maps a condition key to the window the page should open on, so one file serves
-    the run and every condition off a URL fragment. See ``_HASH_VIEW_JS``.
-    """
-    h = _figure_height(fig)
-    fig.update_layout(height=h)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    kwargs = {"div_id": div_id} if div_id else {}
-    html = fig.to_html(full_html=True, include_plotlyjs=False,
-                       config={"responsive": True}, **kwargs)
-    html = html.replace(
-        "<head>",
-        f'<head>\n<style>{_IFRAME_CSS}{extra_css}</style>\n<script src="{PLOTLY_CDN_URL}"></script>\n{_RESIZE_JS}',
-        1,
-    )
-    if views:
-        html = html.replace(
-            "</body>",
-            f"<script>window.__COND_VIEWS__={json.dumps(views)};</script>{_HASH_VIEW_JS}</body>",
-            1,
-        )
-    path.write_text(html, encoding="utf-8")
+    """:func:`_save_figure_html` plus the URL this report must link to the file by."""
+    h = _save_figure_html(fig, path, extra_css=extra_css, div_id=div_id, views=views)
     return _fig_href(path.parent, path.name), h
 
 
@@ -450,44 +430,15 @@ def _motion_detail_figures(
     return built
 
 
-# names the empty annotation a condition's scale note is written into, one per row
-_SCALE_SLOT = "qc-scale-"
-
-
 def _condition_views(fig, spans: "list[tuple[str, float, float]]") -> "dict | None":
-    """Every condition's view of one run-wide figure, keyed by slug for the page to pick.
+    """Every condition's view of one run-wide figure, on this report's figures.
 
-    The scale notes go on as empty annotations first, one per row any condition writes one
-    on, so a view has only to fill in the text: a relayout cannot append an annotation. Each
-    carries the row's name, which is what the page matches on, so an annotation added to the
-    figure later shifts no note onto the wrong row. A row no condition annotates gets no
-    slot, and a condition that reaches the run's own maximum leaves its slot empty.
+    The table is assembled by :func:`~fnirs_pipe.qc.condition_views.condition_view_table`,
+    which the raw viewer builds its own fragment views with, so the two cannot fork.
     """
-    if not spans or not hasattr(fig, "add_annotation"):
-        return None
-    from fnirs_pipe.qc.condition_views import window_view_spec
+    from fnirs_pipe.qc.condition_views import condition_view_table
 
-    specs = [(_pair_fname(label), window_view_spec(fig, t0, t1)) for label, t0, t1 in spans]
-    placed: set = set()
-    for _slug, spec in specs:
-        for note in spec["notes"]:
-            if note["yref"] in placed:
-                continue
-            placed.add(note["yref"])
-            fig.add_annotation(
-                x=0.996, xref=f"{note['xref']} domain", y=0.97,
-                yref=f"{note['yref']} domain", text="", showarrow=False,
-                xanchor="right", yanchor="top", font=dict(size=7, color="#98a2ad"),
-                name=f"{_SCALE_SLOT}{note['yref']}")
-    return {
-        slug: {
-            "x": spec["x"],
-            "y": {key: [floor, top] for key, (floor, top) in spec["y"].items()},
-            "bands": spec["bands"],
-            "ann": {f"{_SCALE_SLOT}{n['yref']}": n["text"] for n in spec["notes"]},
-        }
-        for slug, spec in specs
-    }
+    return condition_view_table(fig, spans)
 
 
 def _section_motion_detail(
@@ -585,14 +536,10 @@ def _segments_in_window(segments: dict | None,
 
 
 def _carpet_views(spans: "list[tuple[str, float, float]]") -> "dict | None":
-    """Each condition's window on the carpet, which moves along time and nothing else.
+    """Each condition's window on the carpet, shared with the raw viewer's own carpet."""
+    from fnirs_pipe.qc.condition_views import carpet_view_table
 
-    Shorter than ``_condition_views``: the carpet's colour scale is one scale across
-    conditions by design, so unlike the per-channel motion rows there is no y range and no
-    shaded span to carry.
-    """
-    return {_pair_fname(label): {"x": [float(t0), float(t1)]}
-            for label, t0, t1 in spans} or None
+    return carpet_view_table(spans)
 
 
 def _condition_carpet(run_vars: dict, slug: str) -> dict:
@@ -1854,6 +1801,7 @@ def build_subject_report(
         format_metric=format_metric,
         metric_class=metric_class,
         od_split_columns=OD_SPLIT_COLUMNS,
+        motion_split_columns=MOTION_SPLIT_COLUMNS,
         subject=subject,
         run_label=sqm_label,
         run_entities={k: v for k, v in entities_of(sqm_label or "").items() if v},

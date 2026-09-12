@@ -27,7 +27,9 @@ from fnirs_pipe.qc.boilerplate.vocabulary import (
     metric_summary,
 )
 from fnirs_pipe.qc.boilerplate.vocabulary import higher_is_better, metric_direction
-from fnirs_pipe.qc.channel_table import OD_SPLIT_COLUMNS, _COLUMN_METRIC
+from fnirs_pipe.qc.channel_table import (
+    MOTION_SPLIT_COLUMNS, OD_SPLIT_COLUMNS, _COLUMN_METRIC,
+)
 from fnirs_pipe.qc.figures.sci_psp_panel import _TRIAL_METRICS
 from fnirs_pipe.qc.prep_raw_report import _VIEW_SCALAR_KEYS
 
@@ -95,6 +97,7 @@ def _view_metric_keys() -> set[str]:
     scalar it is the same quantity as.
     """
     return (set(_VIEW_SCALAR_KEYS) | {key for key, _ in OD_SPLIT_COLUMNS}
+            | {key for key, _ in MOTION_SPLIT_COLUMNS}
             | set(_COLUMN_METRIC.values()))
 
 

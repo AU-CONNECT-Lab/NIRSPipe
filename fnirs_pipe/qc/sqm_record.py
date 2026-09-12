@@ -544,57 +544,15 @@ def condition_sections(
     screening windows.
     """
     from fnirs_pipe.io.snirf import read_snirf
-    from fnirs_pipe.qc.condition_views import (
-        PSD_NFFT_CAP, condition_haemo_scalars, condition_scalars, condition_set_scalars,
-        condition_slices_from_record, span_counts,
-    )
+    from fnirs_pipe.qc.condition_views import PSD_NFFT_CAP, condition_haemo_scalars
     from fnirs_pipe.qc.hyper_report import condition_windows
     from fnirs_pipe.qc.metrics import long_short_channels
-    from fnirs_pipe.qc.metrics.windowed import SCREEN_WINDOW_S, condition_window_means
+    from fnirs_pipe.qc.metrics.windowed import SCREEN_WINDOW_S
 
     windows = condition_windows(raw_intensity, min_duration=2 * SCREEN_WINDOW_S)
     if not windows:
         logger.info("no annotation holds two screening windows; no by_condition section")
         return {}
-
-    cutoffs = _cutoffs_from_sidecar(stages)
-    per_channel = sections.get("per_channel") or {}
-    ch_names = list((per_channel.get("raw") or {}).get("sci_per_channel") or {})
-    sliced_all = condition_slices_from_record(
-        sections, ch_names, windows, cutoffs["sci"], cutoffs["psp"])
-    if not sliced_all:
-        return {}
-
-    windowed = sections.get("windowed") or {}
-    gvtd_times = windowed.get("gvtd_window_times_s") or []
-    # measured on the corrected file, which is what the report says on the rows it prints
-    _GVTD_SERIES = (("gvtd_mean", "gvtd_per_window"),
-                    ("gvtd_p95", "gvtd_p95_per_window"),
-                    ("gvtd_filt_mean", "gvtd_filt_per_window"),
-                    ("gvtd_filt_p95", "gvtd_filt_p95_per_window"))
-
-    def _gvtd_slices(suffix: str) -> dict:
-        return {key: condition_window_means(windowed[series + suffix], gvtd_times, windows)
-                for key, series in _GVTD_SERIES
-                if windowed.get(series + suffix) and gvtd_times}
-
-    # separate measurements rather than subsets, GVTD being an RMS across channels
-    gvtd_sets = {"long": _gvtd_slices(""),
-                 "short": _gvtd_slices("_short"),
-                 "all": _gvtd_slices("_all")}
-    # the run's booleans kept as spans, so a condition counts them over its own stretch
-    span_lists = {
-        "gvtd_pct_above_thresh": windowed.get("gvtd_above_spans_s") or [],
-        "spike_pct_frames":      windowed.get("spike_spans_s") or [],
-        "motion_corrected_pct":  windowed.get("motion_corrected_spans_s") or [],
-    }
-    other_above_spans = {"short": windowed.get("gvtd_above_spans_short_s") or [],
-                         "all":   windowed.get("gvtd_above_spans_all_s") or []}
-    count_key = {"gvtd_pct_above_thresh": "gvtd_num_above_thresh",
-                 "spike_pct_frames": "spike_num_frames",
-                 "motion_corrected_pct": "motion_corrected_num"}
-    sfreq = float(raw_intensity.info["sfreq"])
-    long_names, short_names = long_short_channels(raw_intensity, sep_bands)
 
     def _read(desc: str):
         path = stages.get(desc)
@@ -611,6 +569,97 @@ def condition_sections(
     bands = {"cardiac": (cardiac_l_freq, cardiac_h_freq),
              "resp": (resp_l_freq, resp_h_freq)}
     n_fft_floor = min(PSD_NFFT_CAP, len(haemo.times)) if haemo is not None else 0
+
+    def haemo_of(t0, t1):
+        return _condition_haemo(haemo, errts, t0, t1, n_fft_floor, bands, sep_bands,
+                                condition_haemo_scalars, long_short_channels)
+
+    return _condition_entries(sections, raw_intensity, windows,
+                              _cutoffs_from_sidecar(stages), sep_bands, haemo_of)
+
+
+def raw_condition_sections(
+    sections: dict[str, Any],
+    raw_intensity: "mne.io.Raw",
+    windows: "list[tuple[str, float, float]]",
+    cutoffs: dict[str, float],
+    sep_bands=None,
+) -> dict[str, Any]:
+    """:func:`condition_sections` for a record written before the pipeline ran.
+
+    Same section name, same entry shape, same assembler. What differs is forced by what a
+    raw-only pass holds: there is no haemoglobin stage, so ``haemo_by_set`` and the
+    correlation and CNR per-channel dicts have no input and their keys are left out rather
+    than written as nulls. A reader tests for presence.
+
+    The windows and the cutoffs are passed in rather than re-derived, because this caller
+    screened the recording itself and already holds both. Re-deriving a cutoff is how a
+    condition ends up measured against a line no channel was judged by.
+    """
+    return _condition_entries(sections, raw_intensity, windows, cutoffs, sep_bands)
+
+
+def _condition_entries(
+    sections: dict[str, Any],
+    raw_intensity: "mne.io.Raw",
+    windows: "list[tuple[str, float, float]]",
+    cutoffs: dict[str, float],
+    sep_bands=None,
+    haemo_of=None,
+) -> dict[str, Any]:
+    """The ``by_condition`` entries themselves, for whichever writer holds the record.
+
+    ``haemo_of(t0, t1)`` returns that condition's ``(haemo_by_set, per_channel)``; None is a
+    pass with no haemoglobin stage, and leaves those keys out. Everything else is read out
+    of ``sections`` rather than measured, so the two writers cannot end up with different
+    numbers for one recording.
+    """
+    from fnirs_pipe.qc.condition_views import (
+        condition_scalars, condition_set_scalars, condition_slices_from_record, span_counts,
+    )
+    from fnirs_pipe.qc.metrics import long_short_channels
+    from fnirs_pipe.qc.metrics.windowed import condition_window_means
+
+    per_channel = sections.get("per_channel") or {}
+    ch_names = list((per_channel.get("raw") or {}).get("sci_per_channel") or {})
+    sliced_all = condition_slices_from_record(
+        sections, ch_names, windows, cutoffs["sci"], cutoffs["psp"])
+    if not sliced_all:
+        return {}
+
+    windowed = sections.get("windowed") or {}
+    gvtd_times = windowed.get("gvtd_window_times_s") or []
+    # measured on the corrected file where there is one, which is what the report says on
+    # the rows it prints; on a raw-only record there is only the one stage
+    _GVTD_SERIES = (("gvtd_mean", "gvtd_per_window"),
+                    ("gvtd_p95", "gvtd_p95_per_window"),
+                    ("gvtd_filt_mean", "gvtd_filt_per_window"),
+                    ("gvtd_filt_p95", "gvtd_filt_p95_per_window"))
+
+    def _gvtd_slices(suffix: str) -> dict:
+        return {key: condition_window_means(windowed[series + suffix], gvtd_times, windows)
+                for key, series in _GVTD_SERIES
+                if windowed.get(series + suffix) and gvtd_times}
+
+    # separate measurements rather than subsets, GVTD being an RMS across channels
+    gvtd_sets = {"long": _gvtd_slices(""),
+                 "short": _gvtd_slices("_short"),
+                 "all": _gvtd_slices("_all")}
+    # the run's booleans kept as spans, so a condition counts them over its own stretch. A
+    # span list the writer had no input for is absent, and its scalars come back None; that
+    # is how a raw-only record carries no correction footprint.
+    span_lists = {key: windowed[stored]
+                  for key, stored in (("gvtd_pct_above_thresh", "gvtd_above_spans_s"),
+                                      ("spike_pct_frames", "spike_spans_s"),
+                                      ("motion_corrected_pct", "motion_corrected_spans_s"))
+                  if windowed.get(stored)}
+    other_above_spans = {"short": windowed.get("gvtd_above_spans_short_s") or [],
+                         "all":   windowed.get("gvtd_above_spans_all_s") or []}
+    count_key = {"gvtd_pct_above_thresh": "gvtd_num_above_thresh",
+                 "spike_pct_frames": "spike_num_frames",
+                 "motion_corrected_pct": "motion_corrected_num"}
+    sfreq = float(raw_intensity.info["sfreq"])
+    long_names, short_names = long_short_channels(raw_intensity, sep_bands)
 
     window_of = {w[0]: w for w in windows}
     out: dict[str, Any] = {}
@@ -638,9 +687,7 @@ def condition_sections(
         scalars["n_long_channels"] = len(long_names)
         scalars["n_short_channels"] = len(short_names)
 
-        haemo_by_set, haemo_per_channel = _condition_haemo(
-            haemo, errts, t0, t1, n_fft_floor, bands, sep_bands,
-            condition_haemo_scalars, long_short_channels)
+        haemo_by_set, haemo_per_channel = haemo_of(t0, t1) if haemo_of else ({}, {})
         # the long set, matching what the run's own haemoglobin rows report
         scalars.update(haemo_by_set.get("long") or haemo_by_set.get("all") or {})
 
@@ -662,7 +709,7 @@ def condition_sections(
                 "gvtd_pct_above_thresh": share,
                 "gvtd_num_above_thresh": int(round(share * (t1 - t0) * sfreq))})
 
-        out[label] = {
+        entry = {
             # unrounded, so a reader can pair these bounds back to the annotations they
             # came from; rounding them is what silently dropped conditions before
             "window_s": [float(t0), float(t1)],
@@ -670,10 +717,12 @@ def condition_sections(
             "scalars": scalars,
             "od_by_set": condition_set_scalars(sliced, set(cond_bad), long_names,
                                                short_names),
-            "haemo_by_set": haemo_by_set,
             "motion_by_set": motion_by_set,
             "per_channel": {**sliced, **haemo_per_channel},
         }
+        if haemo_by_set:
+            entry["haemo_by_set"] = haemo_by_set
+        out[label] = entry
     logger.info("by_condition: %d condition(s)", len(out))
     return out
 

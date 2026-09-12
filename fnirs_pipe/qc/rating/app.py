@@ -109,7 +109,9 @@ class FNIRSRatingApp:
         data = request.json
         if not data or "id" not in data:
             return jsonify({"status": "fail", "message": "Missing id"}), 400
-        subject = data["id"].lstrip("sub-")
+        # removeprefix, not lstrip: lstrip takes a character set, so "sub-bus01" came back
+        # as "01" and that subject's ratings overwrote sub-01's
+        subject = data["id"].removeprefix("sub-")
         ratings = data.get("ratings", {})
         notes   = data.get("notes", {})
         try:
@@ -169,19 +171,41 @@ class RawRatingApp:
         # Strip BIDS suffix so sidecar JSON keeps the legacy "_raw_*.json" naming
         # (also matches the hard-coded paths in hyper_align_callbacks / hyper rating app).
         bids_prefix = self.stem.removesuffix("_desc-raw_nirs")
-        self.ratings_path   = output_dir / f"{bids_prefix}_raw_ratings.json"
+        self.ratings_path   = self._ratings_path(self.stem)
         self.decisions_path = output_dir / f"{bids_prefix}_raw_channel_decisions.json"
         self.app = Flask(__name__)
         self._setup_routes()
 
-    def _load_ratings(self) -> dict:
-        if not self.ratings_path.exists():
+    def _ratings_path(self, stem: str) -> Path:
+        """One file per rated page, named after the page's own stem.
+
+        A run and each of its per-condition pages are separate reports and are rated
+        separately, so they get separate files rather than one keyed by whichever page the
+        server was launched on. The stem comes back from the page itself.
+        """
+        return self.output_dir / f"{stem.removesuffix('_desc-raw_nirs')}_raw_ratings.json"
+
+    def _load_ratings(self, stem: "str | None" = None) -> dict:
+        path = self._ratings_path(stem) if stem else self.ratings_path
+        if not path.exists():
             return {"ratings": {}, "notes": {}}
         try:
-            data = json.loads(self.ratings_path.read_text(encoding="utf-8"))
+            data = json.loads(path.read_text(encoding="utf-8"))
             return {"ratings": data.get("ratings", {}), "notes": data.get("notes", {})}
         except Exception:
             return {"ratings": {}, "notes": {}}
+
+    def _append_jsonl(self, stem: str, ratings: dict, notes: dict) -> None:
+        """One line per save, so a tree's raw ratings can be read without walking it.
+
+        The same arrangement ``FNIRSRatingApp`` writes for the subject reports, and for the
+        same reason: the per-page files are what a page loads, this is what a group-level
+        read needs. Append-only, so the history of a change survives.
+        """
+        out = self.output_dir / "group_raw_ratings.jsonl"
+        record = {"stem": stem, "rated_at": _utc_now_iso(), **ratings, "notes": notes}
+        with out.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(record, ensure_ascii=False) + "\n")
 
     def _load_decisions(self) -> dict:
         if not self.decisions_path.exists():
@@ -200,9 +224,19 @@ class RawRatingApp:
                 return f"<h2>Report not found: {self.html_path}</h2>", 404
             return self.html_path.read_text(encoding="utf-8")
 
+        # the per-condition pages sit beside the run's and link to it by name, so they need
+        # a route of their own to be reachable here rather than being served as plain files
+        @app.route("/<report>.html")
+        def sibling_report(report):
+            html_file = self.html_path.with_name(f"{report}.html")
+            if not html_file.exists():
+                return f"<h2>Report not found: {html_file}</h2>", 404
+            return html_file.read_text(encoding="utf-8")
+
         @app.route("/load_raw_ratings", methods=["GET"])
-        def load_raw_ratings():
-            return jsonify(self._load_ratings())
+        @app.route("/load_raw_ratings/<stem>", methods=["GET"])
+        def load_raw_ratings(stem=None):
+            return jsonify(self._load_ratings(stem))
 
         @app.route("/load_channel_decisions", methods=["GET"])
         def load_channel_decisions():
@@ -224,16 +258,21 @@ class RawRatingApp:
         data = request.json
         if not data:
             return jsonify({"status": "fail", "message": "empty body"}), 400
+        # the page says which report it is; a per-condition page is not the run it sits
+        # beside and must not write into the run's file
+        stem = data.get("id") or self.stem
         try:
+            ratings, notes = data.get("ratings", {}), data.get("notes", {})
             record = {
-                "stem":     self.stem,
+                "stem":     stem,
                 "rated_at": _utc_now_iso(),
-                "ratings":  data.get("ratings", {}),
-                "notes":    data.get("notes", {}),
+                "ratings":  ratings,
+                "notes":    notes,
             }
-            self.ratings_path.write_text(
+            self._ratings_path(stem).write_text(
                 json.dumps(record, indent=2, ensure_ascii=False), encoding="utf-8"
             )
+            self._append_jsonl(stem, ratings, notes)
             return jsonify({"status": "success"})
         except Exception as exc:
             logger.exception("save_raw_ratings failed")

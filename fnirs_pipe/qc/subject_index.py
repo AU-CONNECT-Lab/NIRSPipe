@@ -223,9 +223,11 @@ def write_subject_index(
 
     html = render(
         "subject_index.html.j2",
+        # the subject names the page, the way a run names its own; that this is QC is what
+        # the reader opened
         **page_vars(
-            title=f"fnirs-pipe QC — sub-{subject}",
-            heading=f"fnirs-pipe QC — sub-{subject}",
+            title=f"sub-{subject}",
+            heading=f"sub-{subject}",
             css=stylesheet("subject.css"),
         ),
         **footer_vars(versions=collect_software_versions()),

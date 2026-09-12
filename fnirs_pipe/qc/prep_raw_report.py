@@ -7,20 +7,24 @@ from pathlib import Path
 
 import mne
 
+from fnirs_pipe.qc.condition_views import (
+    carpet_view_table as _carpet_views, condition_view_table,
+)
 from fnirs_pipe.qc.figure_io import (
     _pair_fname, _save_figure_html, _save_multi_fig_html,
     extract_markers, get_channel_pairs,
 )
+from fnirs_pipe.qc.hyper_report import markers_on_data_axis
 from fnirs_pipe.qc.channel_table import (
-    channel_columns, channel_rows, format_rows, heatmap_args, pair_rows, save_channel_csv,
-    separation_blocks, separation_notes, split_table,
+    MOTION_SPLIT_COLUMNS, channel_columns, channel_rows, format_rows, heatmap_args,
+    pair_rows, save_channel_csv, separation_blocks, separation_notes, split_table,
 )
 from fnirs_pipe.qc.metrics import SCI_PASS
 from fnirs_pipe.qc.metrics._helpers import _mean_or_none, separation_bands
 from fnirs_pipe.qc.report_shell import (
     collapse_messages, dashboard_css, guard, note, render,
 )
-from fnirs_pipe.qc.trial_qc import score_trials
+from fnirs_pipe.qc.trial_qc import score_trials, trial_windows
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("qc.prep_raw_report")
@@ -32,12 +36,22 @@ _EPOCH_TMAX   = 25.0
 # tooltips all come from the metric registry, so this is only the choice of which ones and
 # in what order: the same ones the subject report prints, minus what a raw recording has no
 # later stage to measure.
+#
+# Two lists, as the subject report has two cases. A montage that splits gets the two tables
+# instead, and the flat list then keeps only what has no channel-set dimension: the pooled
+# spike counts and the montage descriptions. A montage with no short channels has no table
+# to put anything in, so it gets every key in one list.
+_VIEW_MONTAGE_KEYS = (
+    "cp_mean", "n_flat_channels", "mean_amp_mean",
+    "spike_count", "spike_pct_frames", "spike_num_frames",
+)
 _VIEW_SCALAR_KEYS = (
     "channel_retention_rate", "sci_mean", "good_frac_mean", "psp_mean",
     "snr_mean", "cv_mean",
     "cp_mean", "n_flat_channels", "mean_amp_mean",
-    "gvtd_mean", "gvtd_filt_p95", "gvtd_thresh",
-    "gvtd_pct_above_thresh", "gvtd_num_above_thresh", "spike_count",
+    "gvtd_mean", "gvtd_p95", "gvtd_filt_mean", "gvtd_filt_p95", "gvtd_thresh",
+    "gvtd_pct_above_thresh", "gvtd_num_above_thresh",
+    "spike_count", "spike_pct_frames", "spike_num_frames",
 )
 
 # ---- Channel decisions table ----
@@ -48,6 +62,56 @@ _VIEW_SCALAR_KEYS = (
 _CH_COLUMNS     = channel_columns(("corr", "separation"))
 _CH_COLUMN_VARS = {"ch_columns": _CH_COLUMNS,
                    "ch_column_keys_json": json.dumps([key for key, _ in _CH_COLUMNS])}
+
+
+def _store_matrices(windowed: dict, series: dict) -> None:
+    """The channel-by-window matrices into the record, under the pipeline's own key names."""
+    import numpy as np
+
+    for key in ("sci_matrix", "psp_matrix", "cv_matrix",
+                "sci_times", "psp_times", "cv_times"):
+        if series.get(key) is not None:
+            windowed[key] = np.asarray(series[key]).tolist()
+
+
+def _store_spans(windowed: dict, raw, sep_bands, errors: list, label: str) -> None:
+    """The flagged spans, kept as spans so a condition counts the run's own boolean.
+
+    ::
+
+      windowed["spike_spans_s"] -> [[412.0, 1.3], [880.5, 0.8]]
+
+    Two families, each on its own channel sets, because both tests are over a set rather
+    than over a channel: a spike span found on the short channels is not a claim about the
+    long ones, and GVTD is an RMS across whatever it is given, so each set has its own trace
+    and its own threshold. The long set keeps the plain key, as the pipeline's record does.
+
+    No ``motion_corrected_spans_s``: that needs the optical density either side of the
+    correction step and this pass runs before it. The key is absent rather than empty.
+    """
+    from fnirs_pipe.qc.metrics import (
+        gvtd_above_segments, long_short_channels, spike_segments,
+    )
+
+    long_names, short_names = long_short_channels(raw, sep_bands)
+    with guard("Spike spans", errors, label):
+        for key, names in (("spike_spans_s", long_names),
+                           ("spike_spans_short_s", short_names)):
+            if names:
+                picked = raw.copy().pick(names)
+            elif key == "spike_spans_s":
+                picked = raw               # unsplit montage: every channel, as the record does
+            else:
+                continue
+            windowed[key] = [list(span) for span in spike_segments(picked)]
+    with guard("GVTD above-threshold spans", errors, label):
+        windowed["gvtd_above_spans_s"] = [
+            list(span) for span in gvtd_above_segments(raw, sep_bands)]
+        for key, picks in (("gvtd_above_spans_short_s", short_names),
+                           ("gvtd_above_spans_all_s", list(raw.ch_names))):
+            if picks:
+                windowed[key] = [list(span) for span in
+                                 gvtd_above_segments(raw, sep_bands, picks=picks)]
 
 
 def _process_run(
@@ -96,7 +160,9 @@ def _process_run(
         resolve_cutoffs, screen_channels, screening_scores,
     )
     from fnirs_pipe.qc.screen_scope import resolve_screen_scope
-    from fnirs_pipe.qc.sqm_record import raw_sections, sqm_record_dict
+    from fnirs_pipe.qc.sqm_record import (
+        raw_condition_sections, raw_sections, sqm_record_dict,
+    )
 
     label   = run["label"]
     session = run.get("session")
@@ -167,11 +233,16 @@ def _process_run(
     view_scalars = raw_secs.get("raw_long") or raw_secs.get("raw") or {}
     raw_all = raw_secs.get("raw") or {}
     sqm_split = bool(raw_secs.get("raw_long") and raw_secs.get("raw_short"))
-    split = split_table([
+    set_rows = [
         ("All",   len(sci_scores),                raw_all,                         False),
         ("Long",  raw_all.get("n_long_channels"), raw_secs.get("raw_long") or {},  True),
         ("Short", raw_all.get("n_short_channels"), raw_secs.get("raw_short") or {}, False),
-    ]) if sqm_split else {}
+    ]
+    split = split_table(set_rows) if sqm_split else {}
+    # GVTD per channel set, as its own table for the reason MOTION_SPLIT_COLUMNS records.
+    # Every set is in `raw`/`raw_long`/`raw_short` already, so this is a second reading of
+    # what is on disk rather than a second measurement.
+    motion_split = split_table(set_rows, MOTION_SPLIT_COLUMNS) if sqm_split else {}
 
     # Persist windowed series so group_raw can build time × subject heatmaps. Their own
     # section, since `_split_scalars` would file every one of these lists under per_channel.
@@ -180,19 +251,30 @@ def _process_run(
                                     window_s, raw_intensity=raw, sep_bands=sep_bands)
     sci_matrix, sci_win_times = series["sci_matrix"], series["sci_times"]
     psp_matrix, psp_win_times = series["psp_matrix"], series["psp_times"]
+    # the channel by window matrices too, not just the channel-averaged series: a
+    # per-condition number is a column selection out of these, and without them on disk it
+    # could only be recomputed. Same keys the pipeline's own record writes.
+    _store_matrices(windowed, series)
+    _store_spans(windowed, raw, sep_bands, errors, label)
 
     raw_haemo = None
     with guard("Beer-Lambert", errors, label):
         ppf = dpf[0] if len(dpf) == 1 else dpf
         raw_haemo = mne.preprocessing.nirs.beer_lambert_law(raw_od.copy(), ppf=ppf)
     if raw_haemo is None:
-        note(notes, label, "no haemoglobin conversion, so the epoch, evoked-topography "
-                           "and per-channel detail panels are empty")
+        note(notes, label, "no haemoglobin conversion, so the per-channel detail panel "
+                           "is empty")
 
-    markers = extract_markers(raw)
+    # the data axis, which is what every panel on this page is drawn on and what
+    # `score_trials` crops against; `extract_markers` leaves the onsets on the original
+    # recording's axis, offset by `first_time` and zero only on an uncropped input
+    markers = markers_on_data_axis(raw)
     cond_colors_ = condition_colors(markers)
     for m in markers:
         m["color"] = cond_colors_.get(m["description"], "#f39c12")
+    # `build_channel_figure` draws on the original axis and does its own offsetting, so it
+    # is handed the unshifted list, as the subject report hands it one
+    detail_markers = extract_markers(raw)
 
     psp_per_ch    = sqm.get("psp_per_channel", {})
     figure_paths: dict = {}
@@ -234,7 +316,11 @@ def _process_run(
         fig   = carpet_gvtd_figure(raw_carpet, raw_carpet.ch_names,
                                    channel_set=gvtd_set, blocks=gvtd_blocks)
         fname = f"{label}_desc-carpet_nirs.html"
-        h     = _save_figure_html(fig, fig_dir / fname)
+        # not written per condition: its GVTD is filtered, its carpet z-scored per channel
+        # and its colour scale taken over the run, so a cut would give each condition a
+        # scale no other one can be read against. One file, narrowed by URL fragment.
+        h     = _save_figure_html(fig, fig_dir / fname,
+                                  views=_carpet_views(cond_windows))
         figure_paths["carpet"] = {"src": f"figures/{fname}", "h": h}
         carpet_inline = {"figure": fig.to_dict()}
 
@@ -287,7 +373,10 @@ def _process_run(
     fig_tmin = _EPOCH_TMIN if epoch_tmin is None else epoch_tmin
     fig_tmax = _EPOCH_TMAX if epoch_tmax is None else epoch_tmax
 
-    # ── file: evoked topo ──────────────────────────────────────────────────────
+    # ── inline only: evoked topo ───────────────────────────────────────────────
+    # for the GUI's Data Prep page, which reads this result. The report dropped the panel:
+    # at this stage the average is taken on unfiltered, uncorrected concentration and is
+    # mostly drift, and the GUI already shows it interactively.
     evoked_topo_inline: dict = {}
     if raw_haemo is not None:
         with guard("Evoked topography", errors, label):
@@ -295,23 +384,30 @@ def _process_run(
                 raw_haemo, markers, _MAX_TS_PTS, fig_tmin, fig_tmax,
             )
             if fig:
-                fname = f"{label}_desc-evokedtopo_nirs.html"
-                h     = _save_figure_html(fig, fig_dir / fname)
-                figure_paths["evoked_topo"] = {"src": f"figures/{fname}", "h": h}
                 evoked_topo_inline = {"figure": fig.to_dict()}
 
     # ── file: per-channel detail HTML ──────────────────────────────────────────
+    # one file per pair, holding every condition's view: `condition_views` names the windows
+    # and the file picks one off its URL fragment, so a condition page links to the run's
+    # figure rather than to a copy of it
     channel_pairs: list[str] = []
     if raw_haemo is not None:
+        # this one figure is drawn on the original recording's axis, so the windows are
+        # shifted onto it before its views are measured
+        detail_origin = float(raw.first_time)
+        detail_spans = [(lab, t0 + detail_origin, t1 + detail_origin)
+                        for lab, t0, t1 in cond_windows]
         channel_pairs = get_channel_pairs(raw_haemo)
         for pair in channel_pairs:
             with guard("Channel detail", errors, f"{label} | {pair}"):
                 detail_fig, psd_fig, epoch_fig = build_channel_figure(
-                    raw_haemo, markers, pair, _MAX_TS_PTS, fig_tmin, fig_tmax,
+                    raw_haemo, detail_markers, pair, _MAX_TS_PTS, fig_tmin, fig_tmax,
                     cardiac=(cardiac_l_freq, cardiac_h_freq),
                 )
                 fname = f"{label}_desc-ch{_pair_fname(pair)}_nirs.html"
-                _save_multi_fig_html([detail_fig, psd_fig, epoch_fig], fig_dir / fname)
+                _save_multi_fig_html(
+                    [detail_fig, psd_fig, epoch_fig], fig_dir / fname,
+                    views=condition_view_table(detail_fig, detail_spans))
         if channel_pairs:
             figure_paths["ch_detail_template"] = (
                 f"figures/{label}_desc-ch{{pair}}_nirs.html"
@@ -326,6 +422,7 @@ def _process_run(
     # scored here rather than persisted: a trial is not a BIDS entity, so per-trial records
     # have nowhere to live in the derivatives tree without colliding on filename
     trial_qc_inline: dict = {}
+    trial_rows: list = []
     if epoch_qc:
         with guard("Per-trial quality", errors, label):
             labels, sqms = score_trials(raw, markers, sci_threshold,
@@ -333,6 +430,11 @@ def _process_run(
                                         epoch_tmin, epoch_tmax,
                                         psp_threshold=cutoffs["psp"],
                                         min_good_frac=cutoffs["good_frac"])
+            # the onset beside each scored trial, so a condition page takes its own rows out
+            # of this table rather than scoring the same windows a second time
+            trial_rows = [(onset, lab, sqm) for (_, _, _, onset), lab, sqm in zip(
+                trial_windows(markers, epoch_tmin, epoch_tmax, float(raw.times[-1])),
+                labels, sqms)]
             fig = trial_quality_heatmap(labels, sqms)
             if fig:
                 fname = f"{label}_desc-trialqc_nirs.html"
@@ -348,10 +450,17 @@ def _process_run(
     # same run, and one silently overwriting the other loses whichever ran first. Same
     # shape as that one, so the group table reads both through one path.
     sqm_path = sqm_dir / f"{label}_desc-sqmraw_nirs.json"
-    record = sqm_record_dict(
-        {**raw_secs, "windowed": windowed, "per_channel": raw_pc},
-        [str(run["snirf_path"])],
-    )
+    sections = {**raw_secs, "windowed": windowed, "per_channel": raw_pc}
+    # written whenever the recording carries conditions, independently of `by_condition`:
+    # the flag decides what a report shows, the record says what was measured. Deliberately
+    # not in `SECTIONS`, so the group table does not descend into it.
+    by_cond: dict = {}
+    if cond_windows:
+        with guard("Per-condition metrics", errors, label):
+            by_cond = raw_condition_sections(sections, raw, cond_windows, cutoffs, sep_bands)
+    record = sqm_record_dict(sections, [str(run["snirf_path"])])
+    if by_cond:
+        record["by_condition"] = by_cond
     sqm_path.write_text(json.dumps(record, indent=2, default=str), encoding="utf-8")
     logger.info("SQM JSON → %s", sqm_path)
     save_channel_csv(ch_rows, label, sqm_dir, sci_threshold, psp_threshold=cutoffs["psp"])
@@ -371,9 +480,13 @@ def _process_run(
         # travel here too; nothing reads them now that the panels read the record's own
         # channel-set sections, and the quality record on disk is where the raw numbers live.
         "sqm": {
-            "rows":        metric_rows(view_scalars, _VIEW_SCALAR_KEYS, skip_missing=True),
-            "split":       split,
-            "channel_set": "long channels" if sqm_split else "every channel",
+            "rows": metric_rows(
+                view_scalars,
+                _VIEW_MONTAGE_KEYS if sqm_split else _VIEW_SCALAR_KEYS,
+                skip_missing=True),
+            "split":        split,
+            "motion_split": motion_split,
+            "channel_set":  "long channels" if sqm_split else "every channel",
         },
         # One table, at pair granularity: a decision is taken per source-detector pair and
         # SCI is a property of the pair rather than of either wavelength, so a per-wavelength
@@ -394,31 +507,62 @@ def _process_run(
         "errors": collapse_messages(errors),
         "notes":  collapse_messages(notes),
     }, {
-        "record_view":            record_view,
-        "sci_scores":             sci_scores,
-        "bad_channels":           bad_channels,
-        "od_ch_names":            list(raw_od.ch_names),
-        "channel_pairs":          channel_pairs,
-        "series":                 series,
-        "windows":                cond_windows,
-        "good_frac_by_condition": cond_frac,
-        "cutoffs":                cutoffs,
-        "gvtd_series":            (windowed.get("gvtd_per_window"),
-                                   windowed.get("gvtd_window_times_s")),
+        # where the per-condition numbers are, rather than the numbers: the pages read the
+        # record off disk, the way the subject report's do
+        "sqm_path":      sqm_path,
+        "fig_dir":       fig_dir,
+        "sci_scores":    sci_scores,
+        "bad_channels":  bad_channels,
+        "channel_pairs": channel_pairs,
+        "series":        series,
+        "cutoffs":       cutoffs,
+        "trial_rows":    trial_rows,
     }
 
 
 def _write_condition_views(payload: dict, ctx: dict, output_path: Path, run_label: str,
                            sci_threshold: float) -> None:
-    """One report file per condition, beside the run's own.
+    """One report file per condition, beside the run's own, read out of the quality record.
 
-    Each is the same viewer with a single entry, so nothing about how these are read has to
-    be learned twice. The file name comes from :func:`condition_stems`, which follows the
+    Every number on these pages comes from the record's ``by_condition`` section, which
+    :func:`~fnirs_pipe.qc.sqm_record.raw_condition_sections` wrote a moment earlier; nothing
+    is measured here. A record carrying no such section gets no pages rather than a second
+    copy of the numbers free to disagree with the first.
+
+    Each page is the same viewer with a single entry, so nothing about how these are read has
+    to be learned twice. The file name comes from :func:`condition_stems`, which follows the
     rule ``fnirs-prep crop`` set for a segment: the condition becomes the ``task-`` entity.
     """
-    from fnirs_pipe.qc.condition_views import condition_payloads, condition_stem, condition_stems
+    from fnirs_pipe.qc.condition_views import (
+        condition_payloads, condition_stem, condition_stems,
+    )
 
-    views = condition_payloads(payload, sci_threshold=sci_threshold, **ctx)
+    sqm_path = ctx.get("sqm_path")
+    if sqm_path is None or not Path(sqm_path).exists():
+        logger.warning("%s | no quality record; no per-condition pages", run_label)
+        return
+    record = json.loads(Path(sqm_path).read_text(encoding="utf-8"))
+    by_condition = record.get("by_condition") or {}
+    if not by_condition:
+        logger.info("%s | the record carries no by_condition section; no per-condition "
+                    "pages", run_label)
+        return
+
+    fig_dir = Path(ctx["fig_dir"])
+
+    def save_figure(panel: str, slug: str, fig) -> "dict | None":
+        """One condition's own figure file, named so `figure_leaks` can recognise it."""
+        fname = f"{run_label}_desc-{panel.replace('_', '')}_{slug}_nirs.html"
+        h = _save_figure_html(fig, fig_dir / fname)
+        return {"src": f"figures/{fname}", "h": h}
+
+    views = condition_payloads(
+        payload, record=record, by_condition=by_condition,
+        sci_scores=ctx["sci_scores"], bad_channels=ctx["bad_channels"],
+        channel_pairs=ctx["channel_pairs"], series=ctx["series"],
+        sci_threshold=sci_threshold, cutoffs=ctx["cutoffs"],
+        trial_rows=ctx.get("trial_rows"), save_figure=save_figure,
+    )
     if not views:
         return
     stems = condition_stems(output_path.stem, [label for label, _ in views])
@@ -435,7 +579,7 @@ def _write_condition_views(payload: dict, ctx: dict, output_path: Path, run_labe
         )
         out = output_path.with_name(f"{stem}.html")
         out.write_text(html, encoding="utf-8")
-        logger.info("condition %s → %s", label, out.name)
+        logger.info("condition %s \u2192 %s", label, out.name)
 
 
 def build_prep_raw_report(

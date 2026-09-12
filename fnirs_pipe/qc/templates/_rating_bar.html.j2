@@ -139,20 +139,23 @@ h1[id], h2[id], h3[id], details[id] {
   Static mode &mdash; launch via <code>fnirs-rate</code> to load existing ratings and save changes.
 </div>
 
+{# `group` marks the cells belonging to one run, for a page that holds several and shows
+   one at a time. Absent on a one-run page, where there is nothing to switch between. #}
 {% macro qc_cells(entries) %}
   {%- for e in entries %}
+    {%- set g = (' data-qc-group="' ~ e.group ~ '"') if e.group is defined else '' %}
     {%- if e.sep %}
-  <span class="qc-sep"></span>
+  <span class="qc-sep"{{ g }}></span>
     {%- else %}
     {%- if e.href is defined and not e.href %}
-  <span class="qc-nav-cell qc-nav-plain">{{ e.name }}</span>
+  <span class="qc-nav-cell qc-nav-plain"{{ g }}>{{ e.name }}</span>
     {%- else %}
-  <a class="qc-nav-cell" href="{{ e.href | default('#' ~ e.id) }}">{{ e.name }}</a>
+  <a class="qc-nav-cell" href="{{ e.href | default('#' ~ e.id) }}"{{ g }}>{{ e.name }}</a>
     {%- endif %}
       {%- if e.ratable is not defined or e.ratable %}
-  <div class="qc-module" data-mod-id="{{ e.id }}" title="click to rate &nbsp;+ &#8594; &#8722; &#8594; ? &nbsp;&bull;&nbsp; ctrl+click to comment"><span class="qc-icon">&#9723;</span></div>
+  <div class="qc-module" data-mod-id="{{ e.id }}"{{ g }} title="click to rate &nbsp;+ &#8594; &#8722; &#8594; ? &nbsp;&bull;&nbsp; ctrl+click to comment"><span class="qc-icon">&#9723;</span></div>
       {%- else %}
-  <div class="qc-pad"></div>
+  <div class="qc-pad"{{ g }}></div>
       {%- endif %}
     {%- endif %}
   {%- endfor %}
@@ -238,6 +241,17 @@ h1[id], h2[id], h3[id], details[id] {
     })
     .catch(function() { alert("Network error while saving rating"); });
   }
+
+  // a page holding several runs shows one run's cells at a time; one with no groups is
+  // untouched, every cell staying visible
+  window.qcShowGroup = function(index) {
+    var marked = document.querySelectorAll("#qc-container [data-qc-group]");
+    if (!marked.length) return;
+    [].forEach.call(marked, function(el) {
+      el.style.display = (el.dataset.qcGroup === String(index)) ? "" : "none";
+    });
+    syncHeight();
+  };
 
   function syncHeight() {
     var bar = document.getElementById("qc-container");
