@@ -6,6 +6,8 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 
+from ._utils import CONDITION_PALETTE, LONG_COLOR, SHORT_COLOR
+
 
 # Only scale-homogeneous metrics share a chart, so the y-axis stays in real units. Keys are
 # bare metric names: which stage and which channel set a column came from is carried by the
@@ -493,6 +495,87 @@ def build_window_grid(
     return fig
 
 
+def _rgba(hex_colour: str, alpha: float) -> str:
+    """``"#e74c3c", 0.1 -> "rgba(231,76,60,0.1)"``, for a band drawn under a line."""
+    r, g, b = (int(hex_colour[i:i + 2], 16) for i in (1, 3, 5))
+    return f"rgba({r},{g},{b},{alpha})"
+
+
+def condition_colours(conditions: list[str]) -> dict[str, str]:
+    """One colour per condition, by the rule the run report's markers already follow.
+
+    ``raw_figures.condition_colors`` cycles :data:`CONDITION_PALETTE` over the descriptions
+    in the order they first appear, and a condition keeps the colour it wears there, so a
+    band on this page and a marker on the run report are the same colour for the same block.
+    """
+    return {c: CONDITION_PALETTE[i % len(CONDITION_PALETTE)] for i, c in enumerate(conditions)}
+
+
+def build_condition_timeline(
+    row: dict, windows: "list[tuple[str, float, float]]",
+    metrics: tuple = ("sci", "cv", "gvtd"),
+) -> "go.Figure | None":
+    """One run's windowed metrics over time, the conditions shaded behind them.
+
+    The cohort's :func:`build_window_grid` splits the channel sets into columns because it
+    is drawing many runs; a subject page draws one, so the sets share a panel and the columns
+    are spent on nothing. Long and short only: ``all`` is a blend of the two and lands
+    between them, a third line for no third answer.
+
+    Smoothed over :data:`SMOOTH_S` and sampled at that step for the reason recorded there,
+    which also takes a 390-window run down to 65 points a line.
+
+    Colours come from the run report rather than from ``_SET_COLOURS``. That palette puts the
+    long channels on the blue ``_utils.HBR_COLOR`` uses, so a long-channel line here and an
+    HbR trace one click away would be the same blue; ``LONG_COLOR`` and ``SHORT_COLOR`` are
+    the separation split every raw-level view already wears.
+    """
+    from plotly.subplots import make_subplots
+
+    picked = [(key, label) for key, label, *_rest in _WINDOW_MATRICES if key in metrics]
+    if "gvtd" in metrics:
+        picked.append(("gvtd", "GVTD"))
+    panels = [(key, label) for key, label in picked if _window_series(row, key)]
+    if not panels:
+        return None
+
+    step = max(1, int(round(SMOOTH_S / float(row.get("qc_window_s") or 10.0))))
+    set_colour = {"long": LONG_COLOR, "short": SHORT_COLOR}
+    colours = condition_colours([label for label, _t0, _t1 in windows])
+
+    fig = make_subplots(rows=len(panels), cols=1, shared_xaxes=True, vertical_spacing=0.045)
+    for r, (key, label) in enumerate(panels, start=1):
+        series = _window_series(row, key)
+        for channel_set in ("long", "short"):
+            if channel_set not in series:
+                continue
+            times, values = series[channel_set]
+            fig.add_trace(go.Scatter(
+                x=times[::step], y=_smooth(values, step)[::step], mode="lines",
+                name=channel_set, legendgroup=channel_set, showlegend=(r == 1),
+                line=dict(color=set_colour[channel_set], width=2.0),
+                hovertemplate=f"{label} {channel_set}<br>t=%{{x:.0f}}s %{{y:.4g}}<extra></extra>",
+            ), row=r, col=1)
+        fig.update_yaxes(title_text=label, title_font=dict(size=10), row=r, col=1)
+
+    for name, t0, t1 in windows:
+        fig.add_vrect(x0=t0, x1=t1, fillcolor=_rgba(colours[name], 0.10), line_width=0,
+                      layer="below", row="all", col=1)
+        # named once, on the top panel: a label per panel is the same word four times
+        fig.add_annotation(x=(t0 + t1) / 2, y=1.0, yref="y domain", text=name,
+                           showarrow=False, yanchor="bottom", row=1, col=1,
+                           font=dict(size=9, color=colours[name]))
+
+    fig.update_xaxes(gridcolor="#f5f5f5", tickfont=dict(size=9))
+    fig.update_xaxes(title_text="Time (s)", title_font=dict(size=10), row=len(panels), col=1)
+    fig.update_yaxes(gridcolor="#f0f0f0", tickfont=dict(size=9))
+    fig.update_layout(height=170 * len(panels) + 90, plot_bgcolor="white",
+                      margin=dict(l=70, r=20, t=60, b=45),
+                      legend=dict(orientation="h", yanchor="bottom", y=1.04, x=0,
+                                  font=dict(size=10)))
+    return fig
+
+
 # ---- Per condition ----
 
 # What the per-condition panels report, in this order. Each is a key of a condition's
@@ -586,17 +669,53 @@ def build_condition_panels(
     return fig
 
 
+def _condition_heatmap(panels: "list[tuple[str, np.ndarray]]", conditions: list[str],
+                       labels: list[str], row_label: str) -> "go.Figure":
+    """One heatmap per metric over a shared y axis, colour = robust z inside a condition.
+
+    ``panels`` are ``(title, values)`` with values a ``len(labels) x len(conditions)`` array
+    in real units; the z-scoring is down a condition's own column, so a cell says how far
+    that row sat from the others *in that condition* rather than how the conditions rank.
+
+    Two pictures are this one with a different y axis: runs against conditions over a cohort,
+    and channels against conditions inside one run. Sharing the renderer is what keeps them
+    reading the same way, since a reader who learned the colour on one meets it on the other.
+
+    The y labels sit on the left edge only. The panels share the axis, and repeating the
+    names over every panel's cells is what made this unreadable.
+    """
+    from plotly.subplots import make_subplots
+
+    fig = make_subplots(rows=1, cols=len(panels), shared_yaxes=True,
+                        subplot_titles=[t for t, _v in panels], horizontal_spacing=0.012)
+    for i, (_title, values) in enumerate(panels):
+        z = np.column_stack([_robust_z(values[:, j]) for j in range(len(conditions))])
+        fig.add_trace(go.Heatmap(
+            z=z, x=conditions, y=labels, coloraxis="coloraxis", xgap=1, ygap=1,
+            text=[[f"{v:.4g}" for v in row] for row in values],
+            hovertemplate=(f"<b>{row_label} %{{y}}</b><br>%{{x}}<br>"
+                           "value %{text}<br>z=%{z:.2f}<extra></extra>"),
+        ), row=1, col=i + 1)
+
+    fig.update_yaxes(autorange="reversed", showticklabels=False)
+    fig.update_yaxes(showticklabels=True, tickfont=dict(size=9), row=1, col=1)
+    fig.update_xaxes(tickangle=-45, tickfont=dict(size=9))
+    fig.update_annotations(font=dict(size=11, color="#6c757d"))
+    fig.update_layout(height=150 + 14 * len(labels), width=180 * len(panels) + 130,
+                      plot_bgcolor="white", margin=dict(l=110, r=20, t=70, b=90),
+                      coloraxis=dict(colorscale="RdBu", cmid=0, cmin=-3, cmax=3,
+                                     colorbar=dict(title="z", thickness=12, len=0.8)))
+    return fig
+
+
 def build_condition_matrix(
     rows: list[dict], order: "list[str] | None" = None,
 ) -> "go.Figure | None":
     """run x condition, one panel per metric, colour = robust z inside that condition.
 
     Sorted worst-first when an order is given, so the runs a reader is looking for are at the
-    top. The run names sit on the left edge only: the panels share the y axis, and repeating
-    the names over every panel's cells is what made this unreadable.
+    top.
     """
-    from plotly.subplots import make_subplots
-
     conditions = condition_names(rows)
     if len(conditions) < 2:
         return None
@@ -607,31 +726,92 @@ def build_condition_matrix(
         index.sort(key=lambda i: rank.get(names[i], len(order)))
     labels = [_short_run_labels(names)[i] for i in index]
 
-    panels = [(metric, label) for metric, label in _CONDITION_METRICS
+    panels = [(label, _condition_matrix(rows, conditions, metric)[index])
+              for metric, label in _CONDITION_METRICS
               if np.isfinite(_condition_matrix(rows, conditions, metric)).any()]
     if not panels:
         return None
+    return _condition_heatmap(panels, conditions, labels, "run")
 
-    fig = make_subplots(rows=1, cols=len(panels), shared_yaxes=True,
-                        subplot_titles=[l for _m, l in panels], horizontal_spacing=0.012)
-    for i, (metric, _label) in enumerate(panels):
-        values = _condition_matrix(rows, conditions, metric)[index]
-        z = np.column_stack([_robust_z(values[:, j]) for j in range(len(conditions))])
-        fig.add_trace(go.Heatmap(
-            z=z, x=conditions, y=labels, coloraxis="coloraxis", xgap=1, ygap=1,
-            text=[[f"{v:.4g}" for v in row] for row in values],
-            hovertemplate="<b>%{y}</b><br>%{x}<br>value %{text}<br>z=%{z:.2f}<extra></extra>",
-        ), row=1, col=i + 1)
 
-    fig.update_yaxes(autorange="reversed", showticklabels=False)
-    fig.update_yaxes(showticklabels=True, tickfont=dict(size=9), row=1, col=1)
-    fig.update_xaxes(tickangle=-45, tickfont=dict(size=9))
-    fig.update_annotations(font=dict(size=11, color="#6c757d"))
-    fig.update_layout(height=150 + 14 * len(rows), width=180 * len(panels) + 130,
-                      plot_bgcolor="white", margin=dict(l=110, r=20, t=70, b=90),
-                      coloraxis=dict(colorscale="RdBu", cmid=0, cmin=-3, cmax=3,
-                                     colorbar=dict(title="z", thickness=12, len=0.8)))
-    return fig
+# The per-channel field behind each condition panel, where one exists. GVTD has none: it is
+# an RMS across channels by definition, and so is its above-threshold share, which is why
+# those two panels belong to the profile alone and this picture is shorter by two.
+_CONDITION_PER_CHANNEL = {
+    "sci_win_mean": "sci_per_channel",
+    "psp_mean":     "psp_per_channel",
+    "cv_mean":      "cv_per_channel",
+    "snr_mean":     "snr_per_channel",
+}
+
+# Appended after them. `good_frac` has no panel in the profile and belongs here because it
+# is the line a channel is actually rejected on, which is what a condition's kept count is.
+_EXTRA_CHANNEL_PANELS = (("good_frac_per_channel", "Coupled windows"),)
+
+
+def _channel_matrix(by_condition: dict, conditions: list[str],
+                    field: str) -> "tuple[list[str], np.ndarray]":
+    """``(channel names, channels x conditions)`` of one per-channel field, NaN where absent.
+
+    The names come from the first condition that carries the field, which is the recording's
+    channel order; a condition missing a channel leaves that cell NaN rather than shifting
+    the rows under it.
+    """
+    names: list[str] = []
+    for condition in conditions:
+        stored = ((by_condition.get(condition) or {}).get("per_channel") or {}).get(field)
+        if stored:
+            names = list(stored)
+            break
+    if not names:
+        return [], np.zeros((0, len(conditions)))
+    values = np.full((len(names), len(conditions)), np.nan)
+    for j, condition in enumerate(conditions):
+        stored = ((by_condition.get(condition) or {}).get("per_channel") or {}).get(field)
+        for i, name in enumerate(names):
+            value = (stored or {}).get(name)
+            if isinstance(value, (int, float)):
+                values[i, j] = float(value)
+    return names, values
+
+
+def build_channel_condition_matrix(by_condition: dict) -> "go.Figure | None":
+    """channel x condition for one run, the panels and order of ``build_condition_panels``.
+
+    The cohort's matrix asks which *run* moved in a condition; a subject has one run per
+    page, so the same question there is which *channel* moved, and the answer is the only one
+    a group page cannot give. The panel list is derived from ``_CONDITION_METRICS`` rather
+    than written again, so the two cannot name different metrics under the same heading.
+
+    Channels are ordered by how far they move across conditions on the first panel, worst
+    first, and every panel keeps that order so one row reads across all of them.
+    """
+    conditions = list(by_condition)
+    if len(conditions) < 2:
+        return None
+
+    fields = [(_CONDITION_PER_CHANNEL[metric], label)
+              for metric, label in _CONDITION_METRICS if metric in _CONDITION_PER_CHANNEL]
+    fields += list(_EXTRA_CHANNEL_PANELS)
+
+    found = [(label, *_channel_matrix(by_condition, conditions, field))
+             for field, label in fields]
+    found = [(label, names, values) for label, names, values in found
+             if names and np.isfinite(values).any()]
+    if not found:
+        return None
+
+    order_names, order_values = found[0][1], found[0][2]
+    with np.errstate(invalid="ignore"):
+        spread = np.nanmax(
+            np.abs(order_values - np.nanmedian(order_values, axis=1, keepdims=True)), axis=1)
+    labels = [order_names[i] for i in np.argsort(-np.nan_to_num(spread))]
+
+    panels = []
+    for label, names, values in found:
+        index = [names.index(n) for n in labels if n in names]
+        panels.append((label, values[index]))
+    return _condition_heatmap(panels, conditions, labels, "channel")
 
 
 _PALETTE = [

@@ -23,6 +23,9 @@ td.ch-ok  { color: #cfd8dc; text-align: center; }
 td.ch-n   { text-align: right; }
 tr.ch-clean td { color: #b0bec5; }
 .scroll { overflow-x: auto; }
+/* the run the conditions were cut from reads as a heading for them, not as a sixth window */
+tr.cond-whole td { background: #f4f6f8; font-weight: 600; }
+.num { text-align: right; font-variant-numeric: tabular-nums; }
 {% endblock %}
 
 {% block header %}
@@ -87,6 +90,94 @@ tr.ch-clean td { color: #b0bec5; }
   conditions of different length or difficulty are expected to differ.
   {% endif %}
 </p>
+
+{% if condition_groups %}
+<h2>Conditions</h2>
+{% for group in condition_groups %}
+{% if condition_groups | length > 1 %}<h3>{{ group.label }}</h3>{% endif %}
+<div class="scroll">
+<table>
+  <thead>
+    <tr>
+      <th>Window</th>
+      <th>Kind</th>
+      <th>Span</th>
+      <th>Channels kept</th>
+      {% for col in condition_columns %}<th>{{ col }}</th>{% endfor %}
+    </tr>
+  </thead>
+  <tbody>
+  {% for row in group.rows %}
+    <tr{% if row.kind == 'run' %} class="cond-whole"{% endif %}>
+      <td>
+        {% if row.href %}<a href="{{ row.href }}">{{ row.name }}</a>
+        {% else %}{{ row.name }} <span class="muted">(no page)</span>{% endif %}
+      </td>
+      <td>{{ row.kind }}</td>
+      <td class="num">{{ row.span or '&mdash;' }}</td>
+      <td class="num">{% if row.kept %}{{ row.kept }}{% else %}<span class="muted">n/a</span>{% endif %}</td>
+      {% for cell in row.metrics %}
+      <td class="num{% if cell.flagged %} flag{% endif %}">{{ cell.value }}</td>
+      {% endfor %}
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endfor %}
+
+<p class="subtitle" style="margin-top:0.6rem;">
+  A condition is a window selection out of the whole-run pass, not a cut of the recording,
+  so these rows are comparable with each other and with the run they open on. Long channels
+  throughout, and every share in the whole-run row is counted over the full recording the
+  same way a condition counts it over its own window. A tree cropped per condition before
+  preprocessing is listed under <b>Runs</b> instead: each piece there is filtered against
+  its own two edges and lands on its own window grid, so the two kinds do not share a table.
+</p>
+
+{% if condition_figures.profile %}
+<h2>Condition profile
+  <span class="hint">each metric across the conditions, one line per run</span></h2>
+<iframe class="plotly-frame" src="{{ condition_figures.profile.src }}"
+        title="Metrics by condition"
+        style="height:{{ condition_figures.profile.h }}px"></iframe>
+{% endif %}
+
+{% if condition_figures.per_run | selectattr('channels') | list %}
+<h2>Channel &times; condition
+  <span class="hint">which channel moved, and in which block</span></h2>
+{% for run in condition_figures.per_run if run.channels %}
+{% if condition_figures.per_run | length > 1 %}<h3>{{ run.label }}</h3>{% endif %}
+<div class="scroll">
+  <iframe src="{{ run.channels.src }}" title="Channel by condition"
+          style="border:none;display:block;height:{{ run.channels.h }}px;{% if run.channels.w %}width:{{ run.channels.w }}px{% else %}width:100%{% endif %}"></iframe>
+</div>
+{% endfor %}
+<p class="subtitle" style="margin-top:0.6rem;">
+  Colour is the robust z inside one condition, so a cell says how far that channel sat from
+  the others in that block rather than how the blocks rank; hover gives the value. The
+  panels are the profile's, dropped to the ones with a per-channel form: GVTD is an RMS
+  across channels and has none. <b>Coupled windows</b> is added at the end because it is the
+  line a channel is rejected on, which is what the kept count above counts. One channel
+  order over every panel, the widest mover first.
+</p>
+{% endif %}
+
+{% if condition_figures.per_run | selectattr('timeline') | list %}
+<h2>Metrics over time
+  <span class="hint">the conditions shaded behind the windowed metrics</span></h2>
+{% for run in condition_figures.per_run if run.timeline %}
+{% if condition_figures.per_run | length > 1 %}<h3>{{ run.label }}</h3>{% endif %}
+<iframe class="plotly-frame" src="{{ run.timeline.src }}" title="Windowed metrics over time"
+        style="height:{{ run.timeline.h }}px"></iframe>
+{% endfor %}
+<p class="subtitle" style="margin-top:0.6rem;">
+  Smoothed over 60 s and sampled at that step, the trend being slower than one QC window.
+  Long and short only: <code>all</code> is a blend of the two and lands between them. Each
+  band is the colour its condition wears on the run's own report.
+</p>
+{% endif %}
+{% endif %}
 
 {% if channels %}
 <h2>Channel rejections</h2>

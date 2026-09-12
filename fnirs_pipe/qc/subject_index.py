@@ -1,12 +1,20 @@
 """Subject-level landing page: one row per run, linking to that run's QC report.
 
 Every QC figure is per run, so the subject report is an index rather than a report. What
-it adds on top of the links is the two things no single run can show: which run stands
-apart from the subject's others on each metric, and which channels were rejected in which
-run, which is the set ``--bads-scope subject`` unions.
+it adds on top of the links is the three things no single run can show: which run stands
+apart from the subject's others on each metric, which channels were rejected in which run
+(the set ``--bads-scope subject`` unions), and, for a run driven with ``--by-condition``,
+its conditions side by side.
 
 The rows are read back off disk from the records the run already wrote, so this needs
 nothing held in memory and can be rebuilt for a past output tree.
+
+The Conditions section covers per-condition *views* only, the ``by_condition`` block a
+whole-run pass leaves in its record. A tree cropped per condition first is already listed
+above, one run per condition, and belongs there rather than here: a cropped condition is
+filtered against its own two edges and lands on its own window grid, so its numbers are not
+comparable with a view's and the two must not share a table. See
+:mod:`fnirs_pipe.qc.condition_views`.
 """
 
 from __future__ import annotations
@@ -17,7 +25,8 @@ import statistics
 from pathlib import Path
 
 from fnirs_pipe.qc.boilerplate import collect_software_versions
-from fnirs_pipe.qc.report_shell import footer_vars, page_vars, render, stylesheet
+from fnirs_pipe.qc.report_shell import (
+    OUTLIER_Z, footer_vars, guard, outlier_flags, page_vars, render, stylesheet)
 from fnirs_pipe.qc.sqm_record import entities_of
 from fnirs_pipe.utils.logging import get_logger
 
@@ -35,7 +44,10 @@ _COLUMNS = (
     ("Channels kept", ("raw_long_channel_retention_rate", "raw_channel_retention_rate"), "{:.0%}"),
     ("SCI mean",      ("raw_long_sci_mean", "raw_sci_mean"),                             "{:.2f}"),
     ("GVTD p95",      ("raw_long_gvtd_p95", "raw_gvtd_p95"),                             "{:.2e}"),
-    ("Motion corr.",  ("motion_motion_corrected_pct",),                                  "{:.1f}%"),
+    # a fraction of the recording, not a percentage: `motion_corrected_pct` is the mean of
+    # a per-sample boolean. Printed with `{:.1f}%` this column said 0.2% where the run's own
+    # report, which formats it through the metric registry's "pct", said 17.4%
+    ("Motion corr.",  ("motion_motion_corrected_pct",),                                  "{:.1%}"),
     ("HbO-HbR corr",  ("preproc_long_hbo_hbr_corr_mean", "preproc_hbo_hbr_corr_mean"),   "{:+.2f}"),
 )
 
@@ -49,8 +61,34 @@ _ARTEFACTS = (
     ("aux",        "nirs/{label}_desc-aux_timeseries.tsv.gz"),
 )
 
-# How far from the subject's own median a run has to sit before the cell is marked.
-_OUTLIER_Z = 3.5
+
+# ---- Conditions ----
+
+# Column -> (heading, key, format spec). The keys are read from a condition's long-channel
+# block where it has one, so a row sits under the same heading as the run's `raw_long`
+# figures above. `Spike frames` and `Motion corr.` have no per-set block and come off the
+# span lists, which are the long set and every channel respectively; each column is one
+# measurement down its length either way, which is what the whole-run row is built to keep.
+_COND_COLUMNS = (
+    ("SCI (10 s)",      "sci_win_mean",            "{:.3f}"),
+    ("SNR",             "snr_mean",                "{:.0f}"),
+    ("GVTD mean",       "gvtd_mean",               "{:.2e}"),
+    ("GVTD above thr.", "gvtd_pct_above_thresh",   "{:.1%}"),
+    ("Spike frames",    "spike_pct_frames",        "{:.1%}"),
+    ("Motion corr.",    "motion_corrected_pct",    "{:.1%}"),
+    ("Retention",       "channel_retention_rate",  "{:.0%}"),
+)
+
+# The span list behind each share, and the key it fills. The whole-run row counts these over
+# the full recording rather than reading the record's own scalar of the same name: a
+# condition's `gvtd_pct_above_thresh` is the corrected file against its own threshold, while
+# `raw_long_gvtd_pct_above_thresh` is the uncorrected file against its own, and on
+# sub-p1d01 those are 4.0% and 52.4% of one recording. Same rule, same spans, one column.
+_WHOLE_RUN_SPANS = (
+    ("gvtd_pct_above_thresh", "gvtd_above_spans_s"),
+    ("spike_pct_frames",      "spike_spans_s"),
+    ("motion_corrected_pct",  "motion_corrected_spans_s"),
+)
 
 
 def _flat(record: dict) -> dict[str, float]:
@@ -74,32 +112,6 @@ def _shape(nirs_dir: Path, label: str) -> dict:
         if data.get("sfreq"):
             return data
     return {}
-
-
-def _outlier_flags(values: list[float | None]) -> list[bool]:
-    """Which runs sit apart from the subject's own runs on one metric.
-
-    Scaled by the median absolute deviation, so the run being looked for cannot widen the
-    scale that is meant to catch it. Under four runs there is nothing to compare against.
-
-    [0.96, 0.95, 0.96, 0.40, 0.97] -> [False, False, False, True, False]
-
-    A column whose runs agree exactly has a zero MAD, which would divide by nothing. The
-    mean deviation takes over there: it is zero only when every run agrees, and otherwise
-    still marks the single run standing away from a set that agrees with itself.
-    """
-    present = [v for v in values if v is not None]
-    if len(present) < 4:
-        return [False] * len(values)
-
-    median = statistics.median(present)
-    deviations = [abs(v - median) for v in present]
-    scale = statistics.median(deviations) * 1.4826
-    if scale == 0:
-        scale = sum(deviations) / len(deviations)
-    if scale == 0:
-        return [False] * len(values)
-    return [v is not None and abs(v - median) / scale >= _OUTLIER_Z for v in values]
 
 
 def _links(sub_dir: Path, label: str) -> list[dict[str, str]]:
@@ -203,10 +215,151 @@ def collect_runs(sub_dir: Path) -> list[dict]:
     # a run is marked against the subject's other runs, so the comparison can only be made
     # once every row is in hand
     for column in range(len(_COLUMNS)):
-        flags = _outlier_flags([row["metrics"][column]["raw"] for row in rows])
+        flags = outlier_flags([row["metrics"][column]["raw"] for row in rows])
         for row, flagged in zip(rows, flags):
             row["metrics"][column]["flagged"] = flagged
     return rows
+
+
+def _cond_row(name: str, kind: str, href: "str | None", span: str,
+              kept: "tuple[int, int] | None", values: dict) -> dict:
+    """One Conditions row, the values formatted by :data:`_COND_COLUMNS`."""
+    return {
+        "name": name,
+        "kind": kind,
+        "href": href,
+        "span": span,
+        "kept": f"{kept[0]}/{kept[1]}" if kept else None,
+        "metrics": [
+            {"value": fmt.format(values[key]), "raw": values[key], "flagged": False}
+            if isinstance(values.get(key), (int, float))
+            else {"value": "n/a", "raw": None, "flagged": False}
+            for _head, key, fmt in _COND_COLUMNS
+        ],
+    }
+
+
+def _whole_run_values(record: dict, duration_s: "float | None") -> dict:
+    """The Conditions table's whole-run row, measured the way its condition rows are."""
+    from fnirs_pipe.qc.condition_views import span_share
+
+    long_section = record.get("raw_long") or record.get("raw") or {}
+    windowed = record.get("windowed") or {}
+    values = {key: long_section.get(key)
+              for key in ("sci_win_mean", "snr_mean", "channel_retention_rate")}
+
+    per_window = windowed.get("gvtd_per_window")
+    values["gvtd_mean"] = statistics.fmean(per_window) if per_window else None
+    for key, stored in _WHOLE_RUN_SPANS:
+        values[key] = (span_share(windowed.get(stored), 0.0, duration_s)
+                       if windowed.get(stored) and duration_s else None)
+    return values
+
+
+def collect_conditions(sub_dir: Path) -> list[dict]:
+    """One group per run carrying per-condition views, each a whole-run row and its windows.
+
+    A group is ``{"label", "task", "windows", "by_condition", "record", "rows"}``; ``rows``
+    open with the run itself so a condition is read against the whole it was cut from. Runs
+    without a ``by_condition`` block contribute nothing, which is what a tree produced
+    without ``--by-condition``, or cropped per condition first, looks like.
+    """
+    nirs_dir = sub_dir / "nirs"
+    groups: list[dict] = []
+    for sqm_path in sorted(nirs_dir.glob("*_desc-sqm_nirs.json")):
+        label = sqm_path.name[: sqm_path.name.index("_desc-sqm")]
+        try:
+            record = json.loads(sqm_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        by_condition = record.get("by_condition") or {}
+        if len(by_condition) < 2:
+            continue
+
+        shape = _shape(nirs_dir, label)
+        n_channels, duration_s = shape.get("n_channels"), shape.get("duration_s")
+        report = sub_dir / f"{label}_qc.html"
+        rows = [_cond_row(
+            "whole run", "run", report.name if report.exists() else None,
+            f"0–{duration_s:.0f} s" if duration_s else "",
+            (n_channels - (shape.get("n_bad") or 0), n_channels) if n_channels else None,
+            _whole_run_values(record, duration_s),
+        )]
+
+        windows: list[tuple[str, float, float]] = []
+        for name, block in by_condition.items():
+            window = block.get("window_s") or []
+            t0, t1 = (float(window[0]), float(window[1])) if len(window) == 2 else (0.0, 0.0)
+            windows.append((name, t0, t1))
+            page = sub_dir / f"{label}_desc-{name}_qc.html"
+            values = {**((block.get("od_by_set") or {}).get("long") or {}),
+                      **((block.get("motion_by_set") or {}).get("long") or {})}
+            # neither block carries these two, the record splitting only what it measured
+            # per channel set; both come off span lists the whole-run row counts as well
+            for key in ("spike_pct_frames", "motion_corrected_pct"):
+                values[key] = (block.get("scalars") or {}).get(key)
+            rows.append(_cond_row(
+                name, "view", page.name if page.exists() else None,
+                f"{t0:.0f}–{t1:.0f} s",
+                (n_channels - len(block.get("bad_channels") or []), n_channels)
+                if n_channels else None,
+                values,
+            ))
+
+        # a condition is marked against the run's other conditions, the whole-run row
+        # included: it is the set they are cut from and belongs in the comparison
+        for column in range(len(_COND_COLUMNS)):
+            flags = outlier_flags([r["metrics"][column]["raw"] for r in rows])
+            for row, flagged in zip(rows, flags):
+                row["metrics"][column]["flagged"] = flagged
+
+        groups.append({"label": label, "record": record, "rows": rows,
+                       "windows": windows, "by_condition": by_condition,
+                       "task": entities_of(label).get("task") or label})
+    return groups
+
+
+def write_condition_figures(sub_dir: Path, subject: str, groups: list[dict]) -> dict:
+    """Write the Conditions figures and return what the template needs to embed them.
+
+    Three pictures, all of them builders the group report already owns: the profile over
+    every run at once, and then per run a channel-by-condition matrix and a timeline. The
+    profile takes the runs together because that is the comparison it is for; the other two
+    are of one run's channels and one run's clock and cannot be pooled.
+    """
+    from fnirs_pipe.qc.figure_io import _save_figure_html
+    from fnirs_pipe.qc.figures.group_figures import (
+        build_channel_condition_matrix, build_condition_panels, build_condition_timeline,
+    )
+    from fnirs_pipe.qc.group_writer import _sqm_row
+
+    fig_dir = sub_dir / "figures" / f"sub-{subject}"
+    out: dict = {"profile": None, "per_run": []}
+
+    def _save(stem: str, name: str, fig) -> "dict | None":
+        if fig is None:
+            return None
+        fname = f"{stem}_desc-{name}_nirs.html"
+        height = _save_figure_html(fig, fig_dir / fname)
+        return {"src": f"figures/sub-{subject}/{fname}", "h": height,
+                "w": getattr(fig.layout, "width", None)}
+
+    panels = build_condition_panels(
+        [{"bids_name": g["label"], "by_condition": g["by_condition"]} for g in groups])
+    out["profile"] = _save(f"sub-{subject}", "condprofile", panels)
+
+    for group in groups:
+        label = group["label"]
+        out["per_run"].append({
+            "label": label,
+            "task": group["task"],
+            "channels": _save(label, "condchannels",
+                              build_channel_condition_matrix(group["by_condition"])),
+            "timeline": _save(label, "condtimeline",
+                              build_condition_timeline(_sqm_row(label, group["record"]),
+                                                       group["windows"])),
+        })
+    return out
 
 
 def write_subject_index(
@@ -221,6 +374,13 @@ def write_subject_index(
         logger.warning("sub-%s | no SQM records found, index not written", subject)
         return None
 
+    errors: list[str] = []
+    condition_groups = collect_conditions(sub_dir)
+    figures: dict = {"profile": None, "per_run": []}
+    if condition_groups:
+        with guard("Condition figures", errors, f"sub-{subject}"):
+            figures = write_condition_figures(sub_dir, subject, condition_groups)
+
     html = render(
         "subject_index.html.j2",
         # the subject names the page, the way a run names its own; that this is QC is what
@@ -230,12 +390,18 @@ def write_subject_index(
             heading=f"sub-{subject}",
             css=stylesheet("subject.css"),
         ),
-        **footer_vars(versions=collect_software_versions()),
+        # the errors block only when a section actually failed: this page has never carried
+        # one, and an empty "no errors" panel is chrome it does not need
+        **footer_vars(versions=collect_software_versions(),
+                      errors=errors or None, scope=f"sub-{subject}"),
         subject=subject,
         rows=rows,
         channels=collect_bad_channels(sub_dir, [r["label"] for r in rows]),
         columns=[head for head, _, _ in _COLUMNS],
-        outlier_z=_OUTLIER_Z,
+        condition_groups=condition_groups,
+        condition_columns=[head for head, _, _ in _COND_COLUMNS],
+        condition_figures=figures,
+        outlier_z=OUTLIER_Z,
         run_command=run_command,
         mode=mode or "",
     )

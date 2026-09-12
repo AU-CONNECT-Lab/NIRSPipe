@@ -16,6 +16,7 @@ Three groups of helpers:
 
 from __future__ import annotations
 
+import statistics
 from contextlib import contextmanager
 from datetime import date
 from pathlib import Path
@@ -79,6 +80,42 @@ def note(notes: list, scope: str, message: str) -> None:
     """
     notes.append(message)
     logger.info("%s | %s", scope, message)
+
+
+# ---- Index pages ----
+
+# How far from its neighbours a row has to sit before its cell is marked. One constant, so a
+# flag means the same thing on the subject index and on the dyad index.
+OUTLIER_Z = 3.5
+
+
+def outlier_flags(values: "list[float | None]", z: float = OUTLIER_Z) -> list[bool]:
+    """Which rows of an index table sit apart from the others on one metric.
+
+    ::
+
+      [0.96, 0.95, 0.96, 0.40, 0.97] -> [False, False, False, True, False]
+
+    Scaled by the median absolute deviation, so the row being looked for cannot widen the
+    scale that is meant to catch it. Under four rows there is nothing to compare against,
+    which is why a two-condition design gets no flags at all.
+
+    A column whose rows agree exactly has a zero MAD, which would divide by nothing. The mean
+    deviation takes over there: it is zero only when every row agrees, and otherwise still
+    marks the single row standing away from a set that agrees with itself.
+    """
+    present = [v for v in values if v is not None]
+    if len(present) < 4:
+        return [False] * len(values)
+
+    median = statistics.median(present)
+    deviations = [abs(v - median) for v in present]
+    scale = statistics.median(deviations) * 1.4826
+    if scale == 0:
+        scale = sum(deviations) / len(deviations)
+    if scale == 0:
+        return [False] * len(values)
+    return [v is not None and abs(v - median) / scale >= z for v in values]
 
 
 # ---- Rendering ----

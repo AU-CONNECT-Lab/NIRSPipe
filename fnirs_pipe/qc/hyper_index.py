@@ -17,21 +17,17 @@ from __future__ import annotations
 
 import json
 import re
-import statistics
 from pathlib import Path
 
 import pandas as pd
 
 from fnirs_pipe.qc.boilerplate import collect_software_versions
 from fnirs_pipe.qc.figure_io import _pair_fname
-from fnirs_pipe.qc.report_shell import footer_vars, page_vars, render, stylesheet
+from fnirs_pipe.qc.report_shell import (
+    OUTLIER_Z, footer_vars, outlier_flags, page_vars, render, stylesheet)
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("qc.hyper_index")
-
-# How far from the other rows a window has to sit before its cell is marked. The subject
-# index's own threshold, so a flag means the same thing on both pages.
-_OUTLIER_Z = 3.5
 
 _CHROMA_LABEL = {"hbo": "HbO", "hbr": "HbR"}
 
@@ -113,28 +109,6 @@ def _isc_mean(nirs_dir: Path, stem: str, label: "str | None" = None) -> dict:
     return out
 
 
-def _outlier_flags(values: "list[float | None]") -> "list[bool]":
-    """Which rows sit apart from the others on one metric.
-
-    Scaled by the median absolute deviation, so the row being looked for cannot widen the
-    scale meant to catch it. Under four rows there is nothing to compare against, which is
-    why a two-condition design gets no flags at all.
-
-    ``[0.26, 0.25, 0.26, 0.41, 0.27] -> [False, False, False, True, False]``
-    """
-    present = [v for v in values if v is not None]
-    if len(present) < 4:
-        return [False] * len(values)
-    median = statistics.median(present)
-    deviations = [abs(v - median) for v in present]
-    scale = statistics.median(deviations) * 1.4826
-    if scale == 0:
-        scale = sum(deviations) / len(deviations)
-    if scale == 0:
-        return [False] * len(values)
-    return [v is not None and abs(v - median) / scale >= _OUTLIER_Z for v in values]
-
-
 def _tasks(nirs_dir: Path, group_id: str) -> "list[str]":
     """The tasks this dyad has a whole-run coherence table for, in filename order."""
     pattern = re.compile(rf"group-{re.escape(group_id)}_task-([A-Za-z0-9]+)_hyper-wtc\.tsv")
@@ -181,7 +155,7 @@ def collect_rows(group_dir: Path, group_id: str) -> "list[dict]":
     # a window is marked against the dyad's other windows, so this waits until every row is
     # in hand. Flagged per chromophore, the two being separate measurements
     for chroma in ("hbo", "hbr"):
-        flags = _outlier_flags([r["coherence"].get(chroma) for r in rows])
+        flags = outlier_flags([r["coherence"].get(chroma) for r in rows])
         for row, flagged in zip(rows, flags):
             row.setdefault("flagged", {})[chroma] = flagged
     return rows
@@ -236,7 +210,7 @@ def write_hyper_index(
         chroma_labels={c: _CHROMA_LABEL[c] for c in chroma},
         band=band,
         n_tasks=len({row["task"] for row in rows}),
-        outlier_z=_OUTLIER_Z,
+        outlier_z=OUTLIER_Z,
     )
     out_path = group_dir / f"group-{group_id}_index.html"
     out_path.write_text(html, encoding="utf-8")
