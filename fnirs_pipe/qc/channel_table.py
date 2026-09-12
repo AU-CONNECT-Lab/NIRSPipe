@@ -422,9 +422,7 @@ def split_table(
         -> columns: [{"key": "sci_mean", "label": "Mean SCI", ...}]
            rows:    [{"name": "Long", "n": 40, "cells": [{"value": "0.810", "cls": "qm-ok"}]}]
     """
-    from fnirs_pipe.qc.boilerplate.vocabulary import (
-        format_metric, is_key_metric, metric_class, metric_summary,
-    )
+    from fnirs_pipe.qc.boilerplate.vocabulary import is_key_metric, metric_summary
 
     columns = measured_columns(columns, *(s for _, _, s, _ in channel_sets))
     return {

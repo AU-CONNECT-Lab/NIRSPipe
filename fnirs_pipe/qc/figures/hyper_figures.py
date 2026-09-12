@@ -92,14 +92,54 @@ def sci_of(sqm_data: dict, sid: str) -> dict:
     return member.get("sci_win_per_channel") or member.get("sci_per_channel") or {}
 
 
+def _rejected_pairs(sqm_data: dict, sid: str) -> "set[str] | None":
+    """The S-D pairs one member's screening rejected, or None when nothing recorded it.
+
+    ::
+
+      ["S1_D1 760", "S1_D1 850"] -> {"S1_D1"}
+
+    Rejection is stored per wavelength, since that is what prep marks on the recording, and
+    every lookup on a dyad page is per pair. The empty set and None are different answers:
+    a member that lost no channel has an empty list in its record, a member whose record
+    was never written has no list at all, and only the second is unknown.
+    """
+    bad = sqm_data.get(sid, {}).get("bad_channels")
+    if bad is None:
+        return None
+    return {str(ch).rsplit(" ", 1)[0] for ch in bad}
+
+
 def _ch_sci_status(
     ch_pair: str,
     sqm_data: dict[str, dict],
     subject_ids: list[str],
     sci_threshold: float,
 ) -> list[bool | None]:
-    result = []
+    """Whether each member kept this channel pair: the screening's verdict, per member.
+
+    ::
+
+      -> [True, False]   # kept by the first member, rejected by the second
+
+    **The verdict, not a threshold on SCI.** These three colours are labelled good / mixed /
+    bad on every panel that draws them, and "good" has one meaning in this package: the
+    channel survived screening. Screening is `good_frac`, the share of 10 s windows in which
+    SCI and PSP both cleared their lines, so a channel can be dropped at an SCI of 0.96 and
+    kept at a lower one. Colouring by ``sci_threshold`` instead, which is what this did, put
+    a green channel under a rejected one and called both "good".
+
+    ``sci_threshold`` stays the fallback and nothing else: a record with no rejection list at
+    all is the one case with no verdict to draw, and an all-grey montage says less than the
+    number that record does carry. The subject report makes the same split and shows both,
+    rejection first and SCI as the grading underneath it.
+    """
+    result: list[bool | None] = []
     for sid in subject_ids:
+        rejected = _rejected_pairs(sqm_data, sid)
+        if rejected is not None:
+            result.append(ch_pair not in rejected)
+            continue
         sci_d = sci_of(sqm_data, sid)
         val = sci_d.get(f"{ch_pair} hbo") or sci_d.get(ch_pair)
         result.append(None if val is None else float(val) >= sci_threshold)
@@ -118,11 +158,21 @@ def _group_color(statuses: list[bool | None]) -> str:
 
 
 def _hover_sci(pair: str, sqm_data: dict, subject_ids: list[str]) -> str:
+    """One channel pair's line per member: the verdict, and the SCI behind it.
+
+    Both, because they answer different questions and the marker can only carry one colour.
+    A channel rejected at a high SCI is the case worth being able to see, and it reads as a
+    mistake unless the two numbers sit together.
+    """
     lines = [f"<b>{pair}</b>"]
     for sid in subject_ids:
         sci_d = sci_of(sqm_data, sid)
         val = sci_d.get(f"{pair} hbo") or sci_d.get(pair)
-        lines.append(f"{sid}: SCI (10 s) = {val:.3f}" if val is not None else f"{sid}: N/A")
+        sci = f"SCI (10 s) = {val:.3f}" if val is not None else "SCI n/a"
+        rejected = _rejected_pairs(sqm_data, sid)
+        verdict = ("" if rejected is None
+                   else " &bull; rejected" if pair in rejected else " &bull; kept")
+        lines.append(f"{sid}: {sci}{verdict}")
     return "<br>".join(lines)
 
 

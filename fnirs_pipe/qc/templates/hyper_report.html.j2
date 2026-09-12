@@ -179,8 +179,10 @@
 <details id="Layout" open>
   <summary>b. Optode layout</summary>
   <div class="details-body">
-    <p class="step-desc">Green = good in every member, yellow = mixed, gray = bad in every
-      member.</p>
+    <p class="step-desc">The screening&rsquo;s verdict, not a line drawn on SCI: green =
+      kept in every member, yellow = kept in some, gray = rejected in every member. A
+      channel is rejected on its share of coupled windows, so one can be dropped at a high
+      SCI. Hover reads both.</p>
     <div class="row row-layout">
       {% if figure_paths.layout_2d %}
       <div>
@@ -242,8 +244,8 @@
 <details id="ChannelSummary" open>
   <summary>a. Quality summary across the dyad</summary>
   <div class="details-body">
-    <p class="step-desc">Green = good in every member, yellow = mixed, red = bad in every
-      member.</p>
+    <p class="step-desc">The screening&rsquo;s verdict: green = kept in every member,
+      yellow = kept in some, red = rejected in every member.</p>
     <iframe class="plotly-frame" src="{{ figure_paths.ch_summary.src }}"
             title="channel quality summary across the group"
             style="height:{{ figure_paths.ch_summary.h }}px"></iframe>
