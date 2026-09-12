@@ -593,11 +593,12 @@
   {% else %}
   <ul class="qm-list">
     {{ qm_li('channel_retention_rate', 'Channel retention') }}
-    {{ qm_li('sci_mean', 'Mean SCI') }}
+    {{ qm_li('sci_win_mean', 'Mean SCI (10 s windows)') }}
+    {{ qm_li('sci_mean', 'Mean SCI (whole run)') }}
     {{ qm_li('good_frac_mean', 'Coupled windows') }}
     {{ qm_li('psp_mean', 'Mean PSP (10 s windows)') }}
-    {{ qm_li('snr_mean', 'Mean SNR (intensity)') }}
-    {{ qm_li('cv_mean', 'Mean CV (intensity)') }}
+    {{ qm_li('snr_mean', 'Mean SNR (intensity, 10 s)') }}
+    {{ qm_li('cv_mean', 'Mean CV (intensity, 10 s)') }}
   </ul>
   {% endif %}
 

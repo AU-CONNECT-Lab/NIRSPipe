@@ -46,7 +46,7 @@ UNSLICEABLE = ("cp_per_channel", "temporal_derivative_variance",
 # file, the stage that series is measured on; the spike and correction-footprint shares come
 # off spans found on the uncorrected file. Two stages in one list, which is why the report
 # names the stage on each row rather than printing nine bare numbers.
-COND_SCALAR_KEYS = ("sci_mean", "good_frac_mean", "psp_mean",
+COND_SCALAR_KEYS = ("sci_win_mean", "good_frac_mean", "psp_mean",
                     "gvtd_mean", "gvtd_p95", "gvtd_filt_mean", "gvtd_filt_p95",
                     "cv_mean", "snr_mean",
                     "gvtd_pct_above_thresh", "gvtd_num_above_thresh",
@@ -1129,7 +1129,9 @@ def condition_scalars(sliced: "dict[str, dict[str, float]]",
     n_frames = n_frames or {}
     n_segments = n_segments or {}
     out: "dict[str, float | None]" = {
-        "sci_mean":       _mean_or_none((sliced.get("sci_per_channel") or {}).values()),
+        # windowed by construction: a condition is a column selection out of sci_matrix,
+        # and the whole-run sci_mean has no slice of itself to give
+        "sci_win_mean":   _mean_or_none((sliced.get("sci_per_channel") or {}).values()),
         "psp_mean":       _mean_or_none((sliced.get("psp_per_channel") or {}).values()),
         "good_frac_mean": _mean_or_none((sliced.get("good_frac_per_channel") or {}).values()),
         "cv_mean":        _mean_or_none((sliced.get("cv_per_channel") or {}).values()),
@@ -1181,7 +1183,7 @@ def condition_set_scalars(
                      1.0 - sum(1 for ch in in_set if ch in bad_channels) / len(in_set))
         row = {
             "channel_retention_rate": retention,
-            "sci_mean":       _mean("sci_per_channel"),
+            "sci_win_mean":   _mean("sci_per_channel"),
             "good_frac_mean": _mean("good_frac_per_channel"),
             "psp_mean":       _mean("psp_per_channel"),
             "snr_mean":       _mean("snr_per_channel"),

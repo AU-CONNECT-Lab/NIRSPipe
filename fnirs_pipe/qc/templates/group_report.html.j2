@@ -164,7 +164,7 @@ to measure from. Read the panels as the runs' own values side by side.{% endset 
 
 {% if figure_paths.windows %}
 <details id="Windowed" open>
-  <summary>Over time <span class="hint">rows are metrics, columns are channel sets &bull; every run pale, the cohort's interquartile band and median over them &bull; smoothed over 60 s &bull; SCI here is the windowed estimator, not the table's whole-run <code>sci_mean</code></span></summary>
+  <summary>Over time <span class="hint">rows are metrics, columns are channel sets &bull; every run pale, the cohort's interquartile band and median over them &bull; smoothed over 60 s &bull; SCI here follows the QC window, while the table's <code>sci_win_mean</code> is pinned to 10 s and its <code>sci_mean</code> is the whole run</span></summary>
   <div class="details-body">
     <iframe class="plot-frame" src="{{ figure_paths.windows.src }}"
             style="height:{{ figure_paths.windows.h }}px"></iframe>
