@@ -567,7 +567,7 @@ def _section_motion(
     spike_by_set = {gvtd_set: spike_spans, "short": _spans("spike_spans_short_s")}
 
     with _guard("Carpet + GVTD", errors, subject):
-        fig = carpet_gvtd_figure(raw_gvtd, raw_gvtd.ch_names, segments,
+        fig = carpet_gvtd_figure(raw_gvtd, raw_gvtd.ch_names,
                                  corrected_segments=corrected_segments,
                                  spike_segments=spike_by_set,
                                  raw_after=raw_after_motion,
@@ -647,7 +647,7 @@ def _section_haemo(
     ``psd`` False leaves the spectrum out and keeps the rest; only a caller holding both
     spans can tell whether the cut clears mne's ``n_fft``. See :func:`_cropped_sections`.
     """
-    hbo_hbr_path = hbo_hbr_after_path = psd_panel_path = None
+    hbo_hbr_path = psd_panel_path = None
     psd_panel_h = 0
 
     def _cut(raw):
@@ -660,21 +660,17 @@ def _section_haemo(
     raw_haemo_cut, raw_errts_cut = _cut(raw_haemo), _cut(raw_errts)
     psd_stages_cut = [(label, _cut(raw)) for label, raw in (psd_stages or [])] or None
 
+    # One figure for both stages rather than one each: they share a colour scale and a
+    # channel order, which is what makes the pair subtract by eye. A run with no denoising
+    # passes raw_after=None and the panel draws its one-stage form.
     with _guard("HbO-HbR correlation panel", errors, subject):
         b64 = hbo_hbr_correlation_panel(
             raw_haemo_cut,
-            title="HbO–HbR Signal Quality — desc-preproc (before denoising)",
-            sep_bands=sep_bands)
+            title="HbO–HbR Signal Quality",
+            sep_bands=sep_bands,
+            raw_after=raw_errts_cut)
         _save_b64_png(b64, figures_dir / f"hbo_hbr_corr{suffix}.png")
         hbo_hbr_path = _fig_href(figures_dir, f"hbo_hbr_corr{suffix}.png")
-    if raw_errts is not None:
-        with _guard("HbO-HbR correlation panel (after)", errors, subject):
-            b64 = hbo_hbr_correlation_panel(
-                raw_errts_cut,
-                title="HbO–HbR Signal Quality — desc-errts (after denoising)",
-                sep_bands=sep_bands)
-            _save_b64_png(b64, figures_dir / f"hbo_hbr_corr_after{suffix}.png")
-            hbo_hbr_after_path = _fig_href(figures_dir, f"hbo_hbr_corr_after{suffix}.png")
 
     # Recomputed rather than read from the record: the record measures each stage on the
     # signal as it stands there, which cannot be compared across the bandpass. See
@@ -743,7 +739,6 @@ def _section_haemo(
             psd_panel_path, psd_panel_h = _save_plotly_html(fig_psd_custom, figures_dir / f"psd_panel{suffix}.html")
     return {
         "hbo_hbr_path":   hbo_hbr_path,
-        "hbo_hbr_after_path": hbo_hbr_after_path,
         "stage_metrics_path": stage_metrics_path, "stage_metrics_h": stage_metrics_h,
         "stage_banded": stage_banded,
         "psd_panel_path": psd_panel_path, "psd_panel_h": psd_panel_h,

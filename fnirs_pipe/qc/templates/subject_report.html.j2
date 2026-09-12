@@ -255,16 +255,12 @@
       target and r near 0 or positive means a shared artifact.
     </p>
     {% if hbo_hbr_path %}
-      <img class="responsive" src="{{ hbo_hbr_path }}" alt="HbO–HbR correlation panel (before denoising)" />
+      <img class="responsive" src="{{ hbo_hbr_path }}" alt="HbO–HbR correlation panel, before and after denoising" />
       <p class="fig-path">{{ hbo_hbr_path }}</p>
     {% else %}
       <div class="placeholder">Figure generation failed — see Errors section.</div>
     {% endif %}
 
-    {% if hbo_hbr_after_path %}
-      <img class="responsive" src="{{ hbo_hbr_after_path }}" alt="HbO–HbR correlation panel (after denoising)" />
-      <p class="fig-path">{{ hbo_hbr_after_path }}</p>
-    {% endif %}
 
     {% if denoise_carpet_path %}
       <h3>Denoising carpet — before / after</h3>

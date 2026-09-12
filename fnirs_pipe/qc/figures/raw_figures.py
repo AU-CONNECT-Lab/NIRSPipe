@@ -1421,12 +1421,14 @@ def build_trigger_timeline_single(
                        autorange="reversed", gridcolor="#eeeeee",
                        tickfont=dict(size=10)),
             plot_bgcolor="white", paper_bgcolor="white",
-            height=max(120, (n + 1) * 60 + 60),
-            margin=dict(l=120, r=100, t=8, b=38),
+            # the top margin holds the legend now, which is why it is not the r=100 the
+            # legend used to need beside the plot
+            height=max(120, (n + 1) * 60 + 82),
+            margin=dict(l=120, r=20, t=30, b=38),
             hovermode="closest",
             showlegend=True,
-            legend=dict(x=1.01, y=1.0, xanchor="left",
-                        font=dict(size=9), itemsizing="constant"),
+            legend=dict(font=dict(size=9), itemsizing="constant", orientation="h",
+                        x=1, xanchor="right", y=1.0, yanchor="bottom"),
         ),
     )
 

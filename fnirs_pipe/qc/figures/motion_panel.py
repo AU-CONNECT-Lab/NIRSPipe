@@ -222,63 +222,61 @@ def _gvtd_stat_label(g: np.ndarray, thresh: "float | None", prefix: str = "") ->
 
 
 def _blocked_carpet(z, z_after, blocks):
-    """Stack the blocks' carpet rows with one blank row between them.
+    """The carpet's y labels and ``[(set name, first row, last row), ...]`` for its blocks.
 
-    Returns the padded images, the y labels, and ``[(set name, first row, last row), ...]``
-    for the side bars. The gap is a real NaN row rather than a drawn line, so it survives a
-    reader zooming in, and its label is a run of spaces because a heatmap y axis needs every
-    category distinct::
+    The images pass through untouched: the blocks sit directly on top of each other and the
+    seam between them is a thin drawn rule (see :func:`_carpet_band_marks`). It used to be a
+    blank channel row, which is a whole channel high and read as a margin between two
+    separate figures rather than as a division inside one::
 
         blocks [("long", [a, b]), ("short", [c])]
-        -> 4 rows, labels [a, b, " ", c], spans [("long", 0, 1), ("short", 3, 3)]
+        -> labels [a, b, c], spans [("long", 0, 1), ("short", 2, 2)]
     """
-    if len(blocks) < 2:
-        labels = [c for _, chs in blocks for c in chs]
-        return z, z_after, labels, [(blocks[0][0], 0, max(0, len(labels) - 1))]
-
-    blank = np.full((1, z.shape[1]), np.nan)
-    parts, parts_after, labels, spans = [], [], [], []
-    src = 0
-    for i, (name, chs) in enumerate(blocks):
-        if i:
-            parts.append(blank)
-            labels.append(" " * i)
-            if z_after is not None:
-                parts_after.append(blank)
-        parts.append(z[src:src + len(chs)])
-        if z_after is not None:
-            parts_after.append(z_after[src:src + len(chs)])
+    labels: list[str] = []
+    spans = []
+    for name, chs in blocks:
         spans.append((name, len(labels), len(labels) + len(chs) - 1))
         labels += list(chs)
-        src += len(chs)
-    return (np.vstack(parts),
-            (np.vstack(parts_after) if z_after is not None else None),
-            labels, spans)
+    return z, z_after, labels, spans
+
+
+# The division between two channel-set blocks: a rule across the image and a matching break
+# in the side bar. Kept to a couple of pixels, since the blocks are two halves of one carpet
+# read against each other and anything wider reads as two stacked figures.
+_SEAM = 0.005
 
 
 def _carpet_band_marks(fig, row: int, spans: list, n_rows: int) -> None:
-    """A colour bar down the left edge of a carpet, one per channel-set block.
+    """A colour bar down the left edge of a carpet, one per channel-set block, plus the seam.
 
     Placed in y-domain fractions rather than by channel name: the axis is categorical and
     reversed, so row ``i`` of ``n`` runs from ``1 - (i+1)/n`` to ``1 - i/n`` up from the
     bottom. The bar carries no text: it takes its colour from the GVTD row that averaged
-    those channels, which is directly above and names itself. Skipped for a single block,
-    which the axis title already names.
+    those channels, which is directly above and names itself. It sits hard against the
+    image's left edge: a bar floating out in the margin reads as a column of its own rather
+    than as a key to the rows beside it. Skipped for a single block, where the bars would
+    all be one colour and tell nothing apart.
     """
     if len(spans) < 2:
         return
-    for name, i0, i1 in spans:
-        y0, y1 = 1.0 - (i1 + 1) / n_rows, 1.0 - i0 / n_rows
+    last = len(spans) - 1
+    for k, (name, i0, i1) in enumerate(spans):
+        y0 = 1.0 - (i1 + 1) / n_rows + (_SEAM / 2 if k < last else 0.0)
+        y1 = 1.0 - i0 / n_rows - (_SEAM / 2 if k else 0.0)
         fig.add_shape(type="rect", xref="x domain", yref="y domain",
-                      x0=-0.016, x1=-0.008, y0=y0, y1=y1,
+                      x0=-0.009, x1=-0.002, y0=y0, y1=y1,
                       fillcolor=_SET_COLORS.get(name, _GVTD_LINE), line=dict(width=0),
                       row=row, col=1)
+        if k:
+            edge = y1 + _SEAM / 2
+            fig.add_shape(type="line", xref="x domain", yref="y domain",
+                          x0=0, x1=1, y0=edge, y1=edge,
+                          line=dict(color="white", width=2), row=row, col=1)
 
 
 def carpet_gvtd_figure(
     raw: mne.io.Raw,
     ch_names: list[str],
-    segments: "dict | None" = None,
     z_threshold: float = 3.0,
     corrected_segments: "list[tuple[float, float]] | None" = None,
     spike_segments: "dict[str, list] | list[tuple[float, float]] | None" = None,
@@ -302,9 +300,7 @@ def carpet_gvtd_figure(
     derived from the trace: spikes are a per-channel robust outlier test on the same
     band-limited derivative, so shading without a peak over the threshold, or the reverse,
     is a real disagreement between a per-channel and a cross-channel reading rather than a
-    drawing error. The full-height red ``segments`` windows are separate again, and stop at
-    the bottom of the last trace: the carpet is a per-channel image and reading a z value
-    off it through a wash of red is harder than looking one row up.
+    drawing error.
 
     Given ``raw_after``, the motion-corrected recording, every GVTD row carries a second
     trace and a second carpet is stacked under the first, so the figure answers whether the
@@ -399,20 +395,26 @@ def carpet_gvtd_figure(
     carpet_px = int(max(150, min(n_ch * 6, 380)))
     heights   = (([_STRIP_ROW_PX] if has_strip else []) + [_GVTD_ROW_PX] * len(rows)
                  + [carpet_px] * n_carpets)
-    vspace    = 0.02
+    vspace    = 0.03
     # chrome: the margins, the legend and the shared x-axis title
     row_heights, total_px = _px_rows(heights, vspace, chrome_px=130)
     strip_row = 1 if has_strip else None
     gvtd_row  = 2 if has_strip else 1
 
-    # every row is named on its own y-axis rather than by a subplot title: the rows are
-    # packed tight enough that a title sits on the panel above it, and it leaves the top of
-    # the figure to the legend
-    carpet_titles = ["Carpet (before)", "Carpet (after)"] if has_after else ["Carpet"]
+    # only the carpets take a subplot title, in plotly's own styling so they match the
+    # titles on every other figure in the report; the GVTD rows name themselves inside their
+    # panels, where a title would sit on the row above at this spacing
+    carpet_titles = ["before", "after (corrected)"] if has_after else ["carpet"]
     fig = make_subplots(
         rows=n_rows, cols=1, shared_xaxes=True,
         row_heights=row_heights, vertical_spacing=vspace,
+        subplot_titles=[""] * (n_rows - n_carpets) + carpet_titles,
     )
+    # plotly sets a title's baseline on its panel's top edge; lift it just clear of the
+    # image, which starts at that edge, and it stays with its own carpet rather than
+    # drifting into the middle of the gap
+    for ann in fig.layout.annotations:
+        ann.yshift = 3
 
     if has_strip:
         xs, ys = _span_polygons(corrected_segments, 0.30, 0.70)
@@ -504,32 +506,13 @@ def carpet_gvtd_figure(
         ), row=carpet_top + i, col=1)
         _carpet_band_marks(fig, carpet_top + i, band_spans, len(carpet_rows))
 
-    if segments:
-        for label, spans in segments.items():
-            for onset, duration in spans:
-                # traces only: a per-channel image read through a red wash is harder than
-                # looking one row up at the trace the window was derived from
-                for row_i in range(1, carpet_top):
-                    fig.add_vrect(
-                        x0=onset, x1=onset + duration,
-                        fillcolor="#e74c3c", opacity=0.15, line_width=0,
-                        layer="below", row=row_i, col=1,
-                    )
-                fig.add_annotation(
-                    x=onset + duration / 2, y=1.0, yref="y domain", row=gvtd_row, col=1,
-                    text=label, showarrow=False, yanchor="bottom",
-                    font=dict(size=9, color="#e74c3c"),
-                )
-
     if has_strip:
-        fig.update_yaxes(title_text="corrected", title_font_size=8, range=[0, 1],
-                         showticklabels=False, showgrid=False, zeroline=False,
-                         row=strip_row, col=1)
+        fig.update_yaxes(range=[0, 1], showticklabels=False, showgrid=False,
+                         zeroline=False, row=strip_row, col=1)
     for i in range(n_carpets):
         # the channel names stay in the hover, where they are readable; on the axis a full
         # montage would be an unreadable stack
-        fig.update_yaxes(title_text=carpet_titles[i], title_font_size=10,
-                         showticklabels=False, autorange="reversed",
+        fig.update_yaxes(showticklabels=False, autorange="reversed",
                          row=carpet_top + i, col=1)
     fig.update_xaxes(title_text="Time (s)", row=n_rows, col=1)
     fig.update_xaxes(range=[float(times[0]), float(times[-1])])
@@ -542,9 +525,10 @@ def carpet_gvtd_figure(
             colorscale="Greys", cmin=-z_threshold, cmax=z_threshold,
             colorbar=dict(title="Z-score", thickness=10, len=0.45, y=0.35),
         ),
-        margin=dict(l=64, r=20, t=52, b=45),
+        margin=dict(l=52, r=20, t=34, b=45),
         hovermode="x unified",
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0, font=dict(size=9)),
+        legend=dict(font=dict(size=9), orientation="h",
+                    x=1, xanchor="right", y=1.0, yanchor="bottom"),
         plot_bgcolor="white",
     )
     return fig
@@ -824,6 +808,7 @@ def build_motion_detail_figure(
         title_text=ch_name, height=total_px,
         plot_bgcolor="white", paper_bgcolor="white",
         margin=dict(l=60, r=20, t=60, b=40),
-        legend=dict(font=dict(size=9)),
+        legend=dict(font=dict(size=9), orientation="h",
+                    x=1, xanchor="right", y=1.0, yanchor="bottom"),
     )
     return fig
