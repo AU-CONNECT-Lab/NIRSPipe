@@ -457,6 +457,12 @@ def build_hyper_report(
         # every channel and does not split by separation
         subject_metrics_rows=subject_metric_tables(
             {"all": sqm_data}, meta["subject_ids"], sci_threshold),
+        # this page's own name, which is what the rating server files a verdict under
+        page_stem=output_path.stem,
+        # the post report if `fnirs-hyper run` has written one; a raw-only tree has none
+        post_href=(p.name if (p := output_path.with_name(
+            output_path.name.replace("_desc-hyperraw_", "_desc-hyperpost_"))).exists()
+            else None),
     )
     output_path.write_text(html, encoding="utf-8")
     logger.info("Hyper raw report saved: %s", output_path)

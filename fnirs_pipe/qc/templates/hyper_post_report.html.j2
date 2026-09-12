@@ -47,7 +47,8 @@
 
 {% set rating_subject = page_stem %}
 {% set rating_modules = [_bar] %}
-{% set rating_pinned = [{"id": "Final" ~ _rk, "name": "FINAL", "href": "#Final"}] %}
+{# no href: this page has no summary section for it to land on #}
+{% set rating_pinned = [{"id": "Final" ~ _rk, "name": "FINAL", "href": false}] %}
 {% set rating_chip = "group-" ~ group_id %}
 {% set rating_save_endpoint = "/save_hyper_ratings" %}
 {% set rating_load_endpoint = "/load_hyper_ratings/" ~ page_stem %}
@@ -298,7 +299,7 @@
 
 <!-- ISC panel — HbO -->
 {% if isc_panel_hbo_path %}
-<div class="card">
+<div class="card" id="ISC">
   <div class="panel-title">
     Inter-brain Synchrony — HbO
     <span class="panel-hint">

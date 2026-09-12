@@ -36,15 +36,19 @@ select#ch-select {
 .cd-chip.cd-disabled{opacity:.45;pointer-events:none;cursor:not-allowed}
 {% endblock %}
 
-{% set rating_subject = "group-" ~ group_id ~ "_task-" ~ task %}
+{% set rating_subject = page_stem %}
+{# the post report is the other half of this pair of pages, so it is one click away #}
 {% set rating_modules = [[
   {"id": "Signal_Quality", "name": "Signal Quality"},
   {"id": "Coherence", "name": "Coherence"},
+  {"sep": true},
+  {"id": "PostReport", "name": "Post report →",
+   "href": post_href or false, "ratable": false},
 ]] %}
 {% set rating_pinned = [{"id": "Final", "name": "FINAL"}] %}
 {% set rating_chip = "group-" ~ group_id %}
 {% set rating_save_endpoint = "/save_hyper_ratings" %}
-{% set rating_load_endpoint = "/load_hyper_ratings" %}
+{% set rating_load_endpoint = "/load_hyper_ratings/" ~ page_stem %}
 
 {% block content %}
 

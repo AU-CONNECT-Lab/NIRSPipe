@@ -319,17 +319,28 @@ class HyperRatingApp:
         self.group_id  = m.group(1) if m else "unknown"
         self.session   = m.group(2) if m else None
         self.task      = m.group(3) if m else "unknown"
-        # Strip BIDS suffix so ratings JSON keeps the legacy "_hyper-raw_*.json" naming.
-        bids_prefix = stem.removesuffix("_desc-hyperraw_nirs")
-        self.ratings_path = output_dir / f"{bids_prefix}_hyper-raw_ratings.json"
+        self.ratings_path = self._ratings_path(stem)
         self.app = Flask(__name__)
         self._setup_routes()
 
-    def _load_ratings(self) -> dict:
-        if not self.ratings_path.exists():
+    def _ratings_path(self, stem: str) -> Path:
+        """One file per rated page, named after the page's own stem.
+
+        The raw dyad report, the post report and each of its per-condition pages are
+        separate reports and are rated separately. The raw one keeps its legacy
+        ``_hyper-raw_ratings.json`` name; the rest are named after themselves.
+        """
+        if stem.endswith("_desc-hyperraw_nirs"):
+            return self.output_dir / (
+                stem.removesuffix("_desc-hyperraw_nirs") + "_hyper-raw_ratings.json")
+        return self.html_path.parent / f"{stem}_ratings.json"
+
+    def _load_ratings(self, stem: "str | None" = None) -> dict:
+        path = self._ratings_path(stem) if stem else self.ratings_path
+        if not path.exists():
             return {"ratings": {}, "notes": {}}
         try:
-            data = json.loads(self.ratings_path.read_text(encoding="utf-8"))
+            data = json.loads(path.read_text(encoding="utf-8"))
             return {"ratings": data.get("ratings", {}), "notes": data.get("notes", {})}
         except Exception:
             return {"ratings": {}, "notes": {}}
@@ -371,8 +382,9 @@ class HyperRatingApp:
             return self.html_path.read_text(encoding="utf-8")
 
         @app.route("/load_hyper_ratings", methods=["GET"])
-        def load_hyper_ratings():
-            return jsonify(self._load_ratings())
+        @app.route("/load_hyper_ratings/<stem>", methods=["GET"])
+        def load_hyper_ratings(stem=None):
+            return jsonify(self._load_ratings(stem))
 
         @app.route("/load_decisions", methods=["GET"])
         def load_decisions():
@@ -396,14 +408,16 @@ class HyperRatingApp:
         data = request.json
         if not data:
             return jsonify({"status": "fail", "message": "empty body"}), 400
+        # the page says which report it is; a condition page must not write into the run's
+        stem = data.get("id") or self.html_path.stem
         try:
             record = {
-                "stem":     self.html_path.stem,
+                "stem":     stem,
                 "rated_at": _utc_now_iso(),
                 "ratings":  data.get("ratings", {}),
                 "notes":    data.get("notes", {}),
             }
-            self.ratings_path.write_text(
+            self._ratings_path(stem).write_text(
                 json.dumps(record, indent=2, ensure_ascii=False), encoding="utf-8"
             )
             return jsonify({"status": "success"})
