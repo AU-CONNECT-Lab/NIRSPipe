@@ -6,6 +6,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.38.0] - 2026-09-12
+
+### Fixed
+- **A condition's GCOR before/after pair spanned the bandpass as well as the regression.** The run's own page has always paired the filtered stage against the residual; a condition paired the unfiltered one, and the bandpass alone moves that number
+- **The channel-quality grid's SCI row is the windowed estimate on every page.** A run page drew the whole-run one while a condition page drew the windowed one, under the same label, and the four rows beside it were windowed either way
+- **A condition page inherited three per-channel numbers from the whole run**: mean amplitude, the motion-correction footprint and the windowed SCI. All three vary over the recording, and a per-channel metric that belongs to neither list is now named rather than passed through
+- **A dyad page dropped a member's column when the two members' copies of one trigger sat a sample apart.** That is acquisition jitter, not a different condition
+
 ## [0.37.0] - 2026-09-12
 
 ### Added
@@ -63,8 +71,6 @@ All notable changes to this project will be documented in this file.
 - **The Epoch preview panel.** It was hidden on load and never drawn into; the epoch figure it was meant to hold is the third one inside the channel-detail file
 
 ### Fixed
-- **A condition's GCOR before/after pair spanned the bandpass as well as the regression.** The run's own page has always paired the filtered stage against the residual; a condition paired the unfiltered one, and the bandpass alone moves that number
-- **The channel-quality grid's SCI row is the windowed estimate on every page.** A run page drew the whole-run one while a condition page drew the windowed one, under the same label, and the four rows beside it were windowed either way
 - **A dyad's per-condition quality table read the wrong stretch of each member's recording**, offset by that member's alignment crop
 - **The subject index read its motion-correction column a hundred times low**, 0.2% where the run's own report said 17.4% of the same recording
 - **The raw viewer's GVTD carpet was blank, on every page.** It has been since the panel moved from an image to an interactive figure: the loader was handed the iframe rather than the box to build it in, so a second iframe went inside the first, where a browser ignores it

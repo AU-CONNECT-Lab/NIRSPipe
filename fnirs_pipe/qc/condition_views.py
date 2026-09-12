@@ -35,7 +35,14 @@ UNSLICEABLE = ("cp_per_channel", "temporal_derivative_variance",
                "hbo_hbr_corr_per_channel", "cnr_per_channel",
                # the spike mask is per sample, but only its whole-run share per channel is
                # stored, so there is nothing on disk to count over one condition's window
-               "spike_pct_per_channel")
+               "spike_pct_per_channel",
+               # both vary over the recording and neither has a windowed series stored
+               "mean_amp_per_channel", "motion_corrected_frac_per_channel")
+
+# Keys that describe the montage rather than the recording, so the run's value is also the
+# condition's. Named rather than left out of both lists above, which is the same silence a
+# metric that should have been sliced would pass through.
+TIME_INVARIANT = ("ch_dist_per_channel",)
 
 # the scalars a condition can be given, in print order. Short of the run's list on purpose:
 # flat channels, mean amplitude and the spike count have no windowed series to slice, and
@@ -137,6 +144,13 @@ def slice_record(record_view: dict, sliced: "dict[str, dict[str, float]]") -> di
     caller replaces those it has condition values for.
     """
     per_channel = record_view.get("per_channel") or {}
+    unclassified = {k for metrics in per_channel.values() for k in (metrics or {})
+                    if k not in SLICEABLE and k not in UNSLICEABLE
+                    and k not in TIME_INVARIANT}
+    if unclassified:
+        logger.warning("per-channel %s is in none of the three lists, so a condition page "
+                       "is showing the whole run's value for it",
+                       ", ".join(sorted(unclassified)))
     out_pc: dict[str, dict] = {}
     for section, metrics in per_channel.items():
         kept = {k: v for k, v in (metrics or {}).items()

@@ -63,8 +63,8 @@ def timeline_row_traces(events, y, color, name, showlegend, hover_tail=""):
         onsets = [float(e["onset"]) for e in blocks]
         spans  = [float(e["duration"]) for e in blocks]
         traces.append(go.Bar(
-            x=spans, y=[y] * len(blocks), base=onsets, orientation="h", width=0.42,
-            marker=dict(color=color, line=dict(width=0)),
+            x=spans, y=[y] * len(blocks), base=onsets, orientation="h", width=0.38,
+            marker=dict(color=color, opacity=0.9, cornerradius=3, line=dict(width=0)),
             name=name, legendgroup=name, showlegend=showlegend,
             customdata=[[o, d, o + d] for o, d in zip(onsets, spans)],
             hovertemplate=(f"<b>{name}</b><br>onset: %{{customdata[0]:.2f}} s"
@@ -74,12 +74,57 @@ def timeline_row_traces(events, y, color, name, showlegend, hover_tail=""):
     if ticks:
         traces.append(go.Scatter(
             x=[float(e["onset"]) for e in ticks], y=[y] * len(ticks), mode="markers",
-            marker=dict(symbol="line-ns-open", size=16, color=color,
-                        line=dict(width=2.0, color=color)),
+            marker=dict(symbol="line-ns-open", size=14, color=color,
+                        line=dict(width=1.6, color=color)),
             name=name, legendgroup=name, showlegend=showlegend and not blocks,
             hovertemplate=f"<b>{name}</b><br>t=%{{x:.2f}} s{hover_tail}<extra></extra>",
         ))
     return traces
+
+
+# Shared styling for the event timelines. The rows are named on the axis, so nothing in
+# them needs a legend entry to be identified, and the band is what keeps a mark tied to the
+# label beside it once a run has more than three or four conditions.
+TIMELINE_BAND_COLOR = "#f7f8fa"
+TIMELINE_ROW_PX = 36
+# a block narrower than this share of the recording has no room for its length printed
+# inside it; the number is still on hover
+_LABEL_MIN_FRAC = 0.07
+
+
+def timeline_row_bands(n_rows: int) -> list:
+    """Alternating row backgrounds for an event timeline, as layout shapes."""
+    return [dict(type="rect", xref="paper", yref="y", layer="below",
+                 x0=0, x1=1, y0=i - 0.5, y1=i + 0.5,
+                 fillcolor=TIMELINE_BAND_COLOR, line=dict(width=0))
+            for i in range(n_rows) if i % 2]
+
+
+def block_duration_labels(events, y, span: float) -> list:
+    """The length printed on each block wide enough to hold it, as layout annotations.
+
+    ::
+
+      block_duration_labels([{"onset": 10, "duration": 300}], 1, 3900)
+      -> [annotation "300 s" centred on the block at y=1]
+    """
+    out = []
+    for e in events:
+        dur = float(e.get("duration") or 0)
+        if dur > _MIN_BLOCK_S and span > 0 and dur / span > _LABEL_MIN_FRAC:
+            out.append(dict(x=float(e["onset"]) + dur / 2, y=y, text=f"{dur:g} s",
+                            showarrow=False, font=dict(size=10, color="white")))
+    return out
+
+
+def timeline_axes(row_labels: "list[str] | None"):
+    """The x and y axis dicts both event timelines share."""
+    xaxis = dict(title="Time (s)", gridcolor="#edf0f3", zeroline=False, showline=True,
+                 linecolor="#d5dbe1", ticks="outside", tickcolor="#d5dbe1", ticklen=4)
+    n = len(row_labels or ())
+    yaxis = dict(tickvals=list(range(n)), ticktext=list(row_labels or ()), showgrid=False,
+                 zeroline=False, tickfont=dict(size=11), range=[n - 0.5, -0.5])
+    return xaxis, yaxis
 
 
 def decimate(arr: np.ndarray, times: np.ndarray, max_pts: int):

@@ -13,8 +13,10 @@ from fnirs_pipe.utils.logging import get_logger
 from ._brain_utils import mni_trans
 from ._utils import (BAND_COLORS, CONDITION_PALETTE, HBO_COLOR, HBR_COLOR,
                      LONG_COLOR, PSD_NFFT, SHORT_COLOR, UNCLASSIFIED_COLOR,
+                     TIMELINE_ROW_PX, block_duration_labels,
                      decimate as _decimate, epochable_events, line_xy,
-                     physio_bands, timeline_row_traces)
+                     physio_bands, timeline_axes, timeline_row_bands,
+                     timeline_row_traces)
 
 logger = get_logger("qc.figures")
 
@@ -1398,39 +1400,37 @@ def build_trigger_timeline_single(
             all_descs.append(desc)
         by_desc.setdefault(desc, []).append(m)
 
-    traces = []
+    span = max(m["onset"] + m["duration"] for m in markers) - min(m["onset"] for m in markers)
 
-    # Summary row at y=0: all conditions overlaid with their own colours
+    traces, anns = [], []
+    # Summary row at y=0: all conditions overlaid with their own colours, unlabelled -- a
+    # length printed there would sit on whichever condition happened to be drawn last
     for desc in all_descs:
         traces += timeline_row_traces(by_desc[desc], 0, cond_colors.get(desc, "#999"),
                                       desc, False)
 
-    # Per-condition rows starting at y=1
+    # Per-condition rows starting at y=1, each block carrying its length
     for desc_idx, desc in enumerate(all_descs, start=1):
         traces += timeline_row_traces(by_desc[desc], desc_idx, cond_colors.get(desc, "#999"),
-                                      desc, True)
+                                      desc, False)
+        anns += block_duration_labels(by_desc[desc], desc_idx, span)
 
-    n = len(all_descs)
+    rows = ["(all)"] + all_descs
+    xaxis, yaxis = timeline_axes(rows)
     return go.Figure(
         data=traces,
         layout=go.Layout(
-            xaxis=dict(title="Time (s)", gridcolor="#eeeeee"),
-            yaxis=dict(tickvals=[0] + list(range(1, n + 1)),
-                       ticktext=["(all)"] + all_descs,
-                       autorange="reversed", gridcolor="#eeeeee",
-                       tickfont=dict(size=10)),
+            xaxis=xaxis, yaxis=yaxis,
+            shapes=timeline_row_bands(len(rows)), annotations=anns,
             plot_bgcolor="white", paper_bgcolor="white",
             # overlay, or plotly groups the per-condition bars and shifts each row off its
             # own tick
             barmode="overlay",
-            # the top margin holds the legend now, which is why it is not the r=100 the
-            # legend used to need beside the plot
-            height=max(120, (n + 1) * 60 + 82),
-            margin=dict(l=120, r=20, t=30, b=38),
+            height=max(120, len(rows) * TIMELINE_ROW_PX + 60),
+            margin=dict(l=110, r=20, t=14, b=44),
             hovermode="closest",
-            showlegend=True,
-            legend=dict(font=dict(size=9), itemsizing="constant", orientation="h",
-                        x=1, xanchor="right", y=1.0, yanchor="bottom"),
+            # the rows are named on the axis, so a legend would repeat them
+            showlegend=False,
         ),
     )
 
