@@ -1,26 +1,26 @@
 {% extends "_report_base.html.j2" %}
-{% from "_macros.html.j2" import card, subject_metrics %}
+{% from "_macros.html.j2" import subject_metrics %}
 
 {% block css %}
-.map-pick { display: flex; align-items: center; gap: 0.3rem; margin-left: auto; }
+.map-pick { display: flex; align-items: center; gap: 0.3rem; margin: 0.2rem 0 0.4rem; }
 .map-pick select {
-  font-size: 0.78rem; border: 1px solid #ced4da; border-radius: 4px;
-  padding: 0.15rem 0.35rem; background: #fff; max-width: 200px;
+  font-size: 0.8rem; border: 1px solid #ced4da; border-radius: 4px;
+  padding: 0.15rem 0.35rem; background: #fff; max-width: 220px;
 }
 /* The two sides of a crossed pairing read left to right, so the separator has to say
    which member each selector belongs to rather than just sitting between them. */
-.map-pick .pick-x { font-size: 0.78rem; color: #868e96; }
+.map-pick .pick-x { font-size: 0.8rem; color: #868e96; }
 /* Both chromophores are on the page at once, stacked, so nothing is behind a control and
    a reader cannot be comparing an HbO channel against an HbR region without noticing. */
-.chroma-stack { padding: 0.25rem 0 0.1rem; }
-.chroma-stack + .chroma-stack { border-top: 1px solid #e9ecef; margin-top: 0.4rem; }
+.chroma-stack + .chroma-stack { border-top: 1px solid #e9ecef; margin-top: 0.6rem;
+                                padding-top: 0.5rem; }
 .chroma-stack > .chroma-name {
-  display: inline-block; font-size: 0.78rem; font-weight: 600; color: #495057;
+  display: inline-block; font-size: 0.8rem; font-weight: 600; color: #495057;
   letter-spacing: 0.03em; margin: 0 0 0.1rem 0.1rem;
 }
 /* The run and its conditions are one set of pages; every one of them carries the whole
    strip, so any page reaches any other in a click. */
-.cond-nav { display: flex; flex-wrap: wrap; gap: 0.3rem; margin: 0.4rem 0 0.1rem; }
+.cond-nav { display: flex; flex-wrap: wrap; gap: 0.3rem; margin: 0.75rem 0 0; }
 .cond-nav a, .cond-nav span {
   font-size: 0.82rem; padding: 0.22rem 0.7rem; border-radius: 4px;
   border: 1px solid #ced4da; text-decoration: none; color: #495057; background: #fff;
@@ -34,309 +34,352 @@
    are rated separately rather than sharing one verdict. #}
 {% set _rk = "__" ~ page_stem %}
 {% set _bar = [
+  {"id": "Summary", "name": "Summary", "href": "#Final", "ratable": false},
+  {"sep": true},
   {"id": "Alignment" ~ _rk, "name": "Alignment", "href": "#Alignment"},
   {"id": "Quality" ~ _rk,   "name": "Quality",   "href": "#Quality"},
   {"id": "Coherence" ~ _rk, "name": "Coherence", "href": "#Coherence"},
   {"id": "ISC" ~ _rk,       "name": "ISC",       "href": "#ISC"},
 ] %}
 {% set _ = _bar.append({"sep": true}) %}
-{% for link in nav_links %}
-  {% set _ = _bar.append({"id": "page" ~ loop.index, "name": link.label,
-                          "href": link.href, "ratable": false}) %}
-{% endfor %}
+{% set _ = _bar.append({"id": "Provenance", "name": "Provenance", "href": "#Provenance",
+                        "ratable": false}) %}
+{% set _ = _bar.append({"id": "Methods", "name": "Methods", "href": "#Methods",
+                        "ratable": false}) %}
+{% if nav_links %}
+  {% set _ = _bar.append({"sep": true}) %}
+  {% for link in nav_links %}
+    {% set _ = _bar.append({"id": "page" ~ loop.index, "name": link.label,
+                            "href": false if link.current else link.href,
+                            "ratable": false}) %}
+  {% endfor %}
+{% endif %}
 
 {% set rating_subject = page_stem %}
 {% set rating_modules = [_bar] %}
-{# no href: this page has no summary section for it to land on #}
-{% set rating_pinned = [{"id": "Final" ~ _rk, "name": "FINAL", "href": false}] %}
+{% set rating_pinned = [{"id": "Final" ~ _rk, "name": "FINAL", "href": "#Final"}] %}
 {% set rating_chip = "group-" ~ group_id %}
 {% set rating_save_endpoint = "/save_hyper_ratings" %}
 {% set rating_load_endpoint = "/load_hyper_ratings/" ~ page_stem %}
 
+{# The dyad report reads as a document, so its header is a titled band rather than the
+   sticky nav bar the dashboard reports carry. #}
+{% block header %}
+<div class="page-header">
+  <h1>{{ page_heading }}</h1>
+  <span class="subtitle">v{{ versions.get('fnirs-pipe', 'unknown') }} &bull; {{ run_date }}
+    &bull; group-{{ group_id }} &bull; task-{{ task }}</span>
+</div>
+{% endblock %}
+
 {% block content %}
 
-<!-- The run and its conditions -->
-{% if nav_links | length > 1 %}
-<div class="card">
-  <div class="panel-title">
-    {% if condition_label %}Condition: {{ condition_label }}{% else %}Whole run{% endif %}
-    <span class="panel-hint">
-      {% if condition_label -%}
-      {{ condition_window }} &bull; every panel below is this window read out of the whole-run
-      transform, so it carries the recording's cone of influence and not two edges of its own
-      {%- if window_cycles %} &bull; {{ "%.0f"|format(window_cycles) }} cycles of the slowest
-      band frequency{% endif %}
-      {%- elif analysis_window -%}
-      restricted to {{ analysis_window }} by <code>--tstart</code>/<code>--tend</code>, taken
-      out of the transform of the whole recording rather than cut from it &bull; the coherence
-      is averaged across every condition inside that window
-      {%- if window_cycles %} &bull; {{ "%.0f"|format(window_cycles) }} cycles of the slowest
-      band frequency{% endif %}
-      {%- else -%}
-      the coherence over the whole recording, averaged across every condition in it &bull;
-      the per-condition pages are the ones to read for a block design
-      {%- endif %}
-    </span>
-    {% if window_cycles and window_cycles < min_band_cycles %}
-    <div class="panel-caveat">
-      This window holds only {{ "%.1f"|format(window_cycles) }} cycles of
-      <code>--wtc-band-fmin</code>, the slowest frequency being averaged. A coherence there is
-      a statement about a phase relationship this window has seen about that many times, so
-      the low-frequency end of every number below rests on very few independent looks at it.
-      Four to six cycles is the usual minimum. Raise <code>--wtc-band-fmin</code>, or read
-      that end as indicative. Nothing is masked or dropped on account of this.
-    </div>
-    {% endif %}
+<!-- ============================================================== summary -->
+<h2 id="Final">Summary</h2>
+<div class="summary-box">
+  <div class="summary-grid">
+    <table>
+      <tr><th>Group</th><td>group-{{ group_id }}</td></tr>
+      <tr><th>Task</th><td>{{ task }}</td></tr>
+      <tr><th>Members</th><td>{{ subject_ids | join(' &times; ') | safe }}</td></tr>
+      <tr>
+        <th>Scope</th>
+        <td>
+          {%- if condition_label %}condition &ldquo;{{ condition_label }}&rdquo;
+            {%- if condition_window %}, {{ condition_window }}{% endif %}
+          {%- elif analysis_window %}whole run, restricted to {{ analysis_window }}
+          {%- else %}whole run{% endif %}
+        </td>
+      </tr>
+      <tr><th>Date</th><td>{{ run_date }}</td></tr>
+      <tr><th>fnirs-pipe</th><td>v{{ versions.get('fnirs-pipe', 'n/a') }}</td></tr>
+      <tr><th>MNE</th><td>v{{ versions.get('mne', 'n/a') }}</td></tr>
+      <tr><th>Python</th><td>{{ versions.get('python', 'n/a') }}</td></tr>
+    </table>
+    <table>
+      <tr><th>WTC range</th>
+          <td>{{ "%.3f"|format(wtc_fmin) }}&ndash;{{ "%.3f"|format(wtc_fmax) }}&thinsp;Hz</td></tr>
+      <tr><th>Band mean over</th>
+          <td>{{ "%.3f"|format(wtc_band_fmin) }}&ndash;{{ "%.3f"|format(wtc_band_fmax) }}&thinsp;Hz
+            {%- if window_cycles %} &bull; {{ "%.0f"|format(window_cycles) }} cycles of the slowest
+            band frequency{% endif %}</td></tr>
+      <tr><th>Chromophores</th><td>{{ wtc_chroma_labels | join(' + ') }}</td></tr>
+      <tr><th>Arrow threshold</th><td>{{ "%g"|format(arrow_min) }}</td></tr>
+      <tr><th>Outside the COI</th><td>{{ "masked out of every band mean" if mask_coi
+                                        else "kept in the band means" }}</td></tr>
+      <tr><th>ISC threshold</th><td>|r| &ge; {{ "%.2f"|format(isc_threshold) }}</td></tr>
+      <tr><th>SCI threshold</th><td>{{ "%.2f"|format(sci_threshold) }}</td></tr>
+      <tr><th>Aligned duration</th>
+          <td>{% if align_duration_s %}{{ "%.1f"|format(align_duration_s) }}&thinsp;s
+              {%- else %}&mdash;{% endif %}</td></tr>
+      <tr><th>Max crop offset</th>
+          <td>{{ "%.3f"|format(align_max_offset_s) }}&thinsp;s</td></tr>
+    </table>
   </div>
+
+  <p class="qm-note" style="margin-top:0.75rem;">
+    {%- if condition_label %}
+    Every panel below is this window read out of the whole-run transform, so it carries the
+    recording&rsquo;s cone of influence and not two edges of its own.
+    {%- elif analysis_window %}
+    Restricted to {{ analysis_window }} by <code>--tstart</code>/<code>--tend</code>, taken
+    out of the transform of the whole recording rather than cut from it. The coherence is
+    averaged across every condition inside that window.
+    {%- else %}
+    The coherence over the whole recording, averaged across every condition in it. The
+    per-condition pages are the ones to read for a block design.
+    {%- endif %}
+  </p>
+
+  {% if window_cycles and window_cycles < min_band_cycles %}
+  <div class="panel-caveat">
+    This window holds only {{ "%.1f"|format(window_cycles) }} cycles of
+    <code>--wtc-band-fmin</code>, the slowest frequency being averaged. A coherence there is
+    a statement about a phase relationship this window has seen about that many times, so
+    the low-frequency end of every number below rests on very few independent looks at it.
+    Four to six cycles is the usual minimum. Raise <code>--wtc-band-fmin</code>, or read
+    that end as indicative. Nothing is masked or dropped on account of this.
+  </div>
+  {% endif %}
+
+  {% if nav_links | length > 1 %}
   <div class="cond-nav">
     {% for link in nav_links %}
       {% if link.current %}<span class="current">{{ link.label }}</span>
       {% else %}<a href="{{ link.href }}">{{ link.label }}</a>{% endif %}
     {% endfor %}
   </div>
-</div>
-{% endif %}
+  {% endif %}
 
-<!-- Alignment table -->
-{% call card("Time Alignment", hint="crop offset from first shared trigger &bull; all recordings trimmed to shortest", id="Alignment") %}
-<div class="align-wrap">
-  <table id="align-table">
-    <thead><tr><th>Subject</th><th>Offset (s)</th><th>Aligned duration (s)</th></tr></thead>
-    <tbody id="align-tbody"></tbody>
-  </table>
+  <h3 style="margin-top:1rem;">Run command</h3>
+  <pre>{{ run_command }}</pre>
 </div>
-{% endcall %}
 
-<!-- Per-subject quality metrics -->
+<!-- ============================================================= the dyad -->
+<h2>The dyad</h2>
+
+<details id="Alignment" open>
+  <summary>a. Time alignment</summary>
+  <div class="details-body">
+    <p class="step-desc">Crop offset from the first shared trigger; all recordings are then
+      trimmed to the shortest. A dyad window is on the aligned clock and a member&rsquo;s own
+      record is on its own, and this table is what converts between them.</p>
+    <table id="align-table">
+      <thead><tr><th>Subject</th><th>Offset (s)</th><th>Aligned duration (s)</th></tr></thead>
+      <tbody id="align-tbody"></tbody>
+    </table>
+  </div>
+</details>
+
 {% if subject_metrics_rows %}
-{% call card("Per-subject Quality Metrics", id="Quality",
-             hint="one table per channel set &bull; ↑ / ↓ = better direction &bull; SCI coloured against the threshold, HbO-HbR by sign") %}
-<div class="subj-metrics-wrap">
-  {{ subject_metrics(subject_metrics_rows, subject_ids) }}
-</div>
-<div class="panel-caveat">
-  Each table is its own measurement, not a subset of the one above it. GVTD is an RMS across
-  the channels of its set and a retention rate is a fraction of them, so a long and a short
-  row are two numbers about two montages rather than one number split in half. The
-  coherence on this page is computed on the long channels; the short table is what says
-  whether a change there is brain or scalp.
-</div>
-{% if condition_label %}
-<div class="panel-caveat">
-  Over this window only, read out of the <code>by_condition</code> section each member's
-  quality record already holds, so nothing was measured again here and these are the same
-  numbers that member's own per-condition page prints. A row left blank is one the record
-  has no per-condition value for, the whole-recording SCI being the case: it is a single
-  estimate over the run and has no slice of itself to give, so read the 10 s one beside it
-  and take the other off the <a href="{{ run_href }}">whole-run page</a>.
-  <br /><br />
-  <b>This reports, it does not re-decide.</b> The coherence above was computed on the
-  channel set the whole recording was screened into, and stays that way for two reasons:
-  the window is read out of a transform of the whole recording, so a channel set of its own
-  would need a transform of its own; and screening each condition separately would make a
-  contrast between two conditions a contrast between two montages as well. So a channel that
-  held up here and came loose elsewhere is still in, and one that came loose <i>here</i> is
-  still in too &mdash; these numbers are how to see which.
-</div>
-{% endif %}
-{% endcall %}
+<details id="Quality" open>
+  <summary>b. Per-subject quality metrics</summary>
+  <div class="details-body">
+    <p class="step-desc">One table per channel set. &uarr; / &darr; marks the better
+      direction; SCI is coloured against this run&rsquo;s own threshold and HbO&ndash;HbR by
+      sign.</p>
+    {{ subject_metrics(subject_metrics_rows, subject_ids) }}
+    <div class="panel-caveat">
+      Each table is its own measurement, not a subset of the one above it. GVTD is an RMS
+      across the channels of its set and a retention rate is a fraction of them, so a long
+      and a short row are two numbers about two montages rather than one number split in
+      half. The coherence on this page is computed on the long channels; the short table is
+      what says whether a change there is brain or scalp.
+    </div>
+    {% if condition_label %}
+    <div class="panel-caveat">
+      Over this window only, read out of the <code>by_condition</code> section each
+      member&rsquo;s quality record already holds, so nothing was measured again here and
+      these are the same numbers that member&rsquo;s own per-condition page prints. A row
+      left blank is one the record has no per-condition value for, the whole-recording SCI
+      being the case: it is a single estimate over the run and has no slice of itself to
+      give, so read the 10 s one beside it and take the other off the
+      <a href="{{ run_href }}">whole-run page</a>.
+      <br /><br />
+      <b>This reports, it does not re-decide.</b> The coherence above was computed on the
+      channel set the whole recording was screened into, and stays that way for two reasons:
+      the window is read out of a transform of the whole recording, so a channel set of its
+      own would need a transform of its own; and screening each condition separately would
+      make a contrast between two conditions a contrast between two montages as well. So a
+      channel that held up here and came loose elsewhere is still in, and one that came
+      loose <i>here</i> is still in too &mdash; these numbers are how to see which.
+    </div>
+    {% endif %}
+  </div>
+</details>
 {% elif condition_label %}
-{% call card("Per-subject Quality Metrics", hint="not available for this window", id="Quality") %}
-<div class="panel-caveat">
-  Neither member's quality record carries a <code>by_condition</code> section, so there is
-  nothing to show here rather than the whole recording's numbers under this condition's
-  heading. Those are on the <a href="{{ run_href }}">whole-run page</a>. Re-running
-  <code>fnirs-pipe</code> on these subjects writes the section.
-</div>
-{% endcall %}
+<details id="Quality" open>
+  <summary>b. Per-subject quality metrics &mdash; not available for this window</summary>
+  <div class="details-body">
+    <div class="panel-caveat">
+      Neither member&rsquo;s quality record carries a <code>by_condition</code> section, so
+      there is nothing to show here rather than the whole recording&rsquo;s numbers under
+      this condition&rsquo;s heading. Those are on the
+      <a href="{{ run_href }}">whole-run page</a>. Re-running <code>fnirs-pipe</code> on
+      these subjects writes the section.
+    </div>
+  </div>
+</details>
 {% endif %}
 
-<!-- ROI grouping -->
 {% if roi_rows %}
-{% call card("ROI Grouping", hint="channel-to-region mapping from --roi-mapping") %}
-<div class="align-wrap">
-  <table id="roi-table">
-    <thead><tr><th>ROI</th><th>Channels</th></tr></thead>
-    <tbody>
-    {% for row in roi_rows %}
-      <tr>
-        <td><b>{{ row.roi }}</b></td>
-        <td>{{ row.channels | join(", ") }}</td>
-      </tr>
-    {% endfor %}
-    </tbody>
-  </table>
-</div>
-{% endcall %}
+<details id="ROI">
+  <summary>c. ROI grouping</summary>
+  <div class="details-body">
+    <p class="step-desc">The channel-to-region mapping from <code>--roi-mapping</code>, which
+      is what the per-ROI panels below are averaged over.</p>
+    <table id="roi-table">
+      <thead><tr><th>ROI</th><th>Channels</th></tr></thead>
+      <tbody>
+      {% for row in roi_rows %}
+        <tr><td><b>{{ row.roi }}</b></td><td>{{ row.channels | join(", ") }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</details>
 {% endif %}
 
-<!-- Chromophore note: every coherence panel below carries all of them at once -->
-<div class="card">
-  <div class="panel-title">
-    Chromophore
-    <span class="panel-hint">
-      every coherence panel below shows {{ wtc_chroma_labels | join(" above ") }} &bull;
-      <code>hyper-wtc.tsv</code> carries {{ wtc_chroma_labels | join(" and ") }} in a
-      <code>chromophore</code> column
-    </span>
-  </div>
-  <div class="panel-caveat">
-    HbO and HbR are two parallel passes, never mixed and never averaged. The reason to have
-    both is a consistency check, not two results: HbO has the larger amplitude and the
-    better SNR, HbR is the less contaminated by scalp and systemic circulation, so a
-    coupling that shows in HbO and not in HbR is a caution flag. It is not a quantitative
-    test &mdash; coherence is unsigned and bounded, so there is no expected relationship
-    between an HbO value and an HbR one. Read it as present or absent. The inter-brain
-    correlation panels further down show both chromophores at once instead, an ISC matrix
-    being small enough to sit side by side.
-  </div>
-</div>
+<!-- =========================================================== coherence -->
+<h2 id="Coherence">Wavelet Transform Coherence</h2>
 
-<!-- Per-channel WTC -->
-<div class="card" id="Coherence">
-  <div class="panel-title">
-    Wavelet Transform Coherence (per channel)
-    <span class="panel-hint">
-      Morlet wavelet &bull; arrows = relative phase, right in phase and up
-      {{ subject_ids[0] }} leading &bull; washed-out band below the white dash sits outside
-      the cone of influence
-      {%- if chan_crossed %} &bull; left selector = {{ subject_ids[0] }}, right =
-      {{ subject_ids[1] }}, the order the map title reads in{% endif %}
-    </span>
-    <span class="map-pick">
+{#- the chromophore note: about every panel in this section rather than about any one of
+    them, so it opens the section instead of standing as a panel of its own -#}
+<p class="step-desc">
+  Every panel below shows {{ wtc_chroma_labels | join(" above ") }}, stacked and labelled,
+  and <code>hyper-wtc.tsv</code> carries {{ wtc_chroma_labels | join(" and ") }} in a
+  <code>chromophore</code> column. <b>HbO and HbR are two parallel passes, never mixed and
+  never averaged.</b> The reason to have both is a consistency check, not two results: HbO
+  has the larger amplitude and the better SNR, HbR is the less contaminated by scalp and
+  systemic circulation, so a coupling that shows in HbO and not in HbR is a caution flag. It
+  is not a quantitative test &mdash; coherence is unsigned and bounded, so there is no
+  expected relationship between an HbO value and an HbR one. Read it as present or absent.
+  The inter-brain correlation panels further down show both chromophores at once instead, an
+  ISC matrix being small enough to sit side by side.
+</p>
+
+<details id="WTCChannel" open>
+  <summary>a. Per channel</summary>
+  <div class="details-body">
+    <p class="step-desc">Morlet wavelet. Arrows are relative phase, right in phase and up
+      {{ subject_ids[0] }} leading; the washed-out band below the white dash sits outside the
+      cone of influence.
+      {%- if chan_crossed %} The left selector is {{ subject_ids[0] }} and the right
+      {{ subject_ids[1] }}, the order the map title reads in.{% endif %}</p>
+    <div class="map-pick">
       <select id="ch-select-post" aria-label="{{ subject_ids[0] }} channel"></select>
       {% if chan_crossed %}
       <span class="pick-x">&times;</span>
       <select id="ch-select-post-2" aria-label="{{ subject_ids[1] }} channel"></select>
       {% endif %}
-    </span>
-  </div>
-  <div style="text-align:center; padding:0.5rem">
+    </div>
     {% for c in wtc_chroma_labels %}
     <div class="chroma-stack">
       <span class="chroma-name">{{ c }}</span>
-      <img id="wtc-chan-img-{{ loop.index0 }}" alt="channel coherence map ({{ c }})"
-           style="max-width:100%"/>
+      <img class="responsive" id="wtc-chan-img-{{ loop.index0 }}"
+           alt="channel coherence map ({{ c }})" />
     </div>
     {% endfor %}
   </div>
-</div>
+</details>
 
-<!-- Per-ROI WTC -->
 {% if roi_rows %}
-<div class="card">
-  <div class="panel-title">
-    Wavelet Transform Coherence (per ROI)
-    <span class="panel-hint">
-      the member channels' maps averaged cell by cell, bad channels excluded &bull; arrows
-      and cone as above
-      {%- if roi_crossed %} &bull; left selector = {{ subject_ids[0] }}, right =
+<details id="WTCRoi" open>
+  <summary>b. Per ROI</summary>
+  <div class="details-body">
+    <p class="step-desc">The member channels&rsquo; maps averaged cell by cell, bad channels
+      excluded; arrows and cone as above.
+      {%- if roi_crossed %} The left selector is {{ subject_ids[0] }} and the right
       {{ subject_ids[1] }}, so an off-diagonal pairing reads at the size of a homologous
-      one{% endif %}
-    </span>
-    <span class="map-pick">
+      one.{% endif %}</p>
+    <div class="map-pick">
       <select id="roi-select-post" aria-label="{{ subject_ids[0] }} region"></select>
       {% if roi_crossed %}
       <span class="pick-x">&times;</span>
       <select id="roi-select-post-2" aria-label="{{ subject_ids[1] }} region"></select>
       {% endif %}
-    </span>
-  </div>
-  <div style="text-align:center; padding:0.5rem">
+    </div>
     {% for c in wtc_chroma_labels %}
     <div class="chroma-stack">
       <span class="chroma-name">{{ c }}</span>
-      <img id="wtc-roi-img-{{ loop.index0 }}" alt="ROI coherence map ({{ c }})"
-           style="max-width:100%"/>
+      <img class="responsive" id="wtc-roi-img-{{ loop.index0 }}"
+           alt="ROI coherence map ({{ c }})" />
     </div>
     {% endfor %}
   </div>
-</div>
+</details>
 
 {% if has_roi_matrix %}
-<div class="card" id="wtc-roi-matrix-card">
-  <div class="panel-title">
-    Wavelet Transform Coherence (ROI &times; ROI)
-    <span class="panel-hint">
-      band mean per ROI pair, inside the COI &bull; one number per map the selectors above
-      reach &bull; the rows of <code>hyper-wtc-roichan.tsv</code> for this chromophore
-    </span>
-  </div>
-  <div style="text-align:center; padding:0.5rem">
+<details id="wtc-roi-matrix-card" open>
+  <summary>c. ROI &times; ROI</summary>
+  <div class="details-body">
+    <p class="step-desc">Band mean per ROI pair, inside the COI: one number per map the
+      selectors above reach, and the rows of <code>hyper-wtc-roichan.tsv</code> for this
+      chromophore.</p>
     {% for c in wtc_chroma_labels %}
     <div class="chroma-stack">
       <span class="chroma-name">{{ c }}</span>
-      <img id="wtc-roi-matrix-img-{{ loop.index0 }}" alt="ROI by ROI coherence matrix ({{ c }})"
-           style="max-width:100%"/>
+      <img class="responsive" id="wtc-roi-matrix-img-{{ loop.index0 }}"
+           alt="ROI by ROI coherence matrix ({{ c }})" />
     </div>
     {% endfor %}
   </div>
-</div>
+</details>
 {% endif %}
 {% endif %}
 
 {% if has_chan_matrix %}
-<div class="card" id="wtc-chan-matrix-card">
-  <div class="panel-title">
-    Wavelet Transform Coherence (channel &times; channel)
-    <span class="panel-hint">
-      band mean per channel pair &bull; row = {{ subject_ids[0] }}, column =
-      {{ subject_ids[1] }} &bull; one number per map the selectors above reach &bull;
-      the rows of <code>hyper-wtc.tsv</code> for this chromophore
-    </span>
-  </div>
-  <div style="text-align:center; padding:0.5rem">
+<details id="wtc-chan-matrix-card" open>
+  <summary>{{ "d" if roi_rows else "b" }}. Channel &times; channel</summary>
+  <div class="details-body">
+    <p class="step-desc">Band mean per channel pair, row = {{ subject_ids[0] }} and column =
+      {{ subject_ids[1] }}: one number per map the selectors above reach, and the rows of
+      <code>hyper-wtc.tsv</code> for this chromophore.</p>
     {% for c in wtc_chroma_labels %}
     <div class="chroma-stack">
       <span class="chroma-name">{{ c }}</span>
-      <img id="wtc-chan-matrix-img-{{ loop.index0 }}" alt="channel coherence matrix ({{ c }})"
-           style="max-width:100%"/>
+      <img class="responsive" id="wtc-chan-matrix-img-{{ loop.index0 }}"
+           alt="channel coherence matrix ({{ c }})" />
     </div>
     {% endfor %}
   </div>
-</div>
+</details>
 {% endif %}
 
-<!-- ISC panel — HbO -->
+<!-- ================================================= inter-brain synchrony -->
+{% if isc_panel_hbo_path or isc_panel_hbr_path %}
+<h2 id="ISC">Inter-brain Synchrony</h2>
+<p class="step-desc">
+  Topomap (per-channel ISC), ISC matrix (channel &times; channel Pearson r) and connectogram
+  (|ISC| &ge; {{ "%.2f"|format(isc_threshold) }}),
+  {% if condition_label %}over this window only, z-scored inside it
+  {%- else %}over the whole recording{% endif %}.
+  <span style="color:#8e44ad">&#9632;</span> {{ subject_ids[0] }}
+  <span style="color:#27ae60">&#9632;</span> {{ subject_ids[1] }}
+</p>
+{% if isc_unfiltered_note %}<div class="panel-caveat">{{ isc_unfiltered_note }}</div>{% endif %}
+
 {% if isc_panel_hbo_path %}
-<div class="card" id="ISC">
-  <div class="panel-title">
-    Inter-brain Synchrony — HbO
-    <span class="panel-hint">
-      topomap (per-channel ISC) &bull; ISC matrix (channel &times; channel Pearson r) &bull;
-      connectogram (|ISC| &ge; {{ "%.2f"|format(isc_threshold) }}) &bull;
-      {% if condition_label %}over this window only, z-scored inside it
-      {%- else %}over the whole recording{% endif %} &bull;
-      <span style="color:#8e44ad">&#9632;</span> {{ subject_ids[0] }}
-      <span style="color:#27ae60">&#9632;</span> {{ subject_ids[1] }}
-    </span>
+<details id="ISCHbo" open>
+  <summary>a. HbO</summary>
+  <div class="details-body">
+    <img class="responsive" src="{{ isc_panel_hbo_path }}"
+         alt="inter-brain synchrony, HBO" />
+    <p class="fig-path">{{ isc_panel_hbo_path }}</p>
   </div>
-  {% if isc_unfiltered_note %}<div class="panel-caveat">{{ isc_unfiltered_note }}</div>{% endif %}
-  <div style="text-align:center; padding:0.5rem">
-    <img src="{{ isc_panel_hbo_path }}" alt="inter-brain synchrony, HBO" style="max-width:100%"/>
-  </div>
-</div>
+</details>
 {% endif %}
 
-<!-- ISC panel — HbR -->
 {% if isc_panel_hbr_path %}
-<div class="card">
-  <div class="panel-title">
-    Inter-brain Synchrony — HbR
-    <span class="panel-hint">
-      topomap (per-channel ISC) &bull; ISC matrix (channel &times; channel Pearson r) &bull;
-      connectogram (|ISC| &ge; {{ "%.2f"|format(isc_threshold) }}) &bull;
-      {% if condition_label %}over this window only, z-scored inside it
-      {%- else %}over the whole recording{% endif %} &bull;
-      <span style="color:#8e44ad">&#9632;</span> {{ subject_ids[0] }}
-      <span style="color:#27ae60">&#9632;</span> {{ subject_ids[1] }}
-    </span>
+<details id="ISCHbr" open>
+  <summary>b. HbR</summary>
+  <div class="details-body">
+    <img class="responsive" src="{{ isc_panel_hbr_path }}"
+         alt="inter-brain synchrony, HBR" />
+    <p class="fig-path">{{ isc_panel_hbr_path }}</p>
   </div>
-  {% if isc_unfiltered_note %}<div class="panel-caveat">{{ isc_unfiltered_note }}</div>{% endif %}
-  <div style="text-align:center; padding:0.5rem">
-    <img src="{{ isc_panel_hbr_path }}" alt="inter-brain synchrony, HBR" style="max-width:100%"/>
-  </div>
-</div>
+</details>
+{% endif %}
 {% endif %}
 
 <script>

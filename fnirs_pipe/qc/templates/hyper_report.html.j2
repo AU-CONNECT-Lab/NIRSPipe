@@ -1,142 +1,284 @@
 {% extends "_report_base.html.j2" %}
-{% from "_macros.html.j2" import card, subject_metrics %}
+{% from "_macros.html.j2" import subject_metrics %}
 
 {% block css %}
-.row { display: grid; gap: 0.5rem; margin-bottom: 0.5rem; }
-.row-2     { grid-template-columns: 1fr 1fr; }
-.row-coh   { grid-template-columns: 1fr 2fr; }
-.row-layout{ grid-template-columns: 1fr 2fr; }
+/* the two panels a row holds are not the same width: a coherence bar beside a windowed
+   heatmap, an optode map beside a head. Both collapse to one column on a narrow screen */
+.row { display: grid; gap: 1rem; margin-top: 0.5rem; }
+.row-coh    { grid-template-columns: 1fr 2fr; }
+.row-layout { grid-template-columns: 1fr 2fr; }
 @media (max-width: 900px) {
-  .row-2, .row-coh, .row-layout { grid-template-columns: 1fr; }
+  .row-coh, .row-layout { grid-template-columns: 1fr; }
 }
+.row h3 { margin-top: 0; }
 
-select#ch-select {
-  font-size: 0.78rem; border: 1px solid #ced4da; border-radius: 4px;
-  padding: 0.15rem 0.35rem; background: #fff; margin-left: auto; max-width: 220px;
-}
-
-.plot-frame { width: 100%; border: none; display: block; }
-
-#sqm-panel { padding: 0.55rem 1rem 0.65rem; }
-#sqm-panel h3 { margin: 0 0 0.4rem; font-size: 0.88rem; }
-.qm-list { font-size: 0.88rem; column-count: 2; column-gap: 2.5rem;
-           margin: 0; padding: 0; list-style: none; }
-.qm-list li { display: flex; justify-content: space-between; padding: 0.18rem 0;
-              border-bottom: 1px solid #eef0f3; break-inside: avoid; gap: 1rem; }
-.qm-list .ql { color: #666; white-space: nowrap; }
-.qm-list .qv { font-weight: 600; white-space: nowrap; }
-.qm-ok   { color: #27ae60; }
-.qm-warn { color: #e67e22; }
-.qm-bad  { color: #c0392b; }
 .cd-chip{cursor:pointer;padding:.1rem .5rem;border-radius:3px;font-size:.78rem;
   font-weight:600;display:inline-block;min-width:4.2rem;text-align:center}
 .cd-chip.cd-unrated{background:#e9ecef;color:#6c757d}
 .cd-chip.cd-good{background:#d4edda;color:#155724}
 .cd-chip.cd-bad{background:#f8d7da;color:#721c24}
 .cd-chip.cd-disabled{opacity:.45;pointer-events:none;cursor:not-allowed}
+.cd-table { font-size: 0.82rem; margin-top: 0.5rem; }
+.cd-table td:not(:first-child), .cd-table th:not(:first-child) { text-align: center; }
+.cd-table td.bad { color: #c0392b; }
 {% endblock %}
 
 {% set rating_subject = page_stem %}
 {# One cell per section, anchored to it, as the subject and post bars are. `Signal_Quality`
    and `Coherence` keep their ids so ratings already filed under them survive. #}
 {% set rating_modules = [[
+  {"id": "Summary", "name": "Summary", "href": "#Final", "ratable": false},
+  {"sep": true},
   {"id": "Alignment", "name": "Alignment", "href": "#Alignment"},
   {"id": "Signal_Quality", "name": "Quality", "href": "#Quality"},
   {"id": "Triggers", "name": "Triggers", "href": "#Triggers"},
   {"id": "Coherence", "name": "Coherence", "href": "#Coherence"},
   {"id": "Channels", "name": "Channels", "href": "#Channels"},
   {"sep": true},
+  {"id": "Provenance", "name": "Provenance", "href": "#Provenance", "ratable": false},
+  {"id": "Methods", "name": "Methods", "href": "#Methods", "ratable": false},
   {"id": "PostReport", "name": "Post report →",
    "href": post_href or false, "ratable": false},
 ]] %}
-{% set rating_pinned = [{"id": "Final", "name": "FINAL", "href": false}] %}
+{% set rating_pinned = [{"id": "Final", "name": "FINAL", "href": "#Final"}] %}
 {% set rating_chip = "group-" ~ group_id %}
 {% set rating_save_endpoint = "/save_hyper_ratings" %}
 {% set rating_load_endpoint = "/load_hyper_ratings/" ~ page_stem %}
 
+{# The dyad report reads as a document, so its header is a titled band rather than the
+   sticky nav bar the dashboard reports carry. #}
+{% block header %}
+<div class="page-header">
+  <h1>{{ page_heading }}</h1>
+  <span class="subtitle">v{{ versions.get('fnirs-pipe', 'unknown') }} &bull; {{ run_date }}
+    &bull; group-{{ group_id }} &bull; task-{{ task }}</span>
+</div>
+{% endblock %}
+
 {% block content %}
 
-<!-- Alignment table -->
-{% call card("Time Alignment", hint="crop offset from first shared trigger &bull; all recordings trimmed to shortest", id="Alignment") %}
-<div class="align-wrap">
-  <table id="align-table">
-    <thead><tr><th>Subject</th><th>Offset (s)</th><th>Aligned duration (s)</th></tr></thead>
-    <tbody id="align-tbody"></tbody>
-  </table>
+<!-- ============================================================== summary -->
+<h2 id="Final">Summary</h2>
+<div class="summary-box">
+  <div class="summary-grid">
+    <table>
+      <tr><th>Group</th><td>group-{{ group_id }}</td></tr>
+      <tr><th>Task</th><td>{{ task }}</td></tr>
+      <tr><th>Members</th><td>{{ subject_ids | join(' &times; ') | safe }}</td></tr>
+      <tr><th>Scope</th><td>the recording as acquired, before preprocessing</td></tr>
+      <tr><th>Date</th><td>{{ run_date }}</td></tr>
+      <tr><th>fnirs-pipe</th><td>v{{ versions.get('fnirs-pipe', 'n/a') }}</td></tr>
+      <tr><th>MNE</th><td>v{{ versions.get('mne', 'n/a') }}</td></tr>
+      <tr><th>Python</th><td>{{ versions.get('python', 'n/a') }}</td></tr>
+    </table>
+    <table>
+      <tr><th>SCI threshold</th><td>{{ "%.2f"|format(sci_threshold) }}</td></tr>
+      <tr><th>Coherence band</th>
+          <td>{{ "%.3f"|format(coherence_fmin) }}&ndash;{{ "%.3f"|format(coherence_fmax) }}&thinsp;Hz</td></tr>
+      <tr><th>Aligned duration</th>
+          <td>{% if align_duration_s %}{{ "%.1f"|format(align_duration_s) }}&thinsp;s
+              {%- else %}&mdash;{% endif %}</td></tr>
+      <tr><th>Max crop offset</th>
+          <td>{{ "%.3f"|format(align_max_offset_s) }}&thinsp;s</td></tr>
+      <tr><th>Channel pairs</th><td id="sum-n-pairs">&mdash;</td></tr>
+      <tr><th>Good in every member</th><td id="sum-all-good">&mdash;</td></tr>
+      <tr><th>Bad in every member</th><td id="sum-all-bad">&mdash;</td></tr>
+    </table>
+  </div>
+  <p class="qm-note" style="margin-top:0.75rem;">
+    This page is the raw pass: every channel is measured, nothing is split by separation and
+    nothing has been corrected. It is what says whether the recording is worth preprocessing.
+    {% if post_href %}The coherence analysis is on the
+    <a href="{{ post_href }}">post report</a>.{% endif %}
+  </p>
+  <h3 style="margin-top:1rem;">Run command</h3>
+  <pre>{{ run_command }}</pre>
 </div>
-{% endcall %}
 
-<!-- Per-subject quality metrics -->
+<!-- ============================================================= the dyad -->
+<h2>The dyad</h2>
+
+<details id="Alignment" open>
+  <summary>a. Time alignment</summary>
+  <div class="details-body">
+    <p class="step-desc">Crop offset from the first shared trigger; all recordings are then
+      trimmed to the shortest. A dyad window is on the aligned clock and a member&rsquo;s own
+      record is on its own, and this table is what converts between them.</p>
+    <table id="align-table">
+      <thead><tr><th>Subject</th><th>Offset (s)</th><th>Aligned duration (s)</th></tr></thead>
+      <tbody id="align-tbody"></tbody>
+    </table>
+  </div>
+</details>
+
 {% if subject_metrics_rows %}
-{% call card("Per-subject Quality Metrics", hint="↑ / ↓ = better direction &bull; SCI coloured against the threshold, HbO-HbR by sign", id="Quality") %}
-<div class="subj-metrics-wrap">
-  {{ subject_metrics(subject_metrics_rows, subject_ids) }}
-</div>
-{% endcall %}
+<details id="Quality" open>
+  <summary>b. Per-subject quality metrics</summary>
+  <div class="details-body">
+    <p class="step-desc">&uarr; / &darr; marks the better direction; SCI is coloured against
+      this run&rsquo;s own threshold and HbO&ndash;HbR by sign. One unheaded table: the raw
+      pass measures every channel and does not split by separation.</p>
+    {{ subject_metrics(subject_metrics_rows, subject_ids) }}
+  </div>
+</details>
 {% endif %}
 
+<details id="GroupSQM" open>
+  <summary>c. Group-level quality metrics</summary>
+  <div class="details-body">
+    <p class="step-desc">The dyad&rsquo;s own numbers rather than either member&rsquo;s: how
+      many channel pairs survived in both, and where the coherence sits before any
+      preprocessing.</p>
+    <ul id="sqm-list" class="qm-list"></ul>
+  </div>
+</details>
+
+<!-- ============================================================ triggers -->
+<h2 id="Triggers">Triggers</h2>
+<p class="step-desc">Event onsets per subject, before and after alignment. The raw timeline is
+  on each recording&rsquo;s original clock, the aligned one on the shared clock, so the second
+  is where a mis-sync shows.</p>
+
 {% if figure_paths.trigger_timeline_raw %}
-{% call card("Trigger Timeline (Raw)", hint="event onsets per subject before alignment &bull; original recording time", id="Triggers") %}
-<iframe class="plot-frame" src="{{ figure_paths.trigger_timeline_raw.src }}"
-        style="height:{{ figure_paths.trigger_timeline_raw.h }}px"></iframe>
-{% endcall %}
+<details id="TriggersRaw" open>
+  <summary>a. Raw, before alignment</summary>
+  <div class="details-body">
+    <iframe class="plotly-frame" src="{{ figure_paths.trigger_timeline_raw.src }}"
+            title="trigger timeline, before alignment"
+            style="height:{{ figure_paths.trigger_timeline_raw.h }}px"></iframe>
+    <p class="fig-path">{{ figure_paths.trigger_timeline_raw.src }}</p>
+  </div>
+</details>
 {% endif %}
 
 {% if figure_paths.trigger_timeline %}
-{% call card("Trigger Timeline (Aligned)", hint="event onsets per subject after alignment &bull; verify sync") %}
-<iframe class="plot-frame" src="{{ figure_paths.trigger_timeline.src }}"
-        style="height:{{ figure_paths.trigger_timeline.h }}px"></iframe>
-{% endcall %}
+<details id="TriggersAligned" open>
+  <summary>b. Aligned</summary>
+  <div class="details-body">
+    <iframe class="plotly-frame" src="{{ figure_paths.trigger_timeline.src }}"
+            title="trigger timeline, after alignment"
+            style="height:{{ figure_paths.trigger_timeline.h }}px"></iframe>
+    <p class="fig-path">{{ figure_paths.trigger_timeline.src }}</p>
+  </div>
+</details>
 {% endif %}
 
-<!-- Per-channel (signal overlay + PSD + mean epoch comparison) -->
-<div class="card">
-  <div class="panel-title">
-    Per-channel
-    <span class="panel-hint">signal overlay (HbO/HbR) &bull; PSD &bull; mean epoch &bull; multi-subject</span>
-    <select id="ch-select"></select>
+<!-- ============================================================== signals -->
+<h2>Signals</h2>
+
+<details id="PerChannel" open>
+  <summary>a. Per channel</summary>
+  <div class="details-body">
+    <p class="step-desc">Signal overlay (HbO/HbR), PSD and mean epoch, every member on one
+      set of axes.</p>
+    <select id="ch-select" class="ch-select"></select>
+    <iframe id="ch-detail-iframe" class="plotly-frame" title="per-channel detail"
+            style="height:600px"></iframe>
   </div>
-  <iframe id="ch-detail-iframe" class="plot-frame" style="height:600px"></iframe>
-</div>
+</details>
 
-<!-- Optode layout: 2D + 3D -->
-<div class="row row-layout" style="margin-bottom:0.5rem">
-  {% if figure_paths.layout_2d %}
-  {% call card("Optode Layout (2D)", hint="green = all good &bull; yellow = mixed &bull; gray = all bad") %}
-  <iframe class="plot-frame" src="{{ figure_paths.layout_2d.src }}"
-          style="height:{{ figure_paths.layout_2d.h }}px"></iframe>
-  {% endcall %}
-  {% endif %}
-  {% if figure_paths.layout_3d %}
-  {% call card("Channel Positions (3D, fsaverage)") %}
-  <iframe class="plot-frame" src="{{ figure_paths.layout_3d.src }}"
-          style="height:{{ figure_paths.layout_3d.h }}px"></iframe>
-  {% endcall %}
-  {% endif %}
-</div>
+{% if figure_paths.layout_2d or figure_paths.layout_3d %}
+<details id="Layout" open>
+  <summary>b. Optode layout</summary>
+  <div class="details-body">
+    <p class="step-desc">Green = good in every member, yellow = mixed, gray = bad in every
+      member.</p>
+    <div class="row row-layout">
+      {% if figure_paths.layout_2d %}
+      <div>
+        <h3>2D</h3>
+        <iframe class="plotly-frame" src="{{ figure_paths.layout_2d.src }}"
+                title="optode layout, 2D"
+                style="height:{{ figure_paths.layout_2d.h }}px"></iframe>
+      </div>
+      {% endif %}
+      {% if figure_paths.layout_3d %}
+      <div>
+        <h3>3D, on fsaverage</h3>
+        <iframe class="plotly-frame" src="{{ figure_paths.layout_3d.src }}"
+                title="channel positions, 3D"
+                style="height:{{ figure_paths.layout_3d.h }}px"></iframe>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</details>
+{% endif %}
 
-<!-- Coherence: bar chart + windowed heatmap -->
-<div class="row row-coh" style="margin-bottom:0.5rem">
-  {% if figure_paths.coherence_bar %}
-  {% call card("Inter-subject Coherence (mean)", hint="sorted by mean coherence", id="Coherence") %}
-  <iframe class="plot-frame" src="{{ figure_paths.coherence_bar.src }}"
-          style="height:{{ figure_paths.coherence_bar.h }}px"></iframe>
-  {% endcall %}
-  {% endif %}
-  {% if figure_paths.coh_timeseries %}
-  {% call card("Windowed Coherence (time &times; channel)", hint="sliding window in coherence band") %}
-  <iframe class="plot-frame" src="{{ figure_paths.coh_timeseries.src }}"
-          style="height:{{ figure_paths.coh_timeseries.h }}px"></iframe>
-  {% endcall %}
-  {% endif %}
-</div>
+<!-- ============================================================ coherence -->
+{% if figure_paths.coherence_bar or figure_paths.coh_timeseries %}
+<h2 id="Coherence">Inter-subject Coherence</h2>
+<p class="step-desc">Measured on the raw recording, inside
+  {{ "%.3f"|format(coherence_fmin) }}&ndash;{{ "%.3f"|format(coherence_fmax) }}&thinsp;Hz.
+  This is a screening number, not the analysis: the wavelet coherence is on the post
+  report{% if post_href %}, <a href="{{ post_href }}">here</a>{% endif %}.</p>
+<details id="CoherencePanels" open>
+  <summary>a. Mean and windowed</summary>
+  <div class="details-body">
+    <div class="row row-coh">
+      {% if figure_paths.coherence_bar %}
+      <div>
+        <h3>Mean per channel, sorted</h3>
+        <iframe class="plotly-frame" src="{{ figure_paths.coherence_bar.src }}"
+                title="mean inter-subject coherence per channel"
+                style="height:{{ figure_paths.coherence_bar.h }}px"></iframe>
+      </div>
+      {% endif %}
+      {% if figure_paths.coh_timeseries %}
+      <div>
+        <h3>Windowed, time &times; channel</h3>
+        <iframe class="plotly-frame" src="{{ figure_paths.coh_timeseries.src }}"
+                title="windowed coherence, time by channel"
+                style="height:{{ figure_paths.coh_timeseries.h }}px"></iframe>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</details>
+{% endif %}
+
+<!-- ============================================================= channels -->
+<h2 id="Channels">Channels</h2>
 
 {% if figure_paths.ch_summary %}
-{% call card("Channel Quality Summary (Group)", hint="green = all subjects good &bull; yellow = mixed &bull; red = all bad", id="Channels") %}
-<iframe class="plot-frame" src="{{ figure_paths.ch_summary.src }}"
-        style="height:{{ figure_paths.ch_summary.h }}px"></iframe>
-{% endcall %}
+<details id="ChannelSummary" open>
+  <summary>a. Quality summary across the dyad</summary>
+  <div class="details-body">
+    <p class="step-desc">Green = good in every member, yellow = mixed, red = bad in every
+      member.</p>
+    <iframe class="plotly-frame" src="{{ figure_paths.ch_summary.src }}"
+            title="channel quality summary across the group"
+            style="height:{{ figure_paths.ch_summary.h }}px"></iframe>
+    <p class="fig-path">{{ figure_paths.ch_summary.src }}</p>
+  </div>
+</details>
 {% endif %}
+
+<details id="hyper-decisions-card" open>
+  <summary>{{ "b" if figure_paths.ch_summary else "a" }}. Channel decisions
+    <span class="hint" id="hyper-decisions-hint">per subject</span></summary>
+  <div class="details-body">
+    <p class="step-desc">Click a chip to cycle: &mdash; &rarr; good &rarr; bad. Saves to each
+      subject&rsquo;s JSON, and is only active when the page is served by
+      <code>fnirs-rate hyper</code>.</p>
+    <table class="cd-table">
+      <thead>
+        <tr>
+          <th rowspan="2">Channel</th>
+          {% for sid in subject_ids %}
+          <th colspan="2">{{ sid }}</th>
+          {% endfor %}
+        </tr>
+        <tr>
+          {% for sid in subject_ids %}
+          <th>SCI</th><th>Decision</th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody id="hyper-decisions-tbody"></tbody>
+    </table>
+  </div>
+</details>
 
 <script>
 window.addEventListener("message", function(e) {
@@ -150,16 +292,6 @@ window.addEventListener("message", function(e) {
   }
 });
 </script>
-
-<!-- Hyper-level SQM -->
-<div class="card" style="margin-bottom:0.5rem">
-  <div id="sqm-panel">
-    <h3>Group-level Quality Metrics
-      <span style="font-weight:400;font-size:0.78rem;color:#adb5bd">(hyperscanning)</span>
-    </h3>
-    <ul id="sqm-list" class="qm-list"></ul>
-  </div>
-</div>
 
 <script>
 var _ALIGN          = {{ alignment_json | safe }};
@@ -206,7 +338,7 @@ function _pairFname(pair) {
   if (_CH_PAIRS.length > 0) _load(_CH_PAIRS[0]);
 })();
 
-// ── SQM panel ─────────────────────────────────────────────────────────────────
+// ── group-level metrics, and the three of them the summary repeats ───────────
 (function() {
   var q = _SQM;
   function li(label, value, cls) {
@@ -214,11 +346,11 @@ function _pairFname(pair) {
            "<span class='qv" + (cls ? " " + cls : "") + "'>" + value + "</span></li>";
   }
   var pct = q.pct_all_good;
+  var goodCls = pct != null ? (pct >= 80 ? "qm-ok" : pct >= 50 ? "qm-warn" : "qm-bad") : "";
   document.getElementById("sqm-list").innerHTML =
     li("Channels — all good",
        (q.n_all_good != null ? q.n_all_good : "—") +
-         (q.n_total ? " / " + q.n_total : ""),
-       pct != null ? (pct >= 80 ? "qm-ok" : pct >= 50 ? "qm-warn" : "qm-bad") : "") +
+         (q.n_total ? " / " + q.n_total : ""), goodCls) +
     li("Channels — mixed",   q.n_mixed   != null ? q.n_mixed   : "—") +
     li("Channels — all bad", q.n_all_bad != null ? q.n_all_bad : "—",
        q.n_all_bad > 0 ? "qm-bad" : "") +
@@ -232,36 +364,24 @@ function _pairFname(pair) {
          : "—") +
     li("Aligned duration",    q.aligned_duration_s != null ? q.aligned_duration_s + " s" : "—") +
     li("Max alignment offset",q.max_offset_s       != null ? q.max_offset_s + " s"       : "—");
+
+  // the summary's three channel cells come from the same record, so the two cannot disagree
+  function _set(id, text, cls) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = text;
+    if (cls) el.className = cls;
+  }
+  _set("sum-n-pairs", q.n_total != null ? String(q.n_total) : "—");
+  _set("sum-all-good",
+       (q.n_all_good != null ? q.n_all_good : "—") +
+         (pct != null ? " (" + pct.toFixed(0) + "%)" : ""), goodCls);
+  _set("sum-all-bad", q.n_all_bad != null ? String(q.n_all_bad) : "—",
+       q.n_all_bad > 0 ? "qm-bad" : "");
 })();
 </script>
 
-<!-- Channel Decisions (per subject) — populated by fnirs-rate hyper when served via Flask -->
-<div class="card" style="margin-bottom:.5rem" id="hyper-decisions-card">
-  <div class="panel-title">
-    <span>Channel Decisions &nbsp;<span id="hyper-decisions-hint" style="font-weight:400;color:#aaa">per subject</span></span>
-  </div>
-  <div id="hyper-decisions-body" style="padding:.4rem .6rem .6rem">
-    <p style="font-size:.75rem;color:#888;margin:0 0 .4rem">Click chip to cycle: &#8212; &#8594; good &#8594; bad. Saves to each subject's JSON (only active when launched via <code>fnirs-rate hyper</code>).</p>
-    <table style="border-collapse:collapse;width:100%;font-size:.82rem">
-      <thead>
-        <tr>
-          <th rowspan="2" style="text-align:left;padding:.22rem .5rem;border-bottom:2px solid #dde3ea;background:#f8f9fa;font-weight:600;vertical-align:bottom">Channel</th>
-          {% for sid in subject_ids %}
-          <th colspan="2" style="text-align:center;padding:.22rem .5rem;border-bottom:1px solid #dde3ea;background:#f8f9fa;font-weight:600;border-left:2px solid #dde3ea">{{ sid }}</th>
-          {% endfor %}
-        </tr>
-        <tr>
-          {% for sid in subject_ids %}
-          <th style="text-align:center;padding:.18rem .4rem;border-bottom:2px solid #dde3ea;background:#f8f9fa;font-weight:500;color:#6c757d;font-size:.76rem;border-left:2px solid #dde3ea">SCI</th>
-          <th style="text-align:center;padding:.18rem .4rem;border-bottom:2px solid #dde3ea;background:#f8f9fa;font-weight:500;color:#6c757d;font-size:.76rem">Decision</th>
-          {% endfor %}
-        </tr>
-      </thead>
-      <tbody id="hyper-decisions-tbody"></tbody>
-    </table>
-  </div>
-</div>
-
+<!-- Channel Decisions — populated by fnirs-rate hyper when served via Flask -->
 <script>
 (function(){
   var _hyperDecisions = {};
@@ -293,14 +413,12 @@ function _pairFname(pair) {
     tbody.innerHTML = "";
     if (!pairs.length) {
       var cols = subjects.length * 2 + 1;
-      tbody.innerHTML = "<tr><td colspan='"+cols+"' style='color:#adb5bd;font-style:italic;text-align:center;padding:.5rem'>No channels</td></tr>";
+      tbody.innerHTML = "<tr><td colspan='"+cols+"' style='color:#adb5bd;font-style:italic;text-align:center'>No channels</td></tr>";
       return;
     }
-    var _borderLeft = "border-left:2px solid #f0f0f0";
     pairs.forEach(function(pair) {
       var tr = document.createElement("tr");
       var td0 = document.createElement("td");
-      td0.style.cssText = "padding:.18rem .5rem;border-bottom:1px solid #f0f0f0;font-weight:500";
       td0.textContent = pair;
       tr.appendChild(td0);
       subjects.forEach(function(sid) {
@@ -311,7 +429,7 @@ function _pairFname(pair) {
         var below  = sciVal !== null && sciVal < (window._SCI_THRESHOLD || 0.8);
 
         var tdSci = document.createElement("td");
-        tdSci.style.cssText = "padding:.18rem .45rem;border-bottom:1px solid #f0f0f0;text-align:center;font-variant-numeric:tabular-nums;" + _borderLeft + ";color:" + (below ? "#c0392b" : "#6c757d");
+        tdSci.className = below ? "bad" : "";
         tdSci.textContent = sciVal !== null ? sciVal.toFixed(3) : "—";
         tr.appendChild(tdSci);
 
@@ -336,7 +454,6 @@ function _pairFname(pair) {
         }
 
         var tdDec = document.createElement("td");
-        tdDec.style.cssText = "padding:.18rem .45rem;border-bottom:1px solid #f0f0f0;text-align:center";
         tdDec.appendChild(chip);
         tr.appendChild(tdDec);
       });

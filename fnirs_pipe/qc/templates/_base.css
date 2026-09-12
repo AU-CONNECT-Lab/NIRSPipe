@@ -35,39 +35,6 @@ h1 { font-size: 1.05rem; margin: 0; }
   flex-wrap: wrap;
 }
 .panel-hint { font-weight: 400; color: #aaa; }
-/* a caveat about the panel's inputs, not a failure: the figure below is drawn */
-.panel-caveat {
-  color: var(--warn); font-size: 0.82rem; font-weight: 400;
-  padding: 0.3rem 0.6rem; border-left: 3px solid var(--warn); margin: 0.4rem 0;
-}
-
-#align-table { border-collapse: collapse; width: 100%; font-size: 0.82rem; }
-#align-table th, #align-table td {
-  border: 1px solid #dde3ea; padding: 0.28rem 0.55rem; text-align: left;
-}
-#align-table th { background: #f1f3f5; font-weight: 600; }
-#align-table tbody tr:hover { background: #f8f9fa; }
-.align-wrap { padding: 0.5rem 0.8rem; }
-
-.subj-metrics { border-collapse: collapse; width: 100%; font-size: 0.82rem; }
-.subj-metrics th, .subj-metrics td {
-  border: 1px solid #dde3ea; padding: 0.26rem 0.55rem; text-align: left;
-}
-.subj-metrics th { background: #f1f3f5; font-weight: 600; }
-.subj-metrics td:not(:first-child) { text-align: right; font-variant-numeric: tabular-nums; }
-.subj-metrics tbody tr:hover { background: #f8f9fa; }
-.subj-metrics .dir { color: #adb5bd; font-weight: 400; }
-.subj-metrics .qm-ok { color: #27ae60; font-weight: 600; }
-.subj-metrics .qm-bad { color: #c0392b; font-weight: 600; }
-.subj-metrics-wrap { padding: 0.5rem 0.8rem; }
-/* the heading over each channel set's table; the first one sits under the panel hint, so
-   only the ones between tables need the gap */
-.subj-set {
-  margin: 0 0 0.25rem; font-size: 0.8rem; font-weight: 600; color: #495057;
-  letter-spacing: 0.03em;
-}
-.subj-metrics + .subj-set { margin-top: 0.9rem; }
-
 /* ---- report footer ----
    Only what the footer needs from this look. Its prose and tables come from _tokens.css,
    which is why a document-shaped section reads the same at the end of a dashboard page. */

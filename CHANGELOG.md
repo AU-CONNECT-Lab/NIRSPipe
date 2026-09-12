@@ -6,6 +6,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+- **The two dyad reports read as documents, the way the subject report does.** Each opens with a summary carrying the members, the run's parameters, the alignment and the command that produced it; every section folds; and the filled panels each one used to sit in are gone. The chromophore note is part of the coherence section rather than a panel with nothing in it
+- **A coherence map names its conditions in a legend in the top right.** The label was written above every block, so a block design printed the same word once per block
+
+### Fixed
+- **The coherence maps were written at 200 dpi** while every other figure in the package is 300
+
 ## [0.38.0] - 2026-09-12
 
 ### Added
@@ -16,6 +23,8 @@ All notable changes to this project will be documented in this file.
 - **The raw dyad report's bar is one cell per section with anchors**, as the other bars are. It was two coarse cells that scrolled nowhere; verdicts already filed under them are kept
 
 ### Fixed
+- **The dyad quality table was missing the one metric that screens.** It listed SCI, PSP, CV and SNR, none of which rejects a channel, and not the coupled-window share, which does
+- **The dyad table coloured the whole-run SCI and left the windowed one plain**, which is the one to read. Both are now judged against the run's own threshold
 - **A condition's GCOR before/after pair spanned the bandpass as well as the regression.** The run's own page has always paired the filtered stage against the residual; a condition paired the unfiltered one, and the bandpass alone moves that number
 - **The channel-quality grid's SCI row is the windowed estimate on every page.** A run page drew the whole-run one while a condition page drew the windowed one, under the same label, and the four rows beside it were windowed either way
 - **A condition page inherited three per-channel numbers from the whole run**: mean amplitude, the motion-correction footprint and the windowed SCI. All three vary over the recording, and a per-channel metric that belongs to neither list is now named rather than passed through

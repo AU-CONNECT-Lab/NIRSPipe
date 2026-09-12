@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 
 import mne
@@ -25,7 +26,14 @@ from fnirs_pipe.qc.figure_io import (
 )
 from fnirs_pipe.qc.figures.hyper_figures import _cond_colors
 from fnirs_pipe.qc.hyper_raw_writer import _process_hyper_raw_group
-from fnirs_pipe.qc.report_shell import footer_vars, guard, note, page_vars, render
+from fnirs_pipe.qc.report_shell import (
+    footer_vars,
+    guard,
+    note,
+    page_vars,
+    render,
+    stylesheet,
+)
 from fnirs_pipe.utils.lineage import path_from
 from fnirs_pipe.utils.logging import get_logger
 
@@ -42,6 +50,8 @@ logger = get_logger("qc.hyper_report")
 _SUBJECT_METRICS = [
     "sci_win_mean",
     "sci_mean",
+    # the only one of these that screens; the rest are measured and reported
+    "good_frac_mean",
     "psp_mean",
     "cv_mean",
     "snr_mean",
@@ -77,10 +87,11 @@ def _metric_class(key: str, value: float, sci_threshold: float) -> str:
 
     The exception is the same one the per-channel tables make: this run screened at
     ``--sci-threshold``, so colouring its SCI against the registry's cutoff would show a
-    verdict the run did not reach. Everything else is the registry's, and a metric with no
-    published cutoff there prints uncoloured on purpose.
+    verdict the run did not reach. Both estimates take it, the windowed one included, or the
+    only coloured SCI on the page is the whole-run one nobody reads. Everything else is the
+    registry's, and a metric with no published cutoff there prints uncoloured on purpose.
     """
-    if key == "sci_mean":
+    if key in ("sci_mean", "sci_win_mean"):
         return "qm-ok" if value >= sci_threshold else "qm-bad"
     return metric_class(key, value)
 
@@ -435,6 +446,8 @@ def build_hyper_report(
                       ("subjects", ", ".join(meta["subject_ids"]))],
             nav_note=(f"SCI thr: {sci_threshold:.2f} • "
                       f"Coh: {coherence_fmin:.3f}–{coherence_fmax:.3f} Hz"),
+            # the document look, as the subject report wears
+            css=stylesheet("subject.css"),
         ),
         **footer_vars(
             scope=meta["label"], errors=errors, notes=notes,
@@ -448,6 +461,12 @@ def build_hyper_report(
         coherence_fmin=coherence_fmin,
         coherence_fmax=coherence_fmax,
         alignment_json=json.dumps(meta["alignment"]),
+        run_command=" ".join(sys.argv),
+        # the summary states the pair in one line; the table below it is per member
+        align_duration_s=next((r["duration_s"] for r in meta["alignment"]
+                               if r["duration_s"] is not None), None),
+        align_max_offset_s=max((abs(r["offset_s"]) for r in meta["alignment"]),
+                               default=0.0),
         ch_pairs_json=json.dumps(meta["ch_pairs"]),
         sqm_json=json.dumps(meta["sqm"], default=str),
         figure_paths=meta["figure_paths"],
@@ -1322,6 +1341,9 @@ def build_hyper_post_report(
                 nav_meta=nav_meta,
                 nav_note=(f"WTC: {wtc_fmin:.3f}–{wtc_fmax:.3f} Hz · "
                           f"{'+'.join(_CHROMA_LABEL[c] for c in chroma)}"),
+                # the document look, as the subject report wears: this page is read top to
+                # bottom rather than scanned, and its summary is the first thing on it
+                css=stylesheet("subject.css"),
             ),
             **footer_vars(
                 scope=scope, errors=errors, notes=notes,
@@ -1334,6 +1356,17 @@ def build_hyper_post_report(
             subject_ids=subject_ids,
             wtc_fmin=wtc_fmin,
             wtc_fmax=wtc_fmax,
+            wtc_band_fmin=band_fmin,
+            wtc_band_fmax=band_fmax,
+            arrow_min=arrow_min,
+            mask_coi=wtc_mask_coi,
+            sci_threshold=sci_threshold,
+            run_command=" ".join(sys.argv),
+            # the summary states the pair in one line; the table below it is per member
+            align_duration_s=next((r["duration_s"] for r in alignment_rows
+                                   if r["duration_s"] is not None), None),
+            align_max_offset_s=max((abs(r["offset_s"]) for r in alignment_rows),
+                                   default=0.0),
             wtc_chroma_labels=[_CHROMA_LABEL[c] for c in chroma],
             wtc_chroma_json=json.dumps(list(chroma)),
             isc_threshold=isc_threshold,

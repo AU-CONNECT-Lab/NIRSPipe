@@ -128,18 +128,20 @@ def build_wtc_channel(
     drawn on top of the map:
 
     - the **phase arrows**, thinned onto a coarse grid by :func:`_phase_arrows`. Right is in
-      phase, left antiphase, up means the first member leads by a quarter cycle. This is why
-      the panel is matplotlib: a quiver field is the half of a coherence map that says which
-      brain led, and the interactive version of this figure could not draw one.
+      phase, left antiphase, up means the first member leads by a quarter cycle. A quiver
+      field is the half of a coherence map that says which brain led. Plotly draws one too,
+      through ``figure_factory.create_quiver``, so the arrows are not what keeps this panel a
+      PNG; its arrowheads are laid out in data coordinates and would skew on a log axis.
     - the region **outside the cone of influence**, washed out rather than only bounded by
       the dashed line. Those cells are coefficients padded against the record's edges, near 1
       whatever the data did, so a reader who takes them for signal reads the ends of every
       recording as strongly coupled.
     - the **significance contour**, where coherence beats the Monte Carlo level, when one was
       computed.
-    - one **span bar per condition** above the axes, carrying its label, with a line at each
-      end of it. The bar runs the block's actual length, so the gaps between blocks are
-      visible:
+    - one **span bar per block** above the axes with a line at each end of it, and one
+      legend entry per condition in the top right. A block design repeats a condition, so a
+      label on every bar printed the same word once per block. The bar runs the block's
+      actual length, so the gaps between blocks are visible:
       a recording is continuous and its untasked stretches are data like any other, which a
       set of onset lines alone made look like block boundaries. The interactive version
       shaded each block on the map instead, under an opaque heatmap, so nothing showed;
@@ -177,6 +179,7 @@ def build_wtc_channel(
     # A line is a claim about one moment, so an end past the right edge is dropped rather
     # than drawn at the edge, the same rule the onset already followed. The bar is cut there
     # instead, being about where the block sits rather than how long it is
+    drawn_conditions: dict[str, str] = {}
     for m in markers_list:
         onset, duration = float(m["onset"]), float(m["duration"])
         if duration <= 0.1 or not (times[0] <= onset <= times[-1]):
@@ -189,8 +192,7 @@ def build_wtc_channel(
         ax.plot([onset, min(offset, float(times[-1]))], [1.012, 1.012],
                 transform=ax.get_xaxis_transform(), color=colour, lw=3.0,
                 solid_capstyle="butt", clip_on=False, zorder=5)
-        ax.text(onset, 1.035, m["description"], transform=ax.get_xaxis_transform(),
-                ha="left", va="bottom", fontsize=7, color=colour, rotation=0)
+        drawn_conditions.setdefault(m["description"], colour)
 
     # this panel is full width, so it takes more arrows and much smaller ones than the
     # thumbnails elsewhere do
@@ -202,8 +204,23 @@ def build_wtc_channel(
             if pair_label else "the first member")
     ax.set_xlabel("Time (s)", fontsize=9)
     ax.tick_params(labelsize=8)
+
+    # ---- title left, condition legend right, both on the strip above the span bars ----
+    # A block design repeats a condition, and naming every bar printed "game1" eight times.
+    # One key in the corner names each colour once; the bars keep the colour and drop the text
+    legend_rows = 1
+    if drawn_conditions:
+        from matplotlib.lines import Line2D
+        handles = [Line2D([], [], color=c, lw=3.0, solid_capstyle="butt")
+                   for c in drawn_conditions.values()]
+        n_col = min(len(handles), 6)
+        legend_rows = -(-len(handles) // n_col)
+        ax.legend(handles, list(drawn_conditions), loc="lower right",
+                  bbox_to_anchor=(1.0, 1.045), ncol=n_col, frameon=False, fontsize=7.5,
+                  handlelength=1.1, handletextpad=0.45, columnspacing=1.3,
+                  labelspacing=0.3, borderpad=0.0, borderaxespad=0.0)
     heading = f"{site_label}   {pair_label}".strip() if site_label else pair_label
-    ax.set_title(heading, fontsize=10, pad=20)
+    ax.set_title(heading, fontsize=10, loc="left", pad=20 + 10 * (legend_rows - 1))
     fig.colorbar(mesh, ax=ax, pad=0.015, label="WTC")
     caption = (f"arrows: right = in phase, left = antiphase, up = {lead} leads by a quarter "
                f"cycle, drawn only where coherence clears "
@@ -278,7 +295,7 @@ def draw_site_matrix(ax, z, row_labels, col_labels, *, cmap, vmin, vmax,
 
 def _png_b64(fig) -> str:
     buf = io.BytesIO()
-    fig.savefig(buf, format="png", dpi=200, bbox_inches="tight", facecolor="white")
+    fig.savefig(buf, format="png", dpi=300, bbox_inches="tight", facecolor="white")
     plt.close(fig)
     buf.seek(0)
     return base64.b64encode(buf.read()).decode()
