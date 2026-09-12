@@ -631,10 +631,11 @@
   {% endif %}
 
   <h3 class="qm-sub">Motion and spikes</h3>
-  <p class="qm-note">Optical density. GVTD and the spike counts are measured on
-     {% if gvtd_channel_set == 'long' %}long channels only{% else %}every channel{% endif %};
-     the correction footprint is over every channel, since it counts what the correction
-     touched.</p>
+  <p class="qm-note">Optical density.
+     {% if motion_split %}Each channel set is measured on its own, in the table below.
+     {% else %}GVTD, the spike counts and the correction footprint are measured on
+       {% if gvtd_channel_set == 'long' %}long channels only{% else %}every channel{% endif %}.
+     {% endif %}</p>
   {%- set motion_note = ' (motion before&rarr;after)' %}
   {#- the GVTD-threshold paragraph that used to sit here says what the gvtd_thresh tooltip
       already says, and is left to it -#}
@@ -648,15 +649,15 @@
   <p class="qm-note">{{ section_note('metrics.motion_one_side') }}</p>
   {% endif %}
 
-  {#- GVTD over the three channel sets. It is an RMS *across* channels, so these are three
-      measurements and not three groupings of one, which is why they are here rather than as
+  {#- The motion families over the three channel sets. Nearly all of these measure a set
+      rather than regroup per-channel numbers, which is why they are here rather than as
       columns of the table above: that table's rows are groupings of per-channel numbers. -#}
   {% if motion_split %}
   <p class="qm-note">{{ section_note('metrics.gvtd_sets') }}</p>
   {%- set gvtd_set_help = "Long is the set the verdict is read off and the only one coloured."
-      ~ " Each set is a separate GVTD trace rather than a grouping of one: short channels sit"
-      ~ " quieter between events and jump about twice as far during one, which moves both the"
-      ~ " cutoff and the share above it, in opposite directions." %}
+      ~ " Each set is its own measurement rather than a grouping of one, with its own GVTD"
+      ~ " cutoff and its own tenth-of-the-channels bar."
+      ~ " Corrected per channel is the exception, an average over the set." %}
   {#- from fnirs_pipe.qc.channel_table, so this table and the raw viewer's cannot end up
       listing different metrics for the same recording -#}
   {%- set motion_rows = motion_split_columns %}
@@ -701,24 +702,30 @@
   </ul>
   {% endif %}
 
-  {#- one value per row: these count timepoints rather than channels, so the channel set has
-      to be named in prose. The per-channel shares they pair with are columns of the tables
-      above, which carry all three sets -#}
-  <p class="qm-note">Counted on
-     {% if sqm_split %}<b>long channels</b>{% else %}every channel{% endif %}, and over the
-     recording rather than per channel: a timepoint counts when at least a tenth of the set
-     was flagged. A smaller set clears a tenth more easily, so a second set's count would
-     not be a second reading of this one and only the one is printed.</p>
+  {#- What the table above has no column for. Everything with a channel-set meaning moved
+      into it; what is left is censoring, which names its own set, and `spike_count`, a sum
+      over channels that would only track how many a set has. A montage that did not split
+      has no table, so the whole list stays here. -#}
+  {%- set flat_censor = sqm.get('gvtd_censor_pct') is not none %}
+  {% if flat_censor or not motion_split or not condition_label %}
+  <p class="qm-note">
+     {%- if motion_split %}What the table above has no column for. <b>Spike count</b> is a sum
+     over channels, so a second set's would track how many channels it has; censoring names
+     the set <code>--gvtd-censor</code> gave it.
+     {%- else %}Counted on
+     {% if gvtd_channel_set == 'long' %}<b>long channels</b>{% else %}every channel{% endif %},
+     and over the recording rather than per channel: a timepoint counts when at least a tenth
+     of the set was flagged.{% endif %}</p>
   <table class="qm-table qm-split qm-narrow qm-flat">
     <thead><tr><th>Metric</th><th>Value</th></tr></thead>
     <tbody>
-    {% if sqm.get('gvtd_censor_pct') is not none %}
+    {% if flat_censor %}
     {#- censoring names its own set: `--gvtd-censor` picks it, so it need not be the long one -#}
     {{ qm_tr('gvtd_censor_pct', 'GVTD censored % (' ~ (sqm.get('gvtd_censor_channel_set') or 'long')
                                 ~ ' channels, n_std ' ~ sqm.get('gvtd_censor_n_std') ~ ')') }}
     {{ qm_tr('gvtd_censor_retained_s', 'GVTD retained (s in ' ~ sqm.get('gvtd_censor_n_epochs') ~ ' epoch(s))') }}
     {% endif %}
-    {% if sqm.get('motion_corrected_pct') is not none %}
+    {% if not motion_split and sqm.get('motion_corrected_pct') is not none %}
     {{ qm_tr('motion_corrected_pct', 'Motion corrected % (exp.)') }}
     {{ qm_tr('motion_corrected_num', 'Motion corrected frames') }}
     {{ qm_tr('motion_corrected_n_segments', 'Motion corrected segments') }}
@@ -726,13 +733,16 @@
     {% if not condition_label %}
     {{ qm_tr('spike_count', 'Spike count') }}
     {% endif %}
+    {% if not motion_split %}
     {{ qm_tr('spike_pct_frames', 'Spike % frames' ~ before_note) }}
     {{ qm_tr('spike_num_frames', 'Spike frames' ~ before_note) }}
+    {% endif %}
     {% if not sqm_split and sqm.get('spike_pct') is not none %}
     {{ qm_tr('spike_pct', 'Spike % (exp.)') }}
     {% endif %}
     </tbody>
   </table>
+  {% endif %}
 
   <h3 class="qm-sub">Haemoglobin and timing</h3>
   <p class="qm-note">Measured after Beer-Lambert, on

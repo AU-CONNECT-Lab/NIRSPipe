@@ -311,9 +311,12 @@ select#run-select {
   </div>
   <div id="motion-split-wrap" style="display:none">
     <h3 class="qm-sub">Motion and spikes</h3>
-    <p class="qm-note">GVTD is an RMS across channels, so each set is its own trace with its
-       own cutoff. <b>Read the rows down a column, not across one:</b> two sets' shares are
-       counted against different cutoffs and are not two readings of one quantity.</p>
+    <p class="qm-note">Each set is measured on its own here rather than regrouped: GVTD is an
+       RMS across channels with its own cutoff per set, and a frame count asks how many of
+       <i>these</i> channels were flagged at once, a bar a smaller set clears more easily.
+       <b>Read those rows down a column, not across one.</b> Corrected per channel is the
+       exception, being an average over the set, and is the one column two rows can be
+       compared on.</p>
     <div style="overflow-x:auto"><table class="qm-table qm-flat" id="motion-split-table"></table></div>
   </div>
   <div id="bad-list"></div>

@@ -109,12 +109,15 @@ SECTION_NOTES = {
         "averaging the two lifts SCI, PSP and SNR; they are judged on their own in the "
         "per-channel table below.",
     "metrics.motion_one_side":
-        "One side of the motion step, not both, and not the same side for every row, so each "
-        "row names its stage. The run's own page has the before&nbsp;&rarr;&nbsp;after pair.",
+        "One side of the motion step, not both, and not the same side throughout: GVTD is "
+        "measured on the corrected file, the spike and footprint counts on the uncorrected "
+        "one. The run's own page has the before&nbsp;&rarr;&nbsp;after pair.",
     "metrics.gvtd_sets":
-        "GVTD is an RMS across channels, so each set is its own trace with its own cutoff. "
-        "<b>Read the rows down a column, not across one:</b> two sets' shares are counted "
-        "against different cutoffs and are not two readings of one quantity.",
+        "Each set is measured on its own here rather than regrouped: GVTD is an RMS across "
+        "channels with its own cutoff per set, and a frame count asks how many of <i>these</i> "
+        "channels were flagged at once, a bar a smaller set clears more easily. <b>Read those "
+        "rows down a column, not across one.</b> Corrected per channel is the exception, being "
+        "an average over the set, and is the one column two rows can be compared on.",
     "metrics.no_drift":
         "Low-frequency drift is not among these: it grows with the span it is fitted over, so a "
         "per-condition value would compare the conditions' durations. The run's own page "

@@ -575,13 +575,20 @@ def motion_sections(
         # long set under the plain key, the convention `spike_spans_s` follows: a condition's
         # share has to be the same measurement as the run's row above it, and the figures
         # draw this strip beside a spike row that is already the long set's.
-        span_picks = (mc_long if mc_long and len(mc_long) < len(before_od.ch_names)
+        # One list per set, so a condition's three rows are three measurements the way the
+        # run's are, rather than the long one under three headings.
+        long_picks = (mc_long if mc_long and len(mc_long) < len(before_od.ch_names)
                       else None)
         try:
-            windowed["motion_corrected_spans_s"] = [
-                list(span) for span in motion_corrected_segments(
-                    before_od if span_picks is None else before_od.copy().pick(span_picks),
-                    after_od if span_picks is None else after_od.copy().pick(span_picks))]
+            for key, picks in (("motion_corrected_spans_s", long_picks),
+                               ("motion_corrected_spans_short_s", mc_short or None),
+                               ("motion_corrected_spans_all_s", None)):
+                if key.endswith("_short_s") and picks is None:
+                    continue
+                windowed[key] = [
+                    list(span) for span in motion_corrected_segments(
+                        before_od if picks is None else before_od.copy().pick(picks),
+                        after_od if picks is None else after_od.copy().pick(picks))]
         except Exception:
             logger.warning("windowed: correction spans failed", exc_info=True)
 
@@ -728,19 +735,22 @@ def _condition_entries(
     gvtd_sets = {"long": _gvtd_slices(""),
                  "short": _gvtd_slices("_short"),
                  "all": _gvtd_slices("_all")}
-    # the run's booleans kept as spans, so a condition counts them over its own stretch. A
-    # span list the writer had no input for is absent, and its scalars come back None; that
-    # is how a raw-only record carries no correction footprint.
-    span_lists = {key: windowed[stored]
-                  for key, stored in (("gvtd_pct_above_thresh", "gvtd_above_spans_s"),
-                                      ("spike_pct_frames", "spike_spans_s"),
-                                      ("motion_corrected_pct", "motion_corrected_spans_s"))
-                  if windowed.get(stored)}
-    other_above_spans = {"short": windowed.get("gvtd_above_spans_short_s") or [],
-                         "all":   windowed.get("gvtd_above_spans_all_s") or []}
-    count_key = {"gvtd_pct_above_thresh": "gvtd_num_above_thresh",
-                 "spike_pct_frames": "spike_num_frames",
-                 "motion_corrected_pct": "motion_corrected_num"}
+    # The run's booleans kept as spans, so a condition counts them over its own stretch,
+    # against the run's own cutoff rather than one re-derived on a piece. Three families and
+    # three sets each; the long set is under the plain key, the convention the writers
+    # follow. A span list the writer had no input for is absent and its scalars come back
+    # None, which is how a raw-only record carries no correction footprint.
+    _SPAN_FAMILIES = (
+        ("gvtd_above_spans", "gvtd_pct_above_thresh", "gvtd_num_above_thresh", None),
+        ("spike_spans", "spike_pct_frames", "spike_num_frames", None),
+        ("motion_corrected_spans", "motion_corrected_pct", "motion_corrected_num",
+         "motion_corrected_n_segments"),
+    )
+
+    def _spans_of(stem: str, set_name: str) -> list:
+        key = f"{stem}_s" if set_name == "long" else f"{stem}_{set_name}_s"
+        return windowed.get(key) or []
+
     sfreq = float(raw_intensity.info["sfreq"])
     long_names, short_names = long_short_channels(raw_intensity, sep_bands)
 
@@ -754,15 +764,27 @@ def _condition_entries(
         cond_bad = sorted(ch for ch, v in cond_frac.items() if v < cutoffs["good_frac"])
         retention = (1.0 - len(cond_bad) / len(cond_frac)) if cond_frac else None
 
-        # the frame count is that share of this stretch's samples, not a second pass
+        # the frame count is that share of this stretch's samples, not a second pass. The
+        # long set fills the condition's own scalars as well, the run's rows being long.
         shares, n_frames, n_segments = {}, {}, {}
-        for share_key, spans in span_lists.items():
-            share, n_seg = span_counts(spans, t0, t1)
-            shares[share_key] = share
-            n_frames[count_key[share_key]] = (
-                None if share is None else int(round(share * (t1 - t0) * sfreq)))
-            if share_key == "motion_corrected_pct":
-                n_segments["motion_corrected_n_segments"] = n_seg
+        span_counts_by_set: dict[str, dict] = {"all": {}, "long": {}, "short": {}}
+        for stem, share_key, count_key, seg_key in _SPAN_FAMILIES:
+            for set_name in span_counts_by_set:
+                spans = _spans_of(stem, set_name)
+                if not spans:
+                    continue
+                share, n_seg = span_counts(spans, t0, t1)
+                counted = {share_key: share,
+                           count_key: (None if share is None
+                                       else int(round(share * (t1 - t0) * sfreq)))}
+                if seg_key:
+                    counted[seg_key] = n_seg
+                span_counts_by_set[set_name].update(counted)
+                if set_name == "long":
+                    shares[share_key] = counted[share_key]
+                    n_frames[count_key] = counted[count_key]
+                    if seg_key:
+                        n_segments[seg_key] = n_seg
 
         scalars = condition_scalars(
             sliced, {k: float(v[label]) for k, v in gvtd_sets["long"].items() if label in v},
@@ -774,23 +796,13 @@ def _condition_entries(
         # the long set, matching what the run's own haemoglobin rows report
         scalars.update(haemo_by_set.get("long") or haemo_by_set.get("all") or {})
 
-        # no `_post` half: the series is measured on the corrected file. The share and the
-        # count join the long column alone, the run storing spans for that set only.
-        motion_by_set = {name: {k: float(v[label]) for k, v in series.items() if label in v}
-                         for name, series in gvtd_sets.items()}
-        motion_by_set.setdefault("long", {}).update(
-            {k: v for k, v in (("gvtd_pct_above_thresh", shares.get("gvtd_pct_above_thresh")),
-                               ("gvtd_num_above_thresh", n_frames.get("gvtd_num_above_thresh")))
-             if v is not None})
-        for set_name, spans in other_above_spans.items():
-            if not spans:
-                continue
-            share, _ = span_counts(spans, t0, t1)
-            if share is None:
-                continue
-            motion_by_set.setdefault(set_name, {}).update({
-                "gvtd_pct_above_thresh": share,
-                "gvtd_num_above_thresh": int(round(share * (t1 - t0) * sfreq))})
+        # no `_post` half: the GVTD series is measured on the corrected file
+        motion_by_set = {
+            name: {**{k: float(v[label]) for k, v in series.items() if label in v},
+                   **{k: v for k, v in span_counts_by_set.get(name, {}).items()
+                      if v is not None}}
+            for name, series in gvtd_sets.items()
+        }
 
         entry = {
             # unrounded, so a reader can pair these bounds back to the annotations they
@@ -972,12 +984,13 @@ def compute_run_sections(
             from fnirs_pipe.qc.metrics import spike_segments
             spike_source = raw_intensity if raw_intensity is not None else read_snirf(spike_stage)
             spike_long, spike_short = long_short_channels(spike_source, sep_bands)
-            # one list per separation class, because the test is ">= 10% of *these* channels
-            # spiking" and the panel draws each class its own row: a span found on the short
+            # one list per channel set, because the test is ">= 10% of *these* channels
+            # spiking" and the panel draws each set its own row: a span found on the short
             # channels is not a claim about the long ones. The long list keeps the plain key,
             # being the one the verdict, the detail figure and every older record read.
             for key, names in (("spike_spans_s", spike_long),
-                               ("spike_spans_short_s", spike_short)):
+                               ("spike_spans_short_s", spike_short),
+                               ("spike_spans_all_s", list(spike_source.ch_names))):
                 if names:
                     picked = spike_source.copy().pick(names)
                 elif key == "spike_spans_s":

@@ -328,11 +328,13 @@ OD_SPLIT_COLUMNS = (
     ("spike_pct",              "Spike share"),
 )
 
-# The motion table's columns, which are a separate table rather than more of the one above
-# because GVTD is an RMS *across* channels: each set is its own trace with its own cutoff,
-# so these rows are three measurements and not three groupings of one. Read down a column,
-# never across one. Here rather than in either template, so the raw viewer and the subject
-# report cannot end up listing different metrics for the same recording.
+# The motion table's columns, a separate table rather than more of the one above because
+# nearly all of these measure a *set* rather than group per-channel numbers: GVTD is an RMS
+# across channels, and the frame counts ask how many of *these* channels were flagged at
+# once, so each set carries its own trace, its own cutoff and its own bar. Read those down a
+# column. "Corrected per channel" is the exception, a mean over the set, and does compare
+# across rows. Here rather than in either template, so the raw viewer and the subject report
+# cannot end up listing different metrics for the same recording.
 MOTION_SPLIT_COLUMNS = (
     ("gvtd_mean",             "GVTD mean"),
     ("gvtd_p95",              "GVTD p95"),
@@ -341,9 +343,15 @@ MOTION_SPLIT_COLUMNS = (
     ("gvtd_pct_above_thresh", "GVTD % motion"),
     ("gvtd_num_above_thresh", "GVTD motion frames"),
     ("gvtd_thresh",           "GVTD threshold"),
-    # the one grouping of per-channel numbers here, and the only footprint column that
-    # compares across sets; the frame counts beside it in the record do not
-    ("motion_corrected_frac_mean", "Corrected share"),
+    ("spike_pct_frames",      "Spike % frames"),
+    ("spike_num_frames",      "Spike frames"),
+    # "per channel" is the average share of each channel the correction altered; "% frames"
+    # is the share of timepoints where it altered at least a tenth of the set. Different
+    # questions, which is why both are here under names that do not read as the same one
+    ("motion_corrected_frac_mean", "Corrected per channel"),
+    ("motion_corrected_pct",       "Corrected % frames"),
+    ("motion_corrected_num",       "Corrected frames"),
+    ("motion_corrected_n_segments", "Corrected segments"),
 )
 
 # What a per-condition page drops from the two lists above rather than leaving blank in all
