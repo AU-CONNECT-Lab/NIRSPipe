@@ -29,6 +29,29 @@
 .cond-nav span.current { background: #495057; color: #fff; border-color: #495057; }
 {% endblock %}
 
+{# One entry per rated section, anchored to the heading it names, the way a subject report's
+   bar is built. The id carries this page's own stem so the run and each of its conditions
+   are rated separately rather than sharing one verdict. #}
+{% set _rk = "__" ~ page_stem %}
+{% set _bar = [
+  {"id": "Alignment" ~ _rk, "name": "Alignment", "href": "#Alignment"},
+  {"id": "Quality" ~ _rk,   "name": "Quality",   "href": "#Quality"},
+  {"id": "Coherence" ~ _rk, "name": "Coherence", "href": "#Coherence"},
+  {"id": "ISC" ~ _rk,       "name": "ISC",       "href": "#ISC"},
+] %}
+{% set _ = _bar.append({"sep": true}) %}
+{% for link in nav_links %}
+  {% set _ = _bar.append({"id": "page" ~ loop.index, "name": link.label,
+                          "href": link.href, "ratable": false}) %}
+{% endfor %}
+
+{% set rating_subject = page_stem %}
+{% set rating_modules = [_bar] %}
+{% set rating_pinned = [{"id": "Final" ~ _rk, "name": "FINAL", "href": "#Final"}] %}
+{% set rating_chip = "group-" ~ group_id %}
+{% set rating_save_endpoint = "/save_hyper_ratings" %}
+{% set rating_load_endpoint = "/load_hyper_ratings/" ~ page_stem %}
+
 {% block content %}
 
 <!-- The run and its conditions -->
@@ -74,7 +97,7 @@
 {% endif %}
 
 <!-- Alignment table -->
-{% call card("Time Alignment", hint="crop offset from first shared trigger &bull; all recordings trimmed to shortest") %}
+{% call card("Time Alignment", hint="crop offset from first shared trigger &bull; all recordings trimmed to shortest", id="Alignment") %}
 <div class="align-wrap">
   <table id="align-table">
     <thead><tr><th>Subject</th><th>Offset (s)</th><th>Aligned duration (s)</th></tr></thead>
@@ -85,7 +108,7 @@
 
 <!-- Per-subject quality metrics -->
 {% if subject_metrics_rows %}
-{% call card("Per-subject Quality Metrics",
+{% call card("Per-subject Quality Metrics", id="Quality",
              hint="one table per channel set &bull; ↑ / ↓ = better direction &bull; SCI coloured against the threshold, HbO-HbR by sign") %}
 <div class="subj-metrics-wrap">
   {{ subject_metrics(subject_metrics_rows, subject_ids) }}
@@ -117,7 +140,7 @@
 {% endif %}
 {% endcall %}
 {% elif condition_label %}
-{% call card("Per-subject Quality Metrics", hint="not available for this window") %}
+{% call card("Per-subject Quality Metrics", hint="not available for this window", id="Quality") %}
 <div class="panel-caveat">
   Neither member's quality record carries a <code>by_condition</code> section, so there is
   nothing to show here rather than the whole recording's numbers under this condition's
@@ -169,7 +192,7 @@
 </div>
 
 <!-- Per-channel WTC -->
-<div class="card">
+<div class="card" id="Coherence">
   <div class="panel-title">
     Wavelet Transform Coherence (per channel)
     <span class="panel-hint">

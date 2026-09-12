@@ -1358,6 +1358,8 @@ def build_hyper_post_report(
             window_cycles=_band_cycles(window or analysis_window, wtc_band_fmin),
             min_band_cycles=MIN_BAND_CYCLES,
             run_href=_page_path(None).name,
+            # this page's own name, which is what the rating server files a verdict under
+            page_stem=out_path.stem,
             nav_links=[{"label": text, "href": _page_path(lab).name,
                         "current": lab == label} for lab, text in nav_pages],
             isc_unfiltered_note=isc_unfiltered_note,

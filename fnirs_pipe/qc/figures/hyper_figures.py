@@ -14,8 +14,10 @@ from scipy.signal import coherence
 from fnirs_pipe.qc.figure_io import extract_markers as _extract_markers
 from fnirs_pipe.qc.figures._brain_utils import mni_trans
 from fnirs_pipe.qc.figures._utils import (CONDITION_PALETTE, PSD_NFFT,
+                                          TIMELINE_ROW_PX,
                                           decimate as _decimate, epochable_events,
-                                          physio_bands, timeline_row_traces)
+                                          physio_bands, timeline_axes,
+                                          timeline_row_bands, timeline_row_traces)
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("qc.figures.hyper")
@@ -146,19 +148,20 @@ def build_trigger_timeline(
                                           desc, desc not in seen, f"<br>{sid}")
             seen.add(desc)
 
+    # the legend stays here, unlike the single-recording timeline: a row is a member and
+    # the conditions sharing it are told apart by colour alone
+    xaxis, yaxis = timeline_axes([f"sub-{s}" for s in subject_ids])
+    xaxis["title"] = xlabel
     return go.Figure(
         data=traces,
         layout=go.Layout(
-            xaxis=dict(title=xlabel, gridcolor="#eeeeee"),
-            yaxis=dict(tickvals=list(range(len(subject_ids))),
-                       ticktext=[f"sub-{s}" for s in subject_ids],
-                       autorange="reversed", gridcolor="#eeeeee",
-                       tickfont=dict(size=10)),
+            xaxis=xaxis, yaxis=yaxis,
+            shapes=timeline_row_bands(len(subject_ids)),
             plot_bgcolor="white", paper_bgcolor="white",
             # overlay, or plotly groups each subject's bars and shifts them off their row
             barmode="overlay",
-            height=max(110, len(subject_ids) * 52 + 60),
-            margin=dict(l=80, r=15, t=8, b=40),
+            height=max(110, len(subject_ids) * TIMELINE_ROW_PX + 88),
+            margin=dict(l=80, r=20, t=10, b=44),
             legend=dict(font=dict(size=9), orientation="h", y=-0.35),
             hovermode="closest",
         ),
