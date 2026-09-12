@@ -690,6 +690,22 @@ def raw_condition_sections(
     return _condition_entries(sections, raw_intensity, windows, cutoffs, sep_bands)
 
 
+# Which screening criteria a condition can be judged on, and today it is all of them.
+#
+# `good_frac` is what screens, and it is windowed from the bottom up: a window counts when
+# SCI and PSP both clear their lines *inside that window*, and the score is the share of
+# windows that did. So a condition is the same measurement as its run, on the same window
+# grid and behind the same filter, with a range of columns selected. Nothing is approximated
+# and the two verdicts cannot drift apart.
+#
+# The whole-run SCI and PSP are `screens=False`: reported, never decisive, and there is no
+# per-condition version of them because a single estimate over a recording has no windows to
+# select from. A criterion that starts screening without a windowed series behind it would
+# be the first thing a condition could not judge itself on, so it is announced rather than
+# silently skipped.
+_CONDITION_SCREENABLE = frozenset({"good_frac"})
+
+
 def _condition_entries(
     sections: dict[str, Any],
     raw_intensity: "mne.io.Raw",
@@ -708,8 +724,17 @@ def _condition_entries(
     from fnirs_pipe.qc.condition_views import (
         condition_scalars, condition_set_scalars, condition_slices_from_record, span_counts,
     )
-    from fnirs_pipe.qc.metrics import long_short_channels
+    from fnirs_pipe.qc.metrics import long_short_channels, screen_channels
+    from fnirs_pipe.qc.metrics.screening import CRITERIA
     from fnirs_pipe.qc.metrics.windowed import condition_window_means
+
+    unscreened = sorted(c.name for c in CRITERIA
+                        if c.screens and c.name not in _CONDITION_SCREENABLE)
+    if unscreened:
+        logger.warning("by_condition: %s screens the run but has no windowed series to cut "
+                       "to a condition, so a condition's verdict is now decided on less "
+                       "than its run's (%s)",
+                       ", ".join(unscreened), ", ".join(sorted(_CONDITION_SCREENABLE)))
 
     per_channel = sections.get("per_channel") or {}
     ch_names = list((per_channel.get("raw") or {}).get("sci_per_channel") or {})
@@ -762,7 +787,7 @@ def _condition_entries(
         # this condition's own verdict on the run's line; the data was processed under the
         # run's, which the run's own section carries
         cond_frac = sliced.get("good_frac_per_channel") or {}
-        cond_bad = sorted(ch for ch, v in cond_frac.items() if v < cutoffs["good_frac"])
+        cond_bad, _ = screen_channels({"good_frac": cond_frac}, cutoffs)
         retention = (1.0 - len(cond_bad) / len(cond_frac)) if cond_frac else None
 
         # the frame count is that share of this stretch's samples, not a second pass. The

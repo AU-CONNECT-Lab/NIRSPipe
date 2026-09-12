@@ -74,6 +74,8 @@ All notable changes to this project will be documented in this file.
 - **The GUI's channel-detail markers come off the recording being drawn**, not out of the panel above it. The two are on different time axes, and the figure that draws on the original one is the only figure in the package handed a recording cropped in memory
 - **A subject whose label begins with `s`, `u`, `b` or `-` no longer overwrites another subject's ratings.** `sub-bus01` was filed as `sub-01`
 - **Rating a section on a condition page no longer overwrites the run's own verdict.** Every condition of a run shared the run's rating keys, so the last page rated won and the pages beside it silently lost theirs
+- **A condition page's channel-set table no longer carries an empty "Mean SCI (whole run)" column.** That estimate is one number over the recording with no windowed series to cut, so all three of its rows were dashes
+- **A condition's rejected channels are decided by the same screening every other part of the tool uses.** It had its own copy of the rule, which agreed with the shared one only for as long as there was a single screening criterion; a criterion added later would have reached every page except the condition ones, and said nothing
 
 ## [0.36.0] - 2026-09-11
 

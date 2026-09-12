@@ -364,6 +364,9 @@ MOTION_SPLIT_COLUMNS = (
 WHOLE_RUN_ONLY_COLUMNS = frozenset({
     "mean_amp_mean", "spike_pct", "spike_count", "gvtd_thresh",
     "motion_corrected_frac_mean",
+    # one estimate over the whole recording, with no windowed series to take a condition's
+    # columns out of. The 10 s estimate beside it is the one a condition can have
+    "sci_mean",
 })
 
 
