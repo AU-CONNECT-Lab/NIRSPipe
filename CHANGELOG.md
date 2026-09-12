@@ -8,6 +8,9 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 - **The two dyad reports read as documents, the way the subject report does.** Each opens with a summary carrying the members, the run's parameters, the alignment and the command that produced it; every section folds; and the filled panels each one used to sit in are gone. The chromophore note is part of the coherence section rather than a panel with nothing in it
+- **A dyad quality table is the subject report's table, with members where it has channel sets**: one column per metric, no cell grid, and the label's hover text from the same registry. It was a grid of metric rows with a filled header, which was a second way of printing the same numbers
+- **The page is named after the run**, as a subject page is, rather than after the report that wrote it
+- **The orange caveat panels are gone from the dyad pages.** A caveat on every page stops being read as one; what is left is grey prose, and the one coloured warning is the window too short for the band it averages
 - **A coherence map names its conditions in a legend in the top right.** The label was written above every block, so a block design printed the same word once per block
 
 ### Fixed

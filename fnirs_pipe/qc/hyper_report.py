@@ -17,7 +17,7 @@ from fnirs_pipe.pipeline.hyperscanning import (
 )
 from fnirs_pipe.qc.boilerplate import collect_software_versions
 from fnirs_pipe.qc.boilerplate.vocabulary import (
-    MISSING_VALUE, format_metric, metric_class, metric_direction, metric_label,
+    MISSING_VALUE, format_metric, is_key_metric, metric_class, metric_label,
     metric_summary,
 )
 from fnirs_pipe.qc.metrics import SCI_PASS
@@ -101,7 +101,21 @@ def subject_metric_rows(
     subject_ids: list[str],
     sci_threshold: float,
 ) -> list[dict]:
-    """One row per metric, one cell per subject, for the per-subject quality table."""
+    """One entry per metric the members carry a value for, with a cell per member.
+
+    ::
+
+      -> [{"key": "sci_win_mean", "label": "SCI (10 s windows)", "summary": "...",
+           "key_metric": True, "cells": [{"text": "0.91", "cls": "qm-ok"}, ...]}]
+
+    Metric-major, which is not how the page prints it: :func:`subject_metric_tables` turns
+    it a quarter turn so a metric is a column, the arrangement the subject report's own
+    metrics section uses. Kept this way round here because the registry is read per metric.
+
+    No direction arrow. The subject report does not carry one either: which end is better is
+    the registry's and reaches the reader through the header's hover text, so a table cannot
+    say one thing and a tooltip another.
+    """
     rows = []
     for key in _SUBJECT_METRICS:
         cells = []
@@ -113,10 +127,11 @@ def subject_metric_rows(
             else:
                 cells.append({"text": MISSING_VALUE, "cls": ""})
         if any(c["text"] != MISSING_VALUE for c in cells):
-            rows.append({"label": metric_label(key),
-                         "direction": _ARROW.get(metric_direction(key), ""),
-                         "cells": cells,
-                         "summary": metric_summary(key)})
+            rows.append({"key": key,
+                         "label": metric_label(key),
+                         "summary": metric_summary(key),
+                         "key_metric": is_key_metric(key),
+                         "cells": cells})
     return rows
 
 
@@ -133,7 +148,13 @@ def subject_metric_tables(
     subject_ids: list[str],
     sci_threshold: float,
 ) -> list[dict]:
-    """One quality table per channel set, as ``[{"set": heading, "rows": [...]}]``.
+    """One quality table per channel set.
+
+    ::
+
+      -> [{"set": "Long",
+           "columns": [{"key", "label", "summary", "key_metric"}, ...],
+           "rows": [{"member": "sub-p1d01", "cells": [{"text", "cls"}, ...]}, ...]}]
 
     ``by_set`` is ``{set_name: {subject_id: scalars}}``.
 
@@ -147,17 +168,27 @@ def subject_metric_tables(
     same numbers printed twice; it gets a single unheaded table instead. That is also what
     a caller with no split at all passes, under ``all``.
     """
+    def _table(heading: str, data: dict) -> "dict | None":
+        metrics = subject_metric_rows(data, subject_ids, sci_threshold)
+        if not metrics:
+            return None
+        # a quarter turn: metric-major in, column-major out. One row per member is what the
+        # subject report's metrics section does with its channel sets, and the two pages are
+        # read against each other
+        return {
+            "set": heading,
+            "columns": [{k: m[k] for k in ("key", "label", "summary", "key_metric")}
+                        for m in metrics],
+            "rows": [{"member": sid, "cells": [m["cells"][i] for m in metrics]}
+                     for i, sid in enumerate(subject_ids)],
+        }
+
     short = by_set.get("short") or {}
     if not any(short.values()):
-        rows = subject_metric_rows(by_set.get("all") or by_set.get("long") or {},
-                                   subject_ids, sci_threshold)
-        return [{"set": "", "rows": rows}] if rows else []
-    tables = []
-    for key, heading in _CHANNEL_SETS:
-        rows = subject_metric_rows(by_set.get(key) or {}, subject_ids, sci_threshold)
-        if rows:
-            tables.append({"set": heading, "rows": rows})
-    return tables
+        one = _table("", by_set.get("all") or by_set.get("long") or {})
+        return [one] if one else []
+    return [t for t in (_table(heading, by_set.get(key) or {})
+                        for key, heading in _CHANNEL_SETS) if t]
 
 
 def _record_window_matches(
@@ -440,8 +471,10 @@ def build_hyper_report(
     html = render(
         "hyper_report.html.j2",
         **page_vars(
-            title=f"fnirs-pipe Hyper Raw Report — {group_id} / {task}",
-            heading="fnirs‑pipe   Hyper Raw Report",
+            title=f"{meta['label']} raw",
+            # the run names the page, as it does on a subject report; that this is QC
+            # is what the reader opened, and raw against post is in the subtitle
+            heading=meta["label"],
             nav_meta=[("group", group_id), ("task", task),
                       ("subjects", ", ".join(meta["subject_ids"]))],
             nav_note=(f"SCI thr: {sci_threshold:.2f} • "
@@ -1326,7 +1359,7 @@ def build_hyper_post_report(
         chan_matrix = _by_chroma("chan_matrix")
 
         out_path = _page_path(label)
-        heading = "fnirs‑pipe   Hyper Post Report"
+        heading = f"group-{group_id}_task-{task}"
         nav_meta = [("group", group_id), ("task", task),
                     ("subjects", ", ".join(subject_ids))]
         if label is not None:
@@ -1335,8 +1368,7 @@ def build_hyper_post_report(
         html = render(
             "hyper_post_report.html.j2",
             **page_vars(
-                title=(f"fnirs-pipe Hyper Post Report — {group_id} / {task}"
-                       + (f" / {label}" if label else "")),
+                title=f"{heading} post" + (f" / {label}" if label else ""),
                 heading=heading + (f" — {label}" if label else ""),
                 nav_meta=nav_meta,
                 nav_note=(f"WTC: {wtc_fmin:.3f}–{wtc_fmax:.3f} Hz · "

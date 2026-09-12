@@ -18,15 +18,11 @@
   display: inline-block; font-size: 0.8rem; font-weight: 600; color: #495057;
   letter-spacing: 0.03em; margin: 0 0 0.1rem 0.1rem;
 }
-/* The run and its conditions are one set of pages; every one of them carries the whole
-   strip, so any page reaches any other in a click. */
-.cond-nav { display: flex; flex-wrap: wrap; gap: 0.3rem; margin: 0.75rem 0 0; }
-.cond-nav a, .cond-nav span {
-  font-size: 0.82rem; padding: 0.22rem 0.7rem; border-radius: 4px;
-  border: 1px solid #ced4da; text-decoration: none; color: #495057; background: #fff;
-}
-.cond-nav a:hover { background: #f1f3f5; }
-.cond-nav span.current { background: #495057; color: #fff; border-color: #495057; }
+/* The one block-level warning this page can raise. Everything else that used to be an
+   orange panel is a .qm-note, the grey aside the subject report explains itself with:
+   a caveat printed on every page stops being read as a caveat. */
+.too-short { color: var(--warn); font-size: 0.8rem; border-left: 3px solid var(--warn);
+             padding: 0.3rem 0.7rem; margin: 0.6rem 0; }
 {% endblock %}
 
 {# One entry per rated section, anchored to the heading it names, the way a subject report's
@@ -67,8 +63,8 @@
 {% block header %}
 <div class="page-header">
   <h1>{{ page_heading }}</h1>
-  <span class="subtitle">v{{ versions.get('fnirs-pipe', 'unknown') }} &bull; {{ run_date }}
-    &bull; group-{{ group_id }} &bull; task-{{ task }}</span>
+  <span class="subtitle">dyad post QC &bull;
+    v{{ versions.get('fnirs-pipe', 'unknown') }} &bull; {{ run_date }}</span>
 </div>
 {% endblock %}
 
@@ -132,22 +128,13 @@
   </p>
 
   {% if window_cycles and window_cycles < min_band_cycles %}
-  <div class="panel-caveat">
+  <div class="too-short">
     This window holds only {{ "%.1f"|format(window_cycles) }} cycles of
     <code>--wtc-band-fmin</code>, the slowest frequency being averaged. A coherence there is
     a statement about a phase relationship this window has seen about that many times, so
     the low-frequency end of every number below rests on very few independent looks at it.
     Four to six cycles is the usual minimum. Raise <code>--wtc-band-fmin</code>, or read
     that end as indicative. Nothing is masked or dropped on account of this.
-  </div>
-  {% endif %}
-
-  {% if nav_links | length > 1 %}
-  <div class="cond-nav">
-    {% for link in nav_links %}
-      {% if link.current %}<span class="current">{{ link.label }}</span>
-      {% else %}<a href="{{ link.href }}">{{ link.label }}</a>{% endif %}
-    {% endfor %}
   </div>
   {% endif %}
 
@@ -164,8 +151,8 @@
     <p class="step-desc">Crop offset from the first shared trigger; all recordings are then
       trimmed to the shortest. A dyad window is on the aligned clock and a member&rsquo;s own
       record is on its own, and this table is what converts between them.</p>
-    <table id="align-table">
-      <thead><tr><th>Subject</th><th>Offset (s)</th><th>Aligned duration (s)</th></tr></thead>
+    <table class="qm-table qm-flat" id="align-table">
+      <thead><tr><th>Member</th><th>Offset (s)</th><th>Aligned duration (s)</th></tr></thead>
       <tbody id="align-tbody"></tbody>
     </table>
   </div>
@@ -178,32 +165,17 @@
     <p class="step-desc">One table per channel set. &uarr; / &darr; marks the better
       direction; SCI is coloured against this run&rsquo;s own threshold and HbO&ndash;HbR by
       sign.</p>
-    {{ subject_metrics(subject_metrics_rows, subject_ids) }}
-    <div class="panel-caveat">
-      Each table is its own measurement, not a subset of the one above it. GVTD is an RMS
-      across the channels of its set and a retention rate is a fraction of them, so a long
-      and a short row are two numbers about two montages rather than one number split in
-      half. The coherence on this page is computed on the long channels; the short table is
-      what says whether a change there is brain or scalp.
-    </div>
+    {{ subject_metrics(subject_metrics_rows) }}
+    <p class="qm-note">Each table is its own measurement, not a subset of the one above it:
+      GVTD is an RMS across the channels of its set and a retention rate is a fraction of
+      them. The coherence is computed on the long channels.</p>
     {% if condition_label %}
-    <div class="panel-caveat">
-      Over this window only, read out of the <code>by_condition</code> section each
-      member&rsquo;s quality record already holds, so nothing was measured again here and
-      these are the same numbers that member&rsquo;s own per-condition page prints. A row
-      left blank is one the record has no per-condition value for, the whole-recording SCI
-      being the case: it is a single estimate over the run and has no slice of itself to
-      give, so read the 10 s one beside it and take the other off the
-      <a href="{{ run_href }}">whole-run page</a>.
-      <br /><br />
-      <b>This reports, it does not re-decide.</b> The coherence above was computed on the
-      channel set the whole recording was screened into, and stays that way for two reasons:
-      the window is read out of a transform of the whole recording, so a channel set of its
-      own would need a transform of its own; and screening each condition separately would
-      make a contrast between two conditions a contrast between two montages as well. So a
-      channel that held up here and came loose elsewhere is still in, and one that came
-      loose <i>here</i> is still in too &mdash; these numbers are how to see which.
-    </div>
+    <p class="qm-note">Over this window only, read off each member&rsquo;s own record, so
+      these are the numbers that member&rsquo;s per-condition page prints. A blank row is one
+      the record has no per-condition value for. This reports, it does not re-decide: the
+      channel set is the whole recording&rsquo;s, since one montage has to serve every
+      condition, so a channel that came loose here is still in.
+      <a href="{{ run_href }}">Whole-run page</a>.</p>
     {% endif %}
   </div>
 </details>
@@ -211,13 +183,11 @@
 <details id="Quality" open>
   <summary>b. Per-subject quality metrics &mdash; not available for this window</summary>
   <div class="details-body">
-    <div class="panel-caveat">
-      Neither member&rsquo;s quality record carries a <code>by_condition</code> section, so
-      there is nothing to show here rather than the whole recording&rsquo;s numbers under
-      this condition&rsquo;s heading. Those are on the
-      <a href="{{ run_href }}">whole-run page</a>. Re-running <code>fnirs-pipe</code> on
-      these subjects writes the section.
-    </div>
+    <p class="qm-note">Neither member&rsquo;s record carries a <code>by_condition</code>
+      section, so nothing is shown rather than the whole recording&rsquo;s numbers under this
+      condition&rsquo;s heading. Those are on the
+      <a href="{{ run_href }}">whole-run page</a>; re-running <code>fnirs-pipe</code> on
+      these subjects writes the section.</p>
   </div>
 </details>
 {% endif %}
@@ -228,7 +198,7 @@
   <div class="details-body">
     <p class="step-desc">The channel-to-region mapping from <code>--roi-mapping</code>, which
       is what the per-ROI panels below are averaged over.</p>
-    <table id="roi-table">
+    <table class="qm-table qm-flat" id="roi-table">
       <thead><tr><th>ROI</th><th>Channels</th></tr></thead>
       <tbody>
       {% for row in roi_rows %}
@@ -357,7 +327,7 @@
   <span style="color:#8e44ad">&#9632;</span> {{ subject_ids[0] }}
   <span style="color:#27ae60">&#9632;</span> {{ subject_ids[1] }}
 </p>
-{% if isc_unfiltered_note %}<div class="panel-caveat">{{ isc_unfiltered_note }}</div>{% endif %}
+{% if isc_unfiltered_note %}<p class="qm-note">{{ isc_unfiltered_note }}</p>{% endif %}
 
 {% if isc_panel_hbo_path %}
 <details id="ISCHbo" open>

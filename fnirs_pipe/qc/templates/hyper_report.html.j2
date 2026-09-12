@@ -18,9 +18,7 @@
 .cd-chip.cd-good{background:#d4edda;color:#155724}
 .cd-chip.cd-bad{background:#f8d7da;color:#721c24}
 .cd-chip.cd-disabled{opacity:.45;pointer-events:none;cursor:not-allowed}
-.cd-table { font-size: 0.82rem; margin-top: 0.5rem; }
 .cd-table td:not(:first-child), .cd-table th:not(:first-child) { text-align: center; }
-.cd-table td.bad { color: #c0392b; }
 {% endblock %}
 
 {% set rating_subject = page_stem %}
@@ -50,8 +48,8 @@
 {% block header %}
 <div class="page-header">
   <h1>{{ page_heading }}</h1>
-  <span class="subtitle">v{{ versions.get('fnirs-pipe', 'unknown') }} &bull; {{ run_date }}
-    &bull; group-{{ group_id }} &bull; task-{{ task }}</span>
+  <span class="subtitle">dyad raw QC &bull;
+    v{{ versions.get('fnirs-pipe', 'unknown') }} &bull; {{ run_date }}</span>
 </div>
 {% endblock %}
 
@@ -104,8 +102,8 @@
     <p class="step-desc">Crop offset from the first shared trigger; all recordings are then
       trimmed to the shortest. A dyad window is on the aligned clock and a member&rsquo;s own
       record is on its own, and this table is what converts between them.</p>
-    <table id="align-table">
-      <thead><tr><th>Subject</th><th>Offset (s)</th><th>Aligned duration (s)</th></tr></thead>
+    <table class="qm-table qm-flat" id="align-table">
+      <thead><tr><th>Member</th><th>Offset (s)</th><th>Aligned duration (s)</th></tr></thead>
       <tbody id="align-tbody"></tbody>
     </table>
   </div>
@@ -118,7 +116,7 @@
     <p class="step-desc">&uarr; / &darr; marks the better direction; SCI is coloured against
       this run&rsquo;s own threshold and HbO&ndash;HbR by sign. One unheaded table: the raw
       pass measures every channel and does not split by separation.</p>
-    {{ subject_metrics(subject_metrics_rows, subject_ids) }}
+    {{ subject_metrics(subject_metrics_rows) }}
   </div>
 </details>
 {% endif %}
@@ -261,7 +259,7 @@
     <p class="step-desc">Click a chip to cycle: &mdash; &rarr; good &rarr; bad. Saves to each
       subject&rsquo;s JSON, and is only active when the page is served by
       <code>fnirs-rate hyper</code>.</p>
-    <table class="cd-table">
+    <table class="qm-table qm-flat cd-table">
       <thead>
         <tr>
           <th rowspan="2">Channel</th>

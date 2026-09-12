@@ -5,30 +5,42 @@
    a heading with a disclosure triangle and a filled panel around it is chrome. It is gone
    rather than left unused: the only thing it was good for was building the look back. #}
 
-{# Per-subject quality metrics: one table per channel set, one row per metric, one column
-   per subject. Tables come from hyper_report.subject_metric_tables.
+{# Per-subject quality metrics: one table per channel set, one column per metric, one row
+   per member. Tables come from hyper_report.subject_metric_tables.
+
+   The shape and the markup are the subject report's own metrics section, down to the class
+   names, so a reader moving between a subject page and a dyad page reads one table twice
+   rather than two tables once. `qm-flat` is what drops the cell grid: a row is separated by
+   a hairline and a value column by being right-aligned.
 
    A set is its own measurement rather than a grouping of one, which is why it gets its own
    table: GVTD is an RMS across the channels of its set, and a long retention rate and a
    short one are fractions of different montages. An entry whose `set` is empty is a page
-   with nothing to split, and prints unheaded. #}
-{% macro subject_metrics(tables, subject_ids) -%}
+   with nothing to split, and prints unheaded.
+
+   Cells arrive formatted, with their colour class already chosen against the registry. No
+   number is written here; see qc.boilerplate.vocabulary. #}
+{% macro subject_metrics(tables) -%}
 {%- for table in tables %}
-{% if table.set %}<h4 class="subj-set">{{ table.set }} channels</h4>{% endif %}
-<table class="subj-metrics">
+{% if table.set %}<h3 class="qm-sub">{{ table.set }} channels</h3>{% endif %}
+<div style="overflow-x:auto;">
+<table class="qm-table qm-flat">
   <thead>
-    <tr><th>Metric</th>{% for sid in subject_ids %}<th>{{ sid }}</th>{% endfor %}</tr>
+    <tr><th>Member</th>
+      {%- for col in table.columns %}
+      <th><span class="ql{% if col.key_metric %} ql-key{% endif %}" title="{{ col.summary }}"
+          >{{ col.label }}{% if col.key_metric %}<span class="ql-dot" aria-hidden="true">&#9679;</span>{% endif %}</span></th>
+      {%- endfor %}
+    </tr>
   </thead>
   <tbody>
     {%- for row in table.rows %}
-    <tr>
-      <td{% if row.summary %} title="{{ row.summary }}"{% endif %}>{{ row.label }} <span class="dir">{{ row.direction }}</span></td>
-      {%- for cell in row.cells %}
-      <td class="{{ cell.cls }}">{{ cell.text }}</td>
-      {%- endfor %}
+    <tr><td>{{ row.member }}</td>
+      {%- for cell in row.cells %}<td class="qv {{ cell.cls }}">{{ cell.text }}</td>{% endfor %}
     </tr>
     {%- endfor %}
   </tbody>
 </table>
+</div>
 {%- endfor %}
 {%- endmacro %}
