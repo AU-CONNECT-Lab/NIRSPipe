@@ -8,6 +8,13 @@ All notable changes to this project will be documented in this file.
 
 ## [0.38.0] - 2026-09-12
 
+### Added
+- **The dyad post report can be rated.** It had no rating bar at all, so neither the run page nor any of its condition pages could be marked. One cell per section, and the run and each condition are filed separately
+- **Every page in a set links to the others from its bar**: a subject's conditions to each other and back to the run, and the raw dyad report to the post one
+
+### Changed
+- **The raw dyad report's bar is one cell per section with anchors**, as the other bars are. It was two coarse cells that scrolled nowhere; verdicts already filed under them are kept
+
 ### Fixed
 - **A condition's GCOR before/after pair spanned the bandpass as well as the regression.** The run's own page has always paired the filtered stage against the residual; a condition paired the unfiltered one, and the bandpass alone moves that number
 - **The channel-quality grid's SCI row is the windowed estimate on every page.** A run page drew the whole-run one while a condition page drew the windowed one, under the same label, and the four rows beside it were windowed either way

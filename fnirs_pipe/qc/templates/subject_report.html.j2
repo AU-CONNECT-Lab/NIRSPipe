@@ -42,6 +42,15 @@
 {% set _ = _nav.append({"id": "Errors" ~ _rk, "name": "Errors", "href": "#Errors"}) %}
 {% set _ = _nav.append({"id": "Provenance", "name": "Provenance", "href": "#Provenance", "ratable": false}) %}
 {% set _ = _nav.append({"id": "Methods",    "name": "Methods",    "href": "#Methods",    "ratable": false}) %}
+{# the run and its conditions are one set of pages, so each reaches any other in a click #}
+{% if nav_links %}
+  {% set _ = _nav.append({"sep": true}) %}
+  {% for link in nav_links %}
+    {% set _ = _nav.append({"id": "page" ~ loop.index, "name": link.label,
+                            "href": false if link.current else link.href,
+                            "ratable": false}) %}
+  {% endfor %}
+{% endif %}
 {% if index_href %}
   {% set _ = _nav.append({"sep": true}) %}
   {% set _ = _nav.append({"id": "AllRuns", "name": "← All runs", "href": index_href, "ratable": false}) %}

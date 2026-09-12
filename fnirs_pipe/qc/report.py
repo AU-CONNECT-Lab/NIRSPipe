@@ -2273,6 +2273,15 @@ def _write_condition_reports(
     windows = _record_windows(by_condition)
 
     blanked = _blanked(section_vars)
+    # the run and its conditions are one set of pages, so each carries the whole strip and
+    # reaches any other in a click, as a dyad's condition pages do
+    def _page_name(label: "str | None") -> str:
+        if label is None:
+            return out_path.name
+        return f"{out_path.stem.removesuffix('_qc')}_desc-{_pair_fname(label)}_qc.html"
+
+    nav_pages = [(None, "Whole run")] + [(lab, lab) for lab in by_condition]
+
     # one pass for every condition, so the panels land on a shared colour scale; per page it
     # would be one scale each and the pages are read against each other
     trial_images = remake_trial_images(windows) if remake_trial_images is not None else {}
@@ -2334,6 +2343,8 @@ def _write_condition_reports(
         stem = f"{out_path.stem.removesuffix('_qc')}_desc-{_pair_fname(label)}_qc"
         page = {
             **report_vars, **blanked, **summary, **panels,
+            "nav_links": [{"label": text, "href": _page_name(lab),
+                           "current": lab == label} for lab, text in nav_pages],
             "sqm": scalars,
             "channel_rows": rows,
             "channel_cells": cells,

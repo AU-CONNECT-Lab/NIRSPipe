@@ -37,15 +37,19 @@ select#ch-select {
 {% endblock %}
 
 {% set rating_subject = page_stem %}
-{# the post report is the other half of this pair of pages, so it is one click away #}
+{# One cell per section, anchored to it, as the subject and post bars are. `Signal_Quality`
+   and `Coherence` keep their ids so ratings already filed under them survive. #}
 {% set rating_modules = [[
-  {"id": "Signal_Quality", "name": "Signal Quality"},
-  {"id": "Coherence", "name": "Coherence"},
+  {"id": "Alignment", "name": "Alignment", "href": "#Alignment"},
+  {"id": "Signal_Quality", "name": "Quality", "href": "#Quality"},
+  {"id": "Triggers", "name": "Triggers", "href": "#Triggers"},
+  {"id": "Coherence", "name": "Coherence", "href": "#Coherence"},
+  {"id": "Channels", "name": "Channels", "href": "#Channels"},
   {"sep": true},
   {"id": "PostReport", "name": "Post report →",
    "href": post_href or false, "ratable": false},
 ]] %}
-{% set rating_pinned = [{"id": "Final", "name": "FINAL"}] %}
+{% set rating_pinned = [{"id": "Final", "name": "FINAL", "href": false}] %}
 {% set rating_chip = "group-" ~ group_id %}
 {% set rating_save_endpoint = "/save_hyper_ratings" %}
 {% set rating_load_endpoint = "/load_hyper_ratings/" ~ page_stem %}
@@ -53,7 +57,7 @@ select#ch-select {
 {% block content %}
 
 <!-- Alignment table -->
-{% call card("Time Alignment", hint="crop offset from first shared trigger &bull; all recordings trimmed to shortest") %}
+{% call card("Time Alignment", hint="crop offset from first shared trigger &bull; all recordings trimmed to shortest", id="Alignment") %}
 <div class="align-wrap">
   <table id="align-table">
     <thead><tr><th>Subject</th><th>Offset (s)</th><th>Aligned duration (s)</th></tr></thead>
@@ -64,7 +68,7 @@ select#ch-select {
 
 <!-- Per-subject quality metrics -->
 {% if subject_metrics_rows %}
-{% call card("Per-subject Quality Metrics", hint="↑ / ↓ = better direction &bull; SCI coloured against the threshold, HbO-HbR by sign") %}
+{% call card("Per-subject Quality Metrics", hint="↑ / ↓ = better direction &bull; SCI coloured against the threshold, HbO-HbR by sign", id="Quality") %}
 <div class="subj-metrics-wrap">
   {{ subject_metrics(subject_metrics_rows, subject_ids) }}
 </div>
@@ -72,7 +76,7 @@ select#ch-select {
 {% endif %}
 
 {% if figure_paths.trigger_timeline_raw %}
-{% call card("Trigger Timeline (Raw)", hint="event onsets per subject before alignment &bull; original recording time", id="trigger-raw-card") %}
+{% call card("Trigger Timeline (Raw)", hint="event onsets per subject before alignment &bull; original recording time", id="Triggers") %}
 <iframe class="plot-frame" src="{{ figure_paths.trigger_timeline_raw.src }}"
         style="height:{{ figure_paths.trigger_timeline_raw.h }}px"></iframe>
 {% endcall %}
@@ -114,7 +118,7 @@ select#ch-select {
 <!-- Coherence: bar chart + windowed heatmap -->
 <div class="row row-coh" style="margin-bottom:0.5rem">
   {% if figure_paths.coherence_bar %}
-  {% call card("Inter-subject Coherence (mean)", hint="sorted by mean coherence") %}
+  {% call card("Inter-subject Coherence (mean)", hint="sorted by mean coherence", id="Coherence") %}
   <iframe class="plot-frame" src="{{ figure_paths.coherence_bar.src }}"
           style="height:{{ figure_paths.coherence_bar.h }}px"></iframe>
   {% endcall %}
@@ -128,7 +132,7 @@ select#ch-select {
 </div>
 
 {% if figure_paths.ch_summary %}
-{% call card("Channel Quality Summary (Group)", hint="green = all subjects good &bull; yellow = mixed &bull; red = all bad") %}
+{% call card("Channel Quality Summary (Group)", hint="green = all subjects good &bull; yellow = mixed &bull; red = all bad", id="Channels") %}
 <iframe class="plot-frame" src="{{ figure_paths.ch_summary.src }}"
         style="height:{{ figure_paths.ch_summary.h }}px"></iframe>
 {% endcall %}
