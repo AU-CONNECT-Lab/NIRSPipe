@@ -2,8 +2,13 @@
 
 {# One section list drives both rows of the top bar: the anchor links and the rating
    pills under them. Rating ids carry the run label so a subject's runs do not share
-   a key in ratings.toml; hrefs stay the plain anchors used in the body. #}
-{% set _rk = ("__" ~ run_label) if run_label else "" %}
+   a key in ratings.toml; hrefs stay the plain anchors used in the body.
+
+   A per-condition page is its own report and adds its own slug, because it inherits the
+   run's `run_label`: without it every condition of a run rated the run's own key, and a
+   verdict on one condition overwrote the verdict on the page beside it. #}
+{% set _rk = (("__" ~ run_label) if run_label else "")
+             ~ (("__" ~ condition_slug) if condition_slug else "") %}
 {% set _nav = [
   {"id": "Summary", "name": "Summary", "href": "#Final", "ratable": false},
   {"sep": true},

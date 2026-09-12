@@ -2361,6 +2361,8 @@ def _write_condition_reports(
             "page_heading": f"{report_vars['page_heading']} \u2014 {label}",
             "page_title": f"{report_vars['page_title']} \u2014 {label}",
             "condition_label": label,
+            # what keeps this page's rating keys out of the run's; see the template's `_rk`
+            "condition_slug": slug,
             "index_href": out_path.name,
         }
         leaks = _figure_leaks(page, _pair_fname(label))
