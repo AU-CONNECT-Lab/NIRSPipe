@@ -11,7 +11,9 @@ catches what it was not handed, by looking at the assembled values rather than a
 names somebody has to remember to extend.
 """
 
-from fnirs_pipe.qc.report import _blanked, _figure_leaks
+from fnirs_pipe.qc.report import (
+    _blanked, _carpet_views, _condition_carpet, _figure_leaks,
+)
 
 
 # ---- blanking a section keeps its type ----
@@ -132,3 +134,27 @@ def test_the_per_channel_panels_are_checked_at_all():
     # they are the panels there are the most files of
     page = {"ch_detail_pairs": [{"pair": "S1D1", "path": "figures/x/ch_detail_S1D1.html"}]}
     assert _figure_leaks(page, "game1") == ["ch_detail_pairs=ch_detail_S1D1.html"]
+
+
+def test_the_carpet_reaches_a_condition_page_as_a_fragment_too():
+    page = _condition_carpet({"carpet_gvtd_path": "figures/x/carpet_gvtd.html",
+                              "carpet_gvtd_h": 600}, "game1")
+    assert page["carpet_gvtd_path"] == "figures/x/carpet_gvtd.html#game1"
+    assert page["carpet_gvtd_h"] == 600
+    assert _figure_leaks(page, "game1") == []
+
+
+def test_a_run_with_no_carpet_hands_the_condition_page_none():
+    # the build is guarded, so a failed carpet must not become the string "None#game1"
+    assert _condition_carpet({}, "game1")["carpet_gvtd_path"] is None
+
+
+def test_the_carpet_view_carries_the_window_and_nothing_else():
+    # unlike the motion rows, the carpet's colour scale is one scale across conditions, so
+    # there is no y range to pick and no shaded span to redraw
+    views = _carpet_views([("game 1", 10.0, 20.0), ("video", 30.0, 40.0)])
+    assert views == {"game1": {"x": [10.0, 20.0]}, "video": {"x": [30.0, 40.0]}}
+
+
+def test_a_run_with_no_conditions_bakes_no_view_table():
+    assert _carpet_views([]) is None

@@ -68,7 +68,7 @@ from fnirs_pipe.qc.channel_table import (
     save_channel_csv, separation_blocks, separation_notes,
 )
 from fnirs_pipe.qc.figure_io import (
-    CENTER_FIGURE_CSS, PLOTLY_CDN_URL, _IFRAME_CSS, _RESIZE_JS,
+    CENTER_FIGURE_CSS, PLOTLY_CDN_URL, _HASH_VIEW_JS, _IFRAME_CSS, _RESIZE_JS,
     _fig_href, _figure_height, _pair_fname, _save_b64_png, _save_multi_fig_html,
     extract_markers, get_channel_pairs,
 )
@@ -220,8 +220,12 @@ def _save_mpl_fig(fig, path: Path) -> None:
 
 
 def _save_plotly_html(fig, path: Path, div_id: str | None = None,
-                      extra_css: str = "") -> tuple[str, int]:
-    """Save Plotly figure as standalone iframe-ready HTML. Returns (relative_path, height_px)."""
+                      extra_css: str = "", views: "dict | None" = None) -> tuple[str, int]:
+    """Save Plotly figure as standalone iframe-ready HTML. Returns (relative_path, height_px).
+
+    ``views`` maps a condition key to the window the page should open on, so one file serves
+    the run and every condition off a URL fragment. See ``_HASH_VIEW_JS``.
+    """
     h = _figure_height(fig)
     fig.update_layout(height=h)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -233,6 +237,12 @@ def _save_plotly_html(fig, path: Path, div_id: str | None = None,
         f'<head>\n<style>{_IFRAME_CSS}{extra_css}</style>\n<script src="{PLOTLY_CDN_URL}"></script>\n{_RESIZE_JS}',
         1,
     )
+    if views:
+        html = html.replace(
+            "</body>",
+            f"<script>window.__COND_VIEWS__={json.dumps(views)};</script>{_HASH_VIEW_JS}</body>",
+            1,
+        )
     path.write_text(html, encoding="utf-8")
     return _fig_href(path.parent, path.name), h
 
@@ -548,6 +558,24 @@ def _section_psd_detail(
     return {"psd_detail_pairs": saved}
 
 
+def _carpet_views(spans: "list[tuple[str, float, float]]") -> "dict | None":
+    """Each condition's window on the carpet, which moves along time and nothing else.
+
+    Shorter than ``_condition_views``: the carpet's colour scale is one scale across
+    conditions by design, so unlike the per-channel motion rows there is no y range and no
+    shaded span to carry.
+    """
+    return {_pair_fname(label): {"x": [float(t0), float(t1)]}
+            for label, t0, t1 in spans} or None
+
+
+def _condition_carpet(run_vars: dict, slug: str) -> dict:
+    """The run's carpet, addressed at one condition's window."""
+    path = run_vars.get("carpet_gvtd_path")
+    return {"carpet_gvtd_path": f"{path}#{slug}" if path else None,
+            "carpet_gvtd_h": run_vars.get("carpet_gvtd_h")}
+
+
 def _section_motion(
     raw_long: mne.io.Raw,
     raw_gvtd: mne.io.Raw,
@@ -563,17 +591,23 @@ def _section_motion(
     raw_before_motion: mne.io.Raw | None = None,
     raw_after_motion: mne.io.Raw | None = None,
     suffix: str = "",
-    xrange: "tuple[float, float] | None" = None,
+    condition_spans: "list[tuple[str, float, float]] | None" = None,
+    skip_carpet: bool = False,
 ) -> dict:
     """The carpet and GVTD panel, with the flagged spans drawn over it.
 
-    ``suffix`` names both figures, so a per-condition page writes its own rather than
-    overwriting the run's. ``xrange`` narrows the view to one condition **after** the panel
-    is built, which is the only correct way to make this figure per condition: it derives
-    its GVTD (filtered 0.01-0.5 Hz), its per-channel z-scoring and its threshold from
-    whatever recording it is handed, so a cropped one would get filter edges on a short
-    piece, a colour scale no other condition shares, and a threshold of its own. The same
-    argument this docstring already makes for the corrected-versus-uncorrected pair.
+    ``suffix`` names the bad-segment zoom, so a per-condition page writes its own rather
+    than overwriting the run's. The carpet is not written per condition at all: it is
+    narrowed to one **after** the panel is built, which is the only correct way to make this
+    figure per condition, and narrowing moves nothing but the x range. So the run's file
+    carries every condition's window in ``condition_spans`` and a condition page asks for
+    one by URL fragment, ``skip_carpet`` saying it already has the file it needs.
+
+    Building it per condition instead would derive its GVTD (filtered 0.01-0.5 Hz), its
+    per-channel z-scoring and its threshold from a cropped recording, so it would get filter
+    edges on a short piece, a colour scale no other condition shares, and a threshold of its
+    own. The same argument this docstring already makes for the corrected-versus-uncorrected
+    pair.
 
     Both span lists come from the record's ``windowed`` section rather than being detected
     here. They were measured on the same channel set this panel draws, so reading them back
@@ -602,17 +636,16 @@ def _section_motion(
     # keyed by channel set, so each GVTD row shades the spans found on its own channels
     spike_by_set = {gvtd_set: spike_spans, "short": _spans("spike_spans_short_s")}
 
-    with _guard("Carpet + GVTD", errors, subject):
-        fig = carpet_gvtd_figure(raw_gvtd, raw_gvtd.ch_names,
-                                 corrected_segments=corrected_segments,
-                                 spike_segments=spike_by_set,
-                                 raw_after=raw_after_motion,
-                                 channel_set=gvtd_set, blocks=gvtd_blocks)
-        if xrange is not None:
-            from fnirs_pipe.qc.condition_views import zoom_to_condition
-            zoom_to_condition(fig, *xrange)
-        carpet_gvtd_path, carpet_gvtd_h = _save_plotly_html(
-            fig, figures_dir / f"carpet_gvtd{suffix}.html")
+    if not skip_carpet:
+        with _guard("Carpet + GVTD", errors, subject):
+            fig = carpet_gvtd_figure(raw_gvtd, raw_gvtd.ch_names,
+                                     corrected_segments=corrected_segments,
+                                     spike_segments=spike_by_set,
+                                     raw_after=raw_after_motion,
+                                     channel_set=gvtd_set, blocks=gvtd_blocks)
+            carpet_gvtd_path, carpet_gvtd_h = _save_plotly_html(
+                fig, figures_dir / "carpet_gvtd.html",
+                views=_carpet_views(condition_spans or []))
 
     with _guard("Bad segment zoom", errors, subject):
         all_spans = [
@@ -1625,7 +1658,9 @@ def build_subject_report(
                             sci_scores, config, segments, subject, errors,
                             figures_dir, windowed=windowed_section,
                             raw_before_motion=raw_before_motion,
-                            raw_after_motion=raw_after_motion)
+                            raw_after_motion=raw_after_motion,
+                            condition_spans=_record_windows(
+                                record.get("by_condition") or {}) if by_condition else [])
     motion_det_figs   = _motion_detail_figures(
                             raw_before_motion, raw_after_motion, subject, errors,
                             segments=segments,
@@ -1846,11 +1881,15 @@ def build_subject_report(
                 remake_sci=lambda suffix, windowed_slice, sci_pc: _section_sci(
                     raw_intensity, sci_pc, bad_channels, config, windowed_slice,
                     subject, errors, figures_dir, suffix=suffix),
-                remake_motion=lambda suffix, span: _section_motion(
-                    raw_long, raw_gvtd, gvtd_set, gvtd_blocks, sci_scores, config,
-                    segments, subject, errors, figures_dir, windowed=windowed_section,
-                    raw_before_motion=raw_before_motion,
-                    raw_after_motion=raw_after_motion, suffix=suffix, xrange=span),
+                remake_motion=lambda slug: {
+                    **_section_motion(
+                        raw_long, raw_gvtd, gvtd_set, gvtd_blocks, sci_scores, config,
+                        segments, subject, errors, figures_dir, windowed=windowed_section,
+                        raw_before_motion=raw_before_motion,
+                        raw_after_motion=raw_after_motion, suffix=f"_{slug}",
+                        skip_carpet=True),
+                    **_condition_carpet(motion_vars, slug),
+                },
                 # the condition's own SCI and its own rejected set, so the maps show the
                 # verdict printed beside them rather than the run's
                 remake_brain=lambda suffix, sci_pc, cond_bad: _section_brain(
@@ -1920,15 +1959,15 @@ def _blanked(section_vars: tuple) -> dict:
 # and labelled, so it reads as the model and not as one condition's; a per-condition design
 # matrix would be a different model, not a view of this one.
 #
-# Nothing else belongs. The carpet, the spectra and the correlation panels would all look
-# like the condition's, which is why they are rebuilt per condition instead.
+# Nothing else belongs. The spectra and the correlation panels would all look like the
+# condition's, which is why they are rebuilt per condition instead.
 #
 # Everything not listed has to carry the condition's own name, which `_figure_leaks` checks
 # by suffix rather than by listing the panels: a per-panel prefix list would also pass a
 # *different* condition's figure, worse than a run-wide one because the page would look
 # per-condition and be the wrong condition. A `#slug` fragment counts as that name: the
-# per-channel motion figures are one file per channel holding every condition's window,
-# since the traces do not vary by condition and only the axes do.
+# carpet and the per-channel motion figures hold every condition's window in one file,
+# since their traces do not vary by condition and only the axes do.
 _CONDITION_PAGE_FIGURES = ("provenance.", "glm_design_", "trigger_timeline.")
 
 
@@ -2260,12 +2299,13 @@ def _write_condition_reports(
         if remake_sci is not None:
             panels.update(remake_sci(f"_{slug}", _windowed_slice(record, windows, label),
                                      sliced.get("sci_per_channel") or {}))
-        # and the carpet narrowed to it: measured over the run, viewed over the condition
+        # the bad-segment zoom on this condition's own name, and the carpet narrowed to it
+        # without being written again: measured over the run, viewed over the condition
         if remake_motion is not None:
-            panels.update(remake_motion(f"_{slug}", span))
-        # the denoising carpet is narrowed the same way, written again here viewing this
-        # stretch. The per-channel motion figures are not written again at all: the run's
-        # files carry every condition's window and this page addresses one by fragment
+            panels.update(remake_motion(slug))
+        # the denoising carpet is narrowed the same way but written again here, being a PNG
+        # with no view to pick. The carpet and the per-channel motion figures are not: the
+        # run's files carry every condition's window and this page addresses one by fragment
         if remake_brain is not None:
             panels.update(remake_brain(f"_{slug}", sliced.get("sci_per_channel") or {},
                                        cond_bad))

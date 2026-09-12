@@ -34,15 +34,15 @@ _RESIZE_JS = (
     "})();</script>"
 )
 
-# One file per channel holding every condition's view, picked by URL fragment, rather than
-# the same traces written out once per condition. Applies to ``pfig0``, the only div a
-# caller passing a views table has. ``window_view_spec`` measured the numbers; this spends
-# them, so the run-wide file and a condition's view of it cannot disagree.
+# One file holding every condition's view, picked by URL fragment, rather than the same
+# traces written out once per condition. Applies to the first plot in the file, which is
+# the only one a caller passing a views table has. ``window_view_spec`` measured the
+# numbers; this spends them, so the run's file and a condition's view of it cannot disagree.
 _HASH_VIEW_JS = (
     "<script>(function(){"
     "function apply(){"
     "if(typeof Plotly==='undefined')return;"
-    "var t=window.__COND_VIEWS__,gd=document.getElementById('pfig0');"
+    "var t=window.__COND_VIEWS__,gd=document.querySelector('.plotly-graph-div');"
     "if(!t||!gd||!gd.layout)return;"
     "var k=decodeURIComponent(location.hash.replace(/^#/,''));"
     "if(!k||!t[k])return;"
