@@ -12,11 +12,16 @@ import pandas as pd
 from fnirs_pipe.qc.boilerplate import collect_software_versions
 from fnirs_pipe.qc.figure_io import _save_figure_html
 from fnirs_pipe.qc.figures.group_figures import (
+    SCORE_THRESHOLD,
     _split_column,
+    build_condition_matrix,
+    build_condition_panels,
+    build_deviation_strip,
     build_grouped_boxes,
-    build_heatmap,
-    build_time_subject_heatmap,
+    build_window_grid,
+    condition_names,
     detect_outliers,
+    deviation_scores,
     group_metrics,
 )
 from fnirs_pipe.qc.report_shell import (
@@ -48,18 +53,6 @@ _STRIP_CLICK_JS = (
     "if(b)window.open('../'+b.split('_')[0]+'/'+b+'_desc-raw_nirs.html','_blank');});}"
     "bind();})();</script>"
 )
-
-# Per-window metrics that should produce a time × subject heatmap.
-_WINDOWED_METRICS = [
-    ("sci",  "sci_per_window",  "sci_window_times_s",  "SCI per window"),
-    ("psp",  "psp_per_window",  "psp_window_times_s",  "PSP per window"),
-    ("cv",   "cv_per_window",   "cv_window_times_s",   "CV per window"),
-    ("snr",  "snr_per_window",  "cv_window_times_s",   "SNR per window"),
-    ("gvtd", "gvtd_per_window", "gvtd_window_times_s", "GVTD mean per window"),
-    ("gvtd_p95", "gvtd_p95_per_window", "gvtd_window_times_s", "GVTD p95 (worst-moment) per window"),
-    ("gvtd_filt", "gvtd_filt_per_window", "gvtd_window_times_s", "GVTD filtered (0.01-0.5 Hz) mean per window"),
-    ("gvtd_filt_p95", "gvtd_filt_p95_per_window", "gvtd_window_times_s", "GVTD filtered (0.01-0.5 Hz) p95 per window"),
-]
 
 logger = get_logger("qc.group_writer")
 
@@ -305,15 +298,30 @@ def _render_group(
             return
         fname = f"{out_stem}_desc-{desc}_nirs.html"
         h = _save_figure_html(fig, fig_dir / fname, extra_js=extra_js)
-        figure_paths[name] = {"src": f"{out_stem}/{fname}", "h": h}
+        figure_paths[name] = {"src": f"{out_stem}/{fname}", "h": h,
+                              "w": getattr(fig.layout, "width", None)}
+
+    # one number per run, and the few worst names, which every panel below highlights
+    ranked: list[str] = []
+    worst: list[str] = []
+    outliers: dict = {}
+    if metric_cols and not df.empty:
+        with guard("Outlier detection", errors, out_stem):
+            outliers = detect_outliers(df, metric_cols)
+            scores = deviation_scores(df, metric_cols)
+            finite = np.where(np.isfinite(scores), scores, -np.inf)
+            ranked = [str(df.iloc[i, 0]) for i in np.argsort(-finite)]
+            worst = [name for name in ranked if name in outliers][:3]
 
     box_panels: list[dict] = []
+    dropped: list[str] = []
     if not df.empty and metric_cols:
         ordered_cols: list[str] = []
         with guard("Metric ordering", errors, out_stem):
             _, ordered_cols = group_metrics(metric_cols)
-        with guard("Heatmap", errors, out_stem):
-            _save("heatmap", "heatmap", build_heatmap(df, ordered_cols))
+        with guard("Deviation strip", errors, out_stem):
+            strip, dropped = build_deviation_strip(df, ordered_cols)
+            _save("strip", "strip", strip)
         with guard("Boxplots", errors, out_stem):
             for i, (box_title, fig) in enumerate(build_grouped_boxes(df, ordered_cols)):
                 fname = f"{out_stem}_desc-box{i}_nirs.html"
@@ -323,30 +331,28 @@ def _render_group(
                     "w": int(getattr(fig.layout, "width", None) or 300), "title": box_title,
                 })
 
-    windowed_panels: list[dict] = []
-    _warn_on_mixed_windows(full_rows)
-    for key, val_field, time_field, panel_title in _WINDOWED_METRICS:
-        if not any(val_field in r and r[val_field] for r in full_rows):
-            continue
-        with guard(f"Time x subject heatmap ({key})", errors, out_stem):
-            fig = build_time_subject_heatmap(full_rows, val_field, time_field, panel_title)
-            if fig is None:
-                continue
-            _save(f"window_{key}", f"window{key}", fig)
-            windowed_panels.append(
-                {"key": key, "title": panel_title, **figure_paths[f"window_{key}"]})
-
-    outliers: dict = {}
-    if metric_cols:
-        with guard("Outlier detection", errors, out_stem):
-            outliers = detect_outliers(df, metric_cols)
-
-    if 0 < len(df) < SMALL_COHORT_N:
+    if dropped:
+        shown = ", ".join(dropped[:8])
+        more = f", and {len(dropped) - 8} more" if len(dropped) > 8 else ""
         note(notes, out_stem,
-             f"{len(df)} runs. A box, a robust z-score and a Tukey fence all measure how far "
-             f"a run sits from the middle of its cohort, and a cohort this small has no middle "
-             f"to measure from: read the panels as the runs' own values side by side, which is "
-             f"what the table holds.")
+             f"{len(dropped)} metrics hold the same value on every run, so there is no "
+             f"deviation to plot and the overview leaves them out ({shown}{more}). They are "
+             f"still in the table.")
+
+    _warn_on_mixed_windows(full_rows)
+    with guard("Windowed grid", errors, out_stem):
+        _save("windows", "windows", build_window_grid(full_rows, highlight=worst))
+    with guard("Condition panels", errors, out_stem):
+        _save("conditions", "conditions", build_condition_panels(full_rows, highlight=worst))
+    with guard("Condition matrix", errors, out_stem):
+        _save("conditionmatrix", "conditionmatrix",
+              build_condition_matrix(full_rows, order=ranked))
+
+    conditions = condition_names(full_rows)
+    if not conditions:
+        note(notes, out_stem,
+             "no run carries conditions, so the per-condition panels are absent; the "
+             "windowed panel keeps the time axis")
 
     html = render(
         template_name,
@@ -364,9 +370,11 @@ def _render_group(
         summary_meta=_summary_meta(df, metric_cols, descs or []),
         headline_rows=_headline_rows(df) if not df.empty else [],
         small_cohort=0 < len(df) < SMALL_COHORT_N,
+        score_threshold=SCORE_THRESHOLD,
+        conditions=conditions,
+        worst_runs=worst,
         figure_paths=figure_paths,
         box_panels=box_panels,
-        windowed_panels=windowed_panels,
         tsv_name=tsv_path.name,
         table_columns=list(df.columns),
         table_rows=df.values.tolist(),

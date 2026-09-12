@@ -7,6 +7,8 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- **`fnirs-qc prep-raw --motion-correction`** runs that one step on a copy of the optical density and reports the recording either side of it: the correction's footprint split by separation, the corrected file measured again on the keys the uncorrected one carries, and one carpet showing both. Nothing is written back and no other preprocessing runs, so the screening verdict and every coupling metric still describe the recording as delivered. Default `none`
+- **The raw report carries the grand mean and the single-channel trial images**, the two panels the subject report had and this one did not. The grand mean's dotted short-channel trace is the reason it belongs before preprocessing rather than after: when it rises with the solid one the response is scalp haemodynamics, and no later step separates them
 - **`fnirs-qc prep-raw` writes a `by_condition` section too**, the same section and the same shape the pipeline's own record carries, minus the haemoglobin half a raw pass has no stage for. Written whenever the recording has conditions, with or without `--by-condition`
 - **Its quality record carries the windowed matrices and the flagged spans**, so a per-condition number is a column selection out of what the run measured once rather than a second measurement
 - **The raw viewer's metrics panel has a motion table**, GVTD over each channel set, beside the optical-density one. Read the rows down a column: each set is its own trace with its own cutoff
@@ -27,7 +29,10 @@ All notable changes to this project will be documented in this file.
 - **Its rating bar lists every panel on the page and links to it.** It offered three labels, two of them ratable and none clickable; a viewer holding several runs shows one run's pills at a time, following the run selector
 - **The group report reads as a document**, the look the subject report and the raw viewer already wore: a section folds under its heading instead of sitting in a card, and the page opens with a Summary of what the cohort is and where its headline metrics sit
 - **Its distributions put a metric's channel sets side by side**, all / long / short as three colours over one x position rather than three positions of their own. Every metric now lands in a named same-scale chart: the "Other" one that mixed channel counts with millimetres and fractions is gone
-- **The time x subject heatmaps share one panel** with a metric picker, each drawn the first time it is asked for rather than all of them on load
+- **The group overview is a deviation strip**, one row per metric and one dot per run at its robust z, in place of the subject x metric heatmap. A metric every run agreed on is named in the notes rather than drawn as a blank column
+- **It reports per condition**, one panel per metric over the run's own blocks, and a run x condition matrix sorted worst first
+- **Its time panel is a metric x channel-set grid**: every run pale, the cohort's interquartile band and median over them, smoothed over 60 s, conditions shaded behind. Whether only the short channels degraded or the long ones went with them is the difference between a coupling problem and a movement one, and nothing else in the report separated them
+- **A run is called an outlier on one number**, its mean |z| over every metric, rather than on a separate fence per metric. The old rule ran 85 tests per run and flagged nearly every run of a large cohort whatever its quality
 - **A cohort too small to have a middle says so** under every panel that measures distance from one
 
 ### Removed

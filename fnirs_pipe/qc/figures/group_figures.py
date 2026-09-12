@@ -7,17 +7,6 @@ import pandas as pd
 import plotly.graph_objects as go
 
 
-def _tukey_fences(values: np.ndarray, k: float = 1.5) -> tuple[float, float]:
-    """Return (lower, upper) Tukey fences for outlier detection."""
-    finite = values[np.isfinite(values)]
-    if finite.size < 2:
-        return (-np.inf, np.inf)
-    q1 = np.quantile(finite, 0.25)
-    q3 = np.quantile(finite, 0.75)
-    iqr = q3 - q1
-    return (q1 - k * iqr, q3 + k * iqr)
-
-
 # Only scale-homogeneous metrics share a chart, so the y-axis stays in real units. Keys are
 # bare metric names: which stage and which channel set a column came from is carried by the
 # chart's x label and its colour, not by a key of its own.
@@ -126,100 +115,522 @@ def group_metrics(metric_cols: list[str]) -> tuple[list[tuple[str, list[str]]], 
     return groups, ordered
 
 
+# ---- Deviation from the cohort ----
+
+# Mean |z| over every metric, above which a run is called out. One number per run rather than
+# one test per metric: the group table carries 85 columns, and fencing each of them separately
+# and flagging a run that trips any one flags nearly every run in a large cohort whatever its
+# quality. A fence on the scores themselves masks instead: four poor runs in a cohort of twenty
+# pull the fence up over their own heads.
+SCORE_THRESHOLD = 2.0
+
+# One colour per run picked out of the pale mass, the same colour in every panel.
+_HIGHLIGHT_COLOURS = ["#c0392b", "#8e44ad", "#d35400"]
+
+
+def _robust_z(values: np.ndarray) -> np.ndarray:
+    """Distance from the median in robust SDs; all-NaN when the column has no spread.
+
+    ::
+
+        [0.90, 0.94, 0.98]  ->  [-0.67, 0.0, 0.67]
+        [28, 28, 28]        ->  [nan, nan, nan]
+
+    A metric every run agreed on has no distance to report, and saying so with NaN keeps it
+    out of the picture instead of drawing it as average.
+    """
+    out = np.full(np.shape(values), np.nan, dtype=float)
+    values = np.asarray(values, dtype=float)
+    finite = values[np.isfinite(values)]
+    if finite.size < 2:
+        return out
+    median = np.median(finite)
+    mad = np.median(np.abs(finite - median))
+    scale = 1.4826 * mad if mad > 0 else np.std(finite)
+    if scale == 0:
+        return out
+    return (values - median) / scale
+
+
+def deviation_scores(df: pd.DataFrame, metric_cols: list[str]) -> np.ndarray:
+    """Mean |z| per run over every metric that has any spread."""
+    columns = [c for c in metric_cols if c in df.columns]
+    if not columns:
+        return np.full(len(df), np.nan)
+    stack = np.array([_robust_z(pd.to_numeric(df[c], errors="coerce").to_numpy())
+                      for c in columns])
+    with np.errstate(invalid="ignore"):
+        return np.nanmean(np.abs(stack), axis=0)
+
+
 def detect_outliers(
-    df: pd.DataFrame, metric_cols: list[str], k: float = 1.5,
+    df: pd.DataFrame, metric_cols: list[str], threshold: float = SCORE_THRESHOLD,
 ) -> dict[str, list[str]]:
-    """Return {bids_name: [metric_col, ...]} for rows beyond Tukey fences."""
+    """{bids_name: [worst metrics]} for runs whose mean |z| is past the threshold.
+
+    The metric list is what put the run there, worst first, so the reader gets the reason
+    beside the verdict rather than a name alone.
+    """
+    columns = [c for c in metric_cols if c in df.columns]
+    if not columns:
+        return {}
+    stack = np.array([_robust_z(pd.to_numeric(df[c], errors="coerce").to_numpy())
+                      for c in columns])
+    with np.errstate(invalid="ignore"):
+        scores = np.nanmean(np.abs(stack), axis=0)
+
     out: dict[str, list[str]] = {}
-    for col in metric_cols:
-        if col not in df.columns:
+    for i, score in enumerate(scores):
+        if not np.isfinite(score) or score <= threshold:
             continue
-        vals = pd.to_numeric(df[col], errors="coerce").to_numpy()
-        lo, hi = _tukey_fences(vals, k=k)
-        mask = (vals < lo) | (vals > hi)
-        for i, is_out in enumerate(mask):
-            if is_out and np.isfinite(vals[i]):
-                bids_name = str(df.iloc[i, 0])
-                out.setdefault(bids_name, []).append(col)
+        per_metric = np.abs(stack[:, i])
+        order = np.argsort(-np.where(np.isfinite(per_metric), per_metric, -np.inf))
+        worst = [columns[j] for j in order[:6]
+                 if np.isfinite(per_metric[j]) and per_metric[j] > 2]
+        out[str(df.iloc[i, 0])] = worst
     return out
 
 
-def build_heatmap(df: pd.DataFrame, metric_cols: list[str]) -> go.Figure | None:
-    """Subject × metric z-score heatmap. Colour = number of SDs from median."""
-    rows = df.iloc[:, 0].astype(str).tolist()
-    if not rows or not metric_cols:
+def _short_run_labels(runs: list[str]) -> list[str]:
+    """Run labels with the BIDS fields every run shares taken off.
+
+    ::
+
+        ["sub-p1d01_task-full", "sub-p2d01_task-full"]  ->  ["sub-p1d01", "sub-p2d01"]
+
+    An axis with one tick per run has no room for the part of the name that is the same on
+    all of them. The full name stays in the hover.
+    """
+    if len(runs) < 2:
+        return list(runs)
+    fields = [r.split("_") for r in runs]
+    keep = [i for i in range(max(len(f) for f in fields))
+            if len({f[i] if i < len(f) else "" for f in fields}) > 1]
+    if not keep:
+        return list(runs)
+    return ["_".join(f[i] for i in keep if i < len(f)) for f in fields]
+
+
+def build_deviation_strip(
+    df: pd.DataFrame, metric_cols: list[str],
+) -> "tuple[go.Figure | None, list[str]]":
+    """One row per metric, one dot per run at its robust z, colour = channel set.
+
+    This is the report's overview, in place of a subject x metric heatmap. A heatmap of
+    z-scores has two failure modes this does not: at a small cohort every cell takes one of
+    two colours, and at any cohort the metric names have to be read sideways. Here the metric
+    names are horizontal, the cohort's spread is the width of its dot cloud, and a run sitting
+    apart is apart on the axis rather than a shade darker.
+
+    Returns (figure, dropped): a metric every run agreed on has no z to plot and is named in
+    the report's notes instead.
+    """
+    runs = df.iloc[:, 0].astype(str).tolist()
+    if not runs or not metric_cols:
+        return None, []
+
+    groups, _ = group_metrics(metric_cols)
+    entries: list[dict] = []
+    index: dict[tuple[str, str], dict] = {}
+    for title, keys in groups:
+        for col in keys:
+            stage, channel_set, metric = _split_column(col)
+            entry = index.get((stage, metric))
+            if entry is None:
+                entry = {"group": title, "stage": stage, "metric": metric, "z": {}}
+                index[(stage, metric)] = entry
+                entries.append(entry)
+            entry["z"][channel_set] = _robust_z(
+                pd.to_numeric(df[col], errors="coerce").to_numpy())
+
+    dropped = [f'{e["stage"]}_{e["metric"]}' if e["stage"] else e["metric"]
+               for e in entries if not any(np.isfinite(z).any() for z in e["z"].values())]
+    kept = [e for e in entries if any(np.isfinite(z).any() for z in e["z"].values())]
+    if not kept:
+        return None, dropped
+
+    one_stage = len({e["stage"] for e in kept}) == 1
+    labels = [e["metric"] if one_stage else f'{e["stage"]} {e["metric"]}' for e in kept]
+    sets = [s for s in _CHANNEL_SETS if any(s in e["z"] for e in kept)]
+    jitter = np.random.default_rng(0)
+    many = len(runs) > 12
+
+    fig = go.Figure()
+    for i, entry in enumerate(kept):
+        for j, channel_set in enumerate(sets):
+            z = entry["z"].get(channel_set)
+            if z is None:
+                continue
+            offset = (j - (len(sets) - 1) / 2) * (0.7 / max(len(sets), 1))
+            fig.add_trace(go.Scatter(
+                x=z, y=i + offset + jitter.uniform(-0.06, 0.06, len(z)), mode="markers",
+                name=channel_set, legendgroup=channel_set, showlegend=(i == 0),
+                marker=dict(color=_SET_COLOURS[channel_set], size=5 if many else 7,
+                            opacity=0.45 if many else 0.8,
+                            line=dict(width=0.4, color="#fff")),
+                customdata=runs,
+                hovertemplate=("<b>%{customdata}</b><br>" + entry["metric"]
+                               + " z=%{x:.2f}<extra></extra>"),
+            ))
+    fig.add_vrect(x0=-2, x1=2, fillcolor="#3498db", opacity=0.06, line_width=0)
+    fig.add_vline(x=0, line_color="#adb5bd", line_width=1)
+    for i in range(1, len(kept)):
+        if kept[i]["group"] != kept[i - 1]["group"]:
+            fig.add_hline(y=i - 0.5, line_width=1, line_color="#eef0f3")
+
+    fig.update_yaxes(tickvals=list(range(len(kept))), ticktext=labels,
+                     range=[len(kept) - 0.5, -0.5], gridcolor="#f7f8f9",
+                     tickfont=dict(size=10))
+    fig.update_xaxes(title_text="robust z (0 = cohort median)", gridcolor="#f0f0f0",
+                     zeroline=False)
+    fig.update_layout(height=110 + 34 * len(kept), plot_bgcolor="white",
+                      margin=dict(l=150, r=20, t=40, b=50),
+                      legend=dict(orientation="h", yanchor="bottom", y=1.01, x=0,
+                                  font=dict(size=10)))
+    return fig, dropped
+
+
+# ---- Windowed series, per channel set ----
+
+# The windowed metrics that are stored as a channel x window matrix: (key, label, matrix
+# field, the per_channel field whose key order the matrix rows follow, window centres).
+_WINDOW_MATRICES = [
+    ("sci", "SCI (windowed)", "sci_matrix", "sci_per_channel", "sci_window_times_s"),
+    ("psp", "PSP (windowed)", "psp_matrix", "psp_per_channel", "psp_window_times_s"),
+    ("cv",  "CV (windowed)",  "cv_matrix",  "cv_per_channel",  "cv_window_times_s"),
+]
+
+# GVTD is stored as a series per channel set already. The bare key is the long channels,
+# following `spike_spans_s`; `_short` and `_all` name the others.
+_GVTD_SETS = {"long": "gvtd_per_window", "short": "gvtd_per_window_short",
+              "all": "gvtd_per_window_all"}
+
+# The trend a reader looks for in a windowed metric is slower than one QC window, so each
+# series is smoothed over this many seconds and then sampled at that same step. Drawing 200
+# runs at full resolution is a quarter of a million samples for a picture of a grey mass.
+SMOOTH_S = 60.0
+
+
+def _set_rows(row: dict, per_channel_field: str) -> dict[str, list[int]]:
+    """Row indices of each channel set for a stored channel x window matrix.
+
+    The matrix carries no channel names; its rows follow the recording's channel order, which
+    is the key order of ``per_channel.raw.<field>``. Verified rather than assumed: splitting
+    the matrices this way reproduces the stored per-set psp_mean and cv_mean exactly.
+    """
+    per_channel = row.get("per_channel") or {}
+    names = list((per_channel.get("raw") or {}).get(per_channel_field) or {})
+    if not names:
+        return {}
+    sets = {"all": list(range(len(names)))}
+    for channel_set, section in (("long", "raw_long"), ("short", "raw_short")):
+        members = set((per_channel.get(section) or {}).get(per_channel_field) or {})
+        rows = [i for i, name in enumerate(names) if name in members]
+        if rows:
+            sets[channel_set] = rows
+    return sets
+
+
+def _window_series(row: dict, key: str) -> dict[str, tuple]:
+    """{channel set: (times, values)} for one windowed metric of one run."""
+    windowed = row
+    if key == "gvtd":
+        times = np.asarray(windowed.get("gvtd_window_times_s") or [], dtype=float)
+        out = {}
+        for channel_set, field in _GVTD_SETS.items():
+            values = windowed.get(field)
+            if values is not None and len(values) == times.size and times.size:
+                out[channel_set] = (times, np.asarray(values, dtype=float))
+        return out
+
+    spec = next((m for m in _WINDOW_MATRICES if m[0] == key), None)
+    if spec is None:
+        return {}
+    _key, _label, matrix_field, per_channel_field, times_field = spec
+    matrix = windowed.get(matrix_field)
+    times = np.asarray(windowed.get(times_field) or [], dtype=float)
+    if matrix is None or not times.size:
+        return {}
+    matrix = np.asarray(matrix, dtype=float)
+    if matrix.ndim != 2 or matrix.shape[1] != times.size:
+        return {}
+    out = {}
+    for channel_set, rows in _set_rows(row, per_channel_field).items():
+        if rows:
+            with np.errstate(invalid="ignore"):
+                out[channel_set] = (times, np.nanmean(matrix[rows], axis=0))
+    return out
+
+
+def _smooth(values: np.ndarray, window: int) -> np.ndarray:
+    """Rolling median, the edges held at their own value rather than dropped."""
+    if window < 2:
+        return values
+    half = window // 2
+    padded = np.pad(values, half, mode="edge")
+    return np.array([np.median(padded[i:i + window]) for i in range(values.size)])
+
+
+def _bundle(x, ys, colour: str = "#c8d0d8", width: float = 0.5, opacity: float = 0.45):
+    """Every run as one trace, the runs separated by a None in the data.
+
+    Plotly slows to a crawl somewhere past a thousand traces, and a cohort of 200 drawn a
+    line at a time reaches that on one panel. No hover: a line inside a grey mass cannot be
+    pointed at, and a name per sample doubles the file.
+    """
+    xs: list = []
+    values: list = []
+    for y in ys:
+        xs.extend(list(x) + [None])
+        values.extend(list(y) + [None])
+    return go.Scatter(x=xs, y=values, mode="lines", line=dict(color=colour, width=width),
+                      opacity=opacity, showlegend=False, connectgaps=False, hoverinfo="skip")
+
+
+def _stacked_series(rows: list[dict], key: str, channel_set: str) -> tuple:
+    """(times, matrix) of one metric and channel set over the cohort, on a shared grid.
+
+    Each run is smoothed and then sampled at the smoothing step. Runs binned differently land
+    on the union of their grids, with the gaps left as NaN rather than interpolated.
+    """
+    series = []
+    for row in rows:
+        got = _window_series(row, key).get(channel_set)
+        if got is None:
+            continue
+        times, values = got
+        window = max(1, int(round(SMOOTH_S / float(row.get("qc_window_s") or 10.0))))
+        series.append((times[::window], _smooth(values, window)[::window]))
+    if not series:
+        return None, None
+    grid = np.unique(np.concatenate([t for t, _ in series]))
+    stack = np.full((len(series), grid.size), np.nan)
+    for i, (times, values) in enumerate(series):
+        stack[i, np.searchsorted(grid, times)] = values
+    return grid, stack
+
+
+def build_window_grid(
+    rows: list[dict], highlight: "list[str] | None" = None,
+    metrics: tuple = ("sci", "cv", "gvtd"),
+) -> "go.Figure | None":
+    """Metric x channel-set grid over time: every run pale, the cohort's band and median over.
+
+    Rows are metrics and columns are channel sets, sharing the y axis along a row so the three
+    sets are read against each other. Only the short channels degrading is a coupling story
+    and the long ones going with them is a movement story, and nothing else in the report
+    separates the two.
+
+    ``highlight`` names runs that keep a line of their own, one colour each, the same colour
+    in every cell.
+    """
+    from plotly.subplots import make_subplots
+
+    names = [str(r.get("bids_name", "")) for r in rows]
+    picked = [(key, label) for key, label, *_rest in _WINDOW_MATRICES if key in metrics]
+    if "gvtd" in metrics:
+        picked.append(("gvtd", "GVTD (windowed)"))
+    panels = [(key, label) for key, label in picked
+              if any(_window_series(r, key) for r in rows)]
+    if not panels:
         return None
 
-    z = np.full((len(rows), len(metric_cols)), np.nan)
-    for j, col in enumerate(metric_cols):
-        vals = pd.to_numeric(df[col], errors="coerce").to_numpy()
-        finite = vals[np.isfinite(vals)]
-        if finite.size < 2:
-            continue
-        med = np.median(finite)
-        mad = np.median(np.abs(finite - med))
-        scale = 1.4826 * mad if mad > 0 else np.std(finite, ddof=0)
-        if scale == 0:
-            continue
-        z[:, j] = (vals - med) / scale
+    sets = [s for s in _CHANNEL_SETS
+            if any(s in _window_series(r, key) for r in rows for key, _l in panels)]
+    marked = [i for i, name in enumerate(names) if name in set(highlight or [])]
+    many = len(rows) > 12
 
-    fig = go.Figure(go.Heatmap(
-        z=z, x=metric_cols, y=rows,
-        colorscale="RdBu", zmid=0, zmin=-3, zmax=3,
-        hovertemplate="<b>%{y}</b><br>%{x}: z=%{z:.2f}<extra></extra>",
-        colorbar=dict(title="z<br>(robust)", thickness=12),
-    ))
-    fig.update_layout(
-        height=max(360, 22 * len(rows) + 160),
-        margin=dict(l=240, r=20, t=30, b=120),
-        plot_bgcolor="white",
+    fig = make_subplots(
+        rows=len(panels), cols=len(sets), shared_xaxes=True, shared_yaxes=True,
+        vertical_spacing=0.055, horizontal_spacing=0.025,
+        subplot_titles=[s if r == 0 else "" for r in range(len(panels)) for s in sets],
     )
-    fig.update_xaxes(tickangle=-45, automargin=True)
-    fig.update_yaxes(automargin=True)
+    for r, (key, label) in enumerate(panels, start=1):
+        for c, channel_set in enumerate(sets, start=1):
+            grid, stack = _stacked_series(rows, key, channel_set)
+            if grid is None:
+                continue
+            rest = [i for i in range(stack.shape[0]) if i not in marked]
+            if rest:
+                fig.add_trace(_bundle(grid, stack[rest], opacity=0.3 if many else 0.5),
+                              row=r, col=c)
+            with np.errstate(invalid="ignore"):
+                lo, mid, hi = (np.nanpercentile(stack, q, axis=0) for q in (25, 50, 75))
+            fig.add_trace(go.Scatter(
+                x=np.concatenate([grid, grid[::-1]]), y=np.concatenate([hi, lo[::-1]]),
+                fill="toself", mode="lines", line=dict(width=0),
+                fillcolor="rgba(52,152,219,0.18)", hoverinfo="skip", showlegend=False,
+            ), row=r, col=c)
+            fig.add_trace(go.Scatter(
+                x=grid, y=mid, mode="lines", line=dict(color="#2471a3", width=1.8),
+                name="cohort median", legendgroup="median",
+                showlegend=(r == 1 and c == 1),
+                hovertemplate="t=%{x:.0f}s<br>median %{y:.4g}<extra></extra>",
+            ), row=r, col=c)
+            for k, i in enumerate(marked):
+                if i >= stack.shape[0]:
+                    continue
+                fig.add_trace(go.Scatter(
+                    x=grid, y=stack[i], mode="lines",
+                    line=dict(color=_HIGHLIGHT_COLOURS[k % len(_HIGHLIGHT_COLOURS)],
+                              width=1.3),
+                    name=_short_run_labels(names)[i], legendgroup=names[i],
+                    showlegend=(r == 1 and c == 1),
+                    hovertemplate="t=%{x:.0f}s<br>%{y:.4g}<extra></extra>",
+                ), row=r, col=c)
+        fig.update_yaxes(title_text=label, title_font=dict(size=10), row=r, col=1)
+
+    fig.update_xaxes(gridcolor="#f5f5f5", tickfont=dict(size=9))
+    for c in range(1, len(sets) + 1):
+        fig.update_xaxes(title_text="Time (s)", title_font=dict(size=10),
+                         row=len(panels), col=c)
+    fig.update_yaxes(gridcolor="#f0f0f0", tickfont=dict(size=9))
+    fig.update_annotations(font=dict(size=11, color="#6c757d"))
+    fig.update_layout(height=165 * len(panels) + 110, plot_bgcolor="white",
+                      margin=dict(l=70, r=20, t=80, b=50),
+                      legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0,
+                                  font=dict(size=10)))
     return fig
 
 
-def build_time_subject_heatmap(
-    rows: list[dict], metric_field: str, times_field: str, title: str,
-) -> go.Figure | None:
-    """Heatmap of one windowed metric across subjects and time.
+# ---- Per condition ----
 
-    `rows` is a list of dicts (one per subject) each containing the metric
-    array and matching `*_times_s` array. Rows missing the metric are skipped.
-    Different subjects may have different time bases; they are kept on the
-    union time axis (cells beyond a subject's recording = NaN).
+# What the per-condition panels report, in this order. Each is a key of a condition's
+# `scalars` block.
+_CONDITION_METRICS = [
+    ("sci_mean", "SCI"), ("psp_mean", "PSP"), ("cv_mean", "CV"), ("snr_mean", "SNR"),
+    ("gvtd_mean", "GVTD"), ("gvtd_pct_above_thresh", "GVTD above threshold"),
+]
+
+def condition_names(rows: list[dict]) -> list[str]:
+    """Conditions the cohort has, in the order the first run that carries them wrote them."""
+    names: list[str] = []
+    for row in rows:
+        for condition in (row.get("by_condition") or {}):
+            if condition not in names:
+                names.append(condition)
+    return names
+
+
+def _condition_matrix(rows: list[dict], conditions: list[str], metric: str) -> np.ndarray:
+    """runs x conditions of one metric, NaN where a run does not carry that condition."""
+    out = np.full((len(rows), len(conditions)), np.nan)
+    for i, row in enumerate(rows):
+        by_condition = row.get("by_condition") or {}
+        for j, condition in enumerate(conditions):
+            scalars = (by_condition.get(condition) or {}).get("scalars") or {}
+            value = scalars.get(metric)
+            if isinstance(value, (int, float)):
+                out[i, j] = float(value)
+    return out
+
+
+def build_condition_panels(
+    rows: list[dict], highlight: "list[str] | None" = None,
+) -> "go.Figure | None":
+    """One panel per metric: x is the condition, one line per run, the median over them.
+
+    The windows collapsed into the blocks the run was designed around, which is the form the
+    question takes: did this run get worse where everyone got worse, or on its own.
     """
-    series = []
-    for r in rows:
-        vals  = r.get(metric_field)
-        times = r.get(times_field)
-        if vals is None or times is None or not len(vals):
-            continue
-        series.append((r["bids_name"], np.asarray(times, dtype=float), np.asarray(vals, dtype=float)))
-    if not series:
+    from plotly.subplots import make_subplots
+
+    conditions = condition_names(rows)
+    if len(conditions) < 2:
+        return None
+    names = [str(r.get("bids_name", "")) for r in rows]
+    short = _short_run_labels(names)
+    marked = [i for i, name in enumerate(names) if name in set(highlight or [])]
+    many = len(rows) > 12
+
+    panels = [(metric, label) for metric, label in _CONDITION_METRICS
+              if np.isfinite(_condition_matrix(rows, conditions, metric)).any()]
+    if not panels:
         return None
 
-    all_times = np.unique(np.concatenate([t for _, t, _ in series]))
-    z = np.full((len(series), len(all_times)), np.nan)
-    for i, (_, t, v) in enumerate(series):
-        idx = np.searchsorted(all_times, t)
-        z[i, idx] = v
+    cols = 3
+    grid_rows = (len(panels) + cols - 1) // cols
+    fig = make_subplots(rows=grid_rows, cols=cols, subplot_titles=[l for _m, l in panels],
+                        vertical_spacing=0.13, horizontal_spacing=0.07)
+    for i, (metric, _label) in enumerate(panels):
+        r, c = divmod(i, cols)
+        values = _condition_matrix(rows, conditions, metric)
+        rest = [k for k in range(len(rows)) if k not in marked]
+        if rest:
+            fig.add_trace(_bundle(conditions, values[rest], width=0.5 if many else 0.7,
+                                  opacity=0.35 if many else 0.6), row=r + 1, col=c + 1)
+        for k, idx in enumerate(marked):
+            fig.add_trace(go.Scatter(
+                x=conditions, y=values[idx], mode="lines+markers",
+                line=dict(color=_HIGHLIGHT_COLOURS[k % len(_HIGHLIGHT_COLOURS)], width=1.5),
+                marker=dict(size=4), name=short[idx], legendgroup=names[idx],
+                showlegend=(i == 0),
+                hovertemplate=f"<b>{names[idx]}</b><br>%{{x}}: %{{y:.4g}}<extra></extra>",
+            ), row=r + 1, col=c + 1)
+        with np.errstate(invalid="ignore"):
+            median = np.nanmedian(values, axis=0)
+        fig.add_trace(go.Scatter(
+            x=conditions, y=median, mode="lines+markers",
+            line=dict(color="#2471a3", width=2.2), marker=dict(size=5, color="#2471a3"),
+            name="cohort median", legendgroup="median", showlegend=(i == 0),
+            hovertemplate="%{x}: median %{y:.4g}<extra></extra>",
+        ), row=r + 1, col=c + 1)
 
-    subjects = [s for s, _, _ in series]
-    fig = go.Figure(go.Heatmap(
-        z=z, x=all_times.tolist(), y=subjects,
-        colorscale="RdYlGn", zauto=True,
-        hovertemplate="<b>%{y}</b><br>t=%{x:.0f}s<br>" + metric_field + "=%{z:.3f}<extra></extra>",
-        colorbar=dict(title=metric_field, thickness=12),
-    ))
-    fig.update_layout(
-        title=dict(text=title, x=0.02, xanchor="left", font=dict(size=13)),
-        height=max(320, 22 * len(subjects) + 160),
-        margin=dict(l=240, r=20, t=50, b=60),
-        plot_bgcolor="white",
-    )
-    fig.update_xaxes(title_text="Time (s)", gridcolor="#eeeeee", automargin=True)
-    fig.update_yaxes(automargin=True)
+    fig.update_xaxes(tickangle=-30, tickfont=dict(size=9), gridcolor="#f7f8f9")
+    fig.update_yaxes(tickfont=dict(size=9), gridcolor="#f0f0f0")
+    fig.update_annotations(font=dict(size=11))
+    fig.update_layout(height=230 * grid_rows + 70, plot_bgcolor="white",
+                      margin=dict(l=55, r=20, t=70, b=40),
+                      legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0,
+                                  font=dict(size=10)))
+    return fig
+
+
+def build_condition_matrix(
+    rows: list[dict], order: "list[str] | None" = None,
+) -> "go.Figure | None":
+    """run x condition, one panel per metric, colour = robust z inside that condition.
+
+    Sorted worst-first when an order is given, so the runs a reader is looking for are at the
+    top. The run names sit on the left edge only: the panels share the y axis, and repeating
+    the names over every panel's cells is what made this unreadable.
+    """
+    from plotly.subplots import make_subplots
+
+    conditions = condition_names(rows)
+    if len(conditions) < 2:
+        return None
+    names = [str(r.get("bids_name", "")) for r in rows]
+    index = list(range(len(rows)))
+    if order:
+        rank = {name: i for i, name in enumerate(order)}
+        index.sort(key=lambda i: rank.get(names[i], len(order)))
+    labels = [_short_run_labels(names)[i] for i in index]
+
+    panels = [(metric, label) for metric, label in _CONDITION_METRICS
+              if np.isfinite(_condition_matrix(rows, conditions, metric)).any()]
+    if not panels:
+        return None
+
+    fig = make_subplots(rows=1, cols=len(panels), shared_yaxes=True,
+                        subplot_titles=[l for _m, l in panels], horizontal_spacing=0.012)
+    for i, (metric, _label) in enumerate(panels):
+        values = _condition_matrix(rows, conditions, metric)[index]
+        z = np.column_stack([_robust_z(values[:, j]) for j in range(len(conditions))])
+        fig.add_trace(go.Heatmap(
+            z=z, x=conditions, y=labels, coloraxis="coloraxis", xgap=1, ygap=1,
+            text=[[f"{v:.4g}" for v in row] for row in values],
+            hovertemplate="<b>%{y}</b><br>%{x}<br>value %{text}<br>z=%{z:.2f}<extra></extra>",
+        ), row=1, col=i + 1)
+
+    fig.update_yaxes(autorange="reversed", showticklabels=False)
+    fig.update_yaxes(showticklabels=True, tickfont=dict(size=9), row=1, col=1)
+    fig.update_xaxes(tickangle=-45, tickfont=dict(size=9))
+    fig.update_annotations(font=dict(size=11, color="#6c757d"))
+    fig.update_layout(height=150 + 14 * len(rows), width=180 * len(panels) + 130,
+                      plot_bgcolor="white", margin=dict(l=110, r=20, t=70, b=90),
+                      coloraxis=dict(colorscale="RdBu", cmid=0, cmin=-3, cmax=3,
+                                     colorbar=dict(title="z", thickness=12, len=0.8)))
     return fig
 
 

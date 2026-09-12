@@ -22,6 +22,10 @@
 .summary-grid table.headline td { font-variant-numeric: tabular-nums; }
 .summary-grid table.headline td:first-child { color: #34495e; font-weight: 600; }
 
+/* a panel with one row per run is as tall as the cohort is long; it scrolls in its own
+   box so the page does not grow with the cohort */
+.tall-frame { max-height: 700px; overflow: auto; margin-top: 0.5rem; }
+
 #group-table-wrap { overflow: auto; max-height: 600px; margin-top: 0.5rem; }
 table.group-table {
   width: 100%; border-collapse: collapse; font-size: 0.78rem;
@@ -70,9 +74,9 @@ table.group-table th .sort-ind { color: #ccd2d8; font-size: 0.7rem; margin-left:
 {% block content %}
 
 {# printed under every panel whose statistic the cohort is too small to carry #}
-{%- set small_caveat %}Only {{ n_rows }} runs: a box, a robust z-score and a Tukey fence each
-measure how far a run sits from the middle of its cohort, and this cohort has no middle to
-measure from. Read the panels as the runs' own values side by side.{% endset %}
+{%- set small_caveat %}Only {{ n_rows }} runs: a box, a robust z-score and the outlier rule
+each measure how far a run sits from the middle of its cohort, and this cohort has no middle
+to measure from. Read the panels as the runs' own values side by side.{% endset %}
 
 {% if summary_meta or headline_rows %}
 <h2 id="Summary">Summary</h2>
@@ -99,22 +103,24 @@ measure from. Read the panels as the runs' own values side by side.{% endset %}
   </div>
   {% if outliers is defined %}
   <p class="qm-note" style="margin-top:0.9rem">
-    {% if outliers %}{{ outliers | length }} of {{ n_rows }} runs sit beyond a Tukey fence on at
-    least one metric, listed under Outliers.{% else %}No run sits beyond a Tukey fence on any
-    metric.{% endif %}
+    {% if outliers %}{{ outliers | length }} of {{ n_rows }} runs sit more than
+    {{ score_threshold }} robust SDs from the cohort median on the average metric
+    {% if worst_runs %}({{ worst_runs | join(', ') }} the furthest){% endif %}; they are listed
+    under Outliers and drawn in colour in the panels.{% else %}No run sits more than
+    {{ score_threshold }} robust SDs from the cohort median on the average metric.{% endif %}
   </p>
   {% endif %}
   {% if small_cohort %}<p class="qm-note">{{ small_caveat }}</p>{% endif %}
 </div>
 {% endif %}
 
-{% if figure_paths.heatmap %}
-<details id="Heatmap" open>
-  <summary>Heatmap <span class="hint">subject &times; metric, robust z-score &bull; red &asymp; high &bull; blue &asymp; low &bull; |z| &gt; 2 likely outlier</span></summary>
+{% if figure_paths.strip %}
+<details id="Overview" open>
+  <summary>Overview <span class="hint">one row per metric &bull; one dot per run at its robust z &bull; colour = channel set &bull; the band is |z| &lt; 2</span></summary>
   <div class="details-body">
     {% if small_cohort %}<p class="qm-note">{{ small_caveat }}</p>{% endif %}
-    <iframe class="plot-frame" src="{{ figure_paths.heatmap.src }}"
-            style="height:{{ figure_paths.heatmap.h }}px"></iframe>
+    <iframe class="plot-frame" src="{{ figure_paths.strip.src }}"
+            style="height:{{ figure_paths.strip.h }}px"></iframe>
   </div>
 </details>
 {% endif %}
@@ -134,28 +140,41 @@ measure from. Read the panels as the runs' own values side by side.{% endset %}
 </details>
 {% endif %}
 
-{% if windowed_panels %}
-<details id="Windowed" open>
-  <summary>Time &times; subject <span class="hint">one column per QC window &bull; hover for value &bull; pick the metric below</span></summary>
+{% if figure_paths.conditions %}
+<details id="Conditions" open>
+  <summary>By condition <span class="hint">each run's windows collapsed into its own blocks &bull; one line per run &bull; the cohort median over them</span></summary>
   <div class="details-body">
-    <select id="window-pick" class="ch-select">
-      {%- for p in windowed_panels %}
-      <option value="{{ loop.index0 }}">{{ p.title }}</option>
-      {%- endfor %}
-    </select>
-    {%- for p in windowed_panels %}
-    {# src is set when the panel is first shown: eight plotly pages loading at once to put one
-       of them on screen is what made this section slow #}
-    <iframe class="plot-frame window-frame" data-src="{{ p.src }}"
-            style="height:{{ p.h }}px{% if not loop.first %};display:none{% endif %}"></iframe>
-    {%- endfor %}
+    <iframe class="plot-frame" src="{{ figure_paths.conditions.src }}"
+            style="height:{{ figure_paths.conditions.h }}px"></iframe>
+  </div>
+</details>
+{% endif %}
+
+{% if figure_paths.conditionmatrix %}
+<details id="ConditionMatrix" open>
+  <summary>Run &times; condition <span class="hint">colour is the robust z inside that condition &bull; sorted worst first &bull; run names on the left edge</span></summary>
+  <div class="details-body">
+    <div class="tall-frame">
+      <iframe src="{{ figure_paths.conditionmatrix.src }}"
+              style="border:none;display:block;height:{{ figure_paths.conditionmatrix.h }}px;{% if figure_paths.conditionmatrix.w %}width:{{ figure_paths.conditionmatrix.w }}px{% else %}width:100%{% endif %}"></iframe>
+    </div>
+  </div>
+</details>
+{% endif %}
+
+{% if figure_paths.windows %}
+<details id="Windowed" open>
+  <summary>Over time <span class="hint">rows are metrics, columns are channel sets &bull; every run pale, the cohort's interquartile band and median over them &bull; smoothed over 60 s &bull; SCI here is the windowed estimator, not the table's whole-run <code>sci_mean</code></span></summary>
+  <div class="details-body">
+    <iframe class="plot-frame" src="{{ figure_paths.windows.src }}"
+            style="height:{{ figure_paths.windows.h }}px"></iframe>
   </div>
 </details>
 {% endif %}
 
 {% if outliers is defined %}
 <details id="Outliers" open>
-  <summary>Outliers <span class="hint">runs beyond a Tukey fence (Q1 &minus; 1.5&times;IQR, Q3 + 1.5&times;IQR) on any metric</span></summary>
+  <summary>Outliers <span class="hint">runs whose mean |z| over every metric is past {{ score_threshold }} &bull; one test per run, not one per metric</span></summary>
   <div class="details-body" id="outlier-list">
     {% if small_cohort %}<p class="qm-note">{{ small_caveat }}</p>{% endif %}
     {% if outliers %}
@@ -237,20 +256,6 @@ measure from. Read the panels as the runs' own values side by side.{% endset %}
         th.querySelector(".sort-ind").textContent = direction ? "▲" : "▼";
       });
     });
-  }
-
-  // one windowed heatmap on screen at a time, each loaded the first time it is asked for
-  var picker = document.getElementById("window-pick");
-  var frames = document.querySelectorAll(".window-frame");
-  var showWindow = function(i) {
-    frames.forEach(function(f, j) {
-      f.style.display = (j === +i) ? "block" : "none";
-      if (j === +i && !f.src) f.src = f.dataset.src;
-    });
-  };
-  if (picker && frames.length) {
-    showWindow(0);
-    picker.addEventListener("change", function() { showWindow(this.value); });
   }
 
   // iframe auto-resize listener (same protocol as figure_io.py)
