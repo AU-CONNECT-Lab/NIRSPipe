@@ -24,7 +24,7 @@ import pandas as pd
 from fnirs_pipe.qc.boilerplate import collect_software_versions
 from fnirs_pipe.qc.figure_io import _pair_fname
 from fnirs_pipe.qc.report_shell import (
-    OUTLIER_Z, footer_vars, outlier_flags, page_vars, render, stylesheet)
+    OUTLIER_Z, footer_vars, outlier_flags, page_vars, render)
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("qc.hyper_index")
@@ -200,7 +200,6 @@ def write_hyper_index(
         **page_vars(
             title=f"fnirs-pipe hyper — group-{group_id}",
             heading=f"fnirs-pipe hyper — group-{group_id}",
-            css=stylesheet("subject.css"),
         ),
         **footer_vars(versions=collect_software_versions()),
         group_id=group_id,

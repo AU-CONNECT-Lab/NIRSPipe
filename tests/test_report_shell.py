@@ -11,6 +11,7 @@ arrangement, and it exists because both halves of it fail quietly:
   key and the section vanishes with no error anywhere.
 """
 
+import pathlib
 import re
 
 import pytest
@@ -20,7 +21,6 @@ from fnirs_pipe.qc.report_shell import (
     FOOTER_CSS,
     TEMPLATE_DIR,
     TOKENS_CSS,
-    dashboard_css,
     footer_vars,
     guard,
     note,
@@ -135,41 +135,52 @@ def test_notes_are_kept_apart_from_errors():
 
 # ---- stylesheets ----
 
-def test_a_look_replaces_the_other_look_and_not_the_tokens():
-    sheet = page_vars(title="T", heading="T", css=stylesheet("subject.css"))["base_css"]
-    # the document look, the shared tokens, the footer: all three
-    assert "font-size: 14px" in sheet
-    assert ":root" in sheet
-    assert ".boilerplate-html" in sheet
-    # and not the dashboard look. Its ground colour reaching a document report is the
-    # visible symptom of the sheets stacking instead of one look replacing the other.
-    assert "#f5f7fa" not in sheet
+def test_the_default_sheet_is_the_look_the_tokens_and_the_footer():
+    # There is one look. A report that names no `css` gets it, which is the point of the
+    # default: it used to be a second, dashboard look, and by the time the last report
+    # stopped wearing that one the default was a look nothing wore and a new report could
+    # reach it by forgetting a keyword.
+    sheet = page_vars(title="T", heading="T")["base_css"]
+    assert "font-size: 14px" in sheet, "the look is missing"
+    assert ":root" in sheet, "the tokens are missing"
+    assert ".boilerplate-html" in sheet, "the footer would render unstyled"
 
 
-def test_the_tokens_carry_what_both_looks_agree_on():
+def test_the_deleted_dashboard_look_has_not_come_back():
+    # `#f5f7fa` was its ground colour and `#qc-nav` its sticky bar. Either one appearing in
+    # a composed sheet means the sheet is back, whether as a file or pasted into the look.
+    sheet = page_vars(title="T", heading="T")["base_css"]
+    for rule in ("#f5f7fa", "#qc-nav {", ".card {", ".panel-title {"):
+        assert rule not in sheet, f"the dashboard look is back: {rule}"
+    assert not (TEMPLATE_DIR / "_base.css").exists(), "_base.css is back"
+
+
+def test_a_named_css_replaces_the_look_and_not_the_tokens():
+    # the seam a second look would come through, exercised with a stand-in
+    sheet = page_vars(title="T", heading="T", css="body { font-size: 99px; }")["base_css"]
+    assert "font-size: 99px" in sheet
+    assert "font-size: 14px" not in sheet, "the two looks stacked instead of replacing"
+    assert ":root" in sheet and ".boilerplate-html" in sheet
+
+
+def test_the_tokens_carry_what_the_look_and_the_footer_agree_on():
     for rule in ("h2 {", "table {", "th, td {", "pre {", "img {", ".fig-path {"):
-        assert rule in TOKENS_CSS, f"{rule} belongs to both looks and is in neither"
+        assert rule in TOKENS_CSS, f"{rule} is shared and is in neither sheet"
 
 
-def test_neither_look_keeps_a_copy_of_the_token_rules():
-    # the dashboard used to carry .report-footer-scoped copies of every one of these
-    for name in ("_base.css", "subject.css"):
-        sheet = stylesheet(name)
-        for rule in ("th, td {", ".report-footer table {", ".fig-path {"):
-            assert rule not in sheet, f"{name} has a second copy of {rule}"
+def test_the_look_keeps_no_copy_of_the_token_rules():
+    sheet = stylesheet("subject.css")
+    for rule in ("th, td {", ".report-footer table {", ".fig-path {"):
+        assert rule not in sheet, f"subject.css has a second copy of {rule}"
 
 
-def test_the_raw_viewer_takes_the_dashboard_sheet_rather_than_copying_it():
-    # the fourth copy of the dashboard look lived here; the viewer cannot extend the shell
-    # (it is one JavaScript-driven document) but it can take the sheet
+def test_the_raw_viewer_takes_the_shells_sheet_rather_than_copying_it():
+    # a fourth copy of the look lived here; the viewer cannot extend the shell (it is one
+    # JavaScript-driven document) but it can take the sheet page_vars composes
     text = (TEMPLATE_DIR / "raw_viewer.html").read_text(encoding="utf-8")
     assert "{{ base_css }}" in text
     for rule in ("#qc-nav {", ".card {", ".panel-title {", "box-sizing: border-box"):
         assert rule not in text, f"the viewer still carries its own {rule}"
-
-
-def test_the_dashboard_sheet_is_the_same_one_page_vars_composes():
-    assert dashboard_css() == page_vars(title="T", heading="T")["base_css"]
 
 
 def test_the_footer_styles_ship_with_the_footer():
@@ -178,19 +189,26 @@ def test_the_footer_styles_ship_with_the_footer():
         assert cls in FOOTER_CSS, f"{cls} is used by the footer and styled nowhere"
 
 
-def test_page_vars_appends_the_footer_sheet_to_either_look():
-    for css in (None, stylesheet("subject.css")):
-        sheet = page_vars(title="T", heading="T", css=css)["base_css"]
-        assert ".boilerplate-html" in sheet, "the footer would render unstyled"
+def test_the_look_keeps_no_copy_of_the_footer_rules():
+    # it carried a verbatim copy until the rules moved to _footer.css; a copy coming back
+    # means the look has quietly started overriding the footer
+    sheet = stylesheet("subject.css")
+    for cls in (".tab-btn {", ".boilerplate-html {", ".error-list {"):
+        assert cls not in sheet, f"subject.css has a second copy of {cls}"
 
 
-def test_neither_base_sheet_keeps_its_own_copy_of_the_footer_rules():
-    # both sheets carried a verbatim copy until the rules moved to _footer.css; a copy
-    # coming back means one look has quietly started overriding the other
-    for name in ("_base.css", "subject.css"):
-        sheet = stylesheet(name)
-        for cls in (".tab-btn {", ".boilerplate-html {", ".error-list {"):
-            assert cls not in sheet, f"{name} has a second copy of {cls}"
+def test_no_report_writer_names_a_stylesheet():
+    # The arrangement the deletion rests on: `stylesheet` is how a caller names a look, and
+    # nothing outside the shell calls it, so the one look reaches every page through
+    # page_vars and there is no keyword to forget. Not `extra_css`, which is per-figure CSS
+    # injected into an iframe and is a different thing.
+    qc = pathlib.Path(__file__).resolve().parents[1] / "fnirs_pipe" / "qc"
+    for path in sorted(qc.rglob("*.py")):
+        if path.name == "report_shell.py":
+            continue
+        text = path.read_text(encoding="utf-8")
+        assert "stylesheet(" not in text, (
+            f"{path.name} names its own stylesheet; there is one look and it is the default")
 
 
 def test_the_index_shares_the_subject_stylesheet():

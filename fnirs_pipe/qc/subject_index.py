@@ -26,7 +26,7 @@ from pathlib import Path
 
 from fnirs_pipe.qc.boilerplate import collect_software_versions
 from fnirs_pipe.qc.report_shell import (
-    OUTLIER_Z, footer_vars, guard, outlier_flags, page_vars, render, stylesheet)
+    OUTLIER_Z, footer_vars, guard, outlier_flags, page_vars, render)
 from fnirs_pipe.qc.sqm_record import entities_of
 from fnirs_pipe.utils.logging import get_logger
 
@@ -388,7 +388,6 @@ def write_subject_index(
         **page_vars(
             title=f"sub-{subject}",
             heading=f"sub-{subject}",
-            css=stylesheet("subject.css"),
         ),
         # the errors block only when a section actually failed: this page has never carried
         # one, and an empty "no errors" panel is chrome it does not need

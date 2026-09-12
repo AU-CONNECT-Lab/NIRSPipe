@@ -37,23 +37,19 @@ def stylesheet(name: str) -> str:
 
 _SHEETS: dict[str, str] = {}
 
-# Three sheets, composed in this order by page_vars: what every report agrees on, then the
-# look this one wears, then the footer. Tokens first so a look can override them, the
-# footer last so it can override either.
+# Three sheets, composed in this order by page_vars: what every report agrees on, then
+# the look, then the footer. Tokens first so the look can override them, the footer last
+# so it can override either.
+#
+# There used to be two looks: a dashboard one in `_base.css` for the hyper and group
+# reports and the document one for the subject report. The dashboard sheet was deleted on
+# 2026-09-12, when the last report wearing it moved over. Every caller was by then passing
+# `css=stylesheet("subject.css")`, so the default had become a look nothing wore and a new
+# report could reach it by forgetting one keyword. `css` stays a parameter so a second look
+# is one argument away, but it overrides the look rather than choosing between two.
 TOKENS_CSS = stylesheet("_tokens.css")
-BASE_CSS = stylesheet("_base.css")
+BASE_CSS = stylesheet("subject.css")
 FOOTER_CSS = stylesheet("_footer.css")
-
-
-def dashboard_css() -> str:
-    """Tokens plus the dashboard look, for a page that cannot go through page_vars.
-
-    The same sheet ``page_vars`` composes when no ``css`` is named, for a caller that wants
-    the stylesheet without the rest of the shell. The raw viewer used to be the one such
-    caller; since 2026-09-11 it takes ``page_vars`` like every other report, so this is the
-    spare key rather than the one in the lock.
-    """
-    return "\n".join((TOKENS_CSS, BASE_CSS, FOOTER_CSS))
 
 
 # ---- Error handling ----
@@ -154,9 +150,9 @@ def page_vars(
     right-aligned line, which is where the parameters a reader needs to judge the numbers
     belong.
 
-    ``css`` names the look this page wears, replacing the dashboard one; the shared tokens
-    come before it and the footer's own sheet after, either way, because neither belongs to
-    a look.
+    ``css`` replaces the look, for a report that needs one of its own; the shared tokens come
+    before it and the footer's own sheet after, either way, because neither belongs to a
+    look. Every report in the package leaves it alone, there being one look.
     """
     return {
         "page_title":   title,

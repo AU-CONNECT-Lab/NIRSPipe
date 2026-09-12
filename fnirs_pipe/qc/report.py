@@ -110,7 +110,7 @@ from fnirs_pipe.qc.figures import (
     fc_connectogram,
 )
 from fnirs_pipe.qc.report_shell import (
-    footer_vars, guard, note, page_vars, render, stylesheet,
+    footer_vars, guard, note, page_vars, render,
 )
 from fnirs_pipe.qc.sqm_record import record_path as _sqm_record_path
 from fnirs_pipe.qc.trial_qc import score_trials, trial_windows
@@ -1802,7 +1802,6 @@ def build_subject_report(
         **page_vars(
             title=run_label_text,
             heading=run_label_text,
-            css=stylesheet("subject.css"),
         ),
         **footer_vars(
             scope=f"sub-{subject}", errors=errors, notes=notes,

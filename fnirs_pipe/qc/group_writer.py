@@ -31,7 +31,6 @@ from fnirs_pipe.qc.report_shell import (
     note,
     page_vars,
     render,
-    stylesheet,
 )
 from fnirs_pipe.qc.sqm_record import (
     OPTIONAL_SECTIONS,
@@ -373,7 +372,6 @@ def _render_group(
             title=title,
             heading=title,
             nav_meta=[("runs", len(df)), ("metrics", len(metric_cols))],
-            css=stylesheet("subject.css"),
         ),
         **footer_vars(scope=out_stem, errors=errors, notes=notes,
                      versions=collect_software_versions()),

@@ -37,7 +37,6 @@ from fnirs_pipe.qc.report_shell import (
     note,
     page_vars,
     render,
-    stylesheet,
 )
 from fnirs_pipe.utils.lineage import path_from
 from fnirs_pipe.utils.logging import get_logger
@@ -482,8 +481,6 @@ def build_hyper_report(
                       ("subjects", ", ".join(meta["subject_ids"]))],
             nav_note=(f"SCI thr: {sci_threshold:.2f} • "
                       f"Coh: {coherence_fmin:.3f}–{coherence_fmax:.3f} Hz"),
-            # the document look, as the subject report wears
-            css=stylesheet("subject.css"),
         ),
         **footer_vars(
             scope=meta["label"], errors=errors, notes=notes,
@@ -1399,9 +1396,6 @@ def build_hyper_post_report(
                 nav_meta=nav_meta,
                 nav_note=(f"WTC: {wtc_fmin:.3f}–{wtc_fmax:.3f} Hz · "
                           f"{'+'.join(_CHROMA_LABEL[c] for c in chroma)}"),
-                # the document look, as the subject report wears: this page is read top to
-                # bottom rather than scanned, and its summary is the first thing on it
-                css=stylesheet("subject.css"),
             ),
             **footer_vars(
                 scope=scope, errors=errors, notes=notes,

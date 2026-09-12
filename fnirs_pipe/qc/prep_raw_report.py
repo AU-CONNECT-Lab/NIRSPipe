@@ -23,7 +23,7 @@ from fnirs_pipe.qc.channel_table import (
 from fnirs_pipe.qc.metrics import SCI_PASS
 from fnirs_pipe.qc.metrics._helpers import _mean_or_none, separation_bands
 from fnirs_pipe.qc.report_shell import (
-    collapse_messages, footer_vars, guard, note, page_vars, render, stylesheet,
+    collapse_messages, footer_vars, guard, note, page_vars, render,
 )
 from fnirs_pipe.qc.trial_qc import score_trials, trial_windows
 from fnirs_pipe.utils.logging import get_logger
@@ -843,9 +843,6 @@ def _shell_vars(runs: list[dict], output_path: Path, sub_dir: Path,
             heading="fnirs\u2011pipe Raw Viewer",
             nav_meta=meta,
             nav_note=f"SCI thr: {sci_threshold:.2f}",
-            # the subject report's sheet: this page is read top to bottom, and the two
-            # printed the same numbers in two looks
-            css=stylesheet("subject.css"),
         ),
         **footer_vars(
             scope=output_path.stem, nirs_dir=nirs_dir,
