@@ -90,11 +90,11 @@ select#run-select {
   {% set _ = ns.modules.append([
     {"id": "Summary" ~ label,         "name": "Summary",     "href": "#Final", "ratable": false, "group": g},
     {"sep": true, "group": g},
+    {"id": label ~ "_Layout",         "name": "Layout",      "href": "#Layout",         "group": g},
     {"id": label ~ "_Raw_Signal",     "name": "Raw",         "href": "#RawSignal",      "group": g},
     {"id": label ~ "_ChannelDetail",  "name": "HbO/HbR",     "href": "#ChannelDetail",  "group": g},
     {"id": label ~ "_PSD",            "name": "PSD",         "href": "#PSD",            "group": g},
     {"id": label ~ "_SCI_PSP",        "name": "SCI/PSP",     "href": "#SciPsp",         "group": g},
-    {"id": label ~ "_Layout",         "name": "Layout",      "href": "#Layout",         "group": g},
     {"id": label ~ "_Motion",         "name": "Motion",      "href": "#Motion",         "group": g},
     {"id": label ~ "_Events",         "name": "Events",      "href": "#Events",         "group": g},
     {"sep": true, "group": g},
@@ -154,9 +154,26 @@ select#run-select {
   <p class="qm-note" id="sum-scope"></p>
 </div>
 
-<!-- step a: raw signal + the events it carries -->
+<!-- step a: where the channels are. First, because every panel below is read per channel and this is what says which is which. -->
+<details id="Layout" open>
+  <summary>a. Optode Layout</summary>
+  <div class="details-body">
+    <div class="row row-layout">
+      <div>
+        <p class="panel-head">2D top-down <span class="hint">head-projected &bull; red square = source &bull; blue dot = detector &bull; channel colour = SCI &bull; click = highlight</span></p>
+        <div id="layout-2d-plot"></div>
+      </div>
+      <div>
+        <p class="panel-head">Channel positions (3D, fsaverage)</p>
+        <div id="layout-3d-plot"></div>
+      </div>
+    </div>
+  </div>
+</details>
+
+<!-- step b: raw signal + the events it carries -->
 <details id="RawSignal" open>
-  <summary>a. Raw Signal</summary>
+  <summary>b. Raw Signal</summary>
   <div class="details-body">
     <div class="row row-main">
       <div>
@@ -186,7 +203,7 @@ select#run-select {
 <!-- step b: concentration and spectrum, one channel at a time. Directly under the trace
      they are picked off, so a channel clicked above is read without scrolling. -->
 <details id="ChannelDetail" open>
-  <summary>b. HbO / HbR &amp; PSD &mdash; per channel</summary>
+  <summary>c. HbO / HbR &amp; PSD &mdash; per channel</summary>
   <div class="details-body">
     <p class="step-desc" id="detail-title">Pick a channel here or click its trace above.
        The panel holds that channel's concentration after Beer-Lambert and its spectrum.</p>
@@ -200,7 +217,7 @@ select#run-select {
 <!-- step c: the whole recording's spectrum. No picker: it is a mean across channels, and
      the per-channel version is the panel above. -->
 <details id="PSD" open>
-  <summary>c. PSD &mdash; mean across channels</summary>
+  <summary>d. PSD &mdash; mean across channels</summary>
   <div class="details-body">
     <p class="step-desc">Averaged over every channel, on optical density, before
        Beer-Lambert.</p>
@@ -208,31 +225,14 @@ select#run-select {
   </div>
 </details>
 
-<!-- step d: coupling and amplitude over time -->
+<!-- step e: coupling and amplitude over time -->
 <details id="SciPsp" open>
-  <summary>d. Raw Signal Quality (SCI / PSP / CV)</summary>
+  <summary>e. Raw Signal Quality (SCI / PSP / CV)</summary>
   <div class="details-body">
     <p class="step-desc">Scalp coupling index, peak spectral power and coefficient of
        variation per channel, every row on one window grid and all three measured on the
        uncorrected optical density. Red marks a channel below the line.</p>
     <div id="sci-psp-plot"></div>
-  </div>
-</details>
-
-<!-- step e: where the channels are -->
-<details id="Layout" open>
-  <summary>e. Optode Layout</summary>
-  <div class="details-body">
-    <div class="row row-layout">
-      <div>
-        <p class="panel-head">2D top-down <span class="hint">head-projected &bull; red square = source &bull; blue dot = detector &bull; channel colour = SCI &bull; click = highlight</span></p>
-        <div id="layout-2d-plot"></div>
-      </div>
-      <div>
-        <p class="panel-head">Channel positions (3D, fsaverage)</p>
-        <div id="layout-3d-plot"></div>
-      </div>
-    </div>
   </div>
 </details>
 
@@ -253,7 +253,7 @@ select#run-select {
   <div class="details-body">
     <p class="step-desc">Every event on one axis, one row per condition. This is what shows a
        condition that stopped being delivered partway through or a block started twice, which
-       no average can.</p>
+       no average can. <span id="trigger-scope"></span></p>
     <div id="trigger-timeline-plot"></div>
   </div>
 </details>
@@ -624,6 +624,17 @@ function toggleBadFromOptode() { /* handled via double-click on ts trace */ }
 function loadTriggerTimeline() {
   var p = ((_STATIC_DATA[_run_idx] || {}).figure_paths || {}).trigger;
   _showSection("Events", !!(p && p.src));
+  // the one panel a condition page keeps whole on purpose, so the page says so: both
+  // failures above are visible only against the conditions around the one being read, and
+  // a timeline cut to one condition could show neither
+  var cond = (_STATIC_DATA[_run_idx] || {}).condition_label;
+  var scope = document.getElementById("trigger-scope");
+  if (scope) {
+    scope.innerHTML = cond
+      ? "<b>This is the whole run, not just &ldquo;" + _esc(cond) + "&rdquo;</b>, and "
+        + "deliberately so: neither failure is visible without the conditions around it."
+      : "";
+  }
   if (p && p.src) _setIframeSrc("trigger-timeline-plot", p.src, p.h || 120);
 }
 
@@ -729,12 +740,19 @@ function renderSqm(d) {
   }
   document.getElementById("sqm-list").innerHTML = html;
 
+  // three cases, because "every channel" means two different things: a montage with no
+  // short channels to separate, and a page whose separation is in the tables below. Saying
+  // the first on the second printed a sentence the Short rows underneath contradicted.
   var scope = document.getElementById("sqm-scope");
+  var hasSplit = !!((d.split || {}).rows || []).length;
   if (d.channel_set === "long channels") {
     scope.innerHTML = "Measured on <b>long channels only</b>. A short channel sits a few "
       + "millimetres from its source, so it returns far more light and a far stronger pulse "
       + "than any long channel; averaging the two together lifts SCI, PSP and SNR and can "
       + "make a poorly coupled recording read as a good one.";
+  } else if (hasSplit) {
+    scope.innerHTML = "Measured over <b>every channel</b>. The three channel sets are in the "
+      + "tables below; the verdict is read off the long ones.";
   } else {
     scope.textContent = "Measured on every channel: this montage carries no short channels "
       + "to judge separately.";

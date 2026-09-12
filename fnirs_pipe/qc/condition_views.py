@@ -673,6 +673,7 @@ def condition_payloads(
     # line rather than given one of its own.
     od_cols = tuple((k, t) for k, t in OD_SPLIT_COLUMNS if k != "mean_amp_mean")
     motion_cols = tuple((k, t) for k, t in MOTION_SPLIT_COLUMNS if k != "gvtd_thresh")
+    _TABLE_KEYS = {k for k, _ in od_cols} | {k for k, _ in motion_cols}
 
     out: list[tuple[str, dict]] = []
     for label, entry in by_condition.items():
@@ -701,6 +702,8 @@ def condition_payloads(
         ], motion_cols) if motion_by_set.get("short") else {}
 
         d = dict(payload)
+        # what the page is, for the panels that stay whole and have to say why
+        d["condition_label"] = label
         # the run's summary describes the run's verdict; this page screens on its own
         # stretch, so it carries its own count and says which window it is
         n_total = len(rows)
@@ -718,10 +721,17 @@ def condition_payloads(
                       f"against the run's line; the recording was processed under the "
                       f"run's, which the run's own page carries."),
         }
+        # the flat list keeps only what neither table covers, so a number is printed once.
+        # Derived from the two column lists rather than written out again: a column added to
+        # either table leaves the list on its own.
+        flat_keys = (tuple(k for k in COND_SCALAR_KEYS if k not in _TABLE_KEYS)
+                     if split else COND_SCALAR_KEYS)
         d["sqm"] = {
-            "rows": metric_rows(scalars, COND_SCALAR_KEYS, skip_missing=True),
+            "rows": metric_rows(scalars, flat_keys, skip_missing=True),
             "split": split,
             "motion_split": motion_split,
+            # every channel, and the three sets are in the tables. Not "no short channels":
+            # this montage has them, and the Short rows below say so
             "channel_set": "every channel",
         }
         d["channels"] = {
