@@ -22,7 +22,12 @@ from fnirs_pipe.qc.boilerplate.vocabulary import (
 )
 from fnirs_pipe.qc.metrics import SCI_PASS
 from fnirs_pipe.qc.figure_io import (
-    _pair_fname, extract_markers, get_channel_pairs, save_png,
+    _fig_href,
+    _pair_fname,
+    _save_figure_html,
+    extract_markers,
+    get_channel_pairs,
+    save_png,
 )
 from fnirs_pipe.qc.figures.hyper_figures import _cond_colors
 from fnirs_pipe.qc.hyper_raw_writer import _process_hyper_raw_group
@@ -760,6 +765,7 @@ def build_hyper_post_report(
         build_isc_panel,
         build_wtc_channel,
         build_wtc_cross_matrix,
+        build_wtc_map_interactive,
         compute_isc,
     )
 
@@ -851,6 +857,18 @@ def build_hyper_post_report(
         """
         return save_png(b64, figures_dir, name)
 
+    def _fig_html(fig, name: str) -> "dict | None":
+        """One Plotly figure onto disk as its own page, with the height its iframe needs.
+
+        The PNG twin is :func:`_fig`. Its URL is under the same ``wtc`` key a PNG entry
+        uses, so one shape indexes both panels and a reader of the page's tables does not
+        have to know which kind a pairing turned out to be.
+        """
+        if fig is None:
+            return None
+        height = _save_figure_html(fig, figures_dir / name)
+        return {"wtc": _fig_href(figures_dir, name), "h": height}
+
     def _write_df_tsv(df, kind: str, step: str, **extra) -> Path:
         tsv_path = (group_data_dir(output_dir, group_id)
                     / f"group-{group_id}_task-{task}_hyper-{kind}.tsv")
@@ -872,7 +890,8 @@ def build_hyper_post_report(
         return out
 
     def _maps(dest: dict, result, pair_key, pair_label: str, axis: list[str],
-              stem: str, ch_type: str, suffix: str, what: str) -> None:
+              stem: str, ch_type: str, suffix: str, what: str,
+              interactive: bool = False) -> None:
         """Fill ``dest`` with one coherence map per pairing of ``axis`` against itself.
 
         ::
@@ -889,27 +908,36 @@ def build_hyper_post_report(
         A pairing the result has no entry for, or whose builder failed, lands as ``None``
         and the page hides its image. That is the rejected channel's blank row arriving on
         the figure side of the same rule the tables follow.
+
+        ``interactive`` writes each map as its own Plotly page instead of a PNG, and the
+        entry then carries the iframe's height beside its URL. The ROI panel takes it and
+        the channel panel does not, on volume alone: both cost about 3 MB a map, and a
+        14-channel crossed dyad has 2352 channel maps against 192 ROI ones.
         """
         for label1 in axis:
             row: dict = {}
             for label2 in (axis if wtc_channel_cross else [label1]):
-                fig = None
+                entry = None
                 if result and pair_key:
                     key = (label1, label2) if wtc_channel_cross else label1
                     data = result.pairs.get(pair_key, {}).get(key)
                     site = label1 if label1 == label2 else f"{label1} × {label2}"
-                    fname = (f"{stem}_{_pair_fname(label1)}{suffix}.png"
+                    ext = "html" if interactive else "png"
+                    fname = (f"{stem}_{_pair_fname(label1)}{suffix}.{ext}"
                              if label1 == label2 else
                              f"{stem}_{_pair_fname(label1)}_x_{_pair_fname(label2)}"
-                             f"{suffix}.png")
-                    fig = _safe_post(
-                        f"wtc map {site} ({what}, {ch_type})", fname,
-                        build_wtc_channel,
-                        data, result.freqs, result.times,
-                        pair_label, markers_list, cond_colors_, site,
-                        arrow_min=arrow_min,
-                    )
-                row[label2] = {"wtc": fig}
+                             f"{suffix}.{ext}")
+                    build = (build_wtc_map_interactive if interactive
+                             else build_wtc_channel)
+                    with guard(f"wtc map {site} ({what}, {ch_type}) figure", errors, scope):
+                        drawn = build(data, result.freqs, result.times,
+                                      pair_label, markers_list, cond_colors_, site,
+                                      arrow_min=arrow_min)
+                        entry = (_fig_html(drawn, fname) if interactive
+                                 else {"wtc": _fig(drawn, fname)})
+                # always a dict, even where nothing was drawn: the page indexes every
+                # pairing of the axis and a missing one has to answer with an empty URL
+                row[label2] = entry or {"wtc": None}
             dest[label1] = row
 
     def _transform_condition(tstart: float, tstop: float, ch_type: str):
@@ -1085,7 +1113,7 @@ def build_hyper_post_report(
                 roi_band_df, roi_labels, subject_ids, band_fmin, band_fmax, "ROI",
             ) or ""
         _maps(out["per_roi"], roi_wtc, roi_pair_key, pair_label, roi_labels,
-              f"wtcroi_{ch_type}", ch_type, suffix, what)
+              f"wtcroi_{ch_type}", ch_type, suffix, what, interactive=True)
 
         return out
 

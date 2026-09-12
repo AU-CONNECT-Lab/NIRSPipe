@@ -230,6 +230,183 @@ def build_wtc_channel(
     return _png_b64(fig)
 
 
+# Height only. The panel has no width of its own: it fills whatever the report's iframe is,
+# which it can do because the arrows are measured in pixels rather than in data.
+_INTERACTIVE_PLOT_H = 430
+_INTERACTIVE_ARROW_PX = 15.0
+
+
+def build_wtc_map_interactive(
+    wtc_data: dict,
+    freqs: np.ndarray,
+    times: np.ndarray,
+    pair_label: str,
+    markers_list: list[dict],
+    cond_colors: dict[str, str],
+    site_label: str = "",
+    arrow_min: float = ARROW_MIN_COHERENCE,
+):
+    """:func:`build_wtc_channel` as a Plotly figure, for the panels worth zooming into.
+
+    ::
+
+      the same wtc_data -> go.Figure, about 3 MB of standalone HTML
+
+    Same map, same cone, same arrow rule, same span bars and legend. What it adds is hover
+    (time, frequency and coherence per cell) and zoom, which is the whole reason the ROI
+    panel takes this and the channel panels stay PNG: a per-channel map costs the same 3 MB
+    and there are 2352 of them on a 14-channel crossed dyad against 192 ROI maps.
+
+    **Each arrow is an annotation anchored in data with its tail offset in pixels**
+    (``axref="pixel"``), which is what ``angles="uv"`` gives the matplotlib panel: the head
+    sits on its grid point and the direction is a screen direction, so a relative phase of a
+    quarter cycle draws a quarter turn however wide the frame ends up. ``ff.create_quiver``
+    would work too and is one trace instead of N, but it lays the barb and both head strokes
+    out in *data* coordinates, and on axes of seconds against log-Hz that shears every
+    arrowhead and makes the angle depend on the rendered width. An arrow costs about 180
+    bytes against the map's three megabytes, so the trace count is not worth the distortion.
+    Plotly's ``ay`` grows downward, which is the sign that makes ``sin`` point up.
+
+    No ``zsmooth``. Plotly would interpolate the cells, and the moire the pixel grid makes of
+    a map this wide would go with it, but so would the real structure: at the fast end of the
+    band the coherence decorrelates in about ten seconds, and those stripes are the data.
+    """
+    import plotly.graph_objects as go
+
+    if wtc_data is None or len(freqs) == 0 or len(times) == 0:
+        return None
+
+    wtc_arr = np.asarray(wtc_data["wtc"], dtype=float)
+    coi     = np.asarray(wtc_data["coi"], dtype=float)
+    sig     = wtc_data.get("sig")
+    freqs, times = np.asarray(freqs, dtype=float), np.asarray(times, dtype=float)
+
+    lf0, lf1 = float(np.log10(freqs).min()), float(np.log10(freqs).max())
+    t0, t1 = float(times[0]), float(times[-1])
+    # a single time point or a single scale has no axis to draw on
+    if t1 <= t0 or lf1 <= lf0:
+        return None
+
+    fig = go.Figure()
+    # three decimals: the payload is one number per cell written out as text, and no page in
+    # this package reads a coherence past the third place
+    fig.add_trace(go.Heatmap(
+        z=np.round(wtc_arr, 3), x=times, y=freqs,
+        colorscale="Viridis", zmin=0.0, zmax=1.0,
+        colorbar=dict(title="WTC", thickness=14, len=0.92, x=1.005),
+        hovertemplate="t = %{x:.0f} s<br>f = %{y:.4g} Hz<br>WTC = %{z:.3f}<extra></extra>",
+    ))
+
+    with np.errstate(divide="ignore", invalid="ignore"):
+        freq_coi = np.where(coi > 1e-10, 1.0 / coi, freqs.max())
+    freq_coi = np.clip(freq_coi, freqs.min(), freqs.max())
+    fig.add_trace(go.Scatter(
+        x=np.concatenate([times, times[::-1]]),
+        y=np.concatenate([freq_coi, np.full_like(times, freqs.min())]),
+        fill="toself", fillcolor="rgba(255,255,255,0.45)", line=dict(width=0),
+        hoverinfo="skip", showlegend=False,
+    ))
+    fig.add_trace(go.Scatter(
+        x=times, y=freq_coi, mode="lines",
+        line=dict(color="white", width=1.6, dash="dash"),
+        hoverinfo="skip", showlegend=False,
+    ))
+
+    if sig is not None and len(np.asarray(sig)) == wtc_arr.shape[0]:
+        with np.errstate(divide="ignore", invalid="ignore"):
+            ratio = wtc_arr / np.asarray(sig, dtype=float)[:, None]
+        fig.add_trace(go.Contour(
+            z=ratio, x=times, y=freqs, showscale=False, hoverinfo="skip",
+            contours=dict(start=1.0, end=1.0, size=1.0, coloring="none"),
+            line=dict(color="black", width=1.1),
+        ))
+
+    # ---- phase arrows, one pixel-anchored annotation each ----
+    # Inset off the edges, which the matplotlib panel does not need: its quiver is clipped
+    # at the axes, and an annotation is not, so an arrow on the outermost row would hang its
+    # tail over the tick labels.
+    def _grid(n: int, count: int) -> np.ndarray:
+        return np.unique(np.linspace(0.03, 0.97, min(count, n)) * (n - 1)).astype(int)
+
+    fi = _grid(len(freqs), 13)
+    ti = _grid(len(times), 34)
+    phase = wtc_data.get("phase")
+    keep = _arrow_mask(wtc_arr, sig, freqs, freq_coi, arrow_min)[np.ix_(fi, ti)]
+    arrows = []
+    if phase is not None and np.asarray(phase).shape == wtc_arr.shape and keep.any():
+        angle = np.asarray(phase, dtype=float)[np.ix_(fi, ti)]
+        for r, f_i in enumerate(fi):
+            for c, t_i in enumerate(ti):
+                if not keep[r, c]:
+                    continue
+                a = float(angle[r, c])
+                arrows.append(dict(
+                    # a log axis takes an annotation's coordinate in log10, not in Hz.
+                    # Given in Hz every arrow lands off the plot and is clipped away with
+                    # no error at all, which is how this was drawing nothing
+                    x=float(times[t_i]), y=float(np.log10(freqs[f_i])),
+                    ax=-_INTERACTIVE_ARROW_PX * np.cos(a),
+                    ay=_INTERACTIVE_ARROW_PX * np.sin(a),
+                    axref="pixel", ayref="pixel", text="", showarrow=True,
+                    arrowhead=2, arrowsize=1.1, arrowwidth=1.1, arrowcolor="black",
+                ))
+
+    # ---- one span bar per block, one legend entry per condition ----
+    shapes, seen = [], {}
+    for m in markers_list:
+        onset, duration = float(m["onset"]), float(m["duration"])
+        if duration <= 0.1 or not (t0 <= onset <= t1):
+            continue
+        colour = cond_colors.get(m["description"], "#f39c12")
+        shapes.append(dict(type="line", xref="x", yref="paper", y0=1.012, y1=1.012,
+                           x0=onset, x1=min(onset + duration, t1),
+                           line=dict(color=colour, width=5)))
+        for edge in (onset, onset + duration):
+            if t0 <= edge <= t1:
+                # against the paper rather than the axis: the line means "the full height",
+                # and a log axis takes its own coordinates in log10
+                shapes.append(dict(type="line", xref="x", yref="paper", x0=edge, x1=edge,
+                                   y0=0.0, y1=1.0,
+                                   line=dict(color=colour, width=1.1, dash="dot")))
+        seen.setdefault(m["description"], colour)
+    for label, colour in seen.items():
+        fig.add_trace(go.Scatter(x=[None], y=[None], mode="lines", name=label,
+                                 line=dict(color=colour, width=5), hoverinfo="skip"))
+
+    major, minor = _log_freq_ticks(freqs)
+    on_decades = all(abs(np.log10(f) - round(np.log10(f))) < 1e-9 for f in major)
+    lead = (pair_label.split("×")[0].strip() or "the first member"
+            if pair_label else "the first member")
+    heading = f"{site_label}   {pair_label}".strip() if site_label else pair_label
+    clears = "the Monte Carlo level" if sig is not None else f"{arrow_min:g}"
+    fig.update_layout(
+        height=_INTERACTIVE_PLOT_H + 150, autosize=True,
+        margin=dict(l=70, r=80, t=90, b=95),
+        title=dict(text=heading, x=0.0, xanchor="left", y=0.965, font=dict(size=15)),
+        legend=dict(orientation="h", x=1.0, xanchor="right", y=1.035, yanchor="bottom",
+                    font=dict(size=11), bgcolor="rgba(0,0,0,0)"),
+        shapes=shapes, plot_bgcolor="white", paper_bgcolor="white",
+        xaxis=dict(title="Time (s)", range=[t0, t1], showgrid=False, zeroline=False),
+        # a log axis takes its range in log10 units. Given explicitly so the outermost row
+        # does not hang half a cell past the washed band, which reads as an uncut stripe
+        yaxis=dict(title="Frequency (Hz)", type="log", range=[lf1, lf0],
+                   tickmode="array", tickvals=major,
+                   ticktext=[_freq_label(f, "html") if on_decades else f"{f:.3g}"
+                             for f in major],
+                   showgrid=False, zeroline=False),
+        annotations=arrows + [dict(
+            xref="paper", yref="paper", x=0.0, y=-0.155, xanchor="left", yanchor="top",
+            showarrow=False, font=dict(size=11, color="#444444"),
+            text=("arrows: right = in phase, left = antiphase, up = "
+                  f"{lead} leads by a quarter cycle, drawn only where coherence clears "
+                  f"{clears}"
+                  "&nbsp;&nbsp;&nbsp;&nbsp;washed-out band: outside the cone of influence"),
+        )],
+    )
+    fig.update_yaxes(minor=dict(tickvals=minor, showgrid=False))
+    return fig
+
+
 def draw_site_matrix(ax, z, row_labels, col_labels, *, cmap, vmin, vmax,
                      row_title="", col_title="", annotate=True):
     """One site-by-site heatmap with its labels and its numbers. Every matrix here uses it.

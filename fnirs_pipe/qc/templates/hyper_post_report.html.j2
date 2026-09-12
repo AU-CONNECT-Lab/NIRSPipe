@@ -258,7 +258,9 @@
   <summary>b. Per ROI</summary>
   <div class="details-body">
     <p class="step-desc">The member channels&rsquo; maps averaged cell by cell, bad channels
-      excluded; arrows and cone as above.
+      excluded; arrows and cone as above. <b>These ones are live</b>: hover for the time,
+      frequency and coherence under the pointer, and drag to zoom. The per-channel maps
+      above stay stills because there are an order of magnitude more of them.
       {%- if roi_crossed %} The left selector is {{ subject_ids[0] }} and the right
       {{ subject_ids[1] }}, so an off-diagonal pairing reads at the size of a homologous
       one.{% endif %}</p>
@@ -272,8 +274,8 @@
     {% for c in wtc_chroma_labels %}
     <div class="chroma-stack">
       <span class="chroma-name">{{ c }}</span>
-      <img class="responsive" id="wtc-roi-img-{{ loop.index0 }}"
-           alt="ROI coherence map ({{ c }})" />
+      <iframe class="plotly-frame" id="wtc-roi-frame-{{ loop.index0 }}"
+              title="ROI coherence map ({{ c }})" style="height:600px"></iframe>
     </div>
     {% endfor %}
   </div>
@@ -367,10 +369,25 @@ var _ALIGN        = {{ alignment_json | safe }};
 // image per chromophore, stacked and labelled, and _CHROMA is the order they sit in. What a
 // variable below holds is a path under figures/, never the figure, so picking a channel
 // points an img somewhere else and the browser fetches that one file.
-function _img(el, src) {
+function _img(el, d) {
   if (!el) return;
+  var src = d && d.wtc;
   if (src) { el.src = src;               el.style.display = ""; }
   else     { el.removeAttribute("src");  el.style.display = "none"; }
+}
+
+// the ROI maps are live figures in their own pages, so the entry carries a height beside
+// the same `wtc` URL a still would have put there
+function _frame(el, d) {
+  if (!el) return;
+  if (d && d.wtc) {
+    el.src = d.wtc;
+    if (d.h) el.style.height = d.h + "px";
+    el.style.display = "";
+  } else {
+    el.removeAttribute("src");
+    el.style.display = "none";
+  }
 }
 
 // alignment table
@@ -400,24 +417,25 @@ function _fill(sel, labels, mark) {
 }
 
 // One image per chromophore, in _CHROMA order, which is the order the template stacked them.
-function _pick(maps, labels, id1, id2, imgBase) {
+function _pick(maps, labels, id1, id2, base, setter) {
   var sel1 = document.getElementById(id1);
   var sel2 = document.getElementById(id2);
   if (!sel1 || !labels.length) return;
   var a = labels[parseInt(sel1.value) || 0];
   var b = sel2 ? labels[parseInt(sel2.value) || 0] : a;
   _CHROMA.forEach(function(c, i) {
-    var d = ((maps[c] || {})[a] || {})[b] || {};
-    _img(document.getElementById(imgBase + "-" + i), d.wtc);
+    setter(document.getElementById(base + "-" + i),
+           ((maps[c] || {})[a] || {})[b]);
   });
 }
 
 function _selectCh() {
-  _pick(_PER_CH, _CH_PAIRS, "ch-select-post", "ch-select-post-2", "wtc-chan-img");
+  _pick(_PER_CH, _CH_PAIRS, "ch-select-post", "ch-select-post-2", "wtc-chan-img", _img);
 }
 
 function _selectRoi() {
-  _pick(_PER_ROI, _ROI_LABELS, "roi-select-post", "roi-select-post-2", "wtc-roi-img");
+  _pick(_PER_ROI, _ROI_LABELS, "roi-select-post", "roi-select-post-2",
+        "wtc-roi-frame", _frame);
 }
 
 (function() {
@@ -437,10 +455,22 @@ function _selectRoi() {
 // one img hidden and the rest of the page intact.
 function _drawImages() {
   _CHROMA.forEach(function(c, i) {
-    _img(document.getElementById("wtc-roi-matrix-img-" + i), _ROI_MATRIX[c]);
-    _img(document.getElementById("wtc-chan-matrix-img-" + i), _CHAN_MATRIX[c]);
+    _img(document.getElementById("wtc-roi-matrix-img-" + i), {wtc: _ROI_MATRIX[c]});
+    _img(document.getElementById("wtc-chan-matrix-img-" + i), {wtc: _CHAN_MATRIX[c]});
   });
 }
+
+// the live ROI figures resize themselves; same protocol figure_io.py writes into every page
+window.addEventListener("message", function(e) {
+  if (!e.data || e.data.type !== "iframe-resize") return;
+  var frames = document.querySelectorAll("iframe");
+  for (var i = 0; i < frames.length; i++) {
+    if (frames[i].contentWindow === e.source) {
+      frames[i].style.height = e.data.h + "px";
+      return;
+    }
+  }
+});
 
 window.addEventListener("DOMContentLoaded", function() {
   _selectCh();

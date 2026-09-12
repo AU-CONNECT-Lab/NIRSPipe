@@ -6,6 +6,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- **The ROI coherence maps are live figures.** Hover reads the time, frequency and coherence under the pointer and the axes zoom, which is what a map whose structure changes every ten seconds at the fast end needs. The per-channel maps stay stills: both kinds cost about 3 MB apiece, and a crossed 14-channel dyad writes 2352 of the one against 192 of the other
+
 ### Changed
 - **The two dyad reports read as documents, the way the subject report does.** Each opens with a summary carrying the members, the run's parameters, the alignment and the command that produced it; every section folds; and the filled panels each one used to sit in are gone. The chromophore note is part of the coherence section rather than a panel with nothing in it
 - **A dyad quality table is the subject report's table, with members where it has channel sets**: one column per metric, no cell grid, and the label's hover text from the same registry. It was a grid of metric rows with a filled header, which was a second way of printing the same numbers
@@ -14,6 +17,7 @@ All notable changes to this project will be documented in this file.
 - **A coherence map names its conditions in a legend in the top right.** The label was written above every block, so a block design printed the same word once per block
 
 ### Fixed
+- **A subject's per-condition pages had quietly stopped being written.** They failed on the first line and the failure was collected rather than raised, so the run finished, the report was written, and only its error list said the pages were missing
 - **The coherence maps were written at 200 dpi** while every other figure in the package is 300
 
 ## [0.38.0] - 2026-09-12
