@@ -484,9 +484,9 @@ def condition_view_table(fig, spans: "list[tuple[str, float, float]]") -> "dict 
 
 
 # figures a condition page keeps whole, because they describe the run rather than any one
-# condition. The optode layout is the montage. The event timeline is whole too but is
-# written per condition, carrying a mark for the one being read, so it is not on this list.
-CONDITION_PAGE_FIGURES = ("layout",)
+# condition. The optode layout is the montage; the event timeline is the run's schedule, and
+# a reader comparing two conditions wants the same picture on both pages.
+CONDITION_PAGE_FIGURES = ("layout", "trigger")
 
 
 def figure_leaks(figure_paths: dict, slug: str) -> "list[str]":
@@ -612,68 +612,6 @@ def _threshold_of(figure, axis: str) -> "float | None":
     return None
 
 
-def mark_condition(figure: dict, label: str, t0: float, t1: float) -> dict:
-    """The run's event timeline cut to the condition being read, over the run's own summary.
-
-    ::
-
-      mark_condition(timeline_dict, "video", 1616.9, 2516.9)
-      -> two rows: "(all)" and "video", with video's window boxed
-
-    :func:`~fnirs_pipe.qc.figures.raw_figures.build_trigger_timeline_single` draws a summary
-    row carrying every condition's events, then one row per condition. A condition page keeps
-    the summary row and its own, and drops the rest.
-
-    Dropping the others and keeping the summary is the whole point, because the two failures
-    this panel exists to catch need different things. A condition that stopped being
-    delivered partway, or a block started twice, are both visible on **that condition's own
-    row**: a gap, or two marks where one belongs. What the summary row adds is the
-    disambiguation the other rows were there for, whether the run carried on while this
-    condition stopped, and it says that in one row instead of four. On a design with five
-    conditions the four dropped rows carried nothing this page is read for.
-
-    The time axis stays whole, so a gap is read against the recording rather than against
-    the window. The window itself is boxed and named, because a page showing the run's span
-    has to say which part of it is this page's.
-    """
-    # `condition_windows` numbers a repeated description desc#1, desc#2, while the rows are
-    # the bare descriptions; a repeated one shares a row, and the box says which occurrence
-    desc = label.split("#", 1)[0]
-
-    kept, dropped = [], 0
-    for trace in figure.get("data") or []:
-        y = trace.get("y") or []
-        summary_row = bool(y) and float(y[0]) == 0
-        if summary_row:
-            kept.append(trace)
-        elif trace.get("name") == desc:
-            kept.append({**trace, "y": [1] * len(y)})
-        else:
-            dropped += 1
-    if dropped == 0:
-        logger.warning("timeline carries no row named %r; left whole on %s's page",
-                       desc, label)
-
-    layout = dict(figure.get("layout") or {})
-    layout["yaxis"] = {**(layout.get("yaxis") or {}),
-                       "tickvals": [0, 1], "ticktext": ["(all)", desc]}
-    layout["height"] = 2 * 60 + 82
-    shapes = list(layout.get("shapes") or [])
-    shapes.insert(0, {
-        "type": "rect", "xref": "x", "yref": "paper", "layer": "below",
-        "x0": float(t0), "x1": float(t1), "y0": 0, "y1": 1,
-        "fillcolor": "rgba(41, 128, 185, 0.10)",
-        "line": {"color": "#2980b9", "width": 1, "dash": "dot"},
-    })
-    layout["shapes"] = shapes
-    layout["annotations"] = list(layout.get("annotations") or []) + [{
-        "x": (float(t0) + float(t1)) / 2, "xref": "x", "y": 1.0, "yref": "paper",
-        "text": f"this page: {label}", "showarrow": False,
-        "yanchor": "bottom", "font": {"size": 9, "color": "#2980b9"},
-    }]
-    return {**figure, "data": kept, "layout": layout}
-
-
 def condition_payloads(
     payload: dict,
     *,
@@ -721,8 +659,9 @@ def condition_payloads(
       a Welch estimate reads outside the samples it is handed. A condition too short for the
       transform gets no spectrum rather than one on a coarser grid than the run's.
 
-    The event timeline is cut to this condition's row over the run's summary row, keeping
-    its whole time axis; see :func:`mark_condition`.
+    The event timeline is the run's own figure, left whole: it is the schedule the whole
+    recording ran to, and two condition pages showing different pictures of it invites a
+    comparison between them that is not there.
     The per-trial table is cut to the trials whose onset falls inside the window; nothing is
     rescored, a trial's SQM reading nothing outside its own crop.
 
@@ -846,12 +785,6 @@ def condition_payloads(
             d["trial_qc"] = {}
             if trial:
                 paths["trial_qc"], d["trial_qc"] = trial
-            # kept whole and marked, rather than cut: see `mark_condition`
-            timeline = (payload.get("trigger_timeline") or {}).get("figure")
-            if timeline:
-                import plotly.graph_objects as go
-                paths["trigger"] = save_figure("trigger", slug, go.Figure(
-                    mark_condition(timeline, label, float(t0), float(t1))))
             psd_fig = remake_psd(float(t0), float(t1)) if remake_psd else None
             paths.pop("psd", None)
             if psd_fig is not None:
@@ -1190,6 +1123,57 @@ def condition_set_scalars(
         }
         out[set_name] = row
     return out
+
+
+def condition_verdict_view(entry: dict) -> "dict[str, float | None]":
+    """One condition's scalars over the long channels, the set the run's own rows report.
+
+    ::
+
+        {"scalars": {"sci_win_mean": 0.71, "gvtd_filt_p95": 1.2e-4},
+         "od_by_set": {"long": {"sci_win_mean": 0.86}}}
+        -> {"sci_win_mean": 0.86, "gvtd_filt_p95": 1.2e-4}
+
+    The arrangement :func:`~fnirs_pipe.qc.sqm_record.raw_verdict_view` makes for a run, and
+    for the same reason: a page printing a run's row above a condition's needs both on one
+    channel set, or what looks like a comparison between two stretches is a comparison
+    between two montages as well.
+
+    ``scalars`` is mixed by construction. Its motion and haemoglobin halves are already the
+    long set, matching the run's rows; its optical-density half is a mean over every channel,
+    a condition being a column selection out of one matrix that holds them all. Only that
+    half moves here, and only where the long set has a value: a montage with no short
+    channel has a long row equal to the whole of it and nothing changes, and one whose long
+    row is empty keeps the numbers it has rather than gaining a row of dashes.
+    """
+    out = dict(entry.get("scalars") or {})
+    long_od = (entry.get("od_by_set") or {}).get("long") or {}
+    out.update({key: value for key, value in long_od.items() if value is not None})
+    return out
+
+
+def condition_set_view(entry: dict, set_name: str) -> "dict[str, float | None]":
+    """One condition's scalars over one channel set, the three families joined.
+
+    ::
+
+        condition_set_view(entry, "short")
+        -> {"sci_win_mean": 0.55, "gvtd_filt_p95": 3.1e-4, "hbo_hbr_corr_mean": -0.31, ...}
+
+    A condition's record keeps its numbers split three ways by family rather than one flat
+    dict per set: ``od_by_set`` from the windowed matrices, ``motion_by_set`` from the GVTD
+    series and the flagged spans, ``haemo_by_set`` from the crop of the haemoglobin file.
+    A page that prints one channel set wants them back together, and joining them here is
+    what keeps a set's row from mixing two sets the way the flat ``scalars`` does.
+
+    An empty dict for a set the record has nothing under, which is a montage with no
+    channel of that kind; the caller drops the row rather than printing dashes.
+    """
+    out: dict = {}
+    for family in ("od_by_set", "motion_by_set", "haemo_by_set"):
+        out.update((entry.get(family) or {}).get(set_name) or {})
+    return {key: value for key, value in out.items() if value is not None}
+
 
 def span_counts(spans, t0: float, t1: float) -> "tuple[float | None, int]":
     """``span_share`` again, with the number of spans that touch the window.

@@ -250,10 +250,12 @@ def _short_section(
     """Only the metrics that answer "are the short-channel regressors trustworthy".
 
     Coupling (SCI, PSP, the coupled-window share) and amplitude (SNR, CV) transfer to short
-    channels, and so does the whole spike family bar ``spike_count``: the mask is a
-    per-channel MAD test, and the frame counts over it ask how many of *these* channels
-    spiked at once, which the windowed half has stored per set since ``spike_spans_short_s``.
-    ``spike_count`` is a sum over channels and drift does not transfer. GVTD does, in full, threshold included: it is an RMS
+    channels, and so does the whole spike family: the mask is a per-channel MAD test, and the
+    frame counts over it ask how many of *these* channels spiked at once, which the windowed
+    half has stored per set since ``spike_spans_short_s``. ``spike_count`` is a sum over
+    channels rather than a per-channel reading, so it counts this set's channels and not
+    another's; it is printed beside the set's channel count for that reason. Drift does not
+    transfer. GVTD does, in full, threshold included: it is an RMS
     across whatever channels it is given, so a short set is its own measurement rather than a
     subset of the long one, and its threshold is the mode of *its own trace over time*, which
     has as many samples as any other trace of the same recording.
@@ -295,10 +297,9 @@ def _short_section(
     record.update({k: v for k, v in intensity.items()
                    if k.startswith(("snr_", "cv_", "mean_amp_"))})
     record.update(_motion_metrics(raw_short))
-    # everything the spike pass returns except `spike_count`, which is a sum over channels
     spike = _spike_metrics(raw_short)
     record.update({k: v for k, v in spike.items()
-                   if k in ("spike_pct", "spike_pct_per_channel",
+                   if k in ("spike_count", "spike_pct", "spike_pct_per_channel",
                             "spike_num_frames", "spike_pct_frames")})
     record["spike_pct_per_channel"] = record.get("spike_pct_per_channel") or {}
     return _split_scalars(record)

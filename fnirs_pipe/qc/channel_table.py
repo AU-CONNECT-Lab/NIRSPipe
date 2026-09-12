@@ -326,6 +326,9 @@ OD_SPLIT_COLUMNS = (
     ("cv_mean",                "Mean CV (10 s)"),
     ("mean_amp_mean",          "Mean amplitude"),
     ("spike_pct",              "Spike share"),
+    # a sum over the set's channels, so it is read against the row's channel count rather
+    # than against another row
+    ("spike_count",            "Spike count"),
 )
 
 # The motion table's columns, a separate table rather than more of the one above because
@@ -359,7 +362,8 @@ MOTION_SPLIT_COLUMNS = (
 # of the whole run's histogram by definition, so a condition is counted against the run's
 # line. Shared so the subject report's condition pages and the raw viewer's drop the same.
 WHOLE_RUN_ONLY_COLUMNS = frozenset({
-    "mean_amp_mean", "spike_pct", "gvtd_thresh", "motion_corrected_frac_mean",
+    "mean_amp_mean", "spike_pct", "spike_count", "gvtd_thresh",
+    "motion_corrected_frac_mean",
 })
 
 

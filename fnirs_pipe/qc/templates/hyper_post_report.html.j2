@@ -86,9 +86,16 @@
 <!-- Per-subject quality metrics -->
 {% if subject_metrics_rows %}
 {% call card("Per-subject Quality Metrics",
-             hint="↑ / ↓ = better direction &bull; SCI coloured against the threshold, HbO-HbR by sign") %}
+             hint="one table per channel set &bull; ↑ / ↓ = better direction &bull; SCI coloured against the threshold, HbO-HbR by sign") %}
 <div class="subj-metrics-wrap">
   {{ subject_metrics(subject_metrics_rows, subject_ids) }}
+</div>
+<div class="panel-caveat">
+  Each table is its own measurement, not a subset of the one above it. GVTD is an RMS across
+  the channels of its set and a retention rate is a fraction of them, so a long and a short
+  row are two numbers about two montages rather than one number split in half. The
+  coherence on this page is computed on the long channels; the short table is what says
+  whether a change there is brain or scalp.
 </div>
 {% if condition_label %}
 <div class="panel-caveat">

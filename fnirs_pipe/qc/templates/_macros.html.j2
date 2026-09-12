@@ -14,15 +14,22 @@
 </div>
 {%- endmacro %}
 
-{# Per-subject quality metrics: one row per metric, one column per subject.
-   Rows come from hyper_report.subject_metric_rows. #}
-{% macro subject_metrics(rows, subject_ids) -%}
+{# Per-subject quality metrics: one table per channel set, one row per metric, one column
+   per subject. Tables come from hyper_report.subject_metric_tables.
+
+   A set is its own measurement rather than a grouping of one, which is why it gets its own
+   table: GVTD is an RMS across the channels of its set, and a long retention rate and a
+   short one are fractions of different montages. An entry whose `set` is empty is a page
+   with nothing to split, and prints unheaded. #}
+{% macro subject_metrics(tables, subject_ids) -%}
+{%- for table in tables %}
+{% if table.set %}<h4 class="subj-set">{{ table.set }} channels</h4>{% endif %}
 <table class="subj-metrics">
   <thead>
     <tr><th>Metric</th>{% for sid in subject_ids %}<th>{{ sid }}</th>{% endfor %}</tr>
   </thead>
   <tbody>
-    {%- for row in rows %}
+    {%- for row in table.rows %}
     <tr>
       <td{% if row.summary %} title="{{ row.summary }}"{% endif %}>{{ row.label }} <span class="dir">{{ row.direction }}</span></td>
       {%- for cell in row.cells %}
@@ -32,4 +39,5 @@
     {%- endfor %}
   </tbody>
 </table>
+{%- endfor %}
 {%- endmacro %}

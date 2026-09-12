@@ -35,6 +35,53 @@ CONDITION_PALETTE = [
 ]
 
 
+# A marker with no duration is an instant, and the bar drawn for it would be invisible;
+# below this many seconds a block is drawn as a tick too, or it renders as a smear the
+# reader cannot tell from a line.
+_MIN_BLOCK_S = 1e-3
+
+
+def timeline_row_traces(events, y, color, name, showlegend, hover_tail=""):
+    """One row of an event timeline: a bar per timed block, a tick per instant event.
+
+    ::
+
+      timeline_row_traces([{"onset": 10, "duration": 30}], 1, "#e74c3c", "video", True)
+      -> [Bar spanning 10-40 s at y=1]
+
+    A block design carries the answer to "did this block run as long as it should have" in
+    ``duration``, which a tick at the onset throws away. Both shapes can appear on one row,
+    since a run can mix a timed block with an instant cue, so each event picks its own by
+    its duration and the two traces share a legend entry.
+    """
+    import plotly.graph_objects as go
+
+    blocks = [e for e in events if float(e.get("duration") or 0) > _MIN_BLOCK_S]
+    ticks  = [e for e in events if float(e.get("duration") or 0) <= _MIN_BLOCK_S]
+    traces = []
+    if blocks:
+        onsets = [float(e["onset"]) for e in blocks]
+        spans  = [float(e["duration"]) for e in blocks]
+        traces.append(go.Bar(
+            x=spans, y=[y] * len(blocks), base=onsets, orientation="h", width=0.42,
+            marker=dict(color=color, line=dict(width=0)),
+            name=name, legendgroup=name, showlegend=showlegend,
+            customdata=[[o, d, o + d] for o, d in zip(onsets, spans)],
+            hovertemplate=(f"<b>{name}</b><br>onset: %{{customdata[0]:.2f}} s"
+                           f"<br>duration: %{{customdata[1]:.2f}} s"
+                           f"<br>ends: %{{customdata[2]:.2f}} s{hover_tail}<extra></extra>"),
+        ))
+    if ticks:
+        traces.append(go.Scatter(
+            x=[float(e["onset"]) for e in ticks], y=[y] * len(ticks), mode="markers",
+            marker=dict(symbol="line-ns-open", size=16, color=color,
+                        line=dict(width=2.0, color=color)),
+            name=name, legendgroup=name, showlegend=showlegend and not blocks,
+            hovertemplate=f"<b>{name}</b><br>t=%{{x:.2f}} s{hover_tail}<extra></extra>",
+        ))
+    return traces
+
+
 def decimate(arr: np.ndarray, times: np.ndarray, max_pts: int):
     """Uniformly subsample columns of arr (and times) to at most max_pts for display."""
     if len(times) <= max_pts:

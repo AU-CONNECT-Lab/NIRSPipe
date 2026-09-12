@@ -14,7 +14,7 @@ from ._brain_utils import mni_trans
 from ._utils import (BAND_COLORS, CONDITION_PALETTE, HBO_COLOR, HBR_COLOR,
                      LONG_COLOR, PSD_NFFT, SHORT_COLOR, UNCLASSIFIED_COLOR,
                      decimate as _decimate, epochable_events, line_xy,
-                     physio_bands)
+                     physio_bands, timeline_row_traces)
 
 logger = get_logger("qc.figures")
 
@@ -1402,33 +1402,13 @@ def build_trigger_timeline_single(
 
     # Summary row at y=0: all conditions overlaid with their own colours
     for desc in all_descs:
-        color = cond_colors.get(desc, "#999")
-        onsets = [e["onset"] for e in by_desc[desc]]
-        traces.append(go.Scatter(
-            x=onsets,
-            y=[0] * len(onsets),
-            mode="markers",
-            marker=dict(symbol="line-ns-open", size=16, color=color,
-                        line=dict(width=2.0, color=color)),
-            name=desc,
-            showlegend=False,
-            hovertemplate=f"<b>{desc}</b><br>t=%{{x:.2f}} s<extra></extra>",
-        ))
+        traces += timeline_row_traces(by_desc[desc], 0, cond_colors.get(desc, "#999"),
+                                      desc, False)
 
     # Per-condition rows starting at y=1
     for desc_idx, desc in enumerate(all_descs, start=1):
-        color = cond_colors.get(desc, "#999")
-        onsets = [e["onset"] for e in by_desc[desc]]
-        traces.append(go.Scatter(
-            x=onsets,
-            y=[desc_idx] * len(onsets),
-            mode="markers",
-            marker=dict(symbol="line-ns-open", size=16, color=color,
-                        line=dict(width=2.0, color=color)),
-            name=desc,
-            showlegend=True,
-            hovertemplate=f"<b>{desc}</b><br>t=%{{x:.2f}} s<extra></extra>",
-        ))
+        traces += timeline_row_traces(by_desc[desc], desc_idx, cond_colors.get(desc, "#999"),
+                                      desc, True)
 
     n = len(all_descs)
     return go.Figure(
@@ -1440,6 +1420,9 @@ def build_trigger_timeline_single(
                        autorange="reversed", gridcolor="#eeeeee",
                        tickfont=dict(size=10)),
             plot_bgcolor="white", paper_bgcolor="white",
+            # overlay, or plotly groups the per-condition bars and shifts each row off its
+            # own tick
+            barmode="overlay",
             # the top margin holds the legend now, which is why it is not the r=100 the
             # legend used to need beside the plot
             height=max(120, (n + 1) * 60 + 82),

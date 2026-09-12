@@ -264,7 +264,7 @@ select#run-select {
   <div class="details-body">
     <p class="step-desc">Every event on one axis, one row per condition. This is what shows a
        condition that stopped being delivered partway through or a block started twice, which
-       no average can. <span id="trigger-scope"></span></p>
+       no average can.</p>
     <div id="trigger-timeline-plot"></div>
   </div>
 </details>
@@ -668,19 +668,6 @@ function toggleBadFromOptode() { /* handled via double-click on ts trace */ }
 function loadTriggerTimeline() {
   var p = ((_STATIC_DATA[_run_idx] || {}).figure_paths || {}).trigger;
   _showSection("Events", !!(p && p.src));
-  // the one panel a condition page keeps whole on purpose, so the page says so: both
-  // failures above are visible only against the conditions around the one being read, and
-  // a timeline cut to one condition could show neither
-  var cond = (_STATIC_DATA[_run_idx] || {}).condition_label;
-  var scope = document.getElementById("trigger-scope");
-  if (scope) {
-    scope.innerHTML = cond
-      ? "Two rows here: <b>" + _esc(cond) + "</b>, where both failures show as a gap or a "
-        + "doubled mark, and <b>(all)</b>, every event in the run, which is what says "
-        + "whether the run carried on while this condition stopped. The time axis is the "
-        + "whole recording, so a gap is read against it."
-      : "";
-  }
   if (p && p.src) _setIframeSrc("trigger-timeline-plot", p.src, p.h || 120);
 }
 

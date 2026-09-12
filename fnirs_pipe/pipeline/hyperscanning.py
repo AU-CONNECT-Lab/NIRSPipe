@@ -760,6 +760,18 @@ def _member_sqm_files(output_dir: Path, entry: GroupEntry, pattern: str) -> list
                    for f in d.glob(pattern)), key=lambda f: f.name)
 
 
+# Which record sections make up each channel set's row in the dyad quality table, in the
+# order they are merged. `raw` before `motion` before `preproc` follows the pipeline, and
+# no two of them carry the same key, so the order is for reading rather than precedence.
+# The whole-file sections are the "all" set: a record splits by separation and the
+# unsuffixed section is the one measured over every channel.
+_SET_SECTIONS = {
+    "all":   ("raw", "motion", "preproc"),
+    "long":  ("raw_long", "motion_long", "preproc_long"),
+    "short": ("raw_short", "motion_short", "preproc_short"),
+}
+
+
 def load_group_sqm(
     output_dir: Path, group: list[GroupEntry], bads_scope: str = "run",
     scope_tasks: "list[str] | None" = None,
@@ -833,6 +845,16 @@ def load_group_sqm(
             # the per-condition numbers the record already holds, so the dyad pages read
             # them rather than cutting the matrices above a second time
             sqm["by_condition"] = record.get("by_condition") or {}
+            # The same scalars kept split by channel set instead of collapsed onto the long
+            # view above. The dyad quality table prints the three sets side by side, the way
+            # a subject report's own metrics section does, so a reader is not handed one set
+            # and left to trust that it was the right one to judge the dyad on.
+            sqm["by_set"] = {
+                set_name: {k: v
+                           for section in sections
+                           for k, v in (record.get(section) or {}).items()}
+                for set_name, sections in _SET_SECTIONS.items()
+            }
 
         # Rejection is read from the desc-sci sidecars, which prep writes on every run and
         # which name every channel the run rejected whatever came after. The channel-metrics

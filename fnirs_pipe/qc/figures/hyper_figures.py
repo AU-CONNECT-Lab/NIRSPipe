@@ -15,7 +15,7 @@ from fnirs_pipe.qc.figure_io import extract_markers as _extract_markers
 from fnirs_pipe.qc.figures._brain_utils import mni_trans
 from fnirs_pipe.qc.figures._utils import (CONDITION_PALETTE, PSD_NFFT,
                                           decimate as _decimate, epochable_events,
-                                          physio_bands)
+                                          physio_bands, timeline_row_traces)
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("qc.figures.hyper")
@@ -142,21 +142,8 @@ def build_trigger_timeline(
         for m in per_sub[sid]:
             by_desc.setdefault(m["description"], []).append(m)
         for desc, events in by_desc.items():
-            color = colors.get(desc, "#999")
-            traces.append(go.Scatter(
-                x=[e["onset"] for e in events],
-                y=[sub_idx] * len(events),
-                mode="markers",
-                marker=dict(symbol="line-ns-open", size=18, color=color,
-                            line=dict(width=2.5, color=color)),
-                name=desc,
-                legendgroup=desc,
-                showlegend=(desc not in seen),
-                hovertemplate=(
-                    f"<b>{desc}</b><br>onset: %{{x:.2f}} s"
-                    f"<br>{sid}<extra></extra>"
-                ),
-            ))
+            traces += timeline_row_traces(events, sub_idx, colors.get(desc, "#999"),
+                                          desc, desc not in seen, f"<br>{sid}")
             seen.add(desc)
 
     return go.Figure(
@@ -168,6 +155,8 @@ def build_trigger_timeline(
                        autorange="reversed", gridcolor="#eeeeee",
                        tickfont=dict(size=10)),
             plot_bgcolor="white", paper_bgcolor="white",
+            # overlay, or plotly groups each subject's bars and shifts them off their row
+            barmode="overlay",
             height=max(110, len(subject_ids) * 52 + 60),
             margin=dict(l=80, r=15, t=8, b=40),
             legend=dict(font=dict(size=9), orientation="h", y=-0.35),

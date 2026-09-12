@@ -109,6 +109,43 @@ def subject_metric_rows(
     return rows
 
 
+# The channel sets a quality table is printed over, and what each is headed on the page.
+# Same order and same names the subject report's own metrics section uses.
+_CHANNEL_SETS = (("all", "All"), ("long", "Long"), ("short", "Short"))
+
+
+def subject_metric_tables(
+    by_set: "dict[str, dict[str, dict]]",
+    subject_ids: list[str],
+    sci_threshold: float,
+) -> list[dict]:
+    """One quality table per channel set, as ``[{"set": heading, "rows": [...]}]``.
+
+    ``by_set`` is ``{set_name: {subject_id: scalars}}``.
+
+    Three tables rather than three columns of one, because a set is a separate measurement
+    and not a grouping of the same one: GVTD is an RMS across the channels of its set, and
+    a long and a short retention rate are fractions of different montages. This is the
+    arrangement the subject report's own metrics section makes, so a reader moving between
+    a subject page and a dyad page reads one shape.
+
+    A montage with no short channel measures one set, and ``all`` and ``long`` are then the
+    same numbers printed twice; it gets a single unheaded table instead. That is also what
+    a caller with no split at all passes, under ``all``.
+    """
+    short = by_set.get("short") or {}
+    if not any(short.values()):
+        rows = subject_metric_rows(by_set.get("all") or by_set.get("long") or {},
+                                   subject_ids, sci_threshold)
+        return [{"set": "", "rows": rows}] if rows else []
+    tables = []
+    for key, heading in _CHANNEL_SETS:
+        rows = subject_metric_rows(by_set.get(key) or {}, subject_ids, sci_threshold)
+        if rows:
+            tables.append({"set": heading, "rows": rows})
+    return tables
+
+
 def _record_window_matches(
     window_s, t0: float, t1: float, offset: float, tol: float, sid: str, label: str,
 ) -> bool:
@@ -152,7 +189,9 @@ def condition_subject_metrics(
     offsets: "dict[str, float] | None" = None,
     sfreq: "float | None" = None,
 ) -> dict:
-    """``{condition: rows}`` for the per-subject quality table, one entry per window.
+    """``{condition: tables}`` for the per-subject quality table, one entry per window.
+
+    Each value is what :func:`subject_metric_tables` returns, one table per channel set.
 
     Every number is read out of each member's ``by_condition`` record section, which
     :func:`~fnirs_pipe.qc.sqm_record.condition_sections` wrote once after that member's
@@ -170,6 +209,8 @@ def condition_subject_metrics(
     absent, which is the honest answer: the values cannot be recovered from the whole-run
     scalars.
     """
+    from fnirs_pipe.qc.condition_views import condition_set_view
+
     if not windows:
         return {}
 
@@ -197,10 +238,13 @@ def condition_subject_metrics(
             if not _record_window_matches(entry.get("window_s"), t0, t1,
                                           float(offsets.get(sid, 0.0)), tol, sid, label):
                 continue
-            per_subject.setdefault(label, {})[sid] = dict(entry.get("scalars") or {})
+            for set_name, _ in _CHANNEL_SETS:
+                view = condition_set_view(entry, set_name)
+                if view:
+                    per_subject.setdefault(label, {}).setdefault(set_name, {})[sid] = view
 
-    return {label: subject_metric_rows(by_sid, subject_ids, sci_threshold)
-            for label, by_sid in per_subject.items()}
+    return {label: subject_metric_tables(by_set, subject_ids, sci_threshold)
+            for label, by_set in per_subject.items()}
 
 
 def write_isc_matrix(
@@ -407,8 +451,10 @@ def build_hyper_report(
         figure_paths=meta["figure_paths"],
         ch_detail_template_json=json.dumps(meta["figure_paths"].get("ch_detail_template")),
         sci_per_subject_json=json.dumps(sci_per_subject),
-        subject_metrics_rows=subject_metric_rows(
-            sqm_data, meta["subject_ids"], sci_threshold),
+        # one unheaded table: this page's scalars come from the raw pass, which measures
+        # every channel and does not split by separation
+        subject_metrics_rows=subject_metric_tables(
+            {"all": sqm_data}, meta["subject_ids"], sci_threshold),
     )
     output_path.write_text(html, encoding="utf-8")
     logger.info("Hyper raw report saved: %s", output_path)
@@ -1167,7 +1213,12 @@ def build_hyper_post_report(
 
     # the quality table: the run's over the whole recording, and each window's read out of
     # that member's own record. The offsets are what puts the two clocks together
-    run_metric_rows = subject_metric_rows(subject_sqm or {}, subject_ids, sci_threshold)
+    run_metric_rows = subject_metric_tables(
+        {set_name: {sid: (subject_sqm or {}).get(sid, {}).get("by_set", {}).get(set_name)
+                         or {}
+                    for sid in subject_ids}
+         for set_name, _ in _CHANNEL_SETS},
+        subject_ids, sci_threshold)
     cond_metric_rows: dict = {}
     with guard("Per-condition quality table", errors, scope):
         cond_metric_rows = condition_subject_metrics(

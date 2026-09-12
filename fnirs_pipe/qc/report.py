@@ -2253,7 +2253,9 @@ def _write_condition_reports(
     The channel set is the run's throughout, since one set has to serve every condition. The
     *verdict* is not: each page screens on its own stretch.
     """
-    from fnirs_pipe.qc.condition_views import slice_record, with_condition_corr
+    from fnirs_pipe.qc.condition_views import (
+        condition_verdict_view, slice_record, with_condition_corr,
+    )
     from fnirs_pipe.qc.metrics import resolve_cutoffs
 
     if out_dir is None or sqm_label is None:
@@ -2277,7 +2279,8 @@ def _write_condition_reports(
     for label, entry in by_condition.items():
         sliced = entry.get("per_channel") or {}
         cond_bad = set(entry.get("bad_channels") or ())
-        scalars = dict(entry.get("scalars") or {})
+        # the long set, as the run's own scalar panel is, so the two pages compare
+        scalars = condition_verdict_view(entry)
         haemo_by_set = entry.get("haemo_by_set") or {}
         cond_record = with_condition_corr(slice_record(record, sliced),
                                           sliced.get("hbo_hbr_corr_per_channel") or {})
