@@ -103,3 +103,32 @@ def test_several_leaks_are_all_reported():
     leaks = _figure_leaks({"a": "figures/x/carpet_gvtd.html",
                            "b": "figures/x/psd_panel.html"}, "game1")
     assert len(leaks) == 2
+
+
+# ---- a run-wide file addressed at one condition ----
+
+def test_a_fragment_naming_this_condition_is_not_a_leak():
+    # the per-channel motion figures are one file per channel carrying every condition's
+    # window, because the traces are identical across conditions and only the axes move
+    page = {"motion_detail_pairs": [
+        {"pair": "S1D1", "path": "figures/x/motion_detail_S1D1.html#game1", "h": 400}]}
+    assert _figure_leaks(page, "game1") == []
+
+
+def test_the_same_file_with_no_fragment_is_still_a_leak():
+    page = {"motion_detail_pairs": [
+        {"pair": "S1D1", "path": "figures/x/motion_detail_S1D1.html", "h": 400}]}
+    assert _figure_leaks(page, "game1") == ["motion_detail_pairs=motion_detail_S1D1.html"]
+
+
+def test_a_fragment_naming_another_condition_is_a_leak():
+    page = {"motion_detail_pairs": [
+        {"pair": "S1D1", "path": "figures/x/motion_detail_S1D1.html#video", "h": 400}]}
+    assert _figure_leaks(page, "game1")
+
+
+def test_the_per_channel_panels_are_checked_at_all():
+    # they arrive as a list of dicts rather than a path, which the check used to skip, and
+    # they are the panels there are the most files of
+    page = {"ch_detail_pairs": [{"pair": "S1D1", "path": "figures/x/ch_detail_S1D1.html"}]}
+    assert _figure_leaks(page, "game1") == ["ch_detail_pairs=ch_detail_S1D1.html"]

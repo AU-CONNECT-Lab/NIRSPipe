@@ -8,8 +8,11 @@ view that cannot honestly fill a column drops it rather than printing a whole-ru
 beside per-condition ones.
 """
 
+import plotly.graph_objects as go
+
 from fnirs_pipe.qc.condition_views import (
-    UNSLICEABLE, condition_stem, condition_stems, slice_record, zoom_to_condition,
+    UNSLICEABLE, condition_stem, condition_stems, rescale_y_to_window, slice_record,
+    window_view_spec, zoom_to_condition,
 )
 
 STEM = "sub-01_task-full_desc-raw_nirs"
@@ -145,3 +148,54 @@ def test_narrowing_does_not_modify_the_run_wide_figure():
 def test_a_figure_with_no_x_axis_is_returned_unchanged():
     fig = {"layout": {"yaxis": {}}}
     assert zoom_to_condition(fig, 10.0, 20.0) is fig
+
+
+# ---- one file per channel, every condition's window in a table ----
+
+def _two_row_figure():
+    """A stand-in for the motion panel: a zero-pinned row carrying a shaded span, and a row
+    that autoranges. The first row is quiet up to t=60 and twenty times louder after, which
+    is the case the y rescale exists for.
+    """
+    t = list(range(120))
+    quiet = [0.001 * (1 + i % 5) for i in range(60)]
+    loud = [0.020 * (1 + i % 5) for i in range(60)]
+    quiet_then_loud = quiet + loud
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=[10, 10, 20, 20], y=[0, 1, 1, 0], fill="toself"))
+    fig.add_trace(go.Scatter(x=t, y=quiet_then_loud))
+    fig.add_trace(go.Scatter(x=t, y=[-0.5 + 0.01 * (i % 7) for i in t],
+                             xaxis="x2", yaxis="y2"))
+    fig.update_layout(yaxis=dict(range=[0, 0.11]), yaxis2=dict(), xaxis2=dict())
+    return fig
+
+
+def test_the_spec_says_what_rescaling_would_have_done():
+    # the saved-per-condition path and the picked-at-load path have to be one measurement,
+    # or a condition page and a fragment of the run's file drift apart silently
+    spec = window_view_spec(_two_row_figure(), 0.0, 59.0)
+    applied = rescale_y_to_window(_two_row_figure(), 0.0, 59.0)
+    for key, (floor, top) in spec["y"].items():
+        assert list(applied.layout[key].range) == [floor, top]
+    notes = [a.text for a in applied.layout.annotations]
+    assert notes == [n["text"] for n in spec["notes"]]
+
+
+def test_a_zero_pinned_row_keeps_its_floor_in_the_spec():
+    spec = window_view_spec(_two_row_figure(), 0.0, 59.0)
+    assert spec["y"]["yaxis"][0] == 0.0
+    assert spec["y"]["yaxis"][1] < 0.01        # the quiet stretch, not the run's 0.1
+
+
+def test_a_shaded_span_is_named_by_trace_index_so_the_page_can_reach_it():
+    # the span is trace data rather than layout, so narrowing the view has to restyle it
+    spec = window_view_spec(_two_row_figure(), 0.0, 59.0)
+    assert [b["i"] for b in spec["bands"]] == [0]
+    assert spec["bands"][0]["hi"] == spec["y"]["yaxis"][1]
+
+
+def test_measuring_a_window_leaves_the_run_wide_figure_alone():
+    fig = _two_row_figure()
+    window_view_spec(fig, 0.0, 59.0)
+    assert list(fig.layout.yaxis.range) == [0, 0.11]
+    assert fig.layout.annotations == ()

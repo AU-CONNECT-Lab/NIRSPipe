@@ -440,38 +440,74 @@ def _motion_detail_figures(
     return built
 
 
+def _condition_views(fig, spans: "list[tuple[str, float, float]]") -> "dict | None":
+    """Every condition's view of one run-wide figure, keyed by slug for the page to pick.
+
+    The scale notes go on as empty annotations first, one per row any condition writes one
+    on, so a view has only to fill in the text: a relayout addresses an annotation by index
+    and cannot append one. A row no condition annotates gets no slot, and a condition that
+    reaches the run's own maximum leaves the slot it shares with the others empty.
+    """
+    if not spans or not hasattr(fig, "add_annotation"):
+        return None
+    from fnirs_pipe.qc.condition_views import window_view_spec
+
+    specs = [(_pair_fname(label), window_view_spec(fig, t0, t1)) for label, t0, t1 in spans]
+    slot: dict = {}
+    for _slug, spec in specs:
+        for note in spec["notes"]:
+            row = (note["xref"], note["yref"])
+            if row in slot:
+                continue
+            slot[row] = len(fig.layout.annotations or ())
+            fig.add_annotation(
+                x=0.996, xref=f"{note['xref']} domain", y=0.97,
+                yref=f"{note['yref']} domain", text="", showarrow=False,
+                xanchor="right", yanchor="top", font=dict(size=7, color="#98a2ad"))
+    return {
+        slug: {
+            "x": spec["x"],
+            "y": {key: [floor, top] for key, (floor, top) in spec["y"].items()},
+            "bands": spec["bands"],
+            "ann": {str(slot[(n["xref"], n["yref"])]): n["text"] for n in spec["notes"]},
+        }
+        for slug, spec in specs
+    }
+
+
 def _section_motion_detail(
     figures: "list[tuple[str, Any]]",
     subject: str,
     errors: list,
     figures_dir: Path,
-    suffix: str = "",
-    xrange: "tuple[float, float] | None" = None,
+    condition_spans: "list[tuple[str, float, float]] | None" = None,
 ) -> dict:
-    """The built per-channel motion figures written out, optionally narrowed to one condition.
+    """The built per-channel motion figures written out, one file per channel.
 
-    ``xrange`` narrows the time axis the way ``_section_motion`` narrows the carpet, and for
-    the same reason: everything in these figures is measured over the run and only the view
-    moves. The figures are narrowed in place, so each condition's save must follow its own
-    zoom, which is the order this is called in.
+    Every condition shows the same traces: these figures are measured over the run and only
+    the view moves, the way ``_section_motion`` narrows the carpet. So the file is written
+    once and carries each condition's window as a table the page picks from by URL fragment,
+    where it used to be written again per condition. The six copies one channel took were
+    identical but for a few axis numbers, and on a two-subject tree they came to 388 MB.
 
-    The y axes follow the window as well, which the carpet's do not: its colour scale is one
-    scale across conditions by design, while these rows are read for the shape of a trace and
-    a quiet condition under the run's scale is a flat line. ``rescale_y_to_window`` says why
-    at length, and writes each row's own maximum beside the run's on the panel.
+    The y axes follow the window, which the carpet's do not: its colour scale is one scale
+    across conditions by design, while these rows are read for the shape of a trace and a
+    quiet condition under the run's scale is a flat line. ``rescale_y_to_window`` says why at
+    length; ``window_view_spec`` is the same measurement, handed over rather than applied.
     """
-    from fnirs_pipe.qc.condition_views import rescale_y_to_window, zoom_to_condition
-
     saved = []
     for ch, fig in figures:
         with _guard(f"Motion detail {ch}", errors, subject):
-            if xrange is not None:
-                zoom_to_condition(fig, *xrange)
-                rescale_y_to_window(fig, *xrange)
-            fname = f"motion_detail_{_pair_fname(ch)}{suffix}.html"
-            h = _save_multi_fig_html([fig], figures_dir / fname)
+            views = _condition_views(fig, condition_spans or [])
+            fname = f"motion_detail_{_pair_fname(ch)}.html"
+            h = _save_multi_fig_html([fig], figures_dir / fname, views=views)
             saved.append({"pair": ch, "path": _fig_href(figures_dir, fname), "h": h})
     return {"motion_detail_pairs": saved}
+
+
+def _condition_motion_detail(run_pairs: list, slug: str) -> dict:
+    """The run's per-channel motion files, addressed at one condition's window."""
+    return {"motion_detail_pairs": [{**p, "path": f"{p['path']}#{slug}"} for p in run_pairs]}
 
 
 def _section_psd_detail(
@@ -1596,7 +1632,12 @@ def build_subject_report(
                             corrected_segments=motion_vars.get("corrected_segments"),
                             spike_by_set=motion_vars.get("spike_by_set"),
                             gvtd_blocks=gvtd_blocks)
-    motion_det_vars   = _section_motion_detail(motion_det_figs, subject, errors, figures_dir)
+    # every condition's window goes into the run's own files, which is what lets the
+    # condition pages point at them with a fragment instead of getting copies
+    motion_det_vars   = _section_motion_detail(
+                            motion_det_figs, subject, errors, figures_dir,
+                            condition_spans=_record_windows(record.get("by_condition") or {})
+                            if by_condition else [])
     haemo_vars        = _section_haemo(raw_haemo, config, subject, errors, figures_dir,
                                        l_freq=l_freq, h_freq=h_freq,
                                        raw_errts=raw_errts, psd_stages=psd_stages,
@@ -1817,9 +1858,8 @@ def build_subject_report(
                     _good_mask_for(cond_bad, ch_names_brain, sci_pc, good_mask),
                     raw_intensity, subject, errors, figures_dir,
                     ch_names_brain=ch_names_brain, suffix=suffix),
-                remake_motion_detail=lambda suffix, span: _section_motion_detail(
-                    motion_det_figs, subject, errors, figures_dir,
-                    suffix=suffix, xrange=span),
+                remake_motion_detail=lambda slug: _condition_motion_detail(
+                    motion_det_vars.get("motion_detail_pairs") or [], slug),
                 remake_denoise_carpet=lambda suffix, span: _condition_denoise_carpet(
                     raw_haemo, after_haemo, roi_map, span, suffix,
                     subject, errors, figures_dir),
@@ -1886,7 +1926,9 @@ def _blanked(section_vars: tuple) -> dict:
 # Everything not listed has to carry the condition's own name, which `_figure_leaks` checks
 # by suffix rather than by listing the panels: a per-panel prefix list would also pass a
 # *different* condition's figure, worse than a run-wide one because the page would look
-# per-condition and be the wrong condition.
+# per-condition and be the wrong condition. A `#slug` fragment counts as that name: the
+# per-channel motion figures are one file per channel holding every condition's window,
+# since the traces do not vary by condition and only the axes do.
 _CONDITION_PAGE_FIGURES = ("provenance.", "glm_design_", "trigger_timeline.")
 
 
@@ -1900,15 +1942,23 @@ def _figure_leaks(page: dict, label_slug: str) -> "list[str]":
     """
     leaks = []
     for key, value in page.items():
-        if not isinstance(value, str) or "figures/" not in value:
-            continue
-        name = value.rsplit("/", 1)[-1]
-        # every per-condition figure is written as <panel>_<slug>.<ext>
-        if name.rsplit(".", 1)[0].endswith(f"_{label_slug}"):
-            continue
-        if any(name.startswith(ok) for ok in _CONDITION_PAGE_FIGURES):
-            continue
-        leaks.append(f"{key}={name}")
+        # the per-channel panels arrive as a list of {pair, path, h}, so a check over plain
+        # strings alone would not see the figures there are the most of
+        for item in (value if isinstance(value, list) else [value]):
+            path = item.get("path") if isinstance(item, dict) else item
+            if not isinstance(path, str) or "figures/" not in path:
+                continue
+            name, _, fragment = path.rsplit("/", 1)[-1].partition("#")
+            # a run-wide file addressed at one condition's window, which is how the motion
+            # figures reach this page: the same traces, so one file carries every view
+            if fragment == label_slug:
+                continue
+            # every per-condition figure is written as <panel>_<slug>.<ext>
+            if name.rsplit(".", 1)[0].endswith(f"_{label_slug}"):
+                continue
+            if any(name.startswith(ok) for ok in _CONDITION_PAGE_FIGURES):
+                continue
+            leaks.append(f"{key}={name}")
     return leaks
 
 
@@ -2066,6 +2116,15 @@ def _condition_glm(report_vars: dict, label: str) -> dict:
     }
 
 
+def _record_windows(by_condition: dict) -> "list[tuple[str, float, float]]":
+    """``(label, t0, t1)`` per annotated condition, in the record's own order.
+
+    One expression, because the run's figures are handed these spans before the condition
+    pages are built and the two must be the same windows.
+    """
+    return [(label, *entry["window_s"]) for label, entry in by_condition.items()]
+
+
 def _windowed_slice(record: dict, windows: list, label: str) -> dict:
     """The record's ``windowed`` section with its matrices cut to one condition's columns.
 
@@ -2129,7 +2188,9 @@ def _write_condition_reports(
     - **measured over the run, narrowed to the condition**: the GVTD carpet, the per-channel
       motion figures and the denoising carpet. Each derives something run-wide from what it
       is handed -- a filtered GVTD, a threshold, a per-channel z-scale -- so a cut recording
-      would give every condition a scale no other condition could be read against
+      would give every condition a scale no other condition could be read against. The
+      per-channel motion figures are narrowed without being written again: the run's file
+      holds every condition's window and this page links to one by URL fragment
     - **rebuilt on a cropped copy**: the haemoglobin panels, the spectra, the per-channel
       detail, the epoch preview and the topography. Safe because none of them filters; see
       :func:`_cropped_sections`
@@ -2169,7 +2230,7 @@ def _write_condition_reports(
     cutoffs = resolve_cutoffs(config)
     # the windows the record was written against, so the panels that still slice a matrix
     # here cut the same columns the stored scalars were averaged over
-    windows = [(label, *entry["window_s"]) for label, entry in by_condition.items()]
+    windows = _record_windows(by_condition)
 
     blanked = _blanked(section_vars)
     # one pass for every condition, so the panels land on a shared colour scale; per page it
@@ -2202,13 +2263,14 @@ def _write_condition_reports(
         # and the carpet narrowed to it: measured over the run, viewed over the condition
         if remake_motion is not None:
             panels.update(remake_motion(f"_{slug}", span))
-        # the per-channel motion figures and the denoising carpet, both narrowed the same
-        # way: built once over the run above, written again here viewing this stretch
+        # the denoising carpet is narrowed the same way, written again here viewing this
+        # stretch. The per-channel motion figures are not written again at all: the run's
+        # files carry every condition's window and this page addresses one by fragment
         if remake_brain is not None:
             panels.update(remake_brain(f"_{slug}", sliced.get("sci_per_channel") or {},
                                        cond_bad))
         if remake_motion_detail is not None:
-            panels.update(remake_motion_detail(f"_{slug}", span))
+            panels.update(remake_motion_detail(slug))
         if remake_denoise_carpet is not None:
             panels.update(remake_denoise_carpet(f"_{slug}", span))
         # the trial half: rows are this condition's own trials, taken from the run's table

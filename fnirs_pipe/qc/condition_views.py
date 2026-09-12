@@ -296,17 +296,54 @@ def rescale_y_to_window(figure, t0: float, t1: float):
     """
     if not hasattr(figure, "update_yaxes"):
         return figure
+    spec = window_view_spec(figure, t0, t1)
     # the caller narrows one figure object once per condition, so the last condition's notes
     # have to go before this one's are written or every page carries every page's
     figure.layout.annotations = tuple(
         a for a in (figure.layout.annotations or ()) if a.name != _SCALE_NOTE)
+    for key, (floor, top) in spec["y"].items():
+        figure.layout[key].update(range=[floor, top], autorange=False)
+    for band in spec["bands"]:
+        tr = figure.data[band["i"]]
+        floor, top = band["lo"], band["hi"]
+        tr.y = [None if v is None else (floor if v <= floor else top) for v in tr.y]
+    for note in spec["notes"]:
+        figure.add_annotation(
+            x=0.996, xref=f"{note['xref']} domain", y=0.97, yref=f"{note['yref']} domain",
+            text=note["text"], showarrow=False, xanchor="right", yanchor="top",
+            font=dict(size=7, color="#98a2ad"), name=_SCALE_NOTE,
+        )
+    return figure
+
+
+def window_view_spec(figure, t0: float, t1: float) -> dict:
+    """What :func:`rescale_y_to_window` would do to ``figure``, measured but not applied.
+
+    ::
+
+      window_view_spec(motion_detail_fig, 22.4, 322.4)
+      -> {"x": [22.4, 322.4],
+          "y": {"yaxis2": (0.0, 0.0031)},
+          "bands": [{"i": 0, "lo": 0.0, "hi": 0.0031}],
+          "notes": [{"yref": "y2", "xref": "x", "text": "max 0.0031 · run 0.017"}]}
+
+    A figure written once per channel rather than once per condition carries a table of
+    these and lets the page pick one by URL fragment, so the numbers have to come out
+    separately from the figure they were measured on. ``rescale_y_to_window`` applies one,
+    which is what keeps the saved-per-condition and the picked-at-load paths from drifting:
+    there is one measurement and two ways of spending it.
+    """
+    out = {"x": [float(t0), float(t1)], "y": {}, "bands": [], "notes": []}
+    if not hasattr(figure, "update_yaxes"):
+        return out
     lines, bands = {}, {}
-    for tr in figure.data:
+    for i, tr in enumerate(figure.data):
         axis = getattr(tr, "yaxis", None) or "y"
         group = bands if getattr(tr, "fill", None) == "toself" else lines
-        group.setdefault(axis, []).append(tr)
+        group.setdefault(axis, []).append((i, tr))
 
-    for axis, traces in lines.items():
+    for axis, indexed in lines.items():
+        traces = [tr for _i, tr in indexed]
         lo, hi, run_hi = np.inf, -np.inf, -np.inf
         x_axis = "x"
         for tr in traces:
@@ -336,18 +373,16 @@ def rescale_y_to_window(figure, t0: float, t1: float):
             floor = lo - 0.04 * (hi - lo)
         top = hi + 0.1 * (hi - floor)
         if key in figure.layout:
-            figure.layout[key].update(range=[floor, top], autorange=False)
-        for band in bands.get(axis, []):
-            band.y = [None if v is None else (floor if v <= floor else top) for v in band.y]
+            out["y"][key] = (floor, top)
+        for i, _band in bands.get(axis, []):
+            out["bands"].append({"i": i, "lo": floor, "hi": top})
         # which scale the row is on, since it is no longer the one the run's page draws
         if np.isfinite(run_hi) and run_hi > hi:
-            figure.add_annotation(
-                x=0.996, xref=f"{x_axis} domain", y=0.97, yref=f"{axis} domain",
-                text=f"max {hi:.3g} \u00b7 run {run_hi:.3g}", showarrow=False,
-                xanchor="right", yanchor="top", font=dict(size=7, color="#98a2ad"),
-                name=_SCALE_NOTE,
-            )
-    return figure
+            out["notes"].append({
+                "yref": axis, "xref": x_axis,
+                "text": f"max {hi:.3g} \u00b7 run {run_hi:.3g}",
+            })
+    return out
 
 
 def condition_payloads(

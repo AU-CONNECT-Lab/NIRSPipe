@@ -10,6 +10,7 @@ looked at. Embedding them instead is what took one hyperscanning report to 174 M
 from __future__ import annotations
 
 import base64
+import json
 import re
 from pathlib import Path
 
@@ -30,6 +31,34 @@ _RESIZE_JS = (
     "window.addEventListener('load',_h);"
     "setTimeout(_h,300);"
     "try{new ResizeObserver(_h).observe(document.body);}catch(e){}"
+    "})();</script>"
+)
+
+# One file per channel holding every condition's view, picked by URL fragment, rather than
+# the same traces written out once per condition. Applies to ``pfig0``, the only div a
+# caller passing a views table has. ``window_view_spec`` measured the numbers; this spends
+# them, so the run-wide file and a condition's view of it cannot disagree.
+_HASH_VIEW_JS = (
+    "<script>(function(){"
+    "function apply(){"
+    "if(typeof Plotly==='undefined')return;"
+    "var t=window.__COND_VIEWS__,gd=document.getElementById('pfig0');"
+    "if(!t||!gd||!gd.layout)return;"
+    "var k=decodeURIComponent(location.hash.replace(/^#/,''));"
+    "if(!k||!t[k])return;"
+    "var v=t[k],up={};"
+    "Object.keys(gd.layout).forEach(function(a){"
+    "if(/^xaxis[0-9]*$/.test(a)){up[a+'.range']=v.x.slice();up[a+'.autorange']=false;}});"
+    "Object.keys(v.y||{}).forEach(function(a){"
+    "up[a+'.range']=v.y[a].slice();up[a+'.autorange']=false;});"
+    "Object.keys(v.ann||{}).forEach(function(i){up['annotations['+i+'].text']=v.ann[i];});"
+    "Plotly.relayout(gd,up).then(function(){"
+    "(v.bands||[]).forEach(function(b){"
+    "Plotly.restyle(gd,{y:[gd.data[b.i].y.map(function(q){"
+    "return q===null?null:(q<=b.lo?b.lo:b.hi);})]},[b.i]);});});}"
+    "if(document.readyState==='complete')apply();"
+    "else window.addEventListener('load',apply);"
+    "window.addEventListener('hashchange',function(){location.reload();});"
     "})();</script>"
 )
 
@@ -65,8 +94,13 @@ def _save_figure_html(fig, path: Path, extra_js: str = "", extra_css: str = "") 
     return h
 
 
-def _save_multi_fig_html(figs: list, path: Path) -> int:
-    """Stack multiple Plotly figures in one HTML file. Returns total height px."""
+def _save_multi_fig_html(figs: list, path: Path, views: "dict | None" = None) -> int:
+    """Stack multiple Plotly figures in one HTML file. Returns total height px.
+
+    ``views`` maps a condition key to the :func:`~fnirs_pipe.qc.condition_views.window_view_spec`
+    that names its window, so ``…/motion_detail_S1D1760.html#video`` opens the run's figure
+    narrowed to that condition and the bare path opens the run's own view.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
     head = (
         '<meta charset="UTF-8">'
@@ -87,6 +121,9 @@ def _save_multi_fig_html(figs: list, path: Path) -> int:
             div_id=f"pfig{i}", config={"responsive": True},
         )
         parts.append(f'<div class="pfig">{fig_html}</div>')
+    if views:
+        parts.append(f"<script>window.__COND_VIEWS__={json.dumps(views)};</script>")
+        parts.append(_HASH_VIEW_JS)
     parts.append("</body></html>")
     path.write_text("\n".join(parts), encoding="utf-8")
     return max(total_h, 100)
