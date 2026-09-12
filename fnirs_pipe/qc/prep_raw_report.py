@@ -41,7 +41,7 @@ _EPOCH_TMAX   = 25.0
 # Two lists, as the subject report has two cases. A montage that splits gets the two tables
 # instead, and the flat list then keeps only what has no channel-set dimension. What that
 # leaves is not a taste: `_short_section` computes neither cardiac power nor the flat-channel
-# count, and it keeps the per-channel spike rate while deliberately dropping the pooled
+# count, and it keeps the per-channel spike rate and its mean while dropping the pooled
 # counts, a short subset's version of one reading as a second opinion on the run's motion.
 # A montage with no short channels has no table to put anything in and gets one list.
 #
@@ -58,7 +58,7 @@ _VIEW_SCALAR_KEYS = (
     "cp_mean", "n_flat_channels", "mean_amp_mean",
     "gvtd_mean", "gvtd_p95", "gvtd_filt_mean", "gvtd_filt_p95", "gvtd_thresh",
     "gvtd_pct_above_thresh", "gvtd_num_above_thresh",
-    "spike_count", "spike_pct_frames", "spike_num_frames",
+    "spike_count", "spike_pct", "spike_pct_frames", "spike_num_frames",
 )
 
 # ---- Channel decisions table ----
@@ -290,14 +290,19 @@ def _process_run(
     # what is on disk rather than a second measurement.
     # the corrected side merged in under `_post`, so each cell prints before -> after where
     # a correction ran. Each set against its own `raw*` cutoff, never another set's.
-    def _motion_row(raw_key: str, post_key: str) -> dict:
-        return {**(raw_secs.get(raw_key) or {}),
+    # the correction footprint joins unsuffixed: measured across the step rather than either
+    # side of it, so it has no before and after to pair
+    def _motion_row(raw_key: str, mc_key: str, post_key: str) -> dict:
+        return {**(raw_secs.get(raw_key) or {}), **(raw_secs.get(mc_key) or {}),
                 **{f"{k}_post": v for k, v in (raw_secs.get(post_key) or {}).items()}}
 
     motion_rows = [
-        ("All",   len(sci_scores),                 _motion_row("raw", "motion_post"), False),
-        ("Long",  raw_all.get("n_long_channels"),  _motion_row("raw_long", "motion_post_long"), True),
-        ("Short", raw_all.get("n_short_channels"), _motion_row("raw_short", "motion_post_short"), False),
+        ("All",   len(sci_scores),
+         _motion_row("raw", "motion", "motion_post"), False),
+        ("Long",  raw_all.get("n_long_channels"),
+         _motion_row("raw_long", "motion_long", "motion_post_long"), True),
+        ("Short", raw_all.get("n_short_channels"),
+         _motion_row("raw_short", "motion_short", "motion_post_short"), False),
     ]
     motion_split = split_table(motion_rows, MOTION_SPLIT_COLUMNS) if sqm_split else {}
 
@@ -353,6 +358,9 @@ def _process_run(
     #   an iframe rather than inlined like the panels above: the carpet is a channels x 2000
     #   heatmap, and every run of the viewer would carry one in the page itself
     carpet_inline: dict = {}
+    # named out here because the per-channel motion figures below read them too: a channel's
+    # GVTD row has to be its own separation class's, the same blocks the carpet drew
+    gvtd_blocks: "list[tuple[str, list[str]]]" = []
     with guard("GVTD carpet", errors, label):
         from fnirs_pipe.qc.metrics import gvtd_channel_blocks
         gvtd_blocks = gvtd_channel_blocks(raw, sep_bands)
@@ -460,6 +468,42 @@ def _process_run(
                 fname = f"{label}_desc-epochmean_nirs.html"
                 h     = _save_figure_html(fig, fig_dir / fname)
                 figure_paths["epoch_mean"] = {"src": f"figures/{fname}", "h": h}
+
+    # ── file: per-channel motion detail ────────────────────────────────────────
+    # The subject report's own figures, builder and saver: this panel answers the same
+    # question on the same two recordings, and a second copy of it here is how two reports
+    # start disagreeing about what a channel did. One file per channel, carrying every
+    # condition's window, so a condition page narrows the view instead of remeasuring.
+    motion_channels: list[str] = []
+    if raw_motcorr is not None:
+        with guard("Motion detail", errors, label):
+            from fnirs_pipe.qc.report import (
+                _motion_detail_figures, _section_motion_detail,
+            )
+            built = _motion_detail_figures(
+                raw_od, raw_motcorr, label, errors,
+                corrected_segments=[tuple(sp) for sp in
+                                    windowed.get("motion_corrected_spans_s") or []] or None,
+                spike_by_set={
+                    gvtd_blocks[0][0] if gvtd_blocks else "all":
+                        [tuple(sp) for sp in windowed.get("spike_spans_s") or []] or None,
+                    "short": [tuple(sp) for sp in
+                              windowed.get("spike_spans_short_s") or []] or None,
+                },
+                gvtd_blocks=gvtd_blocks or None,
+            )
+            if built:
+                saved = _section_motion_detail(
+                    built, label, errors, fig_dir, condition_spans=cond_windows,
+                    filename=f"{label}_desc-motion{{ch}}_nirs.html",
+                )["motion_detail_pairs"]
+                motion_channels = [entry["pair"] for entry in saved]
+                # every one of these is the same four-row layout, so one height serves the
+                # panel and the viewer does not carry eighty-eight of them
+                figure_paths["motion_detail_template"] = {
+                    "src": f"figures/{label}_desc-motion{{ch}}_nirs.html",
+                    "h": saved[0]["h"] if saved else 700,
+                }
 
     # ── file: per-channel trial images ─────────────────────────────────────────
     # Trials down the rows, so a channel that was fine for the first half and lost for the
@@ -619,6 +663,8 @@ def _process_run(
             "notes":  separation_notes(raw_all, ch_rows),
         },
         "channel_pairs": channel_pairs,
+        # one entry per channel that got a motion figure, for that panel's own picker
+        "motion_channels": motion_channels,
         # one entry per channel that had trials to draw, for this panel's own picker
         "trial_images":  trial_img_pairs,
         "figure_paths":  figure_paths,

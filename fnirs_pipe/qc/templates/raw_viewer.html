@@ -246,6 +246,15 @@ select#run-select {
        derivative under it. Measured over the whole recording; a per-condition page narrows
        the view rather than remeasuring, so its colour scale and its threshold are the run's.</p>
     <div id="carpet-gvtd-panel"></div>
+
+    <div id="motion-detail-block" style="display:none">
+      <h3 class="qm-sub">Per-channel, before and after motion correction</h3>
+      <p class="qm-note">One channel's optical density either side of the correction, under
+         its own separation class's GVTD. Measured over the whole recording like the carpet
+         above, so a per-condition page narrows the view rather than remeasuring it.</p>
+      <select id="motion-detail-select" class="ch-select"></select>
+      <div id="motion-detail-plot"></div>
+    </div>
   </div>
 </details>
 
@@ -451,6 +460,7 @@ window.addEventListener("DOMContentLoaded", function() {
   loadPsdMean();
   loadTriggerTimeline();
   loadCarpetGvtd();
+  loadMotionDetail();
   loadSciPsp();
   loadSqm();
   loadChannelSummary();
@@ -687,6 +697,31 @@ function loadCarpetGvtd() {
   }
 }
 
+// ─── per-channel motion detail ────────────────────────────────────────────────
+// One file per channel, each carrying every condition's window; the template already ends
+// in the condition fragment on a per-condition page, so {ch} is substituted in front of it.
+function loadMotionDetail() {
+  var block = document.getElementById("motion-detail-block");
+  if (!block) return;
+  var d     = _STATIC_DATA[_run_idx] || {};
+  var chans = d.motion_channels || [];
+  var tmpl  = (d.figure_paths || {}).motion_detail_template;
+  var src   = tmpl && (tmpl.src || tmpl);
+  if (!chans.length || !src) { block.style.display = "none"; return; }
+  block.style.display = "";
+
+  var sel = document.getElementById("motion-detail-select");
+  sel.innerHTML = chans.map(function(ch) {
+    return '<option value="' + _esc(ch) + '">' + _esc(ch) + "</option>";
+  }).join("");
+  var show = function(ch) {
+    _setIframeSrc("motion-detail-plot", src.replace("{ch}", _pairFname(ch)),
+                  (tmpl && tmpl.h) || 700);
+  };
+  sel.onchange = function() { show(this.value); };
+  show(chans[0]);
+}
+
 // ─── SCI / PSP ────────────────────────────────────────────────────────────────
 function loadSciPsp() {
   var p = ((_STATIC_DATA[_run_idx] || {}).figure_paths || {}).sci_psp;
@@ -919,7 +954,7 @@ function switchRun(idx) {
     document.getElementById("detail-placeholder").style.display = "flex";
     document.getElementById("detail-plot").style.display = "none";
     loadSummary(); loadChannelPicker(); loadTimeSeries(); loadLayout(); loadPsdMean();
-    loadTriggerTimeline(); loadCarpetGvtd();
+    loadTriggerTimeline(); loadCarpetGvtd(); loadMotionDetail();
     loadSciPsp(); loadSqm(); loadChannelSummary();
     loadTrialQc(); loadEpochMean(); loadTrialImages(); buildChDecisionsTable();
     loadIssues();

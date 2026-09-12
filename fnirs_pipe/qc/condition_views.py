@@ -706,7 +706,8 @@ def condition_payloads(
     - **rewritten for the condition**: the SCI/PSP panel and the channel-quality grid. Both
       are handed their data and derive nothing from a recording, so a real slice is correct
       and ``save_figure`` writes each under a name carrying the condition's slug.
-    - **addressed at the condition's window**: the carpet and the per-channel detail. Each
+    - **addressed at the condition's window**: the carpet, the per-channel detail and the
+      per-channel motion figure. Each
       derives something run-wide from what it is handed, a filtered GVTD, a per-channel
       z-scale, a colour range, so a cut would give every condition a scale no other one can
       be read against. The run's file carries every window and this page asks for one by URL
@@ -732,18 +733,16 @@ def condition_payloads(
     """
     from fnirs_pipe.qc.boilerplate.vocabulary import metric_rows
     from fnirs_pipe.qc.channel_table import (
-        MOTION_SPLIT_COLUMNS, OD_SPLIT_COLUMNS, channel_rows, format_rows, heatmap_args,
-        pair_rows, separation_blocks, split_table,
+        MOTION_SPLIT_COLUMNS, OD_SPLIT_COLUMNS, WHOLE_RUN_ONLY_COLUMNS, channel_rows,
+        format_rows, heatmap_args, pair_rows, separation_blocks, split_table,
     )
     from fnirs_pipe.qc.figure_io import _pair_fname
     from fnirs_pipe.qc.figures import build_sci_psp_figure, channel_quality_heatmap
 
-    # mean amplitude has no windowed series to slice, so the column is dropped rather than
-    # left blank in all three rows. The GVTD threshold goes the same way: it is a mode of
-    # the whole run's histogram by definition, so a condition is counted against the run's
-    # line rather than given one of its own.
-    od_cols = tuple((k, t) for k, t in OD_SPLIT_COLUMNS if k != "mean_amp_mean")
-    motion_cols = tuple((k, t) for k, t in MOTION_SPLIT_COLUMNS if k != "gvtd_thresh")
+    od_cols = tuple((k, t) for k, t in OD_SPLIT_COLUMNS
+                    if k not in WHOLE_RUN_ONLY_COLUMNS)
+    motion_cols = tuple((k, t) for k, t in MOTION_SPLIT_COLUMNS
+                        if k not in WHOLE_RUN_ONLY_COLUMNS)
     _TABLE_KEYS = {k for k, _ in od_cols} | {k for k, _ in motion_cols}
 
     out: list[tuple[str, dict]] = []
@@ -823,7 +822,7 @@ def condition_payloads(
         paths = dict(payload.get("figure_paths") or {})
         paths.pop("psd", None)
         paths.pop("evoked_topo", None)
-        for key in ("carpet", "ch_detail_template"):
+        for key in ("carpet", "ch_detail_template", "motion_detail_template"):
             entry_path = paths.get(key)
             if isinstance(entry_path, dict) and entry_path.get("src"):
                 paths[key] = {**entry_path, "src": f"{entry_path['src']}#{slug}"}

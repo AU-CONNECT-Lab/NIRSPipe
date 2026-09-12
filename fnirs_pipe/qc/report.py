@@ -64,8 +64,8 @@ import mne.io
 
 from fnirs_pipe.qc.boilerplate import collect_software_versions, generate_methods_text
 from fnirs_pipe.qc.channel_table import (
-    MOTION_SPLIT_COLUMNS, OD_SPLIT_COLUMNS, channel_columns, channel_rows,
-    format_rows, heatmap_args,
+    MOTION_SPLIT_COLUMNS, OD_SPLIT_COLUMNS, WHOLE_RUN_ONLY_COLUMNS, channel_columns,
+    channel_rows, format_rows, heatmap_args,
     save_channel_csv, separation_blocks, separation_notes,
 )
 from fnirs_pipe.qc.figure_io import (
@@ -447,6 +447,7 @@ def _section_motion_detail(
     errors: list,
     figures_dir: Path,
     condition_spans: "list[tuple[str, float, float]] | None" = None,
+    filename: str = "motion_detail_{ch}.html",
 ) -> dict:
     """The built per-channel motion figures written out, one file per channel.
 
@@ -460,12 +461,15 @@ def _section_motion_detail(
     across conditions by design, while these rows are read for the shape of a trace and a
     quiet condition under the run's scale is a flat line. ``rescale_y_to_window`` says why at
     length; ``window_view_spec`` is the same measurement, handed over rather than applied.
+
+    ``filename`` takes the channel's sanitised name at ``{ch}``. The raw viewer names every
+    figure it writes for BIDS and passes its own pattern; the default is this report's.
     """
     saved = []
     for ch, fig in figures:
         with _guard(f"Motion detail {ch}", errors, subject):
             views = _condition_views(fig, condition_spans or [])
-            fname = f"motion_detail_{_pair_fname(ch)}.html"
+            fname = filename.format(ch=_pair_fname(ch))
             h = _save_multi_fig_html([fig], figures_dir / fname, views=views)
             saved.append({"pair": ch, "path": _fig_href(figures_dir, fname), "h": h})
     return {"motion_detail_pairs": saved}
@@ -1223,13 +1227,17 @@ def _section_sqm(
         # the motion panel over the same three sets, each carrying both sides of the
         # correction. GVTD is an RMS across channels, so these are three measurements and
         # not three groupings of one, which is why they cannot come out of the table above.
+        # the correction footprint joins them unsuffixed: it is measured across the step
+        # rather than either side of it, so it has no before and after to pair
         motion_sets = {
             name: {**(record.get(raw_name) or {}),
+                   **(record.get(mc_name) or {}),
                    **{f"{k}_post": v
                       for k, v in (record.get(post_name) or {}).items()}}
-            for name, raw_name, post_name in (("all", "raw", "motion_post"),
-                                              ("long", "raw_long", "motion_post_long"),
-                                              ("short", "raw_short", "motion_post_short"))
+            for name, raw_name, mc_name, post_name in (
+                ("all", "raw", "motion", "motion_post"),
+                ("long", "raw_long", "motion_long", "motion_post_long"),
+                ("short", "raw_short", "motion_short", "motion_post_short"))
         }
 
     rows = channel_rows(record_read, sci_scores, bad_channels)
@@ -2331,11 +2339,15 @@ def _write_condition_reports(
             "motion_sets": cond_motion_sets,
             "motion_split": bool(cond_motion_sets.get("long")
                                  and cond_motion_sets.get("short")),
-            # mean amplitude and low-frequency drift are dropped from the columns rather
-            # than left blank in all three rows: neither has a windowed series to slice, and
-            # drift measures the span it is shown rather than the recording
+            # WHOLE_RUN_ONLY_COLUMNS says which are dropped rather than left blank in all
+            # three rows; low-frequency drift goes with them, measuring the span it is shown
+            # rather than the recording
             "od_split_columns": tuple(
-                (key, text) for key, text in OD_SPLIT_COLUMNS if key != "mean_amp_mean"),
+                (key, text) for key, text in OD_SPLIT_COLUMNS
+                if key not in WHOLE_RUN_ONLY_COLUMNS),
+            "motion_split_columns": tuple(
+                (key, text) for key, text in MOTION_SPLIT_COLUMNS
+                if key not in WHOLE_RUN_ONLY_COLUMNS),
             # `page_heading` and `page_title` are what the shell reads; a `heading` key
             # here reached nothing, so every condition page carried the run's own title
             "page_heading": f"{report_vars['page_heading']} \u2014 {label}",
