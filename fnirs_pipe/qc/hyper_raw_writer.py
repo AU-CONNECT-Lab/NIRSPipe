@@ -9,7 +9,9 @@ import mne
 import pandas as pd
 
 from fnirs_pipe.io.derivatives import group_data_dir, group_report_dir
-from fnirs_pipe.pipeline.hyperscanning import GroupEntry, _hyper_sidecar
+from fnirs_pipe.pipeline.hyperscanning import (
+    GroupEntry, _hyper_sidecar, alignment_params,
+)
 from fnirs_pipe.qc.figure_io import (
     _pair_fname, _save_figure_html, _save_multi_fig_html,
     extract_markers, get_channel_pairs,
@@ -48,6 +50,9 @@ def _write_coherence_tsv(
     The figure and the file are the same DataFrame, which is the point: a reader who wants
     the coherence of one channel should not have to hover a heatmap for it. An empty frame
     writes nothing, because a dyad the measure could not be taken on has no table.
+
+    The alignment goes on the sidecar here rather than at the call sites, so a table added
+    later cannot be written without it.
     """
     if df is None or df.empty:
         return
@@ -55,7 +60,7 @@ def _write_coherence_tsv(
     df.to_csv(path, sep="\t", index=False)
     _hyper_sidecar(path, step,
                    [p for p in (path_from(raw) for raw in aligned_raws.values()) if p],
-                   **params)
+                   **alignment_params(aligned_raws), **params)
     logger.info("coherence table -> %s", path)
 
 
@@ -68,6 +73,9 @@ def _hyper_sqm_record(sqm: dict, aligned_raws: dict[str, mne.io.Raw]) -> dict:
     a QC record measured off the chain rather than a signal file on it, so the graph draws
     it without edges. The step name is its own: two objects sharing one is how a stage gets
     credited to the wrong file.
+
+    ``alignment`` is nested rather than flattened in beside the scalars, which are what
+    ``metrics`` is counted over: a clock is not a measurement of the dyad.
     """
     from fnirs_pipe import __version__
 
@@ -77,6 +85,7 @@ def _hyper_sqm_record(sqm: dict, aligned_raws: dict[str, mne.io.Raw]) -> dict:
         "step": "hyper_sqm",
         "Sources": [p for p in (path_from(raw) for raw in aligned_raws.values()) if p],
         "data": {"metrics": metrics, "n_metrics": len(metrics)},
+        "alignment": alignment_params(aligned_raws),
         **sqm,
     }
 

@@ -62,7 +62,9 @@ def write_wtc_null(
     per-condition one sits beside it.
     """
     from fnirs_pipe.io.derivatives import group_data_dir
-    from fnirs_pipe.pipeline.hyperscanning import _hyper_sidecar, compute_wtc_pseudo
+    from fnirs_pipe.pipeline.hyperscanning import (
+        _hyper_sidecar, alignment_params, compute_wtc_pseudo,
+    )
     from fnirs_pipe.pipeline.synchrony import wtc_grid_params
     from fnirs_pipe.utils.lineage import path_from
 
@@ -101,6 +103,9 @@ def write_wtc_null(
            if analysis_window is not None else {}),
         wtc_fmin=wtc_fmin, wtc_fmax=wtc_fmax, n_iter=n_iter, cross=cross, seed=seed,
         chroma=list(chroma), **wtc_grid_params(aligned_raws),
+        # the null is subtracted from the real table row by row, so the two have to say
+        # they were built on the same clock for that subtraction to mean anything
+        **alignment_params(aligned_raws),
     )
     data_dir = group_data_dir(output_dir, group_id)
     stem = f"group-{group_id}_task-{task}_hyper"

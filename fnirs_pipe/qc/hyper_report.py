@@ -11,7 +11,9 @@ import pandas as pd
 from fnirs_pipe.io.derivatives import (
     group_data_dir, group_report_dir, subject_report_dir,
 )
-from fnirs_pipe.pipeline.hyperscanning import GroupEntry, unfiltered_stage_note
+from fnirs_pipe.pipeline.hyperscanning import (
+    GroupEntry, alignment_params, unfiltered_stage_note,
+)
 from fnirs_pipe.qc.boilerplate import collect_software_versions
 from fnirs_pipe.qc.boilerplate.vocabulary import (
     MISSING_VALUE, format_metric, metric_class, metric_direction, metric_label,
@@ -208,6 +210,7 @@ def write_isc_matrix(
     ch_type: str,
     sources: list[str],
     subject_ids: list[str],
+    align: "dict | None" = None,
 ) -> None:
     """Write the matrix the ISC panel is drawn from, so the numbers can leave the report.
 
@@ -215,6 +218,10 @@ def write_isc_matrix(
     two brains: cell (i, j) is the first subject's channel i against the other's channel j.
     Rejected channels are blank rather than absent, so the file's shape is the montage's
     however many channels a given dyad lost.
+
+    ``align`` is what :func:`~fnirs_pipe.pipeline.hyperscanning.alignment_params` returned.
+    ISC is a correlation between two members sample by sample, so it is the metric a missed
+    alignment damages most, and the file says which one it got.
 
     A failure here costs the file and not the panel: the report is still readable without it.
     """
@@ -225,7 +232,7 @@ def write_isc_matrix(
         pd.DataFrame(isc_mat, index=ch_names, columns=ch_names).to_csv(
             tsv_path, sep="\t", index_label="channel")
         _hyper_sidecar(tsv_path, "hyper_isc", sources,
-                       chromophore=ch_type, subjects=subject_ids)
+                       chromophore=ch_type, subjects=subject_ids, **(align or {}))
         logger.info("ISC matrix saved: %s", tsv_path)
     except Exception as exc:
         logger.warning("ISC matrix (%s) not written: %s", ch_type, exc)
@@ -668,6 +675,17 @@ def build_hyper_post_report(
     subject_ids  = [e.subject_id for e in group]
     ref_raw      = aligned_raws.get(subject_ids[0]) if subject_ids else None
 
+    # ---- what put the members on one clock ----
+    # Read once and written onto every table this report produces. An inter-brain number
+    # assumes a shared time axis and nothing on disk used to say whether one was ever
+    # established: `--no-align` and an alignment whose trigger sits at t=0 both leave every
+    # offset at zero, and the numbers cannot be told apart afterwards.
+    align_info = alignment_params(aligned_raws)
+    if align_info.get("aligned") is False:
+        note(notes, scope,
+             "these recordings were trimmed to a common length but never aligned on a "
+             "shared trigger, so every number below assumes they already shared a clock")
+
     # ---- is this a segment rather than a recording? ----
     # A cut carries two edges of its own, and everything this report computes from a wavelet
     # transform loses a share of its band at them that grows as the cut shortens. The tool
@@ -736,7 +754,7 @@ def build_hyper_post_report(
             [p for p in (path_from(r) for r in aligned_raws.values()) if p],
             band_fmin=band_fmin, band_fmax=band_fmax, mask_coi=wtc_mask_coi,
             wtc_fmin=wtc_fmin, wtc_fmax=wtc_fmax, chroma=list(chroma),
-            **wtc_grid_params(aligned_raws), **extra,
+            **wtc_grid_params(aligned_raws), **align_info, **extra,
         )
         return tsv_path
 
@@ -1125,6 +1143,7 @@ def build_hyper_post_report(
                 isc_mat, isc_ch_names, ch_type,
                 [p for p in (path_from(r) for r in aligned_raws.values()) if p],
                 subject_ids,
+                align=align_info,
             )
             panel = _fig(build_isc_panel(
                 isc_mat, isc_ch_names, subject_ids,
