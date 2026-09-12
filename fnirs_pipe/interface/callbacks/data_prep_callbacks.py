@@ -219,7 +219,9 @@ def load_run(run_path, sci_thresh, cardiac_l, cardiac_h, dpf,
             from fnirs_pipe.qc.prep_raw_report import _process_run
             run_label = Path(snirf_path).stem
             run_dir   = Path(output_dir) / ".fnirs_cache"
-            result = _process_run(
+            # the second half is what the per-condition report pages need: windowed
+            # matrices and paths, none of it serialisable and none of it this page's
+            result, _ = _process_run(
                 {"snirf_path": snirf_path, "label": run_label},
                 sci_threshold,
                 run_dir,

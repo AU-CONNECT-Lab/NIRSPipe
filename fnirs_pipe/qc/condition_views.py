@@ -534,15 +534,18 @@ def condition_payloads(
     """
     from fnirs_pipe.qc.boilerplate.vocabulary import metric_rows
     from fnirs_pipe.qc.channel_table import (
-        OD_SPLIT_COLUMNS, channel_rows, format_rows, heatmap_args, pair_rows,
-        separation_blocks, split_table,
+        MOTION_SPLIT_COLUMNS, OD_SPLIT_COLUMNS, channel_rows, format_rows, heatmap_args,
+        pair_rows, separation_blocks, split_table,
     )
     from fnirs_pipe.qc.figure_io import _pair_fname
     from fnirs_pipe.qc.figures import build_sci_psp_figure, channel_quality_heatmap
 
     # mean amplitude has no windowed series to slice, so the column is dropped rather than
-    # left blank in all three rows
+    # left blank in all three rows. The GVTD threshold goes the same way: it is a mode of
+    # the whole run's histogram by definition, so a condition is counted against the run's
+    # line rather than given one of its own.
     od_cols = tuple((k, t) for k, t in OD_SPLIT_COLUMNS if k != "mean_amp_mean")
+    motion_cols = tuple((k, t) for k, t in MOTION_SPLIT_COLUMNS if k != "gvtd_thresh")
 
     out: list[tuple[str, dict]] = []
     for label, entry in by_condition.items():
@@ -550,6 +553,7 @@ def condition_payloads(
         cond_bad = set(entry.get("bad_channels") or ())
         scalars = entry.get("scalars") or {}
         od_by_set = entry.get("od_by_set") or {}
+        motion_by_set = entry.get("motion_by_set") or {}
         t0, t1 = entry["window_s"]
         window = (label, float(t0), float(t1))
         slug = _pair_fname(label)
@@ -563,10 +567,17 @@ def condition_payloads(
             ("Short", scalars.get("n_short_channels"),  od_by_set.get("short") or {}, False),
         ], od_cols) if od_by_set.get("short") else {}
 
+        motion_split = split_table([
+            ("All",   len(rows),                       motion_by_set.get("all") or {},   False),
+            ("Long",  scalars.get("n_long_channels"),  motion_by_set.get("long") or {},  True),
+            ("Short", scalars.get("n_short_channels"), motion_by_set.get("short") or {}, False),
+        ], motion_cols) if motion_by_set.get("short") else {}
+
         d = dict(payload)
         d["sqm"] = {
             "rows": metric_rows(scalars, COND_SCALAR_KEYS, skip_missing=True),
             "split": split,
+            "motion_split": motion_split,
             "channel_set": "every channel",
         }
         d["channels"] = {

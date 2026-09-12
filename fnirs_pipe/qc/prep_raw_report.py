@@ -22,7 +22,7 @@ from fnirs_pipe.qc.channel_table import (
 from fnirs_pipe.qc.metrics import SCI_PASS
 from fnirs_pipe.qc.metrics._helpers import _mean_or_none, separation_bands
 from fnirs_pipe.qc.report_shell import (
-    collapse_messages, dashboard_css, guard, note, render,
+    collapse_messages, footer_vars, guard, note, page_vars, render,
 )
 from fnirs_pipe.qc.trial_qc import score_trials, trial_windows
 from fnirs_pipe.utils.logging import get_logger
@@ -520,7 +520,7 @@ def _process_run(
     }
 
 
-def _write_condition_views(payload: dict, ctx: dict, output_path: Path, run_label: str,
+def _write_condition_views(ctx: dict, payload: dict, output_path: Path, run_label: str,
                            sci_threshold: float) -> None:
     """One report file per condition, beside the run's own, read out of the quality record.
 
@@ -570,16 +570,52 @@ def _write_condition_views(payload: dict, ctx: dict, output_path: Path, run_labe
         view_label = condition_stem(run_label, label, i)
         html = render(
             "raw_viewer.html",
-            base_css=dashboard_css(),
             run_labels_json=json.dumps([view_label]),
             run_labels=[view_label],
             stem=stem,
             data_json=json.dumps([view]),
+            **ctx["shell"],
             **_CH_COLUMN_VARS,
         )
         out = output_path.with_name(f"{stem}.html")
         out.write_text(html, encoding="utf-8")
         logger.info("condition %s \u2192 %s", label, out.name)
+
+
+def _shell_vars(runs: list[dict], output_path: Path, sub_dir: Path,
+                sci_threshold: float) -> dict:
+    """The head, nav bar and four closing sections every QC report shares.
+
+    The raw viewer is the one report that cannot extend ``_report_base.html.j2``, being a
+    single JavaScript-driven document with its own body, so it takes the same variables and
+    includes the same footer partial instead. The errors block is deliberately left out:
+    those are per run here and the viewer renders them itself.
+
+    The Methods prose and the provenance table are read from the sidecars in ``nirs/``, so
+    on a tree where only this command has run they describe that one step rather than a
+    pipeline that has not happened yet.
+    """
+    from fnirs_pipe.qc.boilerplate import collect_software_versions, generate_methods_text
+
+    session = runs[0].get("session") if runs else None
+    nirs_dir = sub_dir / (f"ses-{session}" if session else "") / "nirs"
+    versions = collect_software_versions()
+    meta = [("runs", str(len(runs)))]
+    if session:
+        meta.append(("session", session))
+    return {
+        **page_vars(
+            title=f"fnirs-pipe raw QC \u2014 {output_path.stem}",
+            heading="fnirs\u2011pipe Raw Viewer",
+            nav_meta=meta,
+            nav_note=f"SCI thr: {sci_threshold:.2f}",
+        ),
+        **footer_vars(
+            scope=output_path.stem, nirs_dir=nirs_dir,
+            methods=generate_methods_text(versions=versions, nirs_dir=nirs_dir),
+            versions=versions,
+        ),
+    }
 
 
 def build_prep_raw_report(
@@ -611,6 +647,7 @@ def build_prep_raw_report(
     # rather than a sibling tree, and sub-<id>/ can be moved or copied whole
     sub_dir     = output_path.parent
     static_data = []
+    shell       = _shell_vars(runs, output_path, sub_dir, sci_threshold)
 
     for i, run in enumerate(runs):
         label = run["label"]
@@ -630,17 +667,18 @@ def build_prep_raw_report(
         static_data.append(d)
         if by_condition and ctx:
             with guard("Per-condition views", run_errors, label):
-                _write_condition_views(d, ctx, output_path, label, sci_threshold)
+                _write_condition_views({**ctx, "shell": shell}, d, output_path,
+                                       label, sci_threshold)
 
     run_labels = [r["label"] for r in runs]
 
     html = render(
         "raw_viewer.html",
-        base_css=dashboard_css(),
         run_labels_json=json.dumps(run_labels),
         run_labels=run_labels,
         stem=output_path.stem,
         data_json=json.dumps(static_data),
+        **shell,
         **_CH_COLUMN_VARS,
     )
     output_path.parent.mkdir(parents=True, exist_ok=True)

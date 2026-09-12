@@ -47,9 +47,10 @@ FOOTER_CSS = stylesheet("_footer.css")
 def dashboard_css() -> str:
     """Tokens plus the dashboard look, for a page that cannot go through page_vars.
 
-    The raw viewer is the one: a single JavaScript-driven document with its own body, so it
-    takes the sheet rather than the shell. It carried its own copy of these rules until
-    2026-09-07, which is how it drifted from the other three dashboard reports.
+    The same sheet ``page_vars`` composes when no ``css`` is named, for a caller that wants
+    the stylesheet without the rest of the shell. The raw viewer used to be the one such
+    caller; since 2026-09-11 it takes ``page_vars`` like every other report, so this is the
+    spare key rather than the one in the lock.
     """
     return "\n".join((TOKENS_CSS, BASE_CSS, FOOTER_CSS))
 

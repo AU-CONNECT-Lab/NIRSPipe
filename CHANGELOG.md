@@ -6,8 +6,27 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- **`fnirs-qc prep-raw` writes a `by_condition` section too**, the same section and the same shape the pipeline's own record carries, minus the haemoglobin half a raw pass has no stage for. Written whenever the recording has conditions, with or without `--by-condition`
+- **Its quality record carries the windowed matrices and the flagged spans**, so a per-condition number is a column selection out of what the run measured once rather than a second measurement
+- **The raw viewer's metrics panel has a motion table**, GVTD over each channel set, beside the optical-density one. Read the rows down a column: each set is its own trace with its own cutoff
+- **The raw viewer closes with Provenance, Methods and Software Versions**, the three sections every other report already ended with
+- **Raw ratings are saved per page and appended to `group_raw_ratings.jsonl`.** A run and each of its condition pages are separate reports and are now filed separately, the arrangement the subject reports already used
+
 ### Changed
 - **A report page is titled by the run, not by the words "QC Report".** A condition page appends its own condition and a subject index is titled by its subject, so the heading and the browser tab say which page you are on; the condition used to appear only in the Scope row
+- **The raw viewer's per-condition pages read their numbers out of the record** instead of computing their own while the page is written
+- **Its rating bar lists every panel on the page and links to it.** It offered three labels, two of them ratable and none clickable; a viewer holding several runs shows one run's pills at a time, following the run selector
+
+### Removed
+- **The Evoked response panel, from the raw report.** At this stage the average is taken on unfiltered, uncorrected concentration and is mostly drift. It stays in the GUI, where it is interactive
+- **The Epoch preview panel.** It was hidden on load and never drawn into; the epoch figure it was meant to hold is the third one inside the channel-detail file
+
+### Fixed
+- **A condition page in the raw viewer showed the whole run's figures.** Every panel but the signal trace carried the run's carpet, spectrum, coupling map and channel grid under that condition's numbers, with nothing on the page saying so
+- **Event onsets were drawn a cropped recording's start-time late.** The signal trace, the event table, the trigger timeline and the per-trial windows all read onsets on the original recording's clock while being drawn on the data's, so a recording cropped from anywhere but zero misplaced every one of them
+- **The GUI's Data Prep page failed to load a run**, reporting it as an unreadable file
+- **A subject whose label begins with `s`, `u`, `b` or `-` no longer overwrites another subject's ratings.** `sub-bus01` was filed as `sub-01`
 
 ## [0.36.0] - 2026-09-11
 

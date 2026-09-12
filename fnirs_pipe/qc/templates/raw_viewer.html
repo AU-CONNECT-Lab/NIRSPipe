@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8"/>
-<title>fnirs-pipe Raw Viewer</title>
+<title>{{ page_title }}</title>
 <script src="https://cdn.plot.ly/plotly-3.5.0.min.js"></script>
 <style>
 {{ base_css }}
@@ -136,8 +136,16 @@ select#run-select {
 {% set rating_load_endpoint = "/load_raw_ratings/" ~ stem %}
 {% include "_rating_bar.html.j2" %}
 
+{# the same nav bar _report_base.html.j2 gives the other dashboard reports, filled from
+   qc.report_shell.page_vars, with the run selector in place of its nav_extra block #}
 <nav id="qc-nav">
-  <h1>fnirs&#8209;pipe Raw Viewer</h1>
+  <h1>{{ page_heading }}</h1>
+  {%- for label, value in nav_meta or [] %}
+  <span class="nav-meta">{{ label }}: <b>{{ value }}</b></span>
+  {%- endfor %}
+  {%- if nav_note %}
+  <span class="nav-meta" style="margin-left:auto">{{ nav_note }}</span>
+  {%- endif %}
   <div class="nav-right">
     <select id="run-select" onchange="switchRun(this.value)" style="display:none"></select>
     <span id="run-label-single" style="font-size:0.82rem;color:#6c757d"></span>
@@ -880,5 +888,7 @@ function _cdScheduleSave() {
 }
 
 </script>
+{% include "_footer.html.j2" %}
+
 </body>
 </html>
