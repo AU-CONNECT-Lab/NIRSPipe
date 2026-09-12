@@ -79,6 +79,19 @@ def _psd_band_shapes(cardiac=None) -> tuple[list[dict], list[dict]]:
     return shapes, annots
 
 
+def sci_of(sqm_data: dict, sid: str) -> dict:
+    """The per-channel SCI a dyad page prints, for one member.
+
+    The **windowed** estimate, which is the one this project reads: a drift shared by both
+    wavelengths lifts the whole-run number, and the two can disagree about which channel
+    coupled better. The whole-run scores stand in only for a record written before the
+    windowed pass existed, so an old tree degrades to the number it has rather than to an
+    empty grid.
+    """
+    member = sqm_data.get(sid) or {}
+    return member.get("sci_win_per_channel") or member.get("sci_per_channel") or {}
+
+
 def _ch_sci_status(
     ch_pair: str,
     sqm_data: dict[str, dict],
@@ -87,7 +100,7 @@ def _ch_sci_status(
 ) -> list[bool | None]:
     result = []
     for sid in subject_ids:
-        sci_d = sqm_data.get(sid, {}).get("sci_per_channel", {})
+        sci_d = sci_of(sqm_data, sid)
         val = sci_d.get(f"{ch_pair} hbo") or sci_d.get(ch_pair)
         result.append(None if val is None else float(val) >= sci_threshold)
     return result
@@ -107,9 +120,9 @@ def _group_color(statuses: list[bool | None]) -> str:
 def _hover_sci(pair: str, sqm_data: dict, subject_ids: list[str]) -> str:
     lines = [f"<b>{pair}</b>"]
     for sid in subject_ids:
-        sci_d = sqm_data.get(sid, {}).get("sci_per_channel", {})
+        sci_d = sci_of(sqm_data, sid)
         val = sci_d.get(f"{pair} hbo") or sci_d.get(pair)
-        lines.append(f"{sid}: SCI = {val:.3f}" if val is not None else f"{sid}: N/A")
+        lines.append(f"{sid}: SCI (10 s) = {val:.3f}" if val is not None else f"{sid}: N/A")
     return "<br>".join(lines)
 
 
@@ -814,7 +827,7 @@ def build_channel_summary(
 ) -> go.Figure | None:
     ch_set: set[str] = set()
     for sid in subject_ids:
-        for k in sqm_data.get(sid, {}).get("sci_per_channel", {}):
+        for k in sci_of(sqm_data, sid):
             ch_set.add(k.rsplit(" ", 1)[0] if " " in k else k)
 
     if not ch_set:
@@ -828,7 +841,7 @@ def build_channel_summary(
         known    = [s for s in statuses if s is not None]
         sci_vals = []
         for sid in subject_ids:
-            sci_d = sqm_data.get(sid, {}).get("sci_per_channel", {})
+            sci_d = sci_of(sqm_data, sid)
             val   = sci_d.get(f"{ch} hbo") or sci_d.get(ch)
             sci_vals.append(f"{sid}: {val:.3f}" if val is not None else f"{sid}: N/A")
 
@@ -890,7 +903,7 @@ def compute_hyper_sqm(
 ) -> dict:
     ch_set: set[str] = set()
     for sid in subject_ids:
-        for k in sqm_data.get(sid, {}).get("sci_per_channel", {}):
+        for k in sci_of(sqm_data, sid):
             ch_set.add(k.rsplit(" ", 1)[0] if " " in k else k)
 
     n_all_good = n_mixed = n_all_bad = n_unknown = 0

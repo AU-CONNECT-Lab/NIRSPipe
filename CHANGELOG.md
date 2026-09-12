@@ -17,6 +17,7 @@ All notable changes to this project will be documented in this file.
 - **A coherence map names its conditions in a legend in the top right.** The label was written above every block, so a block design printed the same word once per block
 
 ### Fixed
+- **Every per-channel SCI on the raw dyad page is the windowed estimate.** The rating table printed the whole-run number beside each decision chip, and the optode maps coloured and hovered on it, so the one figure this project says to read was the one the dyad page did not show
 - **A subject's per-condition pages had quietly stopped being written.** They failed on the first line and the failure was collected rather than raised, so the run finished, the report was written, and only its error list said the pages were missing
 - **The coherence maps were written at 200 dpi** while every other figure in the package is 300
 

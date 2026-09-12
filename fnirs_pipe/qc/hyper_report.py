@@ -29,7 +29,7 @@ from fnirs_pipe.qc.figure_io import (
     get_channel_pairs,
     save_png,
 )
-from fnirs_pipe.qc.figures.hyper_figures import _cond_colors
+from fnirs_pipe.qc.figures.hyper_figures import _cond_colors, sci_of
 from fnirs_pipe.qc.hyper_raw_writer import _process_hyper_raw_group
 from fnirs_pipe.qc.report_shell import (
     footer_vars,
@@ -83,7 +83,6 @@ def _empty_figures() -> dict:
     """A figure set with every key present and its own empty value."""
     return {key: factory() for key, factory in _FIGURE_SET.items()}
 
-_ARROW = {"higher": "↑", "lower": "↓"}
 _CHROMA_LABEL = {"hbo": "HbO", "hbr": "HbR"}
 
 
@@ -450,10 +449,9 @@ def build_hyper_report(
         errors=errors, notes=notes,
     )
 
-    sci_per_subject = {
-        sid: sqm_data.get(sid, {}).get("sci_per_channel", {})
-        for sid in meta["subject_ids"]
-    }
+    # the windowed estimate, as every other SCI on a dyad page is. The decisions table
+    # prints this beside each rating chip, so it has to be the number the reader reads
+    sci_per_subject = {sid: sci_of(sqm_data, sid) for sid in meta["subject_ids"]}
 
     from fnirs_pipe.qc.boilerplate.vocabulary import template_slots
     versions = collect_software_versions()

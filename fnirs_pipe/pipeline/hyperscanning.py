@@ -372,6 +372,8 @@ def compute_group_sqm_raw(
         # which channel set the row above describes, so a table read on its own says so
         sqm["channel_set"] = "long" if sections.get("raw_long") else "all"
         sqm["sci_per_channel"] = sci_scores
+        sqm["sci_win_per_channel"] = _pairwise(
+            (sections.get("raw") or {}).get("sci_win_per_channel") or {})
         sqm["bad_channels"]    = bad_channels
         sqm_data[entry.subject_id] = sqm
 
@@ -701,6 +703,29 @@ def _bad_from_sidecar(json_path: Path) -> list[str]:
         return list(json.loads(json_path.read_text(encoding="utf-8")).get("bad_channels") or [])
     except (OSError, json.JSONDecodeError):
         return []
+
+
+def _pairwise(per_wavelength: dict) -> dict[str, float]:
+    """A per-channel score re-keyed the way every dyad lookup asks for it.
+
+    ::
+
+      {"S1_D1 760": 0.86, "S1_D1 850": 0.86} -> {"S1_D1": 0.86, "S1_D1 hbo": 0.86}
+
+    The whole-run SCI is built with both spellings a few lines above, because the pages ask
+    for ``"<pair> hbo"`` and fall back to the bare pair. The windowed estimate comes out of
+    the metric registry keyed by the recording's own channel names instead, so handing it
+    over unchanged makes every lookup miss and every channel read as unmeasured, with
+    nothing to say so. SCI is a property of the pair, both wavelength rows carrying one
+    number, so averaging them is a no-op that also survives a montage where it is not.
+    """
+    by_pair: dict[str, list[float]] = {}
+    for ch, value in per_wavelength.items():
+        by_pair.setdefault(str(ch).rsplit(" ", 1)[0], []).append(float(value))
+    out: dict[str, float] = {}
+    for pair, values in by_pair.items():
+        out[pair] = out[f"{pair} hbo"] = sum(values) / len(values)
+    return out
 
 
 def _sci_from_sidecar(json_path: Path) -> dict[str, float]:

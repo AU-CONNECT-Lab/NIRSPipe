@@ -258,7 +258,8 @@
   <div class="details-body">
     <p class="step-desc">Click a chip to cycle: &mdash; &rarr; good &rarr; bad. Saves to each
       subject&rsquo;s JSON, and is only active when the page is served by
-      <code>fnirs-rate hyper</code>.</p>
+      <code>fnirs-rate hyper</code>. The SCI beside each chip is the windowed estimate,
+      averaged over 10 s windows; it is reported, not the line a channel is screened on.</p>
     <table class="qm-table qm-flat cd-table">
       <thead>
         <tr>
@@ -269,7 +270,7 @@
         </tr>
         <tr>
           {% for sid in subject_ids %}
-          <th>SCI</th><th>Decision</th>
+          <th>SCI (10 s)</th><th>Decision</th>
           {% endfor %}
         </tr>
       </thead>
