@@ -2254,7 +2254,7 @@ def _write_condition_reports(
     *verdict* is not: each page screens on its own stretch.
     """
     from fnirs_pipe.qc.condition_views import (
-        condition_verdict_view, slice_record, with_condition_corr,
+        slice_record, with_condition_corr,
     )
     from fnirs_pipe.qc.metrics import resolve_cutoffs
 

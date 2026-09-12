@@ -657,13 +657,16 @@ def condition_sections(
             return None
 
     haemo, errts = _read("preproc"), _read("errts")
+    # gcor's before side, the same stage the run's own page pairs against errts
+    filtered = _read("filtered")
     bands = {"cardiac": (cardiac_l_freq, cardiac_h_freq),
              "resp": (resp_l_freq, resp_h_freq)}
     n_fft_floor = min(PSD_NFFT_CAP, len(haemo.times)) if haemo is not None else 0
 
     def haemo_of(t0, t1):
         return _condition_haemo(haemo, errts, t0, t1, n_fft_floor, bands, sep_bands,
-                                condition_haemo_scalars, long_short_channels)
+                                condition_haemo_scalars, long_short_channels,
+                                filtered=filtered)
 
     return _condition_entries(sections, raw_intensity, windows,
                               _cutoffs_from_sidecar(stages), sep_bands, haemo_of)
@@ -690,19 +693,8 @@ def raw_condition_sections(
     return _condition_entries(sections, raw_intensity, windows, cutoffs, sep_bands)
 
 
-# Which screening criteria a condition can be judged on, and today it is all of them.
-#
-# `good_frac` is what screens, and it is windowed from the bottom up: a window counts when
-# SCI and PSP both clear their lines *inside that window*, and the score is the share of
-# windows that did. So a condition is the same measurement as its run, on the same window
-# grid and behind the same filter, with a range of columns selected. Nothing is approximated
-# and the two verdicts cannot drift apart.
-#
-# The whole-run SCI and PSP are `screens=False`: reported, never decisive, and there is no
-# per-condition version of them because a single estimate over a recording has no windows to
-# select from. A criterion that starts screening without a windowed series behind it would
-# be the first thing a condition could not judge itself on, so it is announced rather than
-# silently skipped.
+# Screening criteria a condition can be judged on: those with a windowed series to cut.
+# One that starts screening without one is announced rather than silently skipped.
 _CONDITION_SCREENABLE = frozenset({"good_frac"})
 
 
@@ -882,11 +874,14 @@ def _condition_cnr(haemo, t0, t1, picks=None) -> dict:
 
 
 def _condition_haemo(haemo, errts, t0, t1, n_fft_floor, bands, sep_bands,
-                     condition_haemo_scalars, long_short_channels):
+                     condition_haemo_scalars, long_short_channels, filtered=None):
     """One condition's haemoglobin scalars per channel set, plus its per-channel dicts.
 
     Safe to crop because nothing here filters. The per-channel dicts are lifted out of the
     scalars, which flatten into a table of numbers.
+
+    ``filtered`` is gcor's before side. Without it that pair spans the bandpass as well as
+    the regression, which is not what the run's own page reports under the same names.
     """
     if haemo is None:
         return {}, {}
@@ -897,20 +892,28 @@ def _condition_haemo(haemo, errts, t0, t1, n_fft_floor, bands, sep_bands,
         lo, hi = max(0.0, float(t0)), min(float(raw.times[-1]), float(t1))
         return None if hi <= lo else raw.copy().crop(tmin=lo, tmax=hi)
 
-    haemo_cut, errts_cut = _cut(haemo), _cut(errts)
+    def _pick(raw, picks):
+        if raw is None:
+            return None
+        names = [c for c in picks if c in raw.ch_names]
+        return raw.copy().pick(names) if names else None
+
+    haemo_cut, errts_cut, filt_cut = _cut(haemo), _cut(errts), _cut(filtered)
     if haemo_cut is None:
         return {}, {}
-    by_set = {"all": condition_haemo_scalars(haemo_cut, errts_cut, n_fft_floor, bands)}
+    by_set = {"all": condition_haemo_scalars(haemo_cut, errts_cut, n_fft_floor, bands,
+                                             filtered=filt_cut)}
     long_names, short_names = long_short_channels(haemo_cut, sep_bands)
     for set_name, names in (("long", long_names), ("short", short_names)):
         picks = [c for c in names if c in haemo_cut.ch_names]
         if not picks:
             by_set[set_name] = {}
             continue
-        errts_pick = (None if errts_cut is None else
-                      errts_cut.copy().pick([c for c in picks if c in errts_cut.ch_names]))
-        by_set[set_name] = condition_haemo_scalars(
-            haemo_cut.copy().pick(picks), errts_pick, n_fft_floor, bands)
+        row = condition_haemo_scalars(
+            haemo_cut.copy().pick(picks), _pick(errts_cut, picks), n_fft_floor, bands,
+            filtered=_pick(filt_cut, picks))
+        # kept on the whole-file row alone, as the run's own sections keep it
+        by_set[set_name] = {k: v for k, v in row.items() if k not in _WHOLE_FILE_KEYS}
 
     # CNR needs room either side of each onset, so it cuts the uncropped file itself
     def _scalars_of(cnr):

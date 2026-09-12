@@ -109,6 +109,9 @@ def subject_metric_rows(
     return rows
 
 
+# how far two members' copies of one trigger may sit apart and still be the same condition
+_TRIGGER_JITTER_SAMPLES = 2.0
+
 # The channel sets a quality table is printed over, and what each is headed on the page.
 # Same order and same names the subject report's own metrics section uses.
 _CHANNEL_SETS = (("all", "All"), ("long", "Long"), ("short", "Short"))
@@ -215,9 +218,8 @@ def condition_subject_metrics(
         return {}
 
     offsets = offsets or {}
-    # the aligned clock's own resolution. A looser figure would accept a window belonging
-    # to a different occurrence of the same condition
-    tol = 0.5 / float(sfreq) if sfreq else 0.0
+    # the dyad resolves its windows from one member, the records carry each member's own
+    tol = _TRIGGER_JITTER_SAMPLES / float(sfreq) if sfreq else 0.0
 
     per_subject: dict = {}
     for sid in subject_ids:

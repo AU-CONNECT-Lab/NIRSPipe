@@ -111,6 +111,7 @@ def channel_rows(
     return [{
         "name":       ch,
         "sci":        value_of("sci_per_channel", ch),
+        "sci_win":    value_of("sci_win_per_channel", ch),
         "psp":        value_of("psp_per_channel", ch),
         "good_frac":  value_of("good_frac_per_channel", ch),
         "snr":        value_of("snr_per_channel", ch),
@@ -199,7 +200,12 @@ def heatmap_args(rows: list[dict]) -> dict[str, Any]:
     return {
         "ch_names":   [r["name"] for r in ordered],
         "is_bad":     [r["is_bad"] for r in ordered],
-        "sci_per_ch": {r["name"]: r["sci"] for r in ordered if r.get("sci") is not None},
+        # the row that decides Status, so the grid can say why a channel was rejected
+        "good_frac_per_ch": {r["name"]: r["good_frac"] for r in ordered
+                             if r.get("good_frac") is not None},
+        # the windowed estimator, matching every other row here and the screening itself
+        "sci_per_ch": {r["name"]: v for r in ordered
+                       if (v := r.get("sci_win") or r.get("sci")) is not None},
         "cv_per_ch":  {r["name"]: r["cv"] for r in ordered if r.get("cv") is not None},
         "snr_per_ch": {r["name"]: r["snr"] for r in ordered if r.get("snr") is not None},
         "psp_per_ch": {r["name"]: r["psp"] for r in ordered if r.get("psp") is not None},

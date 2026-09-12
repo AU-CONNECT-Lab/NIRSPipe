@@ -24,8 +24,8 @@ from fnirs_pipe.utils.logging import get_logger
 logger = get_logger("qc.condition_views")
 
 # what a per-condition view can honestly fill, because each has a windowed series behind it
-SLICEABLE = ("sci_per_channel", "psp_per_channel", "good_frac_per_channel",
-             "cv_per_channel", "snr_per_channel")
+SLICEABLE = ("sci_per_channel", "sci_win_per_channel", "psp_per_channel",
+             "good_frac_per_channel", "cv_per_channel", "snr_per_channel")
 
 # and what it therefore has to drop, so no column mixes two time scopes, and a column added
 # later shows a gap instead of a whole-run number under a condition's heading.
@@ -166,7 +166,8 @@ def with_condition_corr(record: dict, corr_per_channel: "dict[str, float]") -> d
     return {**record, "per_channel": per_channel}
 
 
-def condition_haemo_scalars(haemo, errts, n_fft_floor: int, bands: dict) -> dict:
+def condition_haemo_scalars(haemo, errts, n_fft_floor: int, bands: dict,
+                            filtered=None) -> dict:
     """Scalars a condition can be given by recomputing on its own cut, not by slicing.
 
     ``haemo`` and ``errts`` are already cropped to the condition. None of these filters, so a
@@ -188,16 +189,21 @@ def condition_haemo_scalars(haemo, errts, n_fft_floor: int, bands: dict) -> dict
     )
 
     out: dict = {}
-    # gcor's before/after is stored under _prereg / _postreg rather than as an _errts suffix,
-    # and those two stages are exactly this cut's haemo and errts, so it fills the same pair
-    # the run's page prints instead of a lone number beside it
-    for raw, suffix, gcor_suffix in ((haemo, "", "_prereg"), (errts, "_errts", "_postreg")):
+    # `filtered` on the before side, not `haemo`: the bandpass alone moves gcor, so pairing
+    # preproc against errts would credit the regression with the filter's effect too. The
+    # run's own page pairs the same two stages under these names.
+    for raw, suffix, gcor_suffix in ((haemo, "", None),
+                                     (filtered, None, "_prereg"),
+                                     (errts, "_errts", "_postreg")):
         if raw is None:
             continue
         gcor = gcor_metrics(raw)
-        out.update({f"{k}{gcor_suffix}": v for k, v in gcor.items()})
+        if gcor_suffix:
+            out.update({f"{k}{gcor_suffix}": v for k, v in gcor.items()})
         if suffix == "":
             out.update(gcor)          # the plain key too, for a run with no errts stage
+        if suffix is None:
+            continue
         quality = haemo_quality_metrics(raw)
         if "hbo_hbr_corr_mean" in quality:
             out[f"hbo_hbr_corr_mean{suffix}"] = quality["hbo_hbr_corr_mean"]
@@ -1027,7 +1033,10 @@ def condition_slices_from_record(
         if label not in sci_by_cond:
             continue
         out[label] = {
+            # both keys off the same slice: the matrix is the windowed estimator, so a
+            # condition has no whole-run SCI of its own to put under the plain name
             "sci_per_channel": _named(sci_by_cond[label]),
+            "sci_win_per_channel": _named(sci_by_cond[label]),
             "psp_per_channel": _named(psp_by_cond[label]) if label in psp_by_cond else {},
             "good_frac_per_channel": (_named(frac_by_cond[label])
                                       if label in frac_by_cond else {}),
@@ -1122,33 +1131,6 @@ def condition_set_scalars(
             "cv_mean":        _mean("cv_per_channel"),
         }
         out[set_name] = row
-    return out
-
-
-def condition_verdict_view(entry: dict) -> "dict[str, float | None]":
-    """One condition's scalars over the long channels, the set the run's own rows report.
-
-    ::
-
-        {"scalars": {"sci_win_mean": 0.71, "gvtd_filt_p95": 1.2e-4},
-         "od_by_set": {"long": {"sci_win_mean": 0.86}}}
-        -> {"sci_win_mean": 0.86, "gvtd_filt_p95": 1.2e-4}
-
-    The arrangement :func:`~fnirs_pipe.qc.sqm_record.raw_verdict_view` makes for a run, and
-    for the same reason: a page printing a run's row above a condition's needs both on one
-    channel set, or what looks like a comparison between two stretches is a comparison
-    between two montages as well.
-
-    ``scalars`` is mixed by construction. Its motion and haemoglobin halves are already the
-    long set, matching the run's rows; its optical-density half is a mean over every channel,
-    a condition being a column selection out of one matrix that holds them all. Only that
-    half moves here, and only where the long set has a value: a montage with no short
-    channel has a long row equal to the whole of it and nothing changes, and one whose long
-    row is empty keeps the numbers it has rather than gaining a row of dashes.
-    """
-    out = dict(entry.get("scalars") or {})
-    long_od = (entry.get("od_by_set") or {}).get("long") or {}
-    out.update({key: value for key, value in long_od.items() if value is not None})
     return out
 
 

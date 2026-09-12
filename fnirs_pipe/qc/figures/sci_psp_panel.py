@@ -2,6 +2,7 @@ import numpy as np
 import plotly.graph_objects as go
 
 from fnirs_pipe.qc.metrics import CV_PASS, PSP_PASS, SCI_PASS, SNR_PASS
+from fnirs_pipe.qc.metrics._helpers import GOOD_FRAC_PASS
 from fnirs_pipe.utils.logging import get_logger
 
 from ._utils import AXIS_TEXT_COLOR
@@ -59,10 +60,12 @@ def channel_quality_heatmap(
     cv_per_ch: dict[str, float],
     snr_per_ch: dict[str, float],
     psp_per_ch: dict[str, float],
+    good_frac_per_ch: "dict[str, float] | None" = None,
     sci_thresh: float = SCI_PASS,
     cv_thresh: float = CV_PASS,
     snr_thresh: float = SNR_PASS,
     psp_thresh: float = PSP_PASS,
+    good_frac_thresh: float = GOOD_FRAC_PASS,
     split_at: int | None = None,
 ) -> go.Figure:
     """Square-marker grid: channels on x-axis, metrics on y-axis. Green=pass, red=fail, gray=missing.
@@ -72,16 +75,20 @@ def channel_quality_heatmap(
     blocks. The two are pruned by the same threshold but answer different questions, so a
     reader needs to know which side of the line a column is on.
 
-    Status is the screening verdict. The metric rows below it are drawn against the
-    cutoffs in :mod:`fnirs_pipe.qc.metrics._helpers`; CV and SNR prune nothing.
+    Status is the screening verdict and Coupled is the row that produces it, which is why it
+    sits directly under: a channel can fail on its coupled-window share with every average
+    below it comfortable, and without this row nothing on the page says so. The rows under
+    it are drawn against the cutoffs in :mod:`fnirs_pipe.qc.metrics._helpers` and none of
+    them prunes.
     """
     _MISSING = "#D3D3D3"
-    metrics = ["Status", "SCI", "CV", "PSP", "SNR"]
+    metrics = ["Status", "Coupled", "SCI", "CV", "PSP", "SNR"]
     n_ch  = len(ch_names)
     n_met = len(metrics)
 
     specs = [
-        (None,       None,   None),
+        (None,               None,   None),
+        (good_frac_per_ch or {}, ".3f", lambda v: v >= good_frac_thresh),
         (sci_per_ch, ".3f",  lambda v: v >= sci_thresh),
         (cv_per_ch,  ".3f",  lambda v: v <= cv_thresh),
         (psp_per_ch, ".3f",  lambda v: v >= psp_thresh),
