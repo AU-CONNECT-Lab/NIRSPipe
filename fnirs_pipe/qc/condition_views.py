@@ -484,8 +484,9 @@ def condition_view_table(fig, spans: "list[tuple[str, float, float]]") -> "dict 
 
 
 # figures a condition page keeps whole, because they describe the run rather than any one
-# condition: the event timeline is the design, the optode layout is the montage.
-CONDITION_PAGE_FIGURES = ("trigger", "layout")
+# condition. The optode layout is the montage. The event timeline is whole too but is
+# written per condition, carrying a mark for the one being read, so it is not on this list.
+CONDITION_PAGE_FIGURES = ("layout",)
 
 
 def figure_leaks(figure_paths: dict, slug: str) -> "list[str]":
@@ -611,6 +612,68 @@ def _threshold_of(figure, axis: str) -> "float | None":
     return None
 
 
+def mark_condition(figure: dict, label: str, t0: float, t1: float) -> dict:
+    """The run's event timeline cut to the condition being read, over the run's own summary.
+
+    ::
+
+      mark_condition(timeline_dict, "video", 1616.9, 2516.9)
+      -> two rows: "(all)" and "video", with video's window boxed
+
+    :func:`~fnirs_pipe.qc.figures.raw_figures.build_trigger_timeline_single` draws a summary
+    row carrying every condition's events, then one row per condition. A condition page keeps
+    the summary row and its own, and drops the rest.
+
+    Dropping the others and keeping the summary is the whole point, because the two failures
+    this panel exists to catch need different things. A condition that stopped being
+    delivered partway, or a block started twice, are both visible on **that condition's own
+    row**: a gap, or two marks where one belongs. What the summary row adds is the
+    disambiguation the other rows were there for, whether the run carried on while this
+    condition stopped, and it says that in one row instead of four. On a design with five
+    conditions the four dropped rows carried nothing this page is read for.
+
+    The time axis stays whole, so a gap is read against the recording rather than against
+    the window. The window itself is boxed and named, because a page showing the run's span
+    has to say which part of it is this page's.
+    """
+    # `condition_windows` numbers a repeated description desc#1, desc#2, while the rows are
+    # the bare descriptions; a repeated one shares a row, and the box says which occurrence
+    desc = label.split("#", 1)[0]
+
+    kept, dropped = [], 0
+    for trace in figure.get("data") or []:
+        y = trace.get("y") or []
+        summary_row = bool(y) and float(y[0]) == 0
+        if summary_row:
+            kept.append(trace)
+        elif trace.get("name") == desc:
+            kept.append({**trace, "y": [1] * len(y)})
+        else:
+            dropped += 1
+    if dropped == 0:
+        logger.warning("timeline carries no row named %r; left whole on %s's page",
+                       desc, label)
+
+    layout = dict(figure.get("layout") or {})
+    layout["yaxis"] = {**(layout.get("yaxis") or {}),
+                       "tickvals": [0, 1], "ticktext": ["(all)", desc]}
+    layout["height"] = 2 * 60 + 82
+    shapes = list(layout.get("shapes") or [])
+    shapes.insert(0, {
+        "type": "rect", "xref": "x", "yref": "paper", "layer": "below",
+        "x0": float(t0), "x1": float(t1), "y0": 0, "y1": 1,
+        "fillcolor": "rgba(41, 128, 185, 0.10)",
+        "line": {"color": "#2980b9", "width": 1, "dash": "dot"},
+    })
+    layout["shapes"] = shapes
+    layout["annotations"] = list(layout.get("annotations") or []) + [{
+        "x": (float(t0) + float(t1)) / 2, "xref": "x", "y": 1.0, "yref": "paper",
+        "text": f"this page: {label}", "showarrow": False,
+        "yanchor": "bottom", "font": {"size": 9, "color": "#2980b9"},
+    }]
+    return {**figure, "data": kept, "layout": layout}
+
+
 def condition_payloads(
     payload: dict,
     *,
@@ -657,7 +720,8 @@ def condition_payloads(
       a Welch estimate reads outside the samples it is handed. A condition too short for the
       transform gets no spectrum rather than one on a coarser grid than the run's.
 
-    The event timeline is kept whole, being the run's design rather than one condition's.
+    The event timeline is cut to this condition's row over the run's summary row, keeping
+    its whole time axis; see :func:`mark_condition`.
     The per-trial table is cut to the trials whose onset falls inside the window; nothing is
     rescored, a trial's SQM reading nothing outside its own crop.
 
@@ -783,6 +847,12 @@ def condition_payloads(
             d["trial_qc"] = {}
             if trial:
                 paths["trial_qc"], d["trial_qc"] = trial
+            # kept whole and marked, rather than cut: see `mark_condition`
+            timeline = (payload.get("trigger_timeline") or {}).get("figure")
+            if timeline:
+                import plotly.graph_objects as go
+                paths["trigger"] = save_figure("trigger", slug, go.Figure(
+                    mark_condition(timeline, label, float(t0), float(t1))))
             psd_fig = remake_psd(float(t0), float(t1)) if remake_psd else None
             paths.pop("psd", None)
             if psd_fig is not None:

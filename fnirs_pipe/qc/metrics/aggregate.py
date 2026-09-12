@@ -13,7 +13,7 @@ import numpy as np
 
 from fnirs_pipe.qc.metrics.coupling import (
     _cardiac_power_metrics, _channel_distance_metrics, _good_frac_metrics,
-    _intensity_metrics, _psp_metrics, _sci_metrics,
+    _intensity_metrics, _psp_metrics, _sci_metrics, _sci_win_metrics,
 )
 from fnirs_pipe.qc.metrics.gvtd import _motion_metrics
 from fnirs_pipe.qc.metrics.haemo import (
@@ -55,7 +55,8 @@ def compute_raw_sqm(
     Returns
     -------
     dict
-        Flat dict of SCI, channel distance, PSP, CP, the coupled-window share, and
+        Flat dict of SCI (whole-run and windowed), channel distance, PSP, CP, the
+        coupled-window share, and
         (intensity input only) CV/SNR/amplitude plus motion metrics.
 
     Notes
@@ -65,6 +66,7 @@ def compute_raw_sqm(
     """
     record: dict[str, Any] = {}
     record.update(_sci_metrics(sci_scores, bad_channels))
+    record.update(_sci_win_metrics(raw_intensity, cardiac_l_freq, cardiac_h_freq))
     record.update(_good_frac_metrics(good_frac_scores))
     record.update(_channel_distance_metrics(raw_intensity))
     record.update(_psp_metrics(raw_intensity, cardiac_l_freq, cardiac_h_freq))

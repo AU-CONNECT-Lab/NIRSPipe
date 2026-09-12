@@ -272,7 +272,8 @@ def _short_section(
     were never set for it; the long section is where the number is read against a line.
     """
     from fnirs_pipe.qc.metrics import (
-        _intensity_metrics, _motion_metrics, _psp_metrics, _sci_metrics, _spike_metrics,
+        _intensity_metrics, _motion_metrics, _psp_metrics, _sci_metrics,
+        _sci_win_metrics, _spike_metrics,
     )
     from fnirs_pipe.qc.metrics.coupling import _good_frac_metrics
 
@@ -284,6 +285,7 @@ def _short_section(
 
     record: dict[str, Any] = {"n_channels": len(short_names), "n_bad": len(short_bad)}
     record.update(_sci_metrics(short_sci, short_bad))
+    record.update(_sci_win_metrics(raw_short, cardiac_l_freq, cardiac_h_freq))
     record.update(_psp_metrics(raw_short, cardiac_l_freq, cardiac_h_freq))
     record.update(_good_frac_metrics(short_frac))
     intensity = _intensity_metrics(raw_short)
@@ -499,7 +501,8 @@ def _motion_post_section(
     twenty-odd keys of which half would be empty.
     """
     from fnirs_pipe.qc.metrics import (
-        _mean_or_none, _motion_metrics, _psp_metrics, _spike_metrics, compute_sci_scores,
+        _mean_or_none, _motion_metrics, _psp_metrics, _sci_win_metrics, _spike_metrics,
+        compute_sci_scores,
     )
 
     record: dict[str, Any] = {}
@@ -511,6 +514,7 @@ def _motion_post_section(
     # per channel as well as the mean: the report pairs these against the pre-correction
     # scores channel by channel, and a mean cannot say which channel the correction cost
     record["sci_per_channel"] = {k: float(v) for k, v in scores.items()}
+    record.update(_sci_win_metrics(raw_od, cardiac_l_freq, cardiac_h_freq))
     record.update(_psp_metrics(raw_od, cardiac_l_freq, cardiac_h_freq))
     return record
 

@@ -83,7 +83,7 @@ from fnirs_pipe.qc.figures import (
     carpet_gvtd_figure,
     carpet_compare_figure,
     bad_segment_zoom_figure,
-    hbo_hbr_correlation_panel,
+    hbo_hbr_correlation_figure,
     psd_figure,
     quality_brain_views,
     optode_layout_static,
@@ -693,7 +693,7 @@ def _section_haemo(
     spans can tell whether the cut clears mne's ``n_fft``. See :func:`_cropped_sections`.
     """
     hbo_hbr_path = psd_panel_path = None
-    psd_panel_h = 0
+    hbo_hbr_h = psd_panel_h = 0
 
     def _cut(raw):
         """The span `crop` names, or the recording unchanged when there is no crop."""
@@ -709,13 +709,15 @@ def _section_haemo(
     # channel order, which is what makes the pair subtract by eye. A run with no denoising
     # passes raw_after=None and the panel draws its one-stage form.
     with _guard("HbO-HbR correlation panel", errors, subject):
-        b64 = hbo_hbr_correlation_panel(
+        fig = hbo_hbr_correlation_figure(
             raw_haemo_cut,
             title="HbO–HbR Signal Quality",
             sep_bands=sep_bands,
             raw_after=raw_errts_cut)
-        _save_b64_png(b64, figures_dir / f"hbo_hbr_corr{suffix}.png")
-        hbo_hbr_path = _fig_href(figures_dir, f"hbo_hbr_corr{suffix}.png")
+        if fig is None:
+            raise RuntimeError("no haemoglobin channels to correlate")
+        hbo_hbr_path, hbo_hbr_h = _save_plotly_html(
+            fig, figures_dir / f"hbo_hbr_corr{suffix}.html")
 
     # Recomputed rather than read from the record: the record measures each stage on the
     # signal as it stands there, which cannot be compared across the bandpass. See
@@ -784,6 +786,7 @@ def _section_haemo(
             psd_panel_path, psd_panel_h = _save_plotly_html(fig_psd_custom, figures_dir / f"psd_panel{suffix}.html")
     return {
         "hbo_hbr_path":   hbo_hbr_path,
+        "hbo_hbr_h":      hbo_hbr_h,
         "stage_metrics_path": stage_metrics_path, "stage_metrics_h": stage_metrics_h,
         "stage_banded": stage_banded,
         "psd_panel_path": psd_panel_path, "psd_panel_h": psd_panel_h,

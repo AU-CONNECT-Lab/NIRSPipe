@@ -14,29 +14,22 @@ Separation is what the grouping is for. The HbO–HbR anticorrelation that the �
 threshold tests for is a property of cortical haemodynamics, so it says nothing about a
 short channel, which only ever sees scalp. Sorted together the short channels land at one
 end of the list and read as the worst channels on the montage when they are simply not
-being asked the same question.
+being asked the same question. The heatmap rows follow the same grouping, so the block
+dividers inside each chromophore mark the long/short boundary rather than wherever the
+acquisition order happened to switch.
 
-Both panels read their colour off one RdBu_r scale, so a shade means the same r whether it
-is a matrix cell or a dot. The verdict is the dashed −0.3 rule rather than a third hue: the
-green/amber/red fills this replaced separated amber from green by ΔE 5.8 under protanopia,
-so the one distinction the panel exists to make was unreadable to a red-green colourblind
-reader. A single threshold rule keeps its green, having nothing to be confused against.
+Both panels read their colour off one reversed RdBu scale, so a shade means the same r
+whether it is a matrix cell or a dot. The verdict is the dashed −0.3 rule rather than a
+third hue: the green/amber/red fills this replaced separated amber from green by ΔE 5.8
+under protanopia, so the one distinction the panel exists to make was unreadable to a
+red-green colourblind reader. A single threshold rule keeps its green, having nothing to
+be confused against.
 """
 
-import base64
-import io
-
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-from matplotlib.colors import Normalize
 import mne
 import numpy as np
-
-# A rotated channel label needs about this much axis to stay legible at 5.5 pt. The cap
-# used to be a constant 60, which was fine for one wide heatmap and unreadable once two of
-# them split the width: 44 labels at 4.2 pt is a grey smear, not a label.
-_TICK_LABEL_PITCH_IN = 0.11
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
 # The separation groups, in the order they are drawn. "mid" is the 10-15 mm gap that
 # long_short_channels leaves unclaimed; it is usually empty.
@@ -47,18 +40,22 @@ _GROUP_LABEL = {
     "short": "short channels",
 }
 
-# RdBu_r for both panels: a white midpoint rather than a tinted one, which is what keeps
-# a correlation matrix reading as "nothing here" in the middle instead of beige. The dots
-# below take their fill from the same map, so one colour means one r across the figure.
-_DIVERGING = plt.get_cmap("RdBu_r")
-_NORM = Normalize(-1.0, 1.0)
+# Plotly's RdBu runs red→blue, so it is reversed everywhere to put red at r = +1. A white
+# midpoint rather than a tinted one is what keeps a correlation matrix reading as "nothing
+# here" in the middle instead of beige. The dots below take their fill from the same map,
+# so one colour means one r across the figure.
+_SCALE, _REVERSE = "RdBu", True
 
 _MUTED, _GRID, _BASELINE = "#888888", "#eeeeee", "#444444"
-_SURFACE = "#ffffff"
 # a white fill at r near zero would vanish on a white surface, so the marks carry a ring
 _MARK_EDGE = "#9aa0a6"
 
 _R_THRESHOLD = -0.3
+
+# ---- Layout ----
+_ROW_HEIGHTS = [0.68, 0.32]
+_V_SPACING = 0.13
+_HEIGHT = 1000
 
 
 def _pair_key(ch_name: str) -> str:
@@ -80,6 +77,19 @@ def _pair_group(raw_haemo: mne.io.Raw, sep_bands=None) -> "dict[str, str]":
     groups.update({_pair_key(n): "long" for n in long_names})
     groups.update({_pair_key(n): "short" for n in short_names})
     return groups
+
+
+def _channel_order(raw_haemo: mne.io.Raw, groups: "dict[str, str]") -> "list[str]":
+    """HbO block then HbR block, each sorted by separation group then name.
+
+    The two blocks end up carrying the same pair order, so a cell in the HbO × HbR corner
+    sits at the crossing of one pair's two rows.
+    """
+    rank = {g: i for i, g in enumerate(_GROUP_ORDER)}
+    names = [n for n in raw_haemo.ch_names if n.endswith(("hbo", "hbr"))]
+    return sorted(names, key=lambda n: (n.endswith("hbr"),
+                                        rank.get(groups.get(_pair_key(n), "mid"), 9),
+                                        _pair_key(n)))
 
 
 def _stage(raw: mne.io.Raw, order: "list[str]"):
@@ -111,57 +121,49 @@ def _stage(raw: mne.io.Raw, order: "list[str]"):
     return corr, pair_r
 
 
-def _draw_heatmap(ax, corr, all_names, n_hbo, groups, hbo_names, hbr_names,
-                  title, show_yticks, max_labels):
-    n_ch = len(all_names)
-    im = ax.imshow(corr, aspect="equal", cmap=_DIVERGING, norm=_NORM,
-                   interpolation="nearest")
+def _add_heatmap(fig, corr, order, col, show_scale):
+    # float32 halves the serialised payload and still resolves r to ~1e-7, far below what
+    # the colour scale or the hover readout distinguishes
+    fig.add_trace(go.Heatmap(
+        z=np.asarray(corr, dtype=np.float32), x=order, y=order,
+        zmin=-1.0, zmax=1.0, colorscale=_SCALE, reversescale=_REVERSE,
+        showscale=show_scale,
+        colorbar=dict(title="Pearson r", len=_ROW_HEIGHTS[0] * 0.92,
+                      y=1.0 - _ROW_HEIGHTS[0] / 2, thickness=12,
+                      tickvals=[-1, -0.5, 0, 0.5, 1]),
+        hovertemplate="%{y}<br>%{x}<br>r = %{z:.3f}<extra></extra>",
+    ), row=1, col=col)
 
-    def _divider(pos: float, **style) -> None:
-        # an L hugging the diagonal, since a full-width rule would run out over the blank
-        # upper triangle and read as part of the plot
-        ax.plot([-0.5, pos], [pos, pos], **style)
-        ax.plot([pos, pos], [pos, n_ch - 0.5], **style)
 
-    _divider(n_hbo - 0.5, color="#888", lw=0.6, ls="--")
+def _add_dividers(fig, groups, order, n_hbo, col):
+    """An L hugging the diagonal at each block boundary.
+
+    A full-width rule would run out over the blank upper triangle and read as part of the
+    plot, so each divider stops where the diagonal is.
+    """
+    n_ch = len(order)
+
+    def _divider(pos, color, dash, width):
+        for x0, y0, x1, y1 in ((-0.5, pos, pos, pos), (pos, pos, pos, n_ch - 0.5)):
+            fig.add_shape(type="line", x0=x0, y0=y0, x1=x1, y1=y1, layer="above",
+                          line=dict(color=color, width=width, dash=dash), row=1, col=col)
+
+    _divider(n_hbo - 0.5, "#888", "dash", 0.8)
     # separation boundaries inside each chromophore block, lighter than the HbO/HbR one
-    for offset, names in [(0, hbo_names), (n_hbo, hbr_names)]:
-        seen = [groups[_pair_key(n)] for n in names]
+    for offset, names in ((0, order[:n_hbo]), (n_hbo, order[n_hbo:])):
+        seen = [groups.get(_pair_key(n), "mid") for n in names]
         for i in range(1, len(seen)):
             if seen[i] != seen[i - 1]:
-                _divider(offset + i - 0.5, color="#ccc", lw=0.5, ls=":")
-
-    # Label every channel while they still fit; past that, subsample and mark the
-    # unlabelled cells with minor ticks so the rows stay countable
-    step = 1 if n_ch <= max_labels else int(np.ceil(n_ch / max_labels))
-    idxs = list(range(0, n_ch, step))
-    tick_fs = 5.5
-    ax.set_xticks(idxs)
-    ax.set_xticklabels([all_names[i] for i in idxs], fontsize=tick_fs,
-                       rotation=45, ha="right", rotation_mode="anchor")
-    ax.set_yticks(idxs)
-    # No HbO / HbR block labels: every tick label already ends in the chromophore, and
-    # the divider marks where one block stops. The labels were the third telling.
-    ax.set_yticklabels([all_names[i] for i in idxs] if show_yticks else [],
-                       fontsize=tick_fs)
-    if step > 1:
-        ax.set_xticks(np.arange(n_ch), minor=True)
-        ax.set_yticks(np.arange(n_ch), minor=True)
-        ax.tick_params(which="minor", length=1.5, width=0.4, color="#bbbbbb")
-    for spine in ax.spines.values():
-        spine.set_visible(False)
-    ax.set_title(title, fontsize=10, pad=6)
-    return im
+                _divider(offset + i - 0.5, "#ccc", "dot", 0.7)
 
 
-def _draw_dumbbell(ax, groups, r_before, r_after, show_headers):
+def _add_dumbbell(fig, groups, r_before, r_after, row, col):
     """Per-pair r, one x position per pair, before as an open ring and after filled.
 
     Ordered best→worst inside each group on the *before* value, so one order serves both
     stages and the −0.3 crossing happens once along the row.
     """
-    xs, labels, before, after = [], [], [], []
-    spans = []
+    xs, labels, before, after, spans = [], [], [], [], []
     x = 0.0
     for g in _GROUP_ORDER:
         keys = sorted((k for k in r_before if groups.get(k) == g),
@@ -178,61 +180,61 @@ def _draw_dumbbell(ax, groups, r_before, r_after, show_headers):
         spans.append((start, x - 1.0, _GROUP_LABEL[g]))
         x += 1.4          # a gap between groups, so the grouping needs no rule
     if not xs:
-        return
+        return None, None
 
     xs = np.asarray(xs, dtype=float)
     before = np.asarray(before, dtype=float)
     paired = r_after is not None and all(v is not None for v in after)
     tip = np.asarray(after, dtype=float) if paired else before
 
-    ax.axhline(0.0, color=_BASELINE, lw=0.9, zorder=1)
-    ax.axhline(_R_THRESHOLD, color="#27ae60", lw=0.9, ls="--", alpha=0.7, zorder=1)
-    ax.text(xs[-1] + 0.9, _R_THRESHOLD, "r = −0.3", color="#27ae60", fontsize=7,
-            alpha=0.9, va="bottom", ha="right")
+    fig.add_hline(y=0.0, line=dict(color=_BASELINE, width=1.0), row=row, col=col)
+    fig.add_hline(y=_R_THRESHOLD, line=dict(color="#27ae60", width=1.0, dash="dash"),
+                  opacity=0.7, row=row, col=col)
 
     if paired:
-        ax.vlines(xs, before, tip, color=_MUTED, lw=1.4, alpha=0.55, zorder=2)
-        ax.scatter(xs, before, s=26, facecolor=_SURFACE, edgecolor=_MUTED, lw=1.2,
-                   zorder=3, label="before denoising")
-    # the surface ring keeps a mark near the neutral midpoint visible on a white surface
-    ax.scatter(xs, tip, s=48, c=_DIVERGING(_NORM(tip)), edgecolor=_MARK_EDGE, lw=0.8,
-               zorder=4, label="after denoising" if paired else "HbO–HbR r")
+        seg_x, seg_y = [], []
+        for xi, b, a in zip(xs, before, tip):
+            seg_x += [xi, xi, None]
+            seg_y += [b, a, None]
+        fig.add_trace(go.Scatter(x=seg_x, y=seg_y, mode="lines", showlegend=False,
+                                 line=dict(color=_MUTED, width=1.6), opacity=0.55,
+                                 hoverinfo="skip"), row=row, col=col)
+        fig.add_trace(go.Scatter(
+            x=xs, y=before, mode="markers", name="before denoising", customdata=labels,
+            marker=dict(size=9, color="white", line=dict(color=_MUTED, width=1.4)),
+            hovertemplate="%{customdata}<br>before r = %{y:.3f}<extra></extra>",
+        ), row=row, col=col)
+    fig.add_trace(go.Scatter(
+        x=xs, y=tip, mode="markers", customdata=labels,
+        name="after denoising" if paired else "HbO–HbR r", showlegend=paired,
+        marker=dict(size=13, color=tip, cmin=-1.0, cmax=1.0, colorscale=_SCALE,
+                    reversescale=_REVERSE, line=dict(color=_MARK_EDGE, width=1.0)),
+        hovertemplate=("%{customdata}<br>" + ("after " if paired else "")
+                       + "r = %{y:.3f}<extra></extra>"),
+    ), row=row, col=col)
 
-    ax.set_xticks(xs)
-    ax.set_xticklabels(labels, rotation=90, fontsize=6.5)
-    ax.set_yticks([-1, -0.5, 0, 0.5, 1])
-    # headroom above r = 1 for the group headers, which would otherwise land on the marks
-    ax.set_ylim(-1.12, 1.34)
-    ax.set_xlim(-1.0, xs[-1] + 1.0)
-    ax.grid(axis="y", color=_GRID, lw=0.6)
-    ax.set_axisbelow(True)
-    for spine in ax.spines.values():
-        spine.set_visible(False)
-    ax.tick_params(length=0, labelsize=7)
-    ax.set_ylabel("HbO–HbR r", fontsize=9)
-    if show_headers:
+    fig.add_annotation(x=xs[-1] + 0.9, y=_R_THRESHOLD, text="r = −0.3", showarrow=False,
+                       font=dict(color="#27ae60", size=10), xanchor="right",
+                       yanchor="bottom", row=row, col=col)
+    if len(spans) > 1:
         for xa, xb, name in spans:
-            ax.annotate(name, xy=((xa + xb) / 2, 1.16), fontsize=7.5, color="#555",
-                        ha="center", va="center", fontweight="bold")
-    if paired:
-        # above the axes: at lower right it sat on the short channels, which is exactly
-        # where this panel puts its most positive values
-        ax.legend(frameon=False, fontsize=7.5, loc="lower right",
-                  bbox_to_anchor=(1.0, 1.0), ncol=2, handletextpad=0.4,
-                  borderaxespad=0.0, columnspacing=1.2)
-    # pad clears the group headers, which sit just inside the top of the axes
-    ax.set_title("Per-pair HbO–HbR r, best→worst"
-                 + (" within group" if show_headers else ""),
-                 fontsize=10, pad=8, loc="left")
+            fig.add_annotation(x=(xa + xb) / 2, y=1.16, text=f"<b>{name}</b>",
+                               showarrow=False, font=dict(color="#555", size=11),
+                               row=row, col=col)
+    fig.add_annotation(
+        x=0, y=1.30, xanchor="left", showarrow=False, font=dict(size=13),
+        text="Per-pair HbO–HbR r, best→worst" + (" within group" if len(spans) > 1 else ""),
+        row=row, col=col)
+    return xs, labels
 
 
-def hbo_hbr_correlation_panel(
+def hbo_hbr_correlation_figure(
     raw_haemo: mne.io.Raw,
     title: str = "HbO–HbR Signal Quality",
     sep_bands=None,
     raw_after: "mne.io.Raw | None" = None,
-) -> str:
-    """Return base64 PNG of the correlation panel.
+) -> "go.Figure | None":
+    """Return the correlation panel as a Plotly figure, or None on an empty montage.
 
     ``raw_after`` is the denoised recording. Given it, the panel carries both stages: two
     heatmaps on one colour scale and a dumbbell per pair. Left out, or not matching the
@@ -240,68 +242,62 @@ def hbo_hbr_correlation_panel(
     per pair, which is what a run with no denoising and what a condition page both get.
     """
     groups = _pair_group(raw_haemo, sep_bands)
-    rank = {g: i for i, g in enumerate(_GROUP_ORDER)}
+    order = _channel_order(raw_haemo, groups)
+    if not order:
+        return None
 
-    def _by_separation(picks):
-        # stable, so the montage's own channel order survives inside each group
-        return sorted(picks, key=lambda i: rank[groups[_pair_key(raw_haemo.ch_names[i])]])
+    corr_b, r_b = _stage(raw_haemo, order)
+    if corr_b is None:
+        return None
+    corr_a, r_a = (_stage(raw_after, order) if raw_after is not None else (None, None))
+    two_stage = corr_a is not None
 
-    hbo_picks = _by_separation(mne.pick_types(raw_haemo.info, fnirs="hbo"))
-    hbr_picks = _by_separation(mne.pick_types(raw_haemo.info, fnirs="hbr"))
-    hbo_names = [raw_haemo.ch_names[i] for i in hbo_picks]
-    hbr_names = [raw_haemo.ch_names[i] for i in hbr_picks]
-    all_names = hbo_names + hbr_names
-    n_hbo, n_ch = len(hbo_names), len(all_names)
-
-    corr_b, r_before = _stage(raw_haemo, all_names)
-    corr_a, r_after = (_stage(raw_after, all_names) if raw_after is not None
-                       else (None, None))
-    stages = [(corr_b, "before denoising")]
-    if corr_a is not None:
-        stages.append((corr_a, "after denoising"))
-
-    show_headers = len({groups.get(k) for k in r_before}) > 1
-
-    # Two square heatmaps side by side already make a wide top row, so the figure lands
-    # near 1.5:1 without padding either panel: the report scales it to the page width and
-    # a squarer figure eats the viewport height at no gain in detail.
-    # Two squares side by side add width twice as fast as height, so a *larger* square is
-    # what makes this figure wider rather than taller: shrinking it leaves the fixed chrome
-    # (two rows of rotated tick labels and two titles) as a bigger share of the height and
-    # the panel comes out squarer. Measured on a 44-channel montage, the layout floors at
-    # about 1160 px of screen height in a 1600 px column and does not improve past sq 5.2.
-    sq = max(3.4, min(n_ch * 0.118, 5.2))
-    dumb_h = 1.50
-    fig = plt.figure(figsize=(sq * len(stages) + 0.55, sq + dumb_h))
-    gs = fig.add_gridspec(
-        2, len(stages) + 1,
-        height_ratios=[sq, dumb_h],
-        width_ratios=[sq] * len(stages) + [sq * 0.032],
-        # 0.78 put a 2.5 in band of nothing between the two rows, a third of the height
-        hspace=0.62, wspace=0.06,
+    n_ch = len(order)
+    n_hbo = sum(1 for n in order if n.endswith("hbo"))
+    cols = 2 if two_stage else 1
+    fig = make_subplots(
+        rows=2, cols=cols, row_heights=_ROW_HEIGHTS, vertical_spacing=_V_SPACING,
+        horizontal_spacing=0.06,
+        specs=[[{}, {}], [{"colspan": 2}, None]] if two_stage else [[{}], [{}]],
+        subplot_titles=("before denoising", "after denoising") if two_stage else (),
     )
-    # the heatmap axes is roughly three quarters of the square it is allotted
-    max_labels = max(10, int(sq * 0.76 / _TICK_LABEL_PITCH_IN))
-    im = last_ax = None
-    for col, (corr, stage_title) in enumerate(stages):
-        last_ax = fig.add_subplot(gs[0, col])
-        im = _draw_heatmap(last_ax, corr, all_names, n_hbo, groups, hbo_names, hbr_names,
-                           stage_title, show_yticks=(col == 0), max_labels=max_labels)
-    # One colour bar for both heatmaps, which is the point of drawing them on one scale.
-    cax = fig.add_subplot(gs[0, len(stages)])
-    cbar = fig.colorbar(im, cax=cax)
-    cbar.set_label("Pearson r", fontsize=8)
-    cbar.ax.tick_params(labelsize=7)
 
-    _draw_dumbbell(fig.add_subplot(gs[1, :len(stages)]), groups, r_before, r_after,
-                   show_headers)
+    for col, corr in ((1, corr_b), (2, corr_a))[:cols]:
+        _add_heatmap(fig, corr, order, col, show_scale=(col == cols))
+        _add_dividers(fig, groups, order, n_hbo, col)
 
-    fig.suptitle(title, fontsize=11, y=0.99)
+    dumbbell_row = 2
+    xs, labels = _add_dumbbell(fig, groups, r_b, r_a, dumbbell_row, 1)
 
-    buf = io.BytesIO()
-    # 200 rather than 300: the report scales this to the page width, so the extra pixels
-    # were never displayed and cost half the file
-    fig.savefig(buf, format="png", dpi=200, bbox_inches="tight", facecolor=_SURFACE)
-    plt.close(fig)
-    buf.seek(0)
-    return base64.b64encode(buf.read()).decode()
+    # Every channel keeps its label: unlike the static panel this replaced, an unreadable
+    # tick here is one scroll-zoom away from being readable, so subsampling them buys
+    # nothing. The size only has to keep 44-ish channels legible unzoomed.
+    tick_fs = int(np.clip(420 / max(n_ch, 1), 5, 9))
+    for col in range(1, cols + 1):
+        x_axis = "x" if col == 1 else "x2"
+        fig.update_xaxes(showgrid=False, zeroline=False, tickangle=45,
+                         tickfont=dict(size=tick_fs), row=1, col=col)
+        fig.update_yaxes(showgrid=False, zeroline=False, autorange="reversed",
+                         scaleanchor=x_axis, showticklabels=(col == 1),
+                         tickfont=dict(size=tick_fs), row=1, col=col)
+
+    if xs is not None:
+        fig.update_xaxes(tickmode="array", tickvals=xs, ticktext=labels, tickangle=90,
+                         tickfont=dict(size=8), showgrid=False, zeroline=False,
+                         range=[-1.0, xs[-1] + 1.0], row=dumbbell_row, col=1)
+    fig.update_yaxes(title_text="HbO–HbR r", tickvals=[-1, -0.5, 0, 0.5, 1],
+                     # headroom above r = 1 for the group headers, which would otherwise
+                     # land on the marks
+                     range=[-1.12, 1.34], gridcolor=_GRID, zeroline=False,
+                     tickfont=dict(size=9), row=dumbbell_row, col=1)
+
+    fig.update_layout(
+        title=dict(text=title, x=0.5, font=dict(size=16)),
+        height=_HEIGHT, plot_bgcolor="white", paper_bgcolor="white",
+        margin=dict(l=70, r=70, t=70, b=90),
+        # above the dumbbell: at lower right it sat on the short channels, which is exactly
+        # where this panel puts its most positive values
+        legend=dict(orientation="h", xanchor="right", yanchor="bottom",
+                    x=1.0, y=_ROW_HEIGHTS[1] - _V_SPACING / 2, font=dict(size=10)),
+    )
+    return fig

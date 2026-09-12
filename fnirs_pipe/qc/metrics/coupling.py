@@ -26,6 +26,12 @@ PSP_WINDOW_S = 10.0
 # which is the drift, not the noise CV_PASS was set for. Pinned for the same reason PSP is,
 # and to the same length so the two scalars describe the same stretch of recording.
 CV_WINDOW_S = 10.0
+# SCI on that same pinned grid. `sci_mean` is the whole-run correlation of the two
+# wavelengths, which a slow drift shared by both inflates; over 10 s the cardiac band is
+# most of what is left to correlate. The two disagree enough to swap which channel set
+# looks better, so both are reported: the whole-run one is what the published cutoffs were
+# set on, the windowed one is what the windowed panels and the per-condition slices show.
+SCI_WINDOW_S = 10.0
 
 
 def compute_sci_scores(
@@ -77,6 +83,32 @@ def compute_sci_scores(
         logger.warning("SCI failed: %s", exc)
         sci_scores = {ch: 1.0 for ch in raw.ch_names}
     return sci_scores, raw_od
+
+
+@_safe_metrics("SCI (windowed)", ("sci_win_mean", "sci_win_per_channel"))
+def _sci_win_metrics(
+    raw: mne.io.Raw, cardiac_l_freq: float, cardiac_h_freq: float,
+) -> dict[str, Any]:
+    """Per-channel SCI averaged over ``SCI_WINDOW_S`` windows, and its mean over channels.
+
+    The windowed twin of ``sci_mean``, measured on the same optical density and pinned to the
+    same 10 s as ``psp_mean`` and ``cv_mean`` rather than following the QC window, so the
+    four scalars describe the same stretch of recording whatever ``--qc-window`` is set to.
+    """
+    from fnirs_pipe.qc.metrics.windowed import compute_windowed_sci
+
+    raw_od = (raw if is_optical_density(raw)
+              else mne.preprocessing.nirs.optical_density(raw.copy(), verbose=False))
+    scores, _times = compute_windowed_sci(
+        raw_od, cardiac_l_freq, cardiac_h_freq, SCI_WINDOW_S)
+    with np.errstate(invalid="ignore"):
+        means = np.nanmean(np.asarray(scores, dtype=float), axis=1)
+    per_channel = {ch: float(v) for ch, v in zip(raw_od.ch_names, means)
+                   if np.isfinite(v)}
+    return {
+        "sci_win_mean": _mean_or_none(per_channel.values()),
+        "sci_win_per_channel": per_channel,
+    }
 
 
 def _sci_metrics(

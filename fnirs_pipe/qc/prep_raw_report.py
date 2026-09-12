@@ -16,8 +16,9 @@ from fnirs_pipe.qc.figure_io import (
 )
 from fnirs_pipe.qc.hyper_report import markers_on_data_axis
 from fnirs_pipe.qc.channel_table import (
-    MOTION_SPLIT_COLUMNS, channel_columns, channel_rows, format_rows, heatmap_args,
-    pair_rows, save_channel_csv, separation_blocks, separation_notes, split_table,
+    MOTION_SPLIT_COLUMNS, OD_SPLIT_COLUMNS, channel_columns, channel_rows, format_rows,
+    heatmap_args, pair_rows, save_channel_csv, separation_blocks, separation_notes,
+    split_table,
 )
 from fnirs_pipe.qc.metrics import SCI_PASS
 from fnirs_pipe.qc.metrics._helpers import _mean_or_none, separation_bands
@@ -38,12 +39,18 @@ _EPOCH_TMAX   = 25.0
 # later stage to measure.
 #
 # Two lists, as the subject report has two cases. A montage that splits gets the two tables
-# instead, and the flat list then keeps only what has no channel-set dimension: the pooled
-# spike counts and the montage descriptions. A montage with no short channels has no table
-# to put anything in, so it gets every key in one list.
-_VIEW_MONTAGE_KEYS = (
-    "cp_mean", "n_flat_channels", "mean_amp_mean",
-    "spike_count", "spike_pct_frames", "spike_num_frames",
+# instead, and the flat list then keeps only what has no channel-set dimension. What that
+# leaves is not a taste: `_short_section` computes neither cardiac power nor the flat-channel
+# count, and it keeps the per-channel spike rate while deliberately dropping the pooled
+# counts, a short subset's version of one reading as a second opinion on the run's motion.
+# A montage with no short channels has no table to put anything in and gets one list.
+#
+# Derived by subtracting what the tables carry rather than written out again, so a column
+# added to either one leaves the list on its own: mean amplitude was in both for a while.
+_VIEW_MONTAGE_KEYS = tuple(
+    k for k in ("cp_mean", "n_flat_channels", "mean_amp_mean",
+                "spike_count", "spike_pct_frames", "spike_num_frames")
+    if k not in {key for key, _ in (*OD_SPLIT_COLUMNS, *MOTION_SPLIT_COLUMNS)}
 )
 _VIEW_SCALAR_KEYS = (
     "channel_retention_rate", "sci_mean", "good_frac_mean", "psp_mean",

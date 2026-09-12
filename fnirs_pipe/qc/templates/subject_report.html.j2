@@ -231,7 +231,8 @@
     <h3>HbO–HbR Correlation</h3>
     <p style="font-size:0.82rem;color:#666;margin:0 0 0.3rem;">{{ section_note('haemo.hbo_hbr_corr') }}</p>
     {% if hbo_hbr_path %}
-      <img class="responsive" src="{{ hbo_hbr_path }}" alt="HbO–HbR correlation panel, before and after denoising" />
+      <iframe class="plotly-frame" src="{{ hbo_hbr_path }}" title="HbO–HbR correlation panel, before and after denoising"
+              style="height:{{ hbo_hbr_h }}px"></iframe>
       <p class="fig-path">{{ hbo_hbr_path }}</p>
     {% else %}
       <div class="placeholder">Figure generation failed — see Errors section.</div>

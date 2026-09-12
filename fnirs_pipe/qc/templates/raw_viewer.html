@@ -662,8 +662,10 @@ function loadTriggerTimeline() {
   var scope = document.getElementById("trigger-scope");
   if (scope) {
     scope.innerHTML = cond
-      ? "<b>This is the whole run, not just &ldquo;" + _esc(cond) + "&rdquo;</b>, and "
-        + "deliberately so: neither failure is visible without the conditions around it."
+      ? "Two rows here: <b>" + _esc(cond) + "</b>, where both failures show as a gap or a "
+        + "doubled mark, and <b>(all)</b>, every event in the run, which is what says "
+        + "whether the run carried on while this condition stopped. The time axis is the "
+        + "whole recording, so a gap is read against it."
       : "";
   }
   if (p && p.src) _setIframeSrc("trigger-timeline-plot", p.src, p.h || 120);

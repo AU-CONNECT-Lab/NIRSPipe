@@ -35,7 +35,7 @@ from .glm_figures import (
     activation_brain_figure, activation_condition_figures, activation_panel,
     per_channel_hrf_figure, design_matrix_heatmap, glm_betas_figure,
 )
-from .correlation_panel import hbo_hbr_correlation_panel
+from .correlation_panel import hbo_hbr_correlation_figure
 from .optode_layout import optode_layout_static
 from .topomap import evoked_channel_map_figure
 from .rest_figures import (
@@ -84,7 +84,7 @@ __all__ = [
     "per_channel_hrf_figure",
     "design_matrix_heatmap",
     "glm_betas_figure",
-    "hbo_hbr_correlation_panel",
+    "hbo_hbr_correlation_figure",
     "optode_layout_static",
     "evoked_channel_map_figure",
     "alff_falff_figure",
