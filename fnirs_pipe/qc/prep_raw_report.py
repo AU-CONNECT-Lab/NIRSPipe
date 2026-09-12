@@ -272,8 +272,10 @@ def _process_run(
     cond_colors_ = condition_colors(markers)
     for m in markers:
         m["color"] = cond_colors_.get(m["description"], "#f39c12")
-    # `build_channel_figure` draws on the original axis and does its own offsetting, so it
-    # is handed the unshifted list, as the subject report hands it one
+    # `build_channel_figure` is the one figure drawn on the original axis, because it is
+    # also the one handed a recording cropped in memory (the subject report's condition
+    # pages do that); it offsets by `first_time` itself, so it takes the unshifted list.
+    # Derived from the recording it will be drawn against, never from the panel above.
     detail_markers = extract_markers(raw)
 
     psp_per_ch    = sqm.get("psp_per_channel", {})

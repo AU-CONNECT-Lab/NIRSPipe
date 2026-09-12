@@ -91,11 +91,11 @@ select#run-select {
     {"id": "Summary" ~ label,         "name": "Summary",     "href": "#Final", "ratable": false, "group": g},
     {"sep": true, "group": g},
     {"id": label ~ "_Raw_Signal",     "name": "Raw",         "href": "#RawSignal",      "group": g},
+    {"id": label ~ "_ChannelDetail",  "name": "HbO/HbR",     "href": "#ChannelDetail",  "group": g},
+    {"id": label ~ "_PSD",            "name": "PSD",         "href": "#PSD",            "group": g},
     {"id": label ~ "_SCI_PSP",        "name": "SCI/PSP",     "href": "#SciPsp",         "group": g},
     {"id": label ~ "_Layout",         "name": "Layout",      "href": "#Layout",         "group": g},
     {"id": label ~ "_Motion",         "name": "Motion",      "href": "#Motion",         "group": g},
-    {"id": label ~ "_ChannelDetail",  "name": "HbO/HbR",     "href": "#ChannelDetail",  "group": g},
-    {"id": label ~ "_PSD",            "name": "PSD",         "href": "#PSD",            "group": g},
     {"id": label ~ "_Events",         "name": "Events",      "href": "#Events",         "group": g},
     {"sep": true, "group": g},
     {"id": label ~ "_Metrics",        "name": "Metrics",     "href": "#Metrics",        "group": g},
@@ -183,9 +183,34 @@ select#run-select {
   </div>
 </details>
 
-<!-- step b: coupling and amplitude over time -->
+<!-- step b: concentration and spectrum, one channel at a time. Directly under the trace
+     they are picked off, so a channel clicked above is read without scrolling. -->
+<details id="ChannelDetail" open>
+  <summary>b. HbO / HbR &amp; PSD &mdash; per channel</summary>
+  <div class="details-body">
+    <p class="step-desc" id="detail-title">Pick a channel here or click its trace above.
+       The panel holds that channel's concentration after Beer-Lambert and its spectrum.</p>
+    <select class="ch-select" id="ch-detail-select"
+            onchange="selectChannel(this.value)"></select>
+    <div id="detail-placeholder">pick a channel to view HbO &amp; HbR</div>
+    <div id="detail-plot" style="display:none"></div>
+  </div>
+</details>
+
+<!-- step c: the whole recording's spectrum. No picker: it is a mean across channels, and
+     the per-channel version is the panel above. -->
+<details id="PSD" open>
+  <summary>c. PSD &mdash; mean across channels</summary>
+  <div class="details-body">
+    <p class="step-desc">Averaged over every channel, on optical density, before
+       Beer-Lambert.</p>
+    <div id="psd-plot"></div>
+  </div>
+</details>
+
+<!-- step d: coupling and amplitude over time -->
 <details id="SciPsp" open>
-  <summary>b. Raw Signal Quality (SCI / PSP / CV)</summary>
+  <summary>d. Raw Signal Quality (SCI / PSP / CV)</summary>
   <div class="details-body">
     <p class="step-desc">Scalp coupling index, peak spectral power and coefficient of
        variation per channel, every row on one window grid and all three measured on the
@@ -194,9 +219,9 @@ select#run-select {
   </div>
 </details>
 
-<!-- step c: where the channels are -->
+<!-- step e: where the channels are -->
 <details id="Layout" open>
-  <summary>c. Optode Layout</summary>
+  <summary>e. Optode Layout</summary>
   <div class="details-body">
     <div class="row row-layout">
       <div>
@@ -211,34 +236,14 @@ select#run-select {
   </div>
 </details>
 
-<!-- step d: movement -->
+<!-- step f: movement -->
 <details id="Motion" open>
-  <summary>d. Motion (Carpet / GVTD)</summary>
+  <summary>f. Motion (Carpet / GVTD)</summary>
   <div class="details-body">
     <p class="step-desc">Per-channel z-score carpet with the global variance of the temporal
        derivative under it. Measured over the whole recording; a per-condition page narrows
        the view rather than remeasuring, so its colour scale and its threshold are the run's.</p>
     <div id="carpet-gvtd-panel"></div>
-  </div>
-</details>
-
-<!-- step e: concentration, one channel at a time -->
-<details id="ChannelDetail" open>
-  <summary>e. HbO / HbR (Beer-Lambert)</summary>
-  <div class="details-body">
-    <p class="step-desc" id="detail-title">Click a channel in the signal panel above. The
-       file holds the channel's concentration trace, its spectrum and its epoch average.</p>
-    <div id="detail-placeholder">click a channel to view HbO &amp; HbR</div>
-    <div id="detail-plot" style="display:none"></div>
-  </div>
-</details>
-
-<!-- step f: spectrum -->
-<details id="PSD" open>
-  <summary>f. PSD</summary>
-  <div class="details-body">
-    <p class="step-desc">Mean across channels, on optical density, before Beer-Lambert.</p>
-    <div id="psd-plot"></div>
   </div>
 </details>
 
@@ -411,6 +416,7 @@ function _syncMkHeight() {
 // ─── initial load ─────────────────────────────────────────────────────────────
 window.addEventListener("DOMContentLoaded", function() {
   loadSummary();
+  loadChannelPicker();
   loadTimeSeries();
   loadLayout();
   loadPsdMean();
@@ -512,9 +518,25 @@ function resetHighlight() {
 }
 
 // ─── channel detail ───────────────────────────────────────────────────────────
+// The picker and the click on a trace are two ways into one panel, so the picker shows
+// what was clicked and clicking follows the picker. Rebuilt per run: a montage is a
+// property of the recording and two runs need not carry the same pairs.
+function loadChannelPicker() {
+  var sel = document.getElementById("ch-detail-select");
+  if (!sel) return;
+  var pairs = (_STATIC_DATA[_run_idx] || {}).channel_pairs || [];
+  sel.innerHTML = '<option value="">select a channel</option>'
+    + pairs.map(function(p) {
+        return '<option value="' + _esc(p) + '">' + _esc(p) + "</option>";
+      }).join("");
+  sel.style.display = pairs.length ? "" : "none";
+}
+
 function selectChannel(pair) {
-  if (_selChannel === pair) return;
+  if (!pair || _selChannel === pair) return;
   _selChannel = pair;
+  var sel = document.getElementById("ch-detail-select");
+  if (sel && sel.value !== pair) sel.value = pair;
   document.getElementById("detail-title").innerHTML =
     _esc(pair) + " &mdash; concentration, spectrum and epoch average, after Beer-Lambert.";
   document.getElementById("detail-placeholder").style.display = "none";
@@ -808,9 +830,11 @@ function switchRun(idx) {
   function _reload() {
     _run_idx = parseInt(idx);
     _selChannel = null; _selectedMk = -1;
+    var sel = document.getElementById("ch-detail-select");
+    if (sel) sel.value = "";
     document.getElementById("detail-placeholder").style.display = "flex";
     document.getElementById("detail-plot").style.display = "none";
-    loadSummary(); loadTimeSeries(); loadLayout(); loadPsdMean();
+    loadSummary(); loadChannelPicker(); loadTimeSeries(); loadLayout(); loadPsdMean();
     loadTriggerTimeline(); loadCarpetGvtd();
     loadSciPsp(); loadSqm(); loadChannelSummary();
     loadTrialQc(); buildChDecisionsTable();

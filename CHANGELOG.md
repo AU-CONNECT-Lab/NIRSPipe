@@ -17,6 +17,7 @@ All notable changes to this project will be documented in this file.
 - **A condition page's carpet scales its GVTD rows to that condition**, as the per-channel motion figure already did. Both rows keep one shared scale, since long and short are the same unit and scaling each to itself would hide the difference the second row is there to show, and each row restates its numbers over the window. The heatmaps below are untouched: their colour is a z-score against the whole run, and one colour bar serves the whole image
 - **A report page is titled by the run, not by the words "QC Report".** A condition page appends its own condition and a subject index is titled by its subject, so the heading and the browser tab say which page you are on; the condition used to appear only in the Scope row
 - **The raw viewer's per-condition pages read their numbers out of the record** instead of computing their own while the page is written
+- **The per-channel HbO/HbR and spectrum panel sits directly under the raw trace**, with a channel picker beside the click-a-trace it already had. The two stay in step, and the pair reads the way the subject report's does
 - **The SCI/PSP panel carries its CV row.** The figure has drawn one since CV was windowed; the raw viewer never handed it the matrix, so run and condition pages alike showed two rows where the subject report showed three
 - **A condition page's spectrum is measured on that condition** rather than left out, the way the subject report's condition pages already measured theirs. A condition too short for the transform still gets none
 - **A condition's raw-signal panel holds only that condition's samples.** It was the whole run's with the axis narrowed, so Plotly's own double-click opened the whole recording again. Pages are a third of their old size as a result
@@ -38,6 +39,7 @@ All notable changes to this project will be documented in this file.
 - **A condition page in the raw viewer showed the whole run's figures.** Every panel but the signal trace carried the run's carpet, spectrum, coupling map and channel grid under that condition's numbers, with nothing on the page saying so
 - **Event onsets were drawn a cropped recording's start-time late.** The signal trace, the event table, the trigger timeline and the per-trial windows all read onsets on the original recording's clock while being drawn on the data's, so a recording cropped from anywhere but zero misplaced every one of them
 - **The GUI's Data Prep page failed to load a run**, reporting it as an unreadable file
+- **The GUI's channel-detail markers come off the recording being drawn**, not out of the panel above it. The two are on different time axes, and the figure that draws on the original one is the only figure in the package handed a recording cropped in memory
 - **A subject whose label begins with `s`, `u`, `b` or `-` no longer overwrites another subject's ratings.** `sub-bus01` was filed as `sub-01`
 
 ## [0.36.0] - 2026-09-11

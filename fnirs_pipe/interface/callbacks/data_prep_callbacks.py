@@ -533,9 +533,14 @@ def update_channel_detail(channel_pair, store):
                     no_update, no_update, _SHOW, no_update, no_update,
                 )
         try:
+            from fnirs_pipe.qc.figure_io import extract_markers
             from fnirs_pipe.qc.figures import build_channel_figure
             from fnirs_pipe.qc.prep_raw_report import _EPOCH_TMAX, _EPOCH_TMIN, _MAX_TS_PTS
-            markers = cached.get("ts", {}).get("markers", [])
+            # off the recording being drawn, not out of the payload: this figure is the one
+            # that draws on the original axis, so its markers have to be the annotations of
+            # the raw it is handed. The panel's list is on the data axis and would be late
+            # by first_time on anything cropped. `_section_channel_detail` does the same.
+            markers = extract_markers(raw_haemo)
             tmin, tmax = cached.get("epoch_window", [_EPOCH_TMIN, _EPOCH_TMAX])
             cardiac = cached.get("cardiac")
             detail_fig, psd_fig, epoch_fig = build_channel_figure(
