@@ -26,7 +26,7 @@ from fnirs_pipe.pipeline.synchrony import (  # noqa: F401  re-exported
     wtc_band_mean,
 )
 from fnirs_pipe.utils import is_optical_density
-from fnirs_pipe.utils.lineage import lineage_of, path_from, stage_of
+from fnirs_pipe.utils.lineage import lineage_of, path_from, stage_of, stamp
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("pipeline.hyperscanning")
@@ -421,6 +421,68 @@ def compute_group_sqm_raw(
 # ---- Data management: alignment & signal preprocessing ----
 
 
+# ---- Alignment ----
+#
+# The stage every inter-brain number is computed at. Both routes onto it stamp their
+# outputs with it, which is what lets a consumer tell them apart: `--no-align` and an
+# alignment whose shared trigger happens to sit at t=0 both leave every offset at zero,
+# and they are not the same analysis.
+ALIGN_STAGE = "aligned"
+
+
+def _stamp_alignment(raw: mne.io.Raw, source: mne.io.Raw, step: str,
+                     **params) -> mne.io.Raw:
+    """Record which alignment produced one output, keeping the file it came from.
+
+    ``stamp`` replaces the whole lineage entry, so the source's path has to be carried
+    across; without it ``path_from`` returns None and every sidecar built from these
+    objects loses its ``Sources``.
+    """
+    return stamp(raw, ALIGN_STAGE, step, source=source, path=path_from(source), **params)
+
+
+def alignment_params(raws: dict[str, mne.io.Raw]) -> dict:
+    """What put these recordings on one clock, for a sidecar beside a number read off them.
+
+    ::
+
+      {"aligned": True, "align_step": "align_recordings",
+       "align_trigger": {"sub-01": "start", "sub-02": "start"},
+       "align_offset_s": {"sub-01": 0.0, "sub-02": 22.4},
+       "aligned_duration_s": 3900.0}
+
+    Every inter-brain metric assumes the members share a time axis, and until this nothing
+    on disk said whether they had been put on one. ``aligned: null`` means the recordings
+    reached the metric without going through either route, which is the case worth catching:
+    a reader cannot tell it from a successful alignment by looking at the numbers.
+
+    Read off the lineage stamps rather than passed in, so a sidecar cannot claim an
+    alignment that did not run.
+    """
+    stamps = {sid: lineage_of(raw) for sid, raw in raws.items()}
+    aligned = {sid: lin for sid, lin in stamps.items()
+               if lin is not None and lin.stage == ALIGN_STAGE}
+    if len(aligned) != len(stamps) or not aligned:
+        logger.warning("these recordings carry no alignment stamp, so nothing can be "
+                       "recorded about the clock the metrics were computed on")
+        return {"aligned": None}
+
+    steps = {lin.step for lin in aligned.values()}
+    first = next(iter(aligned.values()))
+    out: dict = {
+        "aligned": bool(first.params.get("aligned")),
+        # one word rather than a set: two members aligned by different routes is not a
+        # state the callers can produce, and saying so loudly beats writing a list
+        "align_step": steps.pop() if len(steps) == 1 else sorted(steps),
+        "align_offset_s": {sid: lin.params.get("offset_s") for sid, lin in aligned.items()},
+        "aligned_duration_s": first.params.get("duration_s"),
+    }
+    triggers = {sid: lin.params.get("trigger") for sid, lin in aligned.items()}
+    if any(triggers.values()):
+        out["align_trigger"] = triggers
+    return out
+
+
 def align_recordings(
     raws: dict[str, mne.io.Raw],
     task: str,
@@ -430,7 +492,10 @@ def align_recordings(
     Crops each raw from its first occurrence of a common trigger description,
     then trims all to the same duration (shortest post-crop).
 
-    Returns (aligned_raws, {subject_id: crop_offset_seconds}).
+    Returns (aligned_raws, {subject_id: crop_offset_seconds}). Each output carries an
+    ``aligned`` lineage stamp naming the trigger and the offset it was cut at, which
+    :func:`alignment_params` reads back for the sidecars.
+
     Raises AlignmentError if no shared trigger exists across all subjects.
     """
     # Collect each subject's trigger descriptions, dropping BAD_* motion annotations.
@@ -460,10 +525,12 @@ def align_recordings(
 
     # Offset = onset of each subject's earliest common trigger (sort by onset).
     offsets: dict[str, float] = {}
+    triggers: dict[str, str] = {}
     for sub_id, raw in raws.items():
         for ann in sorted(raw.annotations, key=lambda a: float(a["onset"])):
             if ann["description"] in common:
                 offsets[sub_id] = float(ann["onset"])
+                triggers[sub_id] = str(ann["description"])
                 break
         if sub_id not in offsets:
             raise AlignmentError(f"Subject {sub_id}: no common trigger found (unexpected state)")
@@ -474,9 +541,16 @@ def align_recordings(
         aligned[sub_id] = raw.copy().crop(tmin=offsets[sub_id])
 
     min_duration = min(r.times[-1] for r in aligned.values())
-    for sub_id in list(aligned):
+    for sub_id, raw in raws.items():
         aligned[sub_id].crop(tmax=min_duration)
+        # stamped after both crops, so the duration recorded is the one the metrics saw
+        _stamp_alignment(aligned[sub_id], raw, "align_recordings", aligned=True,
+                         trigger=triggers[sub_id], offset_s=offsets[sub_id],
+                         duration_s=float(min_duration))
 
+    logger.info("aligned %d recording(s) on %r, offsets %s, %.1f s kept", len(aligned),
+                sorted(set(triggers.values())),
+                {s: round(o, 3) for s, o in offsets.items()}, min_duration)
     return aligned, offsets
 
 
@@ -487,10 +561,19 @@ def trim_to_shortest(
 
     Use for resting-state data where no shared trigger exists.
     Returns (trimmed_raws, {subject_id: 0.0}).
+
+    The outputs carry an ``aligned`` stamp too, with ``aligned=False`` on it: the offsets
+    are zero here and can legitimately be zero after a real alignment as well, so the flag
+    is the only thing that tells a reader which of the two produced the numbers.
     """
     min_duration = min(r.times[-1] for r in raws.values())
-    trimmed = {sid: raw.copy().crop(tmax=min_duration) for sid, raw in raws.items()}
+    trimmed = {sid: _stamp_alignment(raw.copy().crop(tmax=min_duration), raw,
+                                     "trim_to_shortest", aligned=False, offset_s=0.0,
+                                     duration_s=float(min_duration))
+               for sid, raw in raws.items()}
     offsets = {sid: 0.0 for sid in raws}
+    logger.warning("no trigger alignment: %d recording(s) trimmed to %.1f s and assumed to "
+                   "share a clock already", len(trimmed), min_duration)
     return trimmed, offsets
 
 
@@ -709,8 +792,9 @@ def load_group_sqm(
 
     Returns {subject_id: sqm_dict}. Alongside the flattened scalars each dict carries
     ``windowed`` (the record's channel-by-window matrices), ``channel_order`` (their row
-    order) and ``screen_cutoffs`` (the lines that run screened by), which is what a
-    per-condition view of the dyad pages is built from.
+    order), ``screen_cutoffs`` (the lines that run screened by) and ``by_condition`` (the
+    record's per-condition entries), which is what a per-condition view of the dyad pages
+    is built from.
     """
     if bads_scope not in ("run", "subject"):
         raise ValueError(f"bads_scope must be 'run' or 'subject', got {bads_scope!r}")
@@ -746,6 +830,9 @@ def load_group_sqm(
             sqm["channel_order"] = list(
                 ((record.get("per_channel") or {}).get("raw") or {})
                 .get("sci_per_channel") or {})
+            # the per-condition numbers the record already holds, so the dyad pages read
+            # them rather than cutting the matrices above a second time
+            sqm["by_condition"] = record.get("by_condition") or {}
 
         # Rejection is read from the desc-sci sidecars, which prep writes on every run and
         # which name every channel the run rejected whatever came after. The channel-metrics

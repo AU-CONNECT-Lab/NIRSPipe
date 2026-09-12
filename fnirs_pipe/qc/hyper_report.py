@@ -107,19 +107,55 @@ def subject_metric_rows(
     return rows
 
 
+def _record_window_matches(
+    window_s, t0: float, t1: float, offset: float, tol: float, sid: str, label: str,
+) -> bool:
+    """Whether a record's stored window is the one hyper resolved, on one clock.
+
+    ::
+
+      record [3602.4, 3902.4], hyper [3580.0, 3880.0], offset 22.4  ->  True
+
+    A record's ``window_s`` is on that member's own recording; a hyper window is on the
+    clock ``align_recordings`` cropped every member onto, and the two differ by that
+    member's crop offset. Matching on the label alone would pair ``talk#2`` with a
+    different occurrence whenever the crop dropped an earlier one, so the bounds are
+    checked rather than assumed.
+
+    The start has to agree: it is an annotation onset and nothing downstream moves it. The
+    end is allowed to run past hyper's, because ``trim_to_shortest`` clips every member to
+    the shortest of them and a final condition therefore ends early on the aligned clock.
+    """
+    if not window_s or len(window_s) != 2:
+        return False
+    r0, r1 = float(window_s[0]) - offset, float(window_s[1]) - offset
+    if abs(r0 - t0) > tol or r1 < t1 - tol:
+        logger.warning(
+            "%s condition %s: the record's window [%.3f, %.3f] is not the one the dyad "
+            "resolved, [%.3f, %.3f], with a crop offset of %.3f s. No column for it.",
+            sid, label, r0, r1, t0, t1, offset)
+        return False
+    if r1 > t1 + tol:
+        logger.info("%s condition %s: the aligned recording ends %.1f s into it, so these "
+                    "numbers cover more of the block than the coherence does",
+                    sid, label, t1 - t0)
+    return True
+
+
 def condition_subject_metrics(
     subject_sqm: dict,
     subject_ids: "list[str]",
     windows: "list[tuple[str, float, float]]",
     sci_threshold: float,
+    offsets: "dict[str, float] | None" = None,
+    sfreq: "float | None" = None,
 ) -> dict:
     """``{condition: rows}`` for the per-subject quality table, one entry per window.
 
-    Each member's quality record already holds the channel-by-window SCI, PSP and CV
-    matrices, so a condition is a column selection out of the pass prep made; nothing is
-    measured again and no recording is read. This is the same slice the subject report's own
-    per-condition pages are built from, through the same function, so a channel's SCI under
-    one condition cannot differ between a subject page and a dyad page.
+    Every number is read out of each member's ``by_condition`` record section, which
+    :func:`~fnirs_pipe.qc.sqm_record.condition_sections` wrote once after that member's
+    pipeline finished. Nothing is measured here and nothing is sliced a second time, so a
+    channel's SCI under one condition cannot differ between a subject page and a dyad page.
 
     **It reports, it does not re-decide.** The coherence on a condition's page was computed
     on the channel set the whole recording was screened into, because the window is read out
@@ -128,37 +164,38 @@ def condition_subject_metrics(
     between two conditions a contrast between two montages. So these rows say how the
     channels held up over this stretch, and the set they were drawn from is the run's.
 
-    A member whose record predates the stored matrices contributes nothing and its column
-    reads as absent, which is the honest answer: the values cannot be recovered from the
-    whole-run scalars.
+    A member whose record predates the section contributes nothing and its column reads as
+    absent, which is the honest answer: the values cannot be recovered from the whole-run
+    scalars.
     """
-    from fnirs_pipe.qc.condition_views import condition_scalars, condition_slices_from_record
-    from fnirs_pipe.qc.metrics import resolve_cutoffs
-
     if not windows:
         return {}
 
+    offsets = offsets or {}
+    # the aligned clock's own resolution. A looser figure would accept a window belonging
+    # to a different occurrence of the same condition
+    tol = 0.5 / float(sfreq) if sfreq else 0.0
+
     per_subject: dict = {}
     for sid in subject_ids:
-        sqm = subject_sqm.get(sid) or {}
-        order = sqm.get("channel_order") or []
-        if not sqm.get("windowed") or not order:
-            logger.info("%s: no windowed matrices in the quality record, so the "
+        by_condition = (subject_sqm.get(sid) or {}).get("by_condition") or {}
+        if not by_condition:
+            logger.info("%s: no by_condition section in the quality record, so the "
                         "per-condition quality table has no column for it", sid)
             continue
-        # that subject's own lines, falling back to the dyad page's SCI threshold only for
-        # a sidecar too old to record them
-        cutoffs = resolve_cutoffs(None, **(sqm.get("screen_cutoffs")
-                                           or {"sci": sci_threshold}))
-        sliced = condition_slices_from_record(
-            {"windowed": sqm["windowed"]}, order, windows,
-            cutoffs["sci"], cutoffs["psp"])
-        for label, values in sliced.items():
-            frac = values.get("good_frac_per_channel") or {}
-            retention = (sum(v >= cutoffs["good_frac"] for v in frac.values()) / len(frac)
-                         if frac else None)
-            per_subject.setdefault(label, {})[sid] = condition_scalars(
-                values, retention=retention)
+        # `windows` drives the loop rather than the record's own set, and the two floors
+        # differ on purpose: the record keeps anything holding two screening windows (20 s),
+        # hyper anything holding one cycle of the slowest frequency analysed (100 s at
+        # 0.01 Hz). The record's set is therefore a superset, and reading it straight
+        # through would put a condition too short to have a coherence onto a WTC page.
+        for label, t0, t1 in windows:
+            entry = by_condition.get(label)
+            if entry is None:
+                continue
+            if not _record_window_matches(entry.get("window_s"), t0, t1,
+                                          float(offsets.get(sid, 0.0)), tol, sid, label):
+                continue
+            per_subject.setdefault(label, {})[sid] = dict(entry.get("scalars") or {})
 
     return {label: subject_metric_rows(by_sid, subject_ids, sci_threshold)
             for label, by_sid in per_subject.items()}
@@ -1109,13 +1146,15 @@ def build_hyper_post_report(
     if isc_unfiltered_note:
         logger.warning("ISC: %s", isc_unfiltered_note)
 
-    # the quality table: the run's over the whole recording, and each window's sliced out
-    # of the same stored matrices
+    # the quality table: the run's over the whole recording, and each window's read out of
+    # that member's own record. The offsets are what puts the two clocks together
     run_metric_rows = subject_metric_rows(subject_sqm or {}, subject_ids, sci_threshold)
     cond_metric_rows: dict = {}
     with guard("Per-condition quality table", errors, scope):
         cond_metric_rows = condition_subject_metrics(
-            subject_sqm or {}, subject_ids, cond_windows, sci_threshold)
+            subject_sqm or {}, subject_ids, cond_windows, sci_threshold,
+            offsets=offsets,
+            sfreq=float(ref_raw.info["sfreq"]) if ref_raw is not None else None)
 
     bad_pairs_all: set[str] = set()
     if bad_channels:

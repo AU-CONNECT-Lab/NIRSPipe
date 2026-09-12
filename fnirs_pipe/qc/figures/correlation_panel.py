@@ -58,7 +58,8 @@ _R_THRESHOLD = -0.3
 # with the spare width spent on blank range either side of the matrix, which is also what
 # pushed the y tick labels away from it. The row is sized off the channel count instead,
 # and `constrain="domain"` below shrinks the axis rather than padding its range, so the
-# labels stay against the matrix whichever dimension binds.
+# labels stay against the matrix whichever dimension binds. These are the height the file is
+# written with; `fit_js` replaces it with the one that fits the page the figure is opened on.
 _CELL_PX = 22
 _HEAT_MIN_PX, _HEAT_MAX_PX = 520, 1100
 _DUMBBELL_PX = 300
@@ -128,15 +129,17 @@ def _stage(raw: mne.io.Raw, order: "list[str]"):
     return corr, pair_r
 
 
-def _add_heatmap(fig, corr, order, col, show_scale, heat_frac):
+def _add_heatmap(fig, corr, order, col, show_scale, heat_px):
     # float32 halves the serialised payload and still resolves r to ~1e-7, far below what
     # the colour scale or the hover readout distinguishes
     fig.add_trace(go.Heatmap(
         z=np.asarray(corr, dtype=np.float32), x=order, y=order,
         zmin=-1.0, zmax=1.0, colorscale=_SCALE, reversescale=_REVERSE,
         showscale=show_scale,
-        colorbar=dict(title="Pearson r", len=heat_frac * 0.92,
-                      y=1.0 - heat_frac / 2, thickness=12,
+        # in pixels and hung from the top of the row, so `fit_js` restores it by setting one
+        # number: a fraction of the figure's height would have to be recomputed with the rest
+        colorbar=dict(title="Pearson r", lenmode="pixels", len=heat_px * 0.92,
+                      yanchor="top", y=1.0, thickness=12,
                       tickvals=[-1, -0.5, 0, 0.5, 1]),
         hovertemplate="%{y}<br>%{x}<br>r = %{z:.3f}<extra></extra>",
     ), row=1, col=col)
@@ -265,7 +268,7 @@ def hbo_hbr_correlation_figure(
 
     heat_px = float(np.clip(n_ch * _CELL_PX, _HEAT_MIN_PX, _HEAT_MAX_PX))
     height = heat_px + _V_SPACING_PX + _DUMBBELL_PX
-    heat_frac, dumb_frac = heat_px / height, _DUMBBELL_PX / height
+    dumb_frac = _DUMBBELL_PX / height
     row_heights = [heat_px / (heat_px + _DUMBBELL_PX),
                    _DUMBBELL_PX / (heat_px + _DUMBBELL_PX)]
     v_spacing = _V_SPACING_PX / height
@@ -279,7 +282,7 @@ def hbo_hbr_correlation_figure(
 
     for col, corr in ((1, corr_b), (2, corr_a))[:cols]:
         _add_heatmap(fig, corr, order, col, show_scale=(col == cols),
-                     heat_frac=heat_frac)
+                     heat_px=heat_px)
         _add_dividers(fig, groups, order, n_hbo, col)
 
     dumbbell_row = 2
@@ -318,3 +321,62 @@ def hbo_hbr_correlation_figure(
                     x=1.0, y=dumb_frac - v_spacing / 2, font=dict(size=10)),
     )
     return fig
+
+
+def _axis_name(ref) -> str:
+    """``"y3"`` -> ``"yaxis3"``, an unset ref being the first axis."""
+    ref = ref or "y"
+    return "yaxis" + ref[1:]
+
+
+def fit_js(fig: "go.Figure") -> str:
+    """Script that re-fits the panel to the width the browser actually gives it.
+
+    The height is written into the file and the width is the page's, so one of the two always
+    has slack and a square-constrained matrix cannot use it. ``constrain="domain"`` moves that
+    slack out from between the labels and the matrix, but it lands between the heatmap and the
+    dumbbell instead, which is a hole in the middle of the figure. This is the only place the
+    two can be reconciled: measure the column on load, set the height that makes the matrix
+    square in it, and move the row domains so the dumbbell keeps its own height rather than
+    scaling with the figure.
+
+    Idempotent and re-run on resize. A page where the width cannot be read leaves the written
+    height alone, which is the figure as it is drawn today.
+    """
+    heat = sorted({_axis_name(tr.yaxis) for tr in fig.data if tr.type == "heatmap"})
+    dumb = sorted({_axis_name(tr.yaxis) for tr in fig.data} - set(heat))
+    # a montage with no pairs to dumbbell leaves an empty second row whose domain this has
+    # nothing to set, so the figure keeps the height it was written with
+    if not heat or not dumb:
+        return ""
+    return (
+        "<script>(function(){"
+        f"var HEAT={heat!r}.map(String),DUMB={(dumb[0] if dumb else '')!r},"
+        f"MIN={_HEAT_MIN_PX},MAX={_HEAT_MAX_PX},D={_DUMBBELL_PX},GAP={_V_SPACING_PX},n=0;"
+        "function fit(){"
+        "var gd=document.querySelector('.plotly-graph-div');"
+        "if(!gd||typeof Plotly==='undefined'||!gd.layout)return;"
+        # the first subplot's drag layer is its plot area, so this is the width the matrix
+        # actually got. Deriving it from the container and the domains lands about 30 px out,
+        # the axis constraint and the colour bar having moved things in between
+        "var L=gd.layout,m=L.margin||{},drag=gd.querySelector('.nsewdrag');"
+        "if(!drag)return;"
+        "var w=drag.getBoundingClientRect().width;"
+        "if(!(w>0))return;"
+        "var heat=Math.min(Math.max(w,MIN),MAX);"
+        "var h=Math.round(heat+(DUMB?GAP+D:0)+(m.t||0)+(m.b||0));"
+        "if(Math.abs(h-(L.height||0))<4)return;"
+        "var inner=h-(m.t||0)-(m.b||0),up={height:h};"
+        "HEAT.forEach(function(a){up[a+'.domain']=[1-heat/inner,1];});"
+        "if(DUMB){up[DUMB+'.domain']=[0,D/inner];up['legend.y']=D/inner;}"
+        "Plotly.relayout(gd,up).then(function(){"
+        "var i=gd.data.findIndex(function(t){return t.type==='heatmap'&&t.showscale;});"
+        "if(i>=0)Plotly.restyle(gd,{'colorbar.len':heat*0.92},[i]);"
+        # the height it just set can move the width: a page tall enough to scroll takes the
+        # scrollbar's width off the column. Bounded, so a layout that oscillates settles
+        "if(++n<3)setTimeout(fit,0);});}"
+        "if(document.readyState==='complete')fit();"
+        "else window.addEventListener('load',fit);"
+        "window.addEventListener('resize',function(){n=0;fit();});"
+        "})();</script>"
+    )

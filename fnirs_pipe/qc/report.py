@@ -84,6 +84,7 @@ from fnirs_pipe.qc.figures import (
     carpet_compare_figure,
     bad_segment_zoom_figure,
     hbo_hbr_correlation_figure,
+    hbo_hbr_fit_js,
     psd_figure,
     quality_brain_views,
     optode_layout_static,
@@ -220,10 +221,11 @@ def _save_mpl_fig(fig, path: Path) -> None:
     plt.close(fig)
 
 
-def _save_plotly_html(fig, path: Path, div_id: str | None = None,
-                      extra_css: str = "", views: "dict | None" = None) -> tuple[str, int]:
+def _save_plotly_html(fig, path: Path, div_id: str | None = None, extra_css: str = "",
+                      views: "dict | None" = None, extra_js: str = "") -> tuple[str, int]:
     """:func:`_save_figure_html` plus the URL this report must link to the file by."""
-    h = _save_figure_html(fig, path, extra_css=extra_css, div_id=div_id, views=views)
+    h = _save_figure_html(fig, path, extra_css=extra_css, div_id=div_id, views=views,
+                          extra_js=extra_js)
     return _fig_href(path.parent, path.name), h
 
 
@@ -720,8 +722,11 @@ def _section_haemo(
             raw_after=raw_errts_cut)
         if fig is None:
             raise RuntimeError("no haemoglobin channels to correlate")
+        # the panel sizes itself to the page: its matrix is square-constrained and only the
+        # browser knows how wide the column is. See `fit_js`.
         hbo_hbr_path, hbo_hbr_h = _save_plotly_html(
-            fig, figures_dir / f"hbo_hbr_corr{suffix}.html")
+            fig, figures_dir / f"hbo_hbr_corr{suffix}.html",
+            extra_js=hbo_hbr_fit_js(fig))
 
     # Recomputed rather than read from the record: the record measures each stage on the
     # signal as it stands there, which cannot be compared across the bandpass. See

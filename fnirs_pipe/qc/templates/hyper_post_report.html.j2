@@ -92,10 +92,12 @@
 </div>
 {% if condition_label %}
 <div class="panel-caveat">
-  Over this window only, read out of the channel-by-window matrices each member's quality
-  record already holds, so nothing was measured again. The rows with no windowed series
-  behind them are on the <a href="{{ run_href }}">whole-run page</a> instead of being
-  filled with the recording's numbers here.
+  Over this window only, read out of the <code>by_condition</code> section each member's
+  quality record already holds, so nothing was measured again here and these are the same
+  numbers that member's own per-condition page prints. A row left blank is one the record
+  has no per-condition value for, the whole-recording SCI being the case: it is a single
+  estimate over the run and has no slice of itself to give, so read the 10 s one beside it
+  and take the other off the <a href="{{ run_href }}">whole-run page</a>.
   <br /><br />
   <b>This reports, it does not re-decide.</b> The coherence above was computed on the
   channel set the whole recording was screened into, and stays that way for two reasons:
@@ -110,11 +112,10 @@
 {% elif condition_label %}
 {% call card("Per-subject Quality Metrics", hint="not available for this window") %}
 <div class="panel-caveat">
-  Neither member's quality record carries the channel-by-window matrices a per-condition
-  view is sliced out of, so there is nothing to show here rather than the whole recording's
-  numbers under this condition's heading. Those are on the
-  <a href="{{ run_href }}">whole-run page</a>. Re-running <code>fnirs-pipe</code> on these
-  subjects writes the matrices.
+  Neither member's quality record carries a <code>by_condition</code> section, so there is
+  nothing to show here rather than the whole recording's numbers under this condition's
+  heading. Those are on the <a href="{{ run_href }}">whole-run page</a>. Re-running
+  <code>fnirs-pipe</code> on these subjects writes the section.
 </div>
 {% endcall %}
 {% endif %}
