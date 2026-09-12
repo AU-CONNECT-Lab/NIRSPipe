@@ -1833,9 +1833,12 @@ def build_subject_report(
     # survives onto a per-condition page, which is how denoise_carpet first got there.
     loose_figure_vars = {"denoise_carpet_path": denoise_carpet_path}
     report_vars = dict(
+        # the run names the page; that it is a QC report is what the reader opened. A
+        # condition page appends its own label in `_condition_pages`, the way the hyper
+        # post report does, so the two pages are told apart by their heading and their tab
         **page_vars(
-            title=f"fnirs-pipe QC \u2014 sub-{subject}",
-            heading=f"fnirs-pipe QC Report \u2014 {run_label_text}",
+            title=run_label_text,
+            heading=run_label_text,
             css=stylesheet("subject.css"),
         ),
         **footer_vars(
@@ -2382,7 +2385,10 @@ def _write_condition_reports(
             # drift measures the span it is shown rather than the recording
             "od_split_columns": tuple(
                 (key, text) for key, text in OD_SPLIT_COLUMNS if key != "mean_amp_mean"),
-            "heading": f"{report_vars.get('heading', '')} \u2014 {label}",
+            # `page_heading` and `page_title` are what the shell reads; a `heading` key
+            # here reached nothing, so every condition page carried the run's own title
+            "page_heading": f"{report_vars['page_heading']} \u2014 {label}",
+            "page_title": f"{report_vars['page_title']} \u2014 {label}",
             "condition_label": label,
             "index_href": out_path.name,
         }

@@ -190,3 +190,26 @@ def test_a_condition_with_nothing_flagged_gets_no_zoom():
     # the template gates the panel on the path, so an empty list means no panel rather than
     # the run's figure under this condition's heading
     assert _segments_in_window(SEGMENTS, (400.0, 800.0)) == []
+
+
+# ---- a page says which page it is ----
+
+def test_the_shell_reads_page_heading_and_page_title():
+    # the keys a page must set to be titled at all
+    from fnirs_pipe.qc.report_shell import page_vars
+    keys = page_vars(title="t", heading="h")
+    assert keys["page_heading"] == "h" and keys["page_title"] == "t"
+    assert "heading" not in keys
+
+
+def test_a_condition_page_sets_the_keys_the_shell_reads():
+    # it used to set `heading`, which nothing reads, so every condition page carried the
+    # run's own title and the Scope row was the only thing telling them apart
+    import inspect
+
+    from fnirs_pipe.qc.report import _write_condition_reports
+
+    source = inspect.getsource(_write_condition_reports)
+    assert '"page_heading": f"{report_vars[' in source
+    assert '"page_title": f"{report_vars[' in source
+    assert '"heading":' not in source

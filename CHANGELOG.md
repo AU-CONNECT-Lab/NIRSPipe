@@ -6,6 +6,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+- **A report page is titled by the run, not by the words "QC Report".** A condition page appends its own condition, so the heading and the browser tab say which page you are on; the condition used to appear only in the Scope row
+
 ## [0.36.0] - 2026-09-11
 
 ### Added
