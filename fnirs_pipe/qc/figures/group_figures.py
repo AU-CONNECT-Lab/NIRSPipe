@@ -12,7 +12,7 @@ import plotly.graph_objects as go
 # chart's x label and its colour, not by a key of its own.
 _METRIC_GROUPS: list[tuple[str, list[str]]] = [
     ("Coupling & retention (0-1)",
-     ["sci_mean", "cp_mean", "good_frac_mean", "channel_retention_rate",
+     ["sci_win_mean", "sci_mean", "cp_mean", "good_frac_mean", "channel_retention_rate",
       "snr_pass_rate", "pct_data_retained"]),
     ("Peak spectral power", ["psp_mean"]),
     ("Coefficient of variation", ["cv_mean", "cv_mean_760", "cv_mean_850"]),

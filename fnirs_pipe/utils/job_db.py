@@ -308,7 +308,8 @@ CREATE INDEX IF NOT EXISTS idx_out_lookup   ON command_outputs (execution_id, su
 """
 
 _SQM_COLS = [
-    "sci_mean", "channel_retention_rate", "snr_mean", "cv_mean", "mean_amp_mean",
+    "sci_win_mean", "sci_mean", "channel_retention_rate", "snr_mean", "cv_mean",
+    "mean_amp_mean",
     "ch_dist_mean", "psp_mean", "qc_window_s", "cp_mean", "gvtd_mean", "gvtd_p95",
     "gvtd_filt_mean", "gvtd_filt_p95", "gvtd_vstd_mean", "gvtd_vstd_p95",
     "gvtd_thresh", "gvtd_num_above_thresh",

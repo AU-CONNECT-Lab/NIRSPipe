@@ -214,15 +214,16 @@ def step_summary(step: str | None) -> str:
 # Per-channel keys are not listed; they are the same quantity as their scalar sibling.
 METRIC_SUMMARY = {
     # coupling
-    "sci_mean": "Scalp coupling: how well the two wavelengths share a pulse. Near 1 is good; low means poor optode contact.",
+    "sci_mean": "Scalp coupling over the whole recording: how well the two wavelengths share a pulse. Near 1 is good; low means poor optode contact. A slow drift shared by both wavelengths lifts this, which is what sci_win_mean is beside it for.",
+    "sci_win_mean": "The same coupling measured inside 10 s windows and then averaged, on the grid psp_mean and cv_mean use. Read this one for coupling; the whole-run sci_mean is what the published cutoffs were set on, and the two can disagree about which channel set coupled better.",
     "channel_retention_rate": "Fraction of channels that survived screening. Higher is better.",
     "psp_mean": "Strength of the shared cardiac peak across the two wavelengths, averaged over 10 s windows and then over channels; higher is a more clearly detected heartbeat.",
     "good_frac_mean": "Share of 10 s windows in which SCI and PSP both pass, averaged over channels; higher is better. This is the line a channel is rejected on.",
     "cp_mean": "How peaked one channel's spectrum is inside the cardiac band, 0 to 1; higher is sharper. Experimental, and it never compares the two wavelengths, so read SCI and PSP for coupling.",
 
     # raw intensity
-    "cv_mean": "Noise relative to a channel's own brightness (SD / mean), per wavelength. Lower is cleaner.",
-    "snr_mean": "Signal size relative to its fluctuation (mean / SD), the reciprocal of CV. Higher is better.",
+    "cv_mean": "Noise relative to a channel's own brightness (SD / mean), per wavelength, measured inside 10 s windows and then averaged. Lower is cleaner. Over the whole recording it would read the drift instead of the noise.",
+    "snr_mean": "Signal size relative to its fluctuation (mean / SD), the exact reciprocal of CV and on the same 10 s windows. Higher is better.",
     "snr_pass_rate": "Fraction of channels whose SNR clears the per-channel line. Higher is better.",
     "n_flat_channels": "How many channels carry no variation at all, flat or saturated; zero is what you want. They count as failures in snr_pass_rate but cannot enter the SNR and CV means.",
     "mean_amp_mean": "Average light level reaching the detectors. No universal good value; use it to spot channels far dimmer than their neighbours.",
@@ -289,7 +290,7 @@ KEY_METRICS = frozenset({
     "pct_data_retained",        # enough time
     "gvtd_pct_above_thresh",    # ... and how much of it is motion
     "gvtd_filt_p95",            # ... and how bad it got, in units nothing adaptive sets
-    "sci_mean",                 # the optodes were coupled
+    "sci_win_mean",             # the optodes were coupled
     "good_frac_mean",           # ... and stayed coupled, which is what rejects a channel
     "hbo_hbr_corr_mean",        # what came out looks like haemodynamics
 })
@@ -330,7 +331,7 @@ _RAW_METRICS = (
 )
 # the OD-domain families, measured again on the corrected file so the pair subtracts
 _RAW_AND_CORRECTED_METRICS = (
-    "sci_mean", "psp_mean",
+    "sci_mean", "sci_win_mean", "psp_mean",
     "gvtd_mean", "gvtd_p95", "gvtd_filt_mean", "gvtd_filt_p95",
     "gvtd_vstd_mean", "gvtd_vstd_p95", "gvtd_thresh", "gvtd_thresh_applied",
     "gvtd_num_above_thresh", "gvtd_pct_above_thresh",
@@ -403,15 +404,18 @@ _HIGHER, _LOWER = "higher", "lower"
 
 METRIC_DISPLAY: dict[str, tuple[str, str, "tuple[float, float] | None", "str | None"]] = {
     # coupling
-    "sci_mean":                ("Mean SCI", ".3f", (0.75, 0.5), _HIGHER),
+    "sci_mean":                ("Mean SCI (whole run)", ".3f", (0.75, 0.5), _HIGHER),
+    # no cutoffs: the published ones were set on the whole-run estimator above, and a
+    # windowed number is not entitled to them just for sharing a name
+    "sci_win_mean":            ("Mean SCI (10 s)", ".3f", None, _HIGHER),
     "channel_retention_rate":  ("Channel retention", "pct", (0.9, 0.7), _HIGHER),
     "psp_mean":                ("Mean PSP (10 s)", ".3f", None, _HIGHER),
     "good_frac_mean":          ("Coupled windows", "pct", (0.75, 0.5), _HIGHER),
     "cp_mean":                 ("Mean CP (exp.)", ".3f", None, _HIGHER),
 
     # raw intensity
-    "cv_mean":                 ("Mean CV", ".3f", None, _LOWER),
-    "snr_mean":                ("Mean SNR", ".1f", (100, 20), _HIGHER),
+    "cv_mean":                 ("Mean CV (10 s)", ".3f", None, _LOWER),
+    "snr_mean":                ("Mean SNR (10 s)", ".1f", (100, 20), _HIGHER),
     "snr_pass_rate":           ("SNR pass rate", "pct", None, _HIGHER),
     "n_flat_channels":         ("Flat channels", "d", (1, 2), _LOWER),
     "mean_amp_mean":           ("Mean amplitude", ".3e", None, None),

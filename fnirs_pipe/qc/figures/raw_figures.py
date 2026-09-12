@@ -736,6 +736,10 @@ def build_sci_psp_figure(
     exactly, so a second row would be the same numbers reflected, and the hover prints both.
     CV is also the one row where low is good, which is why it takes the reversed scale.
 
+    The lollipop beside each row is that row averaged along time, so the dot and the strip
+    are one measurement. It used to be the record's scalar of the same name, which for SCI is
+    the whole-run correlation and not the windowed one the strip draws.
+
     Without the windowed matrices this falls back to the lollipop-only pair it has always
     drawn, which is what a record predating the windowed section leaves it with.
     """
@@ -787,17 +791,24 @@ def build_sci_psp_figure(
     # line, which through `zmid` would stretch the scale to that one window and paint every
     # ordinary window the same green. Pinned, the line sits mid-scale and anything twice as
     # bad saturates, which is what the row is read for.
+    # the mean beside a row is that row's own mean, not the scalar of the same name: the
+    # record's sci_mean is the whole-run correlation and its psp_mean and cv_mean are pinned
+    # to 10 s, so on any other QC window the dot would sit beside a row it was not measured
+    # from. Here the dot is the row, averaged along time.
+    def _row_mean(matrix) -> np.ndarray:
+        with np.errstate(invalid="ignore"):
+            return np.nanmean(np.asarray(matrix, dtype=float), axis=1)
+
     rows = [
-        ("SCI", "SCI (windowed)", "Mean SCI", sci_matrix, sci_win_times, sci_arr,
-         sci_threshold, True, "SCI=%{z:.3f}", None),
-        ("PSP", "PSP (windowed)", "Mean PSP (10 s)", psp_matrix, psp_win_times, psp_arr,
-         psp_threshold, True, "PSP=%{z:.3f}", None),
+        ("SCI", "SCI (windowed)", "Row mean", sci_matrix, sci_win_times,
+         _row_mean(sci_matrix), sci_threshold, True, "SCI=%{z:.3f}", None),
+        ("PSP", "PSP (windowed)", "Row mean", psp_matrix, psp_win_times,
+         _row_mean(psp_matrix), psp_threshold, True, "PSP=%{z:.3f}", None),
     ]
     if cv_matrix is not None and cv_win_times is not None:
-        cv_arr = np.array([(cv_per_channel or {}).get(ch, np.nan) for ch in ch_names],
-                          dtype=float)
-        rows.append(("CV", "CV (windowed)", "Mean CV", cv_matrix, cv_win_times, cv_arr,
-                     cv_threshold, False, "CV=%{z:.4f}<br>SNR=%{customdata:.1f}",
+        rows.append(("CV", "CV (windowed)", "Row mean", cv_matrix, cv_win_times,
+                     _row_mean(cv_matrix), cv_threshold, False,
+                     "CV=%{z:.4f}<br>SNR=%{customdata:.1f}",
                      (0.0, 2 * cv_threshold)))
 
     n_ch   = len(ch_names)

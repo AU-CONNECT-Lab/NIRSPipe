@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 
 from fnirs_pipe.qc.boilerplate import collect_software_versions
+from fnirs_pipe.qc.metrics.coupling import SCI_WINDOW_S
 from fnirs_pipe.qc.figure_io import _save_figure_html
 from fnirs_pipe.qc.figures.group_figures import (
     SCORE_THRESHOLD,
@@ -63,7 +64,7 @@ SMALL_COHORT_N = 5
 
 # What the summary reports, in this order. Each is read off the whole-channel-set column of
 # the earliest stage the cohort carries, that being the one every record has.
-_HEADLINE_METRICS = ("sci_mean", "psp_mean", "snr_mean", "cv_mean",
+_HEADLINE_METRICS = ("sci_win_mean", "psp_mean", "snr_mean", "cv_mean",
                      "channel_retention_rate", "gvtd_pct_above_thresh")
 _STAGE_ORDER = ("raw", "motion", "motion_post", "preproc", "filtered", "resampled", "errts")
 
@@ -347,6 +348,18 @@ def _render_group(
     with guard("Condition matrix", errors, out_stem):
         _save("conditionmatrix", "conditionmatrix",
               build_condition_matrix(full_rows, order=ranked))
+
+    # the coupling scalars are pinned to SCI_WINDOW_S so they stay comparable across runs,
+    # while every windowed panel follows the run's own QC window. Silence means the two agree
+    windows = {float(v) for v in (r.get("qc_window_s") for r in full_rows)
+               if isinstance(v, (int, float))}
+    if windows - {SCI_WINDOW_S}:
+        note(notes, out_stem,
+             f"the table's sci_win_mean, psp_mean, cv_mean and snr_mean are measured over "
+             f"{SCI_WINDOW_S:g} s windows whatever --qc-window is set to, so they stay "
+             f"comparable across runs; this cohort binned its windowed panels at "
+             f"{', '.join(f'{w:g}' for w in sorted(windows))} s, so a panel and its column "
+             f"do not describe the same stretch of recording.")
 
     conditions = condition_names(full_rows)
     if not conditions:

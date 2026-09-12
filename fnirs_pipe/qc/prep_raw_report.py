@@ -53,7 +53,7 @@ _VIEW_MONTAGE_KEYS = tuple(
     if k not in {key for key, _ in (*OD_SPLIT_COLUMNS, *MOTION_SPLIT_COLUMNS)}
 )
 _VIEW_SCALAR_KEYS = (
-    "channel_retention_rate", "sci_mean", "good_frac_mean", "psp_mean",
+    "channel_retention_rate", "sci_win_mean", "sci_mean", "good_frac_mean", "psp_mean",
     "snr_mean", "cv_mean",
     "cp_mean", "n_flat_channels", "mean_amp_mean",
     "gvtd_mean", "gvtd_p95", "gvtd_filt_mean", "gvtd_filt_p95", "gvtd_thresh",

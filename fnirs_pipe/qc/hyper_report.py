@@ -38,6 +38,7 @@ logger = get_logger("qc.hyper_report")
 # and four here. Absent keys render as a dash, so one list serves the raw path (intensity
 # metrics only) and the post path (which adds motion and haemoglobin).
 _SUBJECT_METRICS = [
+    "sci_win_mean",
     "sci_mean",
     "psp_mean",
     "cv_mean",

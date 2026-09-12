@@ -318,11 +318,12 @@ CSV_FIELDS = (*(key for key, _ in channel_columns(("status",))),
 # column added to one and not the other is a difference a reader reads as a finding.
 OD_SPLIT_COLUMNS = (
     ("channel_retention_rate", "Channel retention"),
-    ("sci_mean",               "Mean SCI"),
+    ("sci_win_mean",           "Mean SCI (10 s)"),
+    ("sci_mean",               "Mean SCI (whole run)"),
     ("good_frac_mean",         "Coupled windows"),
     ("psp_mean",               "Mean PSP (10 s)"),
-    ("snr_mean",               "Mean SNR"),
-    ("cv_mean",                "Mean CV"),
+    ("snr_mean",               "Mean SNR (10 s)"),
+    ("cv_mean",                "Mean CV (10 s)"),
     ("mean_amp_mean",          "Mean amplitude"),
 )
 
