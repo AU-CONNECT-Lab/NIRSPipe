@@ -7,11 +7,13 @@
 <style>
 {{ base_css }}
 
-/* The raw viewer's own rules. Everything it shares with the other dashboard reports and
-   with the report footer comes from the sheet injected above
-   (qc.report_shell.dashboard_css), so only what is specific to this page belongs here. */
+/* The raw viewer's own rules. It wears the subject report's document look, injected above
+   by qc.report_shell.page_vars, so the metric lists, the tables, the notes and the summary
+   grid are that sheet's and only what is specific to this page belongs here: the grids, the
+   event table, and the rating chips. A rule here that subject.css already has is a fork. */
 
 .hint { font-size: 0.78rem; color: #888; }
+.nav-meta { font-size: 0.78rem; color: #6c757d; }
 
 .nav-right { margin-left: auto; display: flex; align-items: center; gap: 0.5rem; }
 select#run-select {
@@ -19,8 +21,11 @@ select#run-select {
   padding: 0.2rem 0.4rem; background: #f8f9fa;
 }
 
-/* grids */
-.row { display: grid; gap: 0.5rem; margin-bottom: 0.5rem; }
+/* grids. The panels that sit side by side stay side by side; what goes is the chrome that
+   used to box each one, the page reading as a document the way the subject report does. */
+.row { display: grid; gap: 1.25rem; margin-bottom: 0.5rem; }
+.panel-head { font-size: 0.9rem; font-weight: 600; color: #34495e; margin: 0 0 0.3rem; }
+.panel-head .hint { font-weight: 400; }
 .row-main    { grid-template-columns: 3fr 1fr; align-items: start; }
 .row-detail  { grid-template-columns: 1fr; }
 .row-layout  { grid-template-columns: 1fr 2fr; }
@@ -43,7 +48,7 @@ select#run-select {
 .btn-active  { background: #ebf5fb; border-color: #3498db; color: #2176ae; font-weight: 600; }
 
 #mk-card { display: flex; flex-direction: column; overflow: hidden; }
-#mk-table-wrap { flex: 1; overflow-y: auto; padding: 0.4rem 0.6rem; }
+#mk-table-wrap { flex: 1; overflow-y: auto; }
 #mk-count { font-size: 0.75rem; color: #6c757d; }
 #marker-table { border-collapse: collapse; width: 100%; font-size: 0.80rem; table-layout: fixed; }
 #marker-table th, #marker-table td {
@@ -59,35 +64,6 @@ select#run-select {
   display: flex; align-items: center; justify-content: center;
   height: 120px; color: #adb5bd; font-size: 0.85rem; font-style: italic;
 }
-
-/* SQM panel */
-#sqm-panel { padding: 0.5rem 1rem 0.6rem; }
-#sqm-panel h3 { margin: 0 0 0.4rem; font-size: 0.88rem; }
-.qm-list { font-size: 0.88rem; column-count: 2; column-gap: 2.5rem;
-           margin: 0; padding: 0; list-style: none; }
-.qm-list li { display: flex; justify-content: space-between; padding: 0.18rem 0;
-              border-bottom: 1px solid #eef0f3; break-inside: avoid; gap: 1rem; }
-.qm-list .ql { color: #666; white-space: nowrap; }
-.qm-list .qv { font-weight: 600; white-space: nowrap; }
-.qm-ok   { color: #27ae60; }
-.qm-warn { color: #e67e22; }
-.qm-bad  { color: #c0392b; }
-
-/* metric tables. Class names match the subject report's so one set of colour rules
-   describes a cell in either view. */
-.qm-table { border-collapse: collapse; width: 100%; font-size: 0.82rem; }
-.qm-table th { text-align: left; padding: 0.22rem 0.5rem; background: #f8f9fa;
-               border-bottom: 2px solid #dde3ea; font-weight: 600; white-space: nowrap; }
-.qm-table td { padding: 0.18rem 0.5rem; border-bottom: 1px solid #f0f0f0;
-               font-variant-numeric: tabular-nums; }
-.qm-table td.bad  { color: #c0392b; }
-.qm-table td.good { color: #27ae60; }
-.qm-table td.neg  { color: #27ae60; }
-.qm-table td.pos  { color: #c0392b; }
-.qm-table td.ch-group { font-weight: 600; background: #f2f4f6;
-                        font-variant-numeric: normal; }
-.qm-note { font-size: 0.75rem; color: #777; margin: 0 0 0.4rem; line-height: 1.45; }
-.qm-sub  { font-size: 0.8rem; margin: 0 0 0.25rem; color: #34495e; }
 
 /* bad channel list */
 #bad-list { font-size: 0.78rem; color: #c0392b; margin-top: 0.3rem; }
@@ -112,13 +88,15 @@ select#run-select {
 {% for label in run_labels %}
   {% set g = loop.index0 %}
   {% set _ = ns.modules.append([
+    {"id": "Summary" ~ label,         "name": "Summary",     "href": "#Final", "ratable": false, "group": g},
+    {"sep": true, "group": g},
     {"id": label ~ "_Raw_Signal",     "name": "Raw",         "href": "#RawSignal",      "group": g},
-    {"id": label ~ "_Events",         "name": "Events",      "href": "#Events",         "group": g},
     {"id": label ~ "_SCI_PSP",        "name": "SCI/PSP",     "href": "#SciPsp",         "group": g},
-    {"id": label ~ "_Motion",         "name": "Motion",      "href": "#Motion",         "group": g},
-    {"id": label ~ "_PSD",            "name": "PSD",         "href": "#PSD",            "group": g},
     {"id": label ~ "_Layout",         "name": "Layout",      "href": "#Layout",         "group": g},
-    {"id": label ~ "_ChannelDetail",  "name": "Ch. detail",  "href": "#ChannelDetail",  "group": g},
+    {"id": label ~ "_Motion",         "name": "Motion",      "href": "#Motion",         "group": g},
+    {"id": label ~ "_ChannelDetail",  "name": "HbO/HbR",     "href": "#ChannelDetail",  "group": g},
+    {"id": label ~ "_PSD",            "name": "PSD",         "href": "#PSD",            "group": g},
+    {"id": label ~ "_Events",         "name": "Events",      "href": "#Events",         "group": g},
     {"sep": true, "group": g},
     {"id": label ~ "_Metrics",        "name": "Metrics",     "href": "#Metrics",        "group": g},
     {"id": label ~ "_ChannelSummary", "name": "Ch. Summary", "href": "#ChannelSummary", "group": g},
@@ -129,174 +107,208 @@ select#run-select {
 {% endfor %}
 {% set rating_subject = stem %}
 {% set rating_modules = ns.modules %}
-{# no Summary section to link to, so the overall verdict is a plain label over its pill #}
-{% set rating_pinned = [{"id": run_labels[0] ~ "_Final", "name": "FINAL", "href": false}] %}
+{% set rating_pinned = [{"id": run_labels[0] ~ "_Final", "name": "FINAL", "href": "#Final"}] %}
 {% set rating_chip = stem %}
 {% set rating_save_endpoint = "/save_raw_ratings" %}
 {% set rating_load_endpoint = "/load_raw_ratings/" ~ stem %}
 {% include "_rating_bar.html.j2" %}
 
-{# the same nav bar _report_base.html.j2 gives the other dashboard reports, filled from
-   qc.report_shell.page_vars, with the run selector in place of its nav_extra block #}
-<nav id="qc-nav">
+{# a titled band rather than the dashboard's sticky nav: this page is read top to bottom
+   like the subject report, whose header block this mirrors. The run selector rides in it,
+   being the one control the page has. #}
+<div class="page-header">
   <h1>{{ page_heading }}</h1>
-  {%- for label, value in nav_meta or [] %}
-  <span class="nav-meta">{{ label }}: <b>{{ value }}</b></span>
-  {%- endfor %}
-  {%- if nav_note %}
-  <span class="nav-meta" style="margin-left:auto">{{ nav_note }}</span>
-  {%- endif %}
+  <span class="subtitle">
+    {%- for label, value in nav_meta or [] %}{{ label }}: <b>{{ value }}</b> &bull; {% endfor -%}
+    {{ run_date }}{% if nav_note %} &bull; {{ nav_note }}{% endif %}
+  </span>
   <div class="nav-right">
     <select id="run-select" onchange="switchRun(this.value)" style="display:none"></select>
     <span id="run-label-single" style="font-size:0.82rem;color:#6c757d"></span>
   </div>
-</nav>
-
-<!-- Row 1: time series + marker editor -->
-<div class="row row-main" id="RawSignal">
-  <div class="card">
-    <div class="panel-title">Raw signal &nbsp;<span style="font-weight:400;color:#aaa">blue = short channel &bull; orange = long &bull; click trace = select channel &bull; double-click = reset</span></div>
-    <div id="ts-plot"></div>
-  </div>
-  <div class="card" id="mk-card">
-    <div class="panel-title">Events &nbsp;<span id="mk-count"></span></div>
-    <div id="mk-table-wrap">
-      <table id="marker-table">
-        <colgroup>
-          <col style="width:45%"/>
-          <col style="width:28%"/>
-          <col style="width:27%"/>
-        </colgroup>
-        <thead><tr>
-          <th>Description</th><th>Onset (s)</th><th>Dur (s)</th>
-        </tr></thead>
-        <tbody id="mk-tbody"></tbody>
-      </table>
-    </div>
-  </div>
 </div>
 
-<!-- Row 2: single-channel detail -->
-<div class="row row-detail" id="ChannelDetail">
-  <div class="card" id="detail-card">
-    <div class="panel-title" id="detail-title">Channel detail &nbsp;<span style="font-weight:400;color:#aaa">click a channel in the signal panel &bull; HbO / HbR concentration, after Beer-Lambert</span></div>
+{#- The page reads as a document, the way the subject report does: a step is a heading with
+    a disclosure triangle rather than a card, and the closing sections are plain h2s. The
+    lettering follows that report's, so a run inspected before the pipeline and after it is
+    read in one order. Section ids are the rating bar's anchors. -#}
+
+<h2 id="Final">Summary</h2>
+<div class="summary-box">
+  <div class="summary-grid">
+    <table>
+      <tr><th>Run</th><td id="sum-run"></td></tr>
+      <tr><th>Date</th><td>{{ run_date }}</td></tr>
+      <tr><th>fnirs-pipe</th><td>v{{ versions.get('fnirs-pipe', 'n/a') }}</td></tr>
+      <tr><th>MNE</th><td>v{{ versions.get('mne', 'n/a') }}</td></tr>
+      <tr><th>Python</th><td>{{ versions.get('python', 'n/a') }}</td></tr>
+    </table>
+    <table>
+      <tr><th>Bad channels</th><td id="sum-bad"></td></tr>
+      <tr><th>SCI threshold</th><td id="sum-sci"></td></tr>
+      <tr><th>Coupled windows</th><td id="sum-frac"></td></tr>
+      <tr><th>DPF</th><td id="sum-dpf"></td></tr>
+      <tr><th>Cardiac band</th><td id="sum-cardiac"></td></tr>
+    </table>
+  </div>
+  <p class="qm-note" id="sum-scope"></p>
+</div>
+
+<!-- step a: raw signal + the events it carries -->
+<details id="RawSignal" open>
+  <summary>a. Raw Signal</summary>
+  <div class="details-body">
+    <div class="row row-main">
+      <div>
+        <p class="panel-head">Raw signal <span class="hint">blue = short channel &bull; orange = long &bull; click trace = select channel &bull; double-click = reset</span></p>
+        <div id="ts-plot"></div>
+      </div>
+      <div id="mk-card">
+        <p class="panel-head">Events <span class="hint" id="mk-count"></span></p>
+        <div id="mk-table-wrap">
+          <table id="marker-table">
+            <colgroup>
+              <col style="width:45%"/>
+              <col style="width:28%"/>
+              <col style="width:27%"/>
+            </colgroup>
+            <thead><tr>
+              <th>Description</th><th>Onset (s)</th><th>Dur (s)</th>
+            </tr></thead>
+            <tbody id="mk-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</details>
+
+<!-- step b: coupling and amplitude over time -->
+<details id="SciPsp" open>
+  <summary>b. Raw Signal Quality (SCI / PSP / CV)</summary>
+  <div class="details-body">
+    <p class="step-desc">Scalp coupling index, peak spectral power and coefficient of
+       variation per channel, every row on one window grid and all three measured on the
+       uncorrected optical density. Red marks a channel below the line.</p>
+    <div id="sci-psp-plot"></div>
+  </div>
+</details>
+
+<!-- step c: where the channels are -->
+<details id="Layout" open>
+  <summary>c. Optode Layout</summary>
+  <div class="details-body">
+    <div class="row row-layout">
+      <div>
+        <p class="panel-head">2D top-down <span class="hint">head-projected &bull; red square = source &bull; blue dot = detector &bull; channel colour = SCI &bull; click = highlight</span></p>
+        <div id="layout-2d-plot"></div>
+      </div>
+      <div>
+        <p class="panel-head">Channel positions (3D, fsaverage)</p>
+        <div id="layout-3d-plot"></div>
+      </div>
+    </div>
+  </div>
+</details>
+
+<!-- step d: movement -->
+<details id="Motion" open>
+  <summary>d. Motion (Carpet / GVTD)</summary>
+  <div class="details-body">
+    <p class="step-desc">Per-channel z-score carpet with the global variance of the temporal
+       derivative under it. Measured over the whole recording; a per-condition page narrows
+       the view rather than remeasuring, so its colour scale and its threshold are the run's.</p>
+    <div id="carpet-gvtd-panel"></div>
+  </div>
+</details>
+
+<!-- step e: concentration, one channel at a time -->
+<details id="ChannelDetail" open>
+  <summary>e. HbO / HbR (Beer-Lambert)</summary>
+  <div class="details-body">
+    <p class="step-desc" id="detail-title">Click a channel in the signal panel above. The
+       file holds the channel's concentration trace, its spectrum and its epoch average.</p>
     <div id="detail-placeholder">click a channel to view HbO &amp; HbR</div>
     <div id="detail-plot" style="display:none"></div>
   </div>
-</div>
+</details>
 
-<!-- Row 3: PSD -->
-<div class="row" style="margin-bottom:0.5rem;">
-  <div class="card" id="PSD">
-    <div class="panel-title">PSD &nbsp;<span style="font-weight:400;color:#aaa">mean across channels &bull; optical density, before Beer-Lambert</span></div>
+<!-- step f: spectrum -->
+<details id="PSD" open>
+  <summary>f. PSD</summary>
+  <div class="details-body">
+    <p class="step-desc">Mean across channels, on optical density, before Beer-Lambert.</p>
     <div id="psd-plot"></div>
   </div>
-</div>
+</details>
 
-<!-- Row 3b: Trigger Timeline -->
-<div class="row" style="margin-bottom:0.5rem;">
-  <div class="card" id="Events">
-    <div class="panel-title">Trigger Timeline &nbsp;<span style="font-weight:400;color:#aaa">event onsets colored by condition</span></div>
+<!-- step g: the design -->
+<details id="Events" open>
+  <summary>g. Event Timeline</summary>
+  <div class="details-body">
+    <p class="step-desc">Every event on one axis, one row per condition. This is what shows a
+       condition that stopped being delivered partway through or a block started twice, which
+       no average can.</p>
     <div id="trigger-timeline-plot"></div>
   </div>
-</div>
+</details>
 
-<!-- Row 4: 2D layout + 3D brain -->
-<div class="row row-layout" id="Layout">
-  <div class="card">
-    <div class="panel-title">Optode layout (2D top-down) &nbsp;<span style="font-weight:400;color:#aaa">head-projected &bull; red square = source &bull; blue dot = detector &bull; channel colour = SCI &bull; click = highlight</span></div>
-    <div id="layout-2d-plot"></div>
+<h2 id="Metrics">Quantitative Metrics</h2>
+<div class="qm-box">
+  <p class="qm-note" id="sqm-scope"></p>
+  <ul id="sqm-list" class="qm-list"></ul>
+  <div id="sqm-split-wrap" style="display:none">
+    <h3 class="qm-sub">Original recording &mdash; optical density</h3>
+    <p class="qm-note">The same recording measured over three channel sets. <b>Long</b> is
+       the set the verdict is read off; <b>Short</b> is left uncoloured, a short channel's
+       coupling being high by construction and having no established threshold, so that row
+       answers whether the regressors those channels feed are trustworthy rather than whether
+       the run is usable.</p>
+    <div style="overflow-x:auto"><table class="qm-table qm-flat" id="sqm-split-table"></table></div>
   </div>
-  <div class="card">
-    <div class="panel-title">Channel positions (3D, fsaverage)</div>
-    <div id="layout-3d-plot"></div>
+  <div id="motion-split-wrap" style="display:none">
+    <h3 class="qm-sub">Motion and spikes</h3>
+    <p class="qm-note">GVTD is an RMS across channels, so each set is its own trace with its
+       own cutoff. <b>Read the rows down a column, not across one:</b> two sets' shares are
+       counted against different cutoffs and are not two readings of one quantity.</p>
+    <div style="overflow-x:auto"><table class="qm-table qm-flat" id="motion-split-table"></table></div>
   </div>
+  <div id="bad-list"></div>
 </div>
 
-<!-- Row 4b: Carpet / GVTD -->
-<div class="row" style="margin-bottom:0.5rem;">
-  <div class="card" id="Motion">
-    <div class="panel-title">Carpet / GVTD &nbsp;<span style="font-weight:400;color:#aaa">z-score carpet (all channels) with global variance of temporal derivative</span></div>
-    <div id="carpet-gvtd-panel" style="padding:0.4rem 0.6rem;text-align:center;"></div>
-  </div>
-</div>
+<h2 id="ChannelSummary">Channel Quality Summary</h2>
+<p class="qm-note">Status / SCI / CV / PSP / SNR per channel, green = pass and red = fail.
+   Status screens on the coupled-window share; SCI, PSP, CV and SNR are reported only.</p>
+<div id="ch-summary-plot"></div>
 
-<!-- Row 5: SCI / PSP -->
-<div class="row" style="margin-bottom:0.5rem;">
-  <div class="card" id="SciPsp">
-    <div class="panel-title">SCI / PSP &nbsp;<span style="font-weight:400;color:#aaa">scalp coupling index and peak spectral power per channel &bull; red = below threshold</span></div>
-    <div id="sci-psp-plot"></div>
-  </div>
-</div>
-
-<!-- Row 6: SQM -->
-<div class="card" id="Metrics" style="margin-bottom:0.5rem">
-  <div id="sqm-panel">
-    <h3>Image Quality Metrics &nbsp;<span style="font-weight:400;font-size:0.78rem;color:#adb5bd">(raw intensity)</span></h3>
-    <p class="qm-note" id="sqm-scope"></p>
-    <ul id="sqm-list" class="qm-list"></ul>
-    <div id="sqm-split-wrap" style="display:none;margin-top:0.6rem">
-      <h4 class="qm-sub">Original recording &mdash; optical density</h4>
-      <p class="qm-note">The same recording measured over three channel sets.
-         <b>Long</b> is what the verdict above is read off; <b>Short</b> answers a different
-         question, whether the regressors those channels feed are trustworthy, and carries no
-         colouring because a short channel's coupling is high by construction and has no
-         established threshold.</p>
-      <div style="overflow-x:auto"><table class="qm-table" id="sqm-split-table"></table></div>
-    </div>
-    <div id="motion-split-wrap" style="display:none;margin-top:0.6rem">
-      <h4 class="qm-sub">Motion and spikes</h4>
-      <p class="qm-note">GVTD is an RMS across channels, so each set is its own trace with
-         its own cutoff. <b>Read the rows down a column, not across one:</b> two sets' shares
-         are counted against different cutoffs and are not two readings of one quantity.</p>
-      <div style="overflow-x:auto"><table class="qm-table" id="motion-split-table"></table></div>
-    </div>
-    <div id="bad-list"></div>
-  </div>
-</div>
-
-<!-- Row 7: Channel quality summary heatmap -->
-<div class="card" id="ChannelSummary" style="margin-bottom:0.5rem">
-  <div class="panel-title">Channel Quality Summary &nbsp;<span style="font-weight:400;color:#aaa">Status / SCI / CV / PSP / SNR per channel &bull; green&nbsp;=&nbsp;pass, red&nbsp;=&nbsp;fail &bull; Status screens on the coupled-window share; SCI / PSP / CV / SNR are reported only</span></div>
-  <div id="ch-summary-plot"></div>
-</div>
-
-<!-- Row 7b: per-trial QC (hidden unless --epoch-qc was asked for) -->
-<div class="card" id="TrialQC" data-card="trial-qc-card" style="margin-bottom:0.5rem;display:none">
-  <div class="panel-title">Per-trial Quality &nbsp;<span style="font-weight:400;color:#aaa" id="trial-qc-hint">each event window scored on its own &bull; colour is relative within a metric row, not a threshold</span></div>
+<h2 id="TrialQC" data-card="trial-qc-card" style="display:none">Per-trial Quality</h2>
+<div id="trial-qc-wrap" style="display:none">
+  <p class="qm-note" id="trial-qc-hint">Each event window scored on its own. Colour is
+     relative within a metric row, not a threshold.</p>
   <div id="trial-qc-plot"></div>
 </div>
 
-<!-- Row 8: per-channel metrics, with the rating decision as its last column -->
-<div class="card" style="margin-bottom:0.5rem" id="Channels" data-card="ch-decisions-card">
-  <div class="panel-title">
-    <span>Per-channel Metrics &nbsp;<span id="ch-decisions-hint" style="font-weight:400;color:#aaa">one row per source-detector pair &bull; good / bad / unrated</span></span>
-  </div>
-  <div id="ch-decisions-body" style="padding:0.4rem 0.6rem 0.6rem">
-    <div id="ch-notes"></div>
-    <p class="qm-note">One row per source-detector pair: a decision applies to the pair, and
-       SCI is a property of the pair rather than of either wavelength. The per-wavelength
-       numbers are in the channel metrics CSV written beside the quality record. Rows in red
-       were rejected by screening, and Status names the criterion. Click the decision chip
-       to cycle:
-       &#8212; &#8594; good &#8594; bad. Saves automatically.</p>
-    <div style="overflow-x:auto">
-    <table id="ch-decisions-table" class="qm-table">
-      <thead><tr>
-        {%- for _key, label in ch_columns %}<th>{{ label }}</th>{% endfor %}
-        <th>Decision</th>
-      </tr></thead>
-      <tbody id="ch-decisions-tbody"></tbody>
-    </table>
-    </div>
+<h2 id="Channels">Per-channel Metrics</h2>
+<div id="ch-decisions-body">
+  <div id="ch-notes"></div>
+  <p class="qm-note">One row per source-detector pair: a decision applies to the pair, and
+     SCI is a property of the pair rather than of either wavelength. The per-wavelength
+     numbers are in the channel metrics CSV written beside the quality record. Rows in red
+     were rejected by screening, and Status names the criterion. Click the decision chip
+     to cycle: &#8212; &#8594; good &#8594; bad. Saves automatically.</p>
+  <div style="overflow-x:auto">
+  <table id="ch-decisions-table" class="qm-table">
+    <thead><tr>
+      {%- for _key, label in ch_columns %}<th>{{ label }}</th>{% endfor %}
+      <th>Decision</th>
+    </tr></thead>
+    <tbody id="ch-decisions-tbody"></tbody>
+  </table>
   </div>
 </div>
 
-<!-- Errors and warnings for the selected run -->
-<div class="card" id="Errors" data-card="issues-card" style="margin-bottom:0.5rem;display:none">
-  <div class="panel-title">Errors &amp; Warnings &nbsp;<span style="font-weight:400;color:#aaa">what this run failed at, and what it left out on purpose</span></div>
-  <div id="issues-body" style="padding:0.5rem 0.7rem"></div>
-</div>
+<h2 id="Errors" data-card="issues-card" style="display:none">Errors &amp; Warnings</h2>
+<div id="issues-body" style="display:none"></div>
 
 <script>
 // null = Flask mode (fetch API); array = static mode (pre-computed JSON)
@@ -347,6 +359,14 @@ function _pairFname(pair) {
   return pair.replace(/[^a-zA-Z0-9]/g, "");
 }
 
+// A panel the run has no figure for is hidden whole rather than left as a heading over
+// blank space. Per-condition pages are why this matters: they drop panels on purpose, and a
+// title with nothing under it reads as a figure that failed.
+function _showSection(id, show) {
+  var el = document.getElementById(id);
+  if (el) el.style.display = show ? "" : "none";
+}
+
 function _setIframeSrc(divId, src, h) {
   var div = document.getElementById(divId);
   if (!div) return;
@@ -390,6 +410,7 @@ function _syncMkHeight() {
 
 // ─── initial load ─────────────────────────────────────────────────────────────
 window.addEventListener("DOMContentLoaded", function() {
+  loadSummary();
   loadTimeSeries();
   loadLayout();
   loadPsdMean();
@@ -495,8 +516,7 @@ function selectChannel(pair) {
   if (_selChannel === pair) return;
   _selChannel = pair;
   document.getElementById("detail-title").innerHTML =
-    "Channel detail &nbsp;<span style='font-weight:400;color:#aaa'>" + _esc(pair)
-    + " &bull; HbO / HbR concentration, after Beer-Lambert</span>";
+    _esc(pair) + " &mdash; concentration, spectrum and epoch average, after Beer-Lambert.";
   document.getElementById("detail-placeholder").style.display = "none";
   document.getElementById("detail-plot").style.display = "block";
 
@@ -581,6 +601,7 @@ function toggleBadFromOptode() { /* handled via double-click on ts trace */ }
 // ─── Trigger Timeline ─────────────────────────────────────────────────────────
 function loadTriggerTimeline() {
   var p = ((_STATIC_DATA[_run_idx] || {}).figure_paths || {}).trigger;
+  _showSection("Events", !!(p && p.src));
   if (p && p.src) _setIframeSrc("trigger-timeline-plot", p.src, p.h || 120);
 }
 
@@ -589,9 +610,12 @@ function loadCarpetGvtd() {
   var panel = document.getElementById("carpet-gvtd-panel");
   if (!panel) return;
   var p = ((_STATIC_DATA[_run_idx] || {}).figure_paths || {}).carpet;
+  _showSection("Motion", !!(p && p.src));
   if (p && p.src) {
-    panel.innerHTML = '<iframe id="carpet-gvtd-plot" class="plotly-frame" style="width:100%;border:0;"></iframe>';
-    _setIframeSrc("carpet-gvtd-plot", p.src, p.h || 600);
+    // the panel, not an iframe of its own: _setIframeSrc builds the iframe inside what it
+    // is given, and handing it an <iframe> put a second one inside the first, where a
+    // browser ignores it. Every other caller passes its container.
+    _setIframeSrc("carpet-gvtd-panel", p.src, p.h || 600);
   } else {
     panel.innerHTML = '<span style="color:#adb5bd;font-style:italic;font-size:0.85rem;">No data</span>';
   }
@@ -600,18 +624,21 @@ function loadCarpetGvtd() {
 // ─── SCI / PSP ────────────────────────────────────────────────────────────────
 function loadSciPsp() {
   var p = ((_STATIC_DATA[_run_idx] || {}).figure_paths || {}).sci_psp;
+  _showSection("SciPsp", !!(p && p.src));
   if (p && p.src) _setIframeSrc("sci-psp-plot", p.src, p.h || 400);
 }
 
 // ─── PSD (mean) ───────────────────────────────────────────────────────────────
 function loadPsdMean() {
   var p = ((_STATIC_DATA[_run_idx] || {}).figure_paths || {}).psd;
+  _showSection("PSD", !!(p && p.src));
   if (p && p.src) _setIframeSrc("psd-plot", p.src, p.h || 350);
 }
 
 // ─── Channel quality summary ──────────────────────────────────────────────────
 function loadChannelSummary() {
   var p = ((_STATIC_DATA[_run_idx] || {}).figure_paths || {}).ch_summary;
+  _showSection("ChannelSummary", !!(p && p.src));
   if (p && p.src) _setIframeSrc("ch-summary-plot", p.src, p.h || 500);
 }
 
@@ -620,13 +647,39 @@ function loadTrialQc() {
   var card = document.getElementById("TrialQC");
   var d = (_STATIC_DATA[_run_idx] || {}).trial_qc || {};
   var p = ((_STATIC_DATA[_run_idx] || {}).figure_paths || {}).trial_qc;
-  if (card) card.style.display = (p && p.src) ? "" : "none";
-  if (!p || !p.src) return;
+  var has = !!(p && p.src);
+  if (card) card.style.display = has ? "" : "none";
+  _showSection("trial-qc-wrap", has);
+  if (!has) return;
   var hint = document.getElementById("trial-qc-hint");
   if (hint && d.n_trials) {
     hint.textContent = d.n_trials + " trials • colour is relative within a metric row, not a threshold";
   }
   _setIframeSrc("trial-qc-plot", p.src, p.h || 260);
+}
+
+// ─── summary ──────────────────────────────────────────────────────────────────
+// The run-level facts the page opens with, mirroring the subject report's summary block.
+// Per run rather than rendered server-side, because a viewer holding several switches
+// between them and the bad-channel count is the first thing that differs.
+function loadSummary() {
+  var d = (_STATIC_DATA[_run_idx] || {}).summary || {};
+  function put(id, html) {
+    var el = document.getElementById(id);
+    if (el) el.innerHTML = html;
+  }
+  put("sum-run", _esc(d.run || ""));
+  put("sum-bad", d.n_total
+      ? "<span class='" + (d.badge_class || "") + "'>" + d.n_bad + "/" + d.n_total
+        + " (" + Math.round(d.bad_rate || 0) + "%)</span>"
+      : "&mdash;");
+  put("sum-sci", d.sci_threshold === undefined ? "&mdash;" : _esc(d.sci_threshold));
+  put("sum-frac", d.good_frac === undefined ? "&mdash;"
+                  : Math.round(d.good_frac * 100) + "% of windows");
+  put("sum-dpf", _esc((d.dpf || []).join(", ")));
+  put("sum-cardiac", (d.cardiac || []).length
+      ? _esc(d.cardiac[0]) + "&ndash;" + _esc(d.cardiac[1]) + " Hz" : "&mdash;");
+  put("sum-scope", _esc(d.scope || ""));
 }
 
 // ─── SQM ──────────────────────────────────────────────────────────────────────
@@ -730,6 +783,7 @@ function loadIssues() {
   var card  = document.getElementById("Errors");
   var body  = document.getElementById("issues-body");
   if (!card || !body) return;
+  body.style.display = (errs.length || notes.length) ? "" : "none";
 
   var html = "";
   if (notes.length) {
@@ -756,7 +810,7 @@ function switchRun(idx) {
     _selChannel = null; _selectedMk = -1;
     document.getElementById("detail-placeholder").style.display = "flex";
     document.getElementById("detail-plot").style.display = "none";
-    loadTimeSeries(); loadLayout(); loadPsdMean();
+    loadSummary(); loadTimeSeries(); loadLayout(); loadPsdMean();
     loadTriggerTimeline(); loadCarpetGvtd();
     loadSciPsp(); loadSqm(); loadChannelSummary();
     loadTrialQc(); buildChDecisionsTable();

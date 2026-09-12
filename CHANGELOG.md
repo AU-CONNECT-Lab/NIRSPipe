@@ -17,6 +17,10 @@ All notable changes to this project will be documented in this file.
 - **A condition page's carpet scales its GVTD rows to that condition**, as the per-channel motion figure already did. Both rows keep one shared scale, since long and short are the same unit and scaling each to itself would hide the difference the second row is there to show, and each row restates its numbers over the window. The heatmaps below are untouched: their colour is a z-score against the whole run, and one colour bar serves the whole image
 - **A report page is titled by the run, not by the words "QC Report".** A condition page appends its own condition and a subject index is titled by its subject, so the heading and the browser tab say which page you are on; the condition used to appear only in the Scope row
 - **The raw viewer's per-condition pages read their numbers out of the record** instead of computing their own while the page is written
+- **The SCI/PSP panel carries its CV row.** The figure has drawn one since CV was windowed; the raw viewer never handed it the matrix, so run and condition pages alike showed two rows where the subject report showed three
+- **A condition page's spectrum is measured on that condition** rather than left out, the way the subject report's condition pages already measured theirs. A condition too short for the transform still gets none
+- **A condition's raw-signal panel holds only that condition's samples.** It was the whole run's with the axis narrowed, so Plotly's own double-click opened the whole recording again. Pages are a third of their old size as a result
+- **A panel a page has nothing for is hidden, heading and all**, instead of leaving a title over blank space
 - **Its rating bar lists every panel on the page and links to it.** It offered three labels, two of them ratable and none clickable; a viewer holding several runs shows one run's pills at a time, following the run selector
 
 ### Removed
@@ -24,6 +28,9 @@ All notable changes to this project will be documented in this file.
 - **The Epoch preview panel.** It was hidden on load and never drawn into; the epoch figure it was meant to hold is the third one inside the channel-detail file
 
 ### Fixed
+- **The raw viewer's GVTD carpet was blank, on every page.** It has been since the panel moved from an image to an interactive figure: the loader was handed the iframe rather than the box to build it in, so a second iframe went inside the first, where a browser ignores it
+- **A figure addressed at one condition's window goes back to that window on double-click**, not to the whole recording. This one is the subject report's too, whose carpet and per-channel motion figures reset the same way
+- **The channel-detail epoch panel drops a condition with one trial.** On a block design that is every condition, and the panel is headed "grand mean" while showing that block's own trace
 - **A condition page in the raw viewer showed the whole run's figures.** Every panel but the signal trace carried the run's carpet, spectrum, coupling map and channel grid under that condition's numbers, with nothing on the page saying so
 - **Event onsets were drawn a cropped recording's start-time late.** The signal trace, the event table, the trigger timeline and the per-trial windows all read onsets on the original recording's clock while being drawn on the data's, so a recording cropped from anywhere but zero misplaced every one of them
 - **The GUI's Data Prep page failed to load a run**, reporting it as an unreadable file

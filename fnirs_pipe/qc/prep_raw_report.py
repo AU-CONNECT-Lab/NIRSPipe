@@ -22,7 +22,7 @@ from fnirs_pipe.qc.channel_table import (
 from fnirs_pipe.qc.metrics import SCI_PASS
 from fnirs_pipe.qc.metrics._helpers import _mean_or_none, separation_bands
 from fnirs_pipe.qc.report_shell import (
-    collapse_messages, footer_vars, guard, note, page_vars, render,
+    collapse_messages, footer_vars, guard, note, page_vars, render, stylesheet,
 )
 from fnirs_pipe.qc.trial_qc import score_trials, trial_windows
 from fnirs_pipe.utils.logging import get_logger
@@ -327,10 +327,14 @@ def _process_run(
     # ── file: SCI / PSP ────────────────────────────────────────────────────────
     sci_psp_inline: dict = {}
     with guard("SCI / PSP", errors, label):
+        # the CV row too, off the same windowed pass and the same grid, as the subject
+        # report's copy of this panel draws it
         fig   = build_sci_psp_figure(
             sci_scores, psp_per_ch, bad_channels, sci_threshold,
             sci_matrix=sci_matrix, sci_win_times=sci_win_times,
             psp_matrix=psp_matrix, psp_win_times=psp_win_times,
+            cv_per_channel=(raw_pc.get("raw") or {}).get("cv_per_channel") or {},
+            cv_matrix=series.get("cv_matrix"), cv_win_times=series.get("cv_times"),
         )
         fname = f"{label}_desc-scipsp_nirs.html"
         h     = _save_figure_html(fig, fig_dir / fname)
@@ -465,7 +469,26 @@ def _process_run(
     logger.info("SQM JSON → %s", sqm_path)
     save_channel_csv(ch_rows, label, sqm_dir, sci_threshold, psp_threshold=cutoffs["psp"])
 
+    n_total = len(sci_scores)
+    bad_rate = 100 * len(bad_channels) / n_total if n_total else 0.0
     return {
+        # what the page opens with. Per run, because a viewer holding several switches
+        # between them and the rejected count is the first thing that differs.
+        "summary": {
+            "run": label,
+            "n_bad": len(bad_channels),
+            "n_total": n_total,
+            "bad_rate": bad_rate,
+            "badge_class": ("badge-green" if bad_rate < 10
+                            else "badge-yellow" if bad_rate < 30 else "badge-red"),
+            "sci_threshold": cutoffs["sci"],
+            "good_frac": cutoffs["good_frac"],
+            "dpf": list(dpf),
+            "cardiac": [cardiac_l_freq, cardiac_h_freq],
+            "scope": ("Screened on the long channels."
+                      if sqm_split else "Screened on every channel: this montage carries "
+                                        "no short channels to judge separately."),
+        },
         "ts":           ts_inline,
         "layout":       layout_inline,
         "evoked_topo":  evoked_topo_inline,
@@ -509,6 +532,8 @@ def _process_run(
     }, {
         # where the per-condition numbers are, rather than the numbers: the pages read the
         # record off disk, the way the subject report's do
+        "remake_psd":    _psd_maker(raw, cardiac_l_freq, cardiac_h_freq,
+                                    build_psd_mean_figure),
         "sqm_path":      sqm_path,
         "fig_dir":       fig_dir,
         "sci_scores":    sci_scores,
@@ -518,6 +543,34 @@ def _process_run(
         "cutoffs":       cutoffs,
         "trial_rows":    trial_rows,
     }
+
+
+def _psd_maker(raw, cardiac_l_freq: float, cardiac_h_freq: float, build):
+    """``(t0, t1) -> figure`` for one condition's own spectrum, or None when the cut is short.
+
+    Recomputed on a crop rather than sliced, because there is nothing to slice: it is one
+    spectrum, not a time-by-frequency matrix. Safe to recompute for the reason the subject
+    report's condition pages recompute theirs: ``compute_psd`` is Welch, which segments and
+    tapers but does not band-pass, so a cut carries no filter edge the whole run would not
+    have had. What a cut does change is resolution, and only once it is shorter than the
+    transform: below ``PSD_NFFT_CAP`` samples it would land on a coarser frequency grid than
+    the run's and is left out instead, at the same floor the record stops writing its band
+    scalars at.
+    """
+    from fnirs_pipe.qc.condition_views import PSD_NFFT_CAP
+
+    def remake(t0: float, t1: float):
+        lo, hi = max(0.0, float(t0)), min(float(raw.times[-1]), float(t1))
+        if hi <= lo:
+            return None
+        cut = raw.copy().crop(tmin=lo, tmax=hi)
+        if len(cut.times) < PSD_NFFT_CAP:
+            logger.info("condition %.1f-%.1f s is %d samples, under the %d the transform "
+                        "needs; no spectrum", lo, hi, len(cut.times), PSD_NFFT_CAP)
+            return None
+        return build(cut, cardiac=(cardiac_l_freq, cardiac_h_freq))
+
+    return remake
 
 
 def _write_condition_views(ctx: dict, payload: dict, output_path: Path, run_label: str,
@@ -562,6 +615,7 @@ def _write_condition_views(ctx: dict, payload: dict, output_path: Path, run_labe
         channel_pairs=ctx["channel_pairs"], series=ctx["series"],
         sci_threshold=sci_threshold, cutoffs=ctx["cutoffs"],
         trial_rows=ctx.get("trial_rows"), save_figure=save_figure,
+        remake_psd=ctx.get("remake_psd"),
     )
     if not views:
         return
@@ -609,6 +663,9 @@ def _shell_vars(runs: list[dict], output_path: Path, sub_dir: Path,
             heading="fnirs\u2011pipe Raw Viewer",
             nav_meta=meta,
             nav_note=f"SCI thr: {sci_threshold:.2f}",
+            # the subject report's sheet: this page is read top to bottom, and the two
+            # printed the same numbers in two looks
+            css=stylesheet("subject.css"),
         ),
         **footer_vars(
             scope=output_path.stem, nirs_dir=nirs_dir,

@@ -624,6 +624,7 @@ def condition_payloads(
     cutoffs: "dict[str, float]",
     trial_rows: "list | None" = None,
     save_figure=None,
+    remake_psd=None,
 ) -> "list[tuple[str, dict]]":
     """One viewer payload per condition, read out of the quality record.
 
@@ -644,9 +645,10 @@ def condition_payloads(
       z-scale, a colour range, so a cut would give every condition a scale no other one can
       be read against. The run's file carries every window and this page asks for one by URL
       fragment.
-    - **dropped**: the spectrum. It is one spectrum rather than a time-by-frequency matrix,
-      so there is nothing to slice, and recomputing it on a cut is what this module exists
-      to avoid. What a condition page wants from it is the sliced PSP row.
+    - **rebuilt on a cropped copy**: the spectrum, through ``remake_psd``. There is nothing
+      to slice, it being one spectrum rather than a time-by-frequency matrix, and nothing in
+      a Welch estimate reads outside the samples it is handed. A condition too short for the
+      transform gets no spectrum rather than one on a coarser grid than the run's.
 
     The event timeline is kept whole, being the run's design rather than one condition's.
     The per-trial table is cut to the trials whose onset falls inside the window; nothing is
@@ -699,6 +701,23 @@ def condition_payloads(
         ], motion_cols) if motion_by_set.get("short") else {}
 
         d = dict(payload)
+        # the run's summary describes the run's verdict; this page screens on its own
+        # stretch, so it carries its own count and says which window it is
+        n_total = len(rows)
+        bad_rate = 100 * len(cond_bad) / n_total if n_total else 0.0
+        d["summary"] = {
+            **(payload.get("summary") or {}),
+            "run": label,
+            "n_bad": len(cond_bad),
+            "n_total": n_total,
+            "bad_rate": bad_rate,
+            "badge_class": ("badge-green" if bad_rate < 10
+                            else "badge-yellow" if bad_rate < 30 else "badge-red"),
+            "scope": (f"Condition “{label}” only, {t0:.0f} to {t1:.0f} s. The "
+                      f"verdict here is this condition's own, screened on its windows "
+                      f"against the run's line; the recording was processed under the "
+                      f"run's, which the run's own page carries."),
+        }
         d["sqm"] = {
             "rows": metric_rows(scalars, COND_SCALAR_KEYS, skip_missing=True),
             "split": split,
@@ -729,8 +748,8 @@ def condition_payloads(
         if save_figure is not None:
             sci_fig = _condition_sci_psp(
                 build_sci_psp_figure, sliced.get("sci_per_channel") or {},
-                sliced.get("psp_per_channel") or {}, bad_channels, sci_threshold,
-                series, window)
+                sliced.get("psp_per_channel") or {}, sliced.get("cv_per_channel") or {},
+                bad_channels, sci_threshold, series, window)
             for key, fig in (("sci_psp", sci_fig),
                              ("ch_summary", channel_quality_heatmap(
                                  sci_thresh=sci_threshold, **heatmap_args(rows)))):
@@ -744,6 +763,9 @@ def condition_payloads(
             d["trial_qc"] = {}
             if trial:
                 paths["trial_qc"], d["trial_qc"] = trial
+            psd_fig = remake_psd(float(t0), float(t1)) if remake_psd else None
+            if psd_fig is not None:
+                paths["psd"] = save_figure("psd", slug, psd_fig)
         leaks = figure_leaks(paths, slug)
         if leaks:
             # loud rather than silent: a run-wide figure under per-condition numbers reads
@@ -762,9 +784,9 @@ def condition_payloads(
             "The verdict here is this condition's own, screened on its windows against the "
             "run's line. The recording was processed under the run's verdict, not this one; "
             "the run's page carries it.",
-            "The spectrum is absent rather than zero: it is one spectrum rather than a "
-            "matrix, so a per-condition value would have to be recomputed on a cut. The "
-            "run's own page has it.",
+            "The spectrum is the one panel measured on a cut of the recording rather than "
+            "sliced out of the run's pass. Nothing in it reads outside the samples it is "
+            "given, so the cut carries no edge the run would not have had.",
         ]
         out.append((label, d))
     return out
@@ -801,25 +823,72 @@ def _narrowed(inline: "dict | None", window) -> dict:
     return {**inline, "figure": zoom_to_condition(inline["figure"], window[1], window[2])}
 
 
+def slice_time_traces(figure: dict, t0: float, t1: float) -> dict:
+    """A figure dict holding only the samples inside ``[t0, t1]``, scales untouched.
+
+    ::
+
+      44 traces of 4427 points, 3602.4 to 3902.5 s  ->  44 traces of ~1300
+
+    The companion of :func:`zoom_to_condition` and the choice between them is not a matter
+    of taste. Narrowing sets the axis and leaves the run's samples in the trace, which is
+    what a figure deriving something internally needs; it also means Plotly's own
+    double-click, which autoranges over the data it holds, opens the whole run. Slicing
+    removes that, so it is right wherever the y values do not depend on which samples are
+    present. The raw-signal panel qualifies: each channel was z-scored and offset over the
+    whole recording before the figure was built, so both numbers are already baked in and
+    dropping samples moves nothing.
+
+    Marker rectangles drawn against the data axis are dropped when they fall outside, since
+    a shape at 22 s would pull an autorange back to the start of the recording. The striped
+    channel bands are on ``paper`` and stay.
+    """
+    data = []
+    for trace in figure.get("data") or []:
+        x = trace.get("x")
+        if not isinstance(x, list):
+            data.append(trace)
+            continue
+        keep = [i for i, v in enumerate(x) if v is not None and t0 <= float(v) <= t1]
+        cut = {**trace, "x": [x[i] for i in keep]}
+        for key in ("y", "customdata", "text", "hovertext"):
+            seq = trace.get(key)
+            if isinstance(seq, list) and len(seq) == len(x):
+                cut[key] = [seq[i] for i in keep]
+        data.append(cut)
+
+    layout = dict(figure.get("layout") or {})
+    shapes = layout.get("shapes")
+    if isinstance(shapes, list):
+        layout["shapes"] = [
+            sh for sh in shapes
+            if sh.get("xref") != "x"
+            or (float(sh.get("x1", t1)) >= t0 and float(sh.get("x0", t0)) <= t1)
+        ]
+    for key in [k for k in layout if k == "xaxis" or k.startswith("xaxis")]:
+        layout[key] = {**(layout[key] or {}), "range": [float(t0), float(t1)]}
+    return {**figure, "data": data, "layout": layout}
+
+
 def _narrowed_ts(inline: "dict | None", window) -> dict:
-    """The raw-signal panel narrowed, with its own bounds and markers moved to match.
+    """The raw-signal panel cut to one condition, with its bounds and markers to match.
 
     ``t_start`` / ``t_end`` travel in this payload for the GUI, which reads them rather than
     the figure's axis, so leaving them at the run's bounds would give two views of one
     condition different spans.
     """
-    if not inline:
-        return {}
-    out = _narrowed(inline, window)
-    if not out:
+    if not inline or not inline.get("figure"):
         return {}
     markers = [m for m in (inline.get("markers") or [])
                if window[1] <= float(m.get("onset", -1)) <= window[2]]
-    return {**out, "t_start": float(window[1]), "t_end": float(window[2]),
+    return {**inline,
+            "figure": slice_time_traces(inline["figure"], window[1], window[2]),
+            "t_start": float(window[1]), "t_end": float(window[2]),
             "markers": markers}
 
 
-def _condition_sci_psp(build, sci_pc, psp_pc, bad_channels, sci_threshold, series, window):
+def _condition_sci_psp(build, sci_pc, psp_pc, cv_pc, bad_channels, sci_threshold,
+                       series, window):
     """The SCI/PSP panel over one condition's columns, a real slice of both matrices.
 
     Unlike the carpet, this figure derives nothing internally: it is handed the matrices and
@@ -832,23 +901,28 @@ def _condition_sci_psp(build, sci_pc, psp_pc, bad_channels, sci_threshold, serie
     """
     import numpy as np
 
-    from fnirs_pipe.qc.metrics.windowed import _in_scope
-    matrix, times = series.get("sci_matrix"), series.get("sci_times")
-    if matrix is None or times is None:
+    from fnirs_pipe.qc.metrics.windowed import _in_scope, window_centers
+
+    def _cut(matrix_key, times_key):
+        """One metric's matrix and window times, cut on that metric's own grid."""
+        matrix, times = series.get(matrix_key), series.get(times_key)
+        if matrix is None or times is None:
+            return None, None
+        keep = _in_scope(window_centers(np.asarray(times)), [window])
+        if not keep.any():
+            return None, None
+        return np.asarray(matrix)[:, keep], np.asarray(times)[keep]
+
+    sci_matrix, sci_times = _cut("sci_matrix", "sci_times")
+    if sci_matrix is None:
         return None
-    centers = np.asarray(times)
-    if centers.ndim == 2 and centers.shape[1] == 2:
-        centers = centers.mean(axis=1)
-    keep = _in_scope(centers, [window])
-    if not keep.any():
-        return None
-    psp_matrix, psp_times = series.get("psp_matrix"), series.get("psp_times")
+    psp_matrix, psp_times = _cut("psp_matrix", "psp_times")
+    cv_matrix, cv_times = _cut("cv_matrix", "cv_times")
     return build(
         sci_pc, psp_pc, bad_channels, sci_threshold,
-        sci_matrix=np.asarray(matrix)[:, keep],
-        sci_win_times=np.asarray(times)[keep],
-        psp_matrix=None if psp_matrix is None else np.asarray(psp_matrix)[:, keep],
-        psp_win_times=None if psp_times is None else np.asarray(psp_times)[keep],
+        sci_matrix=sci_matrix, sci_win_times=sci_times,
+        psp_matrix=psp_matrix, psp_win_times=psp_times,
+        cv_per_channel=cv_pc, cv_matrix=cv_matrix, cv_win_times=cv_times,
     )
 
 

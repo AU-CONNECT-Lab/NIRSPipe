@@ -60,8 +60,18 @@ _HASH_VIEW_JS = (
     "(v.bands||[]).forEach(function(b){"
     "Plotly.restyle(gd,{y:[gd.data[b.i].y.map(function(q){"
     "return q===null?null:(q<=b.lo?b.lo:b.hi);})]},[b.i]);});});}"
-    "if(document.readyState==='complete')apply();"
-    "else window.addEventListener('load',apply);"
+    # Plotly's own double-click autoranges over the samples the trace holds, which are the
+    # whole run's: without this it resets to the run rather than to the view the page asked
+    # for, and nothing on the page says the axis moved. Re-applied after Plotly's reset, so
+    # a file opened with no fragment keeps the ordinary behaviour.
+    "function bind(){"
+    "var gd=document.querySelector('.plotly-graph-div');"
+    "if(!gd||!gd.on)return;"
+    "gd.on('plotly_doubleclick',function(){setTimeout(apply,0);});"
+    "}"
+    "function start(){apply();bind();}"
+    "if(document.readyState==='complete')start();"
+    "else window.addEventListener('load',start);"
     "window.addEventListener('hashchange',function(){location.reload();});"
     "})();</script>"
 )

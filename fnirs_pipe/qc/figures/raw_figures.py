@@ -20,6 +20,11 @@ logger = get_logger("qc.figures")
 
 _PSD_FMAX = 2.0
 
+# A condition needs this many epochs before its row is drawn as an average. One epoch is
+# that block's own trace, not a mean of anything, and the panel is headed "grand mean".
+# The same floor the report's per-trial panels take, for the same reason.
+EPOCH_MIN_TRIALS = 2
+
 
 def _window_centers(win_times) -> np.ndarray:
     """[start, end] window pairs -> one centre per window; already-1-D input passes through.
@@ -314,14 +319,17 @@ def build_channel_figure(
                     baseline=(epoch_tmin, 0),
                     preload=True, verbose=False,
                 )
-                # one panel per condition, HbO/HbR in their usual red and blue
+                # one panel per condition, HbO/HbR in their usual red and blue. A condition
+                # with one epoch is not an average: it is that block's own concentration
+                # trace, and drawing it under a heading that says "mean" invites it to be
+                # read as an evoked response. Same floor the per-trial panels use.
                 panels = []
                 for cond in event_id:
                     try:
                         ep_subset = epochs[cond]
                     except Exception:
                         continue
-                    if len(ep_subset) == 0:
+                    if len(ep_subset) < EPOCH_MIN_TRIALS:
                         continue
                     panels.append((cond, ep_subset.get_data()))
                 if panels:

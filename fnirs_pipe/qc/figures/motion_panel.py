@@ -227,6 +227,9 @@ def gvtd_y_top(traces: "list[np.ndarray]", thresholds: "list[float | None]") -> 
 
     Public because a per-condition view recomputes it over that condition's window, and a
     view drawn by a different rule from the figure it narrows is worse than no view.
+
+    ``build_motion_detail_figure`` deliberately draws the same series against its own
+    maximum instead, its GVTD row being read as a pair with the derivative row under it.
     """
     caps = ([float(np.nanpercentile(np.concatenate(traces), _GVTD_CAP_PCTL))]
             if traces else [])
@@ -741,6 +744,7 @@ def build_motion_detail_figure(
         ), row=strip_row, col=1)
 
     # polygons rather than one vrect per span: a busy channel carries a few hundred of them
+    # max, not the carpet's percentile: read as a pair with the derivative row below
     gvtd_top = float(np.nanmax(gvtd_filt)) * 1.1 if len(gvtd_filt) else 1.0
     tvd_top  = float(np.nanmax(tvd)) * 1.1 if len(tvd) else 1.0
     for row, top in ((gvtd_row, gvtd_top), (tvd_row, tvd_top)):
