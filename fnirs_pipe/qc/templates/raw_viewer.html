@@ -97,6 +97,8 @@ select#run-select {
     {"id": label ~ "_SCI_PSP",        "name": "SCI/PSP",     "href": "#SciPsp",         "group": g},
     {"id": label ~ "_Motion",         "name": "Motion",      "href": "#Motion",         "group": g},
     {"id": label ~ "_Events",         "name": "Events",      "href": "#Events",         "group": g},
+    {"id": label ~ "_Epoch",          "name": "Epoch",       "href": "#Epoch",          "group": g},
+    {"id": label ~ "_TrialImage",     "name": "Trial image", "href": "#TrialImage",     "group": g},
     {"sep": true, "group": g},
     {"id": label ~ "_Metrics",        "name": "Metrics",     "href": "#Metrics",        "group": g},
     {"id": label ~ "_ChannelSummary", "name": "Ch. Summary", "href": "#ChannelSummary", "group": g},
@@ -255,6 +257,33 @@ select#run-select {
        condition that stopped being delivered partway through or a block started twice, which
        no average can. <span id="trigger-scope"></span></p>
     <div id="trigger-timeline-plot"></div>
+  </div>
+</details>
+
+<!-- step h: what the events did, averaged and trial by trial -->
+<details id="Epoch" open>
+  <summary>h. Epoch (grand mean)</summary>
+  <div class="details-body">
+    <p class="step-desc">One row per condition, every long channel averaged, with the short
+       ones dotted. The dotted trace is what this panel is read for: when it rises with the
+       solid one the response is scalp haemodynamics rather than activation, and no later
+       step separates the two. Measured before filtering and motion correction, so read the
+       relation between the two traces rather than the shape of either.</p>
+    <div id="epoch-mean-plot"></div>
+  </div>
+</details>
+
+<details id="TrialImage" open>
+  <summary>i. Trial image &mdash; single-channel trials</summary>
+  <div class="details-body">
+    <p class="step-desc">Trials down the rows, time across, one panel per condition. A
+       channel that was fine for the first half of a block and lost for the second reads as
+       a band here and is averaged away everywhere else. A condition with fewer than two
+       trials draws nothing, which is what a block design is.</p>
+    <select class="ch-select" id="trialimg-select"
+            onchange="document.getElementById('trialimg-frame').src=this.value"></select>
+    <iframe id="trialimg-frame" class="plotly-frame"
+            style="width:100%;border:0;"></iframe>
   </div>
 </details>
 
@@ -426,6 +455,8 @@ window.addEventListener("DOMContentLoaded", function() {
   loadSqm();
   loadChannelSummary();
   loadTrialQc();
+  loadEpochMean();
+  loadTrialImages();
   buildChDecisionsTable();
   loadIssues();
   if (window.qcShowGroup) window.qcShowGroup(_run_idx);
@@ -691,6 +722,26 @@ function loadTrialQc() {
   _setIframeSrc("trial-qc-plot", p.src, p.h || 260);
 }
 
+// ─── grand mean and trial images ──────────────────────────────────────────────
+function loadEpochMean() {
+  var p = ((_STATIC_DATA[_run_idx] || {}).figure_paths || {}).epoch_mean;
+  _showSection("Epoch", !!(p && p.src));
+  if (p && p.src) _setIframeSrc("epoch-mean-plot", p.src, p.h || 400);
+}
+
+function loadTrialImages() {
+  var imgs = (_STATIC_DATA[_run_idx] || {}).trial_images || [];
+  var sel  = document.getElementById("trialimg-select");
+  var frame = document.getElementById("trialimg-frame");
+  _showSection("TrialImage", imgs.length > 0);
+  if (!imgs.length || !sel || !frame) return;
+  sel.innerHTML = imgs.map(function(e) {
+    return '<option value="' + _esc(e.src) + '">' + _esc(e.pair) + "</option>";
+  }).join("");
+  frame.style.height = (imgs[0].h || 400) + "px";
+  frame.src = imgs[0].src;
+}
+
 // ─── summary ──────────────────────────────────────────────────────────────────
 // The run-level facts the page opens with, mirroring the subject report's summary block.
 // Per run rather than rendered server-side, because a viewer holding several switches
@@ -759,6 +810,15 @@ function renderSqm(d) {
   }
   renderSqmSplit(d.split || {},        "sqm-split-wrap",    "sqm-split-table");
   renderSqmSplit(d.motion_split || {}, "motion-split-wrap", "motion-split-table");
+  var mp = document.getElementById("motion-post-note");
+  if (mp) {
+    var corrected = ((_STATIC_DATA[_run_idx] || {}).summary || {}).motion_correction;
+    mp.innerHTML = (corrected && corrected !== "none")
+      ? "Each cell is <b>before &rarr; after " + _esc(corrected) + "</b>. Both sides are "
+        + "counted against the uncorrected side's cutoff, or the pair would be two shape "
+        + "statistics of two different distributions rather than a before and an after."
+      : "";
+  }
 }
 
 // one renderer for both tables: they are the same shape, built by channel_table.split_table
@@ -777,7 +837,11 @@ function renderSqmSplit(split, wrapId, tableId) {
     return "<tr><td>" + _esc(r.name) + "</td><td>"
          + _esc(r.n === null || r.n === undefined ? "—" : r.n) + "</td>"
          + r.cells.map(function(c) {
-             return "<td class='" + (c.cls || "") + "'>" + _esc(c.value) + "</td>";
+             // before -> after where the row carries both; the colour is already the
+             // after's, that being the state the data is left in
+             var v = c.post === undefined ? _esc(c.value)
+                   : _esc(c.value) + " &rarr; " + _esc(c.post);
+             return "<td class='" + (c.cls || "") + "'>" + v + "</td>";
            }).join("")
          + "</tr>";
   }).join("") + "</tbody>";
@@ -855,7 +919,7 @@ function switchRun(idx) {
     loadSummary(); loadChannelPicker(); loadTimeSeries(); loadLayout(); loadPsdMean();
     loadTriggerTimeline(); loadCarpetGvtd();
     loadSciPsp(); loadSqm(); loadChannelSummary();
-    loadTrialQc(); buildChDecisionsTable();
+    loadTrialQc(); loadEpochMean(); loadTrialImages(); buildChDecisionsTable();
     loadIssues();
     if (window.qcShowGroup) window.qcShowGroup(_run_idx);
   }

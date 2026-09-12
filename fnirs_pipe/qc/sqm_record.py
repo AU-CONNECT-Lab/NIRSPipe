@@ -515,6 +515,73 @@ def _motion_post_section(
     return record
 
 
+def motion_sections(
+    before_od: "mne.io.Raw | None",
+    after_od: "mne.io.Raw",
+    section,
+    windowed: dict[str, Any],
+    raw_thresh,
+    cardiac_l_freq: float,
+    cardiac_h_freq: float,
+    sep_bands=None,
+) -> None:
+    """The whole motion family, from the optical density either side of the correction.
+
+    Two groups. ``motion*`` is the correction's footprint, how much of the recording it
+    touched, and ``motion_post*`` is the corrected file measured again on the keys ``raw*``
+    already carries, so a pair subtracts. Both split by separation, because the footprint's
+    frame counts ask how many channels were corrected at once and that is a different
+    measurement per set rather than the same one regrouped.
+
+    ``raw_thresh(name)`` returns the ``raw*`` section's GVTD cutoff for the matching channel
+    set, and it is what makes the before-and-after answerable: the cutoff is derived from
+    whatever trace it is shown, so counting each side against its own would compare two
+    shape statistics of two different distributions. See :func:`_motion_post_section`.
+
+    ``before_od`` None leaves the footprint half out and keeps the rest: measuring what the
+    correction touched needs both sides, measuring the corrected file needs only the one.
+    A tree carrying a corrected file but no pre-correction one still gets ``motion_post*``.
+
+    Written in place through ``section``, the same writer the rest of the record uses, so a
+    family that fails costs that family alone. One function because two callers assemble it:
+    the pipeline's record reads the two files off disk, and ``fnirs-qc prep-raw`` corrects a
+    copy in memory and never writes it.
+    """
+    from fnirs_pipe.qc.metrics import (
+        long_short_channels, motion_corrected_segments, motion_correction_metrics,
+    )
+
+    if before_od is not None:
+        section("motion", lambda: motion_correction_metrics(before_od, after_od))
+        mc_long, mc_short = long_short_channels(before_od, sep_bands)
+        if mc_long and len(mc_long) < len(before_od.ch_names):
+            section("motion_long", lambda: motion_correction_metrics(
+                before_od.copy().pick(mc_long), after_od.copy().pick(mc_long)))
+        if mc_short:
+            section("motion_short", lambda: motion_correction_metrics(
+                before_od.copy().pick(mc_short), after_od.copy().pick(mc_short)))
+
+        # `motion` counts the spans; this is where they are, for the figures that draw them
+        # and for a condition counting the run's own boolean over its own stretch
+        try:
+            windowed["motion_corrected_spans_s"] = [
+                list(span) for span in motion_corrected_segments(before_od, after_od)]
+        except Exception:
+            logger.warning("windowed: correction spans failed", exc_info=True)
+
+    section("motion_post", lambda: _motion_post_section(
+        after_od, cardiac_l_freq, cardiac_h_freq, raw_thresh("raw")))
+    post_long, post_short = long_short_channels(after_od, sep_bands)
+    if post_long and len(post_long) < len(after_od.ch_names):
+        section("motion_post_long", lambda: _motion_post_section(
+            after_od.copy().pick(post_long), cardiac_l_freq, cardiac_h_freq,
+            raw_thresh("raw_long")))
+    if post_short:
+        section("motion_post_short", lambda: _motion_post_section(
+            after_od.copy().pick(post_short), cardiac_l_freq, cardiac_h_freq,
+            raw_thresh("raw_short")))
+
+
 def _cutoffs_from_sidecar(stages: dict[str, Path]) -> dict[str, float]:
     """The lines the run screened by, so a condition's verdict is on the same ones."""
     from fnirs_pipe.qc.metrics import resolve_cutoffs
@@ -957,67 +1024,23 @@ def compute_run_sections(
 
     # the OD either side of the motion step is on disk as desc-sci and desc-motcorrected,
     # so the correction's footprint is measurable here rather than only in memory
-    if "sci" in stages and "motcorrected" in stages:
-        from fnirs_pipe.qc.metrics import (
-            motion_corrected_segments, motion_correction_metrics,
-        )
-        # split like `motion_post`: the frame counts are defined over a channel set
-        try:
-            mc_before = read_snirf(stages["sci"])
-            mc_after = read_snirf(stages["motcorrected"])
-        except Exception:
-            mc_before = mc_after = None
-            logger.warning("motion sections skipped; %s or %s unreadable",
-                           stages["sci"], stages["motcorrected"], exc_info=True)
-        if mc_before is not None and mc_after is not None:
-            section("motion", lambda: motion_correction_metrics(mc_before, mc_after))
-            mc_long, mc_short = long_short_channels(mc_before, sep_bands)
-            if mc_long and len(mc_long) < len(mc_before.ch_names):
-                section("motion_long", lambda: motion_correction_metrics(
-                    mc_before.copy().pick(mc_long), mc_after.copy().pick(mc_long)))
-            if mc_short:
-                section("motion_short", lambda: motion_correction_metrics(
-                    mc_before.copy().pick(mc_short), mc_after.copy().pick(mc_short)))
-        # `motion` counts the spans; this is where they are, for the figures that draw them
-        try:
-            windowed["motion_corrected_spans_s"] = [
-                list(span) for span in motion_corrected_segments(
-                    read_snirf(stages["sci"]), read_snirf(stages["motcorrected"]))
-            ]
-        except Exception:
-            logger.warning("windowed: correction spans failed", exc_info=True)
-
-    # the same OD-domain metrics as `raw`, measured on the corrected file. Same domain and
-    # same units, so these subtract against `raw`; nothing across Beer-Lambert does.
-    # Split by separation the same way `raw` is, so every post section has a `raw*` section
-    # on the identical channel set to subtract against; mixing the two splits would compare
-    # a long-channel GVTD against an all-channel one and read the difference as an effect
-    # of the correction.
     if "motcorrected" in stages:
+        mc_before = None
         try:
-            raw_motcorr = read_snirf(stages["motcorrected"])
+            mc_after = read_snirf(stages["motcorrected"])
+            if "sci" in stages:
+                mc_before = read_snirf(stages["sci"])
         except Exception:
-            raw_motcorr = None
-            logger.warning("%s unreadable; motion_post sections skipped",
+            mc_after = None
+            logger.warning("motion sections skipped; %s unreadable",
                            stages["motcorrected"], exc_info=True)
-        if raw_motcorr is not None:
+        if mc_after is not None:
             # each post section counts against the cutoff of the `raw` section on the same
             # channels, so a pair shares one yardstick and one channel set. Absent when the
             # matching raw section failed, and the post section then falls back to its own.
-            def _raw_thresh(name: str) -> "float | None":
-                return (sections.get(name) or {}).get("gvtd_thresh")
-
-            section("motion_post", lambda: _motion_post_section(
-                raw_motcorr, cardiac_l_freq, cardiac_h_freq, _raw_thresh("raw")))
-            post_long, post_short = long_short_channels(raw_motcorr, sep_bands)
-            if post_long and len(post_long) < len(raw_motcorr.ch_names):
-                section("motion_post_long", lambda: _motion_post_section(
-                    raw_motcorr.copy().pick(post_long), cardiac_l_freq, cardiac_h_freq,
-                    _raw_thresh("raw_long")))
-            if post_short:
-                section("motion_post_short", lambda: _motion_post_section(
-                    raw_motcorr.copy().pick(post_short), cardiac_l_freq, cardiac_h_freq,
-                    _raw_thresh("raw_short")))
+            motion_sections(mc_before, mc_after, section, windowed,
+                            lambda name: (sections.get(name) or {}).get("gvtd_thresh"),
+                            cardiac_l_freq, cardiac_h_freq, sep_bands)
 
     # One family per haemo stage the run actually wrote, each measured with the same
     # metrics as `preproc` so any of them subtracts against it. Band power and drift are

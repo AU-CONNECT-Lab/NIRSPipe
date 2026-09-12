@@ -129,6 +129,7 @@ def _process_run(
     sep_bands=None,
     min_good_frac: float | None = None,
     screen_scope: str = "run",
+    motion_correction: str | None = None,
 ) -> "tuple[dict, dict]":
     """Compute all data, save figure HTMLs + SQM JSON. Returns (inline dict, context).
 
@@ -143,8 +144,10 @@ def _process_run(
     """
     from fnirs_pipe.qc.figures import (
         build_channel_figure,
+        build_epoch_preview_figure,
         build_evoked_topo_figure,
         build_layout_figure,
+        build_trial_image_by_condition,
         build_psd_mean_figure,
         build_sci_psp_figure,
         build_trigger_timeline_single,
@@ -161,7 +164,7 @@ def _process_run(
     )
     from fnirs_pipe.qc.screen_scope import resolve_screen_scope
     from fnirs_pipe.qc.sqm_record import (
-        raw_condition_sections, raw_sections, sqm_record_dict,
+        motion_sections, raw_condition_sections, raw_sections, sqm_record_dict,
     )
 
     label   = run["label"]
@@ -185,6 +188,16 @@ def _process_run(
                                      scope=scope)
     bad_list, _why = screen_channels(screen_scores, cutoffs)
     bad_channels: set[str] = set(bad_list)
+
+    # The one preprocessing step this report runs, and only because the panel it feeds is
+    # unreadable without it: motion is what a raw recording is judged on, and a figure of
+    # the uncorrected trace cannot say whether the correction would have dealt with it.
+    # Nothing is written back; the corrected copy lives for the length of this function.
+    raw_motcorr = None
+    if motion_correction and motion_correction != "none":
+        with guard("Motion correction", errors, label):
+            from fnirs_pipe.pipeline.motion import correct_motion
+            raw_motcorr = correct_motion(raw_od.copy(), method=motion_correction)
 
     sqm: dict = {}
     with guard("Quality metrics", errors, label):
@@ -233,6 +246,32 @@ def _process_run(
     view_scalars = raw_secs.get("raw_long") or raw_secs.get("raw") or {}
     raw_all = raw_secs.get("raw") or {}
     sqm_split = bool(raw_secs.get("raw_long") and raw_secs.get("raw_short"))
+
+    # Persist windowed series so group_raw can build time × subject heatmaps. Their own
+    # section, since `_split_scalars` would file every one of these lists under per_channel.
+    windowed: dict = {}
+    # GVTD off the corrected file where there is one, as the pipeline's own record does:
+    # GVTD measures the movement the correction exists to remove, so the corrected stage is
+    # the informative one for it. SCI and PSP stay on the uncorrected file, being coupling.
+    series = attach_windowed_series(windowed, raw_od, cardiac_l_freq, cardiac_h_freq,
+                                    window_s, gvtd_od=raw_motcorr,
+                                    raw_intensity=raw, sep_bands=sep_bands)
+    sci_matrix, sci_win_times = series["sci_matrix"], series["sci_times"]
+    psp_matrix, psp_win_times = series["psp_matrix"], series["psp_times"]
+    # the channel by window matrices too, not just the channel-averaged series: a
+    # per-condition number is a column selection out of these, and without them on disk it
+    # could only be recomputed. Same keys the pipeline's own record writes.
+    _store_matrices(windowed, series)
+    _store_spans(windowed, raw, sep_bands, errors, label)
+
+    if raw_motcorr is not None:
+        with guard("Motion sections", errors, label):
+            from fnirs_pipe.qc.sqm_record import _section_writer
+            motion_sections(
+                raw_od, raw_motcorr, _section_writer(raw_secs, raw_pc), windowed,
+                lambda name: (raw_secs.get(name) or {}).get("gvtd_thresh"),
+                cardiac_l_freq, cardiac_h_freq, sep_bands)
+
     set_rows = [
         ("All",   len(sci_scores),                raw_all,                         False),
         ("Long",  raw_all.get("n_long_channels"), raw_secs.get("raw_long") or {},  True),
@@ -242,20 +281,18 @@ def _process_run(
     # GVTD per channel set, as its own table for the reason MOTION_SPLIT_COLUMNS records.
     # Every set is in `raw`/`raw_long`/`raw_short` already, so this is a second reading of
     # what is on disk rather than a second measurement.
-    motion_split = split_table(set_rows, MOTION_SPLIT_COLUMNS) if sqm_split else {}
+    # the corrected side merged in under `_post`, so each cell prints before -> after where
+    # a correction ran. Each set against its own `raw*` cutoff, never another set's.
+    def _motion_row(raw_key: str, post_key: str) -> dict:
+        return {**(raw_secs.get(raw_key) or {}),
+                **{f"{k}_post": v for k, v in (raw_secs.get(post_key) or {}).items()}}
 
-    # Persist windowed series so group_raw can build time × subject heatmaps. Their own
-    # section, since `_split_scalars` would file every one of these lists under per_channel.
-    windowed: dict = {}
-    series = attach_windowed_series(windowed, raw_od, cardiac_l_freq, cardiac_h_freq,
-                                    window_s, raw_intensity=raw, sep_bands=sep_bands)
-    sci_matrix, sci_win_times = series["sci_matrix"], series["sci_times"]
-    psp_matrix, psp_win_times = series["psp_matrix"], series["psp_times"]
-    # the channel by window matrices too, not just the channel-averaged series: a
-    # per-condition number is a column selection out of these, and without them on disk it
-    # could only be recomputed. Same keys the pipeline's own record writes.
-    _store_matrices(windowed, series)
-    _store_spans(windowed, raw, sep_bands, errors, label)
+    motion_rows = [
+        ("All",   len(sci_scores),                 _motion_row("raw", "motion_post"), False),
+        ("Long",  raw_all.get("n_long_channels"),  _motion_row("raw_long", "motion_post_long"), True),
+        ("Short", raw_all.get("n_short_channels"), _motion_row("raw_short", "motion_post_short"), False),
+    ]
+    motion_split = split_table(motion_rows, MOTION_SPLIT_COLUMNS) if sqm_split else {}
 
     raw_haemo = None
     with guard("Beer-Lambert", errors, label):
@@ -315,7 +352,19 @@ def _process_run(
         gvtd_set = gvtd_blocks[0][0]
         gvtd_picks = [c for _, names in gvtd_blocks for c in names]
         raw_carpet = raw.copy().pick(gvtd_picks)
+        # before and after in one panel where a correction ran, which is the pairing the
+        # subject report's carpet draws and the reason the flag exists
+        carpet_after = (None if raw_motcorr is None
+                        else raw_motcorr.copy().pick(
+                            [c for c in gvtd_picks if c in raw_motcorr.ch_names]))
         fig   = carpet_gvtd_figure(raw_carpet, raw_carpet.ch_names,
+                                   corrected_segments=[tuple(sp) for sp in
+                                                       windowed.get("motion_corrected_spans_s") or []] or None,
+                                   spike_segments={gvtd_set: [tuple(sp) for sp in
+                                                              windowed.get("spike_spans_s") or []] or None,
+                                                   "short": [tuple(sp) for sp in
+                                                             windowed.get("spike_spans_short_s") or []] or None},
+                                   raw_after=carpet_after,
                                    channel_set=gvtd_set, blocks=gvtd_blocks)
         fname = f"{label}_desc-carpet_nirs.html"
         # not written per condition: its GVTD is filtered, its carpet z-scored per channel
@@ -391,6 +440,45 @@ def _process_run(
             )
             if fig:
                 evoked_topo_inline = {"figure": fig.to_dict()}
+
+    # ── file: grand mean ───────────────────────────────────────────────────────
+    # One row per condition, every long channel averaged with the short ones dotted. The
+    # dotted trace is what the panel is read for at this stage: when it rises with the solid
+    # one the response is scalp haemodynamics, and nothing downstream will separate them.
+    if raw_haemo is not None:
+        with guard("Grand mean", errors, label):
+            fig = build_epoch_preview_figure(raw_haemo, epoch_tmin=fig_tmin,
+                                             epoch_tmax=fig_tmax, sep_bands=sep_bands)
+            if fig:
+                fname = f"{label}_desc-epochmean_nirs.html"
+                h     = _save_figure_html(fig, fig_dir / fname)
+                figure_paths["epoch_mean"] = {"src": f"figures/{fname}", "h": h}
+
+    # ── file: per-channel trial images ─────────────────────────────────────────
+    # Trials down the rows, so a channel that was fine for the first half and lost for the
+    # second reads as a band rather than being averaged away. HbO only, as the subject
+    # report's is: single-trial HbR is too low-amplitude to read as an image. A condition
+    # holding fewer than two trials draws nothing, which is what a block design is.
+    trial_img_pairs: list = []
+    trial_img_by_cond: dict = {}
+    if raw_haemo is not None and cond_windows:
+        hbo_names = [c for c in raw_haemo.ch_names if c.endswith(" hbo")]
+        for ch in hbo_names:
+            with guard("Trial image", errors, f"{label} | {ch}"):
+                by_label = build_trial_image_by_condition(
+                    raw_haemo, ch, cond_windows, fig_tmin, fig_tmax)
+                if not by_label:
+                    continue
+                pair = ch.rsplit(" ", 1)[0]
+                fname = f"{label}_desc-trialimg{_pair_fname(pair)}_nirs.html"
+                figs = [f for figs in by_label.values() for f in figs]
+                h = _save_multi_fig_html(figs, fig_dir / fname)
+                trial_img_pairs.append(
+                    {"pair": pair, "src": f"figures/{fname}", "h": h})
+                # kept in memory so a condition page writes its own single-panel file
+                # rather than this stack of every condition
+                for cond_label, cond_figs in by_label.items():
+                    trial_img_by_cond.setdefault(cond_label, []).append((pair, cond_figs))
 
     # ── file: per-channel detail HTML ──────────────────────────────────────────
     # one file per pair, holding every condition's view: `condition_views` names the windows
@@ -487,6 +575,7 @@ def _process_run(
             "good_frac": cutoffs["good_frac"],
             "dpf": list(dpf),
             "cardiac": [cardiac_l_freq, cardiac_h_freq],
+            "motion_correction": motion_correction or "none",
             "scope": ("Screened on the long channels."
                       if sqm_split else "Screened on every channel: this montage carries "
                                         "no short channels to judge separately."),
@@ -523,6 +612,8 @@ def _process_run(
             "notes":  separation_notes(raw_all, ch_rows),
         },
         "channel_pairs": channel_pairs,
+        # one entry per channel that had trials to draw, for this panel's own picker
+        "trial_images":  trial_img_pairs,
         "figure_paths":  figure_paths,
         # the GUI builds its per-channel figures on demand and needs the run's own band to
         # shade the PSD the way the ones built here are shaded
@@ -536,6 +627,9 @@ def _process_run(
         # record off disk, the way the subject report's do
         "remake_psd":    _psd_maker(raw, cardiac_l_freq, cardiac_h_freq,
                                     build_psd_mean_figure),
+        "remake_epoch":  _epoch_maker(raw_haemo, fig_tmin, fig_tmax, sep_bands,
+                                      build_epoch_preview_figure),
+        "trial_images_by_condition": trial_img_by_cond,
         "sqm_path":      sqm_path,
         "fig_dir":       fig_dir,
         "sci_scores":    sci_scores,
@@ -545,6 +639,28 @@ def _process_run(
         "cutoffs":       cutoffs,
         "trial_rows":    trial_rows,
     }
+
+
+def _epoch_maker(raw_haemo, tmin: float, tmax: float, sep_bands, build):
+    """``(t0, t1) -> figure`` for one condition's grand mean, or None without one.
+
+    Rebuilt on a crop rather than sliced: the figure epochs the recording itself, so there
+    is no windowed series to take a column out of. Safe for the reason the spectrum is,
+    nothing in an epoch average reading outside the samples it is handed. The crop keeps the
+    epoch window's own room after the last onset, or the final block loses its epoch.
+    """
+    if raw_haemo is None:
+        return None
+
+    def remake(t0: float, t1: float):
+        lo = max(0.0, float(t0) + min(0.0, tmin))
+        hi = min(float(raw_haemo.times[-1]), float(t1) + max(0.0, tmax))
+        if hi <= lo:
+            return None
+        return build(raw_haemo.copy().crop(tmin=lo, tmax=hi),
+                     epoch_tmin=tmin, epoch_tmax=tmax, sep_bands=sep_bands)
+
+    return remake
 
 
 def _psd_maker(raw, cardiac_l_freq: float, cardiac_h_freq: float, build):
@@ -611,13 +727,22 @@ def _write_condition_views(ctx: dict, payload: dict, output_path: Path, run_labe
         h = _save_figure_html(fig, fig_dir / fname)
         return {"src": f"figures/{fname}", "h": h}
 
+    def save_stack(panel: str, slug: str, name: str, figs) -> "dict | None":
+        """The same, for a panel whose file holds several figures of one channel."""
+        fname = (f"{run_label}_desc-{panel.replace('_', '')}"
+                 f"{_pair_fname(name)}_{slug}_nirs.html")
+        h = _save_multi_fig_html(list(figs), fig_dir / fname)
+        return {"pair": name, "src": f"figures/{fname}", "h": h}
+
     views = condition_payloads(
         payload, record=record, by_condition=by_condition,
         sci_scores=ctx["sci_scores"], bad_channels=ctx["bad_channels"],
         channel_pairs=ctx["channel_pairs"], series=ctx["series"],
         sci_threshold=sci_threshold, cutoffs=ctx["cutoffs"],
         trial_rows=ctx.get("trial_rows"), save_figure=save_figure,
-        remake_psd=ctx.get("remake_psd"),
+        remake_psd=ctx.get("remake_psd"), remake_epoch=ctx.get("remake_epoch"),
+        trial_images=ctx.get("trial_images_by_condition"),
+        save_stack=save_stack,
     )
     if not views:
         return
@@ -693,6 +818,7 @@ def build_prep_raw_report(
     epoch_tmax: float | None = None,
     sep_bands=None,
     by_condition: bool = False,
+    motion_correction: str | None = None,
 ) -> None:
     """Generate raw QC report: lightweight HTML + per-run folders with figure HTMLs + SQM JSON.
 
@@ -720,7 +846,8 @@ def build_prep_raw_report(
         with guard("Processing this run", run_errors, label):
             d, ctx = _process_run(run, sci_threshold, sub_dir, cardiac_l_freq, cardiac_h_freq,
                                   dpf, window_s, epoch_qc, epoch_tmin, epoch_tmax,
-                                  psp_threshold, sep_bands, min_good_frac, screen_scope)
+                                  psp_threshold, sep_bands, min_good_frac, screen_scope,
+                                  motion_correction)
         if run_errors:
             d = {"errors": run_errors, "notes": []}
         static_data.append(d)

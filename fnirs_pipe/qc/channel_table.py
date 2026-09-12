@@ -342,6 +342,18 @@ MOTION_SPLIT_COLUMNS = (
 )
 
 
+def _cell(key: str, scalars: dict, colour: bool) -> dict:
+    """One table cell, with the after value beside it where the row carries one."""
+    from fnirs_pipe.qc.boilerplate.vocabulary import format_metric, metric_class
+
+    before, after = scalars.get(key), scalars.get(f"{key}_post")
+    cell = {"value": format_metric(key, before),
+            "cls": metric_class(key, after if after is not None else before) if colour else ""}
+    if after is not None:
+        cell["post"] = format_metric(key, after)
+    return cell
+
+
 def split_table(
     channel_sets: list[tuple[str, Any, dict, bool]],
     columns: "Sequence[tuple[str, str]]" = OD_SPLIT_COLUMNS,
@@ -368,9 +380,10 @@ def split_table(
         "rows": [{
             "name": name,
             "n": n_channels,
-            "cells": [{"value": format_metric(key, scalars.get(key)),
-                       "cls": metric_class(key, scalars.get(key)) if colour else ""}
-                      for key, _ in columns],
+            # `post` is the same metric measured after a processing step, present only where
+            # the caller merged one in under a `_post` suffix. The verdict colour follows the
+            # after value: it is the state the data is left in.
+            "cells": [_cell(key, scalars, colour) for key, _ in columns],
         } for name, n_channels, scalars, colour in channel_sets],
     }
 

@@ -625,6 +625,9 @@ def condition_payloads(
     trial_rows: "list | None" = None,
     save_figure=None,
     remake_psd=None,
+    remake_epoch=None,
+    trial_images=None,
+    save_stack=None,
 ) -> "list[tuple[str, dict]]":
     """One viewer payload per condition, read out of the quality record.
 
@@ -645,7 +648,11 @@ def condition_payloads(
       z-scale, a colour range, so a cut would give every condition a scale no other one can
       be read against. The run's file carries every window and this page asks for one by URL
       fragment.
-    - **rebuilt on a cropped copy**: the spectrum, through ``remake_psd``. There is nothing
+    - **taken out of the run's own pass**: the trial images. One run-wide pass drew every
+      condition's, so the pages share a colour scale; a scale taken per page would make two
+      conditions with different responses look alike.
+    - **rebuilt on a cropped copy**: the spectrum and the grand mean, through ``remake_psd``
+      and ``remake_epoch``. There is nothing
       to slice, it being one spectrum rather than a time-by-frequency matrix, and nothing in
       a Welch estimate reads outside the samples it is handed. A condition too short for the
       transform gets no spectrum rather than one on a coarser grid than the run's.
@@ -746,6 +753,9 @@ def condition_payloads(
         d["psd"] = {}
         d["evoked_topo"] = {}
 
+        # the run's, until this page writes its own; carried over it would be every
+        # condition's trials under one condition's heading
+        d["trial_images"] = []
         paths = dict(payload.get("figure_paths") or {})
         paths.pop("psd", None)
         paths.pop("evoked_topo", None)
@@ -774,16 +784,33 @@ def condition_payloads(
             if trial:
                 paths["trial_qc"], d["trial_qc"] = trial
             psd_fig = remake_psd(float(t0), float(t1)) if remake_psd else None
+            paths.pop("psd", None)
             if psd_fig is not None:
                 paths["psd"] = save_figure("psd", slug, psd_fig)
-        leaks = figure_leaks(paths, slug)
+            epoch_fig = remake_epoch(float(t0), float(t1)) if remake_epoch else None
+            paths.pop("epoch_mean", None)
+            if epoch_fig is not None:
+                paths["epoch_mean"] = save_figure("epoch_mean", slug, epoch_fig)
+            # this condition's rows out of the run-wide pass, never redrawn: a scale taken
+            # per page would make two conditions with different responses look alike
+            d["trial_images"] = [
+                saved for pair, figs in ((trial_images or {}).get(label) or [])
+                for saved in [save_stack("trialimg", slug, pair, figs)] if saved
+            ] if save_stack else []
+        # the trial images are figure paths outside `figure_paths`, which is the shape the
+        # subject report's one leak took, so they go through the same check
+        leaks = figure_leaks(
+            {**paths, **{f"trial_image[{e['pair']}]": e for e in d["trial_images"]}}, slug)
         if leaks:
             # loud rather than silent: a run-wide figure under per-condition numbers reads
             # as that condition's, and nothing on the page would say otherwise
             logger.warning("condition %s still points at run-wide figures (%s); they are "
                            "being dropped", label, ", ".join(leaks))
             for key in leaks:
-                paths.pop(key, None)
+                if key.startswith("trial_image["):
+                    d["trial_images"] = []
+                else:
+                    paths.pop(key, None)
         d["figure_paths"] = paths
 
         d["notes"] = list(payload.get("notes") or []) + [

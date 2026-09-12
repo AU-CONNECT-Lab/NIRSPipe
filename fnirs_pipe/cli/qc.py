@@ -24,6 +24,7 @@ def cmd_prep_raw(
     window_length: float,
     epoch_qc: bool, epoch_tmin: float | None, epoch_tmax: float | None,
     by_condition: bool,
+    motion_correction: str,
     short_max_dist: float | None, long_min_dist: float | None,
     long_max_dist: float | None,
     skip_bids_validation: bool,
@@ -95,7 +96,8 @@ def cmd_prep_raw(
                                   cardiac_l_freq=cardiac_l_freq, cardiac_h_freq=cardiac_h_freq,
                                   window_s=window_length, epoch_qc=epoch_qc,
                                   epoch_tmin=epoch_tmin, epoch_tmax=epoch_tmax,
-                                  sep_bands=sep_bands, by_condition=by_condition)
+                                  sep_bands=sep_bands, by_condition=by_condition,
+                                  motion_correction=motion_correction)
             print(f"  -> {html_path}")
         except Exception as exc:
             logger.exception("Raw report generation failed for %s", html_path.name)
@@ -281,8 +283,18 @@ def _build_parser() -> argparse.ArgumentParser:
                          "window grid and the same filter as the run; nothing is cut and "
                          "nothing is re-measured. Each page screens on its own stretch, so "
                          "the verdict on it is that condition's; the recording was processed "
-                         "under the run's, which its own page carries. The PSD is left out "
-                         "of these, having no windowed series to slice.")
+                         "under the run's, which its own page carries.")
+    pr.add_argument("--motion-correction", choices=["tddr", "wavelet", "spline", "none"],
+                    default="none",
+                    help="Run this correction on a copy of the optical density and report "
+                         "the recording either side of it: the correction's footprint, the "
+                         "corrected file measured again on the keys the uncorrected one "
+                         "carries, and one carpet showing both. Nothing is written back and "
+                         "no other preprocessing runs, so the screening verdict and every "
+                         "coupling metric still describe the recording as delivered. "
+                         "Default none, which reports it uncorrected; the counts and the "
+                         "GVTD series then have no corrected stage to be measured on, which "
+                         "is what `fnirs-pipe run` gives them.")
     pr.add_argument("--skip-bids-validation", action=argparse.BooleanOptionalAction, default=False)
     pr.set_defaults(func=cmd_prep_raw)
 
