@@ -8,11 +8,13 @@ view that cannot honestly fill a column drops it rather than printing a whole-ru
 beside per-condition ones.
 """
 
+import numpy as np
 import plotly.graph_objects as go
+import pytest
 
 from fnirs_pipe.qc.condition_views import (
     UNSLICEABLE, condition_stem, condition_stems, rescale_y_to_window, slice_record,
-    window_view_spec, zoom_to_condition,
+    carpet_window_spec, window_view_spec, zoom_to_condition,
 )
 
 STEM = "sub-01_task-full_desc-raw_nirs"
@@ -199,3 +201,83 @@ def test_measuring_a_window_leaves_the_run_wide_figure_alone():
     window_view_spec(fig, 0.0, 59.0)
     assert list(fig.layout.yaxis.range) == [0, 0.11]
     assert fig.layout.annotations == ()
+
+
+# ---- the carpet: its lines follow the condition, its colours do not ----
+
+@pytest.fixture(scope="module")
+def carpet_fig():
+    """A real carpet through the shipped builder, quiet for the first half of the run."""
+    import mne
+    from tests._synth import synth_raw
+    from fnirs_pipe.qc.figures.motion_panel import carpet_gvtd_figure
+    from fnirs_pipe.qc.metrics import gvtd_channel_blocks
+
+    raw = synth_raw("01", "tapping", duration=600.0)
+    rng = np.random.default_rng(0)
+    scale = 1 + np.where(raw.times < 300, 1.0, 20.0) * 1e-3 * rng.standard_normal(
+        raw.get_data().shape)
+    raw = mne.io.RawArray(raw.get_data() * scale, raw.info, verbose="error")
+    blocks = gvtd_channel_blocks(raw)
+    return carpet_gvtd_figure(
+        raw, raw.ch_names, raw_after=raw, channel_set=blocks[0][0], blocks=blocks,
+        corrected_segments=[(400.0, 20.0)], spike_segments={blocks[0][0]: [(100.0, 5.0)]})
+
+
+def test_both_gvtd_rows_are_given_one_top(carpet_fig):
+    # long and short are the same unit at comparable magnitudes, and scaling each to itself
+    # would hide the difference the second row was added to show
+    spec = carpet_window_spec(carpet_fig, 0.0, 300.0)
+    tops = {tuple(v) for v in spec["y"].values()}
+    assert len(spec["y"]) == 2 and len(tops) == 1
+
+
+def test_the_top_is_measured_over_the_window(carpet_fig):
+    quiet = carpet_window_spec(carpet_fig, 0.0, 300.0)["y"]["yaxis2"]
+    loud = carpet_window_spec(carpet_fig, 300.0, 600.0)["y"]["yaxis2"]
+    assert quiet[0] == loud[0] == 0.0          # a magnitude row keeps its floor
+    assert quiet[1] < loud[1]
+
+
+def test_the_heatmaps_keep_the_runs_colour_scale(carpet_fig):
+    # the z-score is against a per-channel mean and SD taken over the whole run from the
+    # uncorrected side; re-deriving it per condition would make one colour mean a different
+    # deviation on each page, with one colour bar for the whole image and nowhere to say so
+    spec = carpet_window_spec(carpet_fig, 0.0, 300.0)
+    assert set(spec["y"]) == {"yaxis2", "yaxis3"}
+    assert "coloraxis" not in spec
+
+
+def test_each_row_restates_its_numbers_over_the_window(carpet_fig):
+    # the run's maximum printed beside an axis that no longer reaches it is worse than no
+    # label, so the view rewrites the line rather than only moving the axis
+    quiet = {n["name"]: n["text"] for n in carpet_window_spec(carpet_fig, 0.0, 300.0)["notes"]}
+    loud = {n["name"]: n["text"] for n in carpet_window_spec(carpet_fig, 300.0, 600.0)["notes"]}
+    assert set(quiet) == set(loud)
+    assert quiet["gvtd-stat-long"] != loud["gvtd-stat-long"]
+
+
+def test_the_threshold_stays_the_runs(carpet_fig):
+    # a condition is counted against the run's line rather than given one of its own
+    import re
+    texts = [n["text"] for n in carpet_window_spec(carpet_fig, 0.0, 300.0)["notes"]]
+    run = [n["text"] for n in carpet_window_spec(carpet_fig, 300.0, 600.0)["notes"]]
+    def thresholds(lines):
+        return {re.search(r"thresh (\S+)", t).group(1) for t in lines if "thresh" in t}
+
+    assert thresholds(texts) == thresholds(run)
+
+
+def test_the_shaded_spans_follow_the_new_top(carpet_fig):
+    spec = carpet_window_spec(carpet_fig, 0.0, 300.0)
+    assert spec["bands"]
+    for band in spec["bands"]:
+        assert band["lo"] == 0.0
+        assert band["hi"] == spec["y"]["yaxis2"][1]
+
+
+def test_measuring_the_carpet_leaves_it_alone(carpet_fig):
+    before = [list(carpet_fig.layout.yaxis2.range), list(carpet_fig.layout.yaxis3.range)]
+    carpet_window_spec(carpet_fig, 0.0, 300.0)
+    assert [list(carpet_fig.layout.yaxis2.range),
+            list(carpet_fig.layout.yaxis3.range)] == before

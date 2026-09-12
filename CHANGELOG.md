@@ -14,6 +14,7 @@ All notable changes to this project will be documented in this file.
 - **Raw ratings are saved per page and appended to `group_raw_ratings.jsonl`.** A run and each of its condition pages are separate reports and are now filed separately, the arrangement the subject reports already used
 
 ### Changed
+- **A condition page's carpet scales its GVTD rows to that condition**, as the per-channel motion figure already did. Both rows keep one shared scale, since long and short are the same unit and scaling each to itself would hide the difference the second row is there to show, and each row restates its numbers over the window. The heatmaps below are untouched: their colour is a z-score against the whole run, and one colour bar serves the whole image
 - **A report page is titled by the run, not by the words "QC Report".** A condition page appends its own condition and a subject index is titled by its subject, so the heading and the browser tab say which page you are on; the condition used to appear only in the Scope row
 - **The raw viewer's per-condition pages read their numbers out of the record** instead of computing their own while the page is written
 - **Its rating bar lists every panel on the page and links to it.** It offered three labels, two of them ratable and none clickable; a viewer holding several runs shows one run's pills at a time, following the run selector

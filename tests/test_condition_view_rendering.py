@@ -23,7 +23,9 @@ import plotly.graph_objects as go
 import pytest
 from plotly.subplots import make_subplots
 
-from fnirs_pipe.qc.condition_views import rescale_y_to_window, zoom_to_condition
+from fnirs_pipe.qc.condition_views import (
+    apply_carpet_window, rescale_y_to_window, zoom_to_condition,
+)
 from fnirs_pipe.qc.figure_io import _save_multi_fig_html
 from fnirs_pipe.qc.report import _carpet_views, _condition_views, _save_plotly_html
 
@@ -111,13 +113,30 @@ def _motion_figure():
 
 
 def _carpet_figure():
+    """Two GVTD rows over a heatmap, shaped like the real carpet: the rows carry the named
+    stat labels a condition view rewrites, and share one y range as the builder gives them."""
+    from fnirs_pipe.qc.figures.motion_panel import GVTD_STAT_SLOT
+
     t = np.arange(0, 1000, 0.5)
     rng = np.random.default_rng(1)
-    fig = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.75, 0.25],
+    long_g = np.abs(np.sin(t / 13)) * np.where(t > 600, 0.017, 0.003)
+    short_g = np.abs(np.sin(t / 7)) * np.where(t > 600, 0.039, 0.006)
+    top = float(max(long_g.max(), short_g.max())) * 1.1
+
+    fig = make_subplots(rows=3, cols=1, shared_xaxes=True, row_heights=[0.2, 0.2, 0.6],
                         vertical_spacing=0.05)
+    for row, series, name in ((1, long_g, "long"), (2, short_g, "short")):
+        fig.add_trace(go.Scatter(x=[210, 210, 240, 240], y=[0, top, top, 0], fill="toself",
+                                 mode="lines", line=dict(width=0)), row=row, col=1)
+        fig.add_trace(go.Scatter(x=t, y=series, mode="lines", name="before"), row=row, col=1)
+        fig.add_hline(y=float(series.mean()) * 3, row=row, col=1,
+                      line=dict(dash="dash", width=1))
+        fig.add_annotation(x=0.998, xref="x domain", y=0.99, yref="y domain",
+                           text=f"max {series.max():.2e}", showarrow=False, xanchor="right",
+                           name=f"{GVTD_STAT_SLOT}{name}", row=row, col=1)
+        fig.update_yaxes(range=[0, top], row=row, col=1)
     fig.add_trace(go.Heatmap(z=rng.normal(0, 1, (40, t.size)), x=t, colorscale="RdBu",
-                             zmin=-3, zmax=3, showscale=False), row=1, col=1)
-    fig.add_trace(go.Scatter(x=t, y=np.abs(np.sin(t / 13)) * 0.01, mode="lines"), row=2, col=1)
+                             zmin=-3, zmax=3, showscale=False), row=3, col=1)
     fig.update_layout(height=520, showlegend=False)
     return fig
 
@@ -140,12 +159,12 @@ def test_a_motion_panel_picked_by_fragment_renders_as_the_written_out_one_did(tm
 def test_a_carpet_picked_by_fragment_renders_as_the_written_out_one_did(tmp_path):
     # the other saver, and the other div id: _save_plotly_html leaves Plotly to name the div
     reference = _carpet_figure()
-    zoom_to_condition(reference, *WINDOW)
+    apply_carpet_window(reference, *WINDOW)
     _save_plotly_html(reference, tmp_path / "reference.html")
 
     one_file = _carpet_figure()
     _save_plotly_html(one_file, tmp_path / "one_file.html",
-                      views=_carpet_views([(SLUG, *WINDOW)]))
+                      views=_carpet_views(one_file, [(SLUG, *WINDOW)]))
 
     was = _shot(tmp_path / "reference.html", tmp_path / "reference.png")
     now = _shot(tmp_path / "one_file.html", tmp_path / "one_file.png", f"#{SLUG}")

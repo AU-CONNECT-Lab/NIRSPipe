@@ -320,7 +320,7 @@ def _process_run(
         # and its colour scale taken over the run, so a cut would give each condition a
         # scale no other one can be read against. One file, narrowed by URL fragment.
         h     = _save_figure_html(fig, fig_dir / fname,
-                                  views=_carpet_views(cond_windows))
+                                  views=_carpet_views(fig, cond_windows))
         figure_paths["carpet"] = {"src": f"figures/{fname}", "h": h}
         carpet_inline = {"figure": fig.to_dict()}
 

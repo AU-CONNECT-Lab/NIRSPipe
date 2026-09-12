@@ -535,11 +535,11 @@ def _segments_in_window(segments: dict | None,
     ]
 
 
-def _carpet_views(spans: "list[tuple[str, float, float]]") -> "dict | None":
+def _carpet_views(fig, spans: "list[tuple[str, float, float]]") -> "dict | None":
     """Each condition's window on the carpet, shared with the raw viewer's own carpet."""
     from fnirs_pipe.qc.condition_views import carpet_view_table
 
-    return carpet_view_table(spans)
+    return carpet_view_table(fig, spans)
 
 
 def _condition_carpet(run_vars: dict, slug: str) -> dict:
@@ -625,7 +625,7 @@ def _section_motion(
                                      channel_set=gvtd_set, blocks=gvtd_blocks)
             carpet_gvtd_path, carpet_gvtd_h = _save_plotly_html(
                 fig, figures_dir / "carpet_gvtd.html",
-                views=_carpet_views(condition_spans or []))
+                views=_carpet_views(fig, condition_spans or []))
 
     with _guard("Bad segment zoom", errors, subject):
         all_spans = _segments_in_window(segments, window)

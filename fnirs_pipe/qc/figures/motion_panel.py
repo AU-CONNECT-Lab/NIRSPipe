@@ -193,6 +193,9 @@ _GVTD_HEADROOM = 1.45
 # Each row's true maximum stays printed in its label, so nothing is hidden by the cap.
 _GVTD_CAP_PCTL = 99.5
 
+# names the annotation holding a GVTD row's numbers, so a condition view can find it
+GVTD_STAT_SLOT = "gvtd-stat-"
+
 
 def _gvtd_row_label(name: str, n_ch: int) -> str:
     """Row title: the channel set large, its size and band small beside it.
@@ -203,6 +206,32 @@ def _gvtd_row_label(name: str, n_ch: int) -> str:
     """
     return (f"<b>GVTD {name}</b>  <span style='font-size:9px;color:#8b95a1'>"
             f"{n_ch} ch · 0.01–0.5 Hz</span>")
+
+
+def gvtd_y_top(traces: "list[np.ndarray]", thresholds: "list[float | None]") -> float:
+    """The top every GVTD row on a carpet panel shares, over whatever stretch it is given.
+
+    ::
+
+      gvtd_y_top([long_before, long_after, short_before, short_after], [4.8e-4, 3.4e-4])
+      -> 0.0127
+
+    A percentile rather than a maximum: on a recording with a handful of violent samples the
+    maximum flattens everything else into the bottom pixel, and the top 0.5% is allowed off
+    the canvas for that reason. Never below a row's threshold, since the line a row is judged
+    against has to stay visible.
+
+    One number for every row because long and short are the same unit at comparable
+    magnitudes, and scaling each to itself would hide the difference the second row exists to
+    show: on the reference dataset short peaks at 2.3 times long over the same window.
+
+    Public because a per-condition view recomputes it over that condition's window, and a
+    view drawn by a different rule from the figure it narrows is worse than no view.
+    """
+    caps = ([float(np.nanpercentile(np.concatenate(traces), _GVTD_CAP_PCTL))]
+            if traces else [])
+    top = max(caps + [t for t in thresholds if t is not None] or [1.0])
+    return top * _GVTD_HEADROOM
 
 
 def _gvtd_stat_label(g: np.ndarray, thresh: "float | None", prefix: str = "") -> str:
@@ -424,15 +453,10 @@ def carpet_gvtd_figure(
             hovertemplate="corrected: %{x:.1f}s<extra></extra>",
         ), row=strip_row, col=1)
 
-    # a fixed y-range shared by every GVTD row, because the spike shading is drawn as
-    # polygons and needs a top edge, and because the rows are only comparable on one scale
     traces = [r["g_ds"] for r in rows if r["g_ds"].size]
     traces += [r["after_ds"][1] for r in rows
                if r["after_ds"] is not None and np.size(r["after_ds"][1])]
-    caps = [float(np.nanpercentile(np.concatenate(traces), _GVTD_CAP_PCTL))] if traces else []
-    # never below a threshold: the line a row is judged against has to stay on the canvas
-    y_top = max(caps + [r["thresh"] for r in rows if r["thresh"] is not None] or [1.0])
-    y_top *= _GVTD_HEADROOM
+    y_top = gvtd_y_top(traces, [r["thresh"] for r in rows])
 
     spike_legend_drawn = False
     for i, r in enumerate(rows):
@@ -482,18 +506,21 @@ def carpet_gvtd_figure(
             xanchor="left", yanchor="top", font=dict(size=13, color=colour),
             row=row_i, col=1,
         )
+        # named, so a per-condition view can rewrite the line over its own window rather
+        # than leave the run's maximum printed beside an axis that no longer reaches it
         fig.add_annotation(
             x=0.998, xref="x domain", y=0.99, yref="y domain",
             text=_gvtd_stat_label(r["gvtd"], r["thresh"]), showarrow=False,
             xanchor="right", yanchor="top", font=dict(size=9, color=_GVTD_LINE),
-            row=row_i, col=1,
+            name=f"{GVTD_STAT_SLOT}{r['name']}", row=row_i, col=1,
         )
         if r["after_ds"] is not None:
             fig.add_annotation(
                 x=0.998, xref="x domain", y=0.80, yref="y domain",
                 text=_gvtd_stat_label(r["after"], r["thresh"], prefix="corrected"),
                 showarrow=False, xanchor="right", yanchor="top",
-                font=dict(size=9, color=_GVTD_AFTER), row=row_i, col=1,
+                font=dict(size=9, color=_GVTD_AFTER),
+                name=f"{GVTD_STAT_SLOT}{r['name']}-after", row=row_i, col=1,
             )
 
     carpet_top = gvtd_row + len(rows)

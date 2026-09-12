@@ -150,18 +150,37 @@ def test_a_run_with_no_carpet_hands_the_condition_page_none():
     assert _condition_carpet({}, "game1")["carpet_gvtd_path"] is None
 
 
-def test_the_carpet_view_carries_the_window_and_nothing_else():
-    # unlike the motion rows, the carpet's colour scale is one scale across conditions, so
-    # there is no y range to pick and no shaded span to redraw
-    views = _carpet_views([("game 1", 10.0, 20.0), ("video", 30.0, 40.0)])
-    assert views == {"game1": {"x": [10.0, 20.0]}, "video": {"x": [30.0, 40.0]}}
+def test_a_carpet_view_names_the_condition_and_its_window():
+    # what a view carries beyond the window is pinned in test_condition_views, against a
+    # figure the real builder made; here it is only the slug and the span
+    from fnirs_pipe.qc.figures.motion_panel import carpet_gvtd_figure  # noqa: F401
+    views = _carpet_views(_FakeFig(), [("game 1", 10.0, 20.0), ("video", 30.0, 40.0)])
+    assert set(views) == {"game1", "video"}
+    assert views["game1"]["x"] == [10.0, 20.0]
 
 
 def test_a_run_with_no_conditions_bakes_no_view_table():
-    assert _carpet_views([]) is None
+    assert _carpet_views(_FakeFig(), []) is None
 
 
 # ---- the bad-segment zoom belongs to the condition it is printed under ----
+
+class _FakeFig:
+    """Enough of a figure for the view table: no GVTD rows, so only the window survives."""
+
+    class _Layout:
+        annotations = ()
+        shapes = ()
+
+    data = ()
+    layout = _Layout()
+
+    def add_annotation(self, **_kw):
+        raise AssertionError("the view table must not write to the figure")
+
+    def update_yaxes(self, **_kw):
+        raise AssertionError("the view table must not write to the figure")
+
 
 SEGMENTS = {"BAD_gvtd": [(10.0, 5.0), (150.0, 40.0), (900.0, 30.0)],
             "BAD_manual": [(95.0, 20.0)]}

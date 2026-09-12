@@ -390,16 +390,50 @@ def window_view_spec(figure, t0: float, t1: float) -> dict:
 SCALE_SLOT = "qc-scale-"
 
 
-def carpet_view_table(spans: "list[tuple[str, float, float]]") -> "dict | None":
-    """Each condition's window on a carpet, which moves along time and nothing else.
+def apply_carpet_window(figure, t0: float, t1: float):
+    """Narrow a carpet to one condition in place: time axis, GVTD rows, and their labels.
 
-    Shorter than :func:`condition_view_table`: a carpet's colour scale is one scale across
-    conditions by design, so there is no y range and no shaded span to carry.
+    The companion of :func:`carpet_window_spec`, which measures the same thing and hands it
+    over instead. Both exist for the reason ``rescale_y_to_window`` and ``window_view_spec``
+    both do: the saved file is written once and a page picks a view out of it at load, so
+    the applied and the picked path have to be one measurement or they drift. Nothing in the
+    report calls this; the browser test that proves the two paths render alike does.
+    """
+    spec = carpet_window_spec(figure, t0, t1)
+    zoom_to_condition(figure, t0, t1)
+    for key, (floor, top) in spec["y"].items():
+        figure.layout[key].update(range=[floor, top], autorange=False)
+    for band in spec["bands"]:
+        tr = figure.data[band["i"]]
+        floor, top = band["lo"], band["hi"]
+        tr.y = [None if v is None else (floor if v <= floor else top) for v in tr.y]
+    by_name = {a.name: a for a in (figure.layout.annotations or ()) if a.name}
+    for note in spec["notes"]:
+        if note["name"] in by_name:
+            by_name[note["name"]].text = note["text"]
+    return figure
+
+
+def carpet_view_table(fig, spans: "list[tuple[str, float, float]]") -> "dict | None":
+    """Each condition's view of a carpet: its window, and its GVTD rows re-fitted to it.
+
+    The heatmaps keep the run's colour scale and only the line rows move;
+    :func:`carpet_window_spec` says why, and computes each view.
     """
     from fnirs_pipe.qc.figure_io import _pair_fname
 
-    return {_pair_fname(label): {"x": [float(t0), float(t1)]}
-            for label, t0, t1 in spans} or None
+    if not spans or not hasattr(fig, "add_annotation"):
+        return None
+    out = {}
+    for label, t0, t1 in spans:
+        spec = carpet_window_spec(fig, t0, t1)
+        out[_pair_fname(label)] = {
+            "x": spec["x"],
+            "y": {key: [floor, top] for key, (floor, top) in spec["y"].items()},
+            "bands": spec["bands"],
+            "ann": {note["name"]: note["text"] for note in spec["notes"]},
+        }
+    return out
 
 
 def condition_view_table(fig, spans: "list[tuple[str, float, float]]") -> "dict | None":
@@ -484,6 +518,97 @@ def figure_leaks(figure_paths: dict, slug: str) -> "list[str]":
             continue
         leaks.append(key)
     return leaks
+
+
+def carpet_window_spec(figure, t0: float, t1: float) -> dict:
+    """The carpet's GVTD rows re-fitted to one condition, its heatmaps left alone.
+
+    ::
+
+      carpet_window_spec(carpet_fig, 22.4, 322.4)
+      -> {"x": [22.4, 322.4],
+          "y": {"yaxis2": (0.0, 0.0061), "yaxis3": (0.0, 0.0061)},
+          "bands": [{"i": 1, "lo": 0.0, "hi": 0.0061}, ...],
+          "notes": [{"name": "gvtd-stat-long", "text": "max 2.36e-03 ..."}, ...]}
+
+    Two things differ from :func:`window_view_spec`, which is why this is its own function
+    rather than an option on that one.
+
+    **One top for every GVTD row, by the figure's own rule.** ``gvtd_y_top`` is called on
+    this window's samples, so the view is drawn the way the panel is drawn: a 99.5th
+    percentile rather than a maximum, and never below the threshold rule. Long and short
+    share the number because they are the same unit at comparable magnitudes; scaling each
+    to itself would hide the difference the second row is there to show.
+
+    **The heatmaps are not touched.** Their colour is a z-score against a per-channel mean
+    and SD taken over the whole run from the uncorrected side, and both carpets use those
+    same two numbers. Re-deriving them per condition would make one colour mean a different
+    deviation on each page, and the colour bar is one legend for the whole image with nowhere
+    to say so. A line can print the scale it is on beside itself, which is what the rewritten
+    stat labels below do, and a pixel cannot.
+    """
+    from fnirs_pipe.qc.figures.motion_panel import (
+        GVTD_STAT_SLOT, _gvtd_stat_label, gvtd_y_top,
+    )
+
+    out = {"x": [float(t0), float(t1)], "y": {}, "bands": [], "notes": []}
+    if not hasattr(figure, "update_yaxes"):
+        return out
+
+    # the GVTD rows are the ones carrying a named stat label; the strip has none and the
+    # heatmaps are not scatter traces at all
+    # the label is anchored to the row's domain, so its yref reads "y2 domain"
+    rows = {str(a.yref).removesuffix(" domain"): a.name[len(GVTD_STAT_SLOT):]
+            for a in (figure.layout.annotations or ())
+            if a.name and a.name.startswith(GVTD_STAT_SLOT) and not a.name.endswith("-after")}
+    if not rows:
+        return out
+
+    inside, per_row = [], {}
+    for i, tr in enumerate(figure.data):
+        axis = getattr(tr, "yaxis", None) or "y"
+        if axis not in rows:
+            continue
+        if getattr(tr, "fill", None) == "toself":
+            out["bands"].append({"i": i, "axis": axis})
+            continue
+        x, y = _trace_x(tr), np.asarray(tr.y, dtype=float)
+        if x is None:
+            continue
+        cut = y[(x >= t0) & (x <= t1)]
+        cut = cut[np.isfinite(cut)]
+        if cut.size:
+            inside.append(cut)
+            per_row.setdefault((axis, str(getattr(tr, "name", ""))), cut)
+    if not inside:
+        return out
+
+    top = gvtd_y_top(inside, [_threshold_of(figure, a) for a in rows])
+    for axis in rows:
+        key = "yaxis" + axis[1:]
+        if key in figure.layout:
+            out["y"][key] = (0.0, top)
+    for band in out["bands"]:
+        band["lo"], band["hi"] = 0.0, top
+        band.pop("axis")
+
+    for (axis, name), cut in per_row.items():
+        suffix = "-after" if name == "after" else ""
+        out["notes"].append({
+            "name": f"{GVTD_STAT_SLOT}{rows[axis]}{suffix}",
+            "text": _gvtd_stat_label(cut, _threshold_of(figure, axis),
+                                     prefix="corrected" if suffix else ""),
+        })
+    return out
+
+
+def _threshold_of(figure, axis: str) -> "float | None":
+    """The dashed threshold rule on one GVTD row, or None if it carries no line."""
+    for shape in (figure.layout.shapes or ()):
+        if getattr(shape, "yref", None) == axis and getattr(shape, "y0", None) is not None:
+            if shape.y0 == shape.y1:
+                return float(shape.y0)
+    return None
 
 
 def condition_payloads(
@@ -701,28 +826,30 @@ def _condition_sci_psp(build, sci_pc, psp_pc, bad_channels, sci_threshold, serie
     the per-channel scalars, so both are replaced by the condition's. Passing the
     condition's matrices with the run's scalars would put a per-condition heatmap beside a
     whole-run bar, which is the mistake this pairing exists to prevent.
+
+    Returns the figure itself, or None when no window of the run's grid falls inside this
+    condition, so the caller can write it to a file of its own.
     """
     import numpy as np
 
     from fnirs_pipe.qc.metrics.windowed import _in_scope
     matrix, times = series.get("sci_matrix"), series.get("sci_times")
     if matrix is None or times is None:
-        return {}
+        return None
     centers = np.asarray(times)
     if centers.ndim == 2 and centers.shape[1] == 2:
         centers = centers.mean(axis=1)
     keep = _in_scope(centers, [window])
     if not keep.any():
-        return {}
+        return None
     psp_matrix, psp_times = series.get("psp_matrix"), series.get("psp_times")
-    fig = build(
+    return build(
         sci_pc, psp_pc, bad_channels, sci_threshold,
         sci_matrix=np.asarray(matrix)[:, keep],
         sci_win_times=np.asarray(times)[keep],
         psp_matrix=None if psp_matrix is None else np.asarray(psp_matrix)[:, keep],
         psp_win_times=None if psp_times is None else np.asarray(psp_times)[keep],
     )
-    return {"figure": fig.to_dict()}
 
 
 def condition_slices_from_record(
