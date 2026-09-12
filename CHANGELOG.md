@@ -22,6 +22,10 @@ All notable changes to this project will be documented in this file.
 - **A condition's raw-signal panel holds only that condition's samples.** It was the whole run's with the axis narrowed, so Plotly's own double-click opened the whole recording again. Pages are a third of their old size as a result
 - **A panel a page has nothing for is hidden, heading and all**, instead of leaving a title over blank space
 - **Its rating bar lists every panel on the page and links to it.** It offered three labels, two of them ratable and none clickable; a viewer holding several runs shows one run's pills at a time, following the run selector
+- **The group report reads as a document**, the look the subject report and the raw viewer already wore: a section folds under its heading instead of sitting in a card, and the page opens with a Summary of what the cohort is and where its headline metrics sit
+- **Its distributions put a metric's channel sets side by side**, all / long / short as three colours over one x position rather than three positions of their own. Every metric now lands in a named same-scale chart: the "Other" one that mixed channel counts with millimetres and fractions is gone
+- **The time x subject heatmaps share one panel** with a metric picker, each drawn the first time it is asked for rather than all of them on load
+- **A cohort too small to have a middle says so** under every panel that measures distance from one
 
 ### Removed
 - **The Evoked response panel, from the raw report.** At this stage the average is taken on unfiltered, uncorrected concentration and is mostly drift. It stays in the GUI, where it is interactive

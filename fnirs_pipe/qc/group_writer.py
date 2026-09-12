@@ -6,18 +6,27 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 from fnirs_pipe.qc.boilerplate import collect_software_versions
 from fnirs_pipe.qc.figure_io import _save_figure_html
 from fnirs_pipe.qc.figures.group_figures import (
+    _split_column,
     build_grouped_boxes,
     build_heatmap,
     build_time_subject_heatmap,
     detect_outliers,
     group_metrics,
 )
-from fnirs_pipe.qc.report_shell import footer_vars, guard, note, page_vars, render
+from fnirs_pipe.qc.report_shell import (
+    footer_vars,
+    guard,
+    note,
+    page_vars,
+    render,
+    stylesheet,
+)
 from fnirs_pipe.qc.sqm_record import (
     OPTIONAL_SECTIONS,
     POST_BANDPASS_HAEMO_STAGES,
@@ -53,6 +62,20 @@ _WINDOWED_METRICS = [
 ]
 
 logger = get_logger("qc.group_writer")
+
+# Below this many runs a spread is not measured, it is drawn: the box, the robust z-score and
+# the Tukey fence each need a middle to sit in. The panels still render, carrying a line that
+# says what they cannot tell the reader at this cohort size.
+SMALL_COHORT_N = 5
+
+# What the summary reports, in this order. Each is read off the whole-channel-set column of
+# the earliest stage the cohort carries, that being the one every record has.
+_HEADLINE_METRICS = ("sci_mean", "psp_mean", "snr_mean", "cv_mean",
+                     "channel_retention_rate", "gvtd_pct_above_thresh")
+_STAGE_ORDER = ("raw", "motion", "motion_post", "preproc", "filtered", "resampled", "errts")
+
+# How a record's desc reads in the summary.
+_DESC_LABELS = {"sqm": "pipeline", "sqmraw": "prep-raw"}
 
 
 
@@ -146,31 +169,87 @@ def _sqm_row(bids_name: str, sqm: dict) -> dict:
 
 def _collect_sqm(
     output_dir: Path, entity_glob: str,
-) -> tuple[pd.DataFrame, list[dict]]:
+) -> tuple[pd.DataFrame, list[dict], list[str]]:
     """Glob SQM JSONs under output_dir matching entity prefix (e.g. 'sub-*' or 'group-*').
 
     One row per run, never one per file: a run that was processed by both the pipeline and
     `prep-raw` has two records, and the sectioned one wins because it is a superset.
 
-    Returns (df, full_rows):
+    Returns (df, full_rows, descs):
       - df:        scalar SQM columns (bids_name + numeric scalars), for TSV/heatmap/boxplot
       - full_rows: each row keeps the full SQM dict (incl. windowed list fields)
+      - descs:     which record kinds the cohort was built from, in _SQM_DESCS order
     """
-    by_run: dict[str, Path] = {}
+    by_run: dict[str, tuple[Path, str]] = {}
     for desc in _SQM_DESCS:
         for sqm_path in sorted(output_dir.glob(f"{entity_glob}/**/nirs/*_desc-{desc}_nirs.json")):
-            by_run.setdefault(_bids_name_from_sqm_path(sqm_path), sqm_path)
+            by_run.setdefault(_bids_name_from_sqm_path(sqm_path), (sqm_path, desc))
 
     full_rows: list[dict] = []
-    for bids_name, sqm_path in sorted(by_run.items()):
+    descs: set[str] = set()
+    for bids_name, (sqm_path, desc) in sorted(by_run.items()):
         try:
             sqm = json.loads(sqm_path.read_text(encoding="utf-8"))
         except Exception as exc:
             logger.warning("skip %s: %s", sqm_path, exc)
             continue
         full_rows.append(_sqm_row(bids_name, sqm))
+        descs.add(desc)
 
-    return rows_to_dataframe(full_rows), full_rows
+    return (rows_to_dataframe(full_rows), full_rows,
+            [d for d in _SQM_DESCS if d in descs])
+
+
+def _headline_rows(df: pd.DataFrame) -> list[dict]:
+    """One row per headline metric: the cohort's median and its range.
+
+    ::
+
+        raw_sci_mean   median 0.95   0.94 - 0.96
+
+    No verdict colour. What counts as a passing SCI is a per-run setting the group table
+    does not carry, so the summary reports the spread and leaves the call to the reader.
+    """
+    by_metric: dict[str, dict[str, str]] = {}
+    for col in df.columns:
+        stage, channel_set, metric = _split_column(col)
+        if channel_set == "all":
+            by_metric.setdefault(metric, {})[stage] = col
+
+    rows: list[dict] = []
+    for metric in _HEADLINE_METRICS:
+        stages = by_metric.get(metric, {})
+        col = next((stages[st] for st in _STAGE_ORDER if st in stages), None)
+        if col is None:
+            continue
+        values = pd.to_numeric(df[col], errors="coerce").to_numpy()
+        finite = values[np.isfinite(values)]
+        if not finite.size:
+            continue
+        rows.append({
+            "label": col,
+            "median": f"{np.median(finite):.4g}",
+            "range": f"{finite.min():.4g} to {finite.max():.4g}",
+        })
+    return rows
+
+
+def _summary_meta(df: pd.DataFrame, metric_cols: list[str], descs: list[str]) -> list[tuple]:
+    """What the cohort is: its size, its shape, and what it was measured from."""
+    channel_sets = sorted({_split_column(c)[1] for c in metric_cols})
+    windows = sorted({
+        float(v) for v in pd.to_numeric(df.get("qc_window_s"), errors="coerce").dropna()
+    }) if "qc_window_s" in df.columns else []
+
+    meta: list[tuple] = [
+        ("Runs", len(df)),
+        ("Metrics", len(metric_cols)),
+        ("Channel sets", ", ".join(channel_sets) or "n/a"),
+    ]
+    if windows:
+        meta.append(("QC window (s)", ", ".join(f"{w:g}" for w in windows)))
+    meta.append(("Records", " + ".join(_DESC_LABELS.get(d, d) for d in descs) or "none"))
+    return meta
 
 
 def _render_group(
@@ -179,6 +258,7 @@ def _render_group(
     title: str,
     df: pd.DataFrame,
     full_rows: list[dict],
+    descs: list[str] | None = None,
     template_name: str = "group_report.html.j2",
 ) -> Path:
     """Render TSV + HTML for an already-collected group of SQM rows.
@@ -253,25 +333,37 @@ def _render_group(
             if fig is None:
                 continue
             _save(f"window_{key}", f"window{key}", fig)
-            windowed_panels.append({"key": key, "title": panel_title})
+            windowed_panels.append(
+                {"key": key, "title": panel_title, **figure_paths[f"window_{key}"]})
 
     outliers: dict = {}
     if metric_cols:
         with guard("Outlier detection", errors, out_stem):
             outliers = detect_outliers(df, metric_cols)
 
+    if 0 < len(df) < SMALL_COHORT_N:
+        note(notes, out_stem,
+             f"{len(df)} runs. A box, a robust z-score and a Tukey fence all measure how far "
+             f"a run sits from the middle of its cohort, and a cohort this small has no middle "
+             f"to measure from: read the panels as the runs' own values side by side, which is "
+             f"what the table holds.")
+
     html = render(
         template_name,
         **page_vars(
             title=title,
             heading=title,
-            nav_meta=[("rows", len(df)), ("metrics", len(metric_cols))],
+            nav_meta=[("runs", len(df)), ("metrics", len(metric_cols))],
+            css=stylesheet("subject.css"),
         ),
         **footer_vars(scope=out_stem, errors=errors, notes=notes,
                      versions=collect_software_versions()),
         title=title,
         n_rows=len(df),
         n_metrics=len(metric_cols),
+        summary_meta=_summary_meta(df, metric_cols, descs or []),
+        headline_rows=_headline_rows(df) if not df.empty else [],
+        small_cohort=0 < len(df) < SMALL_COHORT_N,
         figure_paths=figure_paths,
         box_panels=box_panels,
         windowed_panels=windowed_panels,
@@ -294,8 +386,8 @@ def _build_group(
     template_name: str = "group_report.html.j2",
 ) -> Path:
     """Glob SQM JSONs and render group report."""
-    df, full_rows = _collect_sqm(output_dir, entity_glob)
-    return _render_group(output_dir, out_stem, title, df, full_rows, template_name)
+    df, full_rows, descs = _collect_sqm(output_dir, entity_glob)
+    return _render_group(output_dir, out_stem, title, df, full_rows, descs, template_name)
 
 
 def rows_to_dataframe(full_rows: list[dict]) -> pd.DataFrame:

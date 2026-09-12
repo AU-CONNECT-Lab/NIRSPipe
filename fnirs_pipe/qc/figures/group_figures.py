@@ -18,51 +18,99 @@ def _tukey_fences(values: np.ndarray, k: float = 1.5) -> tuple[float, float]:
     return (q1 - k * iqr, q3 + k * iqr)
 
 
-# Only scale-homogeneous metrics share a chart, so the y-axis stays in real units.
-# Each metric in a group gets its own colour (subgroup).
+# Only scale-homogeneous metrics share a chart, so the y-axis stays in real units. Keys are
+# bare metric names: which stage and which channel set a column came from is carried by the
+# chart's x label and its colour, not by a key of its own.
 _METRIC_GROUPS: list[tuple[str, list[str]]] = [
-    ("Coupling & cardiac (0-1)",
-     ["sci_mean", "psp_mean", "cp_mean",
-      "channel_retention_rate", "pct_data_retained"]),
-    ("GVTD amplitude",
-     ["gvtd_mean", "gvtd_p95", "gvtd_filt_mean", "gvtd_filt_p95", "gvtd_thresh"]),
-    ("Motion fraction", ["gvtd_pct_above_thresh"]),
-    ("Spike / motion counts", ["gvtd_num_above_thresh", "spike_count"]),
+    ("Coupling & retention (0-1)",
+     ["sci_mean", "cp_mean", "good_frac_mean", "channel_retention_rate",
+      "snr_pass_rate", "pct_data_retained"]),
+    ("Peak spectral power", ["psp_mean"]),
     ("Coefficient of variation", ["cv_mean", "cv_mean_760", "cv_mean_850"]),
     ("Intensity SNR", ["snr_mean"]),
     ("Mean amplitude", ["mean_amp_mean"]),
+    ("GVTD amplitude",
+     ["gvtd_mean", "gvtd_p95", "gvtd_filt_mean", "gvtd_filt_p95",
+      "gvtd_thresh", "gvtd_thresh_applied", "gvtd_censor_thresh"]),
+    ("GVTD in SD units", ["gvtd_vstd_mean", "gvtd_vstd_p95"]),
+    ("Motion & spike fraction",
+     ["gvtd_pct_above_thresh", "spike_pct", "spike_pct_frames",
+      "gvtd_censor_pct", "motion_corrected_pct", "motion_corrected_frac_mean"]),
+    ("Motion & spike counts",
+     ["gvtd_num_above_thresh", "spike_count", "spike_num_frames",
+      "gvtd_censor_n_spans", "motion_corrected_num", "motion_corrected_n_segments"]),
+    ("Retained recording (s)", ["gvtd_censor_retained_s"]),
     ("HbO-HbR correlation", ["hbo_hbr_corr_mean"]),
     ("Global correlation", ["gcor_hbo", "gcor_hbr"]),
     ("Low-freq drift", ["lowfreq_drift_amplitude_hbo", "lowfreq_drift_amplitude_hbr"]),
-    ("Residual physiology power", ["residual_cardiac_power", "residual_resp_power"]),
+    ("Physiology band power",
+     ["cardiac_band_power_hbo", "cardiac_band_power_hbr",
+      "resp_band_power_hbo", "resp_band_power_hbr"]),
+    ("Physiology band fraction",
+     ["cardiac_band_frac_hbo", "cardiac_band_frac_hbr",
+      "resp_band_frac_hbo", "resp_band_frac_hbr"]),
+    ("Contrast-to-noise", ["cnr_hbo_mean", "cnr_hbr_mean"]),
+    ("Channel & epoch counts",
+     ["n_channels", "n_long_channels", "n_short_channels", "n_bad",
+      "n_flat_channels", "cnr_n_epochs", "gvtd_censor_n_epochs"]),
     ("Channel distance (m)", ["ch_dist_mean", "ch_dist_min", "ch_dist_max"]),
+    ("Separation (mm)", ["sep_short_max_mm", "sep_long_min_mm", "sep_long_max_mm"]),
 ]
 
+# Settings the record stores beside its metrics. A distribution of a number the run was told
+# to use, rather than one it measured, says nothing: they stay in the table and out of the
+# figures.
+_SETTING_METRICS = frozenset(
+    {"qc_window_s", "gvtd_censor_n_std", "gvtd_censor_min_epoch_s"})
 
-def _bare_metric(col: str) -> str:
-    """Column name without its section prefix: ``raw_long_snr_mean`` -> ``snr_mean``.
+# ---- Channel sets ----
 
-    Quality records are sectioned, so the group table's columns are ``section_metric``
-    while _METRIC_GROUPS above names bare metrics. Longest section first, or ``raw``
-    would match a ``raw_long_`` column and leave ``long_snr_mean`` behind.
+# One colour per channel set, shared by every chart so the legend means the same thing on all
+# of them. The set is the section's `_long` / `_short` suffix; a section without one measured
+# every channel.
+_CHANNEL_SETS = ("all", "long", "short")
+_SET_COLOURS = {"all": "#34495e", "long": "#3498db", "short": "#e67e22"}
+
+
+def _split_column(col: str) -> tuple[str, str, str]:
+    """Split a group-table column into (stage, channel set, metric).
+
+    ::
+
+        "raw_long_sci_mean"  ->  ("raw", "long", "sci_mean")
+        "errts_gcor_hbo"     ->  ("errts", "all", "gcor_hbo")
+
+    Longest section first, or ``raw`` would match a ``raw_long_`` column and leave
+    ``long_sci_mean`` behind.
     """
     from fnirs_pipe.qc.sqm_record import SECTIONS
 
     for section in sorted(SECTIONS, key=len, reverse=True):
         if col.startswith(f"{section}_"):
-            return col[len(section) + 1:]
-    return col
+            stage, _, suffix = section.rpartition("_")
+            if suffix in ("long", "short"):
+                return stage, suffix, col[len(section) + 1:]
+            return section, "all", col[len(section) + 1:]
+    return "", "all", col
+
+
+def _bare_metric(col: str) -> str:
+    """Column name without its section prefix: ``raw_long_snr_mean`` -> ``snr_mean``."""
+    return _split_column(col)[2]
 
 
 def group_metrics(metric_cols: list[str]) -> tuple[list[tuple[str, list[str]]], list[str]]:
     """Split metric_cols into (groups, ordered_flat) following _METRIC_GROUPS; leftovers -> 'Other'.
 
     Matching ignores the section prefix, so ``raw_sci_mean`` and ``raw_long_sci_mean``
-    both land in the coupling group while staying separate columns.
+    both land in the coupling group while staying separate columns. Settings are dropped
+    rather than grouped, so neither the ordering nor the charts carry them.
     """
     by_metric: dict[str, list[str]] = {}
     for col in metric_cols:
-        by_metric.setdefault(_bare_metric(col), []).append(col)
+        bare = _bare_metric(col)
+        if bare not in _SETTING_METRICS:
+            by_metric.setdefault(bare, []).append(col)
 
     groups: list[tuple[str, list[str]]] = []
     assigned: set[str] = set()
@@ -71,7 +119,7 @@ def group_metrics(metric_cols: list[str]) -> tuple[list[tuple[str, list[str]]], 
         if present:
             groups.append((title, present))
             assigned.update(present)
-    leftover = [c for c in metric_cols if c not in assigned]
+    leftover = [c for cols in by_metric.values() for c in cols if c not in assigned]
     if leftover:
         groups.append(("Other", leftover))
     ordered = [c for _, ks in groups for c in ks]
@@ -182,45 +230,86 @@ _PALETTE = [
 
 
 def _group_box(title: str, keys: list[str], df: pd.DataFrame, rows: list[str]) -> go.Figure | None:
-    """One chart: real-value box + jittered strip per metric, coloured per metric."""
-    k = len(keys)
+    """One chart: real-value box + jittered strip, x = metric, colour = channel set.
+
+    The three channel sets of a metric sit side by side over one x position rather than at
+    three x positions of their own, so a metric's all / long / short read as one comparison
+    and the chart is a third as wide. The stage is dropped from the x label when the group
+    only holds one, which is what a cohort measured by `prep-raw` alone looks like.
+    """
+    cats: list[tuple[str, str]] = []          # (stage, metric), in the group's order
+    columns: dict[tuple[str, str], dict[str, str]] = {}   # cat -> {channel set: column}
+    for col in keys:
+        stage, cset, metric = _split_column(col)
+        cat = (stage, metric)
+        if cat not in columns:
+            cats.append(cat)
+            columns[cat] = {}
+        columns[cat][cset] = col
+
+    sets = [s for s in _CHANNEL_SETS if any(s in c for c in columns.values())]
+    one_stage = len({stage for stage, _ in cats}) == 1
+    labels = [metric if one_stage else f"{stage} {metric}" for stage, metric in cats]
+    k = len(cats)
+    slot = 0.8 / max(len(sets), 1)
+
     fig = go.Figure()
     drawn = 0
-    for xi, col in enumerate(keys):
-        vals = pd.to_numeric(df[col], errors="coerce").to_numpy()
-        finite = np.isfinite(vals)
-        if not finite.any():
+    for j, cset in enumerate(sets):
+        offset = (j - (len(sets) - 1) / 2) * slot
+        box_x: list[float] = []
+        box_y: list[float] = []
+        pt_x: list[float] = []
+        pt_y: list[float] = []
+        pt_meta: list[list[str]] = []
+        for i, cat in enumerate(cats):
+            col = columns[cat].get(cset)
+            if col is None:
+                continue
+            vals = pd.to_numeric(df[col], errors="coerce").to_numpy()
+            finite = np.isfinite(vals)
+            if not finite.any():
+                continue
+            box_x += [i + offset] * int(finite.sum())
+            box_y += vals[finite].tolist()
+            rng = np.random.default_rng(seed=abs(hash(col)) % (2**32))
+            pt_x += (i + offset
+                     + rng.uniform(-slot * 0.22, slot * 0.22, size=len(rows))).tolist()
+            pt_y += vals.tolist()
+            pt_meta += [[r, col] for r in rows]
+        if not box_y:
             continue
-        color = _PALETTE[xi % len(_PALETTE)]
-        fig.add_trace(go.Box(
-            x=[xi] * int(finite.sum()), y=vals[finite], name=col, width=0.5,
-            boxpoints=False, line=dict(color=color, width=1.2),
-            fillcolor="rgba(0,0,0,0)", hoverinfo="skip", showlegend=False,
-        ))
-        rng = np.random.default_rng(seed=abs(hash(col)) % (2**32))
-        fig.add_trace(go.Scatter(
-            x=xi + rng.uniform(-0.16, 0.16, size=len(rows)), y=vals,
-            mode="markers",
-            marker=dict(color=color, size=7, opacity=0.85,
-                        line=dict(width=0.5, color="#2c3e50")),
-            customdata=rows,
-            hovertemplate="<b>%{customdata}</b><br>" + col + "=%{y:.4g}<extra></extra>",
-            showlegend=False,
-        ))
         drawn += 1
+        colour = _SET_COLOURS[cset]
+        fig.add_trace(go.Box(
+            x=box_x, y=box_y, width=slot * 0.68, boxpoints=False,
+            line=dict(color=colour, width=1.2), fillcolor="rgba(0,0,0,0)",
+            hoverinfo="skip", showlegend=False, legendgroup=cset,
+        ))
+        fig.add_trace(go.Scatter(
+            x=pt_x, y=pt_y, mode="markers", name=cset, legendgroup=cset,
+            marker=dict(color=colour, size=7, opacity=0.85,
+                        line=dict(width=0.5, color="#2c3e50")),
+            customdata=pt_meta,
+            hovertemplate="<b>%{customdata[0]}</b><br>%{customdata[1]}=%{y:.4g}<extra></extra>",
+            showlegend=len(sets) > 1,
+        ))
     if drawn == 0:
         return None
 
     fig.update_xaxes(
-        tickvals=list(range(k)), ticktext=keys, range=[-0.6, k - 0.4],
+        tickvals=list(range(k)), ticktext=labels, range=[-0.6, k - 0.4],
         tickangle=-30 if k > 1 else 0, gridcolor="#f2f2f2",
     )
     fig.update_yaxes(gridcolor="#eeeeee", zeroline=False)
     fig.update_layout(
-        title=dict(text=title, x=0.02, xanchor="left", font=dict(size=12)),
-        width=150 + 78 * k, height=320,
+        title=dict(text=f"{title} ({cats[0][0]})" if one_stage and cats[0][0] else title,
+                   x=0.02, xanchor="left", font=dict(size=12)),
+        width=150 + (46 + 26 * len(sets)) * k, height=340,
         margin=dict(l=58, r=14, t=34, b=70),
         boxmode="overlay", plot_bgcolor="white",
+        legend=dict(orientation="h", yanchor="bottom", y=1.0, xanchor="right", x=1.0,
+                    font=dict(size=10)),
     )
     return fig
 

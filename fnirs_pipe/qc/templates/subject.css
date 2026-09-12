@@ -27,6 +27,9 @@ h1 { font-size: 1.5rem; margin: 0 0 0.25rem; }
 .summary-grid td, .summary-grid th { border: none; padding: 0.2rem 0.5rem 0.2rem 0; }
 .summary-grid th { background: none; width: 140px; color: #666; font-weight: 500; }
 
+/* the grey aside a section heading carries: what the panel below shows, and how to read it */
+.hint { font-size: 0.78rem; color: #888; font-weight: 400; }
+
 /* ---- badges ---- */
 .badge-green  { color: #27ae60; font-weight: 700; }
 .badge-yellow { color: #e67e22; font-weight: 700; }

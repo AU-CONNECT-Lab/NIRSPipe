@@ -1,52 +1,52 @@
 {% extends "_report_base.html.j2" %}
-{% from "_macros.html.j2" import card %}
 
 {% block css %}
+/* The document look, the same one the subject report and the raw viewer wear: a section is a
+   heading with a disclosure triangle rather than a card, and the page is read top to bottom.
+   subject.css owns the summary grid, the details and the metric tables; only the group
+   report's own panels belong here. */
+
 .plot-frame { width: 100%; border: none; display: block; }
 
-#box-flow {
-  display: flex; flex-wrap: wrap; gap: 6px;
-  padding: 0.4rem; align-items: flex-start;
-}
+#box-flow { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-start; }
 .box-frame { border: none; display: block; }
 
-#qc-nav .nav-meta b { color: #2c3e50; }
-
-#summary-bar {
-  padding: 0.6rem 1rem;
-  font-size: 0.88rem;
-  color: #2c3e50;
+/* the right-hand summary table reports three columns rather than a label and a value, so it
+   does not want the label column the grid gives the left one */
+.summary-grid table.headline th {
+  width: auto; color: #8a949e; font-size: 0.75rem; text-transform: uppercase;
+  letter-spacing: 0.04em; border-bottom: 1px solid #d8dee5;
 }
-#summary-bar a {
-  color: #2980b9; text-decoration: none; font-weight: 600;
-  margin-left: 0.6rem;
-}
-#summary-bar a:hover { text-decoration: underline; }
+.summary-grid table.headline td:not(:first-child),
+.summary-grid table.headline th:not(:first-child) { text-align: right; }
+.summary-grid table.headline td { font-variant-numeric: tabular-nums; }
+.summary-grid table.headline td:first-child { color: #34495e; font-weight: 600; }
 
-#group-table-wrap { padding: 0; overflow: auto; max-height: 600px; }
+#group-table-wrap { overflow: auto; max-height: 600px; margin-top: 0.5rem; }
 table.group-table {
   width: 100%; border-collapse: collapse; font-size: 0.78rem;
   font-variant-numeric: tabular-nums;
 }
+/* no cell grid: a row is separated by a hairline and a column by being right-aligned, the way
+   every other metric table on the document look reads */
 table.group-table th, table.group-table td {
-  border-bottom: 1px solid #eef0f3; padding: 0.25rem 0.55rem; text-align: right;
-  white-space: nowrap;
+  border: none; border-bottom: 1px solid #eef0f3;
+  padding: 0.25rem 0.55rem; text-align: right; white-space: nowrap;
 }
 table.group-table th {
-  background: #f8f9fa; cursor: pointer; user-select: none;
-  position: sticky; top: 0; font-weight: 600; text-align: right;
-  border-bottom: 2px solid #dde3ea;
+  background: #fff; cursor: pointer; user-select: none;
+  position: sticky; top: 0; font-weight: 600; color: #8a949e;
+  font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.03em;
+  border-bottom: 1px solid #d8dee5;
 }
 table.group-table th:first-child, table.group-table td:first-child {
   text-align: left; position: sticky; left: 0; background: #fff;
-  border-right: 1px solid #dde3ea;
 }
-table.group-table th:first-child { background: #f8f9fa; z-index: 2; }
+table.group-table th:first-child { z-index: 2; }
 table.group-table tbody tr:hover td { background: #f5fbff; }
-table.group-table th .sort-ind { color: #adb5bd; font-size: 0.7rem; margin-left: 0.3rem; }
+table.group-table th .sort-ind { color: #ccd2d8; font-size: 0.7rem; margin-left: 0.3rem; }
 
-#outlier-list { padding: 0.6rem 1rem; font-size: 0.85rem; }
-#outlier-list ul { margin: 0; padding-left: 1.2rem; }
+#outlier-list ul { margin: 0; padding-left: 1.2rem; font-size: 0.85rem; }
 #outlier-list li { padding: 0.18rem 0; border-bottom: 1px solid #eef0f3; }
 #outlier-list li b { color: #c0392b; }
 #outlier-list .no-out { color: #27ae60; font-weight: 600; }
@@ -56,141 +56,214 @@ table.group-table th .sort-ind { color: #adb5bd; font-size: 0.7rem; margin-left:
 }
 {% endblock %}
 
-{% block nav_extra %}
-  <span class="nav-meta" style="margin-left:auto">
-    <a href="{{ tsv_name }}" download style="color:#2980b9;text-decoration:none;font-weight:600">⬇ {{ tsv_name }}</a>
+{% block header %}
+<div class="page-header">
+  <h1>{{ page_heading }}</h1>
+  <span class="subtitle">
+    {%- for label, value in nav_meta or [] %}{{ label }}: <b>{{ value }}</b> &bull; {% endfor -%}
+    {{ run_date }}
+    {%- if tsv_name %} &bull; <a href="{{ tsv_name }}" download>&#8681; {{ tsv_name }}</a>{% endif %}
   </span>
-{%- endblock %}
+</div>
+{% endblock %}
 
 {% block content %}
 
-<div class="card" id="summary-card">
-  <div id="summary-bar">
-    Jump to: <a href="#heatmap">Heatmap</a> · <a href="#boxplots">Boxplots</a>
-    {% if windowed_panels %} · <a href="#windowed">Time × subject</a>{% endif %}
-    · <a href="#outliers">Outliers</a> · <a href="#table">Table</a>
-  </div>
-</div>
+{# printed under every panel whose statistic the cohort is too small to carry #}
+{%- set small_caveat %}Only {{ n_rows }} runs: a box, a robust z-score and a Tukey fence each
+measure how far a run sits from the middle of its cohort, and this cohort has no middle to
+measure from. Read the panels as the runs' own values side by side.{% endset %}
 
-<a id="heatmap"></a>
-{% if figure_paths.heatmap %}
-{% call card("Heatmap (subject &times; metric, robust z-score)", hint="red &asymp; high &bull; blue &asymp; low &bull; |z| &gt; 2 likely outlier") %}
-<iframe class="plot-frame" src="{{ figure_paths.heatmap.src }}"
-        style="height:{{ figure_paths.heatmap.h }}px"></iframe>
-{% endcall %}
+{% if summary_meta or headline_rows %}
+<h2 id="Summary">Summary</h2>
+<div class="summary-box">
+  <div class="summary-grid">
+    <table>
+      {%- for label, value in summary_meta or [] %}
+      <tr><th>{{ label }}</th><td>{{ value }}</td></tr>
+      {%- endfor %}
+      <tr><th>Date</th><td>{{ run_date }}</td></tr>
+      {%- if versions %}
+      <tr><th>fnirs-pipe</th><td>v{{ versions.get('fnirs-pipe', 'n/a') }}</td></tr>
+      <tr><th>Python</th><td>{{ versions.get('python', 'n/a') }}</td></tr>
+      {%- endif %}
+    </table>
+    {% if headline_rows %}
+    <table class="headline">
+      <tr><th>Metric</th><th>Median</th><th>Range</th></tr>
+      {%- for row in headline_rows %}
+      <tr><td>{{ row.label }}</td><td>{{ row.median }}</td><td>{{ row.range }}</td></tr>
+      {%- endfor %}
+    </table>
+    {% endif %}
+  </div>
+  {% if outliers is defined %}
+  <p class="qm-note" style="margin-top:0.9rem">
+    {% if outliers %}{{ outliers | length }} of {{ n_rows }} runs sit beyond a Tukey fence on at
+    least one metric, listed under Outliers.{% else %}No run sits beyond a Tukey fence on any
+    metric.{% endif %}
+  </p>
+  {% endif %}
+  {% if small_cohort %}<p class="qm-note">{{ small_caveat }}</p>{% endif %}
+</div>
 {% endif %}
 
-<a id="boxplots"></a>
+{% if figure_paths.heatmap %}
+<details id="Heatmap" open>
+  <summary>Heatmap <span class="hint">subject &times; metric, robust z-score &bull; red &asymp; high &bull; blue &asymp; low &bull; |z| &gt; 2 likely outlier</span></summary>
+  <div class="details-body">
+    {% if small_cohort %}<p class="qm-note">{{ small_caveat }}</p>{% endif %}
+    <iframe class="plot-frame" src="{{ figure_paths.heatmap.src }}"
+            style="height:{{ figure_paths.heatmap.h }}px"></iframe>
+  </div>
+</details>
+{% endif %}
+
 {% if box_panels %}
-{% call card("Distributions by group", hint="real values &bull; each chart groups same-scale metrics, one colour per metric &bull; click a point to open its report") %}
-<div id="box-flow">
-  {% for p in box_panels %}
-  <iframe class="box-frame" src="{{ p.src }}"
-          style="width:{{ p.w }}px;height:{{ p.h }}px"></iframe>
-  {% endfor %}
-</div>
-{% endcall %}
+<details id="Distributions" open>
+  <summary>Distributions <span class="hint">real values &bull; one chart per same-scale group &bull; colour = channel set &bull; click a point to open its report</span></summary>
+  <div class="details-body">
+    {% if small_cohort %}<p class="qm-note">{{ small_caveat }}</p>{% endif %}
+    <div id="box-flow">
+      {%- for p in box_panels %}
+      <iframe class="box-frame" src="{{ p.src }}"
+              style="width:{{ p.w }}px;height:{{ p.h }}px"></iframe>
+      {%- endfor %}
+    </div>
+  </div>
+</details>
 {% endif %}
 
 {% if windowed_panels %}
-<a id="windowed"></a>
-{% for p in windowed_panels %}
-{% set fp = figure_paths['window_' ~ p.key] %}
-{% if fp %}
-{% call card(p.title, hint="time &times; subject &bull; one column per window &bull; hover for value") %}
-<iframe class="plot-frame" src="{{ fp.src }}" style="height:{{ fp.h }}px"></iframe>
-{% endcall %}
+<details id="Windowed" open>
+  <summary>Time &times; subject <span class="hint">one column per QC window &bull; hover for value &bull; pick the metric below</span></summary>
+  <div class="details-body">
+    <select id="window-pick" class="ch-select">
+      {%- for p in windowed_panels %}
+      <option value="{{ loop.index0 }}">{{ p.title }}</option>
+      {%- endfor %}
+    </select>
+    {%- for p in windowed_panels %}
+    {# src is set when the panel is first shown: eight plotly pages loading at once to put one
+       of them on screen is what made this section slow #}
+    <iframe class="plot-frame window-frame" data-src="{{ p.src }}"
+            style="height:{{ p.h }}px{% if not loop.first %};display:none{% endif %}"></iframe>
+    {%- endfor %}
+  </div>
+</details>
 {% endif %}
-{% endfor %}
+
+{% if outliers is defined %}
+<details id="Outliers" open>
+  <summary>Outliers <span class="hint">runs beyond a Tukey fence (Q1 &minus; 1.5&times;IQR, Q3 + 1.5&times;IQR) on any metric</span></summary>
+  <div class="details-body" id="outlier-list">
+    {% if small_cohort %}<p class="qm-note">{{ small_caveat }}</p>{% endif %}
+    {% if outliers %}
+    <ul>
+      {%- for sid, metrics in outliers.items() %}
+      <li><b>{{ sid }}</b> &mdash;
+        {% for m in metrics %}<span class="outlier-metric">{{ m }}</span>{% endfor %}
+      </li>
+      {%- endfor %}
+    </ul>
+    {% else %}
+    <p class="no-out">No outliers flagged.</p>
+    {% endif %}
+  </div>
+</details>
 {% endif %}
 
-<a id="outliers"></a>
-{% call card("Outliers", hint="subjects beyond Tukey fence (Q1 &minus; 1.5&times;IQR, Q3 + 1.5&times;IQR) on any metric") %}
-<div id="outlier-list">
-  {% if outliers %}
-  <ul>
-    {% for sid, metrics in outliers.items() %}
-    <li><b>{{ sid }}</b> &mdash;
-      {% for m in metrics %}<span class="outlier-metric">{{ m }}</span>{% endfor %}
-    </li>
-    {% endfor %}
-  </ul>
-  {% else %}
-  <p class="no-out">No outliers flagged.</p>
-  {% endif %}
-</div>
-{% endcall %}
+{% if table_rows %}
+<details id="Table" open>
+  <summary>All metrics <span class="hint">every scalar the records carry &bull; click a column header to sort &bull; first column sticky</span></summary>
+  <div class="details-body">
+    <div id="group-table-wrap">
+      <table class="group-table" id="group-table">
+        <thead><tr>
+          {%- for c in table_columns %}
+          <th data-col="{{ loop.index0 }}">{{ c }}<span class="sort-ind">&#8645;</span></th>
+          {%- endfor %}
+        </tr></thead>
+        <tbody>
+          {%- for row in table_rows %}
+          <tr>
+            {%- for v in row %}
+            <td>{{ v if v is not none else "&mdash;" }}</td>
+            {%- endfor %}
+          </tr>
+          {%- endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</details>
+{% endif %}
 
-<a id="table"></a>
-{% call card("All metrics (sortable)", hint="click column header to sort &bull; first column sticky") %}
-<div id="group-table-wrap">
-  <table class="group-table" id="group-table">
-    <thead><tr>
-      {% for c in table_columns %}
-      <th data-col="{{ loop.index0 }}">{{ c }}<span class="sort-ind">⇅</span></th>
-      {% endfor %}
-    </tr></thead>
-    <tbody>
-      {% for row in table_rows %}
-      <tr>
-        {% for v in row %}
-        <td>{{ v if v is not none else "—" }}</td>
-        {% endfor %}
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</div>
-{% endcall %}
+{% endblock %}
 
+{% block scripts %}
 <script>
 (function() {
   var table = document.getElementById("group-table");
-  if (!table) return;
-  var thead = table.querySelector("thead");
-  var tbody = table.querySelector("tbody");
-  var asc = {};
+  if (table) {
+    var thead = table.querySelector("thead");
+    var tbody = table.querySelector("tbody");
+    var asc = {};
 
-  function cellValue(td) {
-    var v = td.textContent.trim();
-    if (v === "" || v === "—") return null;
-    var n = Number(v);
-    return Number.isFinite(n) ? n : v.toLowerCase();
+    var cellValue = function(td) {
+      var v = td.textContent.trim();
+      if (v === "" || v === "—") return null;
+      var n = Number(v);
+      return Number.isFinite(n) ? n : v.toLowerCase();
+    };
+
+    thead.querySelectorAll("th").forEach(function(th) {
+      th.addEventListener("click", function() {
+        var col = +th.dataset.col;
+        var direction = asc[col] = !asc[col];
+        var rows = Array.from(tbody.querySelectorAll("tr"));
+        rows.sort(function(a, b) {
+          var va = cellValue(a.children[col]);
+          var vb = cellValue(b.children[col]);
+          if (va === null && vb === null) return 0;
+          if (va === null) return 1;
+          if (vb === null) return -1;
+          if (va < vb) return direction ? -1 : 1;
+          if (va > vb) return direction ? 1 : -1;
+          return 0;
+        });
+        rows.forEach(function(r) { tbody.appendChild(r); });
+        thead.querySelectorAll(".sort-ind").forEach(function(s) { s.textContent = "⇅"; });
+        th.querySelector(".sort-ind").textContent = direction ? "▲" : "▼";
+      });
+    });
   }
 
-  thead.querySelectorAll("th").forEach(function(th) {
-    th.addEventListener("click", function() {
-      var col = +th.dataset.col;
-      var direction = asc[col] = !asc[col];
-      var rows = Array.from(tbody.querySelectorAll("tr"));
-      rows.sort(function(a, b) {
-        var va = cellValue(a.children[col]);
-        var vb = cellValue(b.children[col]);
-        if (va === null && vb === null) return 0;
-        if (va === null) return 1;
-        if (vb === null) return -1;
-        if (va < vb) return direction ? -1 : 1;
-        if (va > vb) return direction ? 1 : -1;
-        return 0;
-      });
-      rows.forEach(function(r) { tbody.appendChild(r); });
-      thead.querySelectorAll(".sort-ind").forEach(function(s) { s.textContent = "⇅"; });
-      th.querySelector(".sort-ind").textContent = direction ? "▲" : "▼";
+  // one windowed heatmap on screen at a time, each loaded the first time it is asked for
+  var picker = document.getElementById("window-pick");
+  var frames = document.querySelectorAll(".window-frame");
+  var showWindow = function(i) {
+    frames.forEach(function(f, j) {
+      f.style.display = (j === +i) ? "block" : "none";
+      if (j === +i && !f.src) f.src = f.dataset.src;
     });
-  });
+  };
+  if (picker && frames.length) {
+    showWindow(0);
+    picker.addEventListener("change", function() { showWindow(this.value); });
+  }
 
   // iframe auto-resize listener (same protocol as figure_io.py)
   window.addEventListener("message", function(e) {
     if (!e.data || e.data.type !== "iframe-resize") return;
-    var frames = document.querySelectorAll("iframe");
-    for (var i = 0; i < frames.length; i++) {
-      if (frames[i].contentWindow === e.source) {
-        frames[i].style.height = e.data.h + "px";
+    var all = document.querySelectorAll("iframe");
+    for (var i = 0; i < all.length; i++) {
+      if (all[i].contentWindow === e.source) {
+        all[i].style.height = e.data.h + "px";
         return;
       }
     }
   });
 })();
 </script>
-
 {% endblock %}
