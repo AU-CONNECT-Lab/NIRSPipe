@@ -46,11 +46,12 @@ _HASH_VIEW_JS = (
     "if(!t||!gd||!gd.layout)return;"
     "var k=decodeURIComponent(location.hash.replace(/^#/,''));"
     "if(!k||!t[k])return;"
-    "var v=t[k],up={};"
+    "var v=t[k],up={},axes=[];"
     "Object.keys(gd.layout).forEach(function(a){"
-    "if(/^xaxis[0-9]*$/.test(a)){up[a+'.range']=v.x.slice();up[a+'.autorange']=false;}});"
+    "if(/^xaxis[0-9]*$/.test(a)){up[a+'.range']=v.x.slice();up[a+'.autorange']=false;"
+    "axes.push([a,v.x]);}});"
     "Object.keys(v.y||{}).forEach(function(a){"
-    "up[a+'.range']=v.y[a].slice();up[a+'.autorange']=false;});"
+    "up[a+'.range']=v.y[a].slice();up[a+'.autorange']=false;axes.push([a,v.y[a]]);});"
     # by the annotation's own name rather than by an index measured when the file was
     # written: an annotation added to the figure in between would shift every index
     # and land a row's note on another row, with nothing to say so
@@ -59,22 +60,26 @@ _HASH_VIEW_JS = (
     "Plotly.relayout(gd,up).then(function(){"
     "(v.bands||[]).forEach(function(b){"
     "Plotly.restyle(gd,{y:[gd.data[b.i].y.map(function(q){"
-    "return q===null?null:(q<=b.lo?b.lo:b.hi);})]},[b.i]);});});}"
-    # Plotly's own double-click autoranges over the samples the trace holds, which are the
-    # whole run's: without this it resets to the run rather than to the view the page asked
-    # for, and nothing on the page says the axis moved. Re-applied after Plotly's reset, so
-    # a file opened with no fragment keeps the ordinary behaviour.
-    "function bind(){"
-    "var gd=document.querySelector('.plotly-graph-div');"
-    "if(!gd||!gd.on)return;"
-    "gd.on('plotly_doubleclick',function(){setTimeout(apply,0);});"
-    "}"
-    "function start(){apply();bind();}"
-    "if(document.readyState==='complete')start();"
-    "else window.addEventListener('load',start);"
+    "return q===null?null:(q<=b.lo?b.lo:b.hi);})]},[b.i]);});"
+    # Plotly interface: `_rangeInitial0` / `_rangeInitial1` on a computed axis is where both
+    # the modebar's reset button and a double-click read their target from, recorded at the
+    # first draw and therefore the whole run. Rewritten so a reset lands on the window the
+    # page asked for. Checked against the pinned CDN build by
+    # tests/test_condition_view_rendering.py.
+    "axes.forEach(function(p){var ax=(gd._fullLayout||{})[p[0]];"
+    "if(ax){ax._rangeInitial0=p[1][0];ax._rangeInitial1=p[1][1];"
+    "ax._autorangeInitial=false;}});"
+    "});}"
+    "if(document.readyState==='complete')apply();"
+    "else window.addEventListener('load',apply);"
     "window.addEventListener('hashchange',function(){location.reload();});"
     "})();</script>"
 )
+
+# Plotly's default is `reset+autosize`, which toggles: the first double-click on a view that
+# is already at its reset target autoscales over the samples the traces hold, the whole run's.
+# Only files carrying a views table get this, so an ordinary figure keeps the default.
+_VIEW_CONFIG = {"responsive": True, "doubleClick": "reset"}
 
 
 def _figure_height(fig, default: int = 500) -> int:
@@ -101,7 +106,8 @@ def _save_figure_html(fig, path: Path, extra_js: str = "", extra_css: str = "",
     path.parent.mkdir(parents=True, exist_ok=True)
     kwargs = {"div_id": div_id} if div_id else {}
     html = fig.to_html(
-        full_html=True, include_plotlyjs=False, config={"responsive": True}, **kwargs
+        full_html=True, include_plotlyjs=False,
+        config=_VIEW_CONFIG if views else {"responsive": True}, **kwargs
     )
     html = html.replace(
         "<head>",
@@ -144,7 +150,8 @@ def _save_multi_fig_html(figs: list, path: Path, views: "dict | None" = None) ->
         fig.update_layout(height=h)
         fig_html = fig.to_html(
             full_html=False, include_plotlyjs=False,
-            div_id=f"pfig{i}", config={"responsive": True},
+            div_id=f"pfig{i}",
+            config=_VIEW_CONFIG if views else {"responsive": True},
         )
         parts.append(f'<div class="pfig">{fig_html}</div>')
     if views:

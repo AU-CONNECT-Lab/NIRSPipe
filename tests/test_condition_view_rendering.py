@@ -10,10 +10,15 @@ So this compares the two by rendering both in a browser and hashing the pixels. 
 Chrome and reaches the Plotly CDN the saved files name, and skips when either is missing
 rather than passing on a pair of blank pages: the size floor below is what makes a blank
 render a failure instead of a match.
+
+The last test asks the page a question a screenshot cannot answer: where a reset would go.
+The shim rewrites Plotly's own reset target, which is a Plotly internal, so that test is
+what catches the rename when the pinned CDN version is bumped.
 """
 
 import hashlib
 import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -73,6 +78,42 @@ def _shot(html: Path, png: Path, fragment: str = "") -> bytes:
 
 def _sha(data: bytes) -> str:
     return hashlib.sha1(data).hexdigest()
+
+
+# Asks the page what a reset would do, which a screenshot cannot show: the shim writes the
+# condition's window onto Plotly's own reset target, and a renamed internal would leave the
+# modebar's reset button and a double-click opening the whole run again with nothing to say
+# the axis moved. Polls because the shim sets it after its relayout resolves.
+_RESET_PROBE = """
+<div id="reset-probe">pending</div>
+<script>(function(){
+var n=0,id=setInterval(function(){
+var gd=document.querySelector('.plotly-graph-div');
+var ax=gd&&gd._fullLayout&&gd._fullLayout.xaxis;
+var out=document.getElementById('reset-probe');
+if(ax&&ax._rangeInitial0!==undefined){
+out.textContent='RESET='+ax._rangeInitial0+','+ax._rangeInitial1;clearInterval(id);}
+else if(++n>100){out.textContent='RESET=none';clearInterval(id);}},50);})();</script>
+"""
+
+
+def _reset_target(html: Path, fragment: str) -> "tuple[float, float]":
+    """The range a reset would restore, read out of the rendered page."""
+    probed = html.with_name("probed.html")
+    page = html.read_text(encoding="utf-8")
+    probed.write_text(page.replace("</body>", _RESET_PROBE + "</body>", 1), encoding="utf-8")
+    out = subprocess.run(
+        [_chrome(), "--headless=old", "--disable-gpu", "--no-sandbox",
+         "--virtual-time-budget=15000", "--window-size=1000,560",
+         f"--user-data-dir={html.parent / '_probe_profile'}", "--dump-dom",
+         probed.resolve().as_uri() + fragment],
+        capture_output=True, timeout=120,
+    ).stdout.decode("utf-8", "replace")
+    if "main-svg" not in out:
+        pytest.skip("the figure did not render; the Plotly CDN is probably unreachable")
+    found = re.search(r"RESET=([-\d.eE+]+),([-\d.eE+]+)", out)
+    assert found, "the shim left Plotly's reset target on the whole run"
+    return float(found.group(1)), float(found.group(2))
 
 
 def _motion_figure():
@@ -197,3 +238,11 @@ def test_an_unknown_fragment_falls_back_to_the_whole_run(tmp_path):
     was = _shot(tmp_path / "run.html", tmp_path / "run.png")
     now = _shot(tmp_path / "one_file.html", tmp_path / "gone.png", "#nosuchcondition")
     assert _sha(now) == _sha(was)
+
+
+def test_a_reset_returns_to_the_condition_not_to_the_run(tmp_path):
+    one_file = _motion_figure()
+    _save_multi_fig_html([one_file], tmp_path / "one_file.html",
+                         views=_condition_views(one_file, [(SLUG, *WINDOW)]))
+
+    assert _reset_target(tmp_path / "one_file.html", f"#{SLUG}") == pytest.approx(WINDOW)

@@ -53,9 +53,16 @@ _MARK_EDGE = "#9aa0a6"
 _R_THRESHOLD = -0.3
 
 # ---- Layout ----
-_ROW_HEIGHTS = [0.68, 0.32]
-_V_SPACING = 0.13
-_HEIGHT = 1000
+# The heatmap is square-constrained, so its side is min(column width, row height). A row
+# height fixed in advance is what made the row the binding one on a wide page: 15 px cells
+# with the spare width spent on blank range either side of the matrix, which is also what
+# pushed the y tick labels away from it. The row is sized off the channel count instead,
+# and `constrain="domain"` below shrinks the axis rather than padding its range, so the
+# labels stay against the matrix whichever dimension binds.
+_CELL_PX = 22
+_HEAT_MIN_PX, _HEAT_MAX_PX = 520, 1100
+_DUMBBELL_PX = 300
+_V_SPACING_PX = 130
 
 
 def _pair_key(ch_name: str) -> str:
@@ -121,15 +128,15 @@ def _stage(raw: mne.io.Raw, order: "list[str]"):
     return corr, pair_r
 
 
-def _add_heatmap(fig, corr, order, col, show_scale):
+def _add_heatmap(fig, corr, order, col, show_scale, heat_frac):
     # float32 halves the serialised payload and still resolves r to ~1e-7, far below what
     # the colour scale or the hover readout distinguishes
     fig.add_trace(go.Heatmap(
         z=np.asarray(corr, dtype=np.float32), x=order, y=order,
         zmin=-1.0, zmax=1.0, colorscale=_SCALE, reversescale=_REVERSE,
         showscale=show_scale,
-        colorbar=dict(title="Pearson r", len=_ROW_HEIGHTS[0] * 0.92,
-                      y=1.0 - _ROW_HEIGHTS[0] / 2, thickness=12,
+        colorbar=dict(title="Pearson r", len=heat_frac * 0.92,
+                      y=1.0 - heat_frac / 2, thickness=12,
                       tickvals=[-1, -0.5, 0, 0.5, 1]),
         hovertemplate="%{y}<br>%{x}<br>r = %{z:.3f}<extra></extra>",
     ), row=1, col=col)
@@ -255,15 +262,24 @@ def hbo_hbr_correlation_figure(
     n_ch = len(order)
     n_hbo = sum(1 for n in order if n.endswith("hbo"))
     cols = 2 if two_stage else 1
+
+    heat_px = float(np.clip(n_ch * _CELL_PX, _HEAT_MIN_PX, _HEAT_MAX_PX))
+    height = heat_px + _V_SPACING_PX + _DUMBBELL_PX
+    heat_frac, dumb_frac = heat_px / height, _DUMBBELL_PX / height
+    row_heights = [heat_px / (heat_px + _DUMBBELL_PX),
+                   _DUMBBELL_PX / (heat_px + _DUMBBELL_PX)]
+    v_spacing = _V_SPACING_PX / height
+
     fig = make_subplots(
-        rows=2, cols=cols, row_heights=_ROW_HEIGHTS, vertical_spacing=_V_SPACING,
+        rows=2, cols=cols, row_heights=row_heights, vertical_spacing=v_spacing,
         horizontal_spacing=0.06,
         specs=[[{}, {}], [{"colspan": 2}, None]] if two_stage else [[{}], [{}]],
         subplot_titles=("before denoising", "after denoising") if two_stage else (),
     )
 
     for col, corr in ((1, corr_b), (2, corr_a))[:cols]:
-        _add_heatmap(fig, corr, order, col, show_scale=(col == cols))
+        _add_heatmap(fig, corr, order, col, show_scale=(col == cols),
+                     heat_frac=heat_frac)
         _add_dividers(fig, groups, order, n_hbo, col)
 
     dumbbell_row = 2
@@ -272,13 +288,14 @@ def hbo_hbr_correlation_figure(
     # Every channel keeps its label: unlike the static panel this replaced, an unreadable
     # tick here is one scroll-zoom away from being readable, so subsampling them buys
     # nothing. The size only has to keep 44-ish channels legible unzoomed.
-    tick_fs = int(np.clip(420 / max(n_ch, 1), 5, 9))
+    tick_fs = int(np.clip(480 / max(n_ch, 1), 5, 10))
     for col in range(1, cols + 1):
         x_axis = "x" if col == 1 else "x2"
         fig.update_xaxes(showgrid=False, zeroline=False, tickangle=45,
-                         tickfont=dict(size=tick_fs), row=1, col=col)
+                         constrain="domain", tickfont=dict(size=tick_fs), row=1, col=col)
         fig.update_yaxes(showgrid=False, zeroline=False, autorange="reversed",
-                         scaleanchor=x_axis, showticklabels=(col == 1),
+                         scaleanchor=x_axis, constrain="domain",
+                         constraintoward="top", showticklabels=(col == 1),
                          tickfont=dict(size=tick_fs), row=1, col=col)
 
     if xs is not None:
@@ -293,11 +310,11 @@ def hbo_hbr_correlation_figure(
 
     fig.update_layout(
         title=dict(text=title, x=0.5, font=dict(size=16)),
-        height=_HEIGHT, plot_bgcolor="white", paper_bgcolor="white",
-        margin=dict(l=70, r=70, t=70, b=90),
+        height=int(height), plot_bgcolor="white", paper_bgcolor="white",
+        margin=dict(l=90, r=70, t=70, b=90),
         # above the dumbbell: at lower right it sat on the short channels, which is exactly
         # where this panel puts its most positive values
         legend=dict(orientation="h", xanchor="right", yanchor="bottom",
-                    x=1.0, y=_ROW_HEIGHTS[1] - _V_SPACING / 2, font=dict(size=10)),
+                    x=1.0, y=dumb_frac - v_spacing / 2, font=dict(size=10)),
     )
     return fig
