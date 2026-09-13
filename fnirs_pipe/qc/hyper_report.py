@@ -728,8 +728,10 @@ def build_hyper_post_report(
     Sections:
       1. Per-channel WTC  — Morlet wavelet coherence, one heatmap per channel
       2. Per-ROI WTC      — the member channels' maps averaged cell by cell (when roi_map given)
-      3. ISC matrix       — inter-brain Pearson r heatmap (channel × channel)
-      4. ISC connectogram — inter-brain arcs filtered by isc_threshold
+      3. Cross matrices   — band-mean coherence per channel pair and per ROI pair, HbO
+                            beside HbR on one scale (when wtc_channel_cross)
+      4. ISC              — inter-brain Pearson r heatmap beside its connectogram, whose
+                            arcs are filtered by isc_threshold
 
     Each WTC map is also collapsed to one number per channel over
     [wtc_band_fmin, wtc_band_fmax] and written as a TSV under the group's nirs/, so a

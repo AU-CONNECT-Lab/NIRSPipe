@@ -10,8 +10,8 @@ All notable changes to this project will be documented in this file.
 - **`fnirs-qc group-hyper-raw` is a report about dyads.** Every dyad in a tree on one page: how much of each recording both members could use at the same moment, split into the loss that is one member's and the loss that is shared; where that time went, per channel pair and per condition; and each window's coherence as its rank inside its own null. A channel pair pale down the whole cohort is the cap rather than any one dyad, which is the finding no single dyad page can carry. The per-subject quality distributions stay in `group-raw`, where they are measured
 - **Each dyad writes a usable-time table**, one row per channel pair and condition, beside its quality record. The three shares are on the dyad's own record too, so a cohort of twenty is read without opening twenty pages
 
-- **Every cross-brain matrix comes with a connectogram beside it**, the arrangement the ISC panel already had: the heatmap carries every pairing and the circle shows which ones stand out. Both coherence band-mean matrices take it, and all three panels are live, so hover names the pairing and prints its value instead of leaving an arc to be traced to both ends
-- **`--wtc-arc-min` sets which pairings the coherence circles draw.** Left unset, a grid small enough to read whole is drawn whole and a larger one keeps its strongest pairings. Display only: no table or matrix cell moves with it
+- **The coherence matrices put HbO and HbR side by side on one colour scale**, per channel pair and per ROI pair. Reading the two together is what the second chromophore is run for, and they were stacked as separate figures with a colorbar each. Live, so hover names the pairing and prints its value
+- **The ISC panel carries a connectogram beside its matrix**: the heatmap holds every pairing and the circle shows which ones stand out, both live
 - **The ROI coherence maps are live figures.** Hover reads the time, frequency and coherence under the pointer and the axes zoom, which is what a map whose structure changes every ten seconds at the fast end needs. The per-channel maps stay stills: both kinds cost about 3 MB apiece, and a crossed 14-channel dyad has 2352 of the one against 192 of the other
 
 ### Changed
@@ -25,6 +25,8 @@ All notable changes to this project will be documented in this file.
 - **The page is named after the run**, as a subject page is, rather than after the report that wrote it
 - **The orange caveat panels are gone from the dyad pages.** A caveat on every page stops being read as one; what is left is grey prose, and the one coloured warning is the window too short for the band it averages
 - **A coherence map names its conditions in a legend in the top right.** The label was written above every block, so a block design printed the same word once per block
+- **The coherence panels are sized to each other.** The channel map is flatter and never taller than the live ROI map under it, which on a wide monitor it was by half again; the matrix and ISC panels are taller, having drawn a small square in the middle of a mostly blank panel
+- **The provenance diagram collapses repeats.** A step run once per chromophore per condition is one box saying what it was run over, so a dyad's graph is eight boxes rather than nineteen stacked into a column four times the height of the rest of it. Two inputs that would read the same are named by subject
 
 ### Fixed
 - **The inter-brain connectogram drew connections that do not exist.** On a 12-channel dyad it put 276 arcs on the circle where 21 cleared the threshold: 132 of them joined two channels of the *same* brain, which an inter-brain matrix has no number for at all, and the rest were sub-threshold pairings drawn at zero. All of them rendered pale rather than invisible, so the circle read as a haze with a few strong lines in it
