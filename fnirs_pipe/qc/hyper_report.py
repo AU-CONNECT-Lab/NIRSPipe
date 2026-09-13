@@ -32,7 +32,7 @@ from fnirs_pipe.qc.figure_io import (
     get_channel_pairs,
     save_png,
 )
-from fnirs_pipe.qc.figures.hyper_figures import _cond_colors, sci_of
+from fnirs_pipe.qc.figures.hyper_figures import _cond_colors
 from fnirs_pipe.qc.hyper_raw_writer import _process_hyper_raw_group
 from fnirs_pipe.qc.report_shell import (
     footer_vars,
@@ -455,7 +455,6 @@ def build_hyper_report(
     sqm_data: dict[str, dict],
     aligned_raws: dict[str, mne.io.Raw],
     offsets: dict[str, float],
-    coherence_df: pd.DataFrame,
     output_dir: Path,
     raw_raws: dict[str, mne.io.Raw] | None = None,
     session: str | None = None,
@@ -464,6 +463,7 @@ def build_hyper_report(
     cardiac_h_freq: float | None = None,
     coherence_fmin: float = 0.01,
     coherence_fmax: float = 0.10,
+    sep_bands=None,
 ) -> Path:
     output_dir.mkdir(parents=True, exist_ok=True)
     errors: list[str] = []
@@ -472,16 +472,12 @@ def build_hyper_report(
     meta = _process_hyper_raw_group(
         group_id=group_id, task=task, group=group,
         sqm_data=sqm_data, aligned_raws=aligned_raws, offsets=offsets,
-        coherence_df=coherence_df, output_dir=output_dir,
+        output_dir=output_dir,
         raw_raws=raw_raws, session=session, sci_threshold=sci_threshold,
         cardiac_l_freq=cardiac_l_freq, cardiac_h_freq=cardiac_h_freq,
         coherence_fmin=coherence_fmin, coherence_fmax=coherence_fmax,
-        errors=errors, notes=notes,
+        sep_bands=sep_bands, errors=errors, notes=notes,
     )
-
-    # the windowed estimate, as every other SCI on a dyad page is. The decisions table
-    # prints this beside each rating chip, so it has to be the number the reader reads
-    sci_per_subject = {sid: sci_of(sqm_data, sid) for sid in meta["subject_ids"]}
 
     from fnirs_pipe.qc.boilerplate.vocabulary import template_slots
     versions = collect_software_versions()
@@ -535,7 +531,6 @@ def build_hyper_report(
         sqm_json=json.dumps(meta["sqm"], default=str),
         figure_paths=meta["figure_paths"],
         ch_detail_template_json=json.dumps(meta["figure_paths"].get("ch_detail_template")),
-        sci_per_subject_json=json.dumps(sci_per_subject),
         ch_columns=_CH_COLUMNS,
         decision_rows_json=json.dumps(
             decision_rows(sqm_data, meta["subject_ids"], sci_threshold), default=str),

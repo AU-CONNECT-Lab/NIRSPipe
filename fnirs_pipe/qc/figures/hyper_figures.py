@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-
 import mne
 import numpy as np
 import pandas as pd
@@ -14,6 +13,12 @@ from fnirs_pipe.qc.figures._utils import (CONDITION_PALETTE, PSD_NFFT,
                                           TIMELINE_ROW_PX,
                                           decimate as _decimate, physio_bands, timeline_axes,
                                           timeline_row_bands, timeline_row_traces)
+# Imported rather than restated: these heads are the subject report's channel map with a
+# different quantity on them, and a reader who learned one reads the other. Two copies of
+# the pair would let one report's bars thicken while the other's stayed put.
+from fnirs_pipe.qc.figures.topomap import (
+    _LONG_SIZE as _HEAD_SIZE, _SHORT_SIZE as _HEAD_SHORT_SIZE,
+)
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("qc.figures.hyper")
@@ -46,16 +51,6 @@ def _hex_to_rgba(hex_color: str, alpha: float) -> str:
     h = hex_color.lstrip("#")
     r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
     return f"rgba({r},{g},{b},{alpha})"
-
-
-def _lighter(hex_color: str, factor: float = 0.45) -> str:
-    h = hex_color.lstrip("#")
-    r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
-    return "#{:02x}{:02x}{:02x}".format(
-        int(r + (255 - r) * factor),
-        int(g + (255 - g) * factor),
-        int(b + (255 - b) * factor),
-    )
 
 
 def _cond_colors(descriptions: list[str]) -> dict[str, str]:
@@ -142,36 +137,6 @@ def _ch_kept_by_member(
     return result
 
 
-def _group_color(statuses: list[bool | None]) -> str:
-    known = [s for s in statuses if s is not None]
-    if not known:
-        return _NA_COLOR
-    if all(known):
-        return _GOOD_COLOR
-    if not any(known):
-        return _NA_COLOR
-    return _MIX_COLOR
-
-
-def _hover_sci(pair: str, sqm_data: dict, subject_ids: list[str]) -> str:
-    """One channel pair's line per member: the verdict, and the SCI behind it.
-
-    Both, because they answer different questions and the marker can only carry one colour.
-    A channel rejected at a high SCI is the case worth being able to see, and it reads as a
-    mistake unless the two numbers sit together.
-    """
-    lines = [f"<b>{pair}</b>"]
-    for sid in subject_ids:
-        sci_d = sci_of(sqm_data, sid)
-        val = sci_d.get(f"{pair} hbo") or sci_d.get(pair)
-        sci = f"SCI (10 s) = {val:.3f}" if val is not None else "SCI n/a"
-        rejected = _rejected_pairs(sqm_data, sid)
-        verdict = ("" if rejected is None
-                   else " &bull; rejected" if pair in rejected else " &bull; kept")
-        lines.append(f"{sid}: {sci}{verdict}")
-    return "<br>".join(lines)
-
-
 # ---------------------------------------------------------------------------
 # Shared data layer: the screening grid, on the dyad's clock
 # ---------------------------------------------------------------------------
@@ -186,11 +151,17 @@ def coupled_grid(
 
     ::
 
-      -> {"t": [...], "pairs": ["S1_D1", ...], "ok": {"sub-01": mask, "sub-02": mask}}
+      -> {"t": [...], "pairs": ["S1_D1", ..., "S1_D8", ...],
+          "long_pairs": ["S1_D1", ...], "ok": {"sub-01": mask, "sub-02": mask}}
 
     with each ``mask`` a ``pair x window`` boolean, True where that member's SCI and PSP both
     cleared their lines in that window. The three dyad panels that read it (the usable-time
     carpet, the two head figures) then cannot disagree about which window was good.
+
+    **Every pair, with the long ones named separately.** The carpet is a long-channel picture
+    because the dyad measures run on long channels, but a head draws the whole montage, and a
+    grid holding only the long set handed the short markers a NaN each: eight discs with no
+    colour and no meaning on it.
 
     Two things this does that a per-panel version kept getting wrong. The stored matrices are
     on each member's **own** clock, so the window centres are shifted by that member's crop
@@ -228,7 +199,9 @@ def coupled_grid(
     if duration_s is not None:
         keep &= ref <= float(duration_s)
 
-    pairs, rows = [], {sid: [] for sid in subject_ids}
+    pairs: list[str] = []
+    long_pairs: list[str] = []
+    rows = {sid: [] for sid in subject_ids}
     for sid in subject_ids:
         member = sqm_data.get(sid) or {}
         order = list((member.get("screen_windows") or {}).get("channel_order") or [])
@@ -241,7 +214,8 @@ def coupled_grid(
         for i, name in enumerate(order):
             by_pair.setdefault(name.rsplit(" ", 1)[0], []).append(i)
         if not pairs:
-            pairs = [p for p in by_pair if p in long_names] or list(by_pair)
+            pairs = list(by_pair)
+            long_pairs = [p for p in pairs if p in long_names] or list(pairs)
         for pair in pairs:
             idx = by_pair.get(pair)
             # a pair one member lacks is not usable by the dyad at any moment
@@ -250,6 +224,7 @@ def coupled_grid(
 
     return {"t": ref[keep],
             "pairs": pairs,
+            "long_pairs": long_pairs,
             "ok": {sid: np.array(rows[sid])[:, keep] for sid in subject_ids}}
 
 
@@ -279,7 +254,7 @@ def member_series(sqm_data: dict, sid: str, grid: dict, offset: float) -> dict:
     order = list(sw.get("channel_order") or [])
     if not order or sw.get("centers") is None:
         return {}
-    long_pairs = set(grid["pairs"])
+    long_pairs = set(grid.get("long_pairs") or grid["pairs"])
     rows = [i for i, name in enumerate(order) if name.rsplit(" ", 1)[0] in long_pairs]
     t = np.asarray(sw["centers"], dtype=float) - float(offset)
     keep = np.isin(np.round(t, 2), np.round(np.asarray(grid["t"], dtype=float), 2))
@@ -414,11 +389,14 @@ def build_usable_time(
 
     None when the grid holds no pair.
     """
-    pairs = list(grid["pairs"])
+    pairs = list(grid.get("long_pairs") or grid["pairs"])
     if not pairs:
         return None
     t = np.asarray(grid["t"], dtype=float)
-    status = dyad_status(grid, subject_ids)
+    # the carpet is a long-channel picture: every dyad measure runs on long channels, and a
+    # short row here would be read as coverage the analysis could have used
+    keep = [i for i, name in enumerate(grid["pairs"]) if name in set(pairs)]
+    status = dyad_status(grid, subject_ids)[keep]
     lost = (status != 2).mean(axis=1)
     order = np.argsort(lost)[::-1]
     labels = [f"{pairs[i]}   {lost[i] * 100:.0f}%" if lost[i] else pairs[i] for i in order]
@@ -501,11 +479,6 @@ def build_usable_time(
 # Figure: where on the head
 # ---------------------------------------------------------------------------
 
-# Marker size is in pixels while a head scales with its container, so a grid of ten small
-# heads and a pair of large ones cannot share one number. 7 is what both layouts here carry;
-# the short disc follows it by the same ratio the subject report's channel map uses.
-_HEAD_SIZE = 7
-_SHORT_RATIO = 12 / 7
 _HEAD_SCALE = [[0.0, _BAD_COLOR], [0.5, _MIX_COLOR], [1.0, _GOOD_COLOR]]
 
 
@@ -562,17 +535,20 @@ def _head_glyph(fig, geo, scope, values, row, col, title, cmin, cmax, bar) -> in
     Long and short keep one colour scale, as the subject report's channel map does, so a
     short channel reads as a contamination check rather than a second map. That report can
     give them a row of their own; one head cannot, so the **shape** carries the distinction:
-    a long channel is a bar of discs along its path, a short one an outlined square.
+    a long channel is a bar of small discs along its path, a short one a single larger disc
+    inside a white ring.
     """
     g = geo[scope]
     short = scope == "short"
     fig.add_trace(go.Scatter(
         x=g["gx"], y=g["gy"], mode="markers", text=g["labels"],
-        marker=dict(size=round(_HEAD_SIZE * (_SHORT_RATIO if short else 1)),
-                    symbol="square" if short else "circle",
+        marker=dict(size=_HEAD_SHORT_SIZE if short else _HEAD_SIZE,
+                    symbol="circle",
                     color=np.repeat(values, g["per_pair"]).astype(np.float32),
                     colorscale=_HEAD_SCALE, cmin=cmin, cmax=cmax, showscale=bar,
-                    line=dict(width=1.1 if short else 0, color="#5a6b7b"),
+                    # a white ring, which reads as a separate object against both the head
+                    # and the bars while leaving the fill on the shared colour scale
+                    line=dict(width=2 if short else 0, color="#ffffff"),
                     colorbar=dict(title=dict(text=title, side="right", font=dict(size=10)),
                                   thickness=12, len=0.72, tickfont=dict(size=9))),
         hovertemplate="%{text}<br>%{marker.color:.3f}<extra></extra>",
@@ -769,6 +745,10 @@ def build_screening_strip(coherence_df: "pd.DataFrame") -> "go.Figure | None":
     windows = list(dict.fromkeys(coherence_df["window"]))
     rows = list(reversed(windows))
     jitter = np.random.default_rng(0)
+    # each block in the colour panel 2 and 3 give it, so a reader carries one mapping across
+    # the page; the whole run is not a block and stays neutral
+    blocks = [w for w in windows if w != "whole run"]
+    colours = {**_cond_colors(blocks), "whole run": "#7f8c8d"}
 
     fig = go.Figure()
     fig.add_vrect(x0=NULL_ALPHA_PCT, x1=100, fillcolor="#3498db", opacity=0.07, line_width=0)
@@ -776,13 +756,17 @@ def build_screening_strip(coherence_df: "pd.DataFrame") -> "go.Figure | None":
     for i, name in enumerate(rows):
         sub = coherence_df[coherence_df["window"] == name]
         pct = sub["percentile"].to_numpy(dtype=float)
+        colour = colours.get(name, "#7f8c8d")
         fig.add_trace(go.Scatter(
             x=pct, y=i + jitter.uniform(-0.13, 0.13, len(pct)), mode="markers",
-            name="one channel", legendgroup="ch", showlegend=(i == 0),
+            name=str(name), legendgroup=str(name), showlegend=False,
             customdata=sub["ch_name"].tolist(),
-            marker=dict(size=7, opacity=0.8,
-                        color=["#c0392b" if p >= NULL_ALPHA_PCT else "#c8d0d8" for p in pct],
-                        line=dict(width=0.4, color="#fff")),
+            # saturated only above the line: a channel that cleared its null is the one a
+            # reader is looking for, and the rest are the spread it has to be read against
+            marker=dict(size=8,
+                        color=[colour if p >= NULL_ALPHA_PCT else "#d7dde2" for p in pct],
+                        opacity=[0.95 if p >= NULL_ALPHA_PCT else 0.75 for p in pct],
+                        line=dict(width=0.6, color="#fff")),
             hovertemplate=("<b>%{customdata}</b><br>" + str(name)
                            + "<br>%{x:.1f}th percentile of its null<extra></extra>"),
         ))
@@ -792,9 +776,10 @@ def build_screening_strip(coherence_df: "pd.DataFrame") -> "go.Figure | None":
              for n in rows]
     fig.add_trace(go.Scatter(
         x=means, y=list(range(len(rows))), mode="markers", name="channel mean",
-        customdata=rows,
-        marker=dict(size=12, symbol="diamond", color="#2471a3",
-                    line=dict(width=0.5, color="#fff")),
+        customdata=rows, showlegend=False,
+        marker=dict(size=13, symbol="diamond",
+                    color=[colours.get(n, "#7f8c8d") for n in rows],
+                    line=dict(width=1.2, color="#fff")),
         hovertemplate="%{customdata}<br>mean at the %{x:.1f}th percentile<extra></extra>"))
 
     fig.update_xaxes(title_text="Percentile inside its own pseudo-dyad null",

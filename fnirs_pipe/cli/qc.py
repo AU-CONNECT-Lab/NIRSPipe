@@ -132,7 +132,6 @@ def cmd_hyper_raw(
         _raw_to_haemo,
         align_recordings,
         compute_group_sqm_raw,
-        compute_pairwise_coherence,
         crop_aligned_window,
         load_group_raw_bids,
         normalize_raws,
@@ -159,10 +158,6 @@ def cmd_hyper_raw(
         aligned_raws = crop_aligned_window(aligned_raws, tstart, tend)
         if normalize:
             aligned_raws = normalize_raws(aligned_raws)
-        coherence_df = compute_pairwise_coherence(
-            aligned_raws, fmin=coherence_fmin, fmax=coherence_fmax,
-            sep_bands=sep_bands,
-        )
         return build_hyper_report(
             group_id=gid,
             task=task,
@@ -171,8 +166,8 @@ def cmd_hyper_raw(
             aligned_raws=aligned_raws,
             offsets=offsets,
             raw_raws=raws_haemo,
-            coherence_df=coherence_df,
             output_dir=output_dir,
+            sep_bands=sep_bands,
             session=ses,
             sci_threshold=sci_threshold,
             cardiac_l_freq=cardiac_l_freq,

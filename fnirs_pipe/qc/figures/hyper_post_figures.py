@@ -246,6 +246,12 @@ def build_wtc_channel(
 # which it can do because the arrows are measured in pixels rather than in data.
 _INTERACTIVE_PLOT_H = 430
 
+# The cross panel's height, the same way: 900 px of figure over the 2.25 aspect its two
+# squares sit side by side at, plus the 150 px of title and colourbar `_INTERACTIVE_PLOT_H`
+# also has to leave room for. Written out because the two constants it used to be computed
+# from were removed when this became a fixed number.
+PANEL_HEIGHT = 550
+
 # Arrow length in pixels. The still's is a fifty-second of its axes, which on a report page
 # about 1600 px wide comes out near this; it is a pixel length here rather than a share of
 # the panel because an annotation's tail is offset in pixels.

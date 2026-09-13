@@ -121,7 +121,6 @@ def _process_hyper_raw_group(
     sqm_data: dict[str, dict],
     aligned_raws: dict[str, mne.io.Raw],
     offsets: dict[str, float],
-    coherence_df: pd.DataFrame,
     output_dir: Path,
     raw_raws: dict[str, mne.io.Raw] | None = None,
     session: str | None = None,
@@ -130,6 +129,7 @@ def _process_hyper_raw_group(
     cardiac_h_freq: float | None = None,
     coherence_fmin: float = 0.01,
     coherence_fmax: float = 0.10,
+    sep_bands=None,
     errors: list | None = None,
     notes: list | None = None,
 ) -> dict:
@@ -185,7 +185,16 @@ def _process_hyper_raw_group(
     with guard("Screening coherence", errors, label):
         screening_df = screening_coherence(
             aligned_raws, fmin=coherence_fmin, fmax=coherence_fmax,
-            windows=[(name, a, b) for name, (a, b) in conditions.items()])
+            windows=[(name, a, b) for name, (a, b) in conditions.items()],
+            sep_bands=sep_bands)
+    # The whole-run rows are the plain pairwise coherence, so the table and the record read
+    # them out of the pass that already measured them rather than measuring a second time.
+    # Two passes meant two copies of the segment-length rule, and a value on this page is
+    # compared with its own null: they have to be the same estimate.
+    coherence_df = (screening_df[screening_df["window"] == "whole run"]
+                    [["ch_name", "sub1", "sub2", "coherence"]].reset_index(drop=True)
+                    if not screening_df.empty else pd.DataFrame(
+                        columns=["ch_name", "sub1", "sub2", "coherence"]))
 
     with guard("Coherence tables", errors, label):
         _write_coherence_tsv(
@@ -225,7 +234,8 @@ def _process_hyper_raw_group(
     else:
         series = {sid: member_series(sqm_data, sid, grid, offsets.get(sid, 0.0))
                   for sid in subject_ids}
-        geo = {sid: head_geometry(aligned_raws[sid], grid["pairs"])
+        geo = {sid: head_geometry(aligned_raws[sid],
+                                  grid.get("long_pairs") or grid["pairs"])
                for sid in subject_ids if sid in aligned_raws}
         geo = {sid: g for sid, g in geo.items() if g is not None}
         if not geo:
@@ -271,8 +281,10 @@ def _process_hyper_raw_group(
     # readable: see `screening_summary`
     sqm["screening"] = screening_summary(screening_df)
     if grid is not None:
-        status = dyad_status(grid, subject_ids)
-        sqm["n_long_pairs"] = len(grid["pairs"])
+        long_pairs = grid.get("long_pairs") or grid["pairs"]
+        rows_long = [i for i, name in enumerate(grid["pairs"]) if name in set(long_pairs)]
+        status = dyad_status(grid, subject_ids)[rows_long]
+        sqm["n_long_pairs"] = len(long_pairs)
         sqm["usable_pairs_mean"] = round(float((status == 2).sum(axis=0).mean()), 2)
         sqm["usable_window_frac"] = round(float((status == 2).mean()), 4)
     sqm_path = sqm_dir / f"{label}_desc-sqm_nirs.json"

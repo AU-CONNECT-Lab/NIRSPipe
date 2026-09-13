@@ -225,12 +225,11 @@
 {% endif %}
 
 {% if figure_paths.head_slider %}
-<details id="HeadSlider">
+<details id="HeadSlider" open>
   <summary>b. Over the recording <span class="hint">one head per member, with a slider</span></summary>
   <div class="details-body">
     <p class="step-desc">Colour is that window&rsquo;s SCI. The block the slider sits in is
-      named above the heads and moves with it. Collapsed by default: every frame carries a
-      colour per marker per member, so this panel is most of the page&rsquo;s weight.</p>
+      named above the heads and moves with it.</p>
     <iframe class="plotly-frame" src="{{ figure_paths.head_slider.src }}"
             title="SCI per channel over the recording"
             style="height:{{ figure_paths.head_slider.h }}px"></iframe>
@@ -357,8 +356,6 @@ var _CH_DETAIL_TMPL = {{ ch_detail_template_json | safe }};
 var _BLOCKS         = {{ blocks_json | safe }};
 var _MEMBERS        = {{ member_info_json | safe }};
 
-window._SCI_PER_SUBJECT = {{ sci_per_subject_json | safe }};
-window._SCI_THRESHOLD   = {{ sci_threshold }};
 window._CH_PAIRS        = _CH_PAIRS;
 window._HYPER_SUBJECTS  = {{ subject_ids | tojson }};
 window._DECISION_ROWS   = {{ decision_rows_json | safe }};

@@ -27,8 +27,12 @@ logger = get_logger("qc.figures")
 # ---- Glyph geometry ----
 _SAMPLES     = 26      # markers laid along a long channel to read as a continuous bar
 _TRIM        = 0.16    # fraction of the path left bare at each end, so optodes stay visible
-_LONG_SIZE   = 9
-_SHORT_SIZE  = 15      # a short channel is too stubby to read as a path; draw one disc
+# Marker size is in pixels while a head scales with its container, so these are read
+# against the smallest head this grid draws: chromophore x separation rows against one
+# column per condition. Narrowed from 9/15 on 2026-09-12, where a channel bar was thick
+# enough to swallow the head under it. The dyad report's heads carry the same pair.
+_LONG_SIZE   = 7
+_SHORT_SIZE  = 12      # a short channel is too stubby to read as a path; draw one disc
 
 # ---- Time axis ----
 _FRAME_STEP  = 1.0

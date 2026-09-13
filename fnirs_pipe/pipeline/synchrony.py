@@ -765,7 +765,7 @@ def compute_pairwise_coherence(
 
     ref_raw = raws[subject_ids[0]]
     sfreq = _shared_sfreq(raws)
-    nperseg = min(512, max(64, ref_raw.n_times // 4))
+    nperseg = welch_nperseg(ref_raw.n_times)
 
     rows: list[dict] = []
     for sub1, sub2 in combinations(subject_ids, 2):
@@ -795,6 +795,23 @@ def compute_pairwise_coherence(
 # Surrogate pairings a screening percentile is read against. 100 is `write_wtc_null`'s own
 # default, so the two nulls a dyad is measured by are drawn the same number of times.
 SCREEN_NULL_ITER = 100
+
+
+def welch_nperseg(n_times: int) -> int:
+    """Segment length the band coherence is estimated with, for a stretch of ``n_times``.
+
+    ::
+
+      a 3900 s run at 10 Hz -> 512;  a 300 s block -> 512;  a 20 s window -> 64
+
+    A quarter of the stretch so a short window still yields several segments, capped at 512
+    so a long one does not spend its resolution on a frequency nobody reads, floored at 64 so
+    the band has bins at all. One function because the number decides both the estimate and
+    its floor: magnitude-squared coherence sits near 1/(number of segments) when nothing is
+    coupled, so two callers with two copies of this rule would print values a reader compares
+    that are not on the same scale.
+    """
+    return min(512, max(64, n_times // 4))
 
 
 def _band_coherence(a, b, sfreq: float, nperseg: int, fmin: float, fmax: float) -> float:
@@ -860,7 +877,7 @@ def screening_coherence(
         for name, tstart, tstop in spans:
             i0, i1 = max(0, int(tstart * sfreq)), min(n_times, int(tstop * sfreq))
             seg = i1 - i0
-            nperseg = min(512, max(64, seg // 4))
+            nperseg = welch_nperseg(seg)
             if seg <= nperseg:
                 logger.warning("screening coherence: %r is %.0f s, too short to score", name,
                                seg / sfreq)
