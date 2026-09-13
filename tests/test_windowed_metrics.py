@@ -157,7 +157,7 @@ def test_our_heatmap_has_one_column_per_window_like_mne_nirs_own_figure(od_raw):
     import matplotlib.pyplot as plt
     from mne_nirs.visualisation import plot_timechannel_quality_metric
 
-    from fnirs_pipe.qc.figures.common.raw_figures import build_sci_psp_figure
+    from fnirs_pipe.qc.figures.subject.sci_psp_panel import build_sci_psp_figure
 
     plt.switch_backend("Agg")
     sci_matrix, sci_times = compute_windowed_sci(od_raw, *CARDIAC, WINDOW_S)
@@ -180,7 +180,7 @@ def test_our_heatmap_has_one_column_per_window_like_mne_nirs_own_figure(od_raw):
 
 
 def test_sci_heatmap_time_axis_spans_the_recording(od_raw):
-    from fnirs_pipe.qc.figures.common.raw_figures import build_sci_psp_figure
+    from fnirs_pipe.qc.figures.subject.sci_psp_panel import build_sci_psp_figure
 
     sci_matrix, sci_times = compute_windowed_sci(od_raw, *CARDIAC, WINDOW_S)
     fig = build_sci_psp_figure(
