@@ -171,7 +171,7 @@ def test_the_maps_are_archived_one_file_per_chromophore(report):
 def test_a_reband_puts_the_chromophore_column_back(report):
     """The archive is per chromophore and says so in its name, so a re-banded table has the
     same shape as the one the run wrote."""
-    from fnirs_pipe.qc.wtc_store import reband_tree
+    from fnirs_pipe.pipeline.wtc_store import reband_tree
 
     written = reband_tree(report.parent.parent, 0.04, 0.09)
     seen = {}
@@ -224,7 +224,7 @@ def test_an_unknown_chromophore_is_refused(dyad, tmp_path, bad):
 def test_the_null_covers_both_chromophores_in_one_table(dyad, tmp_path):
     """A null on one chromophore says nothing about a coupling in the other, so the real
     table's other half would have nothing to be tested against."""
-    from fnirs_pipe.qc.wtc_null import write_wtc_null
+    from fnirs_pipe.pipeline.wtc_null import write_wtc_null
 
     path = write_wtc_null(
         "G1", "tap", dyad, tmp_path, n_iter=1, wtc_fmin=0.02, wtc_fmax=0.2,
@@ -238,7 +238,7 @@ def test_the_null_covers_both_chromophores_in_one_table(dyad, tmp_path):
 
 
 def test_the_null_refuses_an_unknown_chromophore(dyad, tmp_path):
-    from fnirs_pipe.qc.wtc_null import write_wtc_null
+    from fnirs_pipe.pipeline.wtc_null import write_wtc_null
 
     with pytest.raises(ValueError, match="chroma"):
         write_wtc_null("G1", "tap", dyad, tmp_path, n_iter=1, chroma=("hbt",))
@@ -354,7 +354,7 @@ def test_the_null_and_the_report_default_to_the_same_chromophores():
     import inspect
 
     from fnirs_pipe.qc.hyper_report import build_hyper_post_report
-    from fnirs_pipe.qc.wtc_null import write_wtc_null
+    from fnirs_pipe.pipeline.wtc_null import write_wtc_null
 
     report = inspect.signature(build_hyper_post_report).parameters["wtc_chroma"].default
     null = inspect.signature(write_wtc_null).parameters["chroma"].default

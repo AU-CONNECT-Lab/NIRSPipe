@@ -844,7 +844,7 @@ def screening_coherence(
     *that* window is both.
 
     The null pairs one member against a phase-scrambled copy of the other, which is the
-    surrogate :func:`~fnirs_pipe.qc.wtc_null.write_wtc_null` uses on the post report. One
+    surrogate :func:`~fnirs_pipe.pipeline.wtc_null.write_wtc_null` uses on the post report. One
     definition across a dyad's two pages, so "above the null" means one thing on both.
 
     Returns a DataFrame with columns: window, ch_name, sub1, sub2, coherence, null_mean,
@@ -1071,3 +1071,133 @@ def roi_mean_of_channels(
     out.insert(out.columns.get_loc("n_valid_frac"), "coherence_z",
                out["coherence"].map(_fisher_z))
     return out
+
+
+# ---- Inter-subject correlation ----
+#
+# Beside the wavelet coherence because it answers the same question in the time domain
+# and reads the same two helpers, `_shared_sfreq` and `long_axis_over`. It was written
+# in the figure module that drew it, which put a computation behind a plotly import and
+# left `window_result` documenting an asymmetry against a function in another package.
+
+def compute_isc(
+    aligned_raws: dict[str, mne.io.Raw],
+    subject_ids: list[str],
+    ch_type: str = "hbo",
+    sep_bands=None,
+    window: "tuple[float, float] | None" = None,
+) -> tuple[np.ndarray, list[str]] | tuple[None, None]:
+    """Compute inter-brain Pearson r matrix (n_ch × n_ch) over long channels.
+
+    matrix[i, j] = Pearson r between sub1_ch_i and sub2_ch_j.
+    Diagonal = same-channel ISC.
+
+    ``window`` restricts it to ``(tstart, tstop)`` on the aligned clock, which is how a
+    condition gets a correlation of its own. Unlike the wavelet coherence this really is a
+    cut and not a slice of a whole-record computation, and it is sound for the reason the
+    subject report's own per-condition panels are: a correlation has no frequency axis and
+    nothing here filters, so a window carries no edge that the whole record would not have
+    had. What it does carry is its own mean and its own standard deviation, and it has to:
+    both sides are z-scored inside the window, because the correlation over a stretch is
+    against that stretch's mean, not the recording's.
+
+    Cutting the wavelet coherence the same way would be wrong, and that asymmetry is the
+    whole of why the two are treated differently here. See
+    :func:`~fnirs_pipe.pipeline.synchrony.window_result`.
+
+    Both axes are the *montage's* long channels, rejected ones included, so every dyad's
+    matrix has one shape and a group analysis can stack them however their rejections
+    differ. That is the convention
+    :func:`fnirs_pipe.pipeline.restingstate.compute_fc` follows for the same reason. A
+    rejected channel of sub1 leaves a blank row and one of sub2 a blank column -- never
+    both, since sub1's copy of a channel is not needed to correlate sub2's against
+    everything else. The axes carried sub1's *surviving* channels until 0.30.0, which left
+    a matrix whose shape moved with the rejections and dropped sub2's own channels wherever
+    sub1 had lost the same one.
+
+    Position is not a safe key: a participant with one more rejected channel than the other
+    shifts every channel after it, so column j would hold a different pair than its label
+    claims. Everything here is looked up by S-D label.
+
+    Rejections arrive on ``raw.info["bads"]``, which is where
+    :func:`fnirs_pipe.pipeline.hyperscanning.load_group_haemo` puts them and the only place
+    the WTC path reads them from. This used to take the resolved rejections a second time as
+    a ``bad_channels`` argument and never look at it.
+
+    Raises ValueError if the members were recorded at different sampling rates, which is
+    the refusal WTC has always made: alignment equalises duration, not rate.
+
+    Args:
+        ch_type: "hbo" or "hbr".
+    """
+    if len(subject_ids) < 2:
+        return None, None
+    raw1 = aligned_raws.get(subject_ids[0])
+    raw2 = aligned_raws.get(subject_ids[1])
+    if raw1 is None or raw2 is None:
+        return None, None
+    # the same refusal WTC makes: alignment equalises duration, not rate, so at two rates
+    # sample i of one member and sample i of the other are not the same moment and the
+    # correlation between them is a plausible-looking number about nothing
+    _shared_sfreq({subject_ids[0]: raw1, subject_ids[1]: raw2})
+
+    def _by_label(raw: mne.io.Raw) -> dict[str, int]:
+        """{label: index} over what this member kept, bads dropped: what gets correlated."""
+        return {raw.ch_names[p].rsplit(" ", 1)[0]: p
+                for p in long_channel_picks(raw, ch_type, sep_bands=sep_bands)}
+
+    # the axis is the montage, the maps are what survived: one shape, blanks where a channel
+    # went. The axis rule is shared with the crossed WTC matrix, which drew it from the first
+    # member alone until 0.30.0
+    ch_names = long_axis_over([raw1, raw2], ch_type, sep_bands)
+    map1, map2 = _by_label(raw1), _by_label(raw2)
+    if not ch_names:
+        return None, None
+
+    # alignment trims the pair to a common length, but nothing here depends on that having run
+    n_times = min(raw1.n_times, raw2.n_times)
+
+    def _rows(raw: mne.io.Raw, by_label: dict[str, int], who: str) -> np.ndarray:
+        """One row per axis label, NaN for a label this subject has no usable channel at."""
+        out = np.full((len(ch_names), n_times), np.nan)
+        have = [c for c in ch_names if c in by_label]
+        if have:
+            out[[ch_names.index(c) for c in have]] = \
+                raw.get_data(picks=[by_label[c] for c in have])[:, :n_times]
+        if (blank := [c for c in ch_names if c not in by_label]):
+            logger.warning("ISC (%s): %s has no usable %s, leaving those blank",
+                           ch_type, who, ", ".join(blank))
+        return out
+
+    data1 = _rows(raw1, map1, subject_ids[0])
+    data2 = _rows(raw2, map2, subject_ids[1])
+
+    if window is not None:
+        sfreq = float(raw1.info["sfreq"])
+        first = max(0, int(round(float(window[0]) * sfreq)))
+        last  = min(n_times, int(round(float(window[1]) * sfreq)))
+        # two samples is the least a correlation can be computed from at all; a window this
+        # short is a trigger artefact rather than a condition, and returning nothing leaves
+        # the panel out instead of printing a coefficient over three points
+        if last - first < 2:
+            logger.warning("ISC (%s): window %.1f-%.1f s holds %d sample(s) of %d, "
+                           "no correlation computed",
+                           ch_type, window[0], window[1], max(0, last - first), n_times)
+            return None, None
+        data1, data2 = data1[:, first:last], data2[:, first:last]
+
+    # z-scored after the window is taken, so the correlation is against that stretch's own
+    # mean and deviation
+    def _zscore(x: np.ndarray) -> np.ndarray:
+        mu  = x.mean(axis=1, keepdims=True)
+        std = x.std(axis=1, keepdims=True)
+        std[std < 1e-12] = 1.0
+        return (x - mu) / std
+
+    d1 = _zscore(data1)
+    d2 = _zscore(data2)
+    isc_mat = (d1 @ d2.T) / d1.shape[1]
+    np.clip(isc_mat, -1.0, 1.0, out=isc_mat)
+
+    # a rejected channel contributed a row of NaN above, which the products carry
+    return isc_mat, ch_names

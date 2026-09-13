@@ -74,7 +74,7 @@ def test_wtc_never_pairs_the_short_channel():
 
 
 def test_isc_reads_the_same_channels_as_wtc():
-    from fnirs_pipe.qc.figures.hyper_post_figures import compute_isc
+    from fnirs_pipe.pipeline.synchrony import compute_isc
 
     subject_ids = ["sub-10031", "sub-10032"]
     raws = dict(zip(subject_ids, (_haemo("10031"), _haemo("10032"))))
@@ -100,7 +100,7 @@ def _tagged(subject: str, drop: str | None = None) -> mne.io.Raw:
 
 
 def test_isc_matches_channels_by_label_not_position():
-    from fnirs_pipe.qc.figures.hyper_post_figures import compute_isc
+    from fnirs_pipe.pipeline.synchrony import compute_isc
 
     # sub-B rejected S2_D2, so its remaining channels sit one position earlier than sub-A's
     subject_ids = ["sub-A", "sub-B"]
@@ -125,7 +125,7 @@ def test_the_axis_is_the_union_of_the_two_montages():
 
 
 def test_isc_keeps_a_channel_only_one_member_has():
-    from fnirs_pipe.qc.figures.hyper_post_figures import compute_isc
+    from fnirs_pipe.pipeline.synchrony import compute_isc
 
     subject_ids = ["sub-A", "sub-B"]
     a, b = _tagged("10031"), _tagged("10032")
@@ -139,7 +139,7 @@ def test_isc_keeps_a_channel_only_one_member_has():
 
 
 def test_the_blanked_column_is_the_one_that_was_named():
-    from fnirs_pipe.qc.figures.hyper_post_figures import compute_isc
+    from fnirs_pipe.pipeline.synchrony import compute_isc
 
     # rejections reach ISC on info["bads"], the way load_group_haemo leaves them and the
     # way the WTC path reads them
@@ -154,7 +154,7 @@ def test_the_blanked_column_is_the_one_that_was_named():
 
 def test_isc_refuses_two_sampling_rates():
     """WTC raises on this; ISC used to pair sample i with sample i and answer anyway."""
-    from fnirs_pipe.qc.figures.hyper_post_figures import compute_isc
+    from fnirs_pipe.pipeline.synchrony import compute_isc
 
     a, b = _tagged("10031"), _tagged("10032")
     b.resample(b.info["sfreq"] / 2, verbose="error")
@@ -355,7 +355,7 @@ def test_the_isc_matrix_is_written_beside_the_panel(tmp_path):
     Same contract as the band mean above: what the figure shows and what a stats script reads
     have to be one set of numbers.
     """
-    from fnirs_pipe.qc.hyper_report import write_isc_matrix
+    from fnirs_pipe.pipeline.hyper_post import write_isc_matrix
 
     names = ["S1_D1 hbo", "S2_D2 hbo"]
     mat = np.array([[0.9, np.nan], [0.4, 0.8]])
@@ -374,7 +374,7 @@ def test_the_isc_matrix_is_written_beside_the_panel(tmp_path):
 
 def test_a_failed_isc_write_costs_the_file_and_not_the_report(tmp_path):
     # the report is still readable without the TSV, so the writer swallows its own failure
-    from fnirs_pipe.qc.hyper_report import write_isc_matrix
+    from fnirs_pipe.pipeline.hyper_post import write_isc_matrix
 
     path = tmp_path / "isc.tsv"
     write_isc_matrix(path, np.eye(3), ["a", "b"], "hbo", [], ["sub-01"])   # shapes disagree

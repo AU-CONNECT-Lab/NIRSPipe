@@ -316,7 +316,7 @@ def test_the_conditions_are_unaffected_by_the_analysis_window(stub_pseudo):
 def test_the_writer_passes_the_window_down(monkeypatch, tmp_path):
     """The wiring, which is where this bug lived: both functions had the parameter for the
     conditions and neither had it for the run."""
-    from fnirs_pipe.qc import wtc_null
+    from fnirs_pipe.pipeline import wtc_null
     seen = {}
 
     def _spy(*args, **kwargs):

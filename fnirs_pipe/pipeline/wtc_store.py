@@ -16,7 +16,7 @@ import pandas as pd
 from fnirs_pipe.pipeline.synchrony import WTCResult, wtc_band_mean
 from fnirs_pipe.utils.logging import get_logger
 
-logger = get_logger("qc.wtc_store")
+logger = get_logger("pipeline.wtc_store")
 
 _SEP = "\x1f"  # not legal in a BIDS label, so it cannot collide with a channel or ROI name
 

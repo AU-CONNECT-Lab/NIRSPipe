@@ -61,6 +61,8 @@ def write_wtc_null(
     out of one pass of ``n_iter`` transforms. Returns the whole-run path either way; the
     per-condition one sits beside it.
     """
+    # imported in the call, not at module load: the wiring tests patch these on the module
+    # that defines them, which only a lookup made at call time can see
     from fnirs_pipe.io.derivatives import group_data_dir
     from fnirs_pipe.pipeline.hyperscanning import (
         _hyper_sidecar, alignment_params, compute_wtc_pseudo,

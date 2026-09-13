@@ -163,7 +163,7 @@ def _merge_reminder(output_dir: Path) -> None:
     Driven off the aggregator's own kinds and its own glob, so the counts are the ones
     `merge` would use and a new kind cannot be left out.
     """
-    from fnirs_pipe.qc.wtc_aggregate import _KINDS
+    from fnirs_pipe.pipeline.wtc_aggregate import _KINDS
 
     lines = []
     for kind, stem in _KINDS.items():
@@ -228,7 +228,7 @@ def cmd_run(
     from fnirs_pipe.qc.hyper_report import build_hyper_post_report
     from fnirs_pipe.qc.windows import condition_windows
     from fnirs_pipe.qc.metrics._helpers import bands_to_record
-    from fnirs_pipe.qc.wtc_null import write_wtc_null
+    from fnirs_pipe.pipeline.wtc_null import write_wtc_null
     from fnirs_pipe.utils.run_record import write_group_run_record
 
     setup_logging(verbose=verbose)
@@ -409,7 +409,7 @@ def cmd_band(
     wtc_mask_coi: bool, wtc_suffix: str | None, verbose: bool,
 ) -> None:
     """Re-average every saved WTC map over a new band, without recomputing the transform."""
-    from fnirs_pipe.qc.wtc_store import reband_tree
+    from fnirs_pipe.pipeline.wtc_store import reband_tree
 
     setup_logging(verbose=verbose)
 
@@ -448,7 +448,7 @@ def cmd_index(output_dir: Path, group_id: str | None, verbose: bool) -> None:
 
 def cmd_merge(output_dir: Path, verbose: bool) -> None:
     """Merge every per-dyad WTC band-mean table into one long table per kind."""
-    from fnirs_pipe.qc.wtc_aggregate import _KINDS, write_aggregate_wtc
+    from fnirs_pipe.pipeline.wtc_aggregate import _KINDS, write_aggregate_wtc
 
     setup_logging(verbose=verbose)
 

@@ -19,7 +19,7 @@ import pandas as pd
 import pytest
 
 from fnirs_pipe.cli.hyper import _build_parser
-from fnirs_pipe.qc.wtc_aggregate import aggregate_wtc
+from fnirs_pipe.pipeline.wtc_aggregate import aggregate_wtc
 
 
 def _hyper(*argv):
@@ -58,7 +58,7 @@ def test_the_null_can_be_crossed_on_its_own():
 
 def test_the_sidecar_records_the_iteration_count_and_the_shape(tmp_path, monkeypatch, make_raw):
     import fnirs_pipe.pipeline.hyperscanning as hyper
-    from fnirs_pipe.qc import wtc_null
+    from fnirs_pipe.pipeline import wtc_null
 
     frame = pd.DataFrame({"sub1": ["a"], "sub2": ["b"], "label": ["S1_D1"],
                           "coherence": [0.3], "coherence_z": [0.31], "n_valid_frac": [1.0]})
@@ -86,7 +86,7 @@ def test_the_null_tags_each_chromophore_without_mutating_the_frame(tmp_path, mon
     change. Inserting the column in place worked for HbO and raised on HbR as soon as
     two passes were handed the same object, which a cache or a stub does."""
     import fnirs_pipe.pipeline.hyperscanning as hyper
-    from fnirs_pipe.qc import wtc_null
+    from fnirs_pipe.pipeline import wtc_null
 
     frame = pd.DataFrame({"sub1": ["a"], "sub2": ["b"], "label": ["S1_D1"],
                           "coherence": [0.3], "coherence_z": [0.31],
@@ -105,7 +105,7 @@ def test_the_null_tags_each_chromophore_without_mutating_the_frame(tmp_path, mon
 
 def test_one_chromophore_writes_one_set_of_rows(tmp_path, monkeypatch, make_raw):
     import fnirs_pipe.pipeline.hyperscanning as hyper
-    from fnirs_pipe.qc import wtc_null
+    from fnirs_pipe.pipeline import wtc_null
 
     frame = pd.DataFrame({"sub1": ["a"], "sub2": ["b"], "label": ["S1_D1"],
                           "coherence": [0.3], "coherence_z": [0.31],
@@ -152,7 +152,7 @@ def test_nulls_of_one_length_merge(tmp_path):
 def test_merge_covers_every_kind_the_aggregator_has(tmp_path):
     """It asked for wtc-roi, gone since 0.24.0, and died before reaching the null."""
     from fnirs_pipe.cli.hyper import cmd_merge
-    from fnirs_pipe.qc.wtc_aggregate import _KINDS
+    from fnirs_pipe.pipeline.wtc_aggregate import _KINDS
 
     _write_null(tmp_path, "d01", "baseline", 100)
     cmd_merge(tmp_path, verbose=False)                        # no kind raises
@@ -234,7 +234,7 @@ def test_windows_add_a_second_table_beside_the_whole_run_one(tmp_path, monkeypat
     """Two files rather than one, mirroring the real side, where the whole-run and
     per-condition tables are also merged separately."""
     import fnirs_pipe.pipeline.hyperscanning as hyper
-    from fnirs_pipe.qc import wtc_null
+    from fnirs_pipe.pipeline import wtc_null
 
     whole, by_cond = _null_frames()
     monkeypatch.setattr(hyper, "compute_wtc_pseudo", lambda *a, **k: (whole, by_cond))
@@ -255,7 +255,7 @@ def test_windows_add_a_second_table_beside_the_whole_run_one(tmp_path, monkeypat
 def test_the_windowed_sidecar_names_the_conditions(tmp_path, monkeypatch, make_raw):
     """Without them a table of five conditions and a table of two read the same on disk."""
     import fnirs_pipe.pipeline.hyperscanning as hyper
-    from fnirs_pipe.qc import wtc_null
+    from fnirs_pipe.pipeline import wtc_null
 
     whole, by_cond = _null_frames()
     monkeypatch.setattr(hyper, "compute_wtc_pseudo", lambda *a, **k: (whole, by_cond))
@@ -273,7 +273,7 @@ def test_the_windowed_sidecar_names_the_conditions(tmp_path, monkeypatch, make_r
 
 def test_no_windows_writes_only_the_whole_run_table(tmp_path, monkeypatch, make_raw):
     import fnirs_pipe.pipeline.hyperscanning as hyper
-    from fnirs_pipe.qc import wtc_null
+    from fnirs_pipe.pipeline import wtc_null
 
     whole, _ = _null_frames()
     monkeypatch.setattr(hyper, "compute_wtc_pseudo", lambda *a, **k: (whole, None))
@@ -288,7 +288,7 @@ def test_no_windows_writes_only_the_whole_run_table(tmp_path, monkeypatch, make_
 
 def test_the_per_condition_null_is_its_own_merge_kind():
     """Merging it into the whole-run null would average five conditions into one row."""
-    from fnirs_pipe.qc.wtc_aggregate import _KINDS
+    from fnirs_pipe.pipeline.wtc_aggregate import _KINDS
 
     assert _KINDS["wtcbycond-pseudo"] == "group_hyper_wtc_bycondition_pseudo"
     assert _KINDS["wtc-pseudo"] != _KINDS["wtcbycond-pseudo"]

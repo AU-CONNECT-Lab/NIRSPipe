@@ -21,7 +21,7 @@ import pandas as pd
 
 from fnirs_pipe.utils.logging import get_logger
 
-logger = get_logger("qc.wtc_aggregate")
+logger = get_logger("pipeline.wtc_aggregate")
 
 # parameters that have to match across every file in a merge, and why they cannot be mixed
 # n_iter only ever appears on a pseudo-dyad sidecar, and a file without a key carries no
