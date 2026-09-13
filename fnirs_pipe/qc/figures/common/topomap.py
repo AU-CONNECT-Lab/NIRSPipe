@@ -79,7 +79,7 @@ def _projected_optodes(info: mne.Info) -> "tuple[dict, list, dict] | None":
     e.g. a two-pair montage yields ``({"S1": (x, y), "D1": ..., "D2": ...},
     [("S1", "D1"), ("S1", "D2")], {"head": (xs, ys), ...})``.
     """
-    from fnirs_pipe.qc.figures.common.raw_figures import _optode_positions, _topomap_project
+    from fnirs_pipe.qc.figures.common._utils import _optode_positions, _topomap_project
 
     picks = list(mne.pick_types(info, meg=False, fnirs=True, exclude=[]))
     if not picks:

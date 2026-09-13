@@ -1,4 +1,4 @@
-from fnirs_pipe.qc.figures.common.raw_figures import (
+from fnirs_pipe.qc.figures.subject.raw_figures import (
     build_ts_figure,
     build_channel_figure,
     build_layout_figure,

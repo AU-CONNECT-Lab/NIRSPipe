@@ -22,7 +22,7 @@ from PIL import Image as _PILImage
 from fnirs_pipe.qc.metrics import SCI_PASS
 from fnirs_pipe.utils.logging import get_logger
 from fnirs_pipe.qc.figures.common._brain_utils import CAMERAS, VIEW_LABELS, load_mesh_traces, to_mni
-from fnirs_pipe.qc.figures.common.raw_figures import SCI_WARN_RATIO
+from fnirs_pipe.qc.figures.subject.raw_figures import SCI_WARN_RATIO
 
 logger = get_logger("qc.figures.brain_views")
 

@@ -312,3 +312,52 @@ def chunk_annotations(raw, chunk_duration: "float | None"):
                 chunk_duration, len(raw.annotations), len(onsets))
     return out
 
+
+# ---- Optode geometry ----
+# Read off the channel locs and projected the way MNE flattens sensors, so an optode
+# lands in the same frame as the channel midpoints. Here rather than with the figures
+# that draw heads, because two of those modules need it and neither owns it.
+
+def _topomap_project(xyz: np.ndarray, sphere: np.ndarray) -> np.ndarray:
+    """Flatten 3-D points the way MNE flattens sensors for a topomap.
+
+    Azimuthal-equidistant projection about the fitted head sphere: translate to the sphere
+    origin, read (azimuth, polar) as (angle, radius), scale radians back to metres. MNE only
+    exposes this for channel positions, so optodes are projected here with the same sphere and
+    land in the same frame as the channel midpoints returned by ``_get_pos_outlines``.
+
+    e.g. a point on the sphere equator, 90 deg from the vertex, maps onto the head circle.
+    """
+    from mne.transforms import _cart_to_sph, _pol_to_cart
+
+    sph = _cart_to_sph(np.asarray(xyz, dtype=float) - sphere[:3])
+    out = _pol_to_cart(sph[:, 1:][:, ::-1])
+    out *= sph[:, [0]] / (np.pi / 2.0)
+    return out + sphere[:2]
+
+
+def _optode_positions(chs, ch_names) -> tuple[dict, dict, list[tuple[str, str]]]:
+    """Named source / detector coordinates read off the fNIRS channel locs.
+
+    A channel "S1_D2 760" carries its source in ``loc[3:6]`` and its detector in ``loc[6:9]``
+    (``loc[:3]`` is the midpoint, not the detector), so it contributes {"S1": xyz} to the
+    sources, {"D2": xyz} to the detectors and ("S1", "D2") to the pairs; repeats collapse.
+    """
+    src: dict[str, np.ndarray] = {}
+    det: dict[str, np.ndarray] = {}
+    pairs: list[tuple[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for ch, name in zip(chs, ch_names):
+        pair = name.split(" ")[0]
+        if "_" not in pair:
+            continue
+        s_name, d_name = pair.split("_")[:2]
+        s_xyz, d_xyz = np.asarray(ch["loc"][3:6]), np.asarray(ch["loc"][6:9])
+        if not (np.any(s_xyz) or np.any(d_xyz)):
+            continue
+        src.setdefault(s_name, s_xyz)
+        det.setdefault(d_name, d_xyz)
+        if (s_name, d_name) not in seen:
+            seen.add((s_name, d_name))
+            pairs.append((s_name, d_name))
+    return src, det, pairs
