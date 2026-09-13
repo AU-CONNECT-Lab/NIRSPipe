@@ -179,12 +179,8 @@ def cone_margin_s(band_fmin: float, factor: float = 2.0) -> float:
 
         \mathrm{margin} = \mathrm{factor} \times \frac{\sqrt{2}}{f_{\min}}
 
-    The formula is checked against the COI array the transform actually returns, which it
-    matches to within a percent across the band.
-
     ``factor`` is 2 rather than 1 because the cone is a contour and not a wall: contamination
-    is small past it, not absent. One margin still leaves a residual in a condition's band
-    mean; two puts it below anything this package reports.
+    is small past it, not absent.
 
     Returned in seconds, so a caller crops ``[t0 - margin, t1 + margin]`` and windows the
     result back to ``[t0, t1]``.

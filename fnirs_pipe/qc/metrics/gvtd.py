@@ -263,11 +263,9 @@ def _motion_metrics(raw_intensity: mne.io.Raw,
         before and after halves of a pair are counted against one yardstick.
 
         Without it the pair is not a comparison. The threshold is the mode of the trace's
-        own histogram plus 3 SD, so it tracks whatever distribution it is handed: re-derived
-        on the corrected file it rises, and most of the apparent improvement is the cutoff
-        moving rather than the motion going. It is the same rule the per-condition views
-        follow: fix the yardstick over the run and count the mask, never re-derive it on the
-        part being compared.
+        own histogram plus 3 SD, so it tracks whatever distribution it is handed. It is the
+        same rule the per-condition views follow: fix the yardstick over the run and count
+        the mask, never re-derive it on the part being compared.
 
         ``gvtd_thresh`` still reports this recording's own cutoff either way, because the
         report has a row for exactly that and its movement is worth seeing;

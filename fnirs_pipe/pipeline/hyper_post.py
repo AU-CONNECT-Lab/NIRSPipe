@@ -233,12 +233,10 @@ def run_hyper_post(
             -> transform [3533, 3927], then window the result to [3580, 3880]
 
         The alternative to reading the window out of the whole-run transform, for a caller
-        who wants each condition transformed on its own. **It is the same number**, to four
-        decimal places, as long as the padding is wide enough: a condition's band mean stops
-        moving once the padding passes
-        :func:`~fnirs_pipe.pipeline.synchrony.cone_margin_s`. What the padding buys is the
-        cone: it lands in the margin instead of eating the condition's own edges, which is
-        the whole difference between this and cutting a condition to its own boundaries.
+        who wants each condition transformed on its own. What the padding buys is the cone:
+        with a margin past :func:`~fnirs_pipe.pipeline.synchrony.cone_margin_s` it lands
+        outside the condition instead of eating its edges, which is the whole difference
+        between this and cutting a condition to its own boundaries.
 
         ``cond_pad_s`` of 0 does cut to the boundaries, which reproduces the route most
         published per-condition pipelines take and is biased upward by an amount that grows

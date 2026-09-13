@@ -10,7 +10,7 @@ from plotly.subplots import make_subplots
 
 from fnirs_pipe.qc.common.figure_io import extract_markers as _extract_markers
 from fnirs_pipe.qc.metrics.hyper import (  # noqa: F401  (re-exported for the panels)
-    NULL_ALPHA_PCT, _ch_kept_by_member, sci_of,
+    NULL_ALPHA_PCT, _ch_kept_by_member, dyad_status, sci_of,
 )
 from fnirs_pipe.qc.figures._utils import (CONDITION_PALETTE, PSD_NFFT,
                                           TIMELINE_ROW_PX,
@@ -388,8 +388,7 @@ def motion_series(
     Spikes are kept only where **every** member was spiking at once. A member spiking alone
     costs that member's channels, which the usable-time carpet already shows; both at once is
     the case that survives a surrogate null and raises any synchrony measure taken on the
-    pair. Per-member spike lanes were drawn and dropped: there are hundreds of runs each and
-    they read as a wash.
+    pair.
 
     Returns ``{}`` when no member carries usable optical density.
     """

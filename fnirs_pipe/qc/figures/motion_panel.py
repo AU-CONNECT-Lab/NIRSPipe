@@ -223,7 +223,7 @@ def gvtd_y_top(traces: "list[np.ndarray]", thresholds: "list[float | None]") -> 
 
     One number for every row because long and short are the same unit at comparable
     magnitudes, and scaling each to itself would hide the difference the second row exists to
-    show: short can peak well above long over the same window.
+    show.
 
     Public because a per-condition view recomputes it over that condition's window, and a
     view drawn by a different rule from the figure it narrows is worse than no view.
