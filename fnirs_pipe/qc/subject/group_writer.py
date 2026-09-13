@@ -12,7 +12,7 @@ import pandas as pd
 from fnirs_pipe.qc.boilerplate import collect_software_versions
 from fnirs_pipe.qc.metrics.coupling import SCI_WINDOW_S
 from fnirs_pipe.qc.common.figure_io import _save_figure_html
-from fnirs_pipe.qc.figures.group_figures import (
+from fnirs_pipe.qc.figures.subject.group_figures import (
     SCORE_THRESHOLD,
     _split_column,
     build_condition_matrix,

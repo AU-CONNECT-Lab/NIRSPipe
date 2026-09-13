@@ -15,7 +15,7 @@ from fnirs_pipe.pipeline.hyperscanning import (
 from fnirs_pipe.qc.common.figure_io import (
     _pair_fname, _save_figure_html, _save_multi_fig_html, get_channel_pairs,
 )
-from fnirs_pipe.qc.figures.hyper_figures import (
+from fnirs_pipe.qc.figures.hyper.hyper_figures import (
     _cond_colors,
     build_alignment_timeline,
     build_channel_summary,

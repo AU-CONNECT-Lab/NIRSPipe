@@ -18,11 +18,11 @@ from fnirs_pipe.pipeline.denoise import (
 )
 from fnirs_pipe.utils.lineage import lineage_of
 
-from ._utils import HBO_COLOR as _HBO_COLOR, HBR_COLOR as _HBR_COLOR
-from ._utils import line_xy
-from ._utils import HBO_MEAN_COLOR as _HBO_MEAN_COLOR, HBR_MEAN_COLOR as _HBR_MEAN_COLOR
-from ._utils import add_band_shading as _add_band_shading
-from ._utils import physio_bands as _physio_bands
+from fnirs_pipe.qc.figures.common._utils import HBO_COLOR as _HBO_COLOR, HBR_COLOR as _HBR_COLOR
+from fnirs_pipe.qc.figures.common._utils import line_xy
+from fnirs_pipe.qc.figures.common._utils import HBO_MEAN_COLOR as _HBO_MEAN_COLOR, HBR_MEAN_COLOR as _HBR_MEAN_COLOR
+from fnirs_pipe.qc.figures.common._utils import add_band_shading as _add_band_shading
+from fnirs_pipe.qc.figures.common._utils import physio_bands as _physio_bands
 
 # Stage is the row and chromophore is the colour, so HbO and HbR keep the identity they have
 # in every other figure of the report and a step is read by looking down the column.

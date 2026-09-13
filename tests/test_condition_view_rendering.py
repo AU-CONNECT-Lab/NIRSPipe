@@ -156,7 +156,7 @@ def _motion_figure():
 def _carpet_figure():
     """Two GVTD rows over a heatmap, shaped like the real carpet: the rows carry the named
     stat labels a condition view rewrites, and share one y range as the builder gives them."""
-    from fnirs_pipe.qc.figures.motion_panel import GVTD_STAT_SLOT
+    from fnirs_pipe.qc.figures.common.motion_panel import GVTD_STAT_SLOT
 
     t = np.arange(0, 1000, 0.5)
     rng = np.random.default_rng(1)
@@ -257,7 +257,7 @@ def _coherence_map():
     inside it. The window carries its own set and the view swaps the whole array in, which is
     the branch of the shim below this exercises.
     """
-    from fnirs_pipe.qc.figures.hyper_post_figures import build_wtc_map_interactive
+    from fnirs_pipe.qc.figures.hyper.hyper_post_figures import build_wtc_map_interactive
 
     freqs = np.logspace(-2, np.log10(0.2), 40)
     times = np.arange(0.0, 1000.0, 0.5)
@@ -278,7 +278,7 @@ def _coherence_map():
 
 
 def test_a_coherence_map_picked_by_fragment_carries_the_window_s_own_arrows(tmp_path):
-    from fnirs_pipe.qc.figures.hyper_post_figures import wtc_condition_views
+    from fnirs_pipe.qc.figures.hyper.hyper_post_figures import wtc_condition_views
     from fnirs_pipe.qc.common.figure_io import _save_figure_html
 
     # the third saver, and the one the dyad report writes its ROI maps with

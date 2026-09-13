@@ -141,7 +141,7 @@ def test_an_older_database_gains_the_columns_it_is_missing(tmp_path):
 
 # ---- F6: the heatmap gets one x value per column ----
 def test_window_centers_collapses_start_end_pairs():
-    from fnirs_pipe.qc.figures.raw_figures import _window_centers
+    from fnirs_pipe.qc.figures.subject.sci_psp_panel import _window_centers
 
     pairs = [(0.0, 10.1), (10.1, 20.2), (20.2, 30.3)]
     assert np.allclose(_window_centers(pairs), [5.05, 15.15, 25.25])
@@ -157,7 +157,7 @@ def test_our_heatmap_has_one_column_per_window_like_mne_nirs_own_figure(od_raw):
     import matplotlib.pyplot as plt
     from mne_nirs.visualisation import plot_timechannel_quality_metric
 
-    from fnirs_pipe.qc.figures.raw_figures import build_sci_psp_figure
+    from fnirs_pipe.qc.figures.common.raw_figures import build_sci_psp_figure
 
     plt.switch_backend("Agg")
     sci_matrix, sci_times = compute_windowed_sci(od_raw, *CARDIAC, WINDOW_S)
@@ -180,7 +180,7 @@ def test_our_heatmap_has_one_column_per_window_like_mne_nirs_own_figure(od_raw):
 
 
 def test_sci_heatmap_time_axis_spans_the_recording(od_raw):
-    from fnirs_pipe.qc.figures.raw_figures import build_sci_psp_figure
+    from fnirs_pipe.qc.figures.common.raw_figures import build_sci_psp_figure
 
     sci_matrix, sci_times = compute_windowed_sci(od_raw, *CARDIAC, WINDOW_S)
     fig = build_sci_psp_figure(

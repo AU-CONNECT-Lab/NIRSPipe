@@ -25,7 +25,7 @@ import pandas as pd
 
 from fnirs_pipe.utils.logging import get_logger
 
-from ._utils import HBO_COLOR, HBR_COLOR, head_outline
+from fnirs_pipe.qc.figures.common._utils import HBO_COLOR, HBR_COLOR, head_outline
 
 logger = get_logger("qc.figures.rest")
 

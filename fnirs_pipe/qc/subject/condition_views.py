@@ -568,7 +568,7 @@ def carpet_window_spec(figure, t0: float, t1: float) -> dict:
     to say so. A line can print the scale it is on beside itself, which is what the rewritten
     stat labels below do, and a pixel cannot.
     """
-    from fnirs_pipe.qc.figures.motion_panel import (
+    from fnirs_pipe.qc.figures.common.motion_panel import (
         GVTD_STAT_SLOT, _gvtd_stat_label, gvtd_y_top,
     )
 

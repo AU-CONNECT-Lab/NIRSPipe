@@ -30,7 +30,7 @@ from fnirs_pipe.qc.boilerplate.vocabulary import higher_is_better, metric_direct
 from fnirs_pipe.qc.common.channel_table import (
     MOTION_SPLIT_COLUMNS, OD_SPLIT_COLUMNS, _COLUMN_METRIC,
 )
-from fnirs_pipe.qc.figures.sci_psp_panel import _TRIAL_METRICS
+from fnirs_pipe.qc.figures.subject.sci_psp_panel import _TRIAL_METRICS
 from fnirs_pipe.qc.subject.prep_raw_report import _VIEW_SCALAR_KEYS
 
 _QC = Path(qc_pkg.__file__).parent

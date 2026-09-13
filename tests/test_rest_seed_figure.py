@@ -18,7 +18,7 @@ import pytest
 from fnirs_pipe.pipeline.post_pipeline import PostConfig, run_post
 from fnirs_pipe.pipeline.prep_pipeline import PrepConfig, run_prep
 from fnirs_pipe.pipeline.restingstate import compute_fc_seed
-from fnirs_pipe.qc.figures.rest_figures import _channel_endpoints, fc_seed_topo_figure
+from fnirs_pipe.qc.figures.subject.rest_figures import _channel_endpoints, fc_seed_topo_figure
 
 from ._synth import synth_raw
 

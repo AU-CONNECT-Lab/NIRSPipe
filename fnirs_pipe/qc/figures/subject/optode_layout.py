@@ -8,8 +8,8 @@ import plotly.graph_objects as go
 
 from fnirs_pipe.qc.metrics import SCI_PASS
 
-from ._utils import head_outline
-from .raw_figures import sci_color, sci_legend
+from fnirs_pipe.qc.figures.common._utils import head_outline
+from fnirs_pipe.qc.figures.common.raw_figures import sci_color, sci_legend
 
 
 def optode_layout_static(

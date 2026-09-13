@@ -18,7 +18,7 @@ import mne
 import numpy as np
 import pytest
 
-from fnirs_pipe.qc.figures.motion_panel import (
+from fnirs_pipe.qc.figures.common.motion_panel import (
     _SPIKE_LABEL, _maxpool_xy, build_motion_detail_figure, carpet_gvtd_figure,
 )
 from fnirs_pipe.qc.metrics import _mask_to_segments

@@ -10,7 +10,7 @@ from __future__ import annotations
 import mne
 import pytest
 
-from fnirs_pipe.qc.figures.raw_figures import (
+from fnirs_pipe.qc.figures.common.raw_figures import (
     _trial_image_by_span, build_trial_image_by_condition,
 )
 from fnirs_pipe.qc.common.windows import condition_windows

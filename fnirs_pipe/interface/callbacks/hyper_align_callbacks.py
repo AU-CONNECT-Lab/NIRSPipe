@@ -183,7 +183,7 @@ def update_group_figures(group_val, bids_dir, group_csv):
     if not info:
         return no_update, no_update
 
-    from fnirs_pipe.qc.figures.hyper_figures import (
+    from fnirs_pipe.qc.figures.hyper.hyper_figures import (
         _cond_colors, _extract_markers,
         build_signal_overlay, build_trigger_timeline,
     )

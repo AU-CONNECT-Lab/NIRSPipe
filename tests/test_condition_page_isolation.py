@@ -153,7 +153,7 @@ def test_a_run_with_no_carpet_hands_the_condition_page_none():
 def test_a_carpet_view_names_the_condition_and_its_window():
     # what a view carries beyond the window is pinned in test_condition_views, against a
     # figure the real builder made; here it is only the slug and the span
-    from fnirs_pipe.qc.figures.motion_panel import carpet_gvtd_figure  # noqa: F401
+    from fnirs_pipe.qc.figures.common.motion_panel import carpet_gvtd_figure  # noqa: F401
     views = _carpet_views(_FakeFig(), [("game 1", 10.0, 20.0), ("video", 30.0, 40.0)])
     assert set(views) == {"game1", "video"}
     assert views["game1"]["x"] == [10.0, 20.0]

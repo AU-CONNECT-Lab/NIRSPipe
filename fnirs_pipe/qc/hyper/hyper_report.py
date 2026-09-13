@@ -33,7 +33,7 @@ from fnirs_pipe.qc.common.figure_io import (
     _save_figure_html,
     save_png,
 )
-from fnirs_pipe.qc.figures.hyper_figures import _cond_colors
+from fnirs_pipe.qc.figures.hyper.hyper_figures import _cond_colors
 from fnirs_pipe.qc.hyper.hyper_raw_writer import _process_hyper_raw_group
 from fnirs_pipe.qc.common.report_shell import (
     footer_vars,
@@ -733,11 +733,11 @@ def build_hyper_post_report(
 
     ``wtc_arrow_min`` is the coherence a cell has to reach before its phase arrow is drawn
     when no Monte Carlo level was computed. Display only: no table or figure value changes
-    with it. ``None`` takes :data:`~fnirs_pipe.qc.figures.hyper_post_figures.ARROW_MIN_COHERENCE`.
+    with it. ``None`` takes :data:`~fnirs_pipe.qc.figures.hyper.hyper_post_figures.ARROW_MIN_COHERENCE`.
     """
     from fnirs_pipe.pipeline.hyper_post import HyperPostConfig, run_hyper_post
     from fnirs_pipe.pipeline.hyperscanning import WTCResult, roi_maps_from_channels
-    from fnirs_pipe.qc.figures.hyper_post_figures import (
+    from fnirs_pipe.qc.figures.hyper.hyper_post_figures import (
         ARROW_MIN_COHERENCE,
         build_isc_panel,
         build_wtc_channel,
@@ -928,7 +928,7 @@ def build_hyper_post_report(
         one shape and the pair of selectors above each panel is the only difference.
         ``roi_view_of`` hands a window the run's own ROI map set, and the window then points
         at those files with its slug on the end instead of drawing its own. See
-        :func:`~fnirs_pipe.qc.figures.hyper_post_figures.wtc_condition_views` for when that
+        :func:`~fnirs_pipe.qc.figures.hyper.hyper_post_figures.wtc_condition_views` for when that
         is the same figure and when it is not.
 
         ``pair`` is which two members these maps are of. A group of three holds three
@@ -1164,7 +1164,7 @@ def build_hyper_post_report(
     # `fnirs-qc provenance` uses, so re-running that refreshes the image this report links.
     provenance_path = None
     with guard("Provenance diagram", errors, scope):
-        from fnirs_pipe.qc.figures.provenance_figure import write_provenance
+        from fnirs_pipe.qc.figures.common.provenance_figure import write_provenance
 
         for written in write_provenance(
             group_data_dir(output_dir, group_id),

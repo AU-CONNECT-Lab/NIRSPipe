@@ -19,7 +19,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
 from fnirs_pipe.qc.metrics.hyper import NULL_ALPHA_PCT
-from fnirs_pipe.qc.figures.hyper_figures import (
+from fnirs_pipe.qc.figures.hyper.hyper_figures import (
     _BAD_COLOR, _GOOD_COLOR, _MIX_COLOR, _cond_colors,
 )
 from fnirs_pipe.utils.logging import get_logger

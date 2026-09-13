@@ -32,7 +32,7 @@ import pandas as pd
 
 from fnirs_pipe.qc.boilerplate import collect_software_versions
 from fnirs_pipe.qc.common.figure_io import _save_figure_html
-from fnirs_pipe.qc.figures.group_hyper_figures import (
+from fnirs_pipe.qc.figures.hyper.group_hyper_figures import (
     build_condition_dials, build_null_strip, build_pair_field, build_usable_bars,
     cohort_order,
 )

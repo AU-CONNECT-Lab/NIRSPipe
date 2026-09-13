@@ -16,7 +16,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from fnirs_pipe.qc.figures.rest_figures import alff_topo_figure, fc_roi_matrix_figure
+from fnirs_pipe.qc.figures.subject.rest_figures import alff_topo_figure, fc_roi_matrix_figure
 
 
 def _png_size(b64: str) -> tuple[int, int]:

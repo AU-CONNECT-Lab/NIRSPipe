@@ -15,7 +15,7 @@ import numpy as np
 import pytest
 
 from fnirs_pipe.pipeline.synchrony import _mean_phase
-from fnirs_pipe.qc.figures.hyper_post_figures import _log_freq_ticks
+from fnirs_pipe.qc.figures.hyper.hyper_post_figures import _log_freq_ticks
 
 # pycwt's default grid: 12 sub-octaves per octave, so neighbours differ by 2 ** (1 / 12)
 WAVELET_GRID = np.sort(0.2 / 2 ** (np.arange(0, 70) / 12))

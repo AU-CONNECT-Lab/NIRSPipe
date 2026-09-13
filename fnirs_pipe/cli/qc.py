@@ -227,7 +227,7 @@ def cmd_provenance(output_dir: Path) -> None:
 
     Reads the JSON sidecars already on disk, so it works on any past run.
     """
-    from fnirs_pipe.qc.figures.provenance_figure import write_provenance
+    from fnirs_pipe.qc.figures.common.provenance_figure import write_provenance
 
     # the root is always searched too: hyper-raw writes its group TSVs there, not under nirs/
     targets = [

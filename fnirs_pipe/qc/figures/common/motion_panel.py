@@ -14,9 +14,9 @@ import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from fnirs_pipe.qc.figures._utils import LONG_COLOR, SHORT_COLOR, UNCLASSIFIED_COLOR
-from fnirs_pipe.qc.figures._utils import decimate as _decimate
-from fnirs_pipe.qc.figures._utils import line_xy as _line_xy
+from fnirs_pipe.qc.figures.common._utils import LONG_COLOR, SHORT_COLOR, UNCLASSIFIED_COLOR
+from fnirs_pipe.qc.figures.common._utils import decimate as _decimate
+from fnirs_pipe.qc.figures.common._utils import line_xy as _line_xy
 from fnirs_pipe.qc.metrics import (
     GVTD_MOTION_BAND, GVTD_N_STD, _motion_band_diff, gvtd_threshold, gvtd_timetrace,
 )

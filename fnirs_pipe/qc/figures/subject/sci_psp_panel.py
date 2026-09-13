@@ -1,11 +1,12 @@
 import numpy as np
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
 from fnirs_pipe.qc.metrics import CV_PASS, PSP_PASS, SCI_PASS, SNR_PASS
 from fnirs_pipe.qc.metrics._helpers import GOOD_FRAC_PASS
 from fnirs_pipe.utils.logging import get_logger
 
-from ._utils import AXIS_TEXT_COLOR
+from fnirs_pipe.qc.figures.common._utils import AXIS_TEXT_COLOR
 
 logger = get_logger("qc.figures.sci_psp")
 
@@ -303,6 +304,197 @@ def lollipop_scores_figure(
     fig.update_layout(
         xaxis_title=metric_label,
         yaxis=dict(autorange="reversed", showticklabels=False),
+        plot_bgcolor="white", paper_bgcolor="white",
+    )
+    return fig
+
+
+# ---- The windowed strip, and the lollipop beside it ----
+# Here rather than with the raw-intensity figures: only the subject pages draw it,
+# and the lollipop it ends with is this module's.
+
+def _window_centers(win_times) -> np.ndarray:
+    """[start, end] window pairs -> one centre per window; already-1-D input passes through.
+
+    e.g. [(0.0, 10.1), (10.1, 20.2)] -> [5.05, 15.15]. Flattening instead would hand a
+    heatmap twice as many x values as it has columns, and the extras are silently dropped,
+    which compresses the plotted time axis to half the recording.
+    """
+    a = np.asarray(win_times, dtype=float)
+    return a.mean(axis=1) if a.ndim == 2 and a.shape[1] == 2 else a.ravel()
+
+
+def build_sci_psp_figure(
+    sci_scores: dict[str, float],
+    psp_per_channel: dict[str, float],
+    bad_channels: set[str],
+    sci_threshold: float = SCI_PASS,
+    psp_threshold: float = PSP_PASS,
+    sci_matrix: np.ndarray | None = None,
+    sci_win_times: np.ndarray | None = None,
+    psp_matrix: np.ndarray | None = None,
+    psp_win_times: np.ndarray | None = None,
+    cv_per_channel: dict[str, float] | None = None,
+    cv_matrix: np.ndarray | None = None,
+    cv_win_times: np.ndarray | None = None,
+    cv_threshold: float = CV_PASS,
+) -> go.Figure:
+    """Channel quality over time: one heatmap row per metric, its channel mean beside it.
+
+    Every row is measured on the uncorrected optical density and on one window grid, so a
+    column in the CV row is the same stretch of recording as the column above it in SCI.
+
+    CV carries SNR rather than getting a row of its own: the record stores SNR as 1/CV
+    exactly, so a second row would be the same numbers reflected, and the hover prints both.
+    CV is also the one row where low is good, which is why it takes the reversed scale.
+
+    The lollipop beside each row is that row averaged along time, so the dot and the strip
+    are one measurement, rather than the record's scalar of the same name -- which for SCI is
+    the whole-run correlation and not the windowed one the strip draws.
+
+    Without the windowed matrices this falls back to the lollipop-only pair it has always
+    drawn, which is what a record predating the windowed section leaves it with.
+    """
+    ch_names = list(sci_scores.keys())
+    sci_arr  = np.array([sci_scores.get(ch, 0.0) for ch in ch_names])
+    has_psp  = bool(psp_per_channel)
+    psp_arr  = np.array([psp_per_channel.get(ch, 0.0) for ch in ch_names]) if has_psp else None
+
+    has_matrices = (
+        sci_matrix is not None and sci_win_times is not None
+        and psp_matrix is not None and psp_win_times is not None
+        and has_psp
+    )
+
+    if not has_matrices:
+        sci_colors = [
+            "#e74c3c" if ch in bad_channels
+            else ("#27ae60" if sci_scores.get(ch, 0.0) >= sci_threshold else "#f39c12")
+            for ch in ch_names
+        ]
+        if not has_psp:
+            return lollipop_scores_figure(ch_names, sci_arr, sci_colors, sci_threshold, "SCI")
+        psp_colors = ["#27ae60" if psp_per_channel.get(ch, 0.0) >= psp_threshold
+                      else "#e74c3c" for ch in ch_names]
+        fig_sci = lollipop_scores_figure(ch_names, sci_arr, sci_colors, sci_threshold, "SCI")
+        fig_psp = lollipop_scores_figure(ch_names, psp_arr,  psp_colors, psp_threshold, "PSP")
+        n_ch = len(ch_names)
+        combined = make_subplots(rows=1, cols=2, shared_yaxes=True,
+                                 horizontal_spacing=0.08, subplot_titles=["SCI", "PSP"])
+        for t in fig_sci.data: combined.add_trace(t, row=1, col=1)
+        for t in fig_psp.data: combined.add_trace(t, row=1, col=2)
+        combined.update_yaxes(tickvals=[i * _SPACING for i in range(n_ch)],
+                               ticktext=ch_names, autorange="reversed",
+                               tickfont=dict(size=9), row=1, col=1)
+        combined.update_yaxes(autorange="reversed", showticklabels=False, row=1, col=2)
+        combined.update_layout(height=min(max(300, n_ch * 14 + 100), 700),
+                                margin=dict(l=110, r=30, t=40, b=40),
+                                plot_bgcolor="white", paper_bgcolor="white")
+        return combined
+
+    # ---- one spec per heatmap row ----
+    # (short name, heat title, mean title, matrix, window times, channel means,
+    #  threshold, higher is better, hover line, colour range)
+    #
+    # SCI and PSP centre their scale on the threshold; CV pins its range to twice it
+    # instead. CV is unbounded above and a single flat window can reach 0.38 against a 0.05
+    # line, which through `zmid` would stretch the scale to that one window and paint every
+    # ordinary window the same green. Pinned, the line sits mid-scale and anything twice as
+    # bad saturates, which is what the row is read for.
+    # the mean beside a row is that row's own mean, not the scalar of the same name: the
+    # record's sci_mean is the whole-run correlation and its psp_mean and cv_mean are pinned
+    # to 10 s, so on any other QC window the dot would sit beside a row it was not measured
+    # from. Here the dot is the row, averaged along time.
+    def _row_mean(matrix) -> np.ndarray:
+        with np.errstate(invalid="ignore"):
+            return np.nanmean(np.asarray(matrix, dtype=float), axis=1)
+
+    rows = [
+        ("SCI", "SCI (windowed)", "Row mean", sci_matrix, sci_win_times,
+         _row_mean(sci_matrix), sci_threshold, True, "SCI=%{z:.3f}", None),
+        ("PSP", "PSP (windowed)", "Row mean", psp_matrix, psp_win_times,
+         _row_mean(psp_matrix), psp_threshold, True, "PSP=%{z:.3f}", None),
+    ]
+    if cv_matrix is not None and cv_win_times is not None:
+        rows.append(("CV", "CV (windowed)", "Row mean", cv_matrix, cv_win_times,
+                     _row_mean(cv_matrix), cv_threshold, False,
+                     "CV=%{z:.4f}<br>SNR=%{customdata:.1f}",
+                     (0.0, 2 * cv_threshold)))
+
+    n_ch   = len(ch_names)
+    n_rows = len(rows)
+    row_h  = min(max(220, n_ch * 14 + 80), 480)
+
+    fig = make_subplots(
+        rows=n_rows, cols=2,
+        shared_yaxes=True,
+        column_widths=[0.875, 0.125],
+        row_heights=[1.0 / n_rows] * n_rows,
+        vertical_spacing=0.06,
+        horizontal_spacing=0.02,
+        subplot_titles=[t for row in rows for t in (row[1], row[2])],
+    )
+
+    for i, (name, _heat_title, _mean_title, matrix, win_times, means,
+            threshold, higher_better, hover, zrange) in enumerate(rows, start=1):
+        centers = _window_centers(win_times)
+        z = np.asarray(matrix, dtype=float)
+        # SNR is 1/CV by construction, so the row that has it hands it to the hover rather
+        # than repeating the same matrix reflected as a fourth row
+        customdata = None
+        if not higher_better:
+            with np.errstate(divide="ignore", invalid="ignore"):
+                customdata = np.where(z > 0, 1.0 / z, np.nan)
+        fig.add_trace(go.Heatmap(
+            z=z, x=centers.tolist(), y=ch_names,
+            customdata=customdata,
+            colorscale="RdYlGn" if higher_better else "RdYlGn_r",
+            zmid=None if zrange else threshold,
+            zmin=zrange[0] if zrange else None,
+            zmax=zrange[1] if zrange else None,
+            colorbar=dict(title=name, thickness=10,
+                          len=0.88 / n_rows, y=1.0 - (i - 0.5) / n_rows, x=1.01),
+            hovertemplate="Ch: %{y}<br>t=%{x:.1f}s<br>" + hover + "<extra></extra>",
+            name=name,
+        ), row=i, col=1)
+
+        # the screening verdict only colours the row it is read off; the others colour
+        # against their own cutoff, so a channel rejected on SCI is not painted red in CV
+        colors = []
+        for ch, v in zip(ch_names, means):
+            if name == "SCI" and ch in bad_channels:
+                colors.append("#e74c3c")
+            elif not np.isfinite(v):
+                colors.append("#D3D3D3")
+            elif (v >= threshold) if higher_better else (v <= threshold):
+                colors.append("#27ae60")
+            else:
+                colors.append("#f39c12" if higher_better else "#e74c3c")
+
+        lx, ly = [], []
+        for ch, v in zip(ch_names, means):
+            lx += [0.0, float(v) if np.isfinite(v) else 0.0, None]
+            ly += [ch, ch, None]
+        fig.add_trace(go.Scatter(x=lx, y=ly, mode="lines",
+                                 line=dict(color="#aaa", width=1.2),
+                                 showlegend=False, hoverinfo="skip"), row=i, col=2)
+        fig.add_trace(go.Scatter(x=np.asarray(means, dtype=float).tolist(), y=ch_names,
+                                 mode="markers",
+                                 marker=dict(size=7, color=colors,
+                                             line=dict(width=0.5, color="#333")),
+                                 showlegend=False,
+                                 hovertemplate="%{y}: %{x:.3f}<extra></extra>"), row=i, col=2)
+        fig.add_vline(x=threshold, line_dash="dash", line_color="#888",
+                      line_width=1, row=i, col=2)
+
+        fig.update_yaxes(autorange="reversed", tickfont=dict(size=9), row=i, col=1)
+        fig.update_yaxes(autorange="reversed", showticklabels=False, row=i, col=2)
+
+    fig.update_xaxes(title_text="Time (s)", gridcolor="#eee", row=n_rows, col=1)
+    fig.update_xaxes(title_text="Score", row=n_rows, col=2)
+    fig.update_layout(
+        height=row_h * n_rows + 80,
+        margin=dict(l=120, r=110, t=50, b=40),
         plot_bgcolor="white", paper_bgcolor="white",
     )
     return fig

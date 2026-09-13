@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 
-from ._utils import CONDITION_PALETTE, LONG_COLOR, SHORT_COLOR
+from fnirs_pipe.qc.figures.common._utils import CONDITION_PALETTE, LONG_COLOR, SHORT_COLOR
 
 
 # Only scale-homogeneous metrics share a chart, so the y-axis stays in real units. Keys are

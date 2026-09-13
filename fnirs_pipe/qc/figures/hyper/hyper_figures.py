@@ -12,14 +12,14 @@ from fnirs_pipe.qc.common.figure_io import extract_markers as _extract_markers
 from fnirs_pipe.qc.metrics.hyper import (  # noqa: F401  (re-exported for the panels)
     NULL_ALPHA_PCT, _ch_kept_by_member, dyad_status, sci_of,
 )
-from fnirs_pipe.qc.figures._utils import (CONDITION_PALETTE, PSD_NFFT,
+from fnirs_pipe.qc.figures.common._utils import (CONDITION_PALETTE, PSD_NFFT,
                                           TIMELINE_ROW_PX,
                                           decimate as _decimate, physio_bands, timeline_axes,
                                           timeline_row_bands, timeline_row_traces)
 # Imported rather than restated: these heads are the subject report's channel map with a
 # different quantity on them, and a reader who learned one reads the other. Two copies of
 # the pair would let one report's bars thicken while the other's stayed put.
-from fnirs_pipe.qc.figures.topomap import (
+from fnirs_pipe.qc.figures.common.topomap import (
     _LONG_SIZE as _HEAD_SIZE, _SHORT_SIZE as _HEAD_SHORT_SIZE,
 )
 from fnirs_pipe.utils.logging import get_logger
@@ -392,7 +392,7 @@ def motion_series(
 
     Returns ``{}`` when no member carries usable optical density.
     """
-    from fnirs_pipe.qc.figures.motion_panel import carpet_z
+    from fnirs_pipe.qc.figures.common.motion_panel import carpet_z
     from fnirs_pipe.qc.metrics import (
         GVTD_MOTION_BAND, gvtd_channel_blocks, gvtd_timetrace, spike_segments,
     )
@@ -556,7 +556,7 @@ def build_motion_panel(
 
     Under the rows sits the spike strip, marking only the spans where every member was
     spiking at once, and under that each member's z-scored optical-density carpet, drawn by
-    the subject report's own :func:`~fnirs_pipe.qc.figures.motion_panel.add_carpet` so the
+    the subject report's own :func:`~fnirs_pipe.qc.figures.common.motion_panel.add_carpet` so the
     dyad's image and the member's own cannot drift apart.
 
     Row titles and the run's numbers sit in the left margin rather than inside the panels: a
@@ -573,7 +573,7 @@ def build_motion_panel(
     if not sets:
         return None
 
-    from fnirs_pipe.qc.figures.motion_panel import (
+    from fnirs_pipe.qc.figures.common.motion_panel import (
         _maxpool_xy, _px_rows, _span_polygons, add_carpet, carpet_coloraxis,
     )
 
@@ -711,7 +711,7 @@ def head_geometry(raw: mne.io.Raw, pairs: list[str]) -> "dict | None":
 
     None when the montage has no usable optode positions.
     """
-    from fnirs_pipe.qc.figures.topomap import _glyph_points, _projected_optodes
+    from fnirs_pipe.qc.figures.common.topomap import _glyph_points, _projected_optodes
 
     got = _projected_optodes(raw.info)
     if got is None:

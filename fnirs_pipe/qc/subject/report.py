@@ -75,7 +75,7 @@ from fnirs_pipe.qc.common.figure_io import (
 )
 from fnirs_pipe.qc.metrics import CV_PASS, SCI_PASS, gvtd_channel_blocks, separation_bands
 from fnirs_pipe.qc.metrics._helpers import bands_from_record
-from fnirs_pipe.qc.figures._utils import chunk_annotations
+from fnirs_pipe.qc.figures.common._utils import chunk_annotations
 from fnirs_pipe.qc.figures import (
     build_trigger_timeline_single,
     condition_colors,

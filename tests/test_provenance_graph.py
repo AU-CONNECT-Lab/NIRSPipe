@@ -10,7 +10,7 @@ import json
 import pytest
 
 from fnirs_pipe.qc.common.provenance import scan, to_mermaid
-from fnirs_pipe.qc.figures.provenance_figure import write_provenance
+from fnirs_pipe.qc.figures.common.provenance_figure import write_provenance
 
 
 def _sidecar(directory, name, step=None, sources=(), data_file=True, **extra):

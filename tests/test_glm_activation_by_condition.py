@@ -18,7 +18,7 @@ import pandas as pd
 import pytest
 
 from fnirs_pipe.qc.figures import glm_figures
-from fnirs_pipe.qc.figures.glm_figures import (
+from fnirs_pipe.qc.figures.subject.glm_figures import (
     _shared_clim, activation_condition_figures, activation_panel,
 )
 

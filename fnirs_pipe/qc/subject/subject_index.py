@@ -392,7 +392,7 @@ def write_condition_figures(sub_dir: Path, subject: str, groups: list[dict]) -> 
     are of one run's channels and one run's clock and cannot be pooled.
     """
     from fnirs_pipe.qc.common.figure_io import _save_figure_html
-    from fnirs_pipe.qc.figures.group_figures import (
+    from fnirs_pipe.qc.figures.subject.group_figures import (
         build_channel_condition_matrix, build_condition_panels, build_condition_timeline,
     )
     from fnirs_pipe.qc.subject.group_writer import _sqm_row

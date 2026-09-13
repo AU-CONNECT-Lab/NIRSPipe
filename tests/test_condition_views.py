@@ -210,7 +210,7 @@ def carpet_fig():
     """A real carpet through the shipped builder, quiet for the first half of the run."""
     import mne
     from tests._synth import synth_raw
-    from fnirs_pipe.qc.figures.motion_panel import carpet_gvtd_figure
+    from fnirs_pipe.qc.figures.common.motion_panel import carpet_gvtd_figure
     from fnirs_pipe.qc.metrics import gvtd_channel_blocks
 
     raw = synth_raw("01", "tapping", duration=600.0)
