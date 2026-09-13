@@ -5,10 +5,8 @@ The whole of GVTD is here, from the per-sample trace to the spans a run marks as
 against the trace, the censoring is defined against the threshold, and the channel set the
 figures print is the one the censoring used.
 
-Which channels and why the flagged fraction runs high are settled in
-``qc/GVTD/gvtd_channel_set_and_threshold.md``, measured on 17 recordings. Two decisions from
-it are carried here: ``GVTD_MOTION_BAND`` does not follow ``--mode``, and the channel set is
-the long channels, not an option, since the analysis never uses the rest.
+``GVTD_MOTION_BAND`` does not follow ``--mode``, and the channel set is the long channels
+rather than an option, since the analysis never uses the rest.
 
 ``_motion_metrics`` keeps its name, which predates the split and says "motion" where it
 means GVTD. The other motion measures, spikes and the correction footprint, are in
@@ -265,12 +263,11 @@ def _motion_metrics(raw_intensity: mne.io.Raw,
         before and after halves of a pair are counted against one yardstick.
 
         Without it the pair is not a comparison. The threshold is the mode of the trace's
-        own histogram plus 3 SD, so it tracks whatever distribution it is handed: on
-        ``sub-p1d01`` it rises 1.54x across the correction (4.81e-04 to 7.39e-04), and the
-        share above it falls 52.4% to 4.0% while the share above the *original* cutoff only
-        falls to 33.1%. Most of that 13x was the cutoff moving. It is the same rule the
-        per-condition views follow, which the project already states: fix the yardstick over
-        the run and count the mask, never re-derive it on the part being compared.
+        own histogram plus 3 SD, so it tracks whatever distribution it is handed: re-derived
+        on the corrected file it rises, and most of the apparent improvement is the cutoff
+        moving rather than the motion going. It is the same rule the per-condition views
+        follow: fix the yardstick over the run and count the mask, never re-derive it on the
+        part being compared.
 
         ``gvtd_thresh`` still reports this recording's own cutoff either way, because the
         report has a row for exactly that and its movement is worth seeing;

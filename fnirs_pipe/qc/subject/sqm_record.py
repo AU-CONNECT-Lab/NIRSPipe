@@ -267,17 +267,10 @@ def _short_section(
     subset of the long one, and its threshold is the mode of *its own trace over time*, which
     has as many samples as any other trace of the same recording.
 
-    Two earlier versions of this docstring said otherwise, that a handful of scalp channels
-    has no distribution to set a cutoff from. `qc/GVTD/gvtd_channel_set_and_threshold.md`
-    refutes it: H8 computes both the threshold and the flagged fraction for short channels
-    across 11 runs, and subsampling the long set to the short channel count moves the
-    spikiness by 0.97x, so the channel count is not what does the work. The package reads
-    long everywhere for the reason recorded there, H7, which is about ``all`` not being a
-    stable definition across montages and says nothing about short.
-
-    What the same file does warn about is comparison: each set's share is counted against its
-    own set's threshold, so a short share and a long share are not two readings of one thing.
-    That is a labelling problem and the panel labels it.
+    The channel count is not what sets the threshold, so a short set having few channels is
+    no reason to withhold one. What does need care is comparison: each set's share is counted
+    against its own set's threshold, so a short share and a long share are not two readings
+    of one thing. That is a labelling problem, and the panel labels it.
 
     Every value here is a value and not a verdict. Nothing colours a short channel's row,
     because a short channel's coupling is high by construction and the published cutoffs

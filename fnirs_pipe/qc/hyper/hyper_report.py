@@ -160,7 +160,7 @@ def subject_metric_tables(
 
       -> [{"set": "Long",
            "columns": [{"key", "label", "summary", "key_metric"}, ...],
-           "rows": [{"member": "sub-p1d01", "cells": [{"text", "cls"}, ...]}, ...]}]
+           "rows": [{"member": "sub-01", "cells": [{"text", "cls"}, ...]}, ...]}]
 
     ``by_set`` is ``{set_name: {subject_id: scalars}}``.
 

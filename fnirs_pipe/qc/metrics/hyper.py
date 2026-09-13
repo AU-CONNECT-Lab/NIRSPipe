@@ -238,8 +238,8 @@ def motion_summary(motion: dict) -> dict:
 
     ``together`` is the mean of the pointwise minimum of the members' traces, which is high
     only where both were high. It replaced a count of windows where both crossed a line: the
-    histogram-mode GVTD threshold marks 40 to 55% of the samples on the reference dyad, so a
-    "both above" share built on it was not a measurement of anything. A minimum needs no
+    histogram-mode GVTD threshold marks a large share of the samples, so a "both above" share
+    built on it was not a measurement of anything. A minimum needs no
     cutoff chosen, and being a mean of the same normalised trace it is comparable between
     stages. ``reduction`` is the share of simultaneous movement the correction removed.
     """

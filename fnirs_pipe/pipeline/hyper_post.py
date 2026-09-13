@@ -234,9 +234,8 @@ def run_hyper_post(
 
         The alternative to reading the window out of the whole-run transform, for a caller
         who wants each condition transformed on its own. **It is the same number**, to four
-        decimal places, as long as the padding is wide enough: measured on d01, a padded cut
-        and the whole-record transform agree per map cell to 0.00014 at a correlation of
-        1.00000, and a condition's band mean stops moving once the padding passes
+        decimal places, as long as the padding is wide enough: a condition's band mean stops
+        moving once the padding passes
         :func:`~fnirs_pipe.pipeline.synchrony.cone_margin_s`. What the padding buys is the
         cone: it lands in the margin instead of eating the condition's own edges, which is
         the whole difference between this and cutting a condition to its own boundaries.

@@ -388,8 +388,8 @@ def motion_series(
     Spikes are kept only where **every** member was spiking at once. A member spiking alone
     costs that member's channels, which the usable-time carpet already shows; both at once is
     the case that survives a surrogate null and raises any synchrony measure taken on the
-    pair. Per-member spike lanes were drawn and dropped: on the reference dyad they are 530
-    to 570 runs each and read as a wash.
+    pair. Per-member spike lanes were drawn and dropped: there are hundreds of runs each and
+    they read as a wash.
 
     Returns ``{}`` when no member carries usable optical density.
     """

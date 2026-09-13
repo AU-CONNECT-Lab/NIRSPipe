@@ -93,8 +93,8 @@ _COND_COLUMNS = (
 # The span list behind each share, and the key it fills. The whole-run row counts these over
 # the full recording rather than reading the record's own scalar of the same name: a
 # condition's `gvtd_pct_above_thresh` is the corrected file against its own threshold, while
-# `raw_long_gvtd_pct_above_thresh` is the uncorrected file against its own, and on
-# sub-p1d01 those are 4.0% and 52.4% of one recording. Same rule, same spans, one column.
+# `raw_long_gvtd_pct_above_thresh` is the uncorrected file against its own: two numbers an
+# order of magnitude apart for one recording. Same rule, same spans, one column.
 _WHOLE_RUN_SPANS = (
     ("gvtd_pct_above_thresh", "gvtd_above_spans_s"),
     ("spike_pct_frames",      "spike_spans_s"),

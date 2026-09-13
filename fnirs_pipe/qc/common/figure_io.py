@@ -203,7 +203,7 @@ def save_png(b64: str, figures_dir: Path, name: str) -> "str | None":
 
     ::
 
-      save_png(b64, .../group-d01/figures, "wtc_hbo_S1D1.png")
+      save_png(b64, .../group-01/figures, "wtc_hbo_S1D1.png")
       -> "figures/wtc_hbo_S1D1.png"
 
     The two halves of writing a matplotlib figure out, in one call, because every caller

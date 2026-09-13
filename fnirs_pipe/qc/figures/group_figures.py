@@ -198,7 +198,7 @@ def _short_run_labels(runs: list[str]) -> list[str]:
 
     ::
 
-        ["sub-p1d01_task-full", "sub-p2d01_task-full"]  ->  ["sub-p1d01", "sub-p2d01"]
+        ["sub-01_task-full", "sub-02_task-full"]  ->  ["sub-01", "sub-02"]
 
     An axis with one tick per run has no room for the part of the name that is the same on
     all of them. The full name stays in the hover.
