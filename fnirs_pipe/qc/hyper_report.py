@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 import mne
+import numpy as np
 import pandas as pd
 
 from fnirs_pipe.io.derivatives import (
@@ -1386,15 +1387,18 @@ def build_hyper_post_report(
     # while a wavelet transform of a cut window has two edges and a cone of its own. See
     # `compute_isc` and `window_result`, which each say why they do it their way.
     def _isc_panel(ch_type: str, label: "str | None" = None,
-                   window: "tuple[float, float] | None" = None) -> str:
+                   window: "tuple[float, float] | None" = None) -> tuple:
+        """(panel, matrix, channel names) for one scope. The matrix comes back as well as
+        the figure because the numbers table prints it beside the coherence."""
         what = f"condition {label}" if label else "whole run"
         suffix = f"_{_pair_fname(label)}" if label else ""
         panel: dict = {}
+        isc_mat = isc_ch_names = None
         with guard(f"ISC panel ({what}, {ch_type})", errors, scope):
             isc_mat, isc_ch_names = compute_isc(aligned_raws, subject_ids, ch_type,
                                                 sep_bands, window=window)
             if isc_mat is None:
-                return {}
+                return {}, None, None
             # the desc- entity a condition's page takes, so its table is named the way its
             # page is and a reader can pair the two without a rule of their own
             desc = f"_desc-{_pair_fname(label)}" if label else ""
@@ -1410,14 +1414,15 @@ def build_hyper_post_report(
                 isc_mat, isc_ch_names, subject_ids,
                 ch_type=ch_type, isc_threshold=isc_threshold,
             ), f"isc_{ch_type}{suffix}.html") or {}
-        return panel
+        return panel, isc_mat, isc_ch_names
 
-    # {label or None: {chromophore: href}}, one entry per page below
-    isc_panels: dict = {None: {c: _isc_panel(c, window=analysis_window)
-                               for c in ("hbo", "hbr")}}
+    # {label or None: {chromophore: href}}, one entry per page below, and the same keys over
+    # the matrices those figures were drawn from
+    isc_runs = {None: {c: _isc_panel(c, window=analysis_window) for c in ("hbo", "hbr")}}
     for label, tstart, tstop in cond_windows:
-        isc_panels[label] = {c: _isc_panel(c, label, (tstart, tstop))
-                             for c in ("hbo", "hbr")}
+        isc_runs[label] = {c: _isc_panel(c, label, (tstart, tstop)) for c in ("hbo", "hbr")}
+    isc_panels = {k: {c: v[0] for c, v in row.items()} for k, row in isc_runs.items()}
+    isc_values = {k: {c: v[1:] for c, v in row.items()} for k, row in isc_runs.items()}
 
     # ISC has no frequency axis, so an unfiltered stage reaches the number directly; WTC
     # does not care. Said on the page as well as in the log, since the two are read by
@@ -1485,7 +1490,69 @@ def build_hyper_post_report(
     methods = group_methods(output_dir, group, group_data_dir(output_dir, group_id),
                             own_steps, versions, notes, scope)
 
-    def _render_page(figs: dict, matrices: dict, label: "str | None",
+    def _number_table(bands: dict, isc: "dict | None", axis: list[str], kind: str) -> dict:
+        """Every number behind one scope's panels, one row per pairing.
+
+        ::
+
+          {"hbo": band frame, "hbr": ...} + {"hbo": (matrix, names), ...}
+            -> {"kind": "channel", "columns": ["HbO coherence", ...],
+                "rows": [{"a": "S1_D1", "b": "S1_D2", "cells": [".241", "99%", ...]}]}
+
+        The panels above show these as colour and the TSVs hold them to full precision; this
+        is the same numbers on the page, so that reading one off a cell does not mean opening
+        a file. Every value is looked up by label pair, never by position, which is the rule
+        the matrices follow and for the same reason: two members can differ in what they
+        rejected.
+
+        ``valid`` is the share of the pairing's band cells that survived the cone of
+        influence, the one number behind a band mean that no figure here shows. A pairing
+        whose coherence rests on a third of its window is not the same measurement as one
+        that kept all of it.
+
+        Rows are every pairing that carries at least one value, so an uncrossed run shows the
+        coherence on the diagonal and the ISC everywhere, which is what those two actually
+        computed. ``isc`` is None for the ROI table, there being no ROI-level ISC.
+        """
+        cells_by_pair: dict = {}
+        columns: list[str] = []
+
+        def _put(pair: tuple, column: int, text: str) -> None:
+            cells_by_pair.setdefault(pair, {})[column] = text
+
+        for ch_type in chroma:
+            name = _CHROMA_LABEL[ch_type]
+            col = len(columns)
+            columns += [f"{name} coherence", f"{name} valid"]
+            df = bands.get(ch_type)
+            if df is None or "label2" not in getattr(df, "columns", []):
+                continue
+            for row in df.itertuples():
+                _put((row.label, row.label2), col, f"{row.coherence:.3f}")
+                frac = getattr(row, "n_valid_frac", None)
+                if frac is not None and np.isfinite(frac):
+                    _put((row.label, row.label2), col + 1, f"{100 * frac:.0f}%")
+
+        for ch_type in (chroma if isc else ()):
+            col = len(columns)
+            columns.append(f"{_CHROMA_LABEL[ch_type]} ISC")
+            mat, names = isc.get(ch_type) or (None, None)
+            if mat is None or not names:
+                continue
+            index = {name: i for i, name in enumerate(names)}
+            for a in axis:
+                for b in axis:
+                    if a in index and b in index:
+                        value = float(np.asarray(mat)[index[a], index[b]])
+                        if np.isfinite(value):
+                            _put((a, b), col, f"{value:+.3f}")
+
+        rows = [{"a": a, "b": b,
+                 "cells": [cells_by_pair[(a, b)].get(i, "") for i in range(len(columns))]}
+                for a in axis for b in axis if (a, b) in cells_by_pair]
+        return {"kind": kind, "columns": columns, "rows": rows} if rows else {}
+
+    def _render_page(figs: dict, matrices: dict, band_frames: dict, label: "str | None",
                      window: "tuple[float, float] | None") -> Path:
         """One page: the whole run's when ``label`` is None, else that condition's.
 
@@ -1513,6 +1580,15 @@ def build_hyper_post_report(
         per_roi     = _by_chroma("per_roi")
         roi_matrix  = matrices.get("roi_matrix") or {}
         chan_matrix = matrices.get("chan_matrix") or {}
+
+        # the same scope the panels above were drawn over, printed rather than coloured
+        bands = {c: (band_frames.get(c) or {}) for c in chroma}
+        number_tables = [t for t in (
+            _number_table({c: bands[c].get("chan") for c in chroma},
+                          isc_values.get(label) or {}, chan_axis, "channel"),
+            _number_table({c: bands[c].get("roichan") for c in chroma},
+                          None, roi_labels, "ROI"),
+        ) if t]
 
         out_path = _page_path(label)
         heading = f"group-{group_id}_task-{task}"
@@ -1566,6 +1642,7 @@ def build_hyper_post_report(
             per_roi_post_json=json.dumps(per_roi),
             wtc_roi_matrix=roi_matrix,
             wtc_chan_matrix=chan_matrix,
+            number_tables=number_tables,
             # a second selector on each map panel, which an uncrossed run has no pairings
             # for: it holds the diagonal alone
             chan_crossed=wtc_channel_cross,
@@ -1597,10 +1674,14 @@ def build_hyper_post_report(
     for i, (label, tstart, tstop) in enumerate(cond_windows):
         figs = {c: (passes[c]["cond_figs"][i] if i < len(passes[c]["cond_figs"]) else {})
                 for c in chroma}
-        written = _render_page(figs, cond_matrices[i], label, (tstart, tstop))
+        bands = {c: (passes[c]["cond_bands"][i] if i < len(passes[c]["cond_bands"]) else {})
+                 for c in chroma}
+        written = _render_page(figs, cond_matrices[i], bands, label, (tstart, tstop))
         logger.info("group-%s | condition %s → %s", group_id, label, written.name)
 
-    output_path = _render_page({c: passes[c]["run_figs"] for c in chroma}, run_matrices,
-                               None, None)
+    output_path = _render_page(
+        {c: passes[c]["run_figs"] for c in chroma}, run_matrices,
+        {c: {"chan": passes[c]["chan"], "roichan": passes[c]["roichan"]} for c in chroma},
+        None, None)
     logger.info("Hyper post report saved: %s", output_path)
     return output_path

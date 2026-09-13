@@ -44,9 +44,10 @@
   {"id": "Summary", "name": "Summary", "href": "#Final", "ratable": false},
   {"sep": true},
   {"id": "Alignment" ~ _rk, "name": "Alignment", "href": "#Alignment"},
-  {"id": "Quality" ~ _rk,   "name": "Quality",   "href": "#Quality"},
   {"id": "Coherence" ~ _rk, "name": "Coherence", "href": "#Coherence"},
   {"id": "ISC" ~ _rk,       "name": "ISC",       "href": "#ISC"},
+  {"id": "Numbers" ~ _rk,   "name": "Numbers",   "href": "#Numbers", "ratable": false},
+  {"id": "Quality" ~ _rk,   "name": "Quality",   "href": "#Quality"},
 ] %}
 {% set _ = _bar.append({"sep": true}) %}
 {% set _ = _bar.append({"id": "Provenance", "name": "Provenance", "href": "#Provenance",
@@ -149,77 +150,41 @@
   </div>
   {% endif %}
 
+  {#- Both of these are what the rest of the page is read against rather than findings of
+      their own: the clocks convert a dyad window to a member's own record, and the ROI map
+      says what every per-ROI panel below was averaged over. The raw dyad report carries its
+      clocks the same way. -#}
+  <div class="summary-grid" style="margin-top:1.1rem;">
+    <div id="Alignment">
+      <h3 style="margin:0 0 0.3rem;">The two clocks</h3>
+      <p class="qm-note">Crop offset from the first shared trigger; all recordings are then
+        trimmed to the shortest. A dyad window is on the aligned clock and a member&rsquo;s
+        own record is on its own, and this table is what converts between them.</p>
+      <table class="qm-table qm-flat" id="align-table">
+        <thead><tr><th>Member</th><th>Offset (s)</th><th>Aligned duration (s)</th></tr></thead>
+        <tbody id="align-tbody"></tbody>
+      </table>
+    </div>
+    {% if roi_rows %}
+    <div id="ROI">
+      <h3 style="margin:0 0 0.3rem;">ROI grouping</h3>
+      <p class="qm-note">The channel-to-region mapping from <code>--roi-mapping</code>, which
+        is what the per-ROI panels below are averaged over.</p>
+      <table class="qm-table qm-flat" id="roi-table">
+        <thead><tr><th>ROI</th><th>Channels</th></tr></thead>
+        <tbody>
+        {% for row in roi_rows %}
+          <tr><td><b>{{ row.roi }}</b></td><td>{{ row.channels | join(", ") }}</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+  </div>
+
   <h3 style="margin-top:1rem;">Run command</h3>
   <pre>{{ run_command }}</pre>
 </div>
-
-<!-- ============================================================= the dyad -->
-<h2>The dyad</h2>
-
-<details id="Alignment" open>
-  <summary>a. Time alignment</summary>
-  <div class="details-body">
-    <p class="step-desc">Crop offset from the first shared trigger; all recordings are then
-      trimmed to the shortest. A dyad window is on the aligned clock and a member&rsquo;s own
-      record is on its own, and this table is what converts between them.</p>
-    <table class="qm-table qm-flat" id="align-table">
-      <thead><tr><th>Member</th><th>Offset (s)</th><th>Aligned duration (s)</th></tr></thead>
-      <tbody id="align-tbody"></tbody>
-    </table>
-  </div>
-</details>
-
-{% if subject_metrics_rows %}
-<details id="Quality" open>
-  <summary>b. Per-subject quality metrics</summary>
-  <div class="details-body">
-    <p class="step-desc">One table per channel set. &uarr; / &darr; marks the better
-      direction; SCI is coloured against this run&rsquo;s own threshold and HbO&ndash;HbR by
-      sign.</p>
-    {{ subject_metrics(subject_metrics_rows) }}
-    <p class="qm-note">Each table is its own measurement, not a subset of the one above it:
-      GVTD is an RMS across the channels of its set and a retention rate is a fraction of
-      them. The coherence is computed on the long channels.</p>
-    {% if condition_label %}
-    <p class="qm-note">Over this window only, read off each member&rsquo;s own record, so
-      these are the numbers that member&rsquo;s per-condition page prints. A blank row is one
-      the record has no per-condition value for. This reports, it does not re-decide: the
-      channel set is the whole recording&rsquo;s, since one montage has to serve every
-      condition, so a channel that came loose here is still in.
-      <a href="{{ run_href }}">Whole-run page</a>.</p>
-    {% endif %}
-  </div>
-</details>
-{% elif condition_label %}
-<details id="Quality" open>
-  <summary>b. Per-subject quality metrics &mdash; not available for this window</summary>
-  <div class="details-body">
-    <p class="qm-note">Neither member&rsquo;s record carries a <code>by_condition</code>
-      section, so nothing is shown rather than the whole recording&rsquo;s numbers under this
-      condition&rsquo;s heading. Those are on the
-      <a href="{{ run_href }}">whole-run page</a>; re-running <code>fnirs-pipe</code> on
-      these subjects writes the section.</p>
-  </div>
-</details>
-{% endif %}
-
-{% if roi_rows %}
-<details id="ROI">
-  <summary>c. ROI grouping</summary>
-  <div class="details-body">
-    <p class="step-desc">The channel-to-region mapping from <code>--roi-mapping</code>, which
-      is what the per-ROI panels below are averaged over.</p>
-    <table class="qm-table qm-flat" id="roi-table">
-      <thead><tr><th>ROI</th><th>Channels</th></tr></thead>
-      <tbody>
-      {% for row in roi_rows %}
-        <tr><td><b>{{ row.roi }}</b></td><td>{{ row.channels | join(", ") }}</td></tr>
-      {% endfor %}
-      </tbody>
-    </table>
-  </div>
-</details>
-{% endif %}
 
 <!-- =========================================================== coherence -->
 <h2 id="Coherence">Wavelet Transform Coherence</h2>
@@ -366,6 +331,72 @@
   </div>
 </details>
 {% endif %}
+{% endif %}
+
+<!-- ============================================================== numbers -->
+{% if number_tables %}
+<h2 id="Numbers">The numbers</h2>
+<p class="step-desc">Every value the panels above were drawn from, one row per pairing, for
+  {% if condition_label %}this window{% else %}the whole run{% endif %}. Not rounded anywhere
+  but here: <code>hyper-wtc.tsv</code>, <code>hyper-wtc-roichan.tsv</code> and
+  <code>hyper-isc-*.tsv</code> under the group&rsquo;s <code>nirs/</code> carry the same
+  numbers at full precision. <b>valid</b> is the share of the pairing&rsquo;s band cells that
+  survived the cone of influence, which is the one thing behind a band mean that no figure
+  here shows: a coherence resting on a third of its window is not the same measurement as one
+  that kept all of it.</p>
+{% for table in number_tables %}
+<div class="qm-box">
+  <h3 class="qm-sub">{{ table.kind }} pairs &mdash; {{ table.rows | length }}</h3>
+  <div style="overflow-x:auto;">
+  <table class="qm-table qm-flat qm-narrow">
+    <thead>
+      <tr><th>{{ subject_ids[0] }}</th><th>{{ subject_ids[1] }}</th>
+        {%- for col in table.columns %}<th>{{ col }}</th>{% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      {%- for row in table.rows %}
+      <tr><td>{{ row.a }}</td><td>{{ row.b }}</td>
+        {%- for cell in row.cells %}<td class="qv">{{ cell or "&mdash;" | safe }}</td>{% endfor %}
+      </tr>
+      {%- endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+{% endfor %}
+{% endif %}
+
+<!-- ================================================== per-subject quality -->
+{% if subject_metrics_rows %}
+<h2 id="Quality">Per-subject quality</h2>
+<div class="qm-box">
+  <p class="step-desc">One table per channel set. &uarr; / &darr; marks the better
+    direction; SCI is coloured against this run&rsquo;s own threshold and HbO&ndash;HbR by
+    sign. Last on the page for the reason the subject report puts its own metrics after the
+    pictures: these are each member&rsquo;s numbers, and what the page is about is the pair.</p>
+  {{ subject_metrics(subject_metrics_rows) }}
+  <p class="qm-note">Each table is its own measurement, not a subset of the one above it:
+    GVTD is an RMS across the channels of its set and a retention rate is a fraction of
+    them. The coherence is computed on the long channels.</p>
+  {% if condition_label %}
+  <p class="qm-note">Over this window only, read off each member&rsquo;s own record, so
+    these are the numbers that member&rsquo;s per-condition page prints. A blank row is one
+    the record has no per-condition value for. This reports, it does not re-decide: the
+    channel set is the whole recording&rsquo;s, since one montage has to serve every
+    condition, so a channel that came loose here is still in.
+    <a href="{{ run_href }}">Whole-run page</a>.</p>
+  {% endif %}
+</div>
+{% elif condition_label %}
+<h2 id="Quality">Per-subject quality &mdash; not available for this window</h2>
+<div class="qm-box">
+  <p class="qm-note">Neither member&rsquo;s record carries a <code>by_condition</code>
+    section, so nothing is shown rather than the whole recording&rsquo;s numbers under this
+    condition&rsquo;s heading. Those are on the
+    <a href="{{ run_href }}">whole-run page</a>; re-running <code>fnirs-pipe</code> on
+    these subjects writes the section.</p>
+</div>
 {% endif %}
 
 <script>

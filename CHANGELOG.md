@@ -13,6 +13,7 @@ All notable changes to this project will be documented in this file.
 
 - **The coherence matrices put HbO and HbR side by side on one colour scale**, per channel pair and per ROI pair. Reading the two together is what the second chromophore is run for, and they were stacked as separate figures with a colorbar each. Live, so hover names the pairing and prints its value
 - **The ISC panel carries a connectogram beside its matrix**: the heatmap holds every pairing and the circle shows which ones stand out, both live
+- **Every number behind a dyad page's panels is on the page.** One row per pairing, channel pairs and ROI pairs: each chromophore's band-mean coherence, the share of its band cells that survived the cone of influence, and the ISC. Reading a cell off a matrix no longer means opening a TSV, and the fraction is the one thing behind a band mean that no figure shows
 - **The ROI coherence maps are live figures.** Hover reads the time, frequency and coherence under the pointer and the axes zoom, which is what a map whose structure changes every ten seconds at the fast end needs. The per-channel maps stay stills: both kinds cost about 3 MB apiece, and a crossed 14-channel dyad has 2352 of the one against 192 of the other
 
 ### Changed
@@ -27,6 +28,7 @@ All notable changes to this project will be documented in this file.
 - **The page is named after the run**, as a subject page is, rather than after the report that wrote it
 - **The orange caveat panels are gone from the dyad pages.** A caveat on every page stops being read as one; what is left is grey prose, and the one coloured warning is the window too short for the band it averages
 - **A coherence map names its conditions in a legend in the top right.** The label was written above every block, so a block design printed the same word once per block
+- **A dyad page reads what the run was, then the coherence, then the synchrony, then each member's own quality.** The alignment clocks and the ROI grouping moved into the summary, both being what the rest of the page is read against rather than findings of their own, and the per-subject metrics moved to the end, where the subject report puts its own
 - **The panels of a dyad page are sized to each other.** The channel map is flatter and never taller than the live ROI map under it, which on a wide monitor it was by half again; the matrix and ISC panels are taller, having drawn a small square in the middle of a mostly blank panel; and the ISC connectogram is drawn at the size of the matrix beside it rather than three quarters of it
 - **The provenance diagram collapses repeats.** A step run once per chromophore per condition is one box saying what it was run over, so a dyad's graph is eight boxes rather than nineteen stacked into a column four times the height of the rest of it. Two inputs that would read the same are named by subject, and the diagram is sized to its own drawing on the page instead of being stretched to the full width, which for a tall graph filled a screen and a half
 
