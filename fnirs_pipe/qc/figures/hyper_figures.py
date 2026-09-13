@@ -375,6 +375,20 @@ _SERIES_ROWS = (("sci", "SCI (10 s)", False), ("psp", "PSP (10 s)", False),
 _LEAD_COLOURS = ("#3498db", "#e67e22", "#16a085", "#8e44ad")
 
 
+def _row_title(fig, row: int, text: str, x: float = -0.055) -> None:
+    """A series row's name, at a fixed distance from the plot rather than from its ticks.
+
+    Plotly pushes a y-axis title left by the width of that axis's tick labels, so rows whose
+    labels are ``0.8`` and ``1`` and ``0.01`` put their titles at three different depths and
+    the column of names comes out ragged. An annotation on the paper x axis, centred on the
+    row's own domain, lands in the same place whatever the ticks say.
+    """
+    fig.add_annotation(x=x, xref="paper", xanchor="center",
+                       y=0.5, yref=f"y{row if row > 1 else ''} domain", yanchor="middle",
+                       text=text, textangle=-90, showarrow=False,
+                       font=dict(size=9.5, color="#34495e"))
+
+
 def build_usable_time(
     grid: dict,
     subject_ids: list[str],
@@ -454,7 +468,7 @@ def build_usable_time(
         if line is not None:
             fig.add_hline(y=float(line), line_color="#adb5bd", line_width=1,
                           line_dash="dot", row=r, col=1)
-        fig.update_yaxes(title_text=label, title_font=dict(size=9.5), row=r, col=1)
+        _row_title(fig, r, label)
 
     fig.add_trace(go.Heatmap(
         z=status[order], x=t, y=labels,
@@ -590,8 +604,7 @@ def build_motion_panel(
 
     fig.update_xaxes(gridcolor="#f5f5f5", zeroline=False, tickfont=dict(size=9))
     fig.update_yaxes(gridcolor="#f0f0f0", zeroline=False, tickfont=dict(size=9))
-    fig.update_yaxes(title_text="GVTD (x its own median)", title_font=dict(size=9.5),
-                     row=r, col=1)
+    _row_title(fig, r, "GVTD (x its own median)")
     fig.update_xaxes(title_text="Time on the shared clock (s)", title_font=dict(size=10),
                      row=r, col=1)
     fig.update_layout(height=300 if conditions else 260, plot_bgcolor="white",

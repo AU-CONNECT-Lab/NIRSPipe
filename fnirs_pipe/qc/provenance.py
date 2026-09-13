@@ -238,6 +238,141 @@ def _assign_depth(nodes: dict[str, Node]) -> None:
         nodes[key].depth = depth(key)
 
 
+# ---- Drawing the graph: collapsing repeats ----
+
+# A step that produced this many outputs from one set of inputs is drawn as one box. Below
+# it the members still read side by side; above it that one column is taller than the rest
+# of the graph put together, which is what a group run's ISC does at two chromophores times
+# six windows. Two is left alone: a box saying "2 outputs" hides as much as it saves.
+_COLLAPSE_MIN = 3
+
+
+def _entity(key: str, name: str) -> "str | None":
+    """One BIDS entity out of a filename stem, or None."""
+    for token in key.split("_"):
+        if (m := _ENTITY_RE.match(token)) and m.group(1) == name:
+            return m.group(2)
+    return None
+
+
+def _common_prefix(labels: list[str]) -> str:
+    """The name a set of sibling labels shares, cut at a separator.
+
+    ::
+
+      ["hyper-isc-hbo", "hyper-isc-hbo (baseline)", "hyper-isc-hbr"] -> "hyper-isc"
+
+    A raw character-wise prefix of that set is ``hyper-isc-hb``, half a word, so where the
+    labels carry on past the prefix it backs off to the last separator inside it.
+    """
+    prefix = labels[0]
+    for label in labels[1:]:
+        while not label.startswith(prefix):
+            prefix = prefix[:-1]
+    if any(len(lab) > len(prefix) and lab[len(prefix)] not in " -_(" for lab in labels):
+        prefix = re.split(r"[ \-_(](?!.*[ \-_(])", prefix)[0]
+    return prefix.rstrip(" -_(")
+
+
+def _variant_line(members: list[Node], prefix: str) -> str:
+    """What the members of a collapsed box differ by, on one line.
+
+    ::
+
+      12 hyper-isc outputs -> "hbo, hbr  ·  whole run + 5 conditions"
+
+    Two axes, because those are the two a run repeats a step over: what is left of each
+    label once the shared prefix is off, and the ``desc-`` entity. A member without one is
+    the whole run, so it is named rather than counted with the windows.
+    """
+    suffixes: list[str] = []
+    descs: list[str] = []
+    whole_run = False
+    for node in members:
+        tail = node.label.split(" (")[0]
+        tail = tail[len(prefix):].lstrip(" -_") or tail
+        if tail not in suffixes:
+            suffixes.append(tail)
+        desc = _entity(node.key, "desc")
+        if desc is None:
+            whole_run = True
+        elif desc not in descs:
+            descs.append(desc)
+
+    bits = [", ".join(suffixes)]
+    if descs:
+        windows = f"{len(descs)} condition{'s' if len(descs) > 1 else ''}"
+        bits.append(f"whole run + {windows}" if whole_run else windows)
+    return "  ·  ".join(b for b in bits if b)
+
+
+def _qualify_roots(nodes: dict[str, Node]) -> None:
+    """Add the subject to a root's label where two roots would otherwise read the same.
+
+    A hyperscanning graph has one input per member and both are ``errts``, so unqualified
+    the two boxes are indistinguishable and the arrows out of them say nothing. A
+    single-subject graph has no such collision and keeps the bare name.
+    """
+    roots = [n for n in nodes.values() if n.step is None]
+    seen: dict[str, int] = {}
+    for node in roots:
+        seen[node.label] = seen.get(node.label, 0) + 1
+    for node in roots:
+        if seen[node.label] > 1 and (sub := _entity(node.key, "sub")):
+            node.label = f"{node.label} ({sub})"
+
+
+def simplify(nodes: dict[str, Node]) -> dict[str, Node]:
+    """The graph as it is drawn: repeats collapsed, ambiguous roots named.
+
+    ::
+
+      2 inputs + 12 hyper-isc + 4 hyper-wtc -> 2 inputs + 1 hyper-isc box + 4
+
+    Siblings are collapsed when they share a step *and* a source set, which is what makes
+    the merged box's arrows the members' own arrows rather than an approximation of them.
+    Anything downstream of a member is repointed at the box, so no edge is left dangling.
+
+    A drawing step, not a reading one: :func:`scan` still returns every node, which is what
+    the interface DAG and the methods text are built on.
+    """
+    import copy
+
+    groups: dict[tuple, list[Node]] = {}
+    for node in nodes.values():
+        if node.step is None:
+            continue
+        groups.setdefault((node.step, tuple(sorted(node.sources)), node.missing),
+                          []).append(node)
+
+    out: dict[str, Node] = {}
+    merged_into: dict[str, str] = {}
+    for (step, sources, missing), members in groups.items():
+        if len(members) < _COLLAPSE_MIN:
+            continue
+        members.sort(key=lambda n: n.label)
+        prefix = _common_prefix([n.label for n in members]) or step.replace("_", "-")
+        key = f"{step}__collapsed"
+        out[key] = Node(
+            key=key, label=prefix, step=step, sources=list(sources),
+            detail=members[0].detail, state=_variant_line(members, prefix),
+            missing=missing, domain=members[0].domain, depth=members[0].depth,
+            checkpoint=members[0].checkpoint,
+        )
+        for node in members:
+            merged_into[node.key] = key
+
+    for key, node in nodes.items():
+        if key in merged_into:
+            continue
+        node = copy.copy(node)
+        node.sources = sorted({merged_into.get(s, s) for s in node.sources})
+        out[key] = node
+
+    _qualify_roots(out)
+    return out
+
+
 def write_provenance(
     nirs_dir: Path,
     out_dir: Path,
@@ -249,6 +384,9 @@ def write_provenance(
 
     ``label`` restricts the graph to one BIDS run; see :func:`scan`.
 
+    Both outputs are drawn off :func:`simplify`, so the picture and the mermaid source are
+    the same graph.
+
     Returns the files written, empty if nirs_dir holds no provenance sidecars.
     """
     from fnirs_pipe.qc.figures.provenance_figure import provenance_figure
@@ -256,6 +394,7 @@ def write_provenance(
     nodes = scan(nirs_dir, label=label)
     if not nodes:
         return []
+    nodes = simplify(nodes)
 
     out_dir.mkdir(parents=True, exist_ok=True)
     written: list[Path] = []

@@ -1,6 +1,10 @@
 {% extends "_report_base.html.j2" %}
 {% from "_macros.html.j2" import subject_metrics %}
 
+{# The height every coherence map on this page is read at, still or live. One number, so a
+   channel panel and the ROI panel under it cannot drift apart. #}
+{% set MAP_FRAME_H = 600 %}
+
 {% block css %}
 .map-pick { display: flex; align-items: center; gap: 0.3rem; margin: 0.2rem 0 0.4rem; }
 .map-pick select {
@@ -17,6 +21,13 @@
 .chroma-stack > .chroma-name {
   display: inline-block; font-size: 0.8rem; font-weight: 600; color: #495057;
   letter-spacing: 0.03em; margin: 0 0 0.1rem 0.1rem;
+}
+/* The channel map is a still drawn at 100% of a page that has no maximum width, so on a
+   wide monitor it grew past the live ROI map stacked under it and the two panels of one
+   section read at two different sizes. Capped at that map's height ({{ MAP_FRAME_H }}px,
+   the iframes below), after which it keeps its aspect and centres instead of growing. */
+.chroma-stack > img.responsive {
+  max-height: {{ MAP_FRAME_H }}px; width: auto; max-width: 100%; margin: 0 auto;
 }
 /* The one block-level warning this page can raise. Everything else that used to be an
    orange panel is a .qm-note, the grey aside the subject report explains itself with:
@@ -224,8 +235,10 @@
   systemic circulation, so a coupling that shows in HbO and not in HbR is a caution flag. It
   is not a quantitative test &mdash; coherence is unsigned and bounded, so there is no
   expected relationship between an HbO value and an HbR one. Read it as present or absent.
-  The inter-brain correlation panels further down show both chromophores at once instead, an
-  ISC matrix being small enough to sit side by side.
+  The maps are the panels that stack: a map is one pairing and there is nothing to compare
+  inside it. The two matrix panels put the chromophores side by side on one colour scale
+  instead, which is that check in one figure, and the inter-brain correlation panels below
+  do the same.
 </p>
 
 <details id="WTCChannel" open>
@@ -275,48 +288,44 @@
     <div class="chroma-stack">
       <span class="chroma-name">{{ c }}</span>
       <iframe class="plotly-frame" id="wtc-roi-frame-{{ loop.index0 }}"
-              title="ROI coherence map ({{ c }})" style="height:600px"></iframe>
+              title="ROI coherence map ({{ c }})"
+              style="height:{{ MAP_FRAME_H }}px"></iframe>
     </div>
     {% endfor %}
   </div>
 </details>
 
-{% if has_roi_matrix %}
+{% if wtc_roi_matrix.wtc %}
 <details id="wtc-roi-matrix-card" open>
   <summary>c. ROI &times; ROI</summary>
   <div class="details-body">
     <p class="step-desc">Band mean per ROI pair, inside the COI: one number per map the
-      selectors above reach, and the rows of <code>hyper-wtc-roichan.tsv</code> for this
-      chromophore. The heatmap carries every pairing and the circle beside it the ones that
-      stand out; both are live, so hover names the pairing and prints its value.</p>
-    {% for c in wtc_chroma_labels %}
-    <div class="chroma-stack">
-      <span class="chroma-name">{{ c }}</span>
-      <iframe class="plotly-frame" id="wtc-roi-matrix-frame-{{ loop.index0 }}"
-              title="ROI by ROI coherence ({{ c }})" style="height:520px"></iframe>
-    </div>
-    {% endfor %}
+      selectors above reach, and the rows of <code>hyper-wtc-roichan.tsv</code>.
+      {%- if wtc_chroma_labels | length > 1 %} {{ wtc_chroma_labels | join(" left, ") }}
+      right, on one colour scale: reading them side by side is the consistency check the two
+      chromophores are run for.{% endif %} Live, so hover names the pairing and prints its
+      value.</p>
+    <iframe class="plotly-frame" src="{{ wtc_roi_matrix.wtc }}"
+            title="ROI by ROI coherence"
+            style="height:{{ wtc_roi_matrix.h or 720 }}px"></iframe>
+    <p class="fig-path">{{ wtc_roi_matrix.wtc }}</p>
   </div>
 </details>
 {% endif %}
 {% endif %}
 
-{% if has_chan_matrix %}
+{% if wtc_chan_matrix.wtc %}
 <details id="wtc-chan-matrix-card" open>
   <summary>{{ "d" if roi_rows else "b" }}. Channel &times; channel</summary>
   <div class="details-body">
     <p class="step-desc">Band mean per channel pair, row = {{ subject_ids[0] }} and column =
       {{ subject_ids[1] }}: one number per map the selectors above reach, and the rows of
-      <code>hyper-wtc.tsv</code> for this chromophore. Every chord on the circle runs from
-      one brain to the other, there being no within-brain cell in the matrix to draw; hover
-      one to see which pairing it is.</p>
-    {% for c in wtc_chroma_labels %}
-    <div class="chroma-stack">
-      <span class="chroma-name">{{ c }}</span>
-      <iframe class="plotly-frame" id="wtc-chan-matrix-frame-{{ loop.index0 }}"
-              title="channel by channel coherence ({{ c }})" style="height:520px"></iframe>
-    </div>
-    {% endfor %}
+      <code>hyper-wtc.tsv</code>. There is no within-brain cell anywhere in it. Hover a cell
+      to see which pairing it is.</p>
+    <iframe class="plotly-frame" src="{{ wtc_chan_matrix.wtc }}"
+            title="channel by channel coherence"
+            style="height:{{ wtc_chan_matrix.h or 720 }}px"></iframe>
+    <p class="fig-path">{{ wtc_chan_matrix.wtc }}</p>
   </div>
 </details>
 {% endif %}
@@ -366,8 +375,6 @@ var _CH_PAIRS     = {{ ch_pairs_post_json | safe }};
 var _BAD_PAIRS    = {{ bad_pairs_json | safe }};
 var _PER_ROI      = {{ per_roi_post_json | safe }};
 var _ROI_LABELS   = {{ roi_labels_json | safe }};
-var _ROI_MATRIX   = {{ wtc_roi_matrix_json | safe }};
-var _CHAN_MATRIX  = {{ wtc_chan_matrix_json | safe }};
 var _ALIGN        = {{ alignment_json | safe }};
 
 // Nothing on this page is behind a chromophore control any more: every panel carries one
@@ -456,15 +463,6 @@ function _selectRoi() {
   });
 })();
 
-// The panels behind no selector. A chromophore whose guard failed on one figure leaves that
-// one img hidden and the rest of the page intact.
-function _drawImages() {
-  _CHROMA.forEach(function(c, i) {
-    _frame(document.getElementById("wtc-roi-matrix-frame-" + i), _ROI_MATRIX[c]);
-    _frame(document.getElementById("wtc-chan-matrix-frame-" + i), _CHAN_MATRIX[c]);
-  });
-}
-
 // the live ROI figures resize themselves; same protocol figure_io.py writes into every page
 window.addEventListener("message", function(e) {
   if (!e.data || e.data.type !== "iframe-resize") return;
@@ -480,7 +478,6 @@ window.addEventListener("message", function(e) {
 window.addEventListener("DOMContentLoaded", function() {
   _selectCh();
   _selectRoi();
-  _drawImages();
 });
 </script>
 

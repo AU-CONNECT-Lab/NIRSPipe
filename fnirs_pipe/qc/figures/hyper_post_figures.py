@@ -82,12 +82,6 @@ def _apply_log_freq_axis(ax, freqs: np.ndarray) -> None:
 # Display threshold for phase arrows when no Monte Carlo level was computed; not a test.
 ARROW_MIN_COHERENCE = 0.5
 
-# How many arcs a coherence connectogram draws when --wtc-arc-min was not given. Coherence
-# is unsigned and bounded, so unlike a correlation it has no neighbourhood of zero to cut
-# at: every pairing carries some, and a band mean's scale moves with the band and the dyad.
-# Drawing a fixed count instead says "the strongest ones", which holds whatever the scale.
-WTC_ARC_LINES = 20
-
 
 def _arrow_mask(wtc_arr, sig, freqs, freq_coi, arrow_min: float = ARROW_MIN_COHERENCE):
     """Where a phase arrow is worth drawing: inside the cone, and above the noise.
@@ -246,11 +240,11 @@ def build_wtc_channel(
 # which it can do because the arrows are measured in pixels rather than in data.
 _INTERACTIVE_PLOT_H = 430
 
-# The cross panel's height, the same way: 900 px of figure over the 2.25 aspect its two
-# squares sit side by side at, plus the 150 px of title and colourbar `_INTERACTIVE_PLOT_H`
-# also has to leave room for. Written out because the two constants it used to be computed
-# from were removed when this became a fixed number.
-PANEL_HEIGHT = 550
+# The cross panel's height, the same way. Two square panels side by side, so this is what
+# decides how large a square gets: the width is the page's, and the aspect constraint
+# letterboxes whatever the height does not use. At 550 a matrix came out around 400 px on a
+# wide monitor with a third of the panel blank to either side of it.
+PANEL_HEIGHT = 720
 
 # Arrow length in pixels. The still's is a fifty-second of its axes, which on a report page
 # about 1600 px wide comes out near this; it is a pixel length here rather than a share of
@@ -261,7 +255,11 @@ _INTERACTIVE_ARROW_PX = 23.0
 # and a per-condition view can swap the whole set without disturbing the caption.
 _ARROW_NAME = "wtcarrow"
 
-WTC_FIGSIZE = (11.0, 3.6)
+# Wide and flat, because the report page has no fixed width: the still is drawn at 100% of
+# it, so its height on screen is the page's width over this aspect. At 3.06 the panel came
+# out half again as tall as the live ROI map under it on a wide monitor. The page caps it at
+# that map's height as well, which is what stops an even wider one from growing past it.
+WTC_FIGSIZE = (12.0, 3.0)
 WTC_QUIVER_SCALE = 52.0
 
 # ---- why the live panel's lines are drawn about twice their matplotlib widths ----
@@ -571,10 +569,9 @@ BLANK_CELL = "#d5d5d5"
 # the split between the brains is visible before any label is read.
 _CIRCLE_GAP = 12.0
 
-# A grid this size or smaller puts every pairing on the circle. Above it the circle draws
-# WTC_ARC_LINES instead: an ROI grid is sixteen pairings and reads whole, a channel montage
-# is two hundred and reads as a ball of wool.
-ARC_DRAW_ALL_UNDER = 40
+# The colorbar every cross-brain panel carries, minus its title. One layout, so a figure of
+# two panels and a figure of one put their scale in the same place.
+_COLORBAR = {"thickness": 13, "len": 0.72, "x": 1.0, "y": 0.46}
 
 
 def _node_angles(n_per_side: int, gap: float = _CIRCLE_GAP) -> np.ndarray:
@@ -609,6 +606,36 @@ def _arc_color(value: float, cmap: str, vmin: float, vmax: float) -> str:
 
     t = (float(value) - vmin) / ((vmax - vmin) or 1.0)
     return sample_colorscale(cmap, [float(np.clip(t, 0.0, 1.0))])[0]
+
+
+def _matrix_panel(fig, z, row_labels, col_labels, subject_ids, *, cmap, vmin, vmax,
+                  value_label, row, col, colorbar=None):
+    """One cross-brain matrix into a subplot: the blank ground, the cells, their values.
+
+    ``colorbar`` is the bar's layout for the one panel that carries it; every other panel
+    passes None and draws none, which is what puts several panels of a figure on one scale.
+    """
+    import plotly.graph_objects as go
+
+    sub1 = subject_ids[0] if subject_ids else "Sub1"
+    sub2 = subject_ids[1] if len(subject_ids) > 1 else "Sub2"
+
+    # A blank cell is a site one member lost, painted under the heatmap rather than left to
+    # show the panel through. Light enough not to read as a value of its own, and still clear
+    # of the palest end of either scale, which is very nearly white. No gap between cells,
+    # since a border in that colour would draw a missing channel where there is none.
+    fig.add_shape(type="rect", x0=-0.5, x1=len(col_labels) - 0.5,
+                  y0=-0.5, y1=len(row_labels) - 0.5,
+                  fillcolor=BLANK_CELL, line=dict(width=0), layer="below",
+                  row=row, col=col)
+    fig.add_trace(go.Heatmap(
+        z=z, x=list(col_labels), y=list(row_labels), colorscale=cmap,
+        zmin=vmin, zmax=vmax, showscale=colorbar is not None, colorbar=colorbar or {},
+        hovertemplate=(f"{sub1} %{{y}} × {sub2} %{{x}}"
+                       f"<br>{value_label} = %{{z:.3f}}<extra></extra>"),
+    ), row=row, col=col)
+    _cell_values(fig, z, row_labels, col_labels, cmap=cmap, vmin=vmin, vmax=vmax,
+                 row=row, col=col)
 
 
 def _cell_values(fig, z, row_labels, col_labels, *, cmap, vmin, vmax, row, col):
@@ -727,21 +754,23 @@ def build_cross_panel(
     matrix_title: str,
     suptitle: str,
     arc_threshold: "float | None",
-    arc_lines: "int | None",
     kind: str = "",
 ):
-    """Any cross-brain matrix as two live panels: the heatmap, and the same numbers as a circle.
+    """A cross-brain matrix as two live panels: the heatmap, and the same numbers as a circle.
 
     ::
 
-      a 14 x 14 of band means -> [ matrix with every cell printed | connectogram ]
+      a 14 x 14 of ISC values -> [ matrix with every cell printed | connectogram ]
 
-    Every cross-brain matrix in this report is drawn by this: the coherence band means per
-    channel pair and per ROI pair, and the ISC. The two panels answer different questions off
-    one set of numbers, which is why both are on the page. **The matrix is the record**: every
-    cell carries its value, blanks included, so a pairing can be looked up. **The circle is
-    the shape**: an eye reads 196 printed numbers as a texture, and the chords say which sites
-    the strong pairings actually land on.
+    The two panels answer different questions off one set of numbers, which is why both are
+    on the page. **The matrix is the record**: every cell carries its value, blanks included,
+    so a pairing can be looked up. **The circle is the shape**: an eye reads 196 printed
+    numbers as a texture, and the chords say which sites the strong pairings actually land
+    on.
+
+    The coherence matrices are not drawn by this. They come in a pair, HbO against HbR, and
+    that comparison is what the panel is for there, so :func:`build_wtc_cross_matrix` spends
+    both halves of its width on the two heatmaps instead.
 
     Both rows and columns are the *montage*, row for the first member and column for the
     second, so cell (i, j) is one member's site i against the other's site j and the diagonal
@@ -754,14 +783,11 @@ def build_cross_panel(
     it is worth. The heatmap comes along for the same reason its ROI twin did.
 
     The scale is the caller's and both panels share it, so there is one colorbar: a
-    coherence takes :data:`COHERENCE_SCALE` over 0 to 1 and a correlation
-    :data:`CORRELATION_SCALE` over -1 to 1.
+    correlation takes :data:`CORRELATION_SCALE` over -1 to 1.
 
-    ``arc_threshold`` draws every pairing that clears it and ``arc_lines`` the N strongest
-    instead; exactly one is used, the threshold where it is given. Neither changes a number,
-    and the subtitle over the circle says which rule drew it.
+    ``arc_threshold`` is the value a pairing has to clear to get a chord; None draws them
+    all. It changes no number, and the subtitle over the circle says which rule drew it.
     """
-    import plotly.graph_objects as go
     from plotly.subplots import make_subplots
 
     z = np.asarray(z, dtype=float)
@@ -778,10 +804,6 @@ def build_cross_panel(
         # the character, not the HTML entity: plotly's text parser takes the tags it knows
         # and an "&ge;" in a subplot title fails the whole render
         rule = f"|{value_label}| ≥ {arc_threshold:g}"
-    elif arc_lines is not None and int(finite.sum()) > arc_lines:
-        cut = np.sort(np.abs(z[finite]))[-int(arc_lines)]
-        keep = finite & (np.abs(z) >= cut)
-        rule = f"{int(keep.sum())} strongest pairings"
     else:
         keep = finite
         rule = f"all {int(keep.sum())} pairings"
@@ -792,23 +814,9 @@ def build_cross_panel(
                         horizontal_spacing=0.03,
                         subplot_titles=(matrix_title, rule))
 
-    # A blank cell is a site one member lost, painted under the heatmap rather than left to
-    # show the panel through. Light enough not to read as a value of its own, and still clear
-    # of the palest end of either scale, which is very nearly white. No gap between cells,
-    # since a border in that colour would draw a missing channel where there is none.
-    fig.add_shape(type="rect", xref="x", yref="y", x0=-0.5, x1=len(col_labels) - 0.5,
-                  y0=-0.5, y1=len(row_labels) - 0.5,
-                  fillcolor=BLANK_CELL, line=dict(width=0), layer="below")
-
-    fig.add_trace(go.Heatmap(
-        z=z, x=list(col_labels), y=list(row_labels), colorscale=cmap,
-        zmin=vmin, zmax=vmax,
-        colorbar=dict(title=value_label, thickness=13, len=0.72, x=1.0, y=0.46),
-        hovertemplate=(f"{sub1} %{{y}} × {sub2} %{{x}}"
-                       f"<br>{value_label} = %{{z:.3f}}<extra></extra>"),
-    ), row=1, col=1)
-    _cell_values(fig, z, row_labels, col_labels, cmap=cmap, vmin=vmin, vmax=vmax,
-                 row=1, col=1)
+    _matrix_panel(fig, z, row_labels, col_labels, subject_ids, cmap=cmap, vmin=vmin,
+                  vmax=vmax, value_label=value_label, row=1, col=1,
+                  colorbar=_COLORBAR | {"title": value_label})
 
     _circle_traces(fig, z, row_labels, col_labels, subject_ids, cmap=cmap, vmin=vmin,
                    vmax=vmax, value_label=value_label, keep=keep, row=1, col=2)
@@ -841,54 +849,96 @@ def build_cross_panel(
 
 
 def build_wtc_cross_matrix(
-    band_df,
+    band_dfs: dict,
     labels: list[str],
     subject_ids: list[str],
     band_fmin: float,
     band_fmax: float,
     kind: str = "channel",
-    arc_min: "float | None" = None,
 ):
-    """Band-mean coherence for every pairing across the two brains, as one panel.
+    """Band-mean coherence for every pairing across the two brains, one heatmap per chromophore.
+
+    ::
+
+      {"HbO": frame, "HbR": frame} -> [ HbO matrix | HbR matrix ], one colour scale
 
     Rows are sub1's sites, columns sub2's, so cell (i, j) is sub1's site i against sub2's
     site j and the diagonal is the homologous pairing the rest of the report shows. This is
     the whole point of ``--wtc-channel-cross``: the crossed pairs are computed and written to
     the TSV, and without this figure the only ones anybody looks at are the n on the diagonal.
 
-    Needs a crossed frame, recognised by its ``label2`` column; returns None without one.
-    ``kind`` names the sites in the axis titles ("channel" or "ROI"). A blank cell is a
-    pairing that failed or was dropped for resting on too few channels.
+    **The two chromophores share the figure and the scale.** HbO and HbR are two parallel
+    passes, never mixed and never averaged, and what they are both run for is the check that
+    a coupling shows in each; side by side on one colorbar is that check, where one above the
+    other on two colorbars was two results a reader had to hold in their head. The panels
+    were a heatmap and a connectogram of the same numbers until 2026-09-12, and the circle is
+    the half that went: a coherence grid is small enough that the heatmap already carries its
+    shape, and the second chromophore is the comparison worth the width. :func:`build_isc_panel`
+    keeps its circle, having only one matrix to draw.
+
+    ``band_dfs`` maps a display name to that chromophore's band-mean frame. A frame that is
+    None, carries no ``label2`` column, or has no finite cell is left out rather than drawn
+    empty, so a run of one chromophore gets one panel. ``labels`` is the montage rather than
+    whatever the frames happen to carry, so a dyad that lost a channel still gets a matrix of
+    the same shape as one that did not, and the blanks say which sites went.
 
     Read cell by cell the off-diagonal is exploratory: single pairings are noisy and a
     correction over n**2 of them leaves little. The structure is what it is for.
     """
-    if band_df is None or "label2" not in getattr(band_df, "columns", []):
-        return None
+    from plotly.subplots import make_subplots
 
-    lookup = {(r.label, r.label2): r.coherence for r in band_df.itertuples()}
-    z = np.array([[lookup.get((row, col), np.nan) for col in labels] for row in labels],
-                 dtype=float)
-    # labels is the montage, so a blank row is a channel one member lost and a blank
-    # column one the other lost; the shape is the same for every dyad
-    if not np.isfinite(z).any():
+    panels: list[tuple[str, np.ndarray]] = []
+    for name, band_df in (band_dfs or {}).items():
+        if band_df is None or "label2" not in getattr(band_df, "columns", []):
+            continue
+        lookup = {(r.label, r.label2): r.coherence for r in band_df.itertuples()}
+        z = np.array([[lookup.get((row, col), np.nan) for col in labels] for row in labels],
+                     dtype=float)
+        if np.isfinite(z).any():
+            panels.append((str(name), z))
+    if not panels:
         return None
 
     sub1 = subject_ids[0] if subject_ids else "sub1"
     sub2 = subject_ids[1] if len(subject_ids) > 1 else "sub2"
-    mean = float(np.nanmean(z))
-    # an ROI grid goes on the circle whole: sixteen pairings read as sixteen chords, and
-    # every one of them is a number the panel is on the page to show. A channel montage is
-    # two hundred, so there the circle keeps the strongest and the heatmap keeps the rest
-    lines = None if (arc_min is not None or z.size <= ARC_DRAW_ALL_UNDER) else WTC_ARC_LINES
-    return build_cross_panel(
-        z, labels, labels, subject_ids,
-        cmap=COHERENCE_SCALE, vmin=0, vmax=1, value_label="coherence", kind=kind,
-        matrix_title=f"Band mean {band_fmin:.3g}-{band_fmax:.3g} Hz "
-                     f"  (grand mean {mean:.3f})",
-        suptitle=f"Inter-brain coherence, {kind} × {kind}  —  {sub1} × {sub2}",
-        arc_threshold=arc_min, arc_lines=lines,
+    fig = make_subplots(
+        rows=1, cols=len(panels), horizontal_spacing=0.06,
+        subplot_titles=[f"{name}   (grand mean {float(np.nanmean(z)):.3f})"
+                        for name, z in panels],
     )
+
+    for i, (_, z) in enumerate(panels, start=1):
+        _matrix_panel(fig, z, labels, labels, subject_ids,
+                      cmap=COHERENCE_SCALE, vmin=0, vmax=1, value_label="coherence",
+                      row=1, col=i,
+                      colorbar=(_COLORBAR | {"title": "coherence"}
+                                if i == len(panels) else None))
+        # Ranges given rather than left to autorange, which pads a heatmap by a fraction of
+        # a cell on every side and leaves a white margin around the grid. A cell spans half a
+        # step either side of its index, so these two are the grid's own extent.
+        fig.update_xaxes(title_text=f"{sub2} {kind}".strip(), side="bottom", tickangle=-90,
+                         range=[-0.5, len(labels) - 0.5], showgrid=False, zeroline=False,
+                         constrain="domain", row=1, col=i)
+        # the first row at the top, which is how the table it stands for is read. The y title
+        # goes on the left panel alone: both rows are the same member and printing it twice
+        # reads as two different axes
+        fig.update_yaxes(title_text=(f"{sub1} {kind}".strip() if i == 1 else ""),
+                         range=[len(labels) - 0.5, -0.5], showgrid=False, zeroline=False,
+                         scaleanchor=f"x{'' if i == 1 else i}", constrain="domain",
+                         row=1, col=i)
+
+    fig.update_layout(
+        height=PANEL_HEIGHT, autosize=True,
+        margin=dict(l=70, r=90, t=84, b=70),
+        title=dict(text=f"Inter-brain coherence, {kind} × {kind}, "
+                        f"band {band_fmin:.3g}-{band_fmax:.3g} Hz  —  {sub1} × {sub2}",
+                   x=0.5, xanchor="center", y=0.975, font=dict(size=14)),
+        plot_bgcolor="white", paper_bgcolor="white", showlegend=False,
+    )
+    for note in fig.layout.annotations[:len(panels)]:
+        note.font.size = 11
+        note.font.color = "#444444"
+    return fig
 
 
 def _phase_arrows(ax, times: np.ndarray, freqs: np.ndarray, phase, n_time: int = 14,
@@ -1065,8 +1115,8 @@ def build_isc_panel(
 ):
     """The 2-panel ISC summary: ISC matrix | connectogram.
 
-    The panel itself is :func:`build_cross_panel`, which the coherence matrices also take.
-    What stays here is the scale a correlation is read on and the wording of its titles.
+    The panel itself is :func:`build_cross_panel`. What stays here is the scale a correlation
+    is read on and the wording of its titles.
 
     Args:
         isc_mat:       n × n ISC matrix from compute_isc().
@@ -1086,5 +1136,5 @@ def build_isc_panel(
         cmap=CORRELATION_SCALE, vmin=-1, vmax=1, value_label="Pearson r",
         matrix_title=f"ISC matrix ({type_label})",
         suptitle=f"Inter-brain Synchrony ({type_label})  —  {sub1_label} × {sub2_label}",
-        arc_threshold=isc_threshold, arc_lines=None,
+        arc_threshold=isc_threshold,
     )

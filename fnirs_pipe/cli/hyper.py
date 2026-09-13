@@ -189,7 +189,6 @@ def cmd_run(
     wtc_band_fmin: float | None, wtc_band_fmax: float | None,
     wtc_significance: bool, wtc_mc_count: int, wtc_seed: int | None,
     wtc_mask_coi: bool, wtc_roi_min_channels: int, wtc_arrow_min: float,
-    wtc_arc_min: float,
     wtc_channel_cross: bool,
     wtc_by_condition: bool, wtc_chroma: str,
     wtc_cond_transform: bool, wtc_cond_pad_s: "float | None",
@@ -331,7 +330,6 @@ def cmd_run(
             wtc_mask_coi=wtc_mask_coi,
             wtc_roi_min_channels=wtc_roi_min_channels,
             wtc_arrow_min=wtc_arrow_min,
-            wtc_arc_min=wtc_arc_min,
             wtc_chroma=chroma,
             isc_threshold=isc_threshold,
             sci_threshold=sci_threshold,
@@ -559,14 +557,6 @@ def _build_parser() -> argparse.ArgumentParser:
                           "used instead. The relative phase of two uncorrelated series is a "
                           "uniformly random direction, so a map drawn with no threshold "
                           "fills with arrows that read as structure.")
-    run.add_argument("--wtc-arc-min", type=float, default=None, metavar="R",
-                     help="Band mean a pairing has to reach before it is drawn on the "
-                          "coherence connectograms. Display only: no table or matrix cell "
-                          "changes with it, and the heatmap beside each circle still "
-                          "carries every pairing. Left unset, a grid small enough to read "
-                          "whole goes on the circle whole and a larger one keeps its "
-                          "strongest pairings, which is the rule that holds when the scale "
-                          "moves with the band and the dyad.")
     run.add_argument("--wtc-channel-cross", action="store_true",
                      help="Cross every long channel with every other across the two brains "
                           "instead of pairing each channel with its counterpart, so n "
