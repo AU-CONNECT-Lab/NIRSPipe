@@ -246,3 +246,54 @@ def test_a_reset_returns_to_the_condition_not_to_the_run(tmp_path):
                          views=_condition_views(one_file, [(SLUG, *WINDOW)]))
 
     assert _reset_target(tmp_path / "one_file.html", f"#{SLUG}") == pytest.approx(WINDOW)
+
+
+def _coherence_map():
+    """One pairing's whole-run coherence map, plus the arrays the views table re-reads.
+
+    A coherence map carries its phase field as one annotation per arrow, and those are the
+    part of it a window cannot inherit: the grid spreads over whatever span it was drawn for,
+    so the run's set leaves a 200 s window holding the handful of columns that happen to fall
+    inside it. The window carries its own set and the view swaps the whole array in, which is
+    the branch of the shim below this exercises.
+    """
+    from fnirs_pipe.qc.figures.hyper_post_figures import build_wtc_map_interactive
+
+    freqs = np.logspace(-2, np.log10(0.2), 40)
+    times = np.arange(0.0, 1000.0, 0.5)
+    rng = np.random.default_rng(3)
+    wtc = np.clip(np.abs(np.sin(np.add.outer(freqs * 90, times / 40))) * 0.8
+                  + rng.normal(0, 0.05, (freqs.size, times.size)), 0.0, 1.0)
+    data = {
+        "wtc": wtc,
+        "phase": np.add.outer(freqs * 40, times / 90) % (2 * np.pi) - np.pi,
+        "coi": np.sqrt(2.0) * np.minimum(times, times[-1] - times) + 1e-6,
+        "sig": None,
+    }
+    markers = [{"onset": 120.0, "duration": 200.0, "description": SLUG},
+               {"onset": 600.0, "duration": 200.0, "description": "talk"}]
+    fig = build_wtc_map_interactive(data, freqs, times, "sub-01 × sub-02", markers,
+                                    {SLUG: "#4c72b0", "talk": "#dd8452"}, site_label="leftPFC")
+    return fig, data, freqs, times
+
+
+def test_a_coherence_map_picked_by_fragment_carries_the_window_s_own_arrows(tmp_path):
+    from fnirs_pipe.qc.figures.hyper_post_figures import wtc_condition_views
+    from fnirs_pipe.qc.figure_io import _save_figure_html
+
+    # the third saver, and the one the dyad report writes its ROI maps with
+    reference, data, freqs, times = _coherence_map()
+    views = wtc_condition_views(reference, [(SLUG, *WINDOW)], data, freqs, times)
+    assert views, "the window holds no sample of the run"
+
+    # what the shim is supposed to arrive at, applied here instead
+    reference.update_xaxes(range=list(WINDOW), autorange=False)
+    reference.layout.annotations = views[SLUG]["annotations"]
+    _save_figure_html(reference, tmp_path / "reference.html")
+
+    one_file, *_ = _coherence_map()
+    _save_figure_html(one_file, tmp_path / "one_file.html", views=views)
+
+    was = _shot(tmp_path / "reference.html", tmp_path / "reference.png")
+    now = _shot(tmp_path / "one_file.html", tmp_path / "one_file.png", f"#{SLUG}")
+    assert _sha(now) == _sha(was)

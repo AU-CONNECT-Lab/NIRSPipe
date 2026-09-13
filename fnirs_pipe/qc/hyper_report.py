@@ -427,10 +427,6 @@ def build_hyper_report(
     cardiac_h_freq: float | None = None,
     coherence_fmin: float = 0.01,
     coherence_fmax: float = 0.10,
-    epoch_tmin: float = -5.0,
-    epoch_tmax: float = 25.0,
-    coherence_window_s: float = 30.0,
-    coherence_step_s: float = 5.0,
 ) -> Path:
     output_dir.mkdir(parents=True, exist_ok=True)
     errors: list[str] = []
@@ -443,8 +439,6 @@ def build_hyper_report(
         raw_raws=raw_raws, session=session, sci_threshold=sci_threshold,
         cardiac_l_freq=cardiac_l_freq, cardiac_h_freq=cardiac_h_freq,
         coherence_fmin=coherence_fmin, coherence_fmax=coherence_fmax,
-        epoch_tmin=epoch_tmin, epoch_tmax=epoch_tmax,
-        coherence_window_s=coherence_window_s, coherence_step_s=coherence_step_s,
         errors=errors, notes=notes,
     )
 
@@ -763,8 +757,6 @@ def build_hyper_post_report(
     from fnirs_pipe.pipeline.synchrony import long_axis_over, wtc_grid_params
     from fnirs_pipe.qc.figures.hyper_post_figures import (
         ARROW_MIN_COHERENCE,
-        PANEL_RESPONSIVE_JS,
-        WTC_RESPONSIVE_JS,
         build_isc_panel,
         build_wtc_channel,
         build_wtc_cross_matrix,
@@ -861,21 +853,18 @@ def build_hyper_post_report(
         """
         return save_png(b64, figures_dir, name)
 
-    def _fig_html(fig, name: str, extra_js: str = "", views: "dict | None" = None
-                  ) -> "dict | None":
+    def _fig_html(fig, name: str, views: "dict | None" = None) -> "dict | None":
         """One Plotly figure onto disk as its own page, with the height its iframe needs.
 
         The PNG twin is :func:`_fig`. Its URL is under the same ``wtc`` key a PNG entry
         uses, so one shape indexes both panels and a reader of the page's tables does not
         have to know which kind a pairing turned out to be.
 
-        ``extra_js`` is how a figure that has to keep a shape as the page is resized carries
-        its own rule, and ``views`` how one file serves the run and each condition off a URL
-        fragment.
+        ``views`` is how one file serves the run and each condition off a URL fragment.
         """
         if fig is None:
             return None
-        height = _save_figure_html(fig, figures_dir / name, extra_js=extra_js, views=views)
+        height = _save_figure_html(fig, figures_dir / name, views=views)
         return {"wtc": _fig_href(figures_dir, name), "h": height}
 
     def _write_df_tsv(df, kind: str, step: str, **extra) -> Path:
@@ -949,7 +938,7 @@ def build_hyper_post_report(
                         views = (wtc_condition_views(drawn, view_spans, data, result.freqs,
                                                      result.times, arrow_min)
                                  if view_spans and drawn is not None else None)
-                        entry = (_fig_html(drawn, fname, WTC_RESPONSIVE_JS, views)
+                        entry = (_fig_html(drawn, fname, views=views)
                                  if interactive else {"wtc": _fig(drawn, fname)})
                 # always a dict, even where nothing was drawn: the page indexes every
                 # pairing of the axis and a missing one has to answer with an empty URL
@@ -1108,7 +1097,7 @@ def build_hyper_post_report(
                 out["chan_matrix"] = _fig_html(build_wtc_cross_matrix(
                     chan_band_df, chan_labels, subject_ids, band_fmin, band_fmax,
                     kind="channel", arc_min=wtc_arc_min),
-                    f"wtc_chanmatrix_{ch_type}{suffix}.html", PANEL_RESPONSIVE_JS) or {}
+                    f"wtc_chanmatrix_{ch_type}{suffix}.html") or {}
 
         _maps(out["per_channel"], result, pair_key, pair_label, chan_axis,
               f"wtc_{ch_type}", ch_type, suffix, what)
@@ -1141,7 +1130,7 @@ def build_hyper_post_report(
                 out["roi_matrix"] = _fig_html(build_wtc_cross_matrix(
                     roi_band_df, roi_labels, subject_ids, band_fmin, band_fmax, "ROI",
                     arc_min=wtc_arc_min),
-                    f"wtc_roimatrix_{ch_type}{suffix}.html", PANEL_RESPONSIVE_JS) or {}
+                    f"wtc_roimatrix_{ch_type}{suffix}.html") or {}
         if roi_view_of is not None:
             out["per_roi"] = {
                 label1: {label2: ({**entry, "wtc": entry["wtc"] + "#" + suffix.lstrip("_")}
@@ -1324,7 +1313,7 @@ def build_hyper_post_report(
             panel = _fig_html(build_isc_panel(
                 isc_mat, isc_ch_names, subject_ids,
                 ch_type=ch_type, isc_threshold=isc_threshold,
-            ), f"isc_{ch_type}{suffix}.html", PANEL_RESPONSIVE_JS) or {}
+            ), f"isc_{ch_type}{suffix}.html") or {}
         return panel
 
     # {label or None: {chromophore: href}}, one entry per page below

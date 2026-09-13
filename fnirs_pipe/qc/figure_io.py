@@ -18,16 +18,30 @@ import mne
 
 PLOTLY_CDN_URL = "https://cdn.plot.ly/plotly-3.5.0.min.js"
 
-_IFRAME_CSS = "html,body{margin:0;padding:0;width:100%;}"
+# No scrollbar inside a figure's frame. The page that holds it sizes the frame to the height
+# the figure reports, so a scrollbar there is always transient -- but while it is up it takes
+# 15px off the width the figure measures itself against, and a figure that sets its height
+# from its width came out that much shorter than the still beside it.
+_IFRAME_CSS = ("html,body{margin:0;padding:0;width:100%;}"
+               "html{scrollbar-width:none;}html::-webkit-scrollbar{display:none;}")
 
 # A figure that sets its own width does not stretch to the iframe and sits at the left edge,
 # which is right for a panel meant to line up with the one above it and wrong for a single
 # head on a wide page. Passed per figure rather than folded into _IFRAME_CSS for that reason.
 CENTER_FIGURE_CSS = ".plotly-graph-div{margin-left:auto;margin-right:auto;}"
 
+# The figure's own height, reported to the page that frames it. Measured off the plot
+# divs and not off `document.body.scrollHeight`, which is floored by the iframe's current
+# height: a figure could grow that way but never shrink, so one that sizes itself to the
+# page's width left a white band under it at every width narrower than it opened at.
 _RESIZE_JS = (
     "<script>(function(){"
-    "function _h(){parent.postMessage({type:'iframe-resize',h:document.body.scrollHeight},'*');}"
+    "function _h(){"
+    "var d=document.querySelectorAll('.plotly-graph-div'),h=0;"
+    # the 2px is the gap between stacked figures, so it goes between them and not after
+    # the last one, where it is a hairline of white under a figure that fits exactly
+    "for(var i=0;i<d.length;i++)h+=d[i].offsetHeight+(i?2:0);"
+    "parent.postMessage({type:'iframe-resize',h:h||document.body.scrollHeight},'*');}"
     "window.addEventListener('load',_h);"
     "setTimeout(_h,300);"
     "try{new ResizeObserver(_h).observe(document.body);}catch(e){}"

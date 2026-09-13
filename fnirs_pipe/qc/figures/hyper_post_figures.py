@@ -229,92 +229,48 @@ def build_wtc_channel(
     for spine in ax.spines.values():
         spine.set_visible(False)
     flat_colorbar(fig, mesh, ax, "WTC", pad=0.015)
+    # Two lines, and this is about the figure's width rather than about the wording: the
+    # crop on the way out takes the widest thing drawn, and on one line this caption is wider
+    # than the map and its colorbar together, which left the saved image with a sixth of its
+    # width in white to the right of the bar.
     caption = (f"arrows: right = in phase, left = antiphase, up = {lead} leads by a quarter "
-               f"cycle, drawn only where coherence clears "
+               f"cycle,\ndrawn only where coherence clears "
                f"{'the Monte Carlo level' if sig is not None else f'{arrow_min:g}'}"
                "    washed-out band: outside the cone of influence")
-    fig.text(0.5, -0.06, caption, ha="center", fontsize=8, color="#444444")
+    fig.text(0.5, -0.02, caption, ha="center", va="top", fontsize=8, color="#444444",
+             linespacing=1.5)
     return _png_b64(fig)
 
 
 # Height only. The panel has no width of its own: it fills whatever the report's iframe is,
 # which it can do because the arrows are measured in pixels rather than in data.
 _INTERACTIVE_PLOT_H = 430
-_INTERACTIVE_ARROW_PX = 15.0
+
+# Arrow length in pixels. The still's is a fifty-second of its axes, which on a report page
+# about 1600 px wide comes out near this; it is a pixel length here rather than a share of
+# the panel because an annotation's tail is offset in pixels.
+_INTERACTIVE_ARROW_PX = 23.0
 
 # Name every arrow carries, so the resize hook can find them among the figure's annotations
 # and a per-condition view can swap the whole set without disturbing the caption.
 _ARROW_NAME = "wtcarrow"
 
-# ---- what keeps the still and the live panel the same picture ----
-# The two are one panel drawn by two libraries, and both numbers below are the still's, read
-# off it rather than chosen: WTC_FIGSIZE plus the title and caption renders at this ratio,
-# and quiver's `scale` is the axes width an arrow of unit length takes a fifty-second of.
-# The live panel is handed both by WTC_RESPONSIVE_JS, which is why it stretches to the
-# report's width instead of standing at a fixed height with fixed arrows beside a still that
-# grows with the window.
 WTC_FIGSIZE = (11.0, 3.6)
-WTC_RENDERED_ASPECT = 2.46
 WTC_QUIVER_SCALE = 52.0
+
+# ---- why the live panel's lines are drawn about twice their matplotlib widths ----
+# The still's widths are in points and it is written at 300 dpi, so a 1.1 pt line lands as
+# 4.6 px in the file and, once the page has scaled that file to its own width, as about
+# 2.4 CSS px. Plotly is handed CSS pixels directly, so the same 1.1 draws half as heavy a
+# line. Every width below is the still's own, doubled, which is what makes the two panels
+# look like one pair rather than a drawing and a sketch of it.
+_LIVE_LINE_SCALE = 2.2
 
 # Height from width, and arrow length from the plot area, on every draw and every resize.
 # It runs again after a relayout because that is when a condition view swaps in its own
 # arrows, and each pass renormalises whatever length it finds rather than scaling what is
 # there, so running twice is the same as running once. The one-pixel guard is what stops
 # the relayout it makes from calling it forever.
-def responsive_js(aspect: float, offset: int = 0,
-                  quiver_scale: "float | None" = None) -> str:
-    """Script that keeps one live figure at a fixed shape as the report's width changes.
-
-    ::
-
-      responsive_js(2.46, quiver_scale=52)  -> the coherence map's own script
-
-    ``height = width / aspect + offset``, and where ``quiver_scale`` is given, every arrow
-    is renormalised to ``plot area width / quiver_scale``, which is the length matplotlib's
-    quiver gives the still panel. Without this a live figure stands at the height and the
-    arrow length it was written with while the PNG beside it grows with the window, and the
-    two agree only at whatever width happened to be in mind.
-    """
-    q = ("var L=(w-(m.l||0)-(m.r||0))/%g,moved=false;"
-         "var ann=(gd.layout.annotations||[]).map(function(a){return a;});"
-         "ann.forEach(function(a){"
-         f"if(a.name!=='{_ARROW_NAME}')return;"
-         "var d=Math.sqrt(a.ax*a.ax+a.ay*a.ay);if(!d)return;"
-         "if(Math.abs(d-L)<=1)return;"
-         "a.ax=a.ax/d*L;a.ay=a.ay/d*L;moved=true;});"
-         "if(moved)up.annotations=ann;" % quiver_scale) if quiver_scale else ""
-    return (
-        "<script>(function(){"
-        f"var ASPECT={aspect},OFFSET={offset};"
-        "function fit(){"
-        "var gd=document.querySelector('.plotly-graph-div');"
-        "if(!gd||!gd.layout||typeof Plotly==='undefined')return;"
-        "var w=gd.offsetWidth;if(!w)return;"
-        "var m=gd.layout.margin||{},h=Math.round(w/ASPECT+OFFSET),up={};"
-        "if(Math.abs((gd.layout.height||0)-h)>1)up.height=h;"
-        + q +
-        "if(Object.keys(up).length)Plotly.relayout(gd,up);}"
-        # again after a relayout, which is when a condition view swaps in its own arrows.
-        # Each pass renormalises what it finds rather than scaling it, so running twice is
-        # the same as running once, and the one-pixel guard stops it calling itself forever
-        "window.addEventListener('load',function(){fit();"
-        "var gd=document.querySelector('.plotly-graph-div');"
-        "if(gd&&gd.on)gd.on('plotly_relayout',fit);});"
-        "window.addEventListener('resize',fit);"
-        "})();</script>"
-    )
-
-
-WTC_RESPONSIVE_JS = responsive_js(WTC_RENDERED_ASPECT, quiver_scale=WTC_QUIVER_SCALE)
-
-# The two-panel figure is two squares side by side: the height is what makes the heatmap's
-# cells square at a given width, plus the room the titles and the axis labels take.
-PANEL_ASPECT = 2.25
-PANEL_TITLE_PX = 150
-PANEL_RESPONSIVE_JS = responsive_js(PANEL_ASPECT, offset=PANEL_TITLE_PX)
-
-
 def _arrow_annotations(wtc_data: dict, freqs: np.ndarray, times: np.ndarray,
                        freq_coi: np.ndarray,
                        arrow_min: float = ARROW_MIN_COHERENCE) -> list[dict]:
@@ -363,7 +319,8 @@ def _arrow_annotations(wtc_data: dict, freqs: np.ndarray, times: np.ndarray,
                 ax=-_INTERACTIVE_ARROW_PX * np.cos(a),
                 ay=_INTERACTIVE_ARROW_PX * np.sin(a),
                 axref="pixel", ayref="pixel", text="", showarrow=True, name=_ARROW_NAME,
-                arrowhead=2, arrowsize=1.1, arrowwidth=1.1, arrowcolor="black",
+                arrowhead=2, arrowsize=0.8, arrowcolor="black",
+                arrowwidth=1.1 * _LIVE_LINE_SCALE,
             ))
     return arrows
 
@@ -492,7 +449,7 @@ def build_wtc_map_interactive(
     ))
     fig.add_trace(go.Scatter(
         x=times, y=freq_coi, mode="lines",
-        line=dict(color="white", width=1.6, dash="dash"),
+        line=dict(color="white", width=1.3 * _LIVE_LINE_SCALE, dash="dash"),
         hoverinfo="skip", showlegend=False,
     ))
 
@@ -502,7 +459,7 @@ def build_wtc_map_interactive(
         fig.add_trace(go.Contour(
             z=ratio, x=times, y=freqs, showscale=False, hoverinfo="skip",
             contours=dict(start=1.0, end=1.0, size=1.0, coloring="none"),
-            line=dict(color="black", width=1.1),
+            line=dict(color="black", width=1.1 * _LIVE_LINE_SCALE),
         ))
 
     arrows = _arrow_annotations(wtc_data, freqs, times, freq_coi, arrow_min)
@@ -516,18 +473,20 @@ def build_wtc_map_interactive(
         colour = cond_colors.get(m["description"], "#f39c12")
         shapes.append(dict(type="line", xref="x", yref="paper", y0=1.012, y1=1.012,
                            x0=onset, x1=min(onset + duration, t1),
-                           line=dict(color=colour, width=5)))
+                           line=dict(color=colour, width=3.0 * _LIVE_LINE_SCALE)))
         for edge in (onset, onset + duration):
             if t0 <= edge <= t1:
                 # against the paper rather than the axis: the line means "the full height",
                 # and a log axis takes its own coordinates in log10
                 shapes.append(dict(type="line", xref="x", yref="paper", x0=edge, x1=edge,
                                    y0=0.0, y1=1.0,
-                                   line=dict(color=colour, width=1.1, dash="dot")))
+                                   line=dict(color=colour, dash="dot",
+                                             width=1.1 * _LIVE_LINE_SCALE)))
         seen.setdefault(m["description"], colour)
     for label, colour in seen.items():
         fig.add_trace(go.Scatter(x=[None], y=[None], mode="lines", name=label,
-                                 line=dict(color=colour, width=5), hoverinfo="skip"))
+                                 line=dict(color=colour, width=3.0 * _LIVE_LINE_SCALE),
+                                 hoverinfo="skip"))
 
     major, minor = _log_freq_ticks(freqs)
     on_decades = all(abs(np.log10(f) - round(np.log10(f))) < 1e-9 for f in major)
@@ -591,6 +550,17 @@ def _png_b64(fig) -> str:
 # rather than a red and a blue, which on these pages mean HbO and HbR.
 NODE_COLORS = ("#8e44ad", "#27ae60")
 
+# One scale per quantity, each over its own full range. A correlation is signed and takes a
+# diverging map centred on zero; a coherence is unsigned and bounded and takes a sequential
+# one, where nothing is a midpoint because it has none.
+COHERENCE_SCALE = "viridis"
+CORRELATION_SCALE = "RdBu_r"
+
+# A cell no pairing was computed for: grey, because it is not a value and no point on the
+# scale should be able to stand for it.
+BLANK_CELL = "#d5d5d5"
+
+
 # Degrees of blank circle left between the two members, at both ends of each semicircle, so
 # the split between the brains is visible before any label is read.
 _CIRCLE_GAP = 12.0
@@ -640,18 +610,19 @@ def _cell_values(fig, z, row_labels, col_labels, *, cmap, vmin, vmax, row, col):
 
     ::
 
-      a cell at .69 on viridis -> white text;  the same number on RdBu_r -> black
+      a cell at .69 -> white text;  the same number at .12 -> black
 
     **Every cell gets its number.** A fixed colour scale is what lets two dyads or two
     conditions be compared by eye, and the cost is that a matrix whose values all sit near
     0.25 renders as one flat square; the printed value is what makes such a matrix readable
     at all.
 
-    The ink is chosen from **the cell's own colour** and not from its value: viridis is dark
-    at its low end and bright at its high one while a diverging map is dark at both ends and
-    pale in the middle, so any rule written against the value serves one of them and fails
-    the other. Two text traces rather than one, because a heatmap takes a single ``textfont``
-    for the whole grid and that is the one thing this needs per cell.
+    The ink is chosen from **the cell's own colour** and not from its value: the coherence
+    scale is pale at its low end and dark at its high one while the diverging one is dark at
+    both ends and pale in the middle, so any rule written against the value serves one of
+    them and fails the other. Asking the scale and taking the luminance serves both, and any
+    scale added later. Two text traces rather than one, because a heatmap takes a single
+    ``textfont`` for the whole grid and that is the one thing this needs per cell.
     """
     import plotly.graph_objects as go
 
@@ -691,13 +662,26 @@ def _circle_traces(fig, z, row_labels, col_labels, subject_ids, *,
 
     n = len(row_labels)
     ang = np.deg2rad(_node_angles(n))
-    step = np.deg2rad((360.0 - 2 * _CIRCLE_GAP) / (2 * n))
     xy = np.stack([np.cos(ang), np.sin(ang)], axis=1)
+    # the nodes are evenly spaced, so any two neighbours inside one member give the pitch
+    step = float(ang[1] - ang[0]) if n > 1 else np.deg2rad(20.0)
 
     # ---- one thick arc per node, and its label outside it ----
     sub1 = subject_ids[0] if subject_ids else "Sub1"
     sub2 = subject_ids[1] if len(subject_ids) > 1 else "Sub2"
     labels = list(row_labels) + list(col_labels)
+
+    def _radial_label(theta: float, radius: float, text: str, size: float, colour: str):
+        deg = np.rad2deg(theta) % 360.0
+        flip = 90.0 < deg < 270.0
+        fig.add_annotation(
+            x=float(np.cos(theta) * radius), y=float(np.sin(theta) * radius),
+            text=text, showarrow=False, font=dict(size=size, color=colour),
+            textangle=-(deg - 180.0) if flip else -deg,
+            xanchor="right" if flip else "left", yanchor="middle",
+            xref=f"x{col}" if col > 1 else "x", yref=f"y{col}" if col > 1 else "y",
+        )
+
     for k, name in enumerate(labels):
         side = 0 if k < n else 1
         a = np.linspace(ang[k] - step * 0.42, ang[k] + step * 0.42, 12)
@@ -706,15 +690,7 @@ def _circle_traces(fig, z, row_labels, col_labels, subject_ids, *,
             line=dict(color=NODE_COLORS[side], width=9), showlegend=False,
             hovertemplate=f"{(sub1, sub2)[side]}<br>{name}<extra></extra>",
         ), row=row, col=col)
-        deg = np.rad2deg(ang[k]) % 360.0
-        flip = 90.0 < deg < 270.0
-        fig.add_annotation(
-            x=float(np.cos(ang[k]) * 1.06), y=float(np.sin(ang[k]) * 1.06),
-            text=name, showarrow=False, font=dict(size=9, color="#2c3e50"),
-            textangle=-(deg - 180.0) if flip else -deg,
-            xanchor="right" if flip else "left", yanchor="middle",
-            xref=f"x{col}" if col > 1 else "x", yref=f"y{col}" if col > 1 else "y",
-        )
+        _radial_label(ang[k], 1.06, name, 9, "#2c3e50")
 
     # ---- the chords, weakest first so the strong ones are not drawn under them ----
     pairs = [(i, j) for i in range(n) for j in range(n) if keep[i, j]]
@@ -771,9 +747,9 @@ def build_cross_panel(
     to both ends and hope the labels are legible. Hovering says which pairing it is and what
     it is worth. The heatmap comes along for the same reason its ROI twin did.
 
-    The scale is the caller's and both panels share it, so there is one colorbar. A coherence
-    is unsigned and takes viridis over 0 to 1; a correlation is signed and takes a diverging
-    map over -1 to 1.
+    The scale is the caller's and both panels share it, so there is one colorbar: a
+    coherence takes :data:`COHERENCE_SCALE` over 0 to 1 and a correlation
+    :data:`CORRELATION_SCALE` over -1 to 1.
 
     ``arc_threshold`` draws every pairing that clears it and ``arc_lines`` the N strongest
     instead; exactly one is used, the threshold where it is given. Neither changes a number,
@@ -810,13 +786,13 @@ def build_cross_panel(
                         horizontal_spacing=0.03,
                         subplot_titles=(matrix_title, rule))
 
-    # A blank cell is a site one member lost. Painted under the heatmap rather than left to
-    # show the page through, so it reads as "measured, nothing here" and not as a gap. Laid
-    # out on the data's own extent and with no gap between cells, so the only grey anywhere
-    # in the grid is a blank: a cell border in the same colour would read as one too.
+    # A blank cell is a site one member lost, painted under the heatmap rather than left to
+    # show the panel through. Light enough not to read as a value of its own, and still clear
+    # of the palest end of either scale, which is very nearly white. No gap between cells,
+    # since a border in that colour would draw a missing channel where there is none.
     fig.add_shape(type="rect", xref="x", yref="y", x0=-0.5, x1=len(col_labels) - 0.5,
                   y0=-0.5, y1=len(row_labels) - 0.5,
-                  fillcolor="#d5d5d5", line=dict(width=0), layer="below")
+                  fillcolor=BLANK_CELL, line=dict(width=0), layer="below")
 
     fig.add_trace(go.Heatmap(
         z=z, x=list(col_labels), y=list(row_labels), colorscale=cmap,
@@ -833,15 +809,19 @@ def build_cross_panel(
 
     axis_title = lambda who: f"{who} {kind}".strip()
     fig.update_layout(
-        height=int(900 / PANEL_ASPECT + PANEL_TITLE_PX), autosize=True,
+        height=PANEL_HEIGHT, autosize=True,
         margin=dict(l=70, r=90, t=80, b=70),
         title=dict(text=suptitle, x=0.5, xanchor="center", y=0.975, font=dict(size=14)),
         plot_bgcolor="white", paper_bgcolor="white", showlegend=False,
+        # Ranges given rather than left to autorange, which pads a heatmap by a fraction of
+        # a cell on every side and leaves a white margin around the grid. A cell spans half a
+        # step either side of its index, so these two are the grid's own extent.
         xaxis=dict(title=axis_title(sub2), side="bottom", tickangle=-90,
+                   range=[-0.5, len(col_labels) - 0.5],
                    showgrid=False, zeroline=False, constrain="domain"),
         # the first row at the top, which is how the table it stands for is read
-        yaxis=dict(title=axis_title(sub1), autorange="reversed", showgrid=False,
-                   zeroline=False, scaleanchor="x", constrain="domain"),
+        yaxis=dict(title=axis_title(sub1), range=[len(row_labels) - 0.5, -0.5],
+                   showgrid=False, zeroline=False, scaleanchor="x", constrain="domain"),
         # the same span on both, so the constraint letterboxes the subplot instead of
         # stretching the circle into an ellipse
         xaxis2=dict(visible=False, range=[-1.38, 1.38], constrain="domain"),
@@ -897,7 +877,7 @@ def build_wtc_cross_matrix(
     lines = None if (arc_min is not None or z.size <= ARC_DRAW_ALL_UNDER) else WTC_ARC_LINES
     return build_cross_panel(
         z, labels, labels, subject_ids,
-        cmap="viridis", vmin=0, vmax=1, value_label="coherence", kind=kind,
+        cmap=COHERENCE_SCALE, vmin=0, vmax=1, value_label="coherence", kind=kind,
         matrix_title=f"Band mean {band_fmin:.3g}-{band_fmax:.3g} Hz "
                      f"  (grand mean {mean:.3f})",
         suptitle=f"Inter-brain coherence, {kind} × {kind}  —  {sub1} × {sub2}",
@@ -1097,7 +1077,7 @@ def build_isc_panel(
     type_label = ch_type.upper()
     return build_cross_panel(
         np.asarray(isc_mat, dtype=float), list(ch_names), list(ch_names), subject_ids,
-        cmap="RdBu_r", vmin=-1, vmax=1, value_label="Pearson r",
+        cmap=CORRELATION_SCALE, vmin=-1, vmax=1, value_label="Pearson r",
         matrix_title=f"ISC matrix ({type_label})",
         suptitle=f"Inter-brain Synchrony ({type_label})  —  {sub1_label} × {sub2_label}",
         arc_threshold=isc_threshold, arc_lines=None,
