@@ -391,9 +391,10 @@ def compute_group_sqm_raw(
         sqm["bad_channels"]    = bad_channels
         sqm["screen_windows"]  = screen_windows
         sqm["screen_cutoffs"]  = dict(cutoffs)
-        sqm["per_channel"]     = (_per_channel or {}).get("raw") or {}
+        sqm["per_channel"]     = _per_channel or {}
+        sqm["per_channel_all"]  = (_per_channel or {}).get("raw") or {}
         sqm["per_channel_long"] = ((_per_channel or {}).get("raw_long")
-                                   or sqm["per_channel"])
+                                   or sqm["per_channel_all"])
         sqm_data[entry.subject_id] = sqm
 
         # Every scalar the record holds, not a whitelist: the three columns this used to
@@ -923,11 +924,14 @@ def load_group_sqm(
             # from: the dyad's channel table prints the same columns the subject report does,
             # and those come from PSP, SNR, CV and the spike share alongside it
             per_ch = record.get("per_channel") or {}
-            sqm["per_channel"] = per_ch.get("raw") or {}
+            # every section, not only the all-channel one: a short channel's scores live in
+            # `raw_short` and the dyad's channel table prints short rows too
+            sqm["per_channel"] = per_ch
+            sqm["per_channel_all"] = per_ch.get("raw") or {}
             # the long section too, and it is not a nicety: every dyad measure runs on long
             # channels, and a `raw_long` is not written when the montage is all long, so the
             # whole-file section is the long one there rather than a missing answer
-            sqm["per_channel_long"] = per_ch.get("raw_long") or sqm["per_channel"]
+            sqm["per_channel_long"] = per_ch.get("raw_long") or sqm["per_channel_all"]
             # the same screening grid `compute_group_sqm_raw` keeps when it measures one
             # itself, rebuilt here from the matrices the record stored. One shape, so a dyad
             # panel does not care which command produced the members' numbers.

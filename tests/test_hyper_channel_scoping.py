@@ -211,16 +211,19 @@ def test_coherence_matches_channels_by_label():
     assert df.loc[["S1_D1", "S3_D3", "S4_D4"], "coherence"].to_numpy() == pytest.approx(1.0)
 
 
-def test_windowed_coherence_keeps_a_blank_row_rather_than_shifting():
-    from fnirs_pipe.qc.figures.hyper_figures import compute_windowed_coherence
+def test_screening_coherence_drops_a_pair_one_member_lacks():
+    # the windowed coherence this replaced kept a blank row per window; the screening pass
+    # drops the pair instead, because a channel one member does not have is not a channel
+    # the dyad can be screened on and a NaN row would be averaged into the window's mean
+    from fnirs_pipe.pipeline.synchrony import screening_coherence
 
     raws = {"sub-A": _tagged("10031"), "sub-B": _tagged("10032", drop="S2_D2")}
-    df = compute_windowed_coherence(raws, 0.05, 0.15, window_s=20.0, step_s=10.0)
+    df = screening_coherence(raws, 0.05, 0.15, n_iter=3, seed=0)
 
-    assert set(df["ch_name"]) == {"S1_D1", "S2_D2", "S3_D3", "S4_D4"}
-    blank = df[df["ch_name"] == "S2_D2"]
-    assert len(blank) == df["t_center"].nunique() and blank["coherence"].isna().all()
-    assert df[df["ch_name"] == "S3_D3"]["coherence"].to_numpy() == pytest.approx(1.0)
+    assert set(df["ch_name"]) == {"S1_D1", "S3_D3", "S4_D4"}
+    assert list(df["window"].unique()) == ["whole run"]
+    # every row of a window carries that window's own rank, so the page can read it off any
+    assert df["window_percentile"].nunique() == 1
 
 
 def test_a_sampling_rate_mismatch_is_refused():

@@ -598,7 +598,9 @@ function _set(id, text, cls) {
       tbody.appendChild(head);
 
       rows.forEach(function(row) {
-        var pair = row.pair;
+        // at pair granularity the name column *is* the pair, which is what a decision is
+        // filed under; format_rows emits it under the first column's key either way
+        var pair = row[_CH_COLUMNS[0][0]];
         var tr = document.createElement("tr");
         if (row.is_bad) tr.className = "bad-row";
         _CH_COLUMNS.forEach(function(col) {
