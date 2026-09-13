@@ -45,6 +45,7 @@ tr.whole td.num { font-weight: 600; }
   <thead>
     <tr>
       <th>Window</th>
+      {% if has_pairs %}<th>Pair</th>{% endif %}
       <th>Task</th>
       <th>Span</th>
       {% for c in chroma %}<th>WTC {{ chroma_labels[c] }}</th>{% endfor %}
@@ -62,6 +63,7 @@ tr.whole td.num { font-weight: 600; }
           {{ row.condition or "whole run" }} <span class="muted">(no page)</span>
         {% endif %}
       </td>
+      {% if has_pairs %}<td>{{ row.pair or "" }}</td>{% endif %}
       <td>{{ row.task }}</td>
       <td class="num">{% if row.window %}{{ row.window }}{% else %}<span class="muted">&mdash;</span>{% endif %}</td>
       {% for c in chroma %}

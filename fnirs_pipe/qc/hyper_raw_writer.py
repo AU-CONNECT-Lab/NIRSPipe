@@ -31,6 +31,8 @@ from fnirs_pipe.qc.figures.hyper_figures import (
     coupled_grid,
     head_geometry,
     member_series,
+    motion_series,
+    motion_summary,
     screening_summary,
 )
 from fnirs_pipe.pipeline.synchrony import SCREEN_NULL_ITER, screening_coherence
@@ -124,6 +126,8 @@ def _process_hyper_raw_group(
     offsets: dict[str, float],
     output_dir: Path,
     raw_raws: dict[str, mne.io.Raw] | None = None,
+    intensity_raws: dict[str, mne.io.Raw] | None = None,
+    after_raws: dict[str, mne.io.Raw] | None = None,
     session: str | None = None,
     sci_threshold: float = SCI_PASS,
     cardiac_l_freq: float | None = None,
@@ -224,8 +228,30 @@ def _process_hyper_raw_group(
     _safe_save("ch_summary", "chsummary",
                build_channel_summary, sqm_data, subject_ids, sci_threshold)
 
+    # motion is measured off the optical density, not off the aligned haemoglobin the rest
+    # of the page is drawn on, so it is its own pass rather than a row on the screening grid
+    motion, motion_scalars = {}, {}
+    with guard("Motion panel", errors, label):
+        motion = motion_series(intensity_raws or {}, after_raws, subject_ids, sep_bands)
+    if not motion:
+        note(notes, label, "no optical density for the members: the motion panels "
+                           "are empty")
+    else:
+        motion_scalars = motion_summary(motion)
+        for stage in motion["stages"]:
+            with guard(f"Motion panel ({stage})", errors, label):
+                fig = build_motion_panel(motion, stage, conditions)
+                if fig is None:
+                    continue
+                fname = f"{label}_desc-motion{stage}_nirs.html"
+                h = _save_figure_html(fig, fig_dir / fname)
+                figure_paths[f"motion_{stage}"] = {"src": f"figures/{fname}", "h": h}
+        if "after" not in motion["stages"]:
+            note(notes, label, "no motion-corrected derivative lines up with both members: "
+                               "the panel shows the recording as it arrived only")
+
     duration_s = first_raw.times[-1] if first_raw is not None else None
-    grid, series, geo, motion_summary = None, {}, {}, {}
+    grid, series, geo = None, {}, {}
     with guard("Screening grid", errors, label):
         grid = coupled_grid(sqm_data, subject_ids, offsets, duration_s=duration_s)
     if grid is None:
@@ -244,15 +270,6 @@ def _process_hyper_raw_group(
                                "are empty")
         _safe_save("usable_time", "usable", build_usable_time,
                    grid, subject_ids, series, conditions, cutoffs)
-        with guard("Motion panel figure", errors, label):
-            motion_fig, motion_summary = build_motion_panel(series, subject_ids, conditions)
-            if motion_fig is not None:
-                fname = f"{label}_desc-motion_nirs.html"
-                h = _save_figure_html(motion_fig, fig_dir / fname)
-                figure_paths["motion"] = {"src": f"figures/{fname}", "h": h}
-            else:
-                note(notes, label, "no motion trace on either member: "
-                                   "the motion panel is empty")
         if geo:
             _safe_save("head_by_condition", "headcond", build_head_by_condition,
                        geo, subject_ids, grid, conditions)
@@ -290,7 +307,7 @@ def _process_hyper_raw_group(
     # the screening verdict beside the measured coherence, since the value alone is not
     # readable: see `screening_summary`
     sqm["screening"] = screening_summary(screening_df)
-    sqm["motion"] = motion_summary
+    sqm["motion"] = motion_scalars
     if grid is not None:
         sqm.update(usable_scalars(grid, subject_ids))
         with guard("Usable-time table", errors, label):

@@ -29,6 +29,7 @@ from fnirs_pipe.qc.metrics import SCI_PASS
 from fnirs_pipe.qc.figure_io import (
     _fig_href,
     _pair_fname,
+    pair_slug,
     _save_figure_html,
     extract_markers,
     get_channel_pairs,
@@ -475,6 +476,8 @@ def build_hyper_report(
     offsets: dict[str, float],
     output_dir: Path,
     raw_raws: dict[str, mne.io.Raw] | None = None,
+    intensity_raws: dict[str, mne.io.Raw] | None = None,
+    after_raws: dict[str, mne.io.Raw] | None = None,
     session: str | None = None,
     sci_threshold: float = SCI_PASS,
     cardiac_l_freq: float | None = None,
@@ -491,7 +494,8 @@ def build_hyper_report(
         group_id=group_id, task=task, group=group,
         sqm_data=sqm_data, aligned_raws=aligned_raws, offsets=offsets,
         output_dir=output_dir,
-        raw_raws=raw_raws, session=session, sci_threshold=sci_threshold,
+        raw_raws=raw_raws, intensity_raws=intensity_raws, after_raws=after_raws,
+        session=session, sci_threshold=sci_threshold,
         cardiac_l_freq=cardiac_l_freq, cardiac_h_freq=cardiac_h_freq,
         coherence_fmin=coherence_fmin, coherence_fmax=coherence_fmax,
         sep_bands=sep_bands, errors=errors, notes=notes,
@@ -841,19 +845,7 @@ def build_hyper_post_report(
     pairings = list(combinations(subject_ids, 2))
 
     def _pair_slug(pair: "tuple[str, str] | None") -> str:
-        """``""`` while the group holds one pairing, else ``_<sub1>x<sub2>``.
-
-        Empty for a dyad on purpose: a dyad has exactly one pairing, so the slug would
-        distinguish nothing and every file it names would be renamed for no reason.
-
-        ::
-
-          two members            -> ""
-          ("sub-a", "sub-b")     -> "_ab"   (of a group of three)
-        """
-        if pair is None or len(pairings) < 2:
-            return ""
-        return "_" + "x".join(_pair_fname(sid) for sid in pair)
+        return pair_slug(pair, len(pairings))
 
     # ---- what put the members on one clock ----
     # Read once and written onto every table this report produces. An inter-brain number
@@ -1128,6 +1120,21 @@ def build_hyper_post_report(
     # own file. See `wtc_condition_views`.
     roi_view_spans = (cond_windows if (cond_windows and cond_pad_s is None) else None)
 
+    def _roi_band(chan_band_df, ch_type: str, what: str):
+        """The ROI number the WTC literature reports: coherence per channel pair, averaged.
+
+        A table rather than a figure, and derived from a frame carrying every pairing in the
+        group, so it is computed once per chromophore beside the channel means instead of
+        once per pairing alongside the pictures.
+        """
+        if not roi_map or chan_band_df is None:
+            return None
+        out = None
+        with guard(f"ROI mean of channel WTC ({what}, {ch_type})", errors, scope):
+            out = roi_mean_of_channels(chan_band_df, roi_map,
+                                       min_channels=wtc_roi_min_channels)
+        return out
+
     def _figure_set(result, chan_band_df, ch_type: str, suffix: str = "",
                     roi_view_of: "dict | None" = None,
                     pair: "tuple[str, str] | None" = None) -> dict:
@@ -1142,16 +1149,12 @@ def build_hyper_post_report(
         same rule a per-condition subject page names its panels by. That is what lets both
         sets sit in one ``figures/`` directory without the window overwriting the run.
 
-        Returns ``{"per_channel", "per_roi", "roichan"}``. The two cross matrices are not
+        Returns ``{"per_channel", "per_roi"}``. The two cross matrices are not
         here: they carry both chromophores on one pair of axes, so they are built once per
         scope by ``_matrix_set`` rather than once per chromophore.
         The two map sets are nested ``{label_sub1: {label_sub2: {"wtc": url}}}`` whether or
         not the run crossed, an uncrossed one holding only the diagonal, so the page reads
         one shape and the pair of selectors above each panel is the only difference.
-        ``roichan`` is the ROI band-mean frame, untagged: the caller adds the chromophore
-        and, for a window, the condition, because the aggregations inside drop columns they
-        do not know.
-
         ``roi_view_of`` hands a window the run's own ROI map set, and the window then points
         at those files with its slug on the end instead of drawing its own. See
         :func:`~fnirs_pipe.qc.figures.hyper_post_figures.wtc_condition_views` for when that
@@ -1162,7 +1165,7 @@ def build_hyper_post_report(
         than taken off the front: the maps are labelled with it, and its slug separates their
         files from the next pairing's.
         """
-        out: dict = {**_empty_figures(), "roichan": None}
+        out: dict = _empty_figures()
         what = f"condition {suffix.lstrip('_')}" if suffix else "whole run"
 
         pair_key = pair if pair is not None else (
@@ -1174,15 +1177,6 @@ def build_hyper_post_report(
 
         if not roi_map:
             return out
-
-        # the ROI number the WTC literature reports: coherence per channel pair, then
-        # averaged
-        roi_band_df = None
-        if chan_band_df is not None:
-            with guard(f"ROI mean of channel WTC ({what}, {ch_type})", errors, scope):
-                roi_band_df = roi_mean_of_channels(
-                    chan_band_df, roi_map, min_channels=wtc_roi_min_channels)
-        out["roichan"] = roi_band_df
 
         # the maps grouped the same way, so the picture and the table are one average.
         # A window pointing at the run's files needs no maps of its own, so it does not
@@ -1216,21 +1210,25 @@ def build_hyper_post_report(
         about the statistic changes, so this is a loop over ``--wtc-chroma`` rather than a
         branch anywhere inside it. Cost is one full multiple per chromophore.
 
-        Returns the rows each table wants, untagged, plus every figure. The caller
-        concatenates the rows across chromophores and writes one table per kind: the
-        band-mean tables are long-format, so a ``chromophore`` column keeps their filenames
-        stable. The figures stay keyed by chromophore instead, because each page carries all
-        of them and switches between them, which is the comparison the second chromophore
-        exists for.
+        Returns the rows each table wants, untagged, and the transforms they came off.
+        The caller concatenates the rows across chromophores and writes one table per kind:
+        the band-mean tables are long-format, so a ``chromophore`` column keeps their
+        filenames stable.
 
-        ``cond_figs`` is one figure set per window, positional, so the chromophores' lists
-        line up for the switch even where a guard failed on one of them. ``cond_bands`` is
-        positional the same way and holds each window's untagged band means, which is what
-        the cross matrices are drawn from: they carry both chromophores on one pair of axes,
-        so they cannot be built inside this pass.
+        **No figures here.** The transform covers every pairing in the group at once and is
+        the expensive step, while a figure is of one pairing, so the two are separated: this
+        runs once per chromophore and :func:`_figures_for` runs once per chromophore per
+        pairing off what it returns. Running the transform per pairing instead would repeat
+        the one step worth not repeating, and returning per-pairing tables would multiply
+        every row of every TSV by the pairing count.
+
+        ``cond_wtc`` and ``cond_bands`` are positional over the windows, so the chromophores'
+        lists line up even where a guard failed on one of them. ``cond_bands`` holds each
+        window's untagged band means, which is what the cross matrices are drawn from: they
+        carry both chromophores on one pair of axes, so they cannot be built inside this pass.
         """
         out: dict = {"chan": None, "roichan": None, "cond_chan": [], "cond_roi": [],
-                     "run_figs": {}, "cond_figs": [], "cond_bands": []}
+                     "result": None, "cond_wtc": [], "cond_bands": []}
 
         wtc_result: WTCResult | None = None
         with guard(f"WTC computation ({ch_type})", errors, scope):
@@ -1252,8 +1250,8 @@ def build_hyper_post_report(
         if chan_band_df is not None and wtc_save_maps:
             _save_maps(wtc_result, "wtc", ch_type)
 
-        out["run_figs"] = _figure_set(wtc_result, chan_band_df, ch_type)
-        out["roichan"] = out["run_figs"]["roichan"]
+        out["result"] = wtc_result
+        out["roichan"] = _roi_band(chan_band_df, ch_type, "whole run")
 
         # ---- per condition ----
         # Each task window read out of the whole-run pass above rather than transformed on
@@ -1267,7 +1265,7 @@ def build_hyper_post_report(
         # with the contrast. See `window_result`. It is also cheaper: the whole-run
         # transform is computed either way, and this adds no second one.
         for label, tstart, tstop in cond_windows:
-            out["cond_figs"].append({})
+            out["cond_wtc"].append(None)
             out["cond_bands"].append({"chan": None, "roichan": None})
             cond_chan = cond_wtc = None
             with guard(f"Condition {label}: WTC ({ch_type})", errors, scope):
@@ -1283,14 +1281,9 @@ def build_hyper_post_report(
             if cond_chan is None:
                 continue
 
-            # the same panels the run's own page gets, over this window. The ROI maps are
-            # the run's files at this window's fragment, where that route is on
-            figs = _figure_set(
-                cond_wtc, cond_chan, ch_type, f"_{_pair_fname(label)}",
-                roi_view_of=(out["run_figs"]["per_roi"] if roi_view_spans else None))
-            out["cond_figs"][-1] = figs
+            out["cond_wtc"][-1] = cond_wtc
 
-            cond_roi = figs.pop("roichan", None)
+            cond_roi = _roi_band(cond_chan, ch_type, f"condition {label}")
             out["cond_bands"][-1] = {"chan": cond_chan, "roichan": cond_roi}
             if cond_roi is not None and not cond_roi.empty:
                 cond_roi = cond_roi.copy()
@@ -1303,6 +1296,33 @@ def build_hyper_post_report(
 
         return out
 
+    def _figures_for(ch_type: str, computed: dict, pair: "tuple[str, str]") -> dict:
+        """Every figure one pairing gets out of one chromophore's transforms.
+
+        ::
+
+          -> {"run_figs": {...}, "cond_figs": [{...}, ...]}   # positional over the windows
+
+        The transforms come in rather than being computed: see :func:`_wtc_pass`. A window
+        whose own pass failed contributes an empty set and keeps its place in the list.
+        """
+        run_figs = _figure_set(computed["result"], computed["chan"], ch_type, pair=pair)
+        cond_figs: list[dict] = []
+        for i, (label, _, _) in enumerate(cond_windows):
+            cond_wtc = computed["cond_wtc"][i] if i < len(computed["cond_wtc"]) else None
+            cond_chan = (computed["cond_bands"][i] if i < len(computed["cond_bands"])
+                         else {}).get("chan")
+            if cond_wtc is None or cond_chan is None:
+                cond_figs.append({})
+                continue
+            # the same panels the run's own page gets, over this window. The ROI maps are
+            # the run's files at this window's fragment, where that route is on
+            cond_figs.append(_figure_set(
+                cond_wtc, cond_chan, ch_type, f"_{_pair_fname(label)}",
+                roi_view_of=(run_figs["per_roi"] if roi_view_spans else None),
+                pair=pair))
+        return {"run_figs": run_figs, "cond_figs": cond_figs}
+
     if wtc_significance:
         logger.warning("WTC significance on: %d Monte Carlo surrogates per channel pair, "
                        "this is slow.", wtc_mc_count)
@@ -1313,7 +1333,22 @@ def build_hyper_post_report(
         logger.info("--wtc-chroma %s: %d full WTC passes, one per chromophore",
                     "+".join(chroma), len(chroma))
 
-    def _matrix_set(bands: dict, suffix: str, what: str) -> dict:
+    def _slice_pair(df, pair: "tuple[str, str] | None"):
+        """The rows of a band frame belonging to one pairing.
+
+        The frames are long over every pairing in the group. Everything downstream keys on
+        the site pair alone, so handing it the whole frame lets a group of three overwrite
+        one pairing's cell with another's; slicing here means no consumer has to know the
+        column exists. A frame without the columns is from a tree written before they were
+        added and is passed through.
+        """
+        if df is None or pair is None or not {"sub1", "sub2"}.issubset(
+                getattr(df, "columns", [])):
+            return df
+        return df[(df["sub1"] == pair[0]) & (df["sub2"] == pair[1])]
+
+    def _matrix_set(bands: dict, suffix: str, what: str,
+                    pair: "tuple[str, str] | None" = None) -> dict:
         """The two cross matrices for one scope, both chromophores on one pair of axes.
 
         ::
@@ -1342,7 +1377,8 @@ def build_hyper_post_report(
         def _crossed(df) -> bool:
             return df is not None and "label2" in getattr(df, "columns", [])
 
-        chan_dfs = _named("chan")
+        pair_ids = list(pair) if pair else subject_ids
+        chan_dfs = {k: _slice_pair(v, pair) for k, v in _named("chan").items()}
         if any(_crossed(df) for df in chan_dfs.values()):
             with guard(f"WTC channel cross matrix ({what})", errors, scope):
                 # the montage, not the labels a table happens to carry: a dyad that lost a
@@ -1351,28 +1387,18 @@ def build_hyper_post_report(
                                               if _crossed(df)
                                               for lab in (*df["label"], *df["label2"])})
                 out["chan_matrix"] = _fig_html(build_wtc_cross_matrix(
-                    chan_dfs, labels, subject_ids, band_fmin, band_fmax, kind="channel"),
-                    f"wtc_chanmatrix{suffix}.html") or {}
+                    chan_dfs, labels, pair_ids, band_fmin, band_fmax, kind="channel"),
+                    f"wtc_chanmatrix{_pair_slug(pair)}{suffix}.html") or {}
 
-        roi_dfs = _named("roichan")
+        roi_dfs = {k: _slice_pair(v, pair) for k, v in _named("roichan").items()}
         if roi_map and any(_crossed(df) for df in roi_dfs.values()):
             with guard(f"wtc-roi-matrix ({what}) figure", errors, scope):
                 out["roi_matrix"] = _fig_html(build_wtc_cross_matrix(
-                    roi_dfs, roi_labels, subject_ids, band_fmin, band_fmax, "ROI"),
-                    f"wtc_roimatrix{suffix}.html") or {}
+                    roi_dfs, roi_labels, pair_ids, band_fmin, band_fmax, "ROI"),
+                    f"wtc_roimatrix{_pair_slug(pair)}{suffix}.html") or {}
         return out
 
     passes = {ch_type: _wtc_pass(ch_type) for ch_type in chroma}
-
-    run_matrices = _matrix_set(
-        {c: {"chan": passes[c]["chan"], "roichan": passes[c]["roichan"]} for c in chroma},
-        "", "whole run")
-    cond_matrices = [
-        _matrix_set({c: (passes[c]["cond_bands"][i] if i < len(passes[c]["cond_bands"])
-                         else {}) for c in chroma},
-                    f"_{_pair_fname(label)}", f"condition {label}")
-        for i, (label, _, _) in enumerate(cond_windows)
-    ]
 
     def _stack(key: str):
         """One kind's rows from every chromophore, tagged, or None when nothing ran."""
@@ -1417,7 +1443,8 @@ def build_hyper_post_report(
     # while a wavelet transform of a cut window has two edges and a cone of its own. See
     # `compute_isc` and `window_result`, which each say why they do it their way.
     def _isc_panel(ch_type: str, label: "str | None" = None,
-                   window: "tuple[float, float] | None" = None) -> tuple:
+                   window: "tuple[float, float] | None" = None,
+                   pair: "tuple[str, str] | None" = None) -> tuple:
         """(panel, matrix, channel names) for one scope. The matrix comes back as well as
         the figure because the numbers table prints it beside the coherence."""
         what = f"condition {label}" if label else "whole run"
@@ -1425,7 +1452,8 @@ def build_hyper_post_report(
         panel: dict = {}
         isc_mat = isc_ch_names = None
         with guard(f"ISC panel ({what}, {ch_type})", errors, scope):
-            isc_mat, isc_ch_names = compute_isc(aligned_raws, subject_ids, ch_type,
+            pair_ids = list(pair) if pair else subject_ids
+            isc_mat, isc_ch_names = compute_isc(aligned_raws, pair_ids, ch_type,
                                                 sep_bands, window=window)
             if isc_mat is None:
                 return {}, None, None
@@ -1434,25 +1462,31 @@ def build_hyper_post_report(
             desc = f"_desc-{_pair_fname(label)}" if label else ""
             write_isc_matrix(
                 group_data_dir(output_dir, group_id)
-                / f"group-{group_id}_task-{task}{desc}_hyper-isc-{ch_type}.tsv",
+                / f"group-{group_id}_task-{task}{desc}"
+                  f"_hyper-isc-{ch_type}{_pair_slug(pair)}.tsv",
                 isc_mat, isc_ch_names, ch_type,
                 [p for p in (path_from(r) for r in aligned_raws.values()) if p],
-                subject_ids,
+                pair_ids,
                 align=align_info,
             )
             panel = _fig_html(build_isc_panel(
-                isc_mat, isc_ch_names, subject_ids,
+                isc_mat, isc_ch_names, pair_ids,
                 ch_type=ch_type, isc_threshold=isc_threshold,
-            ), f"isc_{ch_type}{suffix}.html") or {}
+            ), f"isc_{ch_type}{_pair_slug(pair)}{suffix}.html") or {}
         return panel, isc_mat, isc_ch_names
 
     # {label or None: {chromophore: href}}, one entry per page below, and the same keys over
     # the matrices those figures were drawn from
-    isc_runs = {None: {c: _isc_panel(c, window=analysis_window) for c in ("hbo", "hbr")}}
-    for label, tstart, tstop in cond_windows:
-        isc_runs[label] = {c: _isc_panel(c, label, (tstart, tstop)) for c in ("hbo", "hbr")}
-    isc_panels = {k: {c: v[0] for c, v in row.items()} for k, row in isc_runs.items()}
-    isc_values = {k: {c: v[1:] for c, v in row.items()} for k, row in isc_runs.items()}
+    isc_panels: dict = {}
+    isc_values: dict = {}
+    for pr in pairings:
+        runs = {None: {c: _isc_panel(c, window=analysis_window, pair=pr)
+                       for c in ("hbo", "hbr")}}
+        for label, tstart, tstop in cond_windows:
+            runs[label] = {c: _isc_panel(c, label, (tstart, tstop), pair=pr)
+                           for c in ("hbo", "hbr")}
+        isc_panels[pr] = {k: {c: v[0] for c, v in row.items()} for k, row in runs.items()}
+        isc_values[pr] = {k: {c: v[1:] for c, v in row.items()} for k, row in runs.items()}
 
     # ISC has no frequency axis, so an unfiltered stage reaches the number directly; WTC
     # does not care. Said on the page as well as in the log, since the two are read by
@@ -1490,10 +1524,11 @@ def build_hyper_post_report(
     # same as the run page of a tree where that condition was cropped to its own task, and
     # the two are not the same number: one carries the whole recording's cone of influence
     # and the other two edges of its own.
-    def _page_path(label: "str | None") -> Path:
+    def _page_path(label: "str | None", pair: "tuple[str, str] | None" = None) -> Path:
         desc = "hyperpost" if label is None else f"{_pair_fname(label)}_hyperpost"
         return (group_report_dir(output_dir, group_id)
-                / f"group-{group_id}_task-{task}_desc-{desc}_nirs.html")
+                / f"group-{group_id}_task-{task}_desc-{desc}"
+                  f"{_pair_slug(pair)}_nirs.html")
 
     # every page carries the whole strip, so any one of them reaches the others in a click
     nav_pages = [(None, "Whole run")] + [(label, label) for label, _, _ in cond_windows]
@@ -1583,7 +1618,8 @@ def build_hyper_post_report(
         return {"kind": kind, "columns": columns, "rows": rows} if rows else {}
 
     def _render_page(figs: dict, matrices: dict, band_frames: dict, label: "str | None",
-                     window: "tuple[float, float] | None") -> Path:
+                     window: "tuple[float, float] | None",
+                     pair: "tuple[str, str] | None" = None) -> Path:
         """One page: the whole run's when ``label`` is None, else that condition's.
 
         Both go through this, so a panel cannot exist on the run's page and be missing from
@@ -1613,17 +1649,19 @@ def build_hyper_post_report(
 
         # the same scope the panels above were drawn over, printed rather than coloured
         bands = {c: (band_frames.get(c) or {}) for c in chroma}
+        pair_ids = list(pair) if pair else subject_ids
         number_tables = [t for t in (
-            _number_table({c: bands[c].get("chan") for c in chroma},
-                          isc_values.get(label) or {}, chan_axis, "channel"),
-            _number_table({c: bands[c].get("roichan") for c in chroma},
+            _number_table({c: _slice_pair(bands[c].get("chan"), pair) for c in chroma},
+                          (isc_values.get(pair) or {}).get(label) or {},
+                          chan_axis, "channel"),
+            _number_table({c: _slice_pair(bands[c].get("roichan"), pair) for c in chroma},
                           None, roi_labels, "ROI"),
         ) if t]
 
-        out_path = _page_path(label)
+        out_path = _page_path(label, pair)
         heading = f"group-{group_id}_task-{task}"
         nav_meta = [("group", group_id), ("task", task),
-                    ("subjects", ", ".join(subject_ids))]
+                    ("subjects", ", ".join(pair_ids))]
         if label is not None:
             nav_meta.insert(2, ("condition", label))
 
@@ -1644,7 +1682,7 @@ def build_hyper_post_report(
             ),
             group_id=group_id,
             task=task,
-            subject_ids=subject_ids,
+            subject_ids=pair_ids,
             wtc_fmin=wtc_fmin,
             wtc_fmax=wtc_fmax,
             wtc_band_fmin=band_fmin,
@@ -1685,33 +1723,51 @@ def build_hyper_post_report(
                              if analysis_window else ""),
             window_cycles=_band_cycles(window or analysis_window, wtc_band_fmin),
             min_band_cycles=MIN_BAND_CYCLES,
-            run_href=_page_path(None).name,
+            run_href=_page_path(None, pair).name,
             # this page's own name, which is what the rating server files a verdict under
             page_stem=out_path.stem,
-            nav_links=[{"label": text, "href": _page_path(lab).name,
-                        "current": lab == label} for lab, text in nav_pages],
+            nav_links=[{"label": text, "href": _page_path(lab, pair).name,
+                        "current": lab == label} for lab, text in nav_pages]
+                      + ([] if len(pairings) < 2 else
+                         [{"label": " × ".join(pr), "href": _page_path(label, pr).name,
+                           "current": pr == pair} for pr in pairings]),
             isc_unfiltered_note=isc_unfiltered_note,
-            isc_panel_hbo=isc_panels.get(label, {}).get("hbo") or {},
-            isc_panel_hbr=isc_panels.get(label, {}).get("hbr") or {},
+            isc_panel_hbo=(isc_panels.get(pair) or {}).get(label, {}).get("hbo") or {},
+            isc_panel_hbr=(isc_panels.get(pair) or {}).get(label, {}).get("hbr") or {},
             subject_metrics_rows=(run_metric_rows if label is None
                                   else cond_metric_rows.get(label, [])),
         )
         out_path.write_text(html, encoding="utf-8")
         return out_path
 
-    # the conditions first and the run last, so the run's page carries the complete error
-    # and note lists: a guard that failed while a window was being drawn belongs on both
-    for i, (label, tstart, tstop) in enumerate(cond_windows):
-        figs = {c: (passes[c]["cond_figs"][i] if i < len(passes[c]["cond_figs"]) else {})
-                for c in chroma}
-        bands = {c: (passes[c]["cond_bands"][i] if i < len(passes[c]["cond_bands"]) else {})
-                 for c in chroma}
-        written = _render_page(figs, cond_matrices[i], bands, label, (tstart, tstop))
-        logger.info("group-%s | condition %s → %s", group_id, label, written.name)
+    # One set of pages per pairing, and inside each the conditions first and the run last,
+    # so the run's page carries the complete error and note lists: a guard that failed while a
+    # window was being drawn belongs on both. The path returned is the first pairing's run
+    # page, which for a dyad is the only one there has ever been.
+    output_path = None
+    for pr in pairings:
+        pair_figs = {c: _figures_for(c, passes[c], pr) for c in chroma}
+        run_matrices = _matrix_set(
+            {c: {"chan": passes[c]["chan"], "roichan": passes[c]["roichan"]}
+             for c in chroma}, "", "whole run", pr)
 
-    output_path = _render_page(
-        {c: passes[c]["run_figs"] for c in chroma}, run_matrices,
-        {c: {"chan": passes[c]["chan"], "roichan": passes[c]["roichan"]} for c in chroma},
-        None, None)
-    logger.info("Hyper post report saved: %s", output_path)
+        for i, (label, tstart, tstop) in enumerate(cond_windows):
+            figs = {c: (pair_figs[c]["cond_figs"][i]
+                        if i < len(pair_figs[c]["cond_figs"]) else {}) for c in chroma}
+            bands = {c: (passes[c]["cond_bands"][i]
+                         if i < len(passes[c]["cond_bands"]) else {}) for c in chroma}
+            written = _render_page(
+                figs,
+                _matrix_set(bands, f"_{_pair_fname(label)}", f"condition {label}", pr),
+                bands, label, (tstart, tstop), pr)
+            logger.info("group-%s | %s condition %s → %s",
+                        group_id, " × ".join(pr), label, written.name)
+
+        written = _render_page(
+            {c: pair_figs[c]["run_figs"] for c in chroma}, run_matrices,
+            {c: {"chan": passes[c]["chan"], "roichan": passes[c]["roichan"]}
+             for c in chroma},
+            None, None, pr)
+        logger.info("Hyper post report saved: %s", written)
+        output_path = output_path or written
     return output_path

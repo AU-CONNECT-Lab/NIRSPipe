@@ -165,32 +165,53 @@
 {% endif %}
 
 <!-- ======================================================== 3. motion -->
-{% if figure_paths.motion %}
+{% if figure_paths.motion_before %}
 <h2 id="Motion">3 &middot; Motion, and whether they moved together</h2>
 <p class="step-desc">SCI and PSP are blind to movement by construction, so the carpet above
   can say a pair decoupled but never that the member moved. Each trace is that
   member&rsquo;s GVTD divided by its own median: GVTD is an RMS of optical-density
   derivatives in the recording&rsquo;s own units, so two members&rsquo; raw traces are not on
   one scale and &ldquo;who moved more&rdquo; is the one reading a shared axis could not
-  support. At &times; its own median, 1.0 is that member&rsquo;s usual level for both.</p>
+  support. At &times; its own median, 1.0 is that member&rsquo;s usual level for both. The
+  grey floor under the two traces is their pointwise minimum, which is high only where both
+  are high: simultaneous movement, with no cutoff to choose.</p>
 
 <details id="MotionPanel" open>
-  <summary>a. Over the shared clock</summary>
+  <summary>a. As it arrived</summary>
   <div class="details-body">
-    <iframe class="plotly-frame" src="{{ figure_paths.motion.src }}"
-            title="motion per member over the shared clock"
-            style="height:{{ figure_paths.motion.h }}px"></iframe>
-    <p class="qm-note">The dotted rule is the line a window counts as movement at; the red
-      bands are where <em>both</em> members were above their own.</p>
-    <p class="fig-path">{{ figure_paths.motion.src }}</p>
+    <iframe class="plotly-frame" src="{{ figure_paths.motion_before.src }}"
+            title="motion per member over the shared clock, before correction"
+            style="height:{{ figure_paths.motion_before.h }}px"></iframe>
+    <p class="qm-note">The amber strip marks the spans where <em>every</em> member was
+      spiking at once; a member spiking alone costs that member&rsquo;s channels, which the
+      usable-time carpet above already shows. The grey carpets are each member&rsquo;s
+      per-channel optical density, z-scored the way the subject report draws it.</p>
+    <p class="fig-path">{{ figure_paths.motion_before.src }}</p>
   </div>
 </details>
 
+{% if figure_paths.motion_after %}
+<details id="MotionAfter" open>
+  <summary>b. After motion correction</summary>
+  <div class="details-body">
+    <p class="step-desc">The same rows on the same axes, off each member&rsquo;s
+      motion-corrected derivative. Both figures divide by the <em>uncorrected</em> median
+      and both carpets are z-scored by the <em>uncorrected</em> mean and SD, so a fall here
+      is movement removed rather than the yardstick following the data.</p>
+    <iframe class="plotly-frame" src="{{ figure_paths.motion_after.src }}"
+            title="motion per member over the shared clock, after correction"
+            style="height:{{ figure_paths.motion_after.h }}px"></iframe>
+    <p class="fig-path">{{ figure_paths.motion_after.src }}</p>
+  </div>
+</details>
+{% endif %}
+
 <details id="MotionTogether" open>
-  <summary>b. Simultaneous movement</summary>
+  <summary>{% if figure_paths.motion_after %}c{% else %}b{% endif %}. Simultaneous
+    movement</summary>
   <div class="details-body">
     <p class="step-desc">A member moving alone costs that member&rsquo;s channels, which the
-      panel above already shows. <b>Both moving at once is the dyad&rsquo;s problem</b>: it
+      panels above already show. <b>Both moving at once is the dyad&rsquo;s problem</b>: it
       raises any synchrony measure taken on the pair, and a shifted or scrambled copy of one
       member does not remove it. This is what the screening synchrony below has to be read
       against.</p>
@@ -566,9 +587,10 @@ function _set(id, text, cls) {
   var m = _SQM.motion || {};
   var el = document.getElementById("motion-list");
   if (!el) return;
-  var above = m.above || {};
-  var names = Object.keys(above);
-  if (!names.length) {
+  var sets = Object.keys(m).filter(function(k) {
+    return m[k] && typeof m[k] === "object" && m[k].before;
+  });
+  if (!sets.length) {
     el.innerHTML = "<li><span class='ql'>no motion trace on either member</span></li>";
     return;
   }
@@ -576,18 +598,33 @@ function _set(id, text, cls) {
     return "<li><span class='ql'>" + label + "</span>" +
            "<span class='qv" + (cls ? " " + cls : "") + "'>" + value + "</span></li>";
   }
+  var unit = m.unit || "x its own before-median";
   var html = "";
-  names.forEach(function(sid) {
-    html += li(sid + " above its own line", (above[sid] * 100).toFixed(1) + "%");
+  sets.forEach(function(set) {
+    var s = m[set];
+    ["before", "after"].forEach(function(stage) {
+      if (!s[stage]) return;
+      Object.keys(s[stage]).forEach(function(key) {
+        // "together" is the mean of the pointwise minimum: high only where both were high
+        var label = set + " " + stage + " · " +
+                    (key === "together" ? "both at once" : key);
+        html += li(label, s[stage][key].toFixed(2) + "x");
+      });
+    });
+    if (s.reduction != null) {
+      // what the correction took off the simultaneous movement; a negative value means it
+      // put some back, which is worth looking at rather than rounding away
+      var cls = s.reduction >= 0.3 ? "qm-ok" : s.reduction > 0 ? "qm-warn" : "qm-bad";
+      html += li(set + " · simultaneous movement removed",
+                 (s.reduction * 100).toFixed(0) + "%", cls);
+    }
   });
-  if (m.together != null) {
-    // the ratio is the number to read: a pair that moved independently lands near 1
-    var cls = m.ratio == null ? "" : (m.ratio >= 2 ? "qm-bad" : m.ratio >= 1.5 ? "qm-warn" : "qm-ok");
-    html += li("both at once", (m.together * 100).toFixed(1) + "%");
-    html += li("expected if independent", (m.expected * 100).toFixed(1) + "%");
-    html += li("observed / expected", m.ratio != null ? m.ratio.toFixed(2) + "x" : "—", cls);
-  }
-  html += li("counts as movement at", m.factor + " x its own median");
+  // counted on the canonical channel set alone, so it sits outside the per-set block
+  var spans = m.spike_spans_both || {};
+  Object.keys(spans).forEach(function(stage) {
+    html += li(stage + " · spans both were spiking", spans[stage]);
+  });
+  html += li("unit", unit);
   el.innerHTML = html;
 })();
 

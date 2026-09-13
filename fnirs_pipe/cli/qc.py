@@ -142,10 +142,12 @@ def cmd_hyper_raw(
     from fnirs_pipe.cli.hyper import _run_groups, _select_groups
     from fnirs_pipe.pipeline.hyperscanning import (
         _raw_to_haemo,
+        align_like,
         align_recordings,
         compute_group_sqm_raw,
         crop_aligned_window,
         load_group_raw_bids,
+        load_group_stage,
         normalize_raws,
         trim_to_shortest,
     )
@@ -170,6 +172,14 @@ def cmd_hyper_raw(
         aligned_raws = crop_aligned_window(aligned_raws, tstart, tend)
         if normalize:
             aligned_raws = normalize_raws(aligned_raws)
+        # the motion panel needs optical density, which the haemoglobin conversion above
+        # has already left behind, so the intensity copy is cut to the same window rather
+        # than aligned a second time. The corrected file is whatever the member's own
+        # `fnirs-pipe` run left in derivatives, and is simply absent for a member who has
+        # not been through one.
+        intensity_raws = align_like(raws_cw, aligned_raws)
+        after_raws = align_like(load_group_stage(output_dir, members, "motcorrected"),
+                                aligned_raws)
         return build_hyper_report(
             group_id=gid,
             task=task,
@@ -178,6 +188,8 @@ def cmd_hyper_raw(
             aligned_raws=aligned_raws,
             offsets=offsets,
             raw_raws=raws_haemo,
+            intensity_raws=intensity_raws,
+            after_raws=after_raws,
             output_dir=output_dir,
             sep_bands=sep_bands,
             session=ses,

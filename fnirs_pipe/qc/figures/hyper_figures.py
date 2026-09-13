@@ -505,113 +505,461 @@ def build_usable_time(
 # Figure: motion, and whether the two moved together
 # ---------------------------------------------------------------------------
 
-# How far above its own usual level a member has to be for a window to count as movement.
-# A multiple of the median rather than `gvtd_thresh`, which on d01 sits an order of magnitude
-# below `gvtd_mean` and would mark almost every window.
-MOTION_FACTOR = 1.5
+# The motion panel is two figures, one for the recording as it arrived and one for the
+# motion-corrected file, rather than one figure carrying both. They hold the same rows in
+# the same order on the same axes, so the correction is read by looking from one to the
+# other; stacking before and after in one figure doubled its height and put the comparison
+# between rows that were already a channel set apart.
+
+# Colour is the member, and nothing else: the channel set is the row, and before/after is
+# the figure. A third thing encoded in hue is what made the earlier draft unreadable.
+_MEMBER_COLOURS = ["#4c72b0", "#c44e52", "#55a868", "#8172b3"]
+# The shared floor under both traces. Grey rather than a fourth member colour, since it
+# belongs to the pair and not to either of them.
+_TOGETHER_FILL = "rgba(120,120,130,0.30)"
+_SPIKE_BOTH = "rgba(245,158,11,0.9)"
+
+_MOTION_ROW_PX = 84
+_MOTION_CARPET_PX = 240
+_SPIKE_ROW_PX = 26
+# Headroom over the 99.5th percentile of every trace on a set's rows. One brief sample can
+# be a hundred times the median here, and scaling to the maximum would flatten the rest of
+# the recording onto the axis; each row's own maximum stays printed in the margin.
+_MOTION_CAP_PCTL = 99.5
+_MOTION_HEADROOM = 1.35
+# Spikes land a few seconds apart for most of a noisy recording, which as separate marks is
+# a grey wash rather than a set of events. Runs closer than this are one mark.
+SPIKE_MERGE_S = 2.0
 
 
-def build_motion_panel(
-    series: dict[str, dict],
-    subject_ids: list[str],
-    conditions: "dict[str, tuple[float, float]] | None" = None,
-    factor: float = MOTION_FACTOR,
-) -> "tuple[go.Figure | None, dict]":
-    """Each member's motion over the shared clock, and where the two moved at once.
+def _merge_spans(spans, gap: float = SPIKE_MERGE_S):
+    """Join spans whose gap is under ``gap`` seconds.
 
     ::
 
-      -> (figure, {"above": {"sub-01": 0.11}, "together": 0.04, "expected": 0.012,
-                   "ratio": 3.4, "factor": 1.5})
-
-    **Simultaneous motion is a dyad problem, not two individual ones.** A member moving alone
-    costs that member's channels, which the usable-time carpet already shows. Both moving at
-    once is the case that survives a surrogate null: it raises any synchrony measure taken on
-    the pair and a shifted or scrambled copy of one member does not remove it, so this panel
-    is what the screening synchrony has to be read against.
-
-    Each trace is divided by that member's own median, because GVTD is an RMS of
-    optical-density derivatives in the recording's own units: two members' raw traces do not
-    share a scale, and "who moved more" is the one reading a common axis could not support.
-    At x its own median, 1.0 is that member's usual level for both of them.
-
-    The share expected if the two moved independently is the product of their own shares, and
-    the ratio of observed to expected is the number to read. Returns ``(None, {})`` when no
-    member carries a motion trace.
+        [(1.0, 0.2), (1.9, 0.3), (40.0, 0.1)], gap 2  ->  [(1.0, 1.2), (40.0, 0.1)]
     """
-    have = [sid for sid in subject_ids if "gvtd" in (series.get(sid) or {})]
-    if len(have) < 1:
-        return None, {}
+    out: list[list[float]] = []
+    for onset, duration in sorted((float(o), float(d)) for o, d in spans):
+        if out and onset - (out[-1][0] + out[-1][1]) < gap:
+            out[-1][1] = max(out[-1][0] + out[-1][1], onset + duration) - out[-1][0]
+        else:
+            out.append([onset, duration])
+    return [(o, d) for o, d in out]
 
-    t = np.asarray((series[have[0]] or {})["t"], dtype=float)
-    traces, flags = {}, {}
+
+def _spans_to_mask(spans, t: np.ndarray) -> np.ndarray:
+    m = np.zeros(len(t), dtype=bool)
+    for onset, duration in spans:
+        m |= (t >= onset) & (t <= onset + duration)
+    return m
+
+
+def _mask_to_spans(mask: np.ndarray, t: np.ndarray):
+    if not mask.any():
+        return []
+    edges = np.flatnonzero(np.diff(np.concatenate([[0], mask.view(np.int8), [0]])))
+    return [(float(t[a]), float(t[min(b, len(t) - 1)] - t[a]))
+            for a, b in zip(edges[::2], edges[1::2])]
+
+
+def motion_series(
+    intensity_raws: dict[str, "mne.io.Raw"],
+    after_raws: "dict[str, mne.io.Raw] | None",
+    subject_ids: list[str],
+    sep_bands=None,
+) -> dict:
+    """Everything the two motion figures draw, measured once off the aligned recordings.
+
+    ::
+
+      -> {"subject_ids": [...], "t": (39610,), "sets": ["long", "short"],
+          "stages": ["before", "after"],
+          "series": {"before": {"long": [("sub-01", (39610,)), ...]}, ...},
+          "spikes_both": {"before": [(412.0, 3.1), ...]},
+          "carpets": {"before": [("sub-01", z, t, labels, spans)]},
+          "y_tops": {"long": 11.4}, "divisors": {("sub-01", "long"): 4.1e-04}}
+
+    **Each member is divided by its own before-median, and the corrected traces are divided
+    by that same number.** GVTD is an RMS of optical-density derivatives in the recording's
+    own units, so two members' raw traces share no scale and "who moved more" is the one
+    reading a common axis could not support; at x its own median, 1.0 is that member's usual
+    level for both of them. Dividing the corrected trace by its *own* median instead would
+    divide out exactly the shrinkage the second figure exists to show.
+
+    One y range per channel set, shared by that set's before and after rows, which is what
+    makes the correction readable as a drop. Long and short do not share one: each pair of
+    (member, set) is divided by its own median, so a "x median" on the long channels is not
+    the same quantity as one on the short.
+
+    Spikes are kept only where **every** member was spiking at once. A member spiking alone
+    costs that member's channels, which the usable-time carpet already shows; both at once is
+    the case that survives a surrogate null and raises any synchrony measure taken on the
+    pair. Per-member spike lanes were drawn and dropped: on the reference dyad they are 530
+    to 570 runs each and read as a wash.
+
+    Returns ``{}`` when no member carries usable optical density.
+    """
+    from fnirs_pipe.qc.figures.motion_panel import carpet_z
+    from fnirs_pipe.qc.metrics import (
+        GVTD_MOTION_BAND, gvtd_channel_blocks, gvtd_timetrace, spike_segments,
+    )
+
+    have = [sid for sid in subject_ids if sid in intensity_raws]
+    if not have:
+        return {}
+
+    stages: list[str] = ["before"]
+    series: dict[str, dict[str, list]] = {"before": {}}
+    carpets: dict[str, list] = {"before": []}
+    spikes: dict[str, dict[str, np.ndarray]] = {"before": {}}
+    divisors: dict[tuple, float] = {}
+    sets: list[str] = []
+    t = None
+
     for sid in have:
-        y = np.asarray(series[sid]["gvtd"], dtype=float)
-        mid = float(np.nanmedian(y))
-        traces[sid] = y / mid if np.isfinite(mid) and mid else y
-        flags[sid] = traces[sid] >= factor
+        raw = intensity_raws[sid]
+        try:
+            od = mne.preprocessing.nirs.optical_density(raw.copy(), verbose=False)
+        except Exception:
+            logger.warning("%s: optical density failed; no motion row", sid, exc_info=True)
+            continue
+        sfreq = float(od.info["sfreq"])
+        times = od.times
+        if t is None or len(times) - 1 < len(t):
+            t = times[1:]
 
-    summary = {"factor": factor,
-               "above": {sid: round(float(flags[sid].mean()), 4) for sid in have}}
-    if len(have) >= 2:
-        both = np.logical_and.reduce([flags[sid] for sid in have])
-        expected = float(np.prod([flags[sid].mean() for sid in have]))
-        summary["together"] = round(float(both.mean()), 4)
-        summary["expected"] = round(expected, 4)
-        summary["ratio"] = round(float(both.mean() / expected), 2) if expected else None
-    else:
-        both = np.zeros(len(t), dtype=bool)
+        after_od = (after_raws or {}).get(sid)
+        blocks = [(name, [c for c in names if c in od.ch_names])
+                  for name, names in gvtd_channel_blocks(raw, sep_bands)]
+        blocks = [(name, names) for name, names in blocks if names]
+        ordered = [c for _, names in blocks for c in names]
+        od_data = od.get_data(picks=ordered)
+        after_data = _matched_after(after_od, ordered, od_data.shape, sfreq, sid)
 
-    rows = 2 if conditions else 1
-    heights = [34 / 250, 216 / 250] if conditions else [1.0]
-    fig = make_subplots(rows=rows, cols=1, shared_xaxes=True, vertical_spacing=0.04,
-                        row_heights=heights)
-    r = rows
+        start = 0
+        carpet_spans = []
+        for name, names in blocks:
+            rows = slice(start, start + len(names))
+            carpet_spans.append((name, start, start + len(names) - 1))
+            start += len(names)
+            if name not in sets:
+                sets.append(name)
+            g = gvtd_timetrace(od_data[rows], sfreq, *GVTD_MOTION_BAND)
+            mid = float(np.nanmedian(g))
+            mid = mid if np.isfinite(mid) and mid > 0 else 1.0
+            divisors[(sid, name)] = mid
+            series["before"].setdefault(name, []).append((sid, g / mid))
+            if after_data is not None:
+                if "after" not in stages:
+                    stages.append("after")
+                    series["after"], carpets["after"], spikes["after"] = {}, [], {}
+                after_g = gvtd_timetrace(after_data[rows], sfreq, *GVTD_MOTION_BAND)
+                series["after"].setdefault(name, []).append((sid, after_g / mid))
 
-    if conditions:
+        # spikes on the canonical set only: the test is ">= 10% of *these* channels", and
+        # one lane a member per set is more marks than the strip can carry
+        canonical = blocks[0][1]
+        for stage, source in (("before", od), ("after", after_od)):
+            if stage not in stages or source is None:
+                continue
+            try:
+                picked = source.copy().pick([c for c in canonical if c in source.ch_names])
+                spikes[stage][sid] = _spans_to_mask(spike_segments(picked), t)
+            except Exception:
+                logger.warning("%s: spike spans failed on the %s file", sid, stage,
+                               exc_info=True)
+
+        z, t_carpet, stats = carpet_z(od_data, times)
+        carpets["before"].append((sid, z, t_carpet, ordered, carpet_spans))
+        if after_data is not None:
+            carpets["after"].append(
+                (sid, carpet_z(after_data, times, stats=stats)[0], t_carpet,
+                 ordered, carpet_spans))
+
+    if not sets or t is None:
+        return {}
+
+    # a stage only one member has is worse than no stage: the reader would be handed a
+    # "both at once" floor drawn from a single trace
+    if "after" in stages and any(
+            len(series["after"].get(name) or []) != len(series["before"].get(name) or [])
+            for name in sets):
+        logger.warning("only some members have a motion-corrected file; dropping the "
+                       "corrected figure rather than drawing one member in it")
+        stages.remove("after")
+
+    # aligned recordings are one length by construction, but a member read from a different
+    # stage can be a sample short; one length here keeps the pointwise minimum defined
+    n = min(len(y) for stage in stages for v in series[stage].values() for _, y in v)
+    n = min(n, len(t))
+    t = t[:n]
+    for stage in stages:
+        series[stage] = {name: [(sid, y[:n]) for sid, y in v]
+                         for name, v in series[stage].items()}
+
+    # one range a set, over both stages, so the after figure's rows are not rescaled to
+    # their own smaller numbers and the drop disappears
+    y_tops = {}
+    for name in sets:
+        flat = [y for stage in stages for _, y in series[stage].get(name, [])]
+        y_tops[name] = (float(np.nanpercentile(np.concatenate(flat), _MOTION_CAP_PCTL))
+                        * _MOTION_HEADROOM) if flat else 1.0
+
+    spikes_both = {}
+    for stage in stages:
+        lanes = [m[:n] for m in spikes.get(stage, {}).values() if m is not None]
+        # every member, not any: a span one of them was spiking through is that member's
+        # problem and the usable-time carpet already carries it
+        both = (np.logical_and.reduce(lanes)
+                if len(lanes) == len(have) and len(lanes) > 1
+                else np.zeros(n, dtype=bool))
+        spikes_both[stage] = _merge_spans(_mask_to_spans(both, t))
+
+    return {"subject_ids": have, "t": t, "sets": sets, "stages": stages,
+            "series": series, "spikes_both": spikes_both, "carpets": carpets,
+            "y_tops": y_tops, "divisors": divisors}
+
+
+def _matched_after(after_od, ch_names, shape, sfreq, sid):
+    """The corrected recording over ``ch_names``, or None if it does not line up.
+
+    A near miss is worse than nothing: GVTD over a different channel set differs severalfold
+    on one recording, and the second figure would show that as an effect of the correction.
+    """
+    if after_od is None:
+        return None
+    if not set(ch_names) <= set(after_od.ch_names):
+        logger.warning("%s: the corrected file is missing channels the panel draws; "
+                       "no after figure", sid)
+        return None
+    if abs(float(after_od.info["sfreq"]) - sfreq) > 1e-6:
+        logger.warning("%s: the corrected file is at a different sampling rate; "
+                       "no after figure", sid)
+        return None
+    data = after_od.get_data(picks=ch_names)
+    if data.shape != shape:
+        logger.warning("%s: the corrected file has a different length; no after figure", sid)
+        return None
+    return data
+
+
+def motion_summary(motion: dict) -> dict:
+    """The dyad's motion scalars, in the same units the figures are drawn in.
+
+    ::
+
+      -> {"unit": "x its own before-median",
+          "long": {"before": {"sub-01": 1.61, "sub-02": 1.51, "together": 0.95},
+                   "after": {...}, "reduction": 0.33}, ...}
+
+    ``together`` is the mean of the pointwise minimum of the members' traces, which is high
+    only where both were high. It replaced a count of windows where both crossed a line: the
+    histogram-mode GVTD threshold marks 40 to 55% of the samples on the reference dyad, so a
+    "both above" share built on it was not a measurement of anything. A minimum needs no
+    cutoff chosen, and being a mean of the same normalised trace it is comparable between
+    stages. ``reduction`` is the share of simultaneous movement the correction removed.
+    """
+    if not motion:
+        return {}
+    out: dict = {"unit": "x its own before-median", "stages": list(motion["stages"])}
+    for name in motion["sets"]:
+        per_set: dict = {}
+        for stage in motion["stages"]:
+            entries = motion["series"][stage].get(name) or []
+            if not entries:
+                continue
+            row = {sid: round(float(np.nanmean(y)), 3) for sid, y in entries}
+            if len(entries) > 1:
+                mins = np.minimum.reduce([y for _, y in entries])
+                row["together"] = round(float(np.nanmean(mins)), 3)
+            per_set[stage] = row
+        before, after = per_set.get("before"), per_set.get("after")
+        if before and after and before.get("together"):
+            per_set["reduction"] = round(
+                1.0 - after["together"] / before["together"], 3)
+        out[name] = per_set
+    # not nested under a set: the spike test runs on the canonical set alone, so a count
+    # printed under "short" would be a claim about channels it never looked at
+    out["spike_spans_both"] = {stage: len(motion["spikes_both"].get(stage) or [])
+                               for stage in motion["stages"]}
+    return out
+
+
+def build_motion_panel(
+    motion: dict,
+    stage: str = "before",
+    conditions: "dict[str, tuple[float, float]] | None" = None,
+) -> "go.Figure | None":
+    """One stage of the motion panel: a GVTD row per channel set, both members in each.
+
+    ::
+
+      build_motion_panel(motion, "after", conditions)  ->  figure
+
+    **Simultaneous motion is a dyad problem, not two individual ones.** A member moving
+    alone costs that member's channels, which the usable-time carpet already shows. Both
+    moving at once raises any synchrony measure taken on the pair, and a shifted or
+    scrambled copy of one member does not remove it, so this is what the screening synchrony
+    has to be read against. It is drawn as the pointwise minimum of the two traces, filled
+    to the axis: high only where both are high, and needing no threshold to be picked.
+
+    Under the rows sits the spike strip, marking only the spans where every member was
+    spiking at once, and under that each member's z-scored optical-density carpet, drawn by
+    the subject report's own :func:`~fnirs_pipe.qc.figures.motion_panel.add_carpet` so the
+    dyad's image and the member's own cannot drift apart.
+
+    Row titles and the run's numbers sit in the left margin rather than inside the panels: a
+    noisy recording fills its rows top to bottom and anything drawn inside one ends up under
+    the data.
+
+    Returns None for a stage the dyad has no data for.
+    """
+    if not motion or stage not in motion.get("stages", []):
+        return None
+    sids = motion["subject_ids"]
+    t = motion["t"]
+    sets = [s for s in motion["sets"] if motion["series"][stage].get(s)]
+    if not sets:
+        return None
+
+    from fnirs_pipe.qc.figures.motion_panel import (
+        _maxpool_xy, _px_rows, _span_polygons, add_carpet, carpet_coloraxis,
+    )
+
+    spans_both = motion["spikes_both"].get(stage) or []
+    carpets = motion["carpets"].get(stage) or []
+    has_cond = bool(conditions)
+    has_spikes = bool(spans_both)
+    n_rows = int(has_cond) + len(sets) + int(has_spikes) + len(carpets)
+
+    heights = (([TIMELINE_ROW_PX - 10] if has_cond else [])
+               + [_MOTION_ROW_PX] * len(sets)
+               + ([_SPIKE_ROW_PX] if has_spikes else [])
+               + [_MOTION_CARPET_PX] * len(carpets))
+    vspace = 0.022
+    row_heights, total_px = _px_rows(heights, vspace, chrome_px=150)
+    titles = ([""] * (n_rows - len(carpets))
+              + [f"{sid} carpet ({stage})" for sid, *_ in carpets])
+    fig = make_subplots(rows=n_rows, cols=1, shared_xaxes=True, row_heights=row_heights,
+                        vertical_spacing=vspace, subplot_titles=titles)
+    for ann in fig.layout.annotations:
+        ann.yshift = 3
+
+    ri = 1
+    if has_cond:
         colours = _cond_colors(list(conditions))
         for name, (a, b) in conditions.items():
             fig.add_trace(go.Bar(
                 x=[b - a], y=[0], base=[a], orientation="h", width=0.55,
-                marker=dict(color=colours[name], opacity=0.9, cornerradius=3,
-                            line=dict(width=0)),
+                marker=dict(color=colours[name], opacity=0.9, line=dict(width=0)),
                 name=name, legendgroup=name, showlegend=True,
                 hovertemplate=f"<b>{name}</b><br>%{{base:.0f}} to {b:.0f} s<extra></extra>",
             ), row=1, col=1)
         fig.update_yaxes(showticklabels=False, showgrid=False, range=[-0.5, 0.5],
                          row=1, col=1)
+        ri = 2
 
-    # the windows both were above their own line, under the traces rather than beside them
-    if len(have) >= 2 and both.any():
-        edges = np.flatnonzero(np.diff(np.concatenate([[0], both.view(np.int8), [0]])))
-        for a, b in zip(edges[::2], edges[1::2]):
-            fig.add_vrect(x0=t[a], x1=t[min(b, len(t) - 1)], fillcolor=_BAD_COLOR,
-                          opacity=0.18, line_width=0, row=r, col=1)
+    shown: set[str] = set()
+    for name in sets:
+        entries = motion["series"][stage][name]
+        y_top = motion["y_tops"][name]
 
-    for sid, colour in zip(have, _LEAD_COLOURS):
+        if len(entries) > 1:
+            mins = np.minimum.reduce([y for _, y in entries])
+            t_ds, m_ds = _maxpool_xy(t, mins)
+            fig.add_trace(go.Scatter(
+                x=t_ds, y=m_ds, mode="lines", fill="tozeroy", fillcolor=_TOGETHER_FILL,
+                line=dict(width=0), name="both at once", legendgroup="both",
+                showlegend="both" not in shown,
+                hovertemplate="t=%{x:.0f}s<br>both >= %{y:.2f}x<extra></extra>",
+            ), row=ri, col=1)
+            shown.add("both")
+
+        for sid, y in entries:
+            t_ds, y_ds = _maxpool_xy(t, y)
+            fig.add_trace(go.Scatter(
+                x=t_ds, y=y_ds, mode="lines", name=sid, legendgroup=sid,
+                showlegend=sid not in shown, opacity=0.9,
+                line=dict(color=_MEMBER_COLOURS[sids.index(sid) % len(_MEMBER_COLOURS)],
+                          width=1.5),
+                hovertemplate=f"<b>{sid}</b><br>t=%{{x:.0f}}s<br>"
+                              "%{y:.2f}x its own median<extra></extra>",
+            ), row=ri, col=1)
+            shown.add(sid)
+
+        # 1.0 is where this member usually sits, by construction; it is a reference and not
+        # a cutoff, and nothing on the page is counted against it
+        fig.add_hline(y=1.0, row=ri, col=1,
+                      line=dict(color="#c8cfd6", width=1, dash="dot"))
+        fig.update_yaxes(range=[0, y_top], tickfont=dict(size=8), gridcolor="#eef1f4",
+                         zeroline=False, row=ri, col=1)
+        _margin_label(fig, ri, _motion_row_lines(name, entries, sids))
+        ri += 1
+
+    if has_spikes:
+        xs, ys = _span_polygons(spans_both, 0.15, 0.85)
         fig.add_trace(go.Scatter(
-            x=t, y=traces[sid], mode="lines", name=sid, legendgroup=sid,
-            line=dict(color=colour, width=1.3), opacity=0.95,
-            hovertemplate=f"<b>{sid}</b><br>t=%{{x:.0f}}s<br>"
-                          "%{y:.2f} x its own median<extra></extra>",
-        ), row=r, col=1)
-    fig.add_hline(y=factor, line_color="#adb5bd", line_width=1, line_dash="dot",
-                  row=r, col=1)
+            x=xs, y=ys, fill="toself", fillcolor=_SPIKE_BOTH, mode="lines",
+            line=dict(width=0), hoverinfo="skip", name="both spiking",
+            legendgroup="spikes", showlegend=True), row=ri, col=1)
+        fig.update_yaxes(range=[0, 1], showticklabels=False, showgrid=False,
+                         zeroline=False, row=ri, col=1)
+        _margin_label(fig, ri, [
+            "<b>both spiking</b>",
+            f"<span style='font-size:8px;color:#8b95a1'>&#8805;10% of channels each, "
+            f"merged &lt;{SPIKE_MERGE_S:g}s</span>",
+            f"<span style='font-size:8px;color:#8b95a1'>{len(spans_both)} spans</span>"])
+        ri += 1
+
+    for sid, z, t_carpet, labels, spans in carpets:
+        add_carpet(fig, ri, z, t_carpet, labels, spans)
+        ri += 1
 
     for a, b in (conditions or {}).values():
         for edge in (a, b):
             fig.add_vline(x=edge, line_color="#e3e8ec", line_width=1, line_dash="dot")
 
     fig.update_xaxes(gridcolor="#f5f5f5", zeroline=False, tickfont=dict(size=9))
-    fig.update_yaxes(gridcolor="#f0f0f0", zeroline=False, tickfont=dict(size=9))
-    _row_title(fig, r, "GVTD (x its own median)")
+    fig.update_xaxes(range=[float(t[0]), float(t[-1])])
     fig.update_xaxes(title_text="Time on the shared clock (s)", title_font=dict(size=10),
-                     row=r, col=1)
-    fig.update_layout(height=300 if conditions else 260, plot_bgcolor="white",
-                      barmode="overlay", margin=dict(l=112, r=24, t=48, b=48),
-                      legend=dict(orientation="h", yanchor="bottom", y=1.02,
+                     row=n_rows, col=1)
+    fig.update_layout(height=total_px, plot_bgcolor="white", barmode="overlay",
+                      coloraxis=carpet_coloraxis(y=0.2),
+                      margin=dict(l=200, r=24, t=56, b=48),
+                      legend=dict(orientation="h", yanchor="bottom", y=1.012,
                                   xanchor="right", x=1, font=dict(size=10)))
-    return fig, summary
+    return fig
+
+
+def _motion_row_lines(name: str, entries: list, sids: list[str]) -> list[str]:
+    """A GVTD row's margin block: the channel set, then one line of numbers per member."""
+    lines = [f"<b>GVTD {name}</b>",
+             "<span style='font-size:8px;color:#8b95a1'>&#215; own before-median &#183; "
+             "0.01-0.5 Hz</span>"]
+    for sid, y in entries:
+        colour = _MEMBER_COLOURS[sids.index(sid) % len(_MEMBER_COLOURS)]
+        lines.append(f"<span style='color:{colour};font-size:8px'>{sid}  "
+                     f"max {np.nanmax(y):.1f}&#215;  mean {np.nanmean(y):.2f}&#215;</span>")
+    if len(entries) > 1:
+        mins = np.minimum.reduce([y for _, y in entries])
+        lines.append(f"<span style='color:#78787f;font-size:8px'>both  "
+                     f"mean {np.nanmean(mins):.2f}&#215;</span>")
+    return lines
+
+
+def _margin_label(fig, row: int, lines: list[str]) -> None:
+    """A row's title and numbers, parked in the left margin clear of the data.
+
+    The row is named through ``yref`` rather than through ``row=``: passing the latter makes
+    plotly rewrite ``xref`` to that subplot's x axis, and an axis-referenced annotation
+    sitting at x=0 on an axis that starts at 0.1 s is clipped away silently.
+    """
+    # clear of the tick labels, which sit between the axis and the margin
+    fig.add_annotation(x=0, xref="paper", xshift=-36,
+                       y=0.5, yref=f"y{row if row > 1 else ''} domain",
+                       text="<br>".join(lines), showarrow=False, xanchor="right",
+                       yanchor="middle", align="right", font=dict(size=10))
 
 
 # ---------------------------------------------------------------------------

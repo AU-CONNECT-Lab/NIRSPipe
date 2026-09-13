@@ -603,6 +603,44 @@ def align_recordings(
     return aligned, offsets
 
 
+def align_like(
+    raws: dict[str, mne.io.Raw],
+    aligned_raws: dict[str, mne.io.Raw],
+) -> dict[str, mne.io.Raw]:
+    """Cut a second copy of the same recordings onto the clock ``aligned_raws`` sit on.
+
+    ::
+
+        align_like({"sub-01": intensity}, {"sub-01": haemo_aligned})
+          -> {"sub-01": intensity cropped to the same window}
+
+    The dyad raw report converts to haemoglobin before aligning, so the aligned objects are
+    no longer optical density and nothing downstream can take GVTD or a carpet off them.
+    This brings the intensity copy onto the same window instead of aligning it a second
+    time: a second pass would re-detect the trigger and could disagree with the one every
+    other panel is drawn against.
+
+    ``crop`` accumulates into ``first_samp``, so the shift already applied to a member is
+    ``aligned.first_time - raw.first_time`` whatever produced it, trigger alignment, a plain
+    trim, or a ``--tstart`` window on top. A member the aligned set does not carry, or one
+    whose window runs past the end of this copy, is dropped rather than returned short.
+    """
+    out: dict[str, mne.io.Raw] = {}
+    for sid, raw in raws.items():
+        ref = aligned_raws.get(sid)
+        if ref is None:
+            continue
+        tmin = float(ref.first_time) - float(raw.first_time)
+        tmax = tmin + float(ref.times[-1])
+        if tmin < -1e-6 or tmax > float(raw.times[-1]) + 1e-6:
+            logger.warning("%s: the aligned window (%.1f-%.1f s) is not inside this copy "
+                           "(0-%.1f s); dropping it from the motion panel",
+                           sid, tmin, tmax, float(raw.times[-1]))
+            continue
+        out[sid] = raw.copy().crop(tmin=max(tmin, 0.0), tmax=tmax)
+    return out
+
+
 def trim_to_shortest(
     raws: dict[str, mne.io.Raw],
 ) -> tuple[dict[str, mne.io.Raw], dict[str, float]]:
@@ -830,6 +868,36 @@ def _member_sqm_files(output_dir: Path, entry: GroupEntry, pattern: str) -> list
     """
     return sorted((f for d in subject_nirs_dirs(output_dir, entry.subject_id, entry.session)
                    for f in d.glob(pattern)), key=lambda f: f.name)
+
+
+def load_group_stage(
+    output_dir: Path, group: list[GroupEntry], desc: str,
+) -> dict[str, mne.io.Raw]:
+    """Each member's ``desc-<desc>`` derivative, for the members that have one.
+
+    ::
+
+        load_group_stage(out, group, "motcorrected")  ->  {"sub-01": Raw, ...}
+
+    Optional by design: the dyad raw report runs off BIDS and a member who has never been
+    through ``fnirs-pipe`` simply contributes nothing here, which the caller draws as a
+    panel with no corrected side rather than as a failure. The task entity is matched, so a
+    subject with five tasks does not hand back another task's recording.
+    """
+    out: dict[str, mne.io.Raw] = {}
+    for entry in group:
+        paths = _for_task(
+            _member_sqm_files(output_dir, entry,
+                              f"{entry.subject_id}*_desc-{desc}_nirs.snirf"),
+            entry.task)
+        if not paths:
+            continue
+        try:
+            out[entry.subject_id] = read_snirf(paths[0], verbose=False)
+        except Exception:
+            logger.warning("%s: desc-%s could not be read", entry.subject_id, desc,
+                           exc_info=True)
+    return out
 
 
 # Which record sections make up each channel set's row in the dyad quality table, in the

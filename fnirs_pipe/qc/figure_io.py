@@ -217,6 +217,24 @@ def save_png(b64: str, figures_dir: Path, name: str) -> "str | None":
     return _fig_href(figures_dir, name)
 
 
+def pair_slug(pair: "tuple[str, str] | None", n_pairings: int) -> str:
+    """``""`` while a group holds one pairing, else ``_<sub1>x<sub2>``.
+
+    Every inter-brain figure is of two members, so a group of three writes three of
+    everything and each needs a name of its own. A dyad has exactly one pairing, where the
+    slug would distinguish nothing and rename every file for no reason, so it is empty
+    there: a dyad's output is spelled the way it always was.
+
+    ::
+
+      pair_slug(("sub-a", "sub-b"), 1)  ->  ""
+      pair_slug(("sub-a", "sub-b"), 3)  ->  "_subaxsubb"
+    """
+    if pair is None or n_pairings < 2:
+        return ""
+    return "_" + "x".join(_pair_fname(sid) for sid in pair)
+
+
 def _pair_fname(pair: str) -> str:
     """Strip non-alphanumeric characters so the string is BIDS desc-value safe."""
     return re.sub(r"[^a-zA-Z0-9]", "", pair)

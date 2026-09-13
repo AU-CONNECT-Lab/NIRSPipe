@@ -272,6 +272,66 @@ def _blocked_carpet(z, z_after, blocks):
     return z, z_after, labels, spans
 
 
+# ---- Carpet ----
+# Both the subject panel and the dyad panel draw this image, so the scale, the clip and the
+# column cap live here once. Grey rather than a diverging ramp: it is the subject report's
+# carpet, and a dyad page that recoloured it would not be comparable with the member's own.
+CARPET_MAX_PTS = 2000
+CARPET_Z = 3.0
+
+
+def carpet_coloraxis(z_threshold: float = CARPET_Z, y: float = 0.35) -> dict:
+    """The ``coloraxis`` every carpet is drawn on, so no view invents its own scale."""
+    return dict(colorscale="Greys", cmin=-z_threshold, cmax=z_threshold,
+                colorbar=dict(title="Z-score", thickness=10, len=0.45, y=y))
+
+
+def carpet_z(
+    data: np.ndarray,
+    times: np.ndarray,
+    z_threshold: float = CARPET_Z,
+    stats: "tuple[np.ndarray, np.ndarray] | None" = None,
+):
+    """Decimated, per-channel z-scored optical density, ready for a ``Heatmap``.
+
+    ::
+
+        carpet_z(od[:, :39611], times)  ->  (z (44, 1980), t (1980,), (mean, std))
+
+    Returns the per-channel mean and SD alongside, so a second carpet of the same recording
+    after a correction can be z-scored by the *uncorrected* numbers: rescaling it by its own
+    SD would divide out the shrinkage the comparison exists to show. Pass them back as
+    ``stats`` to do that. 2 dp because the colour scale cannot resolve more and the z values
+    are most of the payload of the saved HTML.
+    """
+    step = max(1, data.shape[1] // CARPET_MAX_PTS)
+    carpet = data[:, ::step]
+    if stats is None:
+        mean = carpet.mean(axis=1, keepdims=True)
+        std = carpet.std(axis=1, keepdims=True)
+        std[std == 0] = 1.0
+    else:
+        mean, std = stats
+    z = np.round(np.clip((carpet - mean) / std, -z_threshold, z_threshold), 2)
+    return z, times[:data.shape[1]:step], (mean, std)
+
+
+def add_carpet(fig, row: int, z: np.ndarray, t: np.ndarray, labels: list[str],
+               spans: list) -> None:
+    """One carpet image with its channel-set side bars, on the figure's shared coloraxis.
+
+    The channel names stay in the hover rather than on the axis, where a full montage would
+    be an unreadable stack, and the axis is reversed so row 0 of ``z`` is the top row.
+    """
+    fig.add_trace(go.Heatmap(
+        z=z, x=t, y=labels, coloraxis="coloraxis",
+        hovertemplate="%{y}<br>t=%{x:.1f}s<br>z=%{z:.2f}<extra></extra>",
+        showlegend=False,
+    ), row=row, col=1)
+    _carpet_band_marks(fig, row, spans, len(labels))
+    fig.update_yaxes(showticklabels=False, autorange="reversed", row=row, col=1)
+
+
 # The division between two channel-set blocks: a rule across the image and a matching break
 # in the side bar. Kept to a couple of pixels, since the blocks are two halves of one carpet
 # read against each other and anything wider reads as two stacked figures.
@@ -394,22 +454,12 @@ def carpet_gvtd_figure(
         })
 
     # carpet: all channels of every block (both wavelengths are positively correlated, safe
-    # in one z-scored image). decimate columns for display only
-    MAX_PTS = 2000
-    step     = max(1, od_data.shape[1] // MAX_PTS)
-    carpet   = od_data[:, ::step]
-    t_carpet = times[::step]
-    # one scale for both carpets, taken from the uncorrected side: z-scoring the corrected
-    # data by its own SD would divide out the very shrinkage the panel is there to show
-    mean = carpet.mean(axis=1, keepdims=True)
-    std  = carpet.std(axis=1, keepdims=True)
-    std[std == 0] = 1.0
-    # 2 dp: the colour scale cannot resolve more, and the z values are most of the payload
-    # of the saved HTML, so rounding them keeps the file a fraction of the size
-    data_z = np.round(np.clip((carpet - mean) / std, -z_threshold, z_threshold), 2)
+    # in one z-scored image). one scale for both carpets, taken from the uncorrected side:
+    # z-scoring the corrected data by its own SD would divide out the very shrinkage the
+    # panel is there to show
+    data_z, t_carpet, stats = carpet_z(od_data, times, z_threshold)
     data_z_after = (None if not has_after else
-                    np.round(np.clip((od_after[:, ::step] - mean) / std,
-                                     -z_threshold, z_threshold), 2))
+                    carpet_z(od_after, times, z_threshold, stats=stats)[0])
     # a blank row between blocks, so where one set ends is visible without counting channels.
     # the labels are spaces because they still have to be distinct categories on the y axis
     data_z, data_z_after, carpet_rows, band_spans = _blocked_carpet(
@@ -528,22 +578,11 @@ def carpet_gvtd_figure(
 
     carpet_top = gvtd_row + len(rows)
     for i, z in enumerate([data_z, data_z_after][:n_carpets]):
-        fig.add_trace(go.Heatmap(
-            z=z, x=t_carpet, y=carpet_rows,
-            coloraxis="coloraxis",  # one scale and one bar for both carpets
-            hovertemplate="%{y}<br>t=%{x:.1f}s<br>z=%{z:.2f}<extra></extra>",
-            showlegend=False,
-        ), row=carpet_top + i, col=1)
-        _carpet_band_marks(fig, carpet_top + i, band_spans, len(carpet_rows))
+        add_carpet(fig, carpet_top + i, z, t_carpet, carpet_rows, band_spans)
 
     if has_strip:
         fig.update_yaxes(range=[0, 1], showticklabels=False, showgrid=False,
                          zeroline=False, row=strip_row, col=1)
-    for i in range(n_carpets):
-        # the channel names stay in the hover, where they are readable; on the axis a full
-        # montage would be an unreadable stack
-        fig.update_yaxes(showticklabels=False, autorange="reversed",
-                         row=carpet_top + i, col=1)
     fig.update_xaxes(title_text="Time (s)", row=n_rows, col=1)
     fig.update_xaxes(range=[float(times[0]), float(times[-1])])
     if has_strip:
@@ -551,10 +590,7 @@ def carpet_gvtd_figure(
 
     fig.update_layout(
         height=total_px,
-        coloraxis=dict(
-            colorscale="Greys", cmin=-z_threshold, cmax=z_threshold,
-            colorbar=dict(title="Z-score", thickness=10, len=0.45, y=0.35),
-        ),
+        coloraxis=carpet_coloraxis(z_threshold),
         margin=dict(l=52, r=20, t=34, b=45),
         hovermode="x unified",
         legend=dict(font=dict(size=9), orientation="h",

@@ -22,7 +22,7 @@ from pathlib import Path
 import pandas as pd
 
 from fnirs_pipe.qc.boilerplate import collect_software_versions
-from fnirs_pipe.qc.figure_io import _pair_fname
+from fnirs_pipe.qc.figure_io import _pair_fname, pair_slug
 from fnirs_pipe.qc.report_shell import (
     OUTLIER_Z, footer_vars, outlier_flags, page_vars, render)
 from fnirs_pipe.utils.logging import get_logger
@@ -55,8 +55,26 @@ def _band(path: Path) -> str:
     return f"{lo:.3g}–{hi:.3g} Hz"
 
 
+def _pairings(*frames) -> list:
+    """The member pairings a group's tables carry, in the order they were written.
+
+    Read off the tables rather than off a member list: the index is rebuilt for trees it did
+    not produce, and a pairing that failed has no rows and belongs on no row of the page. A
+    table from before the columns existed reports one unnamed pairing, which is what a dyad
+    always was.
+    """
+    for df in frames:
+        if df is None or not {"sub1", "sub2"}.issubset(getattr(df, "columns", [])):
+            continue
+        seen = dict.fromkeys(zip(df["sub1"].astype(str), df["sub2"].astype(str)))
+        if seen:
+            return list(seen)
+    return [None]
+
+
 def _mean_by_chroma(df: "pd.DataFrame | None", column: str,
-                    where: "tuple[str, str] | None" = None) -> dict:
+                    where: "tuple[str, str] | None" = None,
+                    pair: "tuple[str, str] | None" = None) -> dict:
     """``{chromophore: mean of column}``, over one condition's rows when ``where`` is given.
 
     ::
@@ -71,6 +89,8 @@ def _mean_by_chroma(df: "pd.DataFrame | None", column: str,
     """
     if df is None or column not in df.columns:
         return {}
+    if pair is not None and {"sub1", "sub2"}.issubset(df.columns):
+        df = df[(df["sub1"] == pair[0]) & (df["sub2"] == pair[1])]
     if where is not None:
         key, value = where
         if key not in df.columns:
@@ -83,7 +103,8 @@ def _mean_by_chroma(df: "pd.DataFrame | None", column: str,
     return {str(c): float(v) for c, v in df.groupby("chromophore")[column].mean().items()}
 
 
-def _isc_mean(nirs_dir: Path, stem: str, label: "str | None" = None) -> dict:
+def _isc_mean(nirs_dir: Path, stem: str, label: "str | None" = None,
+              slug: str = "") -> dict:
     """``{chromophore: mean same-channel ISC}`` from the two ISC matrices of one window.
 
     The diagonal, which is a channel against the other member's copy of the same channel.
@@ -93,11 +114,13 @@ def _isc_mean(nirs_dir: Path, stem: str, label: "str | None" = None) -> dict:
     ``label`` reads a condition's own matrices, written under the ``desc-`` entity its page
     takes. A window analysed before per-condition ISC existed has none, and the row shows a
     dash rather than the run's number.
+
+    ``slug`` picks one pairing's matrices out of a group that wrote several.
     """
     out: dict = {}
     desc = f"_desc-{_pair_fname(label)}" if label else ""
     for chroma in ("hbo", "hbr"):
-        df = _read_tsv(nirs_dir / f"{stem}{desc}_hyper-isc-{chroma}.tsv")
+        df = _read_tsv(nirs_dir / f"{stem}{desc}_hyper-isc-{chroma}{slug}.tsv")
         if df is None or df.empty:
             continue
         values = df.set_index(df.columns[0]).to_numpy(dtype=float)
@@ -131,26 +154,32 @@ def collect_rows(group_dir: Path, group_id: str) -> "list[dict]":
         stem = f"group-{group_id}_task-{task}"
         whole = _read_tsv(nirs_dir / f"{stem}_hyper-wtc.tsv")
         bycond = _read_tsv(nirs_dir / f"{stem}_hyper-wtcbycond.tsv")
+        # every inter-brain number is of two members, so a group of three contributes three
+        # rows per window, one per pairing, rather than one row averaging across them
+        pairings = _pairings(whole, bycond)
 
-        def _row(label: "str | None", where=None) -> dict:
+        def _row(label: "str | None", pair, where=None) -> dict:
             source = whole if where is None else bycond
+            slug = pair_slug(pair, len(pairings))
             desc = "hyperpost" if label is None else f"{_pair_fname(label)}_hyperpost"
-            report = group_dir / f"{stem}_desc-{desc}_nirs.html"
+            report = group_dir / f"{stem}_desc-{desc}{slug}_nirs.html"
             return {
                 "task": task,
                 "condition": label,
+                "pair": " × ".join(pair) if pair and len(pairings) > 1 else None,
                 "kind": "whole run" if label is None else "window",
                 "href": report.name if report.exists() else None,
-                "coherence": _mean_by_chroma(source, "coherence", where),
-                "valid_frac": _mean_by_chroma(source, "n_valid_frac", where),
-                "isc": _isc_mean(nirs_dir, stem, label),
+                "coherence": _mean_by_chroma(source, "coherence", where, pair),
+                "valid_frac": _mean_by_chroma(source, "n_valid_frac", where, pair),
+                "isc": _isc_mean(nirs_dir, stem, label, slug),
                 "window": _window_of(nirs_dir / f"{stem}_hyper-wtcbycond.tsv", label),
             }
 
-        rows.append(_row(None))
-        if bycond is not None and "condition" in bycond.columns:
-            for label in list(dict.fromkeys(bycond["condition"].astype(str))):
-                rows.append(_row(label, ("condition", label)))
+        for pair in pairings:
+            rows.append(_row(None, pair))
+            if bycond is not None and "condition" in bycond.columns:
+                for label in list(dict.fromkeys(bycond["condition"].astype(str))):
+                    rows.append(_row(label, pair, ("condition", label)))
 
     # a window is marked against the dyad's other windows, so this waits until every row is
     # in hand. Flagged per chromophore, the two being separate measurements
@@ -205,6 +234,7 @@ def write_hyper_index(
         group_id=group_id,
         subject_ids=subject_ids or [],
         rows=rows,
+        has_pairs=any(row.get("pair") for row in rows),
         chroma=chroma,
         chroma_labels={c: _CHROMA_LABEL[c] for c in chroma},
         band=band,
