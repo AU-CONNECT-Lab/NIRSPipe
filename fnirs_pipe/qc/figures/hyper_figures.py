@@ -2,21 +2,17 @@
 
 from __future__ import annotations
 
-from itertools import combinations
 
 import mne
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-from scipy.signal import coherence
 
 from fnirs_pipe.qc.figure_io import extract_markers as _extract_markers
-from fnirs_pipe.qc.figures._brain_utils import mni_trans
 from fnirs_pipe.qc.figures._utils import (CONDITION_PALETTE, PSD_NFFT,
                                           TIMELINE_ROW_PX,
-                                          decimate as _decimate, epochable_events,
-                                          physio_bands, timeline_axes,
+                                          decimate as _decimate, physio_bands, timeline_axes,
                                           timeline_row_bands, timeline_row_traces)
 from fnirs_pipe.utils.logging import get_logger
 
@@ -174,6 +170,93 @@ def _hover_sci(pair: str, sqm_data: dict, subject_ids: list[str]) -> str:
                    else " &bull; rejected" if pair in rejected else " &bull; kept")
         lines.append(f"{sid}: {sci}{verdict}")
     return "<br>".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Shared data layer: the screening grid, on the dyad's clock
+# ---------------------------------------------------------------------------
+
+def coupled_grid(
+    sqm_data: dict[str, dict],
+    subject_ids: list[str],
+    offsets: dict[str, float],
+    duration_s: "float | None" = None,
+) -> "dict | None":
+    """The screening verdict per long pair per window, for every member, on one clock.
+
+    ::
+
+      -> {"t": [...], "pairs": ["S1_D1", ...], "ok": {"sub-01": mask, "sub-02": mask}}
+
+    with each ``mask`` a ``pair x window`` boolean, True where that member's SCI and PSP both
+    cleared their lines in that window. The three dyad panels that read it (the usable-time
+    carpet, the two head figures) then cannot disagree about which window was good.
+
+    Two things this does that a per-panel version kept getting wrong. The stored matrices are
+    on each member's **own** clock, so the window centres are shifted by that member's crop
+    offset, and a dyad with unequal offsets would otherwise compare window *k* of one against
+    window *k* of the other. And they cover the **whole** recording while the dyad exists only
+    on the aligned span, so windows outside it are dropped rather than drawn past the ends of
+    the shared clock.
+
+    ``sqm_data`` carries ``screen_windows`` whichever command produced it: the dyad raw pass
+    keeps the grid it screened by, and a record read from disk is re-masked at that run's own
+    lines. Neither is re-measured here, so the shading and the verdict are one measurement.
+
+    None when a member has no grid, or when the members were not screened on the same one.
+    """
+    grids, masks = {}, {}
+    for sid in subject_ids:
+        member = sqm_data.get(sid) or {}
+        grid = member.get("screen_windows") or {}
+        mask, centers = grid.get("mask"), grid.get("centers")
+        if mask is None or centers is None or not len(centers):
+            logger.warning("no screening grid for %s; the dyad grid is empty", sid)
+            return None
+        grids[sid] = np.asarray(centers, dtype=float) - float(offsets.get(sid, 0.0))
+        masks[sid] = np.asarray(mask, dtype=bool)
+
+    ref = grids[subject_ids[0]]
+    for sid, t in grids.items():
+        if t.shape != ref.shape or not np.allclose(t, ref, atol=1.0):
+            logger.warning("%s was screened on a different window grid; skipping the dyad "
+                           "grid rather than comparing windows that are not the same window",
+                           sid)
+            return None
+
+    keep = ref >= 0
+    if duration_s is not None:
+        keep &= ref <= float(duration_s)
+
+    pairs, rows = [], {sid: [] for sid in subject_ids}
+    for sid in subject_ids:
+        member = sqm_data.get(sid) or {}
+        order = list((member.get("screen_windows") or {}).get("channel_order") or [])
+        long_names = {k.rsplit(" ", 1)[0]
+                      for k in (member.get("per_channel_long") or {})
+                      .get("sci_per_channel", {})}
+        if not order:
+            return None
+        by_pair: dict[str, list[int]] = {}
+        for i, name in enumerate(order):
+            by_pair.setdefault(name.rsplit(" ", 1)[0], []).append(i)
+        if not pairs:
+            pairs = [p for p in by_pair if p in long_names] or list(by_pair)
+        for pair in pairs:
+            idx = by_pair.get(pair)
+            # a pair one member lacks is not usable by the dyad at any moment
+            rows[sid].append(masks[sid][idx].all(axis=0) if idx
+                             else np.zeros(masks[sid].shape[1], dtype=bool))
+
+    return {"t": ref[keep],
+            "pairs": pairs,
+            "ok": {sid: np.array(rows[sid])[:, keep] for sid in subject_ids}}
+
+
+def dyad_status(grid: dict, subject_ids: list[str]) -> "np.ndarray":
+    """``pair x window``: 2 coupled in every member, 1 in some, 0 in none."""
+    stack = np.array([grid["ok"][sid] for sid in subject_ids])
+    return np.where(stack.all(axis=0), 2, np.where(stack.any(axis=0), 1, 0))
 
 
 # ---------------------------------------------------------------------------
@@ -423,447 +506,6 @@ def build_psd(
             shapes=shapes, annotations=annots,
         ),
     )
-
-
-# ---------------------------------------------------------------------------
-# Figure: per-channel mean epoch comparison
-# ---------------------------------------------------------------------------
-
-def build_epoch(
-    aligned_raws: dict[str, mne.io.Raw],
-    ch_pair: str,
-    subject_ids: list[str],
-    tmin: float = -5.0,
-    tmax: float = 25.0,
-) -> go.Figure | None:
-    hbo_name = f"{ch_pair} hbo"
-    first_raw = next(
-        (aligned_raws[s] for s in subject_ids if s in aligned_raws), None
-    )
-    if first_raw is None:
-        return None
-
-    all_descs = list(dict.fromkeys(
-        a["description"] for a in first_raw.annotations
-        if not str(a["description"]).upper().startswith("BAD")
-    ))
-    if not all_descs:
-        return None
-
-    traces: list[go.BaseTraceType] = []
-    for sub_idx, sid in enumerate(subject_ids):
-        raw = aligned_raws.get(sid)
-        if raw is None or hbo_name not in raw.ch_names:
-            continue
-        pick = raw.ch_names.index(hbo_name)
-        try:
-            events_mne, event_id = epochable_events(raw, tmin, tmax)
-            if len(events_mne) == 0:
-                continue
-            epochs = mne.Epochs(
-                raw, events_mne, event_id,
-                tmin=tmin, tmax=tmax, picks=[pick],
-                baseline=(tmin, 0), preload=True, verbose=False,
-            )
-        except Exception as exc:
-            logger.warning("epoch failed sub-%s %s: %s", sid, ch_pair, exc)
-            continue
-
-        sub_color = _SUB_COLORS[sub_idx % len(_SUB_COLORS)]
-        for ci, desc in enumerate(all_descs):
-            if desc not in event_id:
-                continue
-            try:
-                ep = epochs[desc].get_data()
-                if ep.shape[0] == 0:
-                    continue
-                traces.append(go.Scatter(
-                    x=epochs.times.tolist(),
-                    y=(ep[:, 0, :].mean(axis=0) * 1e6).tolist(),
-                    name=f"{sid} {desc} (n={ep.shape[0]})",
-                    mode="lines",
-                    line=dict(color=sub_color, width=1.8,
-                              dash=_COND_DASHES[ci % len(_COND_DASHES)]),
-                    legendgroup=sid,
-                ))
-            except Exception as exc:
-                logger.warning("epoch cond %s sub-%s %s: %s", desc, sid, ch_pair, exc)
-
-    if not traces:
-        return None
-
-    return go.Figure(
-        data=traces,
-        layout=go.Layout(
-            xaxis=dict(title="Time rel. onset (s)", gridcolor="#eeeeee",
-                       zerolinecolor="#cccccc"),
-            yaxis=dict(title="HbO (µmol/L)", gridcolor="#eeeeee"),
-            shapes=[dict(type="line", xref="x", yref="paper",
-                         x0=0, x1=0, y0=0, y1=1,
-                         line=dict(color="#7f8c8d", width=1, dash="dash"))],
-            annotations=[dict(x=0, y=1.0, xref="x", yref="paper",
-                              text="onset", showarrow=False,
-                              font=dict(size=8, color="#7f8c8d"), xanchor="left")],
-            plot_bgcolor="white", paper_bgcolor="white",
-            height=200, margin=dict(l=60, r=15, t=8, b=38),
-            legend=dict(font=dict(size=8), tracegroupgap=4),
-        ),
-    )
-
-
-# ---------------------------------------------------------------------------
-# Figure: 2D optode layout with multi-subject SCI colouring
-# ---------------------------------------------------------------------------
-
-def build_layout_2d(
-    aligned_raws: dict[str, mne.io.Raw],
-    sqm_data: dict[str, dict],
-    subject_ids: list[str],
-    sci_threshold: float,
-) -> go.Figure | None:
-    ref_raw = aligned_raws.get(subject_ids[0]) if subject_ids else None
-    if ref_raw is None:
-        return None
-
-    hbo_picks = mne.pick_types(ref_raw.info, fnirs="hbo")
-    if not len(hbo_picks):
-        return None
-
-    chs      = ref_raw.info["chs"]
-    ch_names = ref_raw.ch_names
-    locs     = np.array([chs[p]["loc"][:3] for p in hbo_picks])
-    if not np.any(np.abs(locs) > 1e-4):
-        logger.warning("build_layout_2d: no optode positions found (all near-zero); skipping")
-        return None
-
-    pair_names  = [ch_names[p].rsplit(" ", 1)[0] for p in hbo_picks]
-    colors      = [_group_color(_ch_kept_by_member(p, sqm_data, subject_ids, sci_threshold))
-                   for p in pair_names]
-    hover_texts = [_hover_sci(p, sqm_data, subject_ids) for p in pair_names]
-    x_mm = (locs[:, 0] * 1000).tolist()
-    y_mm = (locs[:, 1] * 1000).tolist()
-
-    seen: set = set()
-    lines_x, lines_y = [], []
-    for pick in hbo_picks:
-        ch  = chs[pick]
-        src = tuple(round(v, 6) for v in ch["loc"][3:6])
-        det = tuple(round(v, 6) for v in ch["loc"][:3])
-        key = src + det
-        if key in seen or not (any(src) or any(det)):
-            continue
-        seen.add(key)
-        lines_x += [src[0] * 1000, det[0] * 1000, None]
-        lines_y += [src[1] * 1000, det[1] * 1000, None]
-
-    traces: list[go.BaseTraceType] = []
-    if lines_x:
-        traces.append(go.Scatter(
-            x=lines_x, y=lines_y, mode="lines",
-            line=dict(color="#b0bec5", width=1),
-            showlegend=False, hoverinfo="skip",
-        ))
-    traces.append(go.Scatter(
-        x=x_mm, y=y_mm, mode="markers+text",
-        marker=dict(size=11, color=colors, line=dict(width=1, color="#888")),
-        text=pair_names, textposition="top center", textfont=dict(size=7),
-        hovertext=hover_texts, hoverinfo="text",
-        showlegend=False,
-    ))
-    for color, label in [(_GOOD_COLOR, "All good"), (_MIX_COLOR, "Mixed"),
-                          (_NA_COLOR, "All bad / N/A")]:
-        traces.append(go.Scatter(
-            x=[None], y=[None], mode="markers",
-            marker=dict(size=10, color=color, line=dict(width=1, color="#888")),
-            name=label, showlegend=True,
-        ))
-
-    return go.Figure(
-        data=traces,
-        layout=go.Layout(
-            xaxis=dict(title="x (mm)", gridcolor="#eeeeee", scaleanchor="y"),
-            yaxis=dict(title="y (mm)", gridcolor="#eeeeee"),
-            plot_bgcolor="white", paper_bgcolor="white",
-            height=320, margin=dict(l=50, r=15, t=8, b=40),
-            legend=dict(font=dict(size=9)),
-        ),
-    )
-
-
-# ---------------------------------------------------------------------------
-# Figure: 3D channel positions (fsaverage brain)
-# ---------------------------------------------------------------------------
-
-def build_layout_3d(
-    aligned_raws: dict[str, mne.io.Raw],
-    sqm_data: dict[str, dict],
-    subject_ids: list[str],
-    sci_threshold: float,
-) -> go.Figure | None:
-    ref_raw = aligned_raws.get(subject_ids[0]) if subject_ids else None
-    if ref_raw is None:
-        return None
-
-    hbo_picks = mne.pick_types(ref_raw.info, fnirs="hbo")
-    if not len(hbo_picks):
-        return None
-
-    chs      = ref_raw.info["chs"]
-    ch_names = ref_raw.ch_names
-    locs     = np.array([chs[p]["loc"][:3] for p in hbo_picks])
-    if not np.any(np.abs(locs) > 1e-4):
-        logger.warning("build_layout_3d: no optode positions found; skipping")
-        return None
-
-    pair_names = [ch_names[p].rsplit(" ", 1)[0] for p in hbo_picks]
-
-    trans     = mni_trans(ref_raw.info)
-    coords_mm = mne.transforms.apply_trans(trans, locs) * 1000
-
-    seen3: set = set()
-    lx, ly, lz = [], [], []
-    for pick in hbo_picks:
-        ch  = chs[pick]
-        src = ch["loc"][3:6]
-        det = ch["loc"][:3]
-        key = tuple(round(float(v), 5) for v in np.concatenate([src, det]))
-        if key in seen3 or not (np.any(src) or np.any(det)):
-            continue
-        seen3.add(key)
-        src_m = mne.transforms.apply_trans(trans, src.reshape(1, 3))[0] * 1000
-        det_m = mne.transforms.apply_trans(trans, det.reshape(1, 3))[0] * 1000
-        lx += [float(src_m[0]), float(det_m[0]), None]
-        ly += [float(src_m[1]), float(det_m[1]), None]
-        lz += [float(src_m[2]), float(det_m[2]), None]
-
-    ch_colors   = [_group_color(_ch_kept_by_member(p, sqm_data, subject_ids, sci_threshold))
-                   for p in pair_names]
-    hover_texts = [_hover_sci(p, sqm_data, subject_ids) for p in pair_names]
-
-    traces_3d: list[go.BaseTraceType] = []
-    try:
-        from nilearn import datasets as nl_ds, surface as surf
-        fsavg5 = nl_ds.fetch_surf_fsaverage(mesh="fsaverage5")
-        for key in ("pial_left", "pial_right"):
-            verts, faces = surf.load_surf_mesh(fsavg5[key])
-            traces_3d.append(go.Mesh3d(
-                x=verts[:, 0].tolist(), y=verts[:, 1].tolist(), z=verts[:, 2].tolist(),
-                i=faces[:, 0].tolist(), j=faces[:, 1].tolist(), k=faces[:, 2].tolist(),
-                color="#e3e3e3", opacity=0.55, flatshading=False,
-                lighting=dict(ambient=0.85, diffuse=0.5, specular=0.4, fresnel=0.6),
-                lightposition=dict(x=100, y=200, z=300),
-                hoverinfo="skip", showlegend=False,
-            ))
-    except Exception as exc:
-        logger.warning("brain mesh skipped: %s", exc)
-
-    if lx:
-        traces_3d.append(go.Scatter3d(
-            x=lx, y=ly, z=lz, mode="lines",
-            line=dict(color="#95a5a6", width=4),
-            hoverinfo="skip", showlegend=False,
-        ))
-
-    traces_3d.append(go.Scatter3d(
-        x=coords_mm[:, 0].tolist(), y=coords_mm[:, 1].tolist(),
-        z=coords_mm[:, 2].tolist(), mode="markers",
-        marker=dict(size=7, color=ch_colors, opacity=0.92,
-                    line=dict(width=0.5, color="#333")),
-        hovertext=hover_texts, hovertemplate="%{hovertext}<extra></extra>",
-        name="Channels", showlegend=True,
-    ))
-
-    return go.Figure(
-        data=traces_3d,
-        layout=go.Layout(
-            scene=dict(
-                xaxis=dict(visible=False), yaxis=dict(visible=False),
-                zaxis=dict(visible=False),
-                camera=dict(eye=dict(x=0, y=-1.9, z=0.6)),
-                bgcolor="#ffffff",
-            ),
-            margin=dict(l=0, r=0, t=0, b=0),
-            paper_bgcolor="#ffffff", height=380,
-            legend=dict(x=0.01, y=0.99, font=dict(size=9)),
-        ),
-    )
-
-
-# ---------------------------------------------------------------------------
-# Figure: inter-subject coherence bar chart (mean per channel, sorted)
-# ---------------------------------------------------------------------------
-
-def build_coherence_bar(coherence_df: pd.DataFrame) -> go.Figure | None:
-    if coherence_df.empty:
-        return None
-
-    pairs = (
-        coherence_df.drop_duplicates(["sub1", "sub2"])[["sub1", "sub2"]]
-        .values.tolist()
-    )
-    ch_mean   = coherence_df.groupby("ch_name")["coherence"].mean().sort_values(ascending=True)
-    ch_sorted = ch_mean.index.tolist()
-
-    palette = ["#3498db", "#e74c3c", "#2ecc71", "#f39c12", "#9b59b6", "#1abc9c"]
-    traces: list[go.BaseTraceType] = []
-    for pi, (sub1, sub2) in enumerate(pairs):
-        sub_df = coherence_df[
-            (coherence_df["sub1"] == sub1) & (coherence_df["sub2"] == sub2)
-        ]
-        ch_map = dict(zip(sub_df["ch_name"], sub_df["coherence"]))
-        traces.append(go.Bar(
-            y=ch_sorted, x=[ch_map.get(ch) for ch in ch_sorted],
-            name=f"{sub1}–{sub2}", orientation="h",
-            marker=dict(color=palette[pi % len(palette)], opacity=0.78),
-        ))
-
-    return go.Figure(
-        data=traces,
-        layout=go.Layout(
-            barmode="group",
-            xaxis=dict(title="Coherence", range=[0, 1], gridcolor="#eeeeee"),
-            yaxis=dict(tickfont=dict(size=8), autorange="reversed"),
-            plot_bgcolor="white", paper_bgcolor="white",
-            height=max(280, len(ch_sorted) * 20 + 80),
-            margin=dict(l=80, r=20, t=8, b=40),
-            legend=dict(font=dict(size=9)),
-            bargap=0.25, bargroupgap=0.05,
-        ),
-    )
-
-
-# ---------------------------------------------------------------------------
-# Compute: windowed coherence (time x channel DataFrame)
-# ---------------------------------------------------------------------------
-
-def compute_windowed_coherence(
-    aligned_raws: dict[str, mne.io.Raw],
-    fmin: float,
-    fmax: float,
-    window_s: float = 30.0,
-    step_s: float = 5.0,
-) -> pd.DataFrame:
-    """Sliding-window pairwise coherence per long HbO channel.
-
-    Channels are matched across participants by S-D label, the way the whole-record
-    coherence and WTC match them; a label one participant lacks keeps its row with NaN
-    coherence, so the heatmap shows the gap rather than shifting its neighbours into it.
-
-    Returns DataFrame with columns: t_center, ch_name, sub1, sub2, coherence.
-    """
-    from fnirs_pipe.pipeline.synchrony import _long_by_label, _shared_sfreq
-
-    subject_ids = list(aligned_raws.keys())
-    if len(subject_ids) < 2:
-        return pd.DataFrame()
-
-    sfreq     = _shared_sfreq(aligned_raws)
-    win_samp  = int(window_s * sfreq)
-    step_samp = int(step_s * sfreq)
-    n_times   = min(raw.n_times for raw in aligned_raws.values())
-    if win_samp >= n_times:
-        return pd.DataFrame()
-
-    starts = list(range(0, n_times - win_samp + 1, step_samp))
-    # freq_req: minimum nperseg so that at least one bin falls within [fmin, fmax]
-    # capped at win_samp//2 so scipy coherence has >=2 segments per window
-    freq_req = max(32, int(np.ceil(sfreq / fmax)))
-    nperseg  = min(win_samp // 2, freq_req)
-
-    rows: list[dict] = []
-    for sub1, sub2 in combinations(subject_ids, 2):
-        raw1, raw2 = aligned_raws[sub1], aligned_raws[sub2]
-        map1, map2 = _long_by_label(raw1), _long_by_label(raw2)
-        data1  = raw1.get_data(picks=list(map1.values()))
-        data2  = raw2.get_data(picks=list(map2.values()))
-        row_of = {label: i for i, label in enumerate(map2)}
-        # (row in data1, row in data2 or None, label), resolved once for every window
-        matched = [(i, row_of.get(label), label) for i, label in enumerate(map1)]
-        for label in (lbl for _, j, lbl in matched if j is None):
-            logger.warning("windowed coherence: %s has no %s, leaving that row blank",
-                           sub2, label)
-
-        for start in starts:
-            end      = start + win_samp
-            t_center = round((start + win_samp / 2) / sfreq, 2)
-            for i, j, label in matched:
-                if j is None:
-                    mean_coh = float("nan")
-                else:
-                    freqs, coh = coherence(
-                        data1[i, start:end], data2[j, start:end],
-                        fs=sfreq, nperseg=nperseg,
-                    )
-                    mask     = (freqs >= fmin) & (freqs <= fmax)
-                    mean_coh = float(np.mean(coh[mask])) if mask.any() else float("nan")
-                rows.append(dict(
-                    t_center=t_center,
-                    ch_name=label,
-                    sub1=sub1, sub2=sub2,
-                    coherence=mean_coh,
-                ))
-
-    return pd.DataFrame(rows)
-
-
-# ---------------------------------------------------------------------------
-# Figure: windowed coherence heatmap (time x channel)
-# ---------------------------------------------------------------------------
-
-def build_coherence_timeseries(windowed_df: pd.DataFrame) -> go.Figure | None:
-    if windowed_df.empty:
-        return None
-
-    pairs = windowed_df.drop_duplicates(["sub1", "sub2"])[["sub1", "sub2"]].values.tolist()
-
-    ch_mean_order = (
-        windowed_df.groupby("ch_name")["coherence"]
-        .mean()
-        .sort_values(ascending=False)
-        .index.tolist()
-    )
-
-    traces: list[go.BaseTraceType] = []
-    buttons: list[dict] = []
-    for pi, (sub1, sub2) in enumerate(pairs):
-        pair_df = windowed_df[
-            (windowed_df["sub1"] == sub1) & (windowed_df["sub2"] == sub2)
-        ]
-        pivot = pair_df.pivot_table(
-            index="ch_name", columns="t_center", values="coherence", aggfunc="mean"
-        ).reindex(ch_mean_order)
-
-        traces.append(go.Heatmap(
-            x=pivot.columns.tolist(),
-            y=pivot.index.tolist(),
-            z=pivot.values.tolist(),
-            colorscale="Blues", zmin=0, zmax=1,
-            colorbar=dict(title="Coherence", tickformat=".2f", len=0.8),
-            hovertemplate="Ch: %{y}<br>Time: %{x:.1f} s<br>Coherence: %{z:.3f}<extra></extra>",
-            visible=(pi == 0),
-        ))
-        buttons.append(dict(
-            label=f"{sub1}–{sub2}", method="update",
-            args=[{"visible": [j == pi for j in range(len(pairs))]},
-                  {"title.text": f"Windowed Coherence: {sub1}–{sub2}"}],
-        ))
-
-    layout_kwargs: dict = dict(
-        xaxis=dict(title="Time (s)", gridcolor="#eeeeee"),
-        yaxis=dict(title="Channel", tickfont=dict(size=8)),
-        plot_bgcolor="white", paper_bgcolor="white",
-        height=max(280, len(ch_mean_order) * 14 + 80),
-        margin=dict(l=90, r=20, t=40, b=40),
-    )
-    if len(pairs) > 1:
-        layout_kwargs["updatemenus"] = [dict(
-            type="buttons", buttons=buttons,
-            direction="right", showactive=True,
-            x=0, y=1.12, xanchor="left", yanchor="top",
-            font=dict(size=11),
-        )]
-
-    return go.Figure(data=traces, layout=go.Layout(**layout_kwargs))
 
 
 # ---------------------------------------------------------------------------

@@ -399,20 +399,46 @@ def good_window_fraction(
     Returns an empty dict when either metric cannot be measured, or when the scope keeps no
     window, which screens nothing rather than rejecting everything.
     """
+    fractions, _mask, _centers = coupled_windows(
+        raw_od, cardiac_l_freq, cardiac_h_freq, sci_cutoff, psp_cutoff, window_s, scope)
+    return fractions
+
+
+def coupled_windows(
+    raw_od: mne.io.Raw,
+    cardiac_l_freq: float,
+    cardiac_h_freq: float,
+    sci_cutoff: float,
+    psp_cutoff: float,
+    window_s: float = SCREEN_WINDOW_S,
+    scope: "list[tuple[str, float, float]] | None" = None,
+):
+    """:func:`good_window_fraction`, also handing back the grid it counted over.
+
+    Returns ``(fractions, mask, centers)``; the mask is ``channel x window`` and the centres
+    are its time axis. The share is what screening reads and the grid is what a figure over
+    time draws, and they have to be the same measurement: a panel that recomputed its own
+    mask could shade a window the verdict had counted the other way. The scope restricts the
+    share only, never the returned grid, because a figure draws the whole recording and says
+    which part of it counted.
+
+    ``(dict(), None, None)`` where :func:`good_window_fraction` returns an empty dict.
+    """
     mask, centers = _coupled_mask(raw_od, cardiac_l_freq, cardiac_h_freq,
                                   sci_cutoff, psp_cutoff, window_s)
     if mask is None:
-        return {}
+        return {}, None, None
     keep = _in_scope(centers, scope)
     if not keep.any():
         logger.warning("the screening scope keeps none of the %d windows; screening nothing",
                        len(centers))
-        return {}
+        return {}, mask, centers
     if scope:
         logger.info("channel screening counts %d of %d windows, %.0f%% of the recording",
                     int(keep.sum()), len(centers), 100 * keep.mean())
     frac = mask[:, keep].mean(axis=1)
-    return {ch: float(frac[i]) for i, ch in enumerate(raw_od.ch_names) if i < len(frac)}
+    return ({ch: float(frac[i]) for i, ch in enumerate(raw_od.ch_names) if i < len(frac)},
+            mask, centers)
 
 
 def condition_window_means(

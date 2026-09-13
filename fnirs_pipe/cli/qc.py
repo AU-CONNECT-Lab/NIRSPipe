@@ -112,8 +112,6 @@ def cmd_hyper_raw(
     min_good_frac: float | None, screen_scope: str,
     cardiac_l_freq: float, cardiac_h_freq: float,
     coherence_fmin: float, coherence_fmax: float,
-    coherence_window_s: float, coherence_step_s: float,
-    epoch_tmin: float, epoch_tmax: float,
     normalize: bool, no_align: bool, tstart: float | None, tend: float | None,
     session_label: list[str] | None, task_label: list[str] | None,
     short_max_dist: float | None, long_min_dist: float | None,
@@ -181,10 +179,6 @@ def cmd_hyper_raw(
             cardiac_h_freq=cardiac_h_freq,
             coherence_fmin=coherence_fmin,
             coherence_fmax=coherence_fmax,
-            coherence_window_s=coherence_window_s,
-            coherence_step_s=coherence_step_s,
-            epoch_tmin=epoch_tmin,
-            epoch_tmax=epoch_tmax,
         )
 
     _run_groups(groups, _process)
@@ -318,18 +312,6 @@ def _build_parser() -> argparse.ArgumentParser:
                     help="Lower bound (Hz) of the band the Welch coherence is averaged over.")
     hr.add_argument("--coh-fmax", "--fmax", dest="coherence_fmax", type=float, default=0.10,
                     help="Upper bound (Hz) of that band.")
-    hr.add_argument("--coh-window-length", dest="coherence_window_s", type=float, default=30.0,
-                    help="Window (s) the sliding-window coherence heatmap is computed in. "
-                         "A longer window reaches lower frequencies and blurs a coupling "
-                         "that changed partway; it has to hold several cycles of --coh-fmin.")
-    hr.add_argument("--coh-window-step", dest="coherence_step_s", type=float, default=5.0,
-                    help="Step (s) between those windows. Smaller than the window length "
-                         "means they overlap, which smooths the heatmap along time.")
-    hr.add_argument("--epoch-tmin", type=float, default=-5.0,
-                    help="Trial window start relative to event onset (s) for the per-pair "
-                         "evoked figures; negative pulls in a baseline.")
-    hr.add_argument("--epoch-tmax", type=float, default=25.0,
-                    help="Trial window end relative to event onset (s).")
     _shared.add_separation_bands(hr)
     hr.add_argument("--session-label", nargs="+", action="extend", help="Session label(s) to include.")
     hr.add_argument("--skip-bids-validation", action=argparse.BooleanOptionalAction, default=False)

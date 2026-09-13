@@ -354,9 +354,22 @@ def compute_group_sqm_raw(
 
         bad_channels: list[str] = []
         screen: dict = {}
+        screen_windows: dict = {}
         if raw_od is not None:
+            # the coupled-window grid, kept rather than recounted: the dyad panels that draw
+            # quality over time have to shade the windows the verdict was taken on, and a
+            # second pass could disagree with it. `have` then stops the criterion table from
+            # counting the same windows again.
+            from fnirs_pipe.qc.metrics.windowed import coupled_windows
+            frac, mask, centers = coupled_windows(
+                raw_od, cardiac_l_freq, cardiac_h_freq, cutoffs["sci"], cutoffs["psp"],
+                scope=resolve_screen_scope(raw, screen_scope))
+            if mask is not None:
+                screen_windows = {"mask": mask, "centers": centers,
+                                  "channel_order": list(raw_od.ch_names)}
             screen = screening_scores(raw_od, cardiac_l_freq, cardiac_h_freq,
-                                      have={"sci": sci_cw}, cutoffs=cutoffs,
+                                      have={"sci": sci_cw, "good_frac": frac},
+                                      cutoffs=cutoffs,
                                       scope=resolve_screen_scope(raw, screen_scope))
             bad_channels, _ = screen_channels(screen, cutoffs)
 
@@ -367,7 +380,7 @@ def compute_group_sqm_raw(
             sqm = raw_verdict_view(sections)
         except Exception:
             logger.warning("%s: quality metrics failed", entry.subject_id, exc_info=True)
-            sections, sqm = {}, {}
+            sections, sqm, _per_channel = {}, {}, {}
 
         # which channel set the row above describes, so a table read on its own says so
         sqm["channel_set"] = "long" if sections.get("raw_long") else "all"
@@ -375,6 +388,11 @@ def compute_group_sqm_raw(
         sqm["sci_win_per_channel"] = _pairwise(
             (sections.get("raw") or {}).get("sci_win_per_channel") or {})
         sqm["bad_channels"]    = bad_channels
+        sqm["screen_windows"]  = screen_windows
+        sqm["screen_cutoffs"]  = dict(cutoffs)
+        sqm["per_channel"]     = (_per_channel or {}).get("raw") or {}
+        sqm["per_channel_long"] = ((_per_channel or {}).get("raw_long")
+                                   or sqm["per_channel"])
         sqm_data[entry.subject_id] = sqm
 
         # Every scalar the record holds, not a whitelist: the three columns this used to
@@ -797,6 +815,28 @@ _SET_SECTIONS = {
 }
 
 
+def _screen_windows(record: dict, cutoffs: "dict | None") -> dict:
+    """``{mask, centers, channel_order}`` off a stored record, empty when it has no matrices.
+
+    The cutoffs are the run's own where it recorded them, since a record screened at a
+    different SCI line has to be re-masked at that line and not at this package's default.
+    """
+    from fnirs_pipe.qc.metrics._helpers import PSP_PASS, SCI_PASS
+    from fnirs_pipe.qc.metrics.windowed import coupled_mask_from_matrices, window_centers
+
+    windowed = record.get("windowed") or {}
+    lines = cutoffs or {}
+    mask = coupled_mask_from_matrices(
+        windowed.get("sci_matrix"), windowed.get("psp_matrix"),
+        float(lines.get("sci", SCI_PASS)), float(lines.get("psp", PSP_PASS)))
+    times = windowed.get("sci_times")
+    if mask is None or not times:
+        return {}
+    return {"mask": mask, "centers": window_centers(np.asarray(times, dtype=float)),
+            "channel_order": list(((record.get("per_channel") or {}).get("raw") or {})
+                                  .get("sci_per_channel") or {})}
+
+
 def load_group_sqm(
     output_dir: Path, group: list[GroupEntry], bads_scope: str = "run",
     scope_tasks: "list[str] | None" = None,
@@ -829,7 +869,8 @@ def load_group_sqm(
 
     Returns {subject_id: sqm_dict}. Alongside the flattened scalars each dict carries
     ``windowed`` (the record's channel-by-window matrices), ``channel_order`` (their row
-    order), ``screen_cutoffs`` (the lines that run screened by) and ``by_condition`` (the
+    order), ``per_channel`` (the whole per-channel section, which the dyad's channel table
+    prints), ``screen_cutoffs`` (the lines that run screened by) and ``by_condition`` (the
     record's per-condition entries), which is what a per-condition view of the dyad pages
     is built from.
     """
@@ -867,6 +908,19 @@ def load_group_sqm(
             sqm["channel_order"] = list(
                 ((record.get("per_channel") or {}).get("raw") or {})
                 .get("sci_per_channel") or {})
+            # the record's whole per-channel section, not only the SCI its row order is read
+            # from: the dyad's channel table prints the same columns the subject report does,
+            # and those come from PSP, SNR, CV and the spike share alongside it
+            per_ch = record.get("per_channel") or {}
+            sqm["per_channel"] = per_ch.get("raw") or {}
+            # the long section too, and it is not a nicety: every dyad measure runs on long
+            # channels, and a `raw_long` is not written when the montage is all long, so the
+            # whole-file section is the long one there rather than a missing answer
+            sqm["per_channel_long"] = per_ch.get("raw_long") or sqm["per_channel"]
+            # the same screening grid `compute_group_sqm_raw` keeps when it measures one
+            # itself, rebuilt here from the matrices the record stored. One shape, so a dyad
+            # panel does not care which command produced the members' numbers.
+            sqm["screen_windows"] = _screen_windows(record, sqm.get("screen_cutoffs"))
             # the per-condition numbers the record already holds, so the dyad pages read
             # them rather than cutting the matrices above a second time
             sqm["by_condition"] = record.get("by_condition") or {}

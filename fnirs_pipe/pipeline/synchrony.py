@@ -792,6 +792,101 @@ def compute_pairwise_coherence(
     return pd.DataFrame(rows, columns=["ch_name", "sub1", "sub2", "coherence"])
 
 
+# Surrogate pairings a screening percentile is read against. 100 is `write_wtc_null`'s own
+# default, so the two nulls a dyad is measured by are drawn the same number of times.
+SCREEN_NULL_ITER = 100
+
+
+def _band_coherence(a, b, sfreq: float, nperseg: int, fmin: float, fmax: float) -> float:
+    freqs, coh = coherence(a, b, fs=sfreq, nperseg=nperseg)
+    mask = (freqs >= fmin) & (freqs <= fmax)
+    return float(np.mean(coh[mask])) if mask.any() else float("nan")
+
+
+def screening_coherence(
+    raws: dict[str, mne.io.Raw],
+    fmin: float = 0.01,
+    fmax: float = 0.10,
+    windows: "list[tuple[str, float, float]] | None" = None,
+    n_iter: int = SCREEN_NULL_ITER,
+    seed: "int | None" = None,
+    sep_bands=None,
+) -> pd.DataFrame:
+    r"""Band coherence per window and channel, with the percentile of its own surrogate null.
+
+    ::
+
+      screening_coherence(raws, windows=[("game1", 520.0, 1420.0)])
+      -> rows for "whole run" and "game1", each channel carrying coherence and percentile
+
+    **The percentile is the readable number, not the coherence.** Magnitude-squared coherence
+    has a floor near :math:`1/n_{seg}` where :math:`n_{seg}` is the number of Welch segments,
+    and that count falls with the window, so on one recording the floor moves by an order of
+    magnitude between a 300 s block and the whole run. Two windows' raw values are therefore
+    not comparable and neither is readable alone; each value's rank inside a null drawn for
+    *that* window is both.
+
+    The null pairs one member against a phase-scrambled copy of the other, which is the
+    surrogate :func:`~fnirs_pipe.qc.wtc_null.write_wtc_null` uses on the post report. One
+    definition across a dyad's two pages, so "above the null" means one thing on both.
+
+    Returns a DataFrame with columns: window, ch_name, sub1, sub2, coherence, null_mean,
+    null_p95, percentile, n_seg, window_s.
+    """
+    subject_ids = list(raws)
+    if len(subject_ids) < 2:
+        raise ValueError("Need at least 2 subjects for screening coherence")
+
+    sfreq = _shared_sfreq(raws)
+    rng = np.random.default_rng(seed)
+    n_times = min(r.n_times for r in raws.values())
+    spans = [("whole run", 0.0, n_times / sfreq), *(windows or [])]
+
+    rows: list[dict] = []
+    for sub1, sub2 in combinations(subject_ids, 2):
+        map1 = _long_by_label(raws[sub1], sep_bands=sep_bands)
+        map2 = _long_by_label(raws[sub2], sep_bands=sep_bands)
+        labels = [name for name in map1 if name in map2]
+        for missing in (name for name in map1 if name not in map2):
+            logger.warning("screening coherence: %s has no %s, dropping the pair",
+                           sub2, missing)
+        if not labels:
+            continue
+        d1 = raws[sub1].get_data(picks=[map1[n] for n in labels])[:, :n_times]
+        d2 = raws[sub2].get_data(picks=[map2[n] for n in labels])[:, :n_times]
+
+        for name, tstart, tstop in spans:
+            i0, i1 = max(0, int(tstart * sfreq)), min(n_times, int(tstop * sfreq))
+            seg = i1 - i0
+            nperseg = min(512, max(64, seg // 4))
+            if seg <= nperseg:
+                logger.warning("screening coherence: %r is %.0f s, too short to score", name,
+                               seg / sfreq)
+                continue
+            n_seg = max(1, (seg - nperseg) // (nperseg // 2) + 1)
+            real = np.array([_band_coherence(d1[i, i0:i1], d2[i, i0:i1], sfreq, nperseg,
+                                             fmin, fmax) for i in range(len(labels))])
+            null = np.empty((n_iter, len(labels)))
+            for k in range(n_iter):
+                for i in range(len(labels)):
+                    null[k, i] = _band_coherence(
+                        d1[i, i0:i1], phase_scramble(d2[i, i0:i1], rng),
+                        sfreq, nperseg, fmin, fmax)
+            for i, label in enumerate(labels):
+                rows.append({
+                    "window": name, "ch_name": label, "sub1": sub1, "sub2": sub2,
+                    "coherence": float(real[i]),
+                    "null_mean": float(null[:, i].mean()),
+                    "null_p95": float(np.percentile(null[:, i], 95)),
+                    "percentile": float((null[:, i] < real[i]).mean() * 100),
+                    "n_seg": int(n_seg), "window_s": round(seg / sfreq, 1),
+                })
+
+    return pd.DataFrame(rows, columns=["window", "ch_name", "sub1", "sub2", "coherence",
+                                       "null_mean", "null_p95", "percentile",
+                                       "n_seg", "window_s"])
+
+
 def _fisher_z(r: float) -> float:
     """Fisher r-to-z of one value, clipped as :func:`restingstate.fisher_z` clips a matrix."""
     if not np.isfinite(r):

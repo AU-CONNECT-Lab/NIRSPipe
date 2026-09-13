@@ -19,16 +19,10 @@ from fnirs_pipe.qc.figure_io import (
 from fnirs_pipe.qc.figures.hyper_figures import (
     _cond_colors,
     build_channel_summary,
-    build_coherence_bar,
-    build_coherence_timeseries,
-    build_epoch,
-    build_layout_2d,
-    build_layout_3d,
     build_psd,
     build_signal_overlay_pair,
     build_trigger_timeline,
     compute_hyper_sqm,
-    compute_windowed_coherence,
 )
 from fnirs_pipe.qc.metrics import SCI_PASS
 from fnirs_pipe.qc.report_shell import guard, note
@@ -106,10 +100,6 @@ def _process_hyper_raw_group(
     cardiac_h_freq: float | None = None,
     coherence_fmin: float = 0.01,
     coherence_fmax: float = 0.10,
-    epoch_tmin: float = -5.0,
-    epoch_tmax: float = 25.0,
-    coherence_window_s: float = 30.0,
-    coherence_step_s: float = 5.0,
     errors: list | None = None,
     notes: list | None = None,
 ) -> dict:
@@ -150,23 +140,11 @@ def _process_hyper_raw_group(
         for sid in subject_ids
     ]
 
-    windowed_coh_df = pd.DataFrame()
-    with guard("Windowed coherence", errors, label):
-        windowed_coh_df = compute_windowed_coherence(
-            aligned_raws, coherence_fmin, coherence_fmax,
-            window_s=coherence_window_s, step_s=coherence_step_s,
-        )
-
-    with guard("Coherence tables", errors, label):
+    with guard("Coherence table", errors, label):
         _write_coherence_tsv(
             coherence_df, sqm_dir / f"{label}_hyper-coherence.tsv",
             "hyper_coherence", aligned_raws,
             coherence_fmin=coherence_fmin, coherence_fmax=coherence_fmax)
-        _write_coherence_tsv(
-            windowed_coh_df, sqm_dir / f"{label}_hyper-coherencewindowed.tsv",
-            "hyper_coherence_windowed", aligned_raws,
-            coherence_fmin=coherence_fmin, coherence_fmax=coherence_fmax,
-            window_s=coherence_window_s, step_s=coherence_step_s)
 
     figure_paths: dict = {}
 
@@ -184,12 +162,6 @@ def _process_hyper_raw_group(
                    build_trigger_timeline, raw_raws, subject_ids, "Time (s) [raw]")
     _safe_save("trigger_timeline", "triggeraligned",
                build_trigger_timeline, aligned_raws, subject_ids)
-    _safe_save("coherence_bar",  "cohbar", build_coherence_bar, coherence_df)
-    _safe_save("coh_timeseries", "cohts",  build_coherence_timeseries, windowed_coh_df)
-    _safe_save("layout_2d",      "layout2d",
-               build_layout_2d, aligned_raws, sqm_data, subject_ids, sci_threshold)
-    _safe_save("layout_3d",      "layout3d",
-               build_layout_3d, aligned_raws, sqm_data, subject_ids, sci_threshold)
     _safe_save("ch_summary",     "chsummary",
                build_channel_summary, sqm_data, subject_ids, sci_threshold)
 
@@ -206,13 +178,10 @@ def _process_hyper_raw_group(
                 aligned_raws, pair, subject_ids,
                 cardiac=(cardiac_l_freq, cardiac_h_freq) if cardiac_l_freq is not None else None,
             )
-            epoch_fig = build_epoch(
-                aligned_raws, pair, subject_ids, epoch_tmin, epoch_tmax,
-            )
             fname = f"{label}_desc-ch{_pair_fname(pair)}_nirs.html"
-            _save_multi_fig_html(
-                [trace_fig, psd_fig, epoch_fig], fig_dir / fname,
-            )
+            # No epoch panel: this design gives one block per condition, so a "mean epoch"
+            # would average a single trial and draw its first seconds as an evoked response.
+            _save_multi_fig_html([trace_fig, psd_fig], fig_dir / fname)
 
     if ch_pairs:
         figure_paths["ch_detail_template"] = (
