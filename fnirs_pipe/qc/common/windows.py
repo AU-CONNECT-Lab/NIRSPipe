@@ -1,10 +1,7 @@
 """Condition windows and crop provenance, read off a recording's annotations.
 
-Nothing here is hyperscanning. These three lived in ``hyper_report`` and the single-subject
-reports imported them from there, which is how the ``first_time`` correction below came to
-be applied on the group path and not on the dyad raw one: a fix follows the module it was
-written in, not the meaning it belongs to. They sit in their own module so both paths reach
-them without either importing the other's report builder.
+Shared by both report paths on purpose: these lived in the dyad report, and the
+``first_time`` correction in :func:`markers_on_data_axis` was applied on that path only.
 """
 
 from __future__ import annotations

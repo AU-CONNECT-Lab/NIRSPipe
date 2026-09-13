@@ -1052,9 +1052,7 @@ def build_hyper_post_report(
         return out
 
     # ---- the analysis, which is not this module's ----
-    # Everything below draws what this returns. The transform, the band means, the ROI
-    # grouping, the correlation and the six kinds of TSV are one pipeline stage, and the
-    # report reads its result the way a subject report reads an SQM record off disk.
+    # Everything below draws what this returns.
     if result is None:
         result = run_hyper_post(
             group_id, task, aligned_raws, output_dir,

@@ -1,14 +1,8 @@
 """Putting a group's recordings on one clock, and saying afterwards what was done.
 
-The middle of the three modules ``hyperscanning`` was split into. It depends on nothing else
-in the group code: alignment is a property of the recordings and their triggers, not of how
-they were loaded or how good they are.
-
-:func:`alignment_params` is why the rest exists as a module rather than a step. Every
-inter-brain number assumes a shared time axis, and the parameters it returns are stamped
-onto every table so that a file can say whether one was ever established. ``--no-align`` and
-an alignment whose trigger sits at t=0 both leave every offset at zero, and without this they
-could not be told apart afterwards.
+:func:`alignment_params` is stamped onto every inter-brain table, because ``--no-align`` and
+an alignment whose trigger sits at t=0 both leave every offset at zero and nothing else on
+disk can tell the two apart.
 """
 
 from __future__ import annotations

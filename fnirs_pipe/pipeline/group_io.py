@@ -1,9 +1,6 @@
 """Reading a hyperscanning group off disk: who is in it, and which files are theirs.
 
-The bottom of the three modules ``hyperscanning`` was split into, and the one that touches
-the filesystem. Nothing here puts members on a common clock or judges their quality; it
-finds the recordings a group names and hands them back, with the stage checks a caller needs
-to know what it is holding.
+Finds and loads; does not align and does not judge. Depends on no other group module.
 """
 
 from __future__ import annotations

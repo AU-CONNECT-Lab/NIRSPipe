@@ -1,13 +1,7 @@
-"""Dyad-level quality metrics: the screening grid, and the scalars a hyper record holds.
+"""Dyad-level quality metrics: the shared screening grid, and the scalars a record holds.
 
-The layer under :mod:`fnirs_pipe.qc.figures.hyper_figures`, which drew these and measured
-them in one place. A figure module is the wrong home for a number that lands in a quality
-record: ``hyper_usable`` had to import a figure module to reach ``dyad_status``, so the
-record depended on the drawing rather than the other way round.
-
-What stayed behind is what a figure needs and a record does not: ``motion_series`` builds
-carpet z-scores off ``figures.motion_panel``, and ``head_geometry`` projects optode
-positions. Both are figure data. The rule is that nothing here imports ``qc.figures``.
+Nothing here imports ``qc.figures``. What stayed there is figure data rather than a measured
+number: ``motion_series`` builds carpet z-scores, ``head_geometry`` projects optodes.
 """
 
 from __future__ import annotations

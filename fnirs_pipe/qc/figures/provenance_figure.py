@@ -138,10 +138,8 @@ def provenance_figure(nodes: dict[str, Node], title: str | None = None):
 
 
 # ---- Writing the graph out ----
-# Here rather than beside `scan` and `simplify`, which build it. Those read sidecars and
-# return a dict; this draws and saves, and having it in the graph module made the bottom of
-# the report package import the figure package to do it. The graph knows nothing about
-# pictures now, and this knows where both outputs go.
+# Here, not beside `scan` and `simplify`: those build the graph and know nothing about
+# pictures. This draws it and saves both outputs.
 
 def write_provenance(
     nirs_dir: Path,

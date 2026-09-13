@@ -55,10 +55,8 @@ def _names(out_dir, pattern):
 
 
 # ---- three runs, not five ----
-# The five tests below ask five questions of three configurations, and a GLM run is twenty
-# seconds: running one per test made this 98-line file 38% of the suite's wall clock. The
-# runs are module-scoped and every test only reads what they produced, so sharing them
-# changes no assertion. Each yields (run_post's tuple, the directory it wrote into).
+# Five tests, three configurations, and a GLM run is twenty seconds. Module-scoped because
+# every test below only reads. Each yields (run_post's tuple, the directory it wrote into).
 
 @pytest.fixture(scope="module")
 def plain(haemo, tmp_path_factory):

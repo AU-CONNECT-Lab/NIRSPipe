@@ -1074,11 +1074,8 @@ def roi_mean_of_channels(
 
 
 # ---- Inter-subject correlation ----
-#
-# Beside the wavelet coherence because it answers the same question in the time domain
-# and reads the same two helpers, `_shared_sfreq` and `long_axis_over`. It was written
-# in the figure module that drew it, which put a computation behind a plotly import and
-# left `window_result` documenting an asymmetry against a function in another package.
+# Beside the wavelet coherence: same question in the time domain, same two helpers
+# (`_shared_sfreq`, `long_axis_over`), and `window_result` documents itself against it.
 
 def compute_isc(
     aligned_raws: dict[str, mne.io.Raw],

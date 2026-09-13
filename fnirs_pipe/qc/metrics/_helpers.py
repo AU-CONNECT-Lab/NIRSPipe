@@ -286,9 +286,8 @@ def _mask_to_segments(flagged: np.ndarray, times: np.ndarray) -> "list[tuple[flo
 
 
 # ---- Which events a run can actually be epoched on ----
-# Not a figure helper, though it was one: the CNR metric and the subject report both ask this
-# before they build Epochs, and reaching into qc.figures for it made the bottom layer of the
-# metrics package depend on the top layer of the report package.
+# The CNR metric and the subject report both ask this before building Epochs, so it sits
+# below both rather than in qc.figures, where it was.
 
 def epochable_events(raw, tmin: float, tmax: float):
     """Events that can actually be epoched over ``[tmin, tmax]``, as ``(events, event_id)``.

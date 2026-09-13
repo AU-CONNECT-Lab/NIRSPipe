@@ -1,9 +1,7 @@
 """One condition's numbers, read back out of the record that holds them.
 
-Both views take a condition entry as :mod:`~fnirs_pipe.qc.subject.sqm_record` wrote it and return a
-flat dict for one channel set. They are here rather than beside the condition figures because
-the subject pages and the dyad pages each use one of them, and a record view that lives with
-one path's figures is how a shared reading rule ends up with two copies of itself.
+A condition entry in, a flat dict for one channel set out. The subject pages use one of
+these and the dyad pages the other, so neither path owns them.
 """
 
 from __future__ import annotations

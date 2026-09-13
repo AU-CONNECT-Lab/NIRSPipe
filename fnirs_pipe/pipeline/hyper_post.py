@@ -1,22 +1,8 @@
-"""The hyperscanning post-processing run: the transforms, the numbers, and the tables.
+"""The analysis behind ``fnirs-hyper post``: the WTC and ISC runs, and the tables they write.
 
-The analysis half of what ``fnirs-hyper post`` does. It lived inside
-``qc.hyper_report.build_hyper_post_report``, a function of thirty parameters, twenty of them
-``wtc_*``, that computed the wavelet coherence, windowed it, averaged it over a band, grouped
-it into ROIs, correlated the two brains, wrote six kinds of TSV and only then drew anything.
-That is a pipeline stage wearing a report's name, and it was the one analysis line in this
-package with no Config and no ``run_*`` beside :mod:`~fnirs_pipe.pipeline.prep_pipeline` and
-:mod:`~fnirs_pipe.pipeline.post_pipeline`.
-
-The seam was already drawn: ``_wtc_pass`` carried the words "No figures here", because the
-transform covers every pairing at once and a figure is of one pairing. This makes that
-sentence a module boundary. The report now takes a :class:`HyperPostResult` and draws it.
-
-Three things follow. The parameter checks that were spread over the CLI and the report body
-have one home, in :class:`HyperPostConfig`. The analysis can be run and tested without
-drawing anything. And a report can be redrawn from a :class:`HyperPostResult` without a
-second wavelet transform, which is what ``build_hyper_post_report``'s ``result`` argument
-takes: left at None it calls this itself, so the CLI is unchanged.
+Nothing here draws. The transform covers every pairing at once and a figure is of one
+pairing, so the two are separated; :mod:`fnirs_pipe.qc.hyper.hyper_report` draws the
+:class:`HyperPostResult` this returns, and skips the transform when handed one.
 """
 
 from __future__ import annotations
@@ -36,11 +22,9 @@ logger = get_logger("pipeline.hyper_post")
 class HyperPostConfig:
     """Every ``--wtc-*`` option of ``fnirs-hyper post``, with the derived values resolved once.
 
-    The field names are the CLI's, so a flag can be traced to the number it moves without a
-    translation table. ``band_fmin``, ``band_fmax``, ``chroma`` and ``cond_pad_s`` are the
-    resolved forms: the band falls back to the transform's own axis, the chromophores are
-    deduplicated and validated, and the condition padding is clamped at zero. Resolving them
-    in one place is what keeps the tables and the figures from each falling back differently.
+    Field names are the CLI's. ``band_fmin``, ``band_fmax``, ``chroma`` and ``cond_pad_s``
+    are the resolved forms, in one place so the tables and the figures cannot fall back
+    differently.
     """
 
     wtc_fmin: float = 0.004
@@ -90,17 +74,14 @@ class HyperPostConfig:
 class HyperPostResult:
     """What one dyad's post run produced: the transforms, the numbers, and where they went.
 
-    ``passes`` is the per-chromophore output of the transform, keyed ``hbo`` / ``hbr``, each
-    holding the whole-run ``WTCResult`` under ``result``, its band means under ``chan`` and
-    ``roichan``, and the per-condition windows under ``cond_wtc`` and ``cond_bands``
-    positionally over ``cond_windows``. Positional on purpose: the chromophores' lists line
-    up even where a guard failed on one of them.
+    ``passes`` is keyed ``hbo`` / ``hbr``, each holding the whole-run ``WTCResult`` under
+    ``result``, its band means under ``chan`` and ``roichan``, and the windows under
+    ``cond_wtc`` / ``cond_bands`` positionally over ``cond_windows`` -- positional so the
+    chromophores line up even where a guard failed on one.
 
     ``isc`` is ``{pairing: {label or None: {chromophore: (matrix, channel names)}}}``.
-
-    ``chan_axis`` and ``roi_labels`` are the axes every panel and matrix is indexed by. They
-    ride in the result rather than being rebuilt by the report, because a panel drawn on a
-    different axis than the table beside it is the failure this pair of names prevents.
+    ``chan_axis`` and ``roi_labels`` are the axes every panel and matrix is indexed by; they
+    ride here so a panel cannot be drawn on a different axis than the table beside it.
     """
 
     subject_ids: list[str]
@@ -177,18 +158,12 @@ def run_hyper_post(
 ) -> HyperPostResult:
     """Run the coherence and the correlation for one dyad, and write every table they make.
 
-    Returns what the report draws. Nothing here builds a figure and nothing here reads one:
-    the transform covers every pairing in the group at once and is the expensive step, while
-    a figure is of one pairing, so the two are separated. Running the transform per pairing
-    would repeat the one step worth not repeating.
+    ``cond_windows`` supplies the per-condition windows instead of resolving them here: the
+    caller passes the same list to the pseudo-dyad null, and the two tables are only
+    subtractable row by row if they describe the same windows.
 
-    ``cond_windows`` supplies the per-condition windows instead of resolving them here. The
-    caller passes the same list to the pseudo-dyad null, and the two tables can only be
-    subtracted row by row if they describe the same windows. Left at None they are resolved
-    from the annotations, which is what a caller that writes no null wants.
-
-    ``errors`` and ``notes`` are the report's own lists: a guard that fails here has to reach
-    the footer of the page this result is drawn on, not only the run log.
+    ``errors`` and ``notes`` are the report's own lists, so a guard that fails here reaches
+    the footer of the page this result is drawn on and not only the run log.
     """
     from fnirs_pipe.exceptions import StageError
     from fnirs_pipe.io.derivatives import group_data_dir
@@ -214,8 +189,8 @@ def run_hyper_post(
     notes  = notes  if notes  is not None else []
     tables: dict = {}
 
-    # the config back out under the names these blocks were written against, so the transform
-    # reads one resolved value and never a raw option sitting beside it
+    # under the names the blocks below were written against, so the transform reads one
+    # resolved value and never a raw option beside it
     wtc_fmin, wtc_fmax     = config.wtc_fmin, config.wtc_fmax
     band_fmin, band_fmax   = config.band_fmin, config.band_fmax
     wtc_significance       = config.wtc_significance
@@ -509,15 +484,10 @@ def run_hyper_post(
                                   condition_windows_s=spans))
 
     # ---- ISC, which is a cut and not a slice ----
-    # Not driven by --wtc-chroma: ISC is cheap, so it has always run on both, and an ISC
-    # table is a channel-by-channel matrix that cannot share a file with a second one the way
-    # the long-format WTC tables can.
-    #
-    # A window here is a real cut of the recording, unlike the coherence, which is sliced out
-    # of the whole-run transform. Both are right: a correlation has no frequency axis and
-    # nothing in it filters, so a cut window carries no edge the record would not have had,
-    # while a wavelet transform of a cut window has two edges and a cone of its own. See
-    # `compute_isc` and `window_result`, which each say why they do it their way.
+    # Always both chromophores, not --wtc-chroma: ISC is cheap, and its matrix cannot share a
+    # file the way the long-format WTC tables can. A window here is a real cut, unlike the
+    # coherence, which is sliced out of the whole-run transform; see `compute_isc` and
+    # `window_result` for why each is right.
     def _isc_of(ch_type: str, label, window, pair) -> tuple:
         what = f"condition {label}" if label else "whole run"
         isc_mat = isc_ch_names = None

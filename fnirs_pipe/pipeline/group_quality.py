@@ -1,12 +1,8 @@
-"""What a group's members are worth: their rejected channels, their screening, their record.
+"""What a group's members are worth: rejected channels, screening, and the dyad's record.
 
-The top of the three modules ``hyperscanning`` was split into, and the only one that reads
-another: it takes the recordings :mod:`~fnirs_pipe.pipeline.group_io` loaded and reduces them
-to the verdicts a dyad page and a group table print.
-
-The rule the whole module turns on is that a dyad's channel is usable only while it is
-coupled in **both** members. Everything here that takes two members' records and returns one
-answer is applying that rule.
+Reads :mod:`~fnirs_pipe.pipeline.group_io`; nothing reads this. Everything that reduces two
+members to one answer applies the same rule: a dyad's channel is usable only while it is
+coupled in **both** of them.
 """
 
 from __future__ import annotations
