@@ -18,12 +18,22 @@ from fnirs_pipe.qc.figure_io import (
 )
 from fnirs_pipe.qc.figures.hyper_figures import (
     _cond_colors,
+    build_alignment_timeline,
     build_channel_summary,
+    build_head_by_condition,
+    build_head_slider,
     build_psd,
+    build_screening_strip,
     build_signal_overlay_pair,
-    build_trigger_timeline,
+    build_usable_time,
     compute_hyper_sqm,
+    coupled_grid,
+    dyad_status,
+    head_geometry,
+    member_series,
+    screening_summary,
 )
+from fnirs_pipe.pipeline.synchrony import SCREEN_NULL_ITER, screening_coherence
 from fnirs_pipe.qc.metrics import SCI_PASS
 from fnirs_pipe.qc.report_shell import guard, note
 from fnirs_pipe.utils.lineage import path_from
@@ -84,6 +94,26 @@ def _hyper_sqm_record(sqm: dict, aligned_raws: dict[str, mne.io.Raw]) -> dict:
     }
 
 
+def _condition_spans(raw: "mne.io.Raw | None") -> dict:
+    """``{block: (start, stop)}`` on the shared clock, BAD spans dropped.
+
+    ``crop`` moves ``first_samp`` and leaves annotation onsets on the original clock, so the
+    shared-clock time is ``onset - first_time``. Every panel that splits by condition reads
+    this one dict, so none of them can be drawn against a different set of blocks.
+    """
+    if raw is None:
+        return {}
+    t0 = float(raw.first_time)
+    spans: dict = {}
+    for ann in raw.annotations:
+        desc = str(ann["description"])
+        if desc.upper().startswith("BAD"):
+            continue
+        start = float(ann["onset"]) - t0
+        spans[desc] = (start, start + float(ann["duration"] or 0.0))
+    return spans
+
+
 def _process_hyper_raw_group(
     group_id: str,
     task: str,
@@ -130,6 +160,11 @@ def _process_hyper_raw_group(
     all_descs    = list(dict.fromkeys(m["description"] for m in markers_list))
     cond_colors_ = _cond_colors(all_descs)
 
+    conditions = _condition_spans(first_raw)
+    if not conditions:
+        note(notes, label, "no annotated blocks on the aligned recordings: the panels that "
+                           "split by condition are drawn over the whole run instead")
+
     alignment_rows = [
         {
             "subject_id": sid,
@@ -140,11 +175,28 @@ def _process_hyper_raw_group(
         for sid in subject_ids
     ]
 
-    with guard("Coherence table", errors, label):
+    # the lines this run screened by, read off the members rather than re-resolved, so the
+    # rules drawn on the series are the ones the carpet under them was masked at
+    cutoffs = next((dict((sqm_data.get(sid) or {}).get("screen_cutoffs") or {})
+                    for sid in subject_ids
+                    if (sqm_data.get(sid) or {}).get("screen_cutoffs")), {})
+
+    screening_df = pd.DataFrame()
+    with guard("Screening coherence", errors, label):
+        screening_df = screening_coherence(
+            aligned_raws, fmin=coherence_fmin, fmax=coherence_fmax,
+            windows=[(name, a, b) for name, (a, b) in conditions.items()])
+
+    with guard("Coherence tables", errors, label):
         _write_coherence_tsv(
             coherence_df, sqm_dir / f"{label}_hyper-coherence.tsv",
             "hyper_coherence", aligned_raws,
             coherence_fmin=coherence_fmin, coherence_fmax=coherence_fmax)
+        _write_coherence_tsv(
+            screening_df, sqm_dir / f"{label}_hyper-screening.tsv",
+            "hyper_screening", aligned_raws,
+            coherence_fmin=coherence_fmin, coherence_fmax=coherence_fmax,
+            n_iter=SCREEN_NULL_ITER, null="phase_scramble")
 
     figure_paths: dict = {}
 
@@ -157,13 +209,37 @@ def _process_hyper_raw_group(
             h = _save_figure_html(fig, fig_dir / fname)
             figure_paths[name] = {"src": f"figures/{fname}", "h": h}
 
-    if raw_raws:
-        _safe_save("trigger_timeline_raw", "triggerraw",
-                   build_trigger_timeline, raw_raws, subject_ids, "Time (s) [raw]")
-    _safe_save("trigger_timeline", "triggeraligned",
-               build_trigger_timeline, aligned_raws, subject_ids)
-    _safe_save("ch_summary",     "chsummary",
+    _safe_save("alignment_timeline", "alignment",
+               build_alignment_timeline, raw_raws, aligned_raws, subject_ids)
+    _safe_save("ch_summary", "chsummary",
                build_channel_summary, sqm_data, subject_ids, sci_threshold)
+
+    duration_s = first_raw.times[-1] if first_raw is not None else None
+    grid, series, geo = None, {}, {}
+    with guard("Screening grid", errors, label):
+        grid = coupled_grid(sqm_data, subject_ids, offsets, duration_s=duration_s)
+    if grid is None:
+        note(notes, label, "no shared screening grid: the members were screened on "
+                           "different window grids, or their records carry none. The "
+                           "usable-time and head panels are empty")
+    else:
+        series = {sid: member_series(sqm_data, sid, grid, offsets.get(sid, 0.0))
+                  for sid in subject_ids}
+        geo = {sid: head_geometry(aligned_raws[sid], grid["pairs"])
+               for sid in subject_ids if sid in aligned_raws}
+        geo = {sid: g for sid, g in geo.items() if g is not None}
+        if not geo:
+            note(notes, label, "no optode positions on either member: the head panels "
+                               "are empty")
+        _safe_save("usable_time", "usable", build_usable_time,
+                   grid, subject_ids, series, conditions, cutoffs)
+        if geo:
+            _safe_save("head_by_condition", "headcond", build_head_by_condition,
+                       geo, subject_ids, grid, conditions)
+            _safe_save("head_slider", "headslider", build_head_slider,
+                       geo, subject_ids, grid, series, conditions)
+
+    _safe_save("screening_strip", "screening", build_screening_strip, screening_df)
 
     ch_pairs: list[str] = get_channel_pairs(first_raw) if first_raw else []
     if not ch_pairs:
@@ -191,16 +267,41 @@ def _process_hyper_raw_group(
     sqm = compute_hyper_sqm(
         sqm_data, coherence_df, aligned_raws, offsets, subject_ids, sci_threshold,
     )
+    # the screening verdict beside the measured coherence, since the value alone is not
+    # readable: see `screening_summary`
+    sqm["screening"] = screening_summary(screening_df)
+    if grid is not None:
+        status = dyad_status(grid, subject_ids)
+        sqm["n_long_pairs"] = len(grid["pairs"])
+        sqm["usable_pairs_mean"] = round(float((status == 2).sum(axis=0).mean()), 2)
+        sqm["usable_window_frac"] = round(float((status == 2).mean()), 4)
     sqm_path = sqm_dir / f"{label}_desc-sqm_nirs.json"
     sqm_path.write_text(json.dumps(_hyper_sqm_record(sqm, aligned_raws), indent=2,
                                   default=str), encoding="utf-8")
     logger.info("Hyper SQM JSON → %s", sqm_path)
+
+    member_info = [
+        {
+            "subject_id": sid,
+            "sfreq": round(float(aligned_raws[sid].info["sfreq"]), 4)
+                     if sid in aligned_raws else None,
+            "duration_s": round(float(aligned_raws[sid].times[-1]), 1)
+                          if sid in aligned_raws else None,
+            "n_pairs": len(get_channel_pairs(aligned_raws[sid]))
+                       if sid in aligned_raws else 0,
+            "n_long": len((grid or {}).get("pairs") or []),
+        }
+        for sid in subject_ids
+    ]
 
     return {
         "subject_ids":   subject_ids,
         "label":         label,
         "sqm_dir":       sqm_dir,
         "alignment":     alignment_rows,
+        "conditions":    {k: [round(a, 2), round(b, 2)]
+                          for k, (a, b) in conditions.items()},
+        "member_info":   member_info,
         "sqm":           sqm,
         "ch_pairs":      ch_pairs,
         "figure_paths":  figure_paths,

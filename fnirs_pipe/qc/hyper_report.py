@@ -15,6 +15,9 @@ from fnirs_pipe.io.derivatives import (
 from fnirs_pipe.pipeline.hyperscanning import (
     GroupEntry, alignment_params, unfiltered_stage_note,
 )
+from fnirs_pipe.qc.channel_table import (
+    channel_columns, channel_rows, format_rows, pair_rows,
+)
 from fnirs_pipe.qc.boilerplate import collect_software_versions
 from fnirs_pipe.qc.boilerplate.vocabulary import (
     MISSING_VALUE, format_metric, is_key_metric, metric_class, metric_label,
@@ -411,6 +414,37 @@ def group_methods(
     return generate_methods_text(versions=versions, steps=steps)
 
 
+# The columns a dyad's channel table prints, dropped rather than listed, so a column added
+# to CHANNEL_COLUMNS reaches this page by default. Same drops the raw viewer makes: a
+# decision is per pair, and this page groups by member rather than by separation.
+_CH_COLUMNS = channel_columns(("corr", "separation"))
+
+
+def decision_rows(sqm_data: dict, subject_ids: list[str],
+                  sci_threshold: float) -> dict[str, list]:
+    """One member's channel table per member, formatted and classed in Python.
+
+    A view never formats a number itself, so the strings and the cell classes are built here
+    by the same functions the subject report and the raw viewer use, and the page's script
+    only lays them out. A member with no per-channel section comes back with no rows rather
+    than with a table of dashes.
+    """
+    out: dict[str, list] = {}
+    for sid in subject_ids:
+        member = sqm_data.get(sid) or {}
+        record = {"per_channel": {"raw": member.get("per_channel") or {}},
+                  "bad_channels": member.get("bad_channels") or []}
+        try:
+            rows = pair_rows(channel_rows(record))
+            cutoffs = member.get("screen_cutoffs") or {}
+            out[sid] = format_rows(rows, sci_threshold, name_key="pair",
+                                   psp_threshold=cutoffs.get("psp"))
+        except Exception:
+            logger.warning("%s: channel table could not be built", sid, exc_info=True)
+            out[sid] = []
+    return out
+
+
 def build_hyper_report(
     group_id: str,
     task: str,
@@ -499,6 +533,11 @@ def build_hyper_report(
         figure_paths=meta["figure_paths"],
         ch_detail_template_json=json.dumps(meta["figure_paths"].get("ch_detail_template")),
         sci_per_subject_json=json.dumps(sci_per_subject),
+        ch_columns=_CH_COLUMNS,
+        decision_rows_json=json.dumps(
+            decision_rows(sqm_data, meta["subject_ids"], sci_threshold), default=str),
+        blocks_json=json.dumps(meta.get("conditions") or {}),
+        member_info_json=json.dumps(meta.get("member_info") or []),
         # one unheaded table: this page's scalars come from the raw pass, which measures
         # every channel and does not split by separation
         subject_metrics_rows=subject_metric_tables(
