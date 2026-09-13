@@ -550,7 +550,7 @@ def _warn_on_split_tree(output_dir: Path) -> None:
             logger.warning(
                 "quality records under %s are not part of this cohort page; point both "
                 "`fnirs-pipe` and `fnirs-qc prep-raw` at one output directory, or aggregate "
-                "that one separately with `fnirs-qc group-raw %s`", sub, sub)
+                "that one separately with `fnirs-qc cohort %s`", sub, sub)
 
 
 def run_group_level(args: dict[str, Any]) -> None:

@@ -27,7 +27,7 @@ SQM expanded with cardiac power and tSNR metrics; channel quality summary figure
 
 Hyperscanning pipeline consolidated into `pipeline/hyperscanning.py`.
 WTC computation, connectogram visualization, ISC computation.
-Group-level raw QC report and per-dyad post-processing QC report implemented.
+Cohort-level raw QC report and per-dyad post-processing QC report implemented.
 
 ## v0.6 — Resting-State Analysis `[x]`
 
@@ -60,18 +60,18 @@ generates inline. Still missing:
 
 ## v0.10 — Group-Level QC Report `[x]`
 
-`fnirs-qc group-raw` aggregates `sub-*/nirs/*_desc-sqm_nirs.json` into `group_nirs.{tsv,html}`:
+`fnirs-qc cohort` aggregates `sub-*/nirs/*_desc-sqm_nirs.json` into `cohort_nirs.{tsv,html}`:
 subject × metric robust-z heatmap, per-metric boxplots with Tukey 1.5×IQR outlier highlighting,
 sortable table, outlier panel.
 
-`fnirs-qc group-hyper-raw` is the cohort of dyads and reports what a dyad has and a subject
+`fnirs-qc cohort-hyper` is the cohort of dyads and reports what a dyad has and a subject
 cannot: how much of each recording both members could use at the same moment, split into the
 loss that is one member's and the loss that is shared; where that time went per channel pair
 and per condition; and each window's coherence as its rank inside its own null.
 
-prep-raw also persists `sci_per_window` / `psp_per_window` / `gvtd_per_window` into the SQM JSON; group-raw renders time × subject heatmaps for these so users can spot group-wide vs individual outlier windows.
+prep-raw also persists `sci_per_window` / `psp_per_window` / `gvtd_per_window` into the SQM JSON; cohort renders time × subject heatmaps for these so users can spot group-wide vs individual outlier windows.
 
-For "is this time window dropping for everyone?", `fnirs-prep crop` writes a cropped derivatives tree (`--align trigger` measures the window from a shared trigger rather than from each recording's own start) and `prep-raw` + `group-raw` then run over it unchanged.
+For "is this time window dropping for everyone?", `fnirs-prep crop` writes a cropped derivatives tree (`--align trigger` measures the window from a shared trigger rather than from each recording's own start) and `prep-raw` + `cohort` then run over it unchanged.
 
 ## v0.11 — Self-Contained QC Viewers `[x]`
 
@@ -114,7 +114,7 @@ a bare-MNE run of the same chain. Reports are kept with the project notes outsid
 ### Reports / viewer features (designed, not started)
 
 - **Per-step before/after comparison** — interactive channel-level signal comparison across preprocessing steps (OD → SCI → motion-corrected → haemo). Two steps have it: the motion step (per-channel detail, before against after) and denoising (`carpet_compare_figure`). The rest of the chain has nothing
-- **Multi-run QC comparison** — multi-row already present in `group_nirs.tsv`, but the report has no "group rows by subject" panel for within-subject reliability across runs ([qc/group_writer.py](fnirs_pipe/qc/group_writer.py))
+- **Multi-run QC comparison** — multi-row already present in `cohort_nirs.tsv`, but the report has no "group rows by subject" panel for within-subject reliability across runs ([qc/group_writer.py](fnirs_pipe/qc/group_writer.py))
 
 ### Infrastructure
 

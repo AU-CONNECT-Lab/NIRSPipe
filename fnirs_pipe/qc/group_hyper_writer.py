@@ -15,7 +15,7 @@ What it reports is what a dyad has and a subject cannot:
   coherence is not comparable between windows of different length
 
 Deliberately not here: SCI, PSP, CV, retention and motion distributions across the cohort.
-Those are ``fnirs-qc group-raw``'s, measured per subject, and a second copy of them here
+Those are ``fnirs-qc cohort``'s, measured per subject, and a second copy of them here
 would be the same numbers under a heading that implies they are about the dyad.
 
 Nor group statistics. The distribution of a percentile across dyads is here to find the dyad
@@ -193,7 +193,7 @@ def _headline_rows(flats: list[dict]) -> list[dict]:
 
 
 def build_group_hyper_report(output_dir: Path) -> "Path | None":
-    """Render ``group_hyper_nirs.html`` over every dyad in a derivatives tree.
+    """Render ``cohort_hyper_nirs.html`` over every dyad in a derivatives tree.
 
     Returns the path, or None when the tree holds no dyad record, which is what a tree that
     has only seen the per-subject pipeline looks like.
@@ -221,7 +221,7 @@ def build_group_hyper_report(output_dir: Path) -> "Path | None":
             fig = builder(rows, order)
             if fig is None:
                 continue
-            fname = f"group_hyper_{name}.html"
+            fname = f"cohort_hyper_{name}.html"
             figure_paths[name] = {"src": f"figures/{fname}",
                                   "h": _save_figure_html(fig, fig_dir / fname)}
 
@@ -233,7 +233,7 @@ def build_group_hyper_report(output_dir: Path) -> "Path | None":
         note(notes, scope, "no usable-time table found beside the dyad records, so the "
                            "panels that split the usable time are empty")
 
-    tsv_path = output_dir / "group_hyper_nirs.tsv"
+    tsv_path = output_dir / "cohort_hyper_nirs.tsv"
     pd.DataFrame([{k: v for k, v in f.items() if k != "href"} for f in flats]).to_csv(
         tsv_path, sep="\t", index=False)
 
@@ -246,8 +246,8 @@ def build_group_hyper_report(output_dir: Path) -> "Path | None":
     versions = collect_software_versions()
     html = render(
         "group_hyper_report.html.j2",
-        **page_vars(title=f"fnirs-pipe hyper - cohort QC ({output_dir.name})",
-                    heading="fnirs-pipe Group Hyper QC",
+        **page_vars(title=f"fnirs-pipe cohort QC, hyper ({output_dir.name})",
+                    heading="fnirs-pipe Cohort QC (hyperscanning groups)",
                     nav_meta=[("dyads", len(rows))]),
         **footer_vars(versions=versions, errors=errors, notes=notes),
         n_rows=len(rows),
@@ -268,7 +268,7 @@ def build_group_hyper_report(output_dir: Path) -> "Path | None":
                     for label in order],
     )
 
-    out_path = output_dir / "group_hyper_nirs.html"
+    out_path = output_dir / "cohort_hyper_nirs.html"
     out_path.write_text(html, encoding="utf-8")
     logger.info("cohort hyper report saved: %s (%d dyads)", out_path, len(rows))
     return out_path

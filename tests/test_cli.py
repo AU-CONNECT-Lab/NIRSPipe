@@ -294,7 +294,7 @@ def test_moved_commands_are_gone_from_qc():
     sub = [a for a in qc_cli._build_parser()._actions
            if isinstance(a, _ap._SubParsersAction)][0]
     assert set(sub.choices) == {
-        "prep-raw", "hyper-raw", "group-raw", "group-hyper-raw", "provenance"}
+        "prep-raw", "hyper-raw", "cohort", "cohort-hyper", "provenance"}
 
 
 def test_rate_subcommands():

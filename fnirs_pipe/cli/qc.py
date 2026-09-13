@@ -180,7 +180,7 @@ def cmd_hyper_raw(
 
 
 def cmd_group_raw(output_dir: Path) -> None:
-    """Aggregate per-subject prep-raw SQMs into group_nirs.tsv + group_nirs.html."""
+    """Aggregate per-subject SQMs into cohort_nirs.tsv + cohort_nirs.html."""
     from fnirs_pipe.qc.group_writer import build_group_raw_report
 
     path = build_group_raw_report(output_dir)
@@ -188,7 +188,7 @@ def cmd_group_raw(output_dir: Path) -> None:
 
 
 def cmd_group_hyper_raw(output_dir: Path) -> None:
-    """Aggregate per-group hyper SQMs into group_hyper_nirs.tsv + group_hyper_nirs.html."""
+    """Aggregate per-group hyper SQMs into cohort_hyper_nirs.tsv + cohort_hyper_nirs.html."""
     from fnirs_pipe.qc.group_hyper_writer import build_group_hyper_report
 
     path = build_group_hyper_report(output_dir)
@@ -238,7 +238,7 @@ def cmd_provenance(output_dir: Path) -> None:
 def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="fnirs-qc",
-        description="fNIRS quality control: individual, hyperscanning and group-level reports.",
+        description="fNIRS quality control: individual, hyperscanning and cohort-level reports.",
     )
     sub = p.add_subparsers(required=True)
 
@@ -315,18 +315,21 @@ def _build_parser() -> argparse.ArgumentParser:
     hr.add_argument("--skip-bids-validation", action=argparse.BooleanOptionalAction, default=False)
     hr.set_defaults(func=cmd_hyper_raw)
 
-    gr = sub.add_parser("group-raw", help="Aggregate per-subject prep-raw SQMs.")
+    gr = sub.add_parser(
+        "cohort",
+        help="Every subject in a tree on one page.",
+        description="Aggregates the quality record of every run under OUTPUT_DIR. A run processed by both `fnirs-pipe` and `prep-raw` has two records and the pipeline one wins, being a superset, so the page carries every stage the run was measured at rather than the original recording alone.")
     gr.add_argument("output_dir", type=Path,
                     help="fnirs-pipe derivatives directory (contains sub-*/nirs/ SQM JSONs)")
     gr.set_defaults(func=cmd_group_raw)
 
     ghr = sub.add_parser(
-        "group-hyper-raw",
+        "cohort-hyper",
         help="Cohort report over every dyad: shared usable time, where it went, and each "
              "window against its own null.",
         description="One page for every dyad in a tree, built from the records and tables "
                     "the dyad runs already wrote. It reports what a dyad has and a subject "
-                    "cannot; the per-subject quality distributions stay in `group-raw`.")
+                    "cannot; the per-subject quality distributions stay in `cohort`.")
     ghr.add_argument("output_dir", type=Path,
                      help="fnirs-pipe derivatives directory (contains group-*/nirs/ SQM JSONs)")
     ghr.set_defaults(func=cmd_group_hyper_raw)

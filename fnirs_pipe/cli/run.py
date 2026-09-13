@@ -43,7 +43,8 @@ def _build_parser() -> argparse.ArgumentParser:
 
     p.add_argument("bids_dir",   type=Path, help="BIDS dataset directory.")
     p.add_argument("output_dir", type=Path, help="Output directory (BIDS Derivatives).")
-    p.add_argument("analysis_level", choices=_LEVEL_CHOICES, help="Processing level.")
+    p.add_argument("analysis_level", choices=_LEVEL_CHOICES,
+                   help="Processing level. `group` is the BIDS Apps name for the cohort pass; it writes cohort_nirs.{tsv,html} and, where the tree holds groups, cohort_hyper_nirs.{tsv,html}.")
 
     prep = p.add_argument_group("preprocessing (required for participant level)")
     # extend: accepts space-separated (--dpf 6 6) and repeated (--dpf 6 --dpf 6) forms.

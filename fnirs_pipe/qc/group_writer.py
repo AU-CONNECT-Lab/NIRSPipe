@@ -1,4 +1,4 @@
-"""Group-level QC aggregation: glob per-subject (or per-group) SQM JSONs into
+"""Cohort-level QC aggregation: glob per-subject (or per-group) SQM JSONs into
 TSV + an HTML viewer with heatmap / boxplots / sortable table / outlier panel."""
 
 from __future__ import annotations
@@ -419,10 +419,10 @@ def rows_to_dataframe(full_rows: list[dict]) -> pd.DataFrame:
 
 
 def build_group_raw_report(output_dir: Path) -> Path:
-    """Aggregate all sub-XX/nirs/...desc-sqm_nirs.json into group_nirs.{tsv,html}."""
+    """Aggregate all sub-XX/nirs/...desc-sqm_nirs.json into cohort_nirs.{tsv,html}."""
     return _build_group(
         output_dir, entity_glob="sub-*",
-        out_stem="group_nirs",
-        title="Group-level QC (individual)",
+        out_stem="cohort_nirs",
+        title="Cohort QC (individual subjects)",
     )
 

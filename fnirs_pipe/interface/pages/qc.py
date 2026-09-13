@@ -25,8 +25,8 @@ _DESC_CHOICES = [desc for desc, domain in _DOMAIN.items() if domain == "haemo"]
 
 # one output_dir and nothing else, so they share a form
 _AGGREGATE_COMMANDS = [
-    {"label": "Group QC (individual subjects)", "value": "group-raw"},
-    {"label": "Group QC (hyperscanning dyads)", "value": "group-hyper-raw"},
+    {"label": "Cohort QC (individual subjects)", "value": "cohort"},
+    {"label": "Cohort QC (hyperscanning groups)", "value": "cohort-hyper"},
     {"label": "Merge WTC tables across dyads", "value": "merge"},
     {"label": "Rebuild the dyad landing pages", "value": "index"},
     {"label": "Provenance graphs", "value": "provenance"},

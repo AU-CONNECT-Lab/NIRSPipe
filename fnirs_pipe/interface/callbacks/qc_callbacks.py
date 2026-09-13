@@ -18,7 +18,7 @@ from fnirs_pipe.utils.logging import get_logger
 logger = get_logger("interface.qc_callbacks")
 
 # fnirs-qc commands whose whole argument list is one output_dir
-_AGGREGATE = ("group-raw", "group-hyper-raw", "provenance")
+_AGGREGATE = ("cohort", "cohort-hyper", "provenance")
 
 # fnirs-hyper subcommands, which take one output_dir and their own flags
 _HYPER = ("run", "band", "merge", "index")
@@ -34,8 +34,8 @@ _ALL_SECTIONS = ("qc-hyper-post-section", "qc-wtc-band-section", "qc-window-sect
 # report each command writes, relative to output_dir, best match first. The hyper level names
 # its file after the group, so it is found by glob rather than named here.
 _REPORTS = {
-    "group-raw":       ["group_nirs.html"],
-    "group-hyper-raw": ["group_hyper_nirs.html"],
+    "cohort":       ["cohort_nirs.html"],
+    "cohort-hyper": ["cohort_hyper_nirs.html"],
     # the second pattern finds a tree written before the reports moved into group-<id>/
     "run":             ["group-*/group-*_desc-hyperpost_nirs.html", "group-*_hyper*.html"],
 }

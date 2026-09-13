@@ -1,4 +1,4 @@
-"""Plotly figure builders for group-level QC reports (individual and hyper)."""
+"""Plotly figure builders for cohort-level QC reports (individual and hyper)."""
 
 from __future__ import annotations
 

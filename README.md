@@ -11,7 +11,7 @@ A BIDS-compatible fNIRS preprocessing, postprocessing, hyperscanning, and QC pip
 | `participant` | `prep`: fixed-order preprocessing, OD conversion → SCI channel marking → motion correction (TDDR or wavelet) → Beer-Lambert. Then `post` when `--mode` is given: `denoise`, `glm`, or `rest` (bandpass + resample; confound regression; GLM residuals or ALFF/FC) |
 | `group` | Cohort aggregation of the per-subject and per-dyad quality records |
 
-Outputs follow the [BIDS Derivatives](https://bids-specification.readthedocs.io/en/stable/derivatives/introduction.html) spec. Each run gets an HTML QC report with figures, a provenance graph and an auto-generated Methods paragraph, and each subject an index page over their runs. Group-level QC, hyperscanning (dyad WTC/ISC), an interactive rating viewer, a Dash desktop GUI, and a JSONL→SQLite run-log database are all first-class features.
+Outputs follow the [BIDS Derivatives](https://bids-specification.readthedocs.io/en/stable/derivatives/introduction.html) spec. Each run gets an HTML QC report with figures, a provenance graph and an auto-generated Methods paragraph, and each subject an index page over their runs. Cohort-level QC, hyperscanning (dyad WTC/ISC), an interactive rating viewer, a Dash desktop GUI, and a JSONL→SQLite run-log database are all first-class features.
 
 ## Requirements
 
@@ -285,8 +285,8 @@ fnirs-qc hyper-raw BIDS_DIR OUTPUT_DIR --pairs-csv PATH
                    [--short-max-dist/--long-min-dist/--long-max-dist MM]
                    [--normalize] [--no-align] [--tstart/--tend FLOAT]
 
-fnirs-qc group-raw       OUTPUT_DIR
-fnirs-qc group-hyper-raw OUTPUT_DIR
+fnirs-qc cohort       OUTPUT_DIR
+fnirs-qc cohort-hyper OUTPUT_DIR
 fnirs-qc provenance      OUTPUT_DIR
 ```
 
@@ -305,7 +305,7 @@ fnirs-prep crop BIDS_DIR DERIV_DIR --participant-label ... --tmin FLOAT --tmax F
                 [--align none|trigger] [--trigger-name TEXT]
 fnirs-qc   prep-raw DERIV_DIR/cropped OUTPUT_DIR PARTICIPANT_LABEL --dpf ...
                     --cardiac-l-freq FLOAT --cardiac-h-freq FLOAT
-fnirs-qc   group-raw OUTPUT_DIR
+fnirs-qc   cohort OUTPUT_DIR
 ```
 
 ### `fnirs-rate` — Flask rating viewers
@@ -377,8 +377,8 @@ output/
 │       ├── sub-01_desc-hbo_fcroiz.tsv              # + --roi-mapping
 │       ├── sub-01_desc-hbo_fcseed.tsv              # + --roi-mapping (ROI × channel)
 │       └── sub-01_desc-hbo_fcseedz.tsv             # + --roi-mapping
-├── group_nirs.{tsv,html}                # fnirs-qc group-raw
-└── group_hyper_nirs.{tsv,html}          # fnirs-qc group-hyper-raw
+├── cohort_nirs.{tsv,html}                # fnirs-qc cohort
+└── cohort_hyper_nirs.{tsv,html}          # fnirs-qc cohort-hyper
 ```
 
 The `fc*` files are written in rest mode, or in any mode run with `--fc`.
@@ -404,8 +404,8 @@ output/
 |--------|---------|---------------|
 | Per-run | (pipeline, automatic) | individual: raw + post, one report per run plus a subject index |
 | Raw pre-flight viewer | `fnirs-qc prep-raw` | individual — raw only |
-| Group | `fnirs-qc group-raw` / `group-hyper-raw` | group — raw |
-| Time-window group | `fnirs-prep crop` then `prep-raw` + `group-raw` | group — raw, cropped window |
+| Group | `fnirs-qc cohort` / `cohort-hyper` | group — raw |
+| Time-window group | `fnirs-prep crop` then `prep-raw` + `cohort` | group — raw, cropped window |
 | Per-trial | `fnirs-qc prep-raw --epoch-qc` | individual — SQM per task event, in the raw report |
 | Dyad raw | `fnirs-qc hyper-raw` | hyperscanning — raw coherence |
 | Dyad post | `fnirs-hyper run` | hyperscanning — post: WTC + ISC (ROI-level with `--roi-mapping`) |
