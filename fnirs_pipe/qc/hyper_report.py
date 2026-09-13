@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sys
+from itertools import combinations
 from pathlib import Path
 
 import mne
@@ -833,6 +834,27 @@ def build_hyper_post_report(
     subject_ids  = [e.subject_id for e in group]
     ref_raw      = aligned_raws.get(subject_ids[0]) if subject_ids else None
 
+    # Every inter-brain figure on this report is of two members. A group of three has three
+    # such pairings and the transform carries all of them, so each gets its own page rather
+    # than one page standing for the group: the numbers differ per pairing and a single page
+    # would have to pick one and name it after the group.
+    pairings = list(combinations(subject_ids, 2))
+
+    def _pair_slug(pair: "tuple[str, str] | None") -> str:
+        """``""`` while the group holds one pairing, else ``_<sub1>x<sub2>``.
+
+        Empty for a dyad on purpose: a dyad has exactly one pairing, so the slug would
+        distinguish nothing and every file it names would be renamed for no reason.
+
+        ::
+
+          two members            -> ""
+          ("sub-a", "sub-b")     -> "_ab"   (of a group of three)
+        """
+        if pair is None or len(pairings) < 2:
+            return ""
+        return "_" + "x".join(_pair_fname(sid) for sid in pair)
+
     # ---- what put the members on one clock ----
     # Read once and written onto every table this report produces. An inter-brain number
     # assumes a shared time axis and nothing on disk used to say whether one was ever
@@ -1107,7 +1129,8 @@ def build_hyper_post_report(
     roi_view_spans = (cond_windows if (cond_windows and cond_pad_s is None) else None)
 
     def _figure_set(result, chan_band_df, ch_type: str, suffix: str = "",
-                    roi_view_of: "dict | None" = None) -> dict:
+                    roi_view_of: "dict | None" = None,
+                    pair: "tuple[str, str] | None" = None) -> dict:
         """Every figure one WTC result yields: the maps and the three matrices.
 
         Called once with the whole-run result and again with each condition window's, so a
@@ -1133,15 +1156,21 @@ def build_hyper_post_report(
         at those files with its slug on the end instead of drawing its own. See
         :func:`~fnirs_pipe.qc.figures.hyper_post_figures.wtc_condition_views` for when that
         is the same figure and when it is not.
+
+        ``pair`` is which two members these maps are of. A group of three holds three
+        pairings and the result carries all of them, so the one drawn has to be named rather
+        than taken off the front: the maps are labelled with it, and its slug separates their
+        files from the next pairing's.
         """
         out: dict = {**_empty_figures(), "roichan": None}
         what = f"condition {suffix.lstrip('_')}" if suffix else "whole run"
 
-        pair_key   = next(iter(result.pairs)) if result and result.pairs else None
+        pair_key = pair if pair is not None else (
+            next(iter(result.pairs)) if result and result.pairs else None)
         pair_label = f"{pair_key[0]} × {pair_key[1]}" if pair_key else ""
 
         _maps(out["per_channel"], result, pair_key, pair_label, chan_axis,
-              f"wtc_{ch_type}", ch_type, suffix, what)
+              f"wtc_{ch_type}{_pair_slug(pair_key)}", ch_type, suffix, what)
 
         if not roi_map:
             return out
@@ -1162,7 +1191,8 @@ def build_hyper_post_report(
         if result is not None and roi_view_of is None:
             with guard(f"ROI WTC maps from channels ({what}, {ch_type})", errors, scope):
                 roi_wtc = roi_maps_from_channels(result, roi_map)
-        roi_pair_key = next(iter(roi_wtc.pairs)) if roi_wtc and roi_wtc.pairs else None
+        roi_pair_key = pair_key if (roi_wtc and pair_key in roi_wtc.pairs) else (
+            next(iter(roi_wtc.pairs)) if roi_wtc and roi_wtc.pairs else None)
 
         if roi_view_of is not None:
             out["per_roi"] = {
@@ -1173,8 +1203,8 @@ def build_hyper_post_report(
             }
         else:
             _maps(out["per_roi"], roi_wtc, roi_pair_key, pair_label, roi_labels,
-                  f"wtcroi_{ch_type}", ch_type, suffix, what, interactive=True,
-                  view_spans=roi_view_spans)
+                  f"wtcroi_{ch_type}{_pair_slug(pair_key)}", ch_type, suffix, what,
+                  interactive=True, view_spans=roi_view_spans)
 
         return out
 
