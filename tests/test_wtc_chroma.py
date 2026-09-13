@@ -484,7 +484,7 @@ def test_a_condition_boundary_is_drawn_on_the_axis_the_window_was_cut_on(dyad, t
     """An aligned recording keeps its crop offset in `first_time` while everything computed
     from it starts at zero, so the two have to be read through one function. They were not,
     and every boundary line on every coherence map came out late by that offset."""
-    from fnirs_pipe.qc.hyper_report import condition_windows, markers_on_data_axis
+    from fnirs_pipe.qc.windows import condition_windows, markers_on_data_axis
 
     raw = dyad["sub-01"].copy()
     raw.set_annotations(mne.Annotations([20.0, 210.0], [180.0, 180.0], ["rest", "talk"]))

@@ -643,7 +643,7 @@ def condition_sections(
     """
     from fnirs_pipe.io.snirf import read_snirf
     from fnirs_pipe.qc.condition_views import PSD_NFFT_CAP, condition_haemo_scalars
-    from fnirs_pipe.qc.hyper_report import condition_windows
+    from fnirs_pipe.qc.windows import condition_windows
     from fnirs_pipe.qc.metrics import long_short_channels
     from fnirs_pipe.qc.metrics.windowed import SCREEN_WINDOW_S
 

@@ -36,7 +36,7 @@ from fnirs_pipe.qc.figures.group_hyper_figures import (
     build_condition_dials, build_null_strip, build_pair_field, build_usable_bars,
     cohort_order,
 )
-from fnirs_pipe.qc.figures.hyper_figures import NULL_ALPHA_PCT
+from fnirs_pipe.qc.metrics.hyper import NULL_ALPHA_PCT
 from fnirs_pipe.qc.report_shell import footer_vars, guard, note, page_vars, render
 from fnirs_pipe.utils.logging import get_logger
 

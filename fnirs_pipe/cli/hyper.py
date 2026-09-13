@@ -225,7 +225,8 @@ def cmd_run(
     from fnirs_pipe.pipeline.hyperscanning import (
         resolve_analysis_window, resolve_group_bands, write_group_bads,
     )
-    from fnirs_pipe.qc.hyper_report import build_hyper_post_report, condition_windows
+    from fnirs_pipe.qc.hyper_report import build_hyper_post_report
+    from fnirs_pipe.qc.windows import condition_windows
     from fnirs_pipe.qc.metrics._helpers import bands_to_record
     from fnirs_pipe.qc.wtc_null import write_wtc_null
     from fnirs_pipe.utils.run_record import write_group_run_record

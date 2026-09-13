@@ -13,6 +13,7 @@ One module per metric family, layered so the imports run one way::
     haemo       HbO-HbR correlation, CNR, band powers, gcor, drift, retention
     windowed    the same questions per window, on one shared grid
     aggregate   the dicts a run stores, assembled from the families above
+    hyper       the dyad-level questions: the shared screening grid and its scalars
 
 Every name is re-exported here, so ``from fnirs_pipe.qc.metrics import X`` reaches any of
 them and a caller need not know which module X is in.
@@ -73,4 +74,9 @@ from fnirs_pipe.qc.metrics.windowed import (  # noqa: F401
 from fnirs_pipe.qc.metrics.aggregate import (  # noqa: F401
     compute_raw_sqm, compute_haemo_sqm, compute_prep_haemo_sqm, comparable_stage_metrics,
     _band_power, _variance_remaining,
+)
+from fnirs_pipe.qc.metrics.hyper import (  # noqa: F401
+    NULL_ALPHA_PCT, sci_of, _rejected_pairs, _ch_kept_by_member,
+    coupled_grid, dyad_status, member_series,
+    motion_summary, screening_summary, compute_hyper_sqm,
 )

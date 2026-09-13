@@ -13,7 +13,7 @@ import pytest
 from fnirs_pipe.qc.figures.raw_figures import (
     _trial_image_by_span, build_trial_image_by_condition,
 )
-from fnirs_pipe.qc.hyper_report import condition_windows
+from fnirs_pipe.qc.windows import condition_windows
 from fnirs_pipe.qc.metrics.windowed import SCREEN_WINDOW_S
 from fnirs_pipe.qc.report import _condition_trial_qc
 from tests._synth import synth_raw

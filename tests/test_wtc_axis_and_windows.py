@@ -125,7 +125,7 @@ def _raw_with(descs, onsets, durations, end=900.0):
 
 @pytest.fixture
 def windows():
-    from fnirs_pipe.qc.hyper_report import condition_windows
+    from fnirs_pipe.qc.windows import condition_windows
 
     return condition_windows
 

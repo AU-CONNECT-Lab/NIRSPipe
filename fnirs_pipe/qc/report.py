@@ -868,7 +868,7 @@ def _section_trial_qc(
     ``_EPOCH_TMIN`` / ``_EPOCH_TMAX`` while the scoring uses each event's own duration,
     which is what a block design records and a fixed window would cut off.
     """
-    from fnirs_pipe.qc.hyper_report import markers_on_data_axis
+    from fnirs_pipe.qc.windows import markers_on_data_axis
 
     tmin = getattr(config, "epoch_tmin", None)
     tmax = getattr(config, "epoch_tmax", None)
@@ -964,7 +964,7 @@ def _section_condition_trial_images(
     rebuilt panels: a scale taken on one cropped condition at a time would differ from page
     to page, and these pages are read against each other.
     """
-    from fnirs_pipe.qc.hyper_report import markers_on_data_axis
+    from fnirs_pipe.qc.windows import markers_on_data_axis
 
     # the annotations alone say whether any window could fill a panel, and answering from
     # them costs nothing; the pass below epochs the recording once per channel

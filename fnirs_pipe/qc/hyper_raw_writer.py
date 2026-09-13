@@ -13,8 +13,7 @@ from fnirs_pipe.pipeline.hyperscanning import (
     GroupEntry, _hyper_sidecar, alignment_params,
 )
 from fnirs_pipe.qc.figure_io import (
-    _pair_fname, _save_figure_html, _save_multi_fig_html,
-    extract_markers, get_channel_pairs,
+    _pair_fname, _save_figure_html, _save_multi_fig_html, get_channel_pairs,
 )
 from fnirs_pipe.qc.figures.hyper_figures import (
     _cond_colors,
@@ -27,18 +26,17 @@ from fnirs_pipe.qc.figures.hyper_figures import (
     build_screening_strip,
     build_signal_overlay_pair,
     build_usable_time,
-    compute_hyper_sqm,
-    coupled_grid,
     head_geometry,
-    member_series,
     motion_series,
-    motion_summary,
-    screening_summary,
+)
+from fnirs_pipe.qc.metrics.hyper import (
+    compute_hyper_sqm, coupled_grid, member_series, motion_summary, screening_summary,
 )
 from fnirs_pipe.pipeline.synchrony import SCREEN_NULL_ITER, screening_coherence
 from fnirs_pipe.qc.hyper_usable import usable_scalars, write_usable_table
 from fnirs_pipe.qc.metrics import SCI_PASS
 from fnirs_pipe.qc.report_shell import guard, note
+from fnirs_pipe.qc.windows import condition_windows, markers_on_data_axis
 from fnirs_pipe.utils.lineage import path_from
 from fnirs_pipe.utils.logging import get_logger
 
@@ -98,23 +96,21 @@ def _hyper_sqm_record(sqm: dict, aligned_raws: dict[str, mne.io.Raw]) -> dict:
 
 
 def _condition_spans(raw: "mne.io.Raw | None") -> dict:
-    """``{block: (start, stop)}`` on the shared clock, BAD spans dropped.
+    """``{block: (start, stop)}`` on the shared clock, by the rule the post report uses.
 
-    ``crop`` moves ``first_samp`` and leaves annotation onsets on the original clock, so the
-    shared-clock time is ``onset - first_time``. Every panel that splits by condition reads
-    this one dict, so none of them can be drawn against a different set of blocks.
+    The dict is what every panel that splits by condition reads, so none of them can be
+    drawn against a different set of blocks. The rule behind it is
+    :func:`~fnirs_pipe.qc.windows.condition_windows` rather than a second copy of it here.
+    The copy took each annotation's own duration, which on a system that writes
+    zero-duration triggers gave every block a zero-length span, and keyed the dict on the
+    bare description, which kept only the last occurrence of a repeated one.
+
+    ``min_duration`` is 0: these windows only split panels, so no frequency has to fit
+    inside one and nothing is dropped for being short.
     """
     if raw is None:
         return {}
-    t0 = float(raw.first_time)
-    spans: dict = {}
-    for ann in raw.annotations:
-        desc = str(ann["description"])
-        if desc.upper().startswith("BAD"):
-            continue
-        start = float(ann["onset"]) - t0
-        spans[desc] = (start, start + float(ann["duration"] or 0.0))
-    return spans
+    return {label: (t0, t1) for label, t0, t1 in condition_windows(raw, min_duration=0.0)}
 
 
 def _process_hyper_raw_group(
@@ -161,7 +157,7 @@ def _process_hyper_raw_group(
 
     subject_ids  = [e.subject_id for e in group]
     first_raw    = aligned_raws.get(subject_ids[0]) if subject_ids else None
-    markers_list = extract_markers(first_raw) if first_raw else []
+    markers_list = markers_on_data_axis(first_raw) if first_raw else []
     all_descs    = list(dict.fromkeys(m["description"] for m in markers_list))
     cond_colors_ = _cond_colors(all_descs)
 

@@ -14,7 +14,7 @@ from fnirs_pipe.qc.figure_io import (
     _pair_fname, _save_figure_html, _save_multi_fig_html,
     extract_markers, get_channel_pairs,
 )
-from fnirs_pipe.qc.hyper_report import markers_on_data_axis
+from fnirs_pipe.qc.windows import markers_on_data_axis
 from fnirs_pipe.qc.channel_table import (
     MOTION_SPLIT_COLUMNS, OD_SPLIT_COLUMNS, channel_columns, channel_rows, format_rows,
     heatmap_args, pair_rows, save_channel_csv, separation_blocks, separation_notes,
@@ -232,7 +232,7 @@ def _process_run(
     cond_frac: dict = {}
     cond_windows: list = []
     with guard("Coupled windows per condition", errors, label):
-        from fnirs_pipe.qc.hyper_report import condition_windows
+        from fnirs_pipe.qc.windows import condition_windows
         from fnirs_pipe.qc.metrics.windowed import (
             SCREEN_WINDOW_S, condition_window_fractions,
         )
