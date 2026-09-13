@@ -7,11 +7,15 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- **`fnirs-qc group-hyper-raw` is a report about dyads.** Every dyad in a tree on one page: how much of each recording both members could use at the same moment, split into the loss that is one member's and the loss that is shared; where that time went, per channel pair and per condition; and each window's coherence as its rank inside its own null. A channel pair pale down the whole cohort is the cap rather than any one dyad, which is the finding no single dyad page can carry. The per-subject quality distributions stay in `group-raw`, where they are measured
+- **Each dyad writes a usable-time table**, one row per channel pair and condition, beside its quality record. The three shares are on the dyad's own record too, so a cohort of twenty is read without opening twenty pages
+
 - **Every cross-brain matrix comes with a connectogram beside it**, the arrangement the ISC panel already had: the heatmap carries every pairing and the circle shows which ones stand out. Both coherence band-mean matrices take it, and all three panels are live, so hover names the pairing and prints its value instead of leaving an arc to be traced to both ends
 - **`--wtc-arc-min` sets which pairings the coherence circles draw.** Left unset, a grid small enough to read whole is drawn whole and a larger one keeps its strongest pairings. Display only: no table or matrix cell moves with it
 - **The ROI coherence maps are live figures.** Hover reads the time, frequency and coherence under the pointer and the axes zoom, which is what a map whose structure changes every ten seconds at the fast end needs. The per-channel maps stay stills: both kinds cost about 3 MB apiece, and a crossed 14-channel dyad has 2352 of the one against 192 of the other
 
 ### Changed
+- **The cohort hyper page no longer repeats the per-subject cohort report.** It was the subject × metric heatmap, the boxplots and the outlier list over dyad members, which is what `group-raw` already draws over every subject in the tree; what replaces it is the dyad's own numbers
 - **A condition's ROI coherence map is a view of the run's, in the same file.** It always was the same numbers, read out of the whole-run transform rather than cut from it, and it was being written out again per condition; now the run's figure and a condition's view of it cannot disagree, and a five-condition dyad writes a sixth of the files. A run transformed per condition with `--wtc-cond-transform` is a different figure and still gets its own
 - **The live coherence map is drawn at the still's own weights.** Its condition rules, its cone and its phase arrows were all about half the thickness of the ones on the panel above it, because a width in points at 300 dpi lands on a page twice as heavy as the same number handed to a browser as pixels
 - **No figure in the dyad report is boxed in black**, the map's axes and the colorbars included; the live panels never were, and one framed scale beside an unframed one reads as two different scales

@@ -426,11 +426,3 @@ def build_group_raw_report(output_dir: Path) -> Path:
         title="Group-level QC (individual)",
     )
 
-
-def build_group_hyper_raw_report(output_dir: Path) -> Path:
-    """Aggregate all group-XX/nirs/...desc-sqm_nirs.json into group_hyper_nirs.{tsv,html}."""
-    return _build_group(
-        output_dir, entity_glob="group-*",
-        out_stem="group_hyper_nirs",
-        title="Group-level QC (hyperscanning)",
-    )

@@ -188,10 +188,13 @@ def cmd_group_raw(output_dir: Path) -> None:
 
 
 def cmd_group_hyper_raw(output_dir: Path) -> None:
-    """Aggregate per-group hyper-raw SQMs into group_hyper_nirs.tsv + group_hyper_nirs.html."""
-    from fnirs_pipe.qc.group_writer import build_group_hyper_raw_report
+    """Aggregate per-group hyper SQMs into group_hyper_nirs.tsv + group_hyper_nirs.html."""
+    from fnirs_pipe.qc.group_hyper_writer import build_group_hyper_report
 
-    path = build_group_hyper_raw_report(output_dir)
+    path = build_group_hyper_report(output_dir)
+    if path is None:
+        print(f"no dyad records under {output_dir}; run `fnirs-qc hyper-raw` first")
+        return
     print(f"report -> {path}")
 
 
@@ -317,7 +320,13 @@ def _build_parser() -> argparse.ArgumentParser:
                     help="fnirs-pipe derivatives directory (contains sub-*/nirs/ SQM JSONs)")
     gr.set_defaults(func=cmd_group_raw)
 
-    ghr = sub.add_parser("group-hyper-raw", help="Aggregate per-group hyper-raw SQMs.")
+    ghr = sub.add_parser(
+        "group-hyper-raw",
+        help="Cohort report over every dyad: shared usable time, where it went, and each "
+             "window against its own null.",
+        description="One page for every dyad in a tree, built from the records and tables "
+                    "the dyad runs already wrote. It reports what a dyad has and a subject "
+                    "cannot; the per-subject quality distributions stay in `group-raw`.")
     ghr.add_argument("output_dir", type=Path,
                      help="fnirs-pipe derivatives directory (contains group-*/nirs/ SQM JSONs)")
     ghr.set_defaults(func=cmd_group_hyper_raw)

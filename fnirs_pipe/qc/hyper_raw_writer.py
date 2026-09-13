@@ -28,12 +28,12 @@ from fnirs_pipe.qc.figures.hyper_figures import (
     build_usable_time,
     compute_hyper_sqm,
     coupled_grid,
-    dyad_status,
     head_geometry,
     member_series,
     screening_summary,
 )
 from fnirs_pipe.pipeline.synchrony import SCREEN_NULL_ITER, screening_coherence
+from fnirs_pipe.qc.hyper_usable import usable_scalars, write_usable_table
 from fnirs_pipe.qc.metrics import SCI_PASS
 from fnirs_pipe.qc.report_shell import guard, note
 from fnirs_pipe.utils.lineage import path_from
@@ -281,12 +281,12 @@ def _process_hyper_raw_group(
     # readable: see `screening_summary`
     sqm["screening"] = screening_summary(screening_df)
     if grid is not None:
-        long_pairs = grid.get("long_pairs") or grid["pairs"]
-        rows_long = [i for i, name in enumerate(grid["pairs"]) if name in set(long_pairs)]
-        status = dyad_status(grid, subject_ids)[rows_long]
-        sqm["n_long_pairs"] = len(long_pairs)
-        sqm["usable_pairs_mean"] = round(float((status == 2).sum(axis=0).mean()), 2)
-        sqm["usable_window_frac"] = round(float((status == 2).mean()), 4)
+        sqm.update(usable_scalars(grid, subject_ids))
+        with guard("Usable-time table", errors, label):
+            write_usable_table(
+                sqm_dir / f"{label}_hyper-usable.tsv", grid, subject_ids, conditions,
+                sources=[p for p in (path_from(raw) for raw in aligned_raws.values()) if p],
+                sci_threshold=sci_threshold)
     sqm_path = sqm_dir / f"{label}_desc-sqm_nirs.json"
     sqm_path.write_text(json.dumps(_hyper_sqm_record(sqm, aligned_raws), indent=2,
                                   default=str), encoding="utf-8")

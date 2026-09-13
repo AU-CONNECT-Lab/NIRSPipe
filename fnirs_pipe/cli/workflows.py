@@ -544,10 +544,8 @@ def run_group_level(args: dict[str, Any]) -> None:
     if present) SQM JSONs into cohort HTML reports under <output_dir>."""
     from pathlib import Path
 
-    from fnirs_pipe.qc.group_writer import (
-        build_group_hyper_raw_report,
-        build_group_raw_report,
-    )
+    from fnirs_pipe.qc.group_hyper_writer import build_group_hyper_report
+    from fnirs_pipe.qc.group_writer import build_group_raw_report
 
     output_dir = Path(args["output_dir"])
     qc_root    = output_dir / "qc" if (output_dir / "qc").exists() else output_dir
@@ -558,6 +556,6 @@ def run_group_level(args: dict[str, Any]) -> None:
 
     if any(qc_root.glob("group-*/nirs/*_desc-sqm_nirs.json")):
         logger.info("fnirs-pipe group: also aggregating hyperscanning SQMs")
-        hyper_path = build_group_hyper_raw_report(qc_root)
+        hyper_path = build_group_hyper_report(qc_root)
         logger.info("  -> %s", hyper_path)
 
