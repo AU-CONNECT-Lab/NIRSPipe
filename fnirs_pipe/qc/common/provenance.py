@@ -373,44 +373,6 @@ def simplify(nodes: dict[str, Node]) -> dict[str, Node]:
     return out
 
 
-def write_provenance(
-    nirs_dir: Path,
-    out_dir: Path,
-    stem: str,
-    title: str | None = None,
-    label: str | None = None,
-) -> list[Path]:
-    """Render the graph for nirs_dir into out_dir as <stem>.png and <stem>.mmd.
-
-    ``label`` restricts the graph to one BIDS run; see :func:`scan`.
-
-    Both outputs are drawn off :func:`simplify`, so the picture and the mermaid source are
-    the same graph.
-
-    Returns the files written, empty if nirs_dir holds no provenance sidecars.
-    """
-    from fnirs_pipe.qc.figures.provenance_figure import provenance_figure
-
-    nodes = scan(nirs_dir, label=label)
-    if not nodes:
-        return []
-    nodes = simplify(nodes)
-
-    out_dir.mkdir(parents=True, exist_ok=True)
-    written: list[Path] = []
-
-    fig = provenance_figure(nodes, title=title)
-    if fig is not None:
-        png = out_dir / f"{stem}.png"
-        fig.savefig(png, dpi=300, bbox_inches="tight")
-        import matplotlib.pyplot as plt
-        plt.close(fig)
-        written.append(png)
-
-    mmd = out_dir / f"{stem}.mmd"
-    mmd.write_text(to_mermaid(nodes), encoding="utf-8")
-    written.append(mmd)
-    return written
 
 
 def to_mermaid(nodes: dict[str, Node]) -> str:

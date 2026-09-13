@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from pathlib import Path
 
-if TYPE_CHECKING:
-    from fnirs_pipe.qc.common.provenance import Node
+from fnirs_pipe.qc.common.provenance import Node, scan, simplify, to_mermaid
 
 # ---- Palette (shared with the interface DAG, fnirs_pipe/interface/pages/analysis.py) ----
 # Signal domain -> outline colour. Reading left to right the colour tracks the domain
@@ -136,3 +135,47 @@ def provenance_figure(nodes: dict[str, Node], title: str | None = None):
 
     fig.tight_layout()
     return fig
+
+
+# ---- Writing the graph out ----
+# Here rather than beside `scan` and `simplify`, which build it. Those read sidecars and
+# return a dict; this draws and saves, and having it in the graph module made the bottom of
+# the report package import the figure package to do it. The graph knows nothing about
+# pictures now, and this knows where both outputs go.
+
+def write_provenance(
+    nirs_dir: Path,
+    out_dir: Path,
+    stem: str,
+    title: str | None = None,
+    label: str | None = None,
+) -> list[Path]:
+    """Render the graph for nirs_dir into out_dir as <stem>.png and <stem>.mmd.
+
+    ``label`` restricts the graph to one BIDS run; see :func:`scan`.
+
+    Both outputs are drawn off :func:`simplify`, so the picture and the mermaid source are
+    the same graph.
+
+    Returns the files written, empty if nirs_dir holds no provenance sidecars.
+    """
+    nodes = scan(nirs_dir, label=label)
+    if not nodes:
+        return []
+    nodes = simplify(nodes)
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    written: list[Path] = []
+
+    fig = provenance_figure(nodes, title=title)
+    if fig is not None:
+        png = out_dir / f"{stem}.png"
+        fig.savefig(png, dpi=300, bbox_inches="tight")
+        import matplotlib.pyplot as plt
+        plt.close(fig)
+        written.append(png)
+
+    mmd = out_dir / f"{stem}.mmd"
+    mmd.write_text(to_mermaid(nodes), encoding="utf-8")
+    written.append(mmd)
+    return written

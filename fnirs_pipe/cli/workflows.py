@@ -284,7 +284,7 @@ def run_participant_level(args: dict[str, Any]) -> None:
                     # on disk by now, and --no-report still leaves the diagram behind
                     provenance_path = None
                     try:
-                        from fnirs_pipe.qc.common.provenance import write_provenance
+                        from fnirs_pipe.qc.figures.provenance_figure import write_provenance
                         for path in write_provenance(
                             sub_dir / "nirs", sub_dir / "figures" / label,
                             stem="provenance", label=label,

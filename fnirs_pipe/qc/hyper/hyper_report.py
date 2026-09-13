@@ -1166,7 +1166,7 @@ def build_hyper_post_report(
     # `fnirs-qc provenance` uses, so re-running that refreshes the image this report links.
     provenance_path = None
     with guard("Provenance diagram", errors, scope):
-        from fnirs_pipe.qc.common.provenance import write_provenance
+        from fnirs_pipe.qc.figures.provenance_figure import write_provenance
 
         for written in write_provenance(
             group_data_dir(output_dir, group_id),
