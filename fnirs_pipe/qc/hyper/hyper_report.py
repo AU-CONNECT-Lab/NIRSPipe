@@ -260,7 +260,7 @@ def condition_subject_metrics(
     absent, which is the honest answer: the values cannot be recovered from the whole-run
     scalars.
     """
-    from fnirs_pipe.qc.condition_views import condition_set_view
+    from fnirs_pipe.qc.record_views import condition_set_view
 
     if not windows:
         return {}
