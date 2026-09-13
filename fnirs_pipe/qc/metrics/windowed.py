@@ -311,16 +311,24 @@ def _coupled_mask(
     window_s: float,
 ):
     """(mask, centers): mask is channel x window, True where the channel is coupled."""
+    got = _coupled_matrices(raw_od, cardiac_l_freq, cardiac_h_freq, window_s)
+    if got is None:
+        return None, None
+    sci, psp, centers = got
+    mask = coupled_mask_from_matrices(sci, psp, sci_cutoff, psp_cutoff)
+    return (None, None) if mask is None else (mask, centers)
+
+
+def _coupled_matrices(raw_od, cardiac_l_freq: float, cardiac_h_freq: float, window_s: float):
+    """``(sci, psp, centers)`` off one recording, or None when neither could be measured."""
     try:
         sci, times = compute_windowed_sci(raw_od, cardiac_l_freq, cardiac_h_freq, window_s)
         psp, _ = compute_windowed_psp(raw_od, cardiac_l_freq, cardiac_h_freq, window_s)
     except Exception as exc:
         logger.warning("windowed screening could not be measured (%s); it screens nothing",
                        exc)
-        return None, None
-
-    mask = coupled_mask_from_matrices(sci, psp, sci_cutoff, psp_cutoff)
-    return (None, None) if mask is None else (mask, window_centers(times))
+        return None
+    return sci, psp, window_centers(times)
 
 
 def coupled_mask_from_matrices(
@@ -399,9 +407,8 @@ def good_window_fraction(
     Returns an empty dict when either metric cannot be measured, or when the scope keeps no
     window, which screens nothing rather than rejecting everything.
     """
-    fractions, _mask, _centers = coupled_windows(
-        raw_od, cardiac_l_freq, cardiac_h_freq, sci_cutoff, psp_cutoff, window_s, scope)
-    return fractions
+    return coupled_windows(raw_od, cardiac_l_freq, cardiac_h_freq,
+                           sci_cutoff, psp_cutoff, window_s, scope)["fractions"]
 
 
 def coupled_windows(
@@ -412,33 +419,50 @@ def coupled_windows(
     psp_cutoff: float,
     window_s: float = SCREEN_WINDOW_S,
     scope: "list[tuple[str, float, float]] | None" = None,
-):
+) -> dict:
     """:func:`good_window_fraction`, also handing back the grid it counted over.
 
-    Returns ``(fractions, mask, centers)``; the mask is ``channel x window`` and the centres
-    are its time axis. The share is what screening reads and the grid is what a figure over
-    time draws, and they have to be the same measurement: a panel that recomputed its own
-    mask could shade a window the verdict had counted the other way. The scope restricts the
-    share only, never the returned grid, because a figure draws the whole recording and says
-    which part of it counted.
+    ::
 
-    ``(dict(), None, None)`` where :func:`good_window_fraction` returns an empty dict.
+      -> {"fractions": {ch: 0.77, ...}, "mask": (44, 390), "centers": (390,),
+          "sci": (44, 390), "psp": (44, 390), "channel_order": [...]}
+
+    The share is what screening reads and the grid is what a figure over time draws, and they
+    have to be the same measurement: a panel that recomputed its own mask could shade a
+    window the verdict had counted the other way. The two matrices come back beside the mask
+    for the same reason, since a series drawn over the carpet is explaining the holes in it.
+
+    A dict rather than a tuple because this is the extension point: a metric added to the
+    screening has to reach the figures without every caller unpacking one more slot.
+
+    The scope restricts ``fractions`` only, never the grid, because a figure draws the whole
+    recording and says which part of it counted. ``fractions`` is empty where
+    :func:`good_window_fraction` returns an empty dict; ``mask`` is None when nothing could
+    be measured at all.
     """
-    mask, centers = _coupled_mask(raw_od, cardiac_l_freq, cardiac_h_freq,
-                                  sci_cutoff, psp_cutoff, window_s)
+    got = _coupled_matrices(raw_od, cardiac_l_freq, cardiac_h_freq, window_s)
+    if got is None:
+        return {"fractions": {}, "mask": None, "centers": None,
+                "sci": None, "psp": None, "channel_order": list(raw_od.ch_names)}
+    sci, psp, centers = got
+    mask = coupled_mask_from_matrices(sci, psp, sci_cutoff, psp_cutoff)
+    out = {"mask": mask, "centers": centers, "sci": sci, "psp": psp,
+           "channel_order": list(raw_od.ch_names), "fractions": {}}
     if mask is None:
-        return {}, None, None
+        return out
+
     keep = _in_scope(centers, scope)
     if not keep.any():
         logger.warning("the screening scope keeps none of the %d windows; screening nothing",
                        len(centers))
-        return {}, mask, centers
+        return out
     if scope:
         logger.info("channel screening counts %d of %d windows, %.0f%% of the recording",
                     int(keep.sum()), len(centers), 100 * keep.mean())
     frac = mask[:, keep].mean(axis=1)
-    return ({ch: float(frac[i]) for i, ch in enumerate(raw_od.ch_names) if i < len(frac)},
-            mask, centers)
+    out["fractions"] = {ch: float(frac[i]) for i, ch in enumerate(raw_od.ch_names)
+                        if i < len(frac)}
+    return out
 
 
 def condition_window_means(

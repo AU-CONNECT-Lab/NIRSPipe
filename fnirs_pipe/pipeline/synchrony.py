@@ -831,7 +831,9 @@ def screening_coherence(
     definition across a dyad's two pages, so "above the null" means one thing on both.
 
     Returns a DataFrame with columns: window, ch_name, sub1, sub2, coherence, null_mean,
-    null_p95, percentile, n_seg, window_s.
+    null_p95, percentile, window_percentile, n_seg, window_s. ``percentile`` is per channel
+    and ``window_percentile`` is the window's own, repeated down its rows; grade on the
+    second, since the first is a rank over a hundred draws and moves with the draw.
     """
     subject_ids = list(raws)
     if len(subject_ids) < 2:
@@ -872,6 +874,13 @@ def screening_coherence(
                     null[k, i] = _band_coherence(
                         d1[i, i0:i1], phase_scramble(d2[i, i0:i1], rng),
                         sfreq, nperseg, fmin, fmax)
+            # Two percentiles, because they answer different questions and only the
+            # second is the window's verdict. Per channel, a rank among that channel's own
+            # draws, which at an affordable iteration count is noisy. Per window, the rank
+            # of the channel mean among the null's channel means: the channels are pooled
+            # before the comparison, so it tests the dyad rather than fourteen channels.
+            mean_null = null.mean(axis=1)
+            window_pct = float((mean_null < real.mean()).mean() * 100)
             for i, label in enumerate(labels):
                 rows.append({
                     "window": name, "ch_name": label, "sub1": sub1, "sub2": sub2,
@@ -879,12 +888,13 @@ def screening_coherence(
                     "null_mean": float(null[:, i].mean()),
                     "null_p95": float(np.percentile(null[:, i], 95)),
                     "percentile": float((null[:, i] < real[i]).mean() * 100),
+                    "window_percentile": window_pct,
                     "n_seg": int(n_seg), "window_s": round(seg / sfreq, 1),
                 })
 
     return pd.DataFrame(rows, columns=["window", "ch_name", "sub1", "sub2", "coherence",
                                        "null_mean", "null_p95", "percentile",
-                                       "n_seg", "window_s"])
+                                       "window_percentile", "n_seg", "window_s"])
 
 
 def _fisher_z(r: float) -> float:

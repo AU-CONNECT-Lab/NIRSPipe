@@ -361,14 +361,15 @@ def compute_group_sqm_raw(
             # second pass could disagree with it. `have` then stops the criterion table from
             # counting the same windows again.
             from fnirs_pipe.qc.metrics.windowed import coupled_windows
-            frac, mask, centers = coupled_windows(
+            counted = coupled_windows(
                 raw_od, cardiac_l_freq, cardiac_h_freq, cutoffs["sci"], cutoffs["psp"],
                 scope=resolve_screen_scope(raw, screen_scope))
-            if mask is not None:
-                screen_windows = {"mask": mask, "centers": centers,
-                                  "channel_order": list(raw_od.ch_names)}
+            if counted["mask"] is not None:
+                screen_windows = {k: counted[k] for k in
+                                  ("mask", "centers", "sci", "psp", "channel_order")}
             screen = screening_scores(raw_od, cardiac_l_freq, cardiac_h_freq,
-                                      have={"sci": sci_cw, "good_frac": frac},
+                                      have={"sci": sci_cw,
+                                            "good_frac": counted["fractions"]},
                                       cutoffs=cutoffs,
                                       scope=resolve_screen_scope(raw, screen_scope))
             bad_channels, _ = screen_channels(screen, cutoffs)
@@ -826,15 +827,25 @@ def _screen_windows(record: dict, cutoffs: "dict | None") -> dict:
 
     windowed = record.get("windowed") or {}
     lines = cutoffs or {}
-    mask = coupled_mask_from_matrices(
-        windowed.get("sci_matrix"), windowed.get("psp_matrix"),
-        float(lines.get("sci", SCI_PASS)), float(lines.get("psp", PSP_PASS)))
+    sci = windowed.get("sci_matrix")
+    psp = windowed.get("psp_matrix")
+    mask = coupled_mask_from_matrices(sci, psp, float(lines.get("sci", SCI_PASS)),
+                                      float(lines.get("psp", PSP_PASS)))
     times = windowed.get("sci_times")
     if mask is None or not times:
         return {}
-    return {"mask": mask, "centers": window_centers(np.asarray(times, dtype=float)),
-            "channel_order": list(((record.get("per_channel") or {}).get("raw") or {})
-                                  .get("sci_per_channel") or {})}
+    out = {"mask": mask,
+           "centers": window_centers(np.asarray(times, dtype=float)),
+           "sci": np.asarray(sci, dtype=float), "psp": np.asarray(psp, dtype=float),
+           "channel_order": list(((record.get("per_channel") or {}).get("raw") or {})
+                                 .get("sci_per_channel") or {})}
+    # GVTD is an RMS across channels, so it has no matrix and rides along as one series.
+    # Only a stored record carries it; the dyad's own pass does not measure motion, and a
+    # panel that draws it has to cope with the row being absent rather than assume it.
+    gvtd = windowed.get("gvtd_per_window")
+    if gvtd:
+        out["gvtd"] = np.asarray(gvtd, dtype=float)
+    return out
 
 
 def load_group_sqm(
