@@ -569,6 +569,10 @@ BLANK_CELL = "#d5d5d5"
 # the split between the brains is visible before any label is read.
 _CIRCLE_GAP = 12.0
 
+# Half-width of the connectogram's axes, with the nodes on the unit circle: what is left
+# over is the ring the radial labels are written into.
+_CIRCLE_SPAN = 1.16
+
 # The colorbar every cross-brain panel carries, minus its title. One layout, so a figure of
 # two panels and a figure of one put their scale in the same place.
 _COLORBAR = {"thickness": 13, "len": 0.72, "x": 1.0, "y": 0.46}
@@ -837,11 +841,15 @@ def build_cross_panel(
         # the first row at the top, which is how the table it stands for is read
         yaxis=dict(title=axis_title(sub1), range=[len(row_labels) - 0.5, -0.5],
                    showgrid=False, zeroline=False, scaleanchor="x", constrain="domain"),
-        # the same span on both, so the constraint letterboxes the subplot instead of
-        # stretching the circle into an ellipse
-        xaxis2=dict(visible=False, range=[-1.38, 1.38], constrain="domain"),
-        yaxis2=dict(visible=False, range=[-1.38, 1.38], scaleanchor="x2", scaleratio=1,
-                    constrain="domain"),
+        # The same span on both, so the constraint letterboxes the subplot instead of
+        # stretching the circle into an ellipse. The span is what sets the circle's size in
+        # the panel: the nodes sit at radius 1, so at 1.38 the circle used less than three
+        # quarters of the height the matrix beside it used all of. The labels are drawn in
+        # points rather than data units and do not shrink with it, so this is as close as the
+        # longest of them can come to the panel edge.
+        xaxis2=dict(visible=False, range=[-_CIRCLE_SPAN, _CIRCLE_SPAN], constrain="domain"),
+        yaxis2=dict(visible=False, range=[-_CIRCLE_SPAN, _CIRCLE_SPAN], scaleanchor="x2",
+                    scaleratio=1, constrain="domain"),
     )
     for note in fig.layout.annotations[:2]:
         note.font.size = 11

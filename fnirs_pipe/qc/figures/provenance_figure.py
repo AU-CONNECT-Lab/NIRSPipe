@@ -106,7 +106,7 @@ def provenance_figure(nodes: dict[str, Node], title: str | None = None):
         ))
         # three lines: what it is, how it was made, and the shape of the data left behind
         ax.text(x, y + 0.30, node.label, ha="center", va="center",
-                fontsize=_fit(node.label, 9.5, 18), fontweight="bold", color=_LABEL_TEXT,
+                fontsize=_fit(node.label, 9.5, 16), fontweight="bold", color=_LABEL_TEXT,
                 zorder=3)
         # the SQM checkpoints are named after their step, so printing it again under the
         # label would spend the line on a word already there
