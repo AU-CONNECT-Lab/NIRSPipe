@@ -896,20 +896,27 @@ def build_wtc_cross_matrix(
     """
     from plotly.subplots import make_subplots
 
+    sub1 = subject_ids[0] if subject_ids else "sub1"
+    sub2 = subject_ids[1] if len(subject_ids) > 1 else "sub2"
+
     panels: list[tuple[str, np.ndarray]] = []
     for name, band_df in (band_dfs or {}).items():
         if band_df is None or "label2" not in getattr(band_df, "columns", []):
             continue
-        lookup = {(r.label, r.label2): r.coherence for r in band_df.itertuples()}
-        z = np.array([[lookup.get((row, col), np.nan) for col in labels] for row in labels],
-                     dtype=float)
+        has_pair = {"sub1", "sub2"}.issubset(band_df.columns)
+        # keyed by the pairing as well as the sites: the frame is long over every pairing
+        # in the group, and a key of sites alone collapses them onto one cell, the last row
+        # read winning, under axes naming only the first two members
+        lookup = {(r.sub1, r.sub2, r.label, r.label2): r.coherence
+                  for r in band_df.itertuples()} if has_pair else {
+                  (r.label, r.label2): r.coherence for r in band_df.itertuples()}
+        z = np.array([[lookup.get((sub1, sub2, row, col) if has_pair else (row, col), np.nan)
+                       for col in labels] for row in labels], dtype=float)
         if np.isfinite(z).any():
             panels.append((str(name), z))
     if not panels:
         return None
 
-    sub1 = subject_ids[0] if subject_ids else "sub1"
-    sub2 = subject_ids[1] if len(subject_ids) > 1 else "sub2"
     fig = make_subplots(
         rows=1, cols=len(panels), horizontal_spacing=0.06,
         subplot_titles=[f"{name}   (grand mean {float(np.nanmean(z)):.3f})"
