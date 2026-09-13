@@ -104,6 +104,13 @@ SECTIONS = ("raw", "raw_long", "raw_short",
 # Sections only some runs have. Kept out of SECTIONS, which means "every run writes this" and
 # is asserted as such: censoring is opt-in, so a record without it is correct, not incomplete.
 # The group table still descends into these.
+# The two records a run can leave behind, best first. `sqm` is what the pipeline writes,
+# `sqmraw` what `fnirs-qc prep-raw` writes, measuring the original recording only. A run
+# that saw both commands has both files. Both are sectioned; the shape is what is read,
+# never the name, so a record written before the two writers shared their raw sections
+# still lands in the same columns.
+SQM_DESCS = ("sqm", "sqmraw")
+
 OPTIONAL_SECTIONS = ("censor",)
 
 # `pct_data_retained` measures the recording's duration, not its channels, so it is one

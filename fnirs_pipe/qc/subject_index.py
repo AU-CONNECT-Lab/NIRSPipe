@@ -27,7 +27,8 @@ from pathlib import Path
 from fnirs_pipe.qc.boilerplate import collect_software_versions
 from fnirs_pipe.qc.report_shell import (
     OUTLIER_Z, footer_vars, guard, outlier_flags, page_vars, render)
-from fnirs_pipe.qc.sqm_record import entities_of
+from fnirs_pipe.qc.condition_views import condition_stems
+from fnirs_pipe.qc.sqm_record import SQM_DESCS, entities_of
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("qc.subject_index")
@@ -52,8 +53,18 @@ _COLUMNS = (
 )
 
 
+# The report files a run can leave behind, best first, as (link text, path relative to
+# sub_dir). `fnirs-pipe` writes the first and `fnirs-qc prep-raw` the second, so a run that
+# saw both commands has both pages and a run that saw one has one. The row's title links
+# whichever comes first; the rest join the artefact links beside it.
+_REPORTS = (
+    ("pipeline QC", "{label}_qc.html"),
+    ("raw QC",      "{label}_desc-raw_nirs.html"),
+)
+
+
 # Other products of a run, as (link text, path relative to sub_dir). Only the ones on disk
-# reach the page; the run report links itself and is not repeated here.
+# reach the page; the report the row already links is not repeated here.
 _ARTEFACTS = (
     ("MNE",        "{label}_qc_mne.html"),
     ("provenance", "figures/{label}/provenance.png"),
@@ -101,8 +112,20 @@ def _flat(record: dict) -> dict[str, float]:
     return out
 
 
-def _shape(nirs_dir: Path, label: str) -> dict:
-    """Channel count, rate and length, from whichever stage sidecar of this run has them."""
+def _shape(nirs_dir: Path, label: str, record: dict | None = None) -> dict:
+    """Channel count, rate and length, from whichever stage sidecar of this run has them.
+
+    A run measured by `prep-raw` alone wrote no stage file, so the count is counted off the
+    record's own per-channel block instead and the rest is left absent: the rate and the
+    length are not in there under any name, and a plausible number put where a measured one
+    goes is worse than a blank cell. ``channel_retention_rate`` is ``1 - bad/total``, which
+    turns back into the count of rejected channels exactly.
+
+    ::
+
+      per_channel.raw.sci_per_channel holding 44 entries, raw.channel_retention_rate 0.75
+      -> {"n_channels": 44, "n_bad": 11}
+    """
     for desc in ("preproc", "od"):
         path = nirs_dir / f"{label}_desc-{desc}_nirs.json"
         try:
@@ -111,13 +134,65 @@ def _shape(nirs_dir: Path, label: str) -> dict:
             continue
         if data.get("sfreq"):
             return data
-    return {}
+
+    per_channel = ((record or {}).get("per_channel") or {}).get("raw") or {}
+    counts = [len(v) for v in per_channel.values() if isinstance(v, dict)]
+    if not counts:
+        return {}
+    n_channels = max(counts)
+    rate = ((record or {}).get("raw") or {}).get("channel_retention_rate")
+    return {"n_channels": n_channels,
+            "n_bad": round(n_channels * (1 - rate)) if isinstance(rate, (int, float)) else None}
 
 
-def _links(sub_dir: Path, label: str) -> list[dict[str, str]]:
+def _reports(sub_dir: Path, label: str) -> list[dict[str, str]]:
+    """This run's report pages that exist, in _REPORTS order."""
     return [{"text": text, "href": rel}
-            for text, template in _ARTEFACTS
+            for text, template in _REPORTS
             if (sub_dir / (rel := template.format(label=label))).exists()]
+
+
+def _links(sub_dir: Path, label: str, extra: list[dict[str, str]] = ()) -> list[dict[str, str]]:
+    return list(extra) + [{"text": text, "href": rel}
+                          for text, template in _ARTEFACTS
+                          if (sub_dir / (rel := template.format(label=label))).exists()]
+
+
+def _records(nirs_dir: Path) -> list[tuple[str, dict]]:
+    """One (label, record) per run under nirs_dir, the pipeline record winning.
+
+    A run measured by both commands has two files and only the sectioned superset is read,
+    the same rule the cohort page applies; a run measured by `prep-raw` alone is read from
+    its own record rather than left off the page.
+    """
+    by_run: dict[str, Path] = {}
+    for desc in SQM_DESCS:
+        for path in sorted(nirs_dir.glob(f"*_desc-{desc}_nirs.json")):
+            by_run.setdefault(path.name[: path.name.index(f"_desc-{desc}")], path)
+
+    out: list[tuple[str, dict]] = []
+    for label, path in sorted(by_run.items()):
+        try:
+            out.append((label, json.loads(path.read_text(encoding="utf-8"))))
+        except (OSError, json.JSONDecodeError) as exc:
+            logger.warning("skip %s: %s", path.name, exc)
+    return out
+
+
+def _condition_hrefs(sub_dir: Path, label: str, names: list[str]) -> list[str | None]:
+    """Each condition's own page under sub_dir, or None where no command wrote one.
+
+    The two writers name these differently and both spellings are looked for: `fnirs-pipe`
+    puts the condition in the ``desc-`` entity, `prep-raw` in the ``task-`` one, the rule
+    ``fnirs-prep crop`` set for a segment. Names come from the record rather than from a
+    glob, so a task that happens to share a condition's name cannot contribute a row.
+    """
+    raw_stems = condition_stems(f"{label}_desc-raw_nirs", names)
+    out: list[str | None] = []
+    for name, raw_stem in zip(names, raw_stems):
+        candidates = (f"{label}_desc-{name}_qc.html", f"{raw_stem}.html")
+        out.append(next((c for c in candidates if (sub_dir / c).exists()), None))
+    return out
 
 
 def collect_bad_channels(sub_dir: Path, labels: list[str]) -> dict:
@@ -188,25 +263,19 @@ def collect_runs(sub_dir: Path) -> list[dict]:
     """One row per run under sub_dir, newest BIDS entity order, for the index table."""
     nirs_dir = sub_dir / "nirs"
     rows: list[dict] = []
-    for sqm_path in sorted(nirs_dir.glob("*_desc-sqm_nirs.json")):
-        label = sqm_path.name[: sqm_path.name.index("_desc-sqm")]
-        try:
-            record = json.loads(sqm_path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError) as exc:
-            logger.warning("skip %s: %s", sqm_path.name, exc)
-            continue
+    for label, record in _records(nirs_dir):
         flat = _flat(record)
-        shape = _shape(nirs_dir, label)
-        report = sub_dir / f"{label}_qc.html"
+        shape = _shape(nirs_dir, label, record)
+        reports = _reports(sub_dir, label)
         rows.append({
             "label": label,
             "entities": {k: v for k, v in entities_of(label).items() if v},
-            "href": report.name if report.exists() else None,
+            "href": reports[0]["href"] if reports else None,
             "n_channels": shape.get("n_channels"),
             "n_bad": shape.get("n_bad"),
             "duration_s": shape.get("duration_s"),
             "sfreq": shape.get("sfreq"),
-            "links": _links(sub_dir, label),
+            "links": _links(sub_dir, label, reports[1:]),
             "metrics": [
                 _metric_cell(flat, keys, fmt) for _, keys, fmt in _COLUMNS
             ],
@@ -266,32 +335,27 @@ def collect_conditions(sub_dir: Path) -> list[dict]:
     """
     nirs_dir = sub_dir / "nirs"
     groups: list[dict] = []
-    for sqm_path in sorted(nirs_dir.glob("*_desc-sqm_nirs.json")):
-        label = sqm_path.name[: sqm_path.name.index("_desc-sqm")]
-        try:
-            record = json.loads(sqm_path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            continue
+    for label, record in _records(nirs_dir):
         by_condition = record.get("by_condition") or {}
         if len(by_condition) < 2:
             continue
 
-        shape = _shape(nirs_dir, label)
+        shape = _shape(nirs_dir, label, record)
         n_channels, duration_s = shape.get("n_channels"), shape.get("duration_s")
-        report = sub_dir / f"{label}_qc.html"
+        reports = _reports(sub_dir, label)
         rows = [_cond_row(
-            "whole run", "run", report.name if report.exists() else None,
+            "whole run", "run", reports[0]["href"] if reports else None,
             f"0–{duration_s:.0f} s" if duration_s else "",
             (n_channels - (shape.get("n_bad") or 0), n_channels) if n_channels else None,
             _whole_run_values(record, duration_s),
         )]
 
         windows: list[tuple[str, float, float]] = []
-        for name, block in by_condition.items():
+        hrefs = _condition_hrefs(sub_dir, label, list(by_condition))
+        for (name, block), page in zip(by_condition.items(), hrefs):
             window = block.get("window_s") or []
             t0, t1 = (float(window[0]), float(window[1])) if len(window) == 2 else (0.0, 0.0)
             windows.append((name, t0, t1))
-            page = sub_dir / f"{label}_desc-{name}_qc.html"
             values = {**((block.get("od_by_set") or {}).get("long") or {}),
                       **((block.get("motion_by_set") or {}).get("long") or {})}
             # neither block carries these two, the record splitting only what it measured
@@ -299,7 +363,7 @@ def collect_conditions(sub_dir: Path) -> list[dict]:
             for key in ("spike_pct_frames", "motion_corrected_pct"):
                 values[key] = (block.get("scalars") or {}).get(key)
             rows.append(_cond_row(
-                name, "view", page.name if page.exists() else None,
+                name, "view", page,
                 f"{t0:.0f}–{t1:.0f} s",
                 (n_channels - len(block.get("bad_channels") or []), n_channels)
                 if n_channels else None,

@@ -216,7 +216,10 @@ tr.cond-whole td { background: #f4f6f8; font-weight: 600; }
 </p>
 {% endif %}
 
-<h2>Run command</h2>
+<h2>Rebuilt by</h2>
+<p class="step-desc">This page is assembled from the records under <code>nirs/</code> each
+   time either command runs, so it lists whatever is on disk rather than what one command
+   produced. The command below is the one that last rebuilt it.</p>
 <pre>{{ run_command }}</pre>
 
 {% endblock %}

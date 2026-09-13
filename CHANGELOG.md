@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- **`fnirs-qc prep-raw` writes the subject index too**, so its per-condition pages can be found. A subject with five conditions had six report files in their folder and nothing listing them, while the same command run through `fnirs-pipe` had an index all along. The page is one per subject rather than one per command: a run measured by both is one row linking both of its reports, and the conditions of either are read against the run they were cut from
 - **`fnirs-qc cohort-hyper` is a report about dyads.** Every dyad in a tree on one page: how much of each recording both members could use at the same moment, split into the loss that is one member's and the loss that is shared; where that time went, per channel pair and per condition; and each window's coherence as its rank inside its own null. A channel pair pale down the whole cohort is the cap rather than any one dyad, which is the finding no single dyad page can carry. The per-subject quality distributions stay in `cohort`, where they are measured
 - **Each dyad writes a usable-time table**, one row per channel pair and condition, beside its quality record. The three shares are on the dyad's own record too, so a cohort of twenty is read without opening twenty pages
 
@@ -30,6 +31,7 @@ All notable changes to this project will be documented in this file.
 - **The provenance diagram collapses repeats.** A step run once per chromophore per condition is one box saying what it was run over, so a dyad's graph is eight boxes rather than nineteen stacked into a column four times the height of the rest of it. Two inputs that would read the same are named by subject
 
 ### Fixed
+- **The subject index lists runs measured by `prep-raw` alone.** It read the pipeline's records only, so a tree that never saw `fnirs-pipe` produced an index with no rows in it and a warning saying none were found
 - **A cohort page no longer stops at a `qc/` subdirectory.** `fnirs-pipe --analysis-level group` aggregated that subtree alone whenever one existed, so a tree whose pipeline records sit beside it lost every stage after Beer-Lambert off the page with nothing on it to say a stage was missing. Records in a subtree the pass does not reach are now named in a warning
 - **The inter-brain connectogram drew connections that do not exist.** On a 12-channel dyad it put 276 arcs on the circle where 21 cleared the threshold: 132 of them joined two channels of the *same* brain, which an inter-brain matrix has no number for at all, and the rest were sub-threshold pairings drawn at zero. All of them rendered pale rather than invisible, so the circle read as a haze with a few strong lines in it
 - **The dyad's optode maps and channel grid colour by the screening's verdict.** Good, mixed and bad are what the legend says and what the rest of the package means by them; the colour was a line drawn on SCI, so a channel dropped at an SCI of 0.96 drew green and one kept at 0.60 drew grey. Hover now carries the verdict and the SCI together

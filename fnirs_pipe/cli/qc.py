@@ -103,6 +103,18 @@ def cmd_prep_raw(
             logger.exception("Raw report generation failed for %s", html_path.name)
             print(f"  [error] {exc}", file=sys.stderr)
 
+    # rebuilt rather than added to: it is assembled from the records on disk, so it comes
+    # back carrying the pipeline's reports too where a run has been through both commands
+    from fnirs_pipe.qc.subject_index import write_subject_index
+    try:
+        index = write_subject_index(participant_label,
+                                    subject_report_dir(output_dir, participant_label),
+                                    " ".join(sys.argv))
+        if index:
+            print(f"  -> {index}")
+    except Exception:
+        logger.warning("sub-%s | subject index failed", participant_label, exc_info=True)
+
     print(f"Done. {len(all_runs)} run(s) processed.")
 
 

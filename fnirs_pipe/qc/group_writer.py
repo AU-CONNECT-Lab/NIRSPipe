@@ -37,6 +37,7 @@ from fnirs_pipe.qc.sqm_record import (
     POST_BANDPASS_HAEMO_STAGES,
     PRE_BANDPASS_HAEMO_STAGE,
     SECTIONS,
+    SQM_DESCS,
     fill_skipped_long_sections,
 )
 from fnirs_pipe.utils.logging import get_logger
@@ -120,16 +121,8 @@ def _scalars(sqm: dict) -> dict:
     return flat
 
 
-# The two records a run can leave behind, best first. `sqm` is what the pipeline writes,
-# `sqmraw` what `fnirs-qc prep-raw` writes, measuring the original recording only. A run
-# that saw both commands has both files. Both are sectioned; the shape is what is read,
-# never the name, so a record written before the two writers shared their raw sections
-# still lands in the same columns.
-_SQM_DESCS = ("sqm", "sqmraw")
-
-
 def _bids_name_from_sqm_path(path: Path) -> str:
-    for desc in _SQM_DESCS:
+    for desc in SQM_DESCS:
         if (name := path.name.removesuffix(f"_desc-{desc}_nirs.json")) != path.name:
             return name
     return path.stem
@@ -171,10 +164,10 @@ def _collect_sqm(
     Returns (df, full_rows, descs):
       - df:        scalar SQM columns (bids_name + numeric scalars), for TSV/heatmap/boxplot
       - full_rows: each row keeps the full SQM dict (incl. windowed list fields)
-      - descs:     which record kinds the cohort was built from, in _SQM_DESCS order
+      - descs:     which record kinds the cohort was built from, in SQM_DESCS order
     """
     by_run: dict[str, tuple[Path, str]] = {}
-    for desc in _SQM_DESCS:
+    for desc in SQM_DESCS:
         for sqm_path in sorted(output_dir.glob(f"{entity_glob}/**/nirs/*_desc-{desc}_nirs.json")):
             by_run.setdefault(_bids_name_from_sqm_path(sqm_path), (sqm_path, desc))
 
@@ -190,7 +183,7 @@ def _collect_sqm(
         descs.add(desc)
 
     return (rows_to_dataframe(full_rows), full_rows,
-            [d for d in _SQM_DESCS if d in descs])
+            [d for d in SQM_DESCS if d in descs])
 
 
 def _headline_rows(df: pd.DataFrame) -> list[dict]:
