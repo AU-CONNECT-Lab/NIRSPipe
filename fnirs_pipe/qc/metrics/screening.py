@@ -7,7 +7,7 @@ adding one is adding a line plus a scorer. Everything that prunes goes through
 :func:`screen_channels`, so the prep pipeline, the raw QC report, the per-trial scoring and
 the dyad path cannot end up screening on different things.
 
-**SCI and PSP are measured and reported but no longer decide.** Their published definition
+**SCI and PSP are measured and reported but do not decide.** Their published definition
 pairs them inside one short window and counts how many windows a channel passes, which is
 what ``good_frac`` does; the two whole-run numbers stay in the table because every report
 prints them and because they are the lines ``good_frac`` applies per window.

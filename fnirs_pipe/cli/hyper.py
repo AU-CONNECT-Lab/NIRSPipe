@@ -453,7 +453,7 @@ def cmd_merge(output_dir: Path, verbose: bool) -> None:
     setup_logging(verbose=verbose)
 
     # driven off the aggregator's own kinds, so removing or adding one cannot leave this
-    # list behind: it named wtc-roi, gone since 0.24.0, and never named wtc-pseudo at all
+    # list behind
     wrote = False
     for kind in _KINDS:
         path = write_aggregate_wtc(output_dir, kind=kind)
@@ -468,7 +468,7 @@ def _build_parser() -> argparse.ArgumentParser:
     from fnirs_pipe import __version__
 
     # --wtc-band-fmin/fmax and --wtc-mask-coi mean the same thing to `run` and to `band`, so
-    # they are declared once: two spellings of one parameter is what the band flags used to be
+    # they are declared once rather than spelled twice
     band_opts = argparse.ArgumentParser(add_help=False)
     band_opts.add_argument("--wtc-band-fmin", type=float, default=None,
                            help="Lower bound (Hz) of the band the per-channel WTC TSV "

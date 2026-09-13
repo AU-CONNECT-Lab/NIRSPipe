@@ -337,8 +337,7 @@ def restore_from_store(store, _tick):
     ch_options = [{"label": p, "value": p} for p in ch_pairs] or no_update
 
     # already labelled, formatted and coloured by the metric registry, which is also what
-    # the subject report and the raw viewer print. This panel used to dump the record's raw
-    # keys at four decimals with no units, no direction and no verdict.
+    # the subject report and the raw viewer print, so this panel carries no copy of any of it
     sqm = cached.get("sqm", {})
     sqm_rows = sqm.get("rows", []) or no_update
     sqm_tips = [{"label": {"value": r["tip"], "type": "markdown"}}

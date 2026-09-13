@@ -187,10 +187,10 @@ _SET_COLORS = {"long": LONG_COLOR, "short": SHORT_COLOR, "unclassified": UNCLASS
 # Headroom over the tallest sample. Well above the 1.1 a trace alone would need: the top of
 # every row is where the two stat lines go, and they must not sit on the data.
 _GVTD_HEADROOM = 1.45
-# One brief spike used to set the scale for every row, which left the threshold line and the
-# ordinary variation flat against the axis. The rows still share one scale, since that is what
-# makes them comparable; it is the top that is a high percentile rather than the maximum.
-# Each row's true maximum stays printed in its label, so nothing is hidden by the cap.
+# A high percentile rather than the maximum, so one brief spike cannot flatten the threshold
+# line and the ordinary variation against the axis. The rows still share one scale, since that
+# is what makes them comparable, and each row's true maximum stays printed in its label, so
+# nothing is hidden by the cap.
 _GVTD_CAP_PCTL = 99.5
 
 # names the annotation holding a GVTD row's numbers, so a condition view can find it
@@ -854,8 +854,7 @@ def build_motion_detail_figure(
     fig.update_yaxes(title_text="OD", tickfont=dict(size=7), row=od_row, col=1)
     # what each row is, written inside it: these rows are short enough that a title over one
     # lands on the panel above, and an axis title long enough to say it runs past the row.
-    # Row 1 is named the way the carpet panel names its rows, and it used to read "global",
-    # which is what it stopped being once the set followed the channel.
+    # Row 1 is named the way the carpet panel names its rows.
     for row, label, size, colour in (
         (gvtd_row,
          _gvtd_row_label(gvtd_set or "all", len(gvtd_names) or len(raw_od_before.ch_names)),

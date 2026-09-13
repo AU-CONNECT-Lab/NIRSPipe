@@ -275,9 +275,8 @@ def screening_summary(coherence_df: "pd.DataFrame") -> dict:
           "above": ["conversation"], "alpha": 95.0}
 
     ``mean_coherence`` stays in the record because a reader wants the measured value, but the
-    **percentile is what grades it**: the old summary coloured the raw number against 0.3 and
-    0.1, which on a normal recording sits at the null floor and printed red for a dyad with
-    nothing wrong with it.
+    **percentile is what grades it**: a raw coherence has no meaning apart from the null it is
+    read against, so a fixed cutoff on it grades nothing.
     """
     if coherence_df is None or coherence_df.empty:
         return {}

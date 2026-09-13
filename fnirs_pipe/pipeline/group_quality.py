@@ -243,9 +243,9 @@ def compute_group_sqm_raw(
                                    or sqm["per_channel_all"])
         sqm_data[entry.subject_id] = sqm
 
-        # Every scalar the record holds, not a whitelist: the three columns this used to
-        # write left SCI as the only quality metric a hyperscanning study ever saw, and SCI
-        # is amplitude-invariant, so a run with a collapsed cardiac pulse reads as fine
+        # Every scalar the record holds, not a whitelist: a whitelist leaves SCI as the only
+        # quality metric a hyperscanning study sees, and SCI is amplitude-invariant, so a run
+        # with a collapsed cardiac pulse would read as fine
         scalar_rows.append({
             "group_id":       gid,
             "subject_id":     entry.subject_id,
@@ -390,8 +390,7 @@ def load_group_sqm(
         # Rejection is read from the desc-sci sidecars, which prep writes on every run and
         # which name every channel the run rejected whatever came after. The channel-metrics
         # CSV holds the same set, but the report writes that one, so a tree produced with
-        # --no-report has the sidecars and no CSV and used to end up with nothing rejected
-        # at all, silently.
+        # --no-report has the sidecars and no CSV.
         sidecars = _member_sqm_files(output_dir, entry,
                                      f"{entry.subject_id}*_desc-sci_nirs.json")
         csvs     = _member_sqm_files(output_dir, entry,

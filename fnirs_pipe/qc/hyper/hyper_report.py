@@ -766,9 +766,9 @@ def build_hyper_post_report(
 
     # ---- what put the members on one clock ----
     # Read once and written onto every table this report produces. An inter-brain number
-    # assumes a shared time axis and nothing on disk used to say whether one was ever
-    # established: `--no-align` and an alignment whose trigger sits at t=0 both leave every
-    # offset at zero, and the numbers cannot be told apart afterwards.
+    # assumes a shared time axis, and the stamp is the only thing on disk that says whether
+    # one was established: `--no-align` and an alignment whose trigger sits at t=0 both leave
+    # every offset at zero, and the numbers cannot be told apart afterwards.
     align_info = alignment_params(aligned_raws)
     if align_info.get("aligned") is False:
         note(notes, scope,
@@ -777,9 +777,9 @@ def build_hyper_post_report(
 
     # ---- is this a segment rather than a recording? ----
     # A cut carries two edges of its own, and everything this report computes from a wavelet
-    # transform loses a share of its band at them that grows as the cut shortens. The tool
-    # used to treat a segment and a whole recording identically and say nothing, which is the
-    # one way into inflated numbers a reader cannot see. It still computes; it now says so.
+    # transform loses a share of its band at them that grows as the cut shortens. Treating a
+    # segment and a whole recording alike is the one way into inflated numbers a reader cannot
+    # see, so this still computes but says which it got.
     crop_info = crop_provenance(ref_raw) if ref_raw else None
     if crop_info:
         span = crop_info["window"]

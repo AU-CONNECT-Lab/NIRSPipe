@@ -277,8 +277,7 @@ def run_participant_level(args: dict[str, Any]) -> None:
                                        subject, path.name, exc_info=True)
 
                 # one report per run: the figures, the provenance graph and the metrics all
-                # describe a single recording, and a subject holding five tasks used to get
-                # one report showing whichever finished last
+                # describe a single recording, so a subject holding five tasks gets five
                 for label, (raw, result, run_prep_config) in prep_runs.items():
                     # rendered before the report, which embeds it: every sidecar it scans is
                     # on disk by now, and --no-report still leaves the diagram behind

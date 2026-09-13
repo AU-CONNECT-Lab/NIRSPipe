@@ -43,15 +43,9 @@ _SHEETS: dict[str, str] = {}
 # the look, then the footer. Tokens first so the look can override them, the footer last
 # so it can override either.
 #
-# There used to be two looks: a dashboard one in `_base.css` for the hyper and group
-# reports and the document one for the subject report. The dashboard sheet was deleted on
-# 2026-09-12, when the last report wearing it moved over. Every caller was by then passing
-# the document sheet explicitly, so the default had become a look nothing wore and a new
-# report could reach it by forgetting one keyword. `css` stays a parameter so a second look
-# is one argument away, but it overrides the look rather than choosing between two.
-#
-# `document.css` was `subject.css` until 2026-09-12: it names the look, not the one report
-# that used to wear it, so a second look arriving does not make the name wrong again.
+# `css` stays a parameter so a second look is one argument away, but it overrides the look
+# rather than choosing between two. `document.css` names the look and not the report that
+# wears it, so a second look arriving does not make the name wrong.
 TOKENS_CSS = stylesheet("_tokens.css")
 LOOK_CSS = stylesheet("document.css")
 FOOTER_CSS = stylesheet("_footer.css")

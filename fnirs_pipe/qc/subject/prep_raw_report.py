@@ -641,9 +641,8 @@ def _process_run(
         "trigger_timeline": trigger_timeline_inline,
         "trial_qc":         trial_qc_inline,
         # already labelled, formatted and coloured by the metric registry, so the views
-        # print these and carry no copy of the cutoffs. The flat all-channel scalars used to
-        # travel here too; nothing reads them now that the panels read the record's own
-        # channel-set sections, and the quality record on disk is where the raw numbers live.
+        # print these and carry no copy of the cutoffs. The panels read the record's own
+        # channel-set sections, and the record on disk is where the raw numbers live.
         "sqm": {
             "rows": metric_rows(
                 view_scalars,

@@ -327,9 +327,9 @@ def _build_parser() -> argparse.ArgumentParser:
                     help="Lower bound of cardiac band in Hz (required; population-dependent).")
     hr.add_argument("--cardiac-h-freq", type=float, required=True,
                     help="Upper bound of cardiac band in Hz (required; population-dependent).")
-    # named for what they set. The old --fmin / --fmax stay as aliases: they said nothing
-    # about which of the report's frequency bands they were, and read as the analysis band
-    # that fnirs-hyper spells --wtc-fmin
+    # named for what they set; --fmin / --fmax stay as aliases. The bare pair says nothing
+    # about which of the report's frequency bands it is, and reads as the analysis band that
+    # fnirs-hyper spells --wtc-fmin
     hr.add_argument("--coh-fmin", "--fmin", dest="coherence_fmin", type=float, default=0.01,
                     help="Lower bound (Hz) of the band the Welch coherence is averaged over.")
     hr.add_argument("--coh-fmax", "--fmax", dest="coherence_fmax", type=float, default=0.10,

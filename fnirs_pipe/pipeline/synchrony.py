@@ -352,11 +352,11 @@ def _wtc_over_pairs(
     subtracted row by row from its null. Left at None the keys come from the surviving
     channels, which is the shape a caller with no montage to hand can produce.
 
-    **Each side contributes its own surviving channels.** Crossing used to draw both axes
-    from the first subject's list, which dropped every pairing involving a channel the
-    second subject kept and the first had rejected -- pairings that never needed the first
-    subject's copy of that channel -- and made the result depend on which member the pairs
-    table happens to list first. The published pipelines cross the two lists independently
+    **Each side contributes its own surviving channels.** Drawing both axes from the first
+    subject's list would drop every pairing involving a channel the second subject kept and
+    the first had rejected -- pairings that never needed the first subject's copy of that
+    channel -- and would make the result depend on which member the pairs table happens to
+    list first. The published pipelines cross the two lists independently
     and blank only the row or only the column a rejection belongs to (St. Clair et al.
     2025).
 
@@ -391,9 +391,8 @@ def _wtc_over_pairs(
         for sub1, sub2 in combinations(subject_ids, 2):
             sig_map1, sig_map2 = signals[sub1], signals[sub2]
             # the montage when it was given, so a rejection blanks a row or a column of the
-            # result instead of shrinking it. Each side keeps its own axis in the fallback:
-            # crossing used to draw both from the first subject's list, which dropped every
-            # pairing involving a channel only the second subject had
+            # result instead of shrinking it. Each side keeps its own axis in the fallback,
+            # so a channel only the second subject kept still reaches its pairings
             axis1 = axis if axis is not None else list(sig_map1)
             axis2 = axis if axis is not None else list(sig_map2)
             label_pairs = ([(a, b) for a in axis1 for b in axis2] if cross
@@ -1138,8 +1137,7 @@ def compute_isc(
                 for p in long_channel_picks(raw, ch_type, sep_bands=sep_bands)}
 
     # the axis is the montage, the maps are what survived: one shape, blanks where a channel
-    # went. The axis rule is shared with the crossed WTC matrix, which drew it from the first
-    # member alone until 0.30.0
+    # went. Same axis rule as the crossed WTC matrix.
     ch_names = long_axis_over([raw1, raw2], ch_type, sep_bands)
     map1, map2 = _by_label(raw1), _by_label(raw2)
     if not ch_names:

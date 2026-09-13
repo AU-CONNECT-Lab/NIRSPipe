@@ -801,8 +801,7 @@ def _section_haemo(
         "psd_panel_path": psd_panel_path, "psd_panel_h": psd_panel_h,
         "psd_stage_labels": [label for label, _ in (psd_stages or [])],
         # the caption names the same two bands `physio_bands` shades and the band scalars
-        # integrate over. It used to spell them out, and said cardiac 0.7-1.5 Hz on a run
-        # configured for 0.7-2.0
+        # integrate over, read off the config so it cannot name a band the run did not use
         "psd_cardiac_band": (config.cardiac_l_freq, config.cardiac_h_freq),
         "psd_resp_band": (config.resp_l_freq, config.resp_h_freq),
     }
@@ -1206,9 +1205,8 @@ def _section_sqm(
         # `filtered` rather than `preproc` on the before side: the bandpass alone raises
         # GCOR, so the regression is the only step here whose effect is worth a number.
         # Both sides come off the record's own sections, so this pair is the same channel
-        # set as every row beside it; it used to be handed in from the pipeline, measured
-        # over every channel while the rows around it were long, and the two disagreed on
-        # whether the regression lowered HbR global correlation at all.
+        # set as every row beside it: a number measured over every channel, sitting beside
+        # rows that are long, would disagree with them about what the regression did.
         filtered_key = "filtered_long" if record.get("filtered_long") else "filtered"
         for key in ("gcor_hbo", "gcor_hbr"):
             pre = (record.get(filtered_key) or {}).get(key)
@@ -1853,7 +1851,7 @@ def build_subject_report(
         **loose_figure_vars,
         gvtd_set=gvtd_set,
         # the set GVTD was actually measured on, so the note says so on a per-condition page
-        # too, where the column-split flag it used to read is False by design
+        # too
         gvtd_channel_set=gvtd_set,
         mode=mode or "",
     )

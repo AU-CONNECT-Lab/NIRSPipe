@@ -296,8 +296,8 @@ def run_hyper_post(
     # The union of the members' long channels, rejections kept, which is the axis the
     # cross matrix is drawn on: selector and matrix have to name the same set or a reader
     # cannot find a matrix cell in the selector. `ch_pairs_post` above is the whole montage
-    # including the short channels, which have no coherence and left the old selector with
-    # eight dead entries. Labels do not carry the chromophore, so one pass serves both.
+    # including the short channels, which have no coherence and no place on this axis.
+    # Labels do not carry the chromophore, so one pass serves both.
     _members = [aligned_raws[s] for s in subject_ids if s in aligned_raws]
     chan_axis: list[str] = (long_axis_over(_members, fig_chroma, sep_bands) if _members
                             else ch_pairs_post)

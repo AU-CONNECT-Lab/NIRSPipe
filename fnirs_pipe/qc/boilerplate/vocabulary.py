@@ -94,9 +94,9 @@ def template_slots(key: str, params: dict[str, Any]) -> dict[str, str]:
     if key == "sci_marking":
         # All three numbers the screening uses, because none of them describes it alone:
         # SCI and PSP are the per-window lines and `min_good_frac` is what actually rejects
-        # a channel. The sentence used to name the first two and read as though either could
-        # reject on its own, which is the rule this replaced. Each falls back to the criteria
-        # table for a record written before the run started stamping it.
+        # a channel. Naming only the first two reads as though either could reject on its
+        # own. Each falls back to the criteria table for a record written before the run
+        # started stamping it.
         from fnirs_pipe.qc.metrics import criterion_cutoffs
         from fnirs_pipe.qc.metrics.windowed import SCREEN_WINDOW_S
         cutoffs = criterion_cutoffs()
@@ -204,9 +204,8 @@ def step_summary(step: str | None) -> str:
 
 # ---- what each metric means ----
 
-# STEP_SUMMARY above describes steps; this describes the numbers those steps produced. The
-# report used to print them bare, so a reader who did not already know the vocabulary got
-# "GVTD p95  1.001e-02" and no way to act on it.
+# STEP_SUMMARY above describes steps; this describes the numbers those steps produced, so a
+# report never prints one bare.
 #
 # Each line says what the number is and which way is good, because a value with no
 # direction is not actionable. Where the answer is "it depends", say so rather than
@@ -383,9 +382,8 @@ def is_key_metric(metric: str) -> bool:
 #
 # One row per metric: the label a panel prints, the number format, and where the colouring
 # changes. It sits beside METRIC_SUMMARY because a label and its tooltip drift apart the
-# moment they live in different files, and these thresholds used to live in three places:
-# the subject report's Jinja macros, the raw viewer's JavaScript, and nowhere at all in the
-# GUI, which printed bare record keys.
+# moment they live in different files, and because a threshold spread over the report
+# templates, the viewer's JavaScript and the GUI is three chances to disagree.
 #
 # Format is a Python format spec, plus "pct" for a 0-1 fraction written as a percentage.
 #
