@@ -60,10 +60,14 @@ generates inline. Still missing:
 
 ## v0.10 — Group-Level QC Report `[x]`
 
-`fnirs-qc group-raw` aggregates `sub-*/nirs/*_desc-sqm_nirs.json` into `group_nirs.{tsv,html}`.
-`fnirs-qc group-hyper-raw` aggregates `group-*/nirs/*_desc-sqm_nirs.json` into `group_hyper_nirs.{tsv,html}`.
+`fnirs-qc group-raw` aggregates `sub-*/nirs/*_desc-sqm_nirs.json` into `group_nirs.{tsv,html}`:
+subject × metric robust-z heatmap, per-metric boxplots with Tukey 1.5×IQR outlier highlighting,
+sortable table, outlier panel.
 
-HTML report (iframe shell): subject × metric robust-z heatmap, per-metric boxplots with Tukey 1.5×IQR outlier highlighting, sortable table, outlier panel.
+`fnirs-qc group-hyper-raw` is the cohort of dyads and reports what a dyad has and a subject
+cannot: how much of each recording both members could use at the same moment, split into the
+loss that is one member's and the loss that is shared; where that time went per channel pair
+and per condition; and each window's coherence as its rank inside its own null.
 
 prep-raw also persists `sci_per_window` / `psp_per_window` / `gvtd_per_window` into the SQM JSON; group-raw renders time × subject heatmaps for these so users can spot group-wide vs individual outlier windows.
 

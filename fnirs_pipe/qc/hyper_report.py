@@ -421,15 +421,25 @@ _CH_COLUMNS = channel_columns(("corr", "separation"))
 
 
 def decision_rows(sqm_data: dict, subject_ids: list[str],
-                  sci_threshold: float) -> dict[str, list]:
-    """One member's channel table per member, formatted and classed in Python.
+                  sci_threshold: float) -> list[dict]:
+    """The dyad's channel table: one entry per pair, carrying every member's cells.
 
-    A view never formats a number itself, so the strings and the cell classes are built here
-    by the same functions the subject report and the raw viewer use, and the page's script
-    only lays them out. A member with no per-channel section comes back with no rows rather
-    than with a table of dashes.
+    ::
+
+      -> [{"pair": "S1_D1", "separation": "long",
+           "by_sub": {"sub-01": {"sci": "0.956", "sci_cls": "", ...}, "sub-02": {...}}}]
+
+    Grouped by channel rather than by member, because that is the comparison the page is
+    for: a pair's two members sit side by side in one row instead of twenty-two rows apart.
+    Every string and every cell class is built here by the functions the subject report and
+    the raw viewer use, so the dyad's cells and the member's own report cannot disagree; the
+    page's script only lays them out.
+
+    A member with no per-channel section contributes no cells rather than a row of dashes,
+    and the pair order is the first member that has one.
     """
-    out: dict[str, list] = {}
+    per_sub: dict[str, dict[str, dict]] = {}
+    order: list[tuple[str, str]] = []
     for sid in subject_ids:
         member = sqm_data.get(sid) or {}
         record = {"per_channel": member.get("per_channel") or {}}
@@ -440,12 +450,19 @@ def decision_rows(sqm_data: dict, subject_ids: list[str],
             rows = pair_rows(channel_rows(record, sci_scores,
                                           member.get("bad_channels") or []))
             cutoffs = member.get("screen_cutoffs") or {}
-            out[sid] = format_rows(rows, sci_threshold, name_key="pair",
-                                   psp_threshold=cutoffs.get("psp"))
+            formatted = format_rows(rows, sci_threshold, name_key="pair",
+                                    psp_threshold=cutoffs.get("psp"))
         except Exception:
             logger.warning("%s: channel table could not be built", sid, exc_info=True)
-            out[sid] = []
-    return out
+            formatted = []
+        per_sub[sid] = {r["name"]: r for r in formatted}
+        if not order:
+            order = [(r["name"], r.get("separation") or "") for r in formatted]
+
+    return [{"pair": pair, "separation": sep,
+             "by_sub": {sid: per_sub[sid][pair] for sid in subject_ids
+                        if pair in per_sub[sid]}}
+            for pair, sep in order]
 
 
 def build_hyper_report(

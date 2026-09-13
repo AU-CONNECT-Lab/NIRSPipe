@@ -406,7 +406,7 @@ def build_usable_time(
     conditions = conditions or {}
     bar_rows = 1 if conditions else 0
     n_rows = bar_rows + len(have) + 1
-    bar_h, series_h, carpet_h = 30, 58, 19 * len(pairs)
+    bar_h, series_h, carpet_h = 34, 86, 26 * len(pairs)
     total = bar_h * bar_rows + series_h * len(have) + carpet_h
     heights = ([bar_h / total] * bar_rows + [series_h / total] * len(have)
                + [carpet_h / total])
@@ -435,7 +435,7 @@ def build_usable_time(
             fig.add_trace(go.Scatter(
                 x=np.asarray(s["t"]), y=np.asarray(s[key]), mode="lines", name=sid,
                 legendgroup=sid, showlegend=(r == bar_rows + 1),
-                line=dict(color=lines[sid], width=0.9), opacity=0.85,
+                line=dict(color=lines[sid], width=1.4), opacity=0.9,
                 hovertemplate=f"t=%{{x:.0f}}s<br>{label} %{{y:.4g}}<extra></extra>",
             ), row=r, col=1)
         line = (cutoffs or {}).get(key)
@@ -536,7 +536,7 @@ def _head_glyph(fig, geo, scope, values, row, col, title, cmin, cmax, bar) -> in
     short channel reads as a contamination check rather than a second map. That report can
     give them a row of their own; one head cannot, so the **shape** carries the distinction:
     a long channel is a bar of small discs along its path, a short one a single larger disc
-    inside a white ring.
+    inside a dark ring.
     """
     g = geo[scope]
     short = scope == "short"
@@ -546,9 +546,10 @@ def _head_glyph(fig, geo, scope, values, row, col, title, cmin, cmax, bar) -> in
                     symbol="circle",
                     color=np.repeat(values, g["per_pair"]).astype(np.float32),
                     colorscale=_HEAD_SCALE, cmin=cmin, cmax=cmax, showscale=bar,
-                    # a white ring, which reads as a separate object against both the head
-                    # and the bars while leaving the fill on the shared colour scale
-                    line=dict(width=2 if short else 0, color="#ffffff"),
+                    # a dark ring, which reads as a separate object against both the head
+                    # and the bars while leaving the fill on the shared colour scale. White
+                    # was tried and disappears into the page.
+                    line=dict(width=1.6 if short else 0, color="#34495e"),
                     colorbar=dict(title=dict(text=title, side="right", font=dict(size=10)),
                                   thickness=12, len=0.72, tickfont=dict(size=9))),
         hovertemplate="%{text}<br>%{marker.color:.3f}<extra></extra>",
@@ -620,8 +621,10 @@ def build_head_by_condition(
                            font=dict(size=10, color="#6c757d"))
     _head_axes(fig, geo_by_sub, len(subject_ids), len(names))
     fig.update_annotations(font=dict(size=11, color="#6c757d"))
-    fig.update_layout(height=150 * len(subject_ids) + 40, plot_bgcolor="white",
-                      showlegend=False, margin=dict(l=88, r=78, t=42, b=12))
+    # a head per member per block, so the grid is as wide as the blocks and only as tall as
+    # the members; the height is what decides how big each head is drawn
+    fig.update_layout(height=230 * len(subject_ids) + 46, plot_bgcolor="white",
+                      showlegend=False, margin=dict(l=88, r=78, t=46, b=14))
     return fig
 
 

@@ -184,6 +184,8 @@ STEP_SUMMARY = {
     "hyper_coherence": "Band-averaged coherence of each homologous channel pair, over the whole recording.",
     "hyper_coherence_windowed": "The same coherence in sliding windows, one value per window and channel.",
     "hyper_sqm": "Quality metrics for the dyad: alignment, coupling and the members' own.",
+    "hyper_screening": "Each window's coherence beside the surrogate null drawn for that window.",
+    "hyper_usable": "How much of each channel pair both members could use at once, per condition.",
     "group_sqm_raw": "Quality metrics pooled across the members of a dyad.",
     "group_sqm_raw_channels": "The same pooling, kept per channel.",
     "hyper_wtc": "Wavelet coherence between a pair, averaged over a band and one value per channel.",

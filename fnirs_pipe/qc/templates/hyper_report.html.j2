@@ -19,6 +19,10 @@
 .cd-chip.cd-bad{background:#f8d7da;color:#721c24}
 .cd-chip.cd-disabled{opacity:.45;pointer-events:none;cursor:not-allowed}
 .cd-table td:not(:first-child), .cd-table th:not(:first-child) { text-align: center; }
+/* one member's columns run into the next without it; a rule rather than a fill, so the
+   cell colours the metrics carry are still the only colour in the table */
+.cd-table .sub-edge { border-left: 2px solid #d8dee5; }
+.cd-table .cd-cell { padding-left: 0.4rem; padding-right: 0.4rem; }
 {% endblock %}
 
 {% set rating_subject = page_stem %}
@@ -30,11 +34,11 @@
 {% set rating_modules = [[
   {"id": "Summary", "name": "Summary", "href": "#Final", "ratable": false},
   {"sep": true},
-  {"id": "Signal_Quality", "name": "Comparable", "href": "#Quality"},
   {"id": "Alignment", "name": "Alignment", "href": "#Alignment"},
   {"id": "Usable", "name": "Usable time", "href": "#Usable"},
   {"id": "Head", "name": "Head", "href": "#Head"},
   {"id": "Coherence", "name": "Synchrony", "href": "#Coherence"},
+  {"id": "Signal_Quality", "name": "Comparable", "href": "#Quality"},
   {"id": "Channels", "name": "Channels", "href": "#Channels"},
   {"sep": true},
   {"id": "Provenance", "name": "Provenance", "href": "#Provenance", "ratable": false},
@@ -96,52 +100,28 @@
     analysis.{% if post_href %} That is on the
     <a href="{{ post_href }}">post report</a>.{% endif %}
   </p>
+
+  <h3 style="margin-top:1.1rem;">The two clocks</h3>
+  <p class="qm-note">Crop offset from the first shared trigger; all recordings are then
+    trimmed to the shortest. A dyad window is on the aligned clock and a member&rsquo;s own
+    record is on its own, and these are what convert between them.</p>
+  <div class="summary-grid">
+    <table class="qm-table qm-flat" id="align-table">
+      <thead><tr><th>Member</th><th>Offset (s)</th><th>Aligned duration (s)</th></tr></thead>
+      <tbody id="align-tbody"></tbody>
+    </table>
+    <table class="qm-table qm-flat" id="blocks-table">
+      <thead><tr><th>Block</th><th>Start (s)</th><th>Length (s)</th></tr></thead>
+      <tbody id="blocks-tbody"></tbody>
+    </table>
+  </div>
+  <p class="qm-note" id="blocks-verdict"></p>
   <h3 style="margin-top:1rem;">Run command</h3>
   <pre>{{ run_command }}</pre>
 </div>
 
-<!-- ================================================== 1. are they comparable -->
-<h2 id="Quality">1 &middot; Are the two members comparable</h2>
-<p class="step-desc">Everything downstream matches channels by S-D label and assumes one
-  clock. A mismatch here is silent in every later panel: an unmatched label becomes a blank
-  row, and a sampling-rate difference becomes drift that alignment cannot remove.</p>
-
-<details id="Comparable" open>
-  <summary>a. Montage and rate</summary>
-  <div class="details-body">
-    <table class="qm-table qm-flat" id="compare-table">
-      <thead><tr><th>Member</th><th>Sampling rate (Hz)</th><th>Aligned duration (s)</th>
-        <th>S-D pairs</th><th>Long pairs</th></tr></thead>
-      <tbody id="compare-tbody"></tbody>
-    </table>
-    <p class="qm-note" id="compare-verdict"></p>
-  </div>
-</details>
-
-{% if subject_metrics_rows %}
-<details id="MemberMetrics" open>
-  <summary>b. Per-member quality metrics</summary>
-  <div class="details-body">
-    <p class="step-desc">&uarr; / &darr; marks the better direction; SCI is coloured against
-      this run&rsquo;s own threshold and HbO&ndash;HbR by sign. One unheaded table: the raw
-      pass measures every channel and does not split by separation.</p>
-    {{ subject_metrics(subject_metrics_rows) }}
-  </div>
-</details>
-{% endif %}
-
-<details id="GroupSQM" open>
-  <summary>c. Group-level quality metrics</summary>
-  <div class="details-body">
-    <p class="step-desc">The dyad&rsquo;s own numbers rather than either member&rsquo;s: how
-      many channel pairs survived in both, and where the screening synchrony sits against
-      its own null.</p>
-    <ul id="sqm-list" class="qm-list"></ul>
-  </div>
-</details>
-
 <!-- ================================================= 2. alignment and clocks -->
-<h2 id="Alignment">2 &middot; Alignment and the two clocks</h2>
+<h2 id="Alignment">1 &middot; Alignment and the two clocks</h2>
 <p class="step-desc">Alignment crops each recording at the first shared trigger, which
   removes a constant offset and nothing else. What it cannot remove is a trigger that landed
   late in one member, or a sampling-rate difference that pulls the two apart across the run.
@@ -149,7 +129,7 @@
 
 {% if figure_paths.alignment_timeline %}
 <details id="Timeline" open>
-  <summary>a. The blocks, before and after alignment</summary>
+  <summary>The blocks, before and after alignment</summary>
   <div class="details-body">
     <iframe class="plotly-frame" src="{{ figure_paths.alignment_timeline.src }}"
             title="conditions before and after alignment"
@@ -161,27 +141,8 @@
 </details>
 {% endif %}
 
-<details id="Triggers" open>
-  <summary>b. Where each block landed</summary>
-  <div class="details-body">
-    <p class="step-desc">Crop offset from the first shared trigger; all recordings are then
-      trimmed to the shortest. A dyad window is on the aligned clock and a member&rsquo;s own
-      record is on its own, and these tables are what convert between them.</p>
-    <table class="qm-table qm-flat" id="align-table">
-      <thead><tr><th>Member</th><th>Offset (s)</th><th>Aligned duration (s)</th></tr></thead>
-      <tbody id="align-tbody"></tbody>
-    </table>
-    <table class="qm-table qm-flat" id="blocks-table" style="margin-top:1rem">
-      <thead><tr><th>Block</th><th>Start (s)</th><th>Length (s)</th>
-        <th>Spread across members</th></tr></thead>
-      <tbody id="blocks-tbody"></tbody>
-    </table>
-    <p class="qm-note" id="blocks-verdict"></p>
-  </div>
-</details>
-
 <!-- ================================================== 3. shared usable time -->
-<h2 id="Usable">3 &middot; Shared usable time</h2>
+<h2 id="Usable">2 &middot; Shared usable time</h2>
 <p class="step-desc">A channel is usable by the dyad only while it is coupled in
   <em>both</em> members at the same moment, so the dyad&rsquo;s usable time is the
   intersection of the two and not the smaller of them: two members can each keep 13 of 14
@@ -204,7 +165,7 @@
 
 <!-- ==================================================== 3b. where on the head -->
 {% if figure_paths.head_by_condition or figure_paths.head_slider %}
-<h2 id="Head">3b &middot; Where on the head</h2>
+<h2 id="Head">3 &middot; Where on the head</h2>
 <p class="step-desc">The same screening verdict as the carpet above, on the montage instead
   of on a channel axis. A long channel is a bar of discs along its source-detector path, a
   short one an outlined square; both share one colour scale, which is what makes the short
@@ -280,8 +241,48 @@
 </details>
 {% endif %}
 
+<!-- ================================================== 1. are they comparable -->
+<h2 id="Quality">5 &middot; Are the two members comparable</h2>
+<p class="step-desc">Everything downstream matches channels by S-D label and assumes one
+  clock. A mismatch here is silent in every later panel: an unmatched label becomes a blank
+  row, and a sampling-rate difference becomes drift that alignment cannot remove.</p>
+
+<details id="Comparable" open>
+  <summary>a. Montage and rate</summary>
+  <div class="details-body">
+    <table class="qm-table qm-flat" id="compare-table">
+      <thead><tr><th>Member</th><th>Sampling rate (Hz)</th><th>Aligned duration (s)</th>
+        <th>S-D pairs</th><th>Long pairs</th></tr></thead>
+      <tbody id="compare-tbody"></tbody>
+    </table>
+    <p class="qm-note" id="compare-verdict"></p>
+  </div>
+</details>
+
+{% if subject_metrics_rows %}
+<details id="MemberMetrics" open>
+  <summary>b. Per-member quality metrics</summary>
+  <div class="details-body">
+    <p class="step-desc">&uarr; / &darr; marks the better direction; SCI is coloured against
+      this run&rsquo;s own threshold and HbO&ndash;HbR by sign. One unheaded table: the raw
+      pass measures every channel and does not split by separation.</p>
+    {{ subject_metrics(subject_metrics_rows) }}
+  </div>
+</details>
+{% endif %}
+
+<details id="GroupSQM" open>
+  <summary>c. Group-level quality metrics</summary>
+  <div class="details-body">
+    <p class="step-desc">The dyad&rsquo;s own numbers rather than either member&rsquo;s: how
+      many channel pairs survived in both, and where the screening synchrony sits against
+      its own null.</p>
+    <ul id="sqm-list" class="qm-list"></ul>
+  </div>
+</details>
+
 <!-- ============================================================= 5. channels -->
-<h2 id="Channels">5 &middot; Channels</h2>
+<h2 id="Channels">6 &middot; Channels</h2>
 
 {% if figure_paths.ch_summary %}
 <details id="ChannelSummary" open>
@@ -301,17 +302,30 @@
   <summary>{{ "b" if figure_paths.ch_summary else "a" }}. Channel decisions
     <span class="hint" id="hyper-decisions-hint">per member</span></summary>
   <div class="details-body">
-    <p class="step-desc">One row per source-detector pair per member, with the columns the
-      subject report prints. Rows in red were rejected by screening and Status names the
-      criterion. Click a decision chip to cycle: &mdash; &rarr; good &rarr; bad. Saves to
-      each member&rsquo;s JSON, and is only active when the page is served by
+    <p class="step-desc">One row per source-detector pair, both members side by side, with
+      the columns the subject report prints and each member&rsquo;s decision at the end of
+      its own block. Rows in red were rejected by screening and Status names the criterion.
+      Click a chip to cycle: &mdash; &rarr; good &rarr; bad. Saves to each member&rsquo;s
+      JSON, and is only active when the page is served by
       <code>fnirs-rate hyper</code>.</p>
     <div style="overflow-x:auto">
       <table class="qm-table cd-table" id="hyper-decisions-table">
-        <thead><tr>
-          {%- for _key, label in ch_columns %}<th>{{ label }}</th>{% endfor %}
-          <th>Decision</th>
-        </tr></thead>
+        <thead>
+          <tr>
+            <th rowspan="2">{{ ch_columns[0][1] }}</th>
+            {%- for sid in subject_ids %}
+            <th colspan="{{ ch_columns|length }}" class="sub-edge">{{ sid }}</th>
+            {%- endfor %}
+          </tr>
+          <tr>
+            {%- for sid in subject_ids %}
+              {%- for _key, label in ch_columns[1:] %}
+            <th class="{{ 'sub-edge' if loop.first else '' }}">{{ label }}</th>
+              {%- endfor %}
+            <th>Decision</th>
+            {%- endfor %}
+          </tr>
+        </thead>
         <tbody id="hyper-decisions-tbody"></tbody>
       </table>
     </div>
@@ -319,7 +333,7 @@
 </details>
 
 <!-- ============================================================== 6. signals -->
-<h2 id="Signals">6 &middot; Per-channel signals</h2>
+<h2 id="Signals">7 &middot; Per-channel signals</h2>
 
 <details id="PerChannel">
   <summary>a. Both members on one set of axes
@@ -490,7 +504,7 @@ function _set(id, text, cls) {
   var names = Object.keys(_BLOCKS);
   if (!tbody) return;
   if (!names.length) {
-    tbody.innerHTML = "<tr><td colspan='4' style='color:#adb5bd;font-style:italic;"
+    tbody.innerHTML = "<tr><td colspan='3' style='color:#adb5bd;font-style:italic;"
       + "text-align:center'>No annotated blocks</td></tr>";
     return;
   }
@@ -500,8 +514,7 @@ function _set(id, text, cls) {
     tr.innerHTML =
       "<td>" + name + "</td>" +
       "<td>" + span[0].toFixed(2) + "</td>" +
-      "<td>" + (span[1] - span[0]).toFixed(1) + "</td>" +
-      "<td>—</td>";
+      "<td>" + (span[1] - span[0]).toFixed(1) + "</td>";
     tbody.appendChild(tr);
   });
   var el = document.getElementById("blocks-verdict");
@@ -576,65 +589,81 @@ function _set(id, text, cls) {
     var tbody = document.getElementById("hyper-decisions-tbody");
     if (!tbody) return;
     tbody.innerHTML = "";
-    var nCols = _CH_COLUMNS.length + 1;
-    var any = subjects.some(function(sid) { return (_DECISION_ROWS[sid] || []).length; });
-    if (!any) {
+    var metrics = _CH_COLUMNS.slice(1);                 // the name column heads the row
+    var nCols = 1 + subjects.length * (metrics.length + 1);
+    if (!_DECISION_ROWS.length) {
       tbody.innerHTML = "<tr><td colspan='" + nCols + "' style='color:#adb5bd;"
         + "font-style:italic;text-align:center'>No channels</td></tr>";
       return;
     }
-    // one member per group, the way the raw viewer groups by separation: a channel's two
-    // members sit 22 rows apart either way, and this keeps each block identical to the
-    // table that member's own report prints
-    subjects.forEach(function(sid) {
-      var rows = _DECISION_ROWS[sid] || [];
-      var head = document.createElement("tr");
-      head.className = "ch-group";
-      head.innerHTML = "<td colspan='" + nCols + "'>" + sid
-        + " <span class='hint'>(" + rows.length + ")</span></td>";
-      tbody.appendChild(head);
+    // long first, then short, the split and the titles the subject report uses; a montage
+    // of one kind gets no group rows at all
+    var blocks = [["Long channels", []], ["Short channels", []], ["Unclassified", []]];
+    _DECISION_ROWS.forEach(function(row) {
+      var i = row.separation === "short" ? 1 : (row.separation === "unclassified" ? 2 : 0);
+      blocks[i][1].push(row);
+    });
+    blocks = blocks.filter(function(b) { return b[1].length; });
 
-      rows.forEach(function(row) {
-        // at pair granularity the name column *is* the pair, which is what a decision is
-        // filed under; format_rows emits it under the first column's key either way
-        var pair = row[_CH_COLUMNS[0][0]];
+    blocks.forEach(function(block) {
+      if (blocks.length > 1) {
+        var head = document.createElement("tr");
+        var th = document.createElement("td");
+        th.className = "ch-group";
+        th.colSpan = nCols;
+        th.textContent = block[0] + " (" + block[1].length + ")";
+        head.appendChild(th);
+        tbody.appendChild(head);
+      }
+      block[1].forEach(function(row) {
         var tr = document.createElement("tr");
-        if (row.is_bad) tr.className = "bad-row";
-        _CH_COLUMNS.forEach(function(col) {
-          var td = document.createElement("td");
-          td.textContent = row[col[0]] != null ? row[col[0]] : "—";
-          var cls = row[col[0] + "_cls"];
-          if (cls) td.className = cls;
-          tr.appendChild(td);
-        });
+        var tdName = document.createElement("td");
+        tdName.textContent = row.pair;
+        tr.appendChild(tdName);
 
-        var hbo = pair + " hbo";
-        var hbr = pair + " hbr";
-        if (!_hyperDecisions[sid]) _hyperDecisions[sid] = {};
-        var state = _hyperDecisions[sid][hbo] || "unrated";
-        var chip = document.createElement("span");
-        chip.className = "cd-chip cd-" + state + (_isStatic ? " cd-disabled" : "");
-        chip.textContent = {unrated: "—", good: "good", bad: "bad"}[state];
-        if (!_isStatic) {
-          chip.addEventListener("click", (function(s, h1, h2, c) {
-            return function() {
-              if (!_hyperDecisions[s]) _hyperDecisions[s] = {};
-              var cur  = _hyperDecisions[s][h1] || "unrated";
-              var next = {unrated: "good", good: "bad", bad: "unrated"}[cur];
-              _hyperDecisions[s][h1] = next;
-              _hyperDecisions[s][h2] = next;
-              c.className   = "cd-chip cd-" + next;
-              c.textContent = {unrated: "—", good: "good", bad: "bad"}[next];
-              save();
-            };
-          })(sid, hbo, hbr, chip));
+        subjects.forEach(function(sid, si) {
+          var cells = row.by_sub[sid] || {};
+          metrics.forEach(function(col) {
+            var td = document.createElement("td");
+            td.textContent = cells[col[0]] != null ? cells[col[0]] : "—";
+            var cls = cells[col[0] + "_cls"];
+            if (cls) td.className = cls;
+            if (col === metrics[0]) td.classList.add("sub-edge");
+            tr.appendChild(td);
+          });
+          tr.appendChild(chipCell(sid, row.pair));
+        });
+        if (row.by_sub[subjects[0]] && row.by_sub[subjects[0]].is_bad) {
+          tr.style.background = "#fff8f8";
         }
-        var tdDec = document.createElement("td");
-        tdDec.appendChild(chip);
-        tr.appendChild(tdDec);
         tbody.appendChild(tr);
       });
     });
+  }
+
+  function chipCell(sid, pair) {
+    var hbo = pair + " hbo";
+    var hbr = pair + " hbr";
+    if (!_hyperDecisions[sid]) _hyperDecisions[sid] = {};
+    var state = _hyperDecisions[sid][hbo] || "unrated";
+    var chip = document.createElement("span");
+    chip.className = "cd-chip cd-" + state + (_isStatic ? " cd-disabled" : "");
+    chip.textContent = {unrated: "—", good: "good", bad: "bad"}[state];
+    if (!_isStatic) {
+      chip.addEventListener("click", function() {
+        var cur  = _hyperDecisions[sid][hbo] || "unrated";
+        var next = {unrated: "good", good: "bad", bad: "unrated"}[cur];
+        _hyperDecisions[sid][hbo] = next;
+        _hyperDecisions[sid][hbr] = next;
+        chip.className   = "cd-chip cd-" + next;
+        chip.textContent = {unrated: "—", good: "good", bad: "bad"}[next];
+        save();
+      });
+    }
+    var td = document.createElement("td");
+    td.className = "cd-cell";
+    td.appendChild(chip);
+    return td;
   }
 
   function save() {
