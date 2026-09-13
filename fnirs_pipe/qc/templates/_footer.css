@@ -1,8 +1,8 @@
 /* Styles for _footer.html.j2, appended to whichever base sheet a report uses.
    Look-independent on purpose: the error and note lists, the Methods tabs and the
-   boilerplate prose read the same in the document reports and the dashboard ones, so
-   they live here rather than once per sheet. Anything that has to differ between the
-   two looks (h2, tables, the footer's top margin) stays in _base.css / subject.css. */
+   boilerplate prose read the same whichever look a report wears, so they live here
+   rather than once per sheet. Anything that has to differ (h2, tables, the footer's
+   top margin) stays in the look, document.css. */
 
 .section-hint { font-size: 0.85rem; color: #666; }
 

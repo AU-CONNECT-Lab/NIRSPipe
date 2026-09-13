@@ -44,11 +44,14 @@ _SHEETS: dict[str, str] = {}
 # There used to be two looks: a dashboard one in `_base.css` for the hyper and group
 # reports and the document one for the subject report. The dashboard sheet was deleted on
 # 2026-09-12, when the last report wearing it moved over. Every caller was by then passing
-# `css=stylesheet("subject.css")`, so the default had become a look nothing wore and a new
+# the document sheet explicitly, so the default had become a look nothing wore and a new
 # report could reach it by forgetting one keyword. `css` stays a parameter so a second look
 # is one argument away, but it overrides the look rather than choosing between two.
+#
+# `document.css` was `subject.css` until 2026-09-12: it names the look, not the one report
+# that used to wear it, so a second look arriving does not make the name wrong again.
 TOKENS_CSS = stylesheet("_tokens.css")
-BASE_CSS = stylesheet("subject.css")
+LOOK_CSS = stylesheet("document.css")
 FOOTER_CSS = stylesheet("_footer.css")
 
 
@@ -160,7 +163,7 @@ def page_vars(
         "nav_meta":     list(nav_meta or []),
         "nav_note":     nav_note,
         "base_css":     "\n".join(
-            (TOKENS_CSS, BASE_CSS if css is None else css, FOOTER_CSS)),
+            (TOKENS_CSS, LOOK_CSS if css is None else css, FOOTER_CSS)),
         "run_date":     date.today().isoformat(),
     }
 

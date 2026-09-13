@@ -75,7 +75,7 @@ _SUBJECT_METRICS = [
 # themselves would share one dict between every call, so each figure set would write into
 # its predecessor's and every page would end up pointing at the last window's figures.
 _FIGURE_SET: dict = {"per_channel": dict, "per_roi": dict,
-                     "chan_matrix": str, "roi_matrix": str}
+                     "chan_matrix": dict, "roi_matrix": dict}
 
 
 def _empty_figures() -> dict:
@@ -669,6 +669,7 @@ def build_hyper_post_report(
     wtc_mask_coi: bool = True,
     wtc_roi_min_channels: int = 2,
     wtc_arrow_min: "float | None" = None,
+    wtc_arc_min: "float | None" = None,
     wtc_chroma: "tuple[str, ...] | list[str]" = ("hbo", "hbr"),
     isc_threshold: float = 0.3,
     sci_threshold: float = SCI_PASS,
@@ -743,6 +744,11 @@ def build_hyper_post_report(
     ``wtc_arrow_min`` is the coherence a cell has to reach before its phase arrow is drawn
     when no Monte Carlo level was computed. Display only: no table or figure value changes
     with it. ``None`` takes :data:`~fnirs_pipe.qc.figures.hyper_post_figures.ARROW_MIN_COHERENCE`.
+
+    ``wtc_arc_min`` is the band mean a pairing has to reach before it is drawn on the
+    coherence connectograms. Display only in the same sense. ``None`` puts every pairing of
+    a small grid on the circle and the strongest
+    :data:`~fnirs_pipe.qc.figures.hyper_post_figures.WTC_ARC_LINES` of a large one.
     """
     from fnirs_pipe.exceptions import StageError
     from fnirs_pipe.pipeline.hyperscanning import (
@@ -757,11 +763,14 @@ def build_hyper_post_report(
     from fnirs_pipe.pipeline.synchrony import long_axis_over, wtc_grid_params
     from fnirs_pipe.qc.figures.hyper_post_figures import (
         ARROW_MIN_COHERENCE,
+        PANEL_RESPONSIVE_JS,
+        WTC_RESPONSIVE_JS,
         build_isc_panel,
         build_wtc_channel,
         build_wtc_cross_matrix,
         build_wtc_map_interactive,
         compute_isc,
+        wtc_condition_views,
     )
 
     arrow_min = ARROW_MIN_COHERENCE if wtc_arrow_min is None else float(wtc_arrow_min)
@@ -852,16 +861,21 @@ def build_hyper_post_report(
         """
         return save_png(b64, figures_dir, name)
 
-    def _fig_html(fig, name: str) -> "dict | None":
+    def _fig_html(fig, name: str, extra_js: str = "", views: "dict | None" = None
+                  ) -> "dict | None":
         """One Plotly figure onto disk as its own page, with the height its iframe needs.
 
         The PNG twin is :func:`_fig`. Its URL is under the same ``wtc`` key a PNG entry
         uses, so one shape indexes both panels and a reader of the page's tables does not
         have to know which kind a pairing turned out to be.
+
+        ``extra_js`` is how a figure that has to keep a shape as the page is resized carries
+        its own rule, and ``views`` how one file serves the run and each condition off a URL
+        fragment.
         """
         if fig is None:
             return None
-        height = _save_figure_html(fig, figures_dir / name)
+        height = _save_figure_html(fig, figures_dir / name, extra_js=extra_js, views=views)
         return {"wtc": _fig_href(figures_dir, name), "h": height}
 
     def _write_df_tsv(df, kind: str, step: str, **extra) -> Path:
@@ -886,7 +900,7 @@ def build_hyper_post_report(
 
     def _maps(dest: dict, result, pair_key, pair_label: str, axis: list[str],
               stem: str, ch_type: str, suffix: str, what: str,
-              interactive: bool = False) -> None:
+              interactive: bool = False, view_spans=None) -> None:
         """Fill ``dest`` with one coherence map per pairing of ``axis`` against itself.
 
         ::
@@ -908,6 +922,10 @@ def build_hyper_post_report(
         entry then carries the iframe's height beside its URL. The ROI panel takes it and
         the channel panel does not, on volume alone: both cost about 3 MB a map, and a
         14-channel crossed dyad has 2352 channel maps against 192 ROI ones.
+
+        ``view_spans`` puts every condition's window into the file as well, so the run's
+        page and each condition's are one file addressed by URL fragment. Interactive only:
+        a PNG has no view to open on.
         """
         for label1 in axis:
             row: dict = {}
@@ -928,8 +946,11 @@ def build_hyper_post_report(
                         drawn = build(data, result.freqs, result.times,
                                       pair_label, markers_list, cond_colors_, site,
                                       arrow_min=arrow_min)
-                        entry = (_fig_html(drawn, fname) if interactive
-                                 else {"wtc": _fig(drawn, fname)})
+                        views = (wtc_condition_views(drawn, view_spans, data, result.freqs,
+                                                     result.times, arrow_min)
+                                 if view_spans and drawn is not None else None)
+                        entry = (_fig_html(drawn, fname, WTC_RESPONSIVE_JS, views)
+                                 if interactive else {"wtc": _fig(drawn, fname)})
                 # always a dict, even where nothing was drawn: the page indexes every
                 # pairing of the axis and a missing one has to answer with an empty URL
                 row[label2] = entry or {"wtc": None}
@@ -1040,7 +1061,14 @@ def build_hyper_post_report(
             logger.info("--wtc-by-condition: %d window(s), each read off the whole-run "
                         "transform", len(cond_windows))
 
-    def _figure_set(result, chan_band_df, ch_type: str, suffix: str = "") -> dict:
+    # One ROI map file per pairing, carrying the run and a view per window, rather than one
+    # file per window. Only where a window really is a slice of the run's own transform:
+    # --wtc-cond-transform gives each window a figure of its own and each then writes its
+    # own file. See `wtc_condition_views`.
+    roi_view_spans = (cond_windows if (cond_windows and cond_pad_s is None) else None)
+
+    def _figure_set(result, chan_band_df, ch_type: str, suffix: str = "",
+                    roi_view_of: "dict | None" = None) -> dict:
         """Every figure one WTC result yields: the maps and the three matrices.
 
         Called once with the whole-run result and again with each condition window's, so a
@@ -1059,6 +1087,11 @@ def build_hyper_post_report(
         ``roichan`` is the ROI band-mean frame, untagged: the caller adds the chromophore
         and, for a window, the condition, because the aggregations inside drop columns they
         do not know.
+
+        ``roi_view_of`` hands a window the run's own ROI map set, and the window then points
+        at those files with its slug on the end instead of drawing its own. See
+        :func:`~fnirs_pipe.qc.figures.hyper_post_figures.wtc_condition_views` for when that
+        is the same figure and when it is not.
         """
         out: dict = {**_empty_figures(), "roichan": None}
         what = f"condition {suffix.lstrip('_')}" if suffix else "whole run"
@@ -1072,9 +1105,10 @@ def build_hyper_post_report(
                 # channel still gets a matrix of the same shape as one that did not
                 chan_labels = chan_axis or sorted({*chan_band_df["label"],
                                                    *chan_band_df["label2"]})
-                out["chan_matrix"] = _fig(build_wtc_cross_matrix(
+                out["chan_matrix"] = _fig_html(build_wtc_cross_matrix(
                     chan_band_df, chan_labels, subject_ids, band_fmin, band_fmax,
-                    kind="channel"), f"wtc_chanmatrix_{ch_type}{suffix}.png") or ""
+                    kind="channel", arc_min=wtc_arc_min),
+                    f"wtc_chanmatrix_{ch_type}{suffix}.html", PANEL_RESPONSIVE_JS) or {}
 
         _maps(out["per_channel"], result, pair_key, pair_label, chan_axis,
               f"wtc_{ch_type}", ch_type, suffix, what)
@@ -1091,9 +1125,11 @@ def build_hyper_post_report(
                     chan_band_df, roi_map, min_channels=wtc_roi_min_channels)
         out["roichan"] = roi_band_df
 
-        # the maps grouped the same way, so the picture and the table are one average
+        # the maps grouped the same way, so the picture and the table are one average.
+        # A window pointing at the run's files needs no maps of its own, so it does not
+        # average for them either
         roi_wtc: WTCResult | None = None
-        if result is not None:
+        if result is not None and roi_view_of is None:
             with guard(f"ROI WTC maps from channels ({what}, {ch_type})", errors, scope):
                 roi_wtc = roi_maps_from_channels(result, roi_map)
         roi_pair_key = next(iter(roi_wtc.pairs)) if roi_wtc and roi_wtc.pairs else None
@@ -1101,14 +1137,22 @@ def build_hyper_post_report(
         if roi_band_df is not None and wtc_channel_cross:
             # the same builder the channel matrix uses, with the ROI labels: the two were
             # one lookup and one heatmap, written twice in two libraries
-            out["roi_matrix"] = _safe_post(
-                f"wtc-roi-matrix ({what}, {ch_type})",
-                f"wtc_roimatrix_{ch_type}{suffix}.png",
-                build_wtc_cross_matrix,
-                roi_band_df, roi_labels, subject_ids, band_fmin, band_fmax, "ROI",
-            ) or ""
-        _maps(out["per_roi"], roi_wtc, roi_pair_key, pair_label, roi_labels,
-              f"wtcroi_{ch_type}", ch_type, suffix, what, interactive=True)
+            with guard(f"wtc-roi-matrix ({what}, {ch_type}) figure", errors, scope):
+                out["roi_matrix"] = _fig_html(build_wtc_cross_matrix(
+                    roi_band_df, roi_labels, subject_ids, band_fmin, band_fmax, "ROI",
+                    arc_min=wtc_arc_min),
+                    f"wtc_roimatrix_{ch_type}{suffix}.html", PANEL_RESPONSIVE_JS) or {}
+        if roi_view_of is not None:
+            out["per_roi"] = {
+                label1: {label2: ({**entry, "wtc": entry["wtc"] + "#" + suffix.lstrip("_")}
+                                  if entry.get("wtc") else entry)
+                         for label2, entry in row.items()}
+                for label1, row in roi_view_of.items()
+            }
+        else:
+            _maps(out["per_roi"], roi_wtc, roi_pair_key, pair_label, roi_labels,
+                  f"wtcroi_{ch_type}", ch_type, suffix, what, interactive=True,
+                  view_spans=roi_view_spans)
 
         return out
 
@@ -1183,8 +1227,11 @@ def build_hyper_post_report(
             if cond_chan is None:
                 continue
 
-            # the same panels the run's own page gets, over this window
-            figs = _figure_set(cond_wtc, cond_chan, ch_type, f"_{_pair_fname(label)}")
+            # the same panels the run's own page gets, over this window. The ROI maps are
+            # the run's files at this window's fragment, where that route is on
+            figs = _figure_set(
+                cond_wtc, cond_chan, ch_type, f"_{_pair_fname(label)}",
+                roi_view_of=(out["run_figs"]["per_roi"] if roi_view_spans else None))
             out["cond_figs"][-1] = figs
 
             cond_roi = figs.pop("roichan", None)
@@ -1257,12 +1304,12 @@ def build_hyper_post_report(
                    window: "tuple[float, float] | None" = None) -> str:
         what = f"condition {label}" if label else "whole run"
         suffix = f"_{_pair_fname(label)}" if label else ""
-        panel = ""
+        panel: dict = {}
         with guard(f"ISC panel ({what}, {ch_type})", errors, scope):
             isc_mat, isc_ch_names = compute_isc(aligned_raws, subject_ids, ch_type,
                                                 sep_bands, window=window)
             if isc_mat is None:
-                return ""
+                return {}
             # the desc- entity a condition's page takes, so its table is named the way its
             # page is and a reader can pair the two without a rule of their own
             desc = f"_desc-{_pair_fname(label)}" if label else ""
@@ -1274,10 +1321,10 @@ def build_hyper_post_report(
                 subject_ids,
                 align=align_info,
             )
-            panel = _fig(build_isc_panel(
+            panel = _fig_html(build_isc_panel(
                 isc_mat, isc_ch_names, subject_ids,
                 ch_type=ch_type, isc_threshold=isc_threshold,
-            ), f"isc_{ch_type}{suffix}.png") or ""
+            ), f"isc_{ch_type}{suffix}.html", PANEL_RESPONSIVE_JS) or {}
         return panel
 
     # {label or None: {chromophore: href}}, one entry per page below
@@ -1454,8 +1501,8 @@ def build_hyper_post_report(
             nav_links=[{"label": text, "href": _page_path(lab).name,
                         "current": lab == label} for lab, text in nav_pages],
             isc_unfiltered_note=isc_unfiltered_note,
-            isc_panel_hbo_path=isc_panels.get(label, {}).get("hbo", ""),
-            isc_panel_hbr_path=isc_panels.get(label, {}).get("hbr", ""),
+            isc_panel_hbo=isc_panels.get(label, {}).get("hbo") or {},
+            isc_panel_hbr=isc_panels.get(label, {}).get("hbr") or {},
             subject_metrics_rows=(run_metric_rows if label is None
                                   else cond_metric_rows.get(label, [])),
         )

@@ -1,10 +1,10 @@
 /* What every QC report agrees on, whichever look it wears.
  *
- * Two looks share these: the dashboard (_base.css: hyper, group, the raw viewer) and the
- * document (subject.css: the subject report and its run index). What differs between them
- * is density and chrome, and that stays in their own sheets: body, h1, the nav bar, cards.
- * What they agree on is how prose and data are presented, and it is here, because the
- * footer puts a document-shaped section at the end of every report either way.
+ * One look wears these now, document.css, and they stay separate from it because `css=`
+ * replaces the look and never the tokens: a report handed a second look keeps the way
+ * prose and data are presented, which is what is here. Density and chrome are the look's:
+ * body, h1, the nav bar. There were two looks until 2026-09-12, the dashboard one in
+ * _base.css and this one, and the split is what that arrangement left behind.
  *
  * The custom properties cover the values that already appeared identically in several
  * places. The remaining greys are still literals on purpose: folding #888, #666 and #555

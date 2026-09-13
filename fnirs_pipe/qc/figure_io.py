@@ -52,10 +52,13 @@ _HASH_VIEW_JS = (
     "axes.push([a,v.x]);}});"
     "Object.keys(v.y||{}).forEach(function(a){"
     "up[a+'.range']=v.y[a].slice();up[a+'.autorange']=false;axes.push([a,v.y[a]]);});"
-    # by the annotation's own name rather than by an index measured when the file was
-    # written: an annotation added to the figure in between would shift every index
-    # and land a row's note on another row, with nothing to say so
-    "(gd.layout.annotations||[]).forEach(function(a,i){"
+    # A view that carries its own annotations replaces the set outright, which is how a
+    # coherence map swaps in the phase arrows measured over its own window; anything else
+    # edits the notes in place, by the annotation's own name rather than by an index
+    # measured when the file was written, since an annotation added to the figure in
+    # between would shift every index and land a row's note on another row
+    "if(v.annotations)up.annotations=v.annotations;"
+    "else (gd.layout.annotations||[]).forEach(function(a,i){"
     "if(a.name&&(v.ann||{})[a.name]!==undefined)up['annotations['+i+'].text']=v.ann[a.name];});"
     "Plotly.relayout(gd,up).then(function(){"
     "(v.bands||[]).forEach(function(b){"

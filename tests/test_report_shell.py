@@ -169,9 +169,9 @@ def test_the_tokens_carry_what_the_look_and_the_footer_agree_on():
 
 
 def test_the_look_keeps_no_copy_of_the_token_rules():
-    sheet = stylesheet("subject.css")
+    sheet = stylesheet("document.css")
     for rule in ("th, td {", ".report-footer table {", ".fig-path {"):
-        assert rule not in sheet, f"subject.css has a second copy of {rule}"
+        assert rule not in sheet, f"document.css has a second copy of {rule}"
 
 
 def test_the_raw_viewer_takes_the_shells_sheet_rather_than_copying_it():
@@ -192,9 +192,9 @@ def test_the_footer_styles_ship_with_the_footer():
 def test_the_look_keeps_no_copy_of_the_footer_rules():
     # it carried a verbatim copy until the rules moved to _footer.css; a copy coming back
     # means the look has quietly started overriding the footer
-    sheet = stylesheet("subject.css")
+    sheet = stylesheet("document.css")
     for cls in (".tab-btn {", ".boilerplate-html {", ".error-list {"):
-        assert cls not in sheet, f"subject.css has a second copy of {cls}"
+        assert cls not in sheet, f"document.css has a second copy of {cls}"
 
 
 def test_no_report_writer_names_a_stylesheet():
@@ -211,10 +211,10 @@ def test_no_report_writer_names_a_stylesheet():
             f"{path.name} names its own stylesheet; there is one look and it is the default")
 
 
-def test_the_index_shares_the_subject_stylesheet():
+def test_the_index_shares_the_one_stylesheet():
     # the index used to carry a near-copy of the subject report's CSS; only the rules that
     # differ belong in its own block, and a block this long means they have re-forked
     text = (TEMPLATE_DIR / "subject_index.html.j2").read_text(encoding="utf-8")
     block = re.search(r"{% block css %}(.*?){% endblock %}", text, re.S)
-    assert block, "the index defines no css block; check it still loads subject.css"
+    assert block, "the index defines no css block; check it still loads document.css"
     assert len(block.group(1).strip().splitlines()) < 40

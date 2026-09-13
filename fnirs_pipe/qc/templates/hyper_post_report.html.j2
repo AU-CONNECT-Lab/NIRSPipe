@@ -287,12 +287,13 @@
   <div class="details-body">
     <p class="step-desc">Band mean per ROI pair, inside the COI: one number per map the
       selectors above reach, and the rows of <code>hyper-wtc-roichan.tsv</code> for this
-      chromophore.</p>
+      chromophore. The heatmap carries every pairing and the circle beside it the ones that
+      stand out; both are live, so hover names the pairing and prints its value.</p>
     {% for c in wtc_chroma_labels %}
     <div class="chroma-stack">
       <span class="chroma-name">{{ c }}</span>
-      <img class="responsive" id="wtc-roi-matrix-img-{{ loop.index0 }}"
-           alt="ROI by ROI coherence matrix ({{ c }})" />
+      <iframe class="plotly-frame" id="wtc-roi-matrix-frame-{{ loop.index0 }}"
+              title="ROI by ROI coherence ({{ c }})" style="height:520px"></iframe>
     </div>
     {% endfor %}
   </div>
@@ -306,12 +307,14 @@
   <div class="details-body">
     <p class="step-desc">Band mean per channel pair, row = {{ subject_ids[0] }} and column =
       {{ subject_ids[1] }}: one number per map the selectors above reach, and the rows of
-      <code>hyper-wtc.tsv</code> for this chromophore.</p>
+      <code>hyper-wtc.tsv</code> for this chromophore. Every chord on the circle runs from
+      one brain to the other, there being no within-brain cell in the matrix to draw; hover
+      one to see which pairing it is.</p>
     {% for c in wtc_chroma_labels %}
     <div class="chroma-stack">
       <span class="chroma-name">{{ c }}</span>
-      <img class="responsive" id="wtc-chan-matrix-img-{{ loop.index0 }}"
-           alt="channel coherence matrix ({{ c }})" />
+      <iframe class="plotly-frame" id="wtc-chan-matrix-frame-{{ loop.index0 }}"
+              title="channel by channel coherence ({{ c }})" style="height:520px"></iframe>
     </div>
     {% endfor %}
   </div>
@@ -319,10 +322,10 @@
 {% endif %}
 
 <!-- ================================================= inter-brain synchrony -->
-{% if isc_panel_hbo_path or isc_panel_hbr_path %}
+{% if isc_panel_hbo.wtc or isc_panel_hbr.wtc %}
 <h2 id="ISC">Inter-brain Synchrony</h2>
 <p class="step-desc">
-  Topomap (per-channel ISC), ISC matrix (channel &times; channel Pearson r) and connectogram
+  ISC matrix (channel &times; channel Pearson r) and connectogram
   (|ISC| &ge; {{ "%.2f"|format(isc_threshold) }}),
   {% if condition_label %}over this window only, z-scored inside it
   {%- else %}over the whole recording{% endif %}.
@@ -331,24 +334,26 @@
 </p>
 {% if isc_unfiltered_note %}<p class="qm-note">{{ isc_unfiltered_note }}</p>{% endif %}
 
-{% if isc_panel_hbo_path %}
+{% if isc_panel_hbo.wtc %}
 <details id="ISCHbo" open>
   <summary>a. HbO</summary>
   <div class="details-body">
-    <img class="responsive" src="{{ isc_panel_hbo_path }}"
-         alt="inter-brain synchrony, HBO" />
-    <p class="fig-path">{{ isc_panel_hbo_path }}</p>
+    <iframe class="plotly-frame" src="{{ isc_panel_hbo.wtc }}"
+            title="inter-brain synchrony, HBO"
+            style="height:{{ isc_panel_hbo.h or 520 }}px"></iframe>
+    <p class="fig-path">{{ isc_panel_hbo.wtc }}</p>
   </div>
 </details>
 {% endif %}
 
-{% if isc_panel_hbr_path %}
+{% if isc_panel_hbr.wtc %}
 <details id="ISCHbr" open>
   <summary>b. HbR</summary>
   <div class="details-body">
-    <img class="responsive" src="{{ isc_panel_hbr_path }}"
-         alt="inter-brain synchrony, HBR" />
-    <p class="fig-path">{{ isc_panel_hbr_path }}</p>
+    <iframe class="plotly-frame" src="{{ isc_panel_hbr.wtc }}"
+            title="inter-brain synchrony, HBR"
+            style="height:{{ isc_panel_hbr.h or 520 }}px"></iframe>
+    <p class="fig-path">{{ isc_panel_hbr.wtc }}</p>
   </div>
 </details>
 {% endif %}
@@ -455,8 +460,8 @@ function _selectRoi() {
 // one img hidden and the rest of the page intact.
 function _drawImages() {
   _CHROMA.forEach(function(c, i) {
-    _img(document.getElementById("wtc-roi-matrix-img-" + i), {wtc: _ROI_MATRIX[c]});
-    _img(document.getElementById("wtc-chan-matrix-img-" + i), {wtc: _CHAN_MATRIX[c]});
+    _frame(document.getElementById("wtc-roi-matrix-frame-" + i), _ROI_MATRIX[c]);
+    _frame(document.getElementById("wtc-chan-matrix-frame-" + i), _CHAN_MATRIX[c]);
   });
 }
 

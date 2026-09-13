@@ -110,7 +110,7 @@ def _rejected_pairs(sqm_data: dict, sid: str) -> "set[str] | None":
     return {str(ch).rsplit(" ", 1)[0] for ch in bad}
 
 
-def _ch_sci_status(
+def _ch_kept_by_member(
     ch_pair: str,
     sqm_data: dict[str, dict],
     subject_ids: list[str],
@@ -537,7 +537,7 @@ def build_layout_2d(
         return None
 
     pair_names  = [ch_names[p].rsplit(" ", 1)[0] for p in hbo_picks]
-    colors      = [_group_color(_ch_sci_status(p, sqm_data, subject_ids, sci_threshold))
+    colors      = [_group_color(_ch_kept_by_member(p, sqm_data, subject_ids, sci_threshold))
                    for p in pair_names]
     hover_texts = [_hover_sci(p, sqm_data, subject_ids) for p in pair_names]
     x_mm = (locs[:, 0] * 1000).tolist()
@@ -636,7 +636,7 @@ def build_layout_3d(
         ly += [float(src_m[1]), float(det_m[1]), None]
         lz += [float(src_m[2]), float(det_m[2]), None]
 
-    ch_colors   = [_group_color(_ch_sci_status(p, sqm_data, subject_ids, sci_threshold))
+    ch_colors   = [_group_color(_ch_kept_by_member(p, sqm_data, subject_ids, sci_threshold))
                    for p in pair_names]
     hover_texts = [_hover_sci(p, sqm_data, subject_ids) for p in pair_names]
 
@@ -887,7 +887,7 @@ def build_channel_summary(
     colors, hover_texts = [], []
 
     for ch in ch_names:
-        statuses = _ch_sci_status(ch, sqm_data, subject_ids, sci_threshold)
+        statuses = _ch_kept_by_member(ch, sqm_data, subject_ids, sci_threshold)
         known    = [s for s in statuses if s is not None]
         sci_vals = []
         for sid in subject_ids:
@@ -958,7 +958,7 @@ def compute_hyper_sqm(
 
     n_all_good = n_mixed = n_all_bad = n_unknown = 0
     for ch in ch_set:
-        statuses = _ch_sci_status(ch, sqm_data, subject_ids, sci_threshold)
+        statuses = _ch_kept_by_member(ch, sqm_data, subject_ids, sci_threshold)
         known = [s for s in statuses if s is not None]
         if not known:
             n_unknown += 1

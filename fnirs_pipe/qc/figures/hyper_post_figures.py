@@ -82,6 +82,12 @@ def _apply_log_freq_axis(ax, freqs: np.ndarray) -> None:
 # Display threshold for phase arrows when no Monte Carlo level was computed; not a test.
 ARROW_MIN_COHERENCE = 0.5
 
+# How many arcs a coherence connectogram draws when --wtc-arc-min was not given. Coherence
+# is unsigned and bounded, so unlike a correlation it has no neighbourhood of zero to cut
+# at: every pairing carries some, and a band mean's scale moves with the band and the dyad.
+# Drawing a fixed count instead says "the strongest ones", which holds whatever the scale.
+WTC_ARC_LINES = 20
+
 
 def _arrow_mask(wtc_arr, sig, freqs, freq_coi, arrow_min: float = ARROW_MIN_COHERENCE):
     """Where a phase arrow is worth drawing: inside the cone, and above the noise.
@@ -155,15 +161,12 @@ def build_wtc_channel(
     sig     = wtc_data.get("sig")
     freqs, times = np.asarray(freqs, dtype=float), np.asarray(times, dtype=float)
 
-    fig, ax = plt.subplots(figsize=(11.0, 3.6))
+    fig, ax = plt.subplots(figsize=WTC_FIGSIZE)
     mesh = ax.pcolormesh(times, freqs, wtc_arr, cmap="viridis", vmin=0, vmax=1,
                          shading="nearest")
     _apply_log_freq_axis(ax, freqs)
 
-    # COI -> the lowest frequency each time point can still be measured at
-    with np.errstate(divide="ignore", invalid="ignore"):
-        freq_coi = np.where(coi > 1e-10, 1.0 / coi, freqs.max())
-    freq_coi = np.clip(freq_coi, freqs.min(), freqs.max())
+    freq_coi = _freq_coi(coi, freqs)
     ax.fill_between(times, freq_coi, freqs.min(), color="white", alpha=0.45, lw=0, zorder=2)
     ax.plot(times, freq_coi, color="white", lw=1.3, ls="--", zorder=3)
 
@@ -197,7 +200,7 @@ def build_wtc_channel(
     # this panel is full width, so it takes more arrows and much smaller ones than the
     # thumbnails elsewhere do
     _phase_arrows(ax, times, freqs, wtc_data.get("phase"),
-                  n_time=34, n_freq=13, scale=52, width=0.0022,
+                  n_time=34, n_freq=13, scale=WTC_QUIVER_SCALE, width=0.0022,
                   mask=_arrow_mask(wtc_arr, sig, freqs, freq_coi, arrow_min))
 
     lead = (pair_label.split("×")[0].strip() or "the first member"
@@ -221,7 +224,11 @@ def build_wtc_channel(
                   labelspacing=0.3, borderpad=0.0, borderaxespad=0.0)
     heading = f"{site_label}   {pair_label}".strip() if site_label else pair_label
     ax.set_title(heading, fontsize=10, loc="left", pad=20 + 10 * (legend_rows - 1))
-    fig.colorbar(mesh, ax=ax, pad=0.015, label="WTC")
+    # the live twin of this panel has no frame, and a framed map beside an unframed one
+    # reads as two different kinds of figure
+    for spine in ax.spines.values():
+        spine.set_visible(False)
+    flat_colorbar(fig, mesh, ax, "WTC", pad=0.015)
     caption = (f"arrows: right = in phase, left = antiphase, up = {lead} leads by a quarter "
                f"cycle, drawn only where coherence clears "
                f"{'the Monte Carlo level' if sig is not None else f'{arrow_min:g}'}"
@@ -234,6 +241,185 @@ def build_wtc_channel(
 # which it can do because the arrows are measured in pixels rather than in data.
 _INTERACTIVE_PLOT_H = 430
 _INTERACTIVE_ARROW_PX = 15.0
+
+# Name every arrow carries, so the resize hook can find them among the figure's annotations
+# and a per-condition view can swap the whole set without disturbing the caption.
+_ARROW_NAME = "wtcarrow"
+
+# ---- what keeps the still and the live panel the same picture ----
+# The two are one panel drawn by two libraries, and both numbers below are the still's, read
+# off it rather than chosen: WTC_FIGSIZE plus the title and caption renders at this ratio,
+# and quiver's `scale` is the axes width an arrow of unit length takes a fifty-second of.
+# The live panel is handed both by WTC_RESPONSIVE_JS, which is why it stretches to the
+# report's width instead of standing at a fixed height with fixed arrows beside a still that
+# grows with the window.
+WTC_FIGSIZE = (11.0, 3.6)
+WTC_RENDERED_ASPECT = 2.46
+WTC_QUIVER_SCALE = 52.0
+
+# Height from width, and arrow length from the plot area, on every draw and every resize.
+# It runs again after a relayout because that is when a condition view swaps in its own
+# arrows, and each pass renormalises whatever length it finds rather than scaling what is
+# there, so running twice is the same as running once. The one-pixel guard is what stops
+# the relayout it makes from calling it forever.
+def responsive_js(aspect: float, offset: int = 0,
+                  quiver_scale: "float | None" = None) -> str:
+    """Script that keeps one live figure at a fixed shape as the report's width changes.
+
+    ::
+
+      responsive_js(2.46, quiver_scale=52)  -> the coherence map's own script
+
+    ``height = width / aspect + offset``, and where ``quiver_scale`` is given, every arrow
+    is renormalised to ``plot area width / quiver_scale``, which is the length matplotlib's
+    quiver gives the still panel. Without this a live figure stands at the height and the
+    arrow length it was written with while the PNG beside it grows with the window, and the
+    two agree only at whatever width happened to be in mind.
+    """
+    q = ("var L=(w-(m.l||0)-(m.r||0))/%g,moved=false;"
+         "var ann=(gd.layout.annotations||[]).map(function(a){return a;});"
+         "ann.forEach(function(a){"
+         f"if(a.name!=='{_ARROW_NAME}')return;"
+         "var d=Math.sqrt(a.ax*a.ax+a.ay*a.ay);if(!d)return;"
+         "if(Math.abs(d-L)<=1)return;"
+         "a.ax=a.ax/d*L;a.ay=a.ay/d*L;moved=true;});"
+         "if(moved)up.annotations=ann;" % quiver_scale) if quiver_scale else ""
+    return (
+        "<script>(function(){"
+        f"var ASPECT={aspect},OFFSET={offset};"
+        "function fit(){"
+        "var gd=document.querySelector('.plotly-graph-div');"
+        "if(!gd||!gd.layout||typeof Plotly==='undefined')return;"
+        "var w=gd.offsetWidth;if(!w)return;"
+        "var m=gd.layout.margin||{},h=Math.round(w/ASPECT+OFFSET),up={};"
+        "if(Math.abs((gd.layout.height||0)-h)>1)up.height=h;"
+        + q +
+        "if(Object.keys(up).length)Plotly.relayout(gd,up);}"
+        # again after a relayout, which is when a condition view swaps in its own arrows.
+        # Each pass renormalises what it finds rather than scaling it, so running twice is
+        # the same as running once, and the one-pixel guard stops it calling itself forever
+        "window.addEventListener('load',function(){fit();"
+        "var gd=document.querySelector('.plotly-graph-div');"
+        "if(gd&&gd.on)gd.on('plotly_relayout',fit);});"
+        "window.addEventListener('resize',fit);"
+        "})();</script>"
+    )
+
+
+WTC_RESPONSIVE_JS = responsive_js(WTC_RENDERED_ASPECT, quiver_scale=WTC_QUIVER_SCALE)
+
+# The two-panel figure is two squares side by side: the height is what makes the heatmap's
+# cells square at a given width, plus the room the titles and the axis labels take.
+PANEL_ASPECT = 2.25
+PANEL_TITLE_PX = 150
+PANEL_RESPONSIVE_JS = responsive_js(PANEL_ASPECT, offset=PANEL_TITLE_PX)
+
+
+def _arrow_annotations(wtc_data: dict, freqs: np.ndarray, times: np.ndarray,
+                       freq_coi: np.ndarray,
+                       arrow_min: float = ARROW_MIN_COHERENCE) -> list[dict]:
+    """The phase field of one map as Plotly annotations, thinned onto the same grid.
+
+    ::
+
+      a 51 x 3962 map -> about 150 arrows, one annotation each
+
+    The live twin of :func:`_phase_arrows`, and a function rather than a block inside the
+    figure because a per-condition view of that figure needs its own set: the grid spans
+    whatever time axis it is given, so a 300 s condition read off a 1800 s run would show
+    the five columns of the run's grid that happen to land inside it.
+
+    Inset off the edges, which the matplotlib panel does not need: its quiver is clipped at
+    the axes and an annotation is not, so an arrow on the outermost row would hang its tail
+    over the tick labels.
+    """
+    def _grid(n: int, count: int) -> np.ndarray:
+        return np.unique(np.linspace(0.03, 0.97, min(count, n)) * (n - 1)).astype(int)
+
+    wtc_arr = np.asarray(wtc_data["wtc"], dtype=float)
+    sig     = wtc_data.get("sig")
+    phase   = wtc_data.get("phase")
+    if phase is None or np.asarray(phase).shape != wtc_arr.shape:
+        return []
+
+    fi = _grid(len(freqs), 13)
+    ti = _grid(len(times), 34)
+    keep = _arrow_mask(wtc_arr, sig, freqs, freq_coi, arrow_min)[np.ix_(fi, ti)]
+    if not keep.any():
+        return []
+
+    angle = np.asarray(phase, dtype=float)[np.ix_(fi, ti)]
+    arrows = []
+    for r, f_i in enumerate(fi):
+        for c, t_i in enumerate(ti):
+            if not keep[r, c]:
+                continue
+            a = float(angle[r, c])
+            arrows.append(dict(
+                # a log axis takes an annotation's coordinate in log10, not in Hz. Given in
+                # Hz every arrow lands off the plot and is clipped away with no error at
+                # all, which is how this was drawing nothing
+                x=float(times[t_i]), y=float(np.log10(freqs[f_i])),
+                ax=-_INTERACTIVE_ARROW_PX * np.cos(a),
+                ay=_INTERACTIVE_ARROW_PX * np.sin(a),
+                axref="pixel", ayref="pixel", text="", showarrow=True, name=_ARROW_NAME,
+                arrowhead=2, arrowsize=1.1, arrowwidth=1.1, arrowcolor="black",
+            ))
+    return arrows
+
+
+def _freq_coi(coi: np.ndarray, freqs: np.ndarray) -> np.ndarray:
+    """The cone as the lowest frequency each time point can still be measured at."""
+    with np.errstate(divide="ignore", invalid="ignore"):
+        out = np.where(np.asarray(coi, dtype=float) > 1e-10,
+                       1.0 / np.asarray(coi, dtype=float), freqs.max())
+    return np.clip(out, freqs.min(), freqs.max())
+
+
+def wtc_condition_views(fig, spans, wtc_data: dict, freqs: np.ndarray, times: np.ndarray,
+                        arrow_min: float = ARROW_MIN_COHERENCE) -> "dict | None":
+    """Each condition's view of one whole-run coherence map, keyed by slug for a page to pick.
+
+    ::
+
+      wtc_condition_views(fig, [("video", 300.0, 600.0)], data, freqs, times)
+      -> {"video": {"x": [300.0, 600.0], "annotations": [...]}}
+
+    What the file then serves is the run at its own URL and each condition at
+    ``…/map.html#video``, which is the arrangement the subject report's time-axis figures
+    already use. It is sound here for the same reason the tables are: a condition is read
+    out of the whole-run transform and never cut from it, so its map *is* a slice of this
+    one, down to the cone. A run transformed per condition is a different figure and gets
+    its own file; the caller decides, since it is the one that knows which route ran.
+
+    Only the arrows are rebuilt. They sit on a grid spread over whatever span they were
+    drawn for, so a narrowed view of the run's set would show a handful of columns; each
+    condition carries its own set and the caption is left alone.
+    """
+    if not spans or fig is None:
+        return None
+    times = np.asarray(times, dtype=float)
+    freqs = np.asarray(freqs, dtype=float)
+    fixed = [a.to_plotly_json() for a in (fig.layout.annotations or ())
+             if a.name != _ARROW_NAME]
+
+    out = {}
+    from fnirs_pipe.qc.figure_io import _pair_fname
+    for label, t0, t1 in spans:
+        keep = (times >= float(t0)) & (times <= float(t1))
+        if not keep.any():
+            continue
+        cut = {"wtc": np.asarray(wtc_data["wtc"])[:, keep],
+               "phase": (None if wtc_data.get("phase") is None
+                         else np.asarray(wtc_data["phase"])[:, keep]),
+               "sig": wtc_data.get("sig")}
+        coi = _freq_coi(np.asarray(wtc_data["coi"])[keep], freqs)
+        out[_pair_fname(label)] = {
+            "x": [float(t0), float(t1)],
+            "annotations": fixed + _arrow_annotations(cut, freqs, times[keep], coi,
+                                                      arrow_min),
+        }
+    return out or None
 
 
 def build_wtc_map_interactive(
@@ -297,9 +483,7 @@ def build_wtc_map_interactive(
         hovertemplate="t = %{x:.0f} s<br>f = %{y:.4g} Hz<br>WTC = %{z:.3f}<extra></extra>",
     ))
 
-    with np.errstate(divide="ignore", invalid="ignore"):
-        freq_coi = np.where(coi > 1e-10, 1.0 / coi, freqs.max())
-    freq_coi = np.clip(freq_coi, freqs.min(), freqs.max())
+    freq_coi = _freq_coi(coi, freqs)
     fig.add_trace(go.Scatter(
         x=np.concatenate([times, times[::-1]]),
         y=np.concatenate([freq_coi, np.full_like(times, freqs.min())]),
@@ -321,35 +505,7 @@ def build_wtc_map_interactive(
             line=dict(color="black", width=1.1),
         ))
 
-    # ---- phase arrows, one pixel-anchored annotation each ----
-    # Inset off the edges, which the matplotlib panel does not need: its quiver is clipped
-    # at the axes, and an annotation is not, so an arrow on the outermost row would hang its
-    # tail over the tick labels.
-    def _grid(n: int, count: int) -> np.ndarray:
-        return np.unique(np.linspace(0.03, 0.97, min(count, n)) * (n - 1)).astype(int)
-
-    fi = _grid(len(freqs), 13)
-    ti = _grid(len(times), 34)
-    phase = wtc_data.get("phase")
-    keep = _arrow_mask(wtc_arr, sig, freqs, freq_coi, arrow_min)[np.ix_(fi, ti)]
-    arrows = []
-    if phase is not None and np.asarray(phase).shape == wtc_arr.shape and keep.any():
-        angle = np.asarray(phase, dtype=float)[np.ix_(fi, ti)]
-        for r, f_i in enumerate(fi):
-            for c, t_i in enumerate(ti):
-                if not keep[r, c]:
-                    continue
-                a = float(angle[r, c])
-                arrows.append(dict(
-                    # a log axis takes an annotation's coordinate in log10, not in Hz.
-                    # Given in Hz every arrow lands off the plot and is clipped away with
-                    # no error at all, which is how this was drawing nothing
-                    x=float(times[t_i]), y=float(np.log10(freqs[f_i])),
-                    ax=-_INTERACTIVE_ARROW_PX * np.cos(a),
-                    ay=_INTERACTIVE_ARROW_PX * np.sin(a),
-                    axref="pixel", ayref="pixel", text="", showarrow=True,
-                    arrowhead=2, arrowsize=1.1, arrowwidth=1.1, arrowcolor="black",
-                ))
+    arrows = _arrow_annotations(wtc_data, freqs, times, freq_coi, arrow_min)
 
     # ---- one span bar per block, one legend entry per condition ----
     shapes, seen = [], {}
@@ -407,67 +563,20 @@ def build_wtc_map_interactive(
     return fig
 
 
-def draw_site_matrix(ax, z, row_labels, col_labels, *, cmap, vmin, vmax,
-                     row_title="", col_title="", annotate=True):
-    """One site-by-site heatmap with its labels and its numbers. Every matrix here uses it.
+def flat_colorbar(fig, mappable, ax, label: str, **kwargs):
+    """A colorbar with no black box around it. Every bar in this report goes through it.
 
     ::
 
-      a 14 x 14 of band means -> the cells, both axes named by channel, each cell's value
-                                 printed in it
+      flat_colorbar(fig, mesh, ax, "WTC", pad=0.015)
 
-    The report draws three of these -- channel by channel coherence, ROI by ROI coherence,
-    and the inter-brain correlation -- and they used to be two separate blocks of drawing
-    code with different tick rules and only one of them printing values. One function means
-    a change to how a matrix reads happens once.
-
-    **Every cell gets its number.** A fixed colour scale is what lets two dyads or two
-    conditions be compared by eye, and the cost is that a matrix whose values all sit near
-    0.25 renders as one flat square; the printed value is what makes such a matrix readable
-    at all. The font follows the cell size, and the ink is chosen from **the cell's own
-    colour** rather than from its value: viridis is dark at its low end and bright at its
-    high one while a diverging map is dark at both ends and pale in the middle, so any rule
-    written against the value serves one of them and fails the other. Asking the colormap and
-    taking the luminance serves both, and any colormap added later.
-
-    ``vmin``/``vmax`` and ``cmap`` stay the caller's: coherence is 0 to 1 on viridis and a
-    correlation is -1 to 1 on a diverging map, and collapsing that distinction would be
-    worse than the duplication this replaces.
+    The live ROI panel is Plotly and draws an unframed bar; the stills are matplotlib and
+    drew a framed one, so the same scale appeared twice on one page in two liveries. One
+    look, and the choice is made in one place.
     """
-    n_rows, n_cols = len(row_labels), len(col_labels)
-    cmap = plt.get_cmap(cmap).copy()
-    cmap.set_bad("#d5d5d5")
-    im = ax.imshow(z, cmap=cmap, vmin=vmin, vmax=vmax, aspect="equal",
-                   interpolation="nearest")
-
-    tick_size = float(np.clip(150.0 / max(n_rows, n_cols, 1), 4.0, 8.0))
-    ax.set_xticks(range(n_cols))
-    ax.set_xticklabels(col_labels, rotation=90, fontsize=tick_size)
-    ax.set_yticks(range(n_rows))
-    ax.set_yticklabels(row_labels, fontsize=tick_size)
-    if col_title:
-        ax.set_xlabel(col_title, fontsize=9)
-    if row_title:
-        ax.set_ylabel(row_title, fontsize=9)
-    for spine in ax.spines.values():
-        spine.set_visible(False)
-
-    if annotate:
-        # the cell is as wide as the axes divided by the count, and a two-decimal number
-        # needs about a third of that in points before it starts colliding
-        value_size = float(np.clip(110.0 / max(n_rows, n_cols, 1), 3.5, 9.0))
-        span = (vmax - vmin) or 1.0
-        for i in range(n_rows):
-            for j in range(n_cols):
-                value = z[i, j]
-                if not np.isfinite(value):
-                    continue
-                r, g, b, _ = cmap((value - vmin) / span)
-                luminance = 0.299 * r + 0.587 * g + 0.114 * b
-                ax.text(j, i, f"{value:.2f}".replace("0.", "."),
-                        ha="center", va="center", fontsize=value_size,
-                        color="white" if luminance < 0.55 else "#111111")
-    return im
+    bar = fig.colorbar(mappable, ax=ax, label=label, **kwargs)
+    bar.outline.set_visible(False)
+    return bar
 
 
 def _png_b64(fig) -> str:
@@ -478,6 +587,273 @@ def _png_b64(fig) -> str:
     return base64.b64encode(buf.read()).decode()
 
 
+# Node colours for the two members, on every circle this report draws: purple and green
+# rather than a red and a blue, which on these pages mean HbO and HbR.
+NODE_COLORS = ("#8e44ad", "#27ae60")
+
+# Degrees of blank circle left between the two members, at both ends of each semicircle, so
+# the split between the brains is visible before any label is read.
+_CIRCLE_GAP = 12.0
+
+# A grid this size or smaller puts every pairing on the circle. Above it the circle draws
+# WTC_ARC_LINES instead: an ROI grid is sixteen pairings and reads whole, a channel montage
+# is two hundred and reads as a ball of wool.
+ARC_DRAW_ALL_UNDER = 40
+
+
+def _node_angles(n_per_side: int, gap: float = _CIRCLE_GAP) -> np.ndarray:
+    """Where each node sits, in degrees, the first member's sites over the left semicircle.
+
+    ::
+
+      3 a side -> [120, 150, 180] on the left, [300, 330, 0] on the right
+
+    Counterclockwise from the top, so the first member runs down the left side and the
+    second comes back up the right, which puts the two homologous ends of the montage facing
+    each other across the split.
+    """
+    step = (360.0 - 2 * gap) / (2 * n_per_side)
+    k = np.arange(2 * n_per_side)
+    return 90.0 + gap / 2 + (k + 0.5) * step + np.where(k >= n_per_side, gap, 0.0)
+
+
+def _bezier(p0, p2, n: int = 40) -> tuple[np.ndarray, np.ndarray]:
+    """A chord from p0 to p2 bowed toward the middle of the circle.
+
+    Quadratic, with the centre as the control point, which is what makes a pairing between
+    two nodes that face each other read as a straight line across and one between two
+    neighbours as a shallow arc: how far a chord bows is then how far apart its ends are.
+    """
+    t = np.linspace(0.0, 1.0, n)[:, None]
+    return tuple(((1 - t) ** 2 * np.asarray(p0) + t ** 2 * np.asarray(p2)).T)
+
+
+def _arc_color(value: float, cmap: str, vmin: float, vmax: float) -> str:
+    from plotly.colors import sample_colorscale
+
+    t = (float(value) - vmin) / ((vmax - vmin) or 1.0)
+    return sample_colorscale(cmap, [float(np.clip(t, 0.0, 1.0))])[0]
+
+
+def _cell_values(fig, z, row_labels, col_labels, *, cmap, vmin, vmax, row, col):
+    """Print every cell's value on the heatmap, in ink the cell's own colour can carry.
+
+    ::
+
+      a cell at .69 on viridis -> white text;  the same number on RdBu_r -> black
+
+    **Every cell gets its number.** A fixed colour scale is what lets two dyads or two
+    conditions be compared by eye, and the cost is that a matrix whose values all sit near
+    0.25 renders as one flat square; the printed value is what makes such a matrix readable
+    at all.
+
+    The ink is chosen from **the cell's own colour** and not from its value: viridis is dark
+    at its low end and bright at its high one while a diverging map is dark at both ends and
+    pale in the middle, so any rule written against the value serves one of them and fails
+    the other. Two text traces rather than one, because a heatmap takes a single ``textfont``
+    for the whole grid and that is the one thing this needs per cell.
+    """
+    import plotly.graph_objects as go
+
+    n = max(len(row_labels), len(col_labels), 1)
+    size = float(np.clip(150.0 / n, 5.0, 14.0))
+    groups: dict[str, list] = {"white": [[], [], []], "#111111": [[], [], []]}
+    for i, r in enumerate(row_labels):
+        for j, c in enumerate(col_labels):
+            v = z[i, j]
+            if not np.isfinite(v):
+                continue
+            rgb = _arc_color(v, cmap, vmin, vmax)
+            red, green, blue = (float(x) for x in rgb[rgb.index("(") + 1:-1].split(","))
+            ink = "white" if (0.299 * red + 0.587 * green + 0.114 * blue) < 140 else "#111111"
+            xs, ys, ts = groups[ink]
+            xs.append(c)
+            ys.append(r)
+            ts.append(f"{v:.2f}".replace("0.", "."))
+    for ink, (xs, ys, texts) in groups.items():
+        if not xs:
+            continue
+        fig.add_trace(go.Scatter(
+            x=xs, y=ys, text=texts, mode="text", hoverinfo="skip", showlegend=False,
+            textfont=dict(size=size, color=ink),
+        ), row=row, col=col)
+
+
+def _circle_traces(fig, z, row_labels, col_labels, subject_ids, *,
+                   cmap, vmin, vmax, value_label, keep, row, col):
+    """Draw the connectogram into one subplot: node arcs, labels, and one chord per pairing.
+
+    ``keep`` is the boolean of which cells get a chord, already decided by the caller. Every
+    chord runs from a node on the left semicircle to one on the right, because the matrix is
+    one brain against the other and has no within-brain cell to draw.
+    """
+    import plotly.graph_objects as go
+
+    n = len(row_labels)
+    ang = np.deg2rad(_node_angles(n))
+    step = np.deg2rad((360.0 - 2 * _CIRCLE_GAP) / (2 * n))
+    xy = np.stack([np.cos(ang), np.sin(ang)], axis=1)
+
+    # ---- one thick arc per node, and its label outside it ----
+    sub1 = subject_ids[0] if subject_ids else "Sub1"
+    sub2 = subject_ids[1] if len(subject_ids) > 1 else "Sub2"
+    labels = list(row_labels) + list(col_labels)
+    for k, name in enumerate(labels):
+        side = 0 if k < n else 1
+        a = np.linspace(ang[k] - step * 0.42, ang[k] + step * 0.42, 12)
+        fig.add_trace(go.Scatter(
+            x=np.cos(a), y=np.sin(a), mode="lines",
+            line=dict(color=NODE_COLORS[side], width=9), showlegend=False,
+            hovertemplate=f"{(sub1, sub2)[side]}<br>{name}<extra></extra>",
+        ), row=row, col=col)
+        deg = np.rad2deg(ang[k]) % 360.0
+        flip = 90.0 < deg < 270.0
+        fig.add_annotation(
+            x=float(np.cos(ang[k]) * 1.06), y=float(np.sin(ang[k]) * 1.06),
+            text=name, showarrow=False, font=dict(size=9, color="#2c3e50"),
+            textangle=-(deg - 180.0) if flip else -deg,
+            xanchor="right" if flip else "left", yanchor="middle",
+            xref=f"x{col}" if col > 1 else "x", yref=f"y{col}" if col > 1 else "y",
+        )
+
+    # ---- the chords, weakest first so the strong ones are not drawn under them ----
+    pairs = [(i, j) for i in range(n) for j in range(n) if keep[i, j]]
+    pairs.sort(key=lambda ij: abs(z[ij]))
+    for i, j in pairs:
+        value = float(z[i, j])
+        x, y = _bezier(xy[i], xy[n + j])
+        fig.add_trace(go.Scatter(
+            x=x, y=y, mode="lines",
+            line=dict(color=_arc_color(value, cmap, vmin, vmax), width=1.6),
+            showlegend=False,
+            hovertemplate=(f"{sub1} {row_labels[i]} × {sub2} {col_labels[j]}"
+                           f"<br>{value_label} = {value:.3f}<extra></extra>"),
+        ), row=row, col=col)
+    return len(pairs)
+
+
+def build_cross_panel(
+    z: np.ndarray,
+    row_labels: list[str],
+    col_labels: list[str],
+    subject_ids: list[str],
+    *,
+    cmap: str,
+    vmin: float,
+    vmax: float,
+    value_label: str,
+    matrix_title: str,
+    suptitle: str,
+    arc_threshold: "float | None",
+    arc_lines: "int | None",
+    kind: str = "",
+):
+    """Any cross-brain matrix as two live panels: the heatmap, and the same numbers as a circle.
+
+    ::
+
+      a 14 x 14 of band means -> [ matrix with every cell printed | connectogram ]
+
+    Every cross-brain matrix in this report is drawn by this: the coherence band means per
+    channel pair and per ROI pair, and the ISC. The two panels answer different questions off
+    one set of numbers, which is why both are on the page. **The matrix is the record**: every
+    cell carries its value, blanks included, so a pairing can be looked up. **The circle is
+    the shape**: an eye reads 196 printed numbers as a texture, and the chords say which sites
+    the strong pairings actually land on.
+
+    Both rows and columns are the *montage*, row for the first member and column for the
+    second, so cell (i, j) is one member's site i against the other's site j and the diagonal
+    is the homologous pairing. There is no within-brain cell anywhere in it, which is why
+    every chord on the circle crosses the middle.
+
+    Live rather than a still, and the whole reason is the circle: a chord is drawn between
+    two nodes and thirty of them cross, so on a PNG the only way to read one is to trace it
+    to both ends and hope the labels are legible. Hovering says which pairing it is and what
+    it is worth. The heatmap comes along for the same reason its ROI twin did.
+
+    The scale is the caller's and both panels share it, so there is one colorbar. A coherence
+    is unsigned and takes viridis over 0 to 1; a correlation is signed and takes a diverging
+    map over -1 to 1.
+
+    ``arc_threshold`` draws every pairing that clears it and ``arc_lines`` the N strongest
+    instead; exactly one is used, the threshold where it is given. Neither changes a number,
+    and the subtitle over the circle says which rule drew it.
+    """
+    import plotly.graph_objects as go
+    from plotly.subplots import make_subplots
+
+    z = np.asarray(z, dtype=float)
+    if z.size == 0 or not len(row_labels):
+        return None
+
+    n = len(row_labels)
+    sub1 = subject_ids[0] if subject_ids else "Sub1"
+    sub2 = subject_ids[1] if len(subject_ids) > 1 else "Sub2"
+
+    finite = np.isfinite(z)
+    if arc_threshold is not None:
+        keep = finite & (np.abs(z) >= float(arc_threshold))
+        # the character, not the HTML entity: plotly's text parser takes the tags it knows
+        # and an "&ge;" in a subplot title fails the whole render
+        rule = f"|{value_label}| ≥ {arc_threshold:g}"
+    elif arc_lines is not None and int(finite.sum()) > arc_lines:
+        cut = np.sort(np.abs(z[finite]))[-int(arc_lines)]
+        keep = finite & (np.abs(z) >= cut)
+        rule = f"{int(keep.sum())} strongest pairings"
+    else:
+        keep = finite
+        rule = f"all {int(keep.sum())} pairings"
+
+    # both panels are squares centred in their half, so the space between them is whatever
+    # the square constraint leaves over rather than a gap set here
+    fig = make_subplots(rows=1, cols=2, column_widths=[0.5, 0.5],
+                        horizontal_spacing=0.03,
+                        subplot_titles=(matrix_title, rule))
+
+    # A blank cell is a site one member lost. Painted under the heatmap rather than left to
+    # show the page through, so it reads as "measured, nothing here" and not as a gap. Laid
+    # out on the data's own extent and with no gap between cells, so the only grey anywhere
+    # in the grid is a blank: a cell border in the same colour would read as one too.
+    fig.add_shape(type="rect", xref="x", yref="y", x0=-0.5, x1=len(col_labels) - 0.5,
+                  y0=-0.5, y1=len(row_labels) - 0.5,
+                  fillcolor="#d5d5d5", line=dict(width=0), layer="below")
+
+    fig.add_trace(go.Heatmap(
+        z=z, x=list(col_labels), y=list(row_labels), colorscale=cmap,
+        zmin=vmin, zmax=vmax,
+        colorbar=dict(title=value_label, thickness=13, len=0.72, x=1.0, y=0.46),
+        hovertemplate=(f"{sub1} %{{y}} × {sub2} %{{x}}"
+                       f"<br>{value_label} = %{{z:.3f}}<extra></extra>"),
+    ), row=1, col=1)
+    _cell_values(fig, z, row_labels, col_labels, cmap=cmap, vmin=vmin, vmax=vmax,
+                 row=1, col=1)
+
+    _circle_traces(fig, z, row_labels, col_labels, subject_ids, cmap=cmap, vmin=vmin,
+                   vmax=vmax, value_label=value_label, keep=keep, row=1, col=2)
+
+    axis_title = lambda who: f"{who} {kind}".strip()
+    fig.update_layout(
+        height=int(900 / PANEL_ASPECT + PANEL_TITLE_PX), autosize=True,
+        margin=dict(l=70, r=90, t=80, b=70),
+        title=dict(text=suptitle, x=0.5, xanchor="center", y=0.975, font=dict(size=14)),
+        plot_bgcolor="white", paper_bgcolor="white", showlegend=False,
+        xaxis=dict(title=axis_title(sub2), side="bottom", tickangle=-90,
+                   showgrid=False, zeroline=False, constrain="domain"),
+        # the first row at the top, which is how the table it stands for is read
+        yaxis=dict(title=axis_title(sub1), autorange="reversed", showgrid=False,
+                   zeroline=False, scaleanchor="x", constrain="domain"),
+        # the same span on both, so the constraint letterboxes the subplot instead of
+        # stretching the circle into an ellipse
+        xaxis2=dict(visible=False, range=[-1.38, 1.38], constrain="domain"),
+        yaxis2=dict(visible=False, range=[-1.38, 1.38], scaleanchor="x2", scaleratio=1,
+                    constrain="domain"),
+    )
+    for note in fig.layout.annotations[:2]:
+        note.font.size = 11
+        note.font.color = "#444444"
+    return fig
+
+
 def build_wtc_cross_matrix(
     band_df,
     labels: list[str],
@@ -485,8 +861,9 @@ def build_wtc_cross_matrix(
     band_fmin: float,
     band_fmax: float,
     kind: str = "channel",
-) -> str | None:
-    """Band-mean coherence for every pairing across the two brains, as one heatmap.
+    arc_min: "float | None" = None,
+):
+    """Band-mean coherence for every pairing across the two brains, as one panel.
 
     Rows are sub1's sites, columns sub2's, so cell (i, j) is sub1's site i against sub2's
     site j and the diagonal is the homologous pairing the rest of the report shows. This is
@@ -513,21 +890,19 @@ def build_wtc_cross_matrix(
 
     sub1 = subject_ids[0] if subject_ids else "sub1"
     sub2 = subject_ids[1] if len(subject_ids) > 1 else "sub2"
-
-    n = len(labels)
-    side = max(4.0, min(0.42 * n + 1.8, 13.0))
-    fig, ax = plt.subplots(figsize=(side + 1.4, side))
-
-    im = draw_site_matrix(ax, z, labels, labels, cmap="viridis", vmin=0, vmax=1,
-                          row_title=f"{sub1} {kind}", col_title=f"{sub2} {kind}")
-    ax.xaxis.set_label_position("top")
-    ax.xaxis.tick_top()
-
     mean = float(np.nanmean(z))
-    ax.set_title(f"Band mean {band_fmin:.3g}-{band_fmax:.3g} Hz   (grand mean {mean:.3f})",
-                 fontsize=10, pad=26)
-    fig.colorbar(im, ax=ax, shrink=0.75, pad=0.02, label="coherence")
-    return _png_b64(fig)
+    # an ROI grid goes on the circle whole: sixteen pairings read as sixteen chords, and
+    # every one of them is a number the panel is on the page to show. A channel montage is
+    # two hundred, so there the circle keeps the strongest and the heatmap keeps the rest
+    lines = None if (arc_min is not None or z.size <= ARC_DRAW_ALL_UNDER) else WTC_ARC_LINES
+    return build_cross_panel(
+        z, labels, labels, subject_ids,
+        cmap="viridis", vmin=0, vmax=1, value_label="coherence", kind=kind,
+        matrix_title=f"Band mean {band_fmin:.3g}-{band_fmax:.3g} Hz "
+                     f"  (grand mean {mean:.3f})",
+        suptitle=f"Inter-brain coherence, {kind} × {kind}  —  {sub1} × {sub2}",
+        arc_threshold=arc_min, arc_lines=lines,
+    )
 
 
 def _phase_arrows(ax, times: np.ndarray, freqs: np.ndarray, phase, n_time: int = 14,
@@ -701,8 +1076,11 @@ def build_isc_panel(
     subject_ids: list[str],
     ch_type: str = "hbo",
     isc_threshold: float = 0.3,
-) -> str:
-    """Return base64 PNG of 2-panel ISC summary: ISC matrix | connectogram.
+):
+    """The 2-panel ISC summary: ISC matrix | connectogram.
+
+    The panel itself is :func:`build_cross_panel`, which the coherence matrices also take.
+    What stays here is the scale a correlation is read on and the wording of its titles.
 
     Args:
         isc_mat:       n × n ISC matrix from compute_isc().
@@ -711,59 +1089,16 @@ def build_isc_panel(
         ch_type:       "hbo" or "hbr", shown in titles.
         isc_threshold: Minimum ``|ISC|`` arc threshold forwarded to connectogram.
     """
-    from PIL import Image
-    from fnirs_pipe.qc.figures.connectogram import isc_connectogram as _isc_conn
-
     if isc_mat is None or len(ch_names) == 0:
-        return ""
+        return None
 
-    n          = len(ch_names)
     sub1_label = subject_ids[0] if subject_ids else "Sub1"
     sub2_label = subject_ids[1] if len(subject_ids) > 1 else "Sub2"
     type_label = ch_type.upper()
-
-    # height driven by matrix size so it can be square; cap to [5, 9]
-    sq = float(np.clip(n * 0.20, 5.0, 9.0))
-    fig = plt.figure(figsize=(sq * 2.4, sq + 1.0))
-    gs  = fig.add_gridspec(1, 2, width_ratios=[2, 2], wspace=0.35)
-    ax_matrix = fig.add_subplot(gs[0])
-    ax_circle = fig.add_subplot(gs[1])
-
-    # left: channel by channel ISC heatmap, through the same drawing the coherence matrices
-    # use, so the two read alike and both carry their values. The colormap and the -1 to 1
-    # range stay this panel's: a correlation is signed and coherence is not.
-    im = draw_site_matrix(ax_matrix, isc_mat, ch_names, ch_names,
-                          cmap="RdBu_r", vmin=-1, vmax=1,
-                          row_title=sub1_label, col_title=sub2_label)
-    ax_matrix.set_title(f"ISC matrix ({type_label})", fontsize=9, pad=4)
-    plt.colorbar(im, ax=ax_matrix, shrink=0.75, label="Pearson r", pad=0.02)
-
-    # right: connectogram embedded as image
-    try:
-        b64 = _isc_conn(
-            np.nan_to_num(isc_mat, nan=0.0), ch_names,
-            (sub1_label, sub2_label),
-            threshold=isc_threshold,
-            title=f"ISC {type_label}",
-        )
-        circle_bytes = base64.b64decode(b64)
-        circle_img   = np.array(Image.open(io.BytesIO(circle_bytes)).convert("RGB"))
-        ax_circle.imshow(circle_img)
-        ax_circle.axis("off")
-    except Exception as exc:
-        logger.debug("ISC connectogram embed failed: %s", exc)
-        ax_circle.text(0.5, 0.5, f"Connectogram\nunavailable\n{exc}",
-                       ha="center", va="center",
-                       transform=ax_circle.transAxes, fontsize=8, color="#888")
-        ax_circle.axis("off")
-
-    fig.suptitle(
-        f"Inter-brain Synchrony ({type_label})  —  {sub1_label} × {sub2_label}",
-        fontsize=10, y=1.01,
+    return build_cross_panel(
+        np.asarray(isc_mat, dtype=float), list(ch_names), list(ch_names), subject_ids,
+        cmap="RdBu_r", vmin=-1, vmax=1, value_label="Pearson r",
+        matrix_title=f"ISC matrix ({type_label})",
+        suptitle=f"Inter-brain Synchrony ({type_label})  —  {sub1_label} × {sub2_label}",
+        arc_threshold=isc_threshold, arc_lines=None,
     )
-
-    buf = io.BytesIO()
-    fig.savefig(buf, format="png", dpi=300, bbox_inches="tight", facecolor="white")
-    plt.close(fig)
-    buf.seek(0)
-    return base64.b64encode(buf.read()).decode()

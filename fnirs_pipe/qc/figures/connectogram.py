@@ -4,7 +4,9 @@
 
   fc_connectogram():    within-subject FC connectogram from a channel × channel DataFrame.
                         HbO and HbR are drawn as separate circles and stacked vertically.
-  isc_connectogram():   inter-brain connectogram, Sub1 on left semicircle, Sub2 on right.
+
+The inter-brain circle is not here: it is one half of the two-panel figure in
+``hyper_post_figures``, drawn in the same library as the heatmap beside it.
 """
 
 from __future__ import annotations
@@ -40,6 +42,49 @@ def _source_groups(ch_names: list[str]) -> dict[str, str]:
     return groups
 
 
+def _keep_edges(mat: np.ndarray, threshold: float,
+                n_lines: "int | None") -> np.ndarray:
+    """Blank every edge the circle should not draw, as NaN rather than as zero.
+
+    ::
+
+      [[0, .1, .8], ...] at threshold .3 -> [[nan, nan, .8], ...]
+
+    The selection is made here and never handed to the drawing, which is told to draw
+    whatever is left. Two reasons. A zeroed edge **is drawn**: the drawing keeps everything
+    at or above its own threshold of 0.0, and a zero lands mid-colormap, which is the haze of
+    near-white lines that used to sit under every real arc. And its own top-N sorts NaN to
+    the end of the array, so a matrix with more blanks than edges picked a NaN for its cut.
+    NaN is the one value that means "no edge" to both.
+
+    The matrix is one subject against itself, so the diagonal is a channel against itself
+    and every edge appears twice; ``n_lines`` is a count of edges, not of cells.
+    """
+    out = np.array(mat, dtype=float, copy=True)
+    np.fill_diagonal(out, np.nan)
+    if n_lines is None:
+        out[np.abs(out) < threshold] = np.nan
+        return out
+    finite = np.abs(out[np.isfinite(out)])
+    if finite.size > n_lines * 2:
+        out[np.abs(out) < np.sort(finite)[-n_lines * 2]] = np.nan
+    return out
+
+
+def _unframe(fig) -> None:
+    """Drop the black box the drawing puts around its colorbar.
+
+    The circle is embedded beside panels whose own colorbars carry no outline, and one
+    framed bar next to an unframed one reads as two different scales. The circle itself is
+    polar and already unframed, so only the bar is left to do.
+    """
+    for ax in fig.axes:
+        if ax.name == "polar":
+            continue
+        for spine in ax.spines.values():
+            spine.set_visible(False)
+
+
 def _single_circle(
     fc_mat: np.ndarray,
     ch_names: list[str],
@@ -54,15 +99,15 @@ def _single_circle(
     unique_groups = list(dict.fromkeys(groups.get(c, "other") for c in ch_names))
     sorted_ch = sorted(ch_names, key=lambda c: unique_groups.index(groups.get(c, "other")))
 
-    fc_sorted = fc_mat[
-        np.ix_(
-            [ch_names.index(c) for c in sorted_ch],
-            [ch_names.index(c) for c in sorted_ch],
-        )
-    ].copy()
-    np.fill_diagonal(fc_sorted, 0.0)
-    if n_lines is None:
-        fc_sorted[np.abs(fc_sorted) < threshold] = 0.0
+    fc_sorted = _keep_edges(
+        fc_mat[
+            np.ix_(
+                [ch_names.index(c) for c in sorted_ch],
+                [ch_names.index(c) for c in sorted_ch],
+            )
+        ],
+        threshold, n_lines,
+    )
 
     boundaries = [0]
     prev = groups.get(sorted_ch[0], "other")
@@ -88,7 +133,7 @@ def _single_circle(
         display_names,
         node_angles=node_angles,
         node_colors=node_colors,
-        n_lines=n_lines,
+        n_lines=None,
         colormap="RdBu_r",
         vmin=-1.0,
         vmax=1.0,
@@ -104,6 +149,7 @@ def _single_circle(
         padding=1.0,
         show=False,
     )
+    _unframe(fig)
     fig.set_size_inches(8, 8)
     buf = io.BytesIO()
     fig.savefig(buf, format="png", dpi=300, bbox_inches="tight", pad_inches=0.05, facecolor="white")
@@ -178,93 +224,5 @@ def fc_connectogram(
 
     buf = io.BytesIO()
     combined.save(buf, format="png", dpi=(300, 300))
-    buf.seek(0)
-    return base64.b64encode(buf.read()).decode()
-
-
-def isc_connectogram(
-    isc_mat: np.ndarray,
-    ch_names: list[str],
-    subject_ids: tuple[str, str],
-    threshold: float = 0.3,
-    n_lines: int | None = None,
-    diagonal_only: bool = False,
-    title: str = "Inter-brain ISC Connectogram",
-) -> str:
-    """Return base64 PNG of inter-brain connectogram.
-
-    Sub1 channels occupy the left semicircle; Sub2 the right.
-
-    Args:
-        isc_mat:       n × n ISC matrix from compute_isc().
-        ch_names:      Channel labels (n,), without HbO/HbR type suffix.
-        subject_ids:   (sub1_id, sub2_id) used as group colour labels.
-        threshold:     Minimum ``|ISC|`` to draw an arc (ignored when n_lines set).
-        n_lines:       Draw only the top-N strongest arcs.
-        diagonal_only: If True (default), draw only same-channel arcs
-                       (sub1_ch_i ↔ sub2_ch_i). Keeps the plot readable.
-        title:         Figure title.
-    """
-    from mne.viz.circle import _plot_connectivity_circle, circular_layout
-
-    n = len(ch_names)
-    if n == 0:
-        raise ValueError("ch_names is empty")
-
-    sub1_id, sub2_id = subject_ids[0], subject_ids[1]
-
-    # internal unique names for layout; display names are shown in the figure
-    uniq_sub1 = [f"{c}__1" for c in ch_names]
-    uniq_sub2 = [f"{c}__2" for c in ch_names]
-    all_uniq  = uniq_sub1 + uniq_sub2
-    display_names = list(ch_names) + list(ch_names)
-
-    # 2n × 2n connectivity: only cross-brain arcs filled
-    conn = np.zeros((2 * n, 2 * n))
-    block = np.diag(np.diag(isc_mat)) if diagonal_only else isc_mat.copy()
-    if n_lines is None:
-        block[np.abs(block) < threshold] = 0.0
-    conn[:n, n:] = block
-    conn[n:, :n] = block.T
-
-    # sub1 on left half, sub2 on right half
-    node_angles = circular_layout(
-        all_uniq, all_uniq,
-        start_pos=90,
-        group_boundaries=[0, n],
-        group_sep=12,
-    )
-
-    groups = {c: sub1_id for c in uniq_sub1}
-    groups.update({c: sub2_id for c in uniq_sub2})
-    # purple / green — avoids confusion with HbO (red) / HbR (blue)
-    color_map   = {sub1_id: "#8e44ad", sub2_id: "#27ae60"}
-    node_colors = [mcolors.to_rgba(color_map[groups[c]]) for c in all_uniq]
-
-    fig, _ = _plot_connectivity_circle(
-        conn,
-        display_names,
-        node_angles=node_angles,
-        node_colors=node_colors,
-        n_lines=n_lines,
-        colormap="RdBu_r",
-        vmin=-1.0,
-        vmax=1.0,
-        colorbar=True,
-        colorbar_size=0.12,
-        colorbar_pos=(-0.2, 0.1),
-        title=title,
-        facecolor="white",
-        textcolor="#2c3e50",
-        node_edgecolor="white",
-        linewidth=1.5,
-        fontsize_names=6,
-        padding=1.0,
-        show=False,
-    )
-    fig.set_size_inches(10, 10)
-    buf = io.BytesIO()
-    fig.savefig(buf, format="png", dpi=300, bbox_inches="tight", pad_inches=0.05, facecolor="white")
-    plt.close(fig)
     buf.seek(0)
     return base64.b64encode(buf.read()).decode()
