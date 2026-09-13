@@ -54,17 +54,44 @@ def _names(out_dir, pattern):
     return sorted(p.name for p in out_dir.rglob(pattern))
 
 
+# ---- three runs, not five ----
+# The five tests below ask five questions of three configurations, and a GLM run is twenty
+# seconds: running one per test made this 98-line file 38% of the suite's wall clock. The
+# runs are module-scoped and every test only reads what they produced, so sharing them
+# changes no assertion. Each yields (run_post's tuple, the directory it wrote into).
+
+@pytest.fixture(scope="module")
+def plain(haemo, tmp_path_factory):
+    """No --fc: the run the flag has to leave looking exactly as it did before it existed."""
+    out_dir = tmp_path_factory.mktemp("glm_plain")
+    return _glm(haemo, out_dir), out_dir
+
+
+@pytest.fixture(scope="module")
+def fc_with_roi(haemo, roi_map, tmp_path_factory):
+    """--fc with a ROI map: the full family, channel matrices and ROI products both."""
+    out_dir = tmp_path_factory.mktemp("glm_fc_roi")
+    return _glm(haemo, out_dir, roi_map=roi_map, fc=True), out_dir
+
+
+@pytest.fixture(scope="module")
+def fc_no_roi(haemo, tmp_path_factory):
+    """--fc without a ROI map: channel matrices only, which is what makes the map required."""
+    out_dir = tmp_path_factory.mktemp("glm_fc")
+    return _glm(haemo, out_dir, fc=True), out_dir
+
+
 # ---- the flag ----
 
-def test_without_the_flag_nothing_connectivity_is_written(haemo, tmp_path):
-    out = _glm(haemo, tmp_path)
-    assert _names(tmp_path, "*fc*.tsv") == []
+def test_without_the_flag_nothing_connectivity_is_written(plain):
+    out, out_dir = plain
+    assert _names(out_dir, "*fc*.tsv") == []
     assert out[_FC_DF] is None and out[_FC_ROI] == {} and out[_FC_SEED] == {}
 
 
-def test_the_flag_writes_the_same_family_rest_writes(haemo, tmp_path, roi_map):
-    out = _glm(haemo, tmp_path, roi_map=roi_map, fc=True)
-    written = _names(tmp_path, "*fc*.tsv")
+def test_the_flag_writes_the_same_family_rest_writes(fc_with_roi):
+    out, out_dir = fc_with_roi
+    written = _names(out_dir, "*fc*.tsv")
     for chromo in ("hbo", "hbr"):
         for suffix in ("fc", "fcz", "fcroi", "fcroiz", "fcseed", "fcseedz"):
             assert f"sub-01_task-tapping_desc-{chromo}_{suffix}.tsv" in written
@@ -73,26 +100,26 @@ def test_the_flag_writes_the_same_family_rest_writes(haemo, tmp_path, roi_map):
     assert sorted(out[_FC_SEED]) == ["hbo", "hbr"]
 
 
-def test_the_roi_frames_are_square_and_labelled_by_roi(haemo, tmp_path, roi_map):
-    fc_roi = _glm(haemo, tmp_path, roi_map=roi_map, fc=True)[_FC_ROI]
+def test_the_roi_frames_are_square_and_labelled_by_roi(fc_with_roi, roi_map):
+    fc_roi = fc_with_roi[0][_FC_ROI]
     for frame in fc_roi.values():
         assert list(frame.index) == list(frame.columns) == list(roi_map)
 
 
-def test_the_roi_products_need_a_roi_map(haemo, tmp_path):
-    out = _glm(haemo, tmp_path, fc=True)
-    assert _names(tmp_path, "*fcroi*.tsv") == []
-    assert _names(tmp_path, "*fcseed*.tsv") == []
+def test_the_roi_products_need_a_roi_map(fc_no_roi):
+    out, out_dir = fc_no_roi
+    assert _names(out_dir, "*fcroi*.tsv") == []
+    assert _names(out_dir, "*fcseed*.tsv") == []
     assert out[_FC_DF] is not None                      # the channel matrices still come
 
 
 # ---- what the mode cannot produce ----
 
-def test_alff_is_not_written_by_the_glm_mode(haemo, tmp_path):
+def test_alff_is_not_written_by_the_glm_mode(fc_no_roi):
     """fALFF's denominator spans the full spectrum, and this mode's residual is bandpassed.
 
     Writing an ALFF here would put a number in a TSV whose fALFF is ~1 by construction.
     """
-    out = _glm(haemo, tmp_path, fc=True)
+    out, out_dir = fc_no_roi
     assert out[_ALFF_DF] is None
-    assert _names(tmp_path, "*_alff.tsv") == []
+    assert _names(out_dir, "*_alff.tsv") == []
