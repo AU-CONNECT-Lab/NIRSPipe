@@ -255,11 +255,13 @@ _INTERACTIVE_ARROW_PX = 23.0
 # and a per-condition view can swap the whole set without disturbing the caption.
 _ARROW_NAME = "wtcarrow"
 
-# Wide and flat, because the report page has no fixed width: the still is drawn at 100% of
-# it, so its height on screen is the page's width over this aspect. At 3.06 the panel came
-# out half again as tall as the live ROI map under it on a wide monitor. The page caps it at
-# that map's height as well, which is what stops an even wider one from growing past it.
-WTC_FIGSIZE = (12.0, 3.0)
+# Wide and flat, and this is a layout number rather than a taste one. The page caps the
+# still at the height of the live ROI map under it, so on any monitor wide enough the aspect
+# alone decides how much of the column is left blank beside it: with the colorbar and labels
+# these 5 inches per inch come out near 3.1, which fills the width of a 1920 page at that
+# cap. At the 3.06 this started from the panel was half again as tall as the map below it and
+# at 4 it left a sixth of the page white.
+WTC_FIGSIZE = (15.0, 3.0)
 WTC_QUIVER_SCALE = 52.0
 
 # ---- why the live panel's lines are drawn about twice their matplotlib widths ----

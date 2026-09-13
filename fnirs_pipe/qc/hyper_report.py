@@ -1561,14 +1561,18 @@ def build_hyper_post_report(
         ::
 
           {"hbo": band frame, "hbr": ...} + {"hbo": (matrix, names), ...}
-            -> {"kind": "channel", "columns": ["HbO coherence", ...],
-                "rows": [{"a": "S1_D1", "b": "S1_D2", "cells": [".241", "99%", ...]}]}
+            -> {"kind": "channel",
+                "rows": [{"a": "S1_D1", "b": "S1_D2",
+                          "cells": {"HbO coherence": "0.241", "HbO ISC": "+0.067"}}]}
 
         The panels above show these as colour and the TSVs hold them to full precision; this
         is the same numbers on the page, so that reading one off a cell does not mean opening
         a file. Every value is looked up by label pair, never by position, which is the rule
         the matrices follow and for the same reason: two members can differ in what they
         rejected.
+
+        Cells are keyed by column name rather than by position because the channel table and
+        the ROI table sit in one grid under one header, and only the channel one has an ISC.
 
         ``valid`` is the share of the pairing's band cells that survived the cone of
         influence, the one number behind a band mean that no figure here shows. A pairing
@@ -1579,43 +1583,44 @@ def build_hyper_post_report(
         coherence on the diagonal and the ISC everywhere, which is what those two actually
         computed. ``isc`` is None for the ROI table, there being no ROI-level ISC.
         """
-        cells_by_pair: dict = {}
-        columns: list[str] = []
+        cells: dict = {}
 
-        def _put(pair: tuple, column: int, text: str) -> None:
-            cells_by_pair.setdefault(pair, {})[column] = text
+        def _put(pair: tuple, column: str, text: str) -> None:
+            cells.setdefault(pair, {})[column] = text
 
         for ch_type in chroma:
             name = _CHROMA_LABEL[ch_type]
-            col = len(columns)
-            columns += [f"{name} coherence", f"{name} valid"]
             df = bands.get(ch_type)
             if df is None or "label2" not in getattr(df, "columns", []):
                 continue
             for row in df.itertuples():
-                _put((row.label, row.label2), col, f"{row.coherence:.3f}")
+                _put((row.label, row.label2), f"{name} coherence", f"{row.coherence:.3f}")
                 frac = getattr(row, "n_valid_frac", None)
                 if frac is not None and np.isfinite(frac):
-                    _put((row.label, row.label2), col + 1, f"{100 * frac:.0f}%")
+                    _put((row.label, row.label2), f"{name} valid", f"{100 * frac:.0f}%")
 
         for ch_type in (chroma if isc else ()):
-            col = len(columns)
-            columns.append(f"{_CHROMA_LABEL[ch_type]} ISC")
             mat, names = isc.get(ch_type) or (None, None)
             if mat is None or not names:
                 continue
+            mat = np.asarray(mat, dtype=float)
             index = {name: i for i, name in enumerate(names)}
             for a in axis:
                 for b in axis:
-                    if a in index and b in index:
-                        value = float(np.asarray(mat)[index[a], index[b]])
-                        if np.isfinite(value):
-                            _put((a, b), col, f"{value:+.3f}")
+                    if a in index and b in index and np.isfinite(mat[index[a], index[b]]):
+                        _put((a, b), f"{_CHROMA_LABEL[ch_type]} ISC",
+                             f"{mat[index[a], index[b]]:+.3f}")
 
-        rows = [{"a": a, "b": b,
-                 "cells": [cells_by_pair[(a, b)].get(i, "") for i in range(len(columns))]}
-                for a in axis for b in axis if (a, b) in cells_by_pair]
-        return {"kind": kind, "columns": columns, "rows": rows} if rows else {}
+        # the columns this table actually filled, in a fixed order rather than in the order
+        # the first pairing happened to fill them: the header is shared with the other table
+        order = ([f"{_CHROMA_LABEL[c]} {what}" for c in chroma
+                  for what in ("coherence", "valid")]
+                 + [f"{_CHROMA_LABEL[c]} ISC" for c in (chroma if isc else ())])
+        used = {col for pair in cells.values() for col in pair}
+        rows = [{"a": a, "b": b, "cells": cells[(a, b)]}
+                for a in axis for b in axis if (a, b) in cells]
+        return ({"kind": kind, "columns": [c for c in order if c in used], "rows": rows}
+                if rows else {})
 
     def _render_page(figs: dict, matrices: dict, band_frames: dict, label: "str | None",
                      window: "tuple[float, float] | None",
@@ -1711,6 +1716,7 @@ def build_hyper_post_report(
             wtc_roi_matrix=roi_matrix,
             wtc_chan_matrix=chan_matrix,
             number_tables=number_tables,
+            number_columns=number_columns,
             # a second selector on each map panel, which an uncrossed run has no pairings
             # for: it holds the diagonal alone
             chan_crossed=wtc_channel_cross,

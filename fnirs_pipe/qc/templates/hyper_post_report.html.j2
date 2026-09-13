@@ -344,27 +344,34 @@
   survived the cone of influence, which is the one thing behind a band mean that no figure
   here shows: a coherence resting on a third of its window is not the same measurement as one
   that kept all of it.</p>
-{% for table in number_tables %}
+{#- the subject report's per-channel table, with a pairing where it has a channel: one
+    full-width grid, and each kind of pairing announced on a row spanning it rather than by a
+    heading of its own. Two tables would be two grids of different widths for numbers read
+    the same way. -#}
 <div class="qm-box">
-  <h3 class="qm-sub">{{ table.kind }} pairs &mdash; {{ table.rows | length }}</h3>
   <div style="overflow-x:auto;">
-  <table class="qm-table qm-flat qm-narrow">
-    <thead>
-      <tr><th>{{ subject_ids[0] }}</th><th>{{ subject_ids[1] }}</th>
-        {%- for col in table.columns %}<th>{{ col }}</th>{% endfor %}
-      </tr>
-    </thead>
-    <tbody>
-      {%- for row in table.rows %}
-      <tr><td>{{ row.a }}</td><td>{{ row.b }}</td>
-        {%- for cell in row.cells %}<td class="qv">{{ cell or "&mdash;" | safe }}</td>{% endfor %}
-      </tr>
-      {%- endfor %}
-    </tbody>
-  </table>
+    <table class="qm-table">
+      <thead>
+        <tr><th>{{ subject_ids[0] }}</th><th>{{ subject_ids[1] }}</th>
+          {%- for col in number_columns %}<th>{{ col }}</th>{% endfor %}
+        </tr>
+      </thead>
+      {% for table in number_tables %}
+      <tbody>
+        <tr><td colspan="{{ number_columns | length + 2 }}" class="ch-group"
+            >{{ table.kind }} pairs ({{ table.rows | length }})</td></tr>
+        {% for row in table.rows %}
+        <tr><td>{{ row.a }}</td><td>{{ row.b }}</td>
+          {%- for col in number_columns %}
+          <td>{{ row.cells.get(col) or "&mdash;" | safe }}</td>
+          {%- endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+      {% endfor %}
+    </table>
   </div>
 </div>
-{% endfor %}
 {% endif %}
 
 <!-- ================================================== per-subject quality -->
