@@ -239,7 +239,7 @@ def member_series(sqm_data: dict, sid: str, grid: dict, offset: float) -> dict:
 
     ::
 
-      -> {"t": (388,), "sci": (388,), "psp": (388,), "gvtd": (388,),
+      -> {"t": (388,), "sci": (388,), "psp": (388,), "cv": (388,), "gvtd": (388,),
           "per_pair_sci": {"S1_D1": (388,), ...}}
 
     The three series are averaged over the same rows the carpet folds into pairs, off the
@@ -259,7 +259,7 @@ def member_series(sqm_data: dict, sid: str, grid: dict, offset: float) -> dict:
     t = np.asarray(sw["centers"], dtype=float) - float(offset)
     keep = np.isin(np.round(t, 2), np.round(np.asarray(grid["t"], dtype=float), 2))
     out = {"t": t[keep]}
-    for key in ("sci", "psp"):
+    for key in ("sci", "psp", "cv"):
         m = sw.get(key)
         if m is not None and rows:
             out[key] = np.asarray(m, dtype=float)[rows][:, keep].mean(axis=0)
@@ -364,14 +364,14 @@ def _blocks(raw: "mne.io.Raw | None") -> list[dict]:
 # Figure: shared usable time
 # ---------------------------------------------------------------------------
 
-# (key, axis label, whether the row is divided by each member's own median). GVTD is an RMS
-# of optical-density derivatives in each recording's own units, so two members' raw traces
-# are not on one scale and "who moved more" is the one reading a shared axis cannot support.
-# Dividing by the member's own median makes 1.0 "this member's usual level" for both, which
-# is the comparison the row is drawn for. The median, not the stored threshold: `gvtd_thresh`
-# sits an order of magnitude below `gvtd_mean` on d01 and is not a scale to normalise by.
+# (key, axis label, whether the row is divided by each member's own median). SCI and PSP are
+# what the carpet's mask is made of, so they explain it directly. CV is here because they are
+# blind to a class of failure they cannot see by construction: injection testing puts
+# `good_frac` on wavelength decoupling and cardiac loss only, while CV is what moves on
+# baseline shifts and signal loss. Motion has a panel of its own; it is about the dyad rather
+# than about a channel and does not belong under this carpet.
 _SERIES_ROWS = (("sci", "SCI (10 s)", False), ("psp", "PSP (10 s)", False),
-                ("gvtd", "GVTD (x its own median)", True))
+                ("cv", "CV (10 s)", False))
 _LEAD_COLOURS = ("#3498db", "#e67e22", "#16a085", "#8e44ad")
 
 
@@ -447,7 +447,7 @@ def build_usable_time(
             fig.add_trace(go.Scatter(
                 x=np.asarray(s["t"]), y=y, mode="lines", name=sid,
                 legendgroup=sid, showlegend=(r == bar_rows + 1),
-                line=dict(color=lines[sid], width=1.9), opacity=0.95,
+                line=dict(color=lines[sid], width=1.3), opacity=0.95,
                 hovertemplate=f"t=%{{x:.0f}}s<br>{label} %{{y:.4g}}<extra></extra>",
             ), row=r, col=1)
         line = 1.0 if scaled else (cutoffs or {}).get(key)
@@ -485,6 +485,120 @@ def build_usable_time(
                       legend=dict(orientation="h", yanchor="bottom", y=1.02,
                                   xanchor="right", x=1, font=dict(size=10)))
     return fig
+
+
+# ---------------------------------------------------------------------------
+# Figure: motion, and whether the two moved together
+# ---------------------------------------------------------------------------
+
+# How far above its own usual level a member has to be for a window to count as movement.
+# A multiple of the median rather than `gvtd_thresh`, which on d01 sits an order of magnitude
+# below `gvtd_mean` and would mark almost every window.
+MOTION_FACTOR = 1.5
+
+
+def build_motion_panel(
+    series: dict[str, dict],
+    subject_ids: list[str],
+    conditions: "dict[str, tuple[float, float]] | None" = None,
+    factor: float = MOTION_FACTOR,
+) -> "tuple[go.Figure | None, dict]":
+    """Each member's motion over the shared clock, and where the two moved at once.
+
+    ::
+
+      -> (figure, {"above": {"sub-01": 0.11}, "together": 0.04, "expected": 0.012,
+                   "ratio": 3.4, "factor": 1.5})
+
+    **Simultaneous motion is a dyad problem, not two individual ones.** A member moving alone
+    costs that member's channels, which the usable-time carpet already shows. Both moving at
+    once is the case that survives a surrogate null: it raises any synchrony measure taken on
+    the pair and a shifted or scrambled copy of one member does not remove it, so this panel
+    is what the screening synchrony has to be read against.
+
+    Each trace is divided by that member's own median, because GVTD is an RMS of
+    optical-density derivatives in the recording's own units: two members' raw traces do not
+    share a scale, and "who moved more" is the one reading a common axis could not support.
+    At x its own median, 1.0 is that member's usual level for both of them.
+
+    The share expected if the two moved independently is the product of their own shares, and
+    the ratio of observed to expected is the number to read. Returns ``(None, {})`` when no
+    member carries a motion trace.
+    """
+    have = [sid for sid in subject_ids if "gvtd" in (series.get(sid) or {})]
+    if len(have) < 1:
+        return None, {}
+
+    t = np.asarray((series[have[0]] or {})["t"], dtype=float)
+    traces, flags = {}, {}
+    for sid in have:
+        y = np.asarray(series[sid]["gvtd"], dtype=float)
+        mid = float(np.nanmedian(y))
+        traces[sid] = y / mid if np.isfinite(mid) and mid else y
+        flags[sid] = traces[sid] >= factor
+
+    summary = {"factor": factor,
+               "above": {sid: round(float(flags[sid].mean()), 4) for sid in have}}
+    if len(have) >= 2:
+        both = np.logical_and.reduce([flags[sid] for sid in have])
+        expected = float(np.prod([flags[sid].mean() for sid in have]))
+        summary["together"] = round(float(both.mean()), 4)
+        summary["expected"] = round(expected, 4)
+        summary["ratio"] = round(float(both.mean() / expected), 2) if expected else None
+    else:
+        both = np.zeros(len(t), dtype=bool)
+
+    rows = 2 if conditions else 1
+    heights = [34 / 250, 216 / 250] if conditions else [1.0]
+    fig = make_subplots(rows=rows, cols=1, shared_xaxes=True, vertical_spacing=0.04,
+                        row_heights=heights)
+    r = rows
+
+    if conditions:
+        colours = _cond_colors(list(conditions))
+        for name, (a, b) in conditions.items():
+            fig.add_trace(go.Bar(
+                x=[b - a], y=[0], base=[a], orientation="h", width=0.55,
+                marker=dict(color=colours[name], opacity=0.9, cornerradius=3,
+                            line=dict(width=0)),
+                name=name, legendgroup=name, showlegend=True,
+                hovertemplate=f"<b>{name}</b><br>%{{base:.0f}} to {b:.0f} s<extra></extra>",
+            ), row=1, col=1)
+        fig.update_yaxes(showticklabels=False, showgrid=False, range=[-0.5, 0.5],
+                         row=1, col=1)
+
+    # the windows both were above their own line, under the traces rather than beside them
+    if len(have) >= 2 and both.any():
+        edges = np.flatnonzero(np.diff(np.concatenate([[0], both.view(np.int8), [0]])))
+        for a, b in zip(edges[::2], edges[1::2]):
+            fig.add_vrect(x0=t[a], x1=t[min(b, len(t) - 1)], fillcolor=_BAD_COLOR,
+                          opacity=0.18, line_width=0, row=r, col=1)
+
+    for sid, colour in zip(have, _LEAD_COLOURS):
+        fig.add_trace(go.Scatter(
+            x=t, y=traces[sid], mode="lines", name=sid, legendgroup=sid,
+            line=dict(color=colour, width=1.3), opacity=0.95,
+            hovertemplate=f"<b>{sid}</b><br>t=%{{x:.0f}}s<br>"
+                          "%{y:.2f} x its own median<extra></extra>",
+        ), row=r, col=1)
+    fig.add_hline(y=factor, line_color="#adb5bd", line_width=1, line_dash="dot",
+                  row=r, col=1)
+
+    for a, b in (conditions or {}).values():
+        for edge in (a, b):
+            fig.add_vline(x=edge, line_color="#e3e8ec", line_width=1, line_dash="dot")
+
+    fig.update_xaxes(gridcolor="#f5f5f5", zeroline=False, tickfont=dict(size=9))
+    fig.update_yaxes(gridcolor="#f0f0f0", zeroline=False, tickfont=dict(size=9))
+    fig.update_yaxes(title_text="GVTD (x its own median)", title_font=dict(size=9.5),
+                     row=r, col=1)
+    fig.update_xaxes(title_text="Time on the shared clock (s)", title_font=dict(size=10),
+                     row=r, col=1)
+    fig.update_layout(height=300 if conditions else 260, plot_bgcolor="white",
+                      barmode="overlay", margin=dict(l=112, r=24, t=48, b=48),
+                      legend=dict(orientation="h", yanchor="bottom", y=1.02,
+                                  xanchor="right", x=1, font=dict(size=10)))
+    return fig, summary
 
 
 # ---------------------------------------------------------------------------
@@ -541,7 +655,8 @@ def _head_ground(fig, geo: dict, row: int, col: int) -> None:
                              hoverinfo="skip", showlegend=False), row=row, col=col)
 
 
-def _head_glyph(fig, geo, scope, values, row, col, title, cmin, cmax, bar) -> int:
+def _head_glyph(fig, geo, scope, values, row, col, title, cmin, cmax, bar,
+                sid: str = "") -> int:
     """One trace per separation, every channel's markers carried in one colour array.
 
     Long and short keep one colour scale, as the subject report's channel map does, so a
@@ -564,12 +679,16 @@ def _head_glyph(fig, geo, scope, values, row, col, title, cmin, cmax, bar) -> in
                     line=dict(width=1.6 if short else 0, color="#98a4ae"),
                     colorbar=dict(title=dict(text=title, side="right", font=dict(size=10)),
                                   thickness=12, len=0.72, tickfont=dict(size=9))),
-        hovertemplate="%{text}<br>%{marker.color:.3f}<extra></extra>",
+        # the member in every bubble: a grid of heads is read by pointing at one, and the
+        # row label is off at the edge by then
+        hovertemplate=(f"<b>{sid}</b><br>" if sid else "")
+                      + "%{text}<br>%{marker.color:.3f}<extra></extra>",
         showlegend=False), row=row, col=col)
     return len(fig.data) - 1
 
 
-def _head_axes(fig, geo_by_sub: dict, n_rows: int, n_cols: int) -> None:
+def _head_axes(fig, geo_by_sub: dict, n_rows: int, n_cols: int,
+               row_labels: "list[str] | None" = None) -> None:
     xs, ys = [], []
     for geo in geo_by_sub.values():
         for xy in geo["outlines"].values():
@@ -582,9 +701,16 @@ def _head_axes(fig, geo_by_sub: dict, n_rows: int, n_cols: int) -> None:
             n = (r - 1) * n_cols + c
             fig.update_xaxes(visible=False, range=xr, row=r, col=c)
             # the report renders figures responsive, so a wider container would stretch the
-            # head into an ellipse; the anchor keeps it round and spends the slack as margin
-            fig.update_yaxes(visible=False, range=yr, row=r, col=c,
+            # head into an ellipse; the anchor keeps it round and spends the slack as margin.
+            # The axis stays visible with everything stripped rather than `visible=False`,
+            # which would take the title with it, and the title is what names the row.
+            fig.update_yaxes(range=yr, row=r, col=c, showticklabels=False, showgrid=False,
+                             zeroline=False, showline=False, ticks="",
                              scaleanchor="x" if n == 1 else f"x{n}", scaleratio=1)
+    if row_labels:
+        for r, label in enumerate(row_labels, start=1):
+            fig.update_yaxes(title_text=label, title_font=dict(size=11, color="#34495e"),
+                             row=r, col=1)
 
 
 def _pair_values(geo, scope, by_pair: dict, reduce_fn) -> "np.ndarray":
@@ -626,17 +752,13 @@ def build_head_by_condition(
                     continue
                 vals = _pair_values(geo, scope, by_pair, lambda v, s=sel: v[s].mean())
                 _head_glyph(fig, geo, scope, vals, ri, ci, "Coupled<br>windows", 0.0, 1.0,
-                            bar=(ri == 1 and ci == len(names) and scope == "long"))
-        fig.add_annotation(x=0, y=0.5, xref="paper",
-                           yref=f"y{(ri - 1) * len(names) + 1}", text=sid,
-                           showarrow=False, xanchor="right", xshift=-8,
-                           font=dict(size=10, color="#6c757d"))
-    _head_axes(fig, geo_by_sub, len(subject_ids), len(names))
+                            bar=(ri == 1 and ci == len(names) and scope == "long"), sid=sid)
+    _head_axes(fig, geo_by_sub, len(subject_ids), len(names), row_labels=subject_ids)
     fig.update_annotations(font=dict(size=11, color="#6c757d"))
     # a head per member per block, so the grid is as wide as the blocks and only as tall as
     # the members; the height is what decides how big each head is drawn
     fig.update_layout(height=230 * len(subject_ids) + 46, plot_bgcolor="white",
-                      showlegend=False, margin=dict(l=88, r=78, t=46, b=14))
+                      showlegend=False, margin=dict(l=104, r=78, t=46, b=14))
     return fig
 
 
@@ -701,7 +823,7 @@ def build_head_slider(
                 continue
             vals = _pair_values(geo, scope, sci, lambda v, k=frames_at[0]: v[k])
             i = _head_glyph(fig, geo, scope, vals, 1, ci, "SCI<br>(10 s)", cmin, cmax,
-                            bar=(ci == len(subject_ids) and scope == "long"))
+                            bar=(ci == len(subject_ids) and scope == "long"), sid=sid)
             drawn.append((sid, scope, i))
     if not drawn:
         return None

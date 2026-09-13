@@ -36,6 +36,7 @@
   {"sep": true},
   {"id": "Alignment", "name": "Alignment", "href": "#Alignment"},
   {"id": "Usable", "name": "Usable time", "href": "#Usable"},
+  {"id": "Motion", "name": "Motion", "href": "#Motion"},
   {"id": "Head", "name": "Head", "href": "#Head"},
   {"id": "Coherence", "name": "Synchrony", "href": "#Coherence"},
   {"id": "Signal_Quality", "name": "Comparable", "href": "#Quality"},
@@ -163,9 +164,44 @@
 </details>
 {% endif %}
 
+<!-- ======================================================== 3. motion -->
+{% if figure_paths.motion %}
+<h2 id="Motion">3 &middot; Motion, and whether they moved together</h2>
+<p class="step-desc">SCI and PSP are blind to movement by construction, so the carpet above
+  can say a pair decoupled but never that the member moved. Each trace is that
+  member&rsquo;s GVTD divided by its own median: GVTD is an RMS of optical-density
+  derivatives in the recording&rsquo;s own units, so two members&rsquo; raw traces are not on
+  one scale and &ldquo;who moved more&rdquo; is the one reading a shared axis could not
+  support. At &times; its own median, 1.0 is that member&rsquo;s usual level for both.</p>
+
+<details id="MotionPanel" open>
+  <summary>a. Over the shared clock</summary>
+  <div class="details-body">
+    <iframe class="plotly-frame" src="{{ figure_paths.motion.src }}"
+            title="motion per member over the shared clock"
+            style="height:{{ figure_paths.motion.h }}px"></iframe>
+    <p class="qm-note">The dotted rule is the line a window counts as movement at; the red
+      bands are where <em>both</em> members were above their own.</p>
+    <p class="fig-path">{{ figure_paths.motion.src }}</p>
+  </div>
+</details>
+
+<details id="MotionTogether" open>
+  <summary>b. Simultaneous movement</summary>
+  <div class="details-body">
+    <p class="step-desc">A member moving alone costs that member&rsquo;s channels, which the
+      panel above already shows. <b>Both moving at once is the dyad&rsquo;s problem</b>: it
+      raises any synchrony measure taken on the pair, and a shifted or scrambled copy of one
+      member does not remove it. This is what the screening synchrony below has to be read
+      against.</p>
+    <ul id="motion-list" class="qm-list"></ul>
+  </div>
+</details>
+{% endif %}
+
 <!-- ==================================================== 3b. where on the head -->
 {% if figure_paths.head_by_condition or figure_paths.head_slider %}
-<h2 id="Head">3 &middot; Where on the head</h2>
+<h2 id="Head">4 &middot; Where on the head</h2>
 <p class="step-desc">The same screening verdict as the carpet above, on the montage instead
   of on a channel axis. A long channel is a bar of discs along its source-detector path, a
   short one an outlined square; both share one colour scale, which is what makes the short
@@ -201,7 +237,7 @@
 {% endif %}
 
 <!-- ======================================================= 4. screening sync -->
-<h2 id="Coherence">4 &middot; Screening synchrony, against its null</h2>
+<h2 id="Coherence">5 &middot; Screening synchrony, against its null</h2>
 <p class="step-desc">Band coherence in
   {{ "%.3f"|format(coherence_fmin) }}&ndash;{{ "%.3f"|format(coherence_fmax) }}&thinsp;Hz,
   read as each window&rsquo;s rank inside a null drawn for <em>that</em> window by pairing
@@ -242,7 +278,7 @@
 {% endif %}
 
 <!-- ================================================== 1. are they comparable -->
-<h2 id="Quality">5 &middot; Are the two members comparable</h2>
+<h2 id="Quality">6 &middot; Are the two members comparable</h2>
 <p class="step-desc">Everything downstream matches channels by S-D label and assumes one
   clock. A mismatch here is silent in every later panel: an unmatched label becomes a blank
   row, and a sampling-rate difference becomes drift that alignment cannot remove.</p>
@@ -282,7 +318,7 @@
 </details>
 
 <!-- ============================================================= 5. channels -->
-<h2 id="Channels">6 &middot; Channels</h2>
+<h2 id="Channels">7 &middot; Channels</h2>
 
 {% if figure_paths.ch_summary %}
 <details id="ChannelSummary" open>
@@ -333,7 +369,7 @@
 </details>
 
 <!-- ============================================================== 6. signals -->
-<h2 id="Signals">7 &middot; Per-channel signals</h2>
+<h2 id="Signals">8 &middot; Per-channel signals</h2>
 
 <details id="PerChannel">
   <summary>a. Both members on one set of axes
@@ -523,6 +559,36 @@ function _set(id, text, cls) {
       + "line up between the two rows of the figure above is a trigger that landed late in "
       + "one member, or two clocks drifting apart.";
   }
+})();
+
+// ── motion, and whether the two moved together ───────────────────────────────
+(function() {
+  var m = _SQM.motion || {};
+  var el = document.getElementById("motion-list");
+  if (!el) return;
+  var above = m.above || {};
+  var names = Object.keys(above);
+  if (!names.length) {
+    el.innerHTML = "<li><span class='ql'>no motion trace on either member</span></li>";
+    return;
+  }
+  function li(label, value, cls) {
+    return "<li><span class='ql'>" + label + "</span>" +
+           "<span class='qv" + (cls ? " " + cls : "") + "'>" + value + "</span></li>";
+  }
+  var html = "";
+  names.forEach(function(sid) {
+    html += li(sid + " above its own line", (above[sid] * 100).toFixed(1) + "%");
+  });
+  if (m.together != null) {
+    // the ratio is the number to read: a pair that moved independently lands near 1
+    var cls = m.ratio == null ? "" : (m.ratio >= 2 ? "qm-bad" : m.ratio >= 1.5 ? "qm-warn" : "qm-ok");
+    html += li("both at once", (m.together * 100).toFixed(1) + "%");
+    html += li("expected if independent", (m.expected * 100).toFixed(1) + "%");
+    html += li("observed / expected", m.ratio != null ? m.ratio.toFixed(2) + "x" : "—", cls);
+  }
+  html += li("counts as movement at", m.factor + " x its own median");
+  el.innerHTML = html;
 })();
 
 // ── screening synchrony ──────────────────────────────────────────────────────

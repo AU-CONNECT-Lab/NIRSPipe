@@ -367,6 +367,17 @@ def compute_group_sqm_raw(
             if counted["mask"] is not None:
                 screen_windows = {k: counted[k] for k in
                                   ("mask", "centers", "sci", "psp", "channel_order")}
+                # CV on the same grid, off raw intensity, which is what it is defined on:
+                # after the optical-density conversion sigma/mu is no longer relative
+                # brightness. SCI and PSP are blind to the shifts and dropouts it catches.
+                try:
+                    from fnirs_pipe.qc.metrics.windowed import compute_windowed_cv
+                    cv_m, cv_t = compute_windowed_cv(raw)
+                    if cv_m is not None and len(cv_t) == len(counted["centers"]):
+                        screen_windows["cv"] = cv_m
+                except Exception:
+                    logger.warning("%s: windowed CV could not be measured",
+                                   entry.subject_id, exc_info=True)
                 # motion on the same window grid, which the screening pass does not measure:
                 # SCI and PSP are blind to movement by construction, so without this row the
                 # dyad panel can say a pair decoupled but never that the member moved
@@ -854,6 +865,8 @@ def _screen_windows(record: dict, cutoffs: "dict | None") -> dict:
     out = {"mask": mask,
            "centers": window_centers(np.asarray(times, dtype=float)),
            "sci": np.asarray(sci, dtype=float), "psp": np.asarray(psp, dtype=float),
+           **({"cv": np.asarray(windowed["cv_matrix"], dtype=float)}
+              if windowed.get("cv_matrix") else {}),
            "channel_order": list(((record.get("per_channel") or {}).get("raw") or {})
                                  .get("sci_per_channel") or {})}
     # GVTD is an RMS across channels, so it has no matrix and rides along as one series.

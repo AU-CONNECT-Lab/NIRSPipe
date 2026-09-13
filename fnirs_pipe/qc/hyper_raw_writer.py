@@ -22,6 +22,7 @@ from fnirs_pipe.qc.figures.hyper_figures import (
     build_channel_summary,
     build_head_by_condition,
     build_head_slider,
+    build_motion_panel,
     build_psd,
     build_screening_strip,
     build_signal_overlay_pair,
@@ -224,7 +225,7 @@ def _process_hyper_raw_group(
                build_channel_summary, sqm_data, subject_ids, sci_threshold)
 
     duration_s = first_raw.times[-1] if first_raw is not None else None
-    grid, series, geo = None, {}, {}
+    grid, series, geo, motion_summary = None, {}, {}, {}
     with guard("Screening grid", errors, label):
         grid = coupled_grid(sqm_data, subject_ids, offsets, duration_s=duration_s)
     if grid is None:
@@ -243,6 +244,15 @@ def _process_hyper_raw_group(
                                "are empty")
         _safe_save("usable_time", "usable", build_usable_time,
                    grid, subject_ids, series, conditions, cutoffs)
+        with guard("Motion panel figure", errors, label):
+            motion_fig, motion_summary = build_motion_panel(series, subject_ids, conditions)
+            if motion_fig is not None:
+                fname = f"{label}_desc-motion_nirs.html"
+                h = _save_figure_html(motion_fig, fig_dir / fname)
+                figure_paths["motion"] = {"src": f"figures/{fname}", "h": h}
+            else:
+                note(notes, label, "no motion trace on either member: "
+                                   "the motion panel is empty")
         if geo:
             _safe_save("head_by_condition", "headcond", build_head_by_condition,
                        geo, subject_ids, grid, conditions)
@@ -280,6 +290,7 @@ def _process_hyper_raw_group(
     # the screening verdict beside the measured coherence, since the value alone is not
     # readable: see `screening_summary`
     sqm["screening"] = screening_summary(screening_df)
+    sqm["motion"] = motion_summary
     if grid is not None:
         sqm.update(usable_scalars(grid, subject_ids))
         with guard("Usable-time table", errors, label):
