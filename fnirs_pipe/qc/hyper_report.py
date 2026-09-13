@@ -1662,6 +1662,10 @@ def build_hyper_post_report(
             _number_table({c: _slice_pair(bands[c].get("roichan"), pair) for c in chroma},
                           None, roi_labels, "ROI"),
         ) if t]
+        # one header over both tables: the coherence columns they share, then the ISC the
+        # channel table alone has
+        number_columns = list(dict.fromkeys(
+            col for table in number_tables for col in table["columns"]))
 
         out_path = _page_path(label, pair)
         heading = f"group-{group_id}_task-{task}"

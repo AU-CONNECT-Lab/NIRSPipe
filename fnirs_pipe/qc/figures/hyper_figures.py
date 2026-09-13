@@ -833,9 +833,12 @@ def build_motion_panel(
     has_spikes = bool(spans_both)
     n_rows = int(has_cond) + len(sets) + int(has_spikes) + len(carpets)
 
+    # the spike strip sits directly under the condition bar, above the traces: both are
+    # marks on the clock rather than a quantity, and reading them as one band is what says
+    # which block the dyad was spiking through
     heights = (([TIMELINE_ROW_PX - 10] if has_cond else [])
-               + [_MOTION_ROW_PX] * len(sets)
                + ([_SPIKE_ROW_PX] if has_spikes else [])
+               + [_MOTION_ROW_PX] * len(sets)
                + [_MOTION_CARPET_PX] * len(carpets))
     vspace = 0.022
     row_heights, total_px = _px_rows(heights, vspace, chrome_px=150)
@@ -859,6 +862,17 @@ def build_motion_panel(
         fig.update_yaxes(showticklabels=False, showgrid=False, range=[-0.5, 0.5],
                          row=1, col=1)
         ri = 2
+
+    if has_spikes:
+        xs, ys = _span_polygons(spans_both, 0.15, 0.85)
+        fig.add_trace(go.Scatter(
+            x=xs, y=ys, fill="toself", fillcolor=_SPIKE_BOTH, mode="lines",
+            line=dict(width=0), hoverinfo="skip", name="both spiking",
+            legendgroup="spikes", showlegend=True), row=ri, col=1)
+        fig.update_yaxes(range=[0, 1], showticklabels=False, showgrid=False,
+                         zeroline=False, row=ri, col=1)
+        _margin_label(fig, ri, "<b>both spiking</b>")
+        ri += 1
 
     shown: set[str] = set()
     for name in sets:
@@ -894,22 +908,7 @@ def build_motion_panel(
                       line=dict(color="#c8cfd6", width=1, dash="dot"))
         fig.update_yaxes(range=[0, y_top], tickfont=dict(size=8), gridcolor="#eef1f4",
                          zeroline=False, row=ri, col=1)
-        _margin_label(fig, ri, _motion_row_lines(name, entries, sids))
-        ri += 1
-
-    if has_spikes:
-        xs, ys = _span_polygons(spans_both, 0.15, 0.85)
-        fig.add_trace(go.Scatter(
-            x=xs, y=ys, fill="toself", fillcolor=_SPIKE_BOTH, mode="lines",
-            line=dict(width=0), hoverinfo="skip", name="both spiking",
-            legendgroup="spikes", showlegend=True), row=ri, col=1)
-        fig.update_yaxes(range=[0, 1], showticklabels=False, showgrid=False,
-                         zeroline=False, row=ri, col=1)
-        _margin_label(fig, ri, [
-            "<b>both spiking</b>",
-            f"<span style='font-size:8px;color:#8b95a1'>&#8805;10% of channels each, "
-            f"merged &lt;{SPIKE_MERGE_S:g}s</span>",
-            f"<span style='font-size:8px;color:#8b95a1'>{len(spans_both)} spans</span>"])
+        _margin_label(fig, ri, f"<b>GVTD {name}</b>")
         ri += 1
 
     for sid, z, t_carpet, labels, spans in carpets:
@@ -926,39 +925,23 @@ def build_motion_panel(
                      row=n_rows, col=1)
     fig.update_layout(height=total_px, plot_bgcolor="white", barmode="overlay",
                       coloraxis=carpet_coloraxis(y=0.2),
-                      margin=dict(l=200, r=24, t=56, b=48),
+                      margin=dict(l=112, r=24, t=56, b=48),
                       legend=dict(orientation="h", yanchor="bottom", y=1.012,
                                   xanchor="right", x=1, font=dict(size=10)))
     return fig
 
 
-def _motion_row_lines(name: str, entries: list, sids: list[str]) -> list[str]:
-    """A GVTD row's margin block: the channel set, then one line of numbers per member."""
-    lines = [f"<b>GVTD {name}</b>",
-             "<span style='font-size:8px;color:#8b95a1'>&#215; own before-median &#183; "
-             "0.01-0.5 Hz</span>"]
-    for sid, y in entries:
-        colour = _MEMBER_COLOURS[sids.index(sid) % len(_MEMBER_COLOURS)]
-        lines.append(f"<span style='color:{colour};font-size:8px'>{sid}  "
-                     f"max {np.nanmax(y):.1f}&#215;  mean {np.nanmean(y):.2f}&#215;</span>")
-    if len(entries) > 1:
-        mins = np.minimum.reduce([y for _, y in entries])
-        lines.append(f"<span style='color:#78787f;font-size:8px'>both  "
-                     f"mean {np.nanmean(mins):.2f}&#215;</span>")
-    return lines
-
-
-def _margin_label(fig, row: int, lines: list[str]) -> None:
-    """A row's title and numbers, parked in the left margin clear of the data.
+def _margin_label(fig, row: int, text: str) -> None:
+    """A row's name, parked in the left margin clear of the data.
 
     The row is named through ``yref`` rather than through ``row=``: passing the latter makes
     plotly rewrite ``xref`` to that subplot's x axis, and an axis-referenced annotation
     sitting at x=0 on an axis that starts at 0.1 s is clipped away silently.
     """
-    # clear of the tick labels, which sit between the axis and the margin
+    # xshift clears the tick labels, which sit between the axis and the margin
     fig.add_annotation(x=0, xref="paper", xshift=-36,
                        y=0.5, yref=f"y{row if row > 1 else ''} domain",
-                       text="<br>".join(lines), showarrow=False, xanchor="right",
+                       text=text, showarrow=False, xanchor="right",
                        yanchor="middle", align="right", font=dict(size=10))
 
 
