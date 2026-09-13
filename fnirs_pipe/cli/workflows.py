@@ -539,6 +539,20 @@ def _run_post_for_subject(
     return post_runs
 
 
+def _warn_on_split_tree(output_dir: Path) -> None:
+    """Say so when quality records sit in a subtree this aggregation does not reach.
+
+    Two output directories means two records for one run, and the rule preferring the
+    pipeline record over the `prep-raw` one can only choose between records one glob found.
+    """
+    for sub in (output_dir / "qc", output_dir / "derivatives"):
+        if sub.is_dir() and any(sub.glob("*/**/nirs/*_desc-sqm*_nirs.json")):
+            logger.warning(
+                "quality records under %s are not part of this cohort page; point both "
+                "`fnirs-pipe` and `fnirs-qc prep-raw` at one output directory, or aggregate "
+                "that one separately with `fnirs-qc group-raw %s`", sub, sub)
+
+
 def run_group_level(args: dict[str, Any]) -> None:
     """BIDS Apps `group` entry point — aggregates per-subject (and per-group hyper,
     if present) SQM JSONs into cohort HTML reports under <output_dir>."""
@@ -548,14 +562,14 @@ def run_group_level(args: dict[str, Any]) -> None:
     from fnirs_pipe.qc.group_writer import build_group_raw_report
 
     output_dir = Path(args["output_dir"])
-    qc_root    = output_dir / "qc" if (output_dir / "qc").exists() else output_dir
+    _warn_on_split_tree(output_dir)
 
-    logger.info("fnirs-pipe group: aggregating individual SQMs from %s", qc_root)
-    ind_path = build_group_raw_report(qc_root)
+    logger.info("fnirs-pipe group: aggregating individual SQMs from %s", output_dir)
+    ind_path = build_group_raw_report(output_dir)
     logger.info("  -> %s", ind_path)
 
-    if any(qc_root.glob("group-*/nirs/*_desc-sqm_nirs.json")):
+    if any(output_dir.glob("group-*/nirs/*_desc-sqm_nirs.json")):
         logger.info("fnirs-pipe group: also aggregating hyperscanning SQMs")
-        hyper_path = build_group_hyper_report(qc_root)
+        hyper_path = build_group_hyper_report(output_dir)
         logger.info("  -> %s", hyper_path)
 

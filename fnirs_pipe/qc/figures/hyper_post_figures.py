@@ -780,7 +780,8 @@ def build_cross_panel(
     Live rather than a still, and the whole reason is the circle: a chord is drawn between
     two nodes and thirty of them cross, so on a PNG the only way to read one is to trace it
     to both ends and hope the labels are legible. Hovering says which pairing it is and what
-    it is worth. The heatmap comes along for the same reason its ROI twin did.
+    it is worth. The heatmap is live for the same reason, a channel montage printing two
+    hundred cells that are easier to hover than to read.
 
     The scale is the caller's and both panels share it, so there is one colorbar: a
     correlation takes :data:`CORRELATION_SCALE` over -1 to 1.
