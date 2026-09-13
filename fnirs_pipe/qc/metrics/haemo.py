@@ -11,7 +11,9 @@ from typing import Any
 import mne
 import numpy as np
 
-from fnirs_pipe.qc.metrics._helpers import _mean_or_none, _safe_metrics
+from fnirs_pipe.qc.metrics._helpers import (
+    _mean_or_none, _safe_metrics, epochable_events,
+)
 
 
 # fixed rather than derived from stimulus duration, so two runs stay comparable
@@ -112,7 +114,6 @@ def _cnr_metrics(
     event set; epochs overlapping them are dropped by ``reject_by_annotation``. Bad channels
     are excluded, following ``mne.pick_types``.
     """
-    from fnirs_pipe.qc.figures._utils import epochable_events
 
     events, event_id = epochable_events(raw_haemo, baseline[0], response[1])
     if len(events) == 0:

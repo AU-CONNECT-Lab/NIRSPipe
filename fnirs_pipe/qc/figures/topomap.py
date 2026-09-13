@@ -19,7 +19,7 @@ import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from fnirs_pipe.qc.figures._utils import epochable_events
+from fnirs_pipe.qc.metrics._helpers import epochable_events
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("qc.figures")

@@ -187,7 +187,7 @@ def _no_epoch_reason(
     noisy rather than absent. It waives nothing else. The other two reasons are a run with no
     events and a window that fits inside none of them, and no flag makes either epochable.
     """
-    from fnirs_pipe.qc.figures._utils import epochable_events
+    from fnirs_pipe.qc.metrics import epochable_events
 
     events, event_id = epochable_events(raw_haemo, epoch_tmin, epoch_tmax)
     if len(events) > 0:

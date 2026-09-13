@@ -14,9 +14,10 @@ from ._brain_utils import mni_trans
 from ._utils import (BAND_COLORS, CONDITION_PALETTE, HBO_COLOR, HBR_COLOR,
                      LONG_COLOR, PSD_NFFT, SHORT_COLOR, UNCLASSIFIED_COLOR,
                      TIMELINE_ROW_PX, block_duration_labels,
-                     decimate as _decimate, epochable_events, line_xy,
+                     decimate as _decimate, line_xy,
                      physio_bands, timeline_axes, timeline_row_bands,
                      timeline_row_traces)
+from fnirs_pipe.qc.metrics._helpers import epochable_events
 
 logger = get_logger("qc.figures")
 
