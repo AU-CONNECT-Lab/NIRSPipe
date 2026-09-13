@@ -1591,13 +1591,16 @@ def build_hyper_post_report(
         for ch_type in chroma:
             name = _CHROMA_LABEL[ch_type]
             df = bands.get(ch_type)
-            if df is None or "label2" not in getattr(df, "columns", []):
+            if df is None or "label" not in getattr(df, "columns", []):
                 continue
             for row in df.itertuples():
-                _put((row.label, row.label2), f"{name} coherence", f"{row.coherence:.3f}")
+                # an uncrossed run has no `label2`: every row of it is a site against the
+                # other member's copy of the same site, which is this table's diagonal
+                pair = (row.label, getattr(row, "label2", row.label))
+                _put(pair, f"{name} coherence", f"{row.coherence:.3f}")
                 frac = getattr(row, "n_valid_frac", None)
                 if frac is not None and np.isfinite(frac):
-                    _put((row.label, row.label2), f"{name} valid", f"{100 * frac:.0f}%")
+                    _put(pair, f"{name} valid", f"{100 * frac:.0f}%")
 
         for ch_type in (chroma if isc else ()):
             mat, names = isc.get(ch_type) or (None, None)

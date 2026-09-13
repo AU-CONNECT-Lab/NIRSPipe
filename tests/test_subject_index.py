@@ -7,10 +7,10 @@ these build a subject folder rather than running anything.
 
 import json
 
+from fnirs_pipe.qc.report_shell import outlier_flags as _outlier_flags
 from fnirs_pipe.qc.subject_index import (
     _COLUMNS,
     _links,
-    _outlier_flags,
     collect_bad_channels,
     collect_runs,
 )

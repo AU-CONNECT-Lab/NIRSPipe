@@ -420,7 +420,7 @@ def test_every_switched_figure_is_keyed_by_chromophore(dyad, tmp_path):
     html = _page(dyad, tmp_path, ("hbo", "hbr"),
                  roi_map={"L": ["S1_D1", "S2_D2"], "R": ["S3_D3"]},
                  wtc_roi_min_channels=1, wtc_channel_cross=True)
-    for name in ("_PER_CH", "_PER_ROI", "_ROI_MATRIX", "_CHAN_MATRIX"):
+    for name in ("_PER_CH", "_PER_ROI"):
         assert sorted(_js_var(html, name)) == ["hbo", "hbr"], name
 
 
@@ -507,9 +507,13 @@ def test_both_chromophores_are_on_the_page_at_once(dyad, tmp_path):
                  wtc_roi_min_channels=1, wtc_channel_cross=True)
     assert _js_var(html, "_CHROMA") == ["hbo", "hbr"]
     assert 'id="chroma-switch"' not in html
-    for base in ("wtc-chan-img", "wtc-roi-img", "wtc-chan-matrix-img"):
+    # the maps stack one per chromophore; the ROI ones are iframes rather than images
+    for base in ("wtc-chan-img", "wtc-roi-frame"):
         assert f'id="{base}-0"' in html, base
         assert f'id="{base}-1"' in html, base
+    # the cross matrix is one figure carrying both chromophores side by side on one scale,
+    # so it has a card rather than a stacked image per chromophore
+    assert 'id="wtc-chan-matrix-card"' in html
     assert html.count('class="chroma-name"') >= 2
 
 

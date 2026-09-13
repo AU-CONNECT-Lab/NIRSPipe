@@ -66,8 +66,10 @@ def path_from(raw: mne.io.Raw) -> str | None:
     return lin.path if lin else None
 
 
-def lineage_of(raw: mne.io.Raw) -> Lineage | None:
-    return (raw.info.get("temp") or {}).get(_KEY)
+def lineage_of(raw: "mne.io.Raw | None") -> Lineage | None:
+    # a member the group is missing has no recording and so no stamp, which the callers
+    # already read as "not aligned" rather than as an error
+    return (raw.info.get("temp") or {}).get(_KEY) if raw is not None else None
 
 
 def stage_of(raw: mne.io.Raw) -> str | None:

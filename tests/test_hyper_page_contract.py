@@ -145,10 +145,27 @@ def test_the_two_chromophores_are_two_tables(pages):
 
 # ---- the figures the URLs point at ----
 
+def _file_of(url: str) -> str:
+    """The path a URL names, without the fragment that selects a view inside it."""
+    return url.split("#", 1)[0]
+
+
+def _window_in(url: str) -> str:
+    """Which window a URL is of, however this panel says so.
+
+    A channel map is one file per window and carries the slug in its name; an ROI map is one
+    file holding every window and carries it as the fragment. Both are the same claim.
+    """
+    if "#" in url:
+        return url.split("#", 1)[1]
+    tail = Path(url).stem.split("_")[-1]
+    return tail if tail in CONDITIONS else ""
+
+
 def test_every_url_on_the_page_exists_on_disk(pages):
     for page in pages:
         for url in _urls(*_tables(page)):
-            assert (page.parent / url).exists(), (page.name, url)
+            assert (page.parent / _file_of(url)).exists(), (page.name, url)
 
 
 def test_a_condition_page_links_its_own_window_and_no_other(pages):
@@ -157,9 +174,8 @@ def test_a_condition_page_links_its_own_window_and_no_other(pages):
     for page in pages:
         expected = _window_of(page)
         for url in _urls(*_tables(page)):
-            tail = Path(url).stem.split("_")[-1]
-            got = tail if tail in CONDITIONS else ""
-            assert got == expected, (page.name, url, f"expected {expected or '(run)'}")
+            assert _window_in(url) == expected, (
+                page.name, url, f"expected {expected or '(run)'}")
 
 
 def test_the_run_page_and_a_condition_page_do_not_share_a_figure(pages):
