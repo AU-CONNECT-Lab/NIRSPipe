@@ -14,7 +14,7 @@ whole-run pass leaves in its record. A tree cropped per condition first is alrea
 above, one run per condition, and belongs there rather than here: a cropped condition is
 filtered against its own two edges and lands on its own window grid, so its numbers are not
 comparable with a view's and the two must not share a table. See
-:mod:`fnirs_pipe.qc.condition_views`.
+:mod:`fnirs_pipe.qc.subject.condition_views`.
 """
 
 from __future__ import annotations
@@ -25,10 +25,10 @@ import statistics
 from pathlib import Path
 
 from fnirs_pipe.qc.boilerplate import collect_software_versions
-from fnirs_pipe.qc.report_shell import (
+from fnirs_pipe.qc.common.report_shell import (
     OUTLIER_Z, footer_vars, guard, outlier_flags, page_vars, render)
-from fnirs_pipe.qc.condition_views import condition_stems
-from fnirs_pipe.qc.sqm_record import SQM_DESCS, entities_of
+from fnirs_pipe.qc.subject.condition_views import condition_stems
+from fnirs_pipe.qc.subject.sqm_record import SQM_DESCS, entities_of
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("qc.subject_index")
@@ -310,7 +310,7 @@ def _cond_row(name: str, kind: str, href: "str | None", span: str,
 
 def _whole_run_values(record: dict, duration_s: "float | None") -> dict:
     """The Conditions table's whole-run row, measured the way its condition rows are."""
-    from fnirs_pipe.qc.condition_views import span_share
+    from fnirs_pipe.qc.subject.condition_views import span_share
 
     long_section = record.get("raw_long") or record.get("raw") or {}
     windowed = record.get("windowed") or {}
@@ -391,11 +391,11 @@ def write_condition_figures(sub_dir: Path, subject: str, groups: list[dict]) -> 
     profile takes the runs together because that is the comparison it is for; the other two
     are of one run's channels and one run's clock and cannot be pooled.
     """
-    from fnirs_pipe.qc.figure_io import _save_figure_html
+    from fnirs_pipe.qc.common.figure_io import _save_figure_html
     from fnirs_pipe.qc.figures.group_figures import (
         build_channel_condition_matrix, build_condition_panels, build_condition_timeline,
     )
-    from fnirs_pipe.qc.group_writer import _sqm_row
+    from fnirs_pipe.qc.subject.group_writer import _sqm_row
 
     fig_dir = sub_dir / "figures" / f"sub-{subject}"
     out: dict = {"profile": None, "per_run": []}

@@ -12,7 +12,7 @@ import numpy as np
 import plotly.graph_objects as go
 import pytest
 
-from fnirs_pipe.qc.condition_views import (
+from fnirs_pipe.qc.subject.condition_views import (
     UNSLICEABLE, condition_stem, condition_stems, rescale_y_to_window, slice_record,
     carpet_window_spec, window_view_spec, zoom_to_condition,
 )

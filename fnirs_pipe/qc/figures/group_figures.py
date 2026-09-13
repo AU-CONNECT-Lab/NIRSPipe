@@ -74,7 +74,7 @@ def _split_column(col: str) -> tuple[str, str, str]:
     Longest section first, or ``raw`` would match a ``raw_long_`` column and leave
     ``long_sci_mean`` behind.
     """
-    from fnirs_pipe.qc.sqm_record import SECTIONS
+    from fnirs_pipe.qc.subject.sqm_record import SECTIONS
 
     for section in sorted(SECTIONS, key=len, reverse=True):
         if col.startswith(f"{section}_"):

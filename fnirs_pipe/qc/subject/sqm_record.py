@@ -642,8 +642,8 @@ def condition_sections(
     screening windows.
     """
     from fnirs_pipe.io.snirf import read_snirf
-    from fnirs_pipe.qc.condition_views import PSD_NFFT_CAP, condition_haemo_scalars
-    from fnirs_pipe.qc.windows import condition_windows
+    from fnirs_pipe.qc.subject.condition_views import PSD_NFFT_CAP, condition_haemo_scalars
+    from fnirs_pipe.qc.common.windows import condition_windows
     from fnirs_pipe.qc.metrics import long_short_channels
     from fnirs_pipe.qc.metrics.windowed import SCREEN_WINDOW_S
 
@@ -720,7 +720,7 @@ def _condition_entries(
     of ``sections`` rather than measured, so the two writers cannot end up with different
     numbers for one recording.
     """
-    from fnirs_pipe.qc.condition_views import (
+    from fnirs_pipe.qc.subject.condition_views import (
         condition_scalars, condition_set_scalars, condition_slices_from_record, span_counts,
     )
     from fnirs_pipe.qc.metrics import long_short_channels, screen_channels

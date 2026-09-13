@@ -34,7 +34,7 @@ import pytest
 from fnirs_pipe.pipeline.post_pipeline import PostConfig, run_post
 from fnirs_pipe.pipeline.prep_pipeline import PrepConfig, run_prep
 from fnirs_pipe.qc.metrics import long_short_channels
-from fnirs_pipe.qc.sqm_record import (
+from fnirs_pipe.qc.subject.sqm_record import (
     SECTIONS,
     build_sqm_records,
     compute_run_sections,

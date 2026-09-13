@@ -13,7 +13,7 @@ import dash
 import dash_bootstrap_components as dbc
 from dash import dcc, html
 
-from fnirs_pipe.qc.provenance import _DOMAIN
+from fnirs_pipe.qc.common.provenance import _DOMAIN
 
 dash.register_page(__name__, path="/qc", name="QC Reports")
 

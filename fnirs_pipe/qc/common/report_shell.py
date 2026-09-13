@@ -26,7 +26,9 @@ from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("qc.report_shell")
 
-TEMPLATE_DIR = Path(__file__).parent / "templates"
+# qc/templates/, a directory up: the templates are shared by both report paths, so they
+# stay at the package root rather than following this module into common/
+TEMPLATE_DIR = Path(__file__).parent.parent / "templates"
 
 
 def stylesheet(name: str) -> str:
@@ -187,7 +189,7 @@ def provenance_rows(
     rows: list[dict] = []
     with guard("Provenance table", errors if errors is not None else [], scope):
         from fnirs_pipe.qc.boilerplate.generate import step_sentence
-        from fnirs_pipe.qc.provenance import scan
+        from fnirs_pipe.qc.common.provenance import scan
 
         seen: set[tuple] = set()
         for node in sorted(scan(nirs_dir, label=label).values(),

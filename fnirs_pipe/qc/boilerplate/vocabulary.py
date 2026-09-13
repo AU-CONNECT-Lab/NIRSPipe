@@ -605,7 +605,7 @@ def steps_from_sidecars(
     the group's own steps. Directories the caller passes in the wrong order produce
     sentences in the wrong order; nothing here re-sorts across them.
     """
-    from fnirs_pipe.qc.provenance import scan
+    from fnirs_pipe.qc.common.provenance import scan
 
     dirs = [nirs_dir] if isinstance(nirs_dir, (str, Path)) else list(nirs_dir)
 

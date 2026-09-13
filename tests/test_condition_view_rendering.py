@@ -28,11 +28,11 @@ import plotly.graph_objects as go
 import pytest
 from plotly.subplots import make_subplots
 
-from fnirs_pipe.qc.condition_views import (
+from fnirs_pipe.qc.subject.condition_views import (
     apply_carpet_window, rescale_y_to_window, zoom_to_condition,
 )
-from fnirs_pipe.qc.figure_io import _save_multi_fig_html
-from fnirs_pipe.qc.report import _carpet_views, _condition_views, _save_plotly_html
+from fnirs_pipe.qc.common.figure_io import _save_multi_fig_html
+from fnirs_pipe.qc.subject.report import _carpet_views, _condition_views, _save_plotly_html
 
 WINDOW = (120.0, 320.0)
 SLUG = "baseline"
@@ -279,7 +279,7 @@ def _coherence_map():
 
 def test_a_coherence_map_picked_by_fragment_carries_the_window_s_own_arrows(tmp_path):
     from fnirs_pipe.qc.figures.hyper_post_figures import wtc_condition_views
-    from fnirs_pipe.qc.figure_io import _save_figure_html
+    from fnirs_pipe.qc.common.figure_io import _save_figure_html
 
     # the third saver, and the one the dyad report writes its ROI maps with
     reference, data, freqs, times = _coherence_map()

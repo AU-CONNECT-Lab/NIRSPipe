@@ -25,7 +25,7 @@ from fnirs_pipe.exceptions import StageError
 from fnirs_pipe.io.snirf import read_snirf
 from fnirs_pipe.pipeline.post_pipeline import PostConfig, run_post
 from fnirs_pipe.pipeline.prep_pipeline import PrepConfig, compute_sci, run_prep
-from fnirs_pipe.qc.sqm_record import build_sqm_records
+from fnirs_pipe.qc.subject.sqm_record import build_sqm_records
 from fnirs_pipe.utils import is_optical_density
 from fnirs_pipe.utils.lineage import stage_of
 

@@ -252,7 +252,7 @@ def run_participant_level(args: dict[str, Any]) -> None:
                 # The database takes one row per section, which is what its checkpoint
                 # column has always been for.
                 import json as _json
-                from fnirs_pipe.qc.sqm_record import SECTIONS, build_sqm_records, entities_of
+                from fnirs_pipe.qc.subject.sqm_record import SECTIONS, build_sqm_records, entities_of
                 try:
                     sqm_paths = build_sqm_records(
                         sub_dir / "nirs", bids_root=bids_dir,
@@ -284,7 +284,7 @@ def run_participant_level(args: dict[str, Any]) -> None:
                     # on disk by now, and --no-report still leaves the diagram behind
                     provenance_path = None
                     try:
-                        from fnirs_pipe.qc.provenance import write_provenance
+                        from fnirs_pipe.qc.common.provenance import write_provenance
                         for path in write_provenance(
                             sub_dir / "nirs", sub_dir / "figures" / label,
                             stem="provenance", label=label,
@@ -311,7 +311,7 @@ def run_participant_level(args: dict[str, Any]) -> None:
                     ) or []]
 
                 if not args.get("no_report") and prep_runs:
-                    from fnirs_pipe.qc.subject_index import write_subject_index
+                    from fnirs_pipe.qc.subject.subject_index import write_subject_index
                     try:
                         write_subject_index(subject, sub_dir, " ".join(sys.argv),
                                             mode=_v(args["mode"]) if args.get("mode") else None)
@@ -422,7 +422,7 @@ def _make_prep_config(subject: str, session: str | None, args: dict[str, Any]) -
 def _emit_subject_report(subject, sub_dir, last_raw, last_result, prep_config, args, glm_est, dm, alff_df=None, fc_df=None, fc_hbr_df=None, fc_seed=None, fc_roi=None, high_pass=None, low_pass=None, after_haemo=None, roi_map=None, provenance_path=None, sqm_label=None):
     import mne
     import numpy as np
-    from fnirs_pipe.qc.report import build_subject_report
+    from fnirs_pipe.qc.subject.report import build_subject_report
 
     hbo_picks = mne.pick_types(last_result.raw_haemo.info, fnirs="hbo")
     coords_head = np.array([
@@ -558,8 +558,8 @@ def run_group_level(args: dict[str, Any]) -> None:
     if present) SQM JSONs into cohort HTML reports under <output_dir>."""
     from pathlib import Path
 
-    from fnirs_pipe.qc.group_hyper_writer import build_group_hyper_report
-    from fnirs_pipe.qc.group_writer import build_group_raw_report
+    from fnirs_pipe.qc.hyper.group_hyper_writer import build_group_hyper_report
+    from fnirs_pipe.qc.subject.group_writer import build_group_raw_report
 
     output_dir = Path(args["output_dir"])
     _warn_on_split_tree(output_dir)

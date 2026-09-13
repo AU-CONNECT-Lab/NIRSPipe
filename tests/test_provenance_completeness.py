@@ -17,7 +17,7 @@ import pytest
 from fnirs_pipe.io.snirf import read_snirf
 from fnirs_pipe.pipeline.post_pipeline import PostConfig, run_post
 from fnirs_pipe.pipeline.prep_pipeline import PrepConfig, run_prep
-from fnirs_pipe.qc.provenance import scan
+from fnirs_pipe.qc.common.provenance import scan
 
 _BANDS = dict(cardiac_l_freq=0.7, cardiac_h_freq=1.5, resp_l_freq=0.2, resp_h_freq=0.5)
 

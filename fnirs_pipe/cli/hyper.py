@@ -225,8 +225,8 @@ def cmd_run(
     from fnirs_pipe.pipeline.hyperscanning import (
         resolve_analysis_window, resolve_group_bands, write_group_bads,
     )
-    from fnirs_pipe.qc.hyper_report import build_hyper_post_report
-    from fnirs_pipe.qc.windows import condition_windows
+    from fnirs_pipe.qc.hyper.hyper_report import build_hyper_post_report
+    from fnirs_pipe.qc.common.windows import condition_windows
     from fnirs_pipe.qc.metrics._helpers import bands_to_record
     from fnirs_pipe.pipeline.wtc_null import write_wtc_null
     from fnirs_pipe.utils.run_record import write_group_run_record
@@ -388,7 +388,7 @@ def cmd_run(
     # still lists them. It cannot be built inside `_process`: a dyad with several tasks
     # would then have its index rewritten once per task, each time from a tree missing the
     # tasks still to come.
-    from fnirs_pipe.qc.hyper_index import write_hyper_index
+    from fnirs_pipe.qc.hyper.hyper_index import write_hyper_index
 
     for gid in dict.fromkeys(key[0] for key in groups):
         folder = output_dir / f"group-{gid}"
@@ -424,7 +424,7 @@ def cmd_band(
 
 def cmd_index(output_dir: Path, group_id: str | None, verbose: bool) -> None:
     """Write one dyad index per group-* directory, from the tables already on disk."""
-    from fnirs_pipe.qc.hyper_index import write_hyper_index
+    from fnirs_pipe.qc.hyper.hyper_index import write_hyper_index
 
     setup_logging(verbose=verbose)
 

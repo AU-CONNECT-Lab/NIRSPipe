@@ -22,8 +22,8 @@ from pathlib import Path
 import pandas as pd
 
 from fnirs_pipe.qc.boilerplate import collect_software_versions
-from fnirs_pipe.qc.figure_io import _pair_fname, pair_slug
-from fnirs_pipe.qc.report_shell import (
+from fnirs_pipe.qc.common.figure_io import _pair_fname, pair_slug
+from fnirs_pipe.qc.common.report_shell import (
     OUTLIER_Z, footer_vars, outlier_flags, page_vars, render)
 from fnirs_pipe.utils.logging import get_logger
 

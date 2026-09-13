@@ -12,7 +12,7 @@ from fnirs_pipe.io.derivatives import group_data_dir, group_report_dir
 from fnirs_pipe.pipeline.hyperscanning import (
     GroupEntry, _hyper_sidecar, alignment_params,
 )
-from fnirs_pipe.qc.figure_io import (
+from fnirs_pipe.qc.common.figure_io import (
     _pair_fname, _save_figure_html, _save_multi_fig_html, get_channel_pairs,
 )
 from fnirs_pipe.qc.figures.hyper_figures import (
@@ -33,10 +33,10 @@ from fnirs_pipe.qc.metrics.hyper import (
     compute_hyper_sqm, coupled_grid, member_series, motion_summary, screening_summary,
 )
 from fnirs_pipe.pipeline.synchrony import SCREEN_NULL_ITER, screening_coherence
-from fnirs_pipe.qc.hyper_usable import usable_scalars, write_usable_table
+from fnirs_pipe.qc.hyper.hyper_usable import usable_scalars, write_usable_table
 from fnirs_pipe.qc.metrics import SCI_PASS
-from fnirs_pipe.qc.report_shell import guard, note
-from fnirs_pipe.qc.windows import condition_windows, markers_on_data_axis
+from fnirs_pipe.qc.common.report_shell import guard, note
+from fnirs_pipe.qc.common.windows import condition_windows, markers_on_data_axis
 from fnirs_pipe.utils.lineage import path_from
 from fnirs_pipe.utils.logging import get_logger
 
@@ -73,7 +73,7 @@ def _hyper_sqm_record(sqm: dict, aligned_raws: dict[str, mne.io.Raw]) -> dict:
     """The dyad's quality record, with the provenance keys the graph reads.
 
     The keys sit in the file rather than in a sidecar beside it, the way
-    :func:`~fnirs_pipe.qc.sqm_record.sqm_record_dict` puts them there: a sidecar for
+    :func:`~fnirs_pipe.qc.subject.sqm_record.sqm_record_dict` puts them there: a sidecar for
     ``x.json`` would resolve to ``x.json`` itself. ``n_metrics`` is what marks the node as
     a QC record measured off the chain rather than a signal file on it, so the graph draws
     it without edges. The step name is its own: two objects sharing one is how a stage gets
@@ -100,7 +100,7 @@ def _condition_spans(raw: "mne.io.Raw | None") -> dict:
 
     The dict is what every panel that splits by condition reads, so none of them can be
     drawn against a different set of blocks. The rule behind it is
-    :func:`~fnirs_pipe.qc.windows.condition_windows` rather than a second copy of it here.
+    :func:`~fnirs_pipe.qc.common.windows.condition_windows` rather than a second copy of it here.
     The copy took each annotation's own duration, which on a system that writes
     zero-duration triggers gave every block a zero-length span, and keyed the dict on the
     bare description, which kept only the last occurrence of a repeated one.

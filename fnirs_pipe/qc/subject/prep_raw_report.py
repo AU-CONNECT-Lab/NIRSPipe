@@ -7,25 +7,25 @@ from pathlib import Path
 
 import mne
 
-from fnirs_pipe.qc.condition_views import (
+from fnirs_pipe.qc.subject.condition_views import (
     carpet_view_table as _carpet_views, condition_view_table,
 )
-from fnirs_pipe.qc.figure_io import (
+from fnirs_pipe.qc.common.figure_io import (
     _pair_fname, _save_figure_html, _save_multi_fig_html,
     extract_markers, get_channel_pairs,
 )
-from fnirs_pipe.qc.windows import markers_on_data_axis
-from fnirs_pipe.qc.channel_table import (
+from fnirs_pipe.qc.common.windows import markers_on_data_axis
+from fnirs_pipe.qc.common.channel_table import (
     MOTION_SPLIT_COLUMNS, OD_SPLIT_COLUMNS, channel_columns, channel_rows, format_rows,
     heatmap_args, pair_rows, save_channel_csv, separation_blocks, separation_notes,
     split_table,
 )
 from fnirs_pipe.qc.metrics import SCI_PASS
 from fnirs_pipe.qc.metrics._helpers import _mean_or_none, separation_bands
-from fnirs_pipe.qc.report_shell import (
+from fnirs_pipe.qc.common.report_shell import (
     collapse_messages, footer_vars, guard, note, page_vars, render,
 )
-from fnirs_pipe.qc.trial_qc import score_trials, trial_windows
+from fnirs_pipe.qc.subject.trial_qc import score_trials, trial_windows
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("qc.prep_raw_report")
@@ -169,8 +169,8 @@ def _process_run(
         attach_windowed_series, compute_raw_sqm, compute_sci_scores,
         resolve_cutoffs, screen_channels, screening_scores,
     )
-    from fnirs_pipe.qc.screen_scope import resolve_screen_scope
-    from fnirs_pipe.qc.sqm_record import (
+    from fnirs_pipe.qc.common.screen_scope import resolve_screen_scope
+    from fnirs_pipe.qc.subject.sqm_record import (
         motion_sections, raw_condition_sections, raw_sections, sqm_record_dict,
     )
 
@@ -232,7 +232,7 @@ def _process_run(
     cond_frac: dict = {}
     cond_windows: list = []
     with guard("Coupled windows per condition", errors, label):
-        from fnirs_pipe.qc.windows import condition_windows
+        from fnirs_pipe.qc.common.windows import condition_windows
         from fnirs_pipe.qc.metrics.windowed import (
             SCREEN_WINDOW_S, condition_window_fractions,
         )
@@ -273,7 +273,7 @@ def _process_run(
 
     if raw_motcorr is not None:
         with guard("Motion sections", errors, label):
-            from fnirs_pipe.qc.sqm_record import _section_writer
+            from fnirs_pipe.qc.subject.sqm_record import _section_writer
             motion_sections(
                 raw_od, raw_motcorr, _section_writer(raw_secs, raw_pc), windowed,
                 lambda name: (raw_secs.get(name) or {}).get("gvtd_thresh"),
@@ -477,7 +477,7 @@ def _process_run(
     motion_channels: list[str] = []
     if raw_motcorr is not None:
         with guard("Motion detail", errors, label):
-            from fnirs_pipe.qc.report import (
+            from fnirs_pipe.qc.subject.report import (
                 _motion_detail_figures, _section_motion_detail,
             )
             built = _motion_detail_figures(
@@ -728,7 +728,7 @@ def _psd_maker(raw, cardiac_l_freq: float, cardiac_h_freq: float, build):
     the run's and is left out instead, at the same floor the record stops writing its band
     scalars at.
     """
-    from fnirs_pipe.qc.condition_views import PSD_NFFT_CAP
+    from fnirs_pipe.qc.subject.condition_views import PSD_NFFT_CAP
 
     def remake(t0: float, t1: float):
         lo, hi = max(0.0, float(t0)), min(float(raw.times[-1]), float(t1))
@@ -749,7 +749,7 @@ def _write_condition_views(ctx: dict, payload: dict, output_path: Path, run_labe
     """One report file per condition, beside the run's own, read out of the quality record.
 
     Every number on these pages comes from the record's ``by_condition`` section, which
-    :func:`~fnirs_pipe.qc.sqm_record.raw_condition_sections` wrote a moment earlier; nothing
+    :func:`~fnirs_pipe.qc.subject.sqm_record.raw_condition_sections` wrote a moment earlier; nothing
     is measured here. A record carrying no such section gets no pages rather than a second
     copy of the numbers free to disagree with the first.
 
@@ -757,7 +757,7 @@ def _write_condition_views(ctx: dict, payload: dict, output_path: Path, run_labe
     to be learned twice. The file name comes from :func:`condition_stems`, which follows the
     rule ``fnirs-prep crop`` set for a segment: the condition becomes the ``task-`` entity.
     """
-    from fnirs_pipe.qc.condition_views import (
+    from fnirs_pipe.qc.subject.condition_views import (
         condition_payloads, condition_stem, condition_stems,
     )
 
@@ -876,7 +876,7 @@ def build_prep_raw_report(
     named the way ``fnirs-prep crop`` names a segment. They are separate files rather than a
     switch inside this one because this report is already long, and their numbers are sliced
     out of the run's windowed pass rather than measured on a cut of it. See
-    :mod:`fnirs_pipe.qc.condition_views`.
+    :mod:`fnirs_pipe.qc.subject.condition_views`.
     """
     # the report sits in the subject's own folder, so its figures are one level in from it
     # rather than a sibling tree, and sub-<id>/ can be moved or copied whole

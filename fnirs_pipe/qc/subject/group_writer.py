@@ -11,7 +11,7 @@ import pandas as pd
 
 from fnirs_pipe.qc.boilerplate import collect_software_versions
 from fnirs_pipe.qc.metrics.coupling import SCI_WINDOW_S
-from fnirs_pipe.qc.figure_io import _save_figure_html
+from fnirs_pipe.qc.common.figure_io import _save_figure_html
 from fnirs_pipe.qc.figures.group_figures import (
     SCORE_THRESHOLD,
     _split_column,
@@ -25,14 +25,14 @@ from fnirs_pipe.qc.figures.group_figures import (
     deviation_scores,
     group_metrics,
 )
-from fnirs_pipe.qc.report_shell import (
+from fnirs_pipe.qc.common.report_shell import (
     footer_vars,
     guard,
     note,
     page_vars,
     render,
 )
-from fnirs_pipe.qc.sqm_record import (
+from fnirs_pipe.qc.subject.sqm_record import (
     OPTIONAL_SECTIONS,
     POST_BANDPASS_HAEMO_STAGES,
     PRE_BANDPASS_HAEMO_STAGE,

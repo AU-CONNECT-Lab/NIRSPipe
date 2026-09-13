@@ -63,12 +63,12 @@ import mne
 import mne.io
 
 from fnirs_pipe.qc.boilerplate import collect_software_versions, generate_methods_text
-from fnirs_pipe.qc.channel_table import (
+from fnirs_pipe.qc.common.channel_table import (
     MOTION_SPLIT_COLUMNS, OD_SPLIT_COLUMNS, WHOLE_RUN_ONLY_COLUMNS, channel_columns,
     channel_rows, format_rows, heatmap_args, measured_columns,
     save_channel_csv, separation_blocks, separation_notes,
 )
-from fnirs_pipe.qc.figure_io import (
+from fnirs_pipe.qc.common.figure_io import (
     CENTER_FIGURE_CSS, _fig_href, _pair_fname, _save_b64_png,
     _save_figure_html, _save_multi_fig_html,
     extract_markers, get_channel_pairs,
@@ -109,11 +109,11 @@ from fnirs_pipe.qc.figures import (
     fc_seed_topo_figure,
     fc_connectogram,
 )
-from fnirs_pipe.qc.report_shell import (
+from fnirs_pipe.qc.common.report_shell import (
     footer_vars, guard, note, page_vars, render,
 )
-from fnirs_pipe.qc.sqm_record import record_path as _sqm_record_path
-from fnirs_pipe.qc.trial_qc import score_trials, trial_windows
+from fnirs_pipe.qc.subject.sqm_record import record_path as _sqm_record_path
+from fnirs_pipe.qc.subject.trial_qc import score_trials, trial_windows
 from fnirs_pipe.utils.logging import get_logger
 
 if TYPE_CHECKING:
@@ -435,10 +435,10 @@ def _motion_detail_figures(
 def _condition_views(fig, spans: "list[tuple[str, float, float]]") -> "dict | None":
     """Every condition's view of one run-wide figure, on this report's figures.
 
-    The table is assembled by :func:`~fnirs_pipe.qc.condition_views.condition_view_table`,
+    The table is assembled by :func:`~fnirs_pipe.qc.subject.condition_views.condition_view_table`,
     which the raw viewer builds its own fragment views with, so the two cannot fork.
     """
-    from fnirs_pipe.qc.condition_views import condition_view_table
+    from fnirs_pipe.qc.subject.condition_views import condition_view_table
 
     return condition_view_table(fig, spans)
 
@@ -543,7 +543,7 @@ def _segments_in_window(segments: dict | None,
 
 def _carpet_views(fig, spans: "list[tuple[str, float, float]]") -> "dict | None":
     """Each condition's window on the carpet, shared with the raw viewer's own carpet."""
-    from fnirs_pipe.qc.condition_views import carpet_view_table
+    from fnirs_pipe.qc.subject.condition_views import carpet_view_table
 
     return carpet_view_table(fig, spans)
 
@@ -868,7 +868,7 @@ def _section_trial_qc(
     ``_EPOCH_TMIN`` / ``_EPOCH_TMAX`` while the scoring uses each event's own duration,
     which is what a block design records and a fixed window would cut off.
     """
-    from fnirs_pipe.qc.windows import markers_on_data_axis
+    from fnirs_pipe.qc.common.windows import markers_on_data_axis
 
     tmin = getattr(config, "epoch_tmin", None)
     tmax = getattr(config, "epoch_tmax", None)
@@ -964,7 +964,7 @@ def _section_condition_trial_images(
     rebuilt panels: a scale taken on one cropped condition at a time would differ from page
     to page, and these pages are read against each other.
     """
-    from fnirs_pipe.qc.windows import markers_on_data_axis
+    from fnirs_pipe.qc.common.windows import markers_on_data_axis
 
     # the annotations alone say whether any window could fill a panel, and answering from
     # them costs nothing; the pass below epochs the recording once per channel
@@ -1117,7 +1117,7 @@ def _load_stage_raw(
         return None
     with _guard(f"Reading desc-{desc}", errors, subject):
         from fnirs_pipe.io.snirf import read_snirf
-        from fnirs_pipe.qc.sqm_record import scan_runs
+        from fnirs_pipe.qc.subject.sqm_record import scan_runs
         path = (scan_runs(out_dir).get(sqm_label) or {}).get(desc)
         return None if path is None else read_snirf(path)
     return None
@@ -1146,7 +1146,7 @@ def _section_sqm(
     They are screened by the same criteria as everything else, so their status is
     a real verdict with a downstream cost -- a bad short channel is a bad regressor -- and
     printing that verdict without the score behind it leaves it uncheckable. Assembling
-    those rows is :mod:`fnirs_pipe.qc.channel_table`, which the raw views share, so the
+    those rows is :mod:`fnirs_pipe.qc.common.channel_table`, which the raw views share, so the
     three per-channel tables in the package read one record the same way.
 
     Every family is read at its long-channel split where the record carries one, so the
@@ -1788,7 +1788,7 @@ def build_subject_report(
         format_metric, is_key_metric, metric_class, metric_summary,
     )
 
-    from fnirs_pipe.qc.sqm_record import entities_of
+    from fnirs_pipe.qc.subject.sqm_record import entities_of
 
     run_label_text = sqm_label or f"sub-{subject}"
     # figures that reach the template as loose keywords rather than inside a section dict.
@@ -2056,7 +2056,7 @@ def _cropped_sections(
              "resp": (config.resp_l_freq, config.resp_h_freq)}
     # the same floor the record holds the band scalars to, so a page cannot show a spectrum
     # for a number the record refused to write
-    from fnirs_pipe.qc.condition_views import PSD_NFFT_CAP
+    from fnirs_pipe.qc.subject.condition_views import PSD_NFFT_CAP
     n_fft_floor = min(PSD_NFFT_CAP, len(raw_haemo.times))
     psd_ok = len(haemo.times) >= n_fft_floor
     if not psd_ok:
@@ -2213,7 +2213,7 @@ def _write_condition_reports(
     """One subject-report page per annotated condition, read out of the quality record.
 
     Every number on these pages comes from the record's ``by_condition`` section, which
-    :func:`~fnirs_pipe.qc.sqm_record.condition_sections` wrote. Nothing is measured here;
+    :func:`~fnirs_pipe.qc.subject.sqm_record.condition_sections` wrote. Nothing is measured here;
     a run whose record predates that section gets no pages rather than a second, possibly
     disagreeing, copy of the numbers.
 
@@ -2252,10 +2252,10 @@ def _write_condition_reports(
     The channel set is the run's throughout, since one set has to serve every condition. The
     *verdict* is not: each page screens on its own stretch.
     """
-    from fnirs_pipe.qc.condition_views import (
+    from fnirs_pipe.qc.subject.condition_views import (
         slice_record, with_condition_corr,
     )
-    from fnirs_pipe.qc.record_views import condition_verdict_view
+    from fnirs_pipe.qc.common.record_views import condition_verdict_view
     from fnirs_pipe.qc.metrics import resolve_cutoffs
 
     if out_dir is None or sqm_label is None:

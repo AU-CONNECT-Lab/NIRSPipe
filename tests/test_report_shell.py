@@ -17,7 +17,7 @@ import re
 import pytest
 from jinja2 import ChainableUndefined, Environment, FileSystemLoader
 
-from fnirs_pipe.qc.report_shell import (
+from fnirs_pipe.qc.common.report_shell import (
     FOOTER_CSS,
     TEMPLATE_DIR,
     TOKENS_CSS,

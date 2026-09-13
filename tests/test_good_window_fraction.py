@@ -234,7 +234,7 @@ def test_task_scope_takes_the_blocks_and_leaves_the_triggers():
 
 
 def test_run_scope_is_the_whole_recording():
-    from fnirs_pipe.qc.screen_scope import resolve_screen_scope
+    from fnirs_pipe.qc.common.screen_scope import resolve_screen_scope
 
     assert resolve_screen_scope(_annotated([20.0], [300.0], ["rest"]), "run") is None
 
@@ -242,7 +242,7 @@ def test_run_scope_is_the_whole_recording():
 def test_task_scope_falls_back_when_only_triggers_are_annotated(caplog):
     """The case the fallback exists for: scoping to a handful of short triggers would count
     a minute of an hour and still read as a verdict on the run."""
-    from fnirs_pipe.qc.screen_scope import resolve_screen_scope
+    from fnirs_pipe.qc.common.screen_scope import resolve_screen_scope
 
     raw = _annotated([20.0, 100.0, 200.0], [10.0, 10.0, 10.0], ["t", "t", "t"])
     with caplog.at_level("WARNING"):
@@ -251,7 +251,7 @@ def test_task_scope_falls_back_when_only_triggers_are_annotated(caplog):
 
 
 def test_task_scope_returns_the_blocks_when_there_are_blocks():
-    from fnirs_pipe.qc.screen_scope import resolve_screen_scope
+    from fnirs_pipe.qc.common.screen_scope import resolve_screen_scope
 
     raw = _annotated([20.0, 400.0], [300.0, 100.0], ["rest", "talk"])
     assert resolve_screen_scope(raw, "task") == [("rest", 20.0, 320.0),
@@ -259,7 +259,7 @@ def test_task_scope_returns_the_blocks_when_there_are_blocks():
 
 
 def test_an_unknown_scope_is_refused():
-    from fnirs_pipe.qc.screen_scope import resolve_screen_scope
+    from fnirs_pipe.qc.common.screen_scope import resolve_screen_scope
 
     with pytest.raises(ValueError, match="screen scope"):
         resolve_screen_scope(_annotated([20.0], [300.0], ["rest"]), "poi")

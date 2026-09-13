@@ -646,7 +646,7 @@ def _psd_groups(
     A montage whose separations fall in neither range gets a third curve rather than being
     folded into "long". Returns one unnamed mean when there is no usable split at all.
     """
-    from fnirs_pipe.qc.channel_table import _neither_range_title
+    from fnirs_pipe.qc.common.channel_table import _neither_range_title
     from fnirs_pipe.qc.metrics import long_short_channels
 
     try:

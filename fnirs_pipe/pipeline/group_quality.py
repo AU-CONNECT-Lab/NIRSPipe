@@ -133,15 +133,15 @@ def compute_group_sqm_raw(
     Returns {subject_id: sqm_dict} for use in the HTML report.
 
     The dict is the long-channel verdict, assembled by
-    :func:`~fnirs_pipe.qc.sqm_record.raw_verdict_view` from the same three sections the
+    :func:`~fnirs_pipe.qc.subject.sqm_record.raw_verdict_view` from the same three sections the
     per-subject record holds. It used to be one all-channel pass, which put a subject's
     SCI, CV, SNR and GVTD in this table on a different channel set than the same subject's
     numbers in the individual reports and in `fnirs-hyper run`, so the two could not be
     read against each other.
     """
     from fnirs_pipe.qc.metrics import resolve_cutoffs, screen_channels, screening_scores
-    from fnirs_pipe.qc.screen_scope import resolve_screen_scope
-    from fnirs_pipe.qc.sqm_record import raw_sections, raw_verdict_view
+    from fnirs_pipe.qc.common.screen_scope import resolve_screen_scope
+    from fnirs_pipe.qc.subject.sqm_record import raw_sections, raw_verdict_view
 
     cutoffs = resolve_cutoffs(sci=sci_threshold, psp=psp_threshold,
                               good_frac=min_good_frac)
@@ -330,7 +330,7 @@ def load_group_sqm(
     if bads_scope not in ("run", "subject"):
         raise ValueError(f"bads_scope must be 'run' or 'subject', got {bads_scope!r}")
 
-    from fnirs_pipe.qc.sqm_record import raw_verdict_view
+    from fnirs_pipe.qc.subject.sqm_record import raw_verdict_view
 
     result: dict[str, dict] = {}
     for entry in group:

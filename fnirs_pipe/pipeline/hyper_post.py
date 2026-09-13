@@ -205,9 +205,9 @@ def run_hyper_post(
         wtc_band_mean,
         wtc_grid_params,
     )
-    from fnirs_pipe.qc.figure_io import _pair_fname, get_channel_pairs, pair_slug
-    from fnirs_pipe.qc.report_shell import guard, note
-    from fnirs_pipe.qc.windows import condition_windows
+    from fnirs_pipe.qc.common.figure_io import _pair_fname, get_channel_pairs, pair_slug
+    from fnirs_pipe.qc.common.report_shell import guard, note
+    from fnirs_pipe.qc.common.windows import condition_windows
     from fnirs_pipe.utils.lineage import path_from
 
     errors = errors if errors is not None else []

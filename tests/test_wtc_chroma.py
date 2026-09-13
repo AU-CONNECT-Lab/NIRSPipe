@@ -123,7 +123,7 @@ def test_the_screening_coherence_stays_hbo():
 def report(dyad, tmp_path_factory):
     """One report over both chromophores, with the maps archived and the channels crossed."""
     from fnirs_pipe.pipeline.hyperscanning import GroupEntry
-    from fnirs_pipe.qc.hyper_report import build_hyper_post_report
+    from fnirs_pipe.qc.hyper.hyper_report import build_hyper_post_report
 
     out = tmp_path_factory.mktemp("chroma")
     build_hyper_post_report(
@@ -192,7 +192,7 @@ def test_the_isc_tables_stay_one_file_each(report):
 
 def test_asking_for_one_chromophore_writes_only_that_one(dyad, tmp_path):
     from fnirs_pipe.pipeline.hyperscanning import GroupEntry
-    from fnirs_pipe.qc.hyper_report import build_hyper_post_report
+    from fnirs_pipe.qc.hyper.hyper_report import build_hyper_post_report
 
     build_hyper_post_report(
         group_id="G1", task="tap",
@@ -209,7 +209,7 @@ def test_asking_for_one_chromophore_writes_only_that_one(dyad, tmp_path):
 @pytest.mark.parametrize("bad", [(), ("hbt",), ("hbo", "total")])
 def test_an_unknown_chromophore_is_refused(dyad, tmp_path, bad):
     from fnirs_pipe.pipeline.hyperscanning import GroupEntry
-    from fnirs_pipe.qc.hyper_report import build_hyper_post_report
+    from fnirs_pipe.qc.hyper.hyper_report import build_hyper_post_report
 
     with pytest.raises(ValueError, match="wtc_chroma"):
         build_hyper_post_report(
@@ -300,7 +300,7 @@ def by_condition(dyad, tmp_path_factory):
     be at least 50 s.
     """
     from fnirs_pipe.pipeline.hyperscanning import GroupEntry
-    from fnirs_pipe.qc.hyper_report import build_hyper_post_report
+    from fnirs_pipe.qc.hyper.hyper_report import build_hyper_post_report
 
     marked = {sid: raw.copy() for sid, raw in dyad.items()}
     for raw in marked.values():
@@ -353,7 +353,7 @@ def test_the_null_and_the_report_default_to_the_same_chromophores():
     the real table with nothing to be tested against."""
     import inspect
 
-    from fnirs_pipe.qc.hyper_report import build_hyper_post_report
+    from fnirs_pipe.qc.hyper.hyper_report import build_hyper_post_report
     from fnirs_pipe.pipeline.wtc_null import write_wtc_null
 
     report = inspect.signature(build_hyper_post_report).parameters["wtc_chroma"].default
@@ -372,7 +372,7 @@ def _js_var(html: str, name: str):
 
 def _page(dyad, where, chroma, **kwargs):
     from fnirs_pipe.pipeline.hyperscanning import GroupEntry
-    from fnirs_pipe.qc.hyper_report import build_hyper_post_report
+    from fnirs_pipe.qc.hyper.hyper_report import build_hyper_post_report
 
     path = build_hyper_post_report(
         group_id="G1", task="tap",
@@ -484,7 +484,7 @@ def test_a_condition_boundary_is_drawn_on_the_axis_the_window_was_cut_on(dyad, t
     """An aligned recording keeps its crop offset in `first_time` while everything computed
     from it starts at zero, so the two have to be read through one function. They were not,
     and every boundary line on every coherence map came out late by that offset."""
-    from fnirs_pipe.qc.windows import condition_windows, markers_on_data_axis
+    from fnirs_pipe.qc.common.windows import condition_windows, markers_on_data_axis
 
     raw = dyad["sub-01"].copy()
     raw.set_annotations(mne.Annotations([20.0, 210.0], [180.0, 180.0], ["rest", "talk"]))

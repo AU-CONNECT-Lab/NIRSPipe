@@ -31,13 +31,13 @@ import numpy as np
 import pandas as pd
 
 from fnirs_pipe.qc.boilerplate import collect_software_versions
-from fnirs_pipe.qc.figure_io import _save_figure_html
+from fnirs_pipe.qc.common.figure_io import _save_figure_html
 from fnirs_pipe.qc.figures.group_hyper_figures import (
     build_condition_dials, build_null_strip, build_pair_field, build_usable_bars,
     cohort_order,
 )
 from fnirs_pipe.qc.metrics.hyper import NULL_ALPHA_PCT
-from fnirs_pipe.qc.report_shell import footer_vars, guard, note, page_vars, render
+from fnirs_pipe.qc.common.report_shell import footer_vars, guard, note, page_vars, render
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("qc.group_hyper_writer")

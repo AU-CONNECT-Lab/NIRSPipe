@@ -11,7 +11,7 @@ import dash_bootstrap_components as dbc
 from dash import ALL, Input, Output, Patch, State, callback, ctx, dcc, html, no_update
 
 from fnirs_pipe.interface.theme import style_figure
-from fnirs_pipe.qc.channel_table import channel_columns
+from fnirs_pipe.qc.common.channel_table import channel_columns
 
 # Server-side cache: cache_key -> _process_run result dict (large figures stay here)
 _RESULT_CACHE: dict[str, dict] = {}
@@ -177,7 +177,7 @@ def load_run(run_path, sci_thresh, cardiac_l, cardiac_h, dpf,
 
     sci_threshold = float(sci_thresh if sci_thresh is not None else 0.8)
     cardiac_l, cardiac_h, dpf = float(cardiac_l), float(cardiac_h), float(dpf)
-    from fnirs_pipe.qc.prep_raw_report import _EPOCH_TMAX, _EPOCH_TMIN
+    from fnirs_pipe.qc.subject.prep_raw_report import _EPOCH_TMAX, _EPOCH_TMIN
     window_s   = float(window_s if window_s is not None else 10.0)
     ep_tmin    = float(epoch_tmin if epoch_tmin is not None else _EPOCH_TMIN)
     ep_tmax    = float(epoch_tmax if epoch_tmax is not None else _EPOCH_TMAX)
@@ -216,7 +216,7 @@ def load_run(run_path, sci_thresh, cardiac_l, cardiac_h, dpf,
 
     if result is None:
         try:
-            from fnirs_pipe.qc.prep_raw_report import _process_run
+            from fnirs_pipe.qc.subject.prep_raw_report import _process_run
             run_label = Path(snirf_path).stem
             run_dir   = Path(output_dir) / ".fnirs_cache"
             # the second half is what the per-condition report pages need: windowed
@@ -533,9 +533,9 @@ def update_channel_detail(channel_pair, store):
                     no_update, no_update, _SHOW, no_update, no_update,
                 )
         try:
-            from fnirs_pipe.qc.figure_io import extract_markers
+            from fnirs_pipe.qc.common.figure_io import extract_markers
             from fnirs_pipe.qc.figures import build_channel_figure
-            from fnirs_pipe.qc.prep_raw_report import _EPOCH_TMAX, _EPOCH_TMIN, _MAX_TS_PTS
+            from fnirs_pipe.qc.subject.prep_raw_report import _EPOCH_TMAX, _EPOCH_TMIN, _MAX_TS_PTS
             # off the recording being drawn, not out of the payload: this figure is the one
             # that draws on the original axis, so its markers have to be the annotations of
             # the raw it is handed. The panel's list is on the data axis and would be late
@@ -1209,7 +1209,7 @@ def _build_decisions_table(pair_cells: list[dict], blocks: list, notes: list,
                             run_decisions: dict) -> html.Div:
     """Per-channel metrics with the rating decision as the last column.
 
-    Rows arrive from fnirs_pipe.qc.channel_table with their numbers formatted and their
+    Rows arrive from fnirs_pipe.qc.common.channel_table with their numbers formatted and their
     cells classed, so this table, the raw viewer's and the subject report's cannot print one
     channel three ways. It used to show SCI alone, looked up under a key the raw recording
     does not use, so every row read as a dash.

@@ -12,7 +12,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from fnirs_pipe.qc.figure_io import extract_markers
+import mne
+
+from fnirs_pipe.qc.common.figure_io import extract_markers
 from fnirs_pipe.utils.lineage import path_from
 from fnirs_pipe.utils.logging import get_logger
 

@@ -1,6 +1,6 @@
 """One condition's numbers, read back out of the record that holds them.
 
-Both views take a condition entry as :mod:`~fnirs_pipe.qc.sqm_record` wrote it and return a
+Both views take a condition entry as :mod:`~fnirs_pipe.qc.subject.sqm_record` wrote it and return a
 flat dict for one channel set. They are here rather than beside the condition figures because
 the subject pages and the dyad pages each use one of them, and a record view that lives with
 one path's figures is how a shared reading rule ends up with two copies of itself.
@@ -17,7 +17,7 @@ def condition_verdict_view(entry: dict) -> "dict[str, float | None]":
          "od_by_set": {"long": {"sci_win_mean": 0.86}}}
         -> {"sci_win_mean": 0.86, "gvtd_filt_p95": 1.2e-4}
 
-    The arrangement :func:`~fnirs_pipe.qc.sqm_record.raw_verdict_view` makes for a run, and
+    The arrangement :func:`~fnirs_pipe.qc.subject.sqm_record.raw_verdict_view` makes for a run, and
     for the same reason: a page printing a run's row above a condition's needs both on one
     channel set, or what looks like a comparison between two stretches is a comparison
     between two montages as well.

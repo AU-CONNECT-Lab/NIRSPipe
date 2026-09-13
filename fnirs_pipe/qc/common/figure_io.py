@@ -146,7 +146,7 @@ def _save_figure_html(fig, path: Path, extra_js: str = "", extra_css: str = "",
 def _save_multi_fig_html(figs: list, path: Path, views: "dict | None" = None) -> int:
     """Stack multiple Plotly figures in one HTML file. Returns total height px.
 
-    ``views`` maps a condition key to the :func:`~fnirs_pipe.qc.condition_views.window_view_spec`
+    ``views`` maps a condition key to the :func:`~fnirs_pipe.qc.subject.condition_views.window_view_spec`
     that names its window, so ``…/motion_detail_S1D1760.html#video`` opens the run's figure
     narrowed to that condition and the bare path opens the run's own view.
     """

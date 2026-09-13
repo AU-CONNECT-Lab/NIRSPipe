@@ -15,7 +15,7 @@ assembled panel rather than as an expected value.
 
 import json
 
-from fnirs_pipe.qc.report import _section_sqm
+from fnirs_pipe.qc.subject.report import _section_sqm
 
 # a record whose three channel sets disagree on every metric the panel reads, so a row that
 # picked the wrong one cannot coincide with the right one

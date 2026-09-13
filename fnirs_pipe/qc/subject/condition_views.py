@@ -137,7 +137,7 @@ def slice_record(record_view: dict, sliced: "dict[str, dict[str, float]]") -> di
     ``sliced`` is ``{"sci_per_channel": {ch: v}, ...}`` for this condition. Every section's
     per-channel dict is rebuilt from it, restricted to the channels that section already
     described, so a short channel's row stays in the short section and a long channel's in
-    the long one; :func:`~fnirs_pipe.qc.channel_table.channel_rows` reads the sections and
+    the long one; :func:`~fnirs_pipe.qc.common.channel_table.channel_rows` reads the sections and
     would otherwise put every channel in both.
 
     The unsliceable keys are dropped rather than carried over. Scalars are left alone: the
@@ -440,7 +440,7 @@ def carpet_view_table(fig, spans: "list[tuple[str, float, float]]") -> "dict | N
     The heatmaps keep the run's colour scale and only the line rows move;
     :func:`carpet_window_spec` says why, and computes each view.
     """
-    from fnirs_pipe.qc.figure_io import _pair_fname
+    from fnirs_pipe.qc.common.figure_io import _pair_fname
 
     if not spans or not hasattr(fig, "add_annotation"):
         return None
@@ -478,7 +478,7 @@ def condition_view_table(fig, spans: "list[tuple[str, float, float]]") -> "dict 
     """
     if not spans or not hasattr(fig, "add_annotation"):
         return None
-    from fnirs_pipe.qc.figure_io import _pair_fname
+    from fnirs_pipe.qc.common.figure_io import _pair_fname
 
     specs = [(_pair_fname(label), window_view_spec(fig, t0, t1)) for label, t0, t1 in spans]
     placed: set = set()
@@ -653,7 +653,7 @@ def condition_payloads(
     """One viewer payload per condition, read out of the quality record.
 
     Every number here comes from ``by_condition``, which
-    :func:`~fnirs_pipe.qc.sqm_record.raw_condition_sections` wrote; nothing is measured. A
+    :func:`~fnirs_pipe.qc.subject.sqm_record.raw_condition_sections` wrote; nothing is measured. A
     record with no such section gets no pages rather than a second copy of the numbers free
     to disagree with the first.
 
@@ -691,11 +691,11 @@ def condition_payloads(
     zero.
     """
     from fnirs_pipe.qc.boilerplate.vocabulary import metric_rows
-    from fnirs_pipe.qc.channel_table import (
+    from fnirs_pipe.qc.common.channel_table import (
         MOTION_SPLIT_COLUMNS, OD_SPLIT_COLUMNS, WHOLE_RUN_ONLY_COLUMNS, channel_rows,
         format_rows, heatmap_args, pair_rows, separation_blocks, split_table,
     )
-    from fnirs_pipe.qc.figure_io import _pair_fname
+    from fnirs_pipe.qc.common.figure_io import _pair_fname
     from fnirs_pipe.qc.figures import build_sci_psp_figure, channel_quality_heatmap
 
     od_cols = tuple((k, t) for k, t in OD_SPLIT_COLUMNS

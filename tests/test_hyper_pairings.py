@@ -21,7 +21,7 @@ import mne
 import numpy as np
 import pytest
 
-from fnirs_pipe.qc.figure_io import pair_slug
+from fnirs_pipe.qc.common.figure_io import pair_slug
 
 SFREQ = 5.0
 DURATION = 300.0
@@ -73,7 +73,7 @@ def triad():
 def _run(members, where, **kwargs):
     """Build the post report over `members` and return the directory it wrote into."""
     from fnirs_pipe.pipeline.hyperscanning import GroupEntry
-    from fnirs_pipe.qc.hyper_report import build_hyper_post_report
+    from fnirs_pipe.qc.hyper.hyper_report import build_hyper_post_report
 
     ids = list(members)
     path = build_hyper_post_report(

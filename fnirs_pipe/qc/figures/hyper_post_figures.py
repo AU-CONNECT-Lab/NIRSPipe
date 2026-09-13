@@ -364,7 +364,7 @@ def wtc_condition_views(fig, spans, wtc_data: dict, freqs: np.ndarray, times: np
              if a.name != _ARROW_NAME]
 
     out = {}
-    from fnirs_pipe.qc.figure_io import _pair_fname
+    from fnirs_pipe.qc.common.figure_io import _pair_fname
     for label, t0, t1 in spans:
         keep = (times >= float(t0)) & (times <= float(t1))
         if not keep.any():

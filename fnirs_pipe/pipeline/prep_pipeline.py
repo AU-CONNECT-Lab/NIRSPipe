@@ -83,7 +83,7 @@ def mark_bad_channels(
     Raises StageError if the criteria leave no usable channel.
     """
     from fnirs_pipe.qc.metrics import resolve_cutoffs, screen_channels, screening_scores
-    from fnirs_pipe.qc.screen_scope import resolve_screen_scope
+    from fnirs_pipe.qc.common.screen_scope import resolve_screen_scope
 
     cutoffs = resolve_cutoffs(sci=threshold, psp=psp_threshold, good_frac=min_good_frac)
     scope = resolve_screen_scope(raw_od, screen_scope)

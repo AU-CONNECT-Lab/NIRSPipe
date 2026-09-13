@@ -8,7 +8,7 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from fnirs_pipe.qc.figure_io import extract_markers as _extract_markers
+from fnirs_pipe.qc.common.figure_io import extract_markers as _extract_markers
 from fnirs_pipe.qc.metrics.hyper import (  # noqa: F401  (re-exported for the panels)
     NULL_ALPHA_PCT, _ch_kept_by_member, sci_of,
 )

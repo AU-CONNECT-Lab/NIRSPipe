@@ -88,7 +88,7 @@ def _provenance_elements(output_dir: str | None) -> list | None:
     if not output_dir:
         return None
     try:
-        from fnirs_pipe.qc.provenance import scan
+        from fnirs_pipe.qc.common.provenance import scan
 
         root = Path(output_dir)
         for nirs_dir in [*sorted(root.glob("sub-*/nirs")), *sorted(root.glob("group-*/nirs"))]:

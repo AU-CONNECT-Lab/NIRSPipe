@@ -9,7 +9,7 @@ import json
 
 import pytest
 
-from fnirs_pipe.qc.provenance import scan, to_mermaid, write_provenance
+from fnirs_pipe.qc.common.provenance import scan, to_mermaid, write_provenance
 
 
 def _sidecar(directory, name, step=None, sources=(), data_file=True, **extra):
@@ -284,7 +284,7 @@ def test_only_a_checkpoint_loses_its_edges(tmp_path):
 
 def test_the_table_names_the_record_rather_than_the_metrics(tmp_path):
     # 121 metric names in one cell is a paragraph nobody reads; they stay in the record
-    from fnirs_pipe.qc.report_shell import provenance_rows
+    from fnirs_pipe.qc.common.report_shell import provenance_rows
 
     _chain_plus_record(tmp_path)
     rows = provenance_rows(tmp_path, "denoise", scope="sub-01")

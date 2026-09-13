@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from fnirs_pipe.qc.provenance import Node
+    from fnirs_pipe.qc.common.provenance import Node
 
 # ---- Palette (shared with the interface DAG, fnirs_pipe/interface/pages/analysis.py) ----
 # Signal domain -> outline colour. Reading left to right the colour tracks the domain

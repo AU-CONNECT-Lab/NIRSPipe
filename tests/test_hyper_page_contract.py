@@ -70,7 +70,7 @@ def dyad():
 @pytest.fixture(scope="module")
 def pages(dyad, tmp_path_factory) -> "list[Path]":
     """The run's page and one per condition, crossed and over both chromophores."""
-    from fnirs_pipe.qc.hyper_report import build_hyper_post_report
+    from fnirs_pipe.qc.hyper.hyper_report import build_hyper_post_report
 
     out = tmp_path_factory.mktemp("hyper_pages")
     path = build_hyper_post_report(
@@ -246,14 +246,14 @@ CAVEAT = "Four to six cycles is the usual minimum"
     ((0.0, 60.0), 0.02, 1.2),
 ])
 def test_the_count_is_the_window_in_units_of_the_slowest_period(window, band_fmin, expected):
-    from fnirs_pipe.qc.hyper_report import _band_cycles
+    from fnirs_pipe.qc.hyper.hyper_report import _band_cycles
 
     assert _band_cycles(window, band_fmin) == pytest.approx(expected, abs=0.05)
 
 
 def test_a_run_with_no_window_has_no_count():
     """The whole-run page describes the recording, which has no block to be short."""
-    from fnirs_pipe.qc.hyper_report import _band_cycles
+    from fnirs_pipe.qc.hyper.hyper_report import _band_cycles
 
     assert _band_cycles(None, 0.06) is None
 
@@ -270,7 +270,7 @@ def test_a_long_enough_condition_prints_the_count_without_the_caveat(pages):
 
 def test_a_condition_too_short_for_the_band_says_so(dyad, tmp_path_factory):
     """The same blocks against a 0.01 Hz floor: 1.8 cycles, and the page has to say it."""
-    from fnirs_pipe.qc.hyper_report import build_hyper_post_report
+    from fnirs_pipe.qc.hyper.hyper_report import build_hyper_post_report
 
     out = tmp_path_factory.mktemp("hyper_short")
     path = build_hyper_post_report(

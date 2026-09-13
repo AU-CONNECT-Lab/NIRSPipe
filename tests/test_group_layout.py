@@ -65,7 +65,7 @@ def test_a_subject_folder_is_named_the_same_way_from_either_form(tmp_path):
 
 def test_the_raw_qc_report_lands_in_the_subject_folder(tmp_path):
     """It used to sit loose in the root, which for 23 dyads is 230 files beside the study ones."""
-    from fnirs_pipe.qc.prep_raw_report import build_prep_raw_report
+    from fnirs_pipe.qc.subject.prep_raw_report import build_prep_raw_report
 
     out = subject_report_dir(tmp_path, "01") / "sub-01_task-hold_desc-raw_nirs.html"
     build_prep_raw_report([], out, cardiac_l_freq=0.7, cardiac_h_freq=1.5, dpf=[6.0])

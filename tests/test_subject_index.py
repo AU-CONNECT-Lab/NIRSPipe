@@ -7,8 +7,8 @@ these build a subject folder rather than running anything.
 
 import json
 
-from fnirs_pipe.qc.report_shell import outlier_flags as _outlier_flags
-from fnirs_pipe.qc.subject_index import (
+from fnirs_pipe.qc.common.report_shell import outlier_flags as _outlier_flags
+from fnirs_pipe.qc.subject.subject_index import (
     _COLUMNS,
     _links,
     collect_bad_channels,

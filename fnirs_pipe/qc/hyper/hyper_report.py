@@ -17,7 +17,7 @@ from fnirs_pipe.pipeline.hyper_post import HyperPostResult
 from fnirs_pipe.pipeline.hyperscanning import (
     GroupEntry, alignment_params, unfiltered_stage_note,
 )
-from fnirs_pipe.qc.channel_table import (
+from fnirs_pipe.qc.common.channel_table import (
     channel_columns, channel_rows, format_rows, pair_rows,
 )
 from fnirs_pipe.qc.boilerplate import collect_software_versions
@@ -26,7 +26,7 @@ from fnirs_pipe.qc.boilerplate.vocabulary import (
     metric_summary,
 )
 from fnirs_pipe.qc.metrics import SCI_PASS
-from fnirs_pipe.qc.figure_io import (
+from fnirs_pipe.qc.common.figure_io import (
     _fig_href,
     _pair_fname,
     pair_slug,
@@ -34,15 +34,15 @@ from fnirs_pipe.qc.figure_io import (
     save_png,
 )
 from fnirs_pipe.qc.figures.hyper_figures import _cond_colors
-from fnirs_pipe.qc.hyper_raw_writer import _process_hyper_raw_group
-from fnirs_pipe.qc.report_shell import (
+from fnirs_pipe.qc.hyper.hyper_raw_writer import _process_hyper_raw_group
+from fnirs_pipe.qc.common.report_shell import (
     footer_vars,
     guard,
     note,
     page_vars,
     render,
 )
-from fnirs_pipe.qc.windows import crop_provenance, markers_on_data_axis
+from fnirs_pipe.qc.common.windows import crop_provenance, markers_on_data_axis
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("qc.hyper_report")
@@ -245,7 +245,7 @@ def condition_subject_metrics(
     Each value is what :func:`subject_metric_tables` returns, one table per channel set.
 
     Every number is read out of each member's ``by_condition`` record section, which
-    :func:`~fnirs_pipe.qc.sqm_record.condition_sections` wrote once after that member's
+    :func:`~fnirs_pipe.qc.subject.sqm_record.condition_sections` wrote once after that member's
     pipeline finished. Nothing is measured here and nothing is sliced a second time, so a
     channel's SCI under one condition cannot differ between a subject page and a dyad page.
 
@@ -260,7 +260,7 @@ def condition_subject_metrics(
     absent, which is the honest answer: the values cannot be recovered from the whole-run
     scalars.
     """
-    from fnirs_pipe.qc.record_views import condition_set_view
+    from fnirs_pipe.qc.common.record_views import condition_set_view
 
     if not windows:
         return {}
@@ -1166,7 +1166,7 @@ def build_hyper_post_report(
     # `fnirs-qc provenance` uses, so re-running that refreshes the image this report links.
     provenance_path = None
     with guard("Provenance diagram", errors, scope):
-        from fnirs_pipe.qc.provenance import write_provenance
+        from fnirs_pipe.qc.common.provenance import write_provenance
 
         for written in write_provenance(
             group_data_dir(output_dir, group_id),

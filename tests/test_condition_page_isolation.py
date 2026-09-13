@@ -11,7 +11,7 @@ catches what it was not handed, by looking at the assembled values rather than a
 names somebody has to remember to extend.
 """
 
-from fnirs_pipe.qc.report import (
+from fnirs_pipe.qc.subject.report import (
     _blanked, _carpet_views, _condition_carpet, _figure_leaks,
     _segments_in_window,
 )
@@ -215,7 +215,7 @@ def test_a_condition_with_nothing_flagged_gets_no_zoom():
 
 def test_the_shell_reads_page_heading_and_page_title():
     # the keys a page must set to be titled at all
-    from fnirs_pipe.qc.report_shell import page_vars
+    from fnirs_pipe.qc.common.report_shell import page_vars
     keys = page_vars(title="t", heading="h")
     assert keys["page_heading"] == "h" and keys["page_title"] == "t"
     assert "heading" not in keys
@@ -226,7 +226,7 @@ def test_a_condition_page_sets_the_keys_the_shell_reads():
     # run's own title and the Scope row was the only thing telling them apart
     import inspect
 
-    from fnirs_pipe.qc.report import _write_condition_reports
+    from fnirs_pipe.qc.subject.report import _write_condition_reports
 
     source = inspect.getsource(_write_condition_reports)
     assert '"page_heading": f"{report_vars[' in source

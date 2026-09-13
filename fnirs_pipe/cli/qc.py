@@ -42,7 +42,7 @@ def cmd_prep_raw(
 
     from fnirs_pipe.io.bids import bids_label, get_layout, get_nirs_files
     from fnirs_pipe.io.derivatives import subject_report_dir
-    from fnirs_pipe.qc.prep_raw_report import build_prep_raw_report
+    from fnirs_pipe.qc.subject.prep_raw_report import build_prep_raw_report
 
     if (epoch_tmin is None) != (epoch_tmax is None):
         print("Error: --epoch-tmin and --epoch-tmax must be given together.", file=sys.stderr)
@@ -105,7 +105,7 @@ def cmd_prep_raw(
 
     # rebuilt rather than added to: it is assembled from the records on disk, so it comes
     # back carrying the pipeline's reports too where a run has been through both commands
-    from fnirs_pipe.qc.subject_index import write_subject_index
+    from fnirs_pipe.qc.subject.subject_index import write_subject_index
     try:
         index = write_subject_index(participant_label,
                                     subject_report_dir(output_dir, participant_label),
@@ -151,7 +151,7 @@ def cmd_hyper_raw(
         normalize_raws,
         trim_to_shortest,
     )
-    from fnirs_pipe.qc.hyper_report import build_hyper_report
+    from fnirs_pipe.qc.hyper.hyper_report import build_hyper_report
 
     groups = _select_groups(pairs_csv, group_id, task_label)
     ses = session_label[0] if session_label else None
@@ -205,7 +205,7 @@ def cmd_hyper_raw(
 
 def cmd_group_raw(output_dir: Path) -> None:
     """Aggregate per-subject SQMs into cohort_nirs.tsv + cohort_nirs.html."""
-    from fnirs_pipe.qc.group_writer import build_group_raw_report
+    from fnirs_pipe.qc.subject.group_writer import build_group_raw_report
 
     path = build_group_raw_report(output_dir)
     print(f"report -> {path}")
@@ -213,7 +213,7 @@ def cmd_group_raw(output_dir: Path) -> None:
 
 def cmd_group_hyper_raw(output_dir: Path) -> None:
     """Aggregate per-group hyper SQMs into cohort_hyper_nirs.tsv + cohort_hyper_nirs.html."""
-    from fnirs_pipe.qc.group_hyper_writer import build_group_hyper_report
+    from fnirs_pipe.qc.hyper.group_hyper_writer import build_group_hyper_report
 
     path = build_group_hyper_report(output_dir)
     if path is None:
@@ -227,7 +227,7 @@ def cmd_provenance(output_dir: Path) -> None:
 
     Reads the JSON sidecars already on disk, so it works on any past run.
     """
-    from fnirs_pipe.qc.provenance import write_provenance
+    from fnirs_pipe.qc.common.provenance import write_provenance
 
     # the root is always searched too: hyper-raw writes its group TSVs there, not under nirs/
     targets = [
@@ -236,7 +236,7 @@ def cmd_provenance(output_dir: Path) -> None:
         output_dir,
     ]
 
-    from fnirs_pipe.qc.sqm_record import scan_runs
+    from fnirs_pipe.qc.subject.sqm_record import scan_runs
 
     total = 0
     for nirs_dir in targets:
