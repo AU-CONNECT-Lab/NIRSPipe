@@ -364,8 +364,14 @@ def _blocks(raw: "mne.io.Raw | None") -> list[dict]:
 # Figure: shared usable time
 # ---------------------------------------------------------------------------
 
-_SERIES_ROWS = (("sci", "SCI (10 s)", "sci"), ("psp", "PSP (10 s)", "psp"),
-                ("gvtd", "GVTD", None))
+# (key, axis label, whether the row is divided by each member's own median). GVTD is an RMS
+# of optical-density derivatives in each recording's own units, so two members' raw traces
+# are not on one scale and "who moved more" is the one reading a shared axis cannot support.
+# Dividing by the member's own median makes 1.0 "this member's usual level" for both, which
+# is the comparison the row is drawn for. The median, not the stored threshold: `gvtd_thresh`
+# sits an order of magnitude below `gvtd_mean` on d01 and is not a scale to normalise by.
+_SERIES_ROWS = (("sci", "SCI (10 s)", False), ("psp", "PSP (10 s)", False),
+                ("gvtd", "GVTD (x its own median)", True))
 _LEAD_COLOURS = ("#3498db", "#e67e22", "#16a085", "#8e44ad")
 
 
@@ -384,8 +390,10 @@ def build_usable_time(
     lose is a different one. That intersection is the carpet at the bottom.
 
     Over it, each member's long-channel means for the metrics the mask is made of, so the
-    panel says why a pair went and not only that it did. A condition bar names the blocks and
-    dotted rules carry their edges down through the series.
+    panel says why a pair went and not only that it did, plus motion, which those two are
+    blind to by construction: a window can decouple because the member moved, and SCI and PSP
+    cannot tell you that. A condition bar names the blocks and dotted rules carry their edges
+    down through the series.
 
     None when the grid holds no pair.
     """
@@ -401,7 +409,7 @@ def build_usable_time(
     order = np.argsort(lost)[::-1]
     labels = [f"{pairs[i]}   {lost[i] * 100:.0f}%" if lost[i] else pairs[i] for i in order]
 
-    have = [(key, label) for key, label, _need in _SERIES_ROWS
+    have = [(key, label, scaled) for key, label, scaled in _SERIES_ROWS
             if any(key in (series.get(sid) or {}) for sid in subject_ids)]
     conditions = conditions or {}
     bar_rows = 1 if conditions else 0
@@ -427,18 +435,22 @@ def build_usable_time(
                          row=1, col=1)
 
     lines = dict(zip(subject_ids, _LEAD_COLOURS))
-    for r, (key, label) in enumerate(have, start=bar_rows + 1):
+    for r, (key, label, scaled) in enumerate(have, start=bar_rows + 1):
         for sid in subject_ids:
             s = series.get(sid) or {}
             if key not in s:
                 continue
+            y = np.asarray(s[key], dtype=float)
+            if scaled:
+                mid = float(np.nanmedian(y))
+                y = y / mid if np.isfinite(mid) and mid else y
             fig.add_trace(go.Scatter(
-                x=np.asarray(s["t"]), y=np.asarray(s[key]), mode="lines", name=sid,
+                x=np.asarray(s["t"]), y=y, mode="lines", name=sid,
                 legendgroup=sid, showlegend=(r == bar_rows + 1),
-                line=dict(color=lines[sid], width=1.4), opacity=0.9,
+                line=dict(color=lines[sid], width=1.9), opacity=0.95,
                 hovertemplate=f"t=%{{x:.0f}}s<br>{label} %{{y:.4g}}<extra></extra>",
             ), row=r, col=1)
-        line = (cutoffs or {}).get(key)
+        line = 1.0 if scaled else (cutoffs or {}).get(key)
         if line is not None:
             fig.add_hline(y=float(line), line_color="#adb5bd", line_width=1,
                           line_dash="dot", row=r, col=1)
@@ -536,7 +548,7 @@ def _head_glyph(fig, geo, scope, values, row, col, title, cmin, cmax, bar) -> in
     short channel reads as a contamination check rather than a second map. That report can
     give them a row of their own; one head cannot, so the **shape** carries the distinction:
     a long channel is a bar of small discs along its path, a short one a single larger disc
-    inside a dark ring.
+    inside a grey ring.
     """
     g = geo[scope]
     short = scope == "short"
@@ -546,10 +558,10 @@ def _head_glyph(fig, geo, scope, values, row, col, title, cmin, cmax, bar) -> in
                     symbol="circle",
                     color=np.repeat(values, g["per_pair"]).astype(np.float32),
                     colorscale=_HEAD_SCALE, cmin=cmin, cmax=cmax, showscale=bar,
-                    # a dark ring, which reads as a separate object against both the head
+                    # a grey ring, which reads as a separate object against both the head
                     # and the bars while leaving the fill on the shared colour scale. White
-                    # was tried and disappears into the page.
-                    line=dict(width=1.6 if short else 0, color="#34495e"),
+                    # disappears into the page and near-black fights the fill for attention.
+                    line=dict(width=1.6 if short else 0, color="#98a4ae"),
                     colorbar=dict(title=dict(text=title, side="right", font=dict(size=10)),
                                   thickness=12, len=0.72, tickfont=dict(size=9))),
         hovertemplate="%{text}<br>%{marker.color:.3f}<extra></extra>",
@@ -662,11 +674,18 @@ def build_head_slider(
                 return name
         return "between blocks"
 
-    def caption(k: int) -> list[dict]:
-        return [dict(x=0.5, y=1.10, xref="paper", yref="paper", showarrow=False,
-                     text=f"<b>{task_at(t[k])}</b>"
-                          f"<span style='color:#8a949e'> &nbsp;t = {t[k]:.0f} s</span>",
-                     font=dict(size=12, color="#34495e"))]
+    def caption(k: int) -> dict:
+        """The block the slider sits in, as the figure's title.
+
+        A frame that hands back ``layout.annotations`` overwrites the layout's own array
+        **by index**, so a one-element caption lands on subplot title 0 and the real caption,
+        sitting at index 2, never updates: the first head loses its name and the caption is
+        frozen at the first frame. A title has no index to collide with.
+        """
+        return dict(text=f"<b>{task_at(t[k])}</b>"
+                         f"<span style='color:#8a949e'> &nbsp;t = {t[k]:.0f} s</span>",
+                    x=0.5, xanchor="center", y=0.98, yanchor="top",
+                    font=dict(size=13, color="#34495e"))
 
     fig = make_subplots(rows=1, cols=len(subject_ids), subplot_titles=list(subject_ids),
                         horizontal_spacing=0.04)
@@ -696,15 +715,15 @@ def build_head_slider(
                      geo_by_sub[sid][scope]["per_pair"]).astype(np.float32)))
                        for sid, scope, _i in drawn],
                  traces=[i for _s, _sc, i in drawn],
-                 layout=dict(annotations=caption(k)))
+                 layout=dict(title=caption(k)))
         for k in frames_at
     ]
     _head_axes(fig, geo_by_sub, 1, len(subject_ids))
     fig.update_annotations(font=dict(size=11, color="#6c757d"))
     fig.update_layout(
-        height=420, plot_bgcolor="white", showlegend=False,
-        margin=dict(l=20, r=78, t=62, b=76),
-        annotations=list(fig.layout.annotations) + caption(frames_at[0]),
+        height=460, plot_bgcolor="white", showlegend=False,
+        margin=dict(l=20, r=78, t=78, b=76),
+        title=caption(frames_at[0]),
         sliders=[dict(active=0, y=0, yanchor="top", pad=dict(t=30, b=4),
                       currentvalue=dict(visible=False), font=dict(size=9),
                       steps=[dict(method="animate", label=fr.name,

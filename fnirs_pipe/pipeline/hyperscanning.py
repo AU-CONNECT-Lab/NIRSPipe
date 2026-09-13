@@ -367,6 +367,22 @@ def compute_group_sqm_raw(
             if counted["mask"] is not None:
                 screen_windows = {k: counted[k] for k in
                                   ("mask", "centers", "sci", "psp", "channel_order")}
+                # motion on the same window grid, which the screening pass does not measure:
+                # SCI and PSP are blind to movement by construction, so without this row the
+                # dyad panel can say a pair decoupled but never that the member moved
+                try:
+                    from fnirs_pipe.qc.metrics.gvtd import compute_windowed_gvtd
+                    means, _p95, gvtd_t = compute_windowed_gvtd(raw_od)
+                    if len(gvtd_t) == len(counted["centers"]):
+                        screen_windows["gvtd"] = means
+                    else:
+                        logger.warning("%s: windowed GVTD landed on %d windows against the "
+                                       "screening's %d; dropping the motion row rather than "
+                                       "drawing it on the wrong axis", entry.subject_id,
+                                       len(gvtd_t), len(counted["centers"]))
+                except Exception:
+                    logger.warning("%s: windowed GVTD could not be measured",
+                                   entry.subject_id, exc_info=True)
             screen = screening_scores(raw_od, cardiac_l_freq, cardiac_h_freq,
                                       have={"sci": sci_cw,
                                             "good_frac": counted["fractions"]},
