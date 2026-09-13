@@ -13,6 +13,7 @@ import numpy as np
 from fnirs_pipe.io.derivatives import (
     group_data_dir, group_report_dir, subject_report_dir,
 )
+from fnirs_pipe.pipeline.hyper_post import HyperPostResult
 from fnirs_pipe.pipeline.hyperscanning import (
     GroupEntry, alignment_params, unfiltered_stage_note,
 )
@@ -537,6 +538,93 @@ def build_hyper_report(
     return output_path
 
 
+def _slice_pair(df, pair: "tuple[str, str] | None"):
+    """The rows of a band frame belonging to one pairing.
+
+    The frames are long over every pairing in the group. Everything downstream keys on
+    the site pair alone, so handing it the whole frame lets a group of three overwrite
+    one pairing's cell with another's; slicing here means no consumer has to know the
+    column exists. A frame without the columns is from a tree written before they were
+    added and is passed through.
+    """
+    if df is None or pair is None or not {"sub1", "sub2"}.issubset(
+            getattr(df, "columns", [])):
+        return df
+    return df[(df["sub1"] == pair[0]) & (df["sub2"] == pair[1])]
+
+
+def _number_table(bands: dict, isc: "dict | None", axis: list[str], kind: str,
+                  chroma: tuple) -> dict:
+    """Every number behind one scope's panels, one row per pairing.
+
+    ::
+
+      {"hbo": band frame, "hbr": ...} + {"hbo": (matrix, names), ...}
+        -> {"kind": "channel",
+            "rows": [{"a": "S1_D1", "b": "S1_D2",
+                      "cells": {"HbO coherence": "0.241", "HbO ISC": "+0.067"}}]}
+
+    The panels above show these as colour and the TSVs hold them to full precision; this
+    is the same numbers on the page, so that reading one off a cell does not mean opening
+    a file. Every value is looked up by label pair, never by position, which is the rule
+    the matrices follow and for the same reason: two members can differ in what they
+    rejected.
+
+    Cells are keyed by column name rather than by position because the channel table and
+    the ROI table sit in one grid under one header, and only the channel one has an ISC.
+
+    ``valid`` is the share of the pairing's band cells that survived the cone of
+    influence, the one number behind a band mean that no figure here shows. A pairing
+    whose coherence rests on a third of its window is not the same measurement as one
+    that kept all of it.
+
+    Rows are every pairing that carries at least one value, so an uncrossed run shows the
+    coherence on the diagonal and the ISC everywhere, which is what those two actually
+    computed. ``isc`` is None for the ROI table, there being no ROI-level ISC.
+    """
+    cells: dict = {}
+
+    def _put(pair: tuple, column: str, text: str) -> None:
+        cells.setdefault(pair, {})[column] = text
+
+    for ch_type in chroma:
+        name = _CHROMA_LABEL[ch_type]
+        df = bands.get(ch_type)
+        if df is None or "label" not in getattr(df, "columns", []):
+            continue
+        for row in df.itertuples():
+            # an uncrossed run has no `label2`: every row of it is a site against the
+            # other member's copy of the same site, which is this table's diagonal
+            pair = (row.label, getattr(row, "label2", row.label))
+            _put(pair, f"{name} coherence", f"{row.coherence:.3f}")
+            frac = getattr(row, "n_valid_frac", None)
+            if frac is not None and np.isfinite(frac):
+                _put(pair, f"{name} valid", f"{100 * frac:.0f}%")
+
+    for ch_type in (chroma if isc else ()):
+        mat, names = isc.get(ch_type) or (None, None)
+        if mat is None or not names:
+            continue
+        mat = np.asarray(mat, dtype=float)
+        index = {name: i for i, name in enumerate(names)}
+        for a in axis:
+            for b in axis:
+                if a in index and b in index and np.isfinite(mat[index[a], index[b]]):
+                    _put((a, b), f"{_CHROMA_LABEL[ch_type]} ISC",
+                         f"{mat[index[a], index[b]]:+.3f}")
+
+    # the columns this table actually filled, in a fixed order rather than in the order
+    # the first pairing happened to fill them: the header is shared with the other table
+    order = ([f"{_CHROMA_LABEL[c]} {what}" for c in chroma
+              for what in ("coherence", "valid")]
+             + [f"{_CHROMA_LABEL[c]} ISC" for c in (chroma if isc else ())])
+    used = {col for pair in cells.values() for col in pair}
+    rows = [{"a": a, "b": b, "cells": cells[(a, b)]}
+            for a in axis for b in axis if (a, b) in cells]
+    return ({"kind": kind, "columns": [c for c in order if c in used], "rows": rows}
+            if rows else {})
+
+
 def build_hyper_post_report(
     group_id: str,
     task: str,
@@ -568,6 +656,7 @@ def build_hyper_post_report(
     sep_bands=None,
     cond_windows: "list[tuple[str, float, float]] | None" = None,
     analysis_window: "tuple[float, float] | None" = None,
+    result: "HyperPostResult | None" = None,
 ) -> Path:
     """Build hyperscanning post-QC report.
 
@@ -634,6 +723,13 @@ def build_hyper_post_report(
     ``[wtc_fmin, wtc_fmax]`` plus margin, which is most of the runtime and, given that the
     scales land on pycwt's own grid and the margin exceeds its scale-smoothing window,
     reproduces the unrestricted coherences bit for bit.
+
+    ``result`` is an already-computed :class:`~fnirs_pipe.pipeline.hyper_post.HyperPostResult`.
+    Passed one, this draws it and runs no transform, which is how a page is rebuilt after a
+    figure or a caption changes without paying for the wavelet pass again. Left at None the
+    analysis is run here from the ``wtc_*`` arguments, which is what the CLI does. The
+    arguments that only describe the analysis are then ignored, since the result already
+    carries what they resolved to.
 
     ``wtc_arrow_min`` is the coherence a cell has to reach before its phase arrow is drawn
     when no Monte Carlo level was computed. Display only: no table or figure value changes
@@ -904,20 +1000,6 @@ def build_hyper_post_report(
                 pair=pair))
         return {"run_figs": run_figs, "cond_figs": cond_figs}
 
-    def _slice_pair(df, pair: "tuple[str, str] | None"):
-        """The rows of a band frame belonging to one pairing.
-
-        The frames are long over every pairing in the group. Everything downstream keys on
-        the site pair alone, so handing it the whole frame lets a group of three overwrite
-        one pairing's cell with another's; slicing here means no consumer has to know the
-        column exists. A frame without the columns is from a tree written before they were
-        added and is passed through.
-        """
-        if df is None or pair is None or not {"sub1", "sub2"}.issubset(
-                getattr(df, "columns", [])):
-            return df
-        return df[(df["sub1"] == pair[0]) & (df["sub2"] == pair[1])]
-
     def _matrix_set(bands: dict, suffix: str, what: str,
                     pair: "tuple[str, str] | None" = None) -> dict:
         """The two cross matrices for one scope, both chromophores on one pair of axes.
@@ -973,25 +1055,27 @@ def build_hyper_post_report(
     # Everything below draws what this returns. The transform, the band means, the ROI
     # grouping, the correlation and the six kinds of TSV are one pipeline stage, and the
     # report reads its result the way a subject report reads an SQM record off disk.
-    config = HyperPostConfig(
-        wtc_fmin=wtc_fmin, wtc_fmax=wtc_fmax,
-        wtc_band_fmin=wtc_band_fmin, wtc_band_fmax=wtc_band_fmax,
-        wtc_significance=wtc_significance, wtc_seed=wtc_seed, wtc_mc_count=wtc_mc_count,
-        wtc_channel_cross=wtc_channel_cross, wtc_by_condition=wtc_by_condition,
-        wtc_cond_pad_s=wtc_cond_pad_s, wtc_limit_scales=wtc_limit_scales,
-        wtc_save_maps=wtc_save_maps, wtc_mask_coi=wtc_mask_coi,
-        wtc_roi_min_channels=wtc_roi_min_channels, wtc_chroma=wtc_chroma,
-        roi_map=roi_map, sep_bands=sep_bands, analysis_window=analysis_window,
-    )
-    result = run_hyper_post(
-        group_id, task, aligned_raws, output_dir, config,
-        subject_ids=subject_ids, pairings=pairings, align_info=align_info,
-        cond_windows=cond_windows, errors=errors, notes=notes, scope=scope,
-    )
+    if result is None:
+        result = run_hyper_post(
+            group_id, task, aligned_raws, output_dir,
+            HyperPostConfig(
+                wtc_fmin=wtc_fmin, wtc_fmax=wtc_fmax,
+                wtc_band_fmin=wtc_band_fmin, wtc_band_fmax=wtc_band_fmax,
+                wtc_significance=wtc_significance, wtc_seed=wtc_seed,
+                wtc_mc_count=wtc_mc_count, wtc_channel_cross=wtc_channel_cross,
+                wtc_by_condition=wtc_by_condition, wtc_cond_pad_s=wtc_cond_pad_s,
+                wtc_limit_scales=wtc_limit_scales, wtc_save_maps=wtc_save_maps,
+                wtc_mask_coi=wtc_mask_coi, wtc_roi_min_channels=wtc_roi_min_channels,
+                wtc_chroma=wtc_chroma, roi_map=roi_map, sep_bands=sep_bands,
+                analysis_window=analysis_window,
+            ),
+            subject_ids=subject_ids, pairings=pairings, align_info=align_info,
+            cond_windows=cond_windows, errors=errors, notes=notes, scope=scope,
+        )
     chroma       = result.chroma
     band_fmin    = result.band_fmin
     band_fmax    = result.band_fmax
-    cond_pad_s   = config.cond_pad_s
+    cond_pad_s   = result.cond_pad_s
     cond_windows = result.cond_windows
     chan_axis    = result.chan_axis
     roi_labels   = result.roi_labels
@@ -1099,76 +1183,6 @@ def build_hyper_post_report(
     methods = group_methods(output_dir, group, group_data_dir(output_dir, group_id),
                             own_steps, versions, notes, scope)
 
-    def _number_table(bands: dict, isc: "dict | None", axis: list[str], kind: str) -> dict:
-        """Every number behind one scope's panels, one row per pairing.
-
-        ::
-
-          {"hbo": band frame, "hbr": ...} + {"hbo": (matrix, names), ...}
-            -> {"kind": "channel",
-                "rows": [{"a": "S1_D1", "b": "S1_D2",
-                          "cells": {"HbO coherence": "0.241", "HbO ISC": "+0.067"}}]}
-
-        The panels above show these as colour and the TSVs hold them to full precision; this
-        is the same numbers on the page, so that reading one off a cell does not mean opening
-        a file. Every value is looked up by label pair, never by position, which is the rule
-        the matrices follow and for the same reason: two members can differ in what they
-        rejected.
-
-        Cells are keyed by column name rather than by position because the channel table and
-        the ROI table sit in one grid under one header, and only the channel one has an ISC.
-
-        ``valid`` is the share of the pairing's band cells that survived the cone of
-        influence, the one number behind a band mean that no figure here shows. A pairing
-        whose coherence rests on a third of its window is not the same measurement as one
-        that kept all of it.
-
-        Rows are every pairing that carries at least one value, so an uncrossed run shows the
-        coherence on the diagonal and the ISC everywhere, which is what those two actually
-        computed. ``isc`` is None for the ROI table, there being no ROI-level ISC.
-        """
-        cells: dict = {}
-
-        def _put(pair: tuple, column: str, text: str) -> None:
-            cells.setdefault(pair, {})[column] = text
-
-        for ch_type in chroma:
-            name = _CHROMA_LABEL[ch_type]
-            df = bands.get(ch_type)
-            if df is None or "label" not in getattr(df, "columns", []):
-                continue
-            for row in df.itertuples():
-                # an uncrossed run has no `label2`: every row of it is a site against the
-                # other member's copy of the same site, which is this table's diagonal
-                pair = (row.label, getattr(row, "label2", row.label))
-                _put(pair, f"{name} coherence", f"{row.coherence:.3f}")
-                frac = getattr(row, "n_valid_frac", None)
-                if frac is not None and np.isfinite(frac):
-                    _put(pair, f"{name} valid", f"{100 * frac:.0f}%")
-
-        for ch_type in (chroma if isc else ()):
-            mat, names = isc.get(ch_type) or (None, None)
-            if mat is None or not names:
-                continue
-            mat = np.asarray(mat, dtype=float)
-            index = {name: i for i, name in enumerate(names)}
-            for a in axis:
-                for b in axis:
-                    if a in index and b in index and np.isfinite(mat[index[a], index[b]]):
-                        _put((a, b), f"{_CHROMA_LABEL[ch_type]} ISC",
-                             f"{mat[index[a], index[b]]:+.3f}")
-
-        # the columns this table actually filled, in a fixed order rather than in the order
-        # the first pairing happened to fill them: the header is shared with the other table
-        order = ([f"{_CHROMA_LABEL[c]} {what}" for c in chroma
-                  for what in ("coherence", "valid")]
-                 + [f"{_CHROMA_LABEL[c]} ISC" for c in (chroma if isc else ())])
-        used = {col for pair in cells.values() for col in pair}
-        rows = [{"a": a, "b": b, "cells": cells[(a, b)]}
-                for a in axis for b in axis if (a, b) in cells]
-        return ({"kind": kind, "columns": [c for c in order if c in used], "rows": rows}
-                if rows else {})
-
     def _render_page(figs: dict, matrices: dict, band_frames: dict, label: "str | None",
                      window: "tuple[float, float] | None",
                      pair: "tuple[str, str] | None" = None) -> Path:
@@ -1205,9 +1219,9 @@ def build_hyper_post_report(
         number_tables = [t for t in (
             _number_table({c: _slice_pair(bands[c].get("chan"), pair) for c in chroma},
                           (isc_values.get(pair) or {}).get(label) or {},
-                          chan_axis, "channel"),
+                          chan_axis, "channel", chroma),
             _number_table({c: _slice_pair(bands[c].get("roichan"), pair) for c in chroma},
-                          None, roi_labels, "ROI"),
+                          None, roi_labels, "ROI", chroma),
         ) if t]
         # one header over both tables: the coherence columns they share, then the ISC the
         # channel table alone has

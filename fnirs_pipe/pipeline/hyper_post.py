@@ -12,13 +12,11 @@ The seam was already drawn: ``_wtc_pass`` carried the words "No figures here", b
 transform covers every pairing at once and a figure is of one pairing. This makes that
 sentence a module boundary. The report now takes a :class:`HyperPostResult` and draws it.
 
-What this buys today is that the parameter checks spread over the CLI and the report body
-have one home, in :class:`HyperPostConfig`, and that the analysis can be run and tested
-without drawing anything.
-
-What it does not yet buy is rebuilding a report without recomputing: ``build_hyper_post_report``
-still calls this itself rather than taking a :class:`HyperPostResult`. Turning that parameter
-round is the step that makes a redraw free, and the result carries what it would need.
+Three things follow. The parameter checks that were spread over the CLI and the report body
+have one home, in :class:`HyperPostConfig`. The analysis can be run and tested without
+drawing anything. And a report can be redrawn from a :class:`HyperPostResult` without a
+second wavelet transform, which is what ``build_hyper_post_report``'s ``result`` argument
+takes: left at None it calls this itself, so the CLI is unchanged.
 """
 
 from __future__ import annotations
@@ -110,6 +108,11 @@ class HyperPostResult:
     band_fmin: float
     band_fmax: float
     cond_windows: list
+    # how each condition was read: None means windowed out of the whole-run transform, a
+    # number means transformed on its own over a cut padded by that many seconds. The report
+    # points a window at the run's own ROI map only in the first case, so it needs this and
+    # would otherwise have to reach back into the config to get it
+    cond_pad_s: "float | None"
     chan_axis: list[str]
     roi_labels: list[str]
     roi_rows: list[dict]
@@ -189,15 +192,19 @@ def run_hyper_post(
     """
     from fnirs_pipe.exceptions import StageError
     from fnirs_pipe.io.derivatives import group_data_dir
-    from fnirs_pipe.pipeline.hyperscanning import (
+    from fnirs_pipe.pipeline.hyperscanning import _hyper_sidecar
+    # straight from synchrony, which defines them. hyperscanning re-exports the set, and
+    # taking them from there makes the coherence look like a property of the group loader
+    from fnirs_pipe.pipeline.synchrony import (
         WTCResult,
-        _hyper_sidecar,
+        compute_isc,
         compute_wtc,
+        long_axis_over,
         roi_mean_of_channels,
         window_result,
         wtc_band_mean,
+        wtc_grid_params,
     )
-    from fnirs_pipe.pipeline.synchrony import compute_isc, long_axis_over, wtc_grid_params
     from fnirs_pipe.qc.figure_io import _pair_fname, get_channel_pairs, pair_slug
     from fnirs_pipe.qc.report_shell import guard, note
     from fnirs_pipe.qc.windows import condition_windows
@@ -548,6 +555,7 @@ def run_hyper_post(
         band_fmin=band_fmin,
         band_fmax=band_fmax,
         cond_windows=cond_windows,
+        cond_pad_s=cond_pad_s,
         chan_axis=chan_axis,
         roi_labels=roi_labels,
         roi_rows=roi_rows,
