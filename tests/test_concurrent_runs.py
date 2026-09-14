@@ -13,6 +13,8 @@ import json
 import sqlite3
 from concurrent.futures import ThreadPoolExecutor
 
+import pytest
+
 from fnirs_pipe.io.derivatives import write_dataset_description
 from fnirs_pipe.utils import job_db
 
@@ -69,6 +71,21 @@ def test_a_reader_never_sees_a_half_written_file(tmp_path):
     assert not corrupt, f"a reader parsed a partial file: {corrupt[:3]}"
     assert not list(tmp_path.glob("*.tmp")), "a temporary was left behind"
     assert json.loads((tmp_path / "dataset_description.json").read_text())
+
+
+@pytest.mark.parametrize("exc", [OSError("disk full"), PermissionError("held open")])
+def test_a_write_that_cannot_finish_takes_its_temporary_with_it(tmp_path, monkeypatch, exc):
+    """The retry loop exists for PermissionError and gives up after `_REPLACE_TRIES`. Either
+    way the temporary has to go: it sits in the output root, where the next reader of the
+    tree finds a file that is neither BIDS nor anything else."""
+    def boom(src, dst):
+        raise exc
+
+    monkeypatch.setattr("fnirs_pipe.io.derivatives.os.replace", boom)
+    monkeypatch.setattr("fnirs_pipe.io.derivatives._REPLACE_WAIT_S", 0.0)
+    with pytest.raises(OSError):
+        write_dataset_description(tmp_path)
+    assert not list(tmp_path.glob("*.tmp")), "a failed write left its temporary behind"
 
 
 def test_a_run_that_finds_it_already_written_leaves_it_alone(tmp_path, monkeypatch):
@@ -144,3 +161,18 @@ def test_the_id_still_sorts_by_time(tmp_path, monkeypatch):
     late = job_db.log_execution(db_path=db, command_line="b", fnirs_pipe_version="0",
                                 input_dir="in", output_dir="out", subjects=["01"])
     assert early < late, "a later run with a smaller pid sorted first"
+
+
+def test_the_per_record_files_are_keyed_by_execution_too(tmp_path, monkeypatch):
+    """`_sqm` and `_outputs` name themselves after the subject and the millisecond, unlike
+    `_pipeline` and `_runs`. Two runs reaching one subject together would share the file."""
+    db = tmp_path / "logs" / "fnirs_pipe.db"
+    monkeypatch.setattr(job_db.time, "time", lambda: 1_800_000_000.123)
+
+    for execution_id in (1, 2):
+        job_db.log_sqm(db, execution_id, "01", "prep", {"sci": 0.9})
+        job_db.log_output(db, execution_id, "01", command="fnirs-pipe")
+
+    json_dir = db.parent / "json"
+    assert len(list((json_dir / "_sqm").glob("*.jsonl"))) == 2
+    assert len(list((json_dir / "_outputs").glob("*.jsonl"))) == 2

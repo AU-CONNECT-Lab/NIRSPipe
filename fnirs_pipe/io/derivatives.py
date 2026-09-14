@@ -285,14 +285,17 @@ def write_dataset_description(output_dir: Path) -> None:
         pass
 
     tmp = path.with_name(f".{path.name}.{os.getpid()}.{uuid4().hex[:8]}.tmp")
-    tmp.write_text(text)
-    for attempt in range(_REPLACE_TRIES):
-        try:
-            os.replace(tmp, path)
-            return
-        except PermissionError:
-            if attempt == _REPLACE_TRIES - 1:
-                tmp.unlink(missing_ok=True)
-                raise
-            time.sleep(_REPLACE_WAIT_S)
+    try:
+        tmp.write_text(text)
+        for attempt in range(_REPLACE_TRIES):
+            try:
+                os.replace(tmp, path)
+                return
+            except PermissionError:
+                if attempt == _REPLACE_TRIES - 1:
+                    raise
+                time.sleep(_REPLACE_WAIT_S)
+    finally:
+        # a successful replace has already consumed it; anything else must not leave it behind
+        tmp.unlink(missing_ok=True)
 

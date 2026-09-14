@@ -174,7 +174,7 @@ def log_sqm(
         **{k: v for k, v in sqm.items() if not isinstance(v, (dict, list))},
     }
     ts = int(time.time() * 1000)
-    path = _json_dir(db_path) / "_sqm" / f"sub-{subject}_{checkpoint}_{ts}.jsonl"
+    path = _json_dir(db_path) / "_sqm" / f"sub-{subject}_{checkpoint}_{execution_id}_{ts}.jsonl"
     _write_jsonl(path, record)
 
 
@@ -209,7 +209,7 @@ def log_output(
         "log_file_path": log_file_path,
     }
     ts = int(time.time() * 1000)
-    path = _json_dir(db_path) / "_outputs" / f"sub-{subject}_{ts}.jsonl"
+    path = _json_dir(db_path) / "_outputs" / f"sub-{subject}_{execution_id}_{ts}.jsonl"
     _write_jsonl(path, record)
 
 
