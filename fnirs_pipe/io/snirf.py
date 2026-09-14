@@ -96,7 +96,7 @@ def read_snirf(path: Path | str, **kwargs: Any) -> mne.io.Raw:
 def _patch_haemo_wavelengths(raw: mne.io.Raw) -> mne.io.Raw:
     # mne_nirs bug: list.index() on loc[9] fails for nan (nan != nan); sentinel floats
     # are harmless since the file still gets correct dataTypeLabel/dataType=99999.
-    # TODO: switch to pysnirf2 once it supports NumPy 2.x
+    # TODO: switch to pysnirf2 once a release carries its NumPy 2.x fix
     ch_types = raw.get_channel_types()
     if "hbo" not in ch_types and "hbr" not in ch_types:
         return raw

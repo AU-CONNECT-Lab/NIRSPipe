@@ -104,19 +104,18 @@ a bare-MNE run of the same chain. Reports are kept with the project notes outsid
 
 - **Spline motion correction** — still raises `NotImplementedError`; TDDR and wavelet are implemented ([pipeline/motion.py](fnirs_pipe/pipeline/motion.py))
 - **External regressors in confound regression** — built and then withheld: the flags are suppressed and the GUI control is gone, while extraction and the regression path stay. Reopening it needs an across-dyad comparison, and a tCCA-style orthogonalisation is the upgrade path if that comparison finds anything ([pipeline/glm.py](fnirs_pipe/pipeline/glm.py))
-- **Window the pseudo-dyad null by condition** — `--wtc-by-condition` reads each condition out of the whole-record coherence, but the phase-scrambled null it is compared against is still built from the whole recording. A short condition is therefore judged against a narrower spread than its own length warrants, which is anticonservative. `compute_wtc_pseudo` returns band means rather than maps, so it has to be told the window rather than windowed afterwards ([pipeline/synchrony.py](fnirs_pipe/pipeline/synchrony.py))
 
 ### QC enhancements
 
-- **ALFF/fALFF on a brain surface** — the flat map is drawn; projecting onto a surface needs head coordinates and mne_nirs ([qc/figures/rest_figures.py](fnirs_pipe/qc/figures/rest_figures.py))
+- **ALFF/fALFF on a brain surface** — the flat map is drawn; projecting onto a surface needs head coordinates and mne_nirs ([qc/figures/subject/rest_figures.py](fnirs_pipe/qc/figures/subject/rest_figures.py))
 - **Auto-generate roi.json from fOLD** — derive channel-to-region mapping from montage via `mne_nirs.io.fold_channel_specificity` (needs fOLD Excel DB), as an alternative to hand-written `--roi-mapping`
 
 ### Reports / viewer features (designed, not started)
 
 - **Per-step before/after comparison** — interactive channel-level signal comparison across preprocessing steps (OD → SCI → motion-corrected → haemo). Two steps have it: the motion step (per-channel detail, before against after) and denoising (`carpet_compare_figure`). The rest of the chain has nothing
-- **Multi-run QC comparison** — multi-row already present in `cohort_nirs.tsv`, but the report has no "group rows by subject" panel for within-subject reliability across runs ([qc/group_writer.py](fnirs_pipe/qc/group_writer.py))
+- **Multi-run QC comparison** — multi-row already present in `cohort_nirs.tsv`, but the report has no "group rows by subject" panel for within-subject reliability across runs ([qc/subject/group_writer.py](fnirs_pipe/qc/subject/group_writer.py))
 
 ### Infrastructure
 
-- **Switch SNIRF IO to pysnirf2** when it supports NumPy 2.x ([io/snirf.py](fnirs_pipe/io/snirf.py))
-- **Replace `dash_table.DataTable`** in the GUI before Dash removes it from the builtin components; four pages use it ([interface/pages/](fnirs_pipe/interface/pages/))
+- **Switch SNIRF IO to pysnirf2** — blocked upstream on a release, not on the code: the NumPy 2.x fix is on `main` but the newest package on PyPI predates it and fails at import ([io/snirf.py](fnirs_pipe/io/snirf.py))
+- **Replace `dash_table.DataTable`** in the GUI before Dash removes it from the builtin components; six tables across four pages, none using more than editing, row deletion and conditional styling ([interface/pages/](fnirs_pipe/interface/pages/))
