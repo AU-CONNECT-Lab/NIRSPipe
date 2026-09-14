@@ -10,7 +10,8 @@ def _build_parser() -> argparse.ArgumentParser:
         prog="fnirs-gui",
         description="Dash-based GUI for interactive fNIRS data inspection and rating.",
     )
-    p.add_argument("--port", type=int, default=8050, help="Local server port.")
+    p.add_argument("--port", type=int, default=None,
+                   help="Local server port. Default: 8050, or the next free port above it.")
     return p
 
 

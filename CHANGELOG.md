@@ -23,6 +23,8 @@ All notable changes to this project will be documented in this file.
 - **On a crossed run the pseudo-dyad null's `percentile` ranked the wrong cell.** A table already written can be re-ranked rather than recomputed
 - **The dyad report claimed the correlations were run on an unfiltered stage even when they were not.** The note fired on every run, whatever `--desc` pointed at, so the one case it exists to catch was indistinguishable from the rest
 - **Arrows and other non-ASCII characters in the log came out as mojibake on Windows**
+- **`fnirs-gui` and `fnirs-rate` refused to start with "address already in use" whenever their default port was taken**, by a viewer left running from an earlier session, by another app on the same port, or by a Windows reserved port range. A default port now moves up to the first free one and the log says where it landed. A port asked for with `--port` still stops the run, since a named port usually has something pointed at it, but it stops with one line rather than a traceback
+- **The `fnirs-rate` viewers reported they were serving even when their server had failed to come up**, and opened a browser tab at an address nothing was listening on
 
 ### Changed
 - **The coherence's scale smoothing is the width its definition fixes**, where the backend used twice that. Values rise and the gap to the pseudo-dyad null narrows, so neither coherences nor significance from earlier runs carry over; the width is on every WTC sidecar as `wtc_scale_smooth_dj0`
@@ -30,6 +32,7 @@ All notable changes to this project will be documented in this file.
 - **Phase arrows on the coherence maps are drawn against the pseudo-dyad null when one was computed**, at a level per frequency rather than the flat `--wtc-arrow-min`. The caption names which level was used
 - **Crossed wavelet coherence is about three times faster**, with every coherence, phase and cone value identical to before
 - **The pseudo-dyad null is about a third faster**, reusing the unscrambled member's transforms across iterations instead of recomputing them every time. Every value is identical to before; the cost is about a gigabyte of memory while it runs
+- **Every transform is about a fifth faster**, padded only as far as the widest wavelet reaches rather than out to a power of two. Band-mean coherences do not move; a saved map can differ in its lowest frequency rows, at the edges the cone masks off anyway, by a few units in the last place of the precision it is stored at
 - **Entity flags are spelled the same on every command**: `--participant-label`, `--session-label`, `--task-label`, `--run-label`, `--group-id`. `fnirs-qc prep-raw` and `fnirs-rate raw`/`hyper` took theirs as positional arguments, `fnirs-prep` spelled them `--ses`/`--task`/`--run` and `fnirs-recon` `--subject`/`--task`/`--session`. **Existing command lines have to be updated.** A label may now be given with its `sub-`/`ses-`/`task-` prefix or without
 - **`fnirs-qc prep-raw` takes more than one subject**, and one subject's failure no longer stops the rest
 - **`--version` works on every command**

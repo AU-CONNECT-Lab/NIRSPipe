@@ -18,7 +18,7 @@ def _discover_subjects(output_dir: Path) -> list[str]:
     )
 
 
-def cmd_rate(output_dir: Path, participant_label: list[str] | None, port: int) -> None:
+def cmd_rate(output_dir: Path, participant_label: list[str] | None, port: int | None) -> None:
     """Launch QC rating interface for fnirs-pipe reports."""
     from fnirs_pipe.qc.rating.app import FNIRSRatingApp
 
@@ -33,7 +33,7 @@ def cmd_rate(output_dir: Path, participant_label: list[str] | None, port: int) -
 def cmd_raw(
     output_dir: Path, participant_label: str,
     session_label: str | None, task_label: str | None,
-    sci_threshold: float, port: int,
+    sci_threshold: float, port: int | None,
 ) -> None:
     """Launch interactive raw QC viewer with section ratings and channel decisions."""
     from fnirs_pipe.qc.rating.app import RawRatingApp
@@ -56,7 +56,7 @@ def cmd_raw(
 
 def cmd_hyper(
     output_dir: Path, group_id: str, task_label: str, pairs_csv: Path,
-    session_label: str | None, sci_threshold: float, port: int,
+    session_label: str | None, sci_threshold: float, port: int | None,
 ) -> None:
     """Launch interactive hyperscanning QC viewer with section ratings and channel decisions."""
     from fnirs_pipe.pipeline.hyperscanning import parse_group_csv
@@ -98,7 +98,8 @@ def _build_parser() -> argparse.ArgumentParser:
     pr.add_argument("--participant-label", nargs="+", action="extend",
                     type=_shared.BidsLabel,
                     help="Subject ID(s) to open. Default: all found.")
-    pr.add_argument("--port", type=int, default=8765, help="Local server port.")
+    pr.add_argument("--port", type=int, default=None,
+                    help="Local server port. Default: 8765, or the next free port above it.")
     pr.set_defaults(func=cmd_rate)
 
     pw = sub.add_parser("raw", help="Launch interactive raw QC viewer.")
@@ -112,7 +113,8 @@ def _build_parser() -> argparse.ArgumentParser:
                     help="Task label.")
     pw.add_argument("--sci-threshold", type=float, default=0.8,
                     help="SCI threshold for pre-highlighting bad channels.")
-    pw.add_argument("--port", type=int, default=5052, help="Local server port.")
+    pw.add_argument("--port", type=int, default=None,
+                    help="Local server port. Default: 5052, or the next free port above it.")
     pw.set_defaults(func=cmd_raw)
 
     ph = sub.add_parser("hyper", help="Launch interactive hyperscanning QC viewer.")
@@ -127,7 +129,8 @@ def _build_parser() -> argparse.ArgumentParser:
     ph.add_argument("--session-label", default=None, type=_shared.BidsLabel,
                     help="Session label.")
     ph.add_argument("--sci-threshold", type=float, default=0.8, help="SCI threshold.")
-    ph.add_argument("--port", type=int, default=5053, help="Local server port.")
+    ph.add_argument("--port", type=int, default=None,
+                    help="Local server port. Default: 5053, or the next free port above it.")
     ph.set_defaults(func=cmd_hyper)
     return p
 

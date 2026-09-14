@@ -10,8 +10,14 @@ from flask import Flask, jsonify, request, send_from_directory
 
 from fnirs_pipe.qc.metrics import SCI_PASS
 from fnirs_pipe.utils.logging import get_logger
+from fnirs_pipe.utils.net import resolve_port
 
 logger = get_logger("qc.rating")
+
+# ---- Default ports ----
+RATE_PORT = 8765
+RAW_PORT = 5052
+HYPER_PORT = 5053
 
 
 def _utc_now_iso() -> str:
@@ -23,11 +29,18 @@ def _serve_forever(app, port: int, log_name: str, ready_delay: float = 1.0, on_r
     import logging as _logging
     _logging.getLogger("werkzeug").setLevel(_logging.ERROR)
 
+    failures: list[OSError] = []
+
     def _serve():
-        app.run(host="127.0.0.1", port=port, debug=False, use_reloader=False)
+        try:
+            app.run(host="127.0.0.1", port=port, debug=False, use_reloader=False)
+        except OSError as err:      # the thread would otherwise die silently, leaving the wait loop below
+            failures.append(err)
 
     threading.Thread(target=_serve, daemon=True).start()
     time.sleep(ready_delay)
+    if failures:
+        raise SystemExit(f"Could not serve on port {port}: {failures[0]}")
     if on_ready is not None:
         on_ready()
 
@@ -148,16 +161,18 @@ class FNIRSRatingApp:
         with out.open("a", encoding="utf-8") as fh:
             fh.write(json.dumps(record, ensure_ascii=False) + "\n")
 
-    def run(self, port: int = 8765, open_browser: bool = True) -> None:
+    def run(self, port: int | None = None, open_browser: bool = True) -> None:
+        served = resolve_port(port or RATE_PORT, explicit=port is not None)
+
         def _on_ready():
             if not open_browser:
                 return
             for subject in self.subjects:
-                url = f"http://localhost:{port}/sub-{subject}"
+                url = f"http://localhost:{served}/sub-{subject}"
                 logger.info("opening %s", url)
                 webbrowser.open(url)
 
-        _serve_forever(self.app, port, "fnirs-rate", ready_delay=1.5, on_ready=_on_ready)
+        _serve_forever(self.app, served, "fnirs-rate", ready_delay=1.5, on_ready=_on_ready)
 
 
 class RawRatingApp:
@@ -291,13 +306,15 @@ class RawRatingApp:
             logger.exception("save_channel_decisions failed")
             return jsonify({"status": "fail", "message": str(exc)}), 500
 
-    def run(self, port: int = 5052) -> None:
+    def run(self, port: int | None = None) -> None:
+        served = resolve_port(port or RAW_PORT, explicit=port is not None)
+
         def _on_ready():
-            url = f"http://localhost:{port}/"
+            url = f"http://localhost:{served}/"
             logger.info("raw viewer -> %s", url)
             webbrowser.open(url)
 
-        _serve_forever(self.app, port, "fnirs-rate raw", on_ready=_on_ready)
+        _serve_forever(self.app, served, "fnirs-rate raw", on_ready=_on_ready)
 
 
 class HyperRatingApp:
@@ -454,10 +471,12 @@ class HyperRatingApp:
             logger.exception("save_hyper_decisions failed")
             return jsonify({"status": "fail", "message": str(exc)}), 500
 
-    def run(self, port: int = 5053) -> None:
+    def run(self, port: int | None = None) -> None:
+        served = resolve_port(port or HYPER_PORT, explicit=port is not None)
+
         def _on_ready():
-            url = f"http://localhost:{port}/"
+            url = f"http://localhost:{served}/"
             logger.info("hyper viewer -> %s", url)
             webbrowser.open(url)
 
-        _serve_forever(self.app, port, "fnirs-rate hyper", on_ready=_on_ready)
+        _serve_forever(self.app, served, "fnirs-rate hyper", on_ready=_on_ready)

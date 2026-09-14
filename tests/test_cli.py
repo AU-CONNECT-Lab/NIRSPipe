@@ -205,7 +205,13 @@ def test_help_exits_zero_all(mod):
 
 
 def test_gui_default_port():
-    assert gui_cli._build_parser().parse_args([]).port == 8050
+    from fnirs_pipe.interface.app import DEFAULT_PORT
+
+    # None rather than 8050: the launcher has to tell "unset" from "the user asked for 8050",
+    # and only the first may be moved when the port is busy
+    assert gui_cli._build_parser().parse_args([]).port is None
+    assert gui_cli._build_parser().parse_args(["--port", "9000"]).port == 9000
+    assert DEFAULT_PORT == 8050
 
 
 def test_db_merge_subcommand():

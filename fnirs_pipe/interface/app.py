@@ -10,6 +10,9 @@ import dash_cytoscape as cyto
 from dash import Input, Output, State, callback, dcc, html
 
 from fnirs_pipe.interface.theme import SIDEBAR_BG
+from fnirs_pipe.utils.net import resolve_port
+
+DEFAULT_PORT = 8050
 
 cyto.load_extra_layouts()
 
@@ -84,7 +87,7 @@ def _toggle_sidebar(n_clicks, is_open):
     return _SIDEBAR_EXPANDED, _CONTENT_EXPANDED, True, {}
 
 
-def launch(port: int = 8050) -> None:
+def launch(port: int | None = None) -> None:
     pages_folder = os.path.join(os.path.dirname(__file__), "pages")
 
     app = dash.Dash(
@@ -119,4 +122,5 @@ def launch(port: int = 8050) -> None:
         ),
     ])
 
-    app.run(port=port, debug=False)
+    served_port = resolve_port(port or DEFAULT_PORT, explicit=port is not None)
+    app.run(port=served_port, debug=False)
