@@ -231,8 +231,8 @@ Every subcommand reads the derivatives tree `fnirs-pipe` wrote and takes no BIDS
 ### `fnirs-recon` — raw SNIRF → BIDS
 
 ```
-fnirs-recon INPUT_FILE BIDS_DIR --subject LABEL --task LABEL
-                                [--session LABEL] [--run INDEX]
+fnirs-recon INPUT_FILE BIDS_DIR --participant-label LABEL --task-label LABEL
+                                [--session-label LABEL] [--run-label INDEX]
                                 [--overwrite]
 ```
 
@@ -242,7 +242,7 @@ fnirs-recon INPUT_FILE BIDS_DIR --subject LABEL --task LABEL
 fnirs-prep crop BIDS_DIR DERIVATIVES_DIR --participant-label SUB ...
                 ( --tmin FLOAT [--tmax FLOAT] | --segments-path PATH [--combine] )
                 [--align none|trigger] [--trigger-name TEXT]
-                [--ses TEXT] [--task TEXT] [--run TEXT]
+                [--session-label TEXT] [--task-label TEXT] [--run-label TEXT]
                 [--n-jobs INT] [--skip-bids-validation]
 
 fnirs-prep align BIDS_DIR DERIVATIVES_DIR --group-csv PATH
@@ -264,7 +264,7 @@ fnirs-prep edit-markers apply BIDS_DIR DERIVATIVES_DIR --participant-label SUB .
 `prep-raw` and `hyper-raw` read raw recordings, so both require `--cardiac-l-freq` / `--cardiac-h-freq`, which are population-dependent and have no default, and `--dpf`, which they use to convert to haemoglobin internally. Both screen channels, so both take the same `--sci-threshold` / `--psp-threshold` as `fnirs-pipe`, and both split the montage, so both take the same `--short-max-dist` / `--long-min-dist` / `--long-max-dist`; pass what the run was prepped with.
 
 ```
-fnirs-qc prep-raw BIDS_DIR OUTPUT_DIR PARTICIPANT_LABEL
+fnirs-qc prep-raw BIDS_DIR OUTPUT_DIR --participant-label LABEL [LABEL ...]
                   --dpf FLOAT [FLOAT ...]
                   --cardiac-l-freq FLOAT --cardiac-h-freq FLOAT
                   [--session-label / --task-label]
@@ -314,7 +314,7 @@ fnirs-qc   cohort OUTPUT_DIR
 fnirs-rate rate  OUTPUT_DIR [--participant-label SUB ...] [--port INT]   # default 8765
 fnirs-rate raw   OUTPUT_DIR PARTICIPANT_LABEL
                  [--session-label / --task-label] [--sci-threshold FLOAT] [--port INT]   # default 5052
-fnirs-rate hyper OUTPUT_DIR GROUP_ID TASK_LABEL --pairs-csv PATH
+fnirs-rate hyper OUTPUT_DIR --group-id GROUP_ID --task-label TASK_LABEL --pairs-csv PATH
                  [--session-label TEXT] [--sci-threshold FLOAT] [--port INT]             # default 5053
 ```
 

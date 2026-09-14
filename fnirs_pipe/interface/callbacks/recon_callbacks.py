@@ -56,13 +56,13 @@ def _row_command(row: dict, bids_dir: str, overwrite: bool, cont: str) -> str | 
         "fnirs-recon",
         f'"{row["path"]}"',
         f'"{bids_dir}"',
-        "--subject", subject,
-        "--task", task,
+        "--participant-label", subject,
+        "--task-label", task,
     ]
     if row.get("session"):
-        argv += ["--session", row["session"]]
+        argv += ["--session-label", row["session"]]
     if row.get("run"):
-        argv += ["--run", row["run"]]
+        argv += ["--run-label", row["run"]]
     if overwrite:
         argv.append("--overwrite")
     lines = [argv[0]] + [f"  {a}" for a in argv[1:]]

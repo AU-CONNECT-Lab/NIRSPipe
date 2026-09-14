@@ -6,6 +6,10 @@ import argparse
 import sys
 from pathlib import Path
 
+from fnirs_pipe import __version__
+
+from fnirs_pipe.cli import _shared
+
 
 def _discover_subjects(output_dir: Path) -> list[str]:
     return sorted(
@@ -86,20 +90,26 @@ def _build_parser() -> argparse.ArgumentParser:
         prog="fnirs-rate",
         description="Interactive QC review for fNIRS data: rating, individual viewer, hyperscanning viewer.",
     )
+    p.add_argument("--version", action="version", version=f"fnirs-rate {__version__}")
     sub = p.add_subparsers(dest="command", required=True)
 
     pr = sub.add_parser("rate", help="Launch QC rating interface.")
     pr.add_argument("output_dir", type=Path, help="fnirs-pipe output directory.")
     pr.add_argument("--participant-label", nargs="+", action="extend",
+                    type=_shared.BidsLabel,
                     help="Subject ID(s) to open. Default: all found.")
     pr.add_argument("--port", type=int, default=8765, help="Local server port.")
     pr.set_defaults(func=cmd_rate)
 
     pw = sub.add_parser("raw", help="Launch interactive raw QC viewer.")
     pw.add_argument("output_dir", type=Path, help="fnirs-pipe output directory.")
-    pw.add_argument("participant_label", help="Subject ID, e.g. '01'.")
-    pw.add_argument("--session-label", default=None, help="Session label.")
-    pw.add_argument("--task-label", default=None, help="Task label.")
+    # one subject, not a list: the viewer opens one recording at a time
+    pw.add_argument("--participant-label", required=True, type=_shared.BidsLabel,
+                    help="Subject ID to open, e.g. '01'.")
+    pw.add_argument("--session-label", default=None, type=_shared.BidsLabel,
+                    help="Session label.")
+    pw.add_argument("--task-label", default=None, type=_shared.BidsLabel,
+                    help="Task label.")
     pw.add_argument("--sci-threshold", type=float, default=0.8,
                     help="SCI threshold for pre-highlighting bad channels.")
     pw.add_argument("--port", type=int, default=5052, help="Local server port.")
@@ -107,12 +117,15 @@ def _build_parser() -> argparse.ArgumentParser:
 
     ph = sub.add_parser("hyper", help="Launch interactive hyperscanning QC viewer.")
     ph.add_argument("output_dir", type=Path, help="fnirs-pipe output directory.")
-    ph.add_argument("group_id", help="Group ID, e.g. 'A'.")
-    ph.add_argument("task_label", help="Task label, e.g. 'tapping'.")
+    ph.add_argument("--group-id", required=True, type=_shared.BidsLabel,
+                    help="Group ID to open, e.g. 'A'.")
+    ph.add_argument("--task-label", required=True, type=_shared.BidsLabel,
+                    help="Task label, e.g. 'tapping'.")
     ph.add_argument("--pairs-csv", type=Path, required=True,
                     help="CSV with columns: group_id, subject_id, task (same as fnirs-qc hyper-raw). "
                          "Used to look up subject IDs in this group.")
-    ph.add_argument("--session-label", default=None, help="Session label.")
+    ph.add_argument("--session-label", default=None, type=_shared.BidsLabel,
+                    help="Session label.")
     ph.add_argument("--sci-threshold", type=float, default=0.8, help="SCI threshold.")
     ph.add_argument("--port", type=int, default=5053, help="Local server port.")
     ph.set_defaults(func=cmd_hyper)

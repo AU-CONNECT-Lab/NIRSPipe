@@ -6,6 +6,9 @@ import argparse
 import sys
 from pathlib import Path
 
+from fnirs_pipe import __version__
+
+from fnirs_pipe.cli import _shared
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("cli.prep")
@@ -41,7 +44,7 @@ def _report(results: list[tuple]) -> None:
 
 def cmd_crop(
     bids_dir: Path, derivatives_dir: Path, participant_label: list[str],
-    ses: str | None, task: str | None, run: str | None,
+    session_label: str | None, task_label: str | None, run_label: str | None,
     tmin: float | None, tmax: float | None, segments_path: Path | None,
     combine: bool, align: str, trigger_name: str | None, input_desc: str | None,
     n_jobs: int, skip_bids_validation: bool, margin_s: str | None = None,
@@ -81,7 +84,7 @@ def cmd_crop(
     def _crop_one(sub):
         return crop_snirf(
             bids_dir, derivatives_dir, sub,
-            ses=ses, task=task, run=run,
+            ses=session_label, task=task_label, run=run_label,
             tmin=tmin, tmax=tmax,
             segments_path=segments_path,
             combine=combine,
@@ -186,7 +189,7 @@ def cmd_align(
 
 def cmd_markers_export(
     bids_dir: Path, out_dir: Path, participant_label: list[str],
-    ses: str | None, task: str | None, run: str | None,
+    session_label: str | None, task_label: str | None, run_label: str | None,
     n_jobs: int, skip_bids_validation: bool,
 ) -> None:
     """Export events.tsv(s) to out_dir for manual editing."""
@@ -195,7 +198,7 @@ def cmd_markers_export(
     def _export_one(sub):
         return export_markers(
             bids_dir, sub, out_dir,
-            ses=ses, task=task, run=run,
+            ses=session_label, task=task_label, run=run_label,
             validate=not skip_bids_validation,
         )
 
@@ -204,7 +207,7 @@ def cmd_markers_export(
 
 def cmd_markers_apply(
     bids_dir: Path, derivatives_dir: Path, participant_label: list[str],
-    ses: str | None, task: str | None, run: str | None,
+    session_label: str | None, task_label: str | None, run_label: str | None,
     tsv: Path | None, shift: float | None, set_duration: float | None,
     rename: list[str] | None, n_jobs: int, skip_bids_validation: bool,
 ) -> None:
@@ -221,7 +224,7 @@ def cmd_markers_apply(
     def _apply_one(sub):
         return apply_markers(
             bids_dir, derivatives_dir, sub,
-            ses=ses, task=task, run=run,
+            ses=session_label, task=task_label, run=run_label,
             tsv=tsv, shift=shift, set_duration=set_duration, rename=rename,
             validate=not skip_bids_validation,
         )
@@ -231,10 +234,13 @@ def cmd_markers_apply(
 
 def _add_selection(sp) -> None:
     sp.add_argument("--participant-label", nargs="+", action="extend", required=True,
-                    help="Subject ID(s) to process.")
-    sp.add_argument("--ses",  default=None, help="Session label.")
-    sp.add_argument("--task", default=None, help="Task label.")
-    sp.add_argument("--run",  default=None, help="Run label.")
+                    type=_shared.BidsLabel, help="Subject ID(s) to process.")
+    sp.add_argument("--session-label", default=None, type=_shared.BidsLabel,
+                    help="Session label.")
+    sp.add_argument("--task-label",    default=None, type=_shared.BidsLabel,
+                    help="Task label.")
+    sp.add_argument("--run-label",     default=None, type=_shared.BidsLabel,
+                    help="Run label.")
     sp.add_argument("--n-jobs", type=int, default=1, help="Parallel subject jobs.")
     sp.add_argument("--skip-bids-validation", action=argparse.BooleanOptionalAction, default=False)
 
@@ -244,6 +250,7 @@ def _build_parser() -> argparse.ArgumentParser:
         prog="fnirs-prep",
         description="fNIRS data preparation: cropping, alignment and marker editing.",
     )
+    p.add_argument("--version", action="version", version=f"fnirs-prep {__version__}")
     sub = p.add_subparsers(required=True)
 
     crop = sub.add_parser("crop", help="Crop SNIRFs to a time window or segments.")

@@ -15,12 +15,18 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 - **On a crossed run the pseudo-dyad null's `percentile` ranked the wrong cell.** A table already written can be re-ranked rather than recomputed
+- **The dyad report claimed the correlations were run on an unfiltered stage even when they were not.** The note fired on every run, whatever `--desc` pointed at, so the one case it exists to catch was indistinguishable from the rest
+- **Arrows and other non-ASCII characters in the log came out as mojibake on Windows**
 
 ### Changed
 - **The coherence's scale smoothing is the width its definition fixes**, where the backend used twice that. Values rise and the gap to the pseudo-dyad null narrows, so neither coherences nor significance from earlier runs carry over; the width is on every WTC sidecar as `wtc_scale_smooth_dj0`
 - **The connectogram draws a chord where a pairing beats its own surrogate null**, or the strongest tenth when no null was drawn, marked as a display cut rather than a test. `--isc-threshold` still forces an absolute cut
 - **Phase arrows on the coherence maps are drawn against the pseudo-dyad null when one was computed**, at a level per frequency rather than the flat `--wtc-arrow-min`. The caption names which level was used
 - **Crossed wavelet coherence is about three times faster**, with every coherence, phase and cone value identical to before
+- **The pseudo-dyad null is about a third faster**, reusing the unscrambled member's transforms across iterations instead of recomputing them every time. Every value is identical to before; the cost is about a gigabyte of memory while it runs
+- **Entity flags are spelled the same on every command**: `--participant-label`, `--session-label`, `--task-label`, `--run-label`, `--group-id`. `fnirs-qc prep-raw` and `fnirs-rate raw`/`hyper` took theirs as positional arguments, `fnirs-prep` spelled them `--ses`/`--task`/`--run` and `fnirs-recon` `--subject`/`--task`/`--session`. **Existing command lines have to be updated.** A label may now be given with its `sub-`/`ses-`/`task-` prefix or without
+- **`fnirs-qc prep-raw` takes more than one subject**, and one subject's failure no longer stops the rest
+- **`--version` works on every command**
 
 ## [0.39.0] - 2026-09-13
 

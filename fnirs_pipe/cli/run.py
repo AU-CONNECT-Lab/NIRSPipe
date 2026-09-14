@@ -54,9 +54,12 @@ def _build_parser() -> argparse.ArgumentParser:
     _shared.add_sci_threshold(prep)
 
     sel = p.add_argument_group("subject / session / task selection")
-    sel.add_argument("--participant-label", nargs="+", action="extend", help="Subject ID(s) to process.")
-    sel.add_argument("--session-label",     nargs="+", action="extend", help="Session label(s) to process.")
-    sel.add_argument("--task-label",        nargs="+", action="extend", help="Task label(s) to process.")
+    sel.add_argument("--participant-label", nargs="+", action="extend",
+                     type=_shared.BidsLabel, help="Subject ID(s) to process.")
+    sel.add_argument("--session-label",     nargs="+", action="extend",
+                     type=_shared.BidsLabel, help="Session label(s) to process.")
+    sel.add_argument("--task-label",        nargs="+", action="extend",
+                     type=_shared.BidsLabel, help="Task label(s) to process.")
     sel.add_argument("--bids-filter-file",  type=Path, help="JSON file with extra pybids query filters.")
 
     prep_opt = p.add_argument_group("preprocessing (optional)")

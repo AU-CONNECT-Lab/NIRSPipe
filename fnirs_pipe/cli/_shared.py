@@ -21,6 +21,30 @@ import argparse
 from pathlib import Path
 
 
+class BidsLabel(str):
+    """A BIDS entity label with its ``sub-``/``ses-``/``task-`` prefix taken off.
+
+    The BIDS Apps interface asks for bare labels, but the folder on disk is what a user
+    reads and types, so ``--participant-label sub-01`` arrives often enough to be worth
+    accepting. Stripping it here rather than in each command is what keeps one CLI tolerant
+    and the next one silently finding no files.
+
+    Used as an argparse ``type``, so it strips once, at parse time::
+
+        BidsLabel("sub-01") == "01"
+    """
+
+    _PREFIXES = ("sub-", "ses-", "task-", "run-", "group-")
+
+    def __new__(cls, value: str):
+        text = str(value).strip()
+        for prefix in cls._PREFIXES:
+            if text.startswith(prefix):
+                text = text[len(prefix):]
+                break
+        return super().__new__(cls, text)
+
+
 def add_separation_bands(container, note: str = "") -> None:
     """``--short-max-dist`` / ``--long-min-dist`` / ``--long-max-dist``, in mm.
 
@@ -152,9 +176,9 @@ def pairs_selection() -> argparse.ArgumentParser:
     p.add_argument("--pairs-csv", type=Path, required=True,
                    help="CSV with columns: group_id, subject_id, task. Each unique "
                         "(group_id, task) pair is processed as one session.")
-    p.add_argument("--group-id", default=None,
+    p.add_argument("--group-id", default=None, type=BidsLabel,
                    help="Process only this group_id. Omit to process all groups.")
-    p.add_argument("--task-label", nargs="+", action="extend",
+    p.add_argument("--task-label", nargs="+", action="extend", type=BidsLabel,
                    help="Task label(s) to include, filtering the pairs table.")
     return p
 

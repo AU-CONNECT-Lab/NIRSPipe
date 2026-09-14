@@ -5,6 +5,8 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+from fnirs_pipe import __version__
+
 from fnirs_pipe.utils import job_db as _db
 
 
@@ -24,6 +26,7 @@ def _build_parser() -> argparse.ArgumentParser:
         prog="fnirs-log",
         description="Merge JSONL run logs into the fnirs-pipe SQLite database.",
     )
+    p.add_argument("--version", action="version", version=f"fnirs-log {__version__}")
     sub = p.add_subparsers(required=True)
 
     m = sub.add_parser("merge", help="Merge JSONL logs under logs/json/ into the SQLite database.")

@@ -216,9 +216,10 @@ def test_db_merge_subcommand():
 
 def test_recon_requires_subject_and_task():
     with pytest.raises(SystemExit):
-        recon_cli._build_parser().parse_args(["in.snirf", "/bids"])  # missing --subject/--task
-    args = recon_cli._build_parser().parse_args(["in.snirf", "/bids", "--subject", "01", "--task", "tap"])
-    assert (args.subject, args.task, args.overwrite) == ("01", "tap", False)
+        recon_cli._build_parser().parse_args(["in.snirf", "/bids"])  # no participant/task
+    args = recon_cli._build_parser().parse_args(
+        ["in.snirf", "/bids", "--participant-label", "01", "--task-label", "tap"])
+    assert (args.participant_label, args.task_label, args.overwrite) == ("01", "tap", False)
 
 
 def test_prep_subcommands_dispatch():
@@ -300,7 +301,7 @@ def test_moved_commands_are_gone_from_qc():
 def test_rate_subcommands():
     assert rate_cli._build_parser().parse_args(["rate", "/out"]).func is rate_cli.cmd_rate
     assert rate_cli._build_parser().parse_args(
-        ["hyper", "/out", "A", "tap", "--pairs-csv", "p.csv"]
+        ["hyper", "/out", "--group-id", "A", "--task-label", "tap", "--pairs-csv", "p.csv"]
     ).func is rate_cli.cmd_hyper
 
 
@@ -329,7 +330,8 @@ def test_qc_provenance_accepts_no_options():
 
 
 @pytest.mark.parametrize("argv", [
-    pytest.param(["prep-raw", "/b", "/o", "01", "--dpf", "6.0"], id="prep-raw"),
+    pytest.param(["prep-raw", "/b", "/o", "--participant-label", "01", "--dpf", "6.0"],
+                 id="prep-raw"),
     pytest.param(["hyper-raw", "/b", "/o", "--pairs-csv", "p.csv", "--dpf", "6.0"], id="hyper-raw"),
 ])
 def test_cardiac_band_stays_required(argv, capsys):
