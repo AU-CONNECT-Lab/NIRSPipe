@@ -211,6 +211,40 @@ def test_spline_says_it_has_no_backend():
         correct_motion(_od_raw(_od_trace()[0]), method="spline")
 
 
+def test_spline_is_not_offered_by_the_clis():
+    # it used to pass argparse and fail at the correction step, the worst moment to find out
+    import argparse
+
+    from fnirs_pipe.cli.qc import _build_parser as qc_parser
+    from fnirs_pipe.cli.run import _build_parser as run_parser
+
+    def motion_choices(parser):
+        for action in parser._actions:
+            if "--motion-correction" in action.option_strings:
+                yield action.choices
+            elif isinstance(action, argparse._SubParsersAction):
+                for sub in action.choices.values():
+                    yield from motion_choices(sub)
+
+    found = [c for build in (qc_parser, run_parser) for c in motion_choices(build())]
+    assert found, "no --motion-correction argument reached"
+    for choices in found:
+        assert "spline" not in choices
+        assert {"tddr", "wavelet", "none"} <= set(choices)
+
+
+def test_gui_does_not_offer_spline():
+    # read rather than import: pages/analysis.py calls dash.register_page() at module level,
+    # which raises outside a running app
+    from pathlib import Path
+
+    import fnirs_pipe
+    src = (Path(fnirs_pipe.__file__).parent / "interface" / "pages" / "analysis.py"
+           ).read_text(encoding="utf-8")
+    assert '"an-motion-correction"' in src
+    assert '"value": "spline"' not in src
+
+
 @requires_pywt
 def test_wavelet_output_is_stamped_motcorrected():
     out = correct_motion(_od_raw(_od_trace()[0]), method="wavelet")

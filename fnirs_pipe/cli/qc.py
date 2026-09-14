@@ -332,7 +332,7 @@ def _build_parser() -> argparse.ArgumentParser:
                          "nothing is re-measured. Each page screens on its own stretch, so "
                          "the verdict on it is that condition's; the recording was processed "
                          "under the run's, which its own page carries.")
-    pr.add_argument("--motion-correction", choices=["tddr", "wavelet", "spline", "none"],
+    pr.add_argument("--motion-correction", choices=["tddr", "wavelet", "none"],
                     default="none",
                     help="Run this correction on a copy of the optical density and report "
                          "the recording either side of it: the correction's footprint, the "

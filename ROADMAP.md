@@ -102,7 +102,7 @@ a bare-MNE run of the same chain. Reports are kept with the project notes outsid
 
 ### Algorithms / numerical validation
 
-- **Spline motion correction** — still raises `NotImplementedError`; TDDR and wavelet are implemented ([pipeline/motion.py](fnirs_pipe/pipeline/motion.py))
+- **Spline motion correction** — undecided, and withheld from the CLI and the GUI while it is; reachable through the API, where it raises `NotImplementedError`. Building it means building per-channel artifact detection alongside it, since nothing in MNE or mne_nirs supplies either ([pipeline/motion.py](fnirs_pipe/pipeline/motion.py))
 - **External regressors in confound regression** — built and then withheld: the flags are suppressed and the GUI control is gone, while extraction and the regression path stay. Reopening it needs an across-dyad comparison, and a tCCA-style orthogonalisation is the upgrade path if that comparison finds anything ([pipeline/glm.py](fnirs_pipe/pipeline/glm.py))
 
 ### QC enhancements

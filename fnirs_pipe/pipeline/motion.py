@@ -85,8 +85,9 @@ def correct_motion(raw_od: mne.io.Raw, method: MotionMethod | None = None) -> mn
         corrected = _wavelet_motion_correct(raw_od)
     elif method == "spline":
         raise NotImplementedError(
-            "Spline correction has no MNE backend yet. "
-            "Use --motion-correction tddr or none."
+            "Spline correction has no backend. Use tddr, wavelet or none. "
+            "It is kept as a named method rather than an unknown one so the API says "
+            "which it is; the CLI and the GUI do not offer it."
         )
     elif method == "none":
         corrected = raw_od

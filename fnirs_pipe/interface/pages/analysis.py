@@ -246,7 +246,6 @@ layout = dbc.Container([
                     options=[
                         {"label": "TDDR",    "value": "tddr"},
                         {"label": "Wavelet", "value": "wavelet"},
-                        {"label": "Spline",  "value": "spline"},
                         {"label": "None",    "value": "none"},
                     ],
                     value="tddr",

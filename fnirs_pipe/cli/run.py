@@ -12,7 +12,7 @@ from fnirs_pipe.pipeline.denoise import (
     FILTER_METHODS,
 )
 
-_MOTION_CHOICES        = ["tddr", "wavelet", "spline", "none"]
+_MOTION_CHOICES        = ["tddr", "wavelet", "none"]
 _MODE_CHOICES          = ["denoise", "glm", "rest"]
 _HRF_CHOICES           = [
     "spm", "spm + derivative", "spm + derivative + dispersion",
