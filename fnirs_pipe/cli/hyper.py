@@ -424,7 +424,8 @@ def cmd_run(
         try:
             path = write_hyper_index(folder, gid,
                                      [e.subject_id for e in groups[next(
-                                         k for k in groups if k[0] == gid)]])
+                                         k for k in groups if k[0] == gid)]],
+                                     run_command=" ".join(sys.argv))
             if path is not None:
                 print(f"index  -> {path}")
         except Exception:
@@ -467,7 +468,8 @@ def cmd_index(output_dir: Path, group_id: str | None, verbose: bool) -> None:
 
     wrote = 0
     for folder in folders:
-        path = write_hyper_index(folder, folder.name.removeprefix("group-"))
+        path = write_hyper_index(folder, folder.name.removeprefix("group-"),
+                                 run_command=" ".join(sys.argv))
         if path is not None:
             print(f"{folder.name} -> {path}")
             wrote += 1

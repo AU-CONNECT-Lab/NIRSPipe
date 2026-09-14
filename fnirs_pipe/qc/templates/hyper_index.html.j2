@@ -8,11 +8,14 @@
    heading for them rather than as one more window */
 tr.whole td { background: #f4f6f8; font-weight: 600; }
 tr.whole td.num { font-weight: 600; }
+.run-links { display: block; margin-top: 0.15rem; font-size: 0.75rem; }
+.run-links a { color: #7f8c8d; font-weight: 400; margin-right: 0.55rem; }
 {% endblock %}
 
 {# Navigation only: a verdict on a dyad belongs on its raw report, not on the list of its
    windows. #}
-{% set nav_modules = [nav_bar([("Windows", "Windows")], rated=false, summary="",
+{% set nav_modules = [nav_bar([("Windows", "Windows"), ("Rebuilt", "Rebuilt by")],
+                              rated=false, summary="",
                               closing=[("Versions", "Versions")])] %}
 {% set nav_chip = "group-" ~ group_id %}
 
@@ -41,6 +44,9 @@ tr.whole td.num { font-weight: 600; }
       <th>Task</th>
       <th>Span</th>
       {% for c in chroma %}<th>WTC {{ chroma_labels[c] }}</th>{% endfor %}
+      {% if has_null %}
+      {% for c in chroma %}<th>past null {{ chroma_labels[c] }}</th>{% endfor %}
+      {% endif %}
       {% for c in chroma %}<th>inside COI {{ chroma_labels[c] }}</th>{% endfor %}
       {% for c in chroma %}<th>ISC {{ chroma_labels[c] }}</th>{% endfor %}
     </tr>
@@ -54,6 +60,11 @@ tr.whole td.num { font-weight: 600; }
         {% else %}
           {{ row.condition or "whole run" }} <span class="muted">(no page)</span>
         {% endif %}
+        {% if row.links %}
+        <span class="run-links">
+          {% for link in row.links %}<a href="{{ link.href }}">{{ link.text }}</a>{% endfor %}
+        </span>
+        {% endif %}
       </td>
       {% if has_pairs %}<td>{{ row.pair or "" }}</td>{% endif %}
       <td>{{ row.task }}</td>
@@ -64,6 +75,14 @@ tr.whole td.num { font-weight: 600; }
         {%- else %}<span class="muted">n/a</span>{% endif -%}
       </td>
       {% endfor %}
+      {% if has_null %}
+      {% for c in chroma %}
+      <td class="num">
+        {%- if c in row.past_null %}{{ row.past_null[c][0] }}/{{ row.past_null[c][1] }}
+        {%- else %}<span class="muted">&mdash;</span>{% endif -%}
+      </td>
+      {% endfor %}
+      {% endif %}
       {% for c in chroma %}
       <td class="num">
         {%- if c in row.valid_frac %}{{ "%.0f%%"|format(row.valid_frac[c] * 100) }}
@@ -94,6 +113,13 @@ tr.whole td.num { font-weight: 600; }
   have two edges and a cone of its own. Each window is z-scored inside itself, the
   correlation over a stretch being against that stretch's mean. Open a window for its
   coherence maps, its matrices and the phase arrows.
+  {% if has_null %}
+  <b>past null</b> counts the channel pairs whose coherence beat the {{ null_percentile }}th
+  percentile of their own surrogate draws, out of the pairs that were measured. Read it
+  before the coherence: the coherence has a floor that moves with the window length, so two
+  windows' values do not compare and neither is readable alone, while a rank inside a null
+  drawn for that window is both.
+  {% endif %}
   {% if rows | length >= 4 %}
   A marked cell sits more than {{ outlier_z }} median absolute deviations from this dyad's
   other windows on that chromophore. It says the window differs from its neighbours, not
@@ -108,5 +134,13 @@ tr.whole td.num { font-weight: 600; }
   a tree whose conditions were cropped to separate files before the analysis shows them as
   separate tasks instead, each with a whole-run row of its own.
 </p>
+
+{% if run_command %}
+<h2 id="Rebuilt">Rebuilt by</h2>
+<p class="step-desc">This page is assembled from the tables under <code>nirs/</code> each
+   time the dyad is analysed, so it lists whatever is on disk rather than what one command
+   produced. The command below is the one that last rebuilt it.</p>
+<pre>{{ run_command }}</pre>
+{% endif %}
 
 {% endblock %}

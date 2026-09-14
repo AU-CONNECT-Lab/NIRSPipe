@@ -31,6 +31,20 @@ logger = get_logger("qc.hyper_index")
 
 _CHROMA_LABEL = {"hbo": "HbO", "hbr": "HbR"}
 
+# What a value has to beat to be counted past its own null. The same 95 the pseudo tables'
+# `null_p95` column is drawn at, so the count and that column say one thing.
+NULL_PERCENTILE = 95
+
+# Other products of a task, as (link text, path relative to group_dir). Only the ones on
+# disk reach the page; the window page a row already links is not repeated here.
+_ARTEFACTS = (
+    ("raw QC",     "{stem}_desc-hyperraw_nirs.html"),
+    ("provenance", "figures/provenance.png"),
+    ("coherence",  "nirs/{stem}_hyper-wtc.tsv"),
+    ("null",       "nirs/{stem}_hyper-wtc-pseudo.tsv"),
+    ("ISC pairs",  "nirs/{stem}_hyper-iscpairs.tsv"),
+)
+
 
 def _read_tsv(path: Path) -> "pd.DataFrame | None":
     try:
@@ -103,6 +117,38 @@ def _mean_by_chroma(df: "pd.DataFrame | None", column: str,
     return {str(c): float(v) for c, v in df.groupby("chromophore")[column].mean().items()}
 
 
+def _past_null(df: "pd.DataFrame | None", where: "tuple[str, str] | None" = None,
+               pair: "tuple[str, str] | None" = None) -> dict:
+    """``{chromophore: (pairs past their null, pairs measured)}`` for one window.
+
+    ::
+
+      _past_null(pseudo, ("condition", "game1")) -> {"hbo": (2, 14), "hbr": (0, 14)}
+
+    Coherence has a floor that moves with the window, so two windows' raw values do not
+    compare and neither is readable on its own. Each channel pair's own surrogate draws are
+    the scale that makes them both, and this is that scale reduced to the one number a table
+    cell holds: how many of the dyad's pairs the real value beat the draws for.
+    """
+    if df is None or "percentile" not in df.columns:
+        return {}
+    if pair is not None and {"sub1", "sub2"}.issubset(df.columns):
+        df = df[(df["sub1"] == pair[0]) & (df["sub2"] == pair[1])]
+    if where is not None:
+        key, value = where
+        if key not in df.columns:
+            return {}
+        df = df[df[key] == value]
+    if df.empty or "chromophore" not in df.columns:
+        return {}
+    out = {}
+    for chroma, part in df.groupby("chromophore"):
+        ranks = part["percentile"].dropna()
+        if not ranks.empty:
+            out[str(chroma)] = (int((ranks >= NULL_PERCENTILE).sum()), int(ranks.size))
+    return out
+
+
 def _isc_mean(nirs_dir: Path, stem: str, label: "str | None" = None,
               slug: str = "") -> dict:
     """``{chromophore: mean same-channel ISC}`` from the two ISC matrices of one window.
@@ -132,6 +178,12 @@ def _isc_mean(nirs_dir: Path, stem: str, label: "str | None" = None,
     return out
 
 
+def _links(group_dir: Path, stem: str) -> list[dict[str, str]]:
+    return [{"text": text, "href": rel}
+            for text, template in _ARTEFACTS
+            if (group_dir / (rel := template.format(stem=stem))).exists()]
+
+
 def _tasks(nirs_dir: Path, group_id: str) -> "list[str]":
     """The tasks this dyad has a whole-run coherence table for, in filename order."""
     pattern = re.compile(rf"group-{re.escape(group_id)}_task-([A-Za-z0-9]+)_hyper-wtc\.tsv")
@@ -154,12 +206,16 @@ def collect_rows(group_dir: Path, group_id: str) -> "list[dict]":
         stem = f"group-{group_id}_task-{task}"
         whole = _read_tsv(nirs_dir / f"{stem}_hyper-wtc.tsv")
         bycond = _read_tsv(nirs_dir / f"{stem}_hyper-wtcbycond.tsv")
+        # written only when the run drew a null; a tree without one keeps the column empty
+        whole_null = _read_tsv(nirs_dir / f"{stem}_hyper-wtc-pseudo.tsv")
+        bycond_null = _read_tsv(nirs_dir / f"{stem}_hyper-wtcbycond-pseudo.tsv")
         # every inter-brain number is of two members, so a group of three contributes three
         # rows per window, one per pairing, rather than one row averaging across them
         pairings = _pairings(whole, bycond)
 
         def _row(label: "str | None", pair, where=None) -> dict:
             source = whole if where is None else bycond
+            null = whole_null if where is None else bycond_null
             slug = pair_slug(pair, len(pairings))
             desc = "hyperpost" if label is None else f"{_pair_fname(label)}_hyperpost"
             report = group_dir / f"{stem}_desc-{desc}{slug}_nirs.html"
@@ -169,7 +225,11 @@ def collect_rows(group_dir: Path, group_id: str) -> "list[dict]":
                 "pair": " × ".join(pair) if pair and len(pairings) > 1 else None,
                 "kind": "whole run" if label is None else "window",
                 "href": report.name if report.exists() else None,
+                # the task's other products hang off its whole-run row, being the task's and
+                # not one window's; the raw report among them, which nothing else links
+                "links": _links(group_dir, stem) if label is None else [],
                 "coherence": _mean_by_chroma(source, "coherence", where, pair),
+                "past_null": _past_null(null, where, pair),
                 "valid_frac": _mean_by_chroma(source, "n_valid_frac", where, pair),
                 "isc": _isc_mean(nirs_dir, stem, label, slug),
                 "window": _window_of(nirs_dir / f"{stem}_hyper-wtcbycond.tsv", label),
@@ -209,6 +269,7 @@ def write_hyper_index(
     group_dir: Path,
     group_id: str,
     subject_ids: "list[str] | None" = None,
+    run_command: str = "",
 ) -> "Path | None":
     """Render ``group-<id>_index.html`` over the dyad's report pages.
 
@@ -240,6 +301,9 @@ def write_hyper_index(
         band=band,
         n_tasks=len({row["task"] for row in rows}),
         outlier_z=OUTLIER_Z,
+        null_percentile=NULL_PERCENTILE,
+        has_null=any(row["past_null"] for row in rows),
+        run_command=run_command,
     )
     out_path = group_dir / f"group-{group_id}_index.html"
     out_path.write_text(html, encoding="utf-8")
