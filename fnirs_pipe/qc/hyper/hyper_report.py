@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sys
+from collections import defaultdict
 from itertools import combinations
 from pathlib import Path
 
@@ -750,6 +751,10 @@ def build_hyper_post_report(
 
     errors: list[str] = []
     notes: list[str] = []
+    # A page's own failures, keyed (pairing, condition label) with None for the run. `errors`
+    # above stays the run-wide list and reaches every page: an analysis that failed is missing
+    # from all of them. A figure that failed is missing from one, and only that one says so.
+    page_errors: dict = defaultdict(list)
     scope = f"group-{group_id}_task-{task}"
 
     subject_ids  = [e.subject_id for e in group]
@@ -841,15 +846,9 @@ def build_hyper_post_report(
         height = _save_figure_html(fig, figures_dir / name, views=views)
         return {"wtc": _fig_href(figures_dir, name), "h": height}
 
-    def _safe_post(name: str, fname: str, fn, *args, **kwargs) -> "str | None":
-        """Build one figure, write it to ``figures/``, and hand back its URL."""
-        out = None
-        with guard(f"{name} figure", errors, scope):
-            out = _fig(fn(*args, **kwargs), fname)
-        return out
 
     def _maps(dest: dict, result, pair_key, pair_label: str, axis: list[str],
-              stem: str, ch_type: str, suffix: str, what: str,
+              stem: str, ch_type: str, suffix: str, what: str, page,
               interactive: bool = False, view_spans=None) -> None:
         """Fill ``dest`` with one coherence map per pairing of ``axis`` against itself.
 
@@ -892,7 +891,8 @@ def build_hyper_post_report(
                              f"{suffix}.{ext}")
                     build = (build_wtc_map_interactive if interactive
                              else build_wtc_channel)
-                    with guard(f"wtc map {site} ({what}, {ch_type}) figure", errors, scope):
+                    with guard(f"wtc map {site} ({what}, {ch_type}) figure",
+                               page_errors[page], scope):
                         drawn = build(data, result.freqs, result.times,
                                       pair_label, markers_list, cond_colors_, site,
                                       arrow_min=arrow_min)
@@ -906,7 +906,7 @@ def build_hyper_post_report(
                 row[label2] = entry or {"wtc": None}
             dest[label1] = row
 
-    def _figure_set(result, chan_band_df, ch_type: str, suffix: str = "",
+    def _figure_set(result, chan_band_df, ch_type: str, page, suffix: str = "",
                     roi_view_of: "dict | None" = None,
                     pair: "tuple[str, str] | None" = None) -> dict:
         """Every figure one WTC result yields: the maps and the three matrices.
@@ -944,7 +944,7 @@ def build_hyper_post_report(
         pair_label = f"{pair_key[0]} × {pair_key[1]}" if pair_key else ""
 
         _maps(out["per_channel"], result, pair_key, pair_label, chan_axis,
-              f"wtc_{ch_type}{_pair_slug(pair_key)}", ch_type, suffix, what)
+              f"wtc_{ch_type}{_pair_slug(pair_key)}", ch_type, suffix, what, page)
 
         if not roi_map:
             return out
@@ -954,7 +954,8 @@ def build_hyper_post_report(
         # average for them either
         roi_wtc: WTCResult | None = None
         if result is not None and roi_view_of is None:
-            with guard(f"ROI WTC maps from channels ({what}, {ch_type})", errors, scope):
+            with guard(f"ROI WTC maps from channels ({what}, {ch_type})",
+                       page_errors[page], scope):
                 roi_wtc = roi_maps_from_channels(result, roi_map)
         roi_pair_key = pair_key if (roi_wtc and pair_key in roi_wtc.pairs) else (
             next(iter(roi_wtc.pairs)) if roi_wtc and roi_wtc.pairs else None)
@@ -968,7 +969,7 @@ def build_hyper_post_report(
             }
         else:
             _maps(out["per_roi"], roi_wtc, roi_pair_key, pair_label, roi_labels,
-                  f"wtcroi_{ch_type}{_pair_slug(pair_key)}", ch_type, suffix, what,
+                  f"wtcroi_{ch_type}{_pair_slug(pair_key)}", ch_type, suffix, what, page,
                   interactive=True, view_spans=roi_view_spans)
 
         return out
@@ -983,7 +984,8 @@ def build_hyper_post_report(
         The transforms come in rather than being computed: see :func:`_wtc_pass`. A window
         whose own pass failed contributes an empty set and keeps its place in the list.
         """
-        run_figs = _figure_set(computed["result"], computed["chan"], ch_type, pair=pair)
+        run_figs = _figure_set(computed["result"], computed["chan"], ch_type,
+                               (pair, None), pair=pair)
         cond_figs: list[dict] = []
         for i, (label, _, _) in enumerate(cond_windows):
             cond_wtc = computed["cond_wtc"][i] if i < len(computed["cond_wtc"]) else None
@@ -995,12 +997,12 @@ def build_hyper_post_report(
             # the same panels the run's own page gets, over this window. The ROI maps are
             # the run's files at this window's fragment, where that route is on
             cond_figs.append(_figure_set(
-                cond_wtc, cond_chan, ch_type, f"_{_pair_fname(label)}",
+                cond_wtc, cond_chan, ch_type, (pair, label), f"_{_pair_fname(label)}",
                 roi_view_of=(run_figs["per_roi"] if roi_view_spans else None),
                 pair=pair))
         return {"run_figs": run_figs, "cond_figs": cond_figs}
 
-    def _matrix_set(bands: dict, suffix: str, what: str,
+    def _matrix_set(bands: dict, suffix: str, what: str, page,
                     pair: "tuple[str, str] | None" = None) -> dict:
         """The two cross matrices for one scope, both chromophores on one pair of axes.
 
@@ -1033,7 +1035,7 @@ def build_hyper_post_report(
         pair_ids = list(pair) if pair else subject_ids
         chan_dfs = {k: _slice_pair(v, pair) for k, v in _named("chan").items()}
         if any(_crossed(df) for df in chan_dfs.values()):
-            with guard(f"WTC channel cross matrix ({what})", errors, scope):
+            with guard(f"WTC channel cross matrix ({what})", page_errors[page], scope):
                 # the montage, not the labels a table happens to carry: a dyad that lost a
                 # channel still gets a matrix of the same shape as one that did not
                 labels = chan_axis or sorted({lab for df in chan_dfs.values()
@@ -1045,7 +1047,7 @@ def build_hyper_post_report(
 
         roi_dfs = {k: _slice_pair(v, pair) for k, v in _named("roichan").items()}
         if roi_map and any(_crossed(df) for df in roi_dfs.values()):
-            with guard(f"wtc-roi-matrix ({what}) figure", errors, scope):
+            with guard(f"wtc-roi-matrix ({what}) figure", page_errors[page], scope):
                 out["roi_matrix"] = _fig_html(build_wtc_cross_matrix(
                     roi_dfs, roi_labels, pair_ids, band_fmin, band_fmax, "ROI"),
                     f"wtc_roimatrix{_pair_slug(pair)}{suffix}.html") or {}
@@ -1097,7 +1099,7 @@ def build_hyper_post_report(
         what = f"condition {label}" if label else "whole run"
         suffix = f"_{_pair_fname(label)}" if label else ""
         panel: dict = {}
-        with guard(f"ISC panel ({what}, {ch_type})", errors, scope):
+        with guard(f"ISC panel ({what}, {ch_type})", page_errors[(pair, label)], scope):
             panel = _fig_html(build_isc_panel(
                 isc_mat, isc_ch_names, list(pair),
                 ch_type=ch_type, isc_threshold=isc_threshold,
@@ -1243,7 +1245,9 @@ def build_hyper_post_report(
                           f"{'+'.join(_CHROMA_LABEL[c] for c in chroma)}"),
             ),
             **footer_vars(
-                scope=scope, errors=errors, notes=notes,
+                # the run-wide list plus this page's own, so a window that lost a panel says
+                # so and its neighbours do not
+                scope=scope, errors=errors + page_errors[(pair, label)], notes=notes,
                 nirs_dir=group_data_dir(output_dir, group_id),
                 provenance_path=provenance_path,
                 methods=methods, versions=versions,
@@ -1318,7 +1322,7 @@ def build_hyper_post_report(
         pair_figs = {c: _figures_for(c, passes[c], pr) for c in chroma}
         run_matrices = _matrix_set(
             {c: {"chan": passes[c]["chan"], "roichan": passes[c]["roichan"]}
-             for c in chroma}, "", "whole run", pr)
+             for c in chroma}, "", "whole run", (pr, None), pr)
 
         for i, (label, tstart, tstop) in enumerate(cond_windows):
             figs = {c: (pair_figs[c]["cond_figs"][i]
@@ -1327,7 +1331,8 @@ def build_hyper_post_report(
                          if i < len(passes[c]["cond_bands"]) else {}) for c in chroma}
             written = _render_page(
                 figs,
-                _matrix_set(bands, f"_{_pair_fname(label)}", f"condition {label}", pr),
+                _matrix_set(bands, f"_{_pair_fname(label)}", f"condition {label}",
+                            (pr, label), pr),
                 bands, label, (tstart, tstop), pr)
             logger.info("group-%s | %s condition %s → %s",
                         group_id, " × ".join(pr), label, written.name)

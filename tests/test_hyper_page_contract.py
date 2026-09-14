@@ -293,3 +293,44 @@ def test_a_condition_too_short_for_the_band_says_so(dyad, tmp_path_factory):
                if "index" not in p.name and not _window_of(p))
     run_html = run.read_text(encoding="utf-8")
     assert COUNT not in run_html and CAVEAT not in run_html
+
+
+# ---- a failure belongs to the page that lost the panel ----
+
+def test_a_failed_panel_reaches_its_own_page_and_no_other(dyad, tmp_path, monkeypatch):
+    """One window's figures fail; its page says so and the pages beside it do not.
+
+    Every page used to print the run's running total of failures, because one ``errors`` list
+    was shared and each page read it at the moment it was rendered. A reader of the "rest"
+    page was told about a panel that is missing from "talk".
+
+    The failure is injected at the point that knows which window it is drawing: the figure
+    filename carries the window slug and nothing above it does.
+    """
+    from fnirs_pipe.qc.hyper import hyper_report
+
+    real_save = hyper_report.save_png
+
+    def _explode_on_talk(b64, figures_dir, name):
+        if "talk" in name:
+            raise RuntimeError("panel exploded")
+        return real_save(b64, figures_dir, name)
+
+    monkeypatch.setattr(hyper_report, "save_png", _explode_on_talk)
+
+    path = hyper_report.build_hyper_post_report(
+        group_id="G1", task="tap",
+        group=[GroupEntry("G1", "sub-01", "tap"), GroupEntry("G1", "sub-02", "tap")],
+        aligned_raws=dyad, offsets={"sub-01": 0.0, "sub-02": 0.0}, output_dir=tmp_path,
+        wtc_fmin=0.02, wtc_fmax=0.2, wtc_band_fmin=0.03, wtc_band_fmax=0.10,
+        wtc_chroma=("hbo",), wtc_by_condition=True,
+    )
+    pages = {p.name: p.read_text(encoding="utf-8")
+             for p in path.parent.glob("*.html") if "index" not in p.name}
+    talk = next(v for k, v in pages.items() if "talk" in k)
+    rest = next(v for k, v in pages.items() if "rest" in k)
+    run  = next(v for k, v in pages.items() if "talk" not in k and "rest" not in k)
+
+    assert "panel exploded" in talk
+    assert "panel exploded" not in rest
+    assert "panel exploded" not in run
