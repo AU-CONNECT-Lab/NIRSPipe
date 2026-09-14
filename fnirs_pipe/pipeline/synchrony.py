@@ -1190,3 +1190,70 @@ def compute_isc(
 
     # a rejected channel contributed a row of NaN above, which the products carry
     return isc_mat, ch_names
+
+
+def roi_mean_of_isc(
+    isc_mat,
+    ch_names: list[str],
+    roi_map: dict[str, list[str]],
+    min_channels: int = 2,
+) -> "tuple[np.ndarray, list[str]] | tuple[None, None]":
+    """Average the channel-level ISC inside each ROI pair: the ROI number beside the ROI WTC.
+
+    ::
+
+      4x4 r matrix over S1_D1..S4_D4 + {"L": ["S1_D1", "S2_D2"], "R": [...]}
+        -> 2x2 r matrix over ["L", "R"]
+
+    Built from the channel values rather than from an ROI-averaged signal, which is how
+    :func:`roi_mean_of_channels` builds the ROI coherence, so the two ROI numbers a page
+    prints rest on the same channels.
+
+    Cell (i, j) is the first member's ROI i against the other's ROI j, so the matrix is
+    crossed and asymmetric exactly as the channel one is.
+
+    Averaged in Fisher z and returned as r, where the coherence path averages its values
+    directly: a correlation is signed and bounded and these are, unlike coherences, spread
+    across zero.
+
+    Parameters
+    ----------
+    isc_mat : array, shape (n_ch, n_ch)
+        What :func:`compute_isc` returned, NaN where a member lost a channel.
+    ch_names : list of str
+        The axis of ``isc_mat``, both sides.
+    roi_map : dict
+        ``{region: [channel label, ...]}``. Its key order is the returned axis.
+    min_channels : int
+        Least channel pairs a cell may rest on; thinner cells come back NaN. Counts pairs,
+        so a crossed cell needs that many combinations rather than that many channels a side.
+
+    Returns
+    -------
+    (matrix, labels) or (None, None)
+        ``(None, None)`` when there is nothing to average.
+    """
+    if isc_mat is None or not ch_names or not roi_map:
+        return None, None
+    mat = np.asarray(isc_mat, dtype=float)
+    labels = list(roi_map.keys())
+    index = {name: i for i, name in enumerate(ch_names)}
+    picks = {roi: [index[ch] for ch in chs if ch in index] for roi, chs in roi_map.items()}
+
+    out = np.full((len(labels), len(labels)), np.nan)
+    thin = 0
+    for i, a in enumerate(labels):
+        for j, b in enumerate(labels):
+            if not picks[a] or not picks[b]:
+                continue
+            block = mat[np.ix_(picks[a], picks[b])]
+            z = np.array([_fisher_z(r) for r in block.ravel()])
+            z = z[np.isfinite(z)]
+            if z.size < max(1, min_channels):
+                thin += z.size > 0
+                continue
+            out[i, j] = float(np.tanh(z.mean()))
+    if thin:
+        logger.info("ROI ISC: %d cell(s) under %d channel pairs, left blank",
+                    thin, min_channels)
+    return out, labels

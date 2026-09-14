@@ -19,6 +19,7 @@ every assertion, since the failures are all in what it wrote rather than in how 
 """
 
 import json
+import re
 from pathlib import Path
 
 import mne
@@ -334,3 +335,82 @@ def test_a_failed_panel_reaches_its_own_page_and_no_other(dyad, tmp_path, monkey
     assert "panel exploded" in talk
     assert "panel exploded" not in rest
     assert "panel exploded" not in run
+
+
+# ---- the numbers table, which is the one thing on the page that is not of one scope ----
+
+def _banners(page: Path) -> list[str]:
+    """The scope banners of the numbers table, in the order they are printed."""
+    html = page.read_text(encoding="utf-8")
+    return re.findall(r'class="ch-group"\s*>(.*?)</td>', html, re.S)
+
+
+def test_the_run_page_prints_every_condition_under_the_whole_run(pages):
+    """A block design is read by comparing conditions, and no condition page can show that."""
+    run = next(p for p in pages if not _window_of(p))
+    scopes = [b.split(":")[0] for b in _banners(run)]
+    assert scopes[:2] == ["Whole run", "Whole run"]
+    assert [s for s in scopes if s != "Whole run"] == [c for c in CONDITIONS for _ in (0, 1)]
+
+
+def test_a_condition_page_prints_its_own_window_and_no_other(pages):
+    """The run page is where the conditions are compared; a condition page stays its own."""
+    for page in pages:
+        label = _window_of(page)
+        if not label:
+            continue
+        assert [b.split(":")[0] for b in _banners(page)] == [label, label]
+
+
+def test_the_conditions_do_not_all_print_the_run_s_numbers(pages):
+    """The defect this guards is the run's frames reaching every block, which looks right
+    until two conditions agree cell for cell with the whole run."""
+    run = next(p for p in pages if not _window_of(p))
+    html = run.read_text(encoding="utf-8")
+    blocks = [html[i:j] for i, j in zip(
+        [m.start() for m in re.finditer(r'class="ch-group"', html)],
+        [m.start() for m in re.finditer(r'class="ch-group"', html)][1:] + [len(html)])]
+    values = [re.findall(r'<td>(-?\+?\d\.\d{3})</td>', b) for b in blocks]
+    assert all(values), "a block printed no numbers at all"
+    assert len({tuple(v) for v in values}) == len(values)
+
+
+def test_the_roi_rows_carry_an_isc_of_their_own(pages):
+    """The ROI block used to print dashes under the ISC columns, the matrix being
+    channel-level and never grouped."""
+    for page in pages:
+        html = page.read_text(encoding="utf-8")
+        start = html.index("ROI pairs (")
+        stop = html.find('class="ch-group"', start)
+        block = html[start: stop if stop > 0 else html.index("</table>", start)]
+        rows = re.findall(r"<tr><td>(L|R)</td>(.*?)</tr>", block, re.S)
+        assert rows, page.name
+        for roi, rest in rows:
+            cells = re.findall(r"<td[^>]*>(.*?)</td>", rest, re.S)
+            assert any(re.fullmatch(r"[+-]\d\.\d{3}", c) for c in cells), (page.name, roi)
+
+
+def test_the_coherence_column_is_named_for_the_statistic(pages):
+    """It is a wavelet coherence and the index page already calls it WTC; "coherence" left a
+    reader guessing which of the page's two coherences a column held."""
+    for page in pages:
+        html = page.read_text(encoding="utf-8")
+        assert "<th>HbO WTC</th>" in html, page.name
+        assert "<th>HbO coherence</th>" not in html, page.name
+
+
+def test_the_roi_correlation_reaches_disk_for_every_scope(pages):
+    """Written beside the channel matrix and under the same desc- entity, so a group
+    analysis over regions does not have to regroup every dyad itself."""
+    nirs = next(p for p in pages).parent / "nirs"
+    written = {p.name for p in nirs.glob("*hyper-isc-roichan-*.tsv")}
+    assert any("desc-" not in n for n in written), written
+    for label in CONDITIONS:
+        assert any(f"desc-{label}" in n for n in written), (label, written)
+
+
+def test_a_rejected_pairing_reads_as_a_dash_and_not_as_nan(pages):
+    """It kept its row so the surviving direction can be read; the empty half printed the
+    string "nan", which is a number to anyone scanning the column."""
+    for page in pages:
+        assert "<td>nan</td>" not in page.read_text(encoding="utf-8"), page.name

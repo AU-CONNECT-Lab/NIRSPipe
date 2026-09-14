@@ -86,20 +86,26 @@ def _run(members, where, **kwargs):
     return path.parent
 
 
-def _coherence_cells(page):
-    """``{(site a, site b): value}`` off one page's numbers table."""
+def _coherence_cells(page, scope="Whole run"):
+    """``{(site a, site b): value}`` off one block of a page's numbers table.
+
+    The table is one grid with a banner row per scope, so the block is cut at the next
+    banner: a page carrying conditions as well would otherwise answer with the last one.
+    """
     html = page.read_text(encoding="utf-8", errors="replace")
-    i = html.find("channel pairs (")
+    i = html.find(f"{scope}: channel pairs (")
     if i < 0:
         return {}
-    table = html[html.rfind("<table", 0, i): html.find("</table>", i)]
     heads = [re.sub(r"<[^>]+>", "", h).strip()
-             for h in re.findall(r"<th[^>]*>(.*?)</th>", table, re.S)]
-    if "HbO coherence" not in heads:
+             for h in re.findall(r"<th[^>]*>(.*?)</th>",
+                                 html[html.rfind("<table", 0, i):i], re.S)]
+    if "HbO WTC" not in heads:
         return {}
-    column = heads.index("HbO coherence")
+    column = heads.index("HbO WTC")
+    stop = html.find('class="ch-group"', i)
+    block = html[i: stop if stop > 0 else html.find("</table>", i)]
     out = {}
-    for row in re.findall(r"<tr>(.*?)</tr>", table, re.S):
+    for row in re.findall(r"<tr>(.*?)</tr>", block, re.S):
         cells = [re.sub(r"<[^>]+>", "", c).strip()
                  for c in re.findall(r"<td[^>]*>(.*?)</td>", row, re.S)]
         if len(cells) > column and re.fullmatch(r"S\d+_D\d+", cells[0] or ""):

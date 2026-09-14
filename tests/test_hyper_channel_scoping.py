@@ -381,6 +381,89 @@ def test_a_failed_isc_write_costs_the_file_and_not_the_report(tmp_path):
     assert not path.exists()
 
 
+# ---- the ROI mean of the correlations ----
+#
+# It sits beside the ROI mean of the coherences and is built the same way, off the channel
+# values; what differs is the average, since a correlation is signed.
+
+ISC_ROIS = {"L": ["S1_D1", "S2_D2"], "R": ["S3_D3", "S4_D4"]}
+ISC_LABELS = ["S1_D1", "S2_D2", "S3_D3", "S4_D4"]
+
+
+def _isc_roi(mat, **kwargs):
+    from fnirs_pipe.pipeline.synchrony import roi_mean_of_isc
+
+    return roi_mean_of_isc(np.asarray(mat, dtype=float), ISC_LABELS, ISC_ROIS, **kwargs)
+
+
+def test_the_roi_correlation_is_the_fisher_z_mean_of_its_channels():
+    """Averaging r directly pulls a spread block toward zero; that bias is the whole point
+    of the transform, so the test is a block whose two means differ."""
+    mat = np.zeros((4, 4))
+    mat[np.ix_([0, 1], [0, 1])] = [[0.2, 0.4], [0.6, 0.95]]
+    out, labels = _isc_roi(mat, min_channels=1)
+
+    z = np.arctanh(np.clip([0.2, 0.4, 0.6, 0.95], -0.999999, 0.999999))
+    assert labels == ["L", "R"]
+    assert out[0, 0] == pytest.approx(float(np.tanh(z.mean())))
+    assert out[0, 0] > np.mean([0.2, 0.4, 0.6, 0.95])
+
+
+def test_the_roi_correlation_keeps_the_two_members_on_their_own_axis():
+    """Cell (i, j) is sub1's region i against sub2's region j, which is what the channel
+    matrix means and the only reason an off-diagonal cell is readable at all."""
+    mat = np.zeros((4, 4))
+    mat[np.ix_([0, 1], [2, 3])] = 0.5      # sub1's L against sub2's R
+    out, labels = _isc_roi(mat, min_channels=1)
+
+    assert out[labels.index("L"), labels.index("R")] == pytest.approx(0.5)
+    assert out[labels.index("R"), labels.index("L")] == pytest.approx(0.0)
+
+
+def test_a_rejected_channel_thins_a_roi_cell_rather_than_voiding_it():
+    """A rejected channel arrives as NaN. Those are dropped, so the region is still reported
+    off what survived, which is how the ROI coherence treats the same gap."""
+    mat = np.full((4, 4), 0.5)
+    mat[0, :] = np.nan
+    out, _ = _isc_roi(mat, min_channels=2)
+    assert np.isfinite(out).all()
+    assert out[0, 0] == pytest.approx(0.5)
+
+
+def test_a_roi_cell_under_the_minimum_is_left_blank():
+    """The rule the ROI coherence uses, so one surviving optode never stands for a region."""
+    mat = np.full((4, 4), 0.5)
+    mat[0, :] = mat[1, :] = np.nan        # region L keeps nothing on sub1's side
+    out, labels = _isc_roi(mat, min_channels=2)
+    assert np.isnan(out[labels.index("L")]).all()
+    assert np.isfinite(out[labels.index("R")]).all()
+
+
+def test_no_roi_map_is_no_matrix_rather_than_an_empty_one():
+    assert _isc_roi(np.zeros((4, 4)))[0] is not None
+    from fnirs_pipe.pipeline.synchrony import roi_mean_of_isc
+
+    assert roi_mean_of_isc(np.zeros((4, 4)), ISC_LABELS, {}) == (None, None)
+    assert roi_mean_of_isc(None, ISC_LABELS, ISC_ROIS) == (None, None)
+
+
+def test_the_roi_matrix_is_written_beside_the_channel_one(tmp_path):
+    """A group analysis over regions reads this file; without it the ROI correlations only
+    ever exist inside one page's HTML."""
+    from fnirs_pipe.pipeline.hyper_post import write_isc_matrix
+
+    path = tmp_path / "group-G1_task-hold_hyper-isc-roichan-hbo.tsv"
+    write_isc_matrix(path, np.array([[0.4, 0.1], [0.2, 0.3]]), ["L", "R"], "hbo",
+                     [], ["sub-01", "sub-02"],
+                     step="hyper_isc_roichan", index_label="roi")
+
+    written = pd.read_csv(path, sep="	", index_col="roi")
+    assert list(written.index) == ["L", "R"]
+    assert written.iloc[1, 0] == pytest.approx(0.2)
+    sidecar = json.loads(path.with_suffix(".json").read_text(encoding="utf-8"))
+    assert sidecar["step"] == "hyper_isc_roichan"
+
+
 # ---- the quality record reaching the Raw ----
 
 def test_a_rejected_pair_is_marked_at_both_chromophores():

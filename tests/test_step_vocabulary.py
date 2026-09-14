@@ -26,7 +26,8 @@ ALL_STEPS = [
     "fisher_z", "fc_roi", "fc_seed", "group_sqm_raw", "group_sqm_raw_channels",
     "hyper_sqm", "hyper_bads", "hyper_coherence", "hyper_coherence_windowed",
     "hyper_screening", "hyper_usable",
-    "hyper_wtc", "hyper_wtc_roichan", "hyper_wtc_pseudo", "hyper_isc",
+    "hyper_wtc", "hyper_wtc_roichan", "hyper_wtc_pseudo",
+    "hyper_isc", "hyper_isc_roichan",
     "hyper_wtc_bycondition", "hyper_wtc_bycondition_roichan",
     "group_hyper_wtc", "group_hyper_wtc_roichan", "group_hyper_wtc_pseudo",
 ]

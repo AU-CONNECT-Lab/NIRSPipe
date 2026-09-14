@@ -563,7 +563,7 @@ def _number_table(bands: dict, isc: "dict | None", axis: list[str], kind: str,
       {"hbo": band frame, "hbr": ...} + {"hbo": (matrix, names), ...}
         -> {"kind": "channel",
             "rows": [{"a": "S1_D1", "b": "S1_D2",
-                      "cells": {"HbO coherence": "0.241", "HbO ISC": "+0.067"}}]}
+                      "cells": {"HbO WTC": "0.241", "HbO ISC": "+0.067"}}]}
 
     The panels above show these as colour and the TSVs hold them to full precision; this
     is the same numbers on the page, so that reading one off a cell does not mean opening
@@ -581,7 +581,8 @@ def _number_table(bands: dict, isc: "dict | None", axis: list[str], kind: str,
 
     Rows are every pairing that carries at least one value, so an uncrossed run shows the
     coherence on the diagonal and the ISC everywhere, which is what those two actually
-    computed. ``isc`` is None for the ROI table, there being no ROI-level ISC.
+    computed. ``isc`` is the matrices for this scope at this table's own level, channel or
+    ROI, and None where the scope produced none.
     """
     cells: dict = {}
 
@@ -597,7 +598,10 @@ def _number_table(bands: dict, isc: "dict | None", axis: list[str], kind: str,
             # an uncrossed run has no `label2`: every row of it is a site against the
             # other member's copy of the same site, which is this table's diagonal
             pair = (row.label, getattr(row, "label2", row.label))
-            _put(pair, f"{name} coherence", f"{row.coherence:.3f}")
+            # a rejected channel keeps its row and leaves the value empty, which is a dash
+            # here as everywhere else on the page rather than the string "nan"
+            if np.isfinite(row.coherence):
+                _put(pair, f"{name} WTC", f"{row.coherence:.3f}")
             frac = getattr(row, "n_valid_frac", None)
             if frac is not None and np.isfinite(frac):
                 _put(pair, f"{name} valid", f"{100 * frac:.0f}%")
@@ -617,7 +621,7 @@ def _number_table(bands: dict, isc: "dict | None", axis: list[str], kind: str,
     # the columns this table actually filled, in a fixed order rather than in the order
     # the first pairing happened to fill them: the header is shared with the other table
     order = ([f"{_CHROMA_LABEL[c]} {what}" for c in chroma
-              for what in ("coherence", "valid")]
+              for what in ("WTC", "valid")]
              + [f"{_CHROMA_LABEL[c]} ISC" for c in (chroma if isc else ())])
     used = {col for pair in cells.values() for col in pair}
     rows = [{"a": a, "b": b, "cells": cells[(a, b)]}
@@ -1108,6 +1112,7 @@ def build_hyper_post_report(
 
     isc_panels: dict = {}
     isc_values: dict = {}
+    isc_roi_values: dict = {}
     for pr in pairings:
         labels = [None] + [label for label, _, _ in cond_windows]
         isc_panels[pr] = {k: {c: _isc_panel_of(pr, k, c) for c in ("hbo", "hbr")}
@@ -1115,6 +1120,10 @@ def build_hyper_post_report(
         isc_values[pr] = {k: {c: result.isc.get(pr, {}).get(k, {}).get(c, (None, None))
                               for c in ("hbo", "hbr")}
                           for k in labels}
+        isc_roi_values[pr] = {k: {c: result.isc_roi.get(pr, {}).get(k, {}).get(
+                                      c, (None, None))
+                                  for c in ("hbo", "hbr")}
+                              for k in labels}
 
     # ISC has no frequency axis, so an unfiltered stage reaches the number directly; WTC
     # does not care. Said on the page as well as in the log, since the two are read by
@@ -1183,7 +1192,7 @@ def build_hyper_post_report(
     methods = group_methods(output_dir, group, group_data_dir(output_dir, group_id),
                             own_steps, versions, notes, scope)
 
-    def _render_page(figs: dict, matrices: dict, band_frames: dict, label: "str | None",
+    def _render_page(figs: dict, matrices: dict, number_scopes: list, label: "str | None",
                      window: "tuple[float, float] | None",
                      pair: "tuple[str, str] | None" = None) -> Path:
         """One page: the whole run's when ``label`` is None, else that condition's.
@@ -1198,6 +1207,12 @@ def build_hyper_post_report(
         quality table is measured over the whole recording, and printing it under a
         condition's heading would read as that condition's numbers. It is a click away on
         the run's own page, and the page says so.
+
+        ``number_scopes`` is ``[(heading, band frames, ISC label), ...]``: the run's page
+        carries the whole run and then every condition, a condition's page carries itself
+        alone. The pictures above are of one scope and the numbers below are not, because a
+        block design is read by comparing conditions and every panel repeated per condition
+        would be a page nobody scrolls.
         """
         # Every figure's URL keyed by chromophore, which is what the page's chromophore
         # switch reads. The panels are one set of DOM nodes filled from these, not one set
@@ -1213,18 +1228,20 @@ def build_hyper_post_report(
         roi_matrix  = matrices.get("roi_matrix") or {}
         chan_matrix = matrices.get("chan_matrix") or {}
 
-        # the same scope the panels above were drawn over, printed rather than coloured
-        bands = {c: (band_frames.get(c) or {}) for c in chroma}
         pair_ids = list(pair) if pair else subject_ids
-        number_tables = [t for t in (
-            _number_table({c: _slice_pair(bands[c].get("chan"), pair) for c in chroma},
-                          (isc_values.get(pair) or {}).get(label) or {},
-                          chan_axis, "channel", chroma),
-            _number_table({c: _slice_pair(bands[c].get("roichan"), pair) for c in chroma},
-                          None, roi_labels, "ROI", chroma),
-        ) if t]
-        # one header over both tables: the coherence columns they share, then the ISC the
-        # channel table alone has
+        number_tables = []
+        for heading, band_frames, isc_label in number_scopes:
+            bands = {c: (band_frames.get(c) or {}) for c in chroma}
+            for kind, key, axis, values in (
+                ("channel", "chan", chan_axis, isc_values),
+                ("ROI", "roichan", roi_labels, isc_roi_values),
+            ):
+                table = _number_table(
+                    {c: _slice_pair(bands[c].get(key), pair) for c in chroma},
+                    (values.get(pair) or {}).get(isc_label) or {}, axis, kind, chroma)
+                if table:
+                    number_tables.append({**table, "scope": heading})
+        # one header over every table: the WTC columns they share, then the ISC
         number_columns = list(dict.fromkeys(
             col for table in number_tables for col in table["columns"]))
 
@@ -1324,23 +1341,32 @@ def build_hyper_post_report(
             {c: {"chan": passes[c]["chan"], "roichan": passes[c]["roichan"]}
              for c in chroma}, "", "whole run", (pr, None), pr)
 
+        def _cond_bands(i: int) -> dict:
+            return {c: (passes[c]["cond_bands"][i]
+                        if i < len(passes[c]["cond_bands"]) else {}) for c in chroma}
+
+        run_bands = {c: {"chan": passes[c]["chan"], "roichan": passes[c]["roichan"]}
+                     for c in chroma}
+
         for i, (label, tstart, tstop) in enumerate(cond_windows):
             figs = {c: (pair_figs[c]["cond_figs"][i]
                         if i < len(pair_figs[c]["cond_figs"]) else {}) for c in chroma}
-            bands = {c: (passes[c]["cond_bands"][i]
-                         if i < len(passes[c]["cond_bands"]) else {}) for c in chroma}
+            bands = _cond_bands(i)
             written = _render_page(
                 figs,
                 _matrix_set(bands, f"_{_pair_fname(label)}", f"condition {label}",
                             (pr, label), pr),
-                bands, label, (tstart, tstop), pr)
+                [(label, bands, label)], label, (tstart, tstop), pr)
             logger.info("group-%s | %s condition %s → %s",
                         group_id, " × ".join(pr), label, written.name)
 
+        # the run's page prints every condition under the whole run, which is the comparison
+        # a block design is run for and the one thing no condition page can show
         written = _render_page(
             {c: pair_figs[c]["run_figs"] for c in chroma}, run_matrices,
-            {c: {"chan": passes[c]["chan"], "roichan": passes[c]["roichan"]}
-             for c in chroma},
+            [("Whole run", run_bands, None)]
+            + [(label, _cond_bands(i), label)
+               for i, (label, _, _) in enumerate(cond_windows)],
             None, None, pr)
         logger.info("Hyper post report saved: %s", written)
         output_path = output_path or written

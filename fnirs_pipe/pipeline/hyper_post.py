@@ -79,7 +79,8 @@ class HyperPostResult:
     ``cond_wtc`` / ``cond_bands`` positionally over ``cond_windows`` -- positional so the
     chromophores line up even where a guard failed on one.
 
-    ``isc`` is ``{pairing: {label or None: {chromophore: (matrix, channel names)}}}``.
+    ``isc`` is ``{pairing: {label or None: {chromophore: (matrix, channel names)}}}``, and
+    ``isc_roi`` the same shape over the ROI means of those matrices.
     ``chan_axis`` and ``roi_labels`` are the axes every panel and matrix is indexed by; they
     ride here so a panel cannot be drawn on a different axis than the table beside it.
     """
@@ -101,6 +102,7 @@ class HyperPostResult:
     chan_band_df: Any = None
     roi_band_df: Any = None
     isc: dict = field(default_factory=dict)
+    isc_roi: dict = field(default_factory=dict)
     align_info: dict = field(default_factory=dict)
     tables: dict = field(default_factory=dict)
 
@@ -113,6 +115,8 @@ def write_isc_matrix(
     sources: list[str],
     subject_ids: list[str],
     align: "dict | None" = None,
+    step: str = "hyper_isc",
+    index_label: str = "channel",
 ) -> None:
     """Write the matrix the ISC panel is drawn from, so the numbers can leave the report.
 
@@ -121,6 +125,9 @@ def write_isc_matrix(
     two brains: cell (i, j) is the first subject's channel i against the other's channel j.
     Rejected channels are blank rather than absent, so the file's shape is the montage's
     however many channels a given dyad lost.
+
+    ``step`` and ``index_label`` are what let this serve the ROI means of those matrices
+    too, which are the same square shape over regions instead of channels.
 
     ``align`` is what :func:`~fnirs_pipe.pipeline.hyperscanning.alignment_params` returned.
     ISC is a correlation between two members sample by sample, so it is the metric a missed
@@ -133,8 +140,8 @@ def write_isc_matrix(
     try:
         tsv_path.parent.mkdir(parents=True, exist_ok=True)
         pd.DataFrame(isc_mat, index=ch_names, columns=ch_names).to_csv(
-            tsv_path, sep="\t", index_label="channel")
-        _hyper_sidecar(tsv_path, "hyper_isc", sources,
+            tsv_path, sep="\t", index_label=index_label)
+        _hyper_sidecar(tsv_path, step, sources,
                        chromophore=ch_type, subjects=subject_ids, **(align or {}))
         logger.info("ISC matrix saved: %s", tsv_path)
     except Exception as exc:
@@ -176,6 +183,7 @@ def run_hyper_post(
         compute_wtc,
         long_axis_over,
         roi_mean_of_channels,
+        roi_mean_of_isc,
         window_result,
         wtc_band_mean,
         wtc_grid_params,
@@ -486,35 +494,49 @@ def run_hyper_post(
     # coherence, which is sliced out of the whole-run transform; see `compute_isc` and
     # `window_result` for why each is right.
     def _isc_of(ch_type: str, label, window, pair) -> tuple:
+        """One scope's ISC at both levels: ``((matrix, channels), (matrix, regions))``."""
         what = f"condition {label}" if label else "whole run"
-        isc_mat = isc_ch_names = None
+        channel_level = roi_level = (None, None)
         with guard(f"ISC ({what}, {ch_type})", errors, scope):
             pair_ids = list(pair) if pair else subject_ids
             isc_mat, isc_ch_names = compute_isc(aligned_raws, pair_ids, ch_type,
                                                 sep_bands, window=window)
             if isc_mat is None:
-                return None, None
+                return channel_level, roi_level
+            channel_level = (isc_mat, isc_ch_names)
+            sources = [p for p in (path_from(r) for r in aligned_raws.values()) if p]
             # the desc- entity a condition's page takes, so its table is named the way its
             # page is and a reader can pair the two without a rule of their own
             desc = f"_desc-{_pair_fname(label)}" if label else ""
+            stem = (group_data_dir(output_dir, group_id)
+                    / f"group-{group_id}_task-{task}{desc}_hyper-isc")
+            slug = pair_slug(pair, len(pairings))
             write_isc_matrix(
-                group_data_dir(output_dir, group_id)
-                / f"group-{group_id}_task-{task}{desc}"
-                  f"_hyper-isc-{ch_type}{pair_slug(pair, len(pairings))}.tsv",
-                isc_mat, isc_ch_names, ch_type,
-                [p for p in (path_from(r) for r in aligned_raws.values()) if p],
-                pair_ids,
-                align=align_info,
+                Path(f"{stem}-{ch_type}{slug}.tsv"),
+                isc_mat, isc_ch_names, ch_type, sources, pair_ids, align=align_info,
             )
-        return isc_mat, isc_ch_names
+            if roi_map:
+                roi_mat, roi_names = roi_mean_of_isc(
+                    isc_mat, isc_ch_names, roi_map, min_channels=wtc_roi_min_channels)
+                if roi_mat is not None:
+                    roi_level = (roi_mat, roi_names)
+                    write_isc_matrix(
+                        Path(f"{stem}-roichan-{ch_type}{slug}.tsv"),
+                        roi_mat, roi_names, ch_type, sources, pair_ids, align=align_info,
+                        step="hyper_isc_roichan", index_label="roi",
+                    )
+        return channel_level, roi_level
 
     isc: dict = {}
+    isc_roi: dict = {}
     for pr in pairings:
-        rows = {None: {c: _isc_of(c, None, analysis_window, pr) for c in ("hbo", "hbr")}}
-        for label, tstart, tstop in cond_windows:
-            rows[label] = {c: _isc_of(c, label, (tstart, tstop), pr)
-                           for c in ("hbo", "hbr")}
-        isc[pr] = rows
+        scopes = [(None, analysis_window)] + [(lab, (a, b)) for lab, a, b in cond_windows]
+        both = {lab: {c: _isc_of(c, lab, window, pr) for c in ("hbo", "hbr")}
+                for lab, window in scopes}
+        isc[pr] = {lab: {c: got[0] for c, got in by_chroma.items()}
+                   for lab, by_chroma in both.items()}
+        isc_roi[pr] = {lab: {c: got[1] for c, got in by_chroma.items()}
+                       for lab, by_chroma in both.items()}
 
     return HyperPostResult(
         subject_ids=subject_ids,
@@ -530,6 +552,7 @@ def run_hyper_post(
         chan_band_df=chan_band_df,
         roi_band_df=roi_band_df,
         isc=isc,
+        isc_roi=isc_roi,
         align_info=align_info,
         tables=tables,
     )

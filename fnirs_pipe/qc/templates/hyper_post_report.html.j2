@@ -337,11 +337,12 @@
 {% if number_tables %}
 <h2 id="Numbers">The numbers</h2>
 <p class="step-desc">Every value the panels above were drawn from, one row per pairing, for
-  {% if condition_label %}this window{% else %}the whole run{% endif %}. Not rounded anywhere
-  but here: <code>hyper-wtc.tsv</code>, <code>hyper-wtc-roichan.tsv</code> and
+  {% if condition_label %}this window{% else %}the whole run and then each condition, which is
+  the comparison no single page above can show{% endif %}. Not rounded anywhere but here:
+  <code>hyper-wtc.tsv</code>, <code>hyper-wtc-roichan.tsv</code> and
   <code>hyper-isc-*.tsv</code> under the group&rsquo;s <code>nirs/</code> carry the same
   numbers at full precision. <b>valid</b> is the share of the pairing&rsquo;s band cells that
-  survived the cone of influence, which is the one thing behind a band mean that no figure
+  survived the cone of influence, which is the one thing behind a WTC mean that no figure
   here shows: a coherence resting on a third of its window is not the same measurement as one
   that kept all of it.</p>
 {#- the subject report's per-channel table, with a pairing where it has a channel: one
@@ -359,7 +360,7 @@
       {% for table in number_tables %}
       <tbody>
         <tr><td colspan="{{ number_columns | length + 2 }}" class="ch-group"
-            >{{ table.kind }} pairs ({{ table.rows | length }})</td></tr>
+            >{{ table.scope }}: {{ table.kind }} pairs ({{ table.rows | length }})</td></tr>
         {% for row in table.rows %}
         <tr><td>{{ row.a }}</td><td>{{ row.b }}</td>
           {%- for col in number_columns %}
@@ -371,6 +372,10 @@
       {% endfor %}
     </table>
   </div>
+  <p class="qm-note">An ROI value is the mean of the channel pairs inside the two regions,
+    not a second analysis of an averaged signal. The ROI WTC is the plain mean of those
+    coherences and the ROI ISC the Fisher z mean of those correlations, a correlation being
+    signed where a coherence is not.</p>
 </div>
 {% endif %}
 
