@@ -116,6 +116,16 @@ details[open] > summary::before { transform: rotate(90deg); }
               text-transform: uppercase; letter-spacing: 0.04em;
               border-bottom: 1px solid #d8dee5; }
 .qm-flat td.qv { font-weight: 600; white-space: nowrap; }
+/* ---- the dyad report's numbers tables ---- */
+/* one table per kind of pairing, each condition a group of columns beside the whole run's */
+.num-scroll { overflow-x: auto; }
+/* the two label columns to one width across the tables, so the value columns of a channel
+   table and an ROI table start in the same place */
+.num-table col.idcol { width: 7rem; }
+/* a rule where one condition's columns end, without which a dozen of them read as one smear */
+.num-table th.grp, .num-table td.grp { border-left: 2px solid #b8c2cc; }
+.num-table .hdr-note { font-weight: 400; color: #8a949e; }
+
 .qm-table td.bad  { color: #c0392b; }
 .qm-table td.good { color: #27ae60; }
 .qm-table td.neg  { color: #27ae60; }

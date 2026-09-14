@@ -355,42 +355,59 @@
 <!-- ============================================================== numbers -->
 {% if number_tables %}
 <h2 id="Numbers">The numbers</h2>
-<p class="step-desc">Every value the panels above were drawn from, one row per pairing, for
-  {% if condition_label %}this window{% else %}the whole run and then each condition, which is
-  the comparison no single page above can show{% endif %}. Not rounded anywhere but here:
+<p class="step-desc">Every value the panels above were drawn from, one row per pairing
+  {%- if condition_label %} over this window
+  {%- else %}, each condition beside the whole run, which is the comparison no single panel
+  above can show{% endif %}. Not rounded anywhere but here:
   <code>hyper-wtc.tsv</code>, <code>hyper-wtc-roichan.tsv</code> and
   <code>hyper-isc-*.tsv</code> under the group&rsquo;s <code>nirs/</code> carry the same
-  numbers at full precision. <b>valid</b> is the share of the pairing&rsquo;s band cells that
-  survived the cone of influence, which is the one thing behind a WTC mean that no figure
-  here shows: a coherence resting on a third of its window is not the same measurement as one
-  that kept all of it.</p>
-{#- the subject report's per-channel table, with a pairing where it has a channel: one
-    full-width grid, and each kind of pairing announced on a row spanning it rather than by a
-    heading of its own. Two tables would be two grids of different widths for numbers read
-    the same way. -#}
+  numbers at full precision. <b>% in COI</b> beside a column group is the share of that
+  window&rsquo;s band cells that survived the cone of influence, which is the one thing
+  behind a WTC mean that no figure here shows. It is one number per window rather than per
+  pairing, the cone depending on the window length and the band and not on the channels: a
+  coherence resting on a third of its cells is not the same measurement as one that kept all
+  of them.</p>
+{#- one table per kind of pairing, not one grid announcing each kind on a row spanning it.
+    A crossed dyad's channel table is hundreds of rows and the ROI tables are a handful, so
+    they were never read side by side; separate tables let each carry only the columns it
+    filled. -#}
 <div class="qm-box">
-  <div style="overflow-x:auto;">
-    <table class="qm-table">
+  {% for table in number_tables %}
+  <p class="qm-sub">{{ table.kind }} ({{ table.rows | length }})</p>
+  <div class="num-scroll">
+    <table class="qm-table num-table">
+      {#- the two label columns to one width across the tables, which auto layout gives
+          them only by accident: they hold an ROI name in one table and a channel in the
+          next -#}
+      <colgroup><col class="idcol"><col class="idcol"></colgroup>
       <thead>
-        <tr><th>{{ subject_ids[0] }}</th><th>{{ subject_ids[1] }}</th>
-          {%- for col in number_columns %}<th>{{ col }}</th>{% endfor %}
+        <tr>
+          <th rowspan="2">{{ subject_ids[0] }}</th><th rowspan="2">{{ subject_ids[1] }}</th>
+          {%- for scope in table.scopes %}
+          <th colspan="{{ table.columns | length }}" class="grp">{{ scope.label }}
+            {%- if scope.valid %} <span class="hdr-note">{{ scope.valid }}</span>{% endif %}
+          </th>
+          {%- endfor %}
+        </tr>
+        <tr>
+          {%- for scope in table.scopes %}{% for col in table.columns %}
+          <th{% if loop.first %} class="grp"{% endif %}>{{ col }}</th>
+          {%- endfor %}{% endfor %}
         </tr>
       </thead>
-      {% for table in number_tables %}
       <tbody>
-        <tr><td colspan="{{ number_columns | length + 2 }}" class="ch-group"
-            >{{ table.scope }}: {{ table.kind }} pairs ({{ table.rows | length }})</td></tr>
         {% for row in table.rows %}
         <tr><td>{{ row.a }}</td><td>{{ row.b }}</td>
-          {%- for col in number_columns %}
-          <td>{{ row.cells.get(col) or "&mdash;" | safe }}</td>
-          {%- endfor %}
+          {%- for scope in table.scopes %}{% for col in table.columns %}
+          <td{% if loop.first %} class="grp"{% endif %}
+            >{{ row.cells.get(scope.label, {}).get(col) or "&mdash;" | safe }}</td>
+          {%- endfor %}{% endfor %}
         </tr>
         {% endfor %}
       </tbody>
-      {% endfor %}
     </table>
   </div>
+  {% endfor %}
   <p class="qm-note">An ROI value is the mean of the channel pairs inside the two regions,
     not a second analysis of an averaged signal. The ROI WTC is the plain mean of those
     coherences and the ROI ISC the Fisher z mean of those correlations, a correlation being

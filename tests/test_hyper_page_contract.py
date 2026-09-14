@@ -383,23 +383,48 @@ def test_a_failed_panel_reaches_its_own_page_and_no_other(dyad, tmp_path, monkey
 
 # ---- the numbers table, which is the one thing on the page that is not of one scope ----
 
-def _banners(page: Path) -> list[str]:
-    """The scope banners of the numbers table, in the order they are printed."""
-    html = page.read_text(encoding="utf-8")
-    return re.findall(r'class="ch-group"\s*>(.*?)</td>', html, re.S)
+def _table_of(html: str, kind: str) -> str:
+    """One numbers table out of the page, `kind` being the subheading over it."""
+    start = html.index(f'class="qm-sub">{kind} (')
+    return html[start:html.index("</table>", start)]
 
 
-# channel, ROI over every pairing in the region, ROI over its homologous pairs alone
-LEVELS_PER_SCOPE = 3
+def _scope_headers(table: str) -> list[str]:
+    """The scope each column group stands for, in the order they are printed."""
+    return [re.sub(r"<span.*", "", h, flags=re.S).strip()
+            for h in re.findall(r'<th colspan="\d+" class="grp">(.*?)</th>', table, re.S)]
 
 
-def test_the_run_page_prints_every_condition_under_the_whole_run(pages):
-    """A block design is read by comparing conditions, and no condition page can show that."""
-    run = next(p for p in pages if not _window_of(p))
-    scopes = [b.split(":")[0] for b in _banners(run)]
-    assert scopes[:LEVELS_PER_SCOPE] == ["Whole run"] * LEVELS_PER_SCOPE
-    assert ([s for s in scopes if s != "Whole run"]
-            == [c for c in CONDITIONS for _ in range(LEVELS_PER_SCOPE)])
+def _values_by_scope(table: str) -> list:
+    """Each scope's own numbers out of one table, in row order.
+
+    ::
+
+      a row of [run HbO, run HbR | rest HbO, rest HbR] -> [[run...], [rest...]]
+    """
+    n = len(_scope_headers(table))
+    rows = re.findall(r"<tr><td>[^<]+</td><td>[^<]+</td>(.*?)</tr>", table, re.S)
+    out = [[] for _ in range(n)]
+    for rest in rows:
+        cells = [c.strip() for c in re.findall(r"<td[^>]*>(.*?)</td>", rest, re.S)]
+        width = len(cells) // n
+        for i in range(n):
+            out[i] += cells[i * width:(i + 1) * width]
+    return out
+
+
+# one table per kind of pairing: channel, ROI over every pairing in the region, ROI over its
+# homologous pairs alone
+KINDS = ["Channel pairs", "ROI pairs", "ROI homologous pairs"]
+
+
+def test_the_run_page_prints_every_condition_beside_the_whole_run(pages):
+    """A block design is read by comparing conditions, and no condition page can show that.
+    Beside rather than under: stacked, a pairing's whole-run value and its condition's were
+    hundreds of rows apart in a crossed channel table."""
+    html = next(p for p in pages if not _window_of(p)).read_text(encoding="utf-8")
+    for kind in KINDS:
+        assert _scope_headers(_table_of(html, kind)) == ["Whole run", *CONDITIONS], kind
 
 
 def test_a_condition_page_prints_its_own_window_and_no_other(pages):
@@ -408,35 +433,45 @@ def test_a_condition_page_prints_its_own_window_and_no_other(pages):
         label = _window_of(page)
         if not label:
             continue
-        assert [b.split(":")[0] for b in _banners(page)] == [label] * LEVELS_PER_SCOPE
+        html = page.read_text(encoding="utf-8")
+        for kind in KINDS:
+            assert _scope_headers(_table_of(html, kind)) == [label], (page.name, kind)
 
 
 def test_the_conditions_do_not_all_print_the_run_s_numbers(pages):
-    """The defect this guards is the run's frames reaching every block, which looks right
-    until two conditions agree cell for cell with the whole run."""
-    run = next(p for p in pages if not _window_of(p))
-    html = run.read_text(encoding="utf-8")
-    blocks = [html[i:j] for i, j in zip(
-        [m.start() for m in re.finditer(r'class="ch-group"', html)],
-        [m.start() for m in re.finditer(r'class="ch-group"', html)][1:] + [len(html)])]
-    values = [re.findall(r'<td>(-?\+?\d\.\d{3})</td>', b) for b in blocks]
-    assert all(values), "a block printed no numbers at all"
-    assert len({tuple(v) for v in values}) == len(values)
+    """The defect this guards is the run's frames reaching every column group, which looks
+    right until two conditions agree cell for cell with the whole run."""
+    html = next(p for p in pages if not _window_of(p)).read_text(encoding="utf-8")
+    for kind in KINDS:
+        per_scope = _values_by_scope(_table_of(html, kind))
+        assert all(per_scope), f"{kind}: a scope printed no numbers at all"
+        assert len({tuple(v) for v in per_scope}) == len(per_scope), kind
+
+
+def test_the_coi_share_is_stated_once_per_scope_rather_than_as_a_column(pages):
+    """It is the share of band cells inside the cone, which depends on the window length and
+    the band and not on the channels, so as a column it was one number repeated down every
+    row of the table and again for the second chromophore."""
+    for page in pages:
+        html = page.read_text(encoding="utf-8")
+        assert "valid</th>" not in html, page.name
+        table = _table_of(html, "Channel pairs")
+        notes = re.findall(r'<span class="hdr-note">(.*?)</span>', table)
+        assert len(notes) == len(_scope_headers(table)), page.name
+        assert all(n.endswith("% in COI") for n in notes), (page.name, notes)
 
 
 def test_the_roi_rows_carry_an_isc_of_their_own(pages):
     """The ROI block used to print dashes under the ISC columns, the matrix being
     channel-level and never grouped."""
     for page in pages:
-        html = page.read_text(encoding="utf-8")
-        start = html.index("ROI pairs (")
-        stop = html.find('class="ch-group"', start)
-        block = html[start: stop if stop > 0 else html.index("</table>", start)]
-        rows = re.findall(r"<tr><td>(L|R)</td>(.*?)</tr>", block, re.S)
+        table = _table_of(page.read_text(encoding="utf-8"), "ROI pairs")
+        rows = re.findall(r"<tr><td>(L|R)</td>(.*?)</tr>", table, re.S)
         assert rows, page.name
         for roi, rest in rows:
             cells = re.findall(r"<td[^>]*>(.*?)</td>", rest, re.S)
-            assert any(re.fullmatch(r"[+-]\d\.\d{3}", c) for c in cells), (page.name, roi)
+            assert any(re.fullmatch(r"[+-]\d\.\d{3}", c.strip()) for c in cells), (
+                page.name, roi)
 
 
 def test_the_coherence_column_is_named_for_the_statistic(pages):
@@ -444,8 +479,8 @@ def test_the_coherence_column_is_named_for_the_statistic(pages):
     reader guessing which of the page's two coherences a column held."""
     for page in pages:
         html = page.read_text(encoding="utf-8")
-        assert "<th>HbO WTC</th>" in html, page.name
-        assert "<th>HbO coherence</th>" not in html, page.name
+        assert re.search(r"<th[^>]*>HbO WTC</th>", html), page.name
+        assert "HbO coherence" not in html, page.name
 
 
 def test_the_roi_correlation_reaches_disk_for_every_scope(pages):

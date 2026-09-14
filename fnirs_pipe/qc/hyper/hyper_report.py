@@ -561,7 +561,7 @@ def _number_table(bands: dict, isc: "dict | None", axis: list[str], kind: str,
     ::
 
       {"hbo": band frame, "hbr": ...} + {"hbo": (matrix, names), ...}
-        -> {"kind": "channel",
+        -> {"kind": "channel", "valid": "87% in COI",
             "rows": [{"a": "S1_D1", "b": "S1_D2",
                       "cells": {"HbO WTC": "0.241", "HbO ISC": "+0.067"}}]}
 
@@ -571,13 +571,16 @@ def _number_table(bands: dict, isc: "dict | None", axis: list[str], kind: str,
     the matrices follow and for the same reason: two members can differ in what they
     rejected.
 
-    Cells are keyed by column name rather than by position because the channel table and
-    the ROI table sit in one grid under one header, and only the channel one has an ISC.
+    Cells are keyed by column name rather than by position, so a scope that filled a
+    column no other scope did still lands under the right header once `_merge_scopes` puts
+    them side by side.
 
-    ``valid`` is the share of the pairing's band cells that survived the cone of
-    influence, the one number behind a band mean that no figure here shows. A pairing
-    whose coherence rests on a third of its window is not the same measurement as one
-    that kept all of it.
+    ``valid`` is the share of band cells that survived the cone of influence, and it is one
+    number for the whole scope rather than a column: the cone depends on the window length
+    and the band, so every pairing in a scope has the same share. A window whose coherence
+    rests on a third of its cells is not the same measurement as one that kept all of them,
+    which is worth saying once at the top rather than repeating down every row. A rejected
+    pairing contributes nothing to it, its band mean being NaN.
 
     Rows are every pairing that carries at least one value, so an uncrossed run shows the
     coherence on the diagonal and the ISC everywhere, which is what those two actually
@@ -585,6 +588,7 @@ def _number_table(bands: dict, isc: "dict | None", axis: list[str], kind: str,
     ROI, and None where the scope produced none.
     """
     cells: dict = {}
+    fracs: set = set()
 
     def _put(pair: tuple, column: str, text: str) -> None:
         cells.setdefault(pair, {})[column] = text
@@ -604,7 +608,7 @@ def _number_table(bands: dict, isc: "dict | None", axis: list[str], kind: str,
                 _put(pair, f"{name} WTC", f"{row.coherence:.3f}")
             frac = getattr(row, "n_valid_frac", None)
             if frac is not None and np.isfinite(frac):
-                _put(pair, f"{name} valid", f"{100 * frac:.0f}%")
+                fracs.add(round(float(frac), 4))
 
     for ch_type in (chroma if isc else ()):
         mat, names = isc.get(ch_type) or (None, None)
@@ -619,15 +623,54 @@ def _number_table(bands: dict, isc: "dict | None", axis: list[str], kind: str,
                          f"{mat[index[a], index[b]]:+.3f}")
 
     # the columns this table actually filled, in a fixed order rather than in the order
-    # the first pairing happened to fill them: the header is shared with the other table
-    order = ([f"{_CHROMA_LABEL[c]} {what}" for c in chroma
-              for what in ("WTC", "valid")]
+    # the first pairing happened to fill them
+    order = ([f"{_CHROMA_LABEL[c]} WTC" for c in chroma]
              + [f"{_CHROMA_LABEL[c]} ISC" for c in (chroma if isc else ())])
     used = {col for pair in cells.values() for col in pair}
     rows = [{"a": a, "b": b, "cells": cells[(a, b)]}
             for a in axis for b in axis if (a, b) in cells]
-    return ({"kind": kind, "columns": [c for c in order if c in used], "rows": rows}
-            if rows else {})
+    lo, hi = (min(fracs), max(fracs)) if fracs else (None, None)
+    valid = "" if lo is None else (
+        f"{100 * lo:.0f}% in COI" if lo == hi
+        else f"{100 * lo:.0f}–{100 * hi:.0f}% in COI")
+    return ({"kind": kind, "columns": [c for c in order if c in used],
+             "rows": rows, "valid": valid} if rows else {})
+
+
+def _merge_scopes(kind: str, axis: list[str], per_scope: list) -> dict:
+    """The whole run and every condition on one row per pairing, side by side.
+
+    ::
+
+      [("Whole run", table), ("rest", table)]
+        -> {"scopes": [{"label": "Whole run", "valid": "87% in COI"}, ...],
+            "rows": [{"a": "S1_D1", "b": "S1_D2",
+                      "cells": {"Whole run": {"HbO WTC": "0.241"}, "rest": {...}}}]}
+
+    Stacked instead, the channel pairings of a 14-channel crossed dyad are 196 rows per
+    condition and the whole run's copy of a pairing is hundreds of rows away from the
+    condition's. Side by side, the comparison a block design is run for is one row.
+
+    ``columns`` is the union over the scopes, which is what lets one header stand over all
+    of them; a scope that filled fewer leaves its cells empty rather than shifting the rest.
+    Rows keep ``axis`` order and a pairing appears once however many scopes carry it.
+    """
+    if not per_scope:
+        return {}
+    cells: dict = {}
+    for heading, table in per_scope:
+        for row in table["rows"]:
+            cells.setdefault((row["a"], row["b"]), {})[heading] = row["cells"]
+    rows = [{"a": a, "b": b, "cells": cells[(a, b)]}
+            for a in axis for b in axis if (a, b) in cells]
+    if not rows:
+        return {}
+    return {
+        "kind": kind,
+        "columns": list(dict.fromkeys(c for _, t in per_scope for c in t["columns"])),
+        "scopes": [{"label": h, "valid": t["valid"]} for h, t in per_scope],
+        "rows": rows,
+    }
 
 
 def _isc_arc_rule(isc_threshold: "float | None", isc_pseudo: int) -> str:
@@ -1272,24 +1315,28 @@ def build_hyper_post_report(
         chan_matrix = matrices.get("chan_matrix") or {}
 
         pair_ids = list(pair) if pair else subject_ids
+        # One table per kind of pairing rather than one grid holding all three, so a table
+        # carries only the columns it filled and the page has one level of nesting instead
+        # of a scope inside a kind inside a grid.
         number_tables = []
-        for heading, band_frames, isc_label in number_scopes:
-            bands = {c: (band_frames.get(c) or {}) for c in chroma}
-            for kind, key, axis, values in (
-                ("channel", "chan", chan_axis, isc_values),
-                ("ROI", "roichan", roi_labels, isc_roi_values),
-                # the homologous ROI mean, which is the reported number and the only ROI
-                # value the null can rank; the row above is every pairing in the region
-                ("ROI homologous", "roihom", roi_labels, isc_roi_values),
-            ):
+        for kind, key, axis, values in (
+            ("Channel pairs", "chan", chan_axis, isc_values),
+            ("ROI pairs", "roichan", roi_labels, isc_roi_values),
+            # the homologous ROI mean, which is the reported number and the only ROI
+            # value the null can rank; the table above is every pairing in the region
+            ("ROI homologous pairs", "roihom", roi_labels, isc_roi_values),
+        ):
+            per_scope = []
+            for heading, band_frames, isc_label in number_scopes:
+                bands = {c: (band_frames.get(c) or {}) for c in chroma}
                 table = _number_table(
                     {c: _slice_pair(bands[c].get(key), pair) for c in chroma},
                     (values.get(pair) or {}).get(isc_label) or {}, axis, kind, chroma)
                 if table:
-                    number_tables.append({**table, "scope": heading})
-        # one header over every table: the WTC columns they share, then the ISC
-        number_columns = list(dict.fromkeys(
-            col for table in number_tables for col in table["columns"]))
+                    per_scope.append((heading, table))
+            merged = _merge_scopes(kind, axis, per_scope)
+            if merged:
+                number_tables.append(merged)
 
         out_path = _page_path(label, pair)
         heading = f"group-{group_id}_task-{task}"
@@ -1346,7 +1393,6 @@ def build_hyper_post_report(
             wtc_roi_matrix=roi_matrix,
             wtc_chan_matrix=chan_matrix,
             number_tables=number_tables,
-            number_columns=number_columns,
             # a second selector on each map panel, which an uncrossed run has no pairings
             # for: it holds the diagonal alone
             chan_crossed=wtc_channel_cross,

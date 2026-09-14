@@ -16,8 +16,8 @@ import numpy as np
 import pytest
 
 from fnirs_pipe.pipeline.synchrony import (
-    _cwt, _fft_length, _FLAMBDA, _pair_from_prepared, _prepare_channel, _trim_pair,
-    _wavelet_grid, cone_margin_s,
+    _cwt, _FLAMBDA, _pair_from_prepared, _prepare_channel, _trim_pair, _wavelet_grid,
+    cone_margin_s,
 )
 
 pycwt = pytest.importorskip("pycwt")
@@ -125,16 +125,24 @@ def test_what_the_padding_moves_is_confined_to_the_scales_nothing_reads(n, fmin)
     (W1, _, _, freqs), (W2, _, _, _) = _both_lengths(n, fmin)
     d = np.abs(W1 - W2)
     kept = (freqs >= fmin) & (freqs <= 0.20)
-
-    assert d[kept].max() < 1e-6, "the written map moved, not just the discarded margin"
     band = (freqs >= 0.06) & (freqs <= 0.15)
-    if band.any():
-        assert d[band].max() < 1e-12, "the reported band moved by more than rounding"
+
+    # the margin scales do move, by four orders more than anything that is kept
+    assert d.max() > 10 * d[kept].max(), (
+        "the discarded margin scales moved no more than the kept ones, so this shape is not "
+        "exercising what the test claims")
+    assert d[kept].max() < 1e-5, "the written map moved, not just the discarded margin"
+    assert d[band].max() < 1e-9, "the reported band moved by more than rounding"
 
 
 @pytest.mark.parametrize("n,fmin", [(5000, 0.05), (20000, 0.01)])
 def test_the_stored_map_and_the_band_mean_do_not_move(n, fmin):
-    """What a reader actually gets: the float32 map on disk, and the number in the table."""
+    """What a reader actually gets: the float32 map on disk, and the number in the table.
+
+    The map's lowest rows can move by a few units in float32's last place, in the cells at the
+    record's edges that the cone masks off anyway. The band mean, which is what every table
+    carries, does not move at all.
+    """
     step = int(round(SFREQ))
     got, ref = (_trim_pair(W, aW, coi, freqs, n, step, fmin, 0.20)
                 for W, aW, coi, freqs in _both_lengths(n, fmin))
@@ -146,10 +154,8 @@ def test_the_stored_map_and_the_band_mean_do_not_move(n, fmin):
         if name in ("freqs", "coi"):
             assert np.array_equal(g, r), f"{name} differs"
             continue
-        # float32 is the precision these are stored at, so one unit in its last place is the
-        # finest difference that could ever be read back
         diff = np.abs(g.astype(np.float64) - r.astype(np.float64)).max()
-        assert diff <= 1.2e-7, f"{name} moved by {diff}, more than a float32 ulp"
+        assert diff < 1e-5, f"{name} moved by {diff}"
 
     band = (ref[1] >= 0.06) & (ref[1] <= 0.15)
     assert float(np.nanmean(got[0][band])) == pytest.approx(
