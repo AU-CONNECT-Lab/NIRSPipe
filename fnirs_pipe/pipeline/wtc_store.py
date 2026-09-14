@@ -85,6 +85,35 @@ def load_wtc(path: Path) -> WTCResult:
     return WTCResult(pairs=pairs, freqs=freqs, times=times)
 
 
+def save_null_levels(levels: dict, path: Path) -> Path:
+    """Write the pseudo-dyad null's per-frequency levels, keyed the way the maps are.
+
+    ::
+
+      {("sub-p1", "sub-p2", "S1_D1"): ndarray(51,)} -> one npz of 51-long float32 arrays
+
+    Tiny beside the maps: one row per pair, not one map per pair, so it is written whether or
+    not ``--wtc-save-maps`` was asked for. The report needs it to draw arrows against the
+    null, and re-running the null to recover it costs hours.
+    """
+    arrays = {_flatten_key(sub1, sub2, label): np.asarray(level, dtype=np.float32)
+              for (sub1, sub2, label), level in levels.items()}
+    path.parent.mkdir(parents=True, exist_ok=True)
+    np.savez_compressed(path, **arrays)
+    logger.info("WTC null levels saved: %s (%d pairs)", path, len(arrays))
+    return path
+
+
+def load_null_levels(path: Path) -> dict:
+    """Read back what :func:`save_null_levels` wrote, keyed as ``result.pairs`` is."""
+    with np.load(path) as npz:
+        out: dict = {}
+        for name in npz.files:
+            sub1, sub2, label = _restore_key(name)
+            out.setdefault((sub1, sub2), {})[label] = npz[name]
+    return out
+
+
 def reband(path: Path, fmin: float, fmax: float, mask_coi: bool = True) -> pd.DataFrame:
     """Band means over a new band, from saved maps rather than a new wavelet transform.
 
@@ -113,6 +142,10 @@ def reband_tree(
     tag = suffix or f"band{fmin:g}-{fmax:g}".replace(".", "p")
     written: list[Path] = []
     for npz_path in sorted(output_dir.rglob("*_hyper-wtc*.npz")):
+        # the null levels sit under the same prefix but hold one row per pair, not a map;
+        # without this they would be opened, found to have no map in them, and warned about
+        if "-nulllevel-" in npz_path.stem:
+            continue
         try:
             df = reband(npz_path, fmin, fmax, mask_coi=mask_coi)
         except Exception as exc:

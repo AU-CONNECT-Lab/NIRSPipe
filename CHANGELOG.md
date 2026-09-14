@@ -6,7 +6,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- **The pseudo-dyad null keeps its spread.** `--wtc-pseudo` reported only the mean of its iterations, which says where the null sits but not how wide it is, so nothing could be ranked inside it. The tables gain `null_sd`, `null_p95`, `n_iter` and, where the real table is beside them, `percentile`: the share of a cell's surrogate draws its real value beat
+
 ### Changed
+- **Phase arrows on the coherence maps are drawn against the null when one was computed.** Without `--wtc-pseudo` they still clear the flat `--wtc-arrow-min`, which is a display threshold and not a test. With it, each frequency gets its own level out of the surrogates, which matters because surrogate coherence is not flat in frequency: it rises at both ends of the computed range, so one threshold over the whole map draws arrows preferentially at the band edges. The caption names which of the three levels was used
 - **Crossed wavelet coherence is about three times faster.** `--wtc-channel-cross` over a 14-channel montage went from 6.4 to 2.2 minutes per chromophore. Every coherence, phase and cone value it produces is identical to before, bit for bit
 
 ## [0.39.0] - 2026-09-13

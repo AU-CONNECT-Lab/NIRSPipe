@@ -219,15 +219,36 @@ def test_an_unknown_chromophore_is_refused(dyad, tmp_path, bad):
         )
 
 
+
+# The null is drawn and written in two phases, the report sitting between them: the level
+# the phase arrows need has to exist before the figures, and the rank a null row carries is
+# against the real tables the same report writes. These tests want both halves at once.
+def _draw_and_write(wtc_null, **kwargs):
+    run_only = ("limit_scales", "chroma", "sep_bands")
+    nulls = wtc_null.run_wtc_null(**kwargs)
+    return wtc_null.write_wtc_null(
+        nulls, **{k: v for k, v in kwargs.items() if k not in run_only})
+
+
+def _null(frame, cond_frames=(), levels=None):
+    """A PseudoNull around an already-made frame, for the tests that stub the draw away."""
+    from fnirs_pipe.pipeline.synchrony import PseudoNull
+
+    keys = ["sub1", "sub2", "label"] + (["label2"] if "label2" in frame.columns else [])
+    return PseudoNull(draws=[frame], cond_draws=list(cond_frames), keys=keys,
+                      levels=levels or {})
+
+
 # ---- the null follows ----
 
 def test_the_null_covers_both_chromophores_in_one_table(dyad, tmp_path):
     """A null on one chromophore says nothing about a coupling in the other, so the real
     table's other half would have nothing to be tested against."""
-    from fnirs_pipe.pipeline.wtc_null import write_wtc_null
+    from fnirs_pipe.pipeline import wtc_null
 
-    path = write_wtc_null(
-        "G1", "tap", dyad, tmp_path, n_iter=1, wtc_fmin=0.02, wtc_fmax=0.2,
+    path = _draw_and_write(
+        wtc_null, group_id="G1", task="tap", aligned_raws=dyad, output_dir=tmp_path,
+        n_iter=1, wtc_fmin=0.02, wtc_fmax=0.2,
         band_fmin=BAND[0], band_fmax=BAND[1], seed=3, chroma=("hbo", "hbr"))
     df = pd.read_csv(path, sep="\t")
     counts = df["chromophore"].value_counts().to_dict()
@@ -238,10 +259,10 @@ def test_the_null_covers_both_chromophores_in_one_table(dyad, tmp_path):
 
 
 def test_the_null_refuses_an_unknown_chromophore(dyad, tmp_path):
-    from fnirs_pipe.pipeline.wtc_null import write_wtc_null
+    from fnirs_pipe.pipeline.wtc_null import run_wtc_null
 
     with pytest.raises(ValueError, match="chroma"):
-        write_wtc_null("G1", "tap", dyad, tmp_path, n_iter=1, chroma=("hbt",))
+        run_wtc_null("G1", "tap", dyad, tmp_path, n_iter=1, chroma=("hbt",))
 
 
 # ---- the CLI surface ----
@@ -354,10 +375,10 @@ def test_the_null_and_the_report_default_to_the_same_chromophores():
     import inspect
 
     from fnirs_pipe.qc.hyper.hyper_report import build_hyper_post_report
-    from fnirs_pipe.pipeline.wtc_null import write_wtc_null
+    from fnirs_pipe.pipeline.wtc_null import run_wtc_null
 
     report = inspect.signature(build_hyper_post_report).parameters["wtc_chroma"].default
-    null = inspect.signature(write_wtc_null).parameters["chroma"].default
+    null = inspect.signature(run_wtc_null).parameters["chroma"].default
     assert tuple(report) == tuple(null) == ("hbo", "hbr")
 
 

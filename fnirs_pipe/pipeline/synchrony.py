@@ -626,6 +626,109 @@ def phase_scramble(sig: np.ndarray, rng: np.random.Generator) -> np.ndarray:
     return np.fft.irfft(scrambled, n=n)
 
 
+# ---- Pseudo-dyad null ----
+
+
+@dataclass
+class PseudoNull:
+    """One chromophore's phase-scrambled null: the draws, the levels, and the summary of both.
+
+    The draws are kept rather than averaged on the spot because the number worth reading off
+    a null is not its mean but where a real value falls inside it, and the real table is
+    written by a step that runs after this one. :meth:`summarise` is that step's half.
+    """
+
+    draws: "list[pd.DataFrame]"
+    cond_draws: "list[pd.DataFrame]"
+    keys: "list[str]"
+    # (sub1, sub2, label) -> the coherence a cell clears at each frequency to beat the null
+    levels: dict
+
+    def summarise(self, real: "pd.DataFrame | None" = None,
+                  real_by_cond: "pd.DataFrame | None" = None,
+                  ) -> "tuple[pd.DataFrame, pd.DataFrame | None]":
+        """The whole-run and per-condition null tables, ranked against ``real`` if given.
+
+        ``real`` is the true-dyad band-mean table this null sits beside, matched on the key
+        columns, and turns on the ``percentile`` column: the share of a cell's draws its real
+        value beat. Exact rather than interpolated from the stored quantiles, and the same
+        definition :func:`screening_coherence` uses, so "above the null" means one thing
+        across the report. ``real_by_cond`` does the same for the per-condition table.
+        """
+        return (
+            _average_iterations(self.draws, self.keys, real=real),
+            (_average_iterations(self.cond_draws, ["condition"] + self.keys,
+                                 real=real_by_cond) if self.cond_draws else None),
+        )
+
+
+# Quantile of the surrogate coherence a cell has to clear before its phase arrow is drawn.
+# 0.95 is the alpha NULL_ALPHA_PCT grades on, so "above the null" reads the same on a
+# coherence map as on the screening panel.
+NULL_ARROW_QUANTILE = 0.95
+
+# Bins the surrogate coherences are counted into, per frequency. Coherence is bounded on
+# [0, 1], so a fixed grid is exact to 1/_NULL_HIST_BINS and, unlike keeping the draws,
+# costs the same whatever n_iter is: the alternative is n_iter copies of a whole map.
+_NULL_HIST_BINS = 1000
+
+
+def _accumulate_null_hist(hists: dict, result: "WTCResult", mask_coi: bool) -> None:
+    """Count one iteration's surrogate coherences into a per-pair, per-frequency histogram.
+
+    ::
+
+      a 51 x 3962 surrogate map -> 51 rows of counts, added to whatever earlier iterations left
+
+    Pooled over time as well as over iterations, because the null being estimated is the
+    distribution of a single cell at that frequency and every in-cone cell of a surrogate map
+    is a draw from it. ``hists`` is mutated in place, keyed the way ``result.pairs`` is.
+    """
+    freqs = np.asarray(result.freqs, dtype=float)
+    for (sub1, sub2), labels in result.pairs.items():
+        for label, data in labels.items():
+            if data is None:
+                continue
+            wtc = np.asarray(data["wtc"], dtype=float)
+            if wtc.shape[0] != len(freqs):
+                continue
+            keep = (freqs[:, None] >= 1.0 / np.asarray(data["coi"], dtype=float)[None, :]
+                    if mask_coi else np.ones(wtc.shape, dtype=bool))
+            if not keep.any():
+                continue
+            # one bincount over the whole map rather than one per row: the row index is
+            # folded into the bin index, so the flat counts reshape straight back
+            col = np.clip((wtc * _NULL_HIST_BINS).astype(np.int64), 0, _NULL_HIST_BINS - 1)
+            row = np.broadcast_to(np.arange(wtc.shape[0])[:, None], wtc.shape)
+            flat = row[keep] * _NULL_HIST_BINS + col[keep]
+            counts = np.bincount(flat, minlength=wtc.shape[0] * _NULL_HIST_BINS)
+            key = (sub1, sub2, label)
+            if key not in hists:
+                hists[key] = np.zeros((wtc.shape[0], _NULL_HIST_BINS), dtype=np.int64)
+            hists[key] += counts.reshape(hists[key].shape)
+
+
+def _null_level(hist: np.ndarray, quantile: float = NULL_ARROW_QUANTILE) -> np.ndarray:
+    """The quantile of each frequency's accumulated surrogate counts, as a coherence.
+
+    ::
+
+      a 51 x 1000 count matrix -> ndarray(51,), the level a cell clears to beat the null
+
+    A frequency no surrogate cell ever landed on, every one of its cells having been outside
+    the cone, gets NaN rather than 0: no level was measured there, and a 0 would pass every
+    cell as significant.
+    """
+    total = hist.sum(axis=1)
+    cum = np.cumsum(hist, axis=1)
+    out = np.full(hist.shape[0], np.nan)
+    for i in np.flatnonzero(total):
+        j = int(np.searchsorted(cum[i], quantile * total[i], side="left"))
+        # bin centre, so the level sits inside the bin its count was recorded in
+        out[i] = (min(j, hist.shape[1] - 1) + 0.5) / hist.shape[1]
+    return out
+
+
 def compute_wtc_pseudo(
     raws: dict[str, mne.io.Raw],
     band_fmin: float,
@@ -641,17 +744,28 @@ def compute_wtc_pseudo(
     sep_bands=None,
     windows: "list[tuple[str, float, float]] | None" = None,
     analysis_window: "tuple[float, float] | None" = None,
-) -> "tuple[pd.DataFrame, pd.DataFrame | None]":
+) -> "PseudoNull":
     """Pseudo-dyad band means: WTC against a phase-scrambled partner, averaged over ``n_iter``.
 
     One subject's signals are replaced by surrogates and the whole pairwise WTC is rerun, once
     per iteration; the band means are averaged across iterations. The result has the columns
-    ``wtc_band_mean`` returns, so a true-dyad table and this one subtract or test cell by cell.
+    ``wtc_band_mean`` returns, so a true-dyad table and this one subtract or test cell by cell,
+    plus ``null_sd``, ``null_p95`` and ``n_iter``: the mean alone cannot say where in its null
+    a real value sits, and a null nobody can rank against is only half of one.
+
+    Returns a :class:`PseudoNull`, which holds the per-iteration draws as well as their
+    summary: ranking a real value inside its null needs the draws, and the caller that has
+    the real table to rank runs after this one.
 
     Cost is ``n_iter`` times a full WTC run. Significance contours are never computed here:
-    this table *is* the null, so a second null inside it would be redundant and slow. For the
-    same reason the surrogate maps are not saved; only their band means survive, which is what
-    a comparison against the real table needs.
+    this table *is* the null, so a second null inside it would be redundant and slow. The
+    surrogate maps are not saved either, but they are no longer only averaged: each one is
+    counted into a per-frequency histogram on the way past, and ``PseudoNull.levels`` is
+    ``{(sub1, sub2, label): ndarray(n_freqs,)}``, the coherence a cell has to clear at each
+    frequency to beat the null. That is what the phase arrows are drawn against, and it has
+    to be per frequency: surrogate coherence is not flat in frequency, it rises at both ends
+    of the computed range, so one scalar threshold over the whole map draws arrows
+    preferentially at the band edges.
 
     ``seed`` drives the phase randomisation and nothing else. Passing the same value as the
     real run is what makes the pair reproducible together.
@@ -695,6 +809,7 @@ def compute_wtc_pseudo(
 
     frames: list[pd.DataFrame] = []
     cond_frames: list[pd.DataFrame] = []
+    hists: dict[tuple, np.ndarray] = {}
     for i in range(n_iter):
         signals = dict(true_signals)
         signals[scrambled_id] = {
@@ -713,6 +828,9 @@ def compute_wtc_pseudo(
         run_result = (result if analysis_window is None
                       else window_result(result, *analysis_window))
         frames.append(wtc_band_mean(run_result, band_fmin, band_fmax, mask_coi=mask_coi))
+        # counted off the whole-run transform, not the windowed read: a condition is a slice
+        # of the same map, so its cells are draws from the same per-frequency null
+        _accumulate_null_hist(hists, result, mask_coi)
         # windowed off this iteration's own transform, never recomputed on the cut: the
         # real table is windowed the same way, and a null built differently from the table
         # it is subtracted from measures the difference between the two routes
@@ -725,29 +843,86 @@ def compute_wtc_pseudo(
             logger.info("pseudo-dyad WTC: %d/%d iterations", i + 1, n_iter)
 
     keys = ["sub1", "sub2", "label"] + (["label2"] if "label2" in frames[0].columns else [])
-    out = _average_iterations(frames, keys)
-    by_cond = _average_iterations(cond_frames, ["condition"] + keys) if cond_frames else None
-    return out, by_cond
+    return PseudoNull(draws=frames, cond_draws=cond_frames, keys=keys,
+                      levels={key: _null_level(hist) for key, hist in hists.items()})
 
 
-def _average_iterations(frames: "list[pd.DataFrame]", keys: "list[str]") -> pd.DataFrame:
-    """Mean of one band-mean table over the iterations that produced it, plus its Fisher z.
+def _average_iterations(frames: "list[pd.DataFrame]", keys: "list[str]",
+                        real: "pd.DataFrame | None" = None) -> pd.DataFrame:
+    """One band-mean table summarising the iterations that produced it, distribution and all.
 
     ::
 
       [iter1 rows, iter2 rows], ["sub1", "sub2", "label"]  ->  one row per channel pair
 
-    ``coherence_z`` is taken from the averaged coherence rather than averaged itself, which
-    is what the whole-run null did before there was a second table to keep consistent.
+    ``coherence`` is the mean of the draws and ``coherence_z`` its Fisher z, taken from the
+    averaged coherence rather than averaged itself. ``null_sd``, ``null_p95`` and ``n_iter``
+    describe the spread the mean came out of: a null summarised by its mean alone cannot say
+    whether a real value sitting above it is anywhere near unusual.
+
+    ``real`` is the true-dyad table, matched on ``keys``, and adds ``percentile``: the share
+    of a cell's draws its real value beat. A cell the real table has no row for, or whose
+    real value is NaN, gets NaN rather than a rank against nothing.
     """
     stacked = pd.concat(frames, ignore_index=True)
-    out = (stacked.groupby(keys, sort=False)
-                  .agg(coherence=("coherence", "mean"),
+    grouped = stacked.groupby(keys, sort=False)
+    out = (grouped.agg(coherence=("coherence", "mean"),
+                       null_sd=("coherence", "std"),
+                       n_iter=("coherence", "count"),
                        n_valid_frac=("n_valid_frac", "mean"))
                   .reset_index())
-    out.insert(out.columns.get_loc("n_valid_frac"), "coherence_z",
+    draws = {key: part.to_numpy(dtype=float) for key, part in grouped["coherence"]}
+    out.insert(out.columns.get_loc("null_sd"), "coherence_z",
                out["coherence"].map(_fisher_z))
+    out.insert(out.columns.get_loc("n_iter"), "null_p95",
+               [_p95(draws[k]) for k in _row_keys(out, keys)])
+    if real is not None:
+        out.insert(out.columns.get_loc("n_iter"), "percentile",
+                   _null_percentile(out, keys, draws, real))
     return out
+
+
+def _p95(draw: np.ndarray) -> float:
+    """95th percentile of the draws that exist. A pair blank in every iteration has none."""
+    finite = draw[np.isfinite(draw)]
+    return float(np.percentile(finite, 95)) if finite.size else float("nan")
+
+
+def _row_keys(frame: pd.DataFrame, keys: "list[str]") -> list:
+    """The groupby key of each row, shaped the way pandas hands it back: scalar for one key."""
+    if len(keys) == 1:
+        return frame[keys[0]].tolist()
+    return list(map(tuple, frame[keys].to_numpy()))
+
+
+def _null_percentile(out: pd.DataFrame, keys: "list[str]", draws: dict,
+                     real: pd.DataFrame) -> "list[float]":
+    """Where each real value falls among its cell's own surrogate draws, as a percentage.
+
+    ::
+
+      real 0.31 against draws [0.22, 0.25, 0.29, 0.33]  ->  75.0
+
+    Counting rather than interpolating a stored quantile: at the iteration counts a null is
+    affordable at, the two disagree by more than the number is worth.
+    """
+    missing = [k for k in keys if k not in real.columns]
+    if missing:
+        logger.warning("null percentile skipped: the real table has no %s column(s)",
+                       ", ".join(missing))
+        return [float("nan")] * len(out)
+    truth = real.set_index(keys)["coherence"]
+    truth = truth[~truth.index.duplicated()]
+    values = []
+    for key in _row_keys(out, keys):
+        real_value = truth.get(key, float("nan"))
+        draw = draws.get(key)
+        # a NaN draw compares False, so a pair blank in every iteration would rank 0th:
+        # "the real value beat none of them", which is a claim about draws that do not exist
+        usable = draw is not None and np.isfinite(draw).any()
+        values.append(float((draw < real_value).mean() * 100)
+                      if usable and np.isfinite(real_value) else float("nan"))
+    return values
 
 
 def _mean_phase(phases: "list[np.ndarray]") -> "np.ndarray | None":

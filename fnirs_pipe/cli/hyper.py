@@ -228,7 +228,7 @@ def cmd_run(
     from fnirs_pipe.qc.hyper.hyper_report import build_hyper_post_report
     from fnirs_pipe.qc.common.windows import condition_windows
     from fnirs_pipe.qc.metrics._helpers import bands_to_record
-    from fnirs_pipe.pipeline.wtc_null import write_wtc_null
+    from fnirs_pipe.pipeline.wtc_null import run_wtc_null, write_wtc_null
     from fnirs_pipe.utils.run_record import write_group_run_record
 
     setup_logging(verbose=verbose)
@@ -305,6 +305,30 @@ def cmd_run(
                 print(f"     [info] {len(dropped)} condition(s) outside "
                       f"--tstart/--tend: {', '.join(dropped)}")
             cond_windows = inside
+        # Before the report, not after: the level the phase arrows are drawn against comes
+        # out of the surrogates, and the figures are built inside the report. The table this
+        # returns is written after it instead, its percentile column being a rank against
+        # the real band means the same report writes.
+        nulls = run_wtc_null(
+            group_id=gid,
+            task=task,
+            aligned_raws=aligned_raws,
+            output_dir=output_dir,
+            n_iter=wtc_pseudo,
+            wtc_fmin=wtc_fmin,
+            wtc_fmax=wtc_fmax,
+            band_fmin=wtc_band_fmin,
+            band_fmax=wtc_band_fmax,
+            seed=wtc_seed,
+            cross=wtc_pseudo_cross,
+            limit_scales=wtc_limit_scales,
+            mask_coi=wtc_mask_coi,
+            chroma=chroma,
+            sep_bands=sep_bands,
+            windows=cond_windows,
+            analysis_window=analysis_window,
+        ) if wtc_pseudo else None
+
         report_path = build_hyper_post_report(
             group_id=gid,
             task=task,
@@ -337,8 +361,9 @@ def cmd_run(
             sep_bands=sep_bands,
             analysis_window=analysis_window,
         )
-        if wtc_pseudo:
+        if nulls:
             null_path = write_wtc_null(
+                nulls,
                 group_id=gid,
                 task=task,
                 aligned_raws=aligned_raws,
@@ -350,10 +375,7 @@ def cmd_run(
                 band_fmax=wtc_band_fmax,
                 seed=wtc_seed,
                 cross=wtc_pseudo_cross,
-                limit_scales=wtc_limit_scales,
                 mask_coi=wtc_mask_coi,
-                chroma=chroma,
-                sep_bands=sep_bands,
                 windows=cond_windows,
                 analysis_window=analysis_window,
             )
@@ -552,12 +574,17 @@ def _build_parser() -> argparse.ArgumentParser:
                           "surviving optode does not stand in for a region (default 2).")
     run.add_argument("--wtc-arrow-min", type=float, default=0.5, metavar="R",
                      help="Coherence a cell has to reach before its phase arrow is drawn on "
-                          "the WTC maps, when --wtc-significance was not asked for "
-                          "(default 0.5). Display only: no table or figure value changes "
-                          "with it, and with --wtc-significance the Monte Carlo level is "
-                          "used instead. The relative phase of two uncorrelated series is a "
-                          "uniformly random direction, so a map drawn with no threshold "
-                          "fills with arrows that read as structure.")
+                          "the WTC maps, when neither null was computed (default 0.5). "
+                          "Display only: no table or figure value changes with it. Both "
+                          "--wtc-pseudo and --wtc-significance override it with a level per "
+                          "frequency, the pseudo-dyad one winning where both ran, and that "
+                          "is the form to prefer: surrogate coherence rises at both ends of "
+                          "the computed range, so one number over the whole map marks the "
+                          "band edges first. The flat threshold is what is left when nothing "
+                          "was drawn to compare against, and the relative phase of two "
+                          "uncorrelated series being a uniformly random direction, a map "
+                          "drawn with no threshold at all fills with arrows that read as "
+                          "structure.")
     run.add_argument("--wtc-channel-cross", action="store_true",
                      help="Cross every long channel with every other across the two brains "
                           "instead of pairing each channel with its counterpart, so n "
@@ -618,7 +645,10 @@ def _build_parser() -> argparse.ArgumentParser:
                           "--wtc-by-condition the null follows the same windows and lands in "
                           "a second table, at no extra transform: a short condition tested "
                           "against a whole-record null looks further above chance than it "
-                          "is.")
+                          "is. Each table carries the spread the mean came out of and each "
+                          "cell's percentile inside its own draws, and the maps draw their "
+                          "phase arrows against the null's level rather than "
+                          "--wtc-arrow-min.")
     run.add_argument("--wtc-pseudo-cross", action="store_true",
                      help="Cross the channels for the null too. Deliberately separate from "
                           "--wtc-channel-cross: crossing squares the pair count, and the null "

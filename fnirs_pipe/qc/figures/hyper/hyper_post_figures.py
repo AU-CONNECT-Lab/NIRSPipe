@@ -80,6 +80,23 @@ def _apply_log_freq_axis(ax, freqs: np.ndarray) -> None:
 ARROW_MIN_COHERENCE = 0.5
 
 
+def _clears(wtc_data: dict, arrow_min: float = ARROW_MIN_COHERENCE) -> str:
+    """What the caption says an arrow had to clear, named after where the level came from.
+
+    ::
+
+      a map carrying the pseudo null's level -> "the pseudo-dyad null"
+
+    Three sources and three wordings, because two of them are tests and the third is not: a
+    caption reading "the Monte Carlo level" over arrows drawn at a flat display threshold
+    would be claiming a test nobody ran.
+    """
+    if wtc_data.get("sig") is None:
+        return f"{arrow_min:g}"
+    return ("the pseudo-dyad null" if wtc_data.get("sig_source") == "null"
+            else "the Monte Carlo level")
+
+
 def _arrow_mask(wtc_arr, sig, freqs, freq_coi, arrow_min: float = ARROW_MIN_COHERENCE):
     """Where a phase arrow is worth drawing: inside the cone, and above the noise.
 
@@ -226,7 +243,7 @@ def build_wtc_channel(
     # width in white to the right of the bar.
     caption = (f"arrows: right = in phase, left = antiphase, up = {lead} leads by a quarter "
                f"cycle,\ndrawn only where coherence clears "
-               f"{'the Monte Carlo level' if sig is not None else f'{arrow_min:g}'}"
+               f"{_clears(wtc_data, arrow_min)}"
                "    washed-out band: outside the cone of influence")
     fig.text(0.5, -0.02, caption, ha="center", va="top", fontsize=8, color="#444444",
              linespacing=1.5)
@@ -372,7 +389,8 @@ def wtc_condition_views(fig, spans, wtc_data: dict, freqs: np.ndarray, times: np
         cut = {"wtc": np.asarray(wtc_data["wtc"])[:, keep],
                "phase": (None if wtc_data.get("phase") is None
                          else np.asarray(wtc_data["phase"])[:, keep]),
-               "sig": wtc_data.get("sig")}
+               "sig": wtc_data.get("sig"),
+               "sig_source": wtc_data.get("sig_source")}
         coi = _freq_coi(np.asarray(wtc_data["coi"])[keep], freqs)
         out[_pair_fname(label)] = {
             "x": [float(t0), float(t1)],
@@ -496,7 +514,7 @@ def build_wtc_map_interactive(
     lead = (pair_label.split("×")[0].strip() or "the first member"
             if pair_label else "the first member")
     heading = f"{site_label}   {pair_label}".strip() if site_label else pair_label
-    clears = "the Monte Carlo level" if sig is not None else f"{arrow_min:g}"
+    clears = _clears(wtc_data, arrow_min)
     fig.update_layout(
         height=_INTERACTIVE_PLOT_H + 150, autosize=True,
         margin=dict(l=70, r=80, t=90, b=95),

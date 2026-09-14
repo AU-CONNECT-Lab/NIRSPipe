@@ -212,6 +212,15 @@ def _ramp_map(first_half, second_half):
             "phase": np.zeros_like(wtc), "sig": None}
 
 
+def _null(frame, cond_frames=(), levels=None):
+    """A PseudoNull around an already-made frame, for the tests that stub the draw away."""
+    from fnirs_pipe.pipeline.synchrony import PseudoNull
+
+    keys = ["sub1", "sub2", "label"] + (["label2"] if "label2" in frame.columns else [])
+    return PseudoNull(draws=[frame], cond_draws=list(cond_frames), keys=keys,
+                      levels=levels or {})
+
+
 @pytest.fixture
 def stub_pseudo(monkeypatch):
     """compute_wtc_pseudo with the transform and the channel picking replaced.
@@ -233,7 +242,7 @@ def stub_pseudo(monkeypatch):
 
 def test_no_windows_leaves_the_second_table_unbuilt(stub_pseudo):
     whole, by_cond = stub_pseudo.compute_wtc_pseudo(
-        {"s1": None, "s2": None}, 0.02, 0.30, n_iter=1)
+        {"s1": None, "s2": None}, 0.02, 0.30, n_iter=1).summarise()
     assert by_cond is None
     assert whole["coherence"].iloc[0] == pytest.approx(0.5)
 
@@ -244,7 +253,7 @@ def test_a_window_spanning_the_record_reproduces_the_whole_run_number(stub_pseud
     of its own."""
     whole, by_cond = stub_pseudo.compute_wtc_pseudo(
         {"s1": None, "s2": None}, 0.02, 0.30, n_iter=1,
-        windows=[("all", float(TIMES[0]), float(TIMES[-1]))])
+        windows=[("all", float(TIMES[0]), float(TIMES[-1]))]).summarise()
     assert by_cond["condition"].tolist() == ["all"]
     assert by_cond["coherence"].iloc[0] == pytest.approx(whole["coherence"].iloc[0])
 
@@ -254,7 +263,7 @@ def test_each_window_gets_its_own_null_level(stub_pseudo):
     _, by_cond = stub_pseudo.compute_wtc_pseudo(
         {"s1": None, "s2": None}, 0.02, 0.30, n_iter=2,
         windows=[("early", float(TIMES[0]), mid - 1e-9),
-                 ("late", mid, float(TIMES[-1]))])
+                 ("late", mid, float(TIMES[-1]))]).summarise()
     levels = dict(zip(by_cond["condition"], by_cond["coherence"]))
     assert levels["early"] == pytest.approx(0.2)
     assert levels["late"] == pytest.approx(0.8)
@@ -264,7 +273,7 @@ def test_the_windowed_null_carries_the_same_columns_as_the_whole_run_one(stub_ps
     """So a real per-condition table and this one subtract cell by cell, `condition` aside."""
     whole, by_cond = stub_pseudo.compute_wtc_pseudo(
         {"s1": None, "s2": None}, 0.02, 0.30, n_iter=1,
-        windows=[("all", float(TIMES[0]), float(TIMES[-1]))])
+        windows=[("all", float(TIMES[0]), float(TIMES[-1]))]).summarise()
     assert list(by_cond.columns) == ["condition"] + list(whole.columns)
 
 
@@ -277,7 +286,7 @@ def test_the_windowed_null_carries_the_same_columns_as_the_whole_run_one(stub_ps
 # exact, 0.2 over the first half and 0.8 over the second.
 
 def test_without_an_analysis_window_the_whole_run_row_covers_the_record(stub_pseudo):
-    whole, _ = stub_pseudo.compute_wtc_pseudo({"s1": None, "s2": None}, 0.02, 0.30, n_iter=1)
+    whole, _ = stub_pseudo.compute_wtc_pseudo({"s1": None, "s2": None}, 0.02, 0.30, n_iter=1).summarise()
     assert whole["coherence"].iloc[0] == pytest.approx(0.5)
 
 
@@ -287,7 +296,7 @@ def test_the_whole_run_row_is_the_window_when_one_is_given(stub_pseudo, half, ex
     window = ((float(TIMES[0]), mid - 1e-9) if half == "first"
               else (mid, float(TIMES[-1])))
     whole, _ = stub_pseudo.compute_wtc_pseudo(
-        {"s1": None, "s2": None}, 0.02, 0.30, n_iter=1, analysis_window=window)
+        {"s1": None, "s2": None}, 0.02, 0.30, n_iter=1, analysis_window=window).summarise()
     assert whole["coherence"].iloc[0] == pytest.approx(expected)
 
 
@@ -296,7 +305,7 @@ def test_a_window_spanning_everything_is_the_unwindowed_number(stub_pseudo):
     never recomputed on a cut."""
     whole, _ = stub_pseudo.compute_wtc_pseudo(
         {"s1": None, "s2": None}, 0.02, 0.30, n_iter=1,
-        analysis_window=(float(TIMES[0]), float(TIMES[-1])))
+        analysis_window=(float(TIMES[0]), float(TIMES[-1]))).summarise()
     assert whole["coherence"].iloc[0] == pytest.approx(0.5)
 
 
@@ -305,10 +314,10 @@ def test_the_conditions_are_unaffected_by_the_analysis_window(stub_pseudo):
     they are read off the same transform either way. Windowing twice would move them."""
     mid = float(TIMES[len(TIMES) // 2])
     args = dict(n_iter=1, windows=[("late", mid, float(TIMES[-1]))])
-    _, plain = stub_pseudo.compute_wtc_pseudo({"s1": None, "s2": None}, 0.02, 0.30, **args)
+    _, plain = stub_pseudo.compute_wtc_pseudo({"s1": None, "s2": None}, 0.02, 0.30, **args).summarise()
     _, windowed = stub_pseudo.compute_wtc_pseudo(
         {"s1": None, "s2": None}, 0.02, 0.30,
-        analysis_window=(mid, float(TIMES[-1])), **args)
+        analysis_window=(mid, float(TIMES[-1])), **args).summarise()
     assert windowed["coherence"].iloc[0] == pytest.approx(plain["coherence"].iloc[0])
     assert plain["coherence"].iloc[0] == pytest.approx(0.8)
 
@@ -321,8 +330,9 @@ def test_the_writer_passes_the_window_down(monkeypatch, tmp_path):
 
     def _spy(*args, **kwargs):
         seen.update(kwargs)
-        return pd.DataFrame({"label": ["S1_D1"], "label2": ["S1_D1"],
-                             "coherence": [0.5], "coherence_z": [0.55]}), None
+        return _null(pd.DataFrame({"sub1": ["s1"], "sub2": ["s2"], "label": ["S1_D1"],
+                                   "label2": ["S1_D1"], "coherence": [0.5],
+                                   "n_valid_frac": [1.0]}))
 
     monkeypatch.setattr("fnirs_pipe.pipeline.hyperscanning.compute_wtc_pseudo", _spy)
     monkeypatch.setattr("fnirs_pipe.pipeline.hyperscanning._hyper_sidecar",
@@ -330,7 +340,7 @@ def test_the_writer_passes_the_window_down(monkeypatch, tmp_path):
     monkeypatch.setattr("fnirs_pipe.utils.lineage.path_from", lambda r: None)
     # both read the montage off the recordings, which these stubs do not have
     monkeypatch.setattr("fnirs_pipe.pipeline.synchrony.wtc_grid_params", lambda raws: {})
-    wtc_null.write_wtc_null(
+    wtc_null.run_wtc_null(
         group_id="G1", task="tap", aligned_raws={"s1": None, "s2": None},
         output_dir=tmp_path, n_iter=1, chroma=("hbo",), analysis_window=(60.0, 300.0))
     assert seen["analysis_window"] == (60.0, 300.0)

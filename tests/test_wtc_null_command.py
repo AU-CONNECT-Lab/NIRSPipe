@@ -22,6 +22,25 @@ from fnirs_pipe.cli.hyper import _build_parser
 from fnirs_pipe.pipeline.wtc_aggregate import aggregate_wtc
 
 
+# The null is drawn and written in two phases, the report sitting between them: the level
+# the phase arrows need has to exist before the figures, and the rank a null row carries is
+# against the real tables the same report writes. These tests want both halves at once.
+def _draw_and_write(wtc_null, **kwargs):
+    run_only = ("limit_scales", "chroma", "sep_bands")
+    nulls = wtc_null.run_wtc_null(**kwargs)
+    return wtc_null.write_wtc_null(
+        nulls, **{k: v for k, v in kwargs.items() if k not in run_only})
+
+
+def _null(frame, cond_frames=(), levels=None):
+    """A PseudoNull around an already-made frame, for the tests that stub the draw away."""
+    from fnirs_pipe.pipeline.synchrony import PseudoNull
+
+    keys = ["sub1", "sub2", "label"] + (["label2"] if "label2" in frame.columns else [])
+    return PseudoNull(draws=[frame], cond_draws=list(cond_frames), keys=keys,
+                      levels=levels or {})
+
+
 def _hyper(*argv):
     return _build_parser().parse_args(["run", "/out", "--pairs-csv", "/p.csv", *argv])
 
@@ -62,12 +81,13 @@ def test_the_sidecar_records_the_iteration_count_and_the_shape(tmp_path, monkeyp
 
     frame = pd.DataFrame({"sub1": ["a"], "sub2": ["b"], "label": ["S1_D1"],
                           "coherence": [0.3], "coherence_z": [0.31], "n_valid_frac": [1.0]})
-    monkeypatch.setattr(hyper, "compute_wtc_pseudo", lambda *a, **k: (frame, None))
+    monkeypatch.setattr(hyper, "compute_wtc_pseudo", lambda *a, **k: _null(frame))
 
     # a real raw even though the WTC itself is stubbed: the sidecar reads the wavelet grid
     # off the recordings, so an empty map has no sampling rate to report
     raws = {"a": make_raw(n_ch=1), "b": make_raw(n_ch=1)}
-    out = wtc_null.write_wtc_null(
+    out = _draw_and_write(
+        wtc_null,
         group_id="d01", task="baseline", aligned_raws=raws, output_dir=tmp_path,
         n_iter=7, wtc_fmin=0.01, wtc_fmax=0.25, band_fmin=0.06, band_fmax=0.15,
         seed=1, cross=False, mask_coi=True)
@@ -91,10 +111,11 @@ def test_the_null_tags_each_chromophore_without_mutating_the_frame(tmp_path, mon
     frame = pd.DataFrame({"sub1": ["a"], "sub2": ["b"], "label": ["S1_D1"],
                           "coherence": [0.3], "coherence_z": [0.31],
                           "n_valid_frac": [1.0]})
-    monkeypatch.setattr(hyper, "compute_wtc_pseudo", lambda *a, **k: (frame, None))
+    monkeypatch.setattr(hyper, "compute_wtc_pseudo", lambda *a, **k: _null(frame))
 
     raws = {"a": make_raw(n_ch=1), "b": make_raw(n_ch=1)}
-    out = wtc_null.write_wtc_null(
+    out = _draw_and_write(
+        wtc_null,
         group_id="d01", task="baseline", aligned_raws=raws, output_dir=tmp_path,
         n_iter=1, chroma=("hbo", "hbr"))
 
@@ -110,10 +131,11 @@ def test_one_chromophore_writes_one_set_of_rows(tmp_path, monkeypatch, make_raw)
     frame = pd.DataFrame({"sub1": ["a"], "sub2": ["b"], "label": ["S1_D1"],
                           "coherence": [0.3], "coherence_z": [0.31],
                           "n_valid_frac": [1.0]})
-    monkeypatch.setattr(hyper, "compute_wtc_pseudo", lambda *a, **k: (frame, None))
+    monkeypatch.setattr(hyper, "compute_wtc_pseudo", lambda *a, **k: _null(frame))
 
     raws = {"a": make_raw(n_ch=1), "b": make_raw(n_ch=1)}
-    out = wtc_null.write_wtc_null(
+    out = _draw_and_write(
+        wtc_null,
         group_id="d01", task="baseline", aligned_raws=raws, output_dir=tmp_path,
         n_iter=1, chroma=("hbr",))
 
@@ -237,10 +259,12 @@ def test_windows_add_a_second_table_beside_the_whole_run_one(tmp_path, monkeypat
     from fnirs_pipe.pipeline import wtc_null
 
     whole, by_cond = _null_frames()
-    monkeypatch.setattr(hyper, "compute_wtc_pseudo", lambda *a, **k: (whole, by_cond))
+    monkeypatch.setattr(hyper, "compute_wtc_pseudo",
+                        lambda *a, **k: _null(whole, [by_cond]))
 
     raws = {"a": make_raw(n_ch=1), "b": make_raw(n_ch=1)}
-    out = wtc_null.write_wtc_null(
+    out = _draw_and_write(
+        wtc_null,
         group_id="d01", task="full", aligned_raws=raws, output_dir=tmp_path,
         n_iter=2, chroma=("hbo",), windows=[("rest", 0.0, 30.0), ("talk", 30.0, 60.0)])
 
@@ -258,10 +282,12 @@ def test_the_windowed_sidecar_names_the_conditions(tmp_path, monkeypatch, make_r
     from fnirs_pipe.pipeline import wtc_null
 
     whole, by_cond = _null_frames()
-    monkeypatch.setattr(hyper, "compute_wtc_pseudo", lambda *a, **k: (whole, by_cond))
+    monkeypatch.setattr(hyper, "compute_wtc_pseudo",
+                        lambda *a, **k: _null(whole, [by_cond]))
 
     raws = {"a": make_raw(n_ch=1), "b": make_raw(n_ch=1)}
-    out = wtc_null.write_wtc_null(
+    out = _draw_and_write(
+        wtc_null,
         group_id="d01", task="full", aligned_raws=raws, output_dir=tmp_path,
         n_iter=2, chroma=("hbo",), windows=[("rest", 0.0, 30.0), ("talk", 30.0, 60.0)])
 
@@ -276,10 +302,11 @@ def test_no_windows_writes_only_the_whole_run_table(tmp_path, monkeypatch, make_
     from fnirs_pipe.pipeline import wtc_null
 
     whole, _ = _null_frames()
-    monkeypatch.setattr(hyper, "compute_wtc_pseudo", lambda *a, **k: (whole, None))
+    monkeypatch.setattr(hyper, "compute_wtc_pseudo", lambda *a, **k: _null(whole))
 
     raws = {"a": make_raw(n_ch=1), "b": make_raw(n_ch=1)}
-    out = wtc_null.write_wtc_null(
+    out = _draw_and_write(
+        wtc_null,
         group_id="d01", task="full", aligned_raws=raws, output_dir=tmp_path,
         n_iter=1, chroma=("hbo",))
 

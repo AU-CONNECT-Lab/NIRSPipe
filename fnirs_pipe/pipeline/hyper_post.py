@@ -288,6 +288,33 @@ def run_hyper_post(
         with guard(f"Saving WTC maps ({kind} {ch_type})", errors, scope):
             save_wtc(result, npz_path)
 
+    def _apply_null_level(result, ch_type: str) -> None:
+        """Put the pseudo-dyad null's per-frequency level on each pair, where one was drawn.
+
+        ``sig`` is whatever the phase arrows are thresholded against, and it already holds
+        pycwt's Monte Carlo level when --wtc-significance ran. The null's level is the same
+        shape and answers the same question against a better null, so it goes in the same
+        slot rather than a second one the figures would have to choose between.
+
+        Absent unless --wtc-pseudo ran for this dyad, which is the usual case: the maps then
+        keep whatever they had, and the arrows fall back to the flat --wtc-arrow-min.
+        """
+        from fnirs_pipe.pipeline.wtc_store import load_null_levels
+        npz_path = (group_data_dir(output_dir, group_id)
+                    / f"group-{group_id}_task-{task}_hyper-wtc-nulllevel-{ch_type}.npz")
+        if result is None or not npz_path.exists():
+            return
+        with guard(f"WTC null level ({ch_type})", errors, scope):
+            levels = load_null_levels(npz_path)
+            for pair_key, labels in result.pairs.items():
+                for label, data in labels.items():
+                    level = levels.get(pair_key, {}).get(label)
+                    if data is not None and level is not None:
+                        data["sig"] = level
+                        data["sig_source"] = "null"
+            logger.info("%s | phase arrows drawn against the pseudo-dyad null (%s)",
+                        scope, ch_type)
+
     def _band_means(result, kind: str, ch_type: str):
         if result is None or not result.pairs:
             return None
@@ -391,6 +418,8 @@ def run_hyper_post(
         if wtc_result is not None and analysis_window is not None:
             with guard(f"Analysis window ({ch_type})", errors, scope):
                 wtc_result = window_result(wtc_result, *analysis_window)
+
+        _apply_null_level(wtc_result, ch_type)
 
         chan_band_df = _band_means(wtc_result, "wtc", ch_type)
         out["chan"] = chan_band_df
