@@ -190,6 +190,13 @@ def _build_cli_args(opts: dict) -> list[str]:
         args += ["--sci-threshold", str(opts["sci_thresh"])]
     if opts.get("psp_thresh") is not None:
         args += ["--psp-threshold", str(opts["psp_thresh"])]
+    # the two lines above only say what a coupled window is; this is what rejects
+    if opts.get("min_good_frac") is not None:
+        args += ["--min-good-frac", str(opts["min_good_frac"])]
+    if opts.get("screen_scope"):
+        args += ["--screen-scope", opts["screen_scope"]]
+    if opts.get("window_length") is not None:
+        args += ["--window-length", str(opts["window_length"])]
     # each independently optional: omitting --long-max-dist is how "no upper bound" is said
     for opt_key, flag in (("short_max_dist", "--short-max-dist"),
                           ("long_min_dist", "--long-min-dist"),
@@ -200,6 +207,15 @@ def _build_cli_args(opts: dict) -> list[str]:
     if opts.get("epoch_tmin") is not None and opts.get("epoch_tmax") is not None:
         args += ["--epoch-tmin", str(opts["epoch_tmin"]),
                  "--epoch-tmax", str(opts["epoch_tmax"])]
+    if opts.get("epoch_chunk") is not None:
+        args += ["--epoch-chunk-duration", str(opts["epoch_chunk"])]
+    if opts.get("by_condition"):
+        args.append("--by-condition")
+    # nargs="?": the flag carries the channel set, and off means not sending it at all
+    if opts.get("gvtd_censor") and opts["gvtd_censor"] != "off":
+        args += ["--gvtd-censor", opts["gvtd_censor"]]
+        if opts.get("gvtd_n_std") is not None:
+            args += ["--gvtd-censor-n-std", str(opts["gvtd_n_std"])]
     if opts.get("motion_correction"):
         args += ["--motion-correction", opts["motion_correction"]]
     if opts.get("cardiac_l") is not None:
@@ -275,11 +291,18 @@ def _build_cli_args(opts: dict) -> list[str]:
     State("an-dpf",               "value"),
     State("an-sci-thresh",        "value"),
     State("an-psp-thresh",        "value"),
+    State("an-min-good-frac",     "value"),
+    State("an-screen-scope",      "value"),
+    State("an-window-length",     "value"),
     State("an-short-max-dist",    "value"),
     State("an-long-min-dist",     "value"),
     State("an-long-max-dist",     "value"),
     State("an-epoch-tmin",        "value"),
     State("an-epoch-tmax",        "value"),
+    State("an-epoch-chunk",       "value"),
+    State("an-by-condition",      "value"),
+    State("an-gvtd-censor",       "value"),
+    State("an-gvtd-n-std",        "value"),
     State("an-motion-correction", "value"),
     State("an-cardiac-l",         "value"),
     State("an-cardiac-h",         "value"),
@@ -310,8 +333,10 @@ def _build_cli_args(opts: dict) -> list[str]:
     prevent_initial_call=True,
 )
 def generate_command(n_clicks, bids_dir, output_dir, subjects, dpf, sci_thresh, psp_thresh,
+                     min_good_frac, screen_scope, window_length,
                      short_max_dist, long_min_dist, long_max_dist,
-                     epoch_tmin, epoch_tmax,
+                     epoch_tmin, epoch_tmax, epoch_chunk,
+                     by_condition, gvtd_censor, gvtd_n_std,
                      motion_correction, cardiac_l, cardiac_h, resp_l, resp_h,
                      post_mode, high_pass, low_pass, filter_method, filter_order,
                      resample, n_jobs,
@@ -334,9 +359,12 @@ def generate_command(n_clicks, bids_dir, output_dir, subjects, dpf, sci_thresh, 
         bids_dir=bids_dir, output_dir=output_dir, subjects=subjects,
         session_label=session_label, task_label=task_label,
         dpf=dpf, sci_thresh=sci_thresh, psp_thresh=psp_thresh,
+        min_good_frac=min_good_frac, screen_scope=screen_scope,
+        window_length=window_length,
         short_max_dist=short_max_dist, long_min_dist=long_min_dist,
         long_max_dist=long_max_dist,
-        epoch_tmin=epoch_tmin, epoch_tmax=epoch_tmax,
+        epoch_tmin=epoch_tmin, epoch_tmax=epoch_tmax, epoch_chunk=epoch_chunk,
+        by_condition=bool(by_condition), gvtd_censor=gvtd_censor, gvtd_n_std=gvtd_n_std,
         motion_correction=motion_correction, cardiac_l=cardiac_l, cardiac_h=cardiac_h,
         resp_l=resp_l, resp_h=resp_h,
         post_mode=post_mode, high_pass=high_pass, low_pass=low_pass,

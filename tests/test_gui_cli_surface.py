@@ -24,9 +24,12 @@ from fnirs_pipe.cli.workflows import _build_post_config
 from fnirs_pipe.interface.callbacks.analysis_callbacks import _build_cli_args
 from fnirs_pipe.interface.callbacks.qc_callbacks import _AGGREGATE, _HYPER, build_qc_args
 
-# Postprocessing flags the analysis page deliberately does not offer, and why. A flag listed
-# here must still exist in the CLI, and must not also be emitted; both are asserted below.
+# Flags the analysis page deliberately does not offer, and why. A flag listed here must still
+# exist in the CLI, and must not also be emitted; both are asserted below.
 NOT_EXPOSED = {
+    "--bad-channels": "a per-subject channel list or a table path, and the page has no file picker",
+    "--epoch-single-trial": "only meaningful when no condition repeats",
+    "--gvtd-min-epoch-s": "housekeeping beside the threshold, which is the knob that moves the result",
     "--config": "the form is the config surface; a TOML overriding it would make the preview lie",
     "--events-path": "a file path, and mutually exclusive with the Stim Duration field",
     "--contrast-file": "a file path, and the page has no file picker",
@@ -38,7 +41,11 @@ NOT_EXPOSED = {
 _FULL_OPTS = dict(
     bids_dir="/bids", output_dir="/out", subjects=["001"],
     session_label="ses-1", task_label="tapping",
-    dpf=6.0, sci_thresh=0.5, motion_correction="tddr",
+    dpf=6.0, sci_thresh=0.5, psp_thresh=0.1, motion_correction="tddr",
+    min_good_frac=0.75, screen_scope="run", window_length=10.0,
+    short_max_dist=10.0, long_min_dist=15.0, long_max_dist=45.0,
+    epoch_tmin=-5.0, epoch_tmax=25.0, epoch_chunk=25.0,
+    by_condition=True, gvtd_censor="long", gvtd_n_std=10.0,
     cardiac_l=0.7, cardiac_h=1.5, resp_l=0.1, resp_h=0.5,
     high_pass=0.01, low_pass=0.1, filter_method="iir", filter_order=4,
     resample=2.0, n_jobs=1,
@@ -59,17 +66,31 @@ _DYNAMIC_IDS = {"an-subjects-checklist"}
 _PREFIXES = ("an-", "qc-")
 
 
-def _post_flags() -> set[str]:
-    """Every long flag in the CLI's two postprocessing argument groups."""
+def _group_flags(prefix: str) -> set[str]:
+    """Every long flag in the CLI argument groups whose title starts with *prefix*."""
     parser = _build_parser()
     return {
         flag
         for group in parser._action_groups
-        if group.title and group.title.startswith("postprocessing")
+        if group.title and group.title.startswith(prefix)
         for action in group._group_actions
         for flag in action.option_strings
         if flag.startswith("--")
     }
+
+
+def _post_flags() -> set[str]:
+    return _group_flags("postprocessing")
+
+
+def _cli_flags() -> set[str]:
+    """Preprocessing and postprocessing together: both halves drift the same way.
+
+    The preprocessing half was uncovered until `--min-good-frac` and `--screen-scope` had
+    been in the CLI for a while with no way to set them here, which meant the page could
+    only ever screen at the default share of coupled windows.
+    """
+    return _group_flags("preprocessing") | _post_flags()
 
 
 def _emitted(**overrides) -> set[str]:
@@ -92,8 +113,8 @@ def _emitted_any_mode() -> set[str]:
 
 # ---- the flag surface ----
 
-def test_every_postprocessing_flag_is_offered_or_written_off():
-    missing = _post_flags() - _emitted_any_mode() - set(NOT_EXPOSED)
+def test_every_flag_is_offered_or_written_off():
+    missing = _cli_flags() - _emitted_any_mode() - set(NOT_EXPOSED)
     assert not missing, (
         f"the CLI grew {sorted(missing)} and the analysis page cannot send them; "
         f"add a control, or add them to NOT_EXPOSED with a reason"
@@ -102,7 +123,7 @@ def test_every_postprocessing_flag_is_offered_or_written_off():
 
 def test_the_written_off_flags_still_exist():
     """Otherwise the list quietly becomes an excuse for flags nobody removed from it."""
-    stale = set(NOT_EXPOSED) - _post_flags()
+    stale = set(NOT_EXPOSED) - _cli_flags()
     assert not stale, f"NOT_EXPOSED names flags the CLI no longer has: {sorted(stale)}"
 
 

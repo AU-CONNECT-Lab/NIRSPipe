@@ -192,6 +192,26 @@ layout = dbc.Container([
                           value=0.1, min=0.0, max=1.0, step=0.01),
             ], width=2),
             dbc.Col([
+                dbc.Label("Coupled Windows"),
+                dbc.Input(id="an-min-good-frac", type="number",
+                          value=0.75, min=0.0, max=1.0, step=0.05),
+                dbc.FormText("Share a channel needs to be kept. This is what rejects."),
+            ], width=2),
+            dbc.Col([
+                dbc.Label("Screening Scope"),
+                dcc.Dropdown(
+                    id="an-screen-scope",
+                    options=[{"label": "Whole run", "value": "run"},
+                             {"label": "Task blocks only", "value": "task"}],
+                    value="run", clearable=False,
+                ),
+            ], width=2),
+            dbc.Col([
+                dbc.Label("SCI / PSP Window (s)"),
+                dbc.Input(id="an-window-length", type="number", step=1,
+                          min=1, placeholder="10"),
+            ], width=2),
+            dbc.Col([
                 dbc.Label("Separations (mm)"),
                 dbc.InputGroup([
                     dbc.InputGroupText("≤"),
@@ -212,6 +232,12 @@ layout = dbc.Container([
             dbc.Col([
                 dbc.Label("Epoch tmax (s)"),
                 dbc.Input(id="an-epoch-tmax", type="number", placeholder="25"),
+            ], width=2),
+            dbc.Col([
+                dbc.Label("Trial Chunk (s)"),
+                dbc.Input(id="an-epoch-chunk", type="number", step=1, min=1,
+                          placeholder="off"),
+                dbc.FormText("Cut each block into trials this long before epoching."),
             ], width=2),
             dbc.Col([
                 dbc.Label("Motion Correction"),
@@ -244,6 +270,34 @@ layout = dbc.Container([
                 ]),
             ], width=3),
         ], className="g-3"),
+        dbc.Row([
+            dbc.Col([
+                dbc.Label("GVTD Censoring"),
+                dcc.Dropdown(
+                    id="an-gvtd-censor",
+                    options=[{"label": "Off", "value": "off"},
+                             {"label": "Long channels", "value": "long"},
+                             {"label": "All channels", "value": "all"}],
+                    value="off", clearable=False,
+                ),
+                dbc.FormText("Annotates BAD_gvtd. Nothing is cut."),
+            ], width=3),
+            dbc.Col([
+                dbc.Label("Censor Threshold (SD)"),
+                dbc.Input(id="an-gvtd-n-std", type="number", step=0.5, min=0.5,
+                          placeholder="10"),
+                dbc.FormText("Left-tail SDs above the GVTD mode. Read only when censoring is on."),
+            ], width=3),
+            dbc.Col([
+                dbc.Label(" "),
+                dbc.Checklist(
+                    id="an-by-condition",
+                    options=[{"label": "A QC page per condition", "value": "by_condition"}],
+                    value=[], switch=True,
+                ),
+                dbc.FormText("Sliced out of the run's own windows; nothing is measured again."),
+            ], width=4),
+        ], className="g-3 mt-1"),
     ),
 
     # ── Postprocessing ────────────────────────────────────────────────────────

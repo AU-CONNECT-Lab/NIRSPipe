@@ -35,6 +35,7 @@ from itertools import combinations
 import mne
 import numpy as np
 import pandas as pd
+from scipy.fft import next_fast_len
 from scipy.linalg import solve_toeplitz
 from scipy.signal import coherence, convolve2d, lfilter
 
@@ -188,6 +189,24 @@ def _scale_window(dj: float) -> np.ndarray:
     return win / win.sum()
 
 
+def _fft_length(n: int, dt: float, s_max: float) -> int:
+    """Samples to transform over: enough padding to clear the widest wavelet, never more than
+    the power of two pycwt would round up to.
+
+    ::
+
+      _fft_length(39611, 0.0983, 183.9)  ->  45360, where pycwt rounds up to 65536
+
+    Padding stops the circular convolution wrapping the end of the record onto its start, so
+    what it has to clear is how far the widest wavelet reaches in from an edge. That is
+    :func:`cone_margin_s` at the **largest computed scale**, which sits ``_SCALE_MARGIN``
+    scales below ``fmin`` rather than at it. The minimum is what keeps a recording shorter
+    than its own padding from being transformed over more samples than it is today.
+    """
+    margin = int(np.ceil(cone_margin_s(1.0 / (_FLAMBDA * s_max)) / dt))
+    return min(next_fast_len(n + margin), 1 << (max(n, 1) - 1).bit_length())
+
+
 def _morlet():
     r"""The mother wavelet every coherence here is computed with.
 
@@ -202,7 +221,7 @@ def _morlet():
     significance cache on the name.
     """
     import pycwt
-    from pycwt.helpers import fft, fft_kwargs
+    from pycwt.helpers import fft
 
     class _Morlet(pycwt.Morlet):
         def __init__(self):
@@ -211,11 +230,13 @@ def _morlet():
 
         def smooth(self, W, dt, dj, scales):
             n = W.shape[1]
+            # read off the scales rather than rounded up, so the fast path and pycwt's own
+            # Monte Carlo land on one length without either being told which
+            pad = {"n": _fft_length(n, dt, float(np.max(scales)))}
             # time: the wavelet's own Gaussian envelope per scale, applied in Fourier
-            k2 = (2 * np.pi * fft.fftfreq(fft_kwargs(W[0, :])["n"])) ** 2
+            k2 = (2 * np.pi * fft.fftfreq(pad["n"])) ** 2
             F = np.exp(-0.5 * (np.asarray(scales)[:, None] / dt) ** 2 * k2)
-            T = fft.ifft(F * fft.fft(W, axis=1, **fft_kwargs(W[0, :])), axis=1,
-                         **fft_kwargs(W[0, :], overwrite_x=True))[:, :n]
+            T = fft.ifft(F * fft.fft(W, axis=1, **pad), axis=1, **pad)[:, :n]
             if np.isreal(W).all():
                 T = T.real
             return convolve2d(T, _scale_window(dj)[:, None], "same")
@@ -311,6 +332,7 @@ class _WaveletGrid:
     J: int
     sj: np.ndarray
     scales: np.ndarray
+    n_fft: int
 
 
 @dataclass
@@ -333,7 +355,41 @@ def _wavelet_grid(dt: float, n: int, fmin: float, fmax: float,
         J = int(np.round(np.log2(n * dt / s0) / WTC_DJ))
     sj = s0 * 2 ** (np.arange(0, J + 1) * WTC_DJ)
     return _WaveletGrid(mother=mother, s0=s0, J=J, sj=sj,
-                        scales=np.ones([1, n]) * sj[:, None])
+                        scales=np.ones([1, n]) * sj[:, None],
+                        n_fft=_fft_length(n, dt, float(sj[-1])))
+
+
+def _cwt(sig: np.ndarray, dt: float, grid: _WaveletGrid):
+    r"""The continuous wavelet transform :math:`W_x`, on the grid's own padding length.
+
+    The same arithmetic in the same order as ``pycwt.cwt``; only the number of samples
+    transformed over differs, and :func:`_fft_length` picks one that leaves every returned
+    value unchanged. Owned here rather than monkeypatched into pycwt, which chooses its length
+    inside its own module and would go back to a power of two without saying so.
+
+    Returns ``(W, sj, freqs, coi)``.
+    """
+    from pycwt.helpers import fft
+
+    n0 = len(sig)
+    n_fft = grid.n_fft
+    ftfreqs = 2 * np.pi * fft.fftfreq(n_fft, dt)
+    sj_col = grid.sj[:, None]
+    psi_ft_bar = ((sj_col * ftfreqs[1] * n_fft) ** 0.5
+                  * np.conjugate(grid.mother.psi_ft(sj_col * ftfreqs)))
+    W = fft.ifft(fft.fft(sig, n=n_fft) * psi_ft_bar, axis=1, n=n_fft)
+
+    sj = grid.sj
+    freqs = 1 / (grid.mother.flambda() * sj)
+    # pycwt drops any scale whose row came back all-NaN, and the caller's grid check reads
+    # the shortened sj to catch it
+    sel = np.invert(np.isnan(W).all(axis=1))
+    if np.any(sel):
+        sj, freqs, W = sj[sel], freqs[sel], W[sel, :]
+
+    coi = n0 / 2 - np.abs(np.arange(0, n0) - (n0 - 1) / 2)
+    coi = grid.mother.flambda() * grid.mother.coi() * dt * coi
+    return W[:, :n0], sj, freqs, coi
 
 
 def _prepare_channel(sig: np.ndarray, dt: float, grid: _WaveletGrid) -> _ChannelWavelet:
@@ -341,14 +397,11 @@ def _prepare_channel(sig: np.ndarray, dt: float, grid: _WaveletGrid) -> _Channel
 
     Computed once per channel rather than once per pairing, which is what crossing repeats.
     """
-    import pycwt
-
     if len(sig) != grid.scales.shape[1]:
         raise ValueError(f"signal length {len(sig)} differs from the grid's "
                          f"{grid.scales.shape[1]}")
     y = (sig - sig.mean()) / sig.std()
-    W, sj, freqs, coi, _, _ = pycwt.cwt(y, dt, dj=WTC_DJ, s0=grid.s0, J=grid.J,
-                                        wavelet=grid.mother)
+    W, sj, freqs, coi = _cwt(y, dt, grid)
     # pycwt drops any scale whose row came back all-NaN, which would leave two channels on
     # different grids and misalign the cross spectrum without changing its shape
     if not np.array_equal(sj, grid.sj):
