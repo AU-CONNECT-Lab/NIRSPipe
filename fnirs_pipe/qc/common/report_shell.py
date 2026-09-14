@@ -115,17 +115,26 @@ def outlier_flags(values: "list[float | None]", z: float = OUTLIER_Z) -> list[bo
 
 # ---- Rendering ----
 
-def render(template_name: str, **variables: Any) -> str:
+def template_env(**options: Any):
+    """The environment the reports render in, the globals every template may call included.
+
+    Globals rather than variables each builder passes, so a template can use a paragraph or
+    a nav bar that another already has without being wired for it. ``section_note`` is not
+    to be confused with :func:`note` above, which collects what a section skipped.
+    """
     from jinja2 import Environment, FileSystemLoader
 
     from fnirs_pipe.qc.boilerplate.notes import section_note
 
-    env = Environment(loader=FileSystemLoader(str(TEMPLATE_DIR)), autoescape=False)
-    # a global rather than a variable each builder passes, so the hyper and group templates
-    # can use a paragraph the subject report already has without being wired for it. Not to
-    # be confused with `note` above, which collects what a section skipped.
+    env = Environment(loader=FileSystemLoader(str(TEMPLATE_DIR)), autoescape=False,
+                      **options)
     env.globals["section_note"] = section_note
-    return env.get_template(template_name).render(**variables)
+    env.globals["nav_bar"] = nav_bar
+    return env
+
+
+def render(template_name: str, **variables: Any) -> str:
+    return template_env().get_template(template_name).render(**variables)
 
 
 # ---- Head and nav ----
@@ -162,6 +171,74 @@ def page_vars(
             (TOKENS_CSS, LOOK_CSS if css is None else css, FOOTER_CSS)),
         "run_date":     date.today().isoformat(),
     }
+
+
+# The sections every report closes with, in the order the footer prints them. An index page
+# carries none of them and passes its own.
+CLOSING_SECTIONS = (("Provenance", "Provenance"), ("Methods", "Methods"))
+
+
+def nav_bar(
+    sections,
+    *,
+    key: str = "",
+    rated: bool = True,
+    group: "int | None" = None,
+    closing=CLOSING_SECTIONS,
+    summary: str = "#Final",
+    siblings=(),
+    index: str = "",
+    index_label: str = "← All runs",
+) -> list[dict]:
+    """The entries of a report's top bar, from the sections that report drew.
+
+    ::
+
+      nav_bar([("Motion", "Motion"), ("GLM", "GLM")], key="__sub-01_task-chat",
+              index="sub-01_qc.html")
+      -> Summary | Motion  GLM | Provenance  Methods | <- All runs
+
+    A section is ``(id, name)``, anchored at ``#id``, or ``(id, name, href)`` where the
+    anchor is spelled differently from the id a verdict is filed under; ``None`` is a
+    divider between two runs of them. ``key`` is appended
+    to every ratable id, so a subject's runs do not file one verdict between them, and
+    ``rated=False`` drops the pills, which is what a page summarising other pages wants.
+    ``group`` stamps one run's entries on a viewer holding several.
+
+    ``siblings`` are the pages read alongside this one, as ``{label, href, current}``, and
+    ``index`` the page above it. ``summary=""`` drops the leading entry, for an index page
+    whose first section is its summary. The skeleton lives here rather than in each template
+    because it is what drifted: a report that grew a sibling grew its own spelling of the
+    divider before it, and one of them never grew the link back to its index at all.
+    """
+    bar: list[dict] = []
+    if summary:
+        bar.append({"id": "Summary", "name": "Summary", "href": summary,
+                    "ratable": False})
+
+    def extend(entries: list[dict]) -> None:
+        if entries:
+            if bar:
+                bar.append({"sep": True})
+            bar.extend(entries)
+
+    extend([{"sep": True} if section is None else
+            {"id": section[0] + (key if rated else ""), "name": section[1],
+             "href": section[2] if len(section) > 2 else "#" + section[0],
+             "ratable": rated}
+            for section in sections])
+    extend([{"id": sid, "name": name, "href": "#" + sid, "ratable": False}
+            for sid, name in closing])
+    extend([{"id": f"page{i}", "name": link["label"],
+             "href": False if link.get("current") else link["href"], "ratable": False}
+            for i, link in enumerate(siblings, start=1)])
+    if index:
+        extend([{"id": "Index", "name": index_label, "href": index, "ratable": False}])
+
+    if group is not None:
+        for entry in bar:
+            entry["group"] = group
+    return bar
 
 
 # ---- Footer ----

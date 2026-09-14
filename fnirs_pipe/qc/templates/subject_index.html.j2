@@ -1,32 +1,40 @@
 {% extends "_report_base.html.j2" %}
 
-{# The index shares the subject report's stylesheet: both are documents, not dashboards.
-   Only what differs is here, so the two stay one look as long as this block stays short. #}
+{# The index shares the subject report's stylesheet and _index.css with the dyad index:
+   all three are documents, not dashboards. Only what differs is here. #}
 {% block css %}
-.subtitle { color: #7f8c8d; font-size: 0.85rem; }
-.page-header {
-  display: block;
-  border-bottom: 2px solid #2980b9; padding-bottom: 0.6rem; margin-bottom: 1.2rem;
-}
-.page-header .subtitle { color: #7f8c8d; }
-th, td { padding: 0.4rem 0.7rem; white-space: nowrap; }
-tbody tr:hover { background: #f8fafc; }
-td a { color: #2980b9; font-weight: 600; text-decoration: none; }
-td a:hover { text-decoration: underline; }
-.muted { color: #95a5a6; }
-.run-links { display: block; margin-top: 0.15rem; font-size: 0.75rem; }
-.run-links a { color: #7f8c8d; font-weight: 400; margin-right: 0.55rem; }
-td.flag { background: #fdf0e3; font-weight: 600; color: #b9591a; }
-td.flag::after { content: " *"; color: #e08b3f; }
+{% include "_index.css" %}
+tr.ch-clean td { color: #b0bec5; }
 td.ch-bad { background: #fadbd8; color: #922b21; font-weight: 600; text-align: center; }
 td.ch-ok  { color: #cfd8dc; text-align: center; }
 td.ch-n   { text-align: right; }
-tr.ch-clean td { color: #b0bec5; }
-.scroll { overflow-x: auto; }
+.run-links { display: block; margin-top: 0.15rem; font-size: 0.75rem; }
+.run-links a { color: #7f8c8d; font-weight: 400; margin-right: 0.55rem; }
 /* the run the conditions were cut from reads as a heading for them, not as a sixth window */
 tr.cond-whole td { background: #f4f6f8; font-weight: 600; }
-.num { text-align: right; font-variant-numeric: tabular-nums; }
 {% endblock %}
+
+{# Navigation only: this page lists the runs rather than judging one, and a verdict belongs
+   on the run's own report. The sections follow the body, so a subject with no conditions
+   gets no entry for them. #}
+{% set _sections = [("Runs", "Runs")] %}
+{% if condition_groups %}
+  {% set _ = _sections.append(("Conditions", "Conditions")) %}
+  {% if condition_figures.profile %}
+    {% set _ = _sections.append(("Profile", "Profile")) %}
+  {% endif %}
+  {% if condition_figures.per_run | selectattr('channels') | list %}
+    {% set _ = _sections.append(("ChannelCondition", "Ch. × cond.")) %}
+  {% endif %}
+  {% if condition_figures.per_run | selectattr('timeline') | list %}
+    {% set _ = _sections.append(("Timeline", "Over time")) %}
+  {% endif %}
+{% endif %}
+{% if channels %}{% set _ = _sections.append(("Rejections", "Rejections")) %}{% endif %}
+{% set _ = _sections.append(("Rebuilt", "Rebuilt by")) %}
+{% set nav_modules = [nav_bar(_sections, rated=false, summary="",
+                              closing=[("Versions", "Versions")])] %}
+{% set nav_chip = "sub-" ~ subject %}
 
 {% block header %}
 <div class="page-header">
@@ -41,7 +49,7 @@ tr.cond-whole td { background: #f4f6f8; font-weight: 600; }
 
 {% block content %}
 
-<h2>Runs</h2>
+<h2 id="Runs">Runs</h2>
 <div class="scroll">
 <table>
   <thead>
@@ -92,7 +100,7 @@ tr.cond-whole td { background: #f4f6f8; font-weight: 600; }
 </p>
 
 {% if condition_groups %}
-<h2>Conditions</h2>
+<h2 id="Conditions">Conditions</h2>
 {% for group in condition_groups %}
 {% if condition_groups | length > 1 %}<h3>{{ group.label }}</h3>{% endif %}
 <div class="scroll">
@@ -136,7 +144,7 @@ tr.cond-whole td { background: #f4f6f8; font-weight: 600; }
 </p>
 
 {% if condition_figures.profile %}
-<h2>Condition profile
+<h2 id="Profile">Condition profile
   <span class="hint">each metric across the conditions, one line per run</span></h2>
 <iframe class="plotly-frame" src="{{ condition_figures.profile.src }}"
         title="Metrics by condition"
@@ -144,7 +152,7 @@ tr.cond-whole td { background: #f4f6f8; font-weight: 600; }
 {% endif %}
 
 {% if condition_figures.per_run | selectattr('channels') | list %}
-<h2>Channel &times; condition
+<h2 id="ChannelCondition">Channel &times; condition
   <span class="hint">which channel moved, and in which block</span></h2>
 {% for run in condition_figures.per_run if run.channels %}
 {% if condition_figures.per_run | length > 1 %}<h3>{{ run.label }}</h3>{% endif %}
@@ -164,7 +172,7 @@ tr.cond-whole td { background: #f4f6f8; font-weight: 600; }
 {% endif %}
 
 {% if condition_figures.per_run | selectattr('timeline') | list %}
-<h2>Metrics over time
+<h2 id="Timeline">Metrics over time
   <span class="hint">the conditions shaded behind the windowed metrics</span></h2>
 {% for run in condition_figures.per_run if run.timeline %}
 {% if condition_figures.per_run | length > 1 %}<h3>{{ run.label }}</h3>{% endif %}
@@ -180,7 +188,7 @@ tr.cond-whole td { background: #f4f6f8; font-weight: 600; }
 {% endif %}
 
 {% if channels %}
-<h2>Channel rejections</h2>
+<h2 id="Rejections">Channel rejections</h2>
 {% if channels.rejected %}
 <div class="scroll">
 <table>
@@ -216,7 +224,7 @@ tr.cond-whole td { background: #f4f6f8; font-weight: 600; }
 </p>
 {% endif %}
 
-<h2>Rebuilt by</h2>
+<h2 id="Rebuilt">Rebuilt by</h2>
 <p class="step-desc">This page is assembled from the records under <code>nirs/</code> each
    time either command runs, so it lists whatever is on disk rather than what one command
    produced. The command below is the one that last rebuilt it.</p>

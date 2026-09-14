@@ -15,7 +15,7 @@ import pathlib
 import re
 
 import pytest
-from jinja2 import ChainableUndefined, Environment, FileSystemLoader
+from jinja2 import ChainableUndefined
 
 from fnirs_pipe.qc.common.report_shell import (
     FOOTER_CSS,
@@ -23,9 +23,11 @@ from fnirs_pipe.qc.common.report_shell import (
     TOKENS_CSS,
     footer_vars,
     guard,
+    nav_bar,
     note,
     page_vars,
     stylesheet,
+    template_env,
 )
 
 # Every report template, i.e. every .html.j2 that is not a partial (partials are named
@@ -40,8 +42,7 @@ METHODS = {"html": "<p>M</p>", "plain": "M", "markdown": "M", "latex": "M"}
 @pytest.fixture
 def env():
     # the shell is what is under test, not whether a caller passed every panel variable
-    return Environment(loader=FileSystemLoader(str(TEMPLATE_DIR)), autoescape=False,
-                       undefined=ChainableUndefined)
+    return template_env(undefined=ChainableUndefined)
 
 
 # ---- the shell is not optional ----
@@ -218,3 +219,56 @@ def test_the_index_shares_the_one_stylesheet():
     block = re.search(r"{% block css %}(.*?){% endblock %}", text, re.S)
     assert block, "the index defines no css block; check it still loads document.css"
     assert len(block.group(1).strip().splitlines()) < 40
+
+
+# ---- the top bar is one builder ----
+
+def test_every_report_carries_a_top_bar():
+    # the bar is what a reader moves through a report with, and a template that stops
+    # setting nav_modules still renders, just without one
+    for name in REPORT_TEMPLATES + ["raw_viewer.html"]:
+        text = (TEMPLATE_DIR / name).read_text(encoding="utf-8")
+        assert "nav_modules" in text, f"{name} renders with no top bar"
+        assert "nav_bar(" in text, f"{name} spells its own bar instead of calling nav_bar"
+
+
+def test_nav_bar_wraps_the_sections_in_the_shared_skeleton():
+    bar = nav_bar([("Motion", "Motion"), None, ("Metrics", "Metrics")],
+                  siblings=[{"label": "video", "href": "v.html"}],
+                  index="sub-01_qc.html")
+    assert [e.get("name", "|") for e in bar] == [
+        "Summary", "|", "Motion", "|", "Metrics", "|", "Provenance", "Methods",
+        "|", "video", "|", "← All runs"]
+    assert bar[0]["href"] == "#Final"
+    assert [e["ratable"] for e in bar if "name" in e].count(True) == 2
+
+
+def test_a_key_reaches_only_the_ids_a_verdict_is_filed_under():
+    # the anchor is the section's, the id the run's: a subject's runs share the headings
+    # and must not share the verdict
+    bar = nav_bar([("Motion", "Motion")], key="__sub-01_task-chat")
+    motion = next(e for e in bar if e.get("name") == "Motion")
+    assert motion["id"] == "Motion__sub-01_task-chat"
+    assert motion["href"] == "#Motion"
+    assert all(e["id"] == "Provenance" for e in bar if e.get("name") == "Provenance")
+
+
+def test_an_unrated_bar_has_nothing_to_rate_with():
+    assert not any(e.get("ratable") for e in nav_bar([("Runs", "Runs")], rated=False))
+    # and the key cannot reach an id that no longer carries a pill
+    assert nav_bar([("Runs", "Runs")], rated=False, key="__x")[2]["id"] == "Runs"
+
+
+def test_a_summary_page_renders_no_rating_layer(env):
+    html = env.get_template("group_report.html.j2").render(
+        **page_vars(title="T", heading="T"), **footer_vars(versions={"fnirs-pipe": "0.1"}),
+    )
+    assert 'id="qc-container"' in html, "the cohort report lost its bar"
+    for rating_only in ('class="qc-module"', "saveEndpoint", 'id="rating-static-banner"'):
+        assert rating_only not in html, f"an unrated page still ships {rating_only}"
+
+
+def test_the_two_index_pages_share_one_stylesheet():
+    for name in ("subject_index.html.j2", "hyper_index.html.j2"):
+        text = (TEMPLATE_DIR / name).read_text(encoding="utf-8")
+        assert '{% include "_index.css" %}' in text, f"{name} spells the index look again"

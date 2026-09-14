@@ -79,41 +79,46 @@ select#run-select {
 </head>
 <body>
 
-{# One section list drives both rows of the top bar, as the subject report's does: the
-   anchor links and the rating pills under them. Rating ids carry the run label so a
-   subject's runs do not share a key, and the three that existed before this bar listed
-   every panel keep their spelling, an id being what a saved rating is filed under.
-   `group` is the run index, so a viewer holding several shows one run's cells at a time. #}
+{# The sections this viewer draws, once per run it holds: `group` is the run index, so a
+   viewer holding several shows one run's cells at a time. Rating ids carry the run label so
+   a subject's runs do not share a key, and the three that existed before this bar listed
+   every panel keep their spelling, an id being what a saved rating is filed under. #}
+{% set _sections = [
+  ("_Layout", "Layout", "#Layout"),
+  ("_Raw_Signal", "Raw", "#RawSignal"),
+  ("_ChannelDetail", "HbO/HbR", "#ChannelDetail"),
+  ("_PSD", "PSD", "#PSD"),
+  ("_SCI_PSP", "SCI/PSP", "#SciPsp"),
+  ("_Motion", "Motion", "#Motion"),
+  ("_Events", "Events", "#Events"),
+  ("_Epoch", "Epoch", "#Epoch"),
+  ("_TrialImage", "Trial image", "#TrialImage"),
+  none,
+  ("_Metrics", "Metrics", "#Metrics"),
+  ("_ChannelSummary", "Ch. Summary", "#ChannelSummary"),
+  ("_TrialQC", "Per-trial", "#TrialQC"),
+  ("_Channels", "Channels", "#Channels"),
+  ("_Errors", "Errors", "#Errors"),
+] %}
 {% set ns = namespace(modules=[]) %}
 {% for label in run_labels %}
-  {% set g = loop.index0 %}
-  {% set _ = ns.modules.append([
-    {"id": "Summary" ~ label,         "name": "Summary",     "href": "#Final", "ratable": false, "group": g},
-    {"sep": true, "group": g},
-    {"id": label ~ "_Layout",         "name": "Layout",      "href": "#Layout",         "group": g},
-    {"id": label ~ "_Raw_Signal",     "name": "Raw",         "href": "#RawSignal",      "group": g},
-    {"id": label ~ "_ChannelDetail",  "name": "HbO/HbR",     "href": "#ChannelDetail",  "group": g},
-    {"id": label ~ "_PSD",            "name": "PSD",         "href": "#PSD",            "group": g},
-    {"id": label ~ "_SCI_PSP",        "name": "SCI/PSP",     "href": "#SciPsp",         "group": g},
-    {"id": label ~ "_Motion",         "name": "Motion",      "href": "#Motion",         "group": g},
-    {"id": label ~ "_Events",         "name": "Events",      "href": "#Events",         "group": g},
-    {"id": label ~ "_Epoch",          "name": "Epoch",       "href": "#Epoch",          "group": g},
-    {"id": label ~ "_TrialImage",     "name": "Trial image", "href": "#TrialImage",     "group": g},
-    {"sep": true, "group": g},
-    {"id": label ~ "_Metrics",        "name": "Metrics",     "href": "#Metrics",        "group": g},
-    {"id": label ~ "_ChannelSummary", "name": "Ch. Summary", "href": "#ChannelSummary", "group": g},
-    {"id": label ~ "_TrialQC",        "name": "Per-trial",   "href": "#TrialQC",        "group": g},
-    {"id": label ~ "_Channels",       "name": "Channels",    "href": "#Channels",       "group": g},
-    {"id": label ~ "_Errors",         "name": "Errors",      "href": "#Errors",         "group": g},
-  ]) %}
+  {%- set _run = [] %}
+  {%- for section in _sections %}
+    {%- set _ = _run.append(none if section is none
+                            else (label ~ section[0], section[1], section[2])) %}
+  {%- endfor %}
+  {#- the closing sections are the page's, not the run's, so each group carries its own
+      copy: the bar shows one group at a time and they would otherwise vanish with it -#}
+  {%- set _ = ns.modules.append(nav_bar(_run, group=loop.index0,
+                                        index=index_href or "")) %}
 {% endfor %}
+{% set nav_modules = ns.modules %}
+{% set nav_chip = stem %}
 {% set rating_subject = stem %}
-{% set rating_modules = ns.modules %}
 {% set rating_pinned = [{"id": run_labels[0] ~ "_Final", "name": "FINAL", "href": "#Final"}] %}
-{% set rating_chip = stem %}
 {% set rating_save_endpoint = "/save_raw_ratings" %}
 {% set rating_load_endpoint = "/load_raw_ratings/" ~ stem %}
-{% include "_rating_bar.html.j2" %}
+{% include "_topbar.html.j2" %}
 
 {# a titled band rather than the dashboard's sticky nav: this page is read top to bottom
    like the subject report, whose header block this mirrors. The run selector rides in it,

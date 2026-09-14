@@ -60,6 +60,21 @@ table.group-table th .sort-ind { color: #ccd2d8; font-size: 0.7rem; margin-left:
 }
 {% endblock %}
 
+{# Navigation only: this page reads a cohort out of the runs' own records, and a verdict
+   belongs on the run it is about. The sections follow the body, so a cohort with no
+   conditions is not offered an entry for them. #}
+{% set _sections = [("Overview", "Overview"), ("Distributions", "Distributions")] %}
+{% if conditions %}
+  {% set _ = _sections.append(("Conditions", "By condition")) %}
+  {% set _ = _sections.append(("ConditionMatrix", "Run × cond.")) %}
+{% endif %}
+{% set _ = _sections.append(("Windowed", "Over time")) %}
+{% set _ = _sections.append(("Outliers", "Outliers")) %}
+{% set _ = _sections.append(("Table", "All metrics")) %}
+{% set nav_modules = [nav_bar(_sections, rated=false, summary="#Summary",
+                              closing=[("Errors", "Errors"), ("Versions", "Versions")])] %}
+{% set nav_chip = title %}
+
 {% block header %}
 <div class="page-header">
   <h1>{{ page_heading }}</h1>

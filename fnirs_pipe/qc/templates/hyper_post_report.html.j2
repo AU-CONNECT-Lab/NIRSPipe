@@ -36,39 +36,18 @@
              padding: 0.3rem 0.7rem; margin: 0.6rem 0; }
 {% endblock %}
 
-{# One entry per rated section, anchored to the heading it names, the way a subject report's
-   bar is built. The id carries this page's own stem so the run and each of its conditions
-   are rated separately rather than sharing one verdict. #}
-{% set _rk = "__" ~ page_stem %}
-{% set _bar = [
-  {"id": "Summary", "name": "Summary", "href": "#Final", "ratable": false},
-  {"sep": true},
-  {"id": "Alignment" ~ _rk, "name": "Alignment", "href": "#Alignment"},
-  {"id": "Coherence" ~ _rk, "name": "Coherence", "href": "#Coherence"},
-  {"id": "ISC" ~ _rk,       "name": "ISC",       "href": "#ISC"},
-  {"id": "Numbers" ~ _rk,   "name": "Numbers",   "href": "#Numbers", "ratable": false},
-  {"id": "Quality" ~ _rk,   "name": "Quality",   "href": "#Quality"},
-] %}
-{% set _ = _bar.append({"sep": true}) %}
-{% set _ = _bar.append({"id": "Provenance", "name": "Provenance", "href": "#Provenance",
-                        "ratable": false}) %}
-{% set _ = _bar.append({"id": "Methods", "name": "Methods", "href": "#Methods",
-                        "ratable": false}) %}
-{% if nav_links %}
-  {% set _ = _bar.append({"sep": true}) %}
-  {% for link in nav_links %}
-    {% set _ = _bar.append({"id": "page" ~ loop.index, "name": link.label,
-                            "href": false if link.current else link.href,
-                            "ratable": false}) %}
-  {% endfor %}
-{% endif %}
-
-{% set rating_subject = page_stem %}
-{% set rating_modules = [_bar] %}
-{% set rating_pinned = [{"id": "Final" ~ _rk, "name": "FINAL", "href": "#Final"}] %}
-{% set rating_chip = "group-" ~ group_id %}
-{% set rating_save_endpoint = "/save_hyper_ratings" %}
-{% set rating_load_endpoint = "/load_hyper_ratings/" ~ page_stem %}
+{# Navigation only: this page reports what the analysis produced rather than something a
+   reader signs off on, so its bar carries no pills. The raw dyad report is where a dyad is
+   judged. #}
+{% set nav_modules = [nav_bar([
+  ("Alignment", "Alignment"),
+  ("Coherence", "Coherence"),
+  ("ISC", "ISC"),
+  ("Numbers", "Numbers"),
+  ("Quality", "Quality"),
+], rated=false, siblings=nav_links or [], index=index_href or "",
+   index_label="← All windows")] %}
+{% set nav_chip = "group-" ~ group_id %}
 
 {# The dyad report reads as a document, so its header is a titled band rather than the
    sticky nav bar the dashboard reports carry. #}

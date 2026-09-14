@@ -1,19 +1,25 @@
 {# Shared sticky top bar: navigation row above, rating row below, columns aligned.
-   Required variables (set by the parent template):
-     rating_subject:        identifier passed back to the save endpoint
-     rating_modules:        list of groups; each group a list of entries, where an entry is
+   Included by _report_base.html.j2 whenever nav_modules is set; built by
+   qc.report_shell.nav_bar, which owns the order the entries come in.
+   Required:
+     nav_modules:           list of groups; each group a list of entries, where an entry is
                             {id, name, href?, ratable?} or {sep: true} for a divider
+   Optional:
+     nav_chip:              text shown in the right-hand identity chip
+     rating_subject:        identifier passed back to the save endpoint
      rating_save_endpoint:  POST URL for ratings (e.g. "/save_hyper_ratings")
      rating_load_endpoint:  GET URL for existing ratings (e.g. "/load_ratings")
-   Optional:
      rating_pinned:         entries kept in a fixed block at the right edge (overall verdict)
-     rating_chip:           text shown in the right-hand identity chip
    href defaults to "#<id>" and ratable to true, so callers that only pass {id, name}
    get a clickable anchor with a pill under it; href: false renders a plain label
    for pages with no matching anchor.
-   In static mode (fetch fails) the rating row is greyed out and a banner appears. #}
-
+   Without the two endpoints the bar is navigation only: no pills are clickable, no state
+   is fetched, and a page that summarises other pages carries it that way. With them, a
+   failed fetch means the report was opened as a plain file, so the rating row is greyed
+   out and a banner appears rather than the page pretending to save.
+#}
 <style>
+{% if rating_save_endpoint %}
 #rating-static-banner {
   display: none;
   background: #fff3cd;
@@ -30,6 +36,7 @@ body.rating-static-mode #qc-container .qc-module {
   opacity: 0.45;
   cursor: not-allowed;
 }
+{% endif %}
 
 #qc-container {
   position: sticky;
@@ -135,9 +142,11 @@ h1[id], h2[id], h3[id], details[id] {
 }
 </style>
 
+{% if rating_save_endpoint %}
 <div id="rating-static-banner">
   Static mode &mdash; launch via <code>fnirs-rate</code> to load existing ratings and save changes.
 </div>
+{% endif %}
 
 {# `group` marks the cells belonging to one run, for a page that holds several and shows
    one at a time. Absent on a one-run page, where there is nothing to switch between. #}
@@ -164,20 +173,21 @@ h1[id], h2[id], h3[id], details[id] {
 <div id="qc-container">
   <div id="qc-bar-scroll">
     <div class="qc-grid">
-      {%- for group in rating_modules %}
+      {%- for group in nav_modules %}
         {%- if not loop.first %}<span class="qc-sep"></span>{% endif %}
         {{ qc_cells(group) }}
       {%- endfor %}
     </div>
   </div>
-  {%- if rating_pinned or rating_chip %}
+  {%- if rating_pinned or nav_chip %}
   <div id="qc-pinned" class="qc-grid">
     {{ qc_cells(rating_pinned or []) }}
-    {%- if rating_chip %}<span class="qc-chip">{{ rating_chip }}</span>{% endif %}
+    {%- if nav_chip %}<span class="qc-chip">{{ nav_chip }}</span>{% endif %}
   </div>
   {%- endif %}
 </div>
 
+{% if rating_save_endpoint %}
 <script>
 (function() {
   var ratings       = {};
@@ -241,7 +251,12 @@ h1[id], h2[id], h3[id], details[id] {
     })
     .catch(function() { alert("Network error while saving rating"); });
   }
+})();
+</script>
+{% endif %}
 
+<script>
+(function() {
   // a page holding several runs shows one run's cells at a time; one with no groups is
   // untouched, every cell staying visible
   window.qcShowGroup = function(index) {
@@ -261,3 +276,4 @@ h1[id], h2[id], h3[id], details[id] {
   window.addEventListener("resize", syncHeight);
 })();
 </script>
+

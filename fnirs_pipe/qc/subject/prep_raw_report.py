@@ -848,6 +848,8 @@ def _shell_vars(runs: list[dict], output_path: Path, sub_dir: Path,
             methods=generate_methods_text(versions=versions, nirs_dir=nirs_dir),
             versions=versions,
         ),
+        # the subject index is rebuilt by the same command, so the bar can always point at it
+        "index_href": f"sub-{runs[0]['subject_id']}_qc.html" if runs else "",
     }
 
 

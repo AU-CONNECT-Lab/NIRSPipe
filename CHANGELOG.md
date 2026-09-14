@@ -6,6 +6,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+- **Every QC page now carries the same top bar**, built the same way. The subject index, the dyad index and the two cohort reports had none at all and are now navigable from the top; the dyad post report and the cohort reports carry it as navigation only, a verdict belonging on the page that reports one run or one dyad. The raw viewer gains the Provenance and Methods links it lacked, and both dyad pages gain the link back to the dyad index
+
 ### Added
 - **The GUI's Analysis page can set what rejects a channel.** The share of coupled windows, the scope it is counted over and the window length were CLI-only, so a run launched from the page screened at the defaults whatever the study needed. Trial chunking, GVTD censoring and the per-condition QC pages are on the page too
 - **The dyad report draws the ROI × ROI correlations**, HbO beside HbR on one colour scale. The numbers were already in `hyper-isc-roichan-*.tsv` and in the report's table, but nothing pictured them

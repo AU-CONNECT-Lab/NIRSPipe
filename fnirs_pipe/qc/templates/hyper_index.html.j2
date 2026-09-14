@@ -1,28 +1,20 @@
 {% extends "_report_base.html.j2" %}
 
-{# Shares the subject index's stylesheet and its table rules: the two are the same kind of
-   page, one over a subject's runs and one over a dyad's windows, and only what differs
-   is here. #}
+{# Shares _index.css with the subject index: the two are the same kind of page, one over
+   a subject's runs and one over a dyad's windows, and only what differs is here. #}
 {% block css %}
-.subtitle { color: #7f8c8d; font-size: 0.85rem; }
-.page-header {
-  display: block;
-  border-bottom: 2px solid #2980b9; padding-bottom: 0.6rem; margin-bottom: 1.2rem;
-}
-th, td { padding: 0.4rem 0.7rem; white-space: nowrap; }
-tbody tr:hover { background: #f8fafc; }
-td a { color: #2980b9; font-weight: 600; text-decoration: none; }
-td a:hover { text-decoration: underline; }
-.muted { color: #95a5a6; }
-.num { text-align: right; font-variant-numeric: tabular-nums; }
-td.flag { background: #fdf0e3; font-weight: 600; color: #b9591a; }
-td.flag::after { content: " *"; color: #e08b3f; }
+{% include "_index.css" %}
 /* the whole-run row is the average over every condition below it, so it reads as a
    heading for them rather than as one more window */
 tr.whole td { background: #f4f6f8; font-weight: 600; }
 tr.whole td.num { font-weight: 600; }
-.scroll { overflow-x: auto; }
 {% endblock %}
+
+{# Navigation only: a verdict on a dyad belongs on its raw report, not on the list of its
+   windows. #}
+{% set nav_modules = [nav_bar([("Windows", "Windows")], rated=false, summary="",
+                              closing=[("Versions", "Versions")])] %}
+{% set nav_chip = "group-" ~ group_id %}
 
 {% block header %}
 <div class="page-header">
@@ -39,7 +31,7 @@ tr.whole td.num { font-weight: 600; }
 
 {% block content %}
 
-<h2>Windows</h2>
+<h2 id="Windows">Windows</h2>
 <div class="scroll">
 <table>
   <thead>

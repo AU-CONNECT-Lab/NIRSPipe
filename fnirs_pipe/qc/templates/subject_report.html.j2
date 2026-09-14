@@ -1,65 +1,40 @@
 {% extends "_report_base.html.j2" %}
 
-{# One section list drives both rows of the top bar: the anchor links and the rating
-   pills under them. Rating ids carry the run label so a subject's runs do not share
-   a key in ratings.toml; hrefs stay the plain anchors used in the body.
-
-   A per-condition page is its own report and adds its own slug, because it inherits the
-   run's `run_label`: without it every condition of a run rated the run's own key, and a
-   verdict on one condition overwrote the verdict on the page beside it. #}
+{# The sections this report actually drew, in body order; nav_bar wraps them in the
+   skeleton every report shares. Rating ids carry the run label so a subject's runs do not
+   file one verdict between them, and a per-condition page adds its own slug on top: it
+   inherits the run's `run_label`, and without the slug a verdict on one condition
+   overwrote the verdict on the page beside it. #}
 {% set _rk = (("__" ~ run_label) if run_label else "")
              ~ (("__" ~ condition_slug) if condition_slug else "") %}
-{% set _nav = [
-  {"id": "Summary", "name": "Summary", "href": "#Final", "ratable": false},
-  {"sep": true},
-  {"id": "RawSignal" ~ _rk, "name": "Raw", "href": "#RawSignal"},
-  {"id": "Signal" ~ _rk,    "name": "SCI/PSP",    "href": "#Signal"},
-  {"id": "Motion" ~ _rk,    "name": "Motion",     "href": "#Motion"},
-  {"id": "HbO_HbR" ~ _rk,   "name": "HbO/HbR",    "href": "#HbO_HbR"},
+{% set _sections = [
+  ("RawSignal", "Raw"),
+  ("Signal", "SCI/PSP"),
+  ("Motion", "Motion"),
+  ("HbO_HbR", "HbO/HbR"),
 ] %}
-{% if mode != 'rest' %}
-  {% set _ = _nav.append({"id": "Epoch" ~ _rk, "name": "Epoch", "href": "#Epoch"}) %}
-{% endif %}
+{% if mode != 'rest' %}{% set _ = _sections.append(("Epoch", "Epoch")) %}{% endif %}
 {# three independent conditions, matching the body: glm --fc and denoise --fc draw the
    FC panel too, and used to reach it with no nav entry #}
-{% if rest_alff_path %}
-  {% set _ = _nav.append({"id": "RestALFF" ~ _rk, "name": "ALFF/fALFF", "href": "#RestALFF"}) %}
-{% endif %}
-{% if rest_fc_path %}
-  {% set _ = _nav.append({"id": "RestFC" ~ _rk, "name": "FC", "href": "#RestFC"}) %}
-{% endif %}
+{% if rest_alff_path %}{% set _ = _sections.append(("RestALFF", "ALFF/fALFF")) %}{% endif %}
+{% if rest_fc_path %}{% set _ = _sections.append(("RestFC", "FC")) %}{% endif %}
 {% if glm_design_path or glm_activation_path %}
-  {% set _ = _nav.append({"id": "GLM" ~ _rk, "name": "GLM", "href": "#GLM"}) %}
+  {% set _ = _sections.append(("GLM", "GLM")) %}
 {% endif %}
-{% set _ = _nav.append({"sep": true}) %}
-{% set _ = _nav.append({"id": "Metrics" ~ _rk, "name": "Metrics", "href": "#Metrics"}) %}
+{% set _ = _sections.append(none) %}
+{% set _ = _sections.append(("Metrics", "Metrics")) %}
 {% if channel_summary_path %}
-  {% set _ = _nav.append({"id": "ChannelSummary" ~ _rk, "name": "Ch. Summary", "href": "#ChannelSummary"}) %}
+  {% set _ = _sections.append(("ChannelSummary", "Ch. Summary")) %}
 {% endif %}
-{% if trial_qc_path %}
-  {% set _ = _nav.append({"id": "TrialQC" ~ _rk, "name": "Per-trial", "href": "#TrialQC"}) %}
-{% endif %}
-{% set _ = _nav.append({"id": "Errors" ~ _rk, "name": "Errors", "href": "#Errors"}) %}
-{% set _ = _nav.append({"id": "Provenance", "name": "Provenance", "href": "#Provenance", "ratable": false}) %}
-{% set _ = _nav.append({"id": "Methods",    "name": "Methods",    "href": "#Methods",    "ratable": false}) %}
-{# the run and its conditions are one set of pages, so each reaches any other in a click #}
-{% if nav_links %}
-  {% set _ = _nav.append({"sep": true}) %}
-  {% for link in nav_links %}
-    {% set _ = _nav.append({"id": "page" ~ loop.index, "name": link.label,
-                            "href": false if link.current else link.href,
-                            "ratable": false}) %}
-  {% endfor %}
-{% endif %}
-{% if index_href %}
-  {% set _ = _nav.append({"sep": true}) %}
-  {% set _ = _nav.append({"id": "AllRuns", "name": "← All runs", "href": index_href, "ratable": false}) %}
-{% endif %}
+{% if trial_qc_path %}{% set _ = _sections.append(("TrialQC", "Per-trial")) %}{% endif %}
+{% set _ = _sections.append(("Errors", "Errors")) %}
 
+{# the run and its conditions are one set of pages, so each reaches any other in a click #}
+{% set nav_modules = [nav_bar(_sections, key=_rk, siblings=nav_links or [],
+                              index=index_href or "")] %}
+{% set nav_chip = "sub-" ~ subject %}
 {% set rating_subject = "sub-" ~ subject %}
-{% set rating_modules = [_nav] %}
 {% set rating_pinned = [{"id": "Final" ~ _rk, "name": "FINAL", "href": "#Final"}] %}
-{% set rating_chip = "sub-" ~ subject %}
 {% set rating_save_endpoint = "/save_ratings" %}
 {% set rating_load_endpoint = "/load_ratings/sub-" ~ subject %}
 

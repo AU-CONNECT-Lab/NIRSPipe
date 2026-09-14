@@ -5,8 +5,9 @@
    the tab script, so a report cannot be written that quietly lacks them.
 
    Head and nav variables come from qc.report_shell.page_vars, footer variables from
-   qc.report_shell.footer_vars. Setting rating_modules (see _rating_bar.html.j2) is what
-   puts a rating bar on the page.
+   qc.report_shell.footer_vars. Setting nav_modules (built by qc.report_shell.nav_bar, see
+   _topbar.html.j2) is what puts the sticky top bar on the page; adding the rating endpoints
+   is what makes its pills clickable.
 
    Blocks:
      head_extra  extra tags inside <head>, e.g. a CDN script
@@ -30,7 +31,7 @@
 </head>
 <body>
 
-{% if rating_modules %}{% include "_rating_bar.html.j2" %}{% endif %}
+{% if nav_modules %}{% include "_topbar.html.j2" %}{% endif %}
 
 {% block header %}
 <nav id="qc-nav">

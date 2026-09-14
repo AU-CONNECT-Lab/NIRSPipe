@@ -484,6 +484,12 @@ def build_hyper_report(
     output_path = (group_report_dir(output_dir, group_id)
                    / ("_".join(name_parts) + "_desc-hyperraw_nirs.html"))
 
+    # the post report if `fnirs-hyper run` has written one; a raw-only tree has none, and
+    # the index is built from the same coherence tables, so neither link is offered there
+    post = output_path.with_name(
+        output_path.name.replace("_desc-hyperraw_", "_desc-hyperpost_"))
+    post_href = post.name if post.exists() else None
+
     html = render(
         "hyper_report.html.j2",
         **page_vars(
@@ -529,10 +535,8 @@ def build_hyper_report(
             {"all": sqm_data}, meta["subject_ids"], sci_threshold),
         # this page's own name, which is what the rating server files a verdict under
         page_stem=output_path.stem,
-        # the post report if `fnirs-hyper run` has written one; a raw-only tree has none
-        post_href=(p.name if (p := output_path.with_name(
-            output_path.name.replace("_desc-hyperraw_", "_desc-hyperpost_"))).exists()
-            else None),
+        post_href=post_href,
+        index_href=f"group-{group_id}_index.html" if post_href else "",
     )
     output_path.write_text(html, encoding="utf-8")
     logger.info("Hyper raw report saved: %s", output_path)
@@ -1373,6 +1377,7 @@ def build_hyper_post_report(
             group_id=group_id,
             task=task,
             subject_ids=pair_ids,
+            index_href=f"group-{group_id}_index.html",
             wtc_fmin=wtc_fmin,
             wtc_fmax=wtc_fmax,
             wtc_band_fmin=band_fmin,

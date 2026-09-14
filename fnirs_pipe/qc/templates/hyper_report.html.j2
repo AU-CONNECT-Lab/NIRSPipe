@@ -25,30 +25,25 @@
 .cd-table .cd-cell { padding-left: 0.4rem; padding-right: 0.4rem; }
 {% endblock %}
 
-{% set rating_subject = page_stem %}
 {# One cell per section, anchored to it, as the subject and post bars are. Every id that has
    ever been rated is kept even where the section it names was rewritten: a rating is filed
    under the id, so renaming one leaves an old verdict on disk with no cell to show it in.
    `Triggers` is the one that lost its own section; it folded into Alignment, which is where
    a reader looking for it now goes. #}
-{% set rating_modules = [[
-  {"id": "Summary", "name": "Summary", "href": "#Final", "ratable": false},
-  {"sep": true},
-  {"id": "Alignment", "name": "Alignment", "href": "#Alignment"},
-  {"id": "Usable", "name": "Usable time", "href": "#Usable"},
-  {"id": "Motion", "name": "Motion", "href": "#Motion"},
-  {"id": "Head", "name": "Head", "href": "#Head"},
-  {"id": "Coherence", "name": "Synchrony", "href": "#Coherence"},
-  {"id": "Signal_Quality", "name": "Comparable", "href": "#Quality"},
-  {"id": "Channels", "name": "Channels", "href": "#Channels"},
-  {"sep": true},
-  {"id": "Provenance", "name": "Provenance", "href": "#Provenance", "ratable": false},
-  {"id": "Methods", "name": "Methods", "href": "#Methods", "ratable": false},
-  {"id": "PostReport", "name": "Post report →",
-   "href": post_href or false, "ratable": false},
-]] %}
+{% set nav_modules = [nav_bar([
+  ("Alignment", "Alignment"),
+  ("Usable", "Usable time"),
+  ("Motion", "Motion"),
+  ("Head", "Head"),
+  ("Coherence", "Synchrony"),
+  ("Signal_Quality", "Comparable", "#Quality"),
+  ("Channels", "Channels"),
+], siblings=[{"label": "Post report →", "href": post_href,
+              "current": not post_href}],
+   index=index_href or "", index_label="← All windows")] %}
+{% set nav_chip = "group-" ~ group_id %}
+{% set rating_subject = page_stem %}
 {% set rating_pinned = [{"id": "Final", "name": "FINAL", "href": "#Final"}] %}
-{% set rating_chip = "group-" ~ group_id %}
 {% set rating_save_endpoint = "/save_hyper_ratings" %}
 {% set rating_load_endpoint = "/load_hyper_ratings/" ~ page_stem %}
 

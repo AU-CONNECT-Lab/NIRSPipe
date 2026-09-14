@@ -37,6 +37,17 @@ table.group-table tbody tr:hover td { background: #f5fbff; }
 table.group-table th .sort-ind { color: #ccd2d8; font-size: 0.7rem; margin-left: 0.3rem; }
 {% endblock %}
 
+{# Navigation only, as on the subject cohort page: a verdict on a dyad belongs on that
+   dyad's own raw report. #}
+{% set nav_modules = [nav_bar([
+  ("Usable", "Usable time"),
+  ("Where", "Where"),
+  ("Null", "Null"),
+  ("Table", "All dyads"),
+], rated=false, summary="#Summary",
+   closing=[("Errors", "Errors"), ("Versions", "Versions")])] %}
+{% set nav_chip = "cohort" %}
+
 {% block header %}
 <div class="page-header">
   <h1>{{ page_heading }}</h1>
