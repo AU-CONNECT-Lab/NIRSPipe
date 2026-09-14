@@ -190,6 +190,7 @@ def run_hyper_post(
         compute_wtc,
         long_axis_over,
         roi_mean_of_channels,
+    roi_mean_of_homologous,
         roi_mean_of_isc,
         window_result,
         wtc_band_mean,
@@ -385,6 +386,21 @@ def run_hyper_post(
                                        min_channels=wtc_roi_min_channels)
         return out
 
+    def _roi_hom_band(chan_band_df, ch_type: str, what: str):
+        """The homologous ROI mean, which is the number to report and the one with a null.
+
+        Separate from `_roi_band` rather than a column beside it, because a crossed run
+        writes a 4x4 matrix and this writes four rows: one file, one quantity. See
+        `roi_mean_of_homologous` for why the crossed diagonal is not this number.
+        """
+        if not roi_map or chan_band_df is None:
+            return None
+        out = None
+        with guard(f"Homologous ROI mean ({what}, {ch_type})", errors, scope):
+            out = roi_mean_of_homologous(chan_band_df, roi_map,
+                                         min_channels=wtc_roi_min_channels)
+        return out
+
     def _wtc_pass(ch_type: str) -> dict:
         """The whole WTC analysis for one chromophore: rows for the tables, and figures.
 
@@ -410,7 +426,8 @@ def run_hyper_post(
         window's untagged band means, which is what the cross matrices are drawn from: they
         carry both chromophores on one pair of axes, so they cannot be built inside this pass.
         """
-        out: dict = {"chan": None, "roichan": None, "cond_chan": [], "cond_roi": [],
+        out: dict = {"chan": None, "roichan": None, "roihom": None,
+                     "cond_chan": [], "cond_roi": [], "cond_roihom": [],
                      "result": None, "cond_wtc": [], "cond_bands": []}
 
         wtc_result: WTCResult | None = None
@@ -437,6 +454,7 @@ def run_hyper_post(
 
         out["result"] = wtc_result
         out["roichan"] = _roi_band(chan_band_df, ch_type, "whole run")
+        out["roihom"] = _roi_hom_band(chan_band_df, ch_type, "whole run")
 
         # ---- per condition ----
         # Each task window read out of the whole-run pass above rather than transformed on
@@ -475,6 +493,12 @@ def run_hyper_post(
                 cond_roi.insert(0, "condition", label)
                 out["cond_roi"].append(_tag(cond_roi, ch_type))
 
+            cond_hom = _roi_hom_band(cond_chan, ch_type, f"condition {label}")
+            if cond_hom is not None and not cond_hom.empty:
+                cond_hom = cond_hom.copy()
+                cond_hom.insert(0, "condition", label)
+                out["cond_roihom"].append(_tag(cond_hom, ch_type))
+
             cond_chan = cond_chan.copy()
             cond_chan.insert(0, "condition", label)
             out["cond_chan"].append(_tag(cond_chan, ch_type))
@@ -510,6 +534,10 @@ def run_hyper_post(
     if roi_band_df is not None:
         logger.info("WTC ROI means from channels saved: %s",
                     _write_df_tsv(roi_band_df, "wtc-roichan", "hyper_wtc_roichan"))
+    roi_hom_df = _stack("roihom")
+    if roi_hom_df is not None:
+        logger.info("WTC homologous ROI means saved: %s",
+                    _write_df_tsv(roi_hom_df, "wtc-roihom", "hyper_wtc_roihom"))
 
     # the windows are the one thing a reader cannot reconstruct from the table
     spans = {label: [round(t0, 3), round(t1, 3)] for label, t0, t1 in cond_windows}
@@ -524,6 +552,12 @@ def run_hyper_post(
         logger.info("WTC ROI means per condition saved: %s",
                     _write_df_tsv(pd.concat(cond_roi_frames, ignore_index=True),
                                   "wtcbycond-roichan", "hyper_wtc_bycondition_roichan",
+                                  condition_windows_s=spans))
+    cond_hom_frames = [f for r in passes.values() for f in r["cond_roihom"]]
+    if cond_hom_frames:
+        logger.info("WTC homologous ROI means per condition saved: %s",
+                    _write_df_tsv(pd.concat(cond_hom_frames, ignore_index=True),
+                                  "wtcbycond-roihom", "hyper_wtc_bycondition_roihom",
                                   condition_windows_s=spans))
 
     # ---- ISC, which is a cut and not a slice ----

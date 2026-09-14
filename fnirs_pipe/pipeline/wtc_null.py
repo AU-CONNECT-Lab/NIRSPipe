@@ -26,6 +26,12 @@ import pandas as pd
 logger = logging.getLogger(__name__)
 
 
+def write_tsv(frame: pd.DataFrame, path: Path) -> Path:
+    """One spelling for the tab-separated write every table here does."""
+    frame.to_csv(path, sep="\t", index=False)
+    return path
+
+
 def run_wtc_null(
     group_id: str,
     task: str,
@@ -113,6 +119,7 @@ def write_wtc_null(
     mask_coi: bool = True,
     windows: "list[tuple[str, float, float]] | None" = None,
     analysis_window: "tuple[float, float] | None" = None,
+    roi_map: "dict[str, list[str]] | None" = None,
 ) -> Path:
     """Rank what :func:`run_wtc_null` drew against the real band means, and write it.
 
@@ -120,6 +127,13 @@ def write_wtc_null(
     column, matching the real band-mean tables. The sidecar additionally records ``n_iter``,
     ``cross`` and ``chroma``, without which a 5-iteration probe and a 100-iteration null are
     indistinguishable on disk.
+
+    ``roi_map`` adds ``...hyper-wtc-roihom-pseudo.tsv``, the null for the homologous ROI
+    means in ``...hyper-wtc-roihom.tsv``. It is free: the iterations are grouped into
+    regions before they are summarised, so no surrogate is transformed a second time, and
+    grouping inside the iteration is what makes it the null of the ROI mean rather than a
+    bracket around it. The crossed ``-roichan`` matrix has no null and cannot get one from
+    here; see :func:`~fnirs_pipe.pipeline.synchrony.roi_mean_of_homologous`.
 
     ``windows`` adds a second table, ``...hyper-wtcbycond-pseudo.tsv``, with a ``condition``
     column: the null for what ``--wtc-by-condition`` wrote. It mirrors the real side, where
@@ -145,8 +159,11 @@ def write_wtc_null(
     stem = f"group-{group_id}_task-{task}_hyper"
     real = _real_table(data_dir / f"{stem}-wtc.tsv")
     real_by_cond = _real_table(data_dir / f"{stem}-wtcbycond.tsv")
+    real_roi = _real_table(data_dir / f"{stem}-wtc-roihom.tsv")
+    real_roi_by_cond = _real_table(data_dir / f"{stem}-wtcbycond-roihom.tsv")
 
     frames, cond_frames = [], []
+    roi_frames, roi_cond_frames = [], []
     for ch_type, null in nulls.items():
         part, cond_part = null.summarise(real=_for_chroma(real, ch_type),
                                          real_by_cond=_for_chroma(real_by_cond, ch_type))
@@ -159,6 +176,17 @@ def write_wtc_null(
             cond_part = cond_part.copy()
             cond_part.insert(0, "chromophore", ch_type)
             cond_frames.append(cond_part)
+        if roi_map:
+            roi_part, roi_cond_part = null.summarise_roi(
+                roi_map, real=_for_chroma(real_roi, ch_type),
+                real_by_cond=_for_chroma(real_roi_by_cond, ch_type))
+            roi_part = roi_part.copy()
+            roi_part.insert(0, "chromophore", ch_type)
+            roi_frames.append(roi_part)
+            if roi_cond_part is not None:
+                roi_cond_part = roi_cond_part.copy()
+                roi_cond_part.insert(0, "chromophore", ch_type)
+                roi_cond_frames.append(roi_cond_part)
 
     sources = [p for p in (path_from(r) for r in aligned_raws.values()) if p]
     params = dict(
@@ -182,6 +210,18 @@ def write_wtc_null(
         _hyper_sidecar(cond_path, "hyper_wtc_bycondition_pseudo", sources,
                        conditions=[w[0] for w in (windows or [])], **params)
         logger.info("Pseudo-dyad WTC per condition saved: %s", cond_path)
+
+    for group, stem_suffix, step, extra in (
+            (roi_frames, "-wtc-roihom-pseudo", "hyper_wtc_roihom_pseudo", {}),
+            (roi_cond_frames, "-wtcbycond-roihom-pseudo",
+             "hyper_wtc_bycondition_roihom_pseudo",
+             {"conditions": [w[0] for w in (windows or [])]})):
+        if not group:
+            continue
+        path = data_dir / f"{stem}{stem_suffix}.tsv"
+        write_tsv(pd.concat(group, ignore_index=True), path)
+        _hyper_sidecar(path, step, sources, **extra, **params)
+        logger.info("Pseudo-dyad WTC ROI means saved: %s", path)
 
     return out_path
 

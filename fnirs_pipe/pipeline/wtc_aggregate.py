@@ -31,11 +31,16 @@ _MUST_AGREE = ("band_fmin", "band_fmax", "mask_coi", "n_iter")
 _KINDS = {
     "wtc":                "group_hyper_wtc",
     "wtc-roichan":        "group_hyper_wtc_roichan",
+    # the homologous ROI mean and its null: four rows a condition, the number to report
+    "wtc-roihom":         "group_hyper_wtc_roihom",
+    "wtc-roihom-pseudo":  "group_hyper_wtc_roihom_pseudo",
     "wtc-pseudo":         "group_hyper_wtc_pseudo",
     # --wtc-by-condition writes these beside the whole-run pair above; they carry a
     # `condition` column and are merged separately, never into the whole-run table
     "wtcbycond":          "group_hyper_wtc_bycondition",
     "wtcbycond-roichan":  "group_hyper_wtc_bycondition_roichan",
+    "wtcbycond-roihom":   "group_hyper_wtc_bycondition_roihom",
+    "wtcbycond-roihom-pseudo": "group_hyper_wtc_bycondition_roihom_pseudo",
     # the null for the pair above, windowed off the same transform they are
     "wtcbycond-pseudo":   "group_hyper_wtc_bycondition_pseudo",
 }

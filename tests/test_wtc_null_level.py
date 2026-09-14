@@ -47,7 +47,7 @@ def test_the_table_reports_the_spread_the_mean_came_out_of():
                       cond_draws=[], keys=KEYS, levels={})
     table, _ = null.summarise()
 
-    assert table["coherence"].iloc[0] == pytest.approx(0.4)
+    assert table["null_mean"].iloc[0] == pytest.approx(0.4)
     assert table["null_sd"].iloc[0] == pytest.approx(0.2)
     assert table["n_iter"].iloc[0] == 3
 

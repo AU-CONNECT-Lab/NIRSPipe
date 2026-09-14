@@ -244,7 +244,7 @@ def test_no_windows_leaves_the_second_table_unbuilt(stub_pseudo):
     whole, by_cond = stub_pseudo.compute_wtc_pseudo(
         {"s1": None, "s2": None}, 0.02, 0.30, n_iter=1).summarise()
     assert by_cond is None
-    assert whole["coherence"].iloc[0] == pytest.approx(0.5)
+    assert whole["null_mean"].iloc[0] == pytest.approx(0.5)
 
 
 def test_a_window_spanning_the_record_reproduces_the_whole_run_number(stub_pseudo):
@@ -255,7 +255,7 @@ def test_a_window_spanning_the_record_reproduces_the_whole_run_number(stub_pseud
         {"s1": None, "s2": None}, 0.02, 0.30, n_iter=1,
         windows=[("all", float(TIMES[0]), float(TIMES[-1]))]).summarise()
     assert by_cond["condition"].tolist() == ["all"]
-    assert by_cond["coherence"].iloc[0] == pytest.approx(whole["coherence"].iloc[0])
+    assert by_cond["null_mean"].iloc[0] == pytest.approx(whole["null_mean"].iloc[0])
 
 
 def test_each_window_gets_its_own_null_level(stub_pseudo):
@@ -264,7 +264,7 @@ def test_each_window_gets_its_own_null_level(stub_pseudo):
         {"s1": None, "s2": None}, 0.02, 0.30, n_iter=2,
         windows=[("early", float(TIMES[0]), mid - 1e-9),
                  ("late", mid, float(TIMES[-1]))]).summarise()
-    levels = dict(zip(by_cond["condition"], by_cond["coherence"]))
+    levels = dict(zip(by_cond["condition"], by_cond["null_mean"]))
     assert levels["early"] == pytest.approx(0.2)
     assert levels["late"] == pytest.approx(0.8)
 
@@ -287,7 +287,7 @@ def test_the_windowed_null_carries_the_same_columns_as_the_whole_run_one(stub_ps
 
 def test_without_an_analysis_window_the_whole_run_row_covers_the_record(stub_pseudo):
     whole, _ = stub_pseudo.compute_wtc_pseudo({"s1": None, "s2": None}, 0.02, 0.30, n_iter=1).summarise()
-    assert whole["coherence"].iloc[0] == pytest.approx(0.5)
+    assert whole["null_mean"].iloc[0] == pytest.approx(0.5)
 
 
 @pytest.mark.parametrize("half, expected", [("first", 0.2), ("second", 0.8)])
@@ -297,7 +297,7 @@ def test_the_whole_run_row_is_the_window_when_one_is_given(stub_pseudo, half, ex
               else (mid, float(TIMES[-1])))
     whole, _ = stub_pseudo.compute_wtc_pseudo(
         {"s1": None, "s2": None}, 0.02, 0.30, n_iter=1, analysis_window=window).summarise()
-    assert whole["coherence"].iloc[0] == pytest.approx(expected)
+    assert whole["null_mean"].iloc[0] == pytest.approx(expected)
 
 
 def test_a_window_spanning_everything_is_the_unwindowed_number(stub_pseudo):
@@ -306,7 +306,7 @@ def test_a_window_spanning_everything_is_the_unwindowed_number(stub_pseudo):
     whole, _ = stub_pseudo.compute_wtc_pseudo(
         {"s1": None, "s2": None}, 0.02, 0.30, n_iter=1,
         analysis_window=(float(TIMES[0]), float(TIMES[-1]))).summarise()
-    assert whole["coherence"].iloc[0] == pytest.approx(0.5)
+    assert whole["null_mean"].iloc[0] == pytest.approx(0.5)
 
 
 def test_the_conditions_are_unaffected_by_the_analysis_window(stub_pseudo):
@@ -318,8 +318,8 @@ def test_the_conditions_are_unaffected_by_the_analysis_window(stub_pseudo):
     _, windowed = stub_pseudo.compute_wtc_pseudo(
         {"s1": None, "s2": None}, 0.02, 0.30,
         analysis_window=(mid, float(TIMES[-1])), **args).summarise()
-    assert windowed["coherence"].iloc[0] == pytest.approx(plain["coherence"].iloc[0])
-    assert plain["coherence"].iloc[0] == pytest.approx(0.8)
+    assert windowed["null_mean"].iloc[0] == pytest.approx(plain["null_mean"].iloc[0])
+    assert plain["null_mean"].iloc[0] == pytest.approx(0.8)
 
 
 def test_the_writer_passes_the_window_down(monkeypatch, tmp_path):
@@ -344,3 +344,78 @@ def test_the_writer_passes_the_window_down(monkeypatch, tmp_path):
         group_id="G1", task="tap", aligned_raws={"s1": None, "s2": None},
         output_dir=tmp_path, n_iter=1, chroma=("hbo",), analysis_window=(60.0, 300.0))
     assert seen["analysis_window"] == (60.0, 300.0)
+
+
+# ---- the ROI null ----
+
+def _roi_draws(values_per_iter):
+    """PseudoNull with hand-made draws: [{label: value}] per iteration, two channels an ROI."""
+    from fnirs_pipe.pipeline.synchrony import PseudoNull
+
+    frames = []
+    for values in values_per_iter:
+        frames.append(pd.DataFrame({
+            "sub1": ["s1"] * len(values), "sub2": ["s2"] * len(values),
+            "label": list(values), "coherence": list(values.values()),
+            "coherence_z": [np.arctanh(v) for v in values.values()],
+            "n_valid_frac": [1.0] * len(values)}))
+    return PseudoNull(draws=frames, cond_draws=[], keys=["sub1", "sub2", "label"], levels={})
+
+
+ROI_MAP = {"r1": ["S1_D1", "S1_D2"]}
+
+
+def test_the_roi_null_groups_inside_each_iteration():
+    """The ROI null is the spread of the ROI mean, not of the channels it averages.
+
+    Two channels moving together give the ROI mean their own spread; two moving oppositely
+    give it none. Summarising the channels first would report the same sd for both, which is
+    the whole reason the grouping happens per iteration.
+    """
+    together = _roi_draws([{"S1_D1": 0.2, "S1_D2": 0.2},
+                           {"S1_D1": 0.4, "S1_D2": 0.4},
+                           {"S1_D1": 0.6, "S1_D2": 0.6}])
+    opposed = _roi_draws([{"S1_D1": 0.2, "S1_D2": 0.6},
+                          {"S1_D1": 0.4, "S1_D2": 0.4},
+                          {"S1_D1": 0.6, "S1_D2": 0.2}])
+
+    t_whole, _ = together.summarise_roi(ROI_MAP, min_channels=1)
+    o_whole, _ = opposed.summarise_roi(ROI_MAP, min_channels=1)
+
+    # same channel-level spread on both sides, so a bracket from null_sd could not tell them apart
+    assert together.summarise()[0]["null_sd"].iloc[0] == pytest.approx(
+        opposed.summarise()[0]["null_sd"].iloc[0])
+    assert t_whole["null_mean"].iloc[0] == pytest.approx(0.4)
+    assert o_whole["null_mean"].iloc[0] == pytest.approx(0.4)
+    assert t_whole["null_sd"].iloc[0] == pytest.approx(0.2)
+    assert o_whole["null_sd"].iloc[0] == pytest.approx(0.0)
+
+
+def test_the_roi_null_ranks_the_real_roi_value():
+    null = _roi_draws([{"S1_D1": 0.2, "S1_D2": 0.2}, {"S1_D1": 0.4, "S1_D2": 0.4},
+                       {"S1_D1": 0.6, "S1_D2": 0.6}, {"S1_D1": 0.8, "S1_D2": 0.8}])
+    real = pd.DataFrame({"sub1": ["s1"], "sub2": ["s2"], "label": ["r1"],
+                         "coherence": [0.7], "n_valid_frac": [1.0]})
+
+    whole, _ = null.summarise_roi(ROI_MAP, real=real, min_channels=1)
+
+    assert whole["label"].iloc[0] == "r1"
+    assert whole["percentile"].iloc[0] == pytest.approx(75.0)
+
+
+def test_a_crossed_null_still_ranks_only_the_homologous_roi_value():
+    """A crossed draw carries within-ROI cross pairings the reported ROI value does not."""
+    from fnirs_pipe.pipeline.synchrony import PseudoNull
+
+    rows = [("S1_D1", "S1_D1", 0.4), ("S1_D2", "S1_D2", 0.4),
+            ("S1_D1", "S1_D2", 0.9), ("S1_D2", "S1_D1", 0.9)]
+    frame = pd.DataFrame({"sub1": ["s1"] * 4, "sub2": ["s2"] * 4,
+                          "label": [r[0] for r in rows], "label2": [r[1] for r in rows],
+                          "coherence": [r[2] for r in rows], "n_valid_frac": [1.0] * 4})
+    null = PseudoNull(draws=[frame], cond_draws=[],
+                      keys=["sub1", "sub2", "label", "label2"], levels={})
+
+    whole, _ = null.summarise_roi(ROI_MAP, min_channels=1)
+
+    assert len(whole) == 1
+    assert whole["null_mean"].iloc[0] == pytest.approx(0.4)

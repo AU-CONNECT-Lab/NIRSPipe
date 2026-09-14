@@ -384,6 +384,7 @@ def cmd_run(
                 mask_coi=wtc_mask_coi,
                 windows=cond_windows,
                 analysis_window=analysis_window,
+                roi_map=roi_map,
             )
             print(f"     null   -> {null_path}")
 

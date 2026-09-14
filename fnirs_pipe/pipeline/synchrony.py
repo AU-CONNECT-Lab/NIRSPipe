@@ -757,6 +757,44 @@ class PseudoNull:
                                  real=real_by_cond) if self.cond_draws else None),
         )
 
+    def summarise_roi(self, roi_map: dict[str, list[str]],
+                      real: "pd.DataFrame | None" = None,
+                      real_by_cond: "pd.DataFrame | None" = None,
+                      min_channels: int = 2,
+                      ) -> "tuple[pd.DataFrame, pd.DataFrame | None]":
+        """The same two tables at ROI level, for :func:`roi_mean_of_homologous`.
+
+        **Each iteration is grouped into ROIs before the iterations are summarised**, which is
+        the whole point and not an implementation detail. An ROI value is the mean of that
+        region's channels, so its null is the distribution of that mean, and that distribution
+        depends on how the channels' draws move together within an iteration. Summarise first
+        and the covariance is gone: all that is left is each channel's own ``null_sd``, from
+        which the mean's spread can only be bracketed between ``sd / sqrt(k)`` and ``sd``.
+
+        It costs nothing. The draws being averaged are the ones already taken for the channel
+        table; no surrogate is transformed twice.
+
+        Only the homologous ROI value can be ranked this way. A crossed ``(roi, roi)`` cell
+        also holds the within-region cross pairings, which a homologous null never draws.
+        """
+        keys = ["sub1", "sub2", "label"]
+        whole = [roi_mean_of_homologous(f, roi_map, min_channels=min_channels)
+                 for f in self.draws]
+        cond = None
+        if self.cond_draws:
+            cond = []
+            for frame in self.cond_draws:
+                for condition, part in frame.groupby("condition", sort=False):
+                    grouped = roi_mean_of_homologous(part, roi_map,
+                                                     min_channels=min_channels)
+                    grouped.insert(0, "condition", condition)
+                    cond.append(grouped)
+        return (
+            _average_iterations(whole, keys, real=real),
+            (_average_iterations(cond, ["condition"] + keys, real=real_by_cond)
+             if cond else None),
+        )
+
 
 # Quantile of the surrogate coherence a cell has to clear before its phase arrow is drawn.
 # 0.95 is the alpha NULL_ALPHA_PCT grades on, so "above the null" reads the same on a
@@ -957,10 +995,12 @@ def _average_iterations(frames: "list[pd.DataFrame]", keys: "list[str]",
 
       [iter1 rows, iter2 rows], ["sub1", "sub2", "label"]  ->  one row per channel pair
 
-    ``coherence`` is the mean of the draws and ``coherence_z`` its Fisher z, taken from the
-    averaged coherence rather than averaged itself. ``null_sd``, ``null_p95`` and ``n_iter``
-    describe the spread the mean came out of: a null summarised by its mean alone cannot say
-    whether a real value sitting above it is anywhere near unusual.
+    ``null_mean`` is the mean of the draws and ``null_mean_z`` its Fisher z, taken from the
+    averaged value rather than averaged itself. **Not called ``coherence``**, which is what
+    every other table's measured value is called: this column is the null's own centre, and a
+    reader who takes it for the real value compares the null with itself. ``null_sd``,
+    ``null_p95`` and ``n_iter`` describe the spread it came out of, since a null summarised by
+    its mean alone cannot say whether a real value above it is anywhere near unusual.
 
     ``real`` is the true-dyad table, matched on ``keys``, and adds ``percentile``: the share
     of a cell's draws its real value beat. A cell the real table has no row for, or whose
@@ -968,14 +1008,14 @@ def _average_iterations(frames: "list[pd.DataFrame]", keys: "list[str]",
     """
     stacked = pd.concat(frames, ignore_index=True)
     grouped = stacked.groupby(keys, sort=False)
-    out = (grouped.agg(coherence=("coherence", "mean"),
+    out = (grouped.agg(null_mean=("coherence", "mean"),
                        null_sd=("coherence", "std"),
                        n_iter=("coherence", "count"),
                        n_valid_frac=("n_valid_frac", "mean"))
                   .reset_index())
     draws = {key: part.to_numpy(dtype=float) for key, part in grouped["coherence"]}
-    out.insert(out.columns.get_loc("null_sd"), "coherence_z",
-               out["coherence"].map(_fisher_z))
+    out.insert(out.columns.get_loc("null_sd"), "null_mean_z",
+               out["null_mean"].map(_fisher_z))
     out.insert(out.columns.get_loc("n_iter"), "null_p95",
                [_p95(draws[k]) for k in _row_keys(out, keys)])
     if real is not None:
@@ -1470,6 +1510,34 @@ def roi_mean_of_channels(
     out.insert(out.columns.get_loc("n_valid_frac"), "coherence_z",
                out["coherence"].map(_fisher_z))
     return out
+
+
+def roi_mean_of_homologous(
+    band_df: pd.DataFrame,
+    roi_map: dict[str, list[str]],
+    min_channels: int = 2,
+) -> pd.DataFrame:
+    """Average an ROI's *homologous* channel pairs: one value per ROI, however the run was made.
+
+    ::
+
+      right_pfc holds S1_D1, S1_D2, S2_D1, S2_D2
+      -> the mean of the four (S1_D1, S1_D1), (S1_D2, S1_D2), ... coherences
+
+    :func:`roi_mean_of_channels` groups whatever it is handed, so on a crossed frame its
+    ``(roi, roi)`` diagonal is the mean of every pairing inside the ROI, sixteen of them here,
+    of which four are homologous. That is a different quantity from the one the literature
+    reports and from the one an uncrossed run produces, and a flag whose job is to add the
+    off-diagonal cells should not silently redefine the diagonal. This function is the
+    reported number: the homologous mean, identical whether or not the run crossed.
+
+    It is also the only ROI value the homologous pseudo-dyad null can rank, since the null
+    draws exactly these pairings.
+    """
+    df = band_df
+    if "label2" in df.columns:
+        df = df[df["label"] == df["label2"]].drop(columns=["label2"])
+    return roi_mean_of_channels(df, roi_map, min_channels=min_channels)
 
 
 # ---- Inter-subject correlation ----
