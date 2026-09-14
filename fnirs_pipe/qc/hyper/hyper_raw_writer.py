@@ -314,7 +314,7 @@ def _process_hyper_raw_group(
     sqm_path = sqm_dir / f"{label}_desc-sqm_nirs.json"
     sqm_path.write_text(json.dumps(_hyper_sqm_record(sqm, aligned_raws), indent=2,
                                   default=str), encoding="utf-8")
-    logger.info("Hyper SQM JSON → %s", sqm_path)
+    logger.info("Hyper SQM JSON -> %s", sqm_path)
 
     member_info = [
         {

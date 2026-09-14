@@ -50,7 +50,7 @@ def _short_channel_regressors(
     # registered positions would build these out of every channel
     short_names = long_short_channels(haemo, sep_bands)[1]
     if not short_names:
-        logger.warning("no short channels found — skipping short-channel regressors")
+        logger.warning("no short channels found - skipping short-channel regressors")
         return {}
     short = haemo.copy().pick(short_names)
     # a rejected short channel would otherwise enter the regressor, and the regressor
@@ -60,7 +60,7 @@ def _short_channel_regressors(
     # picking an empty selection raises rather than returning nothing, so the emptiness
     # has to be caught here or a subject whose short channels were all rejected kills the run
     if not len(good_hbo) or not len(good_hbr):
-        logger.warning("every short channel of a chromophore is bad — skipping short-channel regressors")
+        logger.warning("every short channel of a chromophore is bad - skipping short-channel regressors")
         return {}
     hbo_data = short.get_data(picks=good_hbo)  # (n_channels, n_times)
     hbr_data = short.get_data(picks=good_hbr)
@@ -312,7 +312,7 @@ def run_glm_pipeline(
         add_regs=confounds,
         events=events,
     )
-    logger.debug("design matrix: %d scans × %d regressors — %s", dm.shape[0], dm.shape[1], list(dm.columns))
+    logger.debug("design matrix: %d scans x %d regressors - %s", dm.shape[0], dm.shape[1], list(dm.columns))
 
     glm_est = fit_glm(haemo, dm, noise_model=noise_model)
 

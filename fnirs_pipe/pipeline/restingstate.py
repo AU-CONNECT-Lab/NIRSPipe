@@ -209,7 +209,7 @@ def _roi_members(
         if picks:
             members[roi] = picks
         else:
-            logger.warning("ROI %s has no good %s channel — excluded from ROI connectivity", roi, chromophore)
+            logger.warning("ROI %s has no good %s channel - excluded from ROI connectivity", roi, chromophore)
     return members
 
 

@@ -1192,7 +1192,7 @@ def write_run_sqm(
     out_path = record_path(nirs_dir, label)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(record, indent=2, default=str), encoding="utf-8")
-    logger.info("SQM record → %s", out_path)
+    logger.info("SQM record -> %s", out_path)
     return out_path
 
 

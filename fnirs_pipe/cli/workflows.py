@@ -127,7 +127,7 @@ def run_participant_level(args: dict[str, Any]) -> None:
     verbose: bool                    = args.get("verbose", False)
 
     setup_logging(verbose=verbose)
-    logger.info("fnirs-pipe starting — output: %s", output_dir)
+    logger.info("fnirs-pipe starting - output: %s", output_dir)
 
     _refuse_cropped_input(bids_dir, allow=bool(args.get("allow_cropped_input")))
 
@@ -262,7 +262,7 @@ def run_participant_level(args: dict[str, Any]) -> None:
                     logger.error("sub-%s | SQM records failed", subject, exc_info=True)
                     sqm_paths = []
                 for path in sqm_paths:
-                    logger.info("sub-%s | SQM record → %s", subject, path.name)
+                    logger.info("sub-%s | SQM record -> %s", subject, path.name)
                     # the record is on disk either way; only the database rows are at risk here
                     try:
                         record = _json.loads(path.read_text(encoding="utf-8"))
@@ -289,7 +289,7 @@ def run_participant_level(args: dict[str, Any]) -> None:
                             stem="provenance", label=label,
                             title=label + (f"  |  mode: {args['mode']}" if args.get("mode") else ""),
                         ):
-                            logger.info("sub-%s | provenance → %s", subject, path)
+                            logger.info("sub-%s | provenance -> %s", subject, path)
                             if path.suffix == ".png":
                                 provenance_path = f"figures/{label}/{path.name}"
                     except Exception:
@@ -345,7 +345,7 @@ def _log_run_notes(run_notes: "list[tuple[str, str]]") -> None:
     """
     if not run_notes:
         return
-    logger.info("run notes (%d) — sections left out, not failures:", len(run_notes))
+    logger.info("run notes (%d) - sections left out, not failures:", len(run_notes))
     for label, note in run_notes:
         logger.info("  %s | %s", label, note)
 

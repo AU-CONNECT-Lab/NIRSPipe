@@ -607,7 +607,7 @@ def _process_run(
     if by_cond:
         record["by_condition"] = by_cond
     sqm_path.write_text(json.dumps(record, indent=2, default=str), encoding="utf-8")
-    logger.info("SQM JSON → %s", sqm_path)
+    logger.info("SQM JSON -> %s", sqm_path)
     save_channel_csv(ch_rows, label, sqm_dir, sci_threshold, psp_threshold=cutoffs["psp"])
 
     n_total = len(sci_scores)

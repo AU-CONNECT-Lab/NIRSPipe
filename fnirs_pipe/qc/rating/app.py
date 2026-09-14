@@ -31,7 +31,7 @@ def _serve_forever(app, port: int, log_name: str, ready_delay: float = 1.0, on_r
     if on_ready is not None:
         on_ready()
 
-    logger.info("%s on http://localhost:%d — Ctrl+C to stop", log_name, port)
+    logger.info("%s on http://localhost:%d - Ctrl+C to stop", log_name, port)
     try:
         while True:
             time.sleep(1)
@@ -294,7 +294,7 @@ class RawRatingApp:
     def run(self, port: int = 5052) -> None:
         def _on_ready():
             url = f"http://localhost:{port}/"
-            logger.info("raw viewer → %s", url)
+            logger.info("raw viewer -> %s", url)
             webbrowser.open(url)
 
         _serve_forever(self.app, port, "fnirs-rate raw", on_ready=_on_ready)
@@ -457,7 +457,7 @@ class HyperRatingApp:
     def run(self, port: int = 5053) -> None:
         def _on_ready():
             url = f"http://localhost:{port}/"
-            logger.info("hyper viewer → %s", url)
+            logger.info("hyper viewer -> %s", url)
             webbrowser.open(url)
 
         _serve_forever(self.app, port, "fnirs-rate hyper", on_ready=_on_ready)

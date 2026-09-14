@@ -1376,7 +1376,7 @@ def build_hyper_post_report(
                 _matrix_set(bands, f"_{_pair_fname(label)}", f"condition {label}",
                             (pr, label), pr),
                 [(label, bands, label)], label, (tstart, tstop), pr)
-            logger.info("group-%s | %s condition %s → %s",
+            logger.info("group-%s | %s condition %s -> %s",
                         group_id, " × ".join(pr), label, written.name)
 
         # the run's page prints every condition under the whole run, which is the comparison

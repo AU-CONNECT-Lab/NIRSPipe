@@ -184,7 +184,7 @@ def run_post(
         _write_step_snirf(result, config, output_dir, desc="filtered", rec=rec, source_entities=source_entities)
 
     if config.resample_sfreq is not None:
-        logger.info("sub-%s | resample → %.1f Hz", config.subject, config.resample_sfreq)
+        logger.info("sub-%s | resample -> %.1f Hz", config.subject, config.resample_sfreq)
         result = resample(result, config.resample_sfreq)
         _write_step_snirf(result, config, output_dir, desc="resampled", rec=rec, source_entities=source_entities)
 
@@ -402,12 +402,12 @@ def _write_fc_derivatives(
         fc_path = _path(chromo_entities, "fc")
         fc_df.to_csv(fc_path, sep="	", index_label="channel")
         _sidecar(fc_path, "fc", chromophore=chromo)
-        logger.info("sub-%s | fc (%s) → %s", config.subject, chromo, fc_path)
+        logger.info("sub-%s | fc (%s) -> %s", config.subject, chromo, fc_path)
 
         fcz_path = _path(chromo_entities, "fcz")
         fisher_z(fc_df).to_csv(fcz_path, sep="	", index_label="channel")
         _sidecar(fcz_path, "fisher_z", chromophore=chromo)
-        logger.info("sub-%s | fcz (%s) → %s", config.subject, chromo, fcz_path)
+        logger.info("sub-%s | fcz (%s) -> %s", config.subject, chromo, fcz_path)
 
         if config.roi_map:
             fc_roi_df = compute_fc_roi(raw_resid, config.roi_map, chromo)
@@ -415,12 +415,12 @@ def _write_fc_derivatives(
                 fc_roi_path = _path(chromo_entities, "fcroi")
                 fc_roi_df.to_csv(fc_roi_path, sep="	", index_label="roi")
                 _sidecar(fc_roi_path, "fc_roi", chromophore=chromo)
-                logger.info("sub-%s | fc_roi (%s) → %s", config.subject, chromo, fc_roi_path)
+                logger.info("sub-%s | fc_roi (%s) -> %s", config.subject, chromo, fc_roi_path)
 
                 fcroiz_path = _path(chromo_entities, "fcroiz")
                 fisher_z(fc_roi_df).to_csv(fcroiz_path, sep="	", index_label="roi")
                 _sidecar(fcroiz_path, "fisher_z", chromophore=chromo)
-                logger.info("sub-%s | fc_roiz (%s) → %s", config.subject, chromo, fcroiz_path)
+                logger.info("sub-%s | fc_roiz (%s) -> %s", config.subject, chromo, fcroiz_path)
 
                 fc_roi[chromo] = fc_roi_df
 
@@ -435,12 +435,12 @@ def _write_fc_derivatives(
                 # inside a listed ROI holds a value instead of being blank
                 _sidecar(fcseed_path, "fc_seed", chromophore=chromo,
                          seed_channels=_roi_members(raw_resid, config.roi_map, chromo))
-                logger.info("sub-%s | fc_seed (%s) → %s", config.subject, chromo, fcseed_path)
+                logger.info("sub-%s | fc_seed (%s) -> %s", config.subject, chromo, fcseed_path)
 
                 fcseedz_path = _path(chromo_entities, "fcseedz")
                 fisher_z(fc_seed_df).to_csv(fcseedz_path, sep="	", index_label="roi")
                 _sidecar(fcseedz_path, "fisher_z", chromophore=chromo)
-                logger.info("sub-%s | fc_seedz (%s) → %s", config.subject, chromo, fcseedz_path)
+                logger.info("sub-%s | fc_seedz (%s) -> %s", config.subject, chromo, fcseedz_path)
 
                 fc_seed[chromo] = fc_seed_df
 
@@ -482,7 +482,7 @@ def _write_rest_derivatives(
         _deriv_sidecar(alff_path, "alff", rec.path_of(raw_resid_bb),
                        list(raw_resid.info["bads"]),
                        low_pass=config.low_pass, high_pass=config.high_pass)
-        logger.info("sub-%s | alff → %s", config.subject, alff_path)
+        logger.info("sub-%s | alff -> %s", config.subject, alff_path)
     else:
         logger.warning("sub-%s | skipping ALFF: --high-pass and --low-pass required", config.subject)
 
@@ -568,5 +568,5 @@ def _write_step_snirf(haemo: mne.io.Raw, config: PostConfig, output_dir: Path, d
         # read back by read_snirf: SNIRF itself cannot carry the marks
         "bad_channels": list(haemo.info["bads"]),
     })
-    logger.info("sub-%s | %s snirf → %s", config.subject, desc, out_path)
+    logger.info("sub-%s | %s snirf -> %s", config.subject, desc, out_path)
     return rec.written(out_path, haemo)
