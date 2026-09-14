@@ -109,9 +109,10 @@ def test_whiten_zero_is_the_unwhitened_correlation():
     a = np.array([_ar(rng, np.array([0.9])) for _ in range(3)])
     b = np.array([_ar(rng, np.array([0.9])) for _ in range(3)])
 
-    mat, orders1, orders2 = _isc_matrix(a, b, 0)
+    mat, orders1, orders2, lags = _isc_matrix(a, b, 0)
     assert orders1 is None and orders2 is None
-    assert mat == pytest.approx(_isc_from_rows(a, b))
+    assert not lags.any(), "no search was asked for, so every cell won at lag 0"
+    assert mat == pytest.approx(_isc_from_rows(a, b)[0])
     assert mat[0, 0] == pytest.approx(np.corrcoef(a[0], b[0])[0, 1], abs=1e-9)
 
 
@@ -192,3 +193,61 @@ def test_the_matrix_entry_point_agrees_with_the_table(dyad):
 
     assert names_a == names_b
     assert direct == pytest.approx(via_table, nan_ok=True)
+
+
+# ---- the lag search ----
+
+def test_a_shifted_copy_is_found_at_the_shift_it_was_made_with():
+    """The point of the search: two haemodynamic responses do not peak together, and a
+    same-sample correlation reads a coupling a second apart as no coupling."""
+    rng = np.random.default_rng(6)
+    source = _ar(rng, np.array([0.9]))
+    shift = 7
+    a = np.vstack([source])
+    b = np.vstack([np.r_[np.zeros(shift), source[:-shift]]])
+
+    at_zero, lag_zero = _isc_from_rows(a, b, max_lag=0)
+    best, lag = _isc_from_rows(a, b, max_lag=20)
+
+    assert abs(at_zero[0, 0]) < 0.8
+    assert best[0, 0] > 0.95
+    assert lag[0, 0] == shift
+    assert lag_zero[0, 0] == 0
+
+
+def test_the_search_keeps_the_sign_of_an_anticorrelated_pairing():
+    """Largest in magnitude, not largest signed: the published form suits a metric built for
+    positive coupling, and this matrix carries both signs."""
+    rng = np.random.default_rng(7)
+    source = _ar(rng, np.array([0.9]))
+    a = np.vstack([source])
+    b = np.vstack([-source])
+
+    best, _ = _isc_from_rows(a, b, max_lag=10)
+    assert best[0, 0] < -0.95
+
+
+def test_searching_raises_the_value_under_no_coupling():
+    """A maximum over many shifts is larger than any one of them, which is why a lagged run
+    belongs with a null searched the same way."""
+    rng = np.random.default_rng(8)
+    a = np.array([_ar(rng, np.array([0.5])) for _ in range(8)])
+    b = np.array([_ar(rng, np.array([0.5])) for _ in range(8)])
+
+    at_zero = np.abs(_isc_from_rows(a, b, max_lag=0)[0]).mean()
+    searched = np.abs(_isc_from_rows(a, b, max_lag=25)[0]).mean()
+    assert searched > at_zero
+
+
+def test_the_null_is_searched_the_same_way_as_the_value(dyad):
+    """So the inflation the search adds is in both and the percentile stays readable."""
+    ids = ["10031", "10032"]
+    _, _, plain = compute_isc_pairs(dyad, ids, "hbo", n_null=20, seed=2)
+    _, _, lagged = compute_isc_pairs(dyad, ids, "hbo", max_lag_s=2.0, n_null=20, seed=2)
+
+    assert "lag_s" not in plain.columns
+    assert "lag_s" in lagged.columns
+    assert lagged["lag_s"].abs().max() <= 2.0 + 1e-9
+    # both sides rose, so the ranks stay comparable rather than every cell becoming extreme
+    assert lagged["null_mean"].mean() > plain["null_mean"].mean()
+    assert lagged["percentile"].mean() == pytest.approx(plain["percentile"].mean(), abs=25)

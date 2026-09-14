@@ -13,7 +13,6 @@ from typing import Any
 
 import pandas as pd
 
-from fnirs_pipe.pipeline.synchrony import ISC_MAX_AR_ORDER
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("pipeline.hyper_post")
@@ -43,7 +42,8 @@ class HyperPostConfig:
     wtc_mask_coi: bool = True
     wtc_roi_min_channels: int = 2
     wtc_chroma: Any = ("hbo", "hbr")
-    isc_whiten: int = ISC_MAX_AR_ORDER
+    isc_whiten: int = 0
+    isc_max_lag_s: float = 0.0
     isc_pseudo: int = 0
     roi_map: dict | None = None
     sep_bands: Any = None
@@ -213,6 +213,7 @@ def run_hyper_post(
     wtc_mask_coi           = config.wtc_mask_coi
     wtc_roi_min_channels   = config.wtc_roi_min_channels
     isc_whiten, isc_pseudo = config.isc_whiten, config.isc_pseudo
+    isc_max_lag_s          = config.isc_max_lag_s
     chroma, cond_pad_s     = config.chroma, config.cond_pad_s
     roi_map, sep_bands     = config.roi_map, config.sep_bands
     analysis_window        = config.analysis_window
@@ -536,7 +537,8 @@ def run_hyper_post(
             pair_ids = list(pair) if pair else subject_ids
             isc_mat, isc_ch_names, pairs_df = compute_isc_pairs(
                 aligned_raws, pair_ids, ch_type, sep_bands, window=window,
-                whiten=isc_whiten, n_null=isc_pseudo, seed=wtc_seed)
+                whiten=isc_whiten, max_lag_s=isc_max_lag_s,
+                n_null=isc_pseudo, seed=wtc_seed)
             if isc_mat is None:
                 return channel_level, roi_level
             channel_level = (isc_mat, isc_ch_names)
@@ -591,7 +593,8 @@ def run_hyper_post(
             _hyper_sidecar(
                 tsv_path, "hyper_isc_pairs",
                 [p for p in (path_from(r) for r in aligned_raws.values()) if p],
-                isc_whiten=isc_whiten, isc_pseudo=isc_pseudo, seed=wtc_seed,
+                isc_whiten=isc_whiten, isc_max_lag_s=isc_max_lag_s,
+                isc_pseudo=isc_pseudo, seed=wtc_seed,
                 chroma=["hbo", "hbr"], conditions=[w[0] for w in cond_windows],
                 **align_info,
             )

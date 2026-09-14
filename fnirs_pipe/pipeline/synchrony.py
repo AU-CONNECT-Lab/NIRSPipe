@@ -1516,16 +1516,60 @@ def _whiten_rows(data: np.ndarray, max_order: int) -> tuple[np.ndarray, list[int
     return (out[:, drop:] if drop else out), orders
 
 
-def _isc_from_rows(data1: np.ndarray, data2: np.ndarray) -> np.ndarray:
-    """Pearson r of every row of ``data1`` against every row of ``data2``, both z-scored."""
-    def _zscore(x: np.ndarray) -> np.ndarray:
-        mu  = x.mean(axis=1, keepdims=True)
-        std = x.std(axis=1, keepdims=True)
-        std = np.where(std < 1e-12, 1.0, std)
-        return (x - mu) / std
+def _zscore_rows(x: np.ndarray) -> np.ndarray:
+    """Each row to zero mean and unit deviation, a flat row left alone rather than divided by 0."""
+    mu  = x.mean(axis=1, keepdims=True)
+    std = x.std(axis=1, keepdims=True)
+    return (x - mu) / np.where(std < 1e-12, 1.0, std)
 
-    isc_mat = (_zscore(data1) @ _zscore(data2).T) / data1.shape[1]
-    return np.clip(isc_mat, -1.0, 1.0, out=isc_mat)
+
+def _isc_from_rows(
+    data1: np.ndarray, data2: np.ndarray, max_lag: int = 0,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Pearson r of every row of ``data1`` against every row of ``data2``, and at what lag.
+
+    ::
+
+      max_lag 0   ->  r at the same sample, lag 0 everywhere
+      max_lag 16  ->  the strongest r within 16 samples either way, and where it was
+
+    With ``max_lag`` the pair is re-correlated at every shift in ``[-max_lag, max_lag]`` and
+    the strongest of them kept. Two people's haemodynamic responses do not peak at the same
+    instant, so a same-sample correlation reads a coupling a second apart as no coupling; a
+    short search either way is what the cross-correlation literature reports instead.
+
+    **Strongest means largest in magnitude, and the sign is kept.** The published form takes
+    the largest signed value, which suits a metric built for positive coupling but would turn
+    every anticorrelated pairing into a small positive number, and this matrix has both.
+    The two agree wherever the coupling is positive.
+
+    Lag is in samples and positive means the second member follows the first. Searching
+    inflates the value under no coupling, since it is a maximum over many draws, so a lagged
+    matrix belongs with a null searched the same way.
+
+    Each shift is correlated over its own overlap, so both sides are re-standardised per lag
+    rather than once over the whole record.
+    """
+    n = data1.shape[1]
+    if max_lag <= 0:
+        isc_mat = (_zscore_rows(data1) @ _zscore_rows(data2).T) / n
+        np.clip(isc_mat, -1.0, 1.0, out=isc_mat)
+        return isc_mat, np.zeros_like(isc_mat)
+
+    best = best_lag = None
+    for shift in range(-int(max_lag), int(max_lag) + 1):
+        left  = data1[:, max(0, -shift): n - max(0, shift)]
+        right = data2[:, max(0, shift): n - max(0, -shift)]
+        at_lag = np.clip((_zscore_rows(left) @ _zscore_rows(right).T) / left.shape[1],
+                         -1.0, 1.0)
+        if best is None:
+            best, best_lag = at_lag, np.full(at_lag.shape, float(shift))
+            continue
+        # NaN compares False, so a blank cell keeps the NaN it started with
+        stronger = np.abs(at_lag) > np.abs(best)
+        best = np.where(stronger, at_lag, best)
+        best_lag = np.where(stronger, float(shift), best_lag)
+    return best, np.where(np.isfinite(best), best_lag, np.nan)
 
 
 def _isc_rows(
@@ -1606,6 +1650,7 @@ def compute_isc(
     sep_bands=None,
     window: "tuple[float, float] | None" = None,
     whiten: int = 0,
+    max_lag_s: float = 0.0,
 ) -> tuple[np.ndarray, list[str]] | tuple[None, None]:
     """Compute inter-brain Pearson r matrix (n_ch × n_ch) over long channels.
 
@@ -1661,7 +1706,16 @@ def compute_isc(
     data1, data2, ch_names = _isc_rows(aligned_raws, subject_ids, ch_type, sep_bands, window)
     if ch_names is None:
         return None, None
-    return _isc_matrix(data1, data2, whiten)[0], ch_names
+    max_lag = _lag_samples(aligned_raws, subject_ids, max_lag_s)
+    return _isc_matrix(data1, data2, whiten, max_lag)[0], ch_names
+
+
+def _lag_samples(aligned_raws: dict, subject_ids: list[str], max_lag_s: float) -> int:
+    """``max_lag_s`` seconds as whole samples of the rate both members share."""
+    if not max_lag_s:
+        return 0
+    sfreq = _shared_sfreq({sid: aligned_raws[sid] for sid in subject_ids[:2]})
+    return max(0, int(round(float(max_lag_s) * sfreq)))
 
 
 def compute_isc_pairs(
@@ -1671,6 +1725,7 @@ def compute_isc_pairs(
     sep_bands=None,
     window: "tuple[float, float] | None" = None,
     whiten: int = 0,
+    max_lag_s: float = 0.0,
     n_null: int = 0,
     seed: int | None = None,
 ) -> "tuple[np.ndarray, list[str], pd.DataFrame] | tuple[None, None, None]":
@@ -1702,7 +1757,9 @@ def compute_isc_pairs(
     if ch_names is None:
         return None, None, None
 
-    isc_mat, orders1, orders2 = _isc_matrix(data1, data2, whiten)
+    max_lag = _lag_samples(aligned_raws, subject_ids, max_lag_s)
+    isc_mat, orders1, orders2, lags = _isc_matrix(data1, data2, whiten, max_lag)
+    sfreq = _shared_sfreq({sid: aligned_raws[sid] for sid in subject_ids[:2]})
     sub1, sub2 = subject_ids[0], subject_ids[1]
 
     rows = [{"sub1": sub1, "sub2": sub2, "label": a, "label2": b,
@@ -1710,19 +1767,23 @@ def compute_isc_pairs(
             for i, a in enumerate(ch_names) for j, b in enumerate(ch_names)]
     frame = pd.DataFrame(rows)
     frame.insert(frame.columns.get_loc("r") + 1, "r_z", frame["r"].map(_fisher_z))
+    index = {name: i for i, name in enumerate(ch_names)}
     if orders1 is not None:
-        index = {name: i for i, name in enumerate(ch_names)}
         frame["ar_order"]  = frame["label"].map(lambda c: orders1[index[c]])
         frame["ar_order2"] = frame["label2"].map(lambda c: orders2[index[c]])
+    if max_lag:
+        ij = (frame["label"].map(index).to_numpy(), frame["label2"].map(index).to_numpy())
+        frame["lag_s"] = lags[ij] / sfreq
 
     if n_null > 0:
-        draws = _isc_null_draws(data1, data2, whiten, n_null, seed)
+        draws = _isc_null_draws(data1, data2, whiten, max_lag, n_null, seed)
         _add_isc_null_columns(frame, isc_mat, ch_names, draws)
     return isc_mat, ch_names, frame
 
 
 def _isc_null_draws(
-    data1: np.ndarray, data2: np.ndarray, whiten: int, n_iter: int, seed: int | None,
+    data1: np.ndarray, data2: np.ndarray, whiten: int, max_lag: int, n_iter: int,
+    seed: int | None,
 ) -> np.ndarray:
     """``n_iter`` ISC matrices against a phase-scrambled second member.
 
@@ -1738,7 +1799,7 @@ def _isc_null_draws(
         surrogate = data2.copy()
         for row in np.flatnonzero(finite):
             surrogate[row] = phase_scramble(data2[row], rng)
-        draws[i] = _isc_matrix(data1, surrogate, whiten)[0]
+        draws[i] = _isc_matrix(data1, surrogate, whiten, max_lag)[0]
     return draws
 
 
@@ -1769,11 +1830,13 @@ def _add_isc_null_columns(
 
 
 def _isc_matrix(
-    data1: np.ndarray, data2: np.ndarray, whiten: int,
-) -> "tuple[np.ndarray, list[int] | None, list[int] | None]":
-    """The r matrix, and the AR order each row was whitened at when ``whiten`` asked for one.
+    data1: np.ndarray, data2: np.ndarray, whiten: int, max_lag: int = 0,
+) -> "tuple[np.ndarray, list[int] | None, list[int] | None, np.ndarray]":
+    """The r matrix, the AR order each row was whitened at, and the lag each cell won at.
 
-    Whitening happens after the window has been cut, so each stretch is fitted on its own.
+    Whitening happens after the window has been cut, so each stretch is fitted on its own,
+    and before the lag search, so the search runs on the residuals rather than on the
+    autocorrelation that would make every shift look alike.
     """
     orders1 = orders2 = None
     if whiten:
@@ -1782,7 +1845,8 @@ def _isc_matrix(
         n_keep = min(data1.shape[1], data2.shape[1])
         data1, data2 = data1[:, :n_keep], data2[:, :n_keep]
     # a rejected channel contributed a row of NaN above, which the products carry
-    return _isc_from_rows(data1, data2), orders1, orders2
+    isc_mat, lags = _isc_from_rows(data1, data2, max_lag)
+    return isc_mat, orders1, orders2, lags
 
 
 def roi_mean_of_isc(

@@ -141,10 +141,18 @@ def _hyper_post():
             dbc.Col([
                 dbc.Label("ISC Whitening Order"),
                 dbc.Input(id="qc-isc-whiten", type="number", min=0, step=1,
-                          placeholder="32"),
+                          placeholder="0, off"),
                 dbc.FormText("Largest AR order fitted per channel before the correlation; "
-                             "0 correlates the signals themselves. Without it r sits far "
-                             "above what its sample count implies."),
+                             "0 correlates the signals themselves. 32 is what the strand of "
+                             "the literature that whitens uses."),
+            ], width=2),
+            dbc.Col([
+                dbc.Label("ISC Max Lag (s)"),
+                dbc.Input(id="qc-isc-max-lag", type="number", min=0, step=0.5,
+                          placeholder="0, none"),
+                dbc.FormText("Search this far either way and keep the strongest, rather "
+                             "than correlating sample against sample. 2 s is the published "
+                             "choice."),
             ], width=2),
             dbc.Col([
                 dbc.Label("ISC Null Iterations"),

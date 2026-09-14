@@ -195,7 +195,8 @@ def cmd_run(
     wtc_cond_transform: bool, wtc_cond_pad_s: "float | None",
     wtc_limit_scales: bool, wtc_save_maps: bool,
     wtc_pseudo: int | None, wtc_pseudo_cross: bool,
-    bads_scope: str, isc_threshold: float, isc_whiten: int, isc_pseudo: int,
+    bads_scope: str, isc_threshold: float, isc_whiten: int,
+    isc_max_lag: float, isc_pseudo: int,
     sci_threshold: float,
     normalize: bool, no_align: bool, tstart: float | None, tend: float | None,
     short_max_dist: float | None, long_min_dist: float | None,
@@ -360,6 +361,7 @@ def cmd_run(
             wtc_chroma=chroma,
             isc_threshold=isc_threshold,
             isc_whiten=isc_whiten,
+            isc_max_lag_s=isc_max_lag,
             isc_pseudo=isc_pseudo,
             sci_threshold=sci_threshold,
             sep_bands=sep_bands,
@@ -671,19 +673,34 @@ def _build_parser() -> argparse.ArgumentParser:
                           "line in the log says which case a given run is.")
     run.add_argument("--isc-threshold", type=float, default=0.3,
                      help="Minimum mean ISC to draw an arc in the connectivity circle.")
-    run.add_argument("--isc-whiten", type=int, default=ISC_MAX_AR_ORDER,
-                     metavar="ORDER",
-                     help="Largest autoregressive order fitted to each channel before the "
-                          "inter-subject correlation, 0 to correlate the signals themselves "
-                          "(default 32, the order chosen per channel by BIC). A haemoglobin "
-                          "trace is strongly autocorrelated, so neighbouring samples are "
-                          "near copies and a correlation between two traces rests on far "
-                          "fewer independent observations than it has samples; the value r "
-                          "reaches with no coupling at all is correspondingly large. "
-                          "Whitening puts r back on the scale its sample count implies, and "
-                          "shrinks it by roughly a factor of six, so a whitened matrix is "
-                          "not comparable with an unwhitened one. The order each channel "
-                          "used reaches hyper-iscpairs.tsv as ar_order.")
+    run.add_argument("--isc-whiten", type=int, default=0, metavar="ORDER",
+                     help="Fit an autoregressive model of at most this order to each channel "
+                          "before the inter-subject correlation and correlate the residuals; "
+                          "0, the default, correlates the signals themselves. A haemoglobin "
+                          "trace is strongly autocorrelated, so a correlation between two of "
+                          "them rests on far fewer independent observations than it has "
+                          "samples and the value it reaches with nothing coupled is "
+                          "correspondingly large; whitening puts r back on the scale its "
+                          "sample count implies. It also shrinks r by roughly a factor of "
+                          f"six, so a whitened matrix is not comparable with an unwhitened "
+                          f"one. The published work that whitens uses {ISC_MAX_AR_ORDER} as "
+                          "the ceiling and picks the order per channel by BIC, which is what "
+                          "passing that number does. The order each channel used reaches "
+                          "hyper-iscpairs.tsv as ar_order.")
+    run.add_argument("--isc-max-lag", type=float, default=0.0, metavar="SECONDS",
+                     help="Re-correlate the pair at every shift within this many seconds "
+                          "either way and keep the strongest, instead of correlating sample "
+                          "against sample (default 0, no search). Two people's haemodynamic "
+                          "responses do not peak at the same instant, so a same-sample "
+                          "correlation reads a coupling a second apart as no coupling; the "
+                          "cross-correlation strand of the literature searches 2 s either "
+                          "way for that reason. Strongest means largest in magnitude with "
+                          "the sign kept, which differs from the published largest-signed "
+                          "form only where a pairing is anticorrelated. The winning shift "
+                          "reaches hyper-iscpairs.tsv as lag_s, positive where the second "
+                          "member follows the first. A maximum over many shifts is larger "
+                          "than any one of them under no coupling, so pair this with "
+                          "--isc-pseudo, whose surrogates are searched the same way.")
     run.add_argument("--isc-pseudo", type=int, default=0, metavar="N",
                      help="Also rank each correlation against N phase-scrambled surrogates "
                           "of the second member, which is the null a correlation between "

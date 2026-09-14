@@ -26,7 +26,6 @@ from fnirs_pipe.qc.boilerplate.vocabulary import (
     MISSING_VALUE, format_metric, is_key_metric, metric_class, metric_label,
     metric_summary,
 )
-from fnirs_pipe.pipeline.synchrony import ISC_MAX_AR_ORDER
 from fnirs_pipe.qc.metrics import SCI_PASS
 from fnirs_pipe.qc.common.figure_io import (
     _fig_href,
@@ -658,7 +657,8 @@ def build_hyper_post_report(
     wtc_arrow_min: "float | None" = None,
     wtc_chroma: "tuple[str, ...] | list[str]" = ("hbo", "hbr"),
     isc_threshold: float = 0.3,
-    isc_whiten: int = ISC_MAX_AR_ORDER,
+    isc_whiten: int = 0,
+    isc_max_lag_s: float = 0.0,
     isc_pseudo: int = 0,
     sci_threshold: float = SCI_PASS,
     sep_bands=None,
@@ -1074,7 +1074,8 @@ def build_hyper_post_report(
                 wtc_limit_scales=wtc_limit_scales, wtc_save_maps=wtc_save_maps,
                 wtc_mask_coi=wtc_mask_coi, wtc_roi_min_channels=wtc_roi_min_channels,
                 wtc_chroma=wtc_chroma, isc_whiten=isc_whiten,
-                isc_pseudo=isc_pseudo, roi_map=roi_map, sep_bands=sep_bands,
+                isc_max_lag_s=isc_max_lag_s, isc_pseudo=isc_pseudo,
+                roi_map=roi_map, sep_bands=sep_bands,
                 analysis_window=analysis_window,
             ),
             subject_ids=subject_ids, pairings=pairings, align_info=align_info,
