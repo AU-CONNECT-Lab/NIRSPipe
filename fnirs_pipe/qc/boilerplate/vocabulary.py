@@ -55,8 +55,9 @@ def boilerplate_key(step: str | None, params: dict[str, Any], mode: str | None =
         return "glm" if mode == "glm" else "confound_regression"
     if step in _WTC_STEPS:
         return "hyper_wtc"
-    if step == "hyper_isc_roichan":
-        # the same correlation, grouped into regions; one sentence covers both
+    if step in ("hyper_isc_roichan", "hyper_isc_pairs"):
+        # the same correlation, grouped into regions or listed pair by pair; one sentence
+        # covers all three
         return "hyper_isc"
     if step == "hyper_coherence_windowed":
         # the same measure, taken in windows; one sentence covers both
@@ -196,6 +197,7 @@ STEP_SUMMARY = {
     "hyper_wtc_roichan": "Channel-level coherences averaged within each ROI.",
     "hyper_isc": "Correlation of each channel of one brain with each channel of the other.",
     "hyper_isc_roichan": "Channel-level correlations averaged within each ROI.",
+    "hyper_isc_pairs": "The same correlations as one row per channel pair.",
     "group_hyper_wtc": "Every dyad's channel-level coherence, merged into one table.",
     "group_hyper_wtc_pseudo": "The same merge, over the phase-scrambled null.",
     "group_hyper_wtc_roichan": "The same merge, over ROI means of channel coherences.",

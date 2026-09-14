@@ -26,6 +26,7 @@ from fnirs_pipe.qc.boilerplate.vocabulary import (
     MISSING_VALUE, format_metric, is_key_metric, metric_class, metric_label,
     metric_summary,
 )
+from fnirs_pipe.pipeline.synchrony import ISC_MAX_AR_ORDER
 from fnirs_pipe.qc.metrics import SCI_PASS
 from fnirs_pipe.qc.common.figure_io import (
     _fig_href,
@@ -657,6 +658,8 @@ def build_hyper_post_report(
     wtc_arrow_min: "float | None" = None,
     wtc_chroma: "tuple[str, ...] | list[str]" = ("hbo", "hbr"),
     isc_threshold: float = 0.3,
+    isc_whiten: int = ISC_MAX_AR_ORDER,
+    isc_pseudo: int = 0,
     sci_threshold: float = SCI_PASS,
     sep_bands=None,
     cond_windows: "list[tuple[str, float, float]] | None" = None,
@@ -726,7 +729,7 @@ def build_hyper_post_report(
     per chromophore, so a different band can be averaged later without a second wavelet
     transform. See :mod:`fnirs_pipe.pipeline.wtc_store`. ``wtc_limit_scales`` computes only the scales inside
     ``[wtc_fmin, wtc_fmax]`` plus margin, which is most of the runtime and, given that the
-    scales land on pycwt's own grid and the margin exceeds its scale-smoothing window,
+    scales land on pycwt's own grid and the margin exceeds the scale-smoothing window,
     reproduces the unrestricted coherences bit for bit.
 
     ``result`` is an already-computed :class:`~fnirs_pipe.pipeline.hyper_post.HyperPostResult`.
@@ -1070,7 +1073,8 @@ def build_hyper_post_report(
                 wtc_by_condition=wtc_by_condition, wtc_cond_pad_s=wtc_cond_pad_s,
                 wtc_limit_scales=wtc_limit_scales, wtc_save_maps=wtc_save_maps,
                 wtc_mask_coi=wtc_mask_coi, wtc_roi_min_channels=wtc_roi_min_channels,
-                wtc_chroma=wtc_chroma, roi_map=roi_map, sep_bands=sep_bands,
+                wtc_chroma=wtc_chroma, isc_whiten=isc_whiten,
+                isc_pseudo=isc_pseudo, roi_map=roi_map, sep_bands=sep_bands,
                 analysis_window=analysis_window,
             ),
             subject_ids=subject_ids, pairings=pairings, align_info=align_info,

@@ -14,6 +14,7 @@ import sys
 from pathlib import Path
 
 from fnirs_pipe.cli import _shared
+from fnirs_pipe.pipeline.synchrony import ISC_MAX_AR_ORDER
 from fnirs_pipe.qc.metrics import SCI_PASS
 from fnirs_pipe.utils.logging import get_logger, setup_logging
 
@@ -194,7 +195,8 @@ def cmd_run(
     wtc_cond_transform: bool, wtc_cond_pad_s: "float | None",
     wtc_limit_scales: bool, wtc_save_maps: bool,
     wtc_pseudo: int | None, wtc_pseudo_cross: bool,
-    bads_scope: str, isc_threshold: float, sci_threshold: float,
+    bads_scope: str, isc_threshold: float, isc_whiten: int, isc_pseudo: int,
+    sci_threshold: float,
     normalize: bool, no_align: bool, tstart: float | None, tend: float | None,
     short_max_dist: float | None, long_min_dist: float | None,
     long_max_dist: float | None,
@@ -357,6 +359,8 @@ def cmd_run(
             wtc_arrow_min=wtc_arrow_min,
             wtc_chroma=chroma,
             isc_threshold=isc_threshold,
+            isc_whiten=isc_whiten,
+            isc_pseudo=isc_pseudo,
             sci_threshold=sci_threshold,
             sep_bands=sep_bands,
             analysis_window=analysis_window,
@@ -627,7 +631,7 @@ def _build_parser() -> argparse.ArgumentParser:
                           "(default on). A narrow band over a long record leaves most of the "
                           "default scale range unused, and the saving is proportional. The "
                           "kept scales land on pycwt's own grid and the margin is wider than "
-                          "its scale-smoothing window, so the coherences match the "
+                          "the scale-smoothing window, so the coherences match the "
                           "unrestricted ones bit for bit. --no-wtc-limit-scales restores the "
                           "old behaviour.")
     run.add_argument("--wtc-save-maps", action="store_true",
@@ -667,6 +671,26 @@ def _build_parser() -> argparse.ArgumentParser:
                           "line in the log says which case a given run is.")
     run.add_argument("--isc-threshold", type=float, default=0.3,
                      help="Minimum mean ISC to draw an arc in the connectivity circle.")
+    run.add_argument("--isc-whiten", type=int, default=ISC_MAX_AR_ORDER,
+                     metavar="ORDER",
+                     help="Largest autoregressive order fitted to each channel before the "
+                          "inter-subject correlation, 0 to correlate the signals themselves "
+                          "(default 32, the order chosen per channel by BIC). A haemoglobin "
+                          "trace is strongly autocorrelated, so neighbouring samples are "
+                          "near copies and a correlation between two traces rests on far "
+                          "fewer independent observations than it has samples; the value r "
+                          "reaches with no coupling at all is correspondingly large. "
+                          "Whitening puts r back on the scale its sample count implies, and "
+                          "shrinks it by roughly a factor of six, so a whitened matrix is "
+                          "not comparable with an unwhitened one. The order each channel "
+                          "used reaches hyper-iscpairs.tsv as ar_order.")
+    run.add_argument("--isc-pseudo", type=int, default=0, metavar="N",
+                     help="Also rank each correlation against N phase-scrambled surrogates "
+                          "of the second member, which is the null a correlation between "
+                          "two recordings needs: scrambling preserves each signal's own "
+                          "spectrum and so its autocorrelation. Adds null_mean, null_sd, "
+                          "null_p95 and percentile to hyper-iscpairs.tsv. Off by default; "
+                          "it costs N extra correlations per chromophore per window.")
     run.add_argument("--check-only", action="store_true",
                      help="Load and align each dyad, print what the metrics would be "
                           "computed on, and stop. Nothing is written. Use it to look over a "

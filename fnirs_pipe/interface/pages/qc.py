@@ -139,6 +139,21 @@ def _hyper_post():
                              "optode."),
             ], width=2),
             dbc.Col([
+                dbc.Label("ISC Whitening Order"),
+                dbc.Input(id="qc-isc-whiten", type="number", min=0, step=1,
+                          placeholder="32"),
+                dbc.FormText("Largest AR order fitted per channel before the correlation; "
+                             "0 correlates the signals themselves. Without it r sits far "
+                             "above what its sample count implies."),
+            ], width=2),
+            dbc.Col([
+                dbc.Label("ISC Null Iterations"),
+                dbc.Input(id="qc-isc-pseudo", type="number", min=0, step=10,
+                          placeholder="0, off"),
+                dbc.FormText("Phase-scrambled surrogates each correlation is ranked "
+                             "against. Cheap next to the coherence null."),
+            ], width=2),
+            dbc.Col([
                 dbc.Label("Chromophore"),
                 dcc.Dropdown(id="qc-wtc-chroma",
                              options=[{"label": "HbO and HbR", "value": "both"},

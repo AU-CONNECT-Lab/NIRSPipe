@@ -27,6 +27,7 @@ length and normalised. All of them read long channels only.
 
 from __future__ import annotations
 
+import warnings
 from collections.abc import Iterable
 from dataclasses import dataclass
 from itertools import combinations
@@ -34,7 +35,8 @@ from itertools import combinations
 import mne
 import numpy as np
 import pandas as pd
-from scipy.signal import coherence
+from scipy.linalg import solve_toeplitz
+from scipy.signal import coherence, convolve2d, lfilter
 
 from fnirs_pipe.io.snirf import long_channel_picks
 from fnirs_pipe.utils.logging import get_logger
@@ -147,19 +149,78 @@ class WTCResult:
 _FLAMBDA = 4 * np.pi / (6 + np.sqrt(2 + 6 ** 2))
 
 # Sub-octaves per octave on the wavelet scale grid: the frequency-axis resolution, and
-# pycwt's own default. Not configurable, and _SCALE_MARGIN below is why: pycwt smooths
-# across neighbouring scales with a boxcar whose width is round(2 * 0.6 / dj), so a
-# different dj needs a different margin for --wtc-limit-scales to keep returning the same
-# coherences. Reported in every WTC sidecar instead, since it decides how many
-# time-frequency cells a band mean averages over.
+# pycwt's own default. Not configurable, and _SCALE_MARGIN below is why: the coherence is
+# smoothed across neighbouring scales over a fixed span in log2(scale), so a different dj
+# needs a different margin for --wtc-limit-scales to keep returning the same coherences.
+# Reported in every WTC sidecar instead, since it decides how many time-frequency cells a
+# band mean averages over.
 WTC_DJ = 1.0 / 12
 
+# Width of the coherence's scale-direction boxcar, in log2(scale) units, so it spans
+# _SCALE_SMOOTH_DJ0 / dj grid steps: 7.2 at the default dj. pycwt's own Morlet spans twice
+# this; see _morlet.
+_SCALE_SMOOTH_DJ0 = 0.6
+
 # Scales of margin kept on each side of the requested band when limiting the scale range.
-# pycwt smooths the coherence across neighbouring scales with a boxcar of round(2 * 0.6 / dj)
-# points, 14 at the default dj, so the outermost 7 scales of whatever range is computed are
-# convolved against the zero padding at the edge. Keeping more margin than that leaves every
-# scale inside the band with the same neighbours it would have had.
+# The scale smoothing reaches _SCALE_SMOOTH_DJ0 / (2 * dj) scales either way, 3.6 at the
+# default dj, so the outermost few scales of whatever range is computed are convolved against
+# the zero padding at the edge. Keeping more margin than that leaves every scale inside the
+# band with the same neighbours it would have had.
 _SCALE_MARGIN = 12
+
+
+def _scale_window(dj: float) -> np.ndarray:
+    """The scale-direction boxcar, ``_SCALE_SMOOTH_DJ0 / dj`` grid steps wide, summing to 1.
+
+    ::
+
+      _scale_window(1 / 12)  ->  [0.014, 0.139 x 7, 0.014]      (7.2 steps over 9 points)
+
+    A width of 0.6 in log2(scale) is 0.6 / dj grid steps, which is not a whole number of
+    them, so each tap takes the share of its own grid cell the boxcar actually covers: 1 for
+    the cells wholly inside, the remainder for the two it ends in. The length is a property
+    of the grid, the width is the one the definition fixes.
+    """
+    half = _SCALE_SMOOTH_DJ0 / (2 * dj)
+    reach = max(0, int(np.ceil(half - 0.5)))
+    offsets = np.arange(-reach, reach + 1)
+    win = np.clip(half - (np.abs(offsets) - 0.5), 0.0, 1.0)
+    return win / win.sum()
+
+
+def _morlet():
+    r"""The mother wavelet every coherence here is computed with.
+
+    A Morlet whose smoothing operator :math:`S` spans ``_SCALE_SMOOTH_DJ0`` in log2(scale),
+    which is the width the coherence is defined with. pycwt's own Morlet spans twice that,
+    and a wider window pulls :math:`R^2` down: the cross term :math:`S(W_{xy})` loses
+    magnitude as phases from neighbouring scales cancel, while the auto terms
+    :math:`S(|W_x|^2)` have nothing to cancel. Measured at about 0.05 on a band mean.
+
+    Returned as an instance rather than a class so the scale window is built once per
+    transform, and named apart from the stock Morlet because pycwt keys its Monte Carlo
+    significance cache on the name.
+    """
+    import pycwt
+    from pycwt.helpers import fft, fft_kwargs
+
+    class _Morlet(pycwt.Morlet):
+        def __init__(self):
+            super().__init__()
+            self.name = "Morlet-dj0"
+
+        def smooth(self, W, dt, dj, scales):
+            n = W.shape[1]
+            # time: the wavelet's own Gaussian envelope per scale, applied in Fourier
+            k2 = (2 * np.pi * fft.fftfreq(fft_kwargs(W[0, :])["n"])) ** 2
+            F = np.exp(-0.5 * (np.asarray(scales)[:, None] / dt) ** 2 * k2)
+            T = fft.ifft(F * fft.fft(W, axis=1, **fft_kwargs(W[0, :])), axis=1,
+                         **fft_kwargs(W[0, :], overwrite_x=True))[:, :n]
+            if np.isreal(W).all():
+                T = T.real
+            return convolve2d(T, _scale_window(dj)[:, None], "same")
+
+    return _Morlet()
 
 
 def cone_margin_s(band_fmin: float, factor: float = 2.0) -> float:
@@ -229,15 +290,17 @@ def _decim_step(sfreq: float) -> int:
 def wtc_grid_params(raws: dict) -> dict:
     """The wavelet grid the maps sit on, for a sidecar: fixed, but reportable.
 
-    wtc_grid_params(raws_at_10_Hz) -> {"wtc_dj": 0.0833, "wtc_time_step_s": 1.0}
+    wtc_grid_params(raws_at_10_Hz)
+      -> {"wtc_dj": 0.0833, "wtc_time_step_s": 1.0, "wtc_scale_smooth_dj0": 0.6}
 
-    Neither is configurable, and both change what a band mean is an average over, so a
+    None is configurable, and all three change what a band mean is an average over, so a
     reader comparing two studies' coherences needs them on the file. Read off the
     recordings rather than passed in, so they cannot disagree with what ran.
     """
     sfreq = _shared_sfreq(raws)
     return {"wtc_dj": round(WTC_DJ, 6),
-            "wtc_time_step_s": round(_decim_step(sfreq) / sfreq, 6)}
+            "wtc_time_step_s": round(_decim_step(sfreq) / sfreq, 6),
+            "wtc_scale_smooth_dj0": _SCALE_SMOOTH_DJ0}
 
 
 @dataclass
@@ -262,9 +325,7 @@ class _ChannelWavelet:
 def _wavelet_grid(dt: float, n: int, fmin: float, fmax: float,
                   limit_scales: bool) -> _WaveletGrid:
     """The scale grid pycwt would pick for signals of length ``n``, resolved up front."""
-    import pycwt
-
-    mother = pycwt.Morlet()
+    mother = _morlet()
     if limit_scales:
         s0, J = _scale_range(dt, WTC_DJ, fmin, fmax, n)
     else:
@@ -406,8 +467,11 @@ def _pairwise_wtc(
     if limit_scales:
         s0, J = _scale_range(dt, dj, fmin, fmax, len(sig1))
         kwargs.update(s0=s0, J=J)
+    # the same mother the fast path uses, and pycwt hands it to its Monte Carlo too, so the
+    # significance level is drawn under the smoothing the coherence was computed with
     WCT, aWCT, coi, freqs, signif = pycwt.wct(
-        sig1, sig2, dt=dt, dj=dj, sig=significance, normalize=True, **kwargs,
+        sig1, sig2, dt=dt, dj=dj, sig=significance, normalize=True,
+        wavelet=_morlet(), **kwargs,
     )
     return _trim_pair(WCT, aWCT, coi, freqs, len(sig1), step, fmin, fmax,
                       signif if significance else None)
@@ -569,7 +633,7 @@ def compute_wtc(
     ch_type: str = "hbo",
     sep_bands=None,
 ) -> WTCResult:
-    """Compute pairwise WTC per long channel of one chromophore, using pycwt Morlet wavelet.
+    """Compute pairwise WTC per long channel of one chromophore, using a Morlet wavelet.
 
     Channels are matched by S-D label across subjects; time axis decimated to ~1 Hz.
     Short-distance channels are excluded (see long_channel_picks), as are bads.
@@ -1374,12 +1438,174 @@ def roi_mean_of_channels(
 # Beside the wavelet coherence: same question in the time domain, same two helpers
 # (`_shared_sfreq`, `long_axis_over`), and `window_result` documents itself against it.
 
+ISC_MAX_AR_ORDER = 32
+
+
+def _ar_whiten(x: np.ndarray, max_order: int = ISC_MAX_AR_ORDER) -> tuple[np.ndarray, int]:
+    r"""Residuals of the best autoregressive fit to ``x``, and the order that won.
+
+    ::
+
+      a slow, strongly autocorrelated trace  ->  a near-white one of the same length, 22
+
+    A haemodynamic trace is heavily autocorrelated: the response is a low-pass filter on
+    whatever drove it, so neighbouring samples are near copies and a correlation between two
+    such traces has far fewer independent observations than it has samples. Fitting
+
+    .. math::
+
+        x_t = \sum_{k=1}^{p} a_k\, x_{t-k} + e_t
+
+    and keeping :math:`e_t` leaves a series whose own samples are close to independent, so
+    the correlation between two of them sits on the scale its sample count implies.
+
+    Coefficients come from the Yule-Walker equations at each order, and ``p`` is the one
+    minimising the Bayesian information criterion over ``1..max_order``, which trades the
+    variance explained against the coefficients spent. The residual keeps the input's length:
+    the filter is applied from the start rather than from sample ``p``, so the first ``p``
+    samples are a startup transient the caller drops.
+
+    An all-NaN row, a constant one, or one too short for a single lag comes back unchanged
+    at order 0.
+    """
+    finite = np.isfinite(x)
+    if not finite.all() or x.size < 8:
+        return x, 0
+    centred = x - x.mean()
+    n = centred.size
+    n_lag = min(int(max_order), n // 4)
+    if n_lag < 1:
+        return x, 0
+    # only the first n_lag lags are needed, and each is one dot product; a full correlation
+    # would be quadratic in the record length and this runs once per surrogate iteration
+    acov = np.array([centred @ centred] + [centred[:-k] @ centred[k:]
+                                           for k in range(1, n_lag + 1)]) / n
+    if acov[0] <= 0:
+        return x, 0
+
+    best_bic, best_coef, best_order = np.inf, None, 0
+    for p in range(1, n_lag + 1):
+        try:
+            coef = solve_toeplitz((acov[:p], acov[:p]), acov[1:p + 1])
+        except np.linalg.LinAlgError:
+            break
+        resid_var = acov[0] - coef @ acov[1:p + 1]
+        if resid_var <= 0:
+            break
+        bic = n * np.log(resid_var) + p * np.log(n)
+        if bic < best_bic:
+            best_bic, best_coef, best_order = bic, coef, p
+    if best_order == 0:
+        return x, 0
+    return lfilter(np.r_[1.0, -best_coef], [1.0], x), best_order
+
+
+def _whiten_rows(data: np.ndarray, max_order: int) -> tuple[np.ndarray, list[int]]:
+    """:func:`_ar_whiten` over every row, with the startup transient dropped from all of them.
+
+    Each row gets its own order, so the transient to discard is the longest of them: cutting
+    per row would leave the rows on different clocks, and they are about to be correlated
+    sample by sample.
+    """
+    out = np.empty_like(data)
+    orders: list[int] = []
+    for i, row in enumerate(data):
+        out[i], order = _ar_whiten(row, max_order)
+        orders.append(order)
+    drop = max(orders) if orders else 0
+    return (out[:, drop:] if drop else out), orders
+
+
+def _isc_from_rows(data1: np.ndarray, data2: np.ndarray) -> np.ndarray:
+    """Pearson r of every row of ``data1`` against every row of ``data2``, both z-scored."""
+    def _zscore(x: np.ndarray) -> np.ndarray:
+        mu  = x.mean(axis=1, keepdims=True)
+        std = x.std(axis=1, keepdims=True)
+        std = np.where(std < 1e-12, 1.0, std)
+        return (x - mu) / std
+
+    isc_mat = (_zscore(data1) @ _zscore(data2).T) / data1.shape[1]
+    return np.clip(isc_mat, -1.0, 1.0, out=isc_mat)
+
+
+def _isc_rows(
+    aligned_raws: dict[str, mne.io.Raw],
+    subject_ids: list[str],
+    ch_type: str = "hbo",
+    sep_bands=None,
+    window: "tuple[float, float] | None" = None,
+) -> "tuple[np.ndarray, np.ndarray, list[str]] | tuple[None, None, None]":
+    """The two members' signals on one montage axis and one clock, ready to correlate.
+
+    One row per axis label per member, NaN where that member has no usable channel
+    there, cut to ``window`` if one was asked for. Everything :func:`compute_isc` and
+    :func:`compute_isc_pairs` disagree about happens after this.
+    """
+    if len(subject_ids) < 2:
+        return None, None, None
+    raw1 = aligned_raws.get(subject_ids[0])
+    raw2 = aligned_raws.get(subject_ids[1])
+    if raw1 is None or raw2 is None:
+        return None, None, None
+    # the same refusal WTC makes: alignment equalises duration, not rate, so at two rates
+    # sample i of one member and sample i of the other are not the same moment and the
+    # correlation between them is a plausible-looking number about nothing
+    _shared_sfreq({subject_ids[0]: raw1, subject_ids[1]: raw2})
+
+    def _by_label(raw: mne.io.Raw) -> dict[str, int]:
+        """{label: index} over what this member kept, bads dropped: what gets correlated."""
+        return {raw.ch_names[p].rsplit(" ", 1)[0]: p
+                for p in long_channel_picks(raw, ch_type, sep_bands=sep_bands)}
+
+    # the axis is the montage, the maps are what survived: one shape, blanks where a channel
+    # went. Same axis rule as the crossed WTC matrix.
+    ch_names = long_axis_over([raw1, raw2], ch_type, sep_bands)
+    map1, map2 = _by_label(raw1), _by_label(raw2)
+    if not ch_names:
+        return None, None, None
+
+    # alignment trims the pair to a common length, but nothing here depends on that having run
+    n_times = min(raw1.n_times, raw2.n_times)
+
+    def _rows(raw: mne.io.Raw, by_label: dict[str, int], who: str) -> np.ndarray:
+        """One row per axis label, NaN for a label this subject has no usable channel at."""
+        out = np.full((len(ch_names), n_times), np.nan)
+        have = [c for c in ch_names if c in by_label]
+        if have:
+            out[[ch_names.index(c) for c in have]] = \
+                raw.get_data(picks=[by_label[c] for c in have])[:, :n_times]
+        if (blank := [c for c in ch_names if c not in by_label]):
+            logger.warning("ISC (%s): %s has no usable %s, leaving those blank",
+                           ch_type, who, ", ".join(blank))
+        return out
+
+    data1 = _rows(raw1, map1, subject_ids[0])
+    data2 = _rows(raw2, map2, subject_ids[1])
+
+    if window is not None:
+        sfreq = float(raw1.info["sfreq"])
+        first = max(0, int(round(float(window[0]) * sfreq)))
+        last  = min(n_times, int(round(float(window[1]) * sfreq)))
+        # two samples is the least a correlation can be computed from at all; a window this
+        # short is a trigger artefact rather than a condition, and returning nothing leaves
+        # the panel out instead of printing a coefficient over three points
+        if last - first < 2:
+            logger.warning("ISC (%s): window %.1f-%.1f s holds %d sample(s) of %d, "
+                           "no correlation computed",
+                           ch_type, window[0], window[1], max(0, last - first), n_times)
+            return None, None, None
+        data1, data2 = data1[:, first:last], data2[:, first:last]
+
+    return data1, data2, ch_names
+
+
 def compute_isc(
     aligned_raws: dict[str, mne.io.Raw],
     subject_ids: list[str],
     ch_type: str = "hbo",
     sep_bands=None,
     window: "tuple[float, float] | None" = None,
+    whiten: int = 0,
 ) -> tuple[np.ndarray, list[str]] | tuple[None, None]:
     """Compute inter-brain Pearson r matrix (n_ch × n_ch) over long channels.
 
@@ -1421,79 +1647,142 @@ def compute_isc(
     Raises ValueError if the members were recorded at different sampling rates, which is
     the refusal WTC has always made: alignment equalises duration, not rate.
 
+    ``whiten`` is the largest autoregressive order :func:`_ar_whiten` may spend on each
+    channel before the correlation, 0 to correlate the signals themselves. A haemodynamic
+    trace is strongly autocorrelated, so a correlation between two of them rests on far
+    fewer independent observations than it has samples, and the value it takes under no
+    coupling at all is correspondingly large. Whitening puts r back on the scale its sample
+    count implies; it also shrinks it, so a whitened matrix and an unwhitened one are not
+    comparable and the sidecar records which was written.
+
     Args:
         ch_type: "hbo" or "hbr".
     """
-    if len(subject_ids) < 2:
+    data1, data2, ch_names = _isc_rows(aligned_raws, subject_ids, ch_type, sep_bands, window)
+    if ch_names is None:
         return None, None
-    raw1 = aligned_raws.get(subject_ids[0])
-    raw2 = aligned_raws.get(subject_ids[1])
-    if raw1 is None or raw2 is None:
-        return None, None
-    # the same refusal WTC makes: alignment equalises duration, not rate, so at two rates
-    # sample i of one member and sample i of the other are not the same moment and the
-    # correlation between them is a plausible-looking number about nothing
-    _shared_sfreq({subject_ids[0]: raw1, subject_ids[1]: raw2})
+    return _isc_matrix(data1, data2, whiten)[0], ch_names
 
-    def _by_label(raw: mne.io.Raw) -> dict[str, int]:
-        """{label: index} over what this member kept, bads dropped: what gets correlated."""
-        return {raw.ch_names[p].rsplit(" ", 1)[0]: p
-                for p in long_channel_picks(raw, ch_type, sep_bands=sep_bands)}
 
-    # the axis is the montage, the maps are what survived: one shape, blanks where a channel
-    # went. Same axis rule as the crossed WTC matrix.
-    ch_names = long_axis_over([raw1, raw2], ch_type, sep_bands)
-    map1, map2 = _by_label(raw1), _by_label(raw2)
-    if not ch_names:
-        return None, None
+def compute_isc_pairs(
+    aligned_raws: dict[str, mne.io.Raw],
+    subject_ids: list[str],
+    ch_type: str = "hbo",
+    sep_bands=None,
+    window: "tuple[float, float] | None" = None,
+    whiten: int = 0,
+    n_null: int = 0,
+    seed: int | None = None,
+) -> "tuple[np.ndarray, list[str], pd.DataFrame] | tuple[None, None, None]":
+    """The ISC matrix and the same numbers as one row per channel pair, ranked against a null.
 
-    # alignment trims the pair to a common length, but nothing here depends on that having run
-    n_times = min(raw1.n_times, raw2.n_times)
+    ::
 
-    def _rows(raw: mne.io.Raw, by_label: dict[str, int], who: str) -> np.ndarray:
-        """One row per axis label, NaN for a label this subject has no usable channel at."""
-        out = np.full((len(ch_names), n_times), np.nan)
-        have = [c for c in ch_names if c in by_label]
-        if have:
-            out[[ch_names.index(c) for c in have]] = \
-                raw.get_data(picks=[by_label[c] for c in have])[:, :n_times]
-        if (blank := [c for c in ch_names if c not in by_label]):
-            logger.warning("ISC (%s): %s has no usable %s, leaving those blank",
-                           ch_type, who, ", ".join(blank))
-        return out
+      a 3 x 3 matrix  ->  9 rows of sub1, sub2, label, label2, r, r_z, ar_order, ar_order2
 
-    data1 = _rows(raw1, map1, subject_ids[0])
-    data2 = _rows(raw2, map2, subject_ids[1])
+    The matrix is what the report draws; the frame is what a group analysis reads, and it is
+    the form the extra columns fit in. ``r_z`` is the Fisher r-to-z of ``r``, which is what
+    should be averaged across dyads, since r is bounded and its mean is biased toward the
+    interior. ``ar_order`` and ``ar_order2`` are what each side's channel was whitened at,
+    and are absent when ``whiten`` is 0.
 
-    if window is not None:
-        sfreq = float(raw1.info["sfreq"])
-        first = max(0, int(round(float(window[0]) * sfreq)))
-        last  = min(n_times, int(round(float(window[1]) * sfreq)))
-        # two samples is the least a correlation can be computed from at all; a window this
-        # short is a trigger artefact rather than a condition, and returning nothing leaves
-        # the panel out instead of printing a coefficient over three points
-        if last - first < 2:
-            logger.warning("ISC (%s): window %.1f-%.1f s holds %d sample(s) of %d, "
-                           "no correlation computed",
-                           ch_type, window[0], window[1], max(0, last - first), n_times)
-            return None, None
-        data1, data2 = data1[:, first:last], data2[:, first:last]
+    ``n_null`` phase-scrambles the second member and recomputes, which is the null a
+    correlation between two recordings needs: scrambling preserves each signal's own power
+    spectrum and so its autocorrelation, and it is the autocorrelation that decides how large
+    r gets with no coupling present. It adds ``null_mean``, ``null_sd``, ``null_p95`` and
+    ``percentile``, the share of a cell's surrogate draws its real value beat. All four are
+    on ``|r|``: the question a null answers here is whether the pair is coupled, not which
+    way, and a surrogate is as likely to land either side of zero.
 
-    # z-scored after the window is taken, so the correlation is against that stretch's own
-    # mean and deviation
-    def _zscore(x: np.ndarray) -> np.ndarray:
-        mu  = x.mean(axis=1, keepdims=True)
-        std = x.std(axis=1, keepdims=True)
-        std[std < 1e-12] = 1.0
-        return (x - mu) / std
+    Whitening and the null answer the same objection by different routes and compose without
+    double-counting: whitening moves the estimate onto an honest scale, the null measures the
+    scale directly, and with both on the null is drawn through the whitening too.
+    """
+    data1, data2, ch_names = _isc_rows(aligned_raws, subject_ids, ch_type, sep_bands, window)
+    if ch_names is None:
+        return None, None, None
 
-    d1 = _zscore(data1)
-    d2 = _zscore(data2)
-    isc_mat = (d1 @ d2.T) / d1.shape[1]
-    np.clip(isc_mat, -1.0, 1.0, out=isc_mat)
+    isc_mat, orders1, orders2 = _isc_matrix(data1, data2, whiten)
+    sub1, sub2 = subject_ids[0], subject_ids[1]
 
+    rows = [{"sub1": sub1, "sub2": sub2, "label": a, "label2": b,
+             "r": float(isc_mat[i, j])}
+            for i, a in enumerate(ch_names) for j, b in enumerate(ch_names)]
+    frame = pd.DataFrame(rows)
+    frame.insert(frame.columns.get_loc("r") + 1, "r_z", frame["r"].map(_fisher_z))
+    if orders1 is not None:
+        index = {name: i for i, name in enumerate(ch_names)}
+        frame["ar_order"]  = frame["label"].map(lambda c: orders1[index[c]])
+        frame["ar_order2"] = frame["label2"].map(lambda c: orders2[index[c]])
+
+    if n_null > 0:
+        draws = _isc_null_draws(data1, data2, whiten, n_null, seed)
+        _add_isc_null_columns(frame, isc_mat, ch_names, draws)
+    return isc_mat, ch_names, frame
+
+
+def _isc_null_draws(
+    data1: np.ndarray, data2: np.ndarray, whiten: int, n_iter: int, seed: int | None,
+) -> np.ndarray:
+    """``n_iter`` ISC matrices against a phase-scrambled second member.
+
+    Only the second member is scrambled, the choice :func:`compute_wtc_pseudo` makes for the
+    same reason: scrambling both would test one surrogate against another, which is a weaker
+    null than a real recording against a surrogate. A blank row stays blank, having no
+    spectrum to preserve.
+    """
+    rng = np.random.default_rng(seed)
+    finite = np.isfinite(data2).all(axis=1)
+    draws = np.empty((n_iter, data1.shape[0], data2.shape[0]))
+    for i in range(n_iter):
+        surrogate = data2.copy()
+        for row in np.flatnonzero(finite):
+            surrogate[row] = phase_scramble(data2[row], rng)
+        draws[i] = _isc_matrix(data1, surrogate, whiten)[0]
+    return draws
+
+
+def _add_isc_null_columns(
+    frame: pd.DataFrame, isc_mat: np.ndarray, ch_names: list[str], draws: np.ndarray,
+) -> None:
+    """Summarise the surrogate draws onto ``frame``, cell by cell, in place."""
+    absolute = np.abs(draws)
+    # a blanked channel makes a cell all-NaN, which every nan-aware reduction warns about and
+    # then handles correctly; the blank mask below is what actually decides those cells
+    with warnings.catch_warnings(), np.errstate(invalid="ignore"):
+        warnings.simplefilter("ignore", RuntimeWarning)
+        null_mean = np.nanmean(absolute, axis=0)
+        null_sd   = np.nanstd(absolute, axis=0)
+        null_p95  = np.nanpercentile(absolute, 95, axis=0)
+        beaten    = (absolute < np.abs(isc_mat)[None, :, :]).mean(axis=0) * 100
+    # a cell whose draws are all NaN was never ranked against anything, and a count of zero
+    # there would read as a real value that lost to every surrogate
+    blank = ~np.isfinite(absolute).any(axis=0) | ~np.isfinite(isc_mat)
+    beaten = np.where(blank, np.nan, beaten)
+
+    index = {name: i for i, name in enumerate(ch_names)}
+    ij = (frame["label"].map(index).to_numpy(), frame["label2"].map(index).to_numpy())
+    frame["null_mean"]  = null_mean[ij]
+    frame["null_sd"]    = null_sd[ij]
+    frame["null_p95"]   = null_p95[ij]
+    frame["percentile"] = beaten[ij]
+
+
+def _isc_matrix(
+    data1: np.ndarray, data2: np.ndarray, whiten: int,
+) -> "tuple[np.ndarray, list[int] | None, list[int] | None]":
+    """The r matrix, and the AR order each row was whitened at when ``whiten`` asked for one.
+
+    Whitening happens after the window has been cut, so each stretch is fitted on its own.
+    """
+    orders1 = orders2 = None
+    if whiten:
+        data1, orders1 = _whiten_rows(data1, whiten)
+        data2, orders2 = _whiten_rows(data2, whiten)
+        n_keep = min(data1.shape[1], data2.shape[1])
+        data1, data2 = data1[:, :n_keep], data2[:, :n_keep]
     # a rejected channel contributed a row of NaN above, which the products carry
-    return isc_mat, ch_names
+    return _isc_from_rows(data1, data2), orders1, orders2
 
 
 def roi_mean_of_isc(

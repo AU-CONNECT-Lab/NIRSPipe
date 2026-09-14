@@ -1,9 +1,11 @@
 """What `_pairwise_wtc` does to pycwt's return values, not what pycwt computes.
 
-The wavelet coherence itself is `pycwt.wct` and is taken as correct. Ours is the adaptation
-around it: trim, sort to ascending frequency, band-limit, decimate time. Four things can go
-wrong there and none of them are pycwt's, so the structural tests below rebuild each step by
-hand from the raw pycwt output and require equality.
+The transform and the coherence ratio are `pycwt.wct` and are taken as correct; the mother
+wavelet handed to it is ours, because its smoothing operator is (see `_morlet`), and the
+fixture below passes the same one so these tests stay about the adaptation. That adaptation
+is trim, sort to ascending frequency, band-limit, decimate time. Four things can go wrong
+there and none of them are pycwt's, so the structural tests below rebuild each step by hand
+from the raw pycwt output and require equality.
 
 A structural test alone cannot catch a convention we and pycwt express identically but label
 wrongly, so the semantic test injects a burst and requires it to show up in the right row and
@@ -47,9 +49,11 @@ def short_pair():
 def raw_pycwt(short_pair):
     import pycwt
 
+    from fnirs_pipe.pipeline.synchrony import _morlet
+
     sig1, sig2 = short_pair
-    WCT, aWCT, coi, freqs, _ = pycwt.wct(sig1, sig2, dt=DT, dj=1.0 / 12,
-                                         sig=False, normalize=True, cache=False)
+    WCT, aWCT, coi, freqs, _ = pycwt.wct(sig1, sig2, dt=DT, dj=1.0 / 12, sig=False,
+                                         normalize=True, cache=False, wavelet=_morlet())
     return WCT, coi, freqs, aWCT
 
 
@@ -163,3 +167,34 @@ def test_a_burst_does_not_light_up_an_unrelated_frequency():
     inside = W[row][lo:hi].mean()
     outside = np.r_[W[row][:lo], W[row][hi:]].mean()
     assert inside == pytest.approx(outside, abs=0.1)
+
+
+# ---- the smoothing operator is ours, not the stock one ----
+
+@pytest.mark.parametrize("dj", [1.0 / 12, 1.0 / 14, 1.0 / 8, 1.0 / 20])
+def test_the_scale_window_spans_dj0_whatever_the_grid_is(dj):
+    """The width is fixed in log2(scale), so the point count follows dj rather than the
+    other way round. Grinsted's kernel is the same numbers at dj = 1/12."""
+    from fnirs_pipe.pipeline.synchrony import _SCALE_SMOOTH_DJ0, _scale_window
+
+    win = _scale_window(dj)
+    # normalised back to unit end-weights, the span is what the definition fixes
+    assert win.sum() == pytest.approx(1.0)
+    assert (win / win.max()).sum() == pytest.approx(_SCALE_SMOOTH_DJ0 / dj)
+    assert len(win) % 2 == 1
+
+
+def test_the_stock_mother_would_give_a_different_coherence(short_pair):
+    """A silent return to pycwt's own Morlet would move every coherence in the package, so
+    the difference is asserted rather than assumed. Wider smoothing reads lower."""
+    import pycwt
+
+    from fnirs_pipe.pipeline.synchrony import _morlet
+
+    sig1, sig2 = short_pair
+    kw = dict(dt=DT, dj=1.0 / 12, sig=False, normalize=True, cache=False)
+    ours, *_ = pycwt.wct(sig1, sig2, wavelet=_morlet(), **kw)
+    stock, *_ = pycwt.wct(sig1, sig2, **kw)
+
+    assert np.nanmean(stock) < np.nanmean(ours)
+    assert np.nanmax(np.abs(ours - stock)) > 0.01

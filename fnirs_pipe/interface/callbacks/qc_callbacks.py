@@ -90,6 +90,8 @@ def build_qc_args(command: str, opts: dict) -> list[str]:
         args += _num("--wtc-pseudo", opts.get("wtc_pseudo"))
         args += _num("--isc-threshold", opts.get("isc_threshold"))
         args += _num("--wtc-roi-min-channels", opts.get("wtc_roi_min_channels"))
+        args += _num("--isc-whiten", opts.get("isc_whiten"))
+        args += _num("--isc-pseudo", opts.get("isc_pseudo"))
         args += _text("--wtc-chroma", opts.get("wtc_chroma"))
         args += _split("--task-label", opts.get("hyper_task"))
         flags = opts.get("hyper_flags") or []
@@ -152,6 +154,7 @@ _STATES = [
     State("qc-wtc-mc-count", "value"), State("qc-wtc-seed", "value"),
     State("qc-isc-threshold", "value"),
     State("qc-wtc-pseudo", "value"), State("qc-wtc-roi-min-channels", "value"),
+    State("qc-isc-whiten", "value"), State("qc-isc-pseudo", "value"),
     State("qc-wtc-chroma", "value"),
     State("qc-hyper-task", "value"),
     State("qc-hyper-flags", "value"),
@@ -165,6 +168,7 @@ def _opts(values) -> dict:
     keys = ["output_dir", "pairs_csv", "group_id", "desc", "roi_mapping",
             "wtc_fmin", "wtc_fmax", "wtc_band_fmin", "wtc_band_fmax", "wtc_mc_count",
             "wtc_seed", "isc_threshold", "wtc_pseudo", "wtc_roi_min_channels",
+            "isc_whiten", "isc_pseudo",
             "wtc_chroma", "hyper_task", "hyper_flags",
             "band_fmin", "band_fmax", "band_suffix", "band_flags",
             "tstart", "tend"]

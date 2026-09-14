@@ -13,6 +13,7 @@ from typing import Any
 
 import pandas as pd
 
+from fnirs_pipe.pipeline.synchrony import ISC_MAX_AR_ORDER
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("pipeline.hyper_post")
@@ -42,6 +43,8 @@ class HyperPostConfig:
     wtc_mask_coi: bool = True
     wtc_roi_min_channels: int = 2
     wtc_chroma: Any = ("hbo", "hbr")
+    isc_whiten: int = ISC_MAX_AR_ORDER
+    isc_pseudo: int = 0
     roi_map: dict | None = None
     sep_bands: Any = None
     analysis_window: "tuple[float, float] | None" = None
@@ -179,7 +182,7 @@ def run_hyper_post(
     # taking them from there makes the coherence look like a property of the group loader
     from fnirs_pipe.pipeline.synchrony import (
         WTCResult,
-        compute_isc,
+        compute_isc_pairs,
         compute_wtc,
         long_axis_over,
         roi_mean_of_channels,
@@ -209,6 +212,7 @@ def run_hyper_post(
     wtc_save_maps          = config.wtc_save_maps
     wtc_mask_coi           = config.wtc_mask_coi
     wtc_roi_min_channels   = config.wtc_roi_min_channels
+    isc_whiten, isc_pseudo = config.isc_whiten, config.isc_pseudo
     chroma, cond_pad_s     = config.chroma, config.cond_pad_s
     roi_map, sep_bands     = config.roi_map, config.sep_bands
     analysis_window        = config.analysis_window
@@ -522,17 +526,26 @@ def run_hyper_post(
     # file the way the long-format WTC tables can. A window here is a real cut, unlike the
     # coherence, which is sliced out of the whole-run transform; see `compute_isc` and
     # `window_result` for why each is right.
+    isc_pair_frames: list = []
+
     def _isc_of(ch_type: str, label, window, pair) -> tuple:
         """One scope's ISC at both levels: ``((matrix, channels), (matrix, regions))``."""
         what = f"condition {label}" if label else "whole run"
         channel_level = roi_level = (None, None)
         with guard(f"ISC ({what}, {ch_type})", errors, scope):
             pair_ids = list(pair) if pair else subject_ids
-            isc_mat, isc_ch_names = compute_isc(aligned_raws, pair_ids, ch_type,
-                                                sep_bands, window=window)
+            isc_mat, isc_ch_names, pairs_df = compute_isc_pairs(
+                aligned_raws, pair_ids, ch_type, sep_bands, window=window,
+                whiten=isc_whiten, n_null=isc_pseudo, seed=wtc_seed)
             if isc_mat is None:
                 return channel_level, roi_level
             channel_level = (isc_mat, isc_ch_names)
+            # the same numbers one row per pairing, which is the shape the z, the AR order
+            # and the null columns fit in and the shape a group analysis reads
+            pairs_df.insert(0, "chromophore", ch_type)
+            if label:
+                pairs_df.insert(0, "condition", label)
+            isc_pair_frames.append(pairs_df)
             sources = [p for p in (path_from(r) for r in aligned_raws.values()) if p]
             # the desc- entity a condition's page takes, so its table is named the way its
             # page is and a reader can pair the two without a rule of their own
@@ -566,6 +579,24 @@ def run_hyper_post(
                    for lab, by_chroma in both.items()}
         isc_roi[pr] = {lab: {c: got[1] for c, got in by_chroma.items()}
                        for lab, by_chroma in both.items()}
+
+    if isc_pair_frames:
+        # its own writer rather than _write_df_tsv: that one stamps the WTC band and grid on
+        # everything it writes, and a correlation was averaged over no band at all
+        with guard("ISC pair table", errors, scope):
+            tsv_path = (group_data_dir(output_dir, group_id)
+                        / f"group-{group_id}_task-{task}_hyper-iscpairs.tsv")
+            pd.concat(isc_pair_frames, ignore_index=True).to_csv(tsv_path, sep="\t",
+                                                                 index=False)
+            _hyper_sidecar(
+                tsv_path, "hyper_isc_pairs",
+                [p for p in (path_from(r) for r in aligned_raws.values()) if p],
+                isc_whiten=isc_whiten, isc_pseudo=isc_pseudo, seed=wtc_seed,
+                chroma=["hbo", "hbr"], conditions=[w[0] for w in cond_windows],
+                **align_info,
+            )
+            tables["iscpairs"] = tsv_path
+            logger.info("ISC pair table saved: %s", tsv_path)
 
     return HyperPostResult(
         subject_ids=subject_ids,
