@@ -35,6 +35,8 @@ NOT_EXPOSED = {
     "--contrast-file": "a file path, and the page has no file picker",
     "--fir-delays": "only meaningful with --hrf-model fir",
     "--no-combine-runs": "the negative half of a paired flag; the checkbox emits the positive",
+    "--aux-regressors": "withheld pending evaluation; suppressed from --help too",
+    "--aux-channels": "only meaningful with --aux-regressors, which is withheld",
 }
 
 # every control filled in, so the union over modes is everything the builder can emit
@@ -50,7 +52,6 @@ _FULL_OPTS = dict(
     high_pass=0.01, low_pass=0.1, filter_method="iir", filter_order=4,
     resample=2.0, n_jobs=1,
     hrf_model="spm", noise_model="ar1", short_channel="mean",
-    aux=True, aux_channels="AUX1 AUX2",
     drift_model="cosine", drift_high_pass=0.01, drift_order=1,
     stim_dur=5.0, roi_mapping="/roi.json", fc=True,
     flags=["dry_run", "skip_bids_validation", "no_report", "combine_runs"],

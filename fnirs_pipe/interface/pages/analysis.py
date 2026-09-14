@@ -378,23 +378,6 @@ layout = dbc.Container([
             ], className="g-3"),
             dbc.Row([
                 dbc.Col([
-                    dbc.Label("Auxiliary Channels"),
-                    dbc.Checklist(
-                        id="an-aux",
-                        options=[{"label": "Regress the recording's aux channels",
-                                  "value": "aux"}],
-                        value=[], switch=True,
-                    ),
-                    dbc.FormText("Accelerometers and the like, if the snirf carries them."),
-                ], width=5),
-                dbc.Col([
-                    dbc.Label("Aux Channels"),
-                    dbc.Input(id="an-aux-channels", type="text", placeholder="all of them"),
-                    dbc.FormText("Space-separated names. Leave empty to use every one."),
-                ], width=4),
-            ], className="g-3 mt-1"),
-            dbc.Row([
-                dbc.Col([
                     dbc.Label("ROI Mapping"),
                     dbc.Input(id="an-roi-mapping", type="text",
                               placeholder="path to roi.json (optional)"),

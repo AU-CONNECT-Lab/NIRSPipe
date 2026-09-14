@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Changed
+- **Aux channel regression is withheld pending evaluation.** `--aux-regressors` and `--aux-channels` no longer appear in the help, and the GUI's Analysis page no longer offers them. Preprocessing still extracts the aux channels to `desc-aux_timeseries.tsv.gz`, which is unchanged and remains readable on its own
 - **Every QC page now carries the same top bar**, built the same way. The subject index, the dyad index and the two cohort reports had none at all and are now navigable from the top; the dyad post report and the cohort reports carry it as navigation only, a verdict belonging on the page that reports one run or one dyad. The raw viewer gains the Provenance and Methods links it lacked, and both dyad pages gain the link back to the dyad index
 
 ### Added

@@ -172,11 +172,6 @@ GLM (--mode glm):
   --drift-order INT            Polynomial drift order.                                [default: 1]
   --fir-delays STR             FIR delay bins in scans, e.g. "0,1,2,3,4,5"
   --short-channel              {none,mean}                                             [default: none]
-  --aux-regressors             Add the recording's auxiliary channels to the confound
-                               regression (accelerometers, gyroscopes, pulse trace).
-                               Preprocessing extracts them to desc-aux_timeseries.tsv.gz.
-  --aux-channels NAME [NAME ...]
-                               Which aux channels to use. Default: all of them.
   --fc                         Also write the connectivity products rest mode writes,
                                from the residual. Works in glm and denoise modes.
   --events-path FILE           Optional. BIDS *_events.tsv overriding SNIRF annotations.
@@ -186,13 +181,13 @@ GLM (--mode glm):
   --contrast-file FILE         TOML file defining GLM contrasts.
 
 Denoise (--mode denoise):
-  Reuses GLM flags for confound regression (drift model, short-channel, aux).
+  Reuses GLM flags for confound regression (drift model, short-channel).
   Any one of them writes desc-errts; no task model, no resting-state derivatives.
   --fc adds the connectivity products, from the residual or from the bandpassed
   data itself when no regression was asked for.
 
 Rest (--mode rest):
-  Reuses GLM flags for confound regression (drift model, short-channel, aux).
+  Reuses GLM flags for confound regression (drift model, short-channel).
   --high-pass + --low-pass required for ALFF (FC computed regardless).
 
 Output:

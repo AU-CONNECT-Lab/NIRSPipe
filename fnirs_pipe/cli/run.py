@@ -189,18 +189,11 @@ def _build_parser() -> argparse.ArgumentParser:
     glm.add_argument("--short-channel", choices=_SHORT_CHANNEL_CHOICES,
                      help="Short-channel confound regressor strategy. Honoured by every mode: "
                           "glm fits it alongside the task, denoise and rest on its own.")
+    # withheld from --help pending evaluation; both still work when named explicitly
     glm.add_argument("--aux-regressors", action="store_true", default=None,
-                     help="Add the recording's auxiliary channels (accelerometers, "
-                          "gyroscopes, pulse and whatever else the device wrote to the "
-                          "snirf aux group) to the confound regression, in every mode that "
-                          "regresses. Preprocessing extracts them to desc-aux_timeseries.tsv.gz; "
-                          "this reads that table, resamples it onto the data's time axis "
-                          "with an anti-alias filter, and band-limits it to --high-pass / "
-                          "--low-pass so regressors and data sit in one frequency band.")
+                     help=argparse.SUPPRESS)
     glm.add_argument("--aux-channels", nargs="+", action="extend",
-                     help="Which aux channels to use, by the name the recording gives them. "
-                          "Default is all of them. Name them when the aux group holds "
-                          "channels that are not confounds, such as an event or trigger line.")
+                     help=argparse.SUPPRESS)
     glm.add_argument("--fc", action="store_true", default=None,
                      help="Also write the connectivity products rest mode writes, from "
                           "whatever the mode produced: glm correlates the task residual, so "

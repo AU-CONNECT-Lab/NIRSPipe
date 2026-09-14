@@ -253,11 +253,6 @@ def _build_cli_args(opts: dict) -> list[str]:
                 args += ["--drift-order", str(opts["drift_order"])]
         if opts.get("short_channel") and opts["short_channel"] != "none":
             args += ["--short-channel", opts["short_channel"]]
-        if opts.get("aux"):
-            args.append("--aux-regressors")
-            for name in (opts.get("aux_channels") or "").split():
-                args += ["--aux-channels", name]
-
         if mode == "glm":
             if opts.get("hrf_model"):   args += ["--hrf-model",   opts["hrf_model"]]
             if opts.get("noise_model"): args += ["--noise-model", opts["noise_model"]]
@@ -318,8 +313,6 @@ def _build_cli_args(opts: dict) -> list[str]:
     State("an-hrf-model",         "value"),
     State("an-noise-model",       "value"),
     State("an-short-channel",     "value"),
-    State("an-aux",               "value"),
-    State("an-aux-channels",      "value"),
     State("an-drift-model",       "value"),
     State("an-drift-high-pass",   "value"),
     State("an-drift-order",       "value"),
@@ -340,7 +333,7 @@ def generate_command(n_clicks, bids_dir, output_dir, subjects, dpf, sci_thresh, 
                      motion_correction, cardiac_l, cardiac_h, resp_l, resp_h,
                      post_mode, high_pass, low_pass, filter_method, filter_order,
                      resample, n_jobs,
-                     hrf_model, noise_model, short_channel, aux, aux_channels,
+                     hrf_model, noise_model, short_channel,
                      drift_model, drift_high_pass, drift_order, stim_dur,
                      roi_mapping, fc, flags,
                      session_label, task_label, shell):
@@ -371,7 +364,6 @@ def generate_command(n_clicks, bids_dir, output_dir, subjects, dpf, sci_thresh, 
         filter_method=filter_method, filter_order=filter_order,
         resample=resample, n_jobs=n_jobs,
         hrf_model=hrf_model, noise_model=noise_model, short_channel=short_channel,
-        aux=bool(aux), aux_channels=aux_channels,
         drift_model=drift_model, drift_high_pass=drift_high_pass,
         drift_order=drift_order, stim_dur=stim_dur,
         roi_mapping=roi_mapping, fc=bool(fc),

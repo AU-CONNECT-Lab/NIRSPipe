@@ -103,7 +103,7 @@ a bare-MNE run of the same chain. Reports are kept with the project notes outsid
 ### Algorithms / numerical validation
 
 - **Spline motion correction** — still raises `NotImplementedError`; TDDR and wavelet are implemented ([pipeline/motion.py](fnirs_pipe/pipeline/motion.py))
-- **External regressors in confound regression** — accept extra nuisance regressors alongside the short-channel ones, e.g. accelerometer traces from the SNIRF `aux` group. The two blocks are not orthogonal, so measure the collinearity before choosing between joint regression and a tCCA-style orthogonalisation ([pipeline/glm.py](fnirs_pipe/pipeline/glm.py))
+- **External regressors in confound regression** — built and then withheld: the flags are suppressed and the GUI control is gone, while extraction and the regression path stay. Reopening it needs an across-dyad comparison, and a tCCA-style orthogonalisation is the upgrade path if that comparison finds anything ([pipeline/glm.py](fnirs_pipe/pipeline/glm.py))
 - **Window the pseudo-dyad null by condition** — `--wtc-by-condition` reads each condition out of the whole-record coherence, but the phase-scrambled null it is compared against is still built from the whole recording. A short condition is therefore judged against a narrower spread than its own length warrants, which is anticonservative. `compute_wtc_pseudo` returns band means rather than maps, so it has to be told the window rather than windowed afterwards ([pipeline/synchrony.py](fnirs_pipe/pipeline/synchrony.py))
 
 ### QC enhancements
