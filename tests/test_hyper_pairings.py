@@ -37,7 +37,7 @@ def _raw(seed: int, hbo_signal: np.ndarray) -> mne.io.Raw:
     for label in LABELS:
         for chroma in ("hbo", "hbr"):
             names.append(f"{label} {chroma}")
-            types.append(f"hbo" if chroma == "hbo" else "hbr")
+            types.append("hbo" if chroma == "hbo" else "hbr")
             base = hbo_signal if chroma == "hbo" else rng.standard_normal(hbo_signal.size)
             data.append(base * 1e-6 + rng.standard_normal(hbo_signal.size) * 1e-8)
     info = mne.create_info(names, SFREQ, types)

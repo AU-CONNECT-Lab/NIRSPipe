@@ -798,7 +798,6 @@ def build_cross_panel(
     if z.size == 0 or not len(row_labels):
         return None
 
-    n = len(row_labels)
     sub1 = subject_ids[0] if subject_ids else "Sub1"
     sub2 = subject_ids[1] if len(subject_ids) > 1 else "Sub2"
 
