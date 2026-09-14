@@ -240,6 +240,113 @@ def wtc_grid_params(raws: dict) -> dict:
             "wtc_time_step_s": round(_decim_step(sfreq) / sfreq, 6)}
 
 
+@dataclass
+class _WaveletGrid:
+    """The scale grid every channel of one transform shares, built once per run."""
+    mother: object
+    s0: float
+    J: int
+    sj: np.ndarray
+    scales: np.ndarray
+
+
+@dataclass
+class _ChannelWavelet:
+    """One signal's transform and smoothed auto spectrum, reusable across its pairings."""
+    W: np.ndarray
+    S: np.ndarray
+    coi: np.ndarray
+    freqs: np.ndarray
+
+
+def _wavelet_grid(dt: float, n: int, fmin: float, fmax: float,
+                  limit_scales: bool) -> _WaveletGrid:
+    """The scale grid pycwt would pick for signals of length ``n``, resolved up front."""
+    import pycwt
+
+    mother = pycwt.Morlet()
+    if limit_scales:
+        s0, J = _scale_range(dt, WTC_DJ, fmin, fmax, n)
+    else:
+        s0 = 2 * dt / mother.flambda()
+        J = int(np.round(np.log2(n * dt / s0) / WTC_DJ))
+    sj = s0 * 2 ** (np.arange(0, J + 1) * WTC_DJ)
+    return _WaveletGrid(mother=mother, s0=s0, J=J, sj=sj,
+                        scales=np.ones([1, n]) * sj[:, None])
+
+
+def _prepare_channel(sig: np.ndarray, dt: float, grid: _WaveletGrid) -> _ChannelWavelet:
+    r"""One signal's half of the coherence: :math:`W_x` and the smoothed :math:`S(|W_x|^2)`.
+
+    Computed once per channel rather than once per pairing, which is what crossing repeats.
+    """
+    import pycwt
+
+    if len(sig) != grid.scales.shape[1]:
+        raise ValueError(f"signal length {len(sig)} differs from the grid's "
+                         f"{grid.scales.shape[1]}")
+    y = (sig - sig.mean()) / sig.std()
+    W, sj, freqs, coi, _, _ = pycwt.cwt(y, dt, dj=WTC_DJ, s0=grid.s0, J=grid.J,
+                                        wavelet=grid.mother)
+    # pycwt drops any scale whose row came back all-NaN, which would leave two channels on
+    # different grids and misalign the cross spectrum without changing its shape
+    if not np.array_equal(sj, grid.sj):
+        raise ValueError("wavelet scales differ from the run's grid")
+    S = grid.mother.smooth(np.abs(W) ** 2 / grid.scales, dt, WTC_DJ, sj)
+    return _ChannelWavelet(W=W, S=S, coi=coi, freqs=freqs)
+
+
+def _pair_from_prepared(p1: _ChannelWavelet, p2: _ChannelWavelet, dt: float,
+                        grid: _WaveletGrid) -> tuple[np.ndarray, np.ndarray]:
+    r"""The half that needs both signals: the cross spectrum, its smoothing and the ratio.
+
+    :math:`R^2 = |S(W_{xy})|^2 / (S(|W_x|^2)\, S(|W_y|^2))`, phase taken from
+    :math:`W_{xy} = W_x W_y^{*}`.
+    """
+    W12 = p1.W * p2.W.conj()
+    phase = np.angle(W12)
+    # in place, and after the phase: the cross spectrum is the largest array a pairing holds
+    W12 /= grid.scales
+    S12 = grid.mother.smooth(W12, dt, WTC_DJ, grid.sj)
+    return np.abs(S12) ** 2 / (p1.S * p2.S), phase
+
+
+def _trim_pair(
+    WCT: np.ndarray,
+    aWCT: np.ndarray,
+    coi: np.ndarray,
+    freqs: np.ndarray,
+    n_sig: int,
+    step: int,
+    fmin: float,
+    fmax: float,
+    signif: np.ndarray | None = None,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray | None, np.ndarray]:
+    """Sort to ascending frequency, band-limit to ``[fmin, fmax]`` and decimate by ``step``.
+
+    The leading slice to ``n_sig`` is defensive: this pycwt pads internally for the FFT but
+    unpads before returning, so the slice is a no-op until a version does not.
+    """
+    WCT  = WCT[:, :n_sig]
+    aWCT = aWCT[:, :n_sig]
+    coi  = coi[:n_sig]
+
+    order      = np.argsort(freqs)
+    freqs_s    = freqs[order]
+    WCT_s      = WCT[order]
+    band       = (freqs_s >= fmin) & (freqs_s <= fmax)
+    WCT_band   = WCT_s[band][:, ::step].astype(np.float32)
+    phase_band = aWCT[order][band][:, ::step].astype(np.float32)
+    freqs_band = freqs_s[band]
+    coi_dec    = coi[::step].astype(np.float32)
+
+    # Per-frequency significance is constant over time: reorder + band-limit only, no decimation.
+    sig_band = None
+    if signif is not None and np.ndim(signif) == 1 and len(signif) == len(freqs):
+        sig_band = np.asarray(signif)[order][band].astype(np.float32)
+    return WCT_band, freqs_band, coi_dec, sig_band, phase_band
+
+
 def _pairwise_wtc(
     sig1: np.ndarray,
     sig2: np.ndarray,
@@ -302,25 +409,8 @@ def _pairwise_wtc(
     WCT, aWCT, coi, freqs, signif = pycwt.wct(
         sig1, sig2, dt=dt, dj=dj, sig=significance, normalize=True, **kwargs,
     )
-    n_sig = len(sig1)
-    WCT   = WCT[:, :n_sig]
-    aWCT  = aWCT[:, :n_sig]
-    coi   = coi[:n_sig]
-
-    order      = np.argsort(freqs)
-    freqs_s    = freqs[order]
-    WCT_s      = WCT[order]
-    band       = (freqs_s >= fmin) & (freqs_s <= fmax)
-    WCT_band   = WCT_s[band][:, ::step].astype(np.float32)
-    phase_band = aWCT[order][band][:, ::step].astype(np.float32)
-    freqs_band = freqs_s[band]
-    coi_dec    = coi[::step].astype(np.float32)
-
-    # Per-frequency significance is constant over time: reorder + band-limit only, no decimation.
-    sig_band = None
-    if significance and np.ndim(signif) == 1 and len(signif) == len(freqs):
-        sig_band = np.asarray(signif)[order][band].astype(np.float32)
-    return WCT_band, freqs_band, coi_dec, sig_band, phase_band
+    return _trim_pair(WCT, aWCT, coi, freqs, len(sig1), step, fmin, fmax,
+                      signif if significance else None)
 
 
 def _wtc_over_pairs(
@@ -363,6 +453,10 @@ def _wtc_over_pairs(
     Time axis decimated to ~1 Hz for display; frequency axis filtered to [fmin, fmax] Hz.
     significance adds a per-frequency Monte Carlo level to each pair (slow; ~300 surrogate runs).
 
+    Each channel is transformed once and reused across its pairings
+    (:func:`_prepare_channel`), which is where the time goes when ``cross`` squares the pair
+    count. The significance path stays on :func:`_pairwise_wtc`, whose cost is the surrogates.
+
     ``seed`` makes those levels reproducible. It seeds pycwt's Monte Carlo only;
     :func:`compute_wtc_pseudo` takes the same number for its own surrogate generator, so one
     value makes a whole run reproducible without the two sharing a stream.
@@ -384,6 +478,13 @@ def _wtc_over_pairs(
     shared_freqs: np.ndarray | None = None
     shared_times: np.ndarray | None = None
 
+    # one grid for the whole run, so a channel's transform can be reused across its pairings
+    grid = None
+    if not significance:
+        first = next((s for m in signals.values() for s in m.values() if s is not None), None)
+        if first is not None:
+            grid = _wavelet_grid(dt, len(first), fmin, fmax, limit_scales)
+
     rng_state = np.random.get_state() if seed is not None else None
     if seed is not None:
         np.random.seed(seed)
@@ -400,6 +501,11 @@ def _wtc_over_pairs(
                                  if axis is not None or a in sig_map2])
             pair_data: dict[str | tuple[str, str], dict | None] = {}
             n_blank = 0
+            # crossing revisits every label of side 2 once per label of side 1, and never
+            # revisits side 1, so only side 2 is worth holding on to
+            cache2: dict[str, _ChannelWavelet] = {}
+            prep1_label: str | None = None
+            prep1: _ChannelWavelet | None = None
             for label1, label2 in label_pairs:
                 key = (label1, label2) if cross else label1
                 sig1, sig2 = sig_map1.get(label1), sig_map2.get(label2)
@@ -411,10 +517,23 @@ def _wtc_over_pairs(
                     n_blank += 1
                     continue
                 try:
-                    WCT_band, freqs_band, coi_dec, sig_band, phase_band = _pairwise_wtc(
-                        sig1, sig2, dt, step, fmin, fmax, significance,
-                        cache=seed is None, mc_count=mc_count,
-                        limit_scales=limit_scales)
+                    if grid is None:
+                        WCT_band, freqs_band, coi_dec, sig_band, phase_band = _pairwise_wtc(
+                            sig1, sig2, dt, step, fmin, fmax, significance,
+                            cache=seed is None, mc_count=mc_count,
+                            limit_scales=limit_scales)
+                    else:
+                        if label1 != prep1_label:
+                            prep1 = _prepare_channel(sig1, dt, grid)
+                            prep1_label = label1
+                        prep2 = cache2.get(label2)
+                        if prep2 is None:
+                            prep2 = _prepare_channel(sig2, dt, grid)
+                            if cross:
+                                cache2[label2] = prep2
+                        WCT, aWCT = _pair_from_prepared(prep1, prep2, dt, grid)
+                        WCT_band, freqs_band, coi_dec, sig_band, phase_band = _trim_pair(
+                            WCT, aWCT, prep1.coi, prep1.freqs, len(sig1), step, fmin, fmax)
                     if shared_freqs is None:
                         shared_freqs = freqs_band
                         shared_times = ref_raw.times[::step]
