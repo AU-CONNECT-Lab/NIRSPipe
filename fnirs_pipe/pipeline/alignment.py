@@ -27,6 +27,10 @@ logger = get_logger("pipeline.alignment")
 # and they are not the same analysis.
 ALIGN_STAGE = "aligned"
 
+# What the source's stamp says about the data rather than about the step that made it, and
+# so is still true of the aligned copy. The same keys `read_snirf` restores off the sidecar.
+_CARRIED_KEYS = ("high_pass", "low_pass", "filter_method", "filter_order")
+
 
 def _stamp_alignment(raw: mne.io.Raw, source: mne.io.Raw, step: str,
                      **params) -> mne.io.Raw:
@@ -35,8 +39,17 @@ def _stamp_alignment(raw: mne.io.Raw, source: mne.io.Raw, step: str,
     ``stamp`` replaces the whole lineage entry, so the source's path has to be carried
     across; without it ``path_from`` returns None and every sidecar built from these
     objects loses its ``Sources``.
+
+    The passband is carried for the same reason. It describes the data rather than this
+    step, nothing here changes it, and every consumer downstream of the alignment sees only
+    this stamp: dropping it made an aligned recording indistinguishable from one that was
+    never filtered, and the ISC panel said so on every correctly filtered run.
     """
-    return stamp(raw, ALIGN_STAGE, step, source=source, path=path_from(source), **params)
+    prev = lineage_of(source)
+    carried = {k: v for k, v in ((prev.params if prev else None) or {}).items()
+               if k in _CARRIED_KEYS and k not in params}
+    return stamp(raw, ALIGN_STAGE, step, source=source, path=path_from(source),
+                 **carried, **params)
 
 
 def alignment_params(raws: dict[str, mne.io.Raw]) -> dict:

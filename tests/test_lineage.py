@@ -180,3 +180,51 @@ def test_writing_the_same_stage_twice_raises(make_raw, tmp_path):
 
     with pytest.raises(StageError, match="already written"):
         rec.written(tmp_path / "b.snirf", second)
+
+
+# ---- what the alignment stamp carries forward ----
+
+def test_alignment_carries_the_passband_forward(make_raw):
+    """Every inter-brain consumer sees only the aligned stamp, so the filter has to survive.
+
+    `stamp` replaces the whole entry, so the errts stage's `high_pass` was dropped the moment
+    the recordings were put on one clock. The ISC panel reads that key to decide whether a
+    whole-record correlation is being run on drift, and with it gone it said so on every run,
+    filtered or not.
+    """
+    from fnirs_pipe.pipeline.alignment import trim_to_shortest
+    from fnirs_pipe.pipeline.group_io import unfiltered_stage_note
+
+    raws = {}
+    for sid in ("sub-01", "sub-02"):
+        raw = make_raw()
+        stamp(raw, stage="errts", step="load", path=f"{sid}.snirf",
+              high_pass=0.01, low_pass=0.2, filter_method="iir", filter_order=4)
+        raws[sid] = raw
+
+    trimmed, _ = trim_to_shortest(raws)
+
+    for sid, raw in trimmed.items():
+        lin = lineage_of(raw)
+        assert lin.stage == "aligned", sid
+        assert lin.params["high_pass"] == 0.01, sid
+        assert lin.params["low_pass"] == 0.2, sid
+        # the step's own record is still there beside it
+        assert lin.params["aligned"] is False, sid
+    assert unfiltered_stage_note(trimmed) is None
+
+
+def test_an_unfiltered_stage_is_still_reported_after_alignment(make_raw):
+    """The carry-forward must not silence the warning it was blocking."""
+    from fnirs_pipe.pipeline.alignment import trim_to_shortest
+    from fnirs_pipe.pipeline.group_io import unfiltered_stage_note
+
+    raws = {}
+    for sid in ("sub-01", "sub-02"):
+        raw = make_raw()
+        stamp(raw, stage="preproc", step="load", path=f"{sid}.snirf")
+        raws[sid] = raw
+
+    trimmed, _ = trim_to_shortest(raws)
+    note = unfiltered_stage_note(trimmed)
+    assert note is not None and "record no bandpass" in note
