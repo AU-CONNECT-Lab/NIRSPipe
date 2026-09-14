@@ -124,7 +124,7 @@ def dyad():
 
 
 def test_the_pair_table_carries_the_z_and_the_order_each_channel_used(dyad):
-    mat, names, frame = compute_isc_pairs(dyad, ["10031", "10032"], "hbo", whiten=16)
+    mat, names, frame, level = compute_isc_pairs(dyad, ["10031", "10032"], "hbo", whiten=16)
 
     assert len(frame) == len(names) ** 2
     assert list(frame.columns[:6]) == ["sub1", "sub2", "label", "label2", "r", "r_z"]
@@ -139,7 +139,7 @@ def test_the_pair_table_carries_the_z_and_the_order_each_channel_used(dyad):
 
 
 def test_the_order_columns_are_absent_when_nothing_was_whitened(dyad):
-    _, _, frame = compute_isc_pairs(dyad, ["10031", "10032"], "hbo", whiten=0)
+    _, _, frame, _ = compute_isc_pairs(dyad, ["10031", "10032"], "hbo", whiten=0)
     assert "ar_order" not in frame.columns
     assert "percentile" not in frame.columns
 
@@ -156,7 +156,7 @@ def test_the_null_columns_rank_the_magnitude_not_the_sign(dyad):
     raws["10031"]._data[picks[0]] = 1e-6 * shared
     raws["10032"]._data[picks[0]] = -1e-6 * shared
 
-    _, names, frame = compute_isc_pairs(raws, ids, "hbo", whiten=0, n_null=20, seed=1)
+    _, names, frame, level = compute_isc_pairs(raws, ids, "hbo", whiten=0, n_null=20, seed=1)
     assert {"null_mean", "null_sd", "null_p95", "percentile"} <= set(frame.columns)
 
     label = names[0]
@@ -175,7 +175,7 @@ def test_a_rejected_channel_is_blank_in_the_table_and_is_not_ranked(dyad):
     raws["10031"].info["bads"] = [c for c in raws["10031"].ch_names
                                   if c.startswith(rejected)]
 
-    mat, names, frame = compute_isc_pairs(raws, ids, "hbo", whiten=16, n_null=5, seed=1)
+    mat, names, frame, level = compute_isc_pairs(raws, ids, "hbo", whiten=16, n_null=5, seed=1)
     assert rejected in names                       # the axis is the montage, not the survivors
     blanked = frame[frame["label"] == rejected]
     assert blanked["r"].isna().all()
@@ -189,7 +189,7 @@ def test_the_matrix_entry_point_agrees_with_the_table(dyad):
     draws one and writes the other, so a divergence would be invisible."""
     ids = ["10031", "10032"]
     direct, names_a = compute_isc(dyad, ids, "hbo", whiten=16)
-    via_table, names_b, _ = compute_isc_pairs(dyad, ids, "hbo", whiten=16)
+    via_table, names_b, _, _ = compute_isc_pairs(dyad, ids, "hbo", whiten=16)
 
     assert names_a == names_b
     assert direct == pytest.approx(via_table, nan_ok=True)
@@ -242,8 +242,8 @@ def test_searching_raises_the_value_under_no_coupling():
 def test_the_null_is_searched_the_same_way_as_the_value(dyad):
     """So the inflation the search adds is in both and the percentile stays readable."""
     ids = ["10031", "10032"]
-    _, _, plain = compute_isc_pairs(dyad, ids, "hbo", n_null=20, seed=2)
-    _, _, lagged = compute_isc_pairs(dyad, ids, "hbo", max_lag_s=2.0, n_null=20, seed=2)
+    _, _, plain, _ = compute_isc_pairs(dyad, ids, "hbo", n_null=20, seed=2)
+    _, _, lagged, _ = compute_isc_pairs(dyad, ids, "hbo", max_lag_s=2.0, n_null=20, seed=2)
 
     assert "lag_s" not in plain.columns
     assert "lag_s" in lagged.columns
@@ -251,3 +251,53 @@ def test_the_null_is_searched_the_same_way_as_the_value(dyad):
     # both sides rose, so the ranks stay comparable rather than every cell becoming extreme
     assert lagged["null_mean"].mean() > plain["null_mean"].mean()
     assert lagged["percentile"].mean() == pytest.approx(plain["percentile"].mean(), abs=25)
+
+
+# ---- which pairings get a chord ----
+
+def test_the_arc_rule_prefers_a_null_to_a_number_and_a_number_to_a_quantile():
+    """Three tiers in the order they deserve to be believed in: a per-cell surrogate level is
+    a test, a fixed cut is a number somebody chose on a scale that moves with the
+    preprocessing, and a quantile of the matrix keeps the same share whatever the data did."""
+    from fnirs_pipe.qc.figures.hyper.hyper_post_figures import _arc_rule
+
+    z = np.array([[0.10, 0.50, np.nan],
+                  [0.90, -0.70, 0.20],
+                  [0.05, 0.30, 0.40]])
+    level = np.full_like(z, 0.45)
+
+    kept, rule = _arc_rule(z, "Pearson r", 0.3, level, 0.9)
+    assert kept.sum() == 5 and "0.3" in rule            # an explicit number wins outright
+    kept, rule = _arc_rule(z, "Pearson r", None, level, 0.9)
+    assert kept.sum() == 3 and "own null" in rule
+    kept, rule = _arc_rule(z, "Pearson r", None, None, 0.9)
+    assert "display cut" in rule and "not a test" in rule
+    kept, rule = _arc_rule(z, "Pearson r", None, None, None)
+    assert kept.sum() == 8 and "all 8" in rule          # every finite pairing, the NaN aside
+
+
+def test_a_cell_with_no_level_measured_gets_no_chord():
+    """A NaN level is a cell the surrogates never reached; drawing it would read as a pairing
+    that beat a null that was never taken."""
+    from fnirs_pipe.qc.figures.hyper.hyper_post_figures import _arc_rule
+
+    z = np.array([[0.9, 0.9]])
+    level = np.array([[0.1, np.nan]])
+    kept, _ = _arc_rule(z, "Pearson r", None, level, None)
+    assert kept.tolist() == [[True, False]]
+
+
+def test_the_null_level_comes_back_as_a_matrix_shaped_like_the_correlations(dyad):
+    """The panel thresholds cell by cell, so the level has to leave `compute_isc_pairs` as a
+    matrix and not only as a column of the table."""
+    mat, names, frame, level = compute_isc_pairs(dyad, ["10031", "10032"], "hbo",
+                                                 n_null=10, seed=3)
+    assert level.shape == mat.shape == (len(names), len(names))
+    index = {n: i for i, n in enumerate(names)}
+    row = frame.iloc[5]
+    assert level[index[row["label"]], index[row["label2"]]] == pytest.approx(row["null_p95"])
+
+
+def test_no_null_means_no_level(dyad):
+    _, _, _, level = compute_isc_pairs(dyad, ["10031", "10032"], "hbo")
+    assert level is None

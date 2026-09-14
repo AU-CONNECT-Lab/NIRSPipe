@@ -195,7 +195,7 @@ def cmd_run(
     wtc_cond_transform: bool, wtc_cond_pad_s: "float | None",
     wtc_limit_scales: bool, wtc_save_maps: bool,
     wtc_pseudo: int | None, wtc_pseudo_cross: bool,
-    bads_scope: str, isc_threshold: float, isc_whiten: int,
+    bads_scope: str, isc_threshold: "float | None", isc_whiten: int,
     isc_max_lag: float, isc_pseudo: int,
     sci_threshold: float,
     normalize: bool, no_align: bool, tstart: float | None, tend: float | None,
@@ -671,8 +671,16 @@ def _build_parser() -> argparse.ArgumentParser:
                           "whole is screened once, so its conditions already rest on one "
                           "channel set and the union is that one run's own rejections. A "
                           "line in the log says which case a given run is.")
-    run.add_argument("--isc-threshold", type=float, default=0.3,
-                     help="Minimum mean ISC to draw an arc in the connectivity circle.")
+    run.add_argument("--isc-threshold", type=float, default=None,
+                     help="Absolute |ISC| a pairing has to clear to get a chord in the "
+                          "connectivity circle. Left alone the rule is chosen instead of the "
+                          "number: with --isc-pseudo a chord is drawn where the pairing beats "
+                          "the 95th percentile of its own surrogate draws, and without one "
+                          "the strongest tenth are drawn and the subtitle says they are a "
+                          "display cut rather than a test. Naming a number here forces the "
+                          "absolute cut, which is what reproducing a fixed threshold needs; "
+                          "it is scale-dependent, and the scale moves with --desc, the "
+                          "passband, --isc-whiten and --isc-max-lag.")
     run.add_argument("--isc-whiten", type=int, default=0, metavar="ORDER",
                      help="Fit an autoregressive model of at most this order to each channel "
                           "before the inter-subject correlation and correlate the residuals; "

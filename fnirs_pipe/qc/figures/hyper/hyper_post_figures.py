@@ -762,6 +762,51 @@ def _circle_traces(fig, z, row_labels, col_labels, subject_ids, *,
     return len(pairs)
 
 
+# Share of pairings a connectogram keeps when there is no null to rank them against. A
+# display cut, and the subtitle says so: it draws the same number of chords whatever the data
+# did, which is exactly what a test must not do.
+ARC_FALLBACK_QUANTILE = 0.90
+
+
+def _arc_rule(
+    z: np.ndarray,
+    value_label: str,
+    threshold: "float | None",
+    level: "np.ndarray | None",
+    quantile: "float | None",
+) -> "tuple[np.ndarray, str]":
+    """Which cells get a chord, and the sentence over the circle saying why.
+
+    ::
+
+      level given      -> cells above their own null          "above its own null (95th pct)"
+      threshold given  -> cells over one number               "|Pearson r| >= 0.3"
+      quantile given   -> the strongest share of them         "strongest 10% (display cut)"
+
+    Three tiers in that order of preference, which is the order they deserve to be believed
+    in. A per-cell ``level`` out of a surrogate distribution is a test; a fixed
+    ``threshold`` is a number somebody chose, and the scale it has to be chosen on moves with
+    the preprocessing, so it wins only when asked for explicitly; a ``quantile`` of the matrix
+    itself keeps the strongest share whatever they are worth and is labelled as the display
+    cut it is. With none of the three, every finite pairing is drawn.
+
+    The rule string uses the ">=" character rather than the HTML entity: plotly's text parser
+    takes the tags it knows, and an escaped entity in a subplot title fails the whole render.
+    """
+    finite = np.isfinite(z)
+    if threshold is not None:
+        return finite & (np.abs(z) >= float(threshold)), f"|{value_label}| ≥ {threshold:g}"
+    if level is not None:
+        level = np.asarray(level, dtype=float)
+        keep = finite & np.isfinite(level) & (np.abs(z) >= level)
+        return keep, f"above its own null ({int(keep.sum())} of {int(finite.sum())})"
+    if quantile is not None and finite.any():
+        cut = float(np.nanquantile(np.abs(z[finite]), quantile))
+        share = int(round((1.0 - quantile) * 100))
+        return finite & (np.abs(z) >= cut), f"strongest {share}% (display cut, not a test)"
+    return finite, f"all {int(finite.sum())} pairings"
+
+
 def build_cross_panel(
     z: np.ndarray,
     row_labels: list[str],
@@ -775,6 +820,8 @@ def build_cross_panel(
     matrix_title: str,
     suptitle: str,
     arc_threshold: "float | None",
+    arc_level: "np.ndarray | None" = None,
+    arc_quantile: "float | None" = None,
     kind: str = "",
 ):
     """A cross-brain matrix as two live panels: the heatmap, and the same numbers as a circle.
@@ -807,8 +854,8 @@ def build_cross_panel(
     The scale is the caller's and both panels share it, so there is one colorbar: a
     correlation takes :data:`CORRELATION_SCALE` over -1 to 1.
 
-    ``arc_threshold`` is the value a pairing has to clear to get a chord; None draws them
-    all. It changes no number, and the subtitle over the circle says which rule drew it.
+    Which pairings get a chord is :func:`_arc_rule`. It changes no number, and the subtitle
+    over the circle says which of its rules drew them.
     """
     from plotly.subplots import make_subplots
 
@@ -819,15 +866,7 @@ def build_cross_panel(
     sub1 = subject_ids[0] if subject_ids else "Sub1"
     sub2 = subject_ids[1] if len(subject_ids) > 1 else "Sub2"
 
-    finite = np.isfinite(z)
-    if arc_threshold is not None:
-        keep = finite & (np.abs(z) >= float(arc_threshold))
-        # the character, not the HTML entity: plotly's text parser takes the tags it knows
-        # and an "&ge;" in a subplot title fails the whole render
-        rule = f"|{value_label}| ≥ {arc_threshold:g}"
-    else:
-        keep = finite
-        rule = f"all {int(keep.sum())} pairings"
+    keep, rule = _arc_rule(z, value_label, arc_threshold, arc_level, arc_quantile)
 
     # both panels are squares centred in their half, so the space between them is whatever
     # the square constraint leaves over rather than a gap set here
@@ -1020,7 +1059,8 @@ def build_isc_panel(
     ch_names: list[str],
     subject_ids: list[str],
     ch_type: str = "hbo",
-    isc_threshold: float = 0.3,
+    isc_threshold: "float | None" = None,
+    arc_level: "np.ndarray | None" = None,
 ):
     """The 2-panel ISC summary: ISC matrix | connectogram.
 
@@ -1032,7 +1072,9 @@ def build_isc_panel(
         ch_names:      Channel labels (n,), without type suffix.
         subject_ids:   [sub1_id, sub2_id, ...].
         ch_type:       "hbo" or "hbr", shown in titles.
-        isc_threshold: Minimum ``|ISC|`` arc threshold forwarded to connectogram.
+        isc_threshold: Absolute ``|ISC|`` a pairing must clear for a chord. None, the
+                       default, leaves the choice to :func:`_arc_rule`.
+        arc_level:     Per-cell level out of the pseudo-dyad null, when one was drawn.
     """
     if isc_mat is None or len(ch_names) == 0:
         return None
@@ -1046,4 +1088,6 @@ def build_isc_panel(
         matrix_title=f"ISC matrix ({type_label})",
         suptitle=f"Inter-brain Synchrony ({type_label})  —  {sub1_label} × {sub2_label}",
         arc_threshold=isc_threshold,
+        arc_level=arc_level,
+        arc_quantile=ARC_FALLBACK_QUANTILE,
     )

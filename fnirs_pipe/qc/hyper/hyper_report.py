@@ -630,6 +630,19 @@ def _number_table(bands: dict, isc: "dict | None", axis: list[str], kind: str,
             if rows else {})
 
 
+def _isc_arc_rule(isc_threshold: "float | None", isc_pseudo: int) -> str:
+    """One sentence naming which of the three rules drew the connectogram's chords.
+
+    The figure's own subtitle says the same thing; this is the page's parameter table, which
+    a reader reaches without opening a panel.
+    """
+    if isc_threshold is not None:
+        return f"|r| &ge; {isc_threshold:.2f}"
+    if isc_pseudo:
+        return f"above each pairing's own null, {isc_pseudo} surrogates"
+    return "the strongest 10%, a display cut rather than a test"
+
+
 def build_hyper_post_report(
     group_id: str,
     task: str,
@@ -656,7 +669,7 @@ def build_hyper_post_report(
     wtc_roi_min_channels: int = 2,
     wtc_arrow_min: "float | None" = None,
     wtc_chroma: "tuple[str, ...] | list[str]" = ("hbo", "hbr"),
-    isc_threshold: float = 0.3,
+    isc_threshold: "float | None" = None,
     isc_whiten: int = 0,
     isc_max_lag_s: float = 0.0,
     isc_pseudo: int = 0,
@@ -674,7 +687,7 @@ def build_hyper_post_report(
       3. Cross matrices   — band-mean coherence per channel pair and per ROI pair, HbO
                             beside HbR on one scale (when wtc_channel_cross)
       4. ISC              — inter-brain Pearson r heatmap beside its connectogram, whose
-                            arcs are filtered by isc_threshold
+                            arcs are chosen by `_arc_rule`
 
     Each WTC map is also collapsed to one number per channel over
     [wtc_band_fmin, wtc_band_fmax] and written as a TSV under the group's nirs/, so a
@@ -1105,13 +1118,14 @@ def build_hyper_post_report(
             ch_type, (None, None))
         if isc_mat is None:
             return {}
+        arc_level = result.isc_levels.get(pair, {}).get(label, {}).get(ch_type)
         what = f"condition {label}" if label else "whole run"
         suffix = f"_{_pair_fname(label)}" if label else ""
         panel: dict = {}
         with guard(f"ISC panel ({what}, {ch_type})", page_errors[(pair, label)], scope):
             panel = _fig_html(build_isc_panel(
                 isc_mat, isc_ch_names, list(pair),
-                ch_type=ch_type, isc_threshold=isc_threshold,
+                ch_type=ch_type, isc_threshold=isc_threshold, arc_level=arc_level,
             ), f"isc_{ch_type}{_pair_slug(pair)}{suffix}.html") or {}
         return panel
 
@@ -1292,7 +1306,7 @@ def build_hyper_post_report(
                                    default=0.0),
             wtc_chroma_labels=[_CHROMA_LABEL[c] for c in chroma],
             wtc_chroma_json=json.dumps(list(chroma)),
-            isc_threshold=isc_threshold,
+            isc_arc_rule=_isc_arc_rule(isc_threshold, isc_pseudo),
             alignment_json=json.dumps(alignment_rows),
             per_channel_post_json=json.dumps(per_channel),
             # the long axis, not `ch_pairs_post`: the selector has to name the set the

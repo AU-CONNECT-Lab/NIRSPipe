@@ -115,7 +115,7 @@
       <tr><th>Arrow threshold</th><td>{{ "%g"|format(arrow_min) }}</td></tr>
       <tr><th>Outside the COI</th><td>{{ "masked out of every band mean" if mask_coi
                                         else "kept in the band means" }}</td></tr>
-      <tr><th>ISC threshold</th><td>|r| &ge; {{ "%.2f"|format(isc_threshold) }}</td></tr>
+      <tr><th>ISC chords</th><td>{{ isc_arc_rule }}</td></tr>
       <tr><th>SCI threshold</th><td>{{ "%.2f"|format(sci_threshold) }}</td></tr>
       <tr><th>Aligned duration</th>
           <td>{% if align_duration_s %}{{ "%.1f"|format(align_duration_s) }}&thinsp;s
@@ -300,7 +300,7 @@
 <h2 id="ISC">Inter-brain Synchrony</h2>
 <p class="step-desc">
   ISC matrix (channel &times; channel Pearson r) and connectogram
-  (|ISC| &ge; {{ "%.2f"|format(isc_threshold) }}),
+  ({{ isc_arc_rule }}),
   {% if condition_label %}over this window only, z-scored inside it
   {%- else %}over the whole recording{% endif %}.
   <span style="color:#8e44ad">&#9632;</span> {{ subject_ids[0] }}

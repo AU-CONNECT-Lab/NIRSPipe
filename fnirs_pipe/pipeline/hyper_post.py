@@ -106,6 +106,10 @@ class HyperPostResult:
     roi_band_df: Any = None
     isc: dict = field(default_factory=dict)
     isc_roi: dict = field(default_factory=dict)
+    # {pairing: {label: {chromophore: ndarray or None}}}, the per-cell level a connectogram
+    # chord is drawn against when --isc-pseudo ran. Its own field rather than a third slot
+    # in `isc`, so nothing reading that pair has to learn a new shape
+    isc_levels: dict = field(default_factory=dict)
     align_info: dict = field(default_factory=dict)
     tables: dict = field(default_factory=dict)
 
@@ -530,17 +534,18 @@ def run_hyper_post(
     isc_pair_frames: list = []
 
     def _isc_of(ch_type: str, label, window, pair) -> tuple:
-        """One scope's ISC at both levels: ``((matrix, channels), (matrix, regions))``."""
+        """One scope's ISC: ``((matrix, channels), (matrix, regions), arc level)``."""
         what = f"condition {label}" if label else "whole run"
         channel_level = roi_level = (None, None)
+        arc_level = None
         with guard(f"ISC ({what}, {ch_type})", errors, scope):
             pair_ids = list(pair) if pair else subject_ids
-            isc_mat, isc_ch_names, pairs_df = compute_isc_pairs(
+            isc_mat, isc_ch_names, pairs_df, arc_level = compute_isc_pairs(
                 aligned_raws, pair_ids, ch_type, sep_bands, window=window,
                 whiten=isc_whiten, max_lag_s=isc_max_lag_s,
                 n_null=isc_pseudo, seed=wtc_seed)
             if isc_mat is None:
-                return channel_level, roi_level
+                return channel_level, roi_level, arc_level
             channel_level = (isc_mat, isc_ch_names)
             # the same numbers one row per pairing, which is the shape the z, the AR order
             # and the null columns fit in and the shape a group analysis reads
@@ -569,10 +574,11 @@ def run_hyper_post(
                         roi_mat, roi_names, ch_type, sources, pair_ids, align=align_info,
                         step="hyper_isc_roichan", index_label="roi",
                     )
-        return channel_level, roi_level
+        return channel_level, roi_level, arc_level
 
     isc: dict = {}
     isc_roi: dict = {}
+    isc_levels: dict = {}
     for pr in pairings:
         scopes = [(None, analysis_window)] + [(lab, (a, b)) for lab, a, b in cond_windows]
         both = {lab: {c: _isc_of(c, lab, window, pr) for c in ("hbo", "hbr")}
@@ -581,6 +587,8 @@ def run_hyper_post(
                    for lab, by_chroma in both.items()}
         isc_roi[pr] = {lab: {c: got[1] for c, got in by_chroma.items()}
                        for lab, by_chroma in both.items()}
+        isc_levels[pr] = {lab: {c: got[2] for c, got in by_chroma.items()}
+                          for lab, by_chroma in both.items()}
 
     if isc_pair_frames:
         # its own writer rather than _write_df_tsv: that one stamps the WTC band and grid on
@@ -616,6 +624,7 @@ def run_hyper_post(
         roi_band_df=roi_band_df,
         isc=isc,
         isc_roi=isc_roi,
+        isc_levels=isc_levels,
         align_info=align_info,
         tables=tables,
     )

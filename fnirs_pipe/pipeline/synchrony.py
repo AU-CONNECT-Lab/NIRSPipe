@@ -1728,7 +1728,7 @@ def compute_isc_pairs(
     max_lag_s: float = 0.0,
     n_null: int = 0,
     seed: int | None = None,
-) -> "tuple[np.ndarray, list[str], pd.DataFrame] | tuple[None, None, None]":
+) -> "tuple[np.ndarray, list[str], pd.DataFrame, np.ndarray | None] | tuple[None, None, None, None]":
     """The ISC matrix and the same numbers as one row per channel pair, ranked against a null.
 
     ::
@@ -1755,7 +1755,7 @@ def compute_isc_pairs(
     """
     data1, data2, ch_names = _isc_rows(aligned_raws, subject_ids, ch_type, sep_bands, window)
     if ch_names is None:
-        return None, None, None
+        return None, None, None, None
 
     max_lag = _lag_samples(aligned_raws, subject_ids, max_lag_s)
     isc_mat, orders1, orders2, lags = _isc_matrix(data1, data2, whiten, max_lag)
@@ -1775,10 +1775,11 @@ def compute_isc_pairs(
         ij = (frame["label"].map(index).to_numpy(), frame["label2"].map(index).to_numpy())
         frame["lag_s"] = lags[ij] / sfreq
 
+    null_level = None
     if n_null > 0:
         draws = _isc_null_draws(data1, data2, whiten, max_lag, n_null, seed)
-        _add_isc_null_columns(frame, isc_mat, ch_names, draws)
-    return isc_mat, ch_names, frame
+        null_level = _add_isc_null_columns(frame, isc_mat, ch_names, draws)
+    return isc_mat, ch_names, frame, null_level
 
 
 def _isc_null_draws(
@@ -1805,8 +1806,12 @@ def _isc_null_draws(
 
 def _add_isc_null_columns(
     frame: pd.DataFrame, isc_mat: np.ndarray, ch_names: list[str], draws: np.ndarray,
-) -> None:
-    """Summarise the surrogate draws onto ``frame``, cell by cell, in place."""
+) -> np.ndarray:
+    """Summarise the surrogate draws onto ``frame`` in place, and return the 95th percentile.
+
+    That percentile is per cell and is what a chord on the connectogram is drawn against, so
+    it leaves as a matrix rather than only as a column.
+    """
     absolute = np.abs(draws)
     # a blanked channel makes a cell all-NaN, which every nan-aware reduction warns about and
     # then handles correctly; the blank mask below is what actually decides those cells
@@ -1827,6 +1832,7 @@ def _add_isc_null_columns(
     frame["null_sd"]    = null_sd[ij]
     frame["null_p95"]   = null_p95[ij]
     frame["percentile"] = beaten[ij]
+    return null_p95
 
 
 def _isc_matrix(
