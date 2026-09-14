@@ -7,19 +7,20 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
-- **`--isc-whiten` fits an autoregressive model to each channel before the correlation** and correlates what is left. A haemoglobin trace is strongly autocorrelated, so neighbouring samples are near copies and a correlation between two traces rests on far fewer independent observations than it has samples; the value it reaches with no coupling present is correspondingly large. Whitening puts r back on the scale its sample count implies, and shrinks it by roughly a factor of six, so a whitened matrix is not comparable with an unwhitened one. Off by default, since the correlation literature is split on it
-- **`--isc-max-lag` searches a few seconds either way and keeps the strongest correlation**, rather than correlating sample against sample. Two people's haemodynamic responses do not peak at the same instant, so a same-sample correlation reads a coupling a second apart as no coupling. The winning shift is reported per pairing. Off by default; 2 seconds is the published choice
-- **`--isc-pseudo N` ranks each correlation against phase-scrambled surrogates**, the null a correlation between two recordings needs: scrambling preserves each signal's own spectrum and so its autocorrelation, which is what decides how large r gets with nothing coupled. Off by default
-- **Every correlation is written one row per channel pair**, in `hyper-iscpairs.tsv`, beside the matrices the report draws. It carries the Fisher z that group statistics should average, the autoregressive order each channel used, and the null columns when one was drawn. The matrices are unchanged
-- **The pseudo-dyad null keeps its spread.** `--wtc-pseudo` reported only the mean of its iterations, which says where the null sits but not how wide it is, so nothing could be ranked inside it. The tables gain `null_sd`, `null_p95`, `n_iter` and, where the real table is beside them, `percentile`: the share of a cell's surrogate draws its real value beat
+- **`--isc-whiten` removes each channel's autocorrelation before the correlation**, so r sits on the scale its sample count implies. A whitened matrix does not compare with an unwhitened one. Off by default
+- **`--isc-max-lag` searches a few seconds either way and keeps the strongest correlation**, reporting the winning shift per pairing. Off by default
+- **`--isc-pseudo N` ranks each correlation against phase-scrambled surrogates.** Off by default
+- **Correlations are also written one row per channel pair**, in `hyper-iscpairs.tsv`, carrying the Fisher z, the autoregressive order each channel used, and the null columns when one was drawn
+- **The pseudo-dyad null reports its spread**, not only its mean: `null_sd`, `null_p95`, `n_iter`, and `percentile` where the real table sits beside it
 
 ### Fixed
-- **On a crossed run the pseudo-dyad null's `percentile` column ranked the wrong cell.** Every channel but the first in the montage was compared against its pairing with the *first* channel of the other brain rather than against its own. Only `--wtc-channel-cross` together with a null left un-crossed was affected, which is the pairing the flags recommend. The null's own columns were always right, so a table already written can be re-ranked rather than recomputed
+- **On a crossed run the pseudo-dyad null's `percentile` ranked the wrong cell.** A table already written can be re-ranked rather than recomputed
 
 ### Changed
-- **The coherence's scale smoothing is the width its definition fixes**, 0.6 in log2(scale), where the backend used twice that. A wider window pulls coherence down, so every value rises: about 0.05 on a band mean, and more where the band is narrow. Contrasts barely move, since real and surrogate were always smoothed alike, but absolute values from earlier runs are not comparable with these and published values are now on the same footing. The width is on every WTC sidecar as `wtc_scale_smooth_dj0`
-- **Phase arrows on the coherence maps are drawn against the null when one was computed.** Without `--wtc-pseudo` they still clear the flat `--wtc-arrow-min`, which is a display threshold and not a test. With it, each frequency gets its own level out of the surrogates, which matters because surrogate coherence is not flat in frequency: it rises at both ends of the computed range, so one threshold over the whole map draws arrows preferentially at the band edges. The caption names which of the three levels was used
-- **Crossed wavelet coherence is about three times faster.** `--wtc-channel-cross` over a 14-channel montage went from 6.4 to 2.2 minutes per chromophore. Every coherence, phase and cone value it produces is identical to before, bit for bit
+- **The coherence's scale smoothing is the width its definition fixes**, where the backend used twice that. Values rise and the gap to the pseudo-dyad null narrows, so neither coherences nor significance from earlier runs carry over; the width is on every WTC sidecar as `wtc_scale_smooth_dj0`
+- **The connectogram draws a chord where a pairing beats its own surrogate null**, or the strongest tenth when no null was drawn, marked as a display cut rather than a test. `--isc-threshold` still forces an absolute cut
+- **Phase arrows on the coherence maps are drawn against the pseudo-dyad null when one was computed**, at a level per frequency rather than the flat `--wtc-arrow-min`. The caption names which level was used
+- **Crossed wavelet coherence is about three times faster**, with every coherence, phase and cone value identical to before
 
 ## [0.39.0] - 2026-09-13
 
