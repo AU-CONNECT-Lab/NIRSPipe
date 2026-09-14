@@ -686,8 +686,9 @@ def build_hyper_post_report(
       2. Per-ROI WTC      — the member channels' maps averaged cell by cell (when roi_map given)
       3. Cross matrices   — band-mean coherence per channel pair and per ROI pair, HbO
                             beside HbR on one scale (when wtc_channel_cross)
-      4. ISC              — inter-brain Pearson r heatmap beside its connectogram, whose
-                            arcs are chosen by `_arc_rule`
+      4. ISC              — inter-brain Pearson r, a ROI × ROI heatmap (when roi_map
+                            given) and then per chromophore a channel heatmap beside its
+                            connectogram, whose arcs are chosen by `_arc_rule`
 
     Each WTC map is also collapsed to one number per channel over
     [wtc_band_fmin, wtc_band_fmax] and written as a TSV under the group's nirs/, so a
@@ -761,6 +762,7 @@ def build_hyper_post_report(
     from fnirs_pipe.qc.figures.hyper.hyper_post_figures import (
         ARROW_MIN_COHERENCE,
         build_isc_panel,
+        build_isc_roi_matrix,
         build_wtc_channel,
         build_wtc_cross_matrix,
         build_wtc_map_interactive,
@@ -1129,13 +1131,35 @@ def build_hyper_post_report(
             ), f"isc_{ch_type}{_pair_slug(pair)}{suffix}.html") or {}
         return panel
 
+    def _isc_roi_matrix_of(pair, label) -> dict:
+        """The ROI ISC of both chromophores as one figure, the way the WTC matrices are.
+
+        One figure rather than one per chromophore, for the reason `_matrix_set` gives: HbO
+        and HbR are a consistency check on each other and side by side on one scale is that
+        check. Nothing is drawn where the run had no ROI map, since `isc_roi` is then empty.
+        """
+        mats = {_CHROMA_LABEL[c]: result.isc_roi.get(pair, {}).get(label, {}).get(
+                                      c, (None, None))
+                for c in chroma}
+        if all(mat is None for mat, _ in mats.values()):
+            return {}
+        what = f"condition {label}" if label else "whole run"
+        suffix = f"_{_pair_fname(label)}" if label else ""
+        out: dict = {}
+        with guard(f"ISC ROI matrix ({what})", page_errors[(pair, label)], scope):
+            out = _fig_html(build_isc_roi_matrix(mats, list(pair)),
+                            f"isc_roimatrix{_pair_slug(pair)}{suffix}.html") or {}
+        return out
+
     isc_panels: dict = {}
+    isc_roi_matrices: dict = {}
     isc_values: dict = {}
     isc_roi_values: dict = {}
     for pr in pairings:
         labels = [None] + [label for label, _, _ in cond_windows]
         isc_panels[pr] = {k: {c: _isc_panel_of(pr, k, c) for c in ("hbo", "hbr")}
                           for k in labels}
+        isc_roi_matrices[pr] = {k: _isc_roi_matrix_of(pr, k) for k in labels}
         isc_values[pr] = {k: {c: result.isc.get(pr, {}).get(k, {}).get(c, (None, None))
                               for c in ("hbo", "hbr")}
                           for k in labels}
@@ -1344,6 +1368,7 @@ def build_hyper_post_report(
                          [{"label": " × ".join(pr), "href": _page_path(label, pr).name,
                            "current": pr == pair} for pr in pairings]),
             isc_unfiltered_note=isc_unfiltered_note,
+            isc_roi_matrix=(isc_roi_matrices.get(pair) or {}).get(label) or {},
             isc_panel_hbo=(isc_panels.get(pair) or {}).get(label, {}).get("hbo") or {},
             isc_panel_hbr=(isc_panels.get(pair) or {}).get(label, {}).get("hbr") or {},
             subject_metrics_rows=(run_metric_rows if label is None

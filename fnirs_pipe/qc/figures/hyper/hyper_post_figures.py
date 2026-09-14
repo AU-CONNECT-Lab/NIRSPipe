@@ -807,6 +807,76 @@ def _arc_rule(
     return finite, f"all {int(finite.sum())} pairings"
 
 
+def _cross_matrix_figure(
+    panels: "list[tuple[str, np.ndarray]]",
+    labels: list[str],
+    subject_ids: list[str],
+    *,
+    cmap: str,
+    vmin: float,
+    vmax: float,
+    value_label: str,
+    title: str,
+    kind: str,
+):
+    """Several cross-brain matrices side by side on one colour scale, one per chromophore.
+
+    ::
+
+      [("HbO", 14 x 14), ("HbR", 14 x 14)] -> [ HbO heatmap | HbR heatmap ], one colorbar
+
+    Shared by the coherence matrices and the ROI ISC one, which differ only in scale and
+    wording. Rows are the first member's sites and columns the second's, so the diagonal is
+    the homologous pairing and no cell is within-brain. Each panel's subtitle carries its
+    own grand mean, which is the number the two chromophores are compared on.
+
+    ``panels`` is ``[(display name, matrix), ...]``, already filtered to the ones worth
+    drawing. The last panel carries the colorbar and the rest draw none, which is what puts
+    them all on one scale.
+    """
+    from plotly.subplots import make_subplots
+
+    sub1 = subject_ids[0] if subject_ids else "sub1"
+    sub2 = subject_ids[1] if len(subject_ids) > 1 else "sub2"
+
+    fig = make_subplots(
+        rows=1, cols=len(panels), horizontal_spacing=0.06,
+        subplot_titles=[f"{name}   (grand mean {float(np.nanmean(z)):.3f})"
+                        for name, z in panels],
+    )
+
+    for i, (_, z) in enumerate(panels, start=1):
+        _matrix_panel(fig, z, labels, labels, subject_ids,
+                      cmap=cmap, vmin=vmin, vmax=vmax, value_label=value_label,
+                      row=1, col=i,
+                      colorbar=(_COLORBAR | {"title": value_label}
+                                if i == len(panels) else None))
+        # Ranges given rather than left to autorange, which pads a heatmap by a fraction of
+        # a cell on every side and leaves a white margin around the grid. A cell spans half a
+        # step either side of its index, so these two are the grid's own extent.
+        fig.update_xaxes(title_text=f"{sub2} {kind}".strip(), side="bottom", tickangle=-90,
+                         range=[-0.5, len(labels) - 0.5], showgrid=False, zeroline=False,
+                         constrain="domain", row=1, col=i)
+        # the first row at the top, which is how the table it stands for is read. The y title
+        # goes on the left panel alone: both rows are the same member and printing it twice
+        # reads as two different axes
+        fig.update_yaxes(title_text=(f"{sub1} {kind}".strip() if i == 1 else ""),
+                         range=[len(labels) - 0.5, -0.5], showgrid=False, zeroline=False,
+                         scaleanchor=f"x{'' if i == 1 else i}", constrain="domain",
+                         row=1, col=i)
+
+    fig.update_layout(
+        height=PANEL_HEIGHT, autosize=True,
+        margin=dict(l=70, r=90, t=84, b=70),
+        title=dict(text=title, x=0.5, xanchor="center", y=0.975, font=dict(size=14)),
+        plot_bgcolor="white", paper_bgcolor="white", showlegend=False,
+    )
+    for note in fig.layout.annotations[:len(panels)]:
+        note.font.size = 11
+        note.font.color = "#444444"
+    return fig
+
+
 def build_cross_panel(
     z: np.ndarray,
     row_labels: list[str],
@@ -938,7 +1008,8 @@ def build_wtc_cross_matrix(
     were a heatmap and a connectogram of the same numbers until 2026-09-12, and the circle is
     the half that went: a coherence grid is small enough that the heatmap already carries its
     shape, and the second chromophore is the comparison worth the width. :func:`build_isc_panel`
-    keeps its circle, having only one matrix to draw.
+    keeps its circle, having a null to rank the pairings by; the ROI ISC matrices have none
+    and are laid out like this one.
 
     ``band_dfs`` maps a display name to that chromophore's band-mean frame. A frame that is
     None, carries no ``label2`` column, or has no finite cell is left out rather than drawn
@@ -949,8 +1020,6 @@ def build_wtc_cross_matrix(
     Read cell by cell the off-diagonal is exploratory: single pairings are noisy and a
     correction over n**2 of them leaves little. The structure is what it is for.
     """
-    from plotly.subplots import make_subplots
-
     sub1 = subject_ids[0] if subject_ids else "sub1"
     sub2 = subject_ids[1] if len(subject_ids) > 1 else "sub2"
 
@@ -972,44 +1041,12 @@ def build_wtc_cross_matrix(
     if not panels:
         return None
 
-    fig = make_subplots(
-        rows=1, cols=len(panels), horizontal_spacing=0.06,
-        subplot_titles=[f"{name}   (grand mean {float(np.nanmean(z)):.3f})"
-                        for name, z in panels],
-    )
-
-    for i, (_, z) in enumerate(panels, start=1):
-        _matrix_panel(fig, z, labels, labels, subject_ids,
-                      cmap=COHERENCE_SCALE, vmin=0, vmax=1, value_label="coherence",
-                      row=1, col=i,
-                      colorbar=(_COLORBAR | {"title": "coherence"}
-                                if i == len(panels) else None))
-        # Ranges given rather than left to autorange, which pads a heatmap by a fraction of
-        # a cell on every side and leaves a white margin around the grid. A cell spans half a
-        # step either side of its index, so these two are the grid's own extent.
-        fig.update_xaxes(title_text=f"{sub2} {kind}".strip(), side="bottom", tickangle=-90,
-                         range=[-0.5, len(labels) - 0.5], showgrid=False, zeroline=False,
-                         constrain="domain", row=1, col=i)
-        # the first row at the top, which is how the table it stands for is read. The y title
-        # goes on the left panel alone: both rows are the same member and printing it twice
-        # reads as two different axes
-        fig.update_yaxes(title_text=(f"{sub1} {kind}".strip() if i == 1 else ""),
-                         range=[len(labels) - 0.5, -0.5], showgrid=False, zeroline=False,
-                         scaleanchor=f"x{'' if i == 1 else i}", constrain="domain",
-                         row=1, col=i)
-
-    fig.update_layout(
-        height=PANEL_HEIGHT, autosize=True,
-        margin=dict(l=70, r=90, t=84, b=70),
-        title=dict(text=f"Inter-brain coherence, {kind} × {kind}, "
-                        f"band {band_fmin:.3g}-{band_fmax:.3g} Hz  —  {sub1} × {sub2}",
-                   x=0.5, xanchor="center", y=0.975, font=dict(size=14)),
-        plot_bgcolor="white", paper_bgcolor="white", showlegend=False,
-    )
-    for note in fig.layout.annotations[:len(panels)]:
-        note.font.size = 11
-        note.font.color = "#444444"
-    return fig
+    return _cross_matrix_figure(
+        panels, labels, subject_ids,
+        cmap=COHERENCE_SCALE, vmin=0, vmax=1, value_label="coherence",
+        title=(f"Inter-brain coherence, {kind} × {kind}, "
+               f"band {band_fmin:.3g}-{band_fmax:.3g} Hz  —  {sub1} × {sub2}"),
+        kind=kind)
 
 
 def _phase_arrows(ax, times: np.ndarray, freqs: np.ndarray, phase, n_time: int = 14,
@@ -1091,3 +1128,45 @@ def build_isc_panel(
         arc_level=arc_level,
         arc_quantile=ARC_FALLBACK_QUANTILE,
     )
+
+
+def build_isc_roi_matrix(isc_by_chroma: dict, subject_ids: list[str]):
+    """ISC at the ROI level, one heatmap per chromophore on a single correlation scale.
+
+    ::
+
+      {"HbO": (4 x 4 r, ["L", "R", ...]), "HbR": (...)} -> [ HbO matrix | HbR matrix ]
+
+    The ROI counterpart of :func:`build_isc_panel`, and it drops the connectogram that one
+    keeps. A handful of regions is small enough that the heatmap already carries the shape,
+    and the ROI matrices have no pseudo-dyad null, so a chord rule would have nothing to
+    rank pairings by. Side by side on one scale is the HbO against HbR check instead, the
+    reading :func:`build_wtc_cross_matrix` is laid out for.
+
+    ``isc_by_chroma`` maps a display name to ``(matrix, roi labels)``. An entry that is
+    None, has no finite cell, or does not match the axis the first panel set is left out
+    rather than drawn empty, so a run of one chromophore gets one panel.
+    """
+    panels: list[tuple[str, np.ndarray]] = []
+    labels: list[str] = []
+    for name, got in (isc_by_chroma or {}).items():
+        mat, roi_names = got or (None, None)
+        if mat is None or not roi_names:
+            continue
+        z = np.asarray(mat, dtype=float)
+        if not np.isfinite(z).any():
+            continue
+        labels = labels or list(roi_names)
+        if z.shape != (len(labels), len(labels)):
+            continue
+        panels.append((str(name), z))
+    if not panels:
+        return None
+
+    sub1 = subject_ids[0] if subject_ids else "sub1"
+    sub2 = subject_ids[1] if len(subject_ids) > 1 else "sub2"
+    return _cross_matrix_figure(
+        panels, labels, subject_ids,
+        cmap=CORRELATION_SCALE, vmin=-1, vmax=1, value_label="Pearson r",
+        title=f"Inter-brain synchrony, ROI \u00d7 ROI  \u2014  {sub1} \u00d7 {sub2}",
+        kind="ROI")

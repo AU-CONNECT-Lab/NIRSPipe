@@ -228,6 +228,50 @@ def test_the_roi_thumbnail_grid_is_gone(pages):
         assert "_ROI_GRID" not in html and "wtc-roi-grid-img" not in html, page.name
 
 
+# ---- the ISC panels, which are plain iframes rather than a selector table ----
+
+def _iframe_srcs(html: str, stem: str) -> list:
+    return re.findall(rf'src="((?:[^"]*/)?{stem}[^"]*\.html)"', html)
+
+
+def test_every_page_draws_the_roi_isc_matrix(pages):
+    """The ROI ISC was computed and written to a TSV long before anything drew it, and the
+    number table it fed reads the same whether the figure is there or not."""
+    for page in pages:
+        found = _iframe_srcs(page.read_text(encoding="utf-8"), "isc_roimatrix")
+        assert len(found) == 1, page.name
+        assert (page.parent / found[0]).exists(), (page.name, found[0])
+
+
+def test_every_page_draws_the_two_coherence_matrices(pages):
+    """Beside the ISC one, and asserted because a failed panel is swallowed by its guard:
+    the page still renders and every other assertion here still passes."""
+    for page in pages:
+        html = page.read_text(encoding="utf-8")
+        for stem in ("wtc_roimatrix", "wtc_chanmatrix"):
+            found = _iframe_srcs(html, stem)
+            assert len(found) == 1, (page.name, stem)
+            assert (page.parent / found[0]).exists(), (page.name, found[0])
+
+
+def test_the_roi_isc_matrix_is_one_figure_for_both_chromophores(pages):
+    """Unlike the channel panels beside it: HbO and HbR share the figure and the scale, so
+    there is no chromophore in its name."""
+    for page in pages:
+        src = _iframe_srcs(page.read_text(encoding="utf-8"), "isc_roimatrix")[0]
+        assert "hbo" not in src and "hbr" not in src, (page.name, src)
+
+
+def test_a_condition_page_draws_its_own_roi_isc_matrix(pages):
+    """The window slug reaching the filename, the defect the coherence panels had."""
+    seen = {}
+    for page in pages:
+        src = _iframe_srcs(page.read_text(encoding="utf-8"), "isc_roimatrix")[0]
+        assert _window_in(src) == _window_of(page), (page.name, src)
+        seen[_window_of(page)] = src
+    assert len(set(seen.values())) == len(seen)
+
+
 # ---- how many cycles of the slowest analysed frequency a window holds ----
 #
 # Not a cone and not contamination: the count stays the same however clean the edges are.

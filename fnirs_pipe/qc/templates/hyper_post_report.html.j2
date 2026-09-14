@@ -299,18 +299,37 @@
 {% if isc_panel_hbo.wtc or isc_panel_hbr.wtc %}
 <h2 id="ISC">Inter-brain Synchrony</h2>
 <p class="step-desc">
-  ISC matrix (channel &times; channel Pearson r) and connectogram
-  ({{ isc_arc_rule }}),
-  {% if condition_label %}over this window only, z-scored inside it
-  {%- else %}over the whole recording{% endif %}.
+  Pearson r between the two members' time courses, every site of one against every site of
+  the other, {% if condition_label %}over this window only, z-scored inside it
+  {%- else %}over the whole recording{% endif %}. The channel panels pair their matrix with
+  a connectogram ({{ isc_arc_rule }}); the ROI matrix has no null to rank pairings by and
+  draws none.
   <span style="color:#8e44ad">&#9632;</span> {{ subject_ids[0] }}
   <span style="color:#27ae60">&#9632;</span> {{ subject_ids[1] }}
 </p>
 {% if isc_unfiltered_note %}<p class="qm-note">{{ isc_unfiltered_note }}</p>{% endif %}
 
+{% if isc_roi_matrix.wtc %}
+<details id="ISCRoiMatrix" open>
+  <summary>a. ROI &times; ROI</summary>
+  <div class="details-body">
+    <p class="step-desc">The channel values of <code>hyper-isc-*.tsv</code> averaged in
+      Fisher z inside each ROI pair, so this rests on the same channels the ROI coherence
+      above does. Row = {{ subject_ids[0] }} and column = {{ subject_ids[1] }}, diagonal =
+      the homologous region.
+      {%- if wtc_chroma_labels | length > 1 %} {{ wtc_chroma_labels | join(" left, ") }}
+      right, on one colour scale.{% endif %} Hover a cell to see which pairing it is.</p>
+    <iframe class="plotly-frame" src="{{ isc_roi_matrix.wtc }}"
+            title="ROI by ROI inter-brain synchrony"
+            style="height:{{ isc_roi_matrix.h or 720 }}px"></iframe>
+    <p class="fig-path">{{ isc_roi_matrix.wtc }}</p>
+  </div>
+</details>
+{% endif %}
+
 {% if isc_panel_hbo.wtc %}
 <details id="ISCHbo" open>
-  <summary>a. HbO</summary>
+  <summary>{{ "b" if isc_roi_matrix.wtc else "a" }}. HbO</summary>
   <div class="details-body">
     <iframe class="plotly-frame" src="{{ isc_panel_hbo.wtc }}"
             title="inter-brain synchrony, HBO"
@@ -322,7 +341,7 @@
 
 {% if isc_panel_hbr.wtc %}
 <details id="ISCHbr" open>
-  <summary>b. HbR</summary>
+  <summary>{{ "c" if isc_roi_matrix.wtc else "b" }}. HbR</summary>
   <div class="details-body">
     <iframe class="plotly-frame" src="{{ isc_panel_hbr.wtc }}"
             title="inter-brain synchrony, HBR"

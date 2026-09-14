@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- **The dyad report draws the ROI × ROI correlations**, HbO beside HbR on one colour scale. The numbers were already in `hyper-isc-roichan-*.tsv` and in the report's table, but nothing pictured them
 - **The ROI coherence is written over an ROI's homologous channel pairs too**, as `hyper-wtc-roihom.tsv` and one per condition, beside the crossed ROI matrix. This is the number to report: it is the same whether or not the run crossed, and it is what the literature averages
 - **That ROI mean gets a null**, `hyper-wtc-roihom-pseudo.tsv`, at no extra cost: the pseudo-dyad iterations are grouped into regions before they are summarised, so the spread is the ROI mean's own rather than a bracket derived from its channels'
 - **The dyad report's numbers table gains a homologous ROI block**, beside the channel and crossed-ROI ones
