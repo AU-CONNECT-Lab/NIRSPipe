@@ -19,6 +19,7 @@ All notable changes to this project will be documented in this file.
 - **The pseudo-dyad null reports its spread**, not only its mean: `null_sd`, `null_p95`, `n_iter`, and `percentile` where the real table sits beside it
 
 ### Fixed
+- **The homologous ROI table listed crossed regions too**, with no coherence in those rows and a correlation copied from the crossed table above it
 - **The ROI coherence on the diagonal meant two different things depending on `--wtc-channel-cross`.** Crossed, a `(roi, roi)` cell averaged every pairing inside the region; uncrossed, only the homologous ones. The crossed table is unchanged and is still the crossed view; the reported number moved to the new table above
 - **On a crossed run the pseudo-dyad null's `percentile` ranked the wrong cell.** A table already written can be re-ranked rather than recomputed
 - **The dyad report claimed the correlations were run on an unfiltered stage even when they were not.** The note fired on every run, whatever `--desc` pointed at, so the one case it exists to catch was indistinguishable from the rest
@@ -27,6 +28,8 @@ All notable changes to this project will be documented in this file.
 - **The `fnirs-rate` viewers reported they were serving even when their server had failed to come up**, and opened a browser tab at an address nothing was listening on
 
 ### Changed
+- **The dyad report's numbers are one table per kind of pairing, each condition beside the whole run** rather than a block per condition stacked under one another. A crossed dyad printed every channel pairing once per condition, so a pairing's whole-run value sat hundreds of rows from the same pairing's condition value
+- **The cone-of-influence share is stated once per condition instead of as a column.** It depends on the window length and the band and not on the channels, so the column held one number repeated down every row and again for the second chromophore
 - **The coherence's scale smoothing is the width its definition fixes**, where the backend used twice that. Values rise and the gap to the pseudo-dyad null narrows, so neither coherences nor significance from earlier runs carry over; the width is on every WTC sidecar as `wtc_scale_smooth_dj0`
 - **The connectogram draws a chord where a pairing beats its own surrogate null**, or the strongest tenth when no null was drawn, marked as a display cut rather than a test. `--isc-threshold` still forces an absolute cut
 - **Phase arrows on the coherence maps are drawn against the pseudo-dyad null when one was computed**, at a level per frequency rather than the flat `--wtc-arrow-min`. The caption names which level was used

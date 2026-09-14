@@ -474,6 +474,17 @@ def test_the_roi_rows_carry_an_isc_of_their_own(pages):
                 page.name, roi)
 
 
+def test_the_homologous_table_holds_the_diagonal_alone(pages):
+    """The correlation matrix is a full ROI x ROI whatever the coherence beside it covers, so
+    this table used to grow a row per crossed region: no coherence in it, and the correlation
+    a copy of the one the crossed table above already prints."""
+    for page in pages:
+        table = _table_of(page.read_text(encoding="utf-8"), "ROI homologous pairs")
+        pairs = re.findall(r"<tr><td>([^<]+)</td><td>([^<]+)</td>", table)
+        assert pairs, page.name
+        assert all(a == b for a, b in pairs), (page.name, pairs)
+
+
 def test_the_coherence_column_is_named_for_the_statistic(pages):
     """It is a wavelet coherence and the index page already calls it WTC; "coherence" left a
     reader guessing which of the page's two coherences a column held."""

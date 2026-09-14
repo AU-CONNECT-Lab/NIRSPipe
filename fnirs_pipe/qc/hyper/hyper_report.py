@@ -555,7 +555,7 @@ def _slice_pair(df, pair: "tuple[str, str] | None"):
 
 
 def _number_table(bands: dict, isc: "dict | None", axis: list[str], kind: str,
-                  chroma: tuple) -> dict:
+                  chroma: tuple, diagonal_only: bool = False) -> dict:
     """Every number behind one scope's panels, one row per pairing.
 
     ::
@@ -586,6 +586,11 @@ def _number_table(bands: dict, isc: "dict | None", axis: list[str], kind: str,
     coherence on the diagonal and the ISC everywhere, which is what those two actually
     computed. ``isc`` is the matrices for this scope at this table's own level, channel or
     ROI, and None where the scope produced none.
+
+    ``diagonal_only`` drops the crossed pairings, for the table whose subject is the
+    homologous mean alone. The correlation matrix is a full ROI x ROI whatever the
+    coherence beside it covers, so without this that table grew a row per crossed region
+    carrying no coherence and repeating the correlation the crossed table above it prints.
     """
     cells: dict = {}
     fracs: set = set()
@@ -626,9 +631,11 @@ def _number_table(bands: dict, isc: "dict | None", axis: list[str], kind: str,
     # the first pairing happened to fill them
     order = ([f"{_CHROMA_LABEL[c]} WTC" for c in chroma]
              + [f"{_CHROMA_LABEL[c]} ISC" for c in (chroma if isc else ())])
-    used = {col for pair in cells.values() for col in pair}
     rows = [{"a": a, "b": b, "cells": cells[(a, b)]}
-            for a in axis for b in axis if (a, b) in cells]
+            for a in axis for b in axis
+            if (a, b) in cells and not (diagonal_only and a != b)]
+    # off the rows that survived, so a column only the dropped pairings filled goes with them
+    used = {col for row in rows for col in row["cells"]}
     lo, hi = (min(fracs), max(fracs)) if fracs else (None, None)
     valid = "" if lo is None else (
         f"{100 * lo:.0f}% in COI" if lo == hi
@@ -1331,7 +1338,8 @@ def build_hyper_post_report(
                 bands = {c: (band_frames.get(c) or {}) for c in chroma}
                 table = _number_table(
                     {c: _slice_pair(bands[c].get(key), pair) for c in chroma},
-                    (values.get(pair) or {}).get(isc_label) or {}, axis, kind, chroma)
+                    (values.get(pair) or {}).get(isc_label) or {}, axis, kind, chroma,
+                    diagonal_only=key == "roihom")
                 if table:
                     per_scope.append((heading, table))
             merged = _merge_scopes(kind, axis, per_scope)

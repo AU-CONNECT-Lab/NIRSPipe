@@ -87,25 +87,31 @@ def _run(members, where, **kwargs):
 
 
 def _coherence_cells(page, scope="Whole run"):
-    """``{(site a, site b): value}`` off one block of a page's numbers table.
+    """``{(site a, site b): value}`` off one scope's columns of a page's channel table.
 
-    The table is one grid with a banner row per scope, so the block is cut at the next
-    banner: a page carrying conditions as well would otherwise answer with the last one.
+    The table carries every scope side by side, a group of columns each, so a cell is found
+    by counting: two label columns, then the scope's group, then the column inside it.
     """
     html = page.read_text(encoding="utf-8", errors="replace")
-    i = html.find(f"{scope}: channel pairs (")
+    i = html.find('class="qm-sub">Channel pairs (')
     if i < 0:
         return {}
-    heads = [re.sub(r"<[^>]+>", "", h).strip()
-             for h in re.findall(r"<th[^>]*>(.*?)</th>",
-                                 html[html.rfind("<table", 0, i):i], re.S)]
-    if "HbO WTC" not in heads:
+    table = html[i:html.find("</table>", i)]
+    head = table[:table.find("</thead>")]
+    # a th spanning anything is a label or a scope banner; the plain ones are the columns.
+    # The lookahead is what keeps `<thead>` from matching as a th with attributes
+    heads = re.findall(r"<th(?![a-z])([^>]*)>(.*?)</th>", head, re.S)
+    scopes = [re.sub(r"<[^>]+>.*", "", h, flags=re.S).strip()
+              for attrs, h in heads if "colspan" in attrs]
+    columns = [re.sub(r"<[^>]+>", "", c).strip()
+               for attrs, c in heads if "span" not in attrs]
+    width = len(columns) // len(scopes) if scopes else 0
+    if scope not in scopes or "HbO WTC" not in columns[:width]:
         return {}
-    column = heads.index("HbO WTC")
-    stop = html.find('class="ch-group"', i)
-    block = html[i: stop if stop > 0 else html.find("</table>", i)]
+    column = 2 + scopes.index(scope) * width + columns.index("HbO WTC")
+
     out = {}
-    for row in re.findall(r"<tr>(.*?)</tr>", block, re.S):
+    for row in re.findall(r"<tr>(.*?)</tr>", table, re.S):
         cells = [re.sub(r"<[^>]+>", "", c).strip()
                  for c in re.findall(r"<td[^>]*>(.*?)</td>", row, re.S)]
         if len(cells) > column and re.fullmatch(r"S\d+_D\d+", cells[0] or ""):
