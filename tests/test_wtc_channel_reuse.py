@@ -162,3 +162,63 @@ def test_the_channel_cache_is_not_carried_between_members():
         ref = _pairwise_wtc(sig_a, sig_b, dt, step, FMIN, FMAX, cache=False)
         got = result.pairs[(s1, s2)][(labels[0], labels[0])]
         assert np.array_equal(got["wtc"], ref[0]), f"{s1}-{s2} coherence differs"
+
+
+# ---- the cache carried between calls ----
+
+def test_a_cache_carried_between_calls_changes_no_value():
+    """`cache1` reuses the first side's transforms across calls; the numbers must not move.
+
+    The pseudo-dyad null calls this once per iteration with the first subject unchanged, so
+    the second call is the one that reads from the cache rather than filling it.
+    """
+    labels = ["S1_D1", "S1_D2", "S2_D1"]
+    sigs1 = _signals(len(labels), seed=3)
+    n = len(sigs1[0])
+    raws = {"sub-01": _raw(n), "sub-02": _raw(n)}
+    cache = {}
+
+    for call, seed2 in enumerate((11, 23)):
+        signals = {"sub-01": dict(zip(labels, sigs1)),
+                   "sub-02": dict(zip(labels, _signals(len(labels), seed=seed2)))}
+        cached = _wtc_over_pairs(raws, signals, FMIN, FMAX, axis=labels, cache1=cache)
+        plain = _wtc_over_pairs(raws, signals, FMIN, FMAX, axis=labels)
+        for label in labels:
+            assert np.array_equal(cached.pairs[("sub-01", "sub-02")][label]["wtc"],
+                                  plain.pairs[("sub-01", "sub-02")][label]["wtc"]), \
+                f"call {call} label {label} differs"
+    assert set(cache) == {("sub-01", label) for label in labels}
+
+
+def test_the_carried_cache_is_keyed_by_member():
+    """Same guard as the within-call cache: two members share label names."""
+    labels = ["S1_D1"]
+    a, b, c = _signals(3, seed=5)
+    n = len(a)
+    raws = {"sub-01": _raw(n), "sub-02": _raw(n), "sub-03": _raw(n)}
+    signals = {"sub-01": {labels[0]: a}, "sub-02": {labels[0]: b}, "sub-03": {labels[0]: c}}
+
+    result = _wtc_over_pairs(raws, signals, FMIN, FMAX, axis=labels, cache1={})
+
+    dt, step = 1 / SFREQ, int(round(SFREQ))
+    for (s1, s2), sig_a, sig_b in [(("sub-01", "sub-02"), a, b),
+                                   (("sub-01", "sub-03"), a, c),
+                                   (("sub-02", "sub-03"), b, c)]:
+        ref = _pairwise_wtc(sig_a, sig_b, dt, step, FMIN, FMAX, cache=False)
+        got = result.pairs[(s1, s2)][labels[0]]
+        assert np.array_equal(got["wtc"], ref[0]), f"{s1}-{s2} coherence differs"
+
+
+def test_a_cached_transform_from_another_grid_is_refused():
+    """A stale entry misaligns the cross spectrum without changing its shape, so it raises."""
+    labels = ["S1_D1"]
+    short, long_ = _signals(1, duration_s=200.0)[0], _signals(1, duration_s=300.0)[0]
+    cache = {}
+    raws = {"sub-01": _raw(len(short)), "sub-02": _raw(len(short))}
+    _wtc_over_pairs(raws, {"sub-01": {labels[0]: short}, "sub-02": {labels[0]: short}},
+                    FMIN, FMAX, axis=labels, cache1=cache)
+
+    raws = {"sub-01": _raw(len(long_)), "sub-02": _raw(len(long_))}
+    with pytest.raises(ValueError, match="different grid"):
+        _wtc_over_pairs(raws, {"sub-01": {labels[0]: long_}, "sub-02": {labels[0]: long_}},
+                        FMIN, FMAX, axis=labels, cache1=cache)

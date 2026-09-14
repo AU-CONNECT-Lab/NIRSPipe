@@ -477,6 +477,16 @@ def _pairwise_wtc(
                       signif if significance else None)
 
 
+def _check_cached_grid(cache1: "dict[tuple[str, str], _ChannelWavelet]", subject: str,
+                       grid: _WaveletGrid) -> None:
+    """Raise if a carried transform was built on a different scale grid or signal length."""
+    want = (grid.sj.size, grid.scales.shape[1])
+    for (sub, label), prep in cache1.items():
+        if sub == subject and prep.W.shape != want:
+            raise ValueError(f"cached transform for {sub} {label} was built on a different "
+                             f"grid: {prep.W.shape} against {want}")
+
+
 def _wtc_over_pairs(
     raws: dict[str, mne.io.Raw],
     signals: dict[str, dict[str, np.ndarray]],
@@ -488,6 +498,7 @@ def _wtc_over_pairs(
     cross: bool = False,
     limit_scales: bool = True,
     axis: "list[str] | None" = None,
+    cache1: "dict[tuple[str, str], _ChannelWavelet] | None" = None,
 ) -> WTCResult:
     """Run pairwise Morlet WTC over precomputed per-subject {label: signal} maps.
 
@@ -520,6 +531,13 @@ def _wtc_over_pairs(
     Each channel is transformed once and reused across its pairings
     (:func:`_prepare_channel`), which is where the time goes when ``cross`` squares the pair
     count. The significance path stays on :func:`_pairwise_wtc`, whose cost is the surrogates.
+
+    ``cache1`` extends that reuse across *calls*, for a caller that runs this many times over
+    an unchanged first side: pass a dict and the first subject's transforms are read from it
+    and written back to it, keyed ``(subject, label)``. :func:`compute_wtc_pseudo` is the one
+    caller, and it is where the saving is, since it scrambles only the second side. Left at
+    None the first side is prepared once per label and dropped, which is what a single pass
+    needs and what keeps a crossed run from holding a second montage of transforms.
 
     ``seed`` makes those levels reproducible. It seeds pycwt's Monte Carlo only;
     :func:`compute_wtc_pseudo` takes the same number for its own surrogate generator, so one
@@ -566,10 +584,18 @@ def _wtc_over_pairs(
             pair_data: dict[str | tuple[str, str], dict | None] = {}
             n_blank = 0
             # crossing revisits every label of side 2 once per label of side 1, and never
-            # revisits side 1, so only side 2 is worth holding on to
+            # revisits side 1, so within one call only side 2 is worth holding on to.
+            # Across calls it is the other way round, which is what `cache1` is for
             cache2: dict[str, _ChannelWavelet] = {}
             prep1_label: str | None = None
             prep1: _ChannelWavelet | None = None
+            if cache1 is not None and grid is not None:
+                # checked here rather than at the lookup: a stale entry is the caller's
+                # mistake and applies to every pairing, where the loop's own `except` is for
+                # one pair's data. _prepare_channel's grid checks cannot run on a reused
+                # transform, and a stale one misaligns the cross spectrum without changing
+                # its shape
+                _check_cached_grid(cache1, sub1, grid)
             for label1, label2 in label_pairs:
                 key = (label1, label2) if cross else label1
                 sig1, sig2 = sig_map1.get(label1), sig_map2.get(label2)
@@ -587,9 +613,15 @@ def _wtc_over_pairs(
                             cache=seed is None, mc_count=mc_count,
                             limit_scales=limit_scales)
                     else:
-                        if label1 != prep1_label:
-                            prep1 = _prepare_channel(sig1, dt, grid)
-                            prep1_label = label1
+                        if cache1 is None:
+                            if label1 != prep1_label:
+                                prep1 = _prepare_channel(sig1, dt, grid)
+                                prep1_label = label1
+                        else:
+                            prep1 = cache1.get((sub1, label1))
+                            if prep1 is None:
+                                prep1 = _prepare_channel(sig1, dt, grid)
+                                cache1[(sub1, label1)] = prep1
                         prep2 = cache2.get(label2)
                         if prep2 is None:
                             prep2 = _prepare_channel(sig2, dt, grid)
@@ -874,6 +906,12 @@ def compute_wtc_pseudo(
     frames: list[pd.DataFrame] = []
     cond_frames: list[pd.DataFrame] = []
     hists: dict[tuple, np.ndarray] = {}
+    # the unscrambled side is the same signal in every iteration, so its transforms are
+    # computed once and reused. Roughly a third of the run: two thirds of an iteration is
+    # _prepare_channel and half of those prepares were this side's. Costs one montage of
+    # transforms resident (~70 MB per channel on an hour-long recording), which does not
+    # grow with n_iter
+    cache1: dict[tuple[str, str], _ChannelWavelet] = {}
     for i in range(n_iter):
         signals = dict(true_signals)
         signals[scrambled_id] = {
@@ -882,7 +920,7 @@ def compute_wtc_pseudo(
         }
         result = _wtc_over_pairs(
             raws, signals, fmin, fmax, significance=False, seed=None,
-            cross=cross, limit_scales=limit_scales,
+            cross=cross, limit_scales=limit_scales, cache1=cache1,
             # the same axis the real table is built on, without which the null cannot be
             # subtracted from it row by row
             axis=long_axis_over(raws.values(), ch_type, sep_bands))
