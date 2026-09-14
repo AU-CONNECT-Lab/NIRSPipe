@@ -27,8 +27,10 @@ _DIRECT = ("od_conversion", "beer_lambert", "resample", "hyper_isc", "hyper_cohe
 
 # A dyad's coherence is written once per grouping (channels, ROI means, per condition) and
 # once more for the null; they are one method sentence, and the band is the same for all.
-_WTC_STEPS = ("hyper_wtc", "hyper_wtc_roichan", "hyper_wtc_bycondition",
-              "hyper_wtc_bycondition_roichan", "hyper_wtc_pseudo")
+_WTC_STEPS = ("hyper_wtc", "hyper_wtc_roichan", "hyper_wtc_roihom",
+              "hyper_wtc_bycondition", "hyper_wtc_bycondition_roichan",
+              "hyper_wtc_bycondition_roihom", "hyper_wtc_pseudo",
+              "hyper_wtc_roihom_pseudo", "hyper_wtc_bycondition_roihom_pseudo")
 
 
 def boilerplate_key(step: str | None, params: dict[str, Any], mode: str | None = None) -> str | None:
@@ -194,13 +196,17 @@ STEP_SUMMARY = {
     "group_sqm_raw_channels": "The same pooling, kept per channel.",
     "hyper_wtc": "Wavelet coherence between a pair, averaged over a band and one value per channel.",
     "hyper_wtc_pseudo": "The same average against a phase-scrambled partner: the null.",
-    "hyper_wtc_roichan": "Channel-level coherences averaged within each ROI.",
+    "hyper_wtc_roichan": "Channel-level coherences averaged within each ROI, every pairing inside it.",
+    "hyper_wtc_roihom": "The same, over an ROI's homologous channel pairs alone: the ROI number to report.",
+    "hyper_wtc_roihom_pseudo": "The null for that ROI mean, its iterations grouped into regions before they were summarised.",
     "hyper_isc": "Correlation of each channel of one brain with each channel of the other.",
     "hyper_isc_roichan": "Channel-level correlations averaged within each ROI.",
     "hyper_isc_pairs": "The same correlations as one row per channel pair.",
     "group_hyper_wtc": "Every dyad's channel-level coherence, merged into one table.",
     "group_hyper_wtc_pseudo": "The same merge, over the phase-scrambled null.",
     "group_hyper_wtc_roichan": "The same merge, over ROI means of channel coherences.",
+    "group_hyper_wtc_roihom": "The same merge, over homologous ROI means.",
+    "group_hyper_wtc_roihom_pseudo": "The same merge, over the homologous ROI null.",
 }
 
 

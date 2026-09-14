@@ -714,8 +714,9 @@ def _build_parser() -> argparse.ArgumentParser:
                      help="Also rank each correlation against N phase-scrambled surrogates "
                           "of the second member, which is the null a correlation between "
                           "two recordings needs: scrambling preserves each signal's own "
-                          "spectrum and so its autocorrelation. Adds null_mean, null_sd, "
-                          "null_p95 and percentile to hyper-iscpairs.tsv. Off by default; "
+                          "spectrum and so its autocorrelation. Adds null_abs_mean, "
+                          "null_abs_sd, null_abs_p95 and percentile to hyper-iscpairs.tsv, "
+                          "all of them magnitudes, since a correlation is two-sided. Off by default; "
                           "it costs N extra correlations per chromophore per window.")
     run.add_argument("--check-only", action="store_true",
                      help="Load and align each dyad, print what the metrics would be "

@@ -157,13 +157,13 @@ def test_the_null_columns_rank_the_magnitude_not_the_sign(dyad):
     raws["10032"]._data[picks[0]] = -1e-6 * shared
 
     _, names, frame, level = compute_isc_pairs(raws, ids, "hbo", whiten=0, n_null=20, seed=1)
-    assert {"null_mean", "null_sd", "null_p95", "percentile"} <= set(frame.columns)
+    assert {"null_abs_mean", "null_abs_sd", "null_abs_p95", "percentile"} <= set(frame.columns)
 
     label = names[0]
     cell = frame[(frame["label"] == label) & (frame["label2"] == label)].iloc[0]
     assert cell["r"] < -0.9
     assert cell["percentile"] == 100.0
-    assert (frame["null_mean"] >= 0).all()
+    assert (frame["null_abs_mean"] >= 0).all()
 
 
 def test_a_rejected_channel_is_blank_in_the_table_and_is_not_ranked(dyad):
@@ -249,7 +249,7 @@ def test_the_null_is_searched_the_same_way_as_the_value(dyad):
     assert "lag_s" in lagged.columns
     assert lagged["lag_s"].abs().max() <= 2.0 + 1e-9
     # both sides rose, so the ranks stay comparable rather than every cell becoming extreme
-    assert lagged["null_mean"].mean() > plain["null_mean"].mean()
+    assert lagged["null_abs_mean"].mean() > plain["null_abs_mean"].mean()
     assert lagged["percentile"].mean() == pytest.approx(plain["percentile"].mean(), abs=25)
 
 
@@ -295,7 +295,7 @@ def test_the_null_level_comes_back_as_a_matrix_shaped_like_the_correlations(dyad
     assert level.shape == mat.shape == (len(names), len(names))
     index = {n: i for i, n in enumerate(names)}
     row = frame.iloc[5]
-    assert level[index[row["label"]], index[row["label2"]]] == pytest.approx(row["null_p95"])
+    assert level[index[row["label"]], index[row["label2"]]] == pytest.approx(row["null_abs_p95"])
 
 
 def test_no_null_means_no_level(dyad):

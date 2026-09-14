@@ -1917,16 +1917,23 @@ def _add_isc_null_columns(
 
     That percentile is per cell and is what a chord on the connectogram is drawn against, so
     it leaves as a matrix rather than only as a column.
+
+    **Every null column describes the magnitude**, hence ``null_abs_``: a correlation is
+    two-sided, so a surrogate that lands at -0.4 is as far from no coupling as one at +0.4,
+    and the rank ``percentile`` reports is |r| among |draws|. The ``r`` column beside them is
+    signed. Naming these ``null_mean`` next to a signed ``r`` invited reading one against the
+    other, which compares a magnitude with a value that can be negative and makes a table look
+    self-contradictory.
     """
     absolute = np.abs(draws)
     # a blanked channel makes a cell all-NaN, which every nan-aware reduction warns about and
     # then handles correctly; the blank mask below is what actually decides those cells
     with warnings.catch_warnings(), np.errstate(invalid="ignore"):
         warnings.simplefilter("ignore", RuntimeWarning)
-        null_mean = np.nanmean(absolute, axis=0)
-        null_sd   = np.nanstd(absolute, axis=0)
-        null_p95  = np.nanpercentile(absolute, 95, axis=0)
-        beaten    = (absolute < np.abs(isc_mat)[None, :, :]).mean(axis=0) * 100
+        null_abs_mean = np.nanmean(absolute, axis=0)
+        null_abs_sd   = np.nanstd(absolute, axis=0)
+        null_abs_p95  = np.nanpercentile(absolute, 95, axis=0)
+        beaten        = (absolute < np.abs(isc_mat)[None, :, :]).mean(axis=0) * 100
     # a cell whose draws are all NaN was never ranked against anything, and a count of zero
     # there would read as a real value that lost to every surrogate
     blank = ~np.isfinite(absolute).any(axis=0) | ~np.isfinite(isc_mat)
@@ -1934,11 +1941,11 @@ def _add_isc_null_columns(
 
     index = {name: i for i, name in enumerate(ch_names)}
     ij = (frame["label"].map(index).to_numpy(), frame["label2"].map(index).to_numpy())
-    frame["null_mean"]  = null_mean[ij]
-    frame["null_sd"]    = null_sd[ij]
-    frame["null_p95"]   = null_p95[ij]
-    frame["percentile"] = beaten[ij]
-    return null_p95
+    frame["null_abs_mean"] = null_abs_mean[ij]
+    frame["null_abs_sd"]   = null_abs_sd[ij]
+    frame["null_abs_p95"]  = null_abs_p95[ij]
+    frame["percentile"]    = beaten[ij]
+    return null_abs_p95
 
 
 def _isc_matrix(

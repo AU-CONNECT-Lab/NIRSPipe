@@ -7,6 +7,9 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- **The ROI coherence is written over an ROI's homologous channel pairs too**, as `hyper-wtc-roihom.tsv` and one per condition, beside the crossed ROI matrix. This is the number to report: it is the same whether or not the run crossed, and it is what the literature averages
+- **That ROI mean gets a null**, `hyper-wtc-roihom-pseudo.tsv`, at no extra cost: the pseudo-dyad iterations are grouped into regions before they are summarised, so the spread is the ROI mean's own rather than a bracket derived from its channels'
+- **The dyad report's numbers table gains a homologous ROI block**, beside the channel and crossed-ROI ones
 - **`--isc-whiten` removes each channel's autocorrelation before the correlation**, so r sits on the scale its sample count implies. A whitened matrix does not compare with an unwhitened one. Off by default
 - **`--isc-max-lag` searches a few seconds either way and keeps the strongest correlation**, reporting the winning shift per pairing. Off by default
 - **`--isc-pseudo N` ranks each correlation against phase-scrambled surrogates.** Off by default
@@ -14,6 +17,7 @@ All notable changes to this project will be documented in this file.
 - **The pseudo-dyad null reports its spread**, not only its mean: `null_sd`, `null_p95`, `n_iter`, and `percentile` where the real table sits beside it
 
 ### Fixed
+- **The ROI coherence on the diagonal meant two different things depending on `--wtc-channel-cross`.** Crossed, a `(roi, roi)` cell averaged every pairing inside the region; uncrossed, only the homologous ones. The crossed table is unchanged and is still the crossed view; the reported number moved to the new table above
 - **On a crossed run the pseudo-dyad null's `percentile` ranked the wrong cell.** A table already written can be re-ranked rather than recomputed
 - **The dyad report claimed the correlations were run on an unfiltered stage even when they were not.** The note fired on every run, whatever `--desc` pointed at, so the one case it exists to catch was indistinguishable from the rest
 - **Arrows and other non-ASCII characters in the log came out as mojibake on Windows**
@@ -27,6 +31,7 @@ All notable changes to this project will be documented in this file.
 - **Entity flags are spelled the same on every command**: `--participant-label`, `--session-label`, `--task-label`, `--run-label`, `--group-id`. `fnirs-qc prep-raw` and `fnirs-rate raw`/`hyper` took theirs as positional arguments, `fnirs-prep` spelled them `--ses`/`--task`/`--run` and `fnirs-recon` `--subject`/`--task`/`--session`. **Existing command lines have to be updated.** A label may now be given with its `sub-`/`ses-`/`task-` prefix or without
 - **`fnirs-qc prep-raw` takes more than one subject**, and one subject's failure no longer stops the rest
 - **`--version` works on every command**
+- **The null tables no longer call their centre `coherence`.** It is `null_mean` in the pseudo-dyad tables and `null_abs_mean` / `null_abs_sd` / `null_abs_p95` in the correlation's, which says what it is: a magnitude, since a correlation is two-sided. Reading the old column against a signed `r`, or against the null's own `null_p95`, compared a table with itself
 
 ## [0.39.0] - 2026-09-13
 

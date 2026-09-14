@@ -469,7 +469,8 @@ def run_hyper_post(
         # transform is computed either way, and this adds no second one.
         for label, tstart, tstop in cond_windows:
             out["cond_wtc"].append(None)
-            out["cond_bands"].append({"chan": None, "roichan": None})
+            out["cond_bands"].append({"chan": None, "roichan": None,
+                                      "roihom": None})
             cond_chan = cond_wtc = None
             with guard(f"Condition {label}: WTC ({ch_type})", errors, scope):
                 if cond_pad_s is None:
@@ -494,6 +495,7 @@ def run_hyper_post(
                 out["cond_roi"].append(_tag(cond_roi, ch_type))
 
             cond_hom = _roi_hom_band(cond_chan, ch_type, f"condition {label}")
+            out["cond_bands"][-1]["roihom"] = cond_hom
             if cond_hom is not None and not cond_hom.empty:
                 cond_hom = cond_hom.copy()
                 cond_hom.insert(0, "condition", label)

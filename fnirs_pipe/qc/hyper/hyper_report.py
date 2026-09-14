@@ -1254,6 +1254,9 @@ def build_hyper_post_report(
             for kind, key, axis, values in (
                 ("channel", "chan", chan_axis, isc_values),
                 ("ROI", "roichan", roi_labels, isc_roi_values),
+                # the homologous ROI mean, which is the reported number and the only ROI
+                # value the null can rank; the row above is every pairing in the region
+                ("ROI homologous", "roihom", roi_labels, isc_roi_values),
             ):
                 table = _number_table(
                     {c: _slice_pair(bands[c].get(key), pair) for c in chroma},
@@ -1364,7 +1367,8 @@ def build_hyper_post_report(
             return {c: (passes[c]["cond_bands"][i]
                         if i < len(passes[c]["cond_bands"]) else {}) for c in chroma}
 
-        run_bands = {c: {"chan": passes[c]["chan"], "roichan": passes[c]["roichan"]}
+        run_bands = {c: {"chan": passes[c]["chan"], "roichan": passes[c]["roichan"],
+                         "roihom": passes[c].get("roihom")}
                      for c in chroma}
 
         for i, (label, tstart, tstop) in enumerate(cond_windows):

@@ -345,12 +345,17 @@ def _banners(page: Path) -> list[str]:
     return re.findall(r'class="ch-group"\s*>(.*?)</td>', html, re.S)
 
 
+# channel, ROI over every pairing in the region, ROI over its homologous pairs alone
+LEVELS_PER_SCOPE = 3
+
+
 def test_the_run_page_prints_every_condition_under_the_whole_run(pages):
     """A block design is read by comparing conditions, and no condition page can show that."""
     run = next(p for p in pages if not _window_of(p))
     scopes = [b.split(":")[0] for b in _banners(run)]
-    assert scopes[:2] == ["Whole run", "Whole run"]
-    assert [s for s in scopes if s != "Whole run"] == [c for c in CONDITIONS for _ in (0, 1)]
+    assert scopes[:LEVELS_PER_SCOPE] == ["Whole run"] * LEVELS_PER_SCOPE
+    assert ([s for s in scopes if s != "Whole run"]
+            == [c for c in CONDITIONS for _ in range(LEVELS_PER_SCOPE)])
 
 
 def test_a_condition_page_prints_its_own_window_and_no_other(pages):
@@ -359,7 +364,7 @@ def test_a_condition_page_prints_its_own_window_and_no_other(pages):
         label = _window_of(page)
         if not label:
             continue
-        assert [b.split(":")[0] for b in _banners(page)] == [label, label]
+        assert [b.split(":")[0] for b in _banners(page)] == [label] * LEVELS_PER_SCOPE
 
 
 def test_the_conditions_do_not_all_print_the_run_s_numbers(pages):
