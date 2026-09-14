@@ -36,9 +36,16 @@ def _pow2(n):
 
 
 def _at_length(grid, n_fft):
-    """The same grid forced onto another transform length."""
+    """The same grid forced onto another transform length, smoothing included.
+
+    The mother carries the length too, so a grid rebuilt without a fresh one would transform
+    at the length asked for and smooth at the length it picked for itself.
+    """
     from dataclasses import replace
-    return replace(grid, n_fft=n_fft)
+    from fnirs_pipe.pipeline.synchrony import _morlet
+    mother = _morlet()
+    mother.n_fft = n_fft
+    return replace(grid, n_fft=n_fft, mother=mother)
 
 
 # ---- the length itself ----

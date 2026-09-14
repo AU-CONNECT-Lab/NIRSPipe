@@ -227,12 +227,13 @@ def _morlet():
         def __init__(self):
             super().__init__()
             self.name = "Morlet-dj0"
+            # set by _wavelet_grid so the transform and its smoothing share one length; left
+            # None when pycwt drives, where it is read off the scales instead
+            self.n_fft = None
 
         def smooth(self, W, dt, dj, scales):
             n = W.shape[1]
-            # read off the scales rather than rounded up, so the fast path and pycwt's own
-            # Monte Carlo land on one length without either being told which
-            pad = {"n": _fft_length(n, dt, float(np.max(scales)))}
+            pad = {"n": self.n_fft or _fft_length(n, dt, float(np.max(scales)))}
             # time: the wavelet's own Gaussian envelope per scale, applied in Fourier
             k2 = (2 * np.pi * fft.fftfreq(pad["n"])) ** 2
             F = np.exp(-0.5 * (np.asarray(scales)[:, None] / dt) ** 2 * k2)
@@ -354,9 +355,10 @@ def _wavelet_grid(dt: float, n: int, fmin: float, fmax: float,
         s0 = 2 * dt / mother.flambda()
         J = int(np.round(np.log2(n * dt / s0) / WTC_DJ))
     sj = s0 * 2 ** (np.arange(0, J + 1) * WTC_DJ)
+    n_fft = _fft_length(n, dt, float(sj[-1]))
+    mother.n_fft = n_fft
     return _WaveletGrid(mother=mother, s0=s0, J=J, sj=sj,
-                        scales=np.ones([1, n]) * sj[:, None],
-                        n_fft=_fft_length(n, dt, float(sj[-1])))
+                        scales=np.ones([1, n]) * sj[:, None], n_fft=n_fft)
 
 
 def _cwt(sig: np.ndarray, dt: float, grid: _WaveletGrid):

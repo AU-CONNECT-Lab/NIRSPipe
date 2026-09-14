@@ -87,13 +87,18 @@ def test_a_signal_of_another_length_is_refused_rather_than_broadcast():
         _prepare_channel(sig[:-1], 1 / SFREQ, grid)
 
 
-def test_a_grid_the_scales_fell_off_is_refused():
-    """pycwt drops all-NaN scale rows, which would pair two channels on different grids."""
+def test_a_grid_the_scales_fell_off_is_refused(monkeypatch):
+    """A scale whose row comes back all-NaN is dropped, which would pair two channels on
+    different grids. Simulated at the transform, since that is the only thing that drops one."""
+    import fnirs_pipe.pipeline.synchrony as syn
     sig, = _signals(1)
     grid = _wavelet_grid(1 / SFREQ, len(sig), FMIN, FMAX, limit_scales=True)
-    grid.sj = grid.sj[:-1]
+    real = syn._cwt
+    monkeypatch.setattr(syn, "_cwt",
+                        lambda s, dt, g: tuple(x[:-1] for x in real(s, dt, g)[:3])
+                                         + (real(s, dt, g)[3],))
     with pytest.raises(ValueError, match="wavelet scales differ"):
-        _prepare_channel(sig, 1 / SFREQ, grid)
+        syn._prepare_channel(sig, 1 / SFREQ, grid)
 
 
 # ---- the loop that uses them ----
