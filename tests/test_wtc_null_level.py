@@ -92,6 +92,48 @@ def test_no_real_table_leaves_the_percentile_column_off_rather_than_empty():
     assert "null_p95" in table.columns
 
 
+# ---- a homologous null against a crossed real table ----
+
+LABELS = ["S1_D1", "S2_D2", "S3_D3"]
+
+
+def _homologous_draw(coherence):
+    return pd.DataFrame({"sub1": "a", "sub2": "b", "label": LABELS,
+                         "coherence": coherence, "n_valid_frac": 1.0})
+
+
+def _crossed_real(diagonal, off_diagonal):
+    """The real table a crossed run writes: label pairs in axis1 x axis2 order."""
+    return pd.DataFrame([
+        {"sub1": "a", "sub2": "b", "label": a, "label2": b,
+         "coherence": diagonal if a == b else off_diagonal, "n_valid_frac": 1.0}
+        for a in LABELS for b in LABELS
+    ])
+
+
+def test_a_homologous_null_ranks_the_crossed_table_s_diagonal():
+    """`--wtc-channel-cross` without `--wtc-pseudo-cross` is the recommended pair, and the
+    null is the null for the pairings it was drawn for. Keying on `label` alone took the
+    row that label came first in, which is its pairing with the *first* channel of the other
+    montage: right for the first label by coincidence and wrong for every other."""
+    null = PseudoNull(draws=[_homologous_draw(v) for v in (0.10, 0.20, 0.30)],
+                      cond_draws=[], keys=KEYS, levels={})
+    table, _ = null.summarise(real=_crossed_real(diagonal=0.9, off_diagonal=0.05))
+
+    assert list(table["label"]) == LABELS
+    assert list(table["percentile"]) == [100.0, 100.0, 100.0]
+
+
+def test_the_off_diagonal_is_not_what_the_homologous_null_is_ranked_against():
+    """The complement of the above: were the crossed rows still being keyed by `label`,
+    a diagonal below the null and an off-diagonal above it would come back as 100."""
+    null = PseudoNull(draws=[_homologous_draw(v) for v in (0.40, 0.50, 0.60)],
+                      cond_draws=[], keys=KEYS, levels={})
+    table, _ = null.summarise(real=_crossed_real(diagonal=0.05, off_diagonal=0.9))
+
+    assert list(table["percentile"]) == [0.0, 0.0, 0.0]
+
+
 # ---- the level is per frequency ----
 
 def test_the_level_is_read_per_frequency_not_over_the_whole_map():

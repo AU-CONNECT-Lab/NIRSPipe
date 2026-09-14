@@ -905,14 +905,24 @@ def _null_percentile(out: pd.DataFrame, keys: "list[str]", draws: dict,
 
     Counting rather than interpolating a stored quantile: at the iteration counts a null is
     affordable at, the two disagree by more than the number is worth.
+
+    A homologous null against a crossed real table ranks the crossed table's diagonal: the
+    rows where ``label`` and ``label2`` agree are the pairings the null was drawn for.
     """
     missing = [k for k in keys if k not in real.columns]
     if missing:
         logger.warning("null percentile skipped: the real table has no %s column(s)",
                        ", ".join(missing))
         return [float("nan")] * len(out)
+    # a crossed table holds one row per label pair, so keying on `label` alone would take
+    # whichever pairing that label came first in rather than its homologous one
+    if "label2" in real.columns and "label2" not in keys:
+        real = real[real["label"] == real["label2"]]
     truth = real.set_index(keys)["coherence"]
-    truth = truth[~truth.index.duplicated()]
+    if truth.index.has_duplicates:
+        logger.warning("null percentile: %d real row(s) share a key, ranking against the "
+                       "first of each", int(truth.index.duplicated().sum()))
+        truth = truth[~truth.index.duplicated()]
     values = []
     for key in _row_keys(out, keys):
         real_value = truth.get(key, float("nan"))
