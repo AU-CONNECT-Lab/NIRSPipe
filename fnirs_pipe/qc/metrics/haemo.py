@@ -297,7 +297,7 @@ def _drift_metrics(raw_haemo: mne.io.Raw, order: "int | None" = None) -> dict[st
     Notes
     -----
     Non-standard homegrown metric. A polynomial is used instead of a 0.01 Hz low-pass,
-    whose FIR length would exceed most recordings. The order rule is AFNI 3dDeconvolve's
+    whose FIR length would exceed most recordings. The order rule is
     ``1 + floor(run_time / 150)``. Peak-to-peak grows with duration whatever the order, so
     the number is not comparable between recordings of different length.
     """

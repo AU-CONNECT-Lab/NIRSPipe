@@ -1,8 +1,11 @@
 """Write BIDS Derivatives output structure."""
 
 import json
+import os
 import re
+import time
 from datetime import datetime, timezone
+from uuid import uuid4
 from pathlib import Path
 from typing import Any
 
@@ -249,8 +252,23 @@ def find_preproc_snirf(
                           task=task, session=session, run=run)
 
 
+# Windows refuses to rename over a file anything else has open, so a reader that happens to be
+# mid-read costs a retry rather than the run.
+_REPLACE_TRIES = 5
+_REPLACE_WAIT_S = 0.05
+
+
 def write_dataset_description(output_dir: Path) -> None:
-    """Write dataset_description.json for the derivatives dataset."""
+    """Write dataset_description.json for the derivatives dataset.
+
+    Every run writes this, so two started against one output directory write the same path.
+    The content is fixed: a run that finds it already correct leaves it alone, which is what
+    keeps concurrent runs off each other rather than the rename. Where it does have to be
+    written it goes to a temporary first, since the plain write truncates and a reader in
+    between sees an empty file and reports the tree as bad BIDS. A reader can still be told
+    the path is busy at the instant it flips, which Windows offers no way around, but that is
+    a retry rather than a tree that looks invalid.
+    """
     desc = {
         "Name": "fnirs-pipe output",
         "BIDSVersion": "1.8.0",
@@ -259,5 +277,22 @@ def write_dataset_description(output_dir: Path) -> None:
     }
     output_dir.mkdir(parents=True, exist_ok=True)
     path = output_dir / "dataset_description.json"
-    path.write_text(json.dumps(desc, indent=2))
+    text = json.dumps(desc, indent=2)
+    try:
+        if path.read_text() == text:
+            return
+    except OSError:
+        pass
+
+    tmp = path.with_name(f".{path.name}.{os.getpid()}.{uuid4().hex[:8]}.tmp")
+    tmp.write_text(text)
+    for attempt in range(_REPLACE_TRIES):
+        try:
+            os.replace(tmp, path)
+            return
+        except PermissionError:
+            if attempt == _REPLACE_TRIES - 1:
+                tmp.unlink(missing_ok=True)
+                raise
+            time.sleep(_REPLACE_WAIT_S)
 

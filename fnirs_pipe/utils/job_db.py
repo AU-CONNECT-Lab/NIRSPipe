@@ -15,6 +15,10 @@ from pathlib import Path
 from typing import Any
 
 
+# How long a merge waits for another one to let go of the database before giving up.
+_LOCK_TIMEOUT_S = 30.0
+
+
 def _write_jsonl(path: Path, record: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as f:
@@ -43,8 +47,12 @@ def log_execution(
     mode: str | None = None,
     dry_run: bool = False,
 ) -> int:
-    """Log pipeline invocation start. Returns execution_id."""
-    execution_id = int(time.time() * 1000)
+    """Log pipeline invocation start. Returns execution_id.
+
+    The id carries the process as well as the millisecond: it is the key every later record
+    joins on, so two runs launched together would otherwise write one execution between them.
+    """
+    execution_id = int(time.time() * 1000) * 100000 + os.getpid() % 100000
     record = {
         "event": "execution_start",
         "execution_id": execution_id,
@@ -343,8 +351,15 @@ def _add_missing_sqm_columns(conn: sqlite3.Connection) -> None:
 
 
 def _get_conn(db_path: Path) -> sqlite3.Connection:
+    """Open the merge database so a second merge waits rather than failing outright.
+
+    Default sqlite locks the whole file for a writer and gives up after five seconds, which
+    is how a concurrent merge ends as "database is locked" partway through.
+    """
     db_path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(db_path)
+    conn = sqlite3.connect(db_path, timeout=_LOCK_TIMEOUT_S)
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute(f"PRAGMA busy_timeout={int(_LOCK_TIMEOUT_S * 1000)}")
     conn.executescript(_SCHEMA)
     _add_missing_sqm_columns(conn)
     return conn
