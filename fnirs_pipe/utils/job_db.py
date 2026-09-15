@@ -347,7 +347,13 @@ def _add_missing_sqm_columns(conn: sqlite3.Connection) -> None:
     for col in _SQM_COLS:
         if col not in have:
             kind = "INTEGER" if col in _SQM_INT_COLS else "REAL"
-            conn.execute(f"ALTER TABLE sqm ADD COLUMN {col} {kind}")
+            try:
+                conn.execute(f"ALTER TABLE sqm ADD COLUMN {col} {kind}")
+            except sqlite3.OperationalError as exc:
+                # another connection added it between the read above and this write; the
+                # column is what was wanted, and whose ALTER made it does not matter
+                if "duplicate column name" not in str(exc).lower():
+                    raise
 
 
 def _get_conn(db_path: Path) -> sqlite3.Connection:
@@ -358,8 +364,16 @@ def _get_conn(db_path: Path) -> sqlite3.Connection:
     """
     db_path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(db_path, timeout=_LOCK_TIMEOUT_S)
-    conn.execute("PRAGMA journal_mode=WAL")
+    # before anything that can block: switching journal mode is not covered by it, but
+    # everything after is, and this used to be set one line too late
     conn.execute(f"PRAGMA busy_timeout={int(_LOCK_TIMEOUT_S * 1000)}")
+    if conn.execute("PRAGMA journal_mode").fetchone()[0].lower() != "wal":
+        try:
+            conn.execute("PRAGMA journal_mode=WAL")
+        except sqlite3.OperationalError:
+            # WAL belongs to the file, not the connection, so losing this race is harmless:
+            # whoever won it set the mode for everyone
+            pass
     conn.executescript(_SCHEMA)
     _add_missing_sqm_columns(conn)
     return conn
