@@ -7,7 +7,7 @@ import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from fnirs_pipe.qc.metrics import CV_PASS, PSP_PASS, SCI_PASS
+from fnirs_pipe.qc.metrics import SCI_PASS
 from fnirs_pipe.utils.logging import get_logger
 
 from fnirs_pipe.qc.figures.common._brain_utils import mni_trans

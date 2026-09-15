@@ -6,48 +6,56 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
-### Changed
-- **Aux channel regression is withheld pending evaluation.** `--aux-regressors` and `--aux-channels` no longer appear in the help, and the GUI's Analysis page no longer offers them. Preprocessing still extracts the aux channels to `desc-aux_timeseries.tsv.gz`, which is unchanged and remains readable on its own
-- **Every QC page now carries the same top bar**, built the same way. The subject index, the dyad index and the two cohort reports had none at all and are now navigable from the top; the dyad post report and the cohort reports carry it as navigation only, a verdict belonging on the page that reports one run or one dyad. The raw viewer gains the Provenance and Methods links it lacked, and both dyad pages gain the link back to the dyad index
-- **Spline motion correction is withheld while it is decided whether to build it.** It never had a backend, so choosing it passed validation and then stopped the run partway through, after the conversion and marking steps had already been paid for. Withheld rather than dropped: the name is still reserved for the method. The two methods that work are unchanged
-- **The GUI shows a run's output while it runs.** The Analysis page used to block on the command and print its last 30 lines at the end, so a run over a real dataset left the page frozen with nothing to read for as long as it took. It now streams, keeps a scrollback rather than a tail, and offers a Stop button; the Run button is held down for the duration, which is what stops a second click from leaving the first run going with nothing watching it
+## [0.41.0] - 2026-09-14
 
 ### Added
-- **The dyad index says how each window stood against its own null**, as the count of channel pairs that beat their surrogate draws. The coherence column alone was unreadable: its floor moves with the window length, so the values never compared down the column the page put them in. The index also links the raw dyad report, the tables each task wrote, and the command that last rebuilt it
-- **The GUI's Analysis page can set what rejects a channel.** The share of coupled windows, the scope it is counted over and the window length were CLI-only, so a run launched from the page screened at the defaults whatever the study needed. Trial chunking, GVTD censoring and the per-condition QC pages are on the page too
-- **The dyad report draws the ROI × ROI correlations**, HbO beside HbR on one colour scale. The numbers were already in `hyper-isc-roichan-*.tsv` and in the report's table, but nothing pictured them
-- **The ROI coherence is written over an ROI's homologous channel pairs too**, as `hyper-wtc-roihom.tsv` and one per condition, beside the crossed ROI matrix. This is the number to report: it is the same whether or not the run crossed, and it is what the literature averages
-- **That ROI mean gets a null**, `hyper-wtc-roihom-pseudo.tsv`, at no extra cost: the pseudo-dyad iterations are grouped into regions before they are summarised, so the spread is the ROI mean's own rather than a bracket derived from its channels'
+- **The dyad index says how each window stood against its own null**, as the count of channel pairs that beat their surrogate. Coherence alone could not be read down the column: its floor moves with the window length
+- **The GUI's Analysis page can set what rejects a channel**, plus trial chunking, GVTD censoring and the per-condition QC pages. All were CLI-only, so a run launched from the page used the defaults whatever the study needed
+- **The dyad report draws the ROI × ROI correlations**, HbO beside HbR on one colour scale
 - **The dyad report's numbers table gains a homologous ROI block**, beside the channel and crossed-ROI ones
+
+### Changed
+- **Spline motion correction is withheld while it is decided whether to build it.** It never had a backend, so choosing it stopped the run partway through instead of at the start. The two methods that work are unchanged
+- **The GUI shows a run's output while it runs**, with a Stop button, instead of blocking and printing the tail at the end. One run at a time
+- **Aux channel regression is withheld pending evaluation.** Preprocessing still writes the aux channels, unchanged and readable on their own
+- **Every QC page now carries the same top bar.** Four pages had none; the raw viewer gains the Provenance and Methods links it lacked, and both dyad pages link back to the dyad index
+- **The dyad report's numbers are one table per kind of pairing**, each condition beside the whole run. A crossed dyad used to put a pairing's whole-run value hundreds of rows from its condition value
+- **The cone-of-influence share is stated once per condition** instead of as a column repeating one number down every row
+- **Every transform is about a fifth faster.** Band-mean coherences do not move; a saved map can differ by a few units in the last place, in rows the cone masks off anyway
+
+### Fixed
+- **`fnirs-gui` and `fnirs-rate` refused to start when their default port was taken.** A default port now moves to the first free one and the log says where it landed. A port named with `--port` still stops the run, but with one line rather than a traceback
+- **The `fnirs-rate` viewers reported they were serving when their server had failed to start**, and opened a browser tab at an address nothing was listening on
+- **Several `fnirs-pipe` runs against one output directory could corrupt each other's bookkeeping.** Dyad runs were never affected and could already be run side by side
+
+## [0.40.0] - 2026-09-13
+
+### Added
+- **The ROI coherence is written over an ROI's homologous channel pairs too**, as `hyper-wtc-roihom.tsv`. This is the number to report: it does not depend on whether the run crossed, and it is what the literature averages
+- **That ROI mean gets a null**, `hyper-wtc-roihom-pseudo.tsv`, at no extra cost, with a spread that is the ROI mean's own rather than derived from its channels'
 - **`--isc-whiten` removes each channel's autocorrelation before the correlation**, so r sits on the scale its sample count implies. A whitened matrix does not compare with an unwhitened one. Off by default
 - **`--isc-max-lag` searches a few seconds either way and keeps the strongest correlation**, reporting the winning shift per pairing. Off by default
 - **`--isc-pseudo N` ranks each correlation against phase-scrambled surrogates.** Off by default
-- **Correlations are also written one row per channel pair**, in `hyper-iscpairs.tsv`, carrying the Fisher z, the autoregressive order each channel used, and the null columns when one was drawn
-- **The pseudo-dyad null reports its spread**, not only its mean: `null_sd`, `null_p95`, `n_iter`, and `percentile` where the real table sits beside it
-
-### Fixed
-- **The homologous ROI table listed crossed regions too**, with no coherence in those rows and a correlation copied from the crossed table above it
-- **The ROI coherence on the diagonal meant two different things depending on `--wtc-channel-cross`.** Crossed, a `(roi, roi)` cell averaged every pairing inside the region; uncrossed, only the homologous ones. The crossed table is unchanged and is still the crossed view; the reported number moved to the new table above
-- **On a crossed run the pseudo-dyad null's `percentile` ranked the wrong cell.** A table already written can be re-ranked rather than recomputed
-- **The dyad report claimed the correlations were run on an unfiltered stage even when they were not.** The note fired on every run, whatever `--desc` pointed at, so the one case it exists to catch was indistinguishable from the rest
-- **Arrows and other non-ASCII characters in the log came out as mojibake on Windows**
-- **`fnirs-gui` and `fnirs-rate` refused to start with "address already in use" whenever their default port was taken**, by a viewer left running from an earlier session, by another app on the same port, or by a Windows reserved port range. A default port now moves up to the first free one and the log says where it landed. A port asked for with `--port` still stops the run, since a named port usually has something pointed at it, but it stops with one line rather than a traceback
-- **The `fnirs-rate` viewers reported they were serving even when their server had failed to come up**, and opened a browser tab at an address nothing was listening on
-- **Several `fnirs-pipe` runs against one output directory could corrupt each other's bookkeeping.** `dataset_description.json` was rewritten by every run and a reader could catch it mid-write and call the tree invalid; two runs started in the same millisecond filed their records under one execution; and a second `fnirs-pipe db merge` could stop at "database is locked". Dyad runs were never affected and could already be run side by side
+- **Correlations are also written one row per channel pair**, in `hyper-iscpairs.tsv`
+- **The pseudo-dyad null reports its spread**, not only its mean, and where the real value sits inside it
 
 ### Changed
-- **The dyad report's numbers are one table per kind of pairing, each condition beside the whole run** rather than a block per condition stacked under one another. A crossed dyad printed every channel pairing once per condition, so a pairing's whole-run value sat hundreds of rows from the same pairing's condition value
-- **The cone-of-influence share is stated once per condition instead of as a column.** It depends on the window length and the band and not on the channels, so the column held one number repeated down every row and again for the second chromophore
-- **The coherence's scale smoothing is the width its definition fixes**, where the backend used twice that. Values rise and the gap to the pseudo-dyad null narrows, so neither coherences nor significance from earlier runs carry over; the width is on every WTC sidecar as `wtc_scale_smooth_dj0`
+- **The coherence's scale smoothing is the width its definition fixes**, where the backend used twice that. **Coherences and significance from earlier runs do not carry over**; the width is on every WTC sidecar
 - **The connectogram draws a chord where a pairing beats its own surrogate null**, or the strongest tenth when no null was drawn, marked as a display cut rather than a test. `--isc-threshold` still forces an absolute cut
-- **Phase arrows on the coherence maps are drawn against the pseudo-dyad null when one was computed**, at a level per frequency rather than the flat `--wtc-arrow-min`. The caption names which level was used
-- **Crossed wavelet coherence is about three times faster**, with every coherence, phase and cone value identical to before
-- **The pseudo-dyad null is about a third faster**, reusing the unscrambled member's transforms across iterations instead of recomputing them every time. Every value is identical to before; the cost is about a gigabyte of memory while it runs
-- **Every transform is about a fifth faster**, padded only as far as the widest wavelet reaches rather than out to a power of two. Band-mean coherences do not move; a saved map can differ in its lowest frequency rows, at the edges the cone masks off anyway, by a few units in the last place of the precision it is stored at
-- **Entity flags are spelled the same on every command**: `--participant-label`, `--session-label`, `--task-label`, `--run-label`, `--group-id`. `fnirs-qc prep-raw` and `fnirs-rate raw`/`hyper` took theirs as positional arguments, `fnirs-prep` spelled them `--ses`/`--task`/`--run` and `fnirs-recon` `--subject`/`--task`/`--session`. **Existing command lines have to be updated.** A label may now be given with its `sub-`/`ses-`/`task-` prefix or without
+- **Phase arrows are drawn against the pseudo-dyad null when one was computed**, at a level per frequency rather than a flat threshold. The caption names which was used
+- **Crossed wavelet coherence is about three times faster**, every value identical to before
+- **The pseudo-dyad null is about a third faster**, every value identical to before, at the cost of about a gigabyte of memory while it runs
+- **Entity flags are spelled the same on every command**: `--participant-label`, `--session-label`, `--task-label`, `--run-label`, `--group-id`. **Existing command lines have to be updated.** A label may be given with or without its `sub-`/`ses-`/`task-` prefix
 - **`fnirs-qc prep-raw` takes more than one subject**, and one subject's failure no longer stops the rest
 - **`--version` works on every command**
-- **The null tables no longer call their centre `coherence`.** It is `null_mean` in the pseudo-dyad tables and `null_abs_mean` / `null_abs_sd` / `null_abs_p95` in the correlation's, which says what it is: a magnitude, since a correlation is two-sided. Reading the old column against a signed `r`, or against the null's own `null_p95`, compared a table with itself
+- **The null tables no longer call their centre `coherence`.** It is `null_mean`, and `null_abs_*` for the correlation, which is two-sided. Reading the old column against a signed r compared a table with itself
+
+### Fixed
+- **The homologous ROI table listed crossed regions too**, with no coherence in those rows and a correlation copied from the table above it
+- **The ROI coherence on the diagonal meant two different things depending on `--wtc-channel-cross`.** The crossed table is unchanged; the reported number moved to the new table above
+- **On a crossed run the pseudo-dyad null's `percentile` ranked the wrong cell**
+- **The dyad report claimed the correlations were run on an unfiltered stage even when they were not.** The note fired on every run, so the one case it exists to catch was indistinguishable from the rest
+- **Arrows and other non-ASCII characters in the log came out as mojibake on Windows**
 
 ## [0.39.0] - 2026-09-13
 
