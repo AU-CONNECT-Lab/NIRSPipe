@@ -5,19 +5,22 @@ from __future__ import annotations
 import platform
 
 import dash
+import dash_ag_grid as dag
 import dash_bootstrap_components as dbc
-from dash import dash_table, dcc, html
+from dash import dcc, html
+
+from fnirs_pipe.interface.grid import AUTO_HEIGHT, COL_DEF
 
 dash.register_page(__name__, path="/recon", name="Recon")
 
 _DEFAULT_SHELL = "cmd" if platform.system() == "Windows" else "bash"
 
 _COLS = [
-    {"name": "File",    "id": "file",    "editable": False},
-    {"name": "subject", "id": "subject", "editable": True},
-    {"name": "task",    "id": "task",    "editable": True},
-    {"name": "session", "id": "session", "editable": True},
-    {"name": "run",     "id": "run",     "editable": True},
+    {"headerName": "File",    "field": "file",    "editable": False},
+    {"headerName": "subject", "field": "subject", "editable": True},
+    {"headerName": "task",    "field": "task",    "editable": True},
+    {"headerName": "session", "field": "session", "editable": True},
+    {"headerName": "run",     "field": "run",     "editable": True},
 ]
 
 
@@ -52,14 +55,15 @@ layout = dbc.Container([
                                  value=False), width="auto"),
         ], className="g-2 mb-2 align-items-center"),
         html.Div(id="rc-detect-result", className="mb-2 small"),
-        dash_table.DataTable(
+        dag.AgGrid(
             id="rc-table",
-            columns=_COLS,
-            data=[],
-            editable=True,
-            style_cell={"fontFamily": "monospace", "fontSize": "13px",
-                        "textAlign": "left", "padding": "4px 8px"},
-            style_header={"fontWeight": "bold"},
+            columnDefs=_COLS,
+            rowData=[],
+            className="fp-grid fp-grid-mono",
+            columnSize="responsiveSizeToFit",
+            defaultColDef=COL_DEF,
+            dashGridOptions=AUTO_HEIGHT,
+            style={"height": None},
         ),
         html.Small("subject/task are required; session/run optional. "
                    "subject must be alphanumeric only.",

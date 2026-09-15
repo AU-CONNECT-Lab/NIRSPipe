@@ -18,7 +18,7 @@ def _sanitize_label(text: str) -> str:
 
 @callback(
     Output("rc-detect-result", "children"),
-    Output("rc-table",         "data"),
+    Output("rc-table",         "rowData"),
     Input("rc-detect-btn",     "n_clicks"),
     State("rc-input-dir",      "value"),
     prevent_initial_call=True,
@@ -71,7 +71,7 @@ def _row_command(row: dict, bids_dir: str, overwrite: bool, cont: str) -> str | 
 
 @callback(
     Output("rc-command-preview", "children"),
-    Input("rc-table",         "data"),
+    Input("rc-table",         "virtualRowData"),
     Input("rc-shell-select",  "value"),
     Input("rc-bids-dir",      "value"),
     Input("rc-overwrite",     "value"),
@@ -91,7 +91,7 @@ def preview_commands(rows, shell, bids_dir, overwrite):
 @callback(
     Output("rc-log",     "children"),
     Input("rc-run-btn",  "n_clicks"),
-    State("rc-table",    "data"),
+    State("rc-table",    "virtualRowData"),
     State("rc-bids-dir", "value"),
     State("rc-overwrite","value"),
     prevent_initial_call=True,

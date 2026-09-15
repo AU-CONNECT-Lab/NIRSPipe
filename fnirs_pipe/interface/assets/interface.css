@@ -211,6 +211,11 @@ a:hover { color: var(--fp-accent-dark); }
   --ag-spacing:                 3px;
   --ag-cell-horizontal-padding: 6px;
 }
+.fp-grid-mono .ag-root-wrapper {
+  --ag-font-family:        var(--fp-mono);
+  --ag-font-size:          13px;
+  --ag-header-font-weight: 700;
+}
 .fp-grid-capped    { max-height: 200px; overflow-y: auto; }
 .fp-grid-capped-sm { max-height: 150px; overflow-y: auto; }
 
