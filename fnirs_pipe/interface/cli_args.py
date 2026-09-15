@@ -177,3 +177,54 @@ def missing_prep(operation: str, opts: dict) -> str | None:
     if opts.get("crop_tmin") is None and opts.get("crop_tmax") is None:
         return "Enter tmin or tmax."
     return None
+
+
+# ---- fnirs-qc raw reports ----
+
+# the static counterparts of what the two QC pages show interactively
+_RAW_QC = ("prep-raw", "hyper-raw")
+
+
+def _screening(opts: dict) -> list[str]:
+    args = _num("--sci-threshold", opts.get("sci_threshold"))
+    args += _num("--dpf", opts.get("dpf"))
+    args += _num("--cardiac-l-freq", opts.get("cardiac_l"))
+    args += _num("--cardiac-h-freq", opts.get("cardiac_h"))
+    args += _num("--short-max-dist", opts.get("short_max_dist"))
+    args += _num("--long-min-dist", opts.get("long_min_dist"))
+    args += _num("--long-max-dist", opts.get("long_max_dist"))
+    args += _text("--session-label", opts.get("ses"))
+    args += _text("--task-label", opts.get("task"))
+    return args
+
+
+def build_raw_qc_args(command: str, opts: dict) -> list[str]:
+    args = ["fnirs-qc", command, opts.get("bids_dir"), opts.get("output_dir")]
+
+    if command == "prep-raw":
+        args += _text("--participant-label", opts.get("subject"))
+        args += _screening(opts)
+        args += _num("--window-length", opts.get("window_length"))
+        args += _num("--epoch-tmin", opts.get("epoch_tmin"))
+        args += _num("--epoch-tmax", opts.get("epoch_tmax"))
+        if opts.get("epoch_qc"):
+            args.append("--epoch-qc")
+        return args
+
+    args += _text("--pairs-csv", opts.get("pairs_csv"))
+    args += _text("--group-id", opts.get("group_id"))
+    args += _screening(opts)
+    return args
+
+
+def missing_raw_qc(command: str, opts: dict) -> str | None:
+    if not opts.get("bids_dir") or not opts.get("output_dir"):
+        return "Set the BIDS and output directories."
+    # these three have no defaults anywhere, by design
+    if opts.get("dpf") is None:
+        return "DPF is required."
+    if opts.get("cardiac_l") is None or opts.get("cardiac_h") is None:
+        return "Both ends of the cardiac band are required."
+    if command == "prep-raw":
+        return None if opts.get("subject") else "Load a run first."
+    return None if opts.get("pairs_csv") else "Set the group CSV."

@@ -10,7 +10,7 @@ from dash import dcc, html
 from fnirs_pipe.interface.components import actions, band, card, field, params
 from fnirs_pipe.interface.grid import AUTO_HEIGHT, COL_DEF
 
-dash.register_page(__name__, path="/hyper-align", name="Hyper Align")
+dash.register_page(__name__, path="/hyper-align", name="Hyper Preparation")
 
 _OFFSET_COLS = [
     {"headerName": "Group",        "field": "group_id"},
@@ -22,7 +22,7 @@ _OFFSET_COLS = [
 
 
 layout = dbc.Container([
-    dbc.Row([dbc.Col([html.H3("Hyperscanning Align"), html.Hr()])]),
+    dbc.Row([dbc.Col([html.H3("Hyper Preparation"), html.Hr()])]),
 
     card("Data Source",
         params(
@@ -87,6 +87,11 @@ layout = dbc.Container([
                      "–",
                      dbc.Input(id="ha-cardiac-h", type="number", step=0.1,
                                placeholder="hi (adult ~1.5)")),
+                field("DPF", dbc.Input(id="ha-dpf", type="number", step=0.1,
+                                       placeholder="e.g. 6.0")),
+                field("SCI threshold",
+                      dbc.Input(id="ha-sci-thresh", type="number", value=0.8,
+                                min=0.0, max=1.0, step=0.01)),
                 className="mb-2",
             ),
             html.Div(id="ha-decisions-table",
@@ -96,9 +101,17 @@ layout = dbc.Container([
         ),
 
         card("Export",
-            dbc.Button("Export Aligned SNIRFs", id="ha-export-btn",
-                       color="success"),
+            actions(
+                dbc.Button("Export aligned SNIRFs", id="ha-export-btn", color="success"),
+                dbc.Button("Write QC report", id="ha-report-btn",
+                           color="secondary", outline=True),
+            ),
+            html.Small("The report runs fnirs-qc hyper-raw over the group CSV with the"
+                       " parameters above. Export writes the aligned recordings themselves.",
+                       className="fp-hint d-block mt-1"),
             html.Div(id="ha-export-status", className="mt-2 small"),
+            html.Div(id="ha-report-status", className="mt-2"),
+            html.Div(id="ha-report-preview", className="mt-2"),
         ),
     ]),
 

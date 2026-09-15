@@ -8,6 +8,8 @@ from pathlib import Path
 import dash_bootstrap_components as dbc
 from dash import ALL, Input, Output, State, callback, ctx, html, no_update
 
+from fnirs_pipe.interface.callbacks._cli_run import run_and_report
+from fnirs_pipe.interface.cli_args import build_raw_qc_args, missing_raw_qc
 from fnirs_pipe.interface.theme import style_figure
 
 # aligned_raws not JSON-serializable — keep in process memory
@@ -543,3 +545,45 @@ def click_ha_cd(n_clicks_list, group_val, bids_dir, group_csv, deriv_dir, cardia
     table  = _build_ha_decisions_table(subject_ids, ch_pairs, sci_by_sid, decisions)
     status = f"Saved · {len(ch_pairs)} channel pair(s)"
     return table, status
+
+
+# ── Static QC report for the dyads in the CSV ────────────────────────────────
+
+_HYPER_RAW_REPORT = ["group-*/group-*_desc-hyperraw_nirs.html"]
+
+
+@callback(
+    Output("ha-report-status",  "children"),
+    Output("ha-report-preview", "children"),
+    Input("ha-report-btn",  "n_clicks"),
+    State("ha-bids-dir",    "value"),
+    State("ha-deriv-dir",   "value"),
+    State("ha-group-csv",   "value"),
+    State("ha-group-select", "value"),
+    State("ha-dpf",         "value"),
+    State("ha-cardiac-l",   "value"),
+    State("ha-cardiac-h",   "value"),
+    State("ha-sci-thresh",  "value"),
+    prevent_initial_call=True,
+)
+def write_hyper_raw_report(n_clicks, bids_dir, deriv_dir, group_csv, group_val,
+                           dpf, cardiac_l, cardiac_h, sci_thresh):
+    # the viewer's group picker doubles as the report's scope; empty means every group
+    group_id = None
+    if group_val:
+        group_id = group_val.split("|")[0] if "|" in str(group_val) else str(group_val)
+
+    opts = {
+        "bids_dir": bids_dir, "output_dir": deriv_dir,
+        "pairs_csv": group_csv, "group_id": group_id,
+        "dpf": dpf, "cardiac_l": cardiac_l, "cardiac_h": cardiac_h,
+        "sci_threshold": sci_thresh,
+    }
+
+    problem = missing_raw_qc("hyper-raw", opts)
+    if problem:
+        return dbc.Alert(problem, color="warning", className="mb-0 py-2"), None
+
+    argv = build_raw_qc_args("hyper-raw", opts)
+    return run_and_report({"argv": argv, "command": "hyper-raw", "output_dir": deriv_dir},
+                          {"hyper-raw": _HYPER_RAW_REPORT})

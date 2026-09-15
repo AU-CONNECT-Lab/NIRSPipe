@@ -7,9 +7,11 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- **The two QC pages can write the static report of what they are showing**, by running `fnirs-qc prep-raw` or `hyper-raw` and embedding the result. What the pages computed lived only in the browser until now, so nothing could be filed or sent on. The report is written when asked for, not when a page is opened: the DPF and the cardiac band have no defaults to open a page with
 - **Batch Prep writes out the `fnirs-prep` command it would run**, for copying to a shell or a job script. The page had none, which left batch editing as the one thing the GUI could do and not hand you. Multi-segment crop needs its table as a file, so generating the command also writes it beside the derivatives
 
 ### Changed
+- **The sidebar is two families rather than one list.** Quality control holds the two pages that load one recording and show it to you, at the individual and dyad levels; Batch holds the five that assemble a command and run it. `Hyper Align` is now `Hyper Preparation`, the dyad counterpart of Data Preparation, and the page of cohort aggregates is `Cohort Reports`
 - **Batch Prep runs the `fnirs-prep` command it shows you**, streaming its output with a Stop button, instead of doing the same work again in the browser process. The tree an alignment writes gains the `participants.tsv` it was missing, and records that `fnirs-prep align` made it
 - **The hyperscanning analysis has its own page.** It is a pipeline that runs on what the individual pipeline wrote, not a report, and it was sharing a page and a command picker with the cohort aggregates, which are a different tool. The sidebar now groups every page by the CLI it drives
 - **Every GUI page keeps Run and the generated command in view while the form scrolls**, in a column beside it rather than at the bottom of the page. On a narrow window the column drops below the form

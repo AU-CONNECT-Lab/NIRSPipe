@@ -261,6 +261,17 @@ layout = dbc.Container([
             ),
             html.Div(id="dp-load-status", className="mt-2 small"),
         ),
+        section("Report",
+            actions(
+                dbc.Button("Write QC report", id="dp-report-btn",
+                           color="secondary", outline=True),
+            ),
+            html.Small("Runs fnirs-qc prep-raw on the loaded run with the parameters above,"
+                       " and writes the report and its quality record into the output"
+                       " directory.", className="fp-hint d-block mt-1"),
+            html.Div(id="dp-report-status", className="mt-2"),
+            html.Div(id="dp-report-preview", className="mt-2"),
+        ),
     ),
 
     dbc.Tabs([

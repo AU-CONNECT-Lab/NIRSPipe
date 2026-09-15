@@ -10,7 +10,7 @@ from dash import dcc, html
 
 from fnirs_pipe.interface.components import actions, card, field, params, split
 
-dash.register_page(__name__, path="/qc", name="QC Reports")
+dash.register_page(__name__, path="/qc", name="Cohort Reports")
 
 _DEFAULT_SHELL = "cmd" if platform.system() == "Windows" else "bash"
 
@@ -58,7 +58,7 @@ def _run_panel():
 layout = dbc.Container([
     dcc.Store(id="qc-command-store"),
 
-    html.H3("QC Reports"),
+    html.H3("Cohort Reports"),
     html.P("Cohort aggregates over the quality records every run already wrote. Each command "
            "takes one derivatives directory and nothing else.", className="text-muted"),
     html.Hr(),

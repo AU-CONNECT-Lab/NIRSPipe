@@ -25,8 +25,11 @@ from fnirs_pipe.interface.callbacks.analysis_callbacks import _build_cli_args
 from fnirs_pipe.interface.cli_args import (
     _AGGREGATE,
     _HYPER,
+    _RAW_QC,
     build_prep_args,
     build_qc_args,
+    build_raw_qc_args,
+    missing_raw_qc,
 )
 
 # Flags the analysis page deliberately does not offer, and why. A flag listed here must still
@@ -289,10 +292,7 @@ def test_the_unbound_controls_still_exist(analysis_page):
 # analysis. Both are subparser CLIs, so each command's flag list is read off its own parser.
 
 # fnirs-qc subcommands the QC page does not offer, and why.
-QC_COMMANDS_NOT_OFFERED = {
-    "prep-raw": "single-subject QC; the Data Prep page's QC tab already does this interactively",
-    "hyper-raw": "pre-analysis dyad QC; belongs with Hyper Align, not with the post-analysis page",
-}
+QC_COMMANDS_NOT_OFFERED: dict[str, str] = {}
 
 # per-command flags the page leaves out. Most are the negative half of a paired
 # BooleanOptionalAction, where the switch emits the positive. --wtc-limit-scales is the
@@ -389,10 +389,12 @@ def _qc_emitted(command: str) -> set[str]:
     return {a for a in build_qc_args(command, _QC_FULL_OPTS) if a.startswith("--")}
 
 
-def test_the_qc_page_offers_every_subcommand_or_writes_it_off():
-    missing = set(_qc_subparsers()) - set(_QC_OFFERED) - set(QC_COMMANDS_NOT_OFFERED)
+def test_some_page_offers_every_fnirs_qc_subcommand_or_writes_it_off():
+    """The aggregates are on Cohort Reports; the two raw reports are on the QC pages."""
+    reachable = set(_QC_OFFERED) | set(_RAW_QC) | set(QC_COMMANDS_NOT_OFFERED)
+    missing = set(_qc_subparsers()) - reachable
     assert not missing, (
-        f"fnirs-qc grew {sorted(missing)} and the QC page neither offers nor declines them"
+        f"fnirs-qc grew {sorted(missing)} and no page either offers or declines them"
     )
 
 
@@ -586,3 +588,104 @@ def test_one_marker_edit_is_sent_at_a_time():
         others = {"--shift", "--set-duration", "--rename"} - {flag}
         assert flag in argv
         assert not (others & set(argv)), f"{marker_op} also sent {sorted(others & set(argv))}"
+
+
+# ── The two QC pages → fnirs-qc prep-raw / hyper-raw ─────────────────────────
+
+# These are the static counterparts of what Data Preparation and Hyper Preparation show
+# interactively. Both take a BIDS root, which is what separates them from the aggregate
+# commands on the Cohort Reports page.
+RAW_QC_NOT_EXPOSED = {
+    "prep-raw": {
+        # the page screens on SCI alone, and its figures are drawn against that. A second
+        # threshold here could be set to a number the viewer never used
+        "--psp-threshold", "--min-good-frac", "--screen-scope",
+        # the page shows one run at a time, so there is no second condition to split by
+        "--by-condition",
+        # the raw report is the recording before correction; the page has no control for it
+        # because nothing it draws is motion-corrected
+        "--motion-correction",
+        "--skip-bids-validation", "--no-skip-bids-validation",
+    },
+    "hyper-raw": {
+        "--psp-threshold", "--min-good-frac", "--screen-scope",
+        # alignment and normalisation are what the page itself does and shows; the report
+        # is of the recordings as they are, so it does not re-decide them
+        "--normalize", "--no-normalize", "--no-align",
+        # the analysis window belongs to Hyper Analysis, which is where a window changes a
+        # result. Here it would only trim what the report draws
+        "--tstart", "--tend",
+        # the coherence band is Hyper Analysis's to set; this report does not average one
+        "--coh-fmin", "--fmin", "--coh-fmax", "--fmax",
+        # the page reads a task per row out of the group CSV
+        "--task-label",
+        "--skip-bids-validation", "--no-skip-bids-validation",
+    },
+}
+
+_RAW_QC_FULL_OPTS = dict(
+    bids_dir="/bids", output_dir="/out", subject="001", ses="01", task="tapping",
+    dpf=6.0, cardiac_l=0.7, cardiac_h=1.5, sci_threshold=0.8,
+    window_length=10.0, epoch_tmin=-5.0, epoch_tmax=25.0, epoch_qc=True,
+    short_max_dist=10.0, long_min_dist=15.0, long_max_dist=45.0,
+    pairs_csv="/pairs.csv", group_id="1003",
+)
+
+
+def _raw_qc_flags(command: str) -> set[str]:
+    parser = _qc_subparsers()[command]
+    return {flag for action in parser._actions for flag in action.option_strings
+            if flag.startswith("--") and action.dest != "help"}
+
+
+def _raw_qc_emitted(command: str) -> set[str]:
+    return {a for a in build_raw_qc_args(command, _RAW_QC_FULL_OPTS) if a.startswith("--")}
+
+
+@pytest.mark.parametrize("command", _RAW_QC)
+def test_the_qc_pages_reach_the_raw_report_commands(command):
+    assert command in _qc_subparsers()
+
+
+@pytest.mark.parametrize("command", _RAW_QC)
+def test_every_raw_qc_flag_is_sendable_or_written_off(command):
+    missing = (_raw_qc_flags(command) - _raw_qc_emitted(command)
+               - RAW_QC_NOT_EXPOSED.get(command, set()))
+    assert not missing, (
+        f"{command} grew {sorted(missing)} and the QC page cannot send them; "
+        f"add a control, or add them to RAW_QC_NOT_EXPOSED with a reason"
+    )
+
+
+@pytest.mark.parametrize("command", _RAW_QC)
+def test_the_written_off_raw_qc_flags_still_exist(command):
+    stale = RAW_QC_NOT_EXPOSED[command] - _raw_qc_flags(command)
+    assert not stale, f"RAW_QC_NOT_EXPOSED[{command!r}] names flags that are gone: {sorted(stale)}"
+
+
+@pytest.mark.parametrize("command", _RAW_QC)
+def test_the_generated_raw_qc_command_parses(command):
+    argv = build_raw_qc_args(command, _RAW_QC_FULL_OPTS)
+    assert argv[:2] == ["fnirs-qc", command]
+    _build_qc_parser().parse_args(argv[1:])   # raises SystemExit on an unknown flag
+
+
+@pytest.mark.parametrize("command", _RAW_QC)
+def test_the_required_raw_qc_arguments_are_all_sent(command):
+    """dpf and the cardiac band have no defaults anywhere, by design."""
+    emitted = _raw_qc_emitted(command)
+    assert {"--dpf", "--cardiac-l-freq", "--cardiac-h-freq"} <= emitted
+
+
+@pytest.mark.parametrize("command", _RAW_QC)
+def test_a_raw_report_refuses_without_the_values_that_have_no_default(command):
+    for field in ("dpf", "cardiac_l", "cardiac_h"):
+        opts = dict(_RAW_QC_FULL_OPTS, **{field: None})
+        assert missing_raw_qc(command, opts), f"{command} accepted a missing {field}"
+
+
+def test_the_raw_reports_take_a_bids_directory():
+    """Unlike everything on the Cohort Reports page, these two read the recordings."""
+    for command in _RAW_QC:
+        argv = build_raw_qc_args(command, _RAW_QC_FULL_OPTS)
+        assert argv[2] == "/bids"

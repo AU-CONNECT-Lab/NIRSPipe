@@ -30,15 +30,18 @@ _CONTENT_EXPANDED  = {"marginLeft": "200px", "padding": "1.25rem 1.5rem", "trans
 _CONTENT_COLLAPSED = {"marginLeft": "44px",  "padding": "1.25rem 1.5rem", "transition": "margin-left 0.2s"}
 
 
-# grouped by the CLI each page drives, which is also the order a study runs them in
+# Two families, split by what you do rather than by tool: the QC pages load one recording
+# and show it to you, the batch pages assemble a command and run it. The five batch pages
+# are one CLI each; the two QC pages are the only ones no single CLI covers, because
+# looking before deciding is the thing a command line cannot do.
 _NAV = [
-    ("fnirs-recon", [("Recon", "/recon")]),
-    ("fnirs-prep", [("Data Preparation", "/"),
-                    ("Hyper Align", "/hyper-align"),
-                    ("Batch Prep", "/batch-prep")]),
-    ("fnirs-pipe", [("Analysis", "/analysis")]),
-    ("fnirs-hyper", [("Hyper Analysis", "/hyper-analysis")]),
-    ("fnirs-qc", [("QC Reports", "/qc")]),
+    ("Quality control", [("Data Preparation", "/"),
+                         ("Hyper Preparation", "/hyper-align")]),
+    ("Batch", [("Recon", "/recon"),
+               ("Batch Prep", "/batch-prep"),
+               ("Analysis", "/analysis"),
+               ("Hyper Analysis", "/hyper-analysis"),
+               ("Cohort Reports", "/qc")]),
 ]
 
 

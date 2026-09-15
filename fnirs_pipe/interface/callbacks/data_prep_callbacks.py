@@ -10,6 +10,8 @@ from pathlib import Path
 import dash_bootstrap_components as dbc
 from dash import ALL, Input, Output, Patch, State, callback, ctx, dcc, html, no_update
 
+from fnirs_pipe.interface.callbacks._cli_run import run_and_report
+from fnirs_pipe.interface.cli_args import build_raw_qc_args, missing_raw_qc
 from fnirs_pipe.interface.grid import rows_minus_clicked
 from fnirs_pipe.interface.theme import style_figure
 from fnirs_pipe.qc.common.channel_table import channel_columns
@@ -1341,3 +1343,54 @@ def click_cd(_, dec_state, run_store):
     pair_cells, blocks, notes = _cached_channels((run_store or {}).get("cache_key"))
     table = _build_decisions_table(pair_cells, blocks, notes, run_decisions)
     return dec_state, table, msg
+
+
+# ── Static QC report for the loaded run ──────────────────────────────────────
+
+_RAW_REPORT = ["sub-*/sub-*_desc-raw_nirs.html"]
+
+
+@callback(
+    Output("dp-report-status",  "children"),
+    Output("dp-report-preview", "children"),
+    Input("dp-report-btn",  "n_clicks"),
+    State("dp-run-store",   "data"),
+    State("dp-bids-dir",    "value"),
+    State("dp-output-dir",  "value"),
+    State("dp-sci-thresh",  "value"),
+    State("dp-dpf",         "value"),
+    State("dp-cardiac-l",   "value"),
+    State("dp-cardiac-h",   "value"),
+    State("dp-window-s",    "value"),
+    State("dp-epoch-tmin",  "value"),
+    State("dp-epoch-tmax",  "value"),
+    State("dp-epoch-qc",    "value"),
+    State("dp-short-max-dist", "value"),
+    State("dp-long-min-dist",  "value"),
+    State("dp-long-max-dist",  "value"),
+    prevent_initial_call=True,
+)
+def write_raw_report(
+    n_clicks, store, bids_dir, output_dir, sci_thresh, dpf, cardiac_l, cardiac_h,
+    window_s, epoch_tmin, epoch_tmax, epoch_qc, short_max, long_min, long_max,
+):
+    entities = _parse_bids_entities(Path(store["snirf_path"]).name) if store else {}
+    opts = {
+        "bids_dir": bids_dir, "output_dir": output_dir,
+        "subject": entities.get("sub"), "ses": entities.get("ses"),
+        "task": entities.get("task"),
+        "sci_threshold": sci_thresh, "dpf": dpf,
+        "cardiac_l": cardiac_l, "cardiac_h": cardiac_h,
+        "window_length": window_s,
+        "epoch_tmin": epoch_tmin, "epoch_tmax": epoch_tmax,
+        "epoch_qc": bool(epoch_qc),
+        "short_max_dist": short_max, "long_min_dist": long_min, "long_max_dist": long_max,
+    }
+
+    problem = missing_raw_qc("prep-raw", opts)
+    if problem:
+        return dbc.Alert(problem, color="warning", className="mb-0 py-2"), None
+
+    argv = build_raw_qc_args("prep-raw", opts)
+    return run_and_report({"argv": argv, "command": "prep-raw", "output_dir": output_dir},
+                          {"prep-raw": _RAW_REPORT})
