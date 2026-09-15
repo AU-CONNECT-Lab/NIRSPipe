@@ -300,10 +300,10 @@ _SHOW = {}
 )
 def restore_from_store(store, _tick):
     if not store:
-        return (no_update,) * 27
+        return (no_update,) * len(ctx.outputs_list)
     cached = _RESULT_CACHE.get(store.get("cache_key"), {})
     if not cached:
-        return (no_update,) * 27
+        return (no_update,) * len(ctx.outputs_list)
 
     def _fig(nested, *keys):
         d = nested
