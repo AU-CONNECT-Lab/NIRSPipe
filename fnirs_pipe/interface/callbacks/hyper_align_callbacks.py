@@ -60,7 +60,7 @@ def _restore_dirs(bids_dir, output_dir):
 @callback(
     Output("ha-load-status",   "children"),
     Output("ha-results-panel", "style"),
-    Output("ha-offset-table",  "data"),
+    Output("ha-offset-table",  "rowData"),
     Output("ha-group-select",  "options"),
     Output("ha-group-select",  "value"),
     Input("ha-load-btn",       "n_clicks"),

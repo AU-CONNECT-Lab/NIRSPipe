@@ -3,18 +3,23 @@
 from __future__ import annotations
 
 import dash
+import dash_ag_grid as dag
 import dash_bootstrap_components as dbc
-from dash import dash_table, dcc, html
+from dash import dcc, html
 
 dash.register_page(__name__, path="/hyper-align", name="Hyper Align")
 
 _OFFSET_COLS = [
-    {"name": "Group",        "id": "group_id"},
-    {"name": "Subject",      "id": "subject_id"},
-    {"name": "Task",         "id": "task"},
-    {"name": "Offset (s)",   "id": "offset_s"},
-    {"name": "Duration (s)", "id": "duration_s"},
+    {"headerName": "Group",        "field": "group_id"},
+    {"headerName": "Subject",      "field": "subject_id"},
+    {"headerName": "Task",         "field": "task"},
+    {"headerName": "Offset (s)",   "field": "offset_s"},
+    {"headerName": "Duration (s)", "field": "duration_s"},
 ]
+
+
+# sorting and filtering are off so the grids behave as the DataTables they replaced
+_COL_DEF = {"sortable": False, "filter": False, "resizable": True}
 
 
 def _card(title, *children):
@@ -58,12 +63,15 @@ layout = dbc.Container([
     html.Div(id="ha-results-panel", style={"display": "none"}, children=[
 
         _card("Alignment Offsets",
-            dash_table.DataTable(
+            dag.AgGrid(
                 id="ha-offset-table",
-                columns=_OFFSET_COLS,
-                style_table={"overflowX": "auto"},
-                style_header={"fontWeight": "600", "fontSize": "0.82rem"},
-                style_cell={"fontSize": "0.82rem", "padding": "4px 8px"},
+                columnDefs=_OFFSET_COLS,
+                rowData=[],
+                className="fp-grid",
+                columnSize="responsiveSizeToFit",
+                defaultColDef=_COL_DEF,
+                dashGridOptions={"domLayout": "autoHeight"},
+                style={"height": None},
             ),
         ),
 

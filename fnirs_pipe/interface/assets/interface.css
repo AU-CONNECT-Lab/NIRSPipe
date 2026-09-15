@@ -172,17 +172,25 @@ a:hover { color: var(--fp-accent-dark); }
 }
 
 /* ---- Tables ---- */
-.dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner th,
-.dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner td {
-  font-family: var(--fp-sans);
-  font-size: 0.8rem;
-  border-color: var(--fp-border) !important;
-  padding: 4px 8px;
-}
-.dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner th {
-  background: #f7f9fb !important;
-  color: var(--fp-muted);
-  font-weight: 600;
+/* AG Grid's theming API defines these on the grid root itself, so a descendant selector is
+   what outranks it. The values carry over the look the DataTables had. */
+.fp-grid .ag-root-wrapper {
+  --ag-font-family:               var(--fp-sans);
+  --ag-font-size:                 0.8rem;
+  --ag-text-color:                var(--fp-text);
+  --ag-border-color:              var(--fp-border);
+  --ag-background-color:          var(--fp-surface);
+  --ag-wrapper-background-color:  var(--fp-surface);
+  --ag-odd-row-background-color:  var(--fp-surface);
+  --ag-row-hover-color:           var(--fp-accent-soft);
+  --ag-header-background-color:   #f7f9fb;
+  --ag-header-text-color:         var(--fp-muted);
+  --ag-header-font-size:          0.8rem;
+  --ag-header-font-weight:        600;
+  --ag-spacing:                   4px;
+  --ag-cell-horizontal-padding:   8px;
+  --ag-border-radius:             4px;
+  border-radius: var(--fp-radius);
 }
 
 /* ---- Plotly chrome ---- */
