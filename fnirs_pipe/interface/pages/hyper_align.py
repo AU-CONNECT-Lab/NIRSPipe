@@ -25,7 +25,6 @@ def _card(title, *children):
 
 
 layout = dbc.Container([
-    dcc.Store(id="ha-decisions-store", storage_type="memory"),
     dbc.Row([dbc.Col([html.H3("Hyperscanning Align"), html.Hr()])]),
 
     _card("Data Source",

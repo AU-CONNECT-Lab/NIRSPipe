@@ -369,7 +369,7 @@ layout = dbc.Container([
                 # Epoch Preview
                 _card("Epoch Preview",
                     html.Small("select a channel to view",
-                               id="dp-epoch-subtitle", className="text-muted d-block mb-1"),
+                               className="text-muted d-block mb-1"),
                     html.Div(id="dp-channel-epoch-wrap", style=_HIDDEN, children=[
                         dcc.Graph(id="dp-channel-epoch"),
                     ]),

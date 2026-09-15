@@ -59,12 +59,24 @@ _FULL_OPTS = dict(
 
 _MODES = ["denoise", "glm", "rest"]
 
-# built by a callback into an-subjects-container rather than declared in the layout, which
-# is why the app is constructed with suppress_callback_exceptions
-_DYNAMIC_IDS = {"an-subjects-checklist"}
+# built by a callback into a container rather than declared in the layout, which is why the
+# app is constructed with suppress_callback_exceptions
+_DYNAMIC_IDS = {"an-subjects-checklist", "dp-subject-radio"}
 
-# pages whose command builder this file holds against the CLI
-_PREFIXES = ("an-", "qc-")
+# Controls the callbacks may leave alone, and why. The deliberate half of the contract below,
+# in the same spirit as NOT_EXPOSED: an id may go unread, but only on purpose and only in
+# writing. `ha-decisions-store` sat here-shaped and unwritten until the AG Grid work widened
+# these tests; it was dead, and was deleted rather than listed.
+_UNBOUND_BY_DESIGN = {
+    "dp-tabs": "a dbc.Tabs container; switching is client-side and reaches no callback",
+}
+
+# bound by callbacks but declared in app.launch's own layout rather than on a page, so the
+# page sweep below cannot see them
+_APP_LEVEL_IDS = {"dp-run-store"}
+
+# every page whose controls are held against the callbacks that drive them
+_PREFIXES = ("an-", "qc-", "bp-", "dp-", "ha-", "rc-")
 
 
 def _group_flags(prefix: str) -> set[str]:
@@ -196,13 +208,17 @@ def analysis_page():
         pages_folder=os.path.join(os.path.dirname(app_module.__file__), "pages"),
         external_stylesheets=[dbc.themes.FLATLY], suppress_callback_exceptions=True,
     )
-    import fnirs_pipe.interface.callbacks.analysis_callbacks  # noqa: F401
+    import fnirs_pipe.interface.callbacks.analysis_callbacks
+    import fnirs_pipe.interface.callbacks.batch_prep_callbacks
+    import fnirs_pipe.interface.callbacks.data_prep_callbacks
+    import fnirs_pipe.interface.callbacks.hyper_align_callbacks
+    import fnirs_pipe.interface.callbacks.qc_callbacks
+    import fnirs_pipe.interface.callbacks.recon_callbacks  # noqa: F401
 
     app.layout = html.Div([dcc.Store(id="app-bids-dir"), dash.page_container])
     app._setup_server()
 
-    layouts = [p["layout"] for p in dash.page_registry.values()
-               if p["path"] in ("/analysis", "/qc")]
+    layouts = [p["layout"] for p in dash.page_registry.values()]
     layouts = [lay() if callable(lay) else lay for lay in layouts]
 
     def _ids(component):
@@ -218,13 +234,16 @@ def analysis_page():
             found |= _ids(children)
         return found
 
+    # pattern-matching bindings carry a dict id and match nothing declared in a layout
     bound = set()
     for entry in app.callback_map.values():
         for spec in list(entry["inputs"]) + list(entry.get("state") or []):
-            bound.add(spec["id"])
+            if isinstance(spec["id"], str):
+                bound.add(spec["id"])
         outputs = entry["output"]
         for out in (outputs if isinstance(outputs, (list, tuple)) else [outputs]):
-            bound.add(out.component_id)
+            if isinstance(out.component_id, str):
+                bound.add(out.component_id)
 
     on_page = set()
     for lay in layouts:
@@ -235,7 +254,8 @@ def analysis_page():
 
 def test_every_control_the_callbacks_bind_to_exists_on_the_page(analysis_page):
     on_page, bound = analysis_page
-    dangling = {i for i in bound if i.startswith(_PREFIXES)} - on_page - _DYNAMIC_IDS
+    dangling = ({i for i in bound if i.startswith(_PREFIXES)}
+                - on_page - _DYNAMIC_IDS - _APP_LEVEL_IDS)
     assert not dangling, f"callbacks bind ids the page does not define: {sorted(dangling)}"
 
 
@@ -246,8 +266,16 @@ def test_no_control_on_the_page_is_decoration(analysis_page):
     this catches is a control wired to nothing in either direction.
     """
     on_page, bound = analysis_page
-    unread = {i for i in on_page if i.startswith(_PREFIXES)} - bound
+    unread = ({i for i in on_page if i.startswith(_PREFIXES)}
+              - bound - set(_UNBOUND_BY_DESIGN))
     assert not unread, f"controls nothing reads: {sorted(unread)}"
+
+
+def test_the_unbound_controls_still_exist(analysis_page):
+    """Otherwise the list quietly becomes an excuse for ids nobody removed from it."""
+    on_page, _ = analysis_page
+    stale = set(_UNBOUND_BY_DESIGN) - on_page
+    assert not stale, f"_UNBOUND_BY_DESIGN names ids no page defines: {sorted(stale)}"
 
 
 # ---- the same contract for the QC page, which drives two tools ----
