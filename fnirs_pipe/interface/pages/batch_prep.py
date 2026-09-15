@@ -3,14 +3,18 @@
 from __future__ import annotations
 
 import dash
+import dash_ag_grid as dag
 import dash_bootstrap_components as dbc
 from dash import dash_table, html
+
+from fnirs_pipe.interface.grid import AUTO_HEIGHT, COL_DEF, DEL_COL
 
 dash.register_page(__name__, path="/batch-prep", name="Batch Prep")
 
 _RENAME_COLS = [
-    {"name": "From", "id": "from_name", "editable": True},
-    {"name": "To",   "id": "to_name",   "editable": True},
+    {"headerName": "From", "field": "from_name", "editable": True},
+    {"headerName": "To",   "field": "to_name",   "editable": True},
+    DEL_COL,
 ]
 
 _SEG_COLS = [
@@ -142,16 +146,15 @@ layout = dbc.Container([
             ]),
 
             html.Div(id="bp-rename-panel", style={"display": "none"}, children=[
-                dash_table.DataTable(
+                dag.AgGrid(
                     id="bp-rename-table",
-                    columns=_RENAME_COLS,
-                    data=[{"from_name": "", "to_name": ""}],
-                    editable=True,
-                    row_deletable=True,
-                    style_table={"overflowX": "auto", "maxHeight": "200px",
-                                 "overflowY": "auto"},
-                    style_header={"fontWeight": "600", "fontSize": "0.78rem"},
-                    style_cell={"fontSize": "0.78rem", "padding": "3px 6px"},
+                    columnDefs=_RENAME_COLS,
+                    rowData=[{"from_name": "", "to_name": ""}],
+                    className="fp-grid fp-grid-sm fp-grid-capped",
+                    columnSize="responsiveSizeToFit",
+                    defaultColDef=COL_DEF,
+                    dashGridOptions=AUTO_HEIGHT,
+                    style={"height": None},
                 ),
                 dbc.Button("+ Add pair", id="bp-rename-add-btn", size="sm",
                            color="outline-secondary", className="mt-2"),

@@ -7,6 +7,8 @@ from pathlib import Path
 import dash_bootstrap_components as dbc
 from dash import Input, Output, State, callback, ctx, html, no_update
 
+from fnirs_pipe.interface.grid import rows_minus_clicked
+
 
 # ── Directory sync: page → shared store ──────────────────────────────────────
 
@@ -146,15 +148,28 @@ def toggle_crop_mode(mode):
 # ── Add rename pair ───────────────────────────────────────────────────────────
 
 @callback(
-    Output("bp-rename-table", "data", allow_duplicate=True),
+    Output("bp-rename-table", "rowData", allow_duplicate=True),
     Input("bp-rename-add-btn", "n_clicks"),
-    State("bp-rename-table",   "data"),
+    State("bp-rename-table",   "virtualRowData"),
     prevent_initial_call=True,
 )
 def add_rename_pair(n_clicks, rows):
-    rows = rows or []
+    rows = list(rows or [])
     rows.append({"from_name": "", "to_name": ""})
     return rows
+
+
+# ── Delete rename pair ────────────────────────────────────────────────────────
+
+@callback(
+    Output("bp-rename-table", "rowData", allow_duplicate=True),
+    Input("bp-rename-table",  "cellClicked"),
+    State("bp-rename-table",  "virtualRowData"),
+    prevent_initial_call=True,
+)
+def delete_rename_pair(cell, rows):
+    kept = rows_minus_clicked(cell, rows)
+    return no_update if kept is None else kept          # [] means the last row was deleted
 
 
 # ── Add crop segment ──────────────────────────────────────────────────────────
@@ -186,7 +201,7 @@ def add_crop_segment(n_clicks, rows):
     State("bp-marker-op",   "value"),
     State("bp-shift-val",   "value"),
     State("bp-duration-val","value"),
-    State("bp-rename-table","data"),
+    State("bp-rename-table","virtualRowData"),
     State("bp-crop-mode",   "value"),
     State("bp-crop-tmin",   "value"),
     State("bp-crop-tmax",   "value"),

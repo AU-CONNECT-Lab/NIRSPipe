@@ -204,6 +204,15 @@ a:hover { color: var(--fp-accent-dark); }
 .fp-grid .ag-cell.fp-grid-del::after { content: "¹5"; }
 .fp-grid .ag-cell.fp-grid-del:hover { color: var(--fp-bad); }
 
+/* the denser of the two table sizes, and the height cap style_table used to set */
+.fp-grid-sm .ag-root-wrapper {
+  --ag-font-size:               0.78rem;
+  --ag-header-font-size:        0.78rem;
+  --ag-spacing:                 3px;
+  --ag-cell-horizontal-padding: 6px;
+}
+.fp-grid-capped { max-height: 200px; overflow-y: auto; }
+
 /* ---- Plotly chrome ---- */
 .js-plotly-plot .modebar { opacity: 0; transition: opacity 0.15s; }
 .card:hover .js-plotly-plot .modebar { opacity: 0.7; }
