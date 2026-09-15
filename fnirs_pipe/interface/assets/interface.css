@@ -297,6 +297,39 @@ a:hover { color: var(--fp-accent-dark); }
   .fp-switches-cols { columns: 1; }
 }
 
+/* a collapsed group still has to say what is set inside it, or folding it hides state */
+.fp-section-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  cursor: pointer;
+  user-select: none;
+}
+.fp-section-head:hover .fp-section-name { color: var(--fp-accent); }
+.fp-section-name { flex: none; }
+.fp-section-summary {
+  font-family: var(--fp-mono);
+  font-size: 0.72rem;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--fp-text);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fp-section-caret {
+  margin-left: auto;
+  flex: none;
+  font-size: 0.6rem;
+  color: var(--fp-muted);
+  transition: transform 0.15s;
+}
+.fp-section-closed .fp-section-caret { transform: rotate(-90deg); }
+/* an open group shows its fields, so repeating them in the header is noise */
+.fp-section-head:not(.fp-section-closed) .fp-section-summary { display: none; }
+
 /* a titled group inside a card, so related parameters share one card instead of four */
 .fp-section {
   font-size: 0.68rem;

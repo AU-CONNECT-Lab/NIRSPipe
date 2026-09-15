@@ -262,7 +262,7 @@ layout = dbc.Container([
                      span=PATH),
             ),
             html.Div(id="dp-load-status", className="mt-2 small"),
-        ),
+         key="dp-params", open=False),
         section("Report",
             actions(
                 dbc.Button("Write QC report", id="dp-report-btn",
@@ -273,7 +273,7 @@ layout = dbc.Container([
                        " directory.", className="fp-hint d-block mt-1"),
             html.Div(id="dp-report-status", className="mt-2"),
             html.Div(id="dp-report-preview", className="mt-2"),
-        ),
+         key="dp-report", open=False),
     ),
 
     dbc.Tabs([

@@ -9,6 +9,7 @@ from dash import Input, Output, State, callback, no_update
 
 from fnirs_pipe.interface import process_stream
 from fnirs_pipe.interface.callbacks._cli_run import log_panel
+from fnirs_pipe.interface.callbacks._sections import rng, summary, value
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("interface.analysis_callbacks")
@@ -446,3 +447,71 @@ def stop_pipeline(_n, run_id):
     if run_id:
         process_stream.stop(run_id)
     return True
+
+
+# ── What each collapsed group says in its header ─────────────────────────────
+
+_SHOWN = {"display": ""}
+_GONE  = {"display": "none"}
+
+
+@callback(
+    Output("an-od-summary",       "children"),
+    Output("an-screen-summary",   "children"),
+    Output("an-bands-summary",    "children"),
+    Output("an-epochs-summary",   "children"),
+    Output("an-gvtd-summary",     "children"),
+    Output("an-confound-summary", "children"),
+    Output("an-glm-summary",      "children"),
+    Input("an-dpf", "value"), Input("an-motion-correction", "value"),
+    Input("an-short-max-dist", "value"), Input("an-long-min-dist", "value"),
+    Input("an-sci-thresh", "value"), Input("an-psp-thresh", "value"),
+    Input("an-min-good-frac", "value"), Input("an-screen-scope", "value"),
+    Input("an-window-length", "value"),
+    Input("an-cardiac-l", "value"), Input("an-cardiac-h", "value"),
+    Input("an-resp-l", "value"), Input("an-resp-h", "value"),
+    Input("an-epoch-tmin", "value"), Input("an-epoch-tmax", "value"),
+    Input("an-epoch-chunk", "value"), Input("an-by-condition", "value"),
+    Input("an-gvtd-censor", "value"), Input("an-gvtd-n-std", "value"),
+    Input("an-drift-model", "value"), Input("an-drift-high-pass", "value"),
+    Input("an-short-channel", "value"), Input("an-fc", "value"),
+    Input("an-hrf-model", "value"), Input("an-noise-model", "value"),
+    Input("an-stim-dur", "value"),
+)
+def section_summaries(dpf, motion, short_max, long_min, sci, psp, frac, scope, window,
+                      card_l, card_h, resp_l, resp_h, tmin, tmax, chunk, by_cond,
+                      censor, n_std, drift, drift_hp, short_ch, fc,
+                      hrf, noise, stim_dur):
+    return (
+        summary(value("DPF", dpf), motion,
+                rng("separations", short_max, long_min, " mm")),
+        summary(value("SCI", sci), value("PSP", psp), value("coupled", frac),
+                {"run": "whole run", "task": "task blocks"}.get(scope),
+                value("window", window, " s")),
+        summary(rng("cardiac", card_l, card_h, " Hz"),
+                rng("respiration", resp_l, resp_h, " Hz")) or "not set",
+        summary(rng("epoch", tmin, tmax, " s"),
+                value("chunk", chunk, " s"),
+                "per-condition QC" if by_cond else None) or "not set",
+        summary("off" if censor in (None, "off") else f"{censor} channels",
+                value("at", n_std, " SD") if censor not in (None, "off") else None),
+        summary(value("drift", drift), value("high-pass", drift_hp, " Hz"),
+                value("short channel", short_ch), "FC products" if fc else None),
+        summary(value("HRF", hrf), value("noise", noise), value("stim", stim_dur, " s")),
+    )
+
+
+@callback(
+    Output("an-gvtd-n-std-wrap",  "style"),
+    Output("an-drift-hp-wrap",    "style"),
+    Output("an-drift-order-wrap", "style"),
+    Input("an-gvtd-censor", "value"),
+    Input("an-drift-model", "value"),
+)
+def hide_what_does_not_apply(censor, drift):
+    # each of these is read by exactly one setting of the control above it
+    return (
+        _SHOWN if censor not in (None, "off") else _GONE,
+        _SHOWN if drift == "cosine" else _GONE,
+        _SHOWN if drift == "polynomial" else _GONE,
+    )

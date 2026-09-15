@@ -28,9 +28,29 @@ def card(title, *children, subtitle=None, className="mb-3", body_class=None, bod
     )
 
 
-def section(title, *children):
-    """A titled group inside a card, so related parameters share one card instead of four."""
-    return html.Div([html.Div(title, className="fp-section"), *children])
+def section(title, *children, key=None, open=True):
+    """A titled group inside a card, so related parameters share one card instead of four.
+
+    With a `key` the group folds away, and its header carries a summary of what is set
+    inside it. Collapsing a group of parameters only helps if the values stay readable;
+    the summary is what a page fills in through `{key}-summary`.
+    """
+    if key is None:
+        return html.Div([html.Div(title, className="fp-section"), *children])
+
+    return html.Div([
+        html.Div(
+            [html.Span(title, className="fp-section-name"),
+             html.Span(id=f"{key}-summary", className="fp-section-summary"),
+             html.Span("▾", className="fp-section-caret")],
+            id={"type": "fp-section-toggle", "key": key},
+            className="fp-section fp-section-head" + ("" if open else " fp-section-closed"),
+            n_clicks=0,
+        ),
+        dbc.Collapse(list(children),
+                     id={"type": "fp-section-body", "key": key},
+                     is_open=open),
+    ])
 
 
 def split(main, aside):
@@ -61,13 +81,15 @@ def _width_for(control) -> int:
     return CHOICE
 
 
-def field(label, control, span=None, hint=None):
+def field(label, control, span=None, hint=None, id=None):
     children = [dbc.Label(label) if label else html.Span()]
     children.append(control)
     # the hint row exists either way, so a row of fields keeps one baseline
     children.append(html.Small(hint, className="fp-hint") if hint else html.Span())
     width = span if span is not None else _width_for(control)
-    return html.Div(children, className=f"fp-field fp-w-{width}")
+    # an id here, rather than on a wrapper, keeps the field a direct child of the grid
+    kwargs = {"id": id} if id else {}
+    return html.Div(children, className=f"fp-field fp-w-{width}", **kwargs)
 
 
 def band(label, *parts, span=RANGE, hint=None):

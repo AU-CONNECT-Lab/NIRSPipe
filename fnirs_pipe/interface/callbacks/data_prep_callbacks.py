@@ -11,6 +11,7 @@ import dash_bootstrap_components as dbc
 from dash import ALL, Input, Output, Patch, State, callback, ctx, dcc, html, no_update
 
 from fnirs_pipe.interface.callbacks._cli_run import run_and_report
+from fnirs_pipe.interface.callbacks._sections import rng, summary, value
 from fnirs_pipe.interface.cli_args import build_raw_qc_args, missing_raw_qc
 from fnirs_pipe.interface.grid import rows_minus_clicked
 from fnirs_pipe.interface.theme import style_figure
@@ -1394,3 +1395,26 @@ def write_raw_report(
     argv = build_raw_qc_args("prep-raw", opts)
     return run_and_report({"argv": argv, "command": "prep-raw", "output_dir": output_dir},
                           {"prep-raw": _RAW_REPORT})
+
+
+@callback(
+    Output("dp-params-summary", "children"),
+    Output("dp-report-summary", "children"),
+    Input("dp-sci-thresh", "value"), Input("dp-window-s", "value"),
+    Input("dp-dpf", "value"),
+    Input("dp-cardiac-l", "value"), Input("dp-cardiac-h", "value"),
+    Input("dp-epoch-tmin", "value"), Input("dp-epoch-tmax", "value"),
+    Input("dp-epoch-qc", "value"),
+    Input("dp-short-max-dist", "value"), Input("dp-long-min-dist", "value"),
+    Input("dp-report-status", "children"),
+)
+def section_summaries(sci, window, dpf, card_l, card_h, tmin, tmax, epoch_qc,
+                      short_max, long_min, report_status):
+    return (
+        summary(value("SCI", sci), value("window", window, " s"), value("DPF", dpf),
+                rng("cardiac", card_l, card_h, " Hz"),
+                rng("epoch", tmin, tmax, " s"),
+                "per-trial QC" if epoch_qc else None,
+                rng("separations", short_max, long_min, " mm")),
+        "written" if report_status else "fnirs-qc prep-raw",
+    )

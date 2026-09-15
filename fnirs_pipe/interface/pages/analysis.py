@@ -181,7 +181,7 @@ def _preprocessing():
                                      min=0.1, placeholder="none"),
                      span=PATH),
             ),
-        ),
+         key="an-od", open=True),
         section("Channel screening",
             params(
                 field("SCI threshold",
@@ -203,7 +203,7 @@ def _preprocessing():
                       dbc.Input(id="an-window-length", type="number", step=1,
                                 min=1, placeholder="10")),
             ),
-        ),
+         key="an-screen", open=False),
         section("Frequency bands",
             params(
                 band("Cardiac (Hz)",
@@ -219,7 +219,7 @@ def _preprocessing():
                      dbc.Input(id="an-resp-h", type="number", step=0.1,
                                placeholder="hi (adult ~0.5)")),
             ),
-        ),
+         key="an-bands", open=False),
         section("Epochs",
             params(
                 field("Epoch tmin (s)",
@@ -236,7 +236,7 @@ def _preprocessing():
                                        value=[], switch=True),
                          hint="Sliced out of the run's own windows; nothing is measured again."),
             ),
-        ),
+         key="an-epochs", open=False),
         section("GVTD censoring",
             params(
                 field("Censoring",
@@ -249,10 +249,9 @@ def _preprocessing():
                 field("Threshold (SD)",
                       dbc.Input(id="an-gvtd-n-std", type="number", step=0.5, min=0.5,
                                 placeholder="10"),
-                      hint="Left-tail SDs above the GVTD mode."
-                           " Read only when censoring is on."),
+                      id="an-gvtd-n-std-wrap"),
             ),
-        ),
+         key="an-gvtd", open=False),
     )
 
 
@@ -298,11 +297,11 @@ def _postprocessing():
                     field("Drift high-pass (Hz)",
                           dbc.Input(id="an-drift-high-pass", type="number", value=0.01,
                                     placeholder="0.01"),
-                          hint="Required when the drift model is cosine."),
+                          id="an-drift-hp-wrap"),
                     field("Drift order",
                           dbc.Input(id="an-drift-order", type="number",
                                     value=1, min=0, step=1),
-                          hint="Polynomial drift only."),
+                          id="an-drift-order-wrap"),
                     field("Short channel",
                           dcc.Dropdown(id="an-short-channel",
                                        options=_opts(_SHORT_CHANNEL_CHOICES),
@@ -318,7 +317,7 @@ def _postprocessing():
                                            value=[], switch=True),
                              hint="Denoise and GLM. Rest writes them anyway."),
                 ),
-            ),
+             key="an-confound", open=False),
         ]),
 
         html.Div(id="an-glm-section", children=[
@@ -333,7 +332,7 @@ def _postprocessing():
                     field("Stim duration (s)",
                           dbc.Input(id="an-stim-dur", type="number", placeholder="optional")),
                 ),
-            ),
+             key="an-glm", open=True),
         ]),
     )
 

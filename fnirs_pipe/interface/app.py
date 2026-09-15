@@ -115,6 +115,7 @@ def launch(port: int | None = None) -> None:
         suppress_callback_exceptions=True,
     )
 
+    import fnirs_pipe.interface.callbacks._sections
     import fnirs_pipe.interface.callbacks.data_prep_callbacks
     import fnirs_pipe.interface.callbacks.recon_callbacks
     import fnirs_pipe.interface.callbacks.batch_prep_callbacks

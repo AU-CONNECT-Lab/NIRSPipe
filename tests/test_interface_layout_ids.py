@@ -36,6 +36,7 @@ def registered():
                          "fnirs_pipe", "interface", "pages")
     dash.Dash(__name__, use_pages=True, pages_folder=pages, suppress_callback_exceptions=True)
 
+    import fnirs_pipe.interface.callbacks._sections               # noqa: F401
     import fnirs_pipe.interface.callbacks.analysis_callbacks      # noqa: F401
     import fnirs_pipe.interface.callbacks.batch_prep_callbacks    # noqa: F401
     import fnirs_pipe.interface.callbacks.data_prep_callbacks     # noqa: F401
