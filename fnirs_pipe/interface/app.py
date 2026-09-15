@@ -30,6 +30,27 @@ _CONTENT_EXPANDED  = {"marginLeft": "200px", "padding": "1.25rem 1.5rem", "trans
 _CONTENT_COLLAPSED = {"marginLeft": "44px",  "padding": "1.25rem 1.5rem", "transition": "margin-left 0.2s"}
 
 
+# the pages are three stages at two scales: one recording at a time, or a whole tree at once.
+# A flat list hid that, and put the page that starts a study third.
+_NAV = [
+    ("Import", [("Recon", "/recon")]),
+    ("Prepare", [("Data Preparation", "/"),
+                 ("Hyper Align", "/hyper-align"),
+                 ("Batch Prep", "/batch-prep")]),
+    ("Run", [("Analysis", "/analysis"),
+             ("QC Reports", "/qc")]),
+]
+
+
+def _nav_items() -> list:
+    items = []
+    for group, links in _NAV:
+        items.append(html.Div(group, className="fp-nav-group"))
+        items += [dbc.NavLink(label, href=href, active="exact", className="text-white")
+                  for label, href in links]
+    return items
+
+
 def _sidebar() -> html.Div:
     return html.Div(
         id="app-sidebar",
@@ -59,14 +80,7 @@ def _sidebar() -> html.Div:
             dbc.Collapse(
                 id="app-sidebar-nav",
                 is_open=True,
-                children=dbc.Nav([
-                    dbc.NavLink("Data Preparation", href="/",            active="exact", className="text-white"),
-                    dbc.NavLink("Recon",            href="/recon",      active="exact", className="text-white"),
-                    dbc.NavLink("Batch Prep",       href="/batch-prep", active="exact", className="text-white"),
-                    dbc.NavLink("Hyper Align",      href="/hyper-align",active="exact", className="text-white"),
-                    dbc.NavLink("Analysis",         href="/analysis",   active="exact", className="text-white"),
-                    dbc.NavLink("QC Reports",       href="/qc",         active="exact", className="text-white"),
-                ], vertical=True, pills=True),
+                children=dbc.Nav(_nav_items(), vertical=True, pills=True),
             ),
         ],
     )

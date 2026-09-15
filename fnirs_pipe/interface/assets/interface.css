@@ -56,6 +56,16 @@ a:hover { color: var(--fp-accent-dark); }
   color: #ffffff !important;
   font-weight: 500;
 }
+#app-sidebar .fp-nav-group {
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.34);
+  padding: 0.75rem 0.7rem 0.2rem;
+  white-space: nowrap;
+}
+#app-sidebar .nav > .fp-nav-group:first-child { padding-top: 0.25rem; }
 #app-sidebar-toggle:hover { opacity: 0.75; }
 
 /* ---- Cards ---- */
