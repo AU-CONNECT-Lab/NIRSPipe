@@ -135,6 +135,9 @@ def _card(title, *children):
 layout = dbc.Container([
     dcc.Store(id="an-subjects-store", storage_type="memory"),
     dcc.Store(id="an-command-store",  storage_type="memory"),
+    dcc.Store(id="an-run-store",      storage_type="memory"),
+    # the run is polled rather than waited on; disabled until there is something to poll
+    dcc.Interval(id="an-run-tick", interval=1000, disabled=True),
     dbc.Row([dbc.Col([html.H3("Analysis"), html.Hr()])]),
 
     # ── Data source ───────────────────────────────────────────────────────────
@@ -437,6 +440,8 @@ layout = dbc.Container([
                 dbc.ButtonGroup([
                     dbc.Button("Generate Command", id="an-generate-btn", color="info"),
                     dbc.Button("Run Pipeline",     id="an-run-btn",      color="success"),
+                    dbc.Button("Stop", id="an-stop-btn", color="danger",
+                               outline=True, disabled=True),
                 ]),
             ], width=4, className="d-flex align-items-center justify-content-end"),
         ], className="align-items-center"),

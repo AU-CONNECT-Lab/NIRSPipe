@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import subprocess
 from pathlib import Path
 
 import dash_bootstrap_components as dbc
 from dash import Input, Output, State, callback, html, no_update
 
+from fnirs_pipe.interface import process_stream
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("interface.analysis_callbacks")
@@ -377,40 +377,87 @@ def generate_command(n_clicks, bids_dir, output_dir, subjects, dpf, sci_thresh, 
     return preview, {"argv": argv}
 
 
+_LOG_STYLE = {
+    "background": "rgba(0,0,0,0.04)", "padding": "0.5rem", "borderRadius": "4px",
+    "maxHeight": "300px", "overflow": "auto", "fontSize": "12px", "margin": "0.5rem 0 0",
+}
+
+
+def _log_panel(header, lines, dropped, color):
+    body = "\n".join(lines) if lines else "(no output yet)"
+    if dropped:
+        body = f"... {dropped} earlier lines dropped ...\n{body}"
+    return dbc.Alert([
+        html.Div(header, className="fw-bold"),
+        html.Pre(body, style=_LOG_STYLE),
+    ], color=color, className="mb-0")
+
+
 @callback(
     Output("an-run-status", "children"),
+    Output("an-run-store",  "data"),
+    Output("an-run-tick",   "disabled"),
+    Output("an-stop-btn",   "disabled"),
+    Output("an-run-btn",    "disabled"),
     Input("an-run-btn",     "n_clicks"),
     State("an-command-store", "data"),
     prevent_initial_call=True,
 )
 def run_pipeline(n_clicks, cmd_data):
     if not cmd_data or not cmd_data.get("argv"):
-        return dbc.Alert("Click 'Generate Command' first.", color="warning", className="mb-0")
+        return (dbc.Alert("Click 'Generate Command' first.", color="warning",
+                          className="mb-0"), None, True, True, False)
 
     argv = cmd_data["argv"]
     try:
-        proc = subprocess.run(argv, capture_output=True, text=True)
+        run_id = process_stream.start(argv)
     except FileNotFoundError:
-        return dbc.Alert(
-            f"`{argv[0]}` not found on PATH — make sure fnirs-pipe is installed.",
-            color="danger", className="mb-0",
-        )
+        return (dbc.Alert(
+            f"`{argv[0]}` not found on PATH - make sure fnirs-pipe is installed.",
+            color="danger", className="mb-0"), None, True, True, False)
     except Exception as exc:
-        return dbc.Alert(f"Failed to launch: {exc}", color="danger", className="mb-0")
+        return (dbc.Alert(f"Failed to launch: {exc}", color="danger", className="mb-0"),
+                None, True, True, False)
 
-    tail = (proc.stdout or "") + (proc.stderr or "")
-    tail = "\n".join(tail.splitlines()[-30:])  # last 30 lines
+    logger.info("started %s as run %s", argv[0], run_id)
+    return _log_panel("Running...", [], 0, "info"), run_id, False, False, True
 
-    if proc.returncode == 0:
-        color, header = "success", "Pipeline finished."
+
+@callback(
+    Output("an-run-status", "children", allow_duplicate=True),
+    Output("an-run-tick",   "disabled", allow_duplicate=True),
+    Output("an-stop-btn",   "disabled", allow_duplicate=True),
+    Output("an-run-btn",    "disabled", allow_duplicate=True),
+    Input("an-run-tick",    "n_intervals"),
+    State("an-run-store",   "data"),
+    prevent_initial_call=True,
+)
+def stream_run_output(_n, run_id):
+    if not run_id:
+        return no_update, True, True, False
+
+    lines, returncode, dropped = process_stream.poll(run_id)
+    if returncode is None:
+        return _log_panel("Running...", lines, dropped, "info"), False, False, True
+
+    if returncode == 0:
+        header, color = "Pipeline finished.", "success"
+    elif returncode < 0:
+        header, color = f"Pipeline stopped (signal {-returncode}).", "warning"
     else:
-        color, header = "danger", f"Pipeline failed (exit {proc.returncode})."
+        header, color = f"Pipeline failed (exit {returncode}).", "danger"
+    process_stream.forget(run_id)
+    return _log_panel(header, lines, dropped, color), True, True, False
 
-    return dbc.Alert([
-        html.Div(header, className="fw-bold"),
-        html.Pre(tail, style={
-            "background": "rgba(0,0,0,0.04)", "padding": "0.5rem",
-            "borderRadius": "4px", "maxHeight": "300px", "overflow": "auto",
-            "fontSize": "12px", "margin": "0.5rem 0 0",
-        }),
-    ], color=color, className="mb-0")
+
+@callback(
+    Output("an-stop-btn", "disabled", allow_duplicate=True),
+    Input("an-stop-btn",  "n_clicks"),
+    State("an-run-store", "data"),
+    prevent_initial_call=True,
+)
+def stop_pipeline(_n, run_id):
+    # the tick reports the outcome; this only asks the process to end
+    if run_id:
+        process_stream.stop(run_id)
+    return True

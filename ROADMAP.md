@@ -1,121 +1,50 @@
 # Roadmap
 
-Status: `[ ]` not started · `[~]` in progress · `[x]` done · `[?]` needs review
+Where this package is and where it is going. Released changes are in [CHANGELOG.md](CHANGELOG.md); this file is only the shape of the work.
 
 ---
 
-## v0.1 — Preprocessing Core `[x]`
+## What it does today
 
-End-to-end single-subject preprocessing: OD conversion, SCI marking, motion correction (TDDR), Beer-Lambert.
-Pipeline reorganized into `pipeline/prep_pipeline.py`; intermediate SNIRF written at each step.
+**Preprocessing.** Raw SNIRF through optical density, channel screening, motion correction and haemoglobin conversion. Every stage is written to disk, and each output records how it was made and from what, so a number in a report can be traced back to the file it came from.
 
-## v0.2 — QC Preprocessing Report `[x]`
+**Analysis.** Task GLM, denoising and resting state for one person at a time. For two people recorded together, wavelet coherence and inter-subject correlation, each reported against a null to judge it by rather than as a bare number.
 
-Per-subject HTML report: SCI/PSP heatmaps, GVTD timeseries, motion carpet, HbO/HbR correlation panel, PSD, brain views, SQM sidecar.
+**Quality control.** A report for a single recording, for a pair, and for a whole cohort. Each opens in a browser with nothing running behind it, and reads the quality record it was drawn from, so a figure and the matching number cannot disagree. Recordings can be rated, and the ratings are kept alongside the data.
 
-## v0.3 — Postprocessing & GLM `[x]`
+**Interfaces.** Everything is available from the command line. A browser interface covers the steps that benefit from being interactive: preparing data, editing markers, launching batches, aligning pairs, and running the pipeline while watching its output arrive.
 
-Task GLM (`pipeline/glm.py`) and denoise mode implemented.
-GLM QC section added to report; raw residuals written as a separate SNIRF.
-
-## v0.4 — Raw QC CLI `[x]`
-
-`fnirs-qc` CLI implemented with `prep-raw` subcommand and interactive HTML viewer.
-SQM expanded with cardiac power and tSNR metrics; channel quality summary figure added.
-
-## v0.5 — Hyperscanning Pipeline `[x]`
-
-Hyperscanning pipeline consolidated into `pipeline/hyperscanning.py`.
-WTC computation, connectogram visualization, ISC computation.
-Cohort-level raw QC report and per-dyad post-processing QC report implemented.
-
-## v0.6 — Resting-State Analysis `[x]`
-
-Resting-state mode added to hyperscanning pipeline: ALFF/fALFF computation, functional connectivity matrix, resting-state QC report.
-
-## v0.7 — GUI Interface `[x]`
-
-Dash-based `fnirs-gui` with sidebar router and 4 pages:
-- **Data Preparation** — SNIRF loader, editable marker table, SQM display
-- **Batch Prep** — multi-subject batch preprocessing trigger
-- **Hyper Align** — pairs CSV editor, alignment preview
-- **Analysis** — pipeline DAG visualization, command generator
-
-## v0.8 — Run Logging & SQM Database `[x]`
-
-JSONL-based event logging wired into `fnirs-pipe` run flow.
-`fnirs-log merge` consolidates JSONL files into a SQLite database (`pipeline_executions`, `runs`, `sqm`, `command_outputs`).
-`PrepResult` now returns `sqm_raw` and `sqm_final` for downstream use.
-
-## v0.9 — GUI Analysis Page & Pipeline Integration `[~]`
-
-Page UI + command generator done in v0.7. The run button executes the generated command
-([interface/callbacks/analysis_callbacks.py](fnirs_pipe/interface/callbacks/analysis_callbacks.py)),
-blocking until it finishes and then showing the last 30 lines of output. The generated
-command is held against the CLI's flag surface by `tests/test_gui_cli_surface.py`. The QC
-Reports page covers the `fnirs-qc` and `fnirs-hyper` layers and shows each report it
-generates inline. Still missing:
-
-- Live progress / log streaming during the run, instead of one block of output at the end
-
-## v0.10 — Group-Level QC Report `[x]`
-
-`fnirs-qc cohort` aggregates `sub-*/nirs/*_desc-sqm_nirs.json` into `cohort_nirs.{tsv,html}`:
-subject × metric robust-z heatmap, per-metric boxplots with Tukey 1.5×IQR outlier highlighting,
-sortable table, outlier panel.
-
-`fnirs-qc cohort-hyper` is the cohort of dyads and reports what a dyad has and a subject
-cannot: how much of each recording both members could use at the same moment, split into the
-loss that is one member's and the loss that is shared; where that time went per channel pair
-and per condition; and each window's coherence as its rank inside its own null.
-
-prep-raw also persists `sci_per_window` / `psp_per_window` / `gvtd_per_window` into the SQM JSON; cohort renders time × subject heatmaps for these so users can spot group-wide vs individual outlier windows.
-
-For "is this time window dropping for everyone?", `fnirs-prep crop` writes a cropped derivatives tree (`--align trigger` measures the window from a shared trigger rather than from each recording's own start) and `prep-raw` + `cohort` then run over it unchanged.
-
-## v0.11 — Self-Contained QC Viewers `[x]`
-
-Rating Flask apps (`HyperRatingApp` / `RawRatingApp` / `FNIRSRatingApp`) refactored:
-
-- HTML generated by the QC writer is self-contained (rating bar UI inline via `_topbar.html.j2`)
-- Flask retains only `/load_*` + `/save_*` REST endpoints; serves HTML as-is
-- No more `_extract_*` regex reverse-parsing or string-concat injection
-- Static-open HTML shows rating bar greyed out + "static mode" banner
-
-## v0.12 — Quality Record & Provenance `[x]`
-
-One quality record per run (`<sub>_<task>_desc-sqm_nirs.json`), sectioned by the file each
-metric was measured on and assembled from the derivatives on disk rather than from what a
-run happened to hold in memory. Every stage SNIRF carries a lineage stamp and a sidecar
-naming its sources. The subject report reads the record instead of recomputing, so a number
-in a figure and the same number in the metrics table cannot disagree.
-
-## v0.13 — Numerical Cross-Validation `[x]`
-
-GVTD, channel SNR, ALFF/fALFF and the functional-connectivity products checked against
-external implementations of the same algorithms, and the CLI checked stage by stage against
-a bare-MNE run of the same chain. Reports are kept with the project notes outside the repo.
+**Reproducibility.** Runs are logged, and the logs consolidate into a database that answers questions across a whole study. The numerical results have been checked against independent implementations of the same algorithms.
 
 ---
 
-## Backlog
+## In progress
 
-### Algorithms / numerical validation
+Nothing. The last piece of planned work closed on 2026-09-14.
 
-- **Spline motion correction** — undecided, and withheld from the CLI and the GUI while it is; reachable through the API, where it raises `NotImplementedError`. Building it means building per-channel artifact detection alongside it, since nothing in MNE or mne_nirs supplies either ([pipeline/motion.py](fnirs_pipe/pipeline/motion.py))
-- **External regressors in confound regression** — built and then withheld: the flags are suppressed and the GUI control is gone, while extraction and the regression path stay. Reopening it needs an across-dyad comparison, and a tCCA-style orthogonalisation is the upgrade path if that comparison finds anything ([pipeline/glm.py](fnirs_pipe/pipeline/glm.py))
+---
 
-### QC enhancements
+## Considered, not committed
 
-- **ALFF/fALFF on a brain surface** — the flat map is drawn; projecting onto a surface needs head coordinates and mne_nirs ([qc/figures/subject/rest_figures.py](fnirs_pipe/qc/figures/subject/rest_figures.py))
-- **Auto-generate roi.json from fOLD** — derive channel-to-region mapping from montage via `mne_nirs.io.fold_channel_specificity` (needs fOLD Excel DB), as an alternative to hand-written `--roi-mapping`
+Ordered by how often each has come up, not by when it might happen.
 
-### Reports / viewer features (designed, not started)
+**Analysis**
 
-- **Per-step before/after comparison** — interactive channel-level signal comparison across preprocessing steps (OD → SCI → motion-corrected → haemo). Two steps have it: the motion step (per-channel detail, before against after) and denoising (`carpet_compare_figure`). The rest of the chain has nothing
-- **Multi-run QC comparison** — multi-row already present in `cohort_nirs.tsv`, but the report has no "group rows by subject" panel for within-subject reliability across runs ([qc/subject/group_writer.py](fnirs_pipe/qc/subject/group_writer.py))
+- Spline motion correction. Two motion correction methods already ship; this would be a third, and it needs its own artifact detection built alongside it
+- External regressors in confound regression. Built, then withheld: whether it helps has not been shown on enough data to turn on
 
-### Infrastructure
+**Quality control**
 
-- **Switch SNIRF IO to pysnirf2** — blocked upstream on a release, not on the code: the NumPy 2.x fix is on `main` but the newest package on PyPI predates it and fails at import ([io/snirf.py](fnirs_pipe/io/snirf.py))
-- **Replace `dash_table.DataTable`** in the GUI before Dash removes it from the builtin components; six tables across four pages, none using more than editing, row deletion and conditional styling ([interface/pages/](fnirs_pipe/interface/pages/))
+- Projecting resting-state maps onto a brain surface rather than a flat layout
+- Deriving region mappings from the montage automatically, instead of writing them by hand
+- Comparing one subject's repeated runs side by side, to show how stable a measure is within a person
+- Comparing the signal before and after every processing step, not only the two that have it
+
+**Under the hood**
+
+- Moving SNIRF reading onto a maintained library. Blocked upstream: the fix exists but has not been released
+- Replacing the table widget the browser interface uses, which its toolkit has deprecated
+
+---
+
+Anything more specific than this lives with the project notes, outside the repository.
