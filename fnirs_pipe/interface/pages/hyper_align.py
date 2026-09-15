@@ -7,6 +7,8 @@ import dash_ag_grid as dag
 import dash_bootstrap_components as dbc
 from dash import dcc, html
 
+from fnirs_pipe.interface.grid import AUTO_HEIGHT, COL_DEF
+
 dash.register_page(__name__, path="/hyper-align", name="Hyper Align")
 
 _OFFSET_COLS = [
@@ -16,10 +18,6 @@ _OFFSET_COLS = [
     {"headerName": "Offset (s)",   "field": "offset_s"},
     {"headerName": "Duration (s)", "field": "duration_s"},
 ]
-
-
-# sorting and filtering are off so the grids behave as the DataTables they replaced
-_COL_DEF = {"sortable": False, "filter": False, "resizable": True}
 
 
 def _card(title, *children):
@@ -69,8 +67,8 @@ layout = dbc.Container([
                 rowData=[],
                 className="fp-grid",
                 columnSize="responsiveSizeToFit",
-                defaultColDef=_COL_DEF,
-                dashGridOptions={"domLayout": "autoHeight"},
+                defaultColDef=COL_DEF,
+                dashGridOptions=AUTO_HEIGHT,
                 style={"height": None},
             ),
         ),

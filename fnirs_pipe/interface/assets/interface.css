@@ -193,6 +193,17 @@ a:hover { color: var(--fp-accent-dark); }
   border-radius: var(--fp-radius);
 }
 
+/* the cross row_deletable used to draw; content rather than row data, so the dicts the
+   callbacks read carry no column the tables never had */
+.fp-grid .ag-cell.fp-grid-del {
+  cursor: pointer;
+  color: var(--fp-muted);
+  text-align: center;
+  padding: 0;
+}
+.fp-grid .ag-cell.fp-grid-del::after { content: "¹5"; }
+.fp-grid .ag-cell.fp-grid-del:hover { color: var(--fp-bad); }
+
 /* ---- Plotly chrome ---- */
 .js-plotly-plot .modebar { opacity: 0; transition: opacity 0.15s; }
 .card:hover .js-plotly-plot .modebar { opacity: 0.7; }
