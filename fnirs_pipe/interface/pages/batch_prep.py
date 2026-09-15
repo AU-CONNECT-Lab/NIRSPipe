@@ -9,7 +9,9 @@ import dash_ag_grid as dag
 import dash_bootstrap_components as dbc
 from dash import dcc, html
 
-from fnirs_pipe.interface.components import actions, card, field, params, section, split, switches
+from fnirs_pipe.interface.components import (
+    FULL, PATH, action_field, actions, card, field, params, section, split,
+)
 from fnirs_pipe.interface.grid import AUTO_HEIGHT, COL_DEF, DEL_COL
 
 dash.register_page(__name__, path="/batch-prep", name="Batch Prep")
@@ -39,11 +41,11 @@ def _scope():
             params(
                 field("BIDS directory",
                       dbc.Input(id="bp-bids-dir", type="text", placeholder="/path/to/bids"),
-                      span=2),
+                      span=PATH),
                 field("Derivatives directory",
                       dbc.Input(id="bp-deriv-dir", type="text",
                                 placeholder="/path/to/derivatives"),
-                      span=2),
+                      span=PATH),
             ),
         ),
         # both sections are hidden whole when the operation does not select subjects
@@ -83,7 +85,7 @@ def _operation():
                 field("Group CSV",
                       dbc.Input(id="bp-group-csv", type="text",
                                 placeholder="/path/to/groups.csv"),
-                      span=2,
+                      span=PATH,
                       hint="Columns: group_id, subject_id, task."
                            " Each (group_id, task) pair is aligned independently."),
             ),
@@ -174,13 +176,14 @@ def _run_panel():
         params(
             field("Parallel jobs",
                   dbc.Input(id="bp-n-jobs", type="number", value=1, min=1, step=1)),
-            switches(actions(
+            action_field(
                 dbc.Button("Run batch", id="bp-run-btn", color="success"),
                 dbc.Button("Stop", id="bp-stop-btn", color="danger",
                            outline=True, disabled=True),
                 dbc.Button("Generate command", id="bp-generate-btn",
                            color="secondary", outline=True),
-            ), span=2),
+                span=FULL,
+            ),
         ),
         html.Div(id="bp-log", className="mt-3"),
     )

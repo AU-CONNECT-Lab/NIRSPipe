@@ -8,7 +8,7 @@ import dash
 import dash_bootstrap_components as dbc
 from dash import dcc, html
 
-from fnirs_pipe.interface.components import actions, card, field, params, split
+from fnirs_pipe.interface.components import PATH, actions, card, field, params, split
 
 dash.register_page(__name__, path="/qc", name="Cohort Reports")
 
@@ -27,11 +27,11 @@ def _scope():
             field("Command",
                   dcc.Dropdown(id="qc-command", options=_COMMANDS,
                                value="cohort", clearable=False),
-                  span=2),
+                  span=PATH),
             field("Derivatives directory",
                   dbc.Input(id="qc-output-dir", type="text",
                             placeholder="path to derivatives"),
-                  span=2),
+                  span=PATH),
         ),
     )
 

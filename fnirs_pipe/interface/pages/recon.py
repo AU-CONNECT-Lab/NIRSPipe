@@ -9,7 +9,9 @@ import dash_ag_grid as dag
 import dash_bootstrap_components as dbc
 from dash import html
 
-from fnirs_pipe.interface.components import actions, card, field, params, split, switches
+from fnirs_pipe.interface.components import (
+    PATH, action_field, actions, card, field, params, split,
+)
 from fnirs_pipe.interface.grid import AUTO_HEIGHT, COL_DEF
 
 dash.register_page(__name__, path="/recon", name="Recon")
@@ -30,15 +32,15 @@ def _files():
         params(
             field("Input folder (raw snirf)",
                   dbc.Input(id="rc-input-dir", type="text", placeholder="/path/to/raw"),
-                  span=2),
+                  span=PATH),
             field("Output BIDS directory",
                   dbc.Input(id="rc-bids-dir", type="text", placeholder="/path/to/bids"),
-                  span=2),
-            switches(actions(
+                  span=PATH),
+            action_field(
                 dbc.Button("Detect", id="rc-detect-btn", color="primary"),
                 dbc.Checkbox(id="rc-overwrite", label="Overwrite existing",
                              value=False, className="ms-2"),
-            ), span=2),
+            ),
         ),
         html.Div(id="rc-detect-result", className="mt-2 mb-2 small"),
         dag.AgGrid(

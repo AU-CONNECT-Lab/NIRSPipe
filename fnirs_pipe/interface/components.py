@@ -48,28 +48,48 @@ def params(*items, className=""):
     return html.Div(list(items), className=("fp-params " + className).strip())
 
 
-def field(label, control, span=1, hint=None):
-    children = [dbc.Label(label)] if label else []
+# columns out of twelve, by what the control holds rather than by where the row falls
+NUMBER, CHOICE, RANGE, PATH, FULL = 2, 3, 4, 6, 12
+
+
+def _width_for(control) -> int:
+    """A control's width follows what it holds; a path or a long label passes its own."""
+    if isinstance(control, dbc.InputGroup):
+        return RANGE
+    if isinstance(control, dbc.Input) and getattr(control, "type", None) == "number":
+        return NUMBER
+    return CHOICE
+
+
+def field(label, control, span=None, hint=None):
+    children = [dbc.Label(label) if label else html.Span()]
     children.append(control)
-    if hint:
-        children.append(html.Small(hint, className="fp-hint"))
-    cls = "fp-field" if span == 1 else f"fp-field fp-span-{span}"
-    return html.Div(children, className=cls)
+    # the hint row exists either way, so a row of fields keeps one baseline
+    children.append(html.Small(hint, className="fp-hint") if hint else html.Span())
+    width = span if span is not None else _width_for(control)
+    return html.Div(children, className=f"fp-field fp-w-{width}")
 
 
-def band(label, *parts, span=2, hint=None):
+def band(label, *parts, span=RANGE, hint=None):
     """A field whose control is several inputs joined into one, e.g. a frequency range."""
     parts = [dbc.InputGroupText(p) if isinstance(p, str) else p for p in parts]
     return field(label, dbc.InputGroup(list(parts)), span=span, hint=hint)
 
 
-def switches(control, span=1, hint=None):
-    """A checklist that sits in a parameter grid without a label above it."""
-    children = [control]
+def action_field(*children, span=CHOICE):
+    """Buttons that belong on a form row: they take a field's slot so they share its baseline."""
+    return html.Div(
+        [html.Span(), html.Div(list(children), className="fp-actions"), html.Span()],
+        className=f"fp-field fp-w-{span}",
+    )
+
+
+def switches(control, hint=None, columns=False):
+    """Checkboxes, on a row of their own: they are not fields and do not line up as ones."""
+    children = [html.Div(control, className="fp-switches-cols" if columns else None)]
     if hint:
-        children.append(html.Small(hint, className="fp-hint"))
-    cls = "fp-field fp-field-switches" + ("" if span == 1 else f" fp-span-{span}")
-    return html.Div(children, className=cls)
+        children.append(html.Small(hint, className="fp-hint d-block mt-1"))
+    return html.Div(children, className="fp-switches")
 
 
 def actions(*children, className=""):

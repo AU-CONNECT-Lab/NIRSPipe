@@ -8,7 +8,9 @@ import dash
 import dash_bootstrap_components as dbc
 from dash import dcc, html
 
-from fnirs_pipe.interface.components import actions, band, card, field, params, section, split, switches
+from fnirs_pipe.interface.components import (
+    PATH, actions, band, card, field, params, section, split, switches,
+)
 from fnirs_pipe.qc.common.provenance import _DOMAIN
 
 dash.register_page(__name__, path="/hyper-analysis", name="Hyper Analysis")
@@ -33,11 +35,11 @@ def _scope():
             field("Command",
                   dcc.Dropdown(id="hy-command", options=_COMMANDS,
                                value="run", clearable=False),
-                  span=2),
+                  span=PATH),
             field("Derivatives directory",
                   dbc.Input(id="hy-output-dir", type="text",
                             placeholder="path to derivatives"),
-                  span=2),
+                  span=PATH),
         ),
     )
 
@@ -50,7 +52,7 @@ def _run_section():
                 field("Pairs CSV",
                       dbc.Input(id="hy-pairs-csv", type="text",
                                 placeholder="path to pairs.csv"),
-                      span=2),
+                      span=PATH),
                 field("Group ID",
                       dbc.Input(id="hy-group-id", type="text", placeholder="all groups")),
                 field("Task label",
@@ -62,7 +64,7 @@ def _run_section():
                 field("ROI mapping",
                       dbc.Input(id="hy-roi-mapping", type="text",
                                 placeholder="roi.json (optional)"),
-                      span=2),
+                      span=PATH),
             ),
         ),
         section("Coherence",
@@ -98,7 +100,7 @@ def _run_section():
                 field("Pseudo-dyad iterations",
                       dbc.Input(id="hy-wtc-pseudo", type="number", min=0, step=10,
                                 placeholder="0, off"),
-                      span=2),
+                      span=PATH),
             ),
         ),
         section("Correlation",
@@ -118,7 +120,7 @@ def _run_section():
             ),
         ),
         section("Options",
-            dbc.Checklist(
+            switches(dbc.Checklist(
                 id="hy-flags",
                 options=[
                     {"label": "Significance testing (slow)", "value": "wtc_significance"},
@@ -136,8 +138,8 @@ def _run_section():
                     {"label": "Normalize recordings", "value": "normalize"},
                     {"label": "Check only (compute nothing)", "value": "check_only"},
                 ],
-                value=[], inline=True, switch=True,
-            ),
+                value=[], switch=True,
+            ), columns=True),
         ),
     ))
 
@@ -153,13 +155,13 @@ def _band_section():
             field("Suffix",
                   dbc.Input(id="hy-band-suffix", type="text",
                             placeholder="e.g. band0p05-0p2"),
-                  span=2),
+                  span=PATH),
             switches(dbc.Checklist(
                 id="hy-band-flags",
                 options=[{"label": "Average the whole band (no COI mask)",
                           "value": "band_no_mask_coi"}],
                 value=[], inline=True, switch=True,
-            ), span=2),
+            )),
         ),
         subtitle="Reads the npz a run with Save WTC maps on wrote. Writes tables, not a report.",
     ))

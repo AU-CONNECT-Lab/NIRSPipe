@@ -7,7 +7,7 @@ import dash_ag_grid as dag
 import dash_bootstrap_components as dbc
 from dash import dcc, html
 
-from fnirs_pipe.interface.components import actions, band, card, field, params
+from fnirs_pipe.interface.components import PATH, actions, band, card, field, params
 from fnirs_pipe.interface.grid import AUTO_HEIGHT, COL_DEF
 
 dash.register_page(__name__, path="/hyper-align", name="Hyper Preparation")
@@ -28,15 +28,15 @@ layout = dbc.Container([
         params(
             field("BIDS directory",
                   dbc.Input(id="ha-bids-dir", type="text", placeholder="/path/to/bids"),
-                  span=2),
+                  span=PATH),
             field("Derivatives directory",
                   dbc.Input(id="ha-deriv-dir", type="text",
                             placeholder="/path/to/derivatives"),
-                  span=2),
+                  span=PATH),
             field("Group CSV",
                   dbc.Input(id="ha-group-csv", type="text",
                             placeholder="/path/to/groups.csv"),
-                  span=2),
+                  span=PATH),
         ),
         actions(dbc.Button("Load & align", id="ha-load-btn", color="primary"),
                 className="mt-3"),

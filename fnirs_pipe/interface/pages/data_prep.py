@@ -7,7 +7,9 @@ import dash_ag_grid as dag
 import dash_bootstrap_components as dbc
 from dash import dcc, html
 
-from fnirs_pipe.interface.components import actions, band, card, field, params, section, switches
+from fnirs_pipe.interface.components import (
+    PATH, action_field, actions, band, card, field, params, section, switches,
+)
 from fnirs_pipe.interface.grid import AUTO_HEIGHT, COL_DEF, DEL_COL
 
 
@@ -198,11 +200,11 @@ layout = dbc.Container([
             params(
                 field("BIDS directory",
                       dbc.Input(id="dp-bids-dir", type="text", placeholder="/path/to/bids"),
-                      span=2),
+                      span=PATH),
                 field(["Output directory ", html.Span("*", className="text-danger")],
                       dbc.Input(id="dp-output-dir", type="text",
                                 placeholder="/path/to/output  (required)"),
-                      span=2),
+                      span=PATH),
             ),
         ),
         section("Subject",
@@ -213,11 +215,11 @@ layout = dbc.Container([
                 field("Run",
                       dcc.Dropdown(id="dp-run-dropdown", options=[],
                                    placeholder="Select run"),
-                      span=2),
-                switches(actions(
+                      span=PATH),
+                action_field(
                     dbc.Button("Detect", id="dp-detect-btn", color="primary"),
                     dbc.Button("Clear",  id="dp-clear-btn",  color="secondary", outline=True),
-                )),
+                ),
             ),
             html.Div(id="dp-subjects-result",    className="mt-2"),
             html.Div(id="dp-subjects-container"),
@@ -257,7 +259,7 @@ layout = dbc.Container([
                      "to",
                      dbc.Input(id="dp-long-max-dist", type="number", step=0.5,
                                min=0.1, placeholder="no limit"),
-                     span=3),
+                     span=PATH),
             ),
             html.Div(id="dp-load-status", className="mt-2 small"),
         ),
