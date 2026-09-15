@@ -5,7 +5,7 @@ from __future__ import annotations
 import dash
 import dash_ag_grid as dag
 import dash_bootstrap_components as dbc
-from dash import dash_table, html
+from dash import html
 
 from fnirs_pipe.interface.grid import AUTO_HEIGHT, COL_DEF, DEL_COL
 
@@ -17,9 +17,12 @@ _RENAME_COLS = [
     DEL_COL,
 ]
 
+_NUM = {"editable": True, "cellDataType": "number", "cellEditor": "agNumberCellEditor"}
+
 _SEG_COLS = [
-    {"name": "Onset (s)",    "id": "onset",    "editable": True, "type": "numeric"},
-    {"name": "Duration (s)", "id": "duration", "editable": True, "type": "numeric"},
+    {"headerName": "Onset (s)",    "field": "onset",    **_NUM},
+    {"headerName": "Duration (s)", "field": "duration", **_NUM},
+    DEL_COL,
 ]
 
 
@@ -188,16 +191,15 @@ layout = dbc.Container([
             ]),
 
             html.Div(id="bp-crop-multi", style={"display": "none"}, children=[
-                dash_table.DataTable(
+                dag.AgGrid(
                     id="bp-crop-seg-table",
-                    columns=_SEG_COLS,
-                    data=[{"onset": 0.0, "duration": 30.0}],
-                    editable=True,
-                    row_deletable=True,
-                    style_table={"overflowX": "auto", "maxHeight": "200px",
-                                 "overflowY": "auto"},
-                    style_header={"fontWeight": "600", "fontSize": "0.78rem"},
-                    style_cell={"fontSize": "0.78rem", "padding": "3px 6px"},
+                    columnDefs=_SEG_COLS,
+                    rowData=[{"onset": 0.0, "duration": 30.0}],
+                    className="fp-grid fp-grid-sm fp-grid-capped",
+                    columnSize="responsiveSizeToFit",
+                    defaultColDef=COL_DEF,
+                    dashGridOptions=AUTO_HEIGHT,
+                    style={"height": None},
                 ),
                 dbc.Row([
                     dbc.Col(dbc.Button("+ Segment", id="bp-seg-add-btn", size="sm",

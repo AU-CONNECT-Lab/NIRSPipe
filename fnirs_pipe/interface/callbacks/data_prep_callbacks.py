@@ -10,6 +10,7 @@ from pathlib import Path
 import dash_bootstrap_components as dbc
 from dash import ALL, Input, Output, Patch, State, callback, ctx, dcc, html, no_update
 
+from fnirs_pipe.interface.grid import rows_minus_clicked
 from fnirs_pipe.interface.theme import style_figure
 from fnirs_pipe.qc.common.channel_table import channel_columns
 
@@ -981,15 +982,28 @@ def toggle_crop_mode(mode):
 # ── Crop: add segment row ─────────────────────────────────────────────────────
 
 @callback(
-    Output("dp-crop-seg-table", "data", allow_duplicate=True),
+    Output("dp-crop-seg-table", "rowData", allow_duplicate=True),
     Input("dp-crop-add-seg-btn", "n_clicks"),
-    State("dp-crop-seg-table",   "data"),
+    State("dp-crop-seg-table",   "virtualRowData"),
     prevent_initial_call=True,
 )
 def add_crop_segment(n_clicks, rows):
-    rows = rows or []
+    rows = list(rows or [])
     rows.append({"onset": 0.0, "duration": 30.0})
     return rows
+
+
+# ── Crop: delete segment row ──────────────────────────────────────────────────
+
+@callback(
+    Output("dp-crop-seg-table", "rowData", allow_duplicate=True),
+    Input("dp-crop-seg-table",  "cellClicked"),
+    State("dp-crop-seg-table",  "virtualRowData"),
+    prevent_initial_call=True,
+)
+def delete_crop_segment(cell, rows):
+    kept = rows_minus_clicked(cell, rows)
+    return no_update if kept is None else kept
 
 
 # ── Crop: fill tmin/tmax from zoom range ──────────────────────────────────────
@@ -1015,7 +1029,7 @@ def use_zoom_range(n_clicks, relayout):
     Output("dp-trigger-timeline", "figure", allow_duplicate=True),
     Input("dp-crop-tmin",         "value"),
     Input("dp-crop-tmax",         "value"),
-    Input("dp-crop-seg-table",    "data"),
+    Input("dp-crop-seg-table",    "virtualRowData"),
     Input("dp-crop-mode",         "value"),
     prevent_initial_call=True,
 )
@@ -1055,7 +1069,7 @@ def update_crop_highlight(tmin, tmax, segments, mode):
     State("dp-crop-mode",       "value"),
     State("dp-crop-tmin",       "value"),
     State("dp-crop-tmax",       "value"),
-    State("dp-crop-seg-table",  "data"),
+    State("dp-crop-seg-table",  "virtualRowData"),
     State("dp-crop-combine",    "value"),
     State("dp-run-store",       "data"),
     State("app-output-dir",     "data"),

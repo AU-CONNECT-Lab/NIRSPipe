@@ -211,7 +211,8 @@ a:hover { color: var(--fp-accent-dark); }
   --ag-spacing:                 3px;
   --ag-cell-horizontal-padding: 6px;
 }
-.fp-grid-capped { max-height: 200px; overflow-y: auto; }
+.fp-grid-capped    { max-height: 200px; overflow-y: auto; }
+.fp-grid-capped-sm { max-height: 150px; overflow-y: auto; }
 
 /* ---- Plotly chrome ---- */
 .js-plotly-plot .modebar { opacity: 0; transition: opacity 0.15s; }

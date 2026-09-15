@@ -175,15 +175,28 @@ def delete_rename_pair(cell, rows):
 # ── Add crop segment ──────────────────────────────────────────────────────────
 
 @callback(
-    Output("bp-crop-seg-table", "data", allow_duplicate=True),
+    Output("bp-crop-seg-table", "rowData", allow_duplicate=True),
     Input("bp-seg-add-btn",     "n_clicks"),
-    State("bp-crop-seg-table",  "data"),
+    State("bp-crop-seg-table",  "virtualRowData"),
     prevent_initial_call=True,
 )
 def add_crop_segment(n_clicks, rows):
-    rows = rows or []
+    rows = list(rows or [])
     rows.append({"onset": 0.0, "duration": 30.0})
     return rows
+
+
+# ── Delete crop segment ───────────────────────────────────────────────────────
+
+@callback(
+    Output("bp-crop-seg-table", "rowData", allow_duplicate=True),
+    Input("bp-crop-seg-table",  "cellClicked"),
+    State("bp-crop-seg-table",  "virtualRowData"),
+    prevent_initial_call=True,
+)
+def delete_crop_segment(cell, rows):
+    kept = rows_minus_clicked(cell, rows)
+    return no_update if kept is None else kept
 
 
 # ── Run batch ─────────────────────────────────────────────────────────────────
@@ -205,7 +218,7 @@ def add_crop_segment(n_clicks, rows):
     State("bp-crop-mode",   "value"),
     State("bp-crop-tmin",   "value"),
     State("bp-crop-tmax",   "value"),
-    State("bp-crop-seg-table", "data"),
+    State("bp-crop-seg-table", "virtualRowData"),
     State("bp-crop-combine","value"),
     State("bp-group-csv",   "value"),
     State("bp-n-jobs",      "value"),

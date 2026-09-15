@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import dash
+import dash_ag_grid as dag
 import dash_bootstrap_components as dbc
 from dash import dash_table, dcc, html
+
+from fnirs_pipe.interface.grid import AUTO_HEIGHT, COL_DEF, DEL_COL
 
 
 dash.register_page(__name__, path="/", name="Data Preparation")
@@ -23,9 +26,12 @@ _SQM_STYLE = [
     {"if": {"filter_query": "{cls} = 'qm-bad'",  "column_id": "value"}, "color": "#c0392b"},
 ]
 
+_NUM = {"editable": True, "cellDataType": "number", "cellEditor": "agNumberCellEditor"}
+
 _SEG_COLS = [
-    {"name": "Onset (s)",    "id": "onset",    "editable": True, "type": "numeric"},
-    {"name": "Duration (s)", "id": "duration", "editable": True, "type": "numeric"},
+    {"headerName": "Onset (s)",    "field": "onset",    **_NUM},
+    {"headerName": "Duration (s)", "field": "duration", **_NUM},
+    DEL_COL,
 ]
 
 _HIDDEN = {"display": "none"}
@@ -94,14 +100,15 @@ def _crop_card(extra_class=""):
         ], className="g-2 mt-2 align-items-center flex-wrap"),
         html.Div(id="dp-crop-seg-wrap", style={"display": "none"}, className="mt-2",
                  children=[
-            dash_table.DataTable(
+            dag.AgGrid(
                 id="dp-crop-seg-table",
-                columns=_SEG_COLS,
-                editable=True,
-                row_deletable=True,
-                style_table={"overflowX": "auto", "maxHeight": "150px", "overflowY": "auto"},
-                style_header={"fontWeight": "600", "fontSize": "0.78rem"},
-                style_cell={"fontSize": "0.78rem", "padding": "3px 6px"},
+                columnDefs=_SEG_COLS,
+                rowData=[],
+                className="fp-grid fp-grid-sm fp-grid-capped-sm",
+                columnSize="responsiveSizeToFit",
+                defaultColDef=COL_DEF,
+                dashGridOptions=AUTO_HEIGHT,
+                style={"height": None},
             ),
         ]),
         html.Div(id="dp-crop-status", className="mt-1 small"),

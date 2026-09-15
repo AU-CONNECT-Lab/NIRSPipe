@@ -17,7 +17,7 @@ AUTO_HEIGHT = {"domLayout": "autoHeight"}
 DEL_COL = {
     "headerName": "", "field": "_del", "editable": False,
     "width": 34, "minWidth": 34, "maxWidth": 34,
-    "resizable": False, "cellClass": "fp-grid-del",
+    "resizable": False, "cellClass": "fp-grid-del", "cellDataType": False,
 }
 
 
