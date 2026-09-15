@@ -22,7 +22,12 @@ from dash import dcc, html
 from fnirs_pipe.cli.run import _build_parser
 from fnirs_pipe.cli.workflows import _build_post_config
 from fnirs_pipe.interface.callbacks.analysis_callbacks import _build_cli_args
-from fnirs_pipe.interface.callbacks.qc_callbacks import _AGGREGATE, _HYPER, build_qc_args
+from fnirs_pipe.interface.cli_args import (
+    _AGGREGATE,
+    _HYPER,
+    build_prep_args,
+    build_qc_args,
+)
 
 # Flags the analysis page deliberately does not offer, and why. A flag listed here must still
 # exist in the CLI, and must not also be emitted; both are asserted below.
@@ -450,3 +455,134 @@ def test_a_space_separated_box_repeats_its_flag_rather_than_joining():
 def test_the_aggregate_commands_take_only_an_output_directory():
     for command in _AGGREGATE:
         assert build_qc_args(command, _QC_FULL_OPTS) == ["fnirs-qc", command, "/out"]
+
+
+# ── Batch Prep → fnirs-prep ──────────────────────────────────────────────────
+
+# per-subcommand flags the Batch Prep page leaves out, and why
+PREP_NOT_EXPOSED = {
+    "crop": {
+        # the page's radio is the two modes; a trigger-relative origin needs a name the
+        # page cannot offer without reading the recording, which is Data Preparation's job
+        "--align", "--trigger-name",
+        # a margin is only meaningful against the band a later analysis will average over,
+        # and that band is set on the Hyper Analysis page. Setting it here would let the two
+        # disagree with nothing saying which one the output was cut for
+        "--margin", "--band-fmin",
+        # cutting a processed stage rather than a recording. The page takes a BIDS root, so
+        # offering this would make the two directory fields mean different things per mode
+        "--input-desc",
+        # the negative half of a paired flag; the checkbox emits the positive
+        "--no-combine",
+        "--skip-bids-validation", "--no-skip-bids-validation",
+    },
+    "align": {"--skip-bids-validation", "--no-skip-bids-validation"},
+    "edit-markers": {
+        # an edited events TSV applied to every subject, and the page has no file picker.
+        # Its three radio options are the edits that need no file
+        "--tsv",
+        "--skip-bids-validation", "--no-skip-bids-validation",
+    },
+}
+
+_PREP_FULL_OPTS = dict(
+    bids_dir="/bids", deriv_dir="/deriv", subjects=["001", "002"],
+    ses="01", task="tapping", run="01", n_jobs=2,
+    shift=-2.5, set_duration=30.0, rename=["old:new"],
+    crop_tmin=10.0, crop_tmax=600.0,
+    segments_path="/deriv/batch-crop-segments.tsv", combine=True,
+    group_csv="/groups.csv",
+)
+
+# every branch of the page's two radios, as (operation, extra opts)
+_PREP_CASES = [
+    ("markers", {"marker_op": "shift"}),
+    ("markers", {"marker_op": "set_duration"}),
+    ("markers", {"marker_op": "rename"}),
+    ("crop", {"crop_mode": "single"}),
+    ("crop", {"crop_mode": "multi"}),
+    ("hyper_align", {}),
+]
+
+# the page's operation names, and the fnirs-prep subcommand each one drives
+_PREP_SUBCOMMAND = {"markers": "edit-markers", "crop": "crop", "hyper_align": "align"}
+
+
+def _build_prep_parser():
+    from fnirs_pipe.cli.prep import _build_parser as build
+    return build()
+
+
+def _prep_subparsers():
+    return _subcommands(_build_prep_parser)
+
+
+def _prep_flags(subcommand: str) -> set[str]:
+    parser = _prep_subparsers()[subcommand]
+    if subcommand == "edit-markers":
+        parser = _subcommands(lambda: parser)["apply"]
+    return {flag for action in parser._actions for flag in action.option_strings
+            if flag.startswith("--") and action.dest != "help"}
+
+
+def _prep_emitted(subcommand: str) -> set[str]:
+    emitted: set[str] = set()
+    for operation, extra in _PREP_CASES:
+        if _PREP_SUBCOMMAND[operation] != subcommand:
+            continue
+        argv = build_prep_args(operation, dict(_PREP_FULL_OPTS, **extra))
+        emitted |= {a for a in argv if a.startswith("--")}
+    return emitted
+
+
+def test_the_batch_page_reaches_every_prep_subcommand():
+    missing = set(_prep_subparsers()) - set(_PREP_SUBCOMMAND.values())
+    assert not missing, f"fnirs-prep grew {sorted(missing)} and Batch Prep cannot reach them"
+
+
+@pytest.mark.parametrize("subcommand", sorted(set(_PREP_SUBCOMMAND.values())))
+def test_every_prep_flag_is_sendable_or_written_off(subcommand):
+    missing = (_prep_flags(subcommand) - _prep_emitted(subcommand)
+               - PREP_NOT_EXPOSED.get(subcommand, set()))
+    assert not missing, (
+        f"{subcommand} grew {sorted(missing)} and Batch Prep cannot send them; "
+        f"add a control, or add them to PREP_NOT_EXPOSED with a reason"
+    )
+
+
+@pytest.mark.parametrize("subcommand", sorted(PREP_NOT_EXPOSED))
+def test_the_written_off_prep_flags_still_exist(subcommand):
+    stale = PREP_NOT_EXPOSED[subcommand] - _prep_flags(subcommand)
+    assert not stale, f"PREP_NOT_EXPOSED[{subcommand!r}] names flags that are gone: {sorted(stale)}"
+
+
+@pytest.mark.parametrize("operation,extra", _PREP_CASES,
+                         ids=[f"{op}-{'-'.join(e.values())}" if e else op
+                              for op, e in _PREP_CASES])
+def test_the_generated_prep_command_parses(operation, extra):
+    argv = build_prep_args(operation, dict(_PREP_FULL_OPTS, **extra))
+    assert argv[0] == "fnirs-prep"
+    _build_prep_parser().parse_args(argv[1:])   # raises SystemExit on an unknown flag
+
+
+def test_the_selected_subjects_reach_participant_label():
+    argv = build_prep_args("crop", dict(_PREP_FULL_OPTS, crop_mode="single"))
+    args = _build_prep_parser().parse_args(argv[1:])
+    assert args.participant_label == ["001", "002"]
+
+
+def test_align_takes_no_subject_selection():
+    """Its subjects come from the group CSV, so a selection flag would contradict it."""
+    argv = build_prep_args("hyper_align", _PREP_FULL_OPTS)
+    assert "--participant-label" not in argv
+
+
+def test_one_marker_edit_is_sent_at_a_time():
+    """The page's radio picks one; sending two would let the CLI apply both."""
+    for marker_op, flag in (("shift", "--shift"),
+                            ("set_duration", "--set-duration"),
+                            ("rename", "--rename")):
+        argv = build_prep_args("markers", dict(_PREP_FULL_OPTS, marker_op=marker_op))
+        others = {"--shift", "--set-duration", "--rename"} - {flag}
+        assert flag in argv
+        assert not (others & set(argv)), f"{marker_op} also sent {sorted(others & set(argv))}"

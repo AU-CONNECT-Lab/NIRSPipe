@@ -39,7 +39,8 @@ def registered():
     import fnirs_pipe.interface.callbacks.analysis_callbacks      # noqa: F401
     import fnirs_pipe.interface.callbacks.batch_prep_callbacks    # noqa: F401
     import fnirs_pipe.interface.callbacks.data_prep_callbacks     # noqa: F401
-    import fnirs_pipe.interface.callbacks.hyper_align_callbacks   # noqa: F401
+    import fnirs_pipe.interface.callbacks.hyper_align_callbacks    # noqa: F401
+    import fnirs_pipe.interface.callbacks.hyper_analysis_callbacks  # noqa: F401
     import fnirs_pipe.interface.callbacks.qc_callbacks            # noqa: F401
     import fnirs_pipe.interface.callbacks.recon_callbacks         # noqa: F401
 
@@ -73,4 +74,4 @@ def test_every_callback_id_is_in_a_layout(registered):
 
 
 def test_pages_all_register(registered):
-    assert len(dash.page_registry) == 6
+    assert len(dash.page_registry) == 7

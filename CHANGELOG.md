@@ -6,7 +6,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- **Batch Prep writes out the `fnirs-prep` command it would run**, for copying to a shell or a job script. The page had none, which left batch editing as the one thing the GUI could do and not hand you. Multi-segment crop needs its table as a file, so generating the command also writes it beside the derivatives
+
 ### Changed
+- **Batch Prep runs the `fnirs-prep` command it shows you**, streaming its output with a Stop button, instead of doing the same work again in the browser process. The tree an alignment writes gains the `participants.tsv` it was missing, and records that `fnirs-prep align` made it
+- **The hyperscanning analysis has its own page.** It is a pipeline that runs on what the individual pipeline wrote, not a report, and it was sharing a page and a command picker with the cohort aggregates, which are a different tool. The sidebar now groups every page by the CLI it drives
 - **Every GUI page keeps Run and the generated command in view while the form scrolls**, in a column beside it rather than at the bottom of the page. On a narrow window the column drops below the form
 - **Parameters are laid out the same way on every GUI page**, in one block that fits as many columns as the window allows instead of a hand-set column count per card. Related parameters are grouped under headings, so a page that spread its settings over four cards now has one
 - **The GUI's tables are drawn by a grid widget Dash still supports.** The one they used is on its way out of Dash and warned on every page build. Rows are deleted by the same cross in the same place, and the columns, the values and the metric colouring are unchanged

@@ -5,9 +5,10 @@ from __future__ import annotations
 from pathlib import Path
 
 import dash_bootstrap_components as dbc
-from dash import Input, Output, State, callback, html, no_update
+from dash import Input, Output, State, callback, no_update
 
 from fnirs_pipe.interface import process_stream
+from fnirs_pipe.interface.callbacks._cli_run import log_panel
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("interface.analysis_callbacks")
@@ -377,22 +378,6 @@ def generate_command(n_clicks, bids_dir, output_dir, subjects, dpf, sci_thresh, 
     return preview, {"argv": argv}
 
 
-_LOG_STYLE = {
-    "background": "rgba(0,0,0,0.04)", "padding": "0.5rem", "borderRadius": "4px",
-    "maxHeight": "300px", "overflow": "auto", "fontSize": "12px", "margin": "0.5rem 0 0",
-}
-
-
-def _log_panel(header, lines, dropped, color):
-    body = "\n".join(lines) if lines else "(no output yet)"
-    if dropped:
-        body = f"... {dropped} earlier lines dropped ...\n{body}"
-    return dbc.Alert([
-        html.Div(header, className="fw-bold"),
-        html.Pre(body, style=_LOG_STYLE),
-    ], color=color, className="mb-0")
-
-
 @callback(
     Output("an-run-status", "children"),
     Output("an-run-store",  "data"),
@@ -420,7 +405,7 @@ def run_pipeline(n_clicks, cmd_data):
                 None, True, True, False)
 
     logger.info("started %s as run %s", argv[0], run_id)
-    return _log_panel("Running...", [], 0, "info"), run_id, False, False, True
+    return log_panel("Running...", [], 0, "info"), run_id, False, False, True
 
 
 @callback(
@@ -438,7 +423,7 @@ def stream_run_output(_n, run_id):
 
     lines, returncode, dropped = process_stream.poll(run_id)
     if returncode is None:
-        return _log_panel("Running...", lines, dropped, "info"), False, False, True
+        return log_panel("Running...", lines, dropped, "info"), False, False, True
 
     if returncode == 0:
         header, color = "Pipeline finished.", "success"
@@ -447,7 +432,7 @@ def stream_run_output(_n, run_id):
     else:
         header, color = f"Pipeline failed (exit {returncode}).", "danger"
     process_stream.forget(run_id)
-    return _log_panel(header, lines, dropped, color), True, True, False
+    return log_panel(header, lines, dropped, color), True, True, False
 
 
 @callback(

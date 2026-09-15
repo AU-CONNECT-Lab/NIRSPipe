@@ -2,15 +2,19 @@
 
 from __future__ import annotations
 
+import platform
+
 import dash
 import dash_ag_grid as dag
 import dash_bootstrap_components as dbc
-from dash import html
+from dash import dcc, html
 
 from fnirs_pipe.interface.components import actions, card, field, params, section, split, switches
 from fnirs_pipe.interface.grid import AUTO_HEIGHT, COL_DEF, DEL_COL
 
 dash.register_page(__name__, path="/batch-prep", name="Batch Prep")
+
+_DEFAULT_SHELL = "cmd" if platform.system() == "Windows" else "bash"
 
 _RENAME_COLS = [
     DEL_COL,
@@ -170,18 +174,43 @@ def _run_panel():
         params(
             field("Parallel jobs",
                   dbc.Input(id="bp-n-jobs", type="number", value=1, min=1, step=1)),
-            switches(actions(dbc.Button("Run batch", id="bp-run-btn", color="success"))),
+            switches(actions(
+                dbc.Button("Run batch", id="bp-run-btn", color="success"),
+                dbc.Button("Stop", id="bp-stop-btn", color="danger",
+                           outline=True, disabled=True),
+                dbc.Button("Generate command", id="bp-generate-btn",
+                           color="secondary", outline=True),
+            ), span=2),
         ),
         html.Div(id="bp-log", className="mt-3"),
     )
 
 
+def _command_panel():
+    return card("Command",
+        dbc.Select(
+            id="bp-shell-select",
+            options=[{"label": s, "value": s} for s in ("bash", "cmd", "powershell")],
+            value=_DEFAULT_SHELL,
+            size="sm",
+            className="mb-2",
+        ),
+        html.Pre(id="bp-command-preview", className="fp-command"),
+        subtitle="what this form is, as fnirs-prep",
+    )
+
+
 layout = dbc.Container([
+    dcc.Store(id="bp-command-store"),
+    dcc.Store(id="bp-run-store", storage_type="memory"),
+    # the run is polled rather than waited on; disabled until there is something to poll
+    dcc.Interval(id="bp-run-tick", interval=1000, disabled=True),
+
     html.H3("Batch Preparation"),
     html.Hr(),
 
     split(
         main=[_scope(), _operation()],
-        aside=[_run_panel()],
+        aside=[_run_panel(), _command_panel()],
     ),
 ], fluid=True)

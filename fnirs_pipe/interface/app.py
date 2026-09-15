@@ -30,15 +30,15 @@ _CONTENT_EXPANDED  = {"marginLeft": "200px", "padding": "1.25rem 1.5rem", "trans
 _CONTENT_COLLAPSED = {"marginLeft": "44px",  "padding": "1.25rem 1.5rem", "transition": "margin-left 0.2s"}
 
 
-# the pages are three stages at two scales: one recording at a time, or a whole tree at once.
-# A flat list hid that, and put the page that starts a study third.
+# grouped by the CLI each page drives, which is also the order a study runs them in
 _NAV = [
-    ("Import", [("Recon", "/recon")]),
-    ("Prepare", [("Data Preparation", "/"),
-                 ("Hyper Align", "/hyper-align"),
-                 ("Batch Prep", "/batch-prep")]),
-    ("Run", [("Analysis", "/analysis"),
-             ("QC Reports", "/qc")]),
+    ("fnirs-recon", [("Recon", "/recon")]),
+    ("fnirs-prep", [("Data Preparation", "/"),
+                    ("Hyper Align", "/hyper-align"),
+                    ("Batch Prep", "/batch-prep")]),
+    ("fnirs-pipe", [("Analysis", "/analysis")]),
+    ("fnirs-hyper", [("Hyper Analysis", "/hyper-analysis")]),
+    ("fnirs-qc", [("QC Reports", "/qc")]),
 ]
 
 
@@ -117,6 +117,7 @@ def launch(port: int | None = None) -> None:
     import fnirs_pipe.interface.callbacks.batch_prep_callbacks
     import fnirs_pipe.interface.callbacks.hyper_align_callbacks
     import fnirs_pipe.interface.callbacks.analysis_callbacks
+    import fnirs_pipe.interface.callbacks.hyper_analysis_callbacks
     import fnirs_pipe.interface.callbacks.qc_callbacks  # noqa: F401  (side effect: registers callbacks)
 
     # lets the QC page show a generated report in an iframe; group reports are iframe shells
