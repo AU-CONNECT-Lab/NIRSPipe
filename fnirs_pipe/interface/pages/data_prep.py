@@ -33,9 +33,9 @@ _SQM_GRID = {**AUTO_HEIGHT, "tooltipShowDelay": 300, "tooltipHideDelay": 60000}
 _NUM = {"editable": True, "cellDataType": "number", "cellEditor": "agNumberCellEditor"}
 
 _SEG_COLS = [
+    DEL_COL,
     {"headerName": "Onset (s)",    "field": "onset",    **_NUM},
     {"headerName": "Duration (s)", "field": "duration", **_NUM},
-    DEL_COL,
 ]
 
 _HIDDEN = {"display": "none"}

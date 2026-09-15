@@ -12,17 +12,17 @@ from fnirs_pipe.interface.grid import AUTO_HEIGHT, COL_DEF, DEL_COL
 dash.register_page(__name__, path="/batch-prep", name="Batch Prep")
 
 _RENAME_COLS = [
+    DEL_COL,
     {"headerName": "From", "field": "from_name", "editable": True},
     {"headerName": "To",   "field": "to_name",   "editable": True},
-    DEL_COL,
 ]
 
 _NUM = {"editable": True, "cellDataType": "number", "cellEditor": "agNumberCellEditor"}
 
 _SEG_COLS = [
+    DEL_COL,
     {"headerName": "Onset (s)",    "field": "onset",    **_NUM},
     {"headerName": "Duration (s)", "field": "duration", **_NUM},
-    DEL_COL,
 ]
 
 
