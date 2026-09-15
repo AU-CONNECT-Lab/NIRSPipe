@@ -137,6 +137,48 @@ def _warn_unmatched_design_band(config: PostConfig) -> None:
     )
 
 
+def _longest_repeat_interval(raw: mne.io.Raw) -> float | None:
+    """The longest gap between two trials of the same condition, over conditions.
+
+    That gap is the slowest rhythm the design contains, so it is the frequency a drift
+    basis must stay below. Annotations that mark rejected time rather than a condition are
+    skipped, and a condition occurring once has no interval to measure.
+    """
+    import numpy as np
+
+    longest = []
+    for desc in set(raw.annotations.description):
+        if desc.upper().startswith("BAD"):
+            continue
+        onsets = np.sort(raw.annotations.onset[raw.annotations.description == desc])
+        if onsets.size >= 2:
+            longest.append(float(np.max(np.diff(onsets))))
+    return max(longest) if longest else None
+
+
+def _warn_drift_absorbs_task(config: PostConfig, raw: mne.io.Raw) -> None:
+    """A drift basis reaching the task's own rhythm fits the task away as if it were drift.
+
+    The cosine basis spans everything below its cutoff, so the cutoff has to sit below the
+    frequency at which a condition repeats. The usual choice is half that frequency, which
+    leaves the basis an octave of room before it reaches the task.
+    """
+    if config.drift_model != "cosine" or config.drift_high_pass is None:
+        return
+    interval = _longest_repeat_interval(raw)
+    if interval is None or interval <= 0:
+        return
+
+    task_freq = 1.0 / interval
+    if config.drift_high_pass < task_freq:
+        return
+    logger.warning(
+        "sub-%s | --drift-high-pass %g Hz is at or above the %g Hz at which a condition "
+        "repeats (every %.1f s), so the drift basis spans the task and will absorb it. "
+        "Use %g Hz or lower.",
+        config.subject, config.drift_high_pass, task_freq, interval, task_freq / 2,
+    )
+
 
 def run_post(
     raw_haemo: mne.io.Raw,
@@ -203,6 +245,7 @@ def run_post(
             raise ValueError("--events-path and --stim-dur are mutually exclusive")
         logger.info("sub-%s | GLM (%s / %s)", config.subject, config.hrf_model, config.noise_model)
         _warn_unmatched_design_band(config)
+        _warn_drift_absorbs_task(config, result)
         _, glm_est, dm, raw_resid = run_glm_pipeline(
             result,
             stim_dur=config.stim_dur,

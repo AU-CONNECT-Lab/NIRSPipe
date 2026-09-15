@@ -211,7 +211,7 @@ a:hover { color: var(--fp-accent-dark); }
   text-align: center;
   padding: 0;
 }
-.fp-grid .ag-cell.fp-grid-del::after { content: "¹5"; }
+.fp-grid .ag-cell.fp-grid-del::after { content: "✕"; }
 .fp-grid .ag-cell.fp-grid-del:hover { color: var(--fp-bad); }
 
 /* the denser of the two table sizes, and the height cap style_table used to set */

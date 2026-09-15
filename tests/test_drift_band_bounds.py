@@ -1,0 +1,97 @@
+"""A cosine drift cutoff is bracketed: at least the data's high-pass, below the task's rhythm."""
+
+from __future__ import annotations
+
+import mne
+import numpy as np
+import pytest
+
+from fnirs_pipe.pipeline.post_pipeline import (
+    PostConfig,
+    _longest_repeat_interval,
+    _warn_drift_absorbs_task,
+    _warn_unmatched_design_band,
+)
+
+
+def _raw_with(descriptions, onsets):
+    info = mne.create_info(["S1_D1 hbo"], sfreq=10.0, ch_types="hbo")
+    raw = mne.io.RawArray(np.zeros((1, 3000)), info, verbose="ERROR")
+    raw.set_annotations(mne.Annotations(onset=onsets, duration=[1.0] * len(onsets),
+                                        description=descriptions))
+    return raw
+
+
+def _config(**kw):
+    base = dict(subject="01", drift_model="cosine", drift_high_pass=0.01,
+                cardiac_l_freq=0.7, cardiac_h_freq=1.5,
+                resp_l_freq=0.1, resp_h_freq=0.5)
+    return PostConfig(**{**base, **kw})
+
+
+# ---- the design side ----
+
+def test_the_longest_gap_is_measured_per_condition():
+    raw = _raw_with(["a", "a", "b", "b"], [0.0, 30.0, 0.0, 120.0])
+    assert _longest_repeat_interval(raw) == pytest.approx(120.0)
+
+
+def test_rejected_time_is_not_a_condition():
+    raw = _raw_with(["a", "a", "BAD_gvtd", "BAD_gvtd"], [0.0, 30.0, 0.0, 200.0])
+    assert _longest_repeat_interval(raw) == pytest.approx(30.0)
+
+
+def test_a_condition_seen_once_has_no_interval():
+    assert _longest_repeat_interval(_raw_with(["a"], [0.0])) is None
+
+
+def test_a_cutoff_above_the_task_rhythm_warns(caplog):
+    raw = _raw_with(["a", "a"], [0.0, 120.0])          # task rhythm 1/120 = 0.0083 Hz
+    with caplog.at_level("WARNING"):
+        _warn_drift_absorbs_task(_config(drift_high_pass=0.01), raw)
+    assert "absorb" in caplog.text
+
+
+def test_a_cutoff_below_the_task_rhythm_is_quiet(caplog):
+    raw = _raw_with(["a", "a"], [0.0, 30.0])           # task rhythm 1/30 = 0.033 Hz
+    with caplog.at_level("WARNING"):
+        _warn_drift_absorbs_task(_config(drift_high_pass=0.0167), raw)
+    assert caplog.text == ""
+
+
+def test_only_a_cosine_basis_is_bounded_this_way(caplog):
+    raw = _raw_with(["a", "a"], [0.0, 120.0])
+    with caplog.at_level("WARNING"):
+        _warn_drift_absorbs_task(_config(drift_model="polynomial"), raw)
+    assert caplog.text == ""
+
+
+# ---- the data side, which was already checked ----
+
+def test_a_cutoff_below_the_data_high_pass_warns(caplog):
+    with caplog.at_level("WARNING"):
+        _warn_unmatched_design_band(_config(high_pass=0.02, drift_high_pass=0.01))
+    assert "underestimated" in caplog.text
+
+
+def test_matching_the_data_high_pass_is_quiet(caplog):
+    with caplog.at_level("WARNING"):
+        _warn_unmatched_design_band(_config(high_pass=0.01, drift_high_pass=0.01))
+    assert caplog.text == ""
+
+
+def test_no_data_high_pass_leaves_nothing_to_match(caplog):
+    """The default: the drift basis is the only detrend, so no cutoff has to be covered."""
+    with caplog.at_level("WARNING"):
+        _warn_unmatched_design_band(_config(high_pass=None, drift_high_pass=0.005))
+    assert caplog.text == ""
+
+
+def test_the_two_bounds_can_exclude_each_other(caplog):
+    """A band too aggressive for the design: no cutoff satisfies both, and both say so."""
+    raw = _raw_with(["a", "a"], [0.0, 120.0])          # task rhythm 0.0083 Hz
+    config = _config(high_pass=0.01, drift_high_pass=0.01)
+    with caplog.at_level("WARNING"):
+        _warn_unmatched_design_band(config)            # quiet: 0.01 >= 0.01
+        _warn_drift_absorbs_task(config, raw)          # warns: 0.01 >= 0.0083
+    assert "absorb" in caplog.text

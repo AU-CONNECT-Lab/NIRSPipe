@@ -7,10 +7,13 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- **The GLM warns when the drift basis reaches the frequency at which a condition repeats**, which makes it fit the task away as if it were drift. The opposite bound, the drift basis having to cover what a bandpass already removed, was checked; this one was not, so the cutoff was only ever pinned from one side
 - **The two QC pages can write the static report of what they are showing**, by running `fnirs-qc prep-raw` or `hyper-raw` and embedding the result. What the pages computed lived only in the browser until now, so nothing could be filed or sent on. The report is written when asked for, not when a page is opened: the DPF and the cardiac band have no defaults to open a page with
 - **Batch Prep writes out the `fnirs-prep` command it would run**, for copying to a shell or a job script. The page had none, which left batch editing as the one thing the GUI could do and not hand you. Multi-segment crop needs its table as a file, so generating the command also writes it beside the derivatives
 
 ### Changed
+- **The Analysis page says on screen when the high-pass and the drift model disagree**, instead of leaving it to a warning in the run log. Its high-pass box no longer suggests a value: leaving it empty and letting the drift basis detrend is what a task model wants, and the suggestion pointed the other way
+- **The grid tables draw a cross again** in the column that deletes a row, rather than the two characters a mangled encoding left there
 - **The sidebar is two families rather than one list.** Quality control holds the two pages that load one recording and show it to you, at the individual and dyad levels; Batch holds the five that assemble a command and run it. `Hyper Align` is now `Hyper Preparation`, the dyad counterpart of Data Preparation, and the page of cohort aggregates is `Cohort Reports`
 - **Batch Prep runs the `fnirs-prep` command it shows you**, streaming its output with a Stop button, instead of doing the same work again in the browser process. The tree an alignment writes gains the `participants.tsv` it was missing, and records that `fnirs-prep align` made it
 - **The hyperscanning analysis has its own page.** It is a pipeline that runs on what the individual pipeline wrote, not a report, and it was sharing a page and a command picker with the cohort aggregates, which are a different tool. The sidebar now groups every page by the CLI it drives

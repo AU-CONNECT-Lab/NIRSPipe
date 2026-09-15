@@ -515,3 +515,37 @@ def hide_what_does_not_apply(censor, drift):
         _SHOWN if drift == "cosine" else _GONE,
         _SHOWN if drift == "polynomial" else _GONE,
     )
+
+
+# ── The drift cutoff is bracketed, so say so while the form is being filled ──
+
+@callback(
+    Output("an-band-note", "children"),
+    Input("an-post-mode",      "value"),
+    Input("an-high-pass",      "value"),
+    Input("an-drift-model",    "value"),
+    Input("an-drift-high-pass", "value"),
+)
+def band_note(mode, high_pass, drift_model, drift_high_pass):
+    if mode != "glm" or high_pass is None:
+        return None
+
+    if drift_model != "cosine":
+        return dbc.Alert(
+            f"The data is high-passed at {high_pass} Hz but the task regressors are not, "
+            f"and a {drift_model or 'none'} drift model does not span that band. "
+            "Task betas will come out too small. Use a cosine drift model at "
+            f"{high_pass} Hz, or leave the high-pass empty and let the drift basis do it.",
+            color="warning", className="mb-0")
+
+    if drift_high_pass is None or drift_high_pass < high_pass:
+        return dbc.Alert(
+            f"Drift high-pass {drift_high_pass} Hz is below the {high_pass} Hz the data is "
+            "filtered at, so the drift basis does not cover what the filter removed. "
+            f"Set it to {high_pass} Hz or higher.",
+            color="warning", className="mb-0")
+
+    return dbc.Alert(
+        f"The high-pass and the cosine drift basis are both at {high_pass} Hz and doing the "
+        "same job. Leaving the high-pass empty is the usual choice for a task model.",
+        color="info", className="mb-0")

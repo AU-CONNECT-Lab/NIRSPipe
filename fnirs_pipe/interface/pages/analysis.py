@@ -270,7 +270,7 @@ def _postprocessing():
         ),
         params(
             field("High-pass (Hz)",
-                  dbc.Input(id="an-high-pass", type="number", placeholder="0.01")),
+                  dbc.Input(id="an-high-pass", type="number", placeholder="off")),
             field("Low-pass (Hz)",
                   dbc.Input(id="an-low-pass", type="number", placeholder="0.5")),
             field("Filter",
@@ -285,6 +285,7 @@ def _postprocessing():
             field("n_jobs",
                   dbc.Input(id="an-n-jobs", type="number", value=1, min=1, step=1)),
         ),
+        html.Div(id="an-band-note", className="mt-2"),
 
         # every mode honours these, and glm and rest require a drift model, so not GLM-only
         html.Div(id="an-confound-section", children=[
@@ -295,8 +296,7 @@ def _postprocessing():
                                        value="cosine", clearable=False),
                           hint="Required by GLM and Rest."),
                     field("Drift high-pass (Hz)",
-                          dbc.Input(id="an-drift-high-pass", type="number", value=0.01,
-                                    placeholder="0.01"),
+                          dbc.Input(id="an-drift-high-pass", type="number", value=0.01),
                           id="an-drift-hp-wrap"),
                     field("Drift order",
                           dbc.Input(id="an-drift-order", type="number",
