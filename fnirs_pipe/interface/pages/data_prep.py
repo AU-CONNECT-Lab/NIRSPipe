@@ -7,6 +7,7 @@ import dash_ag_grid as dag
 import dash_bootstrap_components as dbc
 from dash import dcc, html
 
+from fnirs_pipe.interface.components import actions, band, card, field, params, section, switches
 from fnirs_pipe.interface.grid import AUTO_HEIGHT, COL_DEF, DEL_COL
 
 
@@ -191,107 +192,75 @@ layout = dbc.Container([
 
     dbc.Row([dbc.Col([html.H3("Data Preparation"), html.Hr()])]),
 
-    # ── Data Source ──────────────────────────────────────────────────────────
-    _card("Data Source",
-        dbc.Row([
-            dbc.Col([
-                dbc.Label("BIDS Directory"),
-                dbc.Input(id="dp-bids-dir", type="text",
-                          placeholder="/path/to/bids"),
-            ], width=6),
-            dbc.Col([
-                dbc.Label(["Output Directory ", html.Span("*", className="text-danger")]),
-                dbc.Input(id="dp-output-dir", type="text",
-                          placeholder="/path/to/output  (required)"),
-            ], width=6),
-        ], className="g-3"),
-    ),
-
-    # ── Subject Selection ────────────────────────────────────────────────────
-    _card("Subject Selection",
-        dbc.Row([
-            dbc.Col([
-                dbc.Label("Enter Subject ID"),
-                dbc.Input(id="dp-manual-subject", type="text",
-                          placeholder="e.g. 10031", debounce=True),
-            ], width=5),
-            dbc.Col([
-                dbc.Label(""),
-                dbc.ButtonGroup([
+    # ── Setup ────────────────────────────────────────────────────────────────
+    card("Setup",
+        section("Data source",
+            params(
+                field("BIDS directory",
+                      dbc.Input(id="dp-bids-dir", type="text", placeholder="/path/to/bids"),
+                      span=2),
+                field(["Output directory ", html.Span("*", className="text-danger")],
+                      dbc.Input(id="dp-output-dir", type="text",
+                                placeholder="/path/to/output  (required)"),
+                      span=2),
+            ),
+        ),
+        section("Subject",
+            params(
+                field("Subject ID",
+                      dbc.Input(id="dp-manual-subject", type="text",
+                                placeholder="e.g. 10031", debounce=True)),
+                field("Run",
+                      dcc.Dropdown(id="dp-run-dropdown", options=[],
+                                   placeholder="Select run"),
+                      span=2),
+                switches(actions(
                     dbc.Button("Detect", id="dp-detect-btn", color="primary"),
-                    dbc.Button("Clear",  id="dp-clear-btn",  color="secondary"),
-                ]),
-            ], width="auto", className="d-flex align-items-end"),
-            dbc.Col([
-                dbc.Label("Run"),
-                dcc.Dropdown(id="dp-run-dropdown", options=[],
-                             placeholder="Select run"),
-            ]),
-        ], className="g-3 mb-3"),
-        html.Div(id="dp-subjects-result",    className="mb-2"),
-        html.Div(id="dp-subjects-container"),
-    ),
-
-    # ── Parameters ───────────────────────────────────────────────────────────
-    _card("Parameters",
-        dbc.Row([
-            dbc.Col([
-                dbc.Label("SCI Threshold"),
-                dbc.Input(id="dp-sci-thresh", type="number", value=0.8,
-                          min=0.0, max=1.0, step=0.01),
-            ], width=3),
-            dbc.Col([
-                dbc.Label("Cardiac Band (Hz)"),
-                dbc.InputGroup([
-                    dbc.Input(id="dp-cardiac-l", type="number", step=0.1, placeholder="lo (adult ~0.7)"),
-                    dbc.InputGroupText("–"),
-                    dbc.Input(id="dp-cardiac-h", type="number", step=0.1, placeholder="hi (adult ~1.5)"),
-                ]),
-            ], width=6),
-            dbc.Col([
-                dbc.Label("DPF"),
-                dbc.Input(id="dp-dpf", type="number", step=0.1, placeholder="e.g. 6.0"),
-            ], width=3),
-        ], className="g-3 align-items-end"),
-        dbc.Row([
-            dbc.Col([
-                dbc.Label("SCI / PSP Window (s)"),
-                dbc.Input(id="dp-window-s", type="number", value=10.0, min=1.0, step=1.0),
-            ], width=3),
-            dbc.Col([
-                dbc.Label("Epoch Window (s)"),
-                dbc.InputGroup([
-                    dbc.Input(id="dp-epoch-tmin", type="number", step=0.5, value=-5.0),
-                    dbc.InputGroupText("–"),
-                    dbc.Input(id="dp-epoch-tmax", type="number", step=0.5, value=25.0),
-                ]),
-            ], width=5),
-            dbc.Col(
-                dbc.Checklist(
+                    dbc.Button("Clear",  id="dp-clear-btn",  color="secondary", outline=True),
+                )),
+            ),
+            html.Div(id="dp-subjects-result",    className="mt-2"),
+            html.Div(id="dp-subjects-container"),
+        ),
+        section("Parameters",
+            params(
+                field("SCI threshold",
+                      dbc.Input(id="dp-sci-thresh", type="number", value=0.8,
+                                min=0.0, max=1.0, step=0.01)),
+                field("SCI / PSP window (s)",
+                      dbc.Input(id="dp-window-s", type="number", value=10.0,
+                                min=1.0, step=1.0)),
+                field("DPF",
+                      dbc.Input(id="dp-dpf", type="number", step=0.1, placeholder="e.g. 6.0")),
+                band("Cardiac band (Hz)",
+                     dbc.Input(id="dp-cardiac-l", type="number", step=0.1,
+                               placeholder="lo (adult ~0.7)"),
+                     "–",
+                     dbc.Input(id="dp-cardiac-h", type="number", step=0.1,
+                               placeholder="hi (adult ~1.5)")),
+                band("Epoch window (s)",
+                     dbc.Input(id="dp-epoch-tmin", type="number", step=0.5, value=-5.0),
+                     "–",
+                     dbc.Input(id="dp-epoch-tmax", type="number", step=0.5, value=25.0)),
+                switches(dbc.Checklist(
                     id="dp-epoch-qc",
                     options=[{"label": "Per-trial QC", "value": "on"}],
                     value=[], switch=True, className="small",
-                ),
-                width=3, className="d-flex align-items-end pb-2",
+                )),
+                band("Separations (mm)",
+                     "short ≤",
+                     dbc.Input(id="dp-short-max-dist", type="number", step=0.5,
+                               min=0.1, placeholder="10"),
+                     "long ≥",
+                     dbc.Input(id="dp-long-min-dist", type="number", step=0.5,
+                               min=0.1, placeholder="15"),
+                     "to",
+                     dbc.Input(id="dp-long-max-dist", type="number", step=0.5,
+                               min=0.1, placeholder="no limit"),
+                     span=3),
             ),
-        ], className="g-3 mt-1 align-items-end"),
-        dbc.Row([
-            dbc.Col([
-                dbc.Label("Separations (mm)"),
-                dbc.InputGroup([
-                    dbc.InputGroupText("short ≤"),
-                    dbc.Input(id="dp-short-max-dist", type="number", step=0.5,
-                              min=0.1, placeholder="10"),
-                    dbc.InputGroupText("long ≥"),
-                    dbc.Input(id="dp-long-min-dist", type="number", step=0.5,
-                              min=0.1, placeholder="15"),
-                    dbc.InputGroupText("to"),
-                    dbc.Input(id="dp-long-max-dist", type="number", step=0.5,
-                              min=0.1, placeholder="no limit"),
-                ]),
-            ], width=7),
-        ], className="g-3 mt-1 align-items-end"),
-        html.Div(id="dp-load-status", className="mt-2 small"),
+            html.Div(id="dp-load-status", className="mt-2 small"),
+        ),
     ),
 
     dbc.Tabs([

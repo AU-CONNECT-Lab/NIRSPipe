@@ -26,8 +26,8 @@ _SIDEBAR_COLLAPSED = {
     **_SIDEBAR_EXPANDED,
     "width": "44px",
 }
-_CONTENT_EXPANDED  = {"marginLeft": "200px", "padding": "2rem", "transition": "margin-left 0.2s"}
-_CONTENT_COLLAPSED = {"marginLeft": "44px",  "padding": "2rem", "transition": "margin-left 0.2s"}
+_CONTENT_EXPANDED  = {"marginLeft": "200px", "padding": "1.25rem 1.5rem", "transition": "margin-left 0.2s"}
+_CONTENT_COLLAPSED = {"marginLeft": "44px",  "padding": "1.25rem 1.5rem", "transition": "margin-left 0.2s"}
 
 
 def _sidebar() -> html.Div:

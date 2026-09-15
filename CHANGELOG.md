@@ -7,6 +7,8 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Changed
+- **Every GUI page keeps Run and the generated command in view while the form scrolls**, in a column beside it rather than at the bottom of the page. On a narrow window the column drops below the form
+- **Parameters are laid out the same way on every GUI page**, in one block that fits as many columns as the window allows instead of a hand-set column count per card. Related parameters are grouped under headings, so a page that spread its settings over four cards now has one
 - **The GUI's tables are drawn by a grid widget Dash still supports.** The one they used is on its way out of Dash and warned on every page build. Rows are deleted by the same cross in the same place, and the columns, the values and the metric colouring are unchanged
 
 ## [0.41.0] - 2026-09-14

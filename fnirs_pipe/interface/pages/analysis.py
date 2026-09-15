@@ -9,6 +9,17 @@ import dash_bootstrap_components as dbc
 import dash_cytoscape as cyto
 from dash import dcc, html
 
+from fnirs_pipe.interface.components import (
+    actions,
+    band,
+    card,
+    field,
+    params,
+    section,
+    split,
+    switches,
+)
+
 from fnirs_pipe.cli.run import (
     _DRIFT_CHOICES,
     _HRF_CHOICES,
@@ -103,7 +114,7 @@ def _dag_legend():
 
 
 def _dag_card():
-    return _card(
+    return card(
         "Pipeline DAG",
         _dag_legend(),
         cyto.Cytoscape(
@@ -125,10 +136,243 @@ def _dag_card():
     )
 
 
-def _card(title, *children):
-    return dbc.Card(
-        [dbc.CardHeader(title), dbc.CardBody(list(children))],
-        className="mb-3",
+# ---- Form column ----
+
+def _scope():
+    return card("Scope",
+        params(
+            field("BIDS directory",
+                  dbc.Input(id="an-bids-dir", type="text", placeholder="/path/to/bids"),
+                  span=2),
+            field("Output directory",
+                  dbc.Input(id="an-output-dir", type="text", placeholder="/path/to/output"),
+                  span=2),
+            field("Session label(s)",
+                  dbc.Input(id="an-session-label", type="text", placeholder="01  (optional)")),
+            field("Task label(s)",
+                  dbc.Input(id="an-task-label", type="text", placeholder="rest  (optional)")),
+            switches(dbc.Button("Detect subjects", id="an-detect-btn",
+                                color="primary", className="w-100")),
+        ),
+        html.Div(id="an-subjects-result", className="mt-2"),
+        html.Div(id="an-subjects-container"),
+    )
+
+
+def _preprocessing():
+    return card("Preprocessing",
+        section("Optical density",
+            params(
+                field("DPF", dbc.Input(id="an-dpf", type="number", placeholder="6.0")),
+                field("Motion correction",
+                      dcc.Dropdown(id="an-motion-correction",
+                                   options=[{"label": "TDDR", "value": "tddr"},
+                                            {"label": "Wavelet", "value": "wavelet"},
+                                            {"label": "None", "value": "none"}],
+                                   value="tddr", clearable=False)),
+                band("Separations (mm)",
+                     "≤", dbc.Input(id="an-short-max-dist", type="number", step=0.5,
+                                         min=0.1, placeholder="10"),
+                     "≥", dbc.Input(id="an-long-min-dist", type="number", step=0.5,
+                                         min=0.1, placeholder="15"),
+                     "to", dbc.Input(id="an-long-max-dist", type="number", step=0.5,
+                                     min=0.1, placeholder="none"),
+                     span=2),
+            ),
+        ),
+        section("Channel screening",
+            params(
+                field("SCI threshold",
+                      dbc.Input(id="an-sci-thresh", type="number", value=0.8,
+                                min=0.0, max=1.0, step=0.01)),
+                field("PSP threshold",
+                      dbc.Input(id="an-psp-thresh", type="number", value=0.1,
+                                min=0.0, max=1.0, step=0.01)),
+                field("Coupled windows",
+                      dbc.Input(id="an-min-good-frac", type="number", value=0.75,
+                                min=0.0, max=1.0, step=0.05),
+                      hint="Share a channel needs to be kept. This is what rejects."),
+                field("Screening scope",
+                      dcc.Dropdown(id="an-screen-scope",
+                                   options=[{"label": "Whole run", "value": "run"},
+                                            {"label": "Task blocks only", "value": "task"}],
+                                   value="run", clearable=False)),
+                field("SCI / PSP window (s)",
+                      dbc.Input(id="an-window-length", type="number", step=1,
+                                min=1, placeholder="10")),
+            ),
+        ),
+        section("Frequency bands",
+            params(
+                band("Cardiac (Hz)",
+                     dbc.Input(id="an-cardiac-l", type="number", step=0.1,
+                               placeholder="lo (adult ~0.7)"),
+                     "–",
+                     dbc.Input(id="an-cardiac-h", type="number", step=0.1,
+                               placeholder="hi (adult ~1.5)")),
+                band("Respiration (Hz)",
+                     dbc.Input(id="an-resp-l", type="number", step=0.1,
+                               placeholder="lo (adult ~0.1)"),
+                     "–",
+                     dbc.Input(id="an-resp-h", type="number", step=0.1,
+                               placeholder="hi (adult ~0.5)")),
+            ),
+        ),
+        section("Epochs",
+            params(
+                field("Epoch tmin (s)",
+                      dbc.Input(id="an-epoch-tmin", type="number", placeholder="-5")),
+                field("Epoch tmax (s)",
+                      dbc.Input(id="an-epoch-tmax", type="number", placeholder="25")),
+                field("Trial chunk (s)",
+                      dbc.Input(id="an-epoch-chunk", type="number", step=1, min=1,
+                                placeholder="off"),
+                      hint="Cut each block into trials this long before epoching."),
+                switches(dbc.Checklist(id="an-by-condition",
+                                       options=[{"label": "A QC page per condition",
+                                                 "value": "by_condition"}],
+                                       value=[], switch=True),
+                         span=2,
+                         hint="Sliced out of the run's own windows; nothing is measured again."),
+            ),
+        ),
+        section("GVTD censoring",
+            params(
+                field("Censoring",
+                      dcc.Dropdown(id="an-gvtd-censor",
+                                   options=[{"label": "Off", "value": "off"},
+                                            {"label": "Long channels", "value": "long"},
+                                            {"label": "All channels", "value": "all"}],
+                                   value="off", clearable=False),
+                      hint="Annotates BAD_gvtd. Nothing is cut."),
+                field("Threshold (SD)",
+                      dbc.Input(id="an-gvtd-n-std", type="number", step=0.5, min=0.5,
+                                placeholder="10"),
+                      hint="Left-tail SDs above the GVTD mode."
+                           " Read only when censoring is on."),
+            ),
+        ),
+    )
+
+
+def _postprocessing():
+    return card("Postprocessing",
+        html.Div(
+            dbc.RadioItems(
+                id="an-post-mode",
+                options=[{"label": "None", "value": "none"},
+                         {"label": "Denoise", "value": "denoise"},
+                         {"label": "GLM", "value": "glm"},
+                         {"label": "Rest", "value": "rest"}],
+                value="none", inline=True,
+            ),
+            className="mb-3",
+        ),
+        params(
+            field("High-pass (Hz)",
+                  dbc.Input(id="an-high-pass", type="number", placeholder="0.01")),
+            field("Low-pass (Hz)",
+                  dbc.Input(id="an-low-pass", type="number", placeholder="0.5")),
+            field("Filter",
+                  dbc.Select(id="an-filter-method",
+                             options=[{"label": m, "value": m} for m in FILTER_METHODS],
+                             value=DEFAULT_FILTER_METHOD)),
+            field("Filter order",
+                  dbc.Input(id="an-filter-order", type="number",
+                            value=DEFAULT_FILTER_ORDER, min=1, step=1)),
+            field("Resample (Hz)",
+                  dbc.Input(id="an-resample", type="number", placeholder="2.0")),
+            field("n_jobs",
+                  dbc.Input(id="an-n-jobs", type="number", value=1, min=1, step=1)),
+        ),
+
+        # every mode honours these, and glm and rest require a drift model, so not GLM-only
+        html.Div(id="an-confound-section", children=[
+            section("Confound regression",
+                params(
+                    field("Drift model",
+                          dcc.Dropdown(id="an-drift-model", options=_opts(_DRIFT_CHOICES),
+                                       value="cosine", clearable=False),
+                          hint="Required by GLM and Rest."),
+                    field("Drift high-pass (Hz)",
+                          dbc.Input(id="an-drift-high-pass", type="number", value=0.01,
+                                    placeholder="0.01"),
+                          hint="Required when the drift model is cosine."),
+                    field("Drift order",
+                          dbc.Input(id="an-drift-order", type="number",
+                                    value=1, min=0, step=1),
+                          hint="Polynomial drift only."),
+                    field("Short channel",
+                          dcc.Dropdown(id="an-short-channel",
+                                       options=_opts(_SHORT_CHANNEL_CHOICES),
+                                       value="none", clearable=False)),
+                    field("ROI mapping",
+                          dbc.Input(id="an-roi-mapping", type="text",
+                                    placeholder="path to roi.json (optional)"),
+                          span=2,
+                          hint="Needed for the ROI and seed connectivity products."),
+                    switches(dbc.Checklist(id="an-fc",
+                                           options=[{"label": "Write FC products (--fc)",
+                                                     "value": "fc"}],
+                                           value=[], switch=True),
+                             hint="Denoise and GLM. Rest writes them anyway."),
+                ),
+            ),
+        ]),
+
+        html.Div(id="an-glm-section", children=[
+            section("GLM",
+                params(
+                    field("HRF model",
+                          dcc.Dropdown(id="an-hrf-model", options=_opts(_HRF_CHOICES),
+                                       value="spm", clearable=False)),
+                    field("Noise model",
+                          dcc.Dropdown(id="an-noise-model", options=_opts(_NOISE_CHOICES),
+                                       value="ar1", clearable=False)),
+                    field("Stim duration (s)",
+                          dbc.Input(id="an-stim-dur", type="number", placeholder="optional")),
+                ),
+            ),
+        ]),
+    )
+
+
+# ---- Panel that stays put while the form scrolls ----
+
+def _run_panel():
+    return card("Run",
+        dbc.Checklist(
+            id="an-flags",
+            options=[{"label": "Dry run", "value": "dry_run"},
+                     {"label": "Skip BIDS validation", "value": "skip_bids_validation"},
+                     {"label": "No report", "value": "no_report"},
+                     {"label": "Combine runs", "value": "combine_runs"}],
+            value=["dry_run"],
+            switch=True,
+            className="mb-3",
+        ),
+        actions(
+            dbc.Button("Run pipeline", id="an-run-btn", color="success"),
+            dbc.Button("Stop", id="an-stop-btn", color="danger", outline=True, disabled=True),
+            dbc.Button("Generate command", id="an-generate-btn",
+                       color="secondary", outline=True),
+        ),
+        html.Div(id="an-run-status", className="mt-2 small"),
+    )
+
+
+def _command_panel():
+    return card("Command",
+        dbc.Select(
+            id="an-shell-select",
+            options=[{"label": "bash / zsh (macOS, Linux)", "value": "bash"},
+                     {"label": "cmd (Windows, Anaconda Prompt)", "value": "cmd"},
+                     {"label": "PowerShell (Windows)", "value": "powershell"}],
+            value=_DEFAULT_SHELL,
+            size="sm",
+            className="mb-2",
+        ),
+        html.Pre(id="an-command-preview", className="fp-command"),
     )
 
 
@@ -138,345 +382,14 @@ layout = dbc.Container([
     dcc.Store(id="an-run-store",      storage_type="memory"),
     # the run is polled rather than waited on; disabled until there is something to poll
     dcc.Interval(id="an-run-tick", interval=1000, disabled=True),
-    dbc.Row([dbc.Col([html.H3("Analysis"), html.Hr()])]),
 
-    # ── Data source ───────────────────────────────────────────────────────────
-    _card("Data Source",
-        dbc.Row([
-            dbc.Col([
-                dbc.Label("BIDS Directory"),
-                dbc.Input(id="an-bids-dir", type="text", placeholder="/path/to/bids"),
-            ], width=5),
-            dbc.Col([
-                dbc.Label("Output Directory"),
-                dbc.Input(id="an-output-dir", type="text", placeholder="/path/to/output"),
-            ], width=5),
-            dbc.Col([
-                dbc.Label(" "),
-                dbc.Button("Detect Subjects", id="an-detect-btn",
-                           color="primary", className="d-block w-100"),
-            ], width=2),
-        ], className="align-items-end g-3"),
+    html.H3("Analysis"),
+    html.Hr(),
+
+    split(
+        main=[_scope(), _preprocessing(), _postprocessing(), _dag_card()],
+        aside=[_run_panel(), _command_panel()],
     ),
-
-    # ── Subject selection ─────────────────────────────────────────────────────
-    _card("Subject Selection",
-        html.Div(id="an-subjects-result", className="mb-2"),
-        html.Div(id="an-subjects-container"),
-        dbc.Row([
-            dbc.Col([
-                dbc.Label("Session label(s)"),
-                dbc.Input(id="an-session-label", type="text",
-                          placeholder="e.g. 01  (optional, space-separated)"),
-            ], width=3),
-            dbc.Col([
-                dbc.Label("Task label(s)"),
-                dbc.Input(id="an-task-label", type="text",
-                          placeholder="e.g. rest  (optional)"),
-            ], width=3),
-        ], className="mt-3 g-3"),
-    ),
-
-    # ── Preprocessing ─────────────────────────────────────────────────────────
-    _card("Preprocessing",
-        dbc.Row([
-            dbc.Col([
-                dbc.Label("DPF"),
-                dbc.Input(id="an-dpf", type="number", placeholder="e.g. 6.0"),
-            ], width=2),
-            dbc.Col([
-                dbc.Label("SCI Threshold"),
-                dbc.Input(id="an-sci-thresh", type="number",
-                          value=0.8, min=0.0, max=1.0, step=0.01),
-            ], width=2),
-            dbc.Col([
-                dbc.Label("PSP Threshold"),
-                dbc.Input(id="an-psp-thresh", type="number",
-                          value=0.1, min=0.0, max=1.0, step=0.01),
-            ], width=2),
-            dbc.Col([
-                dbc.Label("Coupled Windows"),
-                dbc.Input(id="an-min-good-frac", type="number",
-                          value=0.75, min=0.0, max=1.0, step=0.05),
-                dbc.FormText("Share a channel needs to be kept. This is what rejects."),
-            ], width=2),
-            dbc.Col([
-                dbc.Label("Screening Scope"),
-                dcc.Dropdown(
-                    id="an-screen-scope",
-                    options=[{"label": "Whole run", "value": "run"},
-                             {"label": "Task blocks only", "value": "task"}],
-                    value="run", clearable=False,
-                ),
-            ], width=2),
-            dbc.Col([
-                dbc.Label("SCI / PSP Window (s)"),
-                dbc.Input(id="an-window-length", type="number", step=1,
-                          min=1, placeholder="10"),
-            ], width=2),
-            dbc.Col([
-                dbc.Label("Separations (mm)"),
-                dbc.InputGroup([
-                    dbc.InputGroupText("≤"),
-                    dbc.Input(id="an-short-max-dist", type="number", step=0.5,
-                              min=0.1, placeholder="10"),
-                    dbc.InputGroupText("≥"),
-                    dbc.Input(id="an-long-min-dist", type="number", step=0.5,
-                              min=0.1, placeholder="15"),
-                    dbc.InputGroupText("to"),
-                    dbc.Input(id="an-long-max-dist", type="number", step=0.5,
-                              min=0.1, placeholder="none"),
-                ]),
-            ], width=4),
-            dbc.Col([
-                dbc.Label("Epoch tmin (s)"),
-                dbc.Input(id="an-epoch-tmin", type="number", placeholder="-5"),
-            ], width=2),
-            dbc.Col([
-                dbc.Label("Epoch tmax (s)"),
-                dbc.Input(id="an-epoch-tmax", type="number", placeholder="25"),
-            ], width=2),
-            dbc.Col([
-                dbc.Label("Trial Chunk (s)"),
-                dbc.Input(id="an-epoch-chunk", type="number", step=1, min=1,
-                          placeholder="off"),
-                dbc.FormText("Cut each block into trials this long before epoching."),
-            ], width=2),
-            dbc.Col([
-                dbc.Label("Motion Correction"),
-                dcc.Dropdown(
-                    id="an-motion-correction",
-                    options=[
-                        {"label": "TDDR",    "value": "tddr"},
-                        {"label": "Wavelet", "value": "wavelet"},
-                        {"label": "None",    "value": "none"},
-                    ],
-                    value="tddr",
-                    clearable=False,
-                ),
-            ], width=3),
-            dbc.Col([
-                dbc.Label("Cardiac Band (Hz)"),
-                dbc.InputGroup([
-                    dbc.Input(id="an-cardiac-l", type="number", step=0.1, placeholder="lo (adult ~0.7)"),
-                    dbc.InputGroupText("–"),
-                    dbc.Input(id="an-cardiac-h", type="number", step=0.1, placeholder="hi (adult ~1.5)"),
-                ]),
-            ], width=3),
-            dbc.Col([
-                dbc.Label("Respiration Band (Hz)"),
-                dbc.InputGroup([
-                    dbc.Input(id="an-resp-l", type="number", step=0.1, placeholder="lo (adult ~0.1)"),
-                    dbc.InputGroupText("–"),
-                    dbc.Input(id="an-resp-h", type="number", step=0.1, placeholder="hi (adult ~0.5)"),
-                ]),
-            ], width=3),
-        ], className="g-3"),
-        dbc.Row([
-            dbc.Col([
-                dbc.Label("GVTD Censoring"),
-                dcc.Dropdown(
-                    id="an-gvtd-censor",
-                    options=[{"label": "Off", "value": "off"},
-                             {"label": "Long channels", "value": "long"},
-                             {"label": "All channels", "value": "all"}],
-                    value="off", clearable=False,
-                ),
-                dbc.FormText("Annotates BAD_gvtd. Nothing is cut."),
-            ], width=3),
-            dbc.Col([
-                dbc.Label("Censor Threshold (SD)"),
-                dbc.Input(id="an-gvtd-n-std", type="number", step=0.5, min=0.5,
-                          placeholder="10"),
-                dbc.FormText("Left-tail SDs above the GVTD mode. Read only when censoring is on."),
-            ], width=3),
-            dbc.Col([
-                dbc.Label(" "),
-                dbc.Checklist(
-                    id="an-by-condition",
-                    options=[{"label": "A QC page per condition", "value": "by_condition"}],
-                    value=[], switch=True,
-                ),
-                dbc.FormText("Sliced out of the run's own windows; nothing is measured again."),
-            ], width=4),
-        ], className="g-3 mt-1"),
-    ),
-
-    # ── Postprocessing ────────────────────────────────────────────────────────
-    _card("Postprocessing",
-        dbc.Row([
-            dbc.Col([
-                dbc.Label("Mode"),
-                dbc.RadioItems(
-                    id="an-post-mode",
-                    options=[
-                        {"label": "None",    "value": "none"},
-                        {"label": "Denoise", "value": "denoise"},
-                        {"label": "GLM",     "value": "glm"},
-                        {"label": "Rest",    "value": "rest"},
-                    ],
-                    value="none",
-                    inline=True,
-                ),
-            ]),
-        ], className="mb-3"),
-        dbc.Row([
-            dbc.Col([
-                dbc.Label("High-pass (Hz)"),
-                dbc.Input(id="an-high-pass", type="number", placeholder="e.g. 0.01"),
-            ], width=2),
-            dbc.Col([
-                dbc.Label("Low-pass (Hz)"),
-                dbc.Input(id="an-low-pass", type="number", placeholder="e.g. 0.5"),
-            ], width=2),
-            dbc.Col([
-                dbc.Label("Filter"),
-                dbc.Select(id="an-filter-method",
-                           options=[{"label": m, "value": m} for m in FILTER_METHODS],
-                           value=DEFAULT_FILTER_METHOD),
-            ], width=2),
-            dbc.Col([
-                dbc.Label("Filter order"),
-                dbc.Input(id="an-filter-order", type="number", value=DEFAULT_FILTER_ORDER,
-                          min=1, step=1),
-            ], width=2),
-            dbc.Col([
-                dbc.Label("Resample (Hz)"),
-                dbc.Input(id="an-resample", type="number", placeholder="e.g. 2.0"),
-            ], width=2),
-            dbc.Col([
-                dbc.Label("n_jobs"),
-                dbc.Input(id="an-n-jobs", type="number", value=1, min=1, step=1),
-            ], width=2),
-        ], className="g-3"),
-
-        # Confound regression: every mode honours these, and glm and rest require a
-        # drift model, so this block is not GLM-only.
-        html.Div(id="an-confound-section", children=[
-            html.Hr(),
-            dbc.Row([
-                dbc.Col([
-                    dbc.Label("Drift Model"),
-                    dcc.Dropdown(id="an-drift-model", options=_opts(_DRIFT_CHOICES),
-                                 value="cosine", clearable=False),
-                    dbc.FormText("Required by GLM and Rest."),
-                ], width=3),
-                dbc.Col([
-                    dbc.Label("Drift High-pass (Hz)"),
-                    dbc.Input(id="an-drift-high-pass", type="number", value=0.01,
-                              placeholder="e.g. 0.01"),
-                    dbc.FormText("Required when the drift model is cosine."),
-                ], width=3),
-                dbc.Col([
-                    dbc.Label("Drift Order"),
-                    dbc.Input(id="an-drift-order", type="number", value=1, min=0, step=1),
-                    dbc.FormText("Polynomial drift only."),
-                ], width=2),
-                dbc.Col([
-                    dbc.Label("Short Channel"),
-                    dcc.Dropdown(id="an-short-channel", options=_opts(_SHORT_CHANNEL_CHOICES),
-                                 value="none", clearable=False),
-                ], width=2),
-            ], className="g-3"),
-            dbc.Row([
-                dbc.Col([
-                    dbc.Label("ROI Mapping"),
-                    dbc.Input(id="an-roi-mapping", type="text",
-                              placeholder="path to roi.json (optional)"),
-                    dbc.FormText("Needed for the ROI and seed connectivity products."),
-                ], width=5),
-                dbc.Col([
-                    dbc.Label("Connectivity"),
-                    dbc.Checklist(
-                        id="an-fc",
-                        options=[{"label": "Write FC products (--fc)", "value": "fc"}],
-                        value=[],
-                        switch=True,
-                    ),
-                    dbc.FormText("Denoise and GLM. Rest writes them anyway."),
-                ], width=4),
-            ], className="g-3 mt-1"),
-        ]),
-
-        # GLM-only options
-        html.Div(id="an-glm-section", children=[
-            html.Hr(),
-            dbc.Row([
-                dbc.Col([
-                    dbc.Label("HRF Model"),
-                    dcc.Dropdown(id="an-hrf-model", options=_opts(_HRF_CHOICES),
-                                 value="spm", clearable=False),
-                ], width=4),
-                dbc.Col([
-                    dbc.Label("Noise Model"),
-                    dcc.Dropdown(id="an-noise-model", options=_opts(_NOISE_CHOICES),
-                                 value="ar1", clearable=False),
-                ], width=2),
-                dbc.Col([
-                    dbc.Label("Stim Duration (s)"),
-                    dbc.Input(id="an-stim-dur", type="number", placeholder="optional"),
-                ], width=2),
-            ], className="g-3"),
-        ]),
-    ),
-
-    # ── Execution ─────────────────────────────────────────────────────────────
-    _card("Execution",
-        dbc.Row([
-            dbc.Col([
-                dbc.Checklist(
-                    id="an-flags",
-                    options=[
-                        {"label": "Dry run",              "value": "dry_run"},
-                        {"label": "Skip BIDS validation", "value": "skip_bids_validation"},
-                        {"label": "No report",            "value": "no_report"},
-                        {"label": "Combine runs",         "value": "combine_runs"},
-                    ],
-                    value=["dry_run"],
-                    inline=True,
-                ),
-            ], width=8),
-            dbc.Col([
-                dbc.ButtonGroup([
-                    dbc.Button("Generate Command", id="an-generate-btn", color="info"),
-                    dbc.Button("Run Pipeline",     id="an-run-btn",      color="success"),
-                    dbc.Button("Stop", id="an-stop-btn", color="danger",
-                               outline=True, disabled=True),
-                ]),
-            ], width=4, className="d-flex align-items-center justify-content-end"),
-        ], className="align-items-center"),
-        html.Div(id="an-run-status", className="mt-2 small"),
-    ),
-
-    # ── Command preview ───────────────────────────────────────────────────────
-    _card("Command Preview",
-        dbc.Row([
-            dbc.Col(dbc.Label("Shell (line-continuation style)"), width="auto"),
-            dbc.Col(dcc.Dropdown(
-                id="an-shell-select",
-                options=[
-                    {"label": "bash / zsh (macOS, Linux)", "value": "bash"},
-                    {"label": "cmd (Windows, Anaconda Prompt)", "value": "cmd"},
-                    {"label": "PowerShell (Windows)", "value": "powershell"},
-                ],
-                value=_DEFAULT_SHELL,
-                clearable=False,
-            ), width=4),
-        ], className="mb-2 align-items-center"),
-        html.Pre(
-            id="an-command-preview",
-            style={
-                "background":   "#f8f9fa",
-                "padding":      "1rem",
-                "borderRadius": "4px",
-                "fontSize":     "13px",
-                "fontFamily":   "monospace",
-                "whiteSpace":   "pre-wrap",
-                "wordBreak":    "break-all",
-                "minHeight":    "60px",
-            },
-        ),
-    ),
-
-    _dag_card(),
 ], fluid=True)
+
+

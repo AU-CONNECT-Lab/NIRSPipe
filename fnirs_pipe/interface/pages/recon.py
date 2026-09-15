@@ -7,8 +7,9 @@ import platform
 import dash
 import dash_ag_grid as dag
 import dash_bootstrap_components as dbc
-from dash import dcc, html
+from dash import html
 
+from fnirs_pipe.interface.components import actions, card, field, params, split, switches
 from fnirs_pipe.interface.grid import AUTO_HEIGHT, COL_DEF
 
 dash.register_page(__name__, path="/recon", name="Recon")
@@ -24,37 +25,22 @@ _COLS = [
 ]
 
 
-def _card(title, *children):
-    return dbc.Card(
-        [dbc.CardHeader(title), dbc.CardBody(list(children))],
-        className="mb-3",
-    )
-
-
-layout = dbc.Container([
-    dbc.Row([dbc.Col([html.H3("Recon — raw snirf → BIDS"), html.Hr()])]),
-
-    _card("Data Source",
-        dbc.Row([
-            dbc.Col([
-                dbc.Label("Input Folder (raw snirf)"),
-                dbc.Input(id="rc-input-dir", type="text", placeholder="/path/to/raw"),
-            ], width=5),
-            dbc.Col([
-                dbc.Label("Output BIDS Directory"),
-                dbc.Input(id="rc-bids-dir", type="text", placeholder="/path/to/bids"),
-            ], width=5),
-        ], className="g-3"),
-    ),
-
-    _card("Files",
-        dbc.Row([
-            dbc.Col(dbc.Button("Detect", id="rc-detect-btn",
-                               color="primary", size="sm"), width="auto"),
-            dbc.Col(dbc.Checkbox(id="rc-overwrite", label="Overwrite existing",
-                                 value=False), width="auto"),
-        ], className="g-2 mb-2 align-items-center"),
-        html.Div(id="rc-detect-result", className="mb-2 small"),
+def _files():
+    return card("Files",
+        params(
+            field("Input folder (raw snirf)",
+                  dbc.Input(id="rc-input-dir", type="text", placeholder="/path/to/raw"),
+                  span=2),
+            field("Output BIDS directory",
+                  dbc.Input(id="rc-bids-dir", type="text", placeholder="/path/to/bids"),
+                  span=2),
+            switches(actions(
+                dbc.Button("Detect", id="rc-detect-btn", color="primary"),
+                dbc.Checkbox(id="rc-overwrite", label="Overwrite existing",
+                             value=False, className="ms-2"),
+            ), span=2),
+        ),
+        html.Div(id="rc-detect-result", className="mt-2 mb-2 small"),
         dag.AgGrid(
             id="rc-table",
             columnDefs=_COLS,
@@ -68,39 +54,37 @@ layout = dbc.Container([
         html.Small("subject/task are required; session/run optional. "
                    "subject must be alphanumeric only.",
                    className="text-muted"),
-    ),
+    )
 
-    _card("Command Preview",
-        dbc.Row([
-            dbc.Col(dbc.Label("Shell (line-continuation style)"), width="auto"),
-            dbc.Col(dcc.Dropdown(
-                id="rc-shell-select",
-                options=[
-                    {"label": "bash / zsh (macOS, Linux)", "value": "bash"},
-                    {"label": "cmd (Windows, Anaconda Prompt)", "value": "cmd"},
-                    {"label": "PowerShell (Windows)", "value": "powershell"},
-                ],
-                value=_DEFAULT_SHELL,
-                clearable=False,
-            ), width=4),
-        ], className="mb-2 align-items-center"),
-        html.Pre(
-            id="rc-command-preview",
-            style={
-                "background":   "#f8f9fa",
-                "padding":      "1rem",
-                "borderRadius": "4px",
-                "fontSize":     "13px",
-                "fontFamily":   "monospace",
-                "whiteSpace":   "pre-wrap",
-                "wordBreak":    "break-all",
-                "minHeight":    "60px",
-            },
-        ),
-    ),
 
-    _card("Run",
-        dbc.Button("Run All", id="rc-run-btn", color="success", size="sm"),
+def _run_panel():
+    return card("Run",
+        actions(dbc.Button("Run all", id="rc-run-btn", color="success")),
         html.Div(id="rc-log", className="mt-2 small"),
+    )
+
+
+def _command_panel():
+    return card("Command",
+        dbc.Select(
+            id="rc-shell-select",
+            options=[{"label": "bash / zsh (macOS, Linux)", "value": "bash"},
+                     {"label": "cmd (Windows, Anaconda Prompt)", "value": "cmd"},
+                     {"label": "PowerShell (Windows)", "value": "powershell"}],
+            value=_DEFAULT_SHELL,
+            size="sm",
+            className="mb-2",
+        ),
+        html.Pre(id="rc-command-preview", className="fp-command"),
+    )
+
+
+layout = dbc.Container([
+    html.H3("Recon — raw snirf → BIDS"),
+    html.Hr(),
+
+    split(
+        main=[_files()],
+        aside=[_run_panel(), _command_panel()],
     ),
 ], fluid=True)

@@ -7,6 +7,7 @@ import dash_ag_grid as dag
 import dash_bootstrap_components as dbc
 from dash import html
 
+from fnirs_pipe.interface.components import actions, card, field, params, section, split, switches
 from fnirs_pipe.interface.grid import AUTO_HEIGHT, COL_DEF, DEL_COL
 
 dash.register_page(__name__, path="/batch-prep", name="Batch Prep")
@@ -25,130 +26,89 @@ _SEG_COLS = [
     {"headerName": "Duration (s)", "field": "duration", **_NUM},
 ]
 
+_HIDDEN = {"display": "none"}
 
-def _card(title, *children):
-    return dbc.Card(
-        [dbc.CardHeader(title), dbc.CardBody(list(children))],
-        className="mb-3",
+
+def _scope():
+    return card("Scope",
+        section("Data source",
+            params(
+                field("BIDS directory",
+                      dbc.Input(id="bp-bids-dir", type="text", placeholder="/path/to/bids"),
+                      span=2),
+                field("Derivatives directory",
+                      dbc.Input(id="bp-deriv-dir", type="text",
+                                placeholder="/path/to/derivatives"),
+                      span=2),
+            ),
+        ),
+        # both sections are hidden whole when the operation does not select subjects
+        html.Div(id="bp-subjects-card", children=section("Subjects",
+            actions(
+                dbc.Button("Detect", id="bp-detect-btn", color="primary", size="sm"),
+                dbc.Button("Select all", id="bp-select-all-btn",
+                           color="outline-secondary", size="sm"),
+                dbc.Button("Clear", id="bp-clear-btn",
+                           color="outline-secondary", size="sm"),
+            ),
+            html.Div(id="bp-subjects-result", className="mt-2 mb-2"),
+            html.Div(id="bp-subjects-container"),
+        )),
+        html.Div(id="bp-run-filter-card", children=section("Run filter (optional)",
+            params(
+                field("Session", dbc.Input(id="bp-ses", type="text", placeholder="e.g. 01")),
+                field("Task", dbc.Input(id="bp-task", type="text", placeholder="e.g. tapping")),
+                field("Run", dbc.Input(id="bp-run", type="text", placeholder="e.g. 01")),
+            ),
+        )),
     )
 
 
-layout = dbc.Container([
-    dbc.Row([dbc.Col([html.H3("Batch Preparation"), html.Hr()])]),
-
-    # ── Data Source ───────────────────────────────────────────────────────────
-    _card("Data Source",
-        dbc.Row([
-            dbc.Col([
-                dbc.Label("BIDS Directory"),
-                dbc.Input(id="bp-bids-dir", type="text",
-                          placeholder="/path/to/bids"),
-            ], width=5),
-            dbc.Col([
-                dbc.Label("Derivatives Directory"),
-                dbc.Input(id="bp-deriv-dir", type="text",
-                          placeholder="/path/to/derivatives"),
-            ], width=5),
-        ], className="g-3"),
-    ),
-
-    # ── Subjects ──────────────────────────────────────────────────────────────
-    html.Div(id="bp-subjects-card", children=_card("Subjects",
-        dbc.Row([
-            dbc.Col(dbc.Button("Detect", id="bp-detect-btn",
-                               color="primary", size="sm"), width="auto"),
-            dbc.Col(dbc.Button("Select All", id="bp-select-all-btn",
-                               color="outline-secondary", size="sm"), width="auto"),
-            dbc.Col(dbc.Button("Clear", id="bp-clear-btn",
-                               color="outline-secondary", size="sm"), width="auto"),
-        ], className="g-2 mb-2"),
-        html.Div(id="bp-subjects-result", className="mb-2"),
-        html.Div(id="bp-subjects-container"),
-    )),
-
-    # ── Run filter ────────────────────────────────────────────────────────────
-    html.Div(id="bp-run-filter-card", children=_card("Run Filter (optional)",
-        dbc.Row([
-            dbc.Col([
-                dbc.Label("Session"),
-                dbc.Input(id="bp-ses", type="text",
-                          placeholder="e.g. 01", size="sm"),
-            ], width=2),
-            dbc.Col([
-                dbc.Label("Task"),
-                dbc.Input(id="bp-task", type="text",
-                          placeholder="e.g. tapping", size="sm"),
-            ], width=2),
-            dbc.Col([
-                dbc.Label("Run"),
-                dbc.Input(id="bp-run", type="text",
-                          placeholder="e.g. 01", size="sm"),
-            ], width=2),
-        ], className="g-3"),
-    )),
-
-    # ── Operation ─────────────────────────────────────────────────────────────
-    _card("Operation",
+def _operation():
+    return card("Operation",
         dbc.RadioItems(
             id="bp-operation",
-            options=[
-                {"label": "Edit Markers",        "value": "markers"},
-                {"label": "Crop",                "value": "crop"},
-                {"label": "Hyperscanning Align", "value": "hyper_align"},
-            ],
+            options=[{"label": "Edit markers", "value": "markers"},
+                     {"label": "Crop", "value": "crop"},
+                     {"label": "Hyperscanning align", "value": "hyper_align"}],
             value="markers", inline=True, className="mb-3",
         ),
 
-        # Hyper Align panel ───────────────────────────────────────────────────
-        html.Div(id="bp-hyper-panel", style={"display": "none"}, children=[
-            dbc.Row([
-                dbc.Col([
-                    dbc.Label("Group CSV", className="small mb-0"),
-                    dbc.Input(id="bp-group-csv", type="text", size="sm",
-                              placeholder="/path/to/groups.csv"),
-                ], width=6),
-            ], className="g-2"),
-            html.Small(
-                "CSV columns: group_id, subject_id, task. "
-                "Each (group_id, task) pair is aligned independently.",
-                className="text-muted d-block mt-1",
+        html.Div(id="bp-hyper-panel", style=_HIDDEN, children=[
+            params(
+                field("Group CSV",
+                      dbc.Input(id="bp-group-csv", type="text",
+                                placeholder="/path/to/groups.csv"),
+                      span=2,
+                      hint="Columns: group_id, subject_id, task."
+                           " Each (group_id, task) pair is aligned independently."),
             ),
         ]),
 
-        # Markers panel ───────────────────────────────────────────────────────
         html.Div(id="bp-markers-panel", children=[
             dbc.RadioItems(
                 id="bp-marker-op",
-                options=[
-                    {"label": "Shift onsets",   "value": "shift"},
-                    {"label": "Set duration",   "value": "set_duration"},
-                    {"label": "Rename markers", "value": "rename"},
-                ],
+                options=[{"label": "Shift onsets", "value": "shift"},
+                         {"label": "Set duration", "value": "set_duration"},
+                         {"label": "Rename markers", "value": "rename"}],
                 value="shift", inline=True, className="mb-3 small",
             ),
 
             html.Div(id="bp-shift-panel", children=[
-                dbc.Row([
-                    dbc.Col(dbc.Label("Shift (s)", className="small mb-0"),
-                            width="auto", className="d-flex align-items-center"),
-                    dbc.Col(dbc.Input(id="bp-shift-val", type="number", size="sm",
-                                      style={"width": "100px"}), width="auto"),
-                    dbc.Col(html.Small("negative = earlier; clipped to 0",
-                                       className="text-muted"),
-                            width="auto", className="d-flex align-items-center"),
-                ], className="g-2 align-items-center"),
+                params(
+                    field("Shift (s)",
+                          dbc.Input(id="bp-shift-val", type="number"),
+                          hint="negative = earlier; clipped to 0"),
+                ),
             ]),
 
-            html.Div(id="bp-duration-panel", style={"display": "none"}, children=[
-                dbc.Row([
-                    dbc.Col(dbc.Label("Duration (s)", className="small mb-0"),
-                            width="auto", className="d-flex align-items-center"),
-                    dbc.Col(dbc.Input(id="bp-duration-val", type="number", size="sm",
-                                      style={"width": "100px"}), width="auto"),
-                ], className="g-2 align-items-center"),
+            html.Div(id="bp-duration-panel", style=_HIDDEN, children=[
+                params(
+                    field("Duration (s)", dbc.Input(id="bp-duration-val", type="number")),
+                ),
             ]),
 
-            html.Div(id="bp-rename-panel", style={"display": "none"}, children=[
+            html.Div(id="bp-rename-panel", style=_HIDDEN, children=[
                 dag.AgGrid(
                     id="bp-rename-table",
                     columnDefs=_RENAME_COLS,
@@ -164,33 +124,22 @@ layout = dbc.Container([
             ]),
         ]),
 
-        # Crop panel ──────────────────────────────────────────────────────────
-        html.Div(id="bp-crop-panel", style={"display": "none"}, children=[
+        html.Div(id="bp-crop-panel", style=_HIDDEN, children=[
             dbc.RadioItems(
                 id="bp-crop-mode",
-                options=[
-                    {"label": "Single segment",  "value": "single"},
-                    {"label": "Multi-segment", "value": "multi"},
-                ],
+                options=[{"label": "Single segment", "value": "single"},
+                         {"label": "Multi-segment", "value": "multi"}],
                 value="single", inline=True, className="mb-3 small",
             ),
 
             html.Div(id="bp-crop-single", children=[
-                dbc.Row([
-                    dbc.Col([
-                        dbc.Label("tmin (s)", className="small mb-0"),
-                        dbc.Input(id="bp-crop-tmin", type="number", size="sm",
-                                  style={"width": "100px"}),
-                    ], width="auto"),
-                    dbc.Col([
-                        dbc.Label("tmax (s)", className="small mb-0"),
-                        dbc.Input(id="bp-crop-tmax", type="number", size="sm",
-                                  style={"width": "100px"}),
-                    ], width="auto"),
-                ], className="g-3"),
+                params(
+                    field("tmin (s)", dbc.Input(id="bp-crop-tmin", type="number")),
+                    field("tmax (s)", dbc.Input(id="bp-crop-tmax", type="number")),
+                ),
             ]),
 
-            html.Div(id="bp-crop-multi", style={"display": "none"}, children=[
+            html.Div(id="bp-crop-multi", style=_HIDDEN, children=[
                 dag.AgGrid(
                     id="bp-crop-seg-table",
                     columnDefs=_SEG_COLS,
@@ -201,33 +150,38 @@ layout = dbc.Container([
                     dashGridOptions=AUTO_HEIGHT,
                     style={"height": None},
                 ),
-                dbc.Row([
-                    dbc.Col(dbc.Button("+ Segment", id="bp-seg-add-btn", size="sm",
-                                       color="outline-secondary"), width="auto"),
-                    dbc.Col(dbc.Checklist(
+                actions(
+                    dbc.Button("+ Segment", id="bp-seg-add-btn", size="sm",
+                               color="outline-secondary"),
+                    dbc.Checklist(
                         id="bp-crop-combine",
                         options=[{"label": "Combine into one file", "value": "combine"}],
                         value=[], inline=True, className="small",
-                    ), width="auto"),
-                ], className="g-2 mt-2 align-items-center"),
+                    ),
+                    className="mt-2",
+                ),
             ]),
         ]),
-    ),
+    )
 
-    # ── Run ───────────────────────────────────────────────────────────────────
-    _card("Run",
-        dbc.Row([
-            dbc.Col([
-                dbc.Label("Parallel jobs"),
-                dbc.Input(id="bp-n-jobs", type="number", value=1, min=1, step=1,
-                          size="sm", style={"width": "80px"}),
-            ], width="auto"),
-            dbc.Col(
-                dbc.Button("Run Batch", id="bp-run-btn", color="success"),
-                width="auto", className="d-flex align-items-end",
-            ),
-        ], className="g-3 align-items-end"),
+
+def _run_panel():
+    return card("Run",
+        params(
+            field("Parallel jobs",
+                  dbc.Input(id="bp-n-jobs", type="number", value=1, min=1, step=1)),
+            switches(actions(dbc.Button("Run batch", id="bp-run-btn", color="success"))),
+        ),
         html.Div(id="bp-log", className="mt-3"),
-    ),
+    )
 
+
+layout = dbc.Container([
+    html.H3("Batch Preparation"),
+    html.Hr(),
+
+    split(
+        main=[_scope(), _operation()],
+        aside=[_run_panel()],
+    ),
 ], fluid=True)

@@ -224,6 +224,71 @@ a:hover { color: var(--fp-accent-dark); }
 .fp-grid-capped    { max-height: 200px; overflow-y: auto; }
 .fp-grid-capped-sm { max-height: 150px; overflow-y: auto; }
 
+/* ---- Parameter grids ---- */
+/* One grid per block, fitting as many columns as the content area allows. The pages used to
+   set a column count per card with `width=`, so no two cards lined up and every input grew
+   to whatever the screen was wide. */
+.fp-params {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10.25rem, 1fr));
+  gap: 0.6rem 0.75rem;
+  align-items: end;
+}
+.fp-params + .fp-params { margin-top: 0.65rem; }
+.fp-field { min-width: 0; display: flex; flex-direction: column; gap: 0.2rem; }
+.fp-field > .form-label { margin-bottom: 0; }
+.fp-field-switches { justify-content: flex-end; padding-bottom: 0.3rem; }
+.fp-span-2 { grid-column: span 2; }
+.fp-span-3 { grid-column: span 3; }
+.fp-span-full { grid-column: 1 / -1; }
+/* below this the grid can fall to one column, where a span would push a track off the edge */
+@media (max-width: 1000px) {
+  .fp-span-2, .fp-span-3 { grid-column: auto; }
+}
+.fp-hint { color: var(--fp-muted); font-size: 0.72rem; line-height: 1.3; }
+.fp-params .form-control, .fp-params .form-select { padding: 0.25rem 0.5rem; }
+.fp-params .input-group-text { padding: 0.25rem 0.5rem; font-size: 0.78rem; }
+.fp-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
+
+/* a titled group inside a card, so related parameters share one card instead of four */
+.fp-section {
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--fp-muted);
+  margin: 0.9rem 0 0.5rem;
+  padding-top: 0.7rem;
+  border-top: 1px solid var(--fp-border);
+}
+.card-body > div:first-child > .fp-section { margin-top: 0; padding-top: 0; border-top: 0; }
+
+/* ---- Generated command ---- */
+.fp-command {
+  background: #f8f9fa;
+  border: 1px solid var(--fp-border);
+  border-radius: 6px;
+  padding: 0.6rem 0.7rem;
+  margin: 0;
+  min-height: 3.5rem;
+  max-height: 22rem;
+  overflow: auto;
+  font-family: var(--fp-mono);
+  font-size: 0.75rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* ---- Form column beside a panel that stays put ---- */
+.fp-split { display: grid; grid-template-columns: minmax(0, 1fr) 22rem; gap: 1rem; align-items: start; }
+.fp-split-main { min-width: 0; }
+.fp-split-aside { min-width: 0; position: sticky; top: 0.75rem; }
+@media (max-width: 1250px) {
+  .fp-split { grid-template-columns: minmax(0, 1fr); }
+  .fp-split-aside { position: static; }
+}
+
 /* ---- Plotly chrome ---- */
 .js-plotly-plot .modebar { opacity: 0; transition: opacity 0.15s; }
 .card:hover .js-plotly-plot .modebar { opacity: 0.7; }
