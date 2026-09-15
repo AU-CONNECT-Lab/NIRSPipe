@@ -211,6 +211,11 @@ a:hover { color: var(--fp-accent-dark); }
   --ag-spacing:                 3px;
   --ag-cell-horizontal-padding: 6px;
 }
+/* the metric registry's verdict, carried in the row data as `cls` and never printed */
+.fp-grid .ag-row.qm-ok   .ag-cell[col-id="value"] { color: #27ae60; }
+.fp-grid .ag-row.qm-warn .ag-cell[col-id="value"] { color: #e67e22; }
+.fp-grid .ag-row.qm-bad  .ag-cell[col-id="value"] { color: #c0392b; }
+
 .fp-grid-mono .ag-root-wrapper {
   --ag-font-family:        var(--fp-mono);
   --ag-font-size:          13px;

@@ -5,26 +5,30 @@ from __future__ import annotations
 import dash
 import dash_ag_grid as dag
 import dash_bootstrap_components as dbc
-from dash import dash_table, dcc, html
+from dash import dcc, html
 
 from fnirs_pipe.interface.grid import AUTO_HEIGHT, COL_DEF, DEL_COL
 
 
 dash.register_page(__name__, path="/", name="Data Preparation")
 
-# The rows come from the metric registry already labelled and formatted, so this only
-# names the columns. `cls` carries the registry's verdict and drives the row colouring in
-# _SQM_STYLE rather than being printed.
+# The rows come from the metric registry already labelled and formatted, so this only names
+# the columns. `cls` carries the registry's verdict and `tip` its explanation; neither is
+# printed, one reaches the Value cell as a colour and the other the Metric cell as a tooltip.
 _SQM_COLS = [
-    {"name": "Metric", "id": "label"},
-    {"name": "Value",  "id": "value"},
+    {"headerName": "Metric", "field": "label", "tooltipField": "tip"},
+    {"headerName": "Value",  "field": "value"},
 ]
 
-_SQM_STYLE = [
-    {"if": {"filter_query": "{cls} = 'qm-ok'",   "column_id": "value"}, "color": "#27ae60"},
-    {"if": {"filter_query": "{cls} = 'qm-warn'", "column_id": "value"}, "color": "#e67e22"},
-    {"if": {"filter_query": "{cls} = 'qm-bad'",  "column_id": "value"}, "color": "#c0392b"},
-]
+# the colours themselves are in assets/interface.css, keyed on these class names
+_SQM_ROW_CLASS = {
+    "qm-ok":   "data.cls == 'qm-ok'",
+    "qm-warn": "data.cls == 'qm-warn'",
+    "qm-bad":  "data.cls == 'qm-bad'",
+}
+
+# the DataTable's tooltip_duration=None never timed out; this is the nearest AG Grid has
+_SQM_GRID = {**AUTO_HEIGHT, "tooltipShowDelay": 300, "tooltipHideDelay": 60000}
 
 _NUM = {"editable": True, "cellDataType": "number", "cellEditor": "agNumberCellEditor"}
 
@@ -419,14 +423,16 @@ layout = dbc.Container([
                 _card("Image Quality Metrics",
                     html.Small(id="dp-sqm-scope",
                                className="text-muted d-block mb-1"),
-                    dash_table.DataTable(
+                    dag.AgGrid(
                         id="dp-sqm-table",
-                        columns=_SQM_COLS,
-                        tooltip_data=[],
-                        tooltip_duration=None,
-                        style_table={"overflowX": "auto"},
-                        style_data_conditional=_SQM_STYLE,
-                        style_cell={"fontSize": "0.82rem", "textAlign": "left"},
+                        columnDefs=_SQM_COLS,
+                        rowData=[],
+                        className="fp-grid",
+                        columnSize="responsiveSizeToFit",
+                        defaultColDef=COL_DEF,
+                        rowClassRules=_SQM_ROW_CLASS,
+                        dashGridOptions=_SQM_GRID,
+                        style={"height": None},
                     ),
                     html.Div(id="dp-sqm-split", className="mt-2"),
                 ),

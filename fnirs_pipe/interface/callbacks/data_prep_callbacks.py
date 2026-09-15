@@ -276,8 +276,7 @@ _SHOW = {}
     Output("dp-ch-summary-figure",      "figure"),
     Output("dp-marker-store",           "data",    allow_duplicate=True),
     Output("dp-channel-selector",       "options"),
-    Output("dp-sqm-table",              "data"),
-    Output("dp-sqm-table",              "tooltip_data"),
+    Output("dp-sqm-table",              "rowData"),
     Output("dp-sqm-scope",              "children"),
     Output("dp-sqm-split",              "children"),
     Output("dp-channel-selector",       "value",   allow_duplicate=True),
@@ -340,9 +339,7 @@ def restore_from_store(store, _tick):
     # already labelled, formatted and coloured by the metric registry, which is also what
     # the subject report and the raw viewer print, so this panel carries no copy of any of it
     sqm = cached.get("sqm", {})
-    sqm_rows = sqm.get("rows", []) or no_update
-    sqm_tips = [{"label": {"value": r["tip"], "type": "markdown"}}
-                for r in sqm.get("rows", [])] or no_update
+    sqm_rows = sqm.get("rows", []) or no_update      # each row carries its own `tip`
 
     carpet_src = cached.get("carpet_gvtd", {}).get("figure")
     carpet_src = style_figure(carpet_src) if carpet_src else no_update
@@ -361,7 +358,6 @@ def restore_from_store(store, _tick):
         marker_rows,
         ch_options,
         sqm_rows,
-        sqm_tips,
         _sqm_scope_text(sqm),
         _build_split_table(sqm.get("split") or {}),
         no_update,
