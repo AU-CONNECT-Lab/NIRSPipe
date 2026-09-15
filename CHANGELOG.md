@@ -6,6 +6,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+- **The GUI's tables are drawn by a grid widget Dash still supports.** The one they used is on its way out of Dash and warned on every page build. Rows are deleted by the same cross in the same place, and the columns, the values and the metric colouring are unchanged
+
 ## [0.41.0] - 2026-09-14
 
 ### Added
