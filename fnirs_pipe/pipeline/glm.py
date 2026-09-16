@@ -340,8 +340,16 @@ def run_glm_pipeline(
     resid_data = np.array([glm_est.data[ch].residuals for ch in glm_est.ch_names]).squeeze(-1)
     raw_resid = haemo.copy()
     raw_resid._data[:] = resid_data
+    # spelled drift_high_pass, not high_pass: the sidecar merges these with the bandpass
+    # parameters and the two cutoffs would otherwise collide
+    if drift_model == "cosine":
+        drift_params = {"drift_high_pass": high_pass}
+    elif drift_model == "polynomial":
+        drift_params = {"drift_order": drift_order}
+    else:
+        drift_params = {}
     stamp(raw_resid, stage="errts", step="glm_residuals", source=haemo,
-          noise_model=noise_model, drift_model=drift_model)
+          noise_model=noise_model, drift_model=drift_model, **drift_params)
 
     contrasts = compute_contrasts(glm_est, contrast_def) if contrast_def else None
 

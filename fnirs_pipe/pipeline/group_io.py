@@ -215,19 +215,38 @@ def _member_sqm_files(output_dir: Path, entry: GroupEntry, pattern: str) -> list
                    for f in d.glob(pattern)), key=lambda f: f.name)
 
 
-def warn_outside_passband(raws: dict[str, mne.io.Raw], fmin: float, fmax: float) -> None:
-    """Warn when a requested frequency range reaches past the bandpass the files record.
+def _low_edge(params: dict) -> "tuple[float | None, str]":
+    """The lowest frequency a file still carries, and which setting put it there.
 
-    Reported rather than enforced: a wider range is occasionally deliberate. The passband
-    comes from the sidecar, so it is what the file went through rather than what was asked for.
+    _low_edge({"high_pass": 0.01}) -> (0.01, "0.01 Hz high-pass")
+
+    Two settings can empty the low end and a run may use either or both: the bandpass, and
+    a cosine drift basis, which spans everything below its cutoff and so is a high-pass by
+    projection. The binding one is whichever sits higher.
+    """
+    low = params.get("high_pass")
+    drift = params.get("drift_high_pass") if params.get("drift_model") == "cosine" else None
+    if drift is not None and (low is None or drift > low):
+        return drift, f"{drift} Hz cosine drift basis"
+    if low is not None:
+        return low, f"{low} Hz high-pass"
+    return None, ""
+
+
+def warn_outside_passband(raws: dict[str, mne.io.Raw], fmin: float, fmax: float) -> None:
+    """Warn when a requested frequency range reaches past the band the files record.
+
+    Reported rather than enforced: a wider range is occasionally deliberate. The band comes
+    from the sidecar, so it is what the file went through rather than what was asked for.
     """
     for subject_id, raw in raws.items():
         lin = lineage_of(raw)
         params = (lin.params if lin else None) or {}
-        low, high = params.get("high_pass"), params.get("low_pass")
+        low, low_label = _low_edge(params)
+        high = params.get("low_pass")
         outside = []
         if low is not None and fmin < low:
-            outside.append(f"{fmin} Hz is below its {low} Hz high-pass")
+            outside.append(f"{fmin} Hz is below its {low_label}")
         if high is not None and fmax > high:
             outside.append(f"{fmax} Hz is above its {high} Hz low-pass")
         if outside:
@@ -249,15 +268,16 @@ def unfiltered_stage_note(raws: dict[str, mne.io.Raw]) -> "str | None":
     ``--desc`` defaults to ``preproc``, which is Beer-Lambert output and is not bandpassed,
     so the default is the case this warns about.
 
-    The passband comes from the sidecar through the lineage stamp, the same route
+    The low edge comes from the sidecar through the lineage stamp, the same route
     :func:`warn_outside_passband` reads, so a file whose sidecar is missing looks the same as
     one that was never filtered. The wording says "record no bandpass" rather than "are
-    unfiltered" for that reason.
+    unfiltered" for that reason. A cosine drift basis counts: it empties the band below its
+    cutoff just as the filter does, so a run that used one and no bandpass is not warned about.
     """
     unrecorded = []
     for subject_id, raw in sorted(raws.items()):
         lin = lineage_of(raw)
-        if ((lin.params if lin else None) or {}).get("high_pass") is None:
+        if _low_edge((lin.params if lin else None) or {})[0] is None:
             unrecorded.append(subject_id)
     if not unrecorded:
         return None

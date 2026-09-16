@@ -541,7 +541,8 @@ def _write_rest_derivatives(
 
 # the parameters that make two runs off one recording two different analyses rather than
 # one repeated. Named here so the check below cannot drift from what the sidecar records.
-_ANALYSIS_KEYS = ("high_pass", "low_pass", "filter_method", "filter_order", "resample_sfreq")
+_ANALYSIS_KEYS = ("high_pass", "low_pass", "filter_method", "filter_order", "resample_sfreq",
+                  "drift_model", "drift_high_pass", "drift_order")
 
 
 def _warn_if_replacing_another_analysis(out_path: Path, parameters: dict, subject: str) -> None:

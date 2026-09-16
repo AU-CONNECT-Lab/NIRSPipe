@@ -71,6 +71,9 @@ def _restore_bads(raw: mne.io.Raw, sidecar: dict) -> None:
 
 # restored onto the lineage stamp, so the filter can be read off the Raw rather than the file
 _FILTER_KEYS = ("high_pass", "low_pass", "filter_method", "filter_order")
+# the drift basis empties a band too, so a consumer asking what the file's low edge is has
+# to see both
+_DRIFT_KEYS = ("drift_model", "drift_high_pass", "drift_order")
 
 
 def read_snirf(path: Path | str, **kwargs: Any) -> mne.io.Raw:
@@ -90,7 +93,8 @@ def read_snirf(path: Path | str, **kwargs: Any) -> mne.io.Raw:
     params = sidecar.get("parameters") or {}
     desc = _DESC_RE.search(path.name)
     return stamp(raw, stage=desc.group(1) if desc else "raw", step="load", path=path.as_posix(),
-                 **{k: params[k] for k in _FILTER_KEYS if params.get(k) is not None})
+                 **{k: params[k] for k in _FILTER_KEYS + _DRIFT_KEYS
+                    if params.get(k) is not None})
 
 
 def _patch_haemo_wavelengths(raw: mne.io.Raw) -> mne.io.Raw:
