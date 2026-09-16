@@ -74,9 +74,9 @@ def _short_channel_regressors(
     # picking an empty selection raises rather than returning nothing, so the emptiness
     # has to be caught here or a subject whose short channels were all rejected kills the run
     if not len(good_hbo) or not len(good_hbr):
-        logger.warning("sub-level: every short channel of a chromophore is rejected, so "
-                       "short-channel regression is skipped for this run while the methods "
-                       "text still names it. Exclude this subject or relax the screening.")
+        logger.warning("every short channel of a chromophore is rejected, so this run gets "
+                       "no short-channel regressor; its record and its methods text say so. "
+                       "The run is not comparable with the subjects that got one.")
         return {}
     hbo_data = short.get_data(picks=good_hbo)  # (n_channels, n_times)
     hbr_data = short.get_data(picks=good_hbr)
@@ -316,6 +316,10 @@ def run_glm_pipeline(
         confound_cols.update(_aux_regressors(haemo, aux_path, aux_channels, data_band,
                                              data_filter_method, data_filter_order))
     confounds = pd.DataFrame(confound_cols) if confound_cols else None
+    # what was built, not what was asked for. The methods sentence is generated from the
+    # sidecar, so a regressor that could not be made must not be named in it: a subject
+    # whose short channels were all rejected keeps running, and its text has to say so.
+    short_channel_used = short_channel if "short_ch_hbo_mean" in confound_cols else None
 
     dm = build_design_matrix(
         raw=haemo,
@@ -347,7 +351,7 @@ def run_glm_pipeline(
                           hrf_model=hrf_model,
                           noise_model=noise_model, drift_model=drift_model,
                           drift_high_pass=high_pass, drift_order=drift_order,
-                          short_channel=short_channel,
+                          short_channel=short_channel_used,
                           aux_regressors=sorted(k for k in confound_cols if k.startswith("aux_")))
 
     return haemo, glm_est, dm, raw_resid

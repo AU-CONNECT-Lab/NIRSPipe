@@ -64,9 +64,28 @@ def test_a_montage_with_short_channels_is_unaffected():
 
 
 def test_a_subject_whose_short_channels_are_all_bad_still_runs(caplog):
-    """Per subject rather than per montage: refusing here would kill a whole batch."""
+    """Per subject rather than per montage: refusing here would kill a whole batch.
+
+    The run is allowed to finish, so what protects the reader is the record: the sidecar
+    carries no short-channel regressor and the methods sentence does not claim one.
+    """
     raw = _haemo([8.0, 35.0])
     raw.info["bads"] = [ch for ch in raw.ch_names if ch.startswith("S1_D1")]
     with caplog.at_level("WARNING"):
         assert _short_channel_regressors(raw, "mean") == {}
-    assert "methods text still names it" in caplog.text
+    assert "not comparable" in caplog.text
+
+
+def test_the_methods_text_names_short_channels_only_when_they_were_built():
+    """The sentence is generated from the sidecar, so the sidecar must record the outcome."""
+    from fnirs_pipe.qc.boilerplate.vocabulary import template_slots
+
+    built = template_slots("confound_regression",
+                           {"short_channel": "mean", "drift_model": "cosine",
+                            "drift_high_pass": 0.01})
+    skipped = template_slots("confound_regression",
+                             {"short_channel": None, "drift_model": "cosine",
+                              "drift_high_pass": 0.01})
+    assert "short-channel" in built["regressors"]
+    assert "short-channel" not in skipped["regressors"]
+    assert "cosine" in skipped["regressors"]
