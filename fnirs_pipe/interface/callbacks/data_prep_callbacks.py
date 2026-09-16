@@ -8,6 +8,7 @@ import re
 from pathlib import Path
 
 import dash_bootstrap_components as dbc
+import numpy as np
 from dash import ALL, Input, Output, Patch, State, callback, ctx, dcc, html, no_update
 
 from fnirs_pipe.interface.callbacks._cli_run import run_and_report
@@ -1418,3 +1419,39 @@ def section_summaries(sci, window, dpf, card_l, card_h, tmin, tmax, epoch_qc,
                 rng("separations", short_max, long_min, " mm")),
         "written" if report_status else "fnirs-qc prep-raw",
     )
+
+
+# ── The drift cutoff this run's own markers allow ────────────────────────────
+
+@callback(
+    Output("dp-drift-hint", "children"),
+    Input("dp-marker-store", "data"),
+)
+def drift_cutoff_hint(rows):
+    """What to put in Analysis's drift high-pass, read off the markers on screen.
+
+    Analysis is a batch page and cannot compute this: the interval differs per subject.
+    Here one run is loaded, so the number is knowable.
+    """
+    intervals = {}
+    for row in rows or []:
+        name = str(row.get("trial_type") or "").strip()
+        if not name or name.lower().startswith(("bad", "edge")):
+            continue
+        intervals.setdefault(name, []).append(float(row.get("onset") or 0.0))
+
+    gaps = {name: max(np.diff(sorted(on))) for name, on in intervals.items() if len(on) >= 2}
+    if not gaps:
+        return None
+
+    slowest_name = max(gaps, key=gaps.get)
+    slowest = gaps[slowest_name]
+    # every condition, because a marker seen twice sets the bound and is rarely the one
+    # being modelled; the reader can see which is which only if all of them are listed
+    per_condition = " · ".join(f"{name} {gap:.0f} s"
+                               for name, gap in sorted(gaps.items(), key=lambda kv: -kv[1]))
+    return html.Small([
+        "Drift high-pass for a GLM on this run: ",
+        html.B(f"{1.0 / (2.0 * slowest):.4g} Hz"),
+        f" or lower, set by {slowest_name}. Slowest repeat per condition: {per_condition}.",
+    ], className="fp-hint d-block")

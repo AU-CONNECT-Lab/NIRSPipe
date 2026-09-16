@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- **Data Preparation reads the drift cutoff a GLM on the loaded run could use**, off the markers on screen, with the slowest repeat of every condition beside it. The Analysis page cannot work this out: it runs over many subjects and the interval is each subject's own
 - **The GLM warns when the drift basis reaches the frequency at which a condition repeats**, which makes it fit the task away as if it were drift. The opposite bound, the drift basis having to cover what a bandpass already removed, was checked; this one was not, so the cutoff was only ever pinned from one side
 - **The two QC pages can write the static report of what they are showing**, by running `fnirs-qc prep-raw` or `hyper-raw` and embedding the result. What the pages computed lived only in the browser until now, so nothing could be filed or sent on. The report is written when asked for, not when a page is opened: the DPF and the cardiac band have no defaults to open a page with
 - **Batch Prep writes out the `fnirs-prep` command it would run**, for copying to a shell or a job script. The page had none, which left batch editing as the one thing the GUI could do and not hand you. Multi-segment crop needs its table as a file, so generating the command also writes it beside the derivatives

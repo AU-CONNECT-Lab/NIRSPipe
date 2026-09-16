@@ -182,6 +182,7 @@ def _marker_editor(extra_class=""):
             ),
         ], className="g-1 mt-2 align-items-center"),
         html.Div(id="dp-save-status", className="mt-2 small"),
+        html.Div(id="dp-drift-hint", className="mt-2"),
         extra_class=extra_class,
     )
 
