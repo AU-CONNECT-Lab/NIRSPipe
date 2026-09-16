@@ -13,6 +13,7 @@ from fnirs_pipe.pipeline.denoise import (
     DEFAULT_FILTER_ORDER,
     filter_array,
 )
+from fnirs_pipe.exceptions import StageError
 from fnirs_pipe.utils.lineage import stamp
 from fnirs_pipe.utils.logging import get_logger
 
@@ -50,8 +51,21 @@ def _short_channel_regressors(
     # registered positions would build these out of every channel
     short_names = long_short_channels(haemo, sep_bands)[1]
     if not short_names:
-        logger.warning("no short channels found - skipping short-channel regressors")
-        return {}
+        # refusing rather than skipping: the methods text names the regressors that were
+        # asked for, so a silent skip publishes a claim the residual does not support
+        from fnirs_pipe.qc.metrics._helpers import separation_bands
+        picks = mne.pick_types(haemo.info, meg=False, fnirs=True, exclude=[])
+        dists = mne.preprocessing.nirs.source_detector_distances(haemo.info, picks=picks)
+        positive = [d for d in dists if d > 0]
+        nearest = min(positive) if positive else None
+        short_max = (sep_bands or separation_bands())[0]
+        raise StageError(
+            "--short-channel was asked for but this montage has no channel at or under "
+            f"{short_max * 1000:.0f} mm"
+            + (f"; the shortest is {nearest * 1000:.1f} mm" if nearest else "")
+            + ". Raise --short-max-dist if those are meant to be the short channels, or "
+            "drop --short-channel."
+        )
     short = haemo.copy().pick(short_names)
     # a rejected short channel would otherwise enter the regressor, and the regressor
     # is in the design matrix, so one bad channel would reach every channel's fit
@@ -60,7 +74,9 @@ def _short_channel_regressors(
     # picking an empty selection raises rather than returning nothing, so the emptiness
     # has to be caught here or a subject whose short channels were all rejected kills the run
     if not len(good_hbo) or not len(good_hbr):
-        logger.warning("every short channel of a chromophore is bad - skipping short-channel regressors")
+        logger.warning("sub-level: every short channel of a chromophore is rejected, so "
+                       "short-channel regression is skipped for this run while the methods "
+                       "text still names it. Exclude this subject or relax the screening.")
         return {}
     hbo_data = short.get_data(picks=good_hbo)  # (n_channels, n_times)
     hbr_data = short.get_data(picks=good_hbr)
