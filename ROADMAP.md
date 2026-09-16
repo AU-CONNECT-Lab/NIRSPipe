@@ -43,7 +43,6 @@ Ordered by how often each has come up, not by when it might happen.
 **Under the hood**
 
 - Moving SNIRF reading onto a maintained library. Blocked upstream: the fix exists but has not been released
-- Replacing the table widget the browser interface uses, which its toolkit has deprecated
 
 ---
 
