@@ -8,7 +8,7 @@ import pytest
 
 from fnirs_pipe.pipeline.post_pipeline import (
     PostConfig,
-    _longest_repeat_interval,
+    _repeat_intervals,
     _warn_drift_absorbs_task,
     _warn_unmatched_design_band,
 )
@@ -16,7 +16,8 @@ from fnirs_pipe.pipeline.post_pipeline import (
 
 def _raw_with(descriptions, onsets):
     info = mne.create_info(["S1_D1 hbo"], sfreq=10.0, ch_types="hbo")
-    raw = mne.io.RawArray(np.zeros((1, 3000)), info, verbose="ERROR")
+    n = int((max(onsets) + 60) * 10)          # long enough to hold every annotation
+    raw = mne.io.RawArray(np.zeros((1, n)), info, verbose="ERROR")
     raw.set_annotations(mne.Annotations(onset=onsets, duration=[1.0] * len(onsets),
                                         description=descriptions))
     return raw
@@ -33,16 +34,26 @@ def _config(**kw):
 
 def test_the_longest_gap_is_measured_per_condition():
     raw = _raw_with(["a", "a", "b", "b"], [0.0, 30.0, 0.0, 120.0])
-    assert _longest_repeat_interval(raw) == pytest.approx(120.0)
+    assert _repeat_intervals(raw) == {"a": pytest.approx(30.0), "b": pytest.approx(120.0)}
 
 
 def test_rejected_time_is_not_a_condition():
     raw = _raw_with(["a", "a", "BAD_gvtd", "BAD_gvtd"], [0.0, 30.0, 0.0, 200.0])
-    assert _longest_repeat_interval(raw) == pytest.approx(30.0)
+    assert set(_repeat_intervals(raw)) == {"a"}
 
 
 def test_a_condition_seen_once_has_no_interval():
-    assert _longest_repeat_interval(_raw_with(["a"], [0.0])) is None
+    assert _repeat_intervals(_raw_with(["a"], [0.0])) == {}
+
+
+def test_the_warning_names_the_conditions_it_spans(caplog):
+    """A block marker and a stimulus marker in one file have different rhythms."""
+    raw = _raw_with(["block", "block", "stim", "stim"], [0.0, 400.0, 0.0, 10.0])
+    with caplog.at_level("WARNING"):
+        _warn_drift_absorbs_task(_config(drift_high_pass=0.01), raw)
+    assert "block" in caplog.text
+    assert "stim" not in caplog.text
+    assert "1 of 2 conditions" in caplog.text
 
 
 def test_a_cutoff_above_the_task_rhythm_warns(caplog):

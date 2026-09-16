@@ -137,46 +137,51 @@ def _warn_unmatched_design_band(config: PostConfig) -> None:
     )
 
 
-def _longest_repeat_interval(raw: mne.io.Raw) -> float | None:
-    """The longest gap between two trials of the same condition, over conditions.
+def _repeat_intervals(raw: mne.io.Raw) -> dict[str, float]:
+    """Per condition, the longest gap between two of its trials.
 
-    That gap is the slowest rhythm the design contains, so it is the frequency a drift
-    basis must stay below. Annotations that mark rejected time rather than a condition are
-    skipped, and a condition occurring once has no interval to measure.
+    That gap is the slowest rhythm the design asks the model to fit, so it is the frequency
+    a drift basis has to stay below. Per condition rather than one number for the run: a
+    file mixing block markers with stimulus markers has both a slow and a fast rhythm, and
+    which one matters depends on which condition the reader cares about. Annotations that
+    mark rejected time are skipped, and a condition seen once has no interval.
     """
     import numpy as np
 
-    longest = []
+    intervals: dict[str, float] = {}
     for desc in set(raw.annotations.description):
-        if desc.upper().startswith("BAD"):
+        if str(desc).lower().startswith(("bad", "edge")):
             continue
         onsets = np.sort(raw.annotations.onset[raw.annotations.description == desc])
         if onsets.size >= 2:
-            longest.append(float(np.max(np.diff(onsets))))
-    return max(longest) if longest else None
+            intervals[str(desc)] = float(np.max(np.diff(onsets)))
+    return intervals
 
 
 def _warn_drift_absorbs_task(config: PostConfig, raw: mne.io.Raw) -> None:
-    """A drift basis reaching the task's own rhythm fits the task away as if it were drift.
+    """A drift basis reaching a condition's own rhythm fits that condition away as drift.
 
     The cosine basis spans everything below its cutoff, so the cutoff has to sit below the
-    frequency at which a condition repeats. The usual choice is half that frequency, which
-    leaves the basis an octave of room before it reaches the task.
+    frequency at which the condition repeats. The usual choice is half that frequency,
+    which leaves the basis an octave of room before it reaches the task.
     """
     if config.drift_model != "cosine" or config.drift_high_pass is None:
         return
-    interval = _longest_repeat_interval(raw)
-    if interval is None or interval <= 0:
+
+    spanned = {name: gap for name, gap in _repeat_intervals(raw).items()
+               if gap > 0 and config.drift_high_pass >= 1.0 / gap}
+    if not spanned:
         return
 
-    task_freq = 1.0 / interval
-    if config.drift_high_pass < task_freq:
-        return
+    slowest = max(spanned.values())
+    named = ", ".join(f"{name} (every {gap:.0f} s)"
+                      for name, gap in sorted(spanned.items(), key=lambda kv: -kv[1]))
     logger.warning(
-        "sub-%s | --drift-high-pass %g Hz is at or above the %g Hz at which a condition "
-        "repeats (every %.1f s), so the drift basis spans the task and will absorb it. "
-        "Use %g Hz or lower.",
-        config.subject, config.drift_high_pass, task_freq, interval, task_freq / 2,
+        "sub-%s | --drift-high-pass %g Hz spans the rhythm of %d of %d conditions, so the "
+        "drift basis will absorb them: %s. Use %.5g Hz or lower to clear the slowest, or "
+        "drop the conditions you are not modelling.",
+        config.subject, config.drift_high_pass, len(spanned), len(_repeat_intervals(raw)),
+        named, 1.0 / (2.0 * slowest),
     )
 
 
