@@ -527,6 +527,17 @@ def hide_what_does_not_apply(censor, drift):
     Input("an-drift-high-pass", "value"),
 )
 def band_note(mode, high_pass, drift_model, drift_high_pass):
+    if mode in (None, "none"):
+        return None
+
+    # cosine without a cutoff stops the run in PostConfig, so say it here instead
+    if drift_model == "cosine" and drift_high_pass is None:
+        return dbc.Alert(
+            "A cosine drift model needs a cutoff, and there is no value that suits every "
+            "design. Load a run on Data Preparation: it reads the slowest repeat of each "
+            "condition off the markers and gives the number to put here.",
+            color="warning", className="mb-0")
+
     if mode != "glm" or high_pass is None:
         return None
 

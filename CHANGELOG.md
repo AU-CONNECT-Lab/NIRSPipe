@@ -13,6 +13,7 @@ All notable changes to this project will be documented in this file.
 - **Batch Prep writes out the `fnirs-prep` command it would run**, for copying to a shell or a job script. The page had none, which left batch editing as the one thing the GUI could do and not hand you. Multi-segment crop needs its table as a file, so generating the command also writes it beside the derivatives
 
 ### Changed
+- **The Analysis page no longer pre-fills a drift cutoff.** The 0.01 Hz it offered is the value nilearn defaults to, and it suits a design whose conditions repeat every half minute or so; against a long-block design it spans the task and fits it away as drift. The field now says where the number comes from, and Data Preparation works it out for a loaded run
 - **The Analysis page says on screen when the high-pass and the drift model disagree**, instead of leaving it to a warning in the run log. Its high-pass box no longer suggests a value: leaving it empty and letting the drift basis detrend is what a task model wants, and the suggestion pointed the other way
 - **The grid tables draw a cross again** in the column that deletes a row, rather than the two characters a mangled encoding left there
 - **The sidebar is two families rather than one list.** Quality control holds the two pages that load one recording and show it to you, at the individual and dyad levels; Batch holds the five that assemble a command and run it. `Hyper Align` is now `Hyper Preparation`, the dyad counterpart of Data Preparation, and the page of cohort aggregates is `Cohort Reports`
