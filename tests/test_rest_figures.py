@@ -113,7 +113,7 @@ def test_a_rejected_channel_sits_below_the_measured_range_not_on_zero():
         "channel": [f"{p} {c}" for p in pairs for c in ("hbo", "hbr")],
         "alff": [1.0, 1.2, np.nan, np.nan], "falff": [0.2, 0.2, np.nan, np.nan]})
     fig = rest_channel_panel(_fc_frame(pairs, "hbo"), None, alff)
-    ring = next(t for t in fig.data if getattr(t, "name", None) == "rejected")
+    ring = next(t for t in fig.data if getattr(t, "name", None) == "no value")
     assert all(y < 1.0 for y in ring.y)
 
 

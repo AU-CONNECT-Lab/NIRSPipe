@@ -80,6 +80,11 @@ def _short_channel_regressors(
                        "no short-channel regressor; its record and its methods text say so. "
                        "The run is not comparable with the subjects that got one.")
         return {}
+    for lone in sole_regressor_channels(haemo, strategy, sep_bands):
+        logger.warning(
+            "%s is the only short channel of its chromophore that passed screening, so the "
+            "regressor built from it is that channel; its own residual is therefore empty "
+            "and its ALFF and FC are left blank. Every other channel is unaffected.", lone)
     hbo_data = short.get_data(picks=good_hbo)  # (n_channels, n_times)
     hbr_data = short.get_data(picks=good_hbr)
     n_dropped = len(short.ch_names) - len(hbo_data) - len(hbr_data)
@@ -92,6 +97,40 @@ def _short_channel_regressors(
         "short_ch_hbo_mean": hbo_data.mean(axis=0),
         "short_ch_hbr_mean": hbr_data.mean(axis=0),
     }
+
+
+def sole_regressor_channels(
+    haemo: mne.io.Raw, strategy: "SCRStrategy | None", sep_bands=None,
+) -> list[str]:
+    """Short channels that would be regressed out of themselves, leaving nothing.
+
+    ``[] `` for a montage with several good short channels a chromophore, ``["S5_D6 hbo"]``
+    for one whose only surviving short channel is that one.
+
+    The ``mean`` regressor is the mean of the good short channels of a chromophore. Where
+    one of them survives screening, that mean **is** that channel, sample for sample, and
+    the design matrix is applied to every channel including the ones it was built from: the
+    channel is fitted against a copy of itself and its residual is numerically zero. With
+    two or more the residual is the channel minus their mean, which is a real if small
+    quantity, so the line is at one and not at some share.
+
+    ``pca`` spans the short channels rather than averaging them, and a single channel's
+    basis is again that channel, so it falls the same way.
+    """
+    if not strategy:
+        return []
+    from fnirs_pipe.qc.metrics._helpers import long_short_channels
+
+    short_names = long_short_channels(haemo, sep_bands)[1]
+    if not short_names:
+        return []
+    short = haemo.copy().pick(short_names)
+    lone = []
+    for chromo in ("hbo", "hbr"):
+        picks = mne.pick_types(short.info, fnirs=chromo, exclude="bads")
+        if len(picks) == 1:
+            lone.append(short.ch_names[picks[0]])
+    return lone
 
 
 def _short_channel_basis(data: np.ndarray) -> dict[str, np.ndarray]:

@@ -494,6 +494,8 @@ def cmd_pair_null(
     verbose: bool,
 ) -> None:
     """Draw the re-paired null for dyads whose real tables are already on disk."""
+    import json
+
     from fnirs_pipe.pipeline.hyperscanning import parse_group_csv
     from fnirs_pipe.pipeline.pair_null import run_pair_null
 
@@ -506,7 +508,11 @@ def cmd_pair_null(
 
     roi_map = None
     if roi_mapping:
-        roi_map = json.loads(Path(roi_mapping).read_text())
+        try:
+            roi_map = json.loads(Path(roi_mapping).read_text())
+        except Exception as exc:
+            print(f"[error] failed to load ROI mapping: {exc}", file=sys.stderr)
+            raise SystemExit(1)
 
     chroma = ("hbo", "hbr") if wtc_chroma == "both" else (wtc_chroma,)
     scope_tasks = sorted({key[1] for key in all_groups})

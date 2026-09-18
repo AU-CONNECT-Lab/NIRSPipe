@@ -236,6 +236,11 @@ def run_hyper_post(
             tsv_path, step,
             [p for p in (path_from(r) for r in aligned_raws.values()) if p],
             band_fmin=band_fmin, band_fmax=band_fmax, mask_coi=wtc_mask_coi,
+            # --tstart/--tend, without which a reader cannot tell a table describing the
+            # whole recording from one describing a stretch of it, and the null that ranks
+            # this table has always recorded it while the table itself did not
+            **({"analysis_window_s": [round(x, 3) for x in analysis_window]}
+               if analysis_window is not None else {}),
             wtc_fmin=wtc_fmin, wtc_fmax=wtc_fmax, chroma=list(chroma),
             **wtc_grid_params(aligned_raws), **align_info, **extra,
         )

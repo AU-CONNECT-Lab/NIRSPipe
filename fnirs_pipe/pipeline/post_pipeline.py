@@ -13,6 +13,7 @@ from typing import Any, Literal
 
 import mne
 import mne.io
+import numpy as np
 import pandas as pd
 
 from fnirs_pipe.io.auxiliary import find_aux_table
@@ -498,11 +499,17 @@ def _write_fc_derivatives(
         _roi_members, compute_fc, compute_fc_roi, compute_fc_seed, fisher_z,
     )
 
+    from fnirs_pipe.pipeline.glm import sole_regressor_channels
+
     entities = carry_entities(source_entities)
 
     # the FC matrices keep their bad rows and columns so the shape stays predictable;
     # the sidecar names them so a consumer can drop or ignore them
     bads = list(raw_resid.info["bads"])
+    # a channel that was the whole short-channel regressor was fitted against a copy of
+    # itself, so its residual is zero and every correlation it takes part in is noise
+    empty = sole_regressor_channels(raw_resid, config.short_channel,
+                                    separation_bands(config))
     src_bp = rec.path_of(raw_resid)
 
     def _path(ents: dict, suffix: str) -> Path:
@@ -524,6 +531,9 @@ def _write_fc_derivatives(
         fc_df = compute_fc(raw_resid, chromo)
         if fc_df.empty:
             continue
+        for ch in (c for c in empty if c in fc_df.index):
+            fc_df.loc[ch, :] = np.nan
+            fc_df.loc[:, ch] = np.nan
         chromo_entities = {**entities, "desc": chromo}
 
         fc_path = _path(chromo_entities, "fc")
@@ -598,9 +608,16 @@ def _write_rest_derivatives(
 
     entities = carry_entities(source_entities)
 
+    from fnirs_pipe.pipeline.glm import sole_regressor_channels
+
     alff_df = None
     if raw_resid_bb is not None:
         alff_df = compute_alff(raw_resid_bb, low_pass=config.low_pass, high_pass=config.high_pass)
+        empty = set(sole_regressor_channels(raw_resid_bb, config.short_channel,
+                                            separation_bands(config)))
+        if empty:
+            rows = alff_df["channel"].isin(empty)
+            alff_df.loc[rows, ["alff", "falff", "malff", "zalff"]] = np.nan
         alff_path = build_output_path(
             output_dir=output_dir, subject=config.subject, session=config.session,
             entities=entities, suffix="alff", extension=".tsv",

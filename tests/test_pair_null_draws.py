@@ -60,13 +60,14 @@ def wired(monkeypatch):
     return state
 
 
-def _run(candidates, refused=None, coverage=None, n_max=None, windows=None):
+def _run(candidates, refused=None, coverage=None, n_max=None, windows=None,
+         real_duration=REAL_DURATION):
     refused = {} if refused is None else refused
     coverage = {} if coverage is None else coverage
     drawn = list(_draw_pairs(
         "/out", "full", FIXED, _Raw(), [GroupEntry("dXX", c, "full") for c in candidates],
         desc="preproc", bads_scope="run", scope_tasks=["full"],
-        real_duration=REAL_DURATION, real_offset=REAL_OFFSET, n_max=n_max,
+        real_duration=real_duration, real_offset=REAL_OFFSET, n_max=n_max,
         refused=refused, coverage=coverage, windows=windows))
     return drawn, refused, coverage
 
@@ -136,3 +137,22 @@ def test_the_condition_overlap_is_measured_for_every_draw(wired, monkeypatch):
     drawn, _, coverage = _run(["sub-p2d02"], windows=[("game1", 0.0, 300.0)])
     assert len(drawn) == 1                       # low overlap still counts
     assert coverage == {"sub-p2d02": {"game1": 0.42}}
+
+
+def test_the_length_a_stand_in_must_cover_is_the_analysed_span(wired):
+    """Measured on real data: what a recording has left after its trigger varies by minutes.
+
+    The first version demanded a stand-in reach the whole aligned recording, so a cohort
+    whose triggers sit at 22 s in one session and 375 s in another refused nearly every
+    pairing, and the longest target got no null at all. The real table describes the analysis
+    window when there is one, so that is what a draw has to cover; pinning every dyad to a
+    common --tstart/--tend is then the way out, and it only works if the guard reads it.
+    """
+    wired["aligned_duration"]["sub-p2d02"] = 3700.0
+    drawn, refused, _ = _run(["sub-p2d02"])                    # against REAL_DURATION 900
+    assert [pid for pid, _ in drawn] == ["sub-p2d02"]
+    assert refused == {}
+
+    drawn, refused, _ = _run(["sub-p2d02"], real_duration=3800.0)
+    assert drawn == []
+    assert refused["too_short"] == ["sub-p2d02"]

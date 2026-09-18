@@ -169,17 +169,19 @@ def _panel_strip(fig, values, order, xs, measure, label, row, col, legend):
     span = (hi - lo) or abs(hi) or 1.0
 
     if (~drawn).any():
-        # a rejected channel keeps its position rather than leaving a gap, or half a montage
-        # of rejections reads as a figure with nothing in it. Below the measured range and
-        # not on the zero line: a channel whose amplitude really is near zero belongs on the
-        # axis, and the two states must not land on the same row
+        # a channel with no value keeps its position rather than leaving a gap, or half a
+        # montage of rejections reads as a figure with nothing in it. Below the measured
+        # range and not on the zero line: a channel whose amplitude really is near zero
+        # belongs on the axis, and the two states must not land on the same row.
+        # "no value" and not "rejected": rejection is the usual reason but not the only one,
+        # and the panel cannot tell them apart. The per-channel table can.
         idx = np.flatnonzero(~drawn)
         fig.add_trace(go.Scatter(
             x=xs[idx], y=np.full(len(idx), lo - 0.17 * span), mode="markers",
-            name="rejected", showlegend=legend, customdata=[order[i] for i in idx],
+            name="no value", showlegend=legend, customdata=[order[i] for i in idx],
             marker=dict(size=_STRIP_MARK, symbol="circle-open", color=_REJECTED_INK,
                         line=dict(color=_REJECTED_INK, width=1.4)),
-            hovertemplate="%{customdata}<br>rejected<extra></extra>",
+            hovertemplate="%{customdata}<br>no value<extra></extra>",
         ), row=row, col=col)
 
     fig.update_yaxes(title_font=dict(size=10), tickfont=dict(size=9),

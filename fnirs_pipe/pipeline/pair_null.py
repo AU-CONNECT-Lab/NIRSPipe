@@ -239,7 +239,9 @@ def _draw_pairs(
             partner = load_group_haemo(output_dir, [entry], desc=desc)
         except Exception as exc:
             refused.setdefault("unreadable", []).append(pid)
-            logger.warning("%s refused as a stand-in: %s", pid, exc)
+            # one line each would be the whole log on a cohort only partly preprocessed;
+            # _log_draw_quality names them together
+            logger.debug("%s refused as a stand-in: %s", pid, exc)
             continue
 
         partner_raw = next(iter(partner.values()))
@@ -342,13 +344,19 @@ def run_pair_null(
     aligned_real, offsets = align_recordings(raws, task)
     fixed_id = members[0].subject_id
     true_pair = (members[0].subject_id, members[1].subject_id)
-    real_duration = min(float(r.times[-1]) for r in aligned_real.values())
+    aligned_duration = min(float(r.times[-1]) for r in aligned_real.values())
+    # what a stand-in has to cover is what the real table describes, which is the analysis
+    # window when there is one rather than the whole aligned recording. Demanding the whole
+    # recording refuses partners whose recording reaches every sample actually compared, and
+    # it takes away the one route out of a cohort whose usable lengths differ: pinning every
+    # dyad to a common --tstart/--tend
+    real_duration = float(analysis_window[1]) if analysis_window else aligned_duration
     recorded = real_params.get("aligned_duration_s")
-    if recorded is not None and abs(float(recorded) - real_duration) > _DURATION_TOL_S:
+    if recorded is not None and abs(float(recorded) - aligned_duration) > _DURATION_TOL_S:
         # the tree moved under the table: the null would describe a different stretch
         raise StageError(
             f"the real table was written on {float(recorded):.3f} s of aligned recording but "
-            f"the tree now aligns to {real_duration:.3f} s. Rerun `fnirs-hyper run` for "
+            f"the tree now aligns to {aligned_duration:.3f} s. Rerun `fnirs-hyper run` for "
             f"group {group_id!r} before drawing its null.")
 
     candidates = partner_pool(groups, group_id, task, pool=pool)

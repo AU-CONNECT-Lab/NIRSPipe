@@ -148,3 +148,64 @@ def test_merge_covers_the_new_kinds(tmp_path):
                 null_kind="repaired", pair_pool="position")
     cmd_merge(tmp_path, verbose=False)
     assert (tmp_path / "group_hyper_wtc_pairnull.tsv").exists()
+
+
+# ---- the ROI mapping path, which only a real run exercised ----
+
+def test_an_roi_mapping_is_read_rather_than_crashing(tmp_path, monkeypatch):
+    """It crashed on `json` being unimported: no test had ever passed --roi-mapping.
+
+    The call is stubbed because what is under test is the command's own argument handling,
+    not the draw; the draw has its own tests and needs a derivatives tree.
+    """
+    import fnirs_pipe.pipeline.pair_null as pair_null
+    from fnirs_pipe.cli.hyper import cmd_pair_null
+
+    (tmp_path / "roi.json").write_text('{"pfc": ["S1_D1", "S1_D2"]}')
+    (tmp_path / "pairs.csv").write_text(
+        "group_id,subject_id,task\nd01,sub-a,full\nd01,sub-b,full\n"
+        "d02,sub-c,full\nd02,sub-d,full\n")
+
+    seen = {}
+    monkeypatch.setattr(pair_null, "run_pair_null",
+                        lambda *a, **k: seen.update(k) or tmp_path / "out.tsv")
+    cmd_pair_null(
+        output_dir=tmp_path, pairs_csv=tmp_path / "pairs.csv", group_id="d01",
+        task_label=None, desc="errts", roi_mapping=str(tmp_path / "roi.json"),
+        bads_scope="run", wtc_chroma="both", wtc_pair_pool="position",
+        wtc_pair_max=None, wtc_pair_cross=False, wtc_roi_min_channels=2,
+        wtc_limit_scales=True, verbose=False)
+
+    assert seen["roi_map"] == {"pfc": ["S1_D1", "S1_D2"]}
+
+
+def test_an_unreadable_roi_mapping_exits_rather_than_tracebacks(tmp_path):
+    from fnirs_pipe.cli.hyper import cmd_pair_null
+
+    (tmp_path / "roi.json").write_text("{not json")
+    (tmp_path / "pairs.csv").write_text(
+        "group_id,subject_id,task\nd01,sub-a,full\nd01,sub-b,full\n")
+    with pytest.raises(SystemExit):
+        cmd_pair_null(
+            output_dir=tmp_path, pairs_csv=tmp_path / "pairs.csv", group_id=None,
+            task_label=None, desc="errts", roi_mapping=str(tmp_path / "roi.json"),
+            bads_scope="run", wtc_chroma="both", wtc_pair_pool="position",
+            wtc_pair_max=None, wtc_pair_cross=False, wtc_roi_min_channels=2,
+            wtc_limit_scales=True, verbose=False)
+
+
+def test_the_real_table_records_the_window_it_describes():
+    """The null that ranks this table has always recorded --tstart/--tend; the table had not.
+
+    Found by running on real recordings: a cohort whose triggers sit minutes apart needs a
+    common analysis window for its dyads to be comparable, and nothing downstream could read
+    that window back off the table it was applied to. Same argument as the alignment stamp:
+    a windowed table and a whole-recording one cannot be told apart by their numbers.
+    """
+    import inspect
+
+    from fnirs_pipe.pipeline import hyper_post
+
+    src = inspect.getsource(hyper_post.run_hyper_post)
+    assert "analysis_window_s" in src, (
+        "the real WTC table's sidecar no longer records the window it describes")
