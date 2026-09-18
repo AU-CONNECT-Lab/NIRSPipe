@@ -44,7 +44,7 @@ class HyperPostConfig:
     wtc_chroma: Any = ("hbo", "hbr")
     isc_whiten: int = 0
     isc_max_lag_s: float = 0.0
-    isc_pseudo: int = 0
+    isc_phase_null: int = 0
     roi_map: dict | None = None
     sep_bands: Any = None
     analysis_window: "tuple[float, float] | None" = None
@@ -107,7 +107,7 @@ class HyperPostResult:
     isc: dict = field(default_factory=dict)
     isc_roi: dict = field(default_factory=dict)
     # {pairing: {label: {chromophore: ndarray or None}}}, the per-cell level a connectogram
-    # chord is drawn against when --isc-pseudo ran. Its own field rather than a third slot
+    # chord is drawn against when --isc-phase-null ran. Its own field rather than a third slot
     # in `isc`, so nothing reading that pair has to learn a new shape
     isc_levels: dict = field(default_factory=dict)
     align_info: dict = field(default_factory=dict)
@@ -173,7 +173,7 @@ def run_hyper_post(
     """Run the coherence and the correlation for one dyad, and write every table they make.
 
     ``cond_windows`` supplies the per-condition windows instead of resolving them here: the
-    caller passes the same list to the pseudo-dyad null, and the two tables are only
+    caller passes the same list to the phase-scrambled null, and the two tables are only
     subtractable row by row if they describe the same windows.
 
     ``errors`` and ``notes`` are the report's own lists, so a guard that fails here reaches
@@ -217,7 +217,7 @@ def run_hyper_post(
     wtc_save_maps          = config.wtc_save_maps
     wtc_mask_coi           = config.wtc_mask_coi
     wtc_roi_min_channels   = config.wtc_roi_min_channels
-    isc_whiten, isc_pseudo = config.isc_whiten, config.isc_pseudo
+    isc_whiten, isc_phase_null = config.isc_whiten, config.isc_phase_null
     isc_max_lag_s          = config.isc_max_lag_s
     chroma, cond_pad_s     = config.chroma, config.cond_pad_s
     roi_map, sep_bands     = config.roi_map, config.sep_bands
@@ -299,14 +299,14 @@ def run_hyper_post(
             save_wtc(result, npz_path)
 
     def _apply_null_level(result, ch_type: str) -> None:
-        """Put the pseudo-dyad null's per-frequency level on each pair, where one was drawn.
+        """Put the phase-scrambled null's per-frequency level on each pair, where one was drawn.
 
         ``sig`` is whatever the phase arrows are thresholded against, and it already holds
         pycwt's Monte Carlo level when --wtc-significance ran. The null's level is the same
         shape and answers the same question against a better null, so it goes in the same
         slot rather than a second one the figures would have to choose between.
 
-        Absent unless --wtc-pseudo ran for this dyad, which is the usual case: the maps then
+        Absent unless --wtc-phase-null ran for this dyad, which is the usual case: the maps then
         keep whatever they had, and the arrows fall back to the flat --wtc-arrow-min.
         """
         from fnirs_pipe.pipeline.wtc_store import load_null_levels
@@ -322,7 +322,7 @@ def run_hyper_post(
                     if data is not None and level is not None:
                         data["sig"] = level
                         data["sig_source"] = "null"
-            logger.info("%s | phase arrows drawn against the pseudo-dyad null (%s)",
+            logger.info("%s | phase arrows drawn against the phase-scrambled null (%s)",
                         scope, ch_type)
 
     def _band_means(result, kind: str, ch_type: str):
@@ -579,7 +579,7 @@ def run_hyper_post(
             isc_mat, isc_ch_names, pairs_df, arc_level = compute_isc_pairs(
                 aligned_raws, pair_ids, ch_type, sep_bands, window=window,
                 whiten=isc_whiten, max_lag_s=isc_max_lag_s,
-                n_null=isc_pseudo, seed=wtc_seed)
+                n_null=isc_phase_null, seed=wtc_seed)
             if isc_mat is None:
                 return channel_level, roi_level, arc_level
             channel_level = (isc_mat, isc_ch_names)
@@ -638,7 +638,7 @@ def run_hyper_post(
                 tsv_path, "hyper_isc_pairs",
                 [p for p in (path_from(r) for r in aligned_raws.values()) if p],
                 isc_whiten=isc_whiten, isc_max_lag_s=isc_max_lag_s,
-                isc_pseudo=isc_pseudo, seed=wtc_seed,
+                isc_phase_null=isc_phase_null, seed=wtc_seed,
                 chroma=["hbo", "hbr"], conditions=[w[0] for w in cond_windows],
                 **align_info,
             )

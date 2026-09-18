@@ -282,7 +282,7 @@ def build_null_strip(rows: list[dict], order: list[str]) -> "go.Figure | None":
                       margin=dict(l=150, r=24, t=52, b=46),
                       legend=dict(orientation="h", yanchor="bottom", y=1.02,
                                   xanchor="right", x=1, font=dict(size=10)))
-    fig.update_xaxes(title_text="Percentile inside its own pseudo-dyad null",
+    fig.update_xaxes(title_text="Percentile inside its own phase-scrambled null",
                      title_font=dict(size=10), range=[-2, 102], dtick=25,
                      gridcolor="#f5f5f5", zeroline=False, tickfont=dict(size=9))
     fig.update_yaxes(tickvals=list(range(len(order))), ticktext=order, showgrid=False,

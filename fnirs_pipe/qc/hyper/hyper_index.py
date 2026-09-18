@@ -31,7 +31,7 @@ logger = get_logger("qc.hyper_index")
 
 _CHROMA_LABEL = {"hbo": "HbO", "hbr": "HbR"}
 
-# What a value has to beat to be counted past its own null. The same 95 the pseudo tables'
+# What a value has to beat to be counted past its own null. The same 95 the null tables'
 # `null_p95` column is drawn at, so the count and that column say one thing.
 NULL_PERCENTILE = 95
 
@@ -41,7 +41,7 @@ _ARTEFACTS = (
     ("raw QC",     "{stem}_desc-hyperraw_nirs.html"),
     ("provenance", "figures/provenance.png"),
     ("coherence",  "nirs/{stem}_hyper-wtc.tsv"),
-    ("null",       "nirs/{stem}_hyper-wtc-pseudo.tsv"),
+    ("null",       "nirs/{stem}_hyper-wtc-phasenull.tsv"),
     ("ISC pairs",  "nirs/{stem}_hyper-iscpairs.tsv"),
 )
 
@@ -123,7 +123,7 @@ def _past_null(df: "pd.DataFrame | None", where: "tuple[str, str] | None" = None
 
     ::
 
-      _past_null(pseudo, ("condition", "game1")) -> {"hbo": (2, 14), "hbr": (0, 14)}
+      _past_null(null_table, ("condition", "game1")) -> {"hbo": (2, 14), "hbr": (0, 14)}
 
     Coherence has a floor that moves with the window, so two windows' raw values do not
     compare and neither is readable on its own. Each channel pair's own surrogate draws are
@@ -207,8 +207,8 @@ def collect_rows(group_dir: Path, group_id: str) -> "list[dict]":
         whole = _read_tsv(nirs_dir / f"{stem}_hyper-wtc.tsv")
         bycond = _read_tsv(nirs_dir / f"{stem}_hyper-wtcbycond.tsv")
         # written only when the run drew a null; a tree without one keeps the column empty
-        whole_null = _read_tsv(nirs_dir / f"{stem}_hyper-wtc-pseudo.tsv")
-        bycond_null = _read_tsv(nirs_dir / f"{stem}_hyper-wtcbycond-pseudo.tsv")
+        whole_null = _read_tsv(nirs_dir / f"{stem}_hyper-wtc-phasenull.tsv")
+        bycond_null = _read_tsv(nirs_dir / f"{stem}_hyper-wtcbycond-phasenull.tsv")
         # every inter-brain number is of two members, so a group of three contributes three
         # rows per window, one per pairing, rather than one row averaging across them
         pairings = _pairings(whole, bycond)

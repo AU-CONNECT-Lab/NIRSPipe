@@ -1,6 +1,6 @@
 """The null keeps its spread, and the arrows are drawn against it per frequency.
 
-Two defects, one cause. `--wtc-pseudo` averaged its iterations on the spot, so a table said
+Two defects, one cause. `--wtc-phase-null` averaged its iterations on the spot, so a table said
 where the null sat but not how wide it was, and nothing could be ranked inside it. And the
 phase arrows on every coherence map were drawn at a flat 0.5, a display threshold that is
 not a test: surrogate coherence is not flat in frequency, it rises at both ends of the
@@ -16,7 +16,7 @@ import pandas as pd
 import pytest
 
 from fnirs_pipe.pipeline.synchrony import (
-    NULL_ARROW_QUANTILE, PseudoNull, WTCResult, _accumulate_null_hist, _null_level,
+    NULL_ARROW_QUANTILE, NullDraws, WTCResult, _accumulate_null_hist, _null_level,
 )
 
 FREQS = np.array([0.02, 0.06, 0.15])
@@ -43,7 +43,7 @@ def _map(rows, n_times=40, coi=1e6):
 def test_the_table_reports_the_spread_the_mean_came_out_of():
     """A null summarised by its mean alone cannot say whether a real value above it is
     anywhere near unusual, which is the only question a null is drawn to answer."""
-    null = PseudoNull(draws=[_draw(0.2), _draw(0.4), _draw(0.6)],
+    null = NullDraws(draws=[_draw(0.2), _draw(0.4), _draw(0.6)],
                       cond_draws=[], keys=KEYS, levels={})
     table, _ = null.summarise()
 
@@ -56,7 +56,7 @@ def test_the_percentile_is_counted_not_interpolated():
     """Three of four draws beat by the real value is the 75th percentile exactly. At the
     iteration counts a null is affordable at, a quantile-interpolated rank disagrees with
     the counted one by more than the number is worth."""
-    null = PseudoNull(draws=[_draw(v) for v in (0.10, 0.20, 0.30, 0.90)],
+    null = NullDraws(draws=[_draw(v) for v in (0.10, 0.20, 0.30, 0.90)],
                       cond_draws=[], keys=KEYS, levels={})
     table, _ = null.summarise(real=_draw(0.5))
 
@@ -66,7 +66,7 @@ def test_the_percentile_is_counted_not_interpolated():
 def test_a_cell_the_real_table_has_no_row_for_is_not_ranked():
     """NaN rather than a rank against nothing: a 0 would read as a cell the real data lost
     to, which is a claim, and an absent row is not one."""
-    null = PseudoNull(draws=[_draw(0.2), _draw(0.4)], cond_draws=[], keys=KEYS, levels={})
+    null = NullDraws(draws=[_draw(0.2), _draw(0.4)], cond_draws=[], keys=KEYS, levels={})
     other = _draw(0.5)
     other["label"] = ["S9_D9"]
     table, _ = null.summarise(real=other)
@@ -77,7 +77,7 @@ def test_a_cell_the_real_table_has_no_row_for_is_not_ranked():
 def test_a_pair_blank_in_every_iteration_is_not_ranked_either():
     """A NaN draw compares False, so counting would put a real value at the 0th percentile:
     "it beat none of them", said about draws that were never taken."""
-    null = PseudoNull(draws=[_draw(float("nan")), _draw(float("nan"))],
+    null = NullDraws(draws=[_draw(float("nan")), _draw(float("nan"))],
                       cond_draws=[], keys=KEYS, levels={})
     table, _ = null.summarise(real=_draw(0.5))
 
@@ -85,7 +85,7 @@ def test_a_pair_blank_in_every_iteration_is_not_ranked_either():
 
 
 def test_no_real_table_leaves_the_percentile_column_off_rather_than_empty():
-    null = PseudoNull(draws=[_draw(0.2)], cond_draws=[], keys=KEYS, levels={})
+    null = NullDraws(draws=[_draw(0.2)], cond_draws=[], keys=KEYS, levels={})
     table, _ = null.summarise()
 
     assert "percentile" not in table.columns
@@ -112,11 +112,11 @@ def _crossed_real(diagonal, off_diagonal):
 
 
 def test_a_homologous_null_ranks_the_crossed_table_s_diagonal():
-    """`--wtc-channel-cross` without `--wtc-pseudo-cross` is the recommended pair, and the
+    """`--wtc-channel-cross` without `--wtc-phase-null-cross` is the recommended pair, and the
     null is the null for the pairings it was drawn for. Keying on `label` alone took the
     row that label came first in, which is its pairing with the *first* channel of the other
     montage: right for the first label by coincidence and wrong for every other."""
-    null = PseudoNull(draws=[_homologous_draw(v) for v in (0.10, 0.20, 0.30)],
+    null = NullDraws(draws=[_homologous_draw(v) for v in (0.10, 0.20, 0.30)],
                       cond_draws=[], keys=KEYS, levels={})
     table, _ = null.summarise(real=_crossed_real(diagonal=0.9, off_diagonal=0.05))
 
@@ -127,7 +127,7 @@ def test_a_homologous_null_ranks_the_crossed_table_s_diagonal():
 def test_the_off_diagonal_is_not_what_the_homologous_null_is_ranked_against():
     """The complement of the above: were the crossed rows still being keyed by `label`,
     a diagonal below the null and an off-diagonal above it would come back as 100."""
-    null = PseudoNull(draws=[_homologous_draw(v) for v in (0.40, 0.50, 0.60)],
+    null = NullDraws(draws=[_homologous_draw(v) for v in (0.40, 0.50, 0.60)],
                       cond_draws=[], keys=KEYS, levels={})
     table, _ = null.summarise(real=_crossed_real(diagonal=0.05, off_diagonal=0.9))
 
@@ -211,14 +211,14 @@ def test_the_arrow_mask_prefers_the_level_over_the_flat_threshold():
 
 def test_the_caption_names_the_level_it_actually_used():
     """Three sources and three wordings. A caption reading "the Monte Carlo level" over
-    arrows drawn against the pseudo null, or against a display threshold, claims a test
+    arrows drawn against the phase-scrambled null, or against a display threshold, claims a test
     nobody ran."""
     from fnirs_pipe.qc.figures.hyper.hyper_post_figures import _clears
 
     level = np.array([0.4, 0.5, 0.6])
     assert _clears({"sig": None}, arrow_min=0.5) == "0.5"
     assert _clears({"sig": level}) == "the Monte Carlo level"
-    assert _clears({"sig": level, "sig_source": "null"}) == "the pseudo-dyad null"
+    assert _clears({"sig": level, "sig_source": "null"}) == "the phase-scrambled null"
 
 
 # ---- what lands on disk ----

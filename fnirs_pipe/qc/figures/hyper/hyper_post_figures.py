@@ -85,7 +85,7 @@ def _clears(wtc_data: dict, arrow_min: float = ARROW_MIN_COHERENCE) -> str:
 
     ::
 
-      a map carrying the pseudo null's level -> "the pseudo-dyad null"
+      a map carrying the phase-scrambled null's level -> "the phase-scrambled null"
 
     Three sources and three wordings, because two of them are tests and the third is not: a
     caption reading "the Monte Carlo level" over arrows drawn at a flat display threshold
@@ -93,7 +93,7 @@ def _clears(wtc_data: dict, arrow_min: float = ARROW_MIN_COHERENCE) -> str:
     """
     if wtc_data.get("sig") is None:
         return f"{arrow_min:g}"
-    return ("the pseudo-dyad null" if wtc_data.get("sig_source") == "null"
+    return ("the phase-scrambled null" if wtc_data.get("sig_source") == "null"
             else "the Monte Carlo level")
 
 
@@ -1111,7 +1111,7 @@ def build_isc_panel(
         ch_type:       "hbo" or "hbr", shown in titles.
         isc_threshold: Absolute ``|ISC|`` a pairing must clear for a chord. None, the
                        default, leaves the choice to :func:`_arc_rule`.
-        arc_level:     Per-cell level out of the pseudo-dyad null, when one was drawn.
+        arc_level:     Per-cell level out of the phase-scrambled null, when one was drawn.
     """
     if isc_mat is None or len(ch_names) == 0:
         return None
@@ -1139,7 +1139,7 @@ def build_isc_roi_matrix(isc_by_chroma: dict, subject_ids: list[str]):
 
     The ROI counterpart of :func:`build_isc_panel`, and it drops the connectogram that one
     keeps. A handful of regions is small enough that the heatmap already carries the shape,
-    and the ROI matrices have no pseudo-dyad null, so a chord rule would have nothing to
+    and the ROI matrices have no phase-scrambled null, so a chord rule would have nothing to
     rank pairings by. Side by side on one scale is the HbO against HbR check instead, the
     reading :func:`build_wtc_cross_matrix` is laid out for.
 

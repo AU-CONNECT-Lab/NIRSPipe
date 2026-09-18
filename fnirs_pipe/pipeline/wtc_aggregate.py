@@ -24,7 +24,7 @@ from fnirs_pipe.utils.logging import get_logger
 logger = get_logger("pipeline.wtc_aggregate")
 
 # parameters that have to match across every file in a merge, and why they cannot be mixed
-# n_iter only ever appears on a pseudo-dyad sidecar, and a file without a key carries no
+# n_iter only ever appears on a phase-scrambled null's sidecar, and a file without a key carries no
 # opinion, so listing it here guards the null merge without touching the real tables
 _MUST_AGREE = ("band_fmin", "band_fmax", "mask_coi", "n_iter")
 
@@ -33,16 +33,16 @@ _KINDS = {
     "wtc-roichan":        "group_hyper_wtc_roichan",
     # the homologous ROI mean and its null: four rows a condition, the number to report
     "wtc-roihom":         "group_hyper_wtc_roihom",
-    "wtc-roihom-pseudo":  "group_hyper_wtc_roihom_pseudo",
-    "wtc-pseudo":         "group_hyper_wtc_pseudo",
+    "wtc-roihom-phasenull":  "group_hyper_wtc_roihom_phasenull",
+    "wtc-phasenull":         "group_hyper_wtc_phasenull",
     # --wtc-by-condition writes these beside the whole-run pair above; they carry a
     # `condition` column and are merged separately, never into the whole-run table
     "wtcbycond":          "group_hyper_wtc_bycondition",
     "wtcbycond-roichan":  "group_hyper_wtc_bycondition_roichan",
     "wtcbycond-roihom":   "group_hyper_wtc_bycondition_roihom",
-    "wtcbycond-roihom-pseudo": "group_hyper_wtc_bycondition_roihom_pseudo",
+    "wtcbycond-roihom-phasenull": "group_hyper_wtc_bycondition_roihom_phasenull",
     # the null for the pair above, windowed off the same transform they are
-    "wtcbycond-pseudo":   "group_hyper_wtc_bycondition_pseudo",
+    "wtcbycond-phasenull":   "group_hyper_wtc_bycondition_phasenull",
 }
 
 
@@ -130,7 +130,7 @@ def aggregate_wtc(output_dir: Path, kind: str = "wtc") -> pd.DataFrame:
     """Concatenate every per-dyad WTC band-mean table under output_dir.
 
     kind is "wtc" for the channel-level tables, "wtc-roichan" for the ROI-level ones,
-    "wtc-pseudo" for the phase-scrambled null, or the "wtcbycond" trio for what
+    "wtc-phasenull" for the phase-scrambled null, or the "wtcbycond" trio for what
     ``--wtc-by-condition`` wrote, its ROI means and its own null. Returns an empty frame
     when nothing matches, so a study that never ran WTC is not an error.
     """

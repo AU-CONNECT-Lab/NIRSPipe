@@ -55,12 +55,12 @@ def build_qc_args(command: str, opts: dict) -> list[str]:
         args += _num("--wtc-band-fmax", opts.get("wtc_band_fmax"))
         args += _num("--wtc-mc-count", opts.get("wtc_mc_count"))
         args += _num("--wtc-seed", opts.get("wtc_seed"))
-        args += _num("--wtc-pseudo", opts.get("wtc_pseudo"))
+        args += _num("--wtc-phase-null", opts.get("wtc_phase_null"))
         args += _num("--isc-threshold", opts.get("isc_threshold"))
         args += _num("--wtc-roi-min-channels", opts.get("wtc_roi_min_channels"))
         args += _num("--isc-whiten", opts.get("isc_whiten"))
         args += _num("--isc-max-lag", opts.get("isc_max_lag"))
-        args += _num("--isc-pseudo", opts.get("isc_pseudo"))
+        args += _num("--isc-phase-null", opts.get("isc_phase_null"))
         args += _text("--wtc-chroma", opts.get("wtc_chroma"))
         args += _split("--task-label", opts.get("hyper_task"))
         flags = opts.get("hyper_flags") or []
@@ -70,8 +70,8 @@ def build_qc_args(command: str, opts: dict) -> list[str]:
             args.append("--no-wtc-mask-coi")
         if "wtc_channel_cross" in flags:
             args.append("--wtc-channel-cross")
-        if "wtc_pseudo_cross" in flags:
-            args.append("--wtc-pseudo-cross")
+        if "wtc_phase_null_cross" in flags:
+            args.append("--wtc-phase-null-cross")
         # the switch turns the per-condition pass off, that pass being the default
         if "no_by_condition" in flags:
             args.append("--no-by-condition")

@@ -26,10 +26,10 @@ ALL_STEPS = [
     "fisher_z", "fc_roi", "fc_seed", "group_sqm_raw", "group_sqm_raw_channels",
     "hyper_sqm", "hyper_bads", "hyper_coherence", "hyper_coherence_windowed",
     "hyper_screening", "hyper_usable",
-    "hyper_wtc", "hyper_wtc_roichan", "hyper_wtc_pseudo",
+    "hyper_wtc", "hyper_wtc_roichan", "hyper_wtc_phasenull",
     "hyper_isc", "hyper_isc_roichan",
     "hyper_wtc_bycondition", "hyper_wtc_bycondition_roichan",
-    "group_hyper_wtc", "group_hyper_wtc_roichan", "group_hyper_wtc_pseudo",
+    "group_hyper_wtc", "group_hyper_wtc_roichan", "group_hyper_wtc_phasenull",
 ]
 
 
@@ -274,7 +274,7 @@ def test_both_regressor_families_are_named_when_both_ran():
 
 @pytest.mark.parametrize("step", [
     "hyper_wtc", "hyper_wtc_roichan", "hyper_wtc_bycondition",
-    "hyper_wtc_bycondition_roichan", "hyper_wtc_pseudo",
+    "hyper_wtc_bycondition_roichan", "hyper_wtc_phasenull",
 ])
 def test_every_coherence_output_maps_to_the_one_coherence_sentence(step):
     # five files, one method; the band is the same for all of them

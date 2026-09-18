@@ -33,9 +33,9 @@ _STATES = [
     State("hy-wtc-band-fmin", "value"), State("hy-wtc-band-fmax", "value"),
     State("hy-wtc-mc-count", "value"), State("hy-wtc-seed", "value"),
     State("hy-isc-threshold", "value"),
-    State("hy-wtc-pseudo", "value"), State("hy-wtc-roi-min-channels", "value"),
+    State("hy-wtc-phasenull", "value"), State("hy-wtc-roi-min-channels", "value"),
     State("hy-isc-whiten", "value"), State("hy-isc-max-lag", "value"),
-    State("hy-isc-pseudo", "value"),
+    State("hy-isc-phasenull", "value"),
     State("hy-wtc-chroma", "value"),
     State("hy-task", "value"),
     State("hy-flags", "value"),
@@ -46,8 +46,8 @@ _STATES = [
 
 _KEYS = ["output_dir", "pairs_csv", "group_id", "desc", "roi_mapping",
          "wtc_fmin", "wtc_fmax", "wtc_band_fmin", "wtc_band_fmax", "wtc_mc_count",
-         "wtc_seed", "isc_threshold", "wtc_pseudo", "wtc_roi_min_channels",
-         "isc_whiten", "isc_max_lag", "isc_pseudo",
+         "wtc_seed", "isc_threshold", "wtc_phase_null", "wtc_roi_min_channels",
+         "isc_whiten", "isc_max_lag", "isc_phase_null",
          "wtc_chroma", "hyper_task", "hyper_flags",
          "band_fmin", "band_fmax", "band_suffix", "band_flags",
          "tstart", "tend"]

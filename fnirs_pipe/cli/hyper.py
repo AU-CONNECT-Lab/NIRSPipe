@@ -128,7 +128,7 @@ def _quality_summary(aligned_raws: dict, group_sqm: dict, sep_bands=None) -> Non
 
     Counted off the aligned Raw after the rejections are applied, so it describes the channel
     set the coherence actually uses rather than what the montage holds. The report says the
-    same thing, but only once the run has finished, which with --wtc-pseudo is hours later.
+    same thing, but only once the run has finished, which with --wtc-phase-null is hours later.
     """
     from fnirs_pipe.io.snirf import long_channel_picks
 
@@ -194,16 +194,16 @@ def cmd_run(
     wtc_by_condition: bool, wtc_chroma: str,
     wtc_cond_transform: bool, wtc_cond_pad_s: "float | None",
     wtc_limit_scales: bool, wtc_save_maps: bool,
-    wtc_pseudo: int | None, wtc_pseudo_cross: bool,
+    wtc_phase_null: int | None, wtc_phase_null_cross: bool,
     bads_scope: str, isc_threshold: "float | None", isc_whiten: int,
-    isc_max_lag: float, isc_pseudo: int,
+    isc_max_lag: float, isc_phase_null: int,
     sci_threshold: float,
     normalize: bool, no_align: bool, tstart: float | None, tend: float | None,
     short_max_dist: float | None, long_min_dist: float | None,
     long_max_dist: float | None,
     check_only: bool, verbose: bool,
 ) -> None:
-    """Dyad WTC + ISC report per group, plus the pseudo-dyad null when --wtc-pseudo is given.
+    """Dyad WTC + ISC report per group, plus the phase-scrambled null when --wtc-phase-null is given.
 
     The null reuses this run's aligned recordings and every band parameter, so it cannot be
     computed over a different band than the table it sits beside.
@@ -317,20 +317,20 @@ def cmd_run(
             task=task,
             aligned_raws=aligned_raws,
             output_dir=output_dir,
-            n_iter=wtc_pseudo,
+            n_iter=wtc_phase_null,
             wtc_fmin=wtc_fmin,
             wtc_fmax=wtc_fmax,
             band_fmin=wtc_band_fmin,
             band_fmax=wtc_band_fmax,
             seed=wtc_seed,
-            cross=wtc_pseudo_cross,
+            cross=wtc_phase_null_cross,
             limit_scales=wtc_limit_scales,
             mask_coi=wtc_mask_coi,
             chroma=chroma,
             sep_bands=sep_bands,
             windows=cond_windows,
             analysis_window=analysis_window,
-        ) if wtc_pseudo else None
+        ) if wtc_phase_null else None
 
         report_path = build_hyper_post_report(
             group_id=gid,
@@ -362,7 +362,7 @@ def cmd_run(
             isc_threshold=isc_threshold,
             isc_whiten=isc_whiten,
             isc_max_lag_s=isc_max_lag,
-            isc_pseudo=isc_pseudo,
+            isc_phase_null=isc_phase_null,
             sci_threshold=sci_threshold,
             sep_bands=sep_bands,
             analysis_window=analysis_window,
@@ -374,13 +374,13 @@ def cmd_run(
                 task=task,
                 aligned_raws=aligned_raws,
                 output_dir=output_dir,
-                n_iter=wtc_pseudo,
+                n_iter=wtc_phase_null,
                 wtc_fmin=wtc_fmin,
                 wtc_fmax=wtc_fmax,
                 band_fmin=wtc_band_fmin,
                 band_fmax=wtc_band_fmax,
                 seed=wtc_seed,
-                cross=wtc_pseudo_cross,
+                cross=wtc_phase_null_cross,
                 mask_coi=wtc_mask_coi,
                 windows=cond_windows,
                 analysis_window=analysis_window,
@@ -405,9 +405,9 @@ def cmd_run(
 
         return report_path
 
-    if wtc_pseudo:
-        logger.info("pseudo-dyad null requested: %d full WTC runs per dyad, on top of the real one",
-                    wtc_pseudo)
+    if wtc_phase_null:
+        logger.info("phase-scrambled null requested: %d full WTC runs per dyad, on top of the real one",
+                    wtc_phase_null)
     _run_groups(groups, _process)
     if check_only:
         return
@@ -531,14 +531,14 @@ def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="fnirs-hyper",
         description="Hyperscanning analysis: wavelet coherence, inter-subject correlation "
-                    "and the pseudo-dyad null, computed over a derivatives tree that "
+                    "and the phase-scrambled null, computed over a derivatives tree that "
                     "fnirs-pipe has already written.",
     )
     p.add_argument("--version", action="version", version=f"fnirs-hyper {__version__}")
     sub = p.add_subparsers(required=True, metavar="COMMAND")
 
     run = sub.add_parser("run", parents=[common, pairs, window, band_opts],
-                         help="WTC + ISC report per dyad, and the null with --wtc-pseudo.")
+                         help="WTC + ISC report per dyad, and the null with --wtc-phase-null.")
     run.add_argument("--desc", default="preproc",
                      help="desc entity of the per-subject stage the inter-brain metrics read, "
                           "e.g. 'preproc' (Beer-Lambert output) or 'errts' (confound-regression "
@@ -555,7 +555,7 @@ def _build_parser() -> argparse.ArgumentParser:
                      help="Overlay a Monte Carlo significance contour on WTC "
                           "(slow: see --wtc-mc-count for how slow). This asks whether a "
                           "time-frequency cell beats red noise, which is a different question "
-                          "from the pseudo-dyad null of --wtc-pseudo.")
+                          "from the phase-scrambled null of --wtc-phase-null.")
     run.add_argument("--wtc-mc-count", type=int, default=300,
                      help="Surrogate series behind each --wtc-significance contour "
                           "(default 300). This is what the runtime is spent on and it "
@@ -563,7 +563,7 @@ def _build_parser() -> argparse.ArgumentParser:
                           "a contour. Ignored without --wtc-significance.")
     run.add_argument("--wtc-seed", type=int, default=None,
                      help="Seed the Monte Carlo surrogates behind --wtc-significance and the "
-                          "phase randomisation behind --wtc-pseudo. Also bypasses pycwt's "
+                          "phase randomisation behind --wtc-phase-null. Also bypasses pycwt's "
                           "on-disk cache, which is not keyed on the seed.")
     run.add_argument("--wtc-chroma", choices=("hbo", "hbr", "both"), default="both",
                      help="Chromophore(s) the coherence runs on (default both). HbO and HbR "
@@ -576,7 +576,7 @@ def _build_parser() -> argparse.ArgumentParser:
                           "HbO with nothing in HbR is a caution flag. Every band-mean table "
                           "gains a chromophore column, and the report gains a switch "
                           "that moves every coherence panel between the chromophores at "
-                          "once. The null of --wtc-pseudo follows, since a null on one "
+                          "once. The null of --wtc-phase-null follows, since a null on one "
                           "chromophore says nothing about the other.")
     run.add_argument("--wtc-roi-min-channels", type=int, default=2, metavar="N",
                      help="Drop an ROI cell resting on fewer than N channel pairs, so one "
@@ -585,8 +585,8 @@ def _build_parser() -> argparse.ArgumentParser:
                      help="Coherence a cell has to reach before its phase arrow is drawn on "
                           "the WTC maps, when neither null was computed (default 0.5). "
                           "Display only: no table or figure value changes with it. Both "
-                          "--wtc-pseudo and --wtc-significance override it with a level per "
-                          "frequency, the pseudo-dyad one winning where both ran, and that "
+                          "--wtc-phase-null and --wtc-significance override it with a level per "
+                          "frequency, the phase-scrambled one winning where both ran, and that "
                           "is the form to prefer: surrogate coherence rises at both ends of "
                           "the computed range, so one number over the whole map marks the "
                           "band edges first. The flat threshold is what is left when nothing "
@@ -602,7 +602,7 @@ def _build_parser() -> argparse.ArgumentParser:
                           "time-frequency heatmaps stay on the homologous pairs. Single "
                           "channels are noisier than ROI averages, so treat the off-diagonal "
                           "as exploratory and correct for the number of tests. Does not "
-                          "affect the null: see --wtc-pseudo-cross.")
+                          "affect the null: see --wtc-phase-null-cross.")
     run.add_argument("--by-condition", "--wtc-by-condition", dest="wtc_by_condition",
                      action=argparse.BooleanOptionalAction, default=True,
                      help="Read the coherence out of each task annotation's own window, "
@@ -644,8 +644,8 @@ def _build_parser() -> argparse.ArgumentParser:
                           "npz, so a different band can be averaged later with `fnirs-hyper "
                           "band` instead of a second wavelet transform. Large: one array "
                           "per pair per dyad per task.")
-    run.add_argument("--wtc-pseudo", type=int, default=None, metavar="N",
-                     help="Also write the pseudo-dyad null: the same band means against a "
+    run.add_argument("--wtc-phase-null", type=int, default=None, metavar="N",
+                     help="Also write the phase-scrambled null: the same band means against a "
                           "phase-scrambled partner, averaged over N iterations (100 is what "
                           "published work uses). Coherence between two unrelated recordings "
                           "is not zero, so this is what a real value is read against. Omit "
@@ -658,7 +658,7 @@ def _build_parser() -> argparse.ArgumentParser:
                           "cell's percentile inside its own draws, and the maps draw their "
                           "phase arrows against the null's level rather than "
                           "--wtc-arrow-min.")
-    run.add_argument("--wtc-pseudo-cross", action="store_true",
+    run.add_argument("--wtc-phase-null-cross", action="store_true",
                      help="Cross the channels for the null too. Deliberately separate from "
                           "--wtc-channel-cross: crossing squares the pair count, and the null "
                           "pays that on every iteration. The homologous null is still the "
@@ -677,7 +677,7 @@ def _build_parser() -> argparse.ArgumentParser:
     run.add_argument("--isc-threshold", type=float, default=None,
                      help="Absolute |ISC| a pairing has to clear to get a chord in the "
                           "connectivity circle. Left alone the rule is chosen instead of the "
-                          "number: with --isc-pseudo a chord is drawn where the pairing beats "
+                          "number: with --isc-phase-null a chord is drawn where the pairing beats "
                           "the 95th percentile of its own surrogate draws, and without one "
                           "the strongest tenth are drawn and the subtitle says they are a "
                           "display cut rather than a test. Naming a number here forces the "
@@ -711,8 +711,8 @@ def _build_parser() -> argparse.ArgumentParser:
                           "reaches hyper-iscpairs.tsv as lag_s, positive where the second "
                           "member follows the first. A maximum over many shifts is larger "
                           "than any one of them under no coupling, so pair this with "
-                          "--isc-pseudo, whose surrogates are searched the same way.")
-    run.add_argument("--isc-pseudo", type=int, default=0, metavar="N",
+                          "--isc-phase-null, whose surrogates are searched the same way.")
+    run.add_argument("--isc-phase-null", type=int, default=0, metavar="N",
                      help="Also rank each correlation against N phase-scrambled surrogates "
                           "of the second member, which is the null a correlation between "
                           "two recordings needs: scrambling preserves each signal's own "
@@ -724,7 +724,7 @@ def _build_parser() -> argparse.ArgumentParser:
                      help="Load and align each dyad, print what the metrics would be "
                           "computed on, and stop. Nothing is written. Use it to look over a "
                           "cohort's channel budget before committing to a run, which with "
-                          "--wtc-pseudo is hours.")
+                          "--wtc-phase-null is hours.")
     # not the shared screening block: nothing is screened here, the rejections were decided
     # upstream and are read off the sidecars, so a --psp-threshold would do nothing at all
     run.add_argument("--sci-threshold", type=float, default=SCI_PASS,

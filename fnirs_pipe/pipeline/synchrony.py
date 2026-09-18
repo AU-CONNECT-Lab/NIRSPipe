@@ -6,7 +6,7 @@ Two ways of asking how locked two recordings are.
                                   frequency, so a pair that only synchronises during part
                                   of the task still shows it. Per channel pair. Backed by
                                   pycwt.
-  compute_wtc_pseudo              The same, against a phase-scrambled partner: the null a
+  compute_wtc_phase_null              The same, against a phase-scrambled partner: the null a
                                   hyperscanning result is actually compared against.
   compute_pairwise_coherence      One magnitude-squared coherence number per channel pair,
                                   averaged over a band. Cheap, and enough when the question
@@ -589,13 +589,13 @@ def _wtc_over_pairs(
 
     ``cache1`` extends that reuse across *calls*, for a caller that runs this many times over
     an unchanged first side: pass a dict and the first subject's transforms are read from it
-    and written back to it, keyed ``(subject, label)``. :func:`compute_wtc_pseudo` is the one
+    and written back to it, keyed ``(subject, label)``. :func:`compute_wtc_phase_null` is the one
     caller, and it is where the saving is, since it scrambles only the second side. Left at
     None the first side is prepared once per label and dropped, which is what a single pass
     needs and what keeps a crossed run from holding a second montage of transforms.
 
     ``seed`` makes those levels reproducible. It seeds pycwt's Monte Carlo only;
-    :func:`compute_wtc_pseudo` takes the same number for its own surrogate generator, so one
+    :func:`compute_wtc_phase_null` takes the same number for its own surrogate generator, so one
     value makes a whole run reproducible without the two sharing a stream.
     It is applied once here rather than per pair:
     the surrogates come from numpy's global legacy RNG inside pycwt, which takes no seed
@@ -777,11 +777,11 @@ def phase_scramble(sig: np.ndarray, rng: np.random.Generator) -> np.ndarray:
     return np.fft.irfft(scrambled, n=n)
 
 
-# ---- Pseudo-dyad null ----
+# ---- Phase-scrambled null ----
 
 
 @dataclass
-class PseudoNull:
+class NullDraws:
     """One chromophore's phase-scrambled null: the draws, the levels, and the summary of both.
 
     The draws are kept rather than averaged on the spot because the number worth reading off
@@ -918,7 +918,7 @@ def _null_level(hist: np.ndarray, quantile: float = NULL_ARROW_QUANTILE) -> np.n
     return out
 
 
-def compute_wtc_pseudo(
+def compute_wtc_phase_null(
     raws: dict[str, mne.io.Raw],
     band_fmin: float,
     band_fmax: float,
@@ -933,8 +933,8 @@ def compute_wtc_pseudo(
     sep_bands=None,
     windows: "list[tuple[str, float, float]] | None" = None,
     analysis_window: "tuple[float, float] | None" = None,
-) -> "PseudoNull":
-    """Pseudo-dyad band means: WTC against a phase-scrambled partner, averaged over ``n_iter``.
+) -> "NullDraws":
+    """Phase-scrambled band means: WTC against a phase-scrambled partner, averaged over ``n_iter``.
 
     One subject's signals are replaced by surrogates and the whole pairwise WTC is rerun, once
     per iteration; the band means are averaged across iterations. The result has the columns
@@ -942,14 +942,14 @@ def compute_wtc_pseudo(
     plus ``null_sd``, ``null_p95`` and ``n_iter``: the mean alone cannot say where in its null
     a real value sits, and a null nobody can rank against is only half of one.
 
-    Returns a :class:`PseudoNull`, which holds the per-iteration draws as well as their
+    Returns a :class:`NullDraws`, which holds the per-iteration draws as well as their
     summary: ranking a real value inside its null needs the draws, and the caller that has
     the real table to rank runs after this one.
 
     Cost is ``n_iter`` times a full WTC run. Significance contours are never computed here:
     this table *is* the null, so a second null inside it would be redundant and slow. The
     surrogate maps are not saved either, but they are no longer only averaged: each one is
-    counted into a per-frequency histogram on the way past, and ``PseudoNull.levels`` is
+    counted into a per-frequency histogram on the way past, and ``NullDraws.levels`` is
     ``{(sub1, sub2, label): ndarray(n_freqs,)}``, the coherence a cell has to clear at each
     frequency to beat the null. That is what the phase arrows are drawn against, and it has
     to be per frequency: surrogate coherence is not flat in frequency, it rises at both ends
@@ -985,7 +985,7 @@ def compute_wtc_pseudo(
         # third member would give pairs of two real recordings sitting in a table labelled
         # null. Refused rather than warned: a wrong null reads exactly like a right one.
         raise ValueError(
-            f"pseudo-dyad WTC needs exactly 2 subjects, got {len(subject_ids)}: "
+            f"phase-scrambled WTC needs exactly 2 subjects, got {len(subject_ids)}: "
             f"{subject_ids}. Only one side is scrambled, so a larger group would leave "
             "real-against-real pairs in a table labelled null. Run it per dyad."
         )
@@ -1035,10 +1035,10 @@ def compute_wtc_pseudo(
             part.insert(0, "condition", label)
             cond_frames.append(part)
         if (i + 1) % 10 == 0:
-            logger.info("pseudo-dyad WTC: %d/%d iterations", i + 1, n_iter)
+            logger.info("phase-scrambled WTC: %d/%d iterations", i + 1, n_iter)
 
     keys = ["sub1", "sub2", "label"] + (["label2"] if "label2" in frames[0].columns else [])
-    return PseudoNull(draws=frames, cond_draws=cond_frames, keys=keys,
+    return NullDraws(draws=frames, cond_draws=cond_frames, keys=keys,
                       levels={key: _null_level(hist) for key, hist in hists.items()})
 
 
@@ -1586,7 +1586,7 @@ def roi_mean_of_homologous(
     off-diagonal cells should not silently redefine the diagonal. This function is the
     reported number: the homologous mean, identical whether or not the run crossed.
 
-    It is also the only ROI value the homologous pseudo-dyad null can rank, since the null
+    It is also the only ROI value the homologous phase-scrambled null can rank, since the null
     draws exactly these pairings.
     """
     df = band_df
@@ -1949,7 +1949,7 @@ def _isc_null_draws(
 ) -> np.ndarray:
     """``n_iter`` ISC matrices against a phase-scrambled second member.
 
-    Only the second member is scrambled, the choice :func:`compute_wtc_pseudo` makes for the
+    Only the second member is scrambled, the choice :func:`compute_wtc_phase_null` makes for the
     same reason: scrambling both would test one surrogate against another, which is a weaker
     null than a real recording against a surrogate. A blank row stays blank, having no
     spectrum to preserve.

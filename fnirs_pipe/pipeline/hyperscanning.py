@@ -1,6 +1,6 @@
 """The one name the group modules are reached by: group_io, alignment, group_quality.
 
-Keep the re-exports. The wiring tests patch ``compute_wtc_pseudo`` on *this* module and
+Keep the re-exports. The wiring tests patch ``compute_wtc_phase_null`` on *this* module and
 ``wtc_null`` looks it up at call time, so dropping a name here breaks a seam, not an import.
 
 Layering, which nothing should undo::
@@ -52,7 +52,7 @@ from fnirs_pipe.pipeline.synchrony import (  # noqa: F401  re-exported
     WTCResult,
     compute_pairwise_coherence,
     compute_wtc,
-    compute_wtc_pseudo,
+    compute_wtc_phase_null,
     roi_maps_from_channels,
     roi_mean_of_channels,
     window_result,

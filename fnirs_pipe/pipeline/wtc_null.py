@@ -1,11 +1,11 @@
-"""The pseudo-dyad null, computed and written on its own.
+"""The phase-scrambled null, computed and written on its own.
 
-Called from ``fnirs-hyper run`` when ``--wtc-pseudo`` is given, so it inherits that run's
+Called from ``fnirs-hyper run`` when ``--wtc-phase-null`` is given, so it inherits that run's
 stage, band and window by construction: a null averaged over a different band is not the
 null for the table it sits beside. Crossing is the one thing it does not inherit. The null
 used to take ``--wtc-channel-cross`` from the real run, so asking for the exploratory
 196-pair channel table also multiplied the surrogate cost by 14; it is now the null's own
-decision, ``--wtc-pseudo-cross``, and defaults to off.
+decision, ``--wtc-phase-null-cross``, and defaults to off.
 
 The chromophores are inherited, unlike crossing: a null missing one leaves that half of the
 real table with nothing to be tested against, which is not a saving worth offering.
@@ -55,7 +55,7 @@ def run_wtc_null(
 
     The expensive half: ``n_iter`` full WTC runs per chromophore. Writes
     ``...hyper-wtc-nulllevel-<chroma>.npz``, the coherence a cell has to clear at each
-    frequency to beat the null, and returns ``{chromophore: PseudoNull}`` for
+    frequency to beat the null, and returns ``{chromophore: NullDraws}`` for
     :func:`write_wtc_null` to rank once the real tables exist.
 
     ``chroma`` has to cover the real run's chromophores: a null computed on HbO says nothing
@@ -72,7 +72,7 @@ def run_wtc_null(
     # imported in the call, not at module load: the wiring tests patch these on the module
     # that defines them, which only a lookup made at call time can see
     from fnirs_pipe.io.derivatives import group_data_dir
-    from fnirs_pipe.pipeline.hyperscanning import compute_wtc_pseudo
+    from fnirs_pipe.pipeline.hyperscanning import compute_wtc_phase_null
     from fnirs_pipe.pipeline.wtc_store import save_null_levels
 
     band_fmin = band_fmin if band_fmin is not None else wtc_fmin
@@ -83,7 +83,7 @@ def run_wtc_null(
         raise ValueError(f"chroma must be some of ('hbo', 'hbr'), got {chroma!r}")
 
     logger.info(
-        "Pseudo-dyad WTC: %d phase-scrambled iterations, %s pairs, one full WTC run each, "
+        "Phase-scrambled WTC: %d phase-scrambled iterations, %s pairs, one full WTC run each, "
         "per chromophore (%s).",
         n_iter, "crossed" if cross else "homologous", "+".join(chroma))
 
@@ -91,7 +91,7 @@ def run_wtc_null(
     stem = f"group-{group_id}_task-{task}_hyper"
     nulls: dict = {}
     for ch_type in chroma:
-        null = compute_wtc_pseudo(
+        null = compute_wtc_phase_null(
             aligned_raws, band_fmin, band_fmax, n_iter=n_iter,
             fmin=wtc_fmin, fmax=wtc_fmax, seed=seed, cross=cross,
             limit_scales=limit_scales, mask_coi=mask_coi, ch_type=ch_type,
@@ -123,19 +123,19 @@ def write_wtc_null(
 ) -> Path:
     """Rank what :func:`run_wtc_null` drew against the real band means, and write it.
 
-    Writes ``group-<id>_task-<task>_hyper-wtc-pseudo.tsv``, one table with a ``chromophore``
+    Writes ``group-<id>_task-<task>_hyper-wtc-phasenull.tsv``, one table with a ``chromophore``
     column, matching the real band-mean tables. The sidecar additionally records ``n_iter``,
     ``cross`` and ``chroma``, without which a 5-iteration probe and a 100-iteration null are
     indistinguishable on disk.
 
-    ``roi_map`` adds ``...hyper-wtc-roihom-pseudo.tsv``, the null for the homologous ROI
+    ``roi_map`` adds ``...hyper-wtc-roihom-phasenull.tsv``, the null for the homologous ROI
     means in ``...hyper-wtc-roihom.tsv``. It is free: the iterations are grouped into
     regions before they are summarised, so no surrogate is transformed a second time, and
     grouping inside the iteration is what makes it the null of the ROI mean rather than a
     bracket around it. The crossed ``-roichan`` matrix has no null and cannot get one from
     here; see :func:`~fnirs_pipe.pipeline.synchrony.roi_mean_of_homologous`.
 
-    ``windows`` adds a second table, ``...hyper-wtcbycond-pseudo.tsv``, with a ``condition``
+    ``windows`` adds a second table, ``...hyper-wtcbycond-phasenull.tsv``, with a ``condition``
     column: the null for what ``--wtc-by-condition`` wrote. It mirrors the real side, where
     the whole-run and per-condition tables are also two files merged separately. Returns the
     whole-run path either way; the per-condition one sits beside it.
@@ -199,29 +199,29 @@ def write_wtc_null(
         # they were built on the same clock for that subtraction to mean anything
         **alignment_params(aligned_raws),
     )
-    out_path = data_dir / f"{stem}-wtc-pseudo.tsv"
+    out_path = data_dir / f"{stem}-wtc-phasenull.tsv"
     pd.concat(frames, ignore_index=True).to_csv(out_path, sep="\t", index=False)
-    _hyper_sidecar(out_path, "hyper_wtc_pseudo", sources, **params)
-    logger.info("Pseudo-dyad WTC band means saved: %s", out_path)
+    _hyper_sidecar(out_path, "hyper_wtc_phasenull", sources, **params)
+    logger.info("Phase-scrambled WTC band means saved: %s", out_path)
 
     if cond_frames:
-        cond_path = data_dir / f"{stem}-wtcbycond-pseudo.tsv"
+        cond_path = data_dir / f"{stem}-wtcbycond-phasenull.tsv"
         pd.concat(cond_frames, ignore_index=True).to_csv(cond_path, sep="\t", index=False)
-        _hyper_sidecar(cond_path, "hyper_wtc_bycondition_pseudo", sources,
+        _hyper_sidecar(cond_path, "hyper_wtc_bycondition_phasenull", sources,
                        conditions=[w[0] for w in (windows or [])], **params)
-        logger.info("Pseudo-dyad WTC per condition saved: %s", cond_path)
+        logger.info("Phase-scrambled WTC per condition saved: %s", cond_path)
 
     for group, stem_suffix, step, extra in (
-            (roi_frames, "-wtc-roihom-pseudo", "hyper_wtc_roihom_pseudo", {}),
-            (roi_cond_frames, "-wtcbycond-roihom-pseudo",
-             "hyper_wtc_bycondition_roihom_pseudo",
+            (roi_frames, "-wtc-roihom-phasenull", "hyper_wtc_roihom_phasenull", {}),
+            (roi_cond_frames, "-wtcbycond-roihom-phasenull",
+             "hyper_wtc_bycondition_roihom_phasenull",
              {"conditions": [w[0] for w in (windows or [])]})):
         if not group:
             continue
         path = data_dir / f"{stem}{stem_suffix}.tsv"
         write_tsv(pd.concat(group, ignore_index=True), path)
         _hyper_sidecar(path, step, sources, **extra, **params)
-        logger.info("Pseudo-dyad WTC ROI means saved: %s", path)
+        logger.info("Phase-scrambled WTC ROI means saved: %s", path)
 
     return out_path
 

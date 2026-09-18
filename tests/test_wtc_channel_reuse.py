@@ -174,7 +174,7 @@ def test_the_channel_cache_is_not_carried_between_members():
 def test_a_cache_carried_between_calls_changes_no_value():
     """`cache1` reuses the first side's transforms across calls; the numbers must not move.
 
-    The pseudo-dyad null calls this once per iteration with the first subject unchanged, so
+    The phase-scrambled null calls this once per iteration with the first subject unchanged, so
     the second call is the one that reads from the cache rather than filling it.
     """
     labels = ["S1_D1", "S1_D2", "S2_D1"]

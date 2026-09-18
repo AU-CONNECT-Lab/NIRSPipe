@@ -1,4 +1,4 @@
-"""What `--isc-whiten` and `--isc-pseudo` add to the inter-brain correlation.
+"""What `--isc-whiten` and `--isc-phase-null` add to the inter-brain correlation.
 
 A haemoglobin trace is strongly autocorrelated, so a Pearson r between two of them rests on
 far fewer independent observations than it has samples and the value it reaches with no

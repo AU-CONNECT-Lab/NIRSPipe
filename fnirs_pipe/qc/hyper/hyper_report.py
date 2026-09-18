@@ -684,7 +684,7 @@ def _merge_scopes(kind: str, axis: list[str], per_scope: list) -> dict:
     }
 
 
-def _isc_arc_rule(isc_threshold: "float | None", isc_pseudo: int) -> str:
+def _isc_arc_rule(isc_threshold: "float | None", isc_phase_null: int) -> str:
     """One sentence naming which of the three rules drew the connectogram's chords.
 
     The figure's own subtitle says the same thing; this is the page's parameter table, which
@@ -692,8 +692,8 @@ def _isc_arc_rule(isc_threshold: "float | None", isc_pseudo: int) -> str:
     """
     if isc_threshold is not None:
         return f"|r| &ge; {isc_threshold:.2f}"
-    if isc_pseudo:
-        return f"above each pairing's own null, {isc_pseudo} surrogates"
+    if isc_phase_null:
+        return f"above each pairing's own null, {isc_phase_null} surrogates"
     return "the strongest 10%, a display cut rather than a test"
 
 
@@ -726,7 +726,7 @@ def build_hyper_post_report(
     isc_threshold: "float | None" = None,
     isc_whiten: int = 0,
     isc_max_lag_s: float = 0.0,
-    isc_pseudo: int = 0,
+    isc_phase_null: int = 0,
     sci_threshold: float = SCI_PASS,
     sep_bands=None,
     cond_windows: "list[tuple[str, float, float]] | None" = None,
@@ -763,7 +763,7 @@ def build_hyper_post_report(
     the recording.
 
     ``cond_windows`` supplies those windows instead of resolving them here. The caller passes
-    the same list to the pseudo-dyad null, and the two tables can only be subtracted row by
+    the same list to the phase-scrambled null, and the two tables can only be subtracted row by
     row if they describe the same windows. Left at None the windows are resolved here, which
     is what a caller that writes no null wants.
 
@@ -1143,7 +1143,7 @@ def build_hyper_post_report(
                 wtc_limit_scales=wtc_limit_scales, wtc_save_maps=wtc_save_maps,
                 wtc_mask_coi=wtc_mask_coi, wtc_roi_min_channels=wtc_roi_min_channels,
                 wtc_chroma=wtc_chroma, isc_whiten=isc_whiten,
-                isc_max_lag_s=isc_max_lag_s, isc_pseudo=isc_pseudo,
+                isc_max_lag_s=isc_max_lag_s, isc_phase_null=isc_phase_null,
                 roi_map=roi_map, sep_bands=sep_bands,
                 analysis_window=analysis_window,
             ),
@@ -1393,7 +1393,7 @@ def build_hyper_post_report(
                                    default=0.0),
             wtc_chroma_labels=[_CHROMA_LABEL[c] for c in chroma],
             wtc_chroma_json=json.dumps(list(chroma)),
-            isc_arc_rule=_isc_arc_rule(isc_threshold, isc_pseudo),
+            isc_arc_rule=_isc_arc_rule(isc_threshold, isc_phase_null),
             alignment_json=json.dumps(alignment_rows),
             per_channel_post_json=json.dumps(per_channel),
             # the long axis, not `ch_pairs_post`: the selector has to name the set the

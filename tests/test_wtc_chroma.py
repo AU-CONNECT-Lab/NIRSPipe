@@ -231,11 +231,11 @@ def _draw_and_write(wtc_null, **kwargs):
 
 
 def _null(frame, cond_frames=(), levels=None):
-    """A PseudoNull around an already-made frame, for the tests that stub the draw away."""
-    from fnirs_pipe.pipeline.synchrony import PseudoNull
+    """A NullDraws around an already-made frame, for the tests that stub the draw away."""
+    from fnirs_pipe.pipeline.synchrony import NullDraws
 
     keys = ["sub1", "sub2", "label"] + (["label2"] if "label2" in frame.columns else [])
-    return PseudoNull(draws=[frame], cond_draws=list(cond_frames), keys=keys,
+    return NullDraws(draws=[frame], cond_draws=list(cond_frames), keys=keys,
                       levels=levels or {})
 
 

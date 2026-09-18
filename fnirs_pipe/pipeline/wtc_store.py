@@ -86,7 +86,7 @@ def load_wtc(path: Path) -> WTCResult:
 
 
 def save_null_levels(levels: dict, path: Path) -> Path:
-    """Write the pseudo-dyad null's per-frequency levels, keyed the way the maps are.
+    """Write the phase-scrambled null's per-frequency levels, keyed the way the maps are.
 
     ::
 

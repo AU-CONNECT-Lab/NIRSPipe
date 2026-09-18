@@ -184,10 +184,10 @@ def test_crossed_channels_group_into_an_roi_by_roi_matrix():
 
 def test_a_group_of_three_is_refused_rather_than_half_scrambled():
     """Only one subject is scrambled, so a third member would leave real pairs in the null."""
-    from fnirs_pipe.pipeline.synchrony import compute_wtc_pseudo
+    from fnirs_pipe.pipeline.synchrony import compute_wtc_phase_null
 
     with pytest.raises(ValueError, match="exactly 2 subjects"):
-        compute_wtc_pseudo({"s1": None, "s2": None, "s3": None}, 0.06, 0.15, n_iter=1)
+        compute_wtc_phase_null({"s1": None, "s2": None, "s3": None}, 0.06, 0.15, n_iter=1)
 
 
 # ---- the null follows the windows the real table was read at ----
@@ -212,17 +212,17 @@ def _ramp_map(first_half, second_half):
 
 
 def _null(frame, cond_frames=(), levels=None):
-    """A PseudoNull around an already-made frame, for the tests that stub the draw away."""
-    from fnirs_pipe.pipeline.synchrony import PseudoNull
+    """A NullDraws around an already-made frame, for the tests that stub the draw away."""
+    from fnirs_pipe.pipeline.synchrony import NullDraws
 
     keys = ["sub1", "sub2", "label"] + (["label2"] if "label2" in frame.columns else [])
-    return PseudoNull(draws=[frame], cond_draws=list(cond_frames), keys=keys,
+    return NullDraws(draws=[frame], cond_draws=list(cond_frames), keys=keys,
                       levels=levels or {})
 
 
 @pytest.fixture
-def stub_pseudo(monkeypatch):
-    """compute_wtc_pseudo with the transform and the channel picking replaced.
+def stub_null(monkeypatch):
+    """compute_wtc_phase_null with the transform and the channel picking replaced.
 
     Neither is what these tests are about, and stubbing both keeps them exact: the map is
     fixed, so every number below is arithmetic rather than a coherence estimate.
@@ -239,27 +239,27 @@ def stub_pseudo(monkeypatch):
     return synchrony
 
 
-def test_no_windows_leaves_the_second_table_unbuilt(stub_pseudo):
-    whole, by_cond = stub_pseudo.compute_wtc_pseudo(
+def test_no_windows_leaves_the_second_table_unbuilt(stub_null):
+    whole, by_cond = stub_null.compute_wtc_phase_null(
         {"s1": None, "s2": None}, 0.02, 0.30, n_iter=1).summarise()
     assert by_cond is None
     assert whole["null_mean"].iloc[0] == pytest.approx(0.5)
 
 
-def test_a_window_spanning_the_record_reproduces_the_whole_run_number(stub_pseudo):
+def test_a_window_spanning_the_record_reproduces_the_whole_run_number(stub_null):
     """The one identity that says "windowed, not recomputed": a window over everything is
     the whole run. Recomputing on a cut would not give this back, because a cut has edges
     of its own."""
-    whole, by_cond = stub_pseudo.compute_wtc_pseudo(
+    whole, by_cond = stub_null.compute_wtc_phase_null(
         {"s1": None, "s2": None}, 0.02, 0.30, n_iter=1,
         windows=[("all", float(TIMES[0]), float(TIMES[-1]))]).summarise()
     assert by_cond["condition"].tolist() == ["all"]
     assert by_cond["null_mean"].iloc[0] == pytest.approx(whole["null_mean"].iloc[0])
 
 
-def test_each_window_gets_its_own_null_level(stub_pseudo):
+def test_each_window_gets_its_own_null_level(stub_null):
     mid = float(TIMES[len(TIMES) // 2])
-    _, by_cond = stub_pseudo.compute_wtc_pseudo(
+    _, by_cond = stub_null.compute_wtc_phase_null(
         {"s1": None, "s2": None}, 0.02, 0.30, n_iter=2,
         windows=[("early", float(TIMES[0]), mid - 1e-9),
                  ("late", mid, float(TIMES[-1]))]).summarise()
@@ -268,9 +268,9 @@ def test_each_window_gets_its_own_null_level(stub_pseudo):
     assert levels["late"] == pytest.approx(0.8)
 
 
-def test_the_windowed_null_carries_the_same_columns_as_the_whole_run_one(stub_pseudo):
+def test_the_windowed_null_carries_the_same_columns_as_the_whole_run_one(stub_null):
     """So a real per-condition table and this one subtract cell by cell, `condition` aside."""
-    whole, by_cond = stub_pseudo.compute_wtc_pseudo(
+    whole, by_cond = stub_null.compute_wtc_phase_null(
         {"s1": None, "s2": None}, 0.02, 0.30, n_iter=1,
         windows=[("all", float(TIMES[0]), float(TIMES[-1]))]).summarise()
     assert list(by_cond.columns) == ["condition"] + list(whole.columns)
@@ -284,37 +284,37 @@ def test_the_windowed_null_carries_the_same_columns_as_the_whole_run_one(stub_ps
 # measuring a different span, with nothing saying so. The ramp map makes the arithmetic
 # exact, 0.2 over the first half and 0.8 over the second.
 
-def test_without_an_analysis_window_the_whole_run_row_covers_the_record(stub_pseudo):
-    whole, _ = stub_pseudo.compute_wtc_pseudo({"s1": None, "s2": None}, 0.02, 0.30, n_iter=1).summarise()
+def test_without_an_analysis_window_the_whole_run_row_covers_the_record(stub_null):
+    whole, _ = stub_null.compute_wtc_phase_null({"s1": None, "s2": None}, 0.02, 0.30, n_iter=1).summarise()
     assert whole["null_mean"].iloc[0] == pytest.approx(0.5)
 
 
 @pytest.mark.parametrize("half, expected", [("first", 0.2), ("second", 0.8)])
-def test_the_whole_run_row_is_the_window_when_one_is_given(stub_pseudo, half, expected):
+def test_the_whole_run_row_is_the_window_when_one_is_given(stub_null, half, expected):
     mid = float(TIMES[len(TIMES) // 2])
     window = ((float(TIMES[0]), mid - 1e-9) if half == "first"
               else (mid, float(TIMES[-1])))
-    whole, _ = stub_pseudo.compute_wtc_pseudo(
+    whole, _ = stub_null.compute_wtc_phase_null(
         {"s1": None, "s2": None}, 0.02, 0.30, n_iter=1, analysis_window=window).summarise()
     assert whole["null_mean"].iloc[0] == pytest.approx(expected)
 
 
-def test_a_window_spanning_everything_is_the_unwindowed_number(stub_pseudo):
+def test_a_window_spanning_everything_is_the_unwindowed_number(stub_null):
     """The same identity the per-condition side is pinned by: windowed off the transform,
     never recomputed on a cut."""
-    whole, _ = stub_pseudo.compute_wtc_pseudo(
+    whole, _ = stub_null.compute_wtc_phase_null(
         {"s1": None, "s2": None}, 0.02, 0.30, n_iter=1,
         analysis_window=(float(TIMES[0]), float(TIMES[-1]))).summarise()
     assert whole["null_mean"].iloc[0] == pytest.approx(0.5)
 
 
-def test_the_conditions_are_unaffected_by_the_analysis_window(stub_pseudo):
+def test_the_conditions_are_unaffected_by_the_analysis_window(stub_null):
     """Condition windows are absolute times and already lie inside the analysis window, so
     they are read off the same transform either way. Windowing twice would move them."""
     mid = float(TIMES[len(TIMES) // 2])
     args = dict(n_iter=1, windows=[("late", mid, float(TIMES[-1]))])
-    _, plain = stub_pseudo.compute_wtc_pseudo({"s1": None, "s2": None}, 0.02, 0.30, **args).summarise()
-    _, windowed = stub_pseudo.compute_wtc_pseudo(
+    _, plain = stub_null.compute_wtc_phase_null({"s1": None, "s2": None}, 0.02, 0.30, **args).summarise()
+    _, windowed = stub_null.compute_wtc_phase_null(
         {"s1": None, "s2": None}, 0.02, 0.30,
         analysis_window=(mid, float(TIMES[-1])), **args).summarise()
     assert windowed["null_mean"].iloc[0] == pytest.approx(plain["null_mean"].iloc[0])
@@ -333,7 +333,7 @@ def test_the_writer_passes_the_window_down(monkeypatch, tmp_path):
                                    "label2": ["S1_D1"], "coherence": [0.5],
                                    "n_valid_frac": [1.0]}))
 
-    monkeypatch.setattr("fnirs_pipe.pipeline.hyperscanning.compute_wtc_pseudo", _spy)
+    monkeypatch.setattr("fnirs_pipe.pipeline.hyperscanning.compute_wtc_phase_null", _spy)
     monkeypatch.setattr("fnirs_pipe.pipeline.hyperscanning._hyper_sidecar",
                         lambda *a, **k: None)
     monkeypatch.setattr("fnirs_pipe.utils.lineage.path_from", lambda r: None)
@@ -348,8 +348,8 @@ def test_the_writer_passes_the_window_down(monkeypatch, tmp_path):
 # ---- the ROI null ----
 
 def _roi_draws(values_per_iter):
-    """PseudoNull with hand-made draws: [{label: value}] per iteration, two channels an ROI."""
-    from fnirs_pipe.pipeline.synchrony import PseudoNull
+    """NullDraws with hand-made draws: [{label: value}] per iteration, two channels an ROI."""
+    from fnirs_pipe.pipeline.synchrony import NullDraws
 
     frames = []
     for values in values_per_iter:
@@ -358,7 +358,7 @@ def _roi_draws(values_per_iter):
             "label": list(values), "coherence": list(values.values()),
             "coherence_z": [np.arctanh(v) for v in values.values()],
             "n_valid_frac": [1.0] * len(values)}))
-    return PseudoNull(draws=frames, cond_draws=[], keys=["sub1", "sub2", "label"], levels={})
+    return NullDraws(draws=frames, cond_draws=[], keys=["sub1", "sub2", "label"], levels={})
 
 
 ROI_MAP = {"r1": ["S1_D1", "S1_D2"]}
@@ -404,14 +404,14 @@ def test_the_roi_null_ranks_the_real_roi_value():
 
 def test_a_crossed_null_still_ranks_only_the_homologous_roi_value():
     """A crossed draw carries within-ROI cross pairings the reported ROI value does not."""
-    from fnirs_pipe.pipeline.synchrony import PseudoNull
+    from fnirs_pipe.pipeline.synchrony import NullDraws
 
     rows = [("S1_D1", "S1_D1", 0.4), ("S1_D2", "S1_D2", 0.4),
             ("S1_D1", "S1_D2", 0.9), ("S1_D2", "S1_D1", 0.9)]
     frame = pd.DataFrame({"sub1": ["s1"] * 4, "sub2": ["s2"] * 4,
                           "label": [r[0] for r in rows], "label2": [r[1] for r in rows],
                           "coherence": [r[2] for r in rows], "n_valid_frac": [1.0] * 4})
-    null = PseudoNull(draws=[frame], cond_draws=[],
+    null = NullDraws(draws=[frame], cond_draws=[],
                       keys=["sub1", "sub2", "label", "label2"], levels={})
 
     whole, _ = null.summarise_roi(ROI_MAP, min_channels=1)

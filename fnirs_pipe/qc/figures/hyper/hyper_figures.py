@@ -1017,7 +1017,7 @@ def build_screening_strip(coherence_df: "pd.DataFrame") -> "go.Figure | None":
                     line=dict(width=1.2, color="#fff")),
         hovertemplate="%{customdata}<br>mean at the %{x:.1f}th percentile<extra></extra>"))
 
-    fig.update_xaxes(title_text="Percentile inside its own pseudo-dyad null",
+    fig.update_xaxes(title_text="Percentile inside its own phase-scrambled null",
                      title_font=dict(size=10), range=[-2, 102], dtick=25,
                      gridcolor="#f5f5f5", zeroline=False, tickfont=dict(size=9))
     fig.update_yaxes(tickvals=list(range(len(rows))), ticktext=rows, showgrid=False,
