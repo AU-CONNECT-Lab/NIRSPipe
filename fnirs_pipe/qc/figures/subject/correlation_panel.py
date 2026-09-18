@@ -52,6 +52,12 @@ _MARK_EDGE = "#9aa0a6"
 
 _R_THRESHOLD = -0.3
 
+# What the two stages are called wherever they are named. The GLM variants say the task
+# is gone from the residual, which is what stops -0.3 from being read against it.
+_BEFORE_LABEL = "before denoising"
+_AFTER_LABEL = "after denoising"
+_AFTER_LABEL_GLM = "after GLM (task removed)"
+
 # ---- Layout ----
 # The heatmap is square-constrained, so its side is min(column width, row height). A row
 # height fixed in advance is what made the row the binding one on a wide page: 15 px cells
@@ -167,7 +173,8 @@ def _add_dividers(fig, groups, order, n_hbo, col):
                 _divider(offset + i - 0.5, "#ccc", "dot", 0.7)
 
 
-def _add_dumbbell(fig, groups, r_before, r_after, row, col):
+def _add_dumbbell(fig, groups, r_before, r_after, row, col,
+                  after_label=_AFTER_LABEL, task_modelled=False):
     """Per-pair r, one x position per pair, before as an open ring and after filled.
 
     Ordered best→worst inside each group on the *before* value, so one order serves both
@@ -210,20 +217,21 @@ def _add_dumbbell(fig, groups, r_before, r_after, row, col):
                                  line=dict(color=_MUTED, width=1.6), opacity=0.55,
                                  hoverinfo="skip"), row=row, col=col)
         fig.add_trace(go.Scatter(
-            x=xs, y=before, mode="markers", name="before denoising", customdata=labels,
+            x=xs, y=before, mode="markers", name=_BEFORE_LABEL, customdata=labels,
             marker=dict(size=9, color="white", line=dict(color=_MUTED, width=1.4)),
             hovertemplate="%{customdata}<br>before r = %{y:.3f}<extra></extra>",
         ), row=row, col=col)
     fig.add_trace(go.Scatter(
         x=xs, y=tip, mode="markers", customdata=labels,
-        name="after denoising" if paired else "HbO–HbR r", showlegend=paired,
+        name=after_label if paired else "HbO–HbR r", showlegend=paired,
         marker=dict(size=13, color=tip, cmin=-1.0, cmax=1.0, colorscale=_SCALE,
                     reversescale=_REVERSE, line=dict(color=_MARK_EDGE, width=1.0)),
         hovertemplate=("%{customdata}<br>" + ("after " if paired else "")
                        + "r = %{y:.3f}<extra></extra>"),
     ), row=row, col=col)
 
-    fig.add_annotation(x=xs[-1] + 0.9, y=_R_THRESHOLD, text="r = −0.3", showarrow=False,
+    rule_text = "r = −0.3 (before)" if task_modelled else "r = −0.3"
+    fig.add_annotation(x=xs[-1] + 0.9, y=_R_THRESHOLD, text=rule_text, showarrow=False,
                        font=dict(color="#27ae60", size=10), xanchor="right",
                        yanchor="bottom", row=row, col=col)
     if len(spans) > 1:
@@ -243,6 +251,7 @@ def hbo_hbr_correlation_figure(
     title: str = "HbO–HbR Signal Quality",
     sep_bands=None,
     raw_after: "mne.io.Raw | None" = None,
+    task_modelled: bool = False,
 ) -> "go.Figure | None":
     """Return the correlation panel as a Plotly figure, or None on an empty montage.
 
@@ -250,6 +259,13 @@ def hbo_hbr_correlation_figure(
     heatmaps on one colour scale and a dumbbell per pair. Left out, or not matching the
     before stage's channels, it degrades to the one-stage panel: one heatmap and one dot
     per pair, which is what a run with no denoising and what a condition page both get.
+
+    ``task_modelled`` says the after stage had a task model taken out of it as well as the
+    confounds, which is what a GLM run's residual is. The -0.3 rule tests for the HbO-HbR
+    anticorrelation of cortical haemodynamics, and a model that explained part of that
+    shared variance leaves a weaker anticorrelation behind without anything having gone
+    wrong. The rule then reads the before stage only, and both the rule and the after stage
+    are labelled to say so.
     """
     groups = _pair_group(raw_haemo, sep_bands)
     order = _channel_order(raw_haemo, groups)
@@ -261,6 +277,8 @@ def hbo_hbr_correlation_figure(
         return None
     corr_a, r_a = (_stage(raw_after, order) if raw_after is not None else (None, None))
     two_stage = corr_a is not None
+
+    after_label = _AFTER_LABEL_GLM if task_modelled else _AFTER_LABEL
 
     n_ch = len(order)
     n_hbo = sum(1 for n in order if n.endswith("hbo"))
@@ -277,7 +295,7 @@ def hbo_hbr_correlation_figure(
         rows=2, cols=cols, row_heights=row_heights, vertical_spacing=v_spacing,
         horizontal_spacing=0.06,
         specs=[[{}, {}], [{"colspan": 2}, None]] if two_stage else [[{}], [{}]],
-        subplot_titles=("before denoising", "after denoising") if two_stage else (),
+        subplot_titles=(_BEFORE_LABEL, after_label) if two_stage else (),
     )
 
     for col, corr in ((1, corr_b), (2, corr_a))[:cols]:
@@ -286,7 +304,8 @@ def hbo_hbr_correlation_figure(
         _add_dividers(fig, groups, order, n_hbo, col)
 
     dumbbell_row = 2
-    xs, labels = _add_dumbbell(fig, groups, r_b, r_a, dumbbell_row, 1)
+    xs, labels = _add_dumbbell(fig, groups, r_b, r_a, dumbbell_row, 1,
+                               after_label=after_label, task_modelled=task_modelled)
 
     # Every channel keeps its label: unlike the static panel this replaced, an unreadable
     # tick here is one scroll-zoom away from being readable, so subsampling them buys

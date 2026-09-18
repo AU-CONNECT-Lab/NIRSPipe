@@ -673,6 +673,7 @@ def _section_haemo(
     suffix: str = "",
     crop: "tuple[float, float] | None" = None,
     psd: bool = True,
+    mode: str | None = None,
 ) -> dict:
     """Beer-Lambert output and what the denoising did to it.
 
@@ -719,7 +720,8 @@ def _section_haemo(
             raw_haemo_cut,
             title="HbO–HbR Signal Quality",
             sep_bands=sep_bands,
-            raw_after=raw_errts_cut)
+            raw_after=raw_errts_cut,
+            task_modelled=(mode == "glm"))
         if fig is None:
             raise RuntimeError("no haemoglobin channels to correlate")
         # the panel sizes itself to the page: its matrix is square-constrained and only the
@@ -1711,7 +1713,7 @@ def build_subject_report(
     haemo_vars        = _section_haemo(raw_haemo, config, subject, errors, figures_dir,
                                        l_freq=l_freq, h_freq=h_freq,
                                        raw_errts=raw_errts, psd_stages=psd_stages,
-                                       record=record, sep_bands=sep_bands)
+                                       record=record, sep_bands=sep_bands, mode=mode)
     carpet_stages = _carpet_stages(raw_haemo, psd_stages)
     carpet_vars = _section_stage_carpets(carpet_stages, roi_map, raw_gvtd, None, "",
                                          subject, errors, figures_dir)
@@ -1955,7 +1957,7 @@ def build_subject_report(
                     psd_stages=psd_stages, record=record, config=config,
                     l_freq=l_freq, h_freq=h_freq, sep_bands=sep_bands,
                     epoch_tmin=epoch_tmin, epoch_tmax=epoch_tmax,
-                    epoch_single_trial=epoch_single_trial,
+                    epoch_single_trial=epoch_single_trial, mode=mode,
                     subject=subject, errors=errors, figures_dir=figures_dir))
 
     _build_mne_report(subject, raw_intensity, raw_haemo, out_path, errors)
@@ -2041,7 +2043,7 @@ def _cropped_sections(
     *,
     raw_haemo, epoch_haemo, raw_haemo_uncorr, raw_errts, psd_stages, record, config,
     l_freq, h_freq, sep_bands, epoch_tmin, epoch_tmax, subject, errors, figures_dir,
-    epoch_single_trial=False,
+    epoch_single_trial=False, mode=None,
 ) -> dict:
     """The panels that are safe to rebuild on a cropped copy, over one condition.
 
@@ -2105,7 +2107,7 @@ def _cropped_sections(
     out.update(_section_haemo(raw_haemo, config, subject, errors, figures_dir,
                               l_freq=l_freq, h_freq=h_freq, raw_errts=raw_errts,
                               psd_stages=psd_stages, record=record, sep_bands=sep_bands,
-                              suffix=suffix, crop=span, psd=psd_ok))
+                              suffix=suffix, crop=span, psd=psd_ok, mode=mode))
     if psd_ok:
         out.update(_section_psd_detail(haemo, subject, errors, figures_dir,
                                        l_freq=l_freq, h_freq=h_freq, psd_stages=stages,

@@ -35,12 +35,12 @@ def _has_response(fig) -> bool:
 
 
 def test_no_bandpass_draws_no_response_curve():
-    """The regression-only run: rows exist, but the cutoffs do not, so no curve is drawn."""
+    """The regression-only run: no cutoffs, so no curve and no row named for a bandpass."""
     raw = _haemo()
     fig = psd_figure(raw, l_freq=None, h_freq=None,
                      stages=[("desc-errts", _haemo())])
     titles = _titles(fig, 2)
-    assert titles == ["Before bandpass", "desc-errts"]
+    assert titles == ["desc-preproc", "desc-errts"]
     assert not _has_response(fig)
 
 

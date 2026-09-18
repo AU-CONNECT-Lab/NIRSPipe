@@ -1,4 +1,4 @@
-"""PSD by pipeline stage: one row per chromophore, one line per stage, band annotations."""
+"""PSD by pipeline stage: one row per stage, HbO and HbR in each, band annotations."""
 
 import logging
 
@@ -28,6 +28,10 @@ from fnirs_pipe.qc.figures.common._utils import physio_bands as _physio_bands
 # in every other figure of the report and a step is read by looking down the column.
 _RESPONSE_COLOR = "#7f8c8d"
 _RESPONSE_FLOOR = -90  # dB; below this the curve is numerical, not something to read
+
+# Row 1 is named for what follows it, so it only reads "before" when there is a bandpass
+# to be before. A regression-only run has none and the row keeps its stage name.
+_FIRST_LABEL = "Before bandpass"
 
 
 def _simulate_bandpass(
@@ -106,7 +110,7 @@ def psd_figure(
     cardiac: "tuple[float, float] | None" = None,
     resp: "tuple[float, float] | None" = None,
     stages: "list[tuple[str, mne.io.Raw]] | None" = None,
-    first_label: str = "Before bandpass",
+    first_label: str = _FIRST_LABEL,
 ) -> go.Figure:
     """Each stage's spectrum in its own row, HbO and HbR together, with the filter drawn on it.
 
@@ -122,7 +126,7 @@ def psd_figure(
     reached into the analysis band. Regressors that are measured signals rather than a
     frequency basis (short channels, aux) leave the spectrum's shape alone and get no row.
 
-    Stage is the row so a step is read by looking down the column, and both rows share one
+    Stage is the row so a step is read by looking down the column, and every row shares one
     power axis or the comparison would be against a rescaled yardstick. The filter's own
     response is drawn dashed over the row it produced, shifted so 0 dB sits at that row's
     passband level: it stays on the one power axis that way, and the data curve can be read
@@ -156,6 +160,8 @@ def psd_figure(
 
     n_rows = len(all_stages)
     titles = [label for label, _ in all_stages]
+    if titles[0] == _FIRST_LABEL and l_freq is None and h_freq is None:
+        titles[0] = "desc-preproc"
     # The row the bandpass produced, which is the only one the response curve may be drawn
     # over and the only one renamed. A run with no bandpass still reaches here with rows of
     # its own (desc-resampled, desc-errts); those are not the filter's output and naming
@@ -175,7 +181,8 @@ def psd_figure(
 
     lo, hi = np.inf, -np.inf
     anchor = None  # passband level of the filter's output row, for the response curve
-    for row, (label, raw) in enumerate(all_stages, start=1):
+    # the hover names the row the way its title does, so the two cannot disagree
+    for row, ((_, raw), label) in enumerate(zip(all_stages, titles), start=1):
         for ch_type, color, mean_color in (("hbo", _HBO_COLOR, _HBO_MEAN_COLOR),
                                            ("hbr", _HBR_COLOR, _HBR_MEAN_COLOR)):
             result = _stage_psd(raw, fmax, ch_type)

@@ -219,6 +219,14 @@
     </p>
     <h3>HbO–HbR Correlation</h3>
     <p style="font-size:0.82rem;color:#666;margin:0 0 0.3rem;">{{ section_note('haemo.hbo_hbr_corr') }}</p>
+    {% if mode == 'glm' %}
+      <p style="font-size:0.82rem;color:#666;margin:0 0 0.3rem;">
+        The after stage on this run is the GLM residual, so the task model came out of it
+        along with the confounds. A weaker anticorrelation there can mean the model explained
+        part of the shared response rather than that the data got worse, which is why the
+        −0.3 rule reads the before stage only.
+      </p>
+    {% endif %}
     {% if hbo_hbr_path %}
       <iframe class="plotly-frame" src="{{ hbo_hbr_path }}" title="HbO–HbR correlation panel, before and after denoising"
               style="height:{{ hbo_hbr_h }}px"></iframe>
@@ -242,6 +250,11 @@
         rows brightening and darkening together.
         The GVTD row on top is the uncorrected motion trace from the section above, on the
         same time axis, so a dark column can be read against what happened at that moment.
+        {% if mode == 'glm' and 'desc-errts' in (carpet_stage_labels or []) %}
+        <code>desc-errts</code> here is the GLM residual, which had the task model removed as
+        well as the confounds: it shows what the model left unexplained, not the data the
+        betas were measured on.
+        {% endif %}
         {% if condition_label %}The z-scoring is the whole recording's and only the columns
         drawn are this condition's, so every condition's carpet is on one greyscale and the
         darker stretch is the noisier one.{% endif %}

@@ -6,6 +6,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.43.0] - 2026-09-17
+
+### Changed
+- **The QC report's denoising carpet is now a block per stage on a shared time axis**, under the run's motion trace, with HbO and HbR in figures of their own. It used to be two blocks, Beer-Lambert output against the bandpassed signal, which left the confound regression out of the panel entirely and had no time axis at all, so a dark column could not be read against what happened at that moment. Each block is scaled to itself, so the residual stays readable instead of washing out
+- **The spectrum panel carries the confound regression's residual.** Where nothing filtered, that stage is the whole detrend and the panel showed none of it; where a bandpass ran, the row should land on top of the one above it, and a gap inside the analysis band means the regression reached further than intended
+- **On a GLM run the HbO–HbR panel stops testing the residual against the −0.3 rule.** The task model comes out of that residual along with the confounds, so a weaker anticorrelation there can mean the model explained part of the shared response rather than that the data got worse. The rule now reads the before stage, and both the rule and the after stage say so
+
+## [0.42.0] - 2026-09-16
+
 ### Added
 - **Data Preparation reads the drift cutoff a GLM on the loaded run could use**, off the markers on screen, with the slowest repeat of every condition beside it. The Analysis page cannot work this out: it runs over many subjects and the interval is each subject's own
 - **The GLM warns when the drift basis reaches the frequency at which a condition repeats**, which makes it fit the task away as if it were drift. The opposite bound, the drift basis having to cover what a bandpass already removed, was checked; this one was not, so the cutoff was only ever pinned from one side
