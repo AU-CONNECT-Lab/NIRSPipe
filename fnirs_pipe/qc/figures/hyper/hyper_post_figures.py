@@ -572,14 +572,12 @@ def _png_b64(fig) -> str:
 NODE_COLORS = ("#8e44ad", "#27ae60")
 
 # One scale per quantity, each over its own full range. A correlation is signed and takes a
-# diverging map centred on zero; a coherence is unsigned and bounded and takes a sequential
-# one, where nothing is a midpoint because it has none.
-COHERENCE_SCALE = "viridis"
-CORRELATION_SCALE = "RdBu_r"
-
-# A cell no pairing was computed for: grey, because it is not a value and no point on the
-# scale should be able to stand for it.
-BLANK_CELL = "#d5d5d5"
+# The scales, the blank cell and the printed cell value are the report's, not this figure's;
+# see figures.common.matrix_map for which quantity takes which and why
+from fnirs_pipe.qc.figures.common.matrix_map import (  # noqa: E402
+    BLANK_CELL, COHERENCE_SCALE, CORRELATION_SCALE, cell_values as _cell_values,
+    matrix_ground, scale_color as _arc_color,
+)
 
 
 # Degrees of blank circle left between the two members, at both ends of each semicircle, so
@@ -622,13 +620,6 @@ def _bezier(p0, p2, n: int = 40) -> tuple[np.ndarray, np.ndarray]:
     return tuple(((1 - t) ** 2 * np.asarray(p0) + t ** 2 * np.asarray(p2)).T)
 
 
-def _arc_color(value: float, cmap: str, vmin: float, vmax: float) -> str:
-    from plotly.colors import sample_colorscale
-
-    t = (float(value) - vmin) / ((vmax - vmin) or 1.0)
-    return sample_colorscale(cmap, [float(np.clip(t, 0.0, 1.0))])[0]
-
-
 def _matrix_panel(fig, z, row_labels, col_labels, subject_ids, *, cmap, vmin, vmax,
                   value_label, row, col, colorbar=None):
     """One cross-brain matrix into a subplot: the blank ground, the cells, their values.
@@ -641,14 +632,8 @@ def _matrix_panel(fig, z, row_labels, col_labels, subject_ids, *, cmap, vmin, vm
     sub1 = subject_ids[0] if subject_ids else "Sub1"
     sub2 = subject_ids[1] if len(subject_ids) > 1 else "Sub2"
 
-    # A blank cell is a site one member lost, painted under the heatmap rather than left to
-    # show the panel through. Light enough not to read as a value of its own, and still clear
-    # of the palest end of either scale, which is very nearly white. No gap between cells,
-    # since a border in that colour would draw a missing channel where there is none.
-    fig.add_shape(type="rect", x0=-0.5, x1=len(col_labels) - 0.5,
-                  y0=-0.5, y1=len(row_labels) - 0.5,
-                  fillcolor=BLANK_CELL, line=dict(width=0), layer="below",
-                  row=row, col=col)
+    # a blank cell here is a site one member lost
+    matrix_ground(fig, len(row_labels), len(col_labels), row, col)
     fig.add_trace(go.Heatmap(
         z=z, x=list(col_labels), y=list(row_labels), colorscale=cmap,
         zmin=vmin, zmax=vmax, showscale=colorbar is not None, colorbar=colorbar or {},
@@ -657,51 +642,6 @@ def _matrix_panel(fig, z, row_labels, col_labels, subject_ids, *, cmap, vmin, vm
     ), row=row, col=col)
     _cell_values(fig, z, row_labels, col_labels, cmap=cmap, vmin=vmin, vmax=vmax,
                  row=row, col=col)
-
-
-def _cell_values(fig, z, row_labels, col_labels, *, cmap, vmin, vmax, row, col):
-    """Print every cell's value on the heatmap, in ink the cell's own colour can carry.
-
-    ::
-
-      a cell at .69 -> white text;  the same number at .12 -> black
-
-    **Every cell gets its number.** A fixed colour scale is what lets two dyads or two
-    conditions be compared by eye, and the cost is that a matrix whose values all sit near
-    0.25 renders as one flat square; the printed value is what makes such a matrix readable
-    at all.
-
-    The ink is chosen from **the cell's own colour** and not from its value: the coherence
-    scale is pale at its low end and dark at its high one while the diverging one is dark at
-    both ends and pale in the middle, so any rule written against the value serves one of
-    them and fails the other. Asking the scale and taking the luminance serves both, and any
-    scale added later. Two text traces rather than one, because a heatmap takes a single
-    ``textfont`` for the whole grid and that is the one thing this needs per cell.
-    """
-    import plotly.graph_objects as go
-
-    n = max(len(row_labels), len(col_labels), 1)
-    size = float(np.clip(150.0 / n, 5.0, 14.0))
-    groups: dict[str, list] = {"white": [[], [], []], "#111111": [[], [], []]}
-    for i, r in enumerate(row_labels):
-        for j, c in enumerate(col_labels):
-            v = z[i, j]
-            if not np.isfinite(v):
-                continue
-            rgb = _arc_color(v, cmap, vmin, vmax)
-            red, green, blue = (float(x) for x in rgb[rgb.index("(") + 1:-1].split(","))
-            ink = "white" if (0.299 * red + 0.587 * green + 0.114 * blue) < 140 else "#111111"
-            xs, ys, ts = groups[ink]
-            xs.append(c)
-            ys.append(r)
-            ts.append(f"{v:.2f}".replace("0.", "."))
-    for ink, (xs, ys, texts) in groups.items():
-        if not xs:
-            continue
-        fig.add_trace(go.Scatter(
-            x=xs, y=ys, text=texts, mode="text", hoverinfo="skip", showlegend=False,
-            textfont=dict(size=size, color=ink),
-        ), row=row, col=col)
 
 
 def _circle_traces(fig, z, row_labels, col_labels, subject_ids, *,

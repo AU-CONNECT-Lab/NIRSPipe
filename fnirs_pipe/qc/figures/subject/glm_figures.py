@@ -149,6 +149,37 @@ def design_matrix_figure(
 
 # --- activation brain --------------------------------------------------------
 
+def _clim_vmax(clim: dict) -> float:
+    lims = clim.get("pos_lims") or clim.get("lims") or (0.0, 0.0, 1.0)
+    return abs(float(lims[-1]))
+
+
+def _add_shared_colorbar(fig, clim: dict) -> None:
+    """One horizontal scale under the three views, in micromolar.
+
+    The renderer draws a colourbar into every view, so a three-view strip carries the same
+    scale three times, each squeezed narrow enough that its scientific-notation labels run
+    into one another. This draws it once instead, wide enough to read, in the unit the
+    betas are quoted in elsewhere rather than in bare molar.
+
+    MNE spaces ``pos_lims``/``lims`` evenly about zero, so a plain symmetric norm over
+    RdBu_r reproduces exactly what was rendered.
+    """
+    from matplotlib.cm import ScalarMappable
+    from matplotlib.colors import Normalize
+
+    vmax = _clim_vmax(clim)
+    cax = fig.add_axes([0.36, 0.035, 0.28, 0.022])
+    cb = fig.colorbar(ScalarMappable(norm=Normalize(-vmax, vmax), cmap="RdBu_r"),
+                      cax=cax, orientation="horizontal")
+    ticks = np.linspace(-vmax, vmax, 5)
+    cb.set_ticks(ticks)
+    cb.set_ticklabels([f"{t * 1e6:.3g}" for t in ticks])
+    cb.set_label("HbO beta (µM)", fontsize=11)
+    cb.ax.tick_params(labelsize=10)
+    cb.outline.set_linewidth(0.5)
+
+
 def _save_glm_brain(
     raw_haemo: mne.io.Raw,
     results_df: "pd.DataFrame",
@@ -193,7 +224,7 @@ def _save_glm_brain(
             results_df = results_df[results_df[ch_col].str.endswith("hbo")].copy()
             results_df = results_df[results_df[ch_col].isin(hbo_ch_names)].copy()
 
-        coef_col = next((c for c in ("Coef.", "theta") if c in results_df.columns), results_df.columns[-1])
+        coef_col = _coef_col(results_df)
 
         # Replicate plot_glm_surface_projection internally so we can pass
         # time_viewer=False — required for offscreen rendering (no iren available)
@@ -221,7 +252,7 @@ def _save_glm_brain(
         brain = stc.plot(
             src=src, subjects_dir=subjects_dir, hemi="both", surface="pial",
             initial_time=0, clim=clim, size=size, colormap="RdBu_r",
-            background="w", colorbar=True, time_viewer=False, verbose=False,
+            background="w", colorbar=False, time_viewer=False, verbose=False,
         )
 
         view_images = []
@@ -242,7 +273,8 @@ def _save_glm_brain(
         ax.axis('off')
         if title:
             ax.set_title(title, fontsize=16, pad=10)
-        plt.subplots_adjust(left=0, right=1, top=0.9, bottom=0)
+        plt.subplots_adjust(left=0, right=1, top=0.9, bottom=0.10)
+        _add_shared_colorbar(fig, clim)
 
         buf = io.BytesIO()
         plt.savefig(buf, format="png", bbox_inches='tight', pad_inches=0.1)
@@ -283,26 +315,60 @@ def activation_brain_figure(
     size: tuple[int, int] = (800, 700),
 ) -> go.Figure:
     if clim is None:
-        col = "Coef." if "Coef." in results_df.columns else (
-              "theta" if "theta" in results_df.columns else results_df.columns[-1])
-        v = max(float(results_df[col].abs().max()), 1e-6)
-        clim = dict(kind="value", lims=(-v, 0, v))
+        clim = _shared_clim({title: results_df}, raw_haemo)
 
     b64 = _save_glm_brain(raw_haemo, results_df, clim, view, size, title)
     return _b64_to_figure(b64, title, size[1])
 
 
-def _shared_clim(results_dict: "dict[str, pd.DataFrame]") -> dict:
+def _coef_col(df) -> str:
+    return "Coef." if "Coef." in df.columns else (
+           "theta" if "theta" in df.columns else df.columns[-1])
+
+
+def _plotted_rows(df, raw_haemo: "mne.io.Raw | None"):
+    """The rows :func:`_save_glm_brain` will actually project: HbO, and not a bad channel.
+
+    _plotted_rows(df_with_hbo_and_hbr_rows, raw) -> only the good HbO rows
+
+    The colour scale has to be measured on the same set that gets drawn. A bad channel's
+    beta can sit orders of magnitude above the rest, and left in, it sets a limit no drawn
+    channel comes near, flattening every real one to background grey.
+    """
+    ch_col = next((c for c in ("ch_name", "Channel", "channel") if c in df.columns), None)
+    if ch_col is None:
+        return df
+    names = df[ch_col].astype(str)
+    keep = names.str.endswith("hbo")
+    bads = set(raw_haemo.info.get("bads") or ()) if raw_haemo is not None else set()
+    if bads:
+        keep &= ~names.isin(bads)
+    return df[keep]
+
+
+def _shared_clim(results_dict: "dict[str, pd.DataFrame]",
+                 raw_haemo: "mne.io.Raw | None" = None) -> dict:
     """One colour scale over every condition, so two of them can be read against each other.
 
     Scaling each condition to its own maximum would make a condition that barely activated
     look like one that activated strongly, since both would fill their own scale.
+
+    The limit is a high percentile of the drawn rows rather than their maximum, so one
+    surviving outlier channel cannot flatten the rest. There is deliberately no absolute
+    floor: haemoglobin betas sit around 1e-7 M, so any fixed floor would outrun the data
+    and grey out every condition.
     """
-    def _coef_col(df):
-        return "Coef." if "Coef." in df.columns else (
-               "theta" if "theta" in df.columns else df.columns[-1])
-    all_vals = np.concatenate([df[_coef_col(df)].values for df in results_dict.values()])
-    v = max(float(np.abs(all_vals).max()) if len(all_vals) else 10.0, 1e-6)
+    vals = [_plotted_rows(df, raw_haemo)[_coef_col(df)].to_numpy(dtype=float)
+            for df in results_dict.values()]
+    mag = np.abs(np.concatenate(vals)) if vals else np.array([])
+    mag = mag[np.isfinite(mag)]
+
+    v = float(np.percentile(mag, 99.5)) if mag.size else 0.0
+    if v <= 0 and mag.size:
+        v = float(mag.max())
+    if v <= 0:
+        # a zero-width scale makes stc.plot raise rather than draw a flat brain
+        v = 1.0
     return dict(kind="value", pos_lims=(0, v / 2, v))
 
 
@@ -325,7 +391,7 @@ def activation_condition_figures(
     switcher never offers a label with nothing behind it.
     """
     if clim is None:
-        clim = _shared_clim(results_dict)
+        clim = _shared_clim(results_dict, raw_haemo)
     rendered: list[tuple[str, str]] = []
     for cond, df in results_dict.items():
         b64 = _save_glm_brain(raw_haemo, df, clim, view, size, str(cond))
