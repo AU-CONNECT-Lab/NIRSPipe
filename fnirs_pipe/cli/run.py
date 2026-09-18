@@ -1,6 +1,7 @@
 """fnirs-pipe CLI entry point (argparse, BIDS App convention)."""
 
 import argparse
+import re
 import sys
 from pathlib import Path
 
@@ -18,8 +19,25 @@ _HRF_CHOICES           = [
     "spm", "spm + derivative", "spm + derivative + dispersion",
     "glover", "glover + derivative", "glover + derivative + dispersion", "fir",
 ]
-_NOISE_CHOICES         = ["ols", "ar1", "ar2", "ar3", "ar4", "ar5"]
+# what the GUI dropdown offers and the help lists. "auto" is mne-nirs' own rule, an AR order
+# of 4x the sampling rate; the low orders are fMRI defaults arriving through nilearn, where a
+# sampling rate an order of magnitude slower makes one lag enough
+_NOISE_CHOICES         = ["auto", "ols", "ar1", "ar2", "ar3", "ar4", "ar5"]
 _DRIFT_CHOICES         = ["cosine", "polynomial", "none"]
+
+def _noise_model(value: str) -> str:
+    """``ols``, ``auto``, or ``arN`` for any order the library will take.
+
+    A closed list is what lost ``auto`` when this CLI moved to argparse, and what the
+    package measures is no reason to stop a caller passing something else. The dropdown and
+    the help still name the common ones.
+    """
+    if value in _NOISE_CHOICES or re.fullmatch(r"ar[1-9][0-9]*", value):
+        return value
+    raise argparse.ArgumentTypeError(
+        f"{value!r}: expected 'ols', 'auto', or 'arN', e.g. ar1 or ar16")
+
+
 _SHORT_CHANNEL_CHOICES = ["none", "mean"]
 _IGNORE_CHOICES        = ["events", "bids-validation"]
 # analysis levels and the flags each one cannot run without. One table, so a level added
@@ -177,7 +195,13 @@ def _build_parser() -> argparse.ArgumentParser:
                      help="Stimulus duration (s) for annotation-based events. Mutually exclusive with --events-path.")
     glm.add_argument("--hrf-model",   choices=_HRF_CHOICES,
                      help="HRF basis. 'spm + derivative' adds temporal derivative column.")
-    glm.add_argument("--noise-model", choices=_NOISE_CHOICES, help="Residual autocorrelation model.")
+    glm.add_argument("--noise-model", type=_noise_model, metavar="MODEL",
+                     help="Residual autocorrelation model, default 'auto'. 'ols', 'auto', or "
+                          "'arN' for any order. 'auto' is an AR order of 4x the sampling "
+                          "rate, which is what the fNIRS implementations use; the low orders "
+                          "come from fMRI, where a sampling rate an order of magnitude "
+                          "slower makes one lag enough. An order too low for the sampling "
+                          "rate leaves a task contrast's t values several times too large.")
     glm.add_argument("--drift-model", choices=_DRIFT_CHOICES,
                      help="Low-frequency drift regressors in design matrix. Required by "
                           "--mode glm and rest; optional in denoise, where the bandpass detrends.")

@@ -143,3 +143,95 @@ def test_ols_and_an_unfiltered_run_are_both_silent(caplog):
         _warn_lowpass_breaks_whitening(_config(noise_model="ar1"))
         _warn_lowpass_breaks_whitening(_config(noise_model=None, low_pass=0.2))
     assert "anti-conservative" not in caplog.text
+
+
+# ---- the noise model a caller lands on by default ----
+
+def test_the_cli_takes_any_order_the_library_takes():
+    """`auto` was reachable until the CLI moved from typer to argparse. Typer took its
+    choices from the `NoiseModel` Literal, which has always listed it; argparse took them
+    from a list transcribed by hand, and the transcription dropped it. Two months later
+    nobody had noticed, and it was the only listed model that whitens a recording at fNIRS
+    sampling rates.
+
+    A closed list is the thing that failed, so there is no longer one: what the package has
+    measured is a reason to pick a default, not a reason to refuse an order. The suggestion
+    list still has to be acceptable to the validator, or the GUI dropdown would offer a value
+    the CLI rejects."""
+    import argparse
+
+    import pytest as _pytest
+
+    from fnirs_pipe.cli.run import _NOISE_CHOICES, _noise_model
+    from fnirs_pipe.pipeline.glm import NoiseModel
+
+    for value in set(_NOISE_CHOICES) | set(NoiseModel.__args__):
+        assert _noise_model(value) == value
+    for value in ("ar16", "ar31", "ar100"):
+        assert _noise_model(value) == value
+    for value in ("ar0", "ar", "banana", "AR16", "ar1.5", ""):
+        with _pytest.raises(argparse.ArgumentTypeError):
+            _noise_model(value)
+
+
+def test_the_default_does_not_shadow_a_config_file():
+    """`pick` takes the CLI value when it is not None, so a default declared in argparse
+    would make the TOML unreachable. It belongs in the `pick` call, as every other defaulted
+    field here has it.
+
+    Asserted off the built parser rather than off the source text: the first version of this
+    matched the argument's source line and broke the moment that line was reformatted, which
+    is what testing how something is written instead of what it does buys you."""
+    import inspect
+
+    from fnirs_pipe.cli import workflows
+    from fnirs_pipe.cli.run import _build_parser
+
+    assert 'noise_model=pick("noise_model", default="auto")' in inspect.getsource(workflows)
+    action = next(a for a in _build_parser()._actions
+                  if "--noise-model" in getattr(a, "option_strings", []))
+    assert action.default is None, "a default here would make the TOML unreachable"
+
+
+
+def test_ols_stays_the_choice_where_nothing_is_tested(monkeypatch):
+    """denoise and rest report no statistic, so a noise model cannot affect a p value there,
+    and both hard-code ols. This pins that: the default is for glm mode, which is the mode
+    whose whole output is inference."""
+    import inspect
+
+    from fnirs_pipe.pipeline import post_pipeline
+
+    src = inspect.getsource(post_pipeline.run_post)
+    assert src.count('noise_model="ols"') >= 2
+
+
+def test_the_gui_field_takes_what_the_cli_takes():
+    """The Analysis page used a dropdown over the same hand-written list, which made it the
+    narrower surface the moment the CLI stopped using one, and it pre-selected `ar1`. It is
+    free text with a suggestion list now, and its `pattern` is the CLI's rule.
+
+    The two rules are written out separately, one in Python and one as an HTML attribute, so
+    this pins that they agree. A user typing `ar16` into the page and having the browser
+    refuse it, or the page accepting something the CLI then rejects, are both silent.
+    """
+    import argparse
+    import re
+
+    from pathlib import Path
+
+    from fnirs_pipe.cli.run import _noise_model
+
+    src = Path("fnirs_pipe/interface/pages/analysis.py").read_text(encoding="utf-8")
+    assert 'id="an-noise-model"' in src and 'value="auto"' in src, "the page must default to auto"
+    pattern = re.search(r'pattern="([^"]+)"', src).group(1)
+
+    for value in ("auto", "ols", "ar1", "ar5", "ar16", "ar31", "ar100",
+                  "ar0", "banana", "ar", "AR16", "ar1.5", ""):
+        browser = bool(re.fullmatch(pattern, value))
+        try:
+            _noise_model(value)
+            cli = True
+        except argparse.ArgumentTypeError:
+            cli = False
+        assert browser == cli, f"{value!r}: page says {browser}, CLI says {cli}"

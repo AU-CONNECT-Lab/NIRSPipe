@@ -327,9 +327,18 @@ def _postprocessing():
                     field("HRF model",
                           dcc.Dropdown(id="an-hrf-model", options=_opts(_HRF_CHOICES),
                                        value="spm", clearable=False)),
+                    # free text with a suggestion list, not a dropdown: the CLI takes any
+                    # `arN` and a closed list here would be the narrower surface. `pattern`
+                    # is the CLI's own rule, so the browser refuses what the CLI would
                     field("Noise model",
-                          dcc.Dropdown(id="an-noise-model", options=_opts(_NOISE_CHOICES),
-                                       value="ar1", clearable=False)),
+                          html.Div([
+                              dbc.Input(id="an-noise-model", value="auto", debounce=True,
+                                        list="an-noise-model-suggest",
+                                        pattern="ols|auto|ar[1-9][0-9]*"),
+                              html.Datalist(id="an-noise-model-suggest",
+                                            children=[html.Option(value=c)
+                                                      for c in _NOISE_CHOICES]),
+                          ])),
                     field("Stim duration (s)",
                           dbc.Input(id="an-stim-dur", type="number", placeholder="optional")),
                 ),
