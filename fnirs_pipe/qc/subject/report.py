@@ -812,9 +812,8 @@ def _section_haemo(
 def _carpet_stages(raw_haemo: mne.io.Raw, psd_stages: "list | None") -> list:
     """The stages a carpet can tell apart, as ``[(label, raw), ...]``.
 
-    Built from the same files the spectrum reads, minus desc-resampled: a resample changes
-    the column count and nothing a carpet shows, so its block would be the one above it
-    redrawn. A run that filtered nothing has no desc-filtered file and gets no such row.
+    The spectrum's files minus desc-resampled, which changes the column count and nothing a
+    carpet shows.
     """
     stages = [("desc-preproc", raw_haemo)]
     stages += [(label, raw) for label, raw in (psd_stages or [])
@@ -833,12 +832,7 @@ def _section_stage_carpets(
     errors: list,
     figures_dir: Path,
 ) -> dict:
-    """One carpet panel per chromophore, each stacking every stage over a shared GVTD row.
-
-    HbO and HbR get a figure each rather than two columns of one: they are anti-correlated
-    and never share a scale elsewhere in the report, and a single figure tall enough for
-    both chromophores at every stage does not fit a page.
-    """
+    """One carpet panel per chromophore, each stacking every stage over a shared GVTD row."""
     panels = []
     if len(stages) < 2:
         return {"carpet_panels": panels}

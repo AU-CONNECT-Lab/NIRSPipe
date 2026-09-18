@@ -1,10 +1,4 @@
-"""Which rows the PSD panel draws, and where the filter response is allowed to land.
-
-The row list follows the stage files on disk, so a run that filtered and a run that only
-regressed reach this figure with different rows and neither may be described as the other's.
-The response curve is the part that breaks: it is drawn from the cutoffs, so a run with no
-bandpass has nothing to draw and asking for it anyway raises inside the filter design.
-"""
+"""Which rows the PSD panel draws, and which row the filter response may be drawn over."""
 
 import numpy as np
 import mne

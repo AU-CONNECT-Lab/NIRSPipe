@@ -348,8 +348,13 @@ def run_glm_pipeline(
         drift_params = {"drift_order": drift_order}
     else:
         drift_params = {}
+    # measured confounds stamped alongside the frequency ones, so a downstream step can read
+    # off this file whether the systemic component was regressed out
     stamp(raw_resid, stage="errts", step="glm_residuals", source=haemo,
-          noise_model=noise_model, drift_model=drift_model, **drift_params)
+          noise_model=noise_model, drift_model=drift_model,
+          short_channel=short_channel_used,
+          aux_regressors=sorted(k for k in confound_cols if k.startswith("aux_")),
+          **drift_params)
 
     contrasts = compute_contrasts(glm_est, contrast_def) if contrast_def else None
 

@@ -8,8 +8,11 @@ All notable changes to this project will be documented in this file.
 
 ## [0.43.0] - 2026-09-17
 
+### Fixed
+- **The confound-regression residual now records the short-channel and aux regressors it was built with.** Only the bandpass, the drift model and the noise model were written to its sidecar, so a coherence or connectivity step reading that file could not tell whether the systemic component had been taken out of it. The GLM's own result file always recorded it
+
 ### Changed
-- **The QC report's denoising carpet is now a block per stage on a shared time axis**, under the run's motion trace, with HbO and HbR in figures of their own. It used to be two blocks, Beer-Lambert output against the bandpassed signal, which left the confound regression out of the panel entirely and had no time axis at all, so a dark column could not be read against what happened at that moment. Each block is scaled to itself, so the residual stays readable instead of washing out
+- **The QC report's denoising carpet is now a block per stage on a shared time axis**, under the run's motion trace, with HbO and HbR in figures of their own. It used to be two blocks, Beer-Lambert output against the bandpassed signal, which left the confound regression out of the panel entirely and had no time axis at all, so a dark column could not be read against what happened at that moment. Every block is z-scored by the first stage, so a step that shrank a channel renders it paler, and each block's title carries how much its SD fell
 - **The spectrum panel carries the confound regression's residual.** Where nothing filtered, that stage is the whole detrend and the panel showed none of it; where a bandpass ran, the row should land on top of the one above it, and a gap inside the analysis band means the regression reached further than intended
 - **On a GLM run the HbO–HbR panel stops testing the residual against the −0.3 rule.** The task model comes out of that residual along with the confounds, so a weaker anticorrelation there can mean the model explained part of the shared response rather than that the data got worse. The rule now reads the before stage, and both the rule and the after stage say so
 

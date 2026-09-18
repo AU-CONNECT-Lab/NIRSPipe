@@ -333,8 +333,11 @@ def run_post(
                     result_bb, **{**rest_glm_kwargs, "data_band": None})
                 # Same regression, un-bandpassed input. Re-stamp so it stops sharing the "errts"
                 # stage with the bandpassed residual, whose file it would otherwise be credited to.
+                # carry the regression's own parameters over; a bare re-stamp overwrites them
+                fitted = (lin.params if (lin := lineage_of(raw_resid_bb)) else None) or {}
                 stamp(raw_resid_bb, stage="errtsbroad", step="glm_residuals_broadband",
-                      source=raw_haemo, resample_sfreq=config.resample_sfreq)
+                      source=raw_haemo,
+                      **{**fitted, "resample_sfreq": config.resample_sfreq})
                 _write_step_snirf(raw_resid_bb, config, output_dir, desc="errtsbroad",
                                   rec=rec, source_entities=source_entities)
 

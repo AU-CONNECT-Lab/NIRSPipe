@@ -18,13 +18,7 @@ _ROI_SEAM = "#ffffff"
 
 
 def _stage_channels(stages, chromophore: str) -> list[str]:
-    """Channels of one chromophore that every stage still carries, in the first stage's order.
-
-    A later stage may have dropped a channel (marked bad after the first file was written),
-    and a carpet whose rows mean different channels in different blocks is not readable::
-
-        stages with ["S1_D1 hbo", "S1_D2 hbo"] then ["S1_D1 hbo"]  ->  ["S1_D1 hbo"]
-    """
+    """Channels of one chromophore every stage still carries, in the first stage's order."""
     if not stages:
         return []
     first = [c for c in stages[0][1].ch_names if c.endswith(f" {chromophore}")]
@@ -35,21 +29,14 @@ def _stage_channels(stages, chromophore: str) -> list[str]:
 
 
 def _roi_order(names: list[str], roi_map: "dict | None"):
-    """Row order grouping channels by ROI, plus the label and boundary of each group.
+    """Row order grouping channels by ROI, plus [(label, first row, last row), ...].
 
-    ``roi_map`` is {ROI label: [channel names]} (project convention) and is matched against
-    the full channel name first, then the S-D base, so a map written either way lands::
-
-        names ["a hbo", "b hbo"], roi_map {"L": ["b hbo"], "R": ["a hbo"]}
-        ->  order [1, 0], groups [("L", 0, 0), ("R", 1, 1)]
-
-    Channels no ROI claims keep their place at the end under "unassigned". Without a map the
-    order is the montage's own and there are no groups.
+    ``roi_map`` is {ROI label: [channel names]}, matched on the full name then the S-D base.
+    Unclaimed channels go last under "unassigned"; no map means montage order and no groups.
     """
     if not roi_map or not names:
         return np.arange(len(names)), []
-    # the S-D base is indexed too, so a map written in HbO channel names also places the HbR
-    # carpet's rows instead of sending every one of them to "unassigned"
+    # index the S-D base too, so an HbO-named map also places the HbR rows
     ch_to_roi: dict = {}
     for label, chans in roi_map.items():
         for ch in chans:
@@ -72,11 +59,7 @@ def _roi_order(names: list[str], roi_map: "dict | None"):
 
 
 def _gvtd_row(raw_gvtd: mne.io.Raw):
-    """(times, trace, threshold) for the motion row, or None when there is nothing to draw.
-
-    Computed here with the same function and constants the motion section uses, so the trace
-    above the carpet is the one the motion panel drew rather than a second opinion.
-    """
+    """(times, trace, threshold) for the motion row, or None with nothing to draw."""
     from fnirs_pipe.qc.metrics import (
         GVTD_MOTION_BAND, GVTD_N_STD, gvtd_threshold, gvtd_timetrace,
     )
@@ -109,22 +92,11 @@ def carpet_compare_figure(
 ) -> "go.Figure | None":
     """One carpet per stage under a shared GVTD row, all on one time axis.
 
-    ``stages`` is ``[(label, raw), ...]`` in pipeline order, normally desc-preproc,
-    desc-filtered and desc-errts. The bandpass takes out the fine cardiac texture; the confound
-    regression takes out structure shared across channels, which reads as a block of rows
-    brightening and darkening together. One row per stage keeps the two apart.
-
-    **Each carpet is z-scored by its own per-channel mean and SD**, so every block shows the
-    structure left in it rather than its amplitude. The shrinkage that costs is in the stage
-    metrics table beside this figure.
-
-    ``raw_gvtd`` is the recording the motion row is measured on, intensity or optical density;
-    it shares the x axis with the carpets so a dark column can be read against what happened at
-    that moment. Omitting it drops the row.
-
-    ``xlim`` is (t0, t1) in seconds and narrows the view to one condition. The z-scoring is
-    still taken over the whole recording and only the columns drawn are cut, so a condition's
-    carpet is on the same greyscale as every other condition's and as the run's.
+    ``stages`` is ``[(label, raw), ...]`` in pipeline order. Every carpet is z-scored by the
+    first stage's per-channel mean and SD, and each later block's title carries the median of
+    its own SD against it. ``raw_gvtd`` is intensity or optical density; omitting it drops the
+    motion row. ``xlim`` (t0, t1) cuts the columns drawn, not the z-scoring, which stays
+    whole-run so a condition's carpet is on the run's greyscale.
 
     Returns None when no channel of ``chromophore`` survives in every stage.
     """
@@ -134,6 +106,13 @@ def carpet_compare_figure(
     order, groups = _roi_order(names, roi_map)
     ordered_names = [names[i] for i in order]
 
+    data = [raw.get_data(picks=ordered_names) for _, raw in stages]
+    ref_sd = data[0].std(axis=1)
+    ref_sd[ref_sd == 0] = 1.0
+    titles = [f"{label}  ·  SD {np.median(d.std(axis=1) / ref_sd):.2f}× {stages[0][0]}"
+              if i else label
+              for i, (label, d) in enumerate(zip((s[0] for s in stages), data))]
+
     gvtd = _gvtd_row(raw_gvtd) if raw_gvtd is not None else None
     n_rows = len(stages) + (1 if gvtd else 0)
     heights = ([_GVTD_ROW_PX] if gvtd else []) + [_CARPET_ROW_PX] * len(stages)
@@ -141,7 +120,7 @@ def carpet_compare_figure(
     fig = make_subplots(
         rows=n_rows, cols=1, shared_xaxes=True,
         row_heights=row_heights, vertical_spacing=_VSPACE,
-        subplot_titles=([""] if gvtd else []) + [label for label, _ in stages],
+        subplot_titles=([""] if gvtd else []) + titles,
     )
     for ann in fig.layout.annotations:
         ann.yshift = 3
@@ -161,9 +140,11 @@ def carpet_compare_figure(
         fig.update_yaxes(title_text="GVTD", title_font_size=10, row=1, col=1)
 
     first_row = 2 if gvtd else 1
-    for i, (_, raw) in enumerate(stages):
-        data = raw.get_data(picks=ordered_names)
-        z, t_ds, _ = carpet_z(data, raw.times, z_threshold)
+    stats = None
+    for i, ((_, raw), d) in enumerate(zip(stages, data)):
+        z, t_ds, first_stats = carpet_z(d, raw.times, z_threshold, stats=stats)
+        if stats is None:
+            stats = first_stats
         keep = _cut(t_ds, xlim)
         add_carpet(fig, first_row + i, z[:, keep], t_ds[keep], ordered_names, [])
         _roi_marks(fig, first_row + i, groups, len(ordered_names))
@@ -180,12 +161,7 @@ def carpet_compare_figure(
 
 
 def _roi_marks(fig, row: int, groups: list, n_ch: int) -> None:
-    """ROI names down the left edge of one carpet, with a white seam between groups.
-
-    Text rather than the colour bar the motion panel uses for long/short: that bar reads off
-    a fixed two-entry palette, and a montage's ROIs are an arbitrary list, so colouring them
-    would mean inventing a category ramp for labels that already fit as words.
-    """
+    """ROI names down the left edge of one carpet, with a white seam between groups."""
     if len(groups) < 2:
         return
     fig.update_yaxes(

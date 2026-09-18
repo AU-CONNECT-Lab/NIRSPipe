@@ -1,11 +1,4 @@
-"""What the stage carpet promises: one block per stage, each read on its own scale.
-
-The scaling is the part worth pinning. Every block is z-scored against its own mean and SD,
-which is what keeps the last stage readable: a residual scaled by the first stage's SD washes
-out to near-white, and that block is the one whose remaining structure the section exists to
-show. The cut is the other half of it, since a condition's block must still be comparable
-with the run's, so the z-scoring is whole-run and only the columns drawn are cut.
-"""
+"""Stage carpet: one block per stage, all z-scored by the first stage, cut without rescaling."""
 
 import mne
 import numpy as np
@@ -35,17 +28,21 @@ def test_one_block_per_stage():
     fig = carpet_compare_figure(
         [("desc-preproc", _raw()), ("desc-filtered", _raw()), ("desc-errts", _raw())], "hbo")
     assert len(_carpets(fig)) == 3
-    assert [a.text for a in fig.layout.annotations[:3]] == [
-        "desc-preproc", "desc-filtered", "desc-errts"]
+    titles = [a.text for a in fig.layout.annotations[:3]]
+    assert titles[0] == "desc-preproc"
+    # every later block names its own SD against the first stage's, beside its label
+    assert titles[1].startswith("desc-filtered") and "SD " in titles[1]
+    assert titles[2].startswith("desc-errts") and "desc-preproc" in titles[2]
 
 
-def test_each_block_is_scaled_by_itself():
-    """A stage 100x smaller than the first still fills its own greyscale."""
+def test_every_block_is_scaled_by_the_first_stage():
+    """A stage 100x smaller renders pale, and its title says by how much."""
     fig = carpet_compare_figure(
         [("desc-preproc", _raw(1e-6)), ("desc-errts", _raw(1e-8))], "hbo")
     first, last = (np.asarray(c.z, dtype=float) for c in _carpets(fig))
-    # scaled by the first stage's SD the second block would sit near zero everywhere
-    assert last.std() > 0.5 * first.std()
+    # scaled to itself the second block would come back to the first's spread
+    assert last.std() < 0.2 * first.std()
+    assert "SD 0.01×" in [a.text for a in fig.layout.annotations[:2]][1]
 
 
 def test_channels_missing_from_a_later_stage_are_dropped_everywhere():

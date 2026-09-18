@@ -52,8 +52,7 @@ _MARK_EDGE = "#9aa0a6"
 
 _R_THRESHOLD = -0.3
 
-# What the two stages are called wherever they are named. The GLM variants say the task
-# is gone from the residual, which is what stops -0.3 from being read against it.
+# what the two stages are called wherever they are named
 _BEFORE_LABEL = "before denoising"
 _AFTER_LABEL = "after denoising"
 _AFTER_LABEL_GLM = "after GLM (task removed)"
@@ -260,12 +259,9 @@ def hbo_hbr_correlation_figure(
     before stage's channels, it degrades to the one-stage panel: one heatmap and one dot
     per pair, which is what a run with no denoising and what a condition page both get.
 
-    ``task_modelled`` says the after stage had a task model taken out of it as well as the
-    confounds, which is what a GLM run's residual is. The -0.3 rule tests for the HbO-HbR
-    anticorrelation of cortical haemodynamics, and a model that explained part of that
-    shared variance leaves a weaker anticorrelation behind without anything having gone
-    wrong. The rule then reads the before stage only, and both the rule and the after stage
-    are labelled to say so.
+    ``task_modelled`` says the after stage is a GLM residual, with the task model taken out
+    as well as the confounds. The -0.3 rule then reads the before stage only, and the rule
+    and the after column are both labelled to say so.
     """
     groups = _pair_group(raw_haemo, sep_bands)
     order = _channel_order(raw_haemo, groups)

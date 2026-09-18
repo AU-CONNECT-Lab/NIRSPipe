@@ -29,9 +29,7 @@ from fnirs_pipe.qc.figures.common._utils import physio_bands as _physio_bands
 _RESPONSE_COLOR = "#7f8c8d"
 _RESPONSE_FLOOR = -90  # dB; below this the curve is numerical, not something to read
 
-# Row 1 is named for what follows it, so it only reads "before" when there is a bandpass
-# to be before. A regression-only run has none and the row keeps its stage name.
-_FIRST_LABEL = "Before bandpass"
+_FIRST_LABEL = "Before bandpass"   # replaced by the stage name when no bandpass ran
 
 
 def _simulate_bandpass(
@@ -118,14 +116,6 @@ def psd_figure(
     wrote after it as ``[(label, raw), ...]``, read off disk by the caller. Passing None falls
     back to simulating the bandpass in memory, which is what a prep-only run gets.
 
-    A row per stage file rather than a before/after pair, since which steps ran differs
-    between runs and each leaves its own mark. The bandpass empties two bands at once. A
-    cosine drift basis empties everything below its cutoff, so it carries the whole detrend
-    where no high-pass ran and little of it where one did; the second case is still worth a
-    row, because a row that does *not* land on top of the one above it says the regression
-    reached into the analysis band. Regressors that are measured signals rather than a
-    frequency basis (short channels, aux) leave the spectrum's shape alone and get no row.
-
     Stage is the row so a step is read by looking down the column, and every row shares one
     power axis or the comparison would be against a rescaled yardstick. The filter's own
     response is drawn dashed over the row it produced, shifted so 0 dB sits at that row's
@@ -162,10 +152,8 @@ def psd_figure(
     titles = [label for label, _ in all_stages]
     if titles[0] == _FIRST_LABEL and l_freq is None and h_freq is None:
         titles[0] = "desc-preproc"
-    # The row the bandpass produced, which is the only one the response curve may be drawn
-    # over and the only one renamed. A run with no bandpass still reaches here with rows of
-    # its own (desc-resampled, desc-errts); those are not the filter's output and naming
-    # either of them "After bandpass" would credit the filter with what the regression did.
+    # the row the bandpass produced: the only one renamed and the only one the response
+    # curve may be drawn over
     filter_row = None
     if l_freq is not None or h_freq is not None:
         filter_row = next((i for i, (label, _) in enumerate(all_stages, start=1)
@@ -181,7 +169,7 @@ def psd_figure(
 
     lo, hi = np.inf, -np.inf
     anchor = None  # passband level of the filter's output row, for the response curve
-    # the hover names the row the way its title does, so the two cannot disagree
+    # hover names the row the way its title does
     for row, ((_, raw), label) in enumerate(zip(all_stages, titles), start=1):
         for ch_type, color, mean_color in (("hbo", _HBO_COLOR, _HBO_MEAN_COLOR),
                                            ("hbr", _HBR_COLOR, _HBR_MEAN_COLOR)):
