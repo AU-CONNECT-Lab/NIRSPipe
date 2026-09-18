@@ -64,16 +64,70 @@ def haemo():
 
 @pytest.fixture
 def alff_df(haemo):
+    """The columns compute_alff writes, mALFF included: the figure draws that one."""
     rng = np.random.default_rng(1)
+    alff = rng.uniform(0.1, 1.0, len(haemo.ch_names))
     return pd.DataFrame({
         "channel": haemo.ch_names,
-        "alff": rng.uniform(0.1, 1.0, len(haemo.ch_names)),
+        "alff": alff,
+        "malff": alff / alff.mean(),
         "falff": rng.uniform(0.1, 0.9, len(haemo.ch_names)),
     })
 
 
 def test_the_flat_map_is_drawn_from_the_montage(haemo, alff_df):
     assert alff_topo_figure(haemo, alff_df) is not None
+
+
+def test_a_channel_is_one_disc_and_not_a_path(haemo, alff_df):
+    """An amplitude is a property of a place. Drawn as a source-to-detector bar it chained
+    into the neighbouring channels wherever they share an optode, and a montage of
+    independent measurements read as one connected polyline."""
+    from fnirs_pipe.qc.metrics import long_short_channels
+
+    long_names, _ = long_short_channels(haemo, None)
+    # short channels are off every map in this module, so the count is the long ones
+    n_drawn = len({c.split(" ")[0] for c in long_names})
+    fig = alff_topo_figure(haemo, alff_df)
+    panel = [t for t in fig.data
+             if t.marker.colorscale is not None and t.xaxis == fig.data[-1].xaxis]
+    # the bar mark would put a string of markers on every channel instead of one disc
+    assert sum(len(t.x) for t in panel) == n_drawn
+
+
+def test_the_two_chromophores_of_a_row_share_one_bar(haemo, alff_df):
+    """mALFF and fALFF are both dimensionless, so HbO and HbR can be read against each
+    other; the four-bar version could compare nothing with anything."""
+    fig = alff_topo_figure(haemo, alff_df)
+    bars = [t for t in fig.data if getattr(t.marker, "showscale", False)]
+    assert len(bars) == 2
+    assert {b.marker.colorbar.title.text for b in bars} == {"mALFF", "fALFF"}
+
+
+def test_the_row_scale_spans_both_chromophores(haemo, alff_df):
+    fig = alff_topo_figure(haemo, alff_df)
+    by_row = {}
+    for t in fig.data:
+        if t.marker.colorscale is not None and t.marker.cmin is not None:
+            by_row.setdefault(t.yaxis, []).append((t.marker.cmin, t.marker.cmax))
+    # two panels a row, and both ends of the scale identical across them
+    for panels in by_row.values():
+        assert len(set(panels)) == 1
+
+
+def test_alff_stands_in_where_a_frame_carries_no_malff(haemo, alff_df):
+    """Only a hand-built frame does; the figure still draws two rows rather than one."""
+    fig = alff_topo_figure(haemo, alff_df.drop(columns=["malff"]))
+    bars = [t for t in fig.data if getattr(t.marker, "showscale", False)]
+    assert {b.marker.colorbar.title.text for b in bars} == {"ALFF", "fALFF"}
+
+
+def test_the_hover_keeps_the_measured_amplitude(haemo, alff_df):
+    """The colour is a multiple of the chromophore mean, so the molar value it came from
+    has nowhere else to go."""
+    fig = alff_topo_figure(haemo, alff_df)
+    carried = [t for t in fig.data if t.customdata is not None]
+    assert carried and all("customdata" in t.hovertemplate for t in carried)
 
 
 def test_no_optode_positions_means_no_figure(haemo, alff_df):
@@ -100,7 +154,8 @@ def test_a_rejected_channel_does_not_set_the_colour_scale(haemo, alff_df):
     channels, since rejecting one removes its fALFF from that panel too.
     """
     spiked = alff_df.copy()
-    spiked.loc[spiked.index[0], "alff"] = 1e6
+    # the drawn column is what sets the scale, so that is the one to spike
+    spiked.loc[spiked.index[0], "malff"] = 1e6
     outlier = str(spiked.iloc[0]["channel"])
 
     assert _scales(alff_topo_figure(haemo, spiked)) != _scales(alff_topo_figure(haemo, alff_df))

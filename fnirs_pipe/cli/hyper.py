@@ -513,7 +513,8 @@ def cmd_pair_null(
 
     failures = 0
     for (gid, task), members in targets.items():
-        print(f"  -> {gid}/{task}")
+        # flushed, or it interleaves with the stderr line naming the failure it belongs to
+        print(f"  -> {gid}/{task}", flush=True)
         try:
             path = run_pair_null(
                 gid, task, members, all_groups, output_dir,

@@ -1,8 +1,16 @@
 """The flat head every figure that draws a value per channel is built on.
 
-One projection, one outline, one glyph convention: a long channel is a bar of small discs
-along its source-to-detector path, a short one a single larger disc inside a grey ring. A
-reader who has learned one of these figures can read the next one, and two views cannot
+One projection, one outline, two marks. Which mark is right depends on what the number is:
+
+- a **bar** along the source-to-detector path, for a value that is a claim about that path,
+  such as a correlation between a seed and this channel. A short channel, too stubby to read
+  as a path, becomes a single larger disc inside a grey ring.
+- a **disc** at the channel's midpoint, for a value that is a property of one place, such as
+  an amplitude. Bars are wrong for those: they meet end to end wherever two channels share
+  an optode, so a montage of independent measurements reads as one connected polyline and
+  the eye groups it into shapes that mean nothing.
+
+A reader who has learned one of these figures can read the next one, and two views cannot
 drift into describing different heads.
 
 Built on :mod:`fnirs_pipe.qc.figures.common.topomap`'s projection, which is MNE's own, so
@@ -17,6 +25,10 @@ import numpy as np
 import plotly.graph_objects as go
 
 from fnirs_pipe.qc.figures.common.topomap import _LONG_SIZE, _SHORT_SIZE
+
+# one disc standing for a whole channel has to carry the value on its own, so it is drawn
+# larger than the discs a bar is strung from
+_DISC_SIZE = 15
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("qc.figures.head_map")
@@ -52,7 +64,10 @@ def head_geometry(raw: mne.io.Raw, pairs: list[str]) -> "dict | None":
         if not sel:
             continue
         gx, gy, labels, per_pair = _glyph_points(sel, opt_xy, short=(scope == "short"))
+        mid = np.array([[(opt_xy[a][0] + opt_xy[b][0]) / 2,
+                         (opt_xy[a][1] + opt_xy[b][1]) / 2] for a, b in sel])
         out[scope] = {"gx": gx, "gy": gy, "labels": labels, "per_pair": per_pair,
+                      "mid_x": mid[:, 0], "mid_y": mid[:, 1],
                       "names": [f"{a}_{b}" for a, b in sel],
                       "skel": [(opt_xy[a][:2], opt_xy[b][:2]) for a, b in sel]}
     return out if ("long" in out or "short" in out) else None
@@ -80,8 +95,10 @@ def _expand(values, per_pair) -> np.ndarray:
     return np.repeat(np.asarray(values, dtype=float), per_pair)
 
 
-def _marker(g: dict, keep, size: float, short: bool, **marker) -> go.Scatter:
-    """One Scatter over the markers ``keep`` selects, with the ring short channels carry."""
+def _marker(g: dict, keep, size: float, short: bool, disc: bool = False,
+            **marker) -> go.Scatter:
+    """One Scatter over the markers ``keep`` selects, with whatever ring its mark carries."""
+    ring = 1.2 if disc else (1.6 if short else 0)
     gx, gy = np.asarray(g["gx"]), np.asarray(g["gy"])
     labels = g["labels"]
     if keep is not None:
@@ -91,21 +108,32 @@ def _marker(g: dict, keep, size: float, short: bool, **marker) -> go.Scatter:
         x=gx, y=gy, mode="markers", text=labels,
         # a grey ring, which reads as a separate object against both the head and the bars
         # while leaving the fill on the shared colour scale. White disappears into the page
-        # and near-black fights the fill for attention.
+        # and near-black fights the fill for attention. A disc takes a white one instead:
+        # nothing else is drawn at that size, and the white is what keeps two neighbouring
+        # channels from merging into one blob
         marker=dict(size=size, symbol="circle",
-                    line=dict(width=1.6 if short else 0, color="#98a4ae"), **marker),
+                    line=dict(width=ring, color="white" if ring and disc else "#98a4ae"),
+                    **marker),
         showlegend=False)
 
 
 def head_glyph(fig, geo, scope, values, row, col, title, cmin, cmax, bar, colorscale,
                sid: str = "", dim=None, blank_color: "str | None" = None,
-               fmt: str = ".3f") -> int:
+               fmt: str = ".3f", mark: str = "bar", hover_tail: str = "",
+               customdata=None) -> int:
     """One scope's channels drawn on the head, coloured by ``values``.
 
     ``values`` carries one number per channel in ``geo[scope]["names"]`` order, and every
-    marker of a channel takes that channel's colour. Long and short stay on one colour
-    scale, so a short channel reads as a contamination check rather than as a second map;
-    the **shape** is what separates them, which is why one figure can carry both.
+    marker of a channel takes that channel's colour.
+
+    ``mark`` is "bar" or "disc"; see this module's own docstring for which a number wants.
+    With bars, long and short stay on one colour scale, so a short channel reads as a
+    contamination check rather than as a second map; the **shape** is what separates them,
+    which is why one figure can carry both.
+
+    ``customdata`` gives one extra value per channel and ``hover_tail`` a template fragment
+    to print it with, for a figure whose colour is a derived number and whose reader still
+    wants the measured one.
 
     ``bar`` is True for the trace that shows the colour bar, or a dict of colorbar settings
     where a grid needs one bar per panel rather than one for the whole figure.
@@ -125,9 +153,15 @@ def head_glyph(fig, geo, scope, values, row, col, title, cmin, cmax, bar, colors
     Returns the index of the coloured trace, which is what such a frame updates.
     """
     g = geo[scope]
+    disc = mark == "disc"
+    if disc:
+        # one marker per channel, so the per-channel arrays need no expanding at all
+        g = {**g, "gx": g["mid_x"], "gy": g["mid_y"], "labels": g["names"],
+             "per_pair": np.ones(len(g["names"]), dtype=int)}
     short = scope == "short"
-    size = _SHORT_SIZE if short else _LONG_SIZE
+    size = _DISC_SIZE if disc else (_SHORT_SIZE if short else _LONG_SIZE)
     marker_values = _expand(values, g["per_pair"])
+    extra = None if customdata is None else _expand(customdata, g["per_pair"])
 
     def _coloured(keep, opacity, show_bar) -> int:
         colorbar = dict(title=dict(text=title, side="right", font=dict(size=10)),
@@ -135,11 +169,11 @@ def head_glyph(fig, geo, scope, values, row, col, title, cmin, cmax, bar, colors
         if isinstance(show_bar, dict):
             # title is nested, so a plain update would drop the text and leave a bar with
             # only its side set
-            extra = dict(show_bar)
-            colorbar["title"] = {**colorbar["title"], **extra.pop("title", {})}
-            colorbar.update(extra)
-        fig.add_trace(_marker(
-            g, keep, size, short, opacity=opacity,
+            over = dict(show_bar)
+            colorbar["title"] = {**colorbar["title"], **over.pop("title", {})}
+            colorbar.update(over)
+        trace = _marker(
+            g, keep, size, short, disc, opacity=opacity,
             color=(marker_values if keep is None else marker_values[keep]).astype(np.float32),
             colorscale=colorscale, cmin=cmin, cmax=cmax, showscale=bool(show_bar),
             colorbar=colorbar,
@@ -147,8 +181,12 @@ def head_glyph(fig, geo, scope, values, row, col, title, cmin, cmax, bar, colors
             # the member in every bubble: a grid of heads is read by pointing at one, and
             # the row label is off at the edge by then
             hovertemplate=(f"<b>{sid}</b><br>" if sid else "")
-                          + "%{text}<br>%{marker.color:" + fmt + "}<extra></extra>",
-        ), row=row, col=col)
+                          + "%{text}<br>%{marker.color:" + fmt + "}" + hover_tail
+                          + "<extra></extra>",
+        )
+        if extra is not None:
+            trace.update(customdata=extra if keep is None else extra[keep])
+        fig.add_trace(trace, row=row, col=col)
         return len(fig.data) - 1
 
     if blank_color is None and not dim:
@@ -164,7 +202,7 @@ def head_glyph(fig, geo, scope, values, row, col, title, cmin, cmax, bar, colors
         for keep, opacity in ((~finite & dimmed, DIM_OPACITY), (~finite & ~dimmed, 1.0)):
             if keep.any():
                 fig.add_trace(
-                    _marker(g, keep, size, short, color=blank_color, opacity=opacity)
+                    _marker(g, keep, size, short, disc, color=blank_color, opacity=opacity)
                     .update(hovertemplate="%{text}<br>no value<extra></extra>"),
                     row=row, col=col)
 

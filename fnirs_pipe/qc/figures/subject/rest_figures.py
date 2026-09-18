@@ -294,26 +294,6 @@ def _values_for(geo: dict, lookup, chromo: str) -> np.ndarray:
 
 # the gap between rows of heads, wide enough to hold a horizontal colour bar and its ticks
 _ROW_GAP = 0.14
-
-
-def _panel_colorbar(row: int, col: int, n_rows: int, n_cols: int) -> dict:
-    """Colorbar placement for one panel of a head grid: horizontal, under its own head.
-
-    Beside the panel is where it belongs but not where it can go: the grid anchors each head
-    square inside a much wider cell, so a vertical bar at the cell's right edge floats in the
-    gap between two heads and reads as belonging to neither. Under the head it is
-    unambiguous, and the row gap is what the head circle leaves free: inside the cell the
-    circle fills the height, and a bar there crosses its lower arc.
-    """
-    cell = (1.0 - _ROW_GAP * (n_rows - 1)) / n_rows
-    return {"orientation": "h", "len": 0.5 / n_cols, "thickness": 9,
-            "x": (col - 0.5) / n_cols, "xanchor": "center",
-            "y": 1.0 - row * cell - (row - 1) * _ROW_GAP - 0.02, "yanchor": "top",
-            # beside the bar, not above it: a title over a horizontal bar grows the block
-            # upward and runs into the subplot title of the row below
-            "tickfont": {"size": 9}, "title": {"side": "right"}}
-
-
 # tall enough that a head, which the grid anchors square, is still legible at report width
 _HEAD_PX = 250
 
@@ -396,22 +376,73 @@ def fc_seed_topo_figure(
     return _finish_head_grid(fig, geo, n_rows, n_cols, title)
 
 
+# What each row draws, best column first, and the measured column its hover names. mALFF
+# rather than ALFF because the raw amplitude is in molar at 1e-8, which no reader has a
+# calibration for, and because it is standardised within each chromophore: that is what lets
+# HbO and HbR share one scale without HbR, the smaller of the two by roughly a factor, coming
+# out a single dark colour. The measured amplitude is still one hover away.
+_ALFF_ROWS = ((("malff", "alff"), "alff"), (("falff",), None))
+_ALFF_LABELS = {"malff": "mALFF", "alff": "ALFF", "falff": "fALFF"}
+
+
+def _alff_rows(alff_df: pd.DataFrame) -> "list[tuple[str, str, str | None]]":
+    """(column, label, measured column) per row, dropping a row the frame cannot fill.
+
+    ``alff`` stands in where a frame carries no ``malff``, which only a hand-built one does.
+    Its hover names nothing extra, the colour already being the measured number.
+    """
+    out = []
+    for candidates, measured in _ALFF_ROWS:
+        col = next((c for c in candidates if c in alff_df.columns), None)
+        if col:
+            out.append((col, _ALFF_LABELS[col], measured if measured != col else None))
+    return out
+
+
+def _row_colorbar(row: int, n_rows: int) -> dict:
+    """Colorbar placement for one row of a head grid: horizontal, under the row it describes.
+
+    Beside the row is where it belongs but not where it can go: the grid anchors each head
+    square inside a much wider cell, so a vertical bar at a cell's right edge floats in the
+    gap between two heads and reads as belonging to neither. The row gap is what the head
+    circle leaves free; inside the cell the circle fills the height and a bar there crosses
+    its lower arc.
+    """
+    cell = (1.0 - _ROW_GAP * (n_rows - 1)) / n_rows
+    return {"orientation": "h", "len": 0.3, "thickness": 9,
+            "x": 0.5, "xanchor": "center",
+            "y": 1.0 - row * cell - (row - 1) * _ROW_GAP - 0.02, "yanchor": "top",
+            # beside the bar, not above it: a title over a horizontal bar grows the block
+            # upward and runs into the subplot title of the row below
+            "tickfont": {"size": 9}, "title": {"side": "right"}}
+
+
 def alff_topo_figure(
     raw: mne.io.Raw,
     alff_df: pd.DataFrame,
     title: str = "ALFF and fALFF on the optode layout",
     sep_bands=None,
 ) -> "go.Figure | None":
-    """ALFF and fALFF drawn on the flat map, or None with no positions.
+    """Low-frequency amplitude drawn on the flat map, or None with no positions.
 
     The bar chart in :func:`alff_falff_figure` orders channels by name, which puts no two
     neighbours side by side; low-frequency amplitude is a spatial claim, and this is the
     view it can be read as one in.
 
-    Both measures are unsigned and their ranges differ by orders of magnitude, so each panel
-    scales to its own data instead of to a shared symmetric scale, and carries its own bar.
-    A rejected channel arrives NaN, so it is drawn grey and faded rather than dropped: the
-    montage stays complete and the gap reads as a rejection.
+    One disc per channel, at its source-detector midpoint, because the value is a property
+    of a place rather than of a path. The segment idiom belongs to
+    :func:`fc_seed_topo_figure`, where the value really is a claim about a pair of points;
+    borrowed here it chained neighbouring channels into polylines that meant nothing.
+
+    Both rows are dimensionless, so a row's two chromophores share one scale and one bar and
+    can be read against each other. The rows keep their own: fALFF is a share of the whole
+    spectrum and mALFF a multiple of the chromophore's own mean, and nothing is gained by
+    putting them on one axis.
+
+    A rejected channel is drawn grey rather than dropped, so the montage stays complete and
+    the gap reads as a rejection, and its value is kept out of the scale. Grey alone, not
+    grey and faded: for this figure a rejected channel is exactly the channel with no value,
+    and a disc carrying both marks is too faint to find.
     """
     geo = _head_for(raw, sep_bands)
     if geo is None:
@@ -421,35 +452,40 @@ def alff_topo_figure(
     values = {str(row["channel"]): row for _, row in alff_df.iterrows()}
     cols = [(chromo, lab) for chromo, lab in (("hbo", "HbO"), ("hbr", "HbR"))
             if any(ch.endswith(f" {chromo}") for ch in values)]
-    if not cols:
+    rows = _alff_rows(alff_df)
+    if not cols or not rows:
         return None
-    rows = ("alff", "falff")
     dim = {_pair_of(ch) for ch in raw.info["bads"]}
+    blank = [n in dim for n in geo["long"]["names"]]
+
+    def column(measure: str, chromo: str) -> np.ndarray:
+        vals = _values_for(
+            geo, lambda ch, m=measure: float(values[ch][m]) if ch in values else np.nan,
+            chromo)
+        # compute_alff already blanks a rejected channel, but the frame is an argument and
+        # may not have come from it; the recording's own bads are the authority, and a
+        # rejected channel that kept its value would still set the scale below
+        vals[blank] = np.nan
+        return vals
 
     n_rows, n_cols = len(rows), len(cols)
-    titles = [f"{measure.upper()} - {lab}" for measure in rows for _, lab in cols]
+    titles = [f"{label} - {lab}" for _, label, _ in rows for _, lab in cols]
     fig = _head_grid(n_rows, n_cols, titles, geo)
 
-    for i, measure in enumerate(rows, start=1):
-        for j, (chromo, _label) in enumerate(cols, start=1):
-            vals = _values_for(
-                geo, lambda ch, m=measure: float(values[ch][m]) if ch in values else np.nan,
-                chromo)
-            # compute_alff already blanks a rejected channel, but the frame is an argument
-            # and may not have come from it; the recording's own bads are the authority, and
-            # a rejected channel that kept its value would still set the scale below
-            vals[[n in dim for n in geo["long"]["names"]]] = np.nan
-            # the scale comes from the channels that have a value: one rejected channel with
-            # a runaway amplitude would flatten every real difference into one colour. Each
-            # panel keeps its own, because this figure is read for where amplitude is high
-            # and not for whether HbO is larger than HbR: HbR is the smaller by roughly a
-            # factor, so a scale shared with HbO renders its whole map one dark colour
-            good = vals[np.isfinite(vals)]
-            if not len(good):
-                continue
-            head_glyph(fig, geo, "long", vals, i, j, measure.upper(),
+    for i, (measure, label, raw_key) in enumerate(rows, start=1):
+        by_col = [column(measure, chromo) for chromo, _ in cols]
+        # the scale comes from the channels that have a value: one rejected channel with a
+        # runaway amplitude would flatten every real difference into one colour
+        good = np.concatenate([v[np.isfinite(v)] for v in by_col])
+        if not len(good):
+            continue
+        for j, ((chromo, _lab), vals) in enumerate(zip(cols, by_col), start=1):
+            measured = column(raw_key, chromo) if raw_key else None
+            head_glyph(fig, geo, "long", vals, i, j, label,
                        float(good.min()), float(good.max()),
-                       bar=_panel_colorbar(i, j, n_rows, n_cols),
-                       colorscale=_ALFF_SCALE, dim=dim, blank_color=BLANK_COLOR,
-                       fmt=".3g")
+                       bar=_row_colorbar(i, n_rows) if j == n_cols else False,
+                       colorscale=_ALFF_SCALE, blank_color=BLANK_COLOR,
+                       fmt=".2f", mark="disc",
+                       customdata=measured,
+                       hover_tail="" if measured is None else "<br>%{customdata:.3g} M")
     return _finish_head_grid(fig, geo, n_rows, n_cols, title)
