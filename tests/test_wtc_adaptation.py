@@ -174,7 +174,7 @@ def test_a_burst_does_not_light_up_an_unrelated_frequency():
 @pytest.mark.parametrize("dj", [1.0 / 12, 1.0 / 14, 1.0 / 8, 1.0 / 20])
 def test_the_scale_window_spans_dj0_whatever_the_grid_is(dj):
     """The width is fixed in log2(scale), so the point count follows dj rather than the
-    other way round. Grinsted's kernel is the same numbers at dj = 1/12."""
+    other way round."""
     from fnirs_pipe.pipeline.synchrony import _SCALE_SMOOTH_DJ0, _scale_window
 
     win = _scale_window(dj)

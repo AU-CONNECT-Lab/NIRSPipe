@@ -1,6 +1,6 @@
 """The long/short separation rule: one definition, configurable, and stamped.
 
-Four things are worth pinning here, and the first three failed independently before 0.30.0.
+Four things are worth pinning here, and the first three have each failed on their own.
 
 The *rule* itself: two bands that do not meet, so a channel between them belongs to
 neither. Channel screening cannot stand in for the lower edge, because a 12 mm channel
@@ -104,8 +104,8 @@ def test_a_channel_between_the_bands_belongs_to_neither():
 
 
 def test_the_long_band_has_no_upper_bound_by_default():
-    """The 45 mm default was dropped in 0.30.0: it is a geometric proxy for SNR, which
-    SCI and PSP measure directly, so a far channel is screened on its own numbers."""
+    """An upper bound is a geometric proxy for SNR, which SCI and PSP measure directly, so
+    a far channel is screened on its own numbers rather than excluded by its distance."""
     assert LONG_MAX_DIST is None
     assert _labels(_montage([30, 58, 64]))["S3_D3 760"] == "long"
 
@@ -285,8 +285,8 @@ def test_the_stamp_is_in_millimetres():
 
 
 def test_a_record_with_nothing_stamped_falls_back_to_the_defaults():
-    """Every record written before 0.30.0. The alternative, refusing to read it, would
-    make the whole existing tree unreportable."""
+    """Every record written before prep started stamping the bands. The alternative,
+    refusing to read it, would make an existing tree unreportable."""
     assert bands_from_record({"n_long_channels": 28}) == separation_bands()
 
 
@@ -345,8 +345,8 @@ def test_the_refusal_names_both_members_and_their_bands():
 
 
 def test_an_unstamped_dyad_falls_back_to_the_defaults_with_a_warning(caplog):
-    """Every tree prepped before 0.30.0. Refusing those outright would make them
-    unanalysable, so it is a warning; the value is a guess and says so."""
+    """Every tree prepped before the bands were stamped. Refusing those outright would make
+    them unanalysable, so it is a warning; the value is a guess and says so."""
     from fnirs_pipe.pipeline.hyperscanning import resolve_group_bands
     with caplog.at_level(logging.WARNING):
         assert resolve_group_bands(_dyad(), _sqm(None, None)) == separation_bands()
@@ -432,8 +432,8 @@ def test_a_positionless_montage_builds_no_short_channel_regressors():
     """The bug this closes: every separation reads as zero, mne_nirs called that short,
     and the "systemic" signal regressed out of every channel was the whole montage.
 
-    The refusal replaced an empty return in 0.43.0: a skip would leave the methods text
-    naming regressors the residual does not carry."""
+    The refusal replaced an empty return: a skip would leave the methods text naming
+    regressors the residual does not carry."""
     from fnirs_pipe.exceptions import StageError
     from fnirs_pipe.pipeline.glm import _short_channel_regressors
 
@@ -444,9 +444,9 @@ def test_a_positionless_montage_builds_no_short_channel_regressors():
 
 
 def test_the_refusal_names_the_shortest_channel_there_is():
-    """The other arm of that message, and the one a real montage hits: the hyper montage's
-    shortest pair is 12.8 mm, so the number to raise --short-max-dist to has to be in the
-    error rather than left for the reader to go measure."""
+    """The other arm of that message, and the one a montage sitting just outside the short
+    band hits: the number to raise --short-max-dist to has to be in the error rather than
+    left for the reader to go measure."""
     from fnirs_pipe.exceptions import StageError
     from fnirs_pipe.pipeline.glm import _short_channel_regressors
 

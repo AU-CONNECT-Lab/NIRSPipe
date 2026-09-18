@@ -2,7 +2,6 @@
 
 import numpy as np
 import mne
-import pytest
 
 from fnirs_pipe.qc.figures.subject.psd_plot import psd_figure
 

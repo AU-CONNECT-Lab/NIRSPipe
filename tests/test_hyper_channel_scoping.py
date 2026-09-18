@@ -7,8 +7,8 @@ to TSV has to agree with the map the report draws, cone of influence included, o
 figures and the group statistics end up answering different questions.
 
 And the third: ISC and WTC are one code path up to the statistic, so what one of them
-refuses the other refuses. `qc/isc_vs_wtc.md` in the notes tree states the whole contract;
-the tests at the end of this file hold the parts of it that have come apart before.
+refuses the other refuses. The tests at the end of this file hold the parts of that which
+have come apart before.
 
 The band-mean tests build a WTCResult by hand rather than running pycwt: the quantity under
 test is the collapse, and a hand-built map is the only way to know what the right answer is.
@@ -253,8 +253,8 @@ def _result(wtc=WTC, coi=COI) -> WTCResult:
 
 def test_cells_outside_the_cone_of_influence_do_not_enter_the_mean():
     # the four corner cells hold the 1.0s; masking them leaves 8 cells holding two of them.
-    # Both calls name the mask: masking is the default since 2026-09-10, so the unmasked
-    # side has to ask for it and this test used to get the masked number twice
+    # Both calls name the mask: masking is the default, so the unmasked side is the one
+    # that has to ask, and a test naming neither would get the masked number twice
     masked   = wtc_band_mean(_result(), 0.04, 0.25, mask_coi=True).iloc[0]
     unmasked = wtc_band_mean(_result(), 0.04, 0.25, mask_coi=False).iloc[0]
     assert masked["coherence"] == pytest.approx(2 / 8)

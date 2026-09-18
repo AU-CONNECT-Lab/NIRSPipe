@@ -3,10 +3,10 @@
 The panel says "measured on long channels" and prints eight rows. Seven came off the
 record's ``*_long`` sections; the GCOR pair did not. It was measured a second time inside
 ``run_post``, over every channel, and handed to the report as a function argument, so the
-two sat in one list under one caption and disagreed. On both Sync-A-Thon members the
-all-channel reading had HbR global correlation *falling* across the confound regression and
-the long-channel one had it *rising*: the short channels are what the regression removes, so
-including them in the measure of what the regression did makes it look like it worked.
+two sat in one list under one caption and disagreed. The two readings can move in opposite
+directions across the confound regression: the short channels are what the regression
+removes, so including them in the measure of what the regression did makes it look like it
+worked.
 
 Nothing fails when this drifts. Both numbers are plausible, both render, and the row label
 is the same either way, which is why the invariant is pinned here as a property of the

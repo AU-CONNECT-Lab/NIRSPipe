@@ -73,8 +73,7 @@ _DYNAMIC_IDS = {"an-subjects-checklist", "dp-subject-radio"}
 
 # Controls the callbacks may leave alone, and why. The deliberate half of the contract below,
 # in the same spirit as NOT_EXPOSED: an id may go unread, but only on purpose and only in
-# writing. `ha-decisions-store` sat here-shaped and unwritten until the AG Grid work widened
-# these tests; it was dead, and was deleted rather than listed.
+# writing. An id nothing reads and nothing will read belongs deleted, not listed here.
 _UNBOUND_BY_DESIGN = {
     "dp-tabs": "a dbc.Tabs container; switching is client-side and reaches no callback",
 }
@@ -178,7 +177,7 @@ def test_the_generated_command_satisfies_its_modes_requirements(mode):
 
 @pytest.mark.parametrize("mode", _MODES)
 def test_short_channel_reaches_every_mode(mode):
-    """It was locked behind glm; rest has always honoured it and denoise does since 0.22.0."""
+    """It was locked behind glm, long after rest and denoise both honoured it."""
     argv = _build_cli_args({**_FULL_OPTS, "post_mode": mode})
     assert "--short-channel" in _emitted(post_mode=mode)
     args = vars(_build_parser().parse_args(argv[1:]))
@@ -316,7 +315,7 @@ QC_NOT_EXPOSED = {
             # changes no table or figure value, so the page has nothing to preview for it
             "--wtc-arrow-min",
             # the positive half of a paired flag, and it is the default; the checkbox emits
-            # the negative one. See memory/project_mask_coi_default_on
+            # the negative one
             "--wtc-mask-coi",
             # four spellings of one switch. The per-condition pass is the default and the
             # checkbox turns it off with the canonical --no-by-condition; offering the

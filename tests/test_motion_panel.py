@@ -74,7 +74,7 @@ def _panel_labels(fig):
 
 def test_carpet_draws_only_the_motion_band_gvtd(od_with_cardiac):
     """One GVTD panel, the band-limited one. The unfiltered trace was dropped: it is the
-    pipeline stage Sherafati 2020 measured the worst artifact-to-background ratio at."""
+    pipeline stage with the worst artifact-to-background ratio."""
     raw = synth_raw("01", "tapping", duration=200.0)
     fig = carpet_gvtd_figure(raw, raw.ch_names[:6])
 

@@ -1,7 +1,7 @@
 """A good channel's metric must not depend on which *other* channels are bad.
 
 `test_bad_channel_exclusion.py` pins three named functions against a leak. This is the
-general statement behind them, and it is the shape of the bug that produced the plan entry:
+general statement behind them, and it is the shape of the bug that prompted them:
 `_spectral_metrics` indexed a PSD array with indices taken from `raw.info`, but
 `Spectrum.get_data()` drops bad channels, so the array was shorter than the index space. It
 raised only once enough channels were bad, and `@_safe_metrics` turned the exception into

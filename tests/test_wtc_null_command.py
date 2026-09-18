@@ -5,12 +5,11 @@ for the exploratory 196-pair channel table also multiplied every surrogate itera
 That coupling was invisible on disk too: the pseudo sidecar recorded the band but neither the
 iteration count nor the shape, so a 5-iteration probe and a 100-iteration null looked alike.
 
-0.25.0 fixed it by splitting the null into its own command. The null now runs inside
-`fnirs-hyper run` again, which is what keeps its band and its stage identical to the table
-it sits beside, and the independence is carried by `--wtc-pseudo-cross` instead. These
-tests hold that independence in place: the null is off unless asked for, its crossing is
-its own decision, the sidecar says what was run, and a merge refuses to mix iteration
-counts.
+The null runs inside `fnirs-hyper run`, which is what keeps its band and its stage identical
+to the table it sits beside, and the independence is carried by `--wtc-pseudo-cross`
+instead. These tests hold that independence in place: the null is off unless asked for, its
+crossing is its own decision, the sidecar says what was run, and a merge refuses to mix
+iteration counts.
 """
 
 import json
@@ -172,7 +171,7 @@ def test_nulls_of_one_length_merge(tmp_path):
 
 
 def test_merge_covers_every_kind_the_aggregator_has(tmp_path):
-    """It asked for wtc-roi, gone since 0.24.0, and died before reaching the null."""
+    """It asked for a kind the aggregator no longer has, and died before reaching the null."""
     from fnirs_pipe.cli.hyper import cmd_merge
     from fnirs_pipe.pipeline.wtc_aggregate import _KINDS
 

@@ -2,10 +2,8 @@
 
 Blanking rather than dropping is the whole point: every subject's matrix keeps the same
 shape and the same channel order, so a group analysis can stack subjects whose rejections
-differ. Dropping rows would make position mean something different in every file. This is
-the convention NIRS-KIT uses (`N_Matrix.m` blanks the rejected rows and columns of the
-correlation matrix, `N_Alff.m` and `N_Whole.m` blank the per-channel indices) and the one
-`compute_isc` already followed before the resting-state products caught up.
+differ. Dropping rows would make position mean something different in every file. It is the
+convention `compute_isc` already followed before the resting-state products caught up.
 
 The failure these guard against is silent: before, a rejected channel carried an ordinary
 looking correlation into `fc.tsv`, the figures drew it like any other, and a group analysis
@@ -164,8 +162,7 @@ def test_naming_a_pair_or_either_wavelength_marks_both(label):
 
     Naming only 760 used to mark only 760, so after the conversion the pair's HbO was
     rejected and its HbR was not, and every HbR product kept a channel the operator had
-    thrown out. Homer3 has the same rule (`hmrR_PruneChannels.m`: if one wavelength of a
-    channel is bad, both are marked).
+    thrown out.
     """
     assert _expand_bad_pairs(_od(), [label]) == ["S2_D2 760", "S2_D2 850"]
 

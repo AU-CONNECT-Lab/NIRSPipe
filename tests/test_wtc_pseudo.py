@@ -96,8 +96,7 @@ def _half_outside_the_cone():
 
 
 def test_the_cone_is_masked_by_default():
-    """The padded half is dropped without being asked for. The default flipped on
-    2026-09-10; this used to assert the other way and was not updated with it."""
+    """The padded half is dropped without being asked for."""
     df = wtc_band_mean(_result({"A": _half_outside_the_cone()}), 0.06, 0.15)
     assert df["coherence"].iloc[0] == pytest.approx(0.5)
 

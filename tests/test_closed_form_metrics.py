@@ -265,8 +265,8 @@ def test_a_flat_recording_has_no_threshold_and_censors_nothing():
 def test_a_montage_with_no_long_channels_falls_back_to_all_and_says_so():
     """The label is printed on the carpet and the trace, and stored in the censor section.
     A fallback that kept reporting "long" would make a run measured over every channel look
-    comparable with one measured over the long ones, which H7 in the method note says it is
-    not: on the hyper montage `all` is 40 channels where `long` is 22.
+    comparable with one measured over the long ones, when the two sets differ in size and in
+    what they see.
     """
     short_only = synth_raw("01", "rest", duration=60.0, n_long_pairs=0,
                            bad_pair=None, motion_onset=None)

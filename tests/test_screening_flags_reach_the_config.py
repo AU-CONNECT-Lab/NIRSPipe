@@ -9,7 +9,7 @@ no-op when its default is None, and a `TypeError` on every run when it is not.
 Both happened. `--psp-threshold` sat in the job-database call from the start and was a
 no-op whenever it was passed; `--min-good-frac` was added beside it and inherited that; then
 `--screen-scope`, whose default is a string rather than None, turned the latent version into
-an unconditional crash on 2026-09-09.
+an unconditional crash.
 
 `test_cli_dispatch_surface.py` cannot see this. That one compares a command's parsed dests
 against its own signature, and both calls here are internal.

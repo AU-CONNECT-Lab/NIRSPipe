@@ -111,9 +111,9 @@ def test_the_written_residual_is_in_the_datas_own_space(haemo):
 
     Under ar1 nilearn subtracts the whitened design's fit, which is roughly the fit
     differenced, so the confounds stay in the file. The exact comparison is what makes this
-    a guard: this fixture shows the defect at 0.019 residual SD, where real recordings show
-    2.95, because its rho is 0.4 against 0.73 and up, and a one-column drift basis explains
-    almost nothing. An assertion on the size would pass here and prove nothing.
+    a guard: how large the discrepancy grows depends on the autocorrelation and on how much
+    the design explains, and this fixture is mild on both counts, so an assertion on the
+    size would pass here and prove nothing.
     """
     for model in ("ols", "ar1"):
         _, est, dm, resid = run_glm_pipeline(haemo, noise_model=model, **FIT)

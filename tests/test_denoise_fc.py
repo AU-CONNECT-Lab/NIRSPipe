@@ -6,8 +6,8 @@ recipe there is -- had no route through the package that did not also run a GLM 
 for. These tests pin that route, and they pin which signal the correlation was taken on,
 because that is the only thing distinguishing the two ways of reaching it.
 
-The regression half had no coverage at all before this file; it arrived in 0.22.0 as
-`_has_confounds` and nothing reached it.
+The regression half had no coverage at all before this file: `_has_confounds` was there and
+nothing reached it.
 """
 
 import json

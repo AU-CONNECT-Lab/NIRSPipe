@@ -1,8 +1,8 @@
 """What happens when several workers process one dataset into one output tree at once.
 
 Two fixes were made for this and neither had been tested under load, which is the whole point
-of this file: a 23-dyad run is roughly a day and a half, and a sharing violation or a locked
-database at hour eighteen costs more than these tests do.
+of this file: a batch runs for hours, and a sharing violation or a locked database near the
+end of one costs more than these tests do.
 
 Real processes, not threads. The Windows failure these guard against is a file being opened
 for writing by one process while another holds it, which threads inside one interpreter do not

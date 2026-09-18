@@ -544,12 +544,3 @@ def test_a_single_chromophore_run_stacks_only_that_one(dyad, tmp_path):
     html = _page(dyad, tmp_path, ("hbo",))
     assert 'id="wtc-chan-img-0"' in html
     assert 'id="wtc-chan-img-1"' not in html
-
-
-# `test_the_condition_images_line_up_by_window_across_chromophores` was removed here. It
-# pinned `_COND_IMGS[chroma][i]` against the card `cond-matrix-<i>`, a positional pairing
-# that existed while every condition shared the run's page. Conditions are their own pages
-# now and neither name is emitted, so the test could only fail. What it was protecting, that
-# both chromophores reach every condition's figures, is covered on the built pages by
-# `test_hyper_page_contract.py`: `test_every_pairing_of_the_axis_is_present_at_both_levels`
-# and `test_the_two_chromophores_are_two_tables` both run over the condition pages.

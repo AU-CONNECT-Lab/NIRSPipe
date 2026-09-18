@@ -55,8 +55,8 @@ def _run_and_read(bids_dir, out_dir, **overrides):
     finally:
         sys.argv = original
 
-    # sub-01.toml, not sub-01_<timestamp>.toml: the stamp was dropped in 0.19.0 and a
-    # re-run now overwrites the record
+    # sub-01.toml, not sub-01_<timestamp>.toml: the record carries no stamp, so a re-run
+    # overwrites it
     record = next((out_dir / "sub-01" / "logs").glob("sub-01*.toml"))
     return tomllib.loads(record.read_text())
 

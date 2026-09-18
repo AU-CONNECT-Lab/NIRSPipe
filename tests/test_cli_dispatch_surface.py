@@ -6,10 +6,9 @@ command's function grew a parameter for it. The failure is a `TypeError` on the 
 invocation and nothing else: the flag parses, the help lists it, the parser tests pass, and
 the command dies the moment somebody runs it.
 
-That is exactly what happened on 2026-09-09. `--min-good-frac` went into the shared
-screening block and broke `fnirs-qc prep-raw` and `fnirs-qc hyper-raw`, which no test
-invoked through `main`. This file is the guard, and it is a signature comparison rather than
-a run so it stays fast and needs no data.
+It has happened: a flag added to the shared screening block broke `fnirs-qc prep-raw` and
+`fnirs-qc hyper-raw`, which no test invoked through `main`. This file is the guard, and it is
+a signature comparison rather than a run so it stays fast and needs no data.
 """
 
 import importlib

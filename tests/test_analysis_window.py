@@ -10,7 +10,6 @@ that is too high by an amount that grows as the window shortens, and nothing rai
 `window_result` against the cone it must carry rather than recompute.
 """
 
-from types import SimpleNamespace
 
 import numpy as np
 import pytest

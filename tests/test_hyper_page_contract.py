@@ -285,7 +285,7 @@ CAVEAT = "Four to six cycles is the usual minimum"
 
 
 @pytest.mark.parametrize("window, band_fmin, expected", [
-    ((3580.0, 3880.0), 0.06, 18.0),      # d01's conversation as it is run
+    ((3580.0, 3880.0), 0.06, 18.0),      # a 300 s block against the default band floor
     ((3580.0, 3880.0), 0.01, 3.0),       # the same block with the band lowered
     ((0.0, 900.0), 0.06, 54.0),
     ((0.0, 60.0), 0.02, 1.2),

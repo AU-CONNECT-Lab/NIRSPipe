@@ -6,10 +6,9 @@ it afterwards, and switching off pycwt's on-disk cache, which is keyed on the wa
 but not on the seed and would otherwise answer with a curve computed under unknown settings.
 
 Seeding once rather than per pair is deliberate and is what the first two tests below pin.
-One seed reused for every pair hands nearly identical surrogates to channels with similar
-autocorrelation (measured: 1.000 correlation between AR1 coefficients of 0.30 and 0.35),
-which would turn the Monte Carlo error into a bias shared by the whole montage instead of
-noise that averages out across channels.
+One seed reused for every pair hands all but identical surrogates to channels with similar
+autocorrelation, which would turn the Monte Carlo error into a bias shared by the whole
+montage instead of noise that averages out across channels.
 
 pycwt's own determinism given a seeded RNG is verified by hand, not here: 300 surrogates
 per pair is far too slow for a suite. These assert our half of the contract.

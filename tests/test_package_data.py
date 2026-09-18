@@ -1,17 +1,15 @@
 """The `package-data` globs against what is actually in the package directory.
 
 Nothing currently depends on this list. setuptools defaults `include-package-data` to true
-under a pyproject build, and a build from this git working tree carries every tracked file
-inside the package whether or not a glob names it: verified on 2026-09-12 by building an
-sdist and a wheel with `qc/templates/*.css` removed from the list, and finding the three
-sheets in both. An untracked file matching no glob is left out of the wheel, which is the
-other half of the same check.
+under a pyproject build, and a build from a git working tree carries every tracked file
+inside the package whether or not a glob names it, so an incomplete list ships correctly
+anyway. An untracked file matching no glob is left out of the wheel, which is the other half
+of the same behaviour.
 
 So the list is what holds when that implicit behaviour does not: a build from an exported
-tree with no VCS, a different backend, `include-package-data` turned off. It was already
-incomplete when this was written (the three sheets), which is the failure shape worth
-pinning: a glob list nobody reads drifts from the directory it describes, and no build
-says so.
+tree with no VCS, a different backend, `include-package-data` turned off. That is the
+failure shape worth pinning: a glob list nobody reads drifts from the directory it
+describes, and no build says so.
 """
 
 import glob

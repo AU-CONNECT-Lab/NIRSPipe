@@ -1,9 +1,9 @@
 """Where a group's outputs land on disk.
 
 A subject owns a folder; a group did not, and wrote its tables and reports loose in the
-derivatives root instead. A study of 25 dyads over 5 tasks put two thousand files there,
-between the reader and the subject folders. These pin the folder, not the filenames, which
-did not change.
+derivatives root instead. A study of any size puts thousands of files there, between the
+reader and the subject folders. These pin the folder, not the filenames, which did not
+change.
 """
 
 import pandas as pd
@@ -64,7 +64,7 @@ def test_a_subject_folder_is_named_the_same_way_from_either_form(tmp_path):
 
 
 def test_the_raw_qc_report_lands_in_the_subject_folder(tmp_path):
-    """It used to sit loose in the root, which for 23 dyads is 230 files beside the study ones."""
+    """It used to sit loose in the root, one file per run beside the study's own."""
     from fnirs_pipe.qc.subject.prep_raw_report import build_prep_raw_report
 
     out = subject_report_dir(tmp_path, "01") / "sub-01_task-hold_desc-raw_nirs.html"

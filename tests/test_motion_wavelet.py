@@ -13,13 +13,12 @@ reference implementation rather than decided here, and either one changes result
            IQR taken per chunk. The reference that came from stored its coefficients as
            shift branches, so a chunk there was the whole recording seen through one
            phase; SWT arrays are time-ordered, so a chunk here was a time window instead.
-           Molavi 2012 estimates one distribution per level over the entire time span and
-           names that requirement as the reason the method cannot run online, so the split
-           is gone. _filter_blocked keeps the old behaviour so the bench can measure what
-           the change cost or bought.
+           The method is defined over one distribution per level across the entire time
+           span, so the split is gone. _filter_blocked keeps the old behaviour so the bench
+           can measure what the change cost or bought.
   level    Used to be fixed at 4, reaching scales of roughly 0.2 to 1.6 s at 10 Hz, so a
            baseline shift was never reached. The depth now follows the recording length and
-           reaches about 25 s. Molavi 2012 also picks which of those levels to clean by
+           reaches about 25 s. The reference also picks which of those levels to clean by
            contamination; _filter_level_pick shows why that rule does not survive the move
            to SWT, and the bench keeps it so the decision is not re-litigated from scratch.
 
@@ -179,7 +178,6 @@ def test_the_spike_is_at_least_halved():
     win = slice(int((SPIKE_T - 2) * SFREQ), int((SPIKE_T + 2) * SFREQ))
     before = np.abs(dirty[win] - clean[win]).max()
     after = np.abs(_corrected(dirty)[win] - clean[win]).max()
-    # measured at 0.31 for every configuration in the bench, blocked or not
     assert after < 0.5 * before
 
 
@@ -188,7 +186,6 @@ def test_an_artifact_free_stretch_is_not_rewritten():
     dirty, clean = _od_trace()
     quiet = slice(int(40 * SFREQ), int(100 * SFREQ))
     residual = np.std(_corrected(dirty)[quiet] - clean[quiet])
-    # measured at 0.017 for every configuration in the bench, blocked or not
     assert residual < 0.1 * np.std(clean[quiet])
 
 
@@ -254,13 +251,13 @@ def test_wavelet_output_is_stamped_motcorrected():
 # ---- Bench for the two inherited choices ----
 
 def _filter_level_pick(coeffs, iqr_factor: float, signal_length: int):
-    """Molavi 2012's level selection, kept as the counterexample that it does not port.
+    """The inherited level selection, kept as the counterexample that it does not port.
 
-    The paper cleans only the levels whose contamination count is at or above the 90th
-    percentile. Under its own decimated transform that count is largely a proxy for how
-    many coefficients a level holds, which halves as levels coarsen. SWT gives every level
-    the same length, so the count instead ranks levels by how heavy-tailed the physiology
-    is there, and it picks the coarsest level, where no artifact lives at all.
+    It cleans only the levels whose contamination count is at or above the 90th percentile.
+    Under a decimated transform that count is largely a proxy for how many coefficients a
+    level holds, which halves as levels coarsen. SWT gives every level the same length, so
+    the count instead ranks levels by how heavy-tailed the physiology is there, and it picks
+    the coarsest level, where no artifact lives at all.
     """
     cAf = coeffs[0][0].copy()
     cleaned, eta = [], []

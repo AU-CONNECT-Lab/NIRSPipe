@@ -1,10 +1,9 @@
 """Post-processing runs on this subject's own derivatives, and nothing else.
 
-The BIDS layout is built over the whole output directory, so every nested derivative
-tree under it gets indexed too. On a real run that meant sixteen unrelated trees under
-output/pipeline_comparision/ were reprocessed as if they were this subject: post ran
-seventeen times and the last unrelated file won. Nothing failed, and the outputs were
-wrong.
+The BIDS layout is built over the whole output directory, so every nested derivative tree
+under it gets indexed too. An output directory holding other trees therefore had each of
+them reprocessed as if it were this subject: post ran once per tree and the last unrelated
+file won. Nothing failed, and the outputs were wrong.
 
 The layout and run_post are faked here. What is under test is the file selection, and a
 real layout would make the nested tree hard to construct while proving nothing extra.

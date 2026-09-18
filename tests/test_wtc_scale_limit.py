@@ -6,8 +6,8 @@ risk: it is safe only because the scales it picks land on pycwt's own grid, and 
 margin is wider than the boxcar `wct` smooths across scales with.
 
 Both halves have already been wrong once. The first version anchored the grid at `2 * dt`
-where pycwt anchors it at `2 * dt / flambda`, which shifted every frequency and moved band
-means by up to 1.2e-2. Nothing failed; the numbers were just quietly different. These tests
+where pycwt anchors it at `2 * dt / flambda`, which shifted every frequency and moved the
+band means with it. Nothing failed; the numbers were just quietly different. These tests
 compare against the unrestricted transform so that cannot happen silently again.
 """
 

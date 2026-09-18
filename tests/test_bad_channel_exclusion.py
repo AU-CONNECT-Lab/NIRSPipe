@@ -74,11 +74,9 @@ def test_the_pca_strategy_is_refused_rather_than_quietly_averaged(haemo):
     past the parser's own choices. Averaging instead of what was asked for would put a
     different regressor in the design matrix than the run record says ran.
 
-    It went because no reference implementation regresses short channels on a principal
-    component, and because PC1 weights by variance: measured on three short channels where
-    one carried a rhythm of its own at 100x the amplitude, PC1 correlated 1.000 with that
-    one channel and 0.009 with what the three shared, where the mean stays diluted by the
-    channel count."""
+    PC1 weights by variance, so one short channel carrying a rhythm of its own dominates the
+    component while the mean stays diluted by the channel count: the two are not variants of
+    one regressor, and substituting either for the other is a different model."""
     with pytest.raises(ValueError, match="must be 'mean'"):
         _short_channel_regressors(haemo, "pca")
 

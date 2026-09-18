@@ -2,7 +2,6 @@
 
 import mne
 import numpy as np
-import pytest
 
 from fnirs_pipe.qc.figures.subject.carpet_compare import carpet_compare_figure
 
