@@ -10,7 +10,8 @@ import json
 import pandas as pd
 import pytest
 
-from fnirs_pipe.pipeline.glm import _entity_prefix, _save_glm_outputs
+from fnirs_pipe.exceptions import StageError
+from fnirs_pipe.pipeline.glm import _entity_prefix, _save_glm_outputs, compute_contrasts
 
 PREPROC = "/out/sub-01/nirs/sub-01_task-tapping_desc-preproc_nirs.snirf"
 
@@ -82,6 +83,34 @@ def test_contrasts_are_written_with_the_same_prefix(tmp_path, design_matrix):
 
     frame = pd.read_csv(tmp_path / "sub-01_task-tapping_contrasts.csv")
     assert frame["contrast"].unique().tolist() == ["tapping-rest"]
+
+
+# ---- contrast vectors ----
+
+class _RecordingGLM:
+    """Records the vector it was handed; mne-nirs takes one value per design column."""
+
+    def __init__(self):
+        self.vectors = []
+
+    def compute_contrast(self, contrast, contrast_type=None):
+        self.vectors.append(list(contrast))
+        return _FakeContrast(["S1_D1 hbo"])
+
+
+def test_named_weights_become_a_vector_over_the_design_columns():
+    glm = _RecordingGLM()
+    design = pd.DataFrame({"left": [], "right": [], "drift_1": [], "constant": []})
+
+    compute_contrasts(glm, {"left_minus_right": {"left": 1.0, "right": -1.0}}, design)
+
+    assert glm.vectors == [[1.0, -1.0, 0.0, 0.0]]
+
+
+def test_a_condition_the_design_lacks_is_refused():
+    design = pd.DataFrame({"left": [], "constant": []})
+    with pytest.raises(StageError, match="typo"):
+        compute_contrasts(_RecordingGLM(), {"c": {"typo": 1.0}}, design)
 
 
 # ---- sidecars ----

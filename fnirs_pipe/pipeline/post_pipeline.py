@@ -3,8 +3,6 @@
 Parameters come from PostConfig, which can be populated from CLI flags or a TOML file.
 All steps within a mode are still individually controllable via PostConfig fields.
 
-With dry_run=True the pipeline writes an inspectable Python script instead of executing.
-
 """
 
 from __future__ import annotations
@@ -18,6 +16,7 @@ import mne.io
 import pandas as pd
 
 from fnirs_pipe.io.auxiliary import find_aux_table
+from fnirs_pipe.io.tables import read_table
 from fnirs_pipe.pipeline.denoise import (
     DEFAULT_FILTER_METHOD,
     DEFAULT_FILTER_ORDER,
@@ -44,7 +43,6 @@ class PostConfig:
     resp_l_freq: float
     resp_h_freq: float
     session: str | None = None
-    dry_run: bool = False
 
     # bandpass filter
     high_pass: float | None = None
@@ -186,28 +184,48 @@ def _warn_lowpass_breaks_whitening(config: PostConfig, mode: Mode) -> None:
     )
 
 
-def _repeat_intervals(raw: mne.io.Raw) -> dict[str, float]:
+def _design_onsets(raw: mne.io.Raw, events: "pd.DataFrame | None") -> dict[str, list]:
+    """Per condition, the onsets the design matrix will be built from.
+
+    ``events`` is the table ``--events-path`` supplied; without one the recording's own
+    annotations are what the design is built from. Reading the wrong one is how a warning
+    ends up naming a condition the model does not contain. Markers of rejected time are
+    dropped either way.
+    """
+    if events is not None:
+        pairs = zip(events["trial_type"].astype(str), events["onset"])
+    else:
+        pairs = zip(raw.annotations.description, raw.annotations.onset)
+    onsets: dict[str, list] = {}
+    for desc, onset in pairs:
+        if str(desc).lower().startswith(("bad", "edge")):
+            continue
+        onsets.setdefault(str(desc), []).append(float(onset))
+    return onsets
+
+
+def _repeat_intervals(raw: mne.io.Raw, events: "pd.DataFrame | None" = None) -> dict[str, float]:
     """Per condition, the longest gap between two of its trials.
 
     That gap is the slowest rhythm the design asks the model to fit, so it is the frequency
     a drift basis has to stay below. Per condition rather than one number for the run: a
     file mixing block markers with stimulus markers has both a slow and a fast rhythm, and
-    which one matters depends on which condition the reader cares about. Annotations that
-    mark rejected time are skipped, and a condition seen once has no interval.
+    which one matters depends on which condition the reader cares about. A condition seen
+    once has no interval.
     """
     import numpy as np
 
     intervals: dict[str, float] = {}
-    for desc in set(raw.annotations.description):
-        if str(desc).lower().startswith(("bad", "edge")):
-            continue
-        onsets = np.sort(raw.annotations.onset[raw.annotations.description == desc])
-        if onsets.size >= 2:
-            intervals[str(desc)] = float(np.max(np.diff(onsets)))
+    for desc, onsets in _design_onsets(raw, events).items():
+        ordered = np.sort(np.asarray(onsets, dtype=float))
+        if ordered.size >= 2:
+            intervals[desc] = float(np.max(np.diff(ordered)))
     return intervals
 
 
-def _warn_drift_absorbs_task(config: PostConfig, raw: mne.io.Raw) -> None:
+def _warn_drift_absorbs_task(
+    config: PostConfig, raw: mne.io.Raw, events: "pd.DataFrame | None" = None,
+) -> None:
     """A drift basis reaching a condition's own rhythm fits that condition away as drift.
 
     The cosine basis spans everything below its cutoff, so the cutoff has to sit below the
@@ -217,7 +235,8 @@ def _warn_drift_absorbs_task(config: PostConfig, raw: mne.io.Raw) -> None:
     if config.drift_model != "cosine" or config.drift_high_pass is None:
         return
 
-    spanned = {name: gap for name, gap in _repeat_intervals(raw).items()
+    intervals = _repeat_intervals(raw, events)
+    spanned = {name: gap for name, gap in intervals.items()
                if gap > 0 and config.drift_high_pass >= 1.0 / gap}
     if not spanned:
         return
@@ -229,7 +248,7 @@ def _warn_drift_absorbs_task(config: PostConfig, raw: mne.io.Raw) -> None:
         "sub-%s | --drift-high-pass %g Hz spans the rhythm of %d of %d conditions, so the "
         "drift basis will absorb them: %s. Use %.5g Hz or lower to clear the slowest, or "
         "drop the conditions you are not modelling.",
-        config.subject, config.drift_high_pass, len(spanned), len(_repeat_intervals(raw)),
+        config.subject, config.drift_high_pass, len(spanned), len(intervals),
         named, 1.0 / (2.0 * slowest),
     )
 
@@ -302,7 +321,10 @@ def run_post(
         logger.info("sub-%s | GLM (%s / %s)", config.subject, config.hrf_model, config.noise_model)
         _warn_unmatched_design_band(config)
         _warn_lowpass_breaks_whitening(config, mode)
-        _warn_drift_absorbs_task(config, result)
+        # the same table the design will be built from, so the warning cannot name a
+        # condition the model does not carry
+        design_events = read_table(config.events_path) if config.events_path else None
+        _warn_drift_absorbs_task(config, result, design_events)
         _, glm_est, dm, raw_resid = run_glm_pipeline(
             result,
             stim_dur=config.stim_dur,

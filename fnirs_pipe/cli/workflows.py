@@ -57,7 +57,6 @@ def _build_post_config(subject: str, session: str | None, args: dict[str, Any], 
         resp_l_freq=pick("resp_l_freq"),
         resp_h_freq=pick("resp_h_freq"),
         session=session,
-        dry_run=args.get("dry_run", False),
         high_pass=pick("high_pass"),
         low_pass=pick("low_pass"),
         filter_method=pick("filter_method", default=DEFAULT_FILTER_METHOD),
@@ -206,6 +205,14 @@ def run_participant_level(args: dict[str, Any]) -> None:
                              if args.get("mode") else None),
             )
             write_run_script(args, subject, sub_timestamp, output_dir, sub_dir=sub_dir)
+
+            # The record and the script are the whole point of a dry run, and both are on
+            # disk by here. Stopping before log_run_start keeps the database free of runs
+            # that never happened.
+            if args.get("dry_run"):
+                logger.info("sub-%s | dry run: wrote the record and the script, processed "
+                            "nothing", subject)
+                continue
 
             _jdb.log_run_start(
                 db_path, execution_id, subject,

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import mne
 import numpy as np
+import pandas as pd
 import pytest
 
 from fnirs_pipe.pipeline.post_pipeline import (
@@ -253,3 +254,23 @@ def test_the_gui_field_takes_what_the_cli_takes():
         except argparse.ArgumentTypeError:
             cli = False
         assert browser == cli, f"{value!r}: page says {browser}, CLI says {cli}"
+
+
+# ---- which events the warning reads ----
+
+def test_an_events_table_overrides_the_annotations():
+    """--events-path is what the design is built from, so it is what the warning measures."""
+    raw = _raw_with(["15.0", "15.0", "a", "a"], [0.0, 2900.0, 0.0, 30.0])
+    events = pd.DataFrame({"trial_type": ["a", "a"], "onset": [0.0, 30.0],
+                           "duration": [5.0, 5.0]})
+    assert _repeat_intervals(raw, events) == {"a": pytest.approx(30.0)}
+
+
+def test_the_warning_ignores_a_marker_the_design_leaves_out(caplog):
+    raw = _raw_with(["15.0", "15.0", "a", "a"], [0.0, 2900.0, 0.0, 30.0])
+    events = pd.DataFrame({"trial_type": ["a", "a"], "onset": [0.0, 30.0],
+                           "duration": [5.0, 5.0]})
+    with caplog.at_level("WARNING"):
+        _warn_drift_absorbs_task(_config(drift_high_pass=0.001), raw, events)
+    assert "15.0" not in caplog.text
+    assert caplog.text == ""

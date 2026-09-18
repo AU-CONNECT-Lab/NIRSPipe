@@ -263,9 +263,29 @@ def fit_glm(
 def compute_contrasts(
     glm_est: Any,
     contrast_def: dict[str, Any],
+    design_matrix: pd.DataFrame,
 ) -> dict[str, Any]:
-    from mne_nirs.statistics import compute_contrast
-    return {name: compute_contrast(glm_est, weights) for name, weights in contrast_def.items()}
+    """Each ``{condition: weight}`` mapping as a weight vector over the design's columns.
+
+    ``{"left_minus_right": {"Tapping_Left": 1, "Tapping_Right": -1}}`` on a design carrying
+    ``[Tapping_Left, Tapping_Right, constant]``  ->  ``[1, -1, 0]``, then the fit's own
+    contrast of that vector.
+
+    A name the design does not carry raises rather than weighting nothing: a contrast file
+    is written by hand against condition labels, and a typo there would otherwise be a
+    silently empty contrast that still lands in `contrasts.csv`.
+    """
+    columns = list(design_matrix.columns)
+    results = {}
+    for name, weights in contrast_def.items():
+        missing = sorted(set(weights) - set(columns))
+        if missing:
+            raise StageError(
+                f"contrast {name!r} names {missing}, which the design matrix does not "
+                f"carry. Its columns are {columns}")
+        vector = np.array([float(weights.get(column, 0.0)) for column in columns])
+        results[name] = glm_est.compute_contrast(vector)
+    return results
 
 def run_glm_pipeline(
     haemo: mne.io.Raw,
@@ -351,7 +371,7 @@ def run_glm_pipeline(
           aux_regressors=sorted(k for k in confound_cols if k.startswith("aux_")),
           **drift_params)
 
-    contrasts = compute_contrasts(glm_est, contrast_def) if contrast_def else None
+    contrasts = compute_contrasts(glm_est, contrast_def, dm) if contrast_def else None
 
     if output_dir:
         _save_glm_outputs(glm_est, dm, Path(output_dir), contrasts=contrasts,
