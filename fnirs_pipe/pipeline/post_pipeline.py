@@ -60,7 +60,9 @@ class PostConfig:
     # GLM (glm mode)
     stim_dur:        float | None          = None
     hrf_model:       str | None            = None
-    noise_model:     str | None            = None
+    # every mode fits it now, so the library carries the default too rather than leaving a
+    # direct caller to pass None into nilearn. "auto" is an AR order of 4x the sampling rate
+    noise_model:     str                   = "auto"
     drift_model:     str | None            = None
     drift_high_pass: float | None          = None
     drift_order:     int | None            = None
@@ -134,24 +136,6 @@ def _warn_unmatched_design_band(config: PostConfig) -> None:
         "mildly for short blocks and severely for long ones. Use --drift-model cosine with "
         "--drift-high-pass %g to match.",
         config.subject, config.high_pass, config.drift_model or "none", config.high_pass,
-    )
-
-
-def _warn_noise_model_unused(config: PostConfig, mode: str) -> None:
-    """denoise and rest fit ordinary least squares whatever was asked for.
-
-    Neither reports a statistic, so the noise model has nothing to calibrate there, and both
-    call the regression with `ols` directly. A flag that is accepted and then ignored is
-    worse than one that is refused: the run's parameters would name a model its output was
-    not produced with.
-    """
-    if config.noise_model is None or mode == "glm":
-        return
-    logger.warning(
-        "sub-%s | --noise-model %s is ignored in --mode %s, which fits ordinary least "
-        "squares: it reports no statistic, so there is nothing for a noise model to "
-        "calibrate. The residual it writes says `ols`.",
-        config.subject, config.noise_model, mode,
     )
 
 
@@ -297,9 +281,10 @@ def run_post(
     fc_seed: dict = {}
     fc_roi: dict = {}
     raw_resid = None  # set by the glm/rest/denoise branches
-    _warn_noise_model_unused(config, mode)
     if mode == "glm":
-        missing = [f for f in ("hrf_model", "noise_model", "drift_model") if getattr(config, f) is None]
+        # noise_model is not here: it has a default, unlike these two, which are design
+        # choices with no safe one
+        missing = [f for f in ("hrf_model", "drift_model") if getattr(config, f) is None]
         if missing:
             raise ValueError(f"GLM mode requires: {', '.join('--' + f.replace('_', '-') for f in missing)}")
         if config.events_path is not None and config.stim_dur is not None:
@@ -342,7 +327,7 @@ def run_post(
         rest_glm_kwargs = dict(
             stim_dur=None,
             hrf_model="spm",
-            noise_model="ols",
+            noise_model=config.noise_model,
             drift_model=config.drift_model,
             high_pass=config.drift_high_pass,
             drift_order=config.drift_order,
@@ -414,7 +399,7 @@ def run_post(
                 result,
                 stim_dur=None,
                 hrf_model="spm",
-                noise_model="ols",
+                noise_model=config.noise_model,
                 drift_model=config.drift_model or "none",
                 high_pass=config.drift_high_pass,
                 drift_order=config.drift_order,

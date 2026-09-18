@@ -187,26 +187,27 @@ def test_the_default_does_not_shadow_a_config_file():
     from fnirs_pipe.cli import workflows
     from fnirs_pipe.cli.run import _build_parser
 
-    src = inspect.getsource(workflows)
-    # scoped to glm: denoise and rest fit ols whatever is asked, so defaulting it everywhere
-    # would name a model in a run's parameters that its output was not produced with
-    assert 'default="auto" if _v(args.get("mode")) == "glm" else None' in src
+    assert 'noise_model=pick("noise_model", default="auto")' in inspect.getsource(workflows)
     action = next(a for a in _build_parser()._actions
                   if "--noise-model" in getattr(a, "option_strings", []))
     assert action.default is None, "a default here would make the TOML unreachable"
 
 
 
-def test_ols_stays_the_choice_where_nothing_is_tested(monkeypatch):
-    """denoise and rest report no statistic, so a noise model cannot affect a p value there,
-    and both hard-code ols. This pins that: the default is for glm mode, which is the mode
-    whose whole output is inference."""
+def test_every_mode_fits_the_model_that_was_asked_for():
+    """denoise and rest used to hard-code ols, which made `--noise-model` a flag they
+    accepted and dropped. They report no statistic, so nothing there needs calibrating, and
+    it was measured that the choice moves their coherence by 0.0034 against a 0.0181 window
+    placement noise. That is a reason exposing it is safe, not a reason to hide it: a
+    confound regression under autocorrelated noise is a place where someone may reasonably
+    want generalised least squares, and the package has no standing to refuse."""
     import inspect
 
     from fnirs_pipe.pipeline import post_pipeline
 
     src = inspect.getsource(post_pipeline.run_post)
-    assert src.count('noise_model="ols"') >= 2
+    assert 'noise_model="ols"' not in src
+    assert src.count("noise_model=config.noise_model") >= 3
 
 
 def test_the_gui_field_takes_what_the_cli_takes():
@@ -238,23 +239,3 @@ def test_the_gui_field_takes_what_the_cli_takes():
         except argparse.ArgumentTypeError:
             cli = False
         assert browser == cli, f"{value!r}: page says {browser}, CLI says {cli}"
-
-
-def test_a_noise_model_that_will_be_ignored_is_said_so(caplog):
-    """denoise and rest call the regression with ols directly. Accepting the flag and
-    dropping it silently is the shape of defect this package keeps finding in itself, so it
-    warns; it does not refuse, because a caller sweeping several modes with one config file
-    has a reason to leave the flag set."""
-    import logging
-
-    from fnirs_pipe.pipeline.post_pipeline import _warn_noise_model_unused
-
-    with caplog.at_level(logging.WARNING):
-        _warn_noise_model_unused(_config(noise_model="auto"), "denoise")
-    assert "ignored in --mode denoise" in caplog.text
-
-    caplog.clear()
-    with caplog.at_level(logging.WARNING):
-        _warn_noise_model_unused(_config(noise_model="auto"), "glm")
-        _warn_noise_model_unused(_config(noise_model=None), "rest")
-    assert "ignored" not in caplog.text
