@@ -140,3 +140,33 @@ def test_a_zero_duration_trigger_runs_to_the_end_of_the_recording(_no_offset):
     """Many systems write triggers with no duration, which is why the window rule exists."""
     raw = _FakeRaw([_m("game1", 100.0, 0.0)], duration=1000.0)
     assert condition_coverage(raw, [("game1", 100.0, 400.0)]) == {"game1": 1.0}
+
+
+# ---- the refusal cannot see every repeated cohort, so it says when it could not look ----
+
+def test_any_warns_when_every_subject_id_is_unique(caplog):
+    """The real cohort this null was built for defeats the refusal.
+
+    BIDS puts one person under one `sub-` label and separates visits with `ses-`, and the
+    pairs table takes a `session` column for exactly that. A table that instead bakes the
+    visit into the subject id, `sub-p1d01` and `sub-p1d03` for one person, is
+    indistinguishable from a table of strangers. Nothing on disk settles it, so the check
+    has not passed there, it has had nothing to test, and it has to say so.
+    """
+    with caplog.at_level("WARNING"):
+        partner_pool(_cohort(n_groups=4), "d01", "full", pool="any")
+    assert "could not be checked" in caplog.text
+    assert "session column" in caplog.text
+
+
+def test_the_idiomatic_encoding_still_gets_a_refusal():
+    """Same people, one stable subject id per person: the refusal has something to test."""
+    with pytest.raises(StageError, match="pair somebody with themselves"):
+        partner_pool(_cohort(repeated_people=True), "d01", "full", pool="any")
+
+
+def test_no_warning_where_the_refusal_had_something_to_test(caplog):
+    with caplog.at_level("WARNING"):
+        with pytest.raises(StageError):
+            partner_pool(_cohort(repeated_people=True), "d01", "full", pool="any")
+    assert "could not be checked" not in caplog.text

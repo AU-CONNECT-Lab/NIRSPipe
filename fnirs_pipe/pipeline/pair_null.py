@@ -63,6 +63,7 @@ def partner_pool(
         raise StageError(f"group {group_id!r} has no task {task!r} in the pairs table")
     if pool == "any":
         _refuse_repeated_subjects(same_task, task)
+        _warn_unverifiable_pool(same_task)
         own = {entry.subject_id for entry in same_task[group_id]}
         return [entry for gid, members in same_task.items() if gid != group_id
                 for entry in members if entry.subject_id not in own]
@@ -100,6 +101,31 @@ def _refuse_repeated_subjects(same_task: dict, task: str) -> None:
             "A cohort of the same people recorded repeatedly has to use the default "
             "'position' pool, where a member is only ever replaced by another group's "
             "member at the same index.")
+
+
+def _warn_unverifiable_pool(same_task: dict) -> None:
+    """Say out loud what `any` rests on, when the table cannot be read to check it.
+
+    The refusal above catches a cohort of repeated people only where the same person keeps
+    one ``subject_id`` across groups, which is how BIDS encodes it: a stable ``sub-`` label
+    and a ``ses-`` label per visit, and ``parse_group_csv`` takes a ``session`` column for
+    exactly that. A table that instead bakes the visit into the subject id, ``sub-p1d01``
+    and ``sub-p1d03`` for one person, looks identical to a table of strangers, and nothing
+    on disk distinguishes them. So where every id is unique the check has not passed, it has
+    had nothing to test, and the difference matters: under `any` a repeated person would be
+    ranked against another recording of themselves.
+    """
+    ids = [e.subject_id for members in same_task.values() for e in members]
+    if len(set(ids)) != len(ids):
+        return          # the refusal above already had something to test
+    logger.warning(
+        "'--wtc-pair-null-pool any' assumes the members of a group are interchangeable and "
+        "that no person appears in more than one group. Every subject id here is unique, so "
+        "that could not be checked: a cohort of the same people recorded repeatedly looks "
+        "the same as a cohort of strangers when the visit is baked into the subject id. If "
+        "these %d groups are repeat visits by the same people, use the default 'position' "
+        "pool, or give the pairs table a stable subject_id and a session column.",
+        len(same_task))
 
 
 def real_table_params(data_dir: Path, stem: str) -> dict:
