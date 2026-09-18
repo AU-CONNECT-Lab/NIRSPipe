@@ -831,10 +831,13 @@ def _section_stage_carpets(
     subject: str,
     errors: list,
     figures_dir: Path,
+    gvtd_blocks: "list | None" = None,
+    sep_bands=None,
 ) -> dict:
-    """One carpet panel per chromophore, over a shared GVTD row.
+    """The denoised carpet with its two trace rows.
 
-    ``stages`` is what :func:`_carpet_stages` returns.
+    ``stages`` is what :func:`_carpet_stages` returns. ``raw_gvtd`` is the motion-corrected
+    recording the motion traces come from and ``gvtd_blocks`` how they split by channel set.
     """
     panels = []
     stages, reference = stages
@@ -842,6 +845,7 @@ def _section_stage_carpets(
         return {"carpet_panels": panels}
     with _guard("Stage carpet", errors, subject):
         fig = carpet_compare_figure(stages, roi_map=roi_map, raw_gvtd=raw_gvtd,
+                                    gvtd_blocks=gvtd_blocks, sep_bands=sep_bands,
                                     xlim=span, reference=reference)
         if fig is not None:
             path, h = _save_plotly_html(fig, figures_dir / f"carpet_stage{suffix}.html")
@@ -1710,9 +1714,18 @@ def build_subject_report(
                                        l_freq=l_freq, h_freq=h_freq,
                                        raw_errts=raw_errts, psd_stages=psd_stages,
                                        record=record, sep_bands=sep_bands, mode=mode)
+    # the corrected recording where there is one: this carpet is post-correction, so a trace
+    # over the uncorrected data would date from before it
+    raw_gvtd_drawn = raw_gvtd
+    if raw_after_motion is not None:
+        present = [c for _, names in gvtd_blocks for c in names
+                   if c in raw_after_motion.ch_names]
+        if present:
+            raw_gvtd_drawn = raw_after_motion.copy().pick(present)
     carpet_stages = _carpet_stages(raw_haemo, psd_stages)
-    carpet_vars = _section_stage_carpets(carpet_stages, roi_map, raw_gvtd, None, "",
-                                         subject, errors, figures_dir)
+    carpet_vars = _section_stage_carpets(carpet_stages, roi_map, raw_gvtd_drawn, None, "",
+                                         subject, errors, figures_dir,
+                                         gvtd_blocks=gvtd_blocks, sep_bands=sep_bands)
     # the trial window every epoch figure averages over. None on the config means the
     # report's own default, so an unset flag draws exactly what it always drew
     epoch_tmin = _EPOCH_TMIN if getattr(config, "epoch_tmin", None) is None else config.epoch_tmin
@@ -1932,8 +1945,9 @@ def build_subject_report(
                 remake_motion_detail=lambda slug: _condition_motion_detail(
                     motion_det_vars.get("motion_detail_pairs") or [], slug),
                 remake_denoise_carpet=lambda suffix, span: _section_stage_carpets(
-                    carpet_stages, roi_map, raw_gvtd, span, suffix,
-                    subject, errors, figures_dir),
+                    carpet_stages, roi_map, raw_gvtd_drawn, span, suffix,
+                    subject, errors, figures_dir,
+                    gvtd_blocks=gvtd_blocks, sep_bands=sep_bands),
                 # --epoch-single-trial waives the "one row is not a comparison" floor
                 # here as well, for the same reason it waives it on the epoch section
                 remake_trial_qc=lambda suffix, span: _condition_trial_qc(

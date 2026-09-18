@@ -105,3 +105,13 @@ def test_the_stage_row_draws_the_reference_and_the_drawn_stage():
     lines = [t for t in fig.data if t.type == "scatter"]
     assert [t.name for t in lines] == ["desc-preproc", "desc-errts"]
     assert len(_carpets(fig)) == 1
+
+
+def test_the_motion_row_is_one_trace_per_channel_set_with_no_rule():
+    """Long and short measure different depths, so they stay apart; no threshold is drawn."""
+    od = _raw().copy()
+    blocks = [("long", od.ch_names[:4]), ("short", od.ch_names[4:])]
+    fig = carpet_compare_figure([("desc-errts", _raw())], raw_gvtd=od, gvtd_blocks=blocks)
+    lines = [t.name for t in fig.data if t.type == "scatter"]
+    assert lines == ["long", "short"]
+    assert not [sh for sh in fig.layout.shapes if (sh.line or {}).get("dash") == "dash"]
