@@ -7,6 +7,8 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- **A GLM run that low-passes its data is now warned about.** Prewhitening is what makes a t value mean anything on a series sampled far faster than the response, and a low-passed series leaves almost nothing for it to do: the AR model ends up describing the filter instead of the noise, so the residual stays serially correlated and the significance is overstated. Betas are unaffected. `--resample-sfreq` raises the same warning, because resampling anti-aliases at the new Nyquist and so removes the same band under another name
+- **The subject report says how much louder the two ends of a filtered recording are than its middle.** A filter with a low cutoff needs a long impulse response, so its output opens and closes with the filter settling rather than with anything measured, and every figure drawn on a filtered stage had been including that silently. The note gives the ratio and says a detrend does not remove it, since a reader's first instinct is to try one
 - **The separation bands can come from a `--config` TOML** instead of being typed on every command. They have to be the same at preprocessing and at postprocessing, since the record is stamped with them at the first step and every later step reads that stamp, so a montage whose short end does not sit under 10 mm no longer means remembering two numbers at four places. A flag on the command line still overrides the file
 
 ### Changed
@@ -16,6 +18,9 @@ All notable changes to this project will be documented in this file.
 - **A run with non-default separation bands was described with the default ones** in the preprocessing report's channel note, so a montage prepared with a raised short bound was told its channels sat in a gap they were not in
 - **The confound-regression residual was not a residual when an AR noise model was asked for.** `--mode glm` with `--noise-model ar1` and up wrote a file that kept most of the drift and systemic signal the regression had just estimated, because the value it was built from subtracts a differenced copy of the fitted model rather than the model. On a bandpassed recording the written residual came within a quarter of a decibel of the regression's own input, meaning the regression was effectively absent from it. Reported effects were never affected: betas, t values and contrasts are computed elsewhere. `--mode denoise` and `--mode rest` were never affected either, and their output is unchanged to the last bit
 - **A prep-only run's spectrum panel no longer presents its simulated bandpass as a stage the run wrote.** With no filtered file on disk the panel simulates the filter to have something to compare against, and that row had started carrying the same title as a real one
+
+### Removed
+- **The `tables` (PyTables) dependency.** It was carried for an HDF5 write the package no longer performs. Anyone calling `save()` on a returned GLM object themselves will need to install it
 
 ## [0.43.0] - 2026-09-17
 

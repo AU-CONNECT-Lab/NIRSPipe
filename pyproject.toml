@@ -16,7 +16,6 @@ dependencies = [
     "pybids>=0.16",
     "mne-bids>=0.14",
     "h5py>=3.9",          # snirf (HDF5)
-    "tables>=3.8",        # HDF5 backend for mne-nirs glm_est.save()
     "pandas>=2.0",
     "jinja2>=3.1",
     "plotly>=5.18",

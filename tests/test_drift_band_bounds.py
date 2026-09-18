@@ -10,6 +10,7 @@ from fnirs_pipe.pipeline.post_pipeline import (
     PostConfig,
     _repeat_intervals,
     _warn_drift_absorbs_task,
+    _warn_lowpass_breaks_whitening,
     _warn_unmatched_design_band,
 )
 
@@ -106,3 +107,39 @@ def test_the_two_bounds_can_exclude_each_other(caplog):
         _warn_unmatched_design_band(config)            # quiet: 0.01 >= 0.01
         _warn_drift_absorbs_task(config, raw)          # warns: 0.01 >= 0.0083
     assert "absorb" in caplog.text
+
+
+# ---- the high end: a low-pass and an AR noise model do not mix ----
+
+def test_a_low_pass_under_an_ar_model_is_warned_about(caplog):
+    """Measured consequence, so it is not a style note: whitening a low-passed series takes
+    the AR coefficient to the stationarity boundary and leaves the residual as correlated as
+    it started, which moves the t values and not the betas."""
+    import logging
+
+    with caplog.at_level(logging.WARNING):
+        _warn_lowpass_breaks_whitening(_config(noise_model="ar1", low_pass=0.2))
+    assert "--low-pass 0.2 Hz" in caplog.text
+    assert "anti-conservative" in caplog.text
+
+
+def test_resampling_counts_as_a_low_pass(caplog):
+    """It anti-aliases at the new Nyquist, so it empties the same band under another name.
+    The warning has to name the Nyquist, or a reader sees no low-pass in their command."""
+    import logging
+
+    with caplog.at_level(logging.WARNING):
+        _warn_lowpass_breaks_whitening(_config(noise_model="ar1", resample_sfreq=2.0))
+    assert "--resample-sfreq 2 Hz" in caplog.text and "1 Hz" in caplog.text
+
+
+def test_ols_and_an_unfiltered_run_are_both_silent(caplog):
+    """ols does not whiten, so there is nothing for the filter to corrupt, and it is what
+    denoise and rest hard-code. An AR model on unfiltered data is the correct combination."""
+    import logging
+
+    with caplog.at_level(logging.WARNING):
+        _warn_lowpass_breaks_whitening(_config(noise_model="ols", low_pass=0.2))
+        _warn_lowpass_breaks_whitening(_config(noise_model="ar1"))
+        _warn_lowpass_breaks_whitening(_config(noise_model=None, low_pass=0.2))
+    assert "anti-conservative" not in caplog.text

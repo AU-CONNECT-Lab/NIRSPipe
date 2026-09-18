@@ -73,8 +73,9 @@ from fnirs_pipe.qc.common.figure_io import (
     _save_figure_html, _save_multi_fig_html,
     extract_markers, get_channel_pairs,
 )
-from fnirs_pipe.qc.metrics import (CV_PASS, SCI_PASS, gvtd_channel_blocks,
-                                  separation_bands, separation_orphans)
+from fnirs_pipe.qc.metrics import (CV_PASS, EDGE_S, SCI_PASS, edge_to_mid_rms,
+                                  gvtd_channel_blocks, separation_bands,
+                                  separation_orphans)
 from fnirs_pipe.qc.metrics._helpers import bands_from_record
 from fnirs_pipe.qc.figures.common._utils import chunk_annotations
 from fnirs_pipe.qc.figures import (
@@ -1814,6 +1815,22 @@ def build_subject_report(
                                      sqm_label=sqm_label,
                                      sci_threshold=getattr(config, "sci_threshold", SCI_PASS),
                                      psp_threshold=getattr(config, "psp_threshold", None))
+    # No threshold: the ratio is meaningful on every run that filtered, and a cutoff here
+    # would be a number nothing backs. Reported when the run wrote a filtered stage and a
+    # high-pass produced it, since the transient is the low cutoff's doing.
+    if l_freq is not None:
+        filtered = next((r for lab, r in (psd_stages or []) if lab == "desc-filtered"), None)
+        ratio = edge_to_mid_rms(filtered) if filtered is not None else None
+        if ratio is not None:
+            _note(notes, subject,
+                  f"The first and last {EDGE_S:g} s of the filtered recording carry "
+                  f"{ratio:.2f}x the RMS of everything between them. That is the "
+                  f"{l_freq:g} Hz high-pass settling, not signal: a low cutoff needs a long "
+                  f"filter. Every figure drawn on a filtered stage includes it, and a "
+                  f"detrend does not remove it. A GLM run can avoid it by leaving "
+                  f"--high-pass off and giving the low band to --drift-model cosine "
+                  f"instead, which projects rather than filters.")
+
     _note_separation(notes, subject, sqm_vars["sqm"], sqm_vars["channel_rows"],
                      short_channel_requested=bool(getattr(config, "short_channel", None)),
                      orphan_mm=separation_orphans(raw_intensity, sep_bands))

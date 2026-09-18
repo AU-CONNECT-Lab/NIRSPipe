@@ -137,6 +137,43 @@ def _warn_unmatched_design_band(config: PostConfig) -> None:
     )
 
 
+def _warn_lowpass_breaks_whitening(config: PostConfig) -> None:
+    """An AR noise model fitted to low-passed data fits the filter, not the noise.
+
+    Prewhitening estimates the residual's autocorrelation and divides it out, which is what
+    makes a t value mean anything on a series sampled far faster than the response. A
+    low-pass leaves the series almost perfectly predictable from its own past, so the AR
+    coefficient lands at the stationarity boundary, the whitening filter becomes a first
+    difference of a nearly integrated series, and the residual comes out as autocorrelated
+    as it went in. The betas are unaffected; the standard errors are not, and they go the
+    anti-conservative way.
+
+    Resampling counts as a low-pass: it anti-aliases at the new Nyquist, so it removes the
+    same band under another flag's name.
+
+    A warning rather than an error because a caller may want the filtered series for another
+    reason and read the betas only.
+    """
+    if config.noise_model in (None, "ols"):
+        return
+    causes = []
+    if config.low_pass is not None:
+        causes.append(f"--low-pass {config.low_pass:g} Hz")
+    if config.resample_sfreq is not None:
+        causes.append(f"--resample-sfreq {config.resample_sfreq:g} Hz, which anti-aliases "
+                      f"at {config.resample_sfreq / 2:g} Hz")
+    if not causes:
+        return
+    logger.warning(
+        "sub-%s | --noise-model %s is fitted to data the run has low-passed (%s). The AR "
+        "model will fit the filter rather than the noise, leaving the residual serially "
+        "correlated and the t values anti-conservative; betas are unaffected. Drop the "
+        "low-pass on a GLM run, or use --noise-model ols and treat the t values as "
+        "uncalibrated.",
+        config.subject, config.noise_model, " and ".join(causes),
+    )
+
+
 def _repeat_intervals(raw: mne.io.Raw) -> dict[str, float]:
     """Per condition, the longest gap between two of its trials.
 
@@ -250,6 +287,7 @@ def run_post(
             raise ValueError("--events-path and --stim-dur are mutually exclusive")
         logger.info("sub-%s | GLM (%s / %s)", config.subject, config.hrf_model, config.noise_model)
         _warn_unmatched_design_band(config)
+        _warn_lowpass_breaks_whitening(config)
         _warn_drift_absorbs_task(config, result)
         _, glm_est, dm, raw_resid = run_glm_pipeline(
             result,

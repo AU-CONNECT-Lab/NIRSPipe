@@ -16,6 +16,62 @@ from fnirs_pipe.qc.metrics._helpers import (
 )
 
 
+# the span each end is measured over, fixed rather than a fraction of the record so two
+# runs of different length are comparable
+EDGE_S = 60.0
+
+
+def edge_to_mid_rms(
+    raw: mne.io.Raw, edge_s: float = EDGE_S, picks: "list[int] | None" = None,
+) -> "float | None":
+    """How much louder the two ends of a filtered recording are than its middle.
+
+    A filter with a low cutoff needs a long impulse response, so its output starts and ends
+    with a transient that is the filter settling rather than anything measured. This is the
+    RMS of the first and last ``edge_s`` seconds against the RMS of everything between,
+    median over channels. A value near 1 means the ends are no louder than the middle;
+    above 1 means the transient is a real part of what the file contains.
+
+    A detrend does not reduce it: the bandpass is linear and time-invariant and the trend
+    lies in its stopband, so subtracting the trend first changes nothing. Projecting the low
+    band out through the design matrix instead of filtering it out avoids the transient
+    entirely, which is why a GLM run defaults to no data filter at all.
+
+    Parameters
+    ----------
+    raw : mne.io.Raw
+        A filtered stage. On unfiltered data the ratio is still defined but means nothing.
+    edge_s : float
+        Seconds at each end.
+    picks : list of int or None
+        Channels to measure; None takes every fNIRS channel, rejected ones included, since
+        this is a property of the filter rather than of channel quality.
+
+    Returns
+    -------
+    float or None
+        The median ratio, or None when the record is too short to have a middle.
+    """
+    n_edge = int(round(edge_s * raw.info["sfreq"]))
+    if raw.n_times < 3 * n_edge or n_edge < 1:
+        return None
+    if picks is None:
+        picks = mne.pick_types(raw.info, meg=False, fnirs=True, exclude=[])
+    data = raw.get_data(picks=picks)
+    if not len(data):
+        return None
+
+    def rms(block):
+        return np.sqrt(np.mean(block ** 2, axis=1))
+
+    edges = rms(np.concatenate([data[:, :n_edge], data[:, -n_edge:]], axis=1))
+    middle = rms(data[:, n_edge:-n_edge])
+    good = middle > 0
+    if not good.any():
+        return None
+    return float(np.median(edges[good] / middle[good]))
+
+
 # fixed rather than derived from stimulus duration, so two runs stay comparable
 CNR_BASELINE_S = (-5.0, 0.0)
 CNR_RESPONSE_S = (5.0, 15.0)
