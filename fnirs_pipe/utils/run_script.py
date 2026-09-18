@@ -49,7 +49,7 @@ def _build_script_text(
     resample_sfreq: float | None = None,
     stim_dur: float | None = None,
     hrf_model: str = "spm",
-    noise_model: str = "ar1",
+    noise_model: str = "auto",
     drift_model: str = "none",
     drift_high_pass: float = 0.01,
     drift_order: int = 1,
@@ -148,11 +148,14 @@ def _build_script_text(
         w('', '# ---- post parameters ----', f'HIGH_PASS      = {high_pass!r}',
           f'LOW_PASS       = {low_pass!r}', f'FILTER_METHOD  = {filter_method!r}',
           f'FILTER_ORDER   = {filter_order!r}', f'RESAMPLE_SFREQ = {resample_sfreq!r}')
+    # every mode that fits a regression honours --noise-model, so the constant cannot live
+    # in the glm branch: the script would report a model the run did not use
+    if mode in ("glm", "rest") or denoise_regress:
+        w(f'NOISE_MODEL    = {noise_model!r}')
     if mode == "glm":
         w(
             f'STIM_DUR       = {stim_dur!r}',
             f'HRF_MODEL      = {hrf_model!r}',
-            f'NOISE_MODEL    = {noise_model!r}',
             f'DRIFT_MODEL    = {drift_model!r}',
             f'DRIFT_HIGH_PASS= {drift_high_pass!r}',
             f'DRIFT_ORDER    = {drift_order!r}',
@@ -290,7 +293,7 @@ def _build_script_text(
                 '# ----- block: denoise | confound regression (no task model) -----',
                 '_, glm_est, design_matrix, raw_resid = run_glm_pipeline(',
                 '    result,',
-                '    stim_dur=None, hrf_model="spm", noise_model="ols",',
+                '    stim_dur=None, hrf_model="spm", noise_model=NOISE_MODEL,',
                 '    drift_model=DRIFT_MODEL, high_pass=DRIFT_HIGH_PASS, drift_order=DRIFT_ORDER,',
                 '    fir_delays=None, short_channel=SHORT_CHANNEL,',
                 *_aux_lines,
@@ -338,7 +341,7 @@ def _build_script_text(
                 '# ----- block: rest | confound regression + ALFF/FC derivatives -----',
                 '_, glm_est, design_matrix, raw_resid = run_glm_pipeline(',
                 '    result,',
-                '    stim_dur=None, hrf_model="spm", noise_model="ols",',
+                '    stim_dur=None, hrf_model="spm", noise_model=NOISE_MODEL,',
                 '    drift_model=DRIFT_MODEL, high_pass=DRIFT_HIGH_PASS, drift_order=DRIFT_ORDER,',
                 '    fir_delays=None, short_channel=SHORT_CHANNEL,',
                 *_aux_lines,
@@ -417,7 +420,7 @@ def write_run_script(
         resample_sfreq=args.get("resample_sfreq"),
         stim_dur=args.get("stim_dur"),
         hrf_model=_unwrap(args.get("hrf_model"), "spm"),
-        noise_model=_unwrap(args.get("noise_model"), "ar1"),
+        noise_model=_unwrap(args.get("noise_model"), "auto"),
         drift_model=_unwrap(args.get("drift_model"), "none"),
         drift_high_pass=_pick("drift_high_pass", 0.01),
         drift_order=_pick("drift_order", 1),
