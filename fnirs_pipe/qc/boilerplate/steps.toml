@@ -42,15 +42,15 @@ plain = "Haemoglobin concentration changes (HbO, HbR) were estimated from OD usi
 citations = ["Delpy1988", "Cope1988"]
 
 [bandpass]
-plain = "Data were bandpass filtered ({l_freq}–{h_freq} Hz) using a zero-phase FIR filter (Hamming window)."
+plain = "Data were bandpass filtered ({l_freq}–{h_freq} Hz) using {filter}."
 citations = ["Yucel2021"]
 
 [highpass]
-plain = "Data were high-pass filtered at {l_freq} Hz using a zero-phase FIR filter (Hamming window)."
+plain = "Data were high-pass filtered at {l_freq} Hz using {filter}."
 citations = ["Yucel2021"]
 
 [lowpass]
-plain = "Data were low-pass filtered at {h_freq} Hz using a zero-phase FIR filter (Hamming window)."
+plain = "Data were low-pass filtered at {h_freq} Hz using {filter}."
 citations = ["Yucel2021"]
 
 [resample]
@@ -58,11 +58,11 @@ plain = "Data were resampled to {sfreq} Hz."
 citations = ["Pinti2018"]
 
 [confound_regression]
-plain = "Systemic physiology was removed by regressing {regressors} out of the haemodynamic time series in an ordinary least-squares model containing no condition regressors; all subsequent analysis used the residuals {citations}."
+plain = "Systemic physiology was removed by regressing {regressors} out of the haemodynamic time series in a model containing no condition regressors, fitted with {noise_model}; all subsequent analysis used the residuals {citations}."
 citations = ["Yucel2021"]
 
 [glm]
-plain = "A first-level general linear model (GLM) was fitted to the haemodynamic time series using a {hrf_model} haemodynamic response function, a {noise_model} noise model, and a {drift_model} drift term (high-pass cutoff: {drift_high_pass} Hz) {citations}."
+plain = "A first-level general linear model (GLM) was fitted to the haemodynamic time series using a {hrf_model} haemodynamic response function, {drift} and {noise_model} {citations}."
 citations = ["Santosa2018"]
 
 # ---- Hyperscanning ----

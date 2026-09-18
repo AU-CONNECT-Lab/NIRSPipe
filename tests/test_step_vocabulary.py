@@ -87,7 +87,40 @@ def test_the_lower_edge_of_the_band_is_called_two_things():
     # a sidecar's high_pass is the lower edge; the filter templates call it l_freq, and
     # crossing the two silently prints the band backwards
     slots = template_slots("bandpass", {"high_pass": 0.01, "low_pass": 0.5})
-    assert slots == {"l_freq": "0.01", "h_freq": "0.5"}
+    assert slots["l_freq"] == "0.01"
+    assert slots["h_freq"] == "0.5"
+
+
+def test_the_filter_sentence_names_the_filter_that_ran():
+    # the template used to spell one family into the prose, so a Butterworth run was
+    # described as an FIR one
+    iir = template_slots("bandpass", {"high_pass": 0.01, "low_pass": 0.5,
+                                      "filter_method": "iir", "filter_order": 4})
+    assert "Butterworth" in iir["filter"] and "order 4" in iir["filter"]
+
+    fir = template_slots("bandpass", {"high_pass": 0.01, "low_pass": 0.5,
+                                      "filter_method": "fir", "filter_order": None})
+    assert "FIR" in fir["filter"] and "Butterworth" not in fir["filter"]
+
+    # a stage written before the method was recorded names no family at all
+    assert template_slots("highpass", {"high_pass": 0.01})["filter"] == "a zero-phase filter"
+
+
+def test_the_noise_model_is_spelled_out_rather_than_pasted():
+    # `auto` reaches the sidecar unexpanded, and "a auto noise model" is what it printed
+    assert "four times the sampling rate" in template_slots("glm", {"noise_model": "auto"})["noise_model"]
+    assert template_slots("glm", {"noise_model": "ar12"})["noise_model"].endswith("order 12")
+    assert "prewhitening" in template_slots("glm", {"noise_model": "ols"})["noise_model"]
+    # every mode fits one now, so the confound sentence has to name it too
+    assert "order 1" in template_slots("confound_regression", {"noise_model": "ar1"})["noise_model"]
+
+
+def test_a_polynomial_drift_is_not_described_by_a_cosine_cutoff():
+    assert template_slots("glm", {"drift_model": "polynomial", "drift_order": 2})["drift"] == (
+        "an order-2 polynomial drift basis")
+    assert "0.01 Hz" in template_slots("glm", {"drift_model": "cosine",
+                                               "drift_high_pass": 0.01})["drift"]
+    assert template_slots("glm", {"drift_model": "none"})["drift"] == "no drift term"
 
 
 def test_a_dpf_list_becomes_one_string():
@@ -147,7 +180,7 @@ def test_the_glm_paragraph_gathers_slots_from_several_files(tmp_path):
 
     slots = dict(steps_from_sidecars(tmp_path, mode="glm"))["glm"]
     assert slots["hrf_model"] == "spm"
-    assert slots["drift_model"] == "cosine"
+    assert slots["drift"] == "a discrete cosine drift basis (high-pass cutoff: 0.01 Hz)"
 
 
 def test_a_step_that_ran_twice_is_described_once(tmp_path):

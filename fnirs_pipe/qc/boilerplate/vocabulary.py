@@ -67,6 +67,56 @@ def boilerplate_key(step: str | None, params: dict[str, Any], mode: str | None =
     return None
 
 
+def _drift_phrase(params: dict[str, Any]) -> str | None:
+    """The drift basis as prose, or None when the design carried none.
+
+    Each model names only the parameter that model uses: a polynomial has no high-pass
+    cutoff, and quoting the field anyway printed "cutoff: None Hz".
+    """
+    drift = params.get("drift_model")
+    if drift == "cosine":
+        return ("a discrete cosine drift basis "
+                f"(high-pass cutoff: {params.get('drift_high_pass')} Hz)")
+    if drift == "polynomial":
+        return f"an order-{params.get('drift_order')} polynomial drift basis"
+    return None
+
+
+def _filter_phrase(params: dict[str, Any]) -> str:
+    """Name the filter that ran.
+
+    The templates used to spell one family into the sentence, so every run described
+    whichever one the text happened to name rather than the one it used.
+    """
+    method, order = params.get("filter_method"), params.get("filter_order")
+    if method == "iir":
+        return ("a zero-phase Butterworth filter "
+                + (f"(order {order}, applied forward and backward)" if order is not None
+                   else "applied forward and backward"))
+    if method == "fir":
+        return "a zero-phase Hamming-windowed FIR filter"
+    # a stage written before the method was recorded. Both branches are zero-phase, so this
+    # stays true without naming a family the run may not have used
+    return "a zero-phase filter"
+
+
+def _noise_phrase(value: Any) -> str:
+    """The noise model as prose, expanding the one spelling that names no order.
+
+    ``auto`` is mne-nirs' own rule and reaches the sidecar unexpanded, so the sentence has
+    to say what it stands for; "a auto noise model" is what it said before.
+    """
+    value = str(value or "").strip().lower()
+    if value == "auto":
+        return ("an autoregressive noise model whose order is four times the sampling rate "
+                "(the 'auto' setting of MNE-NIRS)")
+    if value.startswith("ar") and value[2:].isdigit():
+        return f"an autoregressive noise model of order {value[2:]}"
+    if value == "ols":
+        return "ordinary least squares and no prewhitening"
+    return "an unspecified noise model"
+
+
 def _regressor_phrase(params: dict[str, Any]) -> str:
     """Name the nuisance columns a confound regression actually carried.
 
@@ -79,12 +129,8 @@ def _regressor_phrase(params: dict[str, Any]) -> str:
     if sc == "mean":
         parts.append("the mean short-channel time course of each chromophore")
 
-    drift = params.get("drift_model")
-    if drift == "cosine":
-        parts.append("a discrete cosine drift basis "
-                     f"(high-pass cutoff: {params.get('drift_high_pass')} Hz)")
-    elif drift == "polynomial":
-        parts.append(f"an order-{params.get('drift_order')} polynomial drift basis")
+    if (drift := _drift_phrase(params)) is not None:
+        parts.append(drift)
 
     # the design matrix always holds an intercept, so there is something to say even when
     # neither flag was given, and the sentence stays true rather than naming absent columns
@@ -124,21 +170,24 @@ def template_slots(key: str, params: dict[str, Any]) -> dict[str, str]:
         dpf = params.get("dpf")
         return {"dpf": ", ".join(str(d) for d in dpf) if isinstance(dpf, (list, tuple)) else str(dpf)}
     if key == "bandpass":
-        return {"l_freq": str(params.get("high_pass")), "h_freq": str(params.get("low_pass"))}
+        return {"l_freq": str(params.get("high_pass")), "h_freq": str(params.get("low_pass")),
+                "filter": _filter_phrase(params)}
     if key == "highpass":
-        return {"l_freq": str(params.get("high_pass"))}
+        return {"l_freq": str(params.get("high_pass")), "filter": _filter_phrase(params)}
     if key == "lowpass":
-        return {"h_freq": str(params.get("low_pass"))}
+        return {"h_freq": str(params.get("low_pass")), "filter": _filter_phrase(params)}
     if key == "resample":
         return {"sfreq": str(params.get("sfreq") or params.get("resample_sfreq", ""))}
     if key == "confound_regression":
-        return {"regressors": _regressor_phrase(params)}
+        return {"regressors": _regressor_phrase(params),
+                "noise_model": _noise_phrase(params.get("noise_model"))}
     if key == "glm":
+        # the drift phrase carries its own parameter, so a polynomial stops being described
+        # by a cosine's cutoff
         return {
             "hrf_model": str(params.get("hrf_model", "")),
-            "noise_model": str(params.get("noise_model", "")),
-            "drift_model": str(params.get("drift_model", "")),
-            "drift_high_pass": str(params.get("drift_high_pass", "")),
+            "noise_model": _noise_phrase(params.get("noise_model")),
+            "drift": _drift_phrase(params) or "no drift term",
         }
     if key == "hyper_wtc":
         # the axis the transform covered and the band it was collapsed over are different

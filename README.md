@@ -16,7 +16,7 @@ Outputs follow the [BIDS Derivatives](https://bids-specification.readthedocs.io/
 ## Requirements
 
 - Python ≥ 3.10
-- Dependencies (all required, resolved via `pip install .`): `mne`, `mne-nirs` (≥ 0.7), `nilearn`, `scipy`, `numpy`, `pybids`, `mne-bids`, `h5py`, `tables`, `pandas`, `jinja2`, `plotly`, `kaleido`, `matplotlib`, `pillow`, `joblib`, `flask`, `dash`, `dash-bootstrap-components`, `dash-cytoscape`, `pycwt`, `PyWavelets`, `bibtexparser`, `tomli` (Python < 3.11 only)
+- Every dependency is required and resolved by `pip install .`; what each one is for is in [`docs/getting-started/installation.md`](docs/getting-started/installation.md)
 
 ## Installation
 
@@ -135,7 +135,8 @@ Preprocessing:
 
 Postprocessing mode:
   --mode                       {denoise,glm,rest}
-  --config FILE                TOML file for post parameters. CLI flags override TOML.
+  --config FILE                TOML file for post parameters, plus the cardiac, respiration
+                               and separation bands. CLI flags override TOML.
 
 Filtering / resampling (all modes):
   --high-pass FLOAT            High-pass filter cutoff in Hz (e.g. 0.01).
@@ -153,7 +154,12 @@ Filtering / resampling (all modes):
 GLM (--mode glm):
   --hrf-model                  {spm,spm + derivative,spm + derivative + dispersion,
                                 glover,glover + derivative,glover + derivative + dispersion,fir}
-  --noise-model                {ols,ar1,ar2,ar3,ar4,ar5}
+  --noise-model                ols | auto | arN                            [default: auto]
+                               auto is an AR order of 4x the sampling rate, which is what
+                               the fNIRS implementations use; the low orders come from fMRI,
+                               where a slower sampling rate makes one lag enough. An order
+                               too low leaves a contrast's t values several times too large.
+                               Honoured by every mode, not only glm.
   --drift-model                {cosine,polynomial,none}
   --drift-high-pass FLOAT      Cosine drift high-pass cutoff in Hz. No default: it has to sit
                                at or above --high-pass and below the rate a condition repeats

@@ -145,13 +145,20 @@ def _active_steps(prep_config: Any, post_config: Any, mode: str | None) -> list[
     # caller with no config (a group-level report, say) has only the sidecars to go on.
     if prep_config is None:
         return []
-    dpf_str = ", ".join(str(d) for d in prep_config.dpf)
+    # every section goes through template_slots, so a template that grows a slot is filled
+    # the same way here as on the sidecar path. Filling them by hand is what left this one
+    # raising KeyError on a slot the screening sentence had gained
+    from fnirs_pipe.qc.boilerplate.vocabulary import template_slots
+
+    def slots(key: str, params: dict) -> tuple[str, dict]:
+        return key, template_slots(key, params)
 
     result = [
         ("od_conversion", {}),
-        ("sci_marking", {
-            "threshold": str(prep_config.sci_threshold),
-            "action": "marked as bad and excluded from further analysis",
+        slots("sci_marking", {
+            "sci_threshold": prep_config.sci_threshold,
+            "psp_threshold": getattr(prep_config, "psp_threshold", None),
+            "min_good_frac": getattr(prep_config, "min_good_frac", None),
         }),
     ]
 
@@ -159,37 +166,36 @@ def _active_steps(prep_config: Any, post_config: Any, mode: str | None) -> list[
     if mc != "none":
         result.append((f"motion_{mc}", {}))
 
-    result.append(("beer_lambert", {"dpf": dpf_str}))
+    result.append(slots("beer_lambert", {"dpf": prep_config.dpf}))
 
     if post_config is not None:
         hp = getattr(post_config, "high_pass", None)
         lp = getattr(post_config, "low_pass", None)
+        band = {"high_pass": hp, "low_pass": lp,
+                "filter_method": getattr(post_config, "filter_method", None),
+                "filter_order": getattr(post_config, "filter_order", None)}
         if hp and lp:
-            result.append(("bandpass", {"l_freq": str(hp), "h_freq": str(lp)}))
+            result.append(slots("bandpass", band))
         elif hp:
-            result.append(("highpass", {"l_freq": str(hp)}))
+            result.append(slots("highpass", band))
         elif lp:
-            result.append(("lowpass", {"h_freq": str(lp)}))
+            result.append(slots("lowpass", band))
 
         if getattr(post_config, "resample_sfreq", None):
-            result.append(("resample", {"sfreq": str(post_config.resample_sfreq)}))
+            result.append(slots("resample", {"resample_sfreq": post_config.resample_sfreq}))
 
+        regression = {
+            "short_channel": post_config.short_channel,
+            "drift_model": post_config.drift_model,
+            "drift_high_pass": post_config.drift_high_pass,
+            "drift_order": post_config.drift_order,
+            "noise_model": post_config.noise_model,
+        }
         if mode == "glm":
-            result.append(("glm", {
-                "hrf_model": post_config.hrf_model,
-                "noise_model": post_config.noise_model,
-                "drift_model": post_config.drift_model,
-                "drift_high_pass": str(post_config.drift_high_pass),
-            }))
+            result.append(slots("glm", {**regression, "hrf_model": post_config.hrf_model}))
         elif mode in ("rest", "denoise") and (
                 post_config.short_channel or post_config.drift_model not in (None, "none")):
-            from fnirs_pipe.qc.boilerplate.vocabulary import template_slots
-            result.append(("confound_regression", template_slots("confound_regression", {
-                "short_channel": post_config.short_channel,
-                "drift_model": post_config.drift_model,
-                "drift_high_pass": post_config.drift_high_pass,
-                "drift_order": post_config.drift_order,
-            })))
+            result.append(slots("confound_regression", regression))
 
     return result
 
