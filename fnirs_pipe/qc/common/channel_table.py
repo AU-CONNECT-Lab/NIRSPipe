@@ -76,12 +76,16 @@ def channel_rows(
     A short channel's scores come from ``raw_short`` and a long channel's from the long
     sections, because the two are measured separately: averaging a short channel's coupling
     in with the long ones lifts every score, and reading a short channel's row off the long
-    section would leave it blank. ``corr`` is the exception and comes from the whole-file
-    ``preproc`` section, so it is filled for short channels too.
+    section would leave it blank. A channel in neither range falls back to the whole-montage
+    ``raw`` section, which measured it even though no split claimed it; its scores are the
+    same per-channel numbers either way, and only the scalar means they feed differ.
+    ``corr`` is the exception and comes from the whole-file ``preproc`` section, so it is
+    filled for short channels too.
     """
     per_channel = record.get("per_channel") or {}
     short_pc = per_channel.get("raw_short") or {}
     long_pc = per_channel.get("raw_long") or {}
+    whole_pc = per_channel.get("raw") or {}
     merged_pc = _long_per_channel(record)
     # the whole-file section, not the long split: this column is the one short channels have
     corr_pc = (per_channel.get("preproc") or {}).get("hbo_hbr_corr_per_channel") or {}
@@ -105,22 +109,35 @@ def channel_rows(
             return "short"
         return "long" if ch in long_names else "unclassified"
 
-    def value_of(key: str, ch: str):
-        return ((short_pc if ch in short_names else merged_pc).get(key) or {}).get(ch)
+    def section_for(sep: str) -> dict:
+        if sep == "short":
+            return short_pc
+        # an unclassified channel is in neither split but the whole-montage section
+        # measured it, and without those scores its rejection prints no reason
+        return whole_pc if sep == "unclassified" else merged_pc
 
-    return [{
-        "name":       ch,
-        "sci":        value_of("sci_per_channel", ch),
-        "sci_win":    value_of("sci_win_per_channel", ch),
-        "psp":        value_of("psp_per_channel", ch),
-        "good_frac":  value_of("good_frac_per_channel", ch),
-        "snr":        value_of("snr_per_channel", ch),
-        "cv":         value_of("cv_per_channel", ch),
-        "spike":      value_of("spike_pct_per_channel", ch),
-        "corr":       corr_pc.get(_pair_of(ch)),
-        "is_bad":     ch in bad,
-        "separation": separation_of(ch),
-    } for ch in sci_scores]
+    def row_of(ch: str) -> dict[str, Any]:
+        sep = separation_of(ch)
+        pc = section_for(sep)
+
+        def value_of(key: str):
+            return (pc.get(key) or {}).get(ch)
+
+        return {
+            "name":       ch,
+            "sci":        value_of("sci_per_channel"),
+            "sci_win":    value_of("sci_win_per_channel"),
+            "psp":        value_of("psp_per_channel"),
+            "good_frac":  value_of("good_frac_per_channel"),
+            "snr":        value_of("snr_per_channel"),
+            "cv":         value_of("cv_per_channel"),
+            "spike":      value_of("spike_pct_per_channel"),
+            "corr":       corr_pc.get(_pair_of(ch)),
+            "is_bad":     ch in bad,
+            "separation": sep,
+        }
+
+    return [row_of(ch) for ch in sci_scores]
 
 
 def pair_rows(rows: list[dict], pairs: list[str] | None = None) -> list[dict[str, Any]]:
@@ -226,7 +243,8 @@ def separation_notes(
     recording carries no registered optode positions, so every distance reads as zero and
     the metrics fall back to the whole montage. Channels in neither range is a real montage
     with real positions that happens to use separations the two ranges leave out; those
-    channels are measured by no section and show dashes. The third is a run that asked for
+    channels are screened and scored like any other but sit in none of the split scalars.
+    The third is a run that asked for
     short-channel regression and had no short channel to build it from, which the pipeline
     treats as a warning and carries on past.
 
@@ -266,9 +284,9 @@ def separation_notes(
                      f"end reaches, which the separations alone do not settle.")
         notes.append(
             f"{n_odd} channel(s) sit at a separation the long and short ranges leave out "
-            f"({unclaimed_separations(sep_bands)}). They are in no section, so their row in the "
-            f"per-channel table is blank apart from status and HbO-HbR correlation, and "
-            f"they are in none of the scalar metrics.{where}")
+            f"({unclaimed_separations(sep_bands)}). They were screened and their row in the "
+            f"per-channel table carries the whole-montage scores, but no split claims them, "
+            f"so they are in none of the long or short scalar metrics.{where}")
 
     if short_channel_requested:
         short_rows = [r for r in rows if r.get("separation") == "short"]

@@ -577,3 +577,59 @@ def test_the_report_note_quotes_the_run_s_own_gap():
 
     assert "14-25 mm" in str(notes[0])
     assert "10-15 mm" not in str(notes[0])
+
+
+def _split_record() -> dict:
+    """A record whose montage split left one channel in neither range.
+
+    ``raw`` covers all three; ``raw_long`` and ``raw_short`` claim one each. L scores
+    differently in the two sections so a test can tell which one a row read.
+    """
+    return {
+        "raw": {}, "raw_long": {}, "raw_short": {},
+        "per_channel": {
+            "raw": {"sci_per_channel": {"L 760": 0.55, "S 760": 0.99, "O 760": 0.30},
+                    "psp_per_channel": {"L 760": 0.4, "S 760": 0.5, "O 760": 0.05},
+                    "good_frac_per_channel": {"L 760": 0.9, "S 760": 1.0, "O 760": 0.10},
+                    "snr_per_channel": {"L 760": 80.0, "S 760": 90.0, "O 760": 40.0}},
+            "raw_long": {"sci_per_channel": {"L 760": 0.90},
+                         "good_frac_per_channel": {"L 760": 0.95}},
+            "raw_short": {"sci_per_channel": {"S 760": 0.99},
+                          "good_frac_per_channel": {"S 760": 1.0}},
+        },
+    }
+
+
+def test_a_channel_in_neither_range_carries_the_whole_montage_scores():
+    """It is screened like any other channel, so a blank row cannot explain its verdict.
+
+    Its scores were only ever in the whole-montage section, and reading the row off the
+    long sections left every column None.
+    """
+    from fnirs_pipe.qc.common.channel_table import channel_rows
+
+    sci = {"L 760": 0.90, "S 760": 0.99, "O 760": 0.30}
+    rows = {r["name"]: r for r in channel_rows(_split_record(), sci, ["O 760"])}
+
+    assert rows["O 760"]["separation"] == "unclassified"
+    assert rows["O 760"]["sci"] == 0.30
+    assert rows["O 760"]["good_frac"] == 0.10
+    assert rows["O 760"]["snr"] == 40.0
+    # the split sections still win for the channels they claim, or every long channel
+    # would silently switch to the whole-montage numbers
+    assert rows["L 760"]["sci"] == 0.90 and rows["L 760"]["good_frac"] == 0.95
+    assert rows["S 760"]["sci"] == 0.99
+
+
+def test_a_rejected_channel_in_neither_range_prints_why_it_went():
+    """The reason is derived from the row's own scores, so an empty row read as a manual
+    rejection the screening never made."""
+    from fnirs_pipe.qc.common.channel_table import channel_rows, format_rows
+
+    sci = {"L 760": 0.90, "S 760": 0.99, "O 760": 0.30}
+    rows = channel_rows(_split_record(), sci, ["O 760"])
+    out = {r["name"]: r for r in format_rows(rows)}
+
+    assert out["O 760"]["reason"] == "coupled windows"
+    assert out["O 760"]["status"] == "BAD (coupled windows)"
+    assert out["L 760"]["status"] == "OK"
