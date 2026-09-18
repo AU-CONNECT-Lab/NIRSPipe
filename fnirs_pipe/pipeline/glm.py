@@ -336,8 +336,14 @@ def run_glm_pipeline(
 
     glm_est = fit_glm(haemo, dm, noise_model=noise_model)
 
-    # nilearn stores residuals as (n_times, 1) per channel; squeeze removes the trailing dim
-    resid_data = np.array([glm_est.data[ch].residuals for ch in glm_est.ch_names]).squeeze(-1)
+    # rebuilt rather than read off `.residuals`: nilearn subtracts the *whitened* design's fit
+    # from unwhitened data there, which under an AR model is neither residual. Identical to
+    # `.residuals` under ols, where whitening is the identity.
+    # nilearn stores per-channel arrays as (n_times, 1); squeeze removes the trailing dim
+    resid_data = np.array([
+        np.asarray(res.Y) - np.asarray(res.model.design) @ np.asarray(res.theta)
+        for res in (glm_est.data[ch] for ch in glm_est.ch_names)
+    ]).squeeze(-1)
     raw_resid = haemo.copy()
     raw_resid._data[:] = resid_data
     # spelled drift_high_pass, not high_pass: the sidecar merges these with the bandpass

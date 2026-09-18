@@ -388,10 +388,10 @@ def _motion_detail_figures(
     raw_od_after: mne.io.Raw | None,
     subject: str,
     errors: list,
+    gvtd_blocks: "list[tuple[str, list[str]]]",
     segments: dict | None = None,
     corrected_segments: list | None = None,
     spike_by_set: dict | None = None,
-    gvtd_blocks: "list[tuple[str, list[str]]] | None" = None,
 ) -> "list[tuple[str, Any]]":
     """One per-channel motion figure per channel, each with its own class's GVTD on top.
 
@@ -409,16 +409,16 @@ def _motion_detail_figures(
         return []
     shared_chs = [c for c in raw_od_after.ch_names if c in raw_od_before.ch_names]
 
-    # the same blocks the carpet panel drew, so the two figures never name sets differently:
-    # a montage with no long channels has one block and every channel lands in it
-    blocks = gvtd_blocks or [("all", list(raw_od_before.ch_names))]
-    members = [(name, names, set(names)) for name, names in blocks]
+    # the same blocks the carpet panel drew, so the two figures never name sets differently.
+    # Required rather than defaulted: gvtd_channel_blocks already collapses a montage with no
+    # long channels to one "all" block, and a fallback here would be the forbidden union
+    members = [(name, names, set(names)) for name, names in gvtd_blocks]
 
     def set_of(ch: str) -> "tuple[str, list[str]]":
         for name, names, lookup in members:
             if ch in lookup:
                 return name, names
-        return blocks[0]          # in no block (neither separation range): the canonical set
+        return gvtd_blocks[0]     # in no block (neither separation range): the canonical set
 
     built = []
     for ch in shared_chs:

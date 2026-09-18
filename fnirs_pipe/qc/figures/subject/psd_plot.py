@@ -152,13 +152,14 @@ def psd_figure(
     titles = [label for label, _ in all_stages]
     if titles[0] == _FIRST_LABEL and l_freq is None and h_freq is None:
         titles[0] = "desc-preproc"
-    # the row the bandpass produced: the only one renamed and the only one the response
-    # curve may be drawn over
+    # the row the bandpass produced, and the only one the response curve may be drawn over
     filter_row = None
     if l_freq is not None or h_freq is not None:
         filter_row = next((i for i, (label, _) in enumerate(all_stages, start=1)
                            if label == "desc-filtered" or label.startswith("simulated")), None)
-    if filter_row is not None:
+    # renamed only when a file produced it: a simulated row keeps saying so, or the figure
+    # would present something computed in memory as a stage the run wrote
+    if filter_row is not None and all_stages[filter_row - 1][0] == "desc-filtered":
         edges = "  ".join(part for part in (f"HP {l_freq} Hz" if l_freq is not None else "",
                                             f"LP {h_freq} Hz" if h_freq is not None else "") if part)
         titles[filter_row - 1] = f"After bandpass ({edges})"

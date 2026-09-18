@@ -6,6 +6,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- **The confound-regression residual was not a residual when an AR noise model was asked for.** `--mode glm` with `--noise-model ar1` and up wrote a file that kept most of the drift and systemic signal the regression had just estimated, because the value it was built from subtracts a differenced copy of the fitted model rather than the model. On a bandpassed recording the written residual came within a quarter of a decibel of the regression's own input, meaning the regression was effectively absent from it. Reported effects were never affected: betas, t values and contrasts are computed elsewhere. `--mode denoise` and `--mode rest` were never affected either, and their output is unchanged to the last bit
+- **A prep-only run's spectrum panel no longer presents its simulated bandpass as a stage the run wrote.** With no filtered file on disk the panel simulates the filter to have something to compare against, and that row had started carrying the same title as a real one
+
 ## [0.43.0] - 2026-09-17
 
 ### Fixed
@@ -13,7 +17,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 - **The QC report's denoising carpet now shows the denoised stage alone**, HbO above HbR in one image, under one GVTD row per channel set on a shared time axis, each drawn either side of motion correction, so a dark column can be read against what happened at that moment. It used to draw the Beer-Lambert output beside the bandpassed signal, which left the confound regression out of the panel entirely and had no time axis at all. The stage before denoising is already the carpet in the motion section, and a side-by-side drawn at the same greyscale is unreadable anyway: after denoising a channel's SD is a tenth of what it was, so that block came out flat grey. The title carries the ratio instead
-- **The spectrum panel carries the confound regression's residual.** Where nothing filtered, that stage is the whole detrend and the panel showed none of it; where a bandpass ran, the row should land on top of the one above it, and a gap inside the analysis band means the regression reached further than intended
+- **The spectrum panel carries the confound regression's residual.** Where nothing filtered, that stage is the whole detrend and the panel showed none of it; where a bandpass ran, the row shows how much of the low-frequency end the short-channel and drift regressors still take out after the filter has had it
 - **On a GLM run the HbO–HbR panel stops testing the residual against the −0.3 rule.** The task model comes out of that residual along with the confounds, so a weaker anticorrelation there can mean the model explained part of the shared response rather than that the data got worse. The rule now reads the before stage, and both the rule and the after stage say so
 
 ## [0.42.0] - 2026-09-16

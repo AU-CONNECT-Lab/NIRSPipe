@@ -60,11 +60,13 @@ def _roi_order(names: list[str], roi_map: "dict | None"):
     return order, groups
 
 
-def _gvtd_rows(raw_before, raw_after, blocks: "list | None"):
+def _gvtd_rows(raw_before, raw_after, blocks: list):
     """[(set name, times, before trace, after trace | None), ...], one entry per channel set.
 
     One row per set rather than one over their union: GVTD is an RMS across channels and the
-    long and short sets measure different depths.
+    long and short sets measure different depths. ``blocks`` has no default for that reason:
+    ``gvtd_channel_blocks`` already collapses a montage with no long channels to a single
+    "all" block, so a fallback here could only put the union back.
     """
     from fnirs_pipe.qc.metrics import GVTD_MOTION_BAND, gvtd_timetrace
 
@@ -77,7 +79,7 @@ def _gvtd_rows(raw_before, raw_after, blocks: "list | None"):
     if od_b is None:
         return []
     out = []
-    for name, names in (blocks or [("all", list(od_b.ch_names))]):
+    for name, names in blocks:
         picks = [c for c in names if c in od_b.ch_names]
         if not picks:
             continue
@@ -148,6 +150,11 @@ def carpet_compare_figure(
     if not rows:
         return None
 
+    if raw_gvtd is not None and not gvtd_blocks:
+        raise ValueError(
+            "gvtd_blocks is required alongside raw_gvtd: GVTD is an RMS across channels, so "
+            "the long and short sets get a row each rather than one trace over their union. "
+            "Pass fnirs_pipe.qc.metrics.gvtd_channel_blocks(raw).")
     gvtd = _gvtd_rows(raw_gvtd, raw_gvtd_after, gvtd_blocks) if raw_gvtd is not None else []
     n_rows = len(rows) + len(gvtd)
     block_px = _CARPET_ROW_PX * max(len(r[2]) for r in rows)

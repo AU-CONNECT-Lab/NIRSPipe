@@ -10,10 +10,15 @@ it is exactly the right assertion here: whitening is supposed to remove the seri
 correlation the residuals carry, driving DW from wherever it started toward 2.
 
 The trap this encodes, and the reason the attribute matters more than the number: DW on
-`.residuals` does **not** improve between `ols` and `ar1`. Those are the unwhitened
-residuals and they stay put, so a test written against the wrong attribute would have shown
-a plausible-looking number that proved nothing. `.whitened_residuals` is where prewhitening
-is visible.
+`.residuals` does **not** improve between `ols` and `ar1`, so a test written against that
+attribute would have shown a plausible-looking number that proved nothing.
+`.whitened_residuals` is where prewhitening is visible.
+
+`.residuals` is not the unwhitened residual either, which is the second trap and the one
+that reached a written file. nilearn builds it as `Y - whitened_design @ theta`, mixing the
+two spaces, so under an AR model it is neither residual; the last test here pins the stage
+file against `Y - design @ theta` instead. Under `ols` the two agree, because whitening is
+the identity there.
 """
 
 import mne
@@ -99,6 +104,27 @@ def test_the_unwhitened_residuals_are_the_trap(fits):
     # The point is the scale of the difference, four orders of magnitude below the change
     # whitening produces on the other attribute
     assert_allclose(values["ar1"], values["ols"], rtol=1e-3)
+
+
+def test_the_written_residual_is_in_the_datas_own_space(haemo):
+    """`desc-errts` must be `Y - design @ theta`, not nilearn's mixed-space `.residuals`.
+
+    Under ar1 nilearn subtracts the whitened design's fit, which is roughly the fit
+    differenced, so the confounds stay in the file. The exact comparison is what makes this
+    a guard: this fixture shows the defect at 0.019 residual SD, where real recordings show
+    2.95, because its rho is 0.4 against 0.73 and up, and a one-column drift basis explains
+    almost nothing. An assertion on the size would pass here and prove nothing.
+    """
+    for model in ("ols", "ar1"):
+        _, est, dm, resid = run_glm_pipeline(haemo, noise_model=model, **FIT)
+        design = np.asarray(dm)
+        # the residual is written back by position, so a reordering would scramble channels
+        assert list(est.ch_names) == list(resid.ch_names)
+        for ch in est.ch_names:
+            res = est.data[ch]
+            expected = (np.asarray(res.Y) - design @ np.asarray(res.theta)).ravel()
+            assert_allclose(resid.get_data(picks=[ch]).ravel(), expected, rtol=1e-9,
+                            err_msg=f"{model} {ch}: written residual is not y - X@theta")
 
 
 def test_ols_is_the_negative_control_on_the_whitened_residuals(fits):
