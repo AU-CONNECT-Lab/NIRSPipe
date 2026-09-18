@@ -441,9 +441,10 @@
       <p class="fig-path">{{ rest_fc_roi_path }}</p>
     {% endif %}
     {% if rest_fc_circle_path %}
-      <h3>Connectogram (threshold |r| ≥ 0.3)</h3>
+      <h3>Connectogram</h3>
       <p class="step-desc">{{ section_note('fc.connectogram') }}</p>
-      <img class="responsive" src="{{ rest_fc_circle_path }}" alt="FC connectogram" />
+      <iframe class="plotly-frame" src="{{ rest_fc_circle_path }}" title="FC connectogram"
+              style="height:{{ rest_fc_circle_h }}px"></iframe>
       <p class="fig-path">{{ rest_fc_circle_path }}</p>
     {% endif %}
     {% if rest_fc_seed_path %}

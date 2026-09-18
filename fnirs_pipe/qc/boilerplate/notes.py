@@ -89,8 +89,11 @@ SECTION_NOTES = {
         "the same scale. Channels are averaged before correlating, so this is not the mean of "
         "the cells above. Needs --roi-mapping.",
     "fc.connectogram":
-        "HbO and HbR channels together, nodes colour-coded by source. Only connections above "
-        "threshold are drawn. Rejected channels are off the circle.",
+        "The same correlations as chords rather than as cells: one circle per chromophore, "
+        "channels blocked by source with blank circle between blocks, and a chord coloured "
+        "by r on the scale the matrices use. The nodes carry no colour of their own, the "
+        "blocks being separated by position already. The title says which connections are "
+        "drawn and how many. Rejected channels are off the circle: they carry no edge.",
     "fc.seed_topography":
         "One flat map per seed ROI, each channel coloured by its correlation with that seed's "
         "mean signal, on the same scale as the matrix above. Solid grey channels are inside the "

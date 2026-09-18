@@ -1530,7 +1530,7 @@ def _section_rest(
     sep_bands=None,
 ) -> dict:
     panel_path = alff_topo_path = fc_roi_path = fc_circle_path = fc_seed_path = None
-    alff_topo_h = fc_seed_h = panel_h = fc_roi_h = 0
+    alff_topo_h = fc_seed_h = panel_h = fc_roi_h = fc_circle_h = 0
     with _guard("Rest channel panel", errors, subject):
         if fc_df is not None:
             fig = rest_channel_panel(fc_df, fc_hbr_df, alff_df, raw=raw_haemo,
@@ -1552,9 +1552,9 @@ def _section_rest(
                     fig, figures_dir / "rest_fc_roi.html")
     with _guard("FC connectogram", errors, subject):
         if fc_df is not None:
-            b64 = fc_connectogram(fc_df, fc_hbr_df)
-            _save_b64_png(b64, figures_dir / "rest_fc_circle.png")
-            fc_circle_path = _fig_href(figures_dir, "rest_fc_circle.png")
+            fig = fc_connectogram(fc_df, fc_hbr_df)
+            fc_circle_path, fc_circle_h = _save_plotly_html(
+                fig, figures_dir / "rest_fc_circle.html")
     with _guard("FC seed topography", errors, subject):
         if fc_seed and raw_haemo is not None:
             fig = fc_seed_topo_figure(raw_haemo, fc_seed.get("hbo"), fc_seed.get("hbr"),
@@ -1565,7 +1565,8 @@ def _section_rest(
     return {"rest_panel_path": panel_path, "rest_panel_h": panel_h,
             "rest_alff_topo_path": alff_topo_path, "rest_alff_topo_h": alff_topo_h,
             "rest_fc_roi_path": fc_roi_path, "rest_fc_roi_h": fc_roi_h,
-            "rest_fc_circle_path": fc_circle_path, "rest_fc_seed_path": fc_seed_path,
+            "rest_fc_circle_path": fc_circle_path, "rest_fc_circle_h": fc_circle_h,
+            "rest_fc_seed_path": fc_seed_path,
             "rest_fc_seed_h": fc_seed_h}
 
 

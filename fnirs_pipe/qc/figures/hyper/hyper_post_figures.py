@@ -578,11 +578,13 @@ from fnirs_pipe.qc.figures.common.matrix_map import (  # noqa: E402
     BLANK_CELL, COHERENCE_SCALE, CORRELATION_SCALE, cell_values as _cell_values,
     matrix_ground, scale_color as _arc_color,
 )
+# The circle itself is the report's, not this figure's: one subject's channels against each
+# other and two members' against each other are the same picture on different matrices
+from fnirs_pipe.qc.figures.common.circle_map import (  # noqa: E402
+    DYAD_GAP as _CIRCLE_GAP, bezier as _bezier, circle_axes, node_arc, radial_label,
+    ring_angles,
+)
 
-
-# Degrees of blank circle left between the two members, at both ends of each semicircle, so
-# the split between the brains is visible before any label is read.
-_CIRCLE_GAP = 12.0
 
 # Half-width of the connectogram's axes, with the nodes on the unit circle: what is left
 # over is the ring the radial labels are written into.
@@ -591,33 +593,6 @@ _CIRCLE_SPAN = 1.16
 # The colorbar every cross-brain panel carries, minus its title. One layout, so a figure of
 # two panels and a figure of one put their scale in the same place.
 _COLORBAR = {"thickness": 13, "len": 0.72, "x": 1.0, "y": 0.46}
-
-
-def _node_angles(n_per_side: int, gap: float = _CIRCLE_GAP) -> np.ndarray:
-    """Where each node sits, in degrees, the first member's sites over the left semicircle.
-
-    ::
-
-      3 a side -> [120, 150, 180] on the left, [300, 330, 0] on the right
-
-    Counterclockwise from the top, so the first member runs down the left side and the
-    second comes back up the right, which puts the two homologous ends of the montage facing
-    each other across the split.
-    """
-    step = (360.0 - 2 * gap) / (2 * n_per_side)
-    k = np.arange(2 * n_per_side)
-    return 90.0 + gap / 2 + (k + 0.5) * step + np.where(k >= n_per_side, gap, 0.0)
-
-
-def _bezier(p0, p2, n: int = 40) -> tuple[np.ndarray, np.ndarray]:
-    """A chord from p0 to p2 bowed toward the middle of the circle.
-
-    Quadratic, with the centre as the control point, which is what makes a pairing between
-    two nodes that face each other read as a straight line across and one between two
-    neighbours as a shallow arc: how far a chord bows is then how far apart its ends are.
-    """
-    t = np.linspace(0.0, 1.0, n)[:, None]
-    return tuple(((1 - t) ** 2 * np.asarray(p0) + t ** 2 * np.asarray(p2)).T)
 
 
 def _matrix_panel(fig, z, row_labels, col_labels, subject_ids, *, cmap, vmin, vmax,
@@ -655,7 +630,7 @@ def _circle_traces(fig, z, row_labels, col_labels, subject_ids, *,
     import plotly.graph_objects as go
 
     n = len(row_labels)
-    ang = np.deg2rad(_node_angles(n))
+    ang = np.deg2rad(ring_angles([n, n], gap=_CIRCLE_GAP))
     xy = np.stack([np.cos(ang), np.sin(ang)], axis=1)
     # the nodes are evenly spaced, so any two neighbours inside one member give the pitch
     step = float(ang[1] - ang[0]) if n > 1 else np.deg2rad(20.0)
@@ -665,26 +640,11 @@ def _circle_traces(fig, z, row_labels, col_labels, subject_ids, *,
     sub2 = subject_ids[1] if len(subject_ids) > 1 else "Sub2"
     labels = list(row_labels) + list(col_labels)
 
-    def _radial_label(theta: float, radius: float, text: str, size: float, colour: str):
-        deg = np.rad2deg(theta) % 360.0
-        flip = 90.0 < deg < 270.0
-        fig.add_annotation(
-            x=float(np.cos(theta) * radius), y=float(np.sin(theta) * radius),
-            text=text, showarrow=False, font=dict(size=size, color=colour),
-            textangle=-(deg - 180.0) if flip else -deg,
-            xanchor="right" if flip else "left", yanchor="middle",
-            xref=f"x{col}" if col > 1 else "x", yref=f"y{col}" if col > 1 else "y",
-        )
-
     for k, name in enumerate(labels):
         side = 0 if k < n else 1
-        a = np.linspace(ang[k] - step * 0.42, ang[k] + step * 0.42, 12)
-        fig.add_trace(go.Scatter(
-            x=np.cos(a), y=np.sin(a), mode="lines",
-            line=dict(color=NODE_COLORS[side], width=9), showlegend=False,
-            hovertemplate=f"{(sub1, sub2)[side]}<br>{name}<extra></extra>",
-        ), row=row, col=col)
-        _radial_label(ang[k], 1.06, name, 9, "#2c3e50")
+        node_arc(fig, ang[k], step * 0.42, f"{(sub1, sub2)[side]}<br>{name}", row, col,
+                 colour=NODE_COLORS[side])
+        radial_label(fig, ang[k], 1.06, name, row, col)
 
     # ---- the chords, weakest first so the strong ones are not drawn under them ----
     pairs = [(i, j) for i in range(n) for j in range(n) if keep[i, j]]
