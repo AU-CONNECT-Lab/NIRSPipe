@@ -139,7 +139,7 @@ def _warn_unmatched_design_band(config: PostConfig) -> None:
     )
 
 
-def _warn_lowpass_breaks_whitening(config: PostConfig) -> None:
+def _warn_lowpass_breaks_whitening(config: PostConfig, mode: Mode) -> None:
     """An AR noise model fitted to low-passed data fits the filter, not the noise.
 
     Prewhitening estimates the residual's autocorrelation and divides it out, which is what
@@ -147,14 +147,19 @@ def _warn_lowpass_breaks_whitening(config: PostConfig) -> None:
     low-pass leaves the series almost perfectly predictable from its own past, so the AR
     coefficient lands at the stationarity boundary, the whitening filter becomes a first
     difference of a nearly integrated series, and the residual comes out as autocorrelated
-    as it went in. The betas are unaffected; the standard errors are not, and they go the
-    anti-conservative way.
+    as it went in.
+
+    What that costs depends on what the run is for, so the warning says a different thing
+    per mode. A task GLM keeps its betas and loses its standard errors, which go the
+    anti-conservative way. A run whose product is the residual loses more than that: the
+    coefficients are estimated under a covariance the whitening got wrong, so the residual
+    itself moves, and every inter-brain measure reading that file moves with it.
 
     Resampling counts as a low-pass: it anti-aliases at the new Nyquist, so it removes the
     same band under another flag's name.
 
     A warning rather than an error because a caller may want the filtered series for another
-    reason and read the betas only.
+    reason.
     """
     if config.noise_model in (None, "ols"):
         return
@@ -166,13 +171,18 @@ def _warn_lowpass_breaks_whitening(config: PostConfig) -> None:
                       f"at {config.resample_sfreq / 2:g} Hz")
     if not causes:
         return
+    cost = ("leaving the residual serially correlated and the t values anti-conservative; "
+            "betas are unaffected. Drop the low-pass, or use --noise-model ols and treat the "
+            "t values as uncalibrated"
+            if mode == "glm" else
+            "so the confound coefficients are fitted under the wrong covariance and "
+            "desc-errts is not the residual an ordinary least-squares fit would leave. Use "
+            "--noise-model ols to reproduce a tree written before every mode honoured this "
+            "flag")
     logger.warning(
         "sub-%s | --noise-model %s is fitted to data the run has low-passed (%s). The AR "
-        "model will fit the filter rather than the noise, leaving the residual serially "
-        "correlated and the t values anti-conservative; betas are unaffected. Drop the "
-        "low-pass on a GLM run, or use --noise-model ols and treat the t values as "
-        "uncalibrated.",
-        config.subject, config.noise_model, " and ".join(causes),
+        "model will fit the filter rather than the noise, %s.",
+        config.subject, config.noise_model, " and ".join(causes), cost,
     )
 
 
@@ -291,7 +301,7 @@ def run_post(
             raise ValueError("--events-path and --stim-dur are mutually exclusive")
         logger.info("sub-%s | GLM (%s / %s)", config.subject, config.hrf_model, config.noise_model)
         _warn_unmatched_design_band(config)
-        _warn_lowpass_breaks_whitening(config)
+        _warn_lowpass_breaks_whitening(config, mode)
         _warn_drift_absorbs_task(config, result)
         _, glm_est, dm, raw_resid = run_glm_pipeline(
             result,
@@ -323,6 +333,7 @@ def run_post(
     elif mode == "rest":
         if config.drift_model is None:
             raise ValueError("rest mode requires --drift-model")
+        _warn_lowpass_breaks_whitening(config, mode)
         logger.info("sub-%s | rest confound regression", config.subject)
         rest_glm_kwargs = dict(
             stim_dur=None,
@@ -394,6 +405,7 @@ def run_post(
             # The same empty-events confound regression rest runs, and no task model. Task
             # data whose systemic physiology has to go without the task being modelled
             # (hyperscanning, seed connectivity) ends here.
+            _warn_lowpass_breaks_whitening(config, mode)
             logger.info("sub-%s | denoise confound regression", config.subject)
             _, glm_est, dm, raw_resid = run_glm_pipeline(
                 result,

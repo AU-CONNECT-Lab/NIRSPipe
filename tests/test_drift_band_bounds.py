@@ -118,9 +118,23 @@ def test_a_low_pass_under_an_ar_model_is_warned_about(caplog):
     import logging
 
     with caplog.at_level(logging.WARNING):
-        _warn_lowpass_breaks_whitening(_config(noise_model="ar1", low_pass=0.2))
+        _warn_lowpass_breaks_whitening(_config(noise_model="ar1", low_pass=0.2), "glm")
     assert "--low-pass 0.2 Hz" in caplog.text
     assert "anti-conservative" in caplog.text
+
+
+def test_the_modes_whose_product_is_the_residual_are_warned_too(caplog):
+    """denoise and rest stopped hard-coding ols, so the same combination now moves the file
+    they exist to write. The warning has to name that, not the t values they do not compute:
+    a reader whose coherence changed needs to be told the residual did."""
+    import logging
+
+    for mode in ("denoise", "rest"):
+        caplog.clear()
+        with caplog.at_level(logging.WARNING):
+            _warn_lowpass_breaks_whitening(_config(noise_model="auto", low_pass=0.2), mode)
+        assert "desc-errts" in caplog.text
+        assert "anti-conservative" not in caplog.text
 
 
 def test_resampling_counts_as_a_low_pass(caplog):
@@ -129,20 +143,20 @@ def test_resampling_counts_as_a_low_pass(caplog):
     import logging
 
     with caplog.at_level(logging.WARNING):
-        _warn_lowpass_breaks_whitening(_config(noise_model="ar1", resample_sfreq=2.0))
+        _warn_lowpass_breaks_whitening(_config(noise_model="ar1", resample_sfreq=2.0), "glm")
     assert "--resample-sfreq 2 Hz" in caplog.text and "1 Hz" in caplog.text
 
 
 def test_ols_and_an_unfiltered_run_are_both_silent(caplog):
-    """ols does not whiten, so there is nothing for the filter to corrupt, and it is what
-    denoise and rest hard-code. An AR model on unfiltered data is the correct combination."""
+    """ols does not whiten, so there is nothing for the filter to corrupt. An AR model on
+    unfiltered data is the correct combination."""
     import logging
 
     with caplog.at_level(logging.WARNING):
-        _warn_lowpass_breaks_whitening(_config(noise_model="ols", low_pass=0.2))
-        _warn_lowpass_breaks_whitening(_config(noise_model="ar1"))
-        _warn_lowpass_breaks_whitening(_config(noise_model=None, low_pass=0.2))
-    assert "anti-conservative" not in caplog.text
+        _warn_lowpass_breaks_whitening(_config(noise_model="ols", low_pass=0.2), "glm")
+        _warn_lowpass_breaks_whitening(_config(noise_model="ar1"), "glm")
+        _warn_lowpass_breaks_whitening(_config(noise_model=None, low_pass=0.2), "denoise")
+    assert "fit the filter rather than the noise" not in caplog.text
 
 
 # ---- the noise model a caller lands on by default ----
