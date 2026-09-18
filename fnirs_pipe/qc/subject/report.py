@@ -809,21 +809,21 @@ def _section_haemo(
     }
 
 
-def _carpet_stages(raw_haemo: mne.io.Raw, psd_stages: "list | None") -> list:
-    """The stages a carpet can tell apart, as ``[(label, raw), ...]``.
+def _carpet_stages(raw_haemo: mne.io.Raw, psd_stages: "list | None") -> tuple:
+    """``([(label, raw)], reference)``: the last haemo stage on disk, and desc-preproc.
 
-    The spectrum's files minus desc-resampled, which changes the column count and nothing a
-    carpet shows.
+    One block rather than a chain. The reference is the Beer-Lambert output, drawn in the
+    motion section and quoted here only as the SD each title is measured against.
     """
-    stages = [("desc-preproc", raw_haemo)]
-    stages += [(label, raw) for label, raw in (psd_stages or [])
-               if label in ("desc-filtered", "desc-errts")
-               and "hbo" in raw.get_channel_types()]
-    return stages
+    later = [(label, raw) for label, raw in (psd_stages or [])
+             if label in ("desc-filtered", "desc-errts")
+             and "hbo" in raw.get_channel_types()]
+    reference = ("desc-preproc", raw_haemo)
+    return (later[-1:] or [reference]), reference
 
 
 def _section_stage_carpets(
-    stages: list,
+    stages: tuple,
     roi_map: "dict | None",
     raw_gvtd: "mne.io.Raw | None",
     span: "tuple[float, float] | None",
@@ -832,18 +832,20 @@ def _section_stage_carpets(
     errors: list,
     figures_dir: Path,
 ) -> dict:
-    """One carpet panel per chromophore, each stacking every stage over a shared GVTD row."""
+    """One carpet panel per chromophore, over a shared GVTD row.
+
+    ``stages`` is what :func:`_carpet_stages` returns.
+    """
     panels = []
-    if len(stages) < 2:
+    stages, reference = stages
+    if not stages:
         return {"carpet_panels": panels}
-    for chromo, label in (("hbo", "HbO"), ("hbr", "HbR")):
-        with _guard(f"Stage carpet {label}", errors, subject):
-            fig = carpet_compare_figure(stages, chromo, roi_map=roi_map,
-                                        raw_gvtd=raw_gvtd, xlim=span)
-            if fig is None:
-                continue
-            path, h = _save_plotly_html(fig, figures_dir / f"carpet_{chromo}{suffix}.html")
-            panels.append({"label": label, "path": path, "h": h})
+    with _guard("Stage carpet", errors, subject):
+        fig = carpet_compare_figure(stages, roi_map=roi_map, raw_gvtd=raw_gvtd,
+                                    xlim=span, reference=reference)
+        if fig is not None:
+            path, h = _save_plotly_html(fig, figures_dir / f"carpet_stage{suffix}.html")
+            panels.append({"label": "", "path": path, "h": h})
     return {"carpet_panels": panels,
             "carpet_stage_labels": [lab for lab, _ in stages]}
 

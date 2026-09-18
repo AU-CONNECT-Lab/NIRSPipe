@@ -1,4 +1,4 @@
-"""Stage carpet: one block per stage, all z-scored by the first stage, cut without rescaling."""
+"""Stage carpet: one block per stage, each z-scored to itself, cut without rescaling."""
 
 import mne
 import numpy as np
@@ -24,9 +24,18 @@ def _carpets(fig) -> list:
     return [t for t in fig.data if t.type == "heatmap"]
 
 
+def _tick_labels(fig) -> tuple:
+    """Tick text off whichever axis carries it; the carpet is not always the first row."""
+    for key in dir(fig.layout):
+        if key.startswith("yaxis") and getattr(fig.layout, key).ticktext:
+            return tuple(getattr(fig.layout, key).ticktext)
+    return ()
+
+
 def test_one_block_per_stage():
     fig = carpet_compare_figure(
-        [("desc-preproc", _raw()), ("desc-filtered", _raw()), ("desc-errts", _raw())], "hbo")
+        [("desc-preproc", _raw()), ("desc-filtered", _raw()), ("desc-errts", _raw())],
+        "hbo")
     assert len(_carpets(fig)) == 3
     titles = [a.text for a in fig.layout.annotations[:3]]
     assert titles[0] == "desc-preproc"
@@ -35,13 +44,13 @@ def test_one_block_per_stage():
     assert titles[2].startswith("desc-errts") and "desc-preproc" in titles[2]
 
 
-def test_every_block_is_scaled_by_the_first_stage():
-    """A stage 100x smaller renders pale, and its title says by how much."""
+def test_each_block_is_scaled_to_itself_and_says_by_how_much():
+    """A stage 100x smaller still fills its own greyscale; the title carries the ratio."""
     fig = carpet_compare_figure(
         [("desc-preproc", _raw(1e-6)), ("desc-errts", _raw(1e-8))], "hbo")
     first, last = (np.asarray(c.z, dtype=float) for c in _carpets(fig))
-    # scaled to itself the second block would come back to the first's spread
-    assert last.std() < 0.2 * first.std()
+    # scaled by the first stage's SD this block would sit near zero everywhere
+    assert last.std() > 0.5 * first.std()
     assert "SD 0.01×" in [a.text for a in fig.layout.annotations[:2]][1]
 
 
@@ -57,7 +66,7 @@ def test_roi_map_in_hbo_names_also_orders_the_hbr_carpet():
     roi_map = {"L": ["S1_D1 hbo", "S1_D2 hbo"], "R": ["S1_D3 hbo", "S1_D4 hbo"]}
     fig = carpet_compare_figure([("desc-preproc", _raw()), ("desc-errts", _raw())],
                                 "hbr", roi_map=roi_map)
-    assert tuple(fig.layout.yaxis.ticktext) == ("L", "R")
+    assert _tick_labels(fig) == ("L", "R")
 
 
 def test_cut_narrows_the_view_without_rescaling_it():
@@ -73,3 +82,26 @@ def test_cut_narrows_the_view_without_rescaling_it():
 
 def test_no_channels_of_that_chromophore_returns_none():
     assert carpet_compare_figure([("desc-preproc", _raw())], "nope") is None
+
+
+def test_both_chromophores_stack_in_one_block():
+    """HbO and HbR share one image, one colour bar and one seam, like the motion carpet."""
+    fig = carpet_compare_figure([("desc-errts", _raw(n_pairs=4))],
+                                reference=("desc-preproc", _raw(1e-5, n_pairs=4)))
+    carpets = _carpets(fig)
+    assert len(carpets) == 1
+    assert np.asarray(carpets[0].z).shape[0] == 8      # 4 HbO rows over 4 HbR rows
+    title = fig.layout.annotations[0].text
+    assert "HBO SD" in title and "HBR SD" in title and "desc-preproc" in title
+    # one colour bar per chromophore plus the seam between them
+    assert len([sh for sh in fig.layout.shapes if sh.type == "rect"]) == 2
+    assert len([sh for sh in fig.layout.shapes if sh.type == "line"]) == 1
+
+
+def test_the_stage_row_draws_the_reference_and_the_drawn_stage():
+    """The before/after comparison lives on the trace, not on a second carpet."""
+    fig = carpet_compare_figure([("desc-errts", _raw(1e-8))],
+                                reference=("desc-preproc", _raw(1e-6)))
+    lines = [t for t in fig.data if t.type == "scatter"]
+    assert [t.name for t in lines] == ["desc-preproc", "desc-errts"]
+    assert len(_carpets(fig)) == 1

@@ -237,32 +237,33 @@
 
 
     {% if carpet_panels %}
-      <h3>Carpet by stage</h3>
+      <h3>Carpet after denoising</h3>
       <p class="step-desc">
-        One block per stage file
-        {%- if carpet_stage_labels %} ({% for label in carpet_stage_labels %}<code>{{ label }}</code>{% if not loop.last %} → {% endif %}{% endfor %}){% endif %},
-        each z-scored per channel against its own mean and SD, so every block shows the
-        structure left in it rather than its amplitude. How much amplitude each step removed
-        is in the stage metrics table above, as numbers.
-        The two steps leave different marks: the bandpass takes out the fine vertical
-        texture, which is the cardiac pulse and not an artefact, while the confound
-        regression takes out structure shared across channels, which reads as a band of
-        rows brightening and darkening together.
-        The GVTD row on top is the uncorrected motion trace from the section above, on the
-        same time axis, so a dark column can be read against what happened at that moment.
-        {% if mode == 'glm' and 'desc-errts' in (carpet_stage_labels or []) %}
-        <code>desc-errts</code> here is the GLM residual, which had the task model removed as
-        well as the confounds: it shows what the model left unexplained, not the data the
-        betas were measured on.
+        Per-channel z-scored haemoglobin for
+        {% if carpet_stage_labels %}<code>{{ carpet_stage_labels[0] }}</code>{% else %}the last stage on disk{% endif %},
+        HbO above HbR in one image, a colour bar and a seam between them. Two traces sit
+        above on the same time axis: the channel-equalised GVTD of this stage against the
+        Beer-Lambert output, which is what the denoising did, and the run's uncorrected
+        motion GVTD, so a dark column can be read against what happened at that moment. The
+        title carries how far this stage's per-channel SD has fallen; the recording before
+        any of this is the carpet in the motion section above.
+        Each block is scaled to itself, so it shows the structure left at this stage rather
+        than its amplitude. The texture is finer here than on the raw carpet because the slow
+        drift that made that one look smooth has been removed, not because noise was added:
+        what is left is the analysis passband, and its fast end is near the limit this figure
+        can resolve in time. The spectrum below reads that end.
+        {% if mode == 'glm' %}
+        On a GLM run this is the residual, which had the task model removed as well as the
+        confounds: it shows what the model left unexplained, not the data the betas were
+        measured on.
         {% endif %}
         {% if condition_label %}The z-scoring is the whole recording's and only the columns
         drawn are this condition's, so every condition's carpet is on one greyscale and the
         darker stretch is the noisier one.{% endif %}
       </p>
       {% for panel in carpet_panels %}
-        <h4 style="font-size:0.9rem;margin:0.8rem 0 0.2rem;color:#444;">{{ panel.label }}</h4>
         <iframe class="plotly-frame" src="{{ panel.path }}"
-                title="{{ panel.label }} carpet by stage"
+                title="Carpet after denoising"
                 style="height:{{ panel.h }}px"></iframe>
         <p class="fig-path">{{ panel.path }}</p>
       {% endfor %}
