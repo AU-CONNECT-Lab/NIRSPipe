@@ -137,6 +137,24 @@ def _warn_unmatched_design_band(config: PostConfig) -> None:
     )
 
 
+def _warn_noise_model_unused(config: PostConfig, mode: str) -> None:
+    """denoise and rest fit ordinary least squares whatever was asked for.
+
+    Neither reports a statistic, so the noise model has nothing to calibrate there, and both
+    call the regression with `ols` directly. A flag that is accepted and then ignored is
+    worse than one that is refused: the run's parameters would name a model its output was
+    not produced with.
+    """
+    if config.noise_model is None or mode == "glm":
+        return
+    logger.warning(
+        "sub-%s | --noise-model %s is ignored in --mode %s, which fits ordinary least "
+        "squares: it reports no statistic, so there is nothing for a noise model to "
+        "calibrate. The residual it writes says `ols`.",
+        config.subject, config.noise_model, mode,
+    )
+
+
 def _warn_lowpass_breaks_whitening(config: PostConfig) -> None:
     """An AR noise model fitted to low-passed data fits the filter, not the noise.
 
@@ -279,6 +297,7 @@ def run_post(
     fc_seed: dict = {}
     fc_roi: dict = {}
     raw_resid = None  # set by the glm/rest/denoise branches
+    _warn_noise_model_unused(config, mode)
     if mode == "glm":
         missing = [f for f in ("hrf_model", "noise_model", "drift_model") if getattr(config, f) is None]
         if missing:

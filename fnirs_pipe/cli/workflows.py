@@ -65,7 +65,11 @@ def _build_post_config(subject: str, session: str | None, args: dict[str, Any], 
         resample_sfreq=pick("resample_sfreq"),
         stim_dur=pick("stim_dur"),
         hrf_model=pick("hrf_model"),
-        noise_model=pick("noise_model", default="auto"),
+        # only glm fits a noise model; denoise and rest hard-code ols because they report no
+        # statistic. Defaulting it everywhere would put `auto` in a denoise run's parameters
+        # while ols was what ran
+        noise_model=pick("noise_model",
+                         default="auto" if _v(args.get("mode")) == "glm" else None),
         drift_model=pick("drift_model"),
         drift_high_pass=pick("drift_high_pass"),
         drift_order=pick("drift_order"),

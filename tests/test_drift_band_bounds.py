@@ -187,7 +187,10 @@ def test_the_default_does_not_shadow_a_config_file():
     from fnirs_pipe.cli import workflows
     from fnirs_pipe.cli.run import _build_parser
 
-    assert 'noise_model=pick("noise_model", default="auto")' in inspect.getsource(workflows)
+    src = inspect.getsource(workflows)
+    # scoped to glm: denoise and rest fit ols whatever is asked, so defaulting it everywhere
+    # would name a model in a run's parameters that its output was not produced with
+    assert 'default="auto" if _v(args.get("mode")) == "glm" else None' in src
     action = next(a for a in _build_parser()._actions
                   if "--noise-model" in getattr(a, "option_strings", []))
     assert action.default is None, "a default here would make the TOML unreachable"
@@ -235,3 +238,23 @@ def test_the_gui_field_takes_what_the_cli_takes():
         except argparse.ArgumentTypeError:
             cli = False
         assert browser == cli, f"{value!r}: page says {browser}, CLI says {cli}"
+
+
+def test_a_noise_model_that_will_be_ignored_is_said_so(caplog):
+    """denoise and rest call the regression with ols directly. Accepting the flag and
+    dropping it silently is the shape of defect this package keeps finding in itself, so it
+    warns; it does not refuse, because a caller sweeping several modes with one config file
+    has a reason to leave the flag set."""
+    import logging
+
+    from fnirs_pipe.pipeline.post_pipeline import _warn_noise_model_unused
+
+    with caplog.at_level(logging.WARNING):
+        _warn_noise_model_unused(_config(noise_model="auto"), "denoise")
+    assert "ignored in --mode denoise" in caplog.text
+
+    caplog.clear()
+    with caplog.at_level(logging.WARNING):
+        _warn_noise_model_unused(_config(noise_model="auto"), "glm")
+        _warn_noise_model_unused(_config(noise_model=None), "rest")
+    assert "ignored" not in caplog.text
