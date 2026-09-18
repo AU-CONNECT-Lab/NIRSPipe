@@ -1,30 +1,28 @@
 """The two rest-mode figures whose numbers already existed with nothing drawing them.
 
 `_fcroi.tsv` had been written since ROI FC landed and no panel showed it; ALFF had a bar
-chart ordered by channel name, which cannot be read as the spatial claim it is. Both figures
-return a base64 PNG, so what is asserted is the geometry that carries the meaning and the
+chart ordered by channel name, which cannot be read as the spatial claim it is. Both are
+Plotly figures, so what is asserted is the geometry that carries the meaning and the
 refusals: no frames and no optode positions must give None rather than an exception, because
 the report treats None as "skip the panel" and an exception as a broken report.
 
 The seed map's own route is pinned in test_rest_seed_figure.
 """
 
-import base64
-import io
-
 import numpy as np
 import pandas as pd
+import plotly.colors as pc
 import pytest
 
-from fnirs_pipe.qc.figures.subject.rest_figures import alff_topo_figure, fc_roi_matrix_figure
+from fnirs_pipe.qc.figures.common.matrix_map import BLANK_CELL, CORRELATION_SCALE
+from fnirs_pipe.qc.figures.subject.rest_figures import (
+    alff_topo_figure, fc_matrix_figure, fc_roi_matrix_figure,
+)
 
 
-def _png_size(b64: str) -> tuple[int, int]:
-    """Width and height straight out of the PNG header, without pulling in an image library."""
-    raw = base64.b64decode(b64)
-    assert raw[:8] == b"\x89PNG\r\n\x1a\n"
-    with io.BytesIO(raw[16:24]) as buf:
-        return (int.from_bytes(buf.read(4), "big"), int.from_bytes(buf.read(4), "big"))
+def _panels(fig) -> list[str]:
+    """The subplot titles, one per panel."""
+    return [a.text for a in fig.layout.annotations if a.text]
 
 
 def _roi_frame(labels):
@@ -39,14 +37,63 @@ def _roi_frame(labels):
 
 def test_the_roi_matrix_draws_both_chromophores():
     frame = _roi_frame(["PFC", "TPJ", "M1"])
-    one = fc_roi_matrix_figure({"hbo": frame})
-    two = fc_roi_matrix_figure({"hbo": frame, "hbr": frame})
-    assert _png_size(two)[0] > _png_size(one)[0]      # a second panel, so a wider figure
+    assert _panels(fc_roi_matrix_figure({"hbo": frame})) == ["ROI FC - HbO"]
+    assert _panels(fc_roi_matrix_figure({"hbo": frame, "hbr": frame})) ==            ["ROI FC - HbO", "ROI FC - HbR"]
+
+
+def test_the_roi_matrix_prints_every_cell():
+    """A handful of ROIs means the numbers fit, and a matrix whose values all sit near one
+    another renders as a flat square without them."""
+    frame = _roi_frame(["PFC", "TPJ", "M1"])
+    fig = fc_roi_matrix_figure({"hbo": frame})
+    printed = [t for t in fig.data if getattr(t, "mode", None) == "text"]
+    # the diagonal says nothing and is blanked, so three ROIs leave six cells
+    assert sum(len(t.text) for t in printed) == 6
+
+
+def test_the_roi_diagonal_is_blank():
+    """An ROI's correlation with itself is 1 by construction."""
+    fig = fc_roi_matrix_figure({"hbo": _roi_frame(["PFC", "TPJ"])})
+    z = np.asarray(next(t for t in fig.data if t.type == "heatmap").z, dtype=float)
+    assert np.isnan(np.diag(z)).all()
 
 
 def test_the_roi_matrix_declines_rather_than_raises():
     assert fc_roi_matrix_figure({}) is None
     assert fc_roi_matrix_figure({"hbo": pd.DataFrame()}) is None
+
+
+# ---- the channel matrix ----
+
+def test_the_channel_matrix_splits_by_chromophore():
+    labels = ["S1_D1 hbo", "S1_D2 hbo"], ["S1_D1 hbr", "S1_D2 hbr"]
+    hbo, hbr = (_roi_frame(l) for l in labels)
+    assert _panels(fc_matrix_figure(hbo)) == ["FC - HbO"]
+    assert _panels(fc_matrix_figure(hbo, hbr)) == ["FC - HbO", "FC - HbR"]
+
+
+def test_the_channel_matrix_keeps_a_rejected_channel_as_a_grey_row():
+    """compute_fc blanks a rejected channel, and the row has to stay in the matrix: a
+    dropped row would renumber the others and hide that anything was rejected."""
+    frame = _roi_frame(["S1_D1 hbo", "S1_D2 hbo", "S2_D1 hbo"])
+    frame.loc["S1_D2 hbo", :] = np.nan
+    frame.loc[:, "S1_D2 hbo"] = np.nan
+    fig = fc_matrix_figure(frame)
+    heat = next(t for t in fig.data if t.type == "heatmap")
+    assert list(heat.y) == list(frame.index)
+    assert np.isnan(np.asarray(heat.z, dtype=float)[1]).all()
+    # the grey is painted under the cells, so a blank reads as grey and not as the page
+    assert any(sh.fillcolor == BLANK_CELL for sh in fig.layout.shapes)
+
+
+def test_both_matrices_use_the_report_s_one_correlation_scale():
+    """Three figures used to carry their own copy, so a red cell could have meant +1 in one
+    panel and -1 in the next."""
+    frame = _roi_frame(["S1_D1 hbo", "S1_D2 hbo"])
+    for fig in (fc_matrix_figure(frame), fc_roi_matrix_figure({"hbo": _roi_frame(["A", "B"])})):
+        heat = next(t for t in fig.data if t.type == "heatmap")
+        assert [c for _, c in heat.colorscale] ==                [c for _, c in pc.get_colorscale(CORRELATION_SCALE)]
+        assert (heat.zmin, heat.zmax) == (-1.0, 1.0)
 
 
 # ---- ALFF on the layout ----

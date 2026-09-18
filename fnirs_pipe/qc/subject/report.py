@@ -1531,7 +1531,7 @@ def _section_rest(
     sep_bands=None,
 ) -> dict:
     alff_path = alff_topo_path = fc_path = fc_roi_path = fc_circle_path = fc_seed_path = None
-    alff_topo_h = fc_seed_h = 0
+    alff_topo_h = fc_seed_h = fc_h = fc_roi_h = 0
     with _guard("ALFF/fALFF figure", errors, subject):
         if alff_df is not None:
             b64 = alff_falff_figure(alff_df)
@@ -1545,15 +1545,14 @@ def _section_rest(
                     fig, figures_dir / "rest_alff_topo.html")
     with _guard("FC matrix figure", errors, subject):
         if fc_df is not None:
-            b64 = fc_matrix_figure(fc_df, fc_hbr_df)
-            _save_b64_png(b64, figures_dir / "rest_fc.png")
-            fc_path = _fig_href(figures_dir, "rest_fc.png")
+            fig = fc_matrix_figure(fc_df, fc_hbr_df)
+            fc_path, fc_h = _save_plotly_html(fig, figures_dir / "rest_fc.html")
     with _guard("ROI FC matrix", errors, subject):
         if fc_roi:
-            b64 = fc_roi_matrix_figure(fc_roi)
-            if b64 is not None:
-                _save_b64_png(b64, figures_dir / "rest_fc_roi.png")
-                fc_roi_path = _fig_href(figures_dir, "rest_fc_roi.png")
+            fig = fc_roi_matrix_figure(fc_roi)
+            if fig is not None:
+                fc_roi_path, fc_roi_h = _save_plotly_html(
+                    fig, figures_dir / "rest_fc_roi.html")
     with _guard("FC connectogram", errors, subject):
         if fc_df is not None:
             b64 = fc_connectogram(fc_df, fc_hbr_df)
@@ -1568,7 +1567,8 @@ def _section_rest(
                     fig, figures_dir / "rest_fc_seed.html")
     return {"rest_alff_path": alff_path, "rest_alff_topo_path": alff_topo_path,
             "rest_alff_topo_h": alff_topo_h,
-            "rest_fc_path": fc_path, "rest_fc_roi_path": fc_roi_path,
+            "rest_fc_path": fc_path, "rest_fc_h": fc_h,
+            "rest_fc_roi_path": fc_roi_path, "rest_fc_roi_h": fc_roi_h,
             "rest_fc_circle_path": fc_circle_path, "rest_fc_seed_path": fc_seed_path,
             "rest_fc_seed_h": fc_seed_h}
 

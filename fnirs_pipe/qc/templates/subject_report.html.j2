@@ -431,7 +431,8 @@
   <div class="details-body">
     <p class="step-desc">{{ section_note('fc.channel_matrix') }}</p>
     {% if rest_fc_path %}
-      <img class="responsive" src="{{ rest_fc_path }}" alt="Functional connectivity matrix" />
+      <iframe class="plotly-frame" src="{{ rest_fc_path }}" title="Functional connectivity matrix"
+              style="height:{{ rest_fc_h }}px"></iframe>
       <p class="fig-path">{{ rest_fc_path }}</p>
     {% else %}
       <div class="placeholder">FC matrix not available.</div>
@@ -439,7 +440,8 @@
     {% if rest_fc_roi_path %}
       <h3>ROI to ROI</h3>
       <p class="step-desc">{{ section_note('fc.roi_matrix') }}</p>
-      <img class="responsive" src="{{ rest_fc_roi_path }}" alt="ROI-to-ROI connectivity matrix" />
+      <iframe class="plotly-frame" src="{{ rest_fc_roi_path }}" title="ROI-to-ROI connectivity matrix"
+              style="height:{{ rest_fc_roi_h }}px"></iframe>
       <p class="fig-path">{{ rest_fc_roi_path }}</p>
     {% endif %}
     {% if rest_fc_circle_path %}

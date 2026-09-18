@@ -31,6 +31,8 @@ import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
+from fnirs_pipe.qc.figures.common.matrix_map import CORRELATION_SCALE
+
 # The separation groups, in the order they are drawn. "mid" is the 10-15 mm gap that
 # long_short_channels leaves unclaimed; it is usually empty.
 _GROUP_ORDER = ["long", "mid", "short"]
@@ -40,11 +42,11 @@ _GROUP_LABEL = {
     "short": "short channels",
 }
 
-# Plotly's RdBu runs red→blue, so it is reversed everywhere to put red at r = +1. A white
-# midpoint rather than a tinted one is what keeps a correlation matrix reading as "nothing
-# here" in the middle instead of beige. The dots below take their fill from the same map,
-# so one colour means one r across the figure.
-_SCALE, _REVERSE = "RdBu", True
+# One correlation scale for the whole report, red at r = +1; see figures.common.matrix_map.
+# A white midpoint rather than a tinted one is what keeps a correlation matrix reading as
+# "nothing here" in the middle instead of beige. The dots below take their fill from the
+# same map, so one colour means one r across the figure.
+_SCALE, _REVERSE = CORRELATION_SCALE, False
 
 _MUTED, _GRID, _BASELINE = "#888888", "#eeeeee", "#444444"
 # a white fill at r near zero would vanish on a white surface, so the marks carry a ring

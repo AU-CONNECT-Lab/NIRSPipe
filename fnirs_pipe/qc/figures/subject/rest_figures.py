@@ -21,7 +21,6 @@ import io
 
 import matplotlib
 matplotlib.use("Agg")
-import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
 import mne
 import numpy as np
@@ -35,6 +34,9 @@ from fnirs_pipe.qc.figures.common._utils import HBO_COLOR, HBR_COLOR
 from fnirs_pipe.qc.figures.common.head_map import (
     BLANK_COLOR, head_axes, head_geometry, head_glyph, head_ground,
 )
+from fnirs_pipe.qc.figures.common.matrix_map import (
+    CORRELATION_SCALE, cell_values, matrix_ground,
+)
 
 logger = get_logger("qc.figures.rest")
 
@@ -42,9 +44,6 @@ _HBO_COLOR = HBO_COLOR
 _HBR_COLOR = HBR_COLOR
 _MEAN_LINE_COLOR = "#555555"
 
-# Plotly's RdBu runs red to blue, so it is reversed to put red at r = +1, as the correlation
-# panel does. One colour means one r wherever a correlation is drawn in this report.
-_FC_SCALE = "RdBu_r"
 # an unsigned magnitude, so one hue ramped rather than a diverging pair: the middle of ALFF
 # is not a neutral value the way r = 0 is
 _ALFF_SCALE = "Viridis"
@@ -143,12 +142,67 @@ def alff_falff_figure(
     return base64.b64encode(buf.read()).decode()
 
 
+# One matrix cell, in pixels, and the bounds a panel is clipped to. A channel matrix can run
+# to sixty a side and an ROI matrix to four, so the panel is sized off its own count rather
+# than fixed: at a fixed size the first is unreadable and the second is four vast squares.
+_MATRIX_CELL_PX = 18
+_MATRIX_MIN_PX, _MATRIX_MAX_PX = 300, 680
+
+
+def _matrix_grid(panels: "list[tuple[list[str], np.ndarray, str]]", title: str,
+                 label_all: bool, values: bool):
+    """The shared body of the two FC matrices: one square panel per chromophore.
+
+    ``panels`` is ``(labels, matrix, chromophore label)`` each, already blanked on the
+    diagonal. ``label_all`` prints every tick rather than thinning them, and ``values``
+    prints each cell's number on it, which only fits where the matrix is small.
+    """
+    side = float(np.clip(max(len(n) for n, _, _ in panels) * _MATRIX_CELL_PX,
+                         _MATRIX_MIN_PX, _MATRIX_MAX_PX))
+    fig = make_subplots(rows=1, cols=len(panels), horizontal_spacing=0.12,
+                        subplot_titles=[lab for _, _, lab in panels])
+
+    for col, (names, mat, _label) in enumerate(panels, start=1):
+        matrix_ground(fig, len(names), len(names), 1, col)
+        fig.add_trace(go.Heatmap(
+            # float32 halves the serialised payload and still resolves r far below what the
+            # colour scale or the hover readout distinguishes
+            z=np.asarray(mat, dtype=np.float32), x=names, y=names,
+            zmin=-1.0, zmax=1.0, colorscale=CORRELATION_SCALE,
+            showscale=(col == len(panels)),
+            colorbar=dict(title=dict(text="Pearson r", side="right", font=dict(size=10)),
+                          thickness=12, len=0.78, tickfont=dict(size=9),
+                          tickvals=[-1, -0.5, 0, 0.5, 1]),
+            hovertemplate="%{y}<br>%{x}<br>r = %{z:.3f}<extra></extra>",
+        ), row=1, col=col)
+        if values:
+            cell_values(fig, np.asarray(mat, dtype=float), names, names,
+                        cmap=CORRELATION_SCALE, vmin=-1.0, vmax=1.0, row=1, col=col)
+
+        step = 1 if label_all else max(1, len(names) // 20)
+        ticks = list(range(0, len(names), step))
+        axes = dict(tickmode="array", tickvals=[names[i] for i in ticks],
+                    tickfont=dict(size=8), showgrid=False, zeroline=False,
+                    ticks="", showline=False)
+        fig.update_xaxes(tickangle=-45, **axes, row=1, col=col)
+        # square cells, and `constrain` shrinks the axis rather than padding its range, so
+        # the labels stay against the matrix whichever dimension binds
+        fig.update_yaxes(autorange="reversed", scaleanchor=f"x{col if col > 1 else ''}",
+                         scaleratio=1, constrain="domain", **axes, row=1, col=col)
+
+    fig.update_annotations(font=dict(size=11, color="#6c757d"))
+    fig.update_layout(height=side + 150, plot_bgcolor="white", showlegend=False,
+                      margin=dict(l=70, r=40, t=62, b=90),
+                      title=dict(text=title, x=0.01, font=dict(size=13)))
+    return fig
+
+
 def fc_matrix_figure(
     fc_df: pd.DataFrame,
     fc_hbr_df: pd.DataFrame | None = None,
     title: str = "Functional Connectivity (Pearson r)",
-) -> str:
-    """Return base64 PNG of FC heatmaps, one panel per chromophore present.
+) -> "go.Figure":
+    """FC heatmaps, one panel per chromophore present.
 
     compute_fc returns one matrix per chromophore, so HbO arrives in fc_df and HbR in
     fc_hbr_df. A single matrix holding both is also accepted and split by channel suffix.
@@ -156,6 +210,9 @@ def fc_matrix_figure(
 
     Blank cells are grey. A rejected channel arrives from compute_fc already NaN, so it shows
     as a full grey row and column; the diagonal is the one-cell grey line through the middle.
+
+    Every channel keeps its tick up to a point: an unreadable label here is one scroll-zoom
+    away from being readable, which a static image could not offer.
     """
     panels: list[tuple[list[str], np.ndarray, str]] = []
     for frame in (fc_df, fc_hbr_df):
@@ -167,106 +224,37 @@ def fc_matrix_figure(
         for suffix, label in ((" hbo", "HbO"), (" hbr", "HbR")):
             idx = [i for i, c in enumerate(names) if c.endswith(suffix)]
             if idx:
-                panels.append(([names[i] for i in idx], mat[np.ix_(idx, idx)], label))
+                panels.append(([names[i] for i in idx], mat[np.ix_(idx, idx)],
+                               f"FC - {label}"))
 
     if not panels:
         raise ValueError("fc_df has no recognised HbO/HbR channels")
-
-    def _square_size(n: int) -> float:
-        return max(3.0, min(n * 0.14, 8.0))
-
-    sizes = [_square_size(len(names)) for names, _, _ in panels]
-
-    cmap = plt.get_cmap("RdBu_r").copy()
-    cmap.set_bad("#dddddd")
-
-    fig, axes = plt.subplots(
-        1, len(panels),
-        figsize=(sum(sizes) + 2.0, max(sizes)),
-        gridspec_kw={"width_ratios": sizes},
-        squeeze=False,
-    )
-    fig.subplots_adjust(wspace=0.4)
-
-    for ax, (names, mat, label) in zip(axes[0], panels):
-        im = ax.imshow(mat, aspect="equal", cmap=cmap, vmin=-1, vmax=1,
-                       interpolation="nearest")
-        n = len(names)
-        step = max(1, n // 20)
-        idxs = list(range(0, n, step))
-        ax.set_xticks(idxs)
-        ax.set_xticklabels([names[i] for i in idxs], fontsize=6,
-                           rotation=45, ha="right")
-        ax.set_yticks(idxs)
-        ax.set_yticklabels([names[i] for i in idxs], fontsize=6)
-        for spine in ax.spines.values():
-            spine.set_visible(False)
-        plt.colorbar(im, ax=ax, shrink=0.7, label="Pearson r", pad=0.02)
-        ax.set_title(f"FC — {label}", fontsize=10, pad=6)
-
-    fig.suptitle(title, fontsize=11, y=1.01)
-
-    buf = io.BytesIO()
-    fig.savefig(buf, format="png", dpi=300, bbox_inches="tight")
-    plt.close(fig)
-    buf.seek(0)
-    return base64.b64encode(buf.read()).decode()
+    return _matrix_grid(panels, title, label_all=False, values=False)
 
 
 def fc_roi_matrix_figure(
     fc_roi: "dict[str, pd.DataFrame]",
     title: str = "ROI-to-ROI Functional Connectivity (Pearson r)",
-) -> str | None:
-    """Return base64 PNG of the ROI x ROI FC heatmaps, or None if there is nothing to draw.
+) -> "go.Figure | None":
+    """The ROI x ROI FC heatmaps, or None if there is nothing to draw.
 
     ``fc_roi`` is {chromophore: ROI x ROI frame}, as :func:`compute_fc_roi` returns it. Same
-    RdBu_r / +-1 scale as :func:`fc_matrix_figure`, so the ROI view and the channel view can
-    be read against each other. A handful of ROIs means every label fits, so unlike that
-    figure this one labels and annotates every cell. The diagonal is blanked: an ROI's
-    correlation with itself is 1 by construction and says nothing.
+    scale as :func:`fc_matrix_figure`, so the ROI view and the channel view can be read
+    against each other. A handful of ROIs means every label fits, so unlike that figure this
+    one labels and annotates every cell. The diagonal is blanked: an ROI's correlation with
+    itself is 1 by construction and says nothing.
     """
-    panels = [(fc_roi.get(c), lab) for c, lab in (("hbo", "HbO"), ("hbr", "HbR"))]
-    panels = [(f, lab) for f, lab in panels if f is not None and not f.empty]
-    if not panels:
-        return None
-
-    fig, axes = plt.subplots(
-        1, len(panels), figsize=(len(panels) * 4.2 + 1.0, 4.0), squeeze=False,
-    )
-    fig.subplots_adjust(wspace=0.45)
-
-    cmap = plt.get_cmap("RdBu_r").copy()
-    cmap.set_bad("#dddddd")
-
-    for ax, (frame, label) in zip(axes[0], panels):
-        names = frame.index.tolist()
+    panels = []
+    for chromo, label in (("hbo", "HbO"), ("hbr", "HbR")):
+        frame = fc_roi.get(chromo)
+        if frame is None or frame.empty:
+            continue
         mat = frame.to_numpy(dtype=float).copy()
         np.fill_diagonal(mat, np.nan)
-        im = ax.imshow(mat, aspect="equal", cmap=cmap, vmin=-1, vmax=1,
-                       interpolation="nearest")
-        ax.set_xticks(range(len(names)))
-        ax.set_xticklabels(names, fontsize=7, rotation=45, ha="right")
-        ax.set_yticks(range(len(names)))
-        ax.set_yticklabels(names, fontsize=7)
-        for i in range(len(names)):
-            for j in range(len(names)):
-                if i == j or not np.isfinite(mat[i, j]):
-                    continue
-                # white on the saturated ends, black in the pale middle
-                ax.text(j, i, f"{mat[i, j]:.2f}", ha="center", va="center", fontsize=6,
-                        color="white" if abs(mat[i, j]) > 0.6 else "black")
-        for spine in ax.spines.values():
-            spine.set_visible(False)
-        plt.colorbar(im, ax=ax, shrink=0.7, label="Pearson r", pad=0.02)
-        ax.set_title(f"ROI FC - {label}", fontsize=10, pad=6)
-
-    fig.suptitle(title, fontsize=11, y=1.02)
-
-    buf = io.BytesIO()
-    fig.savefig(buf, format="png", dpi=300, bbox_inches="tight")
-    plt.close(fig)
-    buf.seek(0)
-    return base64.b64encode(buf.read()).decode()
+        panels.append((frame.index.tolist(), mat, f"ROI FC - {label}"))
+    if not panels:
+        return None
+    return _matrix_grid(panels, title, label_all=True, values=True)
 
 
 def _head_for(raw: mne.io.Raw, sep_bands) -> "dict | None":
@@ -372,7 +360,7 @@ def fc_seed_topo_figure(
                             "x": 0.46, "xanchor": "center", "y": -0.05, "yanchor": "top",
                             "tickfont": {"size": 9}, "title": {"side": "right"}}
                            if (i == 1 and j == n_cols) else False,
-                       colorscale=_FC_SCALE, dim=dim, blank_color=BLANK_COLOR)
+                       colorscale=CORRELATION_SCALE, dim=dim, blank_color=BLANK_COLOR)
     return _finish_head_grid(fig, geo, n_rows, n_cols, title)
 
 
