@@ -7,15 +7,13 @@ from plotly.subplots import make_subplots
 
 from fnirs_pipe.qc.figures.common._utils import HBO_COLOR, HBR_COLOR
 from fnirs_pipe.qc.figures.common.motion_panel import (
-    CARPET_Z, _GVTD_LINE, _LINE_MAX_PTS, _SEAM, _SET_COLORS, _maxpool_xy, _px_rows,
+    CARPET_Z, _GVTD_AFTER, _GVTD_LINE, _LINE_MAX_PTS, _SEAM, _maxpool_xy, _px_rows,
     carpet_coloraxis, carpet_z,
 )
 from fnirs_pipe.utils import is_optical_density
 
 _CARPET_ROW_PX = 190
 _CHROMO_COLOR = {"hbo": HBO_COLOR, "hbr": HBR_COLOR}
-_STAGE_LINE = ("#b0b7bf", "#2f4858")   # the stage before denoising, then the one drawn
-_MOTION_ROW_LABEL = "motion GVTD<br>(corrected)"
 _GVTD_ROW_PX = 90
 _VSPACE = 0.035
 _ROI_SEAM = "#ffffff"
@@ -62,47 +60,36 @@ def _roi_order(names: list[str], roi_map: "dict | None"):
     return order, groups
 
 
-def _gvtd_rows(raw_gvtd: mne.io.Raw, blocks: "list | None"):
-    """[(set name, times, trace), ...], one per channel set, or [] with nothing to draw.
+def _gvtd_rows(raw_before, raw_after, blocks: "list | None"):
+    """[(set name, times, before trace, after trace | None), ...], one entry per channel set.
 
-    One trace per set rather than one over their union: GVTD is an RMS across channels and
-    the long and short sets measure different depths.
+    One row per set rather than one over their union: GVTD is an RMS across channels and the
+    long and short sets measure different depths.
     """
     from fnirs_pipe.qc.metrics import GVTD_MOTION_BAND, gvtd_timetrace
 
-    od = raw_gvtd if is_optical_density(raw_gvtd) else         mne.preprocessing.nirs.optical_density(raw_gvtd.copy(), verbose=False)
+    def _od(raw):
+        if raw is None:
+            return None
+        return raw if is_optical_density(raw) else             mne.preprocessing.nirs.optical_density(raw.copy(), verbose=False)
+
+    od_b, od_a = _od(raw_before), _od(raw_after)
+    if od_b is None:
+        return []
     out = []
-    for name, names in (blocks or [("all", list(od.ch_names))]):
-        picks = [c for c in names if c in od.ch_names]
+    for name, names in (blocks or [("all", list(od_b.ch_names))]):
+        picks = [c for c in names if c in od_b.ch_names]
         if not picks:
             continue
-        g = gvtd_timetrace(od.get_data(picks=picks), float(od.info["sfreq"]),
-                           *GVTD_MOTION_BAND)
-        out.append((name, od.times[:len(g)], g))
+        sfreq = float(od_b.info["sfreq"])
+        g = gvtd_timetrace(od_b.get_data(picks=picks), sfreq, *GVTD_MOTION_BAND)
+        after = None
+        if od_a is not None:
+            have = [c for c in picks if c in od_a.ch_names]
+            if len(have) == len(picks) and od_a.n_times == od_b.n_times:
+                after = gvtd_timetrace(od_a.get_data(picks=have), sfreq, *GVTD_MOTION_BAND)
+        out.append((name, od_b.times[:len(g)], g, after))
     return out
-
-
-def _haemo_gvtd(stages, reference, chromos, sep_bands=None):
-    """[(label, times, trace), ...] of the channel-equalised GVTD of each haemo stage.
-
-    Standardised per channel first, so HbO and HbR contribute equally instead of the trace
-    following whichever has the larger units.
-    """
-    from fnirs_pipe.qc.metrics import GVTD_MOTION_BAND, gvtd_timetrace, long_short_channels
-
-    out = []
-    for label, raw in ([reference] if reference else []) + list(stages):
-        # the canonical set only: GVTD is an RMS across channels and the long and short sets
-        # measure different depths, so a trace over their union is neither of them
-        long_names, _ = long_short_channels(raw, sep_bands)
-        pool = long_names or raw.ch_names
-        picks = [c for c in pool if c.rsplit(" ", 1)[-1] in chromos]
-        if not picks:
-            continue
-        g = gvtd_timetrace(raw.get_data(picks=picks), float(raw.info["sfreq"]),
-                           *GVTD_MOTION_BAND, standardize_channels=True)
-        out.append((label, raw.times[:len(g)], g))
-    return out if len(out) > 1 else []
 
 
 def _cut(t: np.ndarray, xlim) -> slice:
@@ -119,8 +106,8 @@ def carpet_compare_figure(
     chromophore: "str | tuple[str, ...]" = ("hbo", "hbr"),
     roi_map: "dict | None" = None,
     raw_gvtd: "mne.io.Raw | None" = None,
+    raw_gvtd_after: "mne.io.Raw | None" = None,
     gvtd_blocks: "list | None" = None,
-    sep_bands=None,
     xlim: "tuple[float, float] | None" = None,
     z_threshold: float = CARPET_Z,
     reference: "tuple[str, mne.io.Raw] | None" = None,
@@ -161,48 +148,36 @@ def carpet_compare_figure(
     if not rows:
         return None
 
-    stage_gvtd = _haemo_gvtd(stages, reference, chromos, sep_bands)
-    gvtd = _gvtd_rows(raw_gvtd, gvtd_blocks) if raw_gvtd is not None else []
-    n_rows = len(rows) + (1 if gvtd else 0) + (1 if stage_gvtd else 0)
+    gvtd = _gvtd_rows(raw_gvtd, raw_gvtd_after, gvtd_blocks) if raw_gvtd is not None else []
+    n_rows = len(rows) + len(gvtd)
     block_px = _CARPET_ROW_PX * max(len(r[2]) for r in rows)
-    heights = ([_GVTD_ROW_PX] if stage_gvtd else []) + ([_GVTD_ROW_PX] if gvtd else [])         + [block_px] * len(rows)
+    heights = [_GVTD_ROW_PX] * len(gvtd) + [block_px] * len(rows)
     row_heights, total_px = _px_rows(heights, _VSPACE, chrome_px=140)
     fig = make_subplots(
         rows=n_rows, cols=1, shared_xaxes=True,
         row_heights=row_heights, vertical_spacing=_VSPACE,
-        subplot_titles=([""] * ((1 if stage_gvtd else 0) + (1 if gvtd else 0))
-                        + [r[0] for r in rows]),
+        subplot_titles=[""] * len(gvtd) + [r[0] for r in rows],
     )
     for ann in fig.layout.annotations:
         ann.yshift = 3
 
-    if stage_gvtd:
-        for k, (label, t_s, g_s) in enumerate(stage_gvtd):
-            keep = _cut(t_s, xlim)
-            t_ds, g_ds = _maxpool_xy(t_s[keep], g_s[keep], _LINE_MAX_PTS)
+    legend_drawn = False
+    for k, (name, t_g, g_b, g_a) in enumerate(gvtd, start=1):
+        keep = _cut(t_g, xlim)
+        for trace, colour, label in ((g_b, _GVTD_LINE, "before correction"),
+                                     (g_a, _GVTD_AFTER, "after correction")):
+            if trace is None:
+                continue
+            t_ds, y_ds = _maxpool_xy(t_g[keep], trace[keep], _LINE_MAX_PTS)
             fig.add_trace(go.Scatter(
-                x=t_ds, y=g_ds, mode="lines", name=label,
-                line=dict(color=_STAGE_LINE[min(k, len(_STAGE_LINE) - 1)],
-                          width=1.3 if k else 1.1),
-                opacity=1.0 if k else 0.75,
-                hovertemplate=f"{label}<br>t=%{{x:.1f}}s<br>%{{y:.2f}}<extra></extra>",
-            ), row=1, col=1)
-        fig.update_yaxes(title_text="stage GVTD", title_font_size=10, row=1, col=1)
+                x=t_ds, y=y_ds, mode="lines", name=label, legendgroup=label,
+                showlegend=not legend_drawn, line=dict(color=colour, width=1.3),
+                hovertemplate=f"{name} {label}<br>t=%{{x:.1f}}s<br>%{{y:.2e}}<extra></extra>",
+            ), row=k, col=1)
+        legend_drawn = legend_drawn or g_a is not None
+        fig.update_yaxes(title_text=f"{name} GVTD", title_font_size=10, row=k, col=1)
 
-    if gvtd:
-        gvtd_row = 2 if stage_gvtd else 1
-        for name, t_g, g in gvtd:
-            keep = _cut(t_g, xlim)
-            t_ds, g_ds = _maxpool_xy(t_g[keep], g[keep], _LINE_MAX_PTS)
-            fig.add_trace(go.Scatter(
-                x=t_ds, y=g_ds, mode="lines", name=name,
-                line=dict(color=_SET_COLORS.get(name, _GVTD_LINE), width=1.3),
-                hovertemplate=f"{name}<br>t=%{{x:.1f}}s<br>GVTD=%{{y:.2e}}<extra></extra>",
-            ), row=gvtd_row, col=1)
-        fig.update_yaxes(title_text=_MOTION_ROW_LABEL, title_font_size=10,
-                         row=gvtd_row, col=1)
-
-    first_row = 1 + (1 if stage_gvtd else 0) + (1 if gvtd else 0)
+    first_row = len(gvtd) + 1
     has_roi = False
     for i, (_, raw, blocks) in enumerate(rows):
         row = first_row + i

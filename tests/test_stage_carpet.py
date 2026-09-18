@@ -106,20 +106,33 @@ def test_both_chromophores_stack_in_one_block():
     assert len([sh for sh in fig.layout.shapes if sh.type == "line"]) == 1
 
 
-def test_the_stage_row_draws_the_reference_and_the_drawn_stage():
-    """The before/after comparison lives on the trace, not on a second carpet."""
+def test_the_reference_only_supplies_the_ratio_and_draws_nothing():
+    """It is quoted in the title; it gets no carpet and no trace of its own."""
     fig = carpet_compare_figure([("desc-errts", _raw(1e-8))],
                                 reference=("desc-preproc", _raw(1e-6)))
-    lines = [t for t in fig.data if t.type == "scatter"]
-    assert [t.name for t in lines] == ["desc-preproc", "desc-errts"]
     assert len(_carpets(fig)) == 1
+    assert not [t for t in fig.data if t.type == "scatter"]
+    assert "SD 0.01×" in fig.layout.annotations[0].text
 
 
-def test_the_motion_row_is_one_trace_per_channel_set_with_no_rule():
-    """Long and short measure different depths, so they stay apart; no threshold is drawn."""
+def test_one_gvtd_row_per_channel_set_carrying_both_sides():
+    """Long and short measure different depths, so they get a row each, before over after."""
     od = _od()
     blocks = [("long", od.ch_names[:4]), ("short", od.ch_names[4:])]
-    fig = carpet_compare_figure([("desc-errts", _raw())], raw_gvtd=od, gvtd_blocks=blocks)
-    lines = [t.name for t in fig.data if t.type == "scatter"]
-    assert lines == ["long", "short"]
+    fig = carpet_compare_figure([("desc-errts", _raw())], raw_gvtd=od, raw_gvtd_after=_od(),
+                                gvtd_blocks=blocks)
+    lines = [t for t in fig.data if t.type == "scatter"]
+    assert [t.name for t in lines] == ["before correction", "after correction"] * 2
+    # one row per set, then the carpet
+    assert {t.yaxis for t in lines} == {"y", "y2"}
+    assert _carpets(fig)[0].yaxis == "y3"
+    # no threshold rule, no spike shading, no correction footprint
     assert not [sh for sh in fig.layout.shapes if getattr(sh.line, "dash", None) == "dash"]
+    assert not [t for t in fig.data if getattr(t, "fill", None) == "toself"]
+
+
+def test_the_motion_rows_fall_back_to_one_trace_without_a_corrected_recording():
+    od = _od()
+    fig = carpet_compare_figure([("desc-errts", _raw())], raw_gvtd=od,
+                                gvtd_blocks=[("long", od.ch_names)])
+    assert [t.name for t in fig.data if t.type == "scatter"] == ["before correction"]

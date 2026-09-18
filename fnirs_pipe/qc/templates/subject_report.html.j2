@@ -241,12 +241,11 @@
       <p class="step-desc">
         Per-channel z-scored haemoglobin for
         {% if carpet_stage_labels %}<code>{{ carpet_stage_labels[0] }}</code>{% else %}the last stage on disk{% endif %},
-        HbO above HbR in one image, a colour bar and a seam between them. Two rows of traces sit
-        above on the same time axis: the channel-equalised GVTD of this stage against the
-        Beer-Lambert output, which is what the denoising did, and the motion GVTD after
-        correction, one line per channel set, so a dark column can be read against what
-        happened at that moment. The motion section above carries that trace's uncorrected
-        side, its threshold and the spans the correction touched. The
+        HbO above HbR in one image, a colour bar and a seam between them. One GVTD row per channel
+        set sits above on the same time axis, each carrying the trace before and after motion
+        correction, so a dark column can be read against what happened at that moment. The
+        threshold, the spike shading and the spans the correction touched stay in the motion
+        section above. The
         title carries how far this stage's per-channel SD has fallen; the recording before
         any of this is the carpet in the motion section above.
         Each block is scaled to itself, so it shows the structure left at this stage rather
