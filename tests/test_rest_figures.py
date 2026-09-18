@@ -84,16 +84,27 @@ def test_no_optode_positions_means_no_figure(haemo, alff_df):
     assert alff_topo_figure(flat, alff_df) is None
 
 
-def test_a_rejected_channel_does_not_set_the_colour_scale(haemo, alff_df):
-    """One dead channel with a runaway amplitude would otherwise flatten every real difference.
+def _scales(fig) -> list[tuple]:
+    """(cmin, cmax) of every trace that carries a colour scale, i.e. one per panel."""
+    return [(t.marker.cmin, t.marker.cmax) for t in fig.data
+            if getattr(t.marker, "cmin", None) is not None]
 
-    Drawn twice, once with that channel rejected. The scale is taken from the good channels
-    alone, so the two figures differ; without that the outlier would set vmax in both.
+
+def test_a_rejected_channel_does_not_set_the_colour_scale(haemo, alff_df):
+    """One dead channel with a runaway amplitude would otherwise flatten every real
+    difference into one colour.
+
+    Asked the direct way: does the spike move the scale? Kept, it must; rejected, it must
+    not, which a figure that only faded the channel and went on reading its value would fail.
+    Comparing a rejected run against a clean one instead would compare two different sets of
+    channels, since rejecting one removes its fALFF from that panel too.
     """
     spiked = alff_df.copy()
     spiked.loc[spiked.index[0], "alff"] = 1e6
-    normal = alff_topo_figure(haemo, spiked)
+    outlier = str(spiked.iloc[0]["channel"])
+
+    assert _scales(alff_topo_figure(haemo, spiked)) != _scales(alff_topo_figure(haemo, alff_df))
 
     marked = haemo.copy()
-    marked.info["bads"] = [str(spiked.iloc[0]["channel"])]
-    assert alff_topo_figure(marked, spiked) != normal
+    marked.info["bads"] = [outlier]
+    assert _scales(alff_topo_figure(marked, spiked)) == _scales(alff_topo_figure(marked, alff_df))

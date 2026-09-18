@@ -292,28 +292,48 @@ def _values_for(geo: dict, lookup, chromo: str) -> np.ndarray:
     return np.array([lookup(f"{name} {chromo}") for name in geo["long"]["names"]], dtype=float)
 
 
+# the gap between rows of heads, wide enough to hold a horizontal colour bar and its ticks
+_ROW_GAP = 0.14
+
+
 def _panel_colorbar(row: int, col: int, n_rows: int, n_cols: int) -> dict:
-    """Colorbar placement for one panel of a grid, beside its own row and column."""
-    height = 1.0 / n_rows
-    return {"len": height * 0.7, "x": col / n_cols - 0.012,
-            "y": 1.0 - (row - 0.5) * height, "yanchor": "middle", "thickness": 9}
+    """Colorbar placement for one panel of a head grid: horizontal, under its own head.
+
+    Beside the panel is where it belongs but not where it can go: the grid anchors each head
+    square inside a much wider cell, so a vertical bar at the cell's right edge floats in the
+    gap between two heads and reads as belonging to neither. Under the head it is
+    unambiguous, and the row gap is what the head circle leaves free: inside the cell the
+    circle fills the height, and a bar there crosses its lower arc.
+    """
+    cell = (1.0 - _ROW_GAP * (n_rows - 1)) / n_rows
+    return {"orientation": "h", "len": 0.5 / n_cols, "thickness": 9,
+            "x": (col - 0.5) / n_cols, "xanchor": "center",
+            "y": 1.0 - row * cell - (row - 1) * _ROW_GAP - 0.02, "yanchor": "top",
+            # beside the bar, not above it: a title over a horizontal bar grows the block
+            # upward and runs into the subplot title of the row below
+            "tickfont": {"size": 9}, "title": {"side": "right"}}
 
 
-def _head_grid(n_rows: int, n_cols: int, titles: list[str], geo: dict, height_per: int = 250):
+# tall enough that a head, which the grid anchors square, is still legible at report width
+_HEAD_PX = 250
+
+
+def _head_grid(n_rows: int, n_cols: int, titles: list[str], geo: dict):
     """An empty grid of heads with the outline and skeleton already under each panel."""
     fig = make_subplots(rows=n_rows, cols=n_cols, subplot_titles=titles,
-                        horizontal_spacing=0.02, vertical_spacing=0.06)
+                        horizontal_spacing=0.02, vertical_spacing=_ROW_GAP)
     for r in range(1, n_rows + 1):
         for c in range(1, n_cols + 1):
             head_ground(fig, geo, r, c)
     return fig
 
 
-def _finish_head_grid(fig, geo, n_rows, n_cols, title, height_per=250):
+def _finish_head_grid(fig, geo, n_rows, n_cols, title):
+    """Square axes, the run's title, and room under the grid for the bars."""
     head_axes(fig, {"run": geo}, n_rows, n_cols)
     fig.update_annotations(font=dict(size=11, color="#6c757d"))
-    fig.update_layout(height=height_per * n_rows + 70, plot_bgcolor="white",
-                      showlegend=False, margin=dict(l=40, r=90, t=62, b=14),
+    fig.update_layout(height=_HEAD_PX * n_rows + 90, plot_bgcolor="white",
+                      showlegend=False, margin=dict(l=40, r=40, t=62, b=54),
                       title=dict(text=title, x=0.01, font=dict(size=13)))
     return fig
 
@@ -365,8 +385,13 @@ def fc_seed_topo_figure(
             chromo = label.lower()
             values = _values_for(geo, lambda ch, r=row: float(r[ch]) if ch in r.index
                                  else np.nan, chromo)
+            # one bar for the whole figure: every panel is on the same fixed +-1 scale, so
+            # a bar per row would be the same bar drawn again
             head_glyph(fig, geo, "long", values, i, j, "Pearson r", -1.0, 1.0,
-                       bar=_panel_colorbar(i, j, n_rows, n_cols) if j == n_cols else False,
+                       bar={"orientation": "h", "len": 0.28, "thickness": 9,
+                            "x": 0.46, "xanchor": "center", "y": -0.05, "yanchor": "top",
+                            "tickfont": {"size": 9}, "title": {"side": "right"}}
+                           if (i == 1 and j == n_cols) else False,
                        colorscale=_FC_SCALE, dim=dim, blank_color=BLANK_COLOR)
     return _finish_head_grid(fig, geo, n_rows, n_cols, title)
 
@@ -399,8 +424,6 @@ def alff_topo_figure(
     if not cols:
         return None
     rows = ("alff", "falff")
-    # compute_alff already blanks a rejected channel, but the frame is an argument and may
-    # not have come from it; the recording's own bads are the authority either way
     dim = {_pair_of(ch) for ch in raw.info["bads"]}
 
     n_rows, n_cols = len(rows), len(cols)
@@ -412,8 +435,15 @@ def alff_topo_figure(
             vals = _values_for(
                 geo, lambda ch, m=measure: float(values[ch][m]) if ch in values else np.nan,
                 chromo)
+            # compute_alff already blanks a rejected channel, but the frame is an argument
+            # and may not have come from it; the recording's own bads are the authority, and
+            # a rejected channel that kept its value would still set the scale below
+            vals[[n in dim for n in geo["long"]["names"]]] = np.nan
             # the scale comes from the channels that have a value: one rejected channel with
-            # a runaway amplitude would flatten every real difference into one colour
+            # a runaway amplitude would flatten every real difference into one colour. Each
+            # panel keeps its own, because this figure is read for where amplitude is high
+            # and not for whether HbO is larger than HbR: HbR is the smaller by roughly a
+            # factor, so a scale shared with HbO renders its whole map one dark colour
             good = vals[np.isfinite(vals)]
             if not len(good):
                 continue

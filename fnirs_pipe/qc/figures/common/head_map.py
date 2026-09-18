@@ -133,7 +133,11 @@ def head_glyph(fig, geo, scope, values, row, col, title, cmin, cmax, bar, colors
         colorbar = dict(title=dict(text=title, side="right", font=dict(size=10)),
                         thickness=12, len=0.72, tickfont=dict(size=9))
         if isinstance(show_bar, dict):
-            colorbar.update(show_bar)
+            # title is nested, so a plain update would drop the text and leave a bar with
+            # only its side set
+            extra = dict(show_bar)
+            colorbar["title"] = {**colorbar["title"], **extra.pop("title", {})}
+            colorbar.update(extra)
         fig.add_trace(_marker(
             g, keep, size, short, opacity=opacity,
             color=(marker_values if keep is None else marker_values[keep]).astype(np.float32),
