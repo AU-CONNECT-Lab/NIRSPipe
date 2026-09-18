@@ -6,6 +6,10 @@ fc_matrix_figure():     functional connectivity heatmaps, HbO and HbR as separat
 fc_roi_matrix_figure(): the same, ROI by ROI instead of channel by channel.
 fc_seed_topo_figure():  seed-to-whole-brain correlations drawn on the optode flat map.
 
+The two flat maps are built on the shared head in :mod:`fnirs_pipe.qc.figures.common.head_map`
+rather than on their own projection, so a channel sits where the report's other head figures
+put it.
+
 # TODO: project ALFF/fALFF onto a brain surface (not just the flat map) via mne_nirs when
 # head coordinates are available.
 """
@@ -22,16 +26,33 @@ import matplotlib.pyplot as plt
 import mne
 import numpy as np
 import pandas as pd
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
 from fnirs_pipe.utils.logging import get_logger
 
-from fnirs_pipe.qc.figures.common._utils import HBO_COLOR, HBR_COLOR, head_outline
+from fnirs_pipe.qc.figures.common._utils import HBO_COLOR, HBR_COLOR
+from fnirs_pipe.qc.figures.common.head_map import (
+    BLANK_COLOR, head_axes, head_geometry, head_glyph, head_ground,
+)
 
 logger = get_logger("qc.figures.rest")
 
 _HBO_COLOR = HBO_COLOR
 _HBR_COLOR = HBR_COLOR
 _MEAN_LINE_COLOR = "#555555"
+
+# Plotly's RdBu runs red to blue, so it is reversed to put red at r = +1, as the correlation
+# panel does. One colour means one r wherever a correlation is drawn in this report.
+_FC_SCALE = "RdBu_r"
+# an unsigned magnitude, so one hue ramped rather than a diverging pair: the middle of ALFF
+# is not a neutral value the way r = 0 is
+_ALFF_SCALE = "Viridis"
+
+
+def _pair_of(ch: str) -> str:
+    """"S1_D1 hbo" -> "S1_D1"; the head draws pairs, the frames are keyed by channel."""
+    return ch.split(" ")[0]
 
 
 def alff_falff_figure(
@@ -248,25 +269,53 @@ def fc_roi_matrix_figure(
     return base64.b64encode(buf.read()).decode()
 
 
-def _channel_endpoints(raw: mne.io.Raw) -> "dict[str, tuple[tuple[float, float], tuple[float, float]]]":
-    """{channel name: ((source x, y), (detector x, y))} for every channel with usable positions.
+def _head_for(raw: mne.io.Raw, sep_bands) -> "dict | None":
+    """The long-channel flat head this run's maps are drawn on, or None with no positions.
 
-    e.g. "S1_D1 hbo" -> ((-0.031, 0.088), (-0.012, 0.093)). Channels whose montage carries no
-    optode coordinates report all-zero or NaN locations and are left out, which is what makes
-    an empty return the signal that no flat map can be drawn at all.
+    Short channels are deliberately left out of every map in this module: they measure
+    extracerebral signal, so neither a connectivity claim nor a low-frequency amplitude is
+    about the cortex there, and including them would set a shared colour scale from signal
+    nobody is asking about.
     """
-    ends: dict[str, tuple[tuple[float, float], tuple[float, float]]] = {}
-    for idx in mne.pick_types(raw.info, fnirs=True, exclude=[]):
-        loc = raw.info["chs"][idx]["loc"]
-        src, det = loc[3:6], loc[6:9]
-        if np.any(np.isnan(src)) or np.any(np.isnan(det)):
-            continue
-        if np.allclose(src, 0) and np.allclose(det, 0):
-            continue
-        ends[raw.info["ch_names"][idx]] = (
-            (float(src[0]), float(src[1])), (float(det[0]), float(det[1])),
-        )
-    return ends
+    from fnirs_pipe.qc.metrics import long_short_channels
+
+    long_names, _ = long_short_channels(raw, sep_bands)
+    pairs = sorted({_pair_of(ch) for ch in (long_names or raw.ch_names)})
+    geo = head_geometry(raw, pairs)
+    if geo is None or "long" not in geo:
+        return None
+    return geo
+
+
+def _values_for(geo: dict, lookup, chromo: str) -> np.ndarray:
+    """One value per pair the head draws, NaN where ``lookup`` has nothing for it."""
+    return np.array([lookup(f"{name} {chromo}") for name in geo["long"]["names"]], dtype=float)
+
+
+def _panel_colorbar(row: int, col: int, n_rows: int, n_cols: int) -> dict:
+    """Colorbar placement for one panel of a grid, beside its own row and column."""
+    height = 1.0 / n_rows
+    return {"len": height * 0.7, "x": col / n_cols - 0.012,
+            "y": 1.0 - (row - 0.5) * height, "yanchor": "middle", "thickness": 9}
+
+
+def _head_grid(n_rows: int, n_cols: int, titles: list[str], geo: dict, height_per: int = 250):
+    """An empty grid of heads with the outline and skeleton already under each panel."""
+    fig = make_subplots(rows=n_rows, cols=n_cols, subplot_titles=titles,
+                        horizontal_spacing=0.02, vertical_spacing=0.06)
+    for r in range(1, n_rows + 1):
+        for c in range(1, n_cols + 1):
+            head_ground(fig, geo, r, c)
+    return fig
+
+
+def _finish_head_grid(fig, geo, n_rows, n_cols, title, height_per=250):
+    head_axes(fig, {"run": geo}, n_rows, n_cols)
+    fig.update_annotations(font=dict(size=11, color="#6c757d"))
+    fig.update_layout(height=height_per * n_rows + 70, plot_bgcolor="white",
+                      showlegend=False, margin=dict(l=40, r=90, t=62, b=14),
+                      title=dict(text=title, x=0.01, font=dict(size=13)))
+    return fig
 
 
 def fc_seed_topo_figure(
@@ -275,96 +324,51 @@ def fc_seed_topo_figure(
     seed_hbr_df: pd.DataFrame | None = None,
     title: str = "Seed-to-whole-brain connectivity (Pearson r)",
     sep_bands=None,
-) -> str | None:
-    """Return base64 PNG of one flat map per seed ROI, or None if the montage has no positions.
+) -> "go.Figure | None":
+    """One flat map per seed ROI, or None if the montage has no positions.
 
     compute_fc_seed returns an ROI x channel frame per chromophore, so HbO arrives in seed_df
-    and HbR in seed_hbr_df. Each channel is drawn as its source-to-detector segment on the
-    optode flat map, coloured by that seed's correlation with it, on the same RdBu_r / +-1
-    scale fc_matrix_figure uses so the two figures can be read against each other.
+    and HbR in seed_hbr_df. Each channel is a bar of discs along its source-to-detector path,
+    coloured by that seed's correlation with it, on the same reversed RdBu / +-1 scale
+    fc_matrix_figure uses so the two figures can be read against each other.
 
     Three states are distinguishable on purpose, because confusing them is the mistake this
     figure exists to avoid:
 
     - an ordinary channel, coloured by r;
-    - a channel **inside the seed**, grey and thicker. Its value is NaN rather than zero, and
-      grey says "no claim made here" where a blue line would say "no connection";
-    - a **rejected** channel, drawn at low alpha. It still carries a real correlation, but the
-      channel was excluded upstream.
-
-    Short channels are not drawn: they measure extracerebral signal, so a correlation with
-    them is not a connectivity claim. Channels are drawn weakest first, so strong connections
-    are never hidden under weak ones.
+    - a channel with no value, grey. That is a channel **inside the seed**, whose correlation
+      is inflated by construction, and grey says "no claim made here" where a blue channel
+      would say "no connection";
+    - a **rejected** channel, drawn faded. Whether it also has a value depends on the frame;
+      either way the fading says the channel was excluded upstream.
     """
-    from fnirs_pipe.qc.metrics import long_short_channels
-
     panels = [(f, lab) for f, lab in ((seed_df, "HbO"), (seed_hbr_df, "HbR"))
               if f is not None and not f.empty]
     if not panels:
         return None
-
-    ends = _channel_endpoints(raw)
-    if not ends:
+    geo = _head_for(raw, sep_bands)
+    if geo is None:
         logger.warning("seed topography skipped: montage carries no optode positions")
         return None
 
-    long_names, _ = long_short_channels(raw, sep_bands)
-    drawable = set(ends) & (set(long_names) or set(ends))   # no split at all -> draw everything
-    bads = set(raw.info["bads"])
-
     rois = list(dict.fromkeys([r for frame, _ in panels for r in frame.index]))
-    cmap = plt.get_cmap("RdBu_r").copy()
-    cmap.set_bad("#aaa")
-    norm = mcolors.Normalize(vmin=-1, vmax=1)
-
-    # one head for every panel, sized from all drawable channels rather than from whichever
-    # subset a given panel happens to draw
-    head_x = [c for ch in drawable for c in (ends[ch][0][0], ends[ch][1][0])]
-    head_y = [c for ch in drawable for c in (ends[ch][0][1], ends[ch][1][1])]
-
+    dim = {_pair_of(ch) for ch in raw.info["bads"]}
     n_rows, n_cols = len(rois), len(panels)
-    fig, axes = plt.subplots(
-        n_rows, n_cols, figsize=(n_cols * 3.0 + 1.4, n_rows * 3.0), squeeze=False,
-    )
+    titles = [f"{roi} - {lab}" for roi in rois for _, lab in panels]
+    fig = _head_grid(n_rows, n_cols, titles, geo)
 
-    for i, roi in enumerate(rois):
-        for j, (frame, label) in enumerate(panels):
-            ax = axes[i][j]
-            ax.set_aspect("equal")
-            ax.axis("off")
-            ax.set_title(f"{roi} — {label}", fontsize=9, pad=4)
-            head_outline(ax, head_x, head_y)
+    for i, roi in enumerate(rois, start=1):
+        for j, (frame, label) in enumerate(panels, start=1):
             if roi not in frame.index:
-                ax.text(0.5, 0.5, "no good channel", transform=ax.transAxes,
-                        ha="center", va="center", fontsize=8, color="#888")
                 continue
-
             row = frame.loc[roi]
-            cells = [(ch, float(row[ch])) for ch in row.index if ch in drawable]
-            # weakest first so a strong connection is never hidden under a weak one; the
-            # seed's own NaN channels sort last and sit on top, which is where they belong
-            cells.sort(key=lambda c: (np.isnan(c[1]), abs(c[1]) if not np.isnan(c[1]) else 0.0))
-
-            for ch, v in cells:
-                (sx, sy), (dx, dy) = ends[ch]
-                in_seed = np.isnan(v)
-                ax.plot([sx, dx], [sy, dy],
-                        color=cmap(norm(np.ma.masked_invalid([v])))[0],
-                        lw=2.5 if in_seed else 2.0,
-                        alpha=0.35 if ch in bads else 1.0, zorder=1,
-                        solid_capstyle="round")
-
-    fig.colorbar(
-        plt.cm.ScalarMappable(norm=norm, cmap=cmap), ax=axes, shrink=0.6,
-        label="Pearson r", pad=0.02,
-    )
-    fig.suptitle(title, fontsize=11)
-
-    buf = io.BytesIO()
-    fig.savefig(buf, format="png", dpi=300, bbox_inches="tight")
-    plt.close(fig)
-    buf.seek(0)
-    return base64.b64encode(buf.read()).decode()
+            chromo = label.lower()
+            values = _values_for(geo, lambda ch, r=row: float(r[ch]) if ch in r.index
+                                 else np.nan, chromo)
+            head_glyph(fig, geo, "long", values, i, j, "Pearson r", -1.0, 1.0,
+                       bar=_panel_colorbar(i, j, n_rows, n_cols) if j == n_cols else False,
+                       colorscale=_FC_SCALE, dim=dim, blank_color=BLANK_COLOR)
+    return _finish_head_grid(fig, geo, n_rows, n_cols, title)
 
 
 def alff_topo_figure(
@@ -372,90 +376,50 @@ def alff_topo_figure(
     alff_df: pd.DataFrame,
     title: str = "ALFF and fALFF on the optode layout",
     sep_bands=None,
-) -> str | None:
-    """Return base64 PNG of ALFF and fALFF drawn on the flat map, or None with no positions.
+) -> "go.Figure | None":
+    """ALFF and fALFF drawn on the flat map, or None with no positions.
 
     The bar chart in :func:`alff_falff_figure` orders channels by name, which puts no two
     neighbours side by side; low-frequency amplitude is a spatial claim, and this is the
-    view it can be read as one in. Each channel is its source-to-detector segment, as in
-    :func:`fc_seed_topo_figure`, and rejected channels are drawn faded grey rather than
-    dropped: their ALFF arrives NaN, so there is no value to colour them by.
+    view it can be read as one in.
 
     Both measures are unsigned and their ranges differ by orders of magnitude, so each panel
-    scales to its own data (viridis) instead of to a shared symmetric scale. Short channels
-    are left out: their amplitude is extracerebral, and including them would set the colour
-    scale from signal nobody is asking about.
+    scales to its own data instead of to a shared symmetric scale, and carries its own bar.
+    A rejected channel arrives NaN, so it is drawn grey and faded rather than dropped: the
+    montage stays complete and the gap reads as a rejection.
     """
-    from fnirs_pipe.qc.metrics import long_short_channels
-
-    ends = _channel_endpoints(raw)
-    if not ends:
+    geo = _head_for(raw, sep_bands)
+    if geo is None:
         logger.warning("ALFF topography skipped: montage carries no optode positions")
         return None
 
-    long_names, _ = long_short_channels(raw, sep_bands)
-    drawable = set(ends) & (set(long_names) or set(ends))
     values = {str(row["channel"]): row for _, row in alff_df.iterrows()}
-    # compute_alff already blanks a rejected channel, but the frame is an argument and may
-    # not have come from it; the recording's own bads are the authority either way
-    bads = set(raw.info["bads"])
-
-    head_x = [c for ch in drawable for c in (ends[ch][0][0], ends[ch][1][0])]
-    head_y = [c for ch in drawable for c in (ends[ch][0][1], ends[ch][1][1])]
-
     cols = [(chromo, lab) for chromo, lab in (("hbo", "HbO"), ("hbr", "HbR"))
-            if any(ch.endswith(f" {chromo}") for ch in drawable)]
+            if any(ch.endswith(f" {chromo}") for ch in values)]
     if not cols:
         return None
     rows = ("alff", "falff")
+    # compute_alff already blanks a rejected channel, but the frame is an argument and may
+    # not have come from it; the recording's own bads are the authority either way
+    dim = {_pair_of(ch) for ch in raw.info["bads"]}
 
-    fig, axes = plt.subplots(
-        len(rows), len(cols), figsize=(len(cols) * 3.0 + 1.4, len(rows) * 3.0), squeeze=False,
-    )
+    n_rows, n_cols = len(rows), len(cols)
+    titles = [f"{measure.upper()} - {lab}" for measure in rows for _, lab in cols]
+    fig = _head_grid(n_rows, n_cols, titles, geo)
 
-    for i, measure in enumerate(rows):
-        for j, (chromo, label) in enumerate(cols):
-            ax = axes[i][j]
-            ax.set_aspect("equal")
-            ax.axis("off")
-            ax.set_title(f"{measure.upper()} - {label}", fontsize=9, pad=4)
-            head_outline(ax, head_x, head_y)
-
-            drawn = [ch for ch in drawable if ch.endswith(f" {chromo}") and ch in values]
-            usable = [ch for ch in drawn
-                      if ch not in bads and np.isfinite(values[ch][measure])]
-            cells = [(ch, float(values[ch][measure])) for ch in usable]
-            blanks = [ch for ch in drawn if ch not in set(usable)]
-            if not cells:
-                ax.text(0.5, 0.5, "no value", transform=ax.transAxes,
-                        ha="center", va="center", fontsize=8, color="#888")
+    for i, measure in enumerate(rows, start=1):
+        for j, (chromo, _label) in enumerate(cols, start=1):
+            vals = _values_for(
+                geo, lambda ch, m=measure: float(values[ch][m]) if ch in values else np.nan,
+                chromo)
+            # the scale comes from the channels that have a value: one rejected channel with
+            # a runaway amplitude would flatten every real difference into one colour
+            good = vals[np.isfinite(vals)]
+            if not len(good):
                 continue
-
-            # the scale comes from the good channels alone: one rejected channel with a
-            # runaway amplitude would otherwise flatten every real difference into one colour
-            good = [v for _, v in cells]
-            norm = mcolors.Normalize(vmin=min(good), vmax=max(good))
-            cmap = plt.get_cmap("viridis")
-
-            # a rejected channel has no value to colour, so it is drawn as a faded grey
-            # segment: the montage stays complete and the gap reads as a rejection
-            for ch in blanks:
-                (sx, sy), (dx, dy) = ends[ch]
-                ax.plot([sx, dx], [sy, dy], color="#aaaaaa", lw=2.0, alpha=0.35, zorder=1,
-                        solid_capstyle="round")
-
-            for ch, v in sorted(cells, key=lambda c: c[1]):
-                (sx, sy), (dx, dy) = ends[ch]
-                ax.plot([sx, dx], [sy, dy], color=cmap(norm(v)), lw=2.0, zorder=1,
-                        solid_capstyle="round")
-
-            plt.colorbar(plt.cm.ScalarMappable(norm=norm, cmap=cmap), ax=ax,
-                         shrink=0.7, pad=0.02)
-
-    fig.suptitle(title, fontsize=11)
-
-    buf = io.BytesIO()
-    fig.savefig(buf, format="png", dpi=300, bbox_inches="tight")
-    plt.close(fig)
-    buf.seek(0)
-    return base64.b64encode(buf.read()).decode()
+            head_glyph(fig, geo, "long", vals, i, j, measure.upper(),
+                       float(good.min()), float(good.max()),
+                       bar=_panel_colorbar(i, j, n_rows, n_cols),
+                       colorscale=_ALFF_SCALE, dim=dim, blank_color=BLANK_COLOR,
+                       fmt=".3g")
+    return _finish_head_grid(fig, geo, n_rows, n_cols, title)

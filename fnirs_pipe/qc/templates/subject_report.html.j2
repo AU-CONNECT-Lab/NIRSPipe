@@ -417,7 +417,8 @@
     {% if rest_alff_topo_path %}
       <h3>On the optode layout</h3>
       <p class="step-desc">{{ section_note('rest.alff_layout') }}</p>
-      <img class="responsive" src="{{ rest_alff_topo_path }}" alt="ALFF / fALFF topography" />
+      <iframe class="plotly-frame" src="{{ rest_alff_topo_path }}" title="ALFF / fALFF topography"
+              style="height:{{ rest_alff_topo_h }}px"></iframe>
       <p class="fig-path">{{ rest_alff_topo_path }}</p>
     {% endif %}
   </div>
@@ -450,7 +451,8 @@
     {% if rest_fc_seed_path %}
       <h3>Seed topography</h3>
       <p class="step-desc">{{ section_note('fc.seed_topography') }}</p>
-      <img class="responsive" src="{{ rest_fc_seed_path }}" alt="Seed-to-whole-brain topography" />
+      <iframe class="plotly-frame" src="{{ rest_fc_seed_path }}" title="Seed-to-whole-brain topography"
+              style="height:{{ rest_fc_seed_h }}px"></iframe>
       <p class="fig-path">{{ rest_fc_seed_path }}</p>
     {% endif %}
   </div>

@@ -1531,6 +1531,7 @@ def _section_rest(
     sep_bands=None,
 ) -> dict:
     alff_path = alff_topo_path = fc_path = fc_roi_path = fc_circle_path = fc_seed_path = None
+    alff_topo_h = fc_seed_h = 0
     with _guard("ALFF/fALFF figure", errors, subject):
         if alff_df is not None:
             b64 = alff_falff_figure(alff_df)
@@ -1538,10 +1539,10 @@ def _section_rest(
             alff_path = _fig_href(figures_dir, "rest_alff.png")
     with _guard("ALFF topography", errors, subject):
         if alff_df is not None and raw_haemo is not None:
-            b64 = alff_topo_figure(raw_haemo, alff_df, sep_bands=sep_bands)
-            if b64 is not None:   # None means the montage carries no optode positions
-                _save_b64_png(b64, figures_dir / "rest_alff_topo.png")
-                alff_topo_path = _fig_href(figures_dir, "rest_alff_topo.png")
+            fig = alff_topo_figure(raw_haemo, alff_df, sep_bands=sep_bands)
+            if fig is not None:   # None means the montage carries no optode positions
+                alff_topo_path, alff_topo_h = _save_plotly_html(
+                    fig, figures_dir / "rest_alff_topo.html")
     with _guard("FC matrix figure", errors, subject):
         if fc_df is not None:
             b64 = fc_matrix_figure(fc_df, fc_hbr_df)
@@ -1560,14 +1561,16 @@ def _section_rest(
             fc_circle_path = _fig_href(figures_dir, "rest_fc_circle.png")
     with _guard("FC seed topography", errors, subject):
         if fc_seed and raw_haemo is not None:
-            b64 = fc_seed_topo_figure(raw_haemo, fc_seed.get("hbo"), fc_seed.get("hbr"),
+            fig = fc_seed_topo_figure(raw_haemo, fc_seed.get("hbo"), fc_seed.get("hbr"),
                                       sep_bands=sep_bands)
-            if b64 is not None:   # None means the montage carries no optode positions
-                _save_b64_png(b64, figures_dir / "rest_fc_seed.png")
-                fc_seed_path = _fig_href(figures_dir, "rest_fc_seed.png")
+            if fig is not None:   # None means the montage carries no optode positions
+                fc_seed_path, fc_seed_h = _save_plotly_html(
+                    fig, figures_dir / "rest_fc_seed.html")
     return {"rest_alff_path": alff_path, "rest_alff_topo_path": alff_topo_path,
+            "rest_alff_topo_h": alff_topo_h,
             "rest_fc_path": fc_path, "rest_fc_roi_path": fc_roi_path,
-            "rest_fc_circle_path": fc_circle_path, "rest_fc_seed_path": fc_seed_path}
+            "rest_fc_circle_path": fc_circle_path, "rest_fc_seed_path": fc_seed_path,
+            "rest_fc_seed_h": fc_seed_h}
 
 
 def _glm_betas_table(df: "Any", conditions: list[str]) -> str:

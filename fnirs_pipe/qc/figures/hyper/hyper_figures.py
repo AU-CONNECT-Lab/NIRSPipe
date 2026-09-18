@@ -19,8 +19,9 @@ from fnirs_pipe.qc.figures.common._utils import (CONDITION_PALETTE, PSD_NFFT,
 # Imported rather than restated: these heads are the subject report's channel map with a
 # different quantity on them, and a reader who learned one reads the other. Two copies of
 # the pair would let one report's bars thicken while the other's stayed put.
-from fnirs_pipe.qc.figures.common.topomap import (
-    _LONG_SIZE as _HEAD_SIZE, _SHORT_SIZE as _HEAD_SHORT_SIZE,
+from fnirs_pipe.qc.figures.common.head_map import (
+    head_axes as _head_axes, head_geometry, head_ground as _head_ground,
+    head_glyph as _head_glyph,
 )
 from fnirs_pipe.utils.logging import get_logger
 
@@ -702,111 +703,6 @@ def _margin_label(fig, row: int, text: str) -> None:
 _HEAD_SCALE = [[0.0, _BAD_COLOR], [0.5, _MIX_COLOR], [1.0, _GOOD_COLOR]]
 
 
-def head_geometry(raw: mne.io.Raw, pairs: list[str]) -> "dict | None":
-    """Glyph coordinates and the head outline for one member, keyed by separation.
-
-    Reuses the subject report's channel map projection, so a dyad head and a subject head are
-    the same head and a reader who learned one can read the other. ``pairs`` names the long
-    S-D pairs; everything else the montage carries is short.
-
-    None when the montage has no usable optode positions.
-    """
-    from fnirs_pipe.qc.figures.common.topomap import _glyph_points, _projected_optodes
-
-    got = _projected_optodes(raw.info)
-    if got is None:
-        return None
-    opt_xy, all_pairs, outlines = got
-    long_set = set(pairs)
-    out = {"outlines": {k: outlines[k] for k in
-                        ("head", "nose", "ear_left", "ear_right") if k in outlines}}
-    for scope, sel in (("long", [(a, b) for a, b in all_pairs if f"{a}_{b}" in long_set]),
-                       ("short", [(a, b) for a, b in all_pairs
-                                  if f"{a}_{b}" not in long_set])):
-        if not sel:
-            continue
-        gx, gy, labels, per_pair = _glyph_points(sel, opt_xy, short=(scope == "short"))
-        out[scope] = {"gx": gx, "gy": gy, "labels": labels, "per_pair": per_pair,
-                      "names": [f"{a}_{b}" for a, b in sel],
-                      "skel": [(opt_xy[a][:2], opt_xy[b][:2]) for a, b in sel]}
-    return out if ("long" in out or "short" in out) else None
-
-
-def _head_ground(fig, geo: dict, row: int, col: int) -> None:
-    """The outline and the bare source-detector skeleton, under the glyphs."""
-    for key in ("head", "nose", "ear_left", "ear_right"):
-        xy = geo["outlines"].get(key)
-        if xy is not None:
-            fig.add_trace(go.Scatter(x=np.asarray(xy[0]), y=np.asarray(xy[1]), mode="lines",
-                                     line=dict(color="#c9d2da", width=1.2),
-                                     hoverinfo="skip", showlegend=False), row=row, col=col)
-    sx, sy = [], []
-    for scope in ("long", "short"):
-        for a, b in geo.get(scope, {}).get("skel", []):
-            sx += [a[0], b[0], None]
-            sy += [a[1], b[1], None]
-    fig.add_trace(go.Scatter(x=sx, y=sy, mode="lines", line=dict(color="#ececec", width=1),
-                             hoverinfo="skip", showlegend=False), row=row, col=col)
-
-
-def _head_glyph(fig, geo, scope, values, row, col, title, cmin, cmax, bar,
-                sid: str = "") -> int:
-    """One trace per separation, every channel's markers carried in one colour array.
-
-    Long and short keep one colour scale, as the subject report's channel map does, so a
-    short channel reads as a contamination check rather than a second map. That report can
-    give them a row of their own; one head cannot, so the **shape** carries the distinction:
-    a long channel is a bar of small discs along its path, a short one a single larger disc
-    inside a grey ring.
-    """
-    g = geo[scope]
-    short = scope == "short"
-    fig.add_trace(go.Scatter(
-        x=g["gx"], y=g["gy"], mode="markers", text=g["labels"],
-        marker=dict(size=_HEAD_SHORT_SIZE if short else _HEAD_SIZE,
-                    symbol="circle",
-                    color=np.repeat(values, g["per_pair"]).astype(np.float32),
-                    colorscale=_HEAD_SCALE, cmin=cmin, cmax=cmax, showscale=bar,
-                    # a grey ring, which reads as a separate object against both the head
-                    # and the bars while leaving the fill on the shared colour scale. White
-                    # disappears into the page and near-black fights the fill for attention.
-                    line=dict(width=1.6 if short else 0, color="#98a4ae"),
-                    colorbar=dict(title=dict(text=title, side="right", font=dict(size=10)),
-                                  thickness=12, len=0.72, tickfont=dict(size=9))),
-        # the member in every bubble: a grid of heads is read by pointing at one, and the
-        # row label is off at the edge by then
-        hovertemplate=(f"<b>{sid}</b><br>" if sid else "")
-                      + "%{text}<br>%{marker.color:.3f}<extra></extra>",
-        showlegend=False), row=row, col=col)
-    return len(fig.data) - 1
-
-
-def _head_axes(fig, geo_by_sub: dict, n_rows: int, n_cols: int,
-               row_labels: "list[str] | None" = None) -> None:
-    xs, ys = [], []
-    for geo in geo_by_sub.values():
-        for xy in geo["outlines"].values():
-            xs += list(np.asarray(xy[0]))
-            ys += list(np.asarray(xy[1]))
-    pad = 0.04 * ((max(xs) - min(xs)) or 1.0)
-    xr, yr = [min(xs) - pad, max(xs) + pad], [min(ys) - pad, max(ys) + pad]
-    for r in range(1, n_rows + 1):
-        for c in range(1, n_cols + 1):
-            n = (r - 1) * n_cols + c
-            fig.update_xaxes(visible=False, range=xr, row=r, col=c)
-            # the report renders figures responsive, so a wider container would stretch the
-            # head into an ellipse; the anchor keeps it round and spends the slack as margin.
-            # The axis stays visible with everything stripped rather than `visible=False`,
-            # which would take the title with it, and the title is what names the row.
-            fig.update_yaxes(range=yr, row=r, col=c, showticklabels=False, showgrid=False,
-                             zeroline=False, showline=False, ticks="",
-                             scaleanchor="x" if n == 1 else f"x{n}", scaleratio=1)
-    if row_labels:
-        for r, label in enumerate(row_labels, start=1):
-            fig.update_yaxes(title_text=label, title_font=dict(size=11, color="#34495e"),
-                             row=r, col=1)
-
-
 def _pair_values(geo, scope, by_pair: dict, reduce_fn) -> "np.ndarray":
     """One value per channel this head draws, NaN where the dyad grid has no such pair."""
     return np.array([reduce_fn(by_pair[name]) if name in by_pair else np.nan
@@ -846,7 +742,8 @@ def build_head_by_condition(
                     continue
                 vals = _pair_values(geo, scope, by_pair, lambda v, s=sel: v[s].mean())
                 _head_glyph(fig, geo, scope, vals, ri, ci, "Coupled<br>windows", 0.0, 1.0,
-                            bar=(ri == 1 and ci == len(names) and scope == "long"), sid=sid)
+                            bar=(ri == 1 and ci == len(names) and scope == "long"),
+                            colorscale=_HEAD_SCALE, sid=sid)
     _head_axes(fig, geo_by_sub, len(subject_ids), len(names), row_labels=subject_ids)
     fig.update_annotations(font=dict(size=11, color="#6c757d"))
     # a head per member per block, so the grid is as wide as the blocks and only as tall as
@@ -917,7 +814,8 @@ def build_head_slider(
                 continue
             vals = _pair_values(geo, scope, sci, lambda v, k=frames_at[0]: v[k])
             i = _head_glyph(fig, geo, scope, vals, 1, ci, "SCI<br>(10 s)", cmin, cmax,
-                            bar=(ci == len(subject_ids) and scope == "long"), sid=sid)
+                            bar=(ci == len(subject_ids) and scope == "long"),
+                            colorscale=_HEAD_SCALE, sid=sid)
             drawn.append((sid, scope, i))
     if not drawn:
         return None

@@ -32,6 +32,8 @@ Ordered by how often each has come up, not by when it might happen.
 
 - Spline motion correction. Two motion correction methods already ship; this would be a third, and it needs its own artifact detection built alongside it
 - External regressors in confound regression. Built, then withheld: whether it helps has not been shown on enough data to turn on
+- Prewhitening before the dyad coherence. The one study proposing it is a simulation, and its only arm resembling an adult pair found the coherence lowered rather than recovered, so it waits on a measurement of our own
+- All short channels as separate confound regressors, instead of their mean. The published comparison ranks it above the mean, and the change is bounded
 
 **Quality control**
 

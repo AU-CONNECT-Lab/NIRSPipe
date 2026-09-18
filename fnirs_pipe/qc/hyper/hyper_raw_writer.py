@@ -26,9 +26,9 @@ from fnirs_pipe.qc.figures.hyper.hyper_figures import (
     build_screening_strip,
     build_signal_overlay_pair,
     build_usable_time,
-    head_geometry,
     motion_series,
 )
+from fnirs_pipe.qc.figures.common.head_map import head_geometry
 from fnirs_pipe.qc.metrics.hyper import (
     compute_hyper_sqm, coupled_grid, member_series, motion_summary, screening_summary,
 )
