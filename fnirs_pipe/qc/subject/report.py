@@ -807,6 +807,51 @@ def _section_haemo(
     }
 
 
+def _carpet_stages(raw_haemo: mne.io.Raw, psd_stages: "list | None") -> list:
+    """The stages a carpet can tell apart, as ``[(label, raw), ...]``.
+
+    Built from the same files the spectrum reads, minus desc-resampled: a resample changes
+    the column count and nothing a carpet shows, so its block would be the one above it
+    redrawn. A run that filtered nothing has no desc-filtered file and gets no such row.
+    """
+    stages = [("desc-preproc", raw_haemo)]
+    stages += [(label, raw) for label, raw in (psd_stages or [])
+               if label in ("desc-filtered", "desc-errts")
+               and "hbo" in raw.get_channel_types()]
+    return stages
+
+
+def _section_stage_carpets(
+    stages: list,
+    roi_map: "dict | None",
+    raw_gvtd: "mne.io.Raw | None",
+    span: "tuple[float, float] | None",
+    suffix: str,
+    subject: str,
+    errors: list,
+    figures_dir: Path,
+) -> dict:
+    """One carpet panel per chromophore, each stacking every stage over a shared GVTD row.
+
+    HbO and HbR get a figure each rather than two columns of one: they are anti-correlated
+    and never share a scale elsewhere in the report, and a single figure tall enough for
+    both chromophores at every stage does not fit a page.
+    """
+    panels = []
+    if len(stages) < 2:
+        return {"carpet_panels": panels}
+    for chromo, label in (("hbo", "HbO"), ("hbr", "HbR")):
+        with _guard(f"Stage carpet {label}", errors, subject):
+            fig = carpet_compare_figure(stages, chromo, roi_map=roi_map,
+                                        raw_gvtd=raw_gvtd, xlim=span)
+            if fig is None:
+                continue
+            path, h = _save_plotly_html(fig, figures_dir / f"carpet_{chromo}{suffix}.html")
+            panels.append({"label": label, "path": path, "h": h})
+    return {"carpet_panels": panels,
+            "carpet_stage_labels": [lab for lab, _ in stages]}
+
+
 def _section_epoch_preview(
     raw_haemo: mne.io.Raw,
     subject: str,
@@ -1632,12 +1677,12 @@ def build_subject_report(
     raw_errts         = _load_stage_raw(nirs_dir, sqm_label, "errts", subject, errors)
     # the haemo chain as it exists on disk, in the order it was written. The PSD figure used
     # to re-filter `raw_haemo` in memory to invent its "after" row, which showed the filter
-    # rather than the run; a stage missing here simply does not get a line. It stops at the
-    # bandpass: desc-errts is the confound regression's output, and what that step did is
-    # not a spectral question.
+    # rather than the run; a stage missing here simply does not get a line. desc-errts earns
+    # its row by being the only detrend when no bandpass ran, and by showing the regression
+    # stayed out of the analysis band when one did.
     psd_stages        = [
         (f"desc-{desc}", raw)
-        for desc in ("filtered", "resampled")
+        for desc in ("filtered", "resampled", "errts")
         if (raw := _load_stage_raw(nirs_dir, sqm_label, desc, subject, errors)) is not None
     ] or None
     sci_vars          = _section_sci(
@@ -1667,12 +1712,9 @@ def build_subject_report(
                                        l_freq=l_freq, h_freq=h_freq,
                                        raw_errts=raw_errts, psd_stages=psd_stages,
                                        record=record, sep_bands=sep_bands)
-    denoise_carpet_path = None
-    if after_haemo is not None:
-        with _guard("Denoising carpet", errors, subject):
-            b64 = carpet_compare_figure(raw_haemo, after_haemo, roi_map=roi_map)
-            _save_b64_png(b64, figures_dir / "denoise_carpet.png")
-            denoise_carpet_path = _fig_href(figures_dir, "denoise_carpet.png")
+    carpet_stages = _carpet_stages(raw_haemo, psd_stages)
+    carpet_vars = _section_stage_carpets(carpet_stages, roi_map, raw_gvtd, None, "",
+                                         subject, errors, figures_dir)
     # the trial window every epoch figure averages over. None on the config means the
     # report's own default, so an unset flag draws exactly what it always drew
     epoch_tmin = _EPOCH_TMIN if getattr(config, "epoch_tmin", None) is None else config.epoch_tmin
@@ -1789,10 +1831,6 @@ def build_subject_report(
     from fnirs_pipe.qc.subject.sqm_record import entities_of
 
     run_label_text = sqm_label or f"sub-{subject}"
-    # figures that reach the template as loose keywords rather than inside a section dict.
-    # They live in one here so `_blanked` can empty them: passed loose, a whole-run figure
-    # survives onto a per-condition page, which is how denoise_carpet first got there.
-    loose_figure_vars = {"denoise_carpet_path": denoise_carpet_path}
     report_vars = dict(
         # the run names the page; that it is a QC report is what the reader opened. A
         # condition page appends its own label in `_condition_pages`, the way the hyper
@@ -1848,7 +1886,7 @@ def build_subject_report(
         **glm_vars,
         **rest_vars,
         **ch_summary_vars,
-        **loose_figure_vars,
+        **carpet_vars,
         gvtd_set=gvtd_set,
         # the set GVTD was actually measured on, so the note says so on a per-condition page
         # too
@@ -1867,7 +1905,7 @@ def build_subject_report(
                 section_vars=(sci_vars, motion_vars, motion_det_vars, trial_image_vars,
                               topomap_vars, haemo_vars, channel_det_vars, psd_det_vars,
                               brain_vars, epoch_vars, trigger_vars, trial_qc_vars,
-                              glm_vars, rest_vars, loose_figure_vars),
+                              glm_vars, rest_vars, carpet_vars),
                 config=config, subject=subject,
                 out_path=out_path, out_dir=nirs_dir, sqm_label=sqm_label,
                 figures_dir=figures_dir, sci_scores=sci_scores, errors=errors,
@@ -1895,8 +1933,8 @@ def build_subject_report(
                     ch_names_brain=ch_names_brain, suffix=suffix),
                 remake_motion_detail=lambda slug: _condition_motion_detail(
                     motion_det_vars.get("motion_detail_pairs") or [], slug),
-                remake_denoise_carpet=lambda suffix, span: _condition_denoise_carpet(
-                    raw_haemo, after_haemo, roi_map, span, suffix,
+                remake_denoise_carpet=lambda suffix, span: _section_stage_carpets(
+                    carpet_stages, roi_map, raw_gvtd, span, suffix,
                     subject, errors, figures_dir),
                 # --epoch-single-trial waives the "one row is not a comparison" floor
                 # here as well, for the same reason it waives it on the epoch section
@@ -2094,26 +2132,6 @@ def _cropped_sections(
         out.update({"epoch_preview_path": None, "epoch_preview_h": 0,
                     "evoked_topomap_path": None, "evoked_topomap_h": 0})
     return out
-
-
-def _condition_denoise_carpet(
-    raw_haemo, after_haemo, roi_map, span, suffix, subject, errors, figures_dir,
-) -> dict:
-    """The before/after denoising carpet over one condition's stretch.
-
-    The greyscale is the run's, set from each channel's whole-recording SD, and only the
-    columns drawn are cut; see ``carpet_compare_figure``'s ``xlim``. This is the third figure
-    on a per-condition page that is measured run-wide and viewed narrow, after the GVTD
-    carpet and the per-channel motion figures.
-    """
-    if after_haemo is None:
-        return {}
-    with _guard("Denoising carpet", errors, subject):
-        b64 = carpet_compare_figure(raw_haemo, after_haemo, roi_map=roi_map, xlim=span)
-        name = f"denoise_carpet{suffix}.png"
-        _save_b64_png(b64, figures_dir / name)
-        return {"denoise_carpet_path": _fig_href(figures_dir, name)}
-    return {}
 
 
 def _condition_timeline(report_vars: dict) -> dict:

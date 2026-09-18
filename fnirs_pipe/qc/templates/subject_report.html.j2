@@ -228,19 +228,31 @@
     {% endif %}
 
 
-    {% if denoise_carpet_path %}
-      <h3>Denoising carpet — before / after</h3>
+    {% if carpet_panels %}
+      <h3>Carpet by stage</h3>
       <p class="step-desc">
-        Per-channel z-scored haemoglobin carpet, both stages scaled by the before SD:
-        reduced fluctuation after denoising renders paler. HbO and HbR shown separately.
-        The fine vertical texture on the Before row is the cardiac pulse, which the
-        bandpass has not yet removed at that stage, not an artefact.
-        {% if condition_label %}The scaling is the whole recording's and only the columns
+        One block per stage file
+        {%- if carpet_stage_labels %} ({% for label in carpet_stage_labels %}<code>{{ label }}</code>{% if not loop.last %} → {% endif %}{% endfor %}){% endif %},
+        each z-scored per channel against its own mean and SD, so every block shows the
+        structure left in it rather than its amplitude. How much amplitude each step removed
+        is in the stage metrics table above, as numbers.
+        The two steps leave different marks: the bandpass takes out the fine vertical
+        texture, which is the cardiac pulse and not an artefact, while the confound
+        regression takes out structure shared across channels, which reads as a band of
+        rows brightening and darkening together.
+        The GVTD row on top is the uncorrected motion trace from the section above, on the
+        same time axis, so a dark column can be read against what happened at that moment.
+        {% if condition_label %}The z-scoring is the whole recording's and only the columns
         drawn are this condition's, so every condition's carpet is on one greyscale and the
         darker stretch is the noisier one.{% endif %}
       </p>
-      <img class="responsive" src="{{ denoise_carpet_path }}" alt="Denoising before/after carpet" />
-      <p class="fig-path">{{ denoise_carpet_path }}</p>
+      {% for panel in carpet_panels %}
+        <h4 style="font-size:0.9rem;margin:0.8rem 0 0.2rem;color:#444;">{{ panel.label }}</h4>
+        <iframe class="plotly-frame" src="{{ panel.path }}"
+                title="{{ panel.label }} carpet by stage"
+                style="height:{{ panel.h }}px"></iframe>
+        <p class="fig-path">{{ panel.path }}</p>
+      {% endfor %}
     {% endif %}
   </div>
 </details>
@@ -250,7 +262,7 @@
   <summary>e. Power Spectral Density by stage</summary>
   <div class="details-body">
     <p class="step-desc">
-      One row per chromophore, one line per stage file on disk. Coloured bands: Mayer wave
+      One row per stage file on disk, HbO and HbR together in each. Coloured bands: Mayer wave
       (~0.1&thinsp;Hz){#- Mayer alone is a fixed visual reference with no metric behind it;
       the other two are the configured bands the shading and the band scalars both use -#}
       {%- if psd_resp_band %}, respiration ({{ '%g'|format(psd_resp_band[0]) }}–{{ '%g'|format(psd_resp_band[1]) }}&thinsp;Hz){% endif %}
@@ -260,6 +272,13 @@
       {% if psd_stage_labels %}
         Stages after <code>desc-preproc</code>:
         {% for label in psd_stage_labels %}<code>{{ label }}</code>{% if not loop.last %}, {% endif %}{% endfor %}.
+        {% if 'desc-errts' in psd_stage_labels %}
+          <code>desc-errts</code> is the confound regression's residual. Where a high-pass ran
+          it should sit on top of the row above it, since the drift basis has little left to
+          remove and the other regressors are measured signals rather than frequency bands; a
+          visible gap inside the analysis band means the regression reached further than
+          intended. Where no high-pass ran, this row carries the whole detrend.
+        {% endif %}
       {% else %}
         No post-processing output was found for this run, so the second line is the bandpass
         simulated in memory rather than a file the pipeline wrote.

@@ -102,18 +102,25 @@ def psd_figure(
     filter_method: str = DEFAULT_FILTER_METHOD,
     filter_order: int = DEFAULT_FILTER_ORDER,
     fmax: float = 2.0,
-    title: str = "Power spectral density, before and after the bandpass",
+    title: str = "Power spectral density by stage",
     cardiac: "tuple[float, float] | None" = None,
     resp: "tuple[float, float] | None" = None,
     stages: "list[tuple[str, mne.io.Raw]] | None" = None,
     first_label: str = "Before bandpass",
 ) -> go.Figure:
-    """The bandpass, before over after, HbO and HbR together, with the filter drawn on it.
+    """Each stage's spectrum in its own row, HbO and HbR together, with the filter drawn on it.
 
     ``raw_haemo`` is the Beer-Lambert output, the filter's input. ``stages`` are what the run
-    wrote after it as ``[(label, raw), ...]``, read off disk by the caller, normally just the
-    filtered file. Passing None falls back to simulating the bandpass in memory, which is
-    what a prep-only run gets.
+    wrote after it as ``[(label, raw), ...]``, read off disk by the caller. Passing None falls
+    back to simulating the bandpass in memory, which is what a prep-only run gets.
+
+    A row per stage file rather than a before/after pair, since which steps ran differs
+    between runs and each leaves its own mark. The bandpass empties two bands at once. A
+    cosine drift basis empties everything below its cutoff, so it carries the whole detrend
+    where no high-pass ran and little of it where one did; the second case is still worth a
+    row, because a row that does *not* land on top of the one above it says the regression
+    reached into the analysis band. Regressors that are measured signals rather than a
+    frequency basis (short channels, aux) leave the spectrum's shape alone and get no row.
 
     Stage is the row so a step is read by looking down the column, and both rows share one
     power axis or the comparison would be against a rescaled yardstick. The filter's own
@@ -149,10 +156,18 @@ def psd_figure(
 
     n_rows = len(all_stages)
     titles = [label for label, _ in all_stages]
-    if n_rows >= 2 and titles[1].startswith("desc-") and (l_freq is not None or h_freq is not None):
+    # The row the bandpass produced, which is the only one the response curve may be drawn
+    # over and the only one renamed. A run with no bandpass still reaches here with rows of
+    # its own (desc-resampled, desc-errts); those are not the filter's output and naming
+    # either of them "After bandpass" would credit the filter with what the regression did.
+    filter_row = None
+    if l_freq is not None or h_freq is not None:
+        filter_row = next((i for i, (label, _) in enumerate(all_stages, start=1)
+                           if label == "desc-filtered" or label.startswith("simulated")), None)
+    if filter_row is not None:
         edges = "  ".join(part for part in (f"HP {l_freq} Hz" if l_freq is not None else "",
                                             f"LP {h_freq} Hz" if h_freq is not None else "") if part)
-        titles[1] = f"After bandpass ({edges})"
+        titles[filter_row - 1] = f"After bandpass ({edges})"
     fig = make_subplots(
         rows=n_rows, cols=1, shared_xaxes=True, vertical_spacing=0.09,
         subplot_titles=titles,
@@ -182,11 +197,11 @@ def psd_figure(
                 hovertemplate=f"{label} {name}<br>%{{x:.3f}} Hz<br>%{{y:.1f}} dB<extra></extra>",
             ), row=row, col=1)
             lo, hi = min(lo, float(db.min())), max(hi, float(db.max()))
-            if row == 2 and ch_type == "hbo":
+            if row == filter_row and ch_type == "hbo":
                 anchor = _passband_level(freqs, mean_db, l_freq, h_freq)
 
-    # the filter goes over row 2, the stage it produced; row 1 is its input
-    if anchor is not None and n_rows >= 2:
+    # the filter goes over the stage it produced; row 1 is its input
+    if anchor is not None and filter_row is not None:
         freqs, db = filter_response(raw_haemo.info["sfreq"], raw_haemo.n_times,
                                     l_freq, h_freq, filter_method, filter_order)
         inside = freqs <= fmax
@@ -199,7 +214,7 @@ def psd_figure(
             name="Filter response", legendgroup="Filter response",
             hovertemplate="filter<br>%{x:.3f} Hz<br>%{text:.1f} dB<extra></extra>",
             text=attenuation.tolist(),
-        ), row=2, col=1)
+        ), row=filter_row, col=1)
 
     _add_band_shading(fig, fmax=fmax, bands=_physio_bands(cardiac, resp), rows=n_rows)
 

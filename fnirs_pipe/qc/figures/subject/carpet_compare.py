@@ -1,143 +1,201 @@
-"""Denoising before/after comparison carpet (HbO + HbR, optional ROI grouping)."""
+"""Stage-by-stage haemoglobin carpet, on the motion panel's time axis and its greyscale."""
 
-import base64
-import io
-
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
 import mne
 import numpy as np
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
-_MAX_PTS = 2000
+from fnirs_pipe.qc.figures.common.motion_panel import (
+    CARPET_Z, _GVTD_LINE, _LINE_MAX_PTS, _THRESH_RULE, _maxpool_xy, _px_rows,
+    add_carpet, carpet_coloraxis, carpet_z,
+)
+from fnirs_pipe.utils import is_optical_density
+
+_CARPET_ROW_PX = 190
+_GVTD_ROW_PX = 90
+_VSPACE = 0.035
+_ROI_SEAM = "#ffffff"
 
 
-def _decimate_cols(arr: np.ndarray, max_pts: int) -> np.ndarray:
-    if arr.shape[1] > max_pts:
-        return arr[:, :: arr.shape[1] // max_pts]
-    return arr
+def _stage_channels(stages, chromophore: str) -> list[str]:
+    """Channels of one chromophore that every stage still carries, in the first stage's order.
+
+    A later stage may have dropped a channel (marked bad after the first file was written),
+    and a carpet whose rows mean different channels in different blocks is not readable::
+
+        stages with ["S1_D1 hbo", "S1_D2 hbo"] then ["S1_D1 hbo"]  ->  ["S1_D1 hbo"]
+    """
+    if not stages:
+        return []
+    first = [c for c in stages[0][1].ch_names if c.endswith(f" {chromophore}")]
+    for _, raw in stages[1:]:
+        have = set(raw.ch_names)
+        first = [c for c in first if c in have]
+    return first
 
 
-def _shared_scale(before: np.ndarray, after: np.ndarray, z: float):
-    """Demean each stage by its own mean, divide BOTH by the before-std so denoising's
-    variance reduction shows (after gets paler). z = (x - mean_t) / std_t(before), clipped."""
-    if before.shape[0] == 0:
-        return before, after
-    std_b = before.std(axis=1, keepdims=True)
-    std_b[std_b == 0] = 1.0
-    bz = (before - before.mean(axis=1, keepdims=True)) / std_b
-    az = (after - after.mean(axis=1, keepdims=True)) / std_b
-    return np.clip(bz, -z, z), np.clip(az, -z, z)
+def _roi_order(names: list[str], roi_map: "dict | None"):
+    """Row order grouping channels by ROI, plus the label and boundary of each group.
+
+    ``roi_map`` is {ROI label: [channel names]} (project convention) and is matched against
+    the full channel name first, then the S-D base, so a map written either way lands::
+
+        names ["a hbo", "b hbo"], roi_map {"L": ["b hbo"], "R": ["a hbo"]}
+        ->  order [1, 0], groups [("L", 0, 0), ("R", 1, 1)]
+
+    Channels no ROI claims keep their place at the end under "unassigned". Without a map the
+    order is the montage's own and there are no groups.
+    """
+    if not roi_map or not names:
+        return np.arange(len(names)), []
+    # the S-D base is indexed too, so a map written in HbO channel names also places the HbR
+    # carpet's rows instead of sending every one of them to "unassigned"
+    ch_to_roi: dict = {}
+    for label, chans in roi_map.items():
+        for ch in chans:
+            ch_to_roi[ch] = label
+            ch_to_roi.setdefault(ch.rsplit(" ", 1)[0], label)
+    labels = [str(ch_to_roi.get(c, ch_to_roi.get(c.rsplit(" ", 1)[0], "unassigned")))
+              for c in names]
+    ordered = sorted(set(labels))
+    if "unassigned" in ordered:  # keep it last rather than wherever it sorts
+        ordered = [l for l in ordered if l != "unassigned"] + ["unassigned"]
+    code_of = {name: i for i, name in enumerate(ordered)}
+    codes = np.array([code_of[l] for l in labels])
+    order = np.argsort(codes, kind="stable")
+    groups = []
+    for i, label in enumerate(ordered):
+        rows = np.where(codes[order] == i)[0]
+        if rows.size:
+            groups.append((label, int(rows[0]), int(rows[-1])))
+    return order, groups
+
+
+def _gvtd_row(raw_gvtd: mne.io.Raw):
+    """(times, trace, threshold) for the motion row, or None when there is nothing to draw.
+
+    Computed here with the same function and constants the motion section uses, so the trace
+    above the carpet is the one the motion panel drew rather than a second opinion.
+    """
+    from fnirs_pipe.qc.metrics import (
+        GVTD_MOTION_BAND, GVTD_N_STD, gvtd_threshold, gvtd_timetrace,
+    )
+
+    od = raw_gvtd if is_optical_density(raw_gvtd) else \
+        mne.preprocessing.nirs.optical_density(raw_gvtd.copy(), verbose=False)
+    data = od.get_data()
+    if not data.size:
+        return None
+    g = gvtd_timetrace(data, float(od.info["sfreq"]), *GVTD_MOTION_BAND)
+    return od.times[:len(g)], g, gvtd_threshold(g, n_std=GVTD_N_STD)
+
+
+def _cut(t: np.ndarray, xlim) -> slice:
+    """Columns inside ``xlim``, or everything when there is no span."""
+    if xlim is None:
+        return slice(None)
+    i0 = int(np.searchsorted(t, float(xlim[0])))
+    i1 = int(np.searchsorted(t, float(xlim[1])))
+    return slice(i0, max(i1, i0 + 1))
 
 
 def carpet_compare_figure(
-    before_haemo: mne.io.Raw,
-    after_haemo: mne.io.Raw,
+    stages: "list[tuple[str, mne.io.Raw]]",
+    chromophore: str = "hbo",
     roi_map: "dict | None" = None,
-    z_threshold: float = 2.5,
+    raw_gvtd: "mne.io.Raw | None" = None,
     xlim: "tuple[float, float] | None" = None,
-) -> str:
-    """Before/after denoising carpet: HbO and HbR columns, before/after rows, shared per-channel scaling.
+    z_threshold: float = CARPET_Z,
+) -> "go.Figure | None":
+    """One carpet per stage under a shared GVTD row, all on one time axis.
 
-    Both stages divide by the before-std (see _shared_scale) so reduced fluctuation after
-    denoising renders paler. roi_map ({ROI label: [channel names]}, project convention) groups
-    rows by ROI (argsort + colour strip) when provided, else channel order. HbR is kept separate
-    from HbO (they are anti-correlated). Returns a base64-encoded PNG.
+    ``stages`` is ``[(label, raw), ...]`` in pipeline order, normally desc-preproc,
+    desc-filtered and desc-errts. The bandpass takes out the fine cardiac texture; the confound
+    regression takes out structure shared across channels, which reads as a block of rows
+    brightening and darkening together. One row per stage keeps the two apart.
 
-    ``xlim`` is (t0, t1) in seconds and narrows the view to one condition. The scaling is
+    **Each carpet is z-scored by its own per-channel mean and SD**, so every block shows the
+    structure left in it rather than its amplitude. The shrinkage that costs is in the stage
+    metrics table beside this figure.
+
+    ``raw_gvtd`` is the recording the motion row is measured on, intensity or optical density;
+    it shares the x axis with the carpets so a dark column can be read against what happened at
+    that moment. Omitting it drops the row.
+
+    ``xlim`` is (t0, t1) in seconds and narrows the view to one condition. The z-scoring is
     still taken over the whole recording and only the columns drawn are cut, so a condition's
-    carpet is on the same greyscale as every other condition's and as the run's. Scaling a
-    900 s piece by its own SD would make each condition's darkest patch equally dark and the
-    panel would stop saying which stretch was the noisy one.
+    carpet is on the same greyscale as every other condition's and as the run's.
+
+    Returns None when no channel of ``chromophore`` survives in every stage.
     """
-    after_set = set(after_haemo.ch_names)
-    hbo_names = [c for c in before_haemo.ch_names if c.endswith(" hbo") and c in after_set]
-    hbr_names = [c for c in before_haemo.ch_names if c.endswith(" hbr") and c in after_set]
+    names = _stage_channels(stages, chromophore)
+    if not names:
+        return None
+    order, groups = _roi_order(names, roi_map)
+    ordered_names = [names[i] for i in order]
 
-    def _stage(names):
-        b = before_haemo.get_data(picks=names) if names else np.empty((0, len(before_haemo.times)))
-        a = after_haemo.get_data(picks=names) if names else np.empty((0, len(after_haemo.times)))
-        return b, a
+    gvtd = _gvtd_row(raw_gvtd) if raw_gvtd is not None else None
+    n_rows = len(stages) + (1 if gvtd else 0)
+    heights = ([_GVTD_ROW_PX] if gvtd else []) + [_CARPET_ROW_PX] * len(stages)
+    row_heights, total_px = _px_rows(heights, _VSPACE, chrome_px=140)
+    fig = make_subplots(
+        rows=n_rows, cols=1, shared_xaxes=True,
+        row_heights=row_heights, vertical_spacing=_VSPACE,
+        subplot_titles=([""] if gvtd else []) + [label for label, _ in stages],
+    )
+    for ann in fig.layout.annotations:
+        ann.yshift = 3
 
-    hbo_bz, hbo_az = _shared_scale(*_stage(hbo_names), z_threshold)
-    hbr_bz, hbr_az = _shared_scale(*_stage(hbr_names), z_threshold)
+    if gvtd:
+        t_g, g, thresh = gvtd
+        keep = _cut(t_g, xlim)
+        t_ds, g_ds = _maxpool_xy(t_g[keep], g[keep], _LINE_MAX_PTS)
+        fig.add_trace(go.Scatter(
+            x=t_ds, y=g_ds, mode="lines", name="GVTD",
+            line=dict(color=_GVTD_LINE, width=1.5),
+            hovertemplate="t=%{x:.1f}s<br>GVTD=%{y:.2e}<extra></extra>",
+        ), row=1, col=1)
+        if thresh is not None:
+            fig.add_hline(y=thresh, line=dict(color=_THRESH_RULE, width=1.2, dash="dash"),
+                          row=1, col=1)
+        fig.update_yaxes(title_text="GVTD", title_font_size=10, row=1, col=1)
 
-    # ROI order shared across chromophores (assumes hbo/hbr rows correspond by S-D pair)
-    n_ch = len(hbo_names)
-    order = np.arange(n_ch)
-    roi_codes = None
-    roi_names: list[str] = []
-    if roi_map and n_ch:
-        # roi_map is {ROI label: [channel names]} (project convention); invert to per-channel
-        ch_to_roi = {ch: label for label, chans in roi_map.items() for ch in chans}
-        labels = [str(ch_to_roi.get(c, ch_to_roi.get(c[:-4], ""))) for c in hbo_names]  # try full name then S-D base
-        roi_names = sorted(set(labels))
-        code_of = {name: i for i, name in enumerate(roi_names)}
-        codes = np.array([code_of[l] for l in labels])
-        order = np.argsort(codes, kind="stable")
-        roi_codes = codes[order]
+    first_row = 2 if gvtd else 1
+    for i, (_, raw) in enumerate(stages):
+        data = raw.get_data(picks=ordered_names)
+        z, t_ds, _ = carpet_z(data, raw.times, z_threshold)
+        keep = _cut(t_ds, xlim)
+        add_carpet(fig, first_row + i, z[:, keep], t_ds[keep], ordered_names, [])
+        _roi_marks(fig, first_row + i, groups, len(ordered_names))
 
-    # the scaling above is run-wide; only what is drawn is cut. See xlim in the docstring
-    times = before_haemo.times
-    keep = slice(None)
-    if xlim is not None:
-        i0 = int(np.searchsorted(times, float(xlim[0])))
-        i1 = int(np.searchsorted(times, float(xlim[1])))
-        keep = slice(i0, max(i1, i0 + 1))
+    fig.update_layout(
+        coloraxis=carpet_coloraxis(z_threshold, y=0.42),
+        height=total_px, plot_bgcolor="white", paper_bgcolor="white",
+        margin=dict(l=90 if groups else 60, r=30, t=60, b=50),
+        legend=dict(orientation="h", x=1, xanchor="right", y=1.02, yanchor="bottom",
+                    font=dict(size=11)),
+    )
+    fig.update_xaxes(title_text="Time (s)", row=n_rows, col=1)
+    return fig
 
-    def _prep(arr):
-        arr = arr[order] if arr.shape[0] == len(order) and len(order) else arr
-        return _decimate_cols(arr[:, keep], _MAX_PTS)
 
-    panels = {
-        (0, 0): _prep(hbo_bz), (0, 1): _prep(hbr_bz),
-        (1, 0): _prep(hbo_az), (1, 1): _prep(hbr_az),
-    }
+def _roi_marks(fig, row: int, groups: list, n_ch: int) -> None:
+    """ROI names down the left edge of one carpet, with a white seam between groups.
 
-    has_roi = roi_codes is not None
-    col0 = 1 if has_roi else 0
-    ncols = 2 + col0
-    width_ratios = ([0.05] if has_roi else []) + [1, 1]
-    fig = plt.figure(figsize=(12, max(3.0, n_ch * 0.09) + 1.2))
-    gs = fig.add_gridspec(2, ncols, width_ratios=width_ratios, hspace=0.18, wspace=0.06)
-
-    row_titles = ["Before", "After (denoised)"]
-    col_titles = ["HbO", "HbR"]
-    im = None
-    for r in range(2):
-        if has_roi:
-            ax_s = fig.add_subplot(gs[r, 0])
-            ax_s.imshow(roi_codes[:, None], aspect="auto", cmap="gist_ncar", interpolation="none")
-            ax_s.set_xticks([])
-            locs = [float(np.mean(np.where(roi_codes == c)[0])) for c in np.unique(roi_codes)]
-            ax_s.set_yticks(locs)
-            ax_s.set_yticklabels([roi_names[c] for c in np.unique(roi_codes)], fontsize=6)
-            ax_s.tick_params(length=0)
-            for sp in ax_s.spines.values():
-                sp.set_visible(False)
-        for c in range(2):
-            ax = fig.add_subplot(gs[r, col0 + c])
-            data = panels[(r, c)]
-            if data.shape[0]:
-                im = ax.imshow(data, aspect="auto", cmap="gray_r",
-                               vmin=-z_threshold, vmax=z_threshold, interpolation="nearest")
-            ax.set_xticks([])
-            ax.set_yticks([])
-            for sp in ax.spines.values():
-                sp.set_visible(False)
-            if r == 0:
-                ax.set_title(col_titles[c], fontsize=10)
-            if c == 0:
-                ax.set_ylabel(row_titles[r], fontsize=9)
-            if r == 1:
-                ax.set_xlabel("Time", fontsize=8)
-
-    if im is not None:
-        fig.colorbar(im, ax=fig.get_axes(), fraction=0.015, pad=0.02,
-                     label="z (scaled by before SD)")
-
-    buf = io.BytesIO()
-    fig.savefig(buf, format="png", dpi=300, bbox_inches="tight")
-    plt.close(fig)
-    buf.seek(0)
-    return base64.b64encode(buf.read()).decode()
+    Text rather than the colour bar the motion panel uses for long/short: that bar reads off
+    a fixed two-entry palette, and a montage's ROIs are an arbitrary list, so colouring them
+    would mean inventing a category ramp for labels that already fit as words.
+    """
+    if len(groups) < 2:
+        return
+    fig.update_yaxes(
+        showticklabels=True, tickmode="array",
+        tickvals=[(i0 + i1) / 2 for _, i0, i1 in groups],
+        ticktext=[label for label, _, _ in groups],
+        tickfont=dict(size=9), ticks="", row=row, col=1,
+    )
+    for _, i0, _ in groups[1:]:
+        edge = 1.0 - i0 / n_ch
+        fig.add_shape(type="line", xref="x domain", yref="y domain",
+                      x0=0, x1=1, y0=edge, y1=edge,
+                      line=dict(color=_ROI_SEAM, width=2), row=row, col=1)
