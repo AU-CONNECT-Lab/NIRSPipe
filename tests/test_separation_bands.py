@@ -430,12 +430,29 @@ def test_the_analysis_paths_agree_with_the_split():
 
 def test_a_positionless_montage_builds_no_short_channel_regressors():
     """The bug this closes: every separation reads as zero, mne_nirs called that short,
-    and the "systemic" signal regressed out of every channel was the whole montage."""
+    and the "systemic" signal regressed out of every channel was the whole montage.
+
+    The refusal replaced an empty return in 0.43.0: a skip would leave the methods text
+    naming regressors the residual does not carry."""
+    from fnirs_pipe.exceptions import StageError
     from fnirs_pipe.pipeline.glm import _short_channel_regressors
 
     raw = _montage([8, 30], ch_type="hbo", positioned=False)
-    assert _short_channel_regressors(raw, "mean") == {}
+    with pytest.raises(StageError, match="no channel at or under"):
+        _short_channel_regressors(raw, "mean")
     assert has_short_channels(raw) is False
+
+
+def test_the_refusal_names_the_shortest_channel_there_is():
+    """The other arm of that message, and the one a real montage hits: the hyper montage's
+    shortest pair is 12.8 mm, so the number to raise --short-max-dist to has to be in the
+    error rather than left for the reader to go measure."""
+    from fnirs_pipe.exceptions import StageError
+    from fnirs_pipe.pipeline.glm import _short_channel_regressors
+
+    raw = _montage([12.8, 30], ch_type="hbo")
+    with pytest.raises(StageError, match="shortest is 12.8 mm"):
+        _short_channel_regressors(raw, "mean")
 
 
 def test_the_gvtd_channel_set_follows_the_bands():

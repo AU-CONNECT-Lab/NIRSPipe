@@ -20,6 +20,14 @@ def _raw(scale: float = 1e-6, n_pairs: int = 4, sfreq: float = 5.0, n: int = 600
     return mne.io.RawArray(data, info, verbose=False)
 
 
+def _od(n_ch: int = 8, sfreq: float = 5.0, n: int = 600) -> mne.io.Raw:
+    """An optical-density Raw, which is what the motion traces are measured on."""
+    rng = np.random.default_rng(2)
+    names = [f"S1_D{i // 2 + 1} {760 if i % 2 else 850}" for i in range(n_ch)]
+    info = mne.create_info(names, sfreq, ["fnirs_od"] * n_ch)
+    return mne.io.RawArray(rng.standard_normal((n_ch, n)) * 1e-2, info, verbose=False)
+
+
 def _carpets(fig) -> list:
     return [t for t in fig.data if t.type == "heatmap"]
 
@@ -109,9 +117,9 @@ def test_the_stage_row_draws_the_reference_and_the_drawn_stage():
 
 def test_the_motion_row_is_one_trace_per_channel_set_with_no_rule():
     """Long and short measure different depths, so they stay apart; no threshold is drawn."""
-    od = _raw().copy()
+    od = _od()
     blocks = [("long", od.ch_names[:4]), ("short", od.ch_names[4:])]
     fig = carpet_compare_figure([("desc-errts", _raw())], raw_gvtd=od, gvtd_blocks=blocks)
     lines = [t.name for t in fig.data if t.type == "scatter"]
     assert lines == ["long", "short"]
-    assert not [sh for sh in fig.layout.shapes if (sh.line or {}).get("dash") == "dash"]
+    assert not [sh for sh in fig.layout.shapes if getattr(sh.line, "dash", None) == "dash"]
