@@ -81,9 +81,9 @@ SECTION_NOTES = {
         "below. All of it is computed from the denoised residual time series. The rows share "
         "one channel order and the same separation blocks, so a channel is in the same "
         "relative place throughout; they are not on one x scale, so the correspondence is by "
-        "label and by block. A rejected channel keeps its row and column in the matrices, "
-        "where it shows as a grey cross, and its position in the strips, where it is a ring "
-        "below the measured range.",
+        "label and by block. Each matrix is drawn as a triangle, being symmetric. A rejected "
+        "channel keeps its row and column, where it shows as a grey wedge, and its position "
+        "in the strips, where it is a ring below the measured range.",
     "fc.roi_matrix":
         "The same correlations between ROI-averaged signals rather than between channels, on "
         "the same scale. Channels are averaged before correlating, so this is not the mean of "

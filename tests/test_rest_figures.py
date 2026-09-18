@@ -70,6 +70,16 @@ def _fc_frame(pairs, chromo):
     return _roi_frame(labels)
 
 
+def test_a_matrix_is_drawn_as_a_triangle():
+    """It is symmetric, so the upper half is the same values read the other way round;
+    drawing both doubles the ink for no second reading."""
+    pairs = ["S1_D1", "S1_D2", "S2_D1"]
+    fig = rest_channel_panel(_fc_frame(pairs, "hbo"), None, None)
+    z = np.asarray(next(t for t in fig.data if t.type == "heatmap").z, dtype=float)
+    assert np.isnan(z[np.triu_indices(len(pairs))]).all()      # upper half and diagonal
+    assert np.isfinite(z[np.tril_indices(len(pairs), -1)]).all()   # lower half kept
+
+
 def test_the_panel_splits_the_matrices_by_chromophore():
     pairs = ["S1_D1", "S1_D2", "S2_D1"]
     hbo, hbr = _fc_frame(pairs, "hbo"), _fc_frame(pairs, "hbr")

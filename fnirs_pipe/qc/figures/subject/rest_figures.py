@@ -98,10 +98,14 @@ def _pair_blocks(pairs, raw, sep_bands):
 def _panel_matrix(fig, frame, order, chromo, col, show_bar):
     """One chromophore's channel matrix into the panel's top row, on the panel's order."""
     names = [f"{p} {chromo}" for p in order]
-    # to_numpy can hand back a read-only view, and the diagonal is blanked in place
+    # to_numpy can hand back a read-only view, and the matrix is blanked in place
     mat = np.array(frame.reindex(index=names, columns=names).to_numpy(dtype=float), copy=True)
     np.fill_diagonal(mat, np.nan)
-    matrix_ground(fig, len(order), len(order), 1, col)
+    # Lower triangle only, as the HbO-HbR correlation panel draws it: the matrix is symmetric,
+    # so the upper half is the same values read the other way round and drawing both doubles
+    # the ink for no second reading
+    mat[np.triu_indices(len(order), k=1)] = np.nan
+    matrix_ground(fig, len(order), len(order), 1, col, triangle=True)
     fig.add_trace(go.Heatmap(
         z=mat.astype(np.float32), x=order, y=order, zmin=-1.0, zmax=1.0,
         colorscale=CORRELATION_SCALE, showscale=show_bar,
@@ -110,14 +114,17 @@ def _panel_matrix(fig, frame, order, chromo, col, show_bar):
                       tickfont=dict(size=9), tickvals=[-1, -0.5, 0, 0.5, 1]),
         hovertemplate="%{y}<br>%{x}<br>r = %{z:.3f}<extra></extra>",
     ), row=1, col=col)
+    # `constrain="domain"` on **both** axes, or the one without it pads its range instead of
+    # shrinking, the square ends up centred in a wider cell, and that axis's tick labels stay
+    # out at the cell's edge with a gap between them and the matrix
     fig.update_xaxes(tickangle=-90, tickfont=dict(size=7), showgrid=False, ticks="",
-                     row=1, col=col)
+                     constrain="domain", row=1, col=col)
     fig.update_yaxes(autorange="reversed", scaleanchor=f"x{col if col > 1 else ''}",
                      scaleratio=1, constrain="domain", tickfont=dict(size=7),
                      showgrid=False, ticks="", row=1, col=col)
 
 
-def _panel_strip(fig, values, order, xs, measure, label, row, legend):
+def _panel_strip(fig, values, order, xs, measure, label, row, col, legend):
     """One measure's row: a marker per chromophore per pair, the two joined.
 
     The gap between the two markers is the question a reader brings to a channel, which a
@@ -135,7 +142,7 @@ def _panel_strip(fig, values, order, xs, measure, label, row, legend):
             seg_y += [a, b, None]
     fig.add_trace(go.Scatter(x=seg_x, y=seg_y, mode="lines", hoverinfo="skip",
                              line=dict(color=_CONNECTOR, width=1.5), showlegend=False),
-                  row=row, col=1)
+                  row=row, col=col)
 
     drawn = np.zeros(len(order), dtype=bool)
     seen = []
@@ -149,13 +156,13 @@ def _panel_strip(fig, values, order, xs, measure, label, row, legend):
             customdata=[order[i] for i in np.flatnonzero(ok)],
             marker=dict(size=_STRIP_MARK, color=colour, line=dict(width=0.8, color="white")),
             hovertemplate="%{customdata}<br>" + label + " = %{y:.3g}<extra></extra>",
-        ), row=row, col=1)
+        ), row=row, col=col)
         if ok.any():
             # the reference a marker is read against: above or below what this run's own
             # channels did, which no absolute number supplies
             fig.add_hline(y=float(np.mean(y[ok])),
                           line=dict(color=colour, width=1, dash="dash"),
-                          opacity=0.5, row=row, col=1)
+                          opacity=0.5, row=row, col=col)
 
     measured = np.concatenate(seen) if any(len(v) for v in seen) else np.zeros(1)
     lo, hi = float(np.min(measured)), float(np.max(measured))
@@ -173,12 +180,12 @@ def _panel_strip(fig, values, order, xs, measure, label, row, legend):
             marker=dict(size=_STRIP_MARK, symbol="circle-open", color=_REJECTED_INK,
                         line=dict(color=_REJECTED_INK, width=1.4)),
             hovertemplate="%{customdata}<br>rejected<extra></extra>",
-        ), row=row, col=1)
+        ), row=row, col=col)
 
-    fig.update_yaxes(title_text=label, title_font=dict(size=10), tickfont=dict(size=9),
+    fig.update_yaxes(title_font=dict(size=10), tickfont=dict(size=9),
                      showgrid=True, gridcolor="#f2f2f2", zeroline=False,
                      range=[lo - 0.28 * span, hi + 0.12 * span],
-                     row=row, col=1)
+                     row=row, col=col)
 
 
 def rest_channel_panel(
@@ -224,35 +231,39 @@ def rest_channel_panel(
 
     measures = [(m, lab) for m, lab in (("alff", "ALFF (M)"), ("falff", "fALFF"))
                 if alff_df is not None and m in alff_df.columns]
-    n_rows = 1 + len(measures)
-    height = _PANEL_MATRIX_PX + _PANEL_STRIP_PX * len(measures) + 150
-    heights = ([_PANEL_MATRIX_PX] + [_PANEL_STRIP_PX] * len(measures))
+    # the two strips sit side by side under the two matrices, so the panel is one grid and
+    # not a matrix block with a tail
+    n_rows = 2 if measures else 1
+    height = _PANEL_MATRIX_PX + (_PANEL_STRIP_PX if measures else 0) + 150
+    heights = [_PANEL_MATRIX_PX] + ([_PANEL_STRIP_PX] if measures else [])
     heights = [h / sum(heights) for h in heights]
     fig = make_subplots(
-        rows=n_rows, cols=2, row_heights=heights, vertical_spacing=0.085,
-        horizontal_spacing=0.07,
-        specs=[[{}, {}]] + [[{"colspan": 2}, None]] * len(measures),
-        subplot_titles=["HbO", "HbR"] + [""] * (2 * len(measures)))
+        rows=n_rows, cols=2, row_heights=heights, vertical_spacing=0.10,
+        horizontal_spacing=0.09,
+        subplot_titles=["HbO", "HbR"] + [lab for _, lab in measures])
 
     for col, chromo in enumerate(("hbo", "hbr"), start=1):
         frame = frames.get(chromo)
         if frame is not None:
             _panel_matrix(fig, frame, order, chromo, col, show_bar=(col == len(frames)))
 
-    for row, (measure, label) in enumerate(measures, start=2):
-        _panel_strip(fig, values, order, xs, measure, label, row, legend=(row == 2))
+    for col, (measure, label) in enumerate(measures, start=1):
+        _panel_strip(fig, values, order, xs, measure, label, 2, col, legend=(col == 1))
         fig.update_xaxes(tickmode="array", tickvals=xs, ticktext=order, tickangle=-90,
-                         tickfont=dict(size=8), showgrid=False, zeroline=False,
-                         showticklabels=(row == n_rows), row=row, col=1)
+                         tickfont=dict(size=7), showgrid=False, zeroline=False,
+                         row=2, col=col)
 
     if measures and len(spans) > 1:
-        for xa, xb, name in spans:
-            fig.add_annotation(x=(xa + xb) / 2, y=1.16, yref="y2 domain", text=f"<b>{name}</b>",
-                               showarrow=False, font=dict(color="#6c757d", size=9),
-                               row=2, col=1)
+        # inside the strip, not above it: the subplot title is up there naming the measure,
+        # and a heading at the same height reads as part of it
+        for col in range(1, len(measures) + 1):
+            for xa, xb, name in spans:
+                fig.add_annotation(x=(xa + xb) / 2, y=0.99, yref="y domain", yanchor="top",
+                                   text=name, showarrow=False,
+                                   font=dict(color="#9aa5af", size=8), row=2, col=col)
 
     for note in fig.layout.annotations:
-        if note.text in ("HbO", "HbR"):
+        if note.text in ("HbO", "HbR") or note.text in {lab for _, lab in measures}:
             note.font = dict(size=12, color="#34495e")
     fig.update_layout(
         height=height, plot_bgcolor="white", margin=dict(l=76, r=30, t=96, b=104),

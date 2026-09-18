@@ -39,14 +39,28 @@ def scale_color(value: float, cmap: str, vmin: float, vmax: float) -> str:
 
 
 def matrix_ground(fig, n_rows: int, n_cols: int, row: int, col: int,
-                  color: str = BLANK_CELL) -> None:
+                  color: str = BLANK_CELL, triangle: bool = False) -> None:
     """The blank field a matrix is painted over, so an absent cell is grey and not the page.
 
     Painted under the heatmap rather than left to show the panel through. No gap between
     cells, since a border in that colour would draw a missing cell where there is none.
+
+    ``triangle`` grounds the lower half alone, for a symmetric matrix drawn as a triangle: a
+    full square would ground the half that was masked on purpose and it would read as a
+    montage of missing cells.
     """
-    fig.add_shape(type="rect", x0=-0.5, x1=n_cols - 0.5, y0=-0.5, y1=n_rows - 0.5,
-                  fillcolor=color, line=dict(width=0), layer="below", row=row, col=col)
+    if not triangle:
+        fig.add_shape(type="rect", x0=-0.5, x1=n_cols - 0.5, y0=-0.5, y1=n_rows - 0.5,
+                      fillcolor=color, line=dict(width=0), layer="below", row=row, col=col)
+        return
+    # the staircase the kept cells make, as one closed path
+    steps = []
+    for i in range(n_rows):
+        steps.append(f"L{i + 0.5},{i - 0.5}")
+        steps.append(f"L{i + 0.5},{i + 0.5}")
+    fig.add_shape(type="path", layer="below", row=row, col=col,
+                  path=f"M-0.5,-0.5 {' '.join(steps)} L-0.5,{n_rows - 0.5} Z",
+                  fillcolor=color, line=dict(width=0))
 
 
 def cell_values(fig, z, row_labels, col_labels, *, cmap, vmin, vmax, row, col,
