@@ -13,10 +13,13 @@ logger = get_logger("interface.hyper_analysis_callbacks")
 # which form sections each command needs; anything not listed here is hidden
 _SECTIONS = {
     "run":  {"hy-run-section", "hy-window-section"},
+    # the pool and the limit are its own; the rest of the selection is the run form's
+    "pair-null": {"hy-run-section", "hy-pairnull-section"},
     "band": {"hy-band-section"},
 }
 
-_ALL_SECTIONS = ("hy-run-section", "hy-band-section", "hy-window-section")
+_ALL_SECTIONS = ("hy-run-section", "hy-pairnull-section", "hy-band-section",
+                 "hy-window-section")
 
 # report each command writes, relative to output_dir, best match first. The hyper level names
 # its file after the group, so it is found by glob rather than named here.
@@ -39,6 +42,8 @@ _STATES = [
     State("hy-wtc-chroma", "value"),
     State("hy-task", "value"),
     State("hy-flags", "value"),
+    State("hy-pair-pool", "value"), State("hy-pair-max", "value"),
+    State("hy-pair-flags", "value"),
     State("hy-band-fmin", "value"), State("hy-band-fmax", "value"),
     State("hy-band-suffix", "value"), State("hy-band-flags", "value"),
     State("hy-tstart", "value"), State("hy-tend", "value"),
@@ -49,6 +54,7 @@ _KEYS = ["output_dir", "pairs_csv", "group_id", "desc", "roi_mapping",
          "wtc_seed", "isc_threshold", "wtc_phase_null", "wtc_roi_min_channels",
          "isc_whiten", "isc_max_lag", "isc_phase_null",
          "wtc_chroma", "hyper_task", "hyper_flags",
+         "wtc_pair_pool", "wtc_pair_max", "pair_flags",
          "band_fmin", "band_fmax", "band_suffix", "band_flags",
          "tstart", "tend"]
 

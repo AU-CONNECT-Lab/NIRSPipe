@@ -144,6 +144,33 @@ def _run_section():
     ))
 
 
+def _pair_null_section():
+    return html.Div(id="hy-pairnull-section", children=card(
+        "Re-paired null",
+        params(
+            field("Stand-in pool",
+                  dbc.Select(id="hy-pair-pool",
+                             options=[{"label": "Same position in the group", "value": "position"},
+                                      {"label": "Any member of another group", "value": "any"}],
+                             value="position"),
+                  span=PATH),
+            field("Draw limit",
+                  dbc.Input(id="hy-pair-max", type="number", min=1, step=1,
+                            placeholder="every eligible one")),
+            switches(dbc.Checklist(
+                id="hy-pair-flags",
+                options=[{"label": "Every channel pair, not homologous only",
+                          "value": "wtc_pair_cross"}],
+                value=[], inline=True, switch=True,
+            )),
+        ),
+        subtitle="Pairs one member with people from the other groups who did the same task. "
+                 "Run it after a run: the band, the mask and the window come off the tables "
+                 "that run wrote, not off this form. The number of draws is the number of "
+                 "other groups, which is what limits how finely it can rank.",
+    ))
+
+
 def _band_section():
     return html.Div(id="hy-band-section", children=card(
         "Re-average saved WTC maps",
@@ -211,6 +238,7 @@ layout = dbc.Container([
         main=[
             _scope(),
             _run_section(),
+            _pair_null_section(),
             _band_section(),
             _window_section(),
             card("Report preview", html.Div(id="hy-report-preview")),

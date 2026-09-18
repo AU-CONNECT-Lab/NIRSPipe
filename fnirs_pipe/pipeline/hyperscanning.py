@@ -52,6 +52,7 @@ from fnirs_pipe.pipeline.synchrony import (  # noqa: F401  re-exported
     WTCResult,
     compute_pairwise_coherence,
     compute_wtc,
+    compute_wtc_pair_null,
     compute_wtc_phase_null,
     roi_maps_from_channels,
     roi_mean_of_channels,

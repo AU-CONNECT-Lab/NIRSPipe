@@ -12,7 +12,7 @@ from __future__ import annotations
 _AGGREGATE = ("cohort", "cohort-hyper", "provenance")
 
 # fnirs-hyper subcommands, which take one output_dir and their own flags
-_HYPER = ("run", "band", "merge", "index")
+_HYPER = ("run", "pair-null", "band", "merge", "index")
 
 
 def _num(flag: str, value) -> list[str]:
@@ -42,6 +42,24 @@ def build_qc_args(command: str, opts: dict) -> list[str]:
         if "band_no_mask_coi" in (opts.get("band_flags") or []):
             args.append("--no-wtc-mask-coi")
         args += _text("--wtc-suffix", opts.get("band_suffix"))
+        return args
+
+    # the re-paired null runs over the finished tree, so it reuses the run form's selection
+    # and reads everything else off the real tables rather than off this page
+    if command == "pair-null":
+        args += _text("--pairs-csv", opts.get("pairs_csv"))
+        args += _text("--group-id", opts.get("group_id"))
+        args += _split("--task-label", opts.get("hyper_task"))
+        args += _text("--desc", opts.get("desc"))
+        args += _text("--roi-mapping", opts.get("roi_mapping"))
+        args += _text("--wtc-chroma", opts.get("wtc_chroma"))
+        args += _num("--wtc-roi-min-channels", opts.get("wtc_roi_min_channels"))
+        args += _text("--wtc-pair-pool", opts.get("wtc_pair_pool"))
+        args += _num("--wtc-pair-max", opts.get("wtc_pair_max"))
+        if "wtc_pair_cross" in (opts.get("pair_flags") or []):
+            args.append("--wtc-pair-cross")
+        if "bads_subject" in (opts.get("hyper_flags") or []):
+            args += ["--bads-scope", "subject"]
         return args
 
     if command == "run":

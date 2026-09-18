@@ -23,10 +23,12 @@ from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("pipeline.wtc_aggregate")
 
-# parameters that have to match across every file in a merge, and why they cannot be mixed
-# n_iter only ever appears on a phase-scrambled null's sidecar, and a file without a key carries no
-# opinion, so listing it here guards the null merge without touching the real tables
-_MUST_AGREE = ("band_fmin", "band_fmax", "mask_coi", "n_iter")
+# parameters that have to match across every file in a merge, and why they cannot be mixed.
+# n_iter, null_kind and pair_pool only ever appear on a null's sidecar, and a file without a
+# key carries no opinion, so listing them guards the null merges without touching the real
+# tables. null_kind is what keeps the two nulls apart if one is renamed onto the other's
+# path: they answer different questions and a table holding both answers neither
+_MUST_AGREE = ("band_fmin", "band_fmax", "mask_coi", "n_iter", "null_kind", "pair_pool")
 
 _KINDS = {
     "wtc":                "group_hyper_wtc",
@@ -43,6 +45,12 @@ _KINDS = {
     "wtcbycond-roihom-phasenull": "group_hyper_wtc_bycondition_roihom_phasenull",
     # the null for the pair above, windowed off the same transform they are
     "wtcbycond-phasenull":   "group_hyper_wtc_bycondition_phasenull",
+    # the re-paired null, drawn across the cohort rather than inside one dyad. Merged apart
+    # from the phase-scrambled tables on purpose: same columns, different question
+    "wtc-pairnull":              "group_hyper_wtc_pairnull",
+    "wtc-roihom-pairnull":       "group_hyper_wtc_roihom_pairnull",
+    "wtcbycond-pairnull":        "group_hyper_wtc_bycondition_pairnull",
+    "wtcbycond-roihom-pairnull": "group_hyper_wtc_bycondition_roihom_pairnull",
 }
 
 

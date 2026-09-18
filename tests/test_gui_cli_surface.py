@@ -330,6 +330,12 @@ QC_NOT_EXPOSED = {
     "band":  {"--verbose",
               # as above: the default, and the checkbox emits --no-wtc-mask-coi
               "--wtc-mask-coi"},
+    "pair-null": {
+        # a log-level switch, not a parameter of the analysis
+        "--verbose",
+        # a speed setting whose kept scales land on pycwt's own grid, so the coherences
+        # match the unrestricted ones bit for bit. Nothing about the result moves with it
+        "--wtc-limit-scales", "--no-wtc-limit-scales"},
     "merge": {"--verbose"},
     # every group-* directory by default, which is the whole shape of the aggregate form
     "index": {"--verbose", "--group-id"},
@@ -346,6 +352,7 @@ _QC_FULL_OPTS = dict(
     hyper_flags=["wtc_significance", "wtc_no_mask_coi", "wtc_channel_cross", "wtc_phase_null_cross",
                  "no_by_condition", "bads_subject", "wtc_save_maps", "no_align", "normalize",
                  "check_only"],
+    wtc_pair_pool="position", wtc_pair_max=20, pair_flags=["wtc_pair_cross"],
     band_fmin=0.05, band_fmax=0.2, band_suffix="band0p05-0p2",
     band_flags=["band_no_mask_coi"],
     tstart=0.0, tend=60.0,

@@ -477,6 +477,60 @@ def cmd_index(output_dir: Path, group_id: str | None, verbose: bool) -> None:
         print(f"no coherence tables under {output_dir}; run `fnirs-hyper run` first")
 
 
+def cmd_pair_null(
+    output_dir: Path,
+    pairs_csv: Path,
+    group_id: str | None,
+    task_label: list[str] | None,
+    desc: str,
+    roi_mapping: str | None,
+    bads_scope: str,
+    wtc_chroma: str,
+    wtc_pair_pool: str,
+    wtc_pair_max: int | None,
+    wtc_pair_cross: bool,
+    wtc_roi_min_channels: int,
+    wtc_limit_scales: bool,
+    verbose: bool,
+) -> None:
+    """Draw the re-paired null for dyads whose real tables are already on disk."""
+    from fnirs_pipe.pipeline.hyperscanning import parse_group_csv
+    from fnirs_pipe.pipeline.pair_null import run_pair_null
+
+    setup_logging(verbose=verbose)
+
+    # the pool comes from every group in the table, the targets from the selection: a null
+    # drawn only from the dyads the caller happened to name would be a different null
+    targets = _select_groups(pairs_csv, group_id, task_label)
+    all_groups = parse_group_csv(pairs_csv)
+
+    roi_map = None
+    if roi_mapping:
+        roi_map = json.loads(Path(roi_mapping).read_text())
+
+    chroma = ("hbo", "hbr") if wtc_chroma == "both" else (wtc_chroma,)
+    scope_tasks = sorted({key[1] for key in all_groups})
+
+    failures = 0
+    for (gid, task), members in targets.items():
+        print(f"  -> {gid}/{task}")
+        try:
+            path = run_pair_null(
+                gid, task, members, all_groups, output_dir,
+                pool=wtc_pair_pool, n_max=wtc_pair_max, desc=desc,
+                bads_scope=bads_scope, scope_tasks=scope_tasks, chroma=chroma,
+                cross=wtc_pair_cross, limit_scales=wtc_limit_scales,
+                roi_map=roi_map, roi_min_channels=wtc_roi_min_channels)
+            print(f"     pair null -> {path}")
+        except Exception as exc:
+            print(f"     [error] {exc}", file=sys.stderr)
+            failures += 1
+
+    if failures:
+        print(f"\n{failures} group(s) failed", file=sys.stderr)
+        raise SystemExit(1)
+    _merge_reminder(output_dir)
+
 def cmd_merge(output_dir: Path, verbose: bool) -> None:
     """Merge every per-dyad WTC band-mean table into one long table per kind."""
     from fnirs_pipe.pipeline.wtc_aggregate import _KINDS, write_aggregate_wtc
@@ -764,13 +818,65 @@ def _build_parser() -> argparse.ArgumentParser:
                        help="Only this dyad. Every group-* directory by default.")
     index.set_defaults(func=cmd_index)
 
+    pair = sub.add_parser(
+        "pair-null", parents=[common, pairs],
+        help="Draw the re-paired null: each dyad against members of the other dyads.",
+        description="Recomputes the coherence of one member against people they never "
+                    "interacted with, drawn from the other groups of the same task, and "
+                    "writes group-*_task-*_hyper-wtc-pairnull.tsv beside the real tables. "
+                    "Unlike --wtc-phase-null, which destroys every temporal structure "
+                    "including each member's own time-locked response to the task, a "
+                    "re-paired partner did the same task, so what survives is coupling "
+                    "beyond what the shared task explains. Needs a cohort: the number of "
+                    "draws is the number of other groups, which is what limits how finely "
+                    "the percentile can rank. Run it after `fnirs-hyper run`, whose tables "
+                    "it reads its band, its mask, its frequency range and its window off.")
+    pair.add_argument("--desc", default="preproc",
+                      help="desc entity of the per-subject stage the null reads. Must match "
+                           "the one the real tables were computed from.")
+    pair.add_argument("--roi-mapping", type=Path, default=None,
+                      help="JSON file mapping ROI labels to channel names, to also write the "
+                           "null of the homologous ROI means. Optional.")
+    pair.add_argument("--bads-scope", choices=_BADS_SCOPE_CHOICES, default="run",
+                      help="Which rejected channels are excluded, as in `run`. A stand-in "
+                           "with no quality record is refused rather than kept whole.")
+    pair.add_argument("--wtc-chroma", choices=("hbo", "hbr", "both"), default="both",
+                      help="Chromophore(s) to draw the null on (default both). A null drawn "
+                           "on HbO says nothing about an HbR coupling.")
+    pair.add_argument("--wtc-pair-pool", choices=("position", "any"), default="position",
+                      help="Who may stand in. 'position' (default) replaces a member only "
+                           "with another group's member at the same index, which keeps a "
+                           "role where the two members are not interchangeable and is the "
+                           "only safe pool where one person appears in several groups, as "
+                           "in a cohort of the same pair recorded over many days. 'any' "
+                           "draws from every other group's members, doubling the pool, and "
+                           "is refused where the table shows anybody repeated: there it "
+                           "would rank a person against themselves.")
+    pair.add_argument("--wtc-pair-max", type=int, default=None, metavar="N",
+                      help="Stop after N draws. The pool is finite, so this is a ceiling "
+                           "rather than a count: without it every eligible stand-in is "
+                           "used, which is what gives the percentile its best resolution.")
+    pair.add_argument("--wtc-pair-cross", action="store_true",
+                      help="Draw the null over every channel pair rather than homologous "
+                           "ones only. Kept separate from the real run's --wtc-channel-cross "
+                           "for the same reason --wtc-phase-null-cross is: a crossed null "
+                           "costs one full run per channel pair.")
+    pair.add_argument("--wtc-roi-min-channels", type=int, default=2, metavar="N",
+                      help="Drop an ROI cell resting on fewer than N channel pairs "
+                           "(default 2). Match the value the real tables used.")
+    pair.add_argument("--wtc-limit-scales", action=argparse.BooleanOptionalAction, default=True,
+                      help="Compute only the scales inside the frequency range plus margin "
+                           "(default on), as in `run`.")
+    pair.set_defaults(func=cmd_pair_null)
+
     merge = sub.add_parser(
         "merge", parents=[common],
         help="Merge the per-dyad band-mean tables into one long table per kind.",
         description="Concatenates every group-*_task-*_hyper-wtc*.tsv under the tree into "
                     "one table per kind at its root, adding group_id and task columns, so a "
                     "cohort analysis reads one file. Refuses to merge tables that disagree "
-                    "on the band, on mask_coi or on the null's iteration count.")
+                    "on the band, on mask_coi, on the null's iteration count or on which null "
+                    "they are.")
     merge.set_defaults(func=cmd_merge)
 
     return p

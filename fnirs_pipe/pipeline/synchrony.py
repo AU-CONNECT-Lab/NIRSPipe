@@ -782,7 +782,11 @@ def phase_scramble(sig: np.ndarray, rng: np.random.Generator) -> np.ndarray:
 
 @dataclass
 class NullDraws:
-    """One chromophore's phase-scrambled null: the draws, the levels, and the summary of both.
+    """One chromophore's null: the draws, the levels, and the summary of both.
+
+    Carries either null. They differ in how a draw is made, phase randomisation against
+    re-pairing, and in nothing after that, so both summarise through the same code and their
+    tables subtract from the same real table.
 
     The draws are kept rather than averaged on the spot because the number worth reading off
     a null is not its mean but where a real value falls inside it, and the real table is
@@ -794,6 +798,9 @@ class NullDraws:
     keys: "list[str]"
     # (sub1, sub2, label) -> the coherence a cell clears at each frequency to beat the null
     levels: dict
+    # who each draw was against, re-pairing only: its pool is finite and named, so the
+    # sidecar can say which recordings the null was built from rather than only how many
+    partners: "list[str] | None" = None
 
     def summarise(self, real: "pd.DataFrame | None" = None,
                   real_by_cond: "pd.DataFrame | None" = None,
@@ -918,6 +925,43 @@ def _null_level(hist: np.ndarray, quantile: float = NULL_ARROW_QUANTILE) -> np.n
     return out
 
 
+def _collect_draw(
+    result: WTCResult,
+    frames: "list[pd.DataFrame]",
+    cond_frames: "list[pd.DataFrame]",
+    hists: "dict[tuple, np.ndarray]",
+    *,
+    band_fmin: float,
+    band_fmax: float,
+    mask_coi: bool,
+    windows: "list[tuple[str, float, float]] | None",
+    analysis_window: "tuple[float, float] | None",
+) -> None:
+    """Fold one surrogate WTC run into the draws the null is summarised from.
+
+    Shared by both nulls on purpose. They differ only in how a surrogate is made, phase
+    randomisation against re-pairing, and a null whose cells were read off the map by a
+    different rule than the table it is subtracted from measures the difference between
+    the two rules rather than the coupling.
+    """
+    # --tstart/--tend, read off this draw's transform the way the real table reads it off
+    # its own. Without it the whole-run row of the null describes the recording while the
+    # row it is compared against describes the window
+    run_result = (result if analysis_window is None
+                  else window_result(result, *analysis_window))
+    frames.append(wtc_band_mean(run_result, band_fmin, band_fmax, mask_coi=mask_coi))
+    # counted off the whole-run transform, not the windowed read: a condition is a slice
+    # of the same map, so its cells are draws from the same per-frequency null
+    _accumulate_null_hist(hists, result, mask_coi)
+    # windowed off this draw's own transform, never recomputed on the cut: the real table
+    # is windowed the same way
+    for label, tstart, tstop in (windows or []):
+        part = wtc_band_mean(window_result(result, tstart, tstop),
+                             band_fmin, band_fmax, mask_coi=mask_coi)
+        part.insert(0, "condition", label)
+        cond_frames.append(part)
+
+
 def compute_wtc_phase_null(
     raws: dict[str, mne.io.Raw],
     band_fmin: float,
@@ -1017,29 +1061,92 @@ def compute_wtc_phase_null(
             # the same axis the real table is built on, without which the null cannot be
             # subtracted from it row by row
             axis=long_axis_over(raws.values(), ch_type, sep_bands))
-        # --tstart/--tend, read off this iteration's transform the way the real table reads
-        # it off its own. Without it the whole-run row of the null describes the recording
-        # while the row it is compared against describes the window
-        run_result = (result if analysis_window is None
-                      else window_result(result, *analysis_window))
-        frames.append(wtc_band_mean(run_result, band_fmin, band_fmax, mask_coi=mask_coi))
-        # counted off the whole-run transform, not the windowed read: a condition is a slice
-        # of the same map, so its cells are draws from the same per-frequency null
-        _accumulate_null_hist(hists, result, mask_coi)
-        # windowed off this iteration's own transform, never recomputed on the cut: the
-        # real table is windowed the same way, and a null built differently from the table
-        # it is subtracted from measures the difference between the two routes
-        for label, tstart, tstop in (windows or []):
-            part = wtc_band_mean(window_result(result, tstart, tstop),
-                                 band_fmin, band_fmax, mask_coi=mask_coi)
-            part.insert(0, "condition", label)
-            cond_frames.append(part)
+        _collect_draw(result, frames, cond_frames, hists,
+                      band_fmin=band_fmin, band_fmax=band_fmax,
+                      mask_coi=mask_coi, windows=windows,
+                      analysis_window=analysis_window)
         if (i + 1) % 10 == 0:
             logger.info("phase-scrambled WTC: %d/%d iterations", i + 1, n_iter)
 
     keys = ["sub1", "sub2", "label"] + (["label2"] if "label2" in frames[0].columns else [])
     return NullDraws(draws=frames, cond_draws=cond_frames, keys=keys,
                       levels={key: _null_level(hist) for key, hist in hists.items()})
+
+
+def compute_wtc_pair_null(
+    draws: "Iterable[tuple[str, dict[str, mne.io.Raw]]]",
+    true_pair: "tuple[str, str]",
+    axis: "list[str]",
+    band_fmin: float,
+    band_fmax: float,
+    fmin: float = 0.004,
+    fmax: float = 0.20,
+    cross: bool = False,
+    limit_scales: bool = True,
+    mask_coi: bool = True,
+    ch_type: str = "hbo",
+    sep_bands=None,
+    windows: "list[tuple[str, float, float]] | None" = None,
+    analysis_window: "tuple[float, float] | None" = None,
+) -> "NullDraws":
+    """Re-paired band means: WTC of one member against people they never interacted with.
+
+    ``draws`` yields ``(partner_id, aligned_raws)``, one false pair per draw, each already
+    cut onto the clock the real table was computed on. Building them is the caller's job:
+    it needs the pairs table and the derivatives tree, neither of which this module reads.
+
+    The difference from :func:`compute_wtc_phase_null` is what the surrogate keeps. Phase
+    randomisation destroys every temporal structure including each member's own time-locked
+    response to the task, so under a task design it is the looser null: two people who never
+    meet still cohere through the task they both did. A re-paired partner is a real recording
+    of the same task, so what survives the comparison is coupling beyond what the shared task
+    explains. Everything downstream of the transform is the other null's code, so the two
+    tables subtract from the same real table and from each other.
+
+    Both the pair key and the per-frequency histogram are relabelled to ``true_pair``. Each
+    draw carries a different partner, and the summary groups by ``sub1``/``sub2``, so without
+    this every draw would be its own group of one and the table would report ``n_iter`` 1
+    against a null it never averaged.
+
+    ``axis`` is the real dyad's channel axis, passed in rather than recomputed: a partner with
+    a different montage would otherwise move the rows and the null could no longer be
+    subtracted from the real table row by row. A label the partner lacks lands as a blank row,
+    the same shape a rejected channel leaves.
+
+    The pool is finite, unlike phase randomisation's, so the number of draws is a property of
+    the cohort rather than a setting. That is what limits the resolution of ``percentile``.
+    """
+    frames: list[pd.DataFrame] = []
+    cond_frames: list[pd.DataFrame] = []
+    hists: dict[tuple, np.ndarray] = {}
+    partners: list[str] = []
+    # the fixed member is cut to the same window in every draw, so its transforms are
+    # computed once. The caller guarantees that by refusing a partner that would move the
+    # fixed side's crop; without that guarantee this cache would serve stale transforms
+    cache1: dict[tuple[str, str], _ChannelWavelet] = {}
+    for partner_id, aligned in draws:
+        signals = {sid: _long_signals(raw, ch_type, sep_bands) for sid, raw in aligned.items()}
+        result = _wtc_over_pairs(
+            aligned, signals, fmin, fmax, significance=False, seed=None,
+            cross=cross, limit_scales=limit_scales, cache1=cache1, axis=axis)
+        result = WTCResult(pairs={true_pair: next(iter(result.pairs.values()))},
+                           freqs=result.freqs, times=result.times)
+        _collect_draw(result, frames, cond_frames, hists,
+                      band_fmin=band_fmin, band_fmax=band_fmax,
+                      mask_coi=mask_coi, windows=windows,
+                      analysis_window=analysis_window)
+        partners.append(partner_id)
+        logger.info("re-paired WTC: draw %d against %s", len(partners), partner_id)
+
+    if not frames:
+        raise ValueError(
+            "no usable partner was drawn, so there is no null. Every candidate was refused: "
+            "the log says which test each one failed.")
+
+    keys = ["sub1", "sub2", "label"] + (["label2"] if "label2" in frames[0].columns else [])
+    return NullDraws(draws=frames, cond_draws=cond_frames, keys=keys,
+                     levels={key: _null_level(hist) for key, hist in hists.items()},
+                     partners=partners)
 
 
 def _average_iterations(frames: "list[pd.DataFrame]", keys: "list[str]",
