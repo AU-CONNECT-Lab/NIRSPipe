@@ -33,7 +33,6 @@ NoiseModel = Literal["ols", "ar1", "ar2", "ar3", "ar4", "ar5", "auto"]
 DriftModel = Literal["cosine", "polynomial", "none"]
 SCRStrategy = Literal["mean"]
 
-# May add motion parameters (if available) and/or other confounds in the future
 
 def _short_channel_regressors(
     haemo: mne.io.Raw, strategy: SCRStrategy, sep_bands=None,
@@ -43,10 +42,7 @@ def _short_channel_regressors(
     # a --config TOML reaches this past the CLI's own choices
     if strategy is not True and strategy != "mean":
         raise ValueError(
-            f"short-channel strategy must be 'mean', got {strategy!r}. The 'pca' strategy "
-            "was removed: no reference implementation regresses short channels on a "
-            "principal component, and the first one tracks whichever short channel has the "
-            "most variance rather than what they share.")
+            f"short-channel strategy must be 'mean', got {strategy!r}.")
     # not mne_nirs' get_short_channels: that reads distance 0 as short, so a montage with no
     # registered positions would build these out of every channel
     short_names = long_short_channels(haemo, sep_bands)[1]
@@ -93,11 +89,9 @@ def _band_fraction(x: np.ndarray, sfreq: float,
                    l_freq: float | None, h_freq: float | None) -> float:
     """Share of a signal's variance sitting inside ``l_freq``-``h_freq``, from its spectrum.
 
-    Measured on the signal rather than on the filter's output, because the two disagree on
-    a short recording. A 0.01 Hz cutoff at 10 Hz builds a 3301-tap FIR, so on anything under
-    an hour most of the filtered series is edge transient: a 2 Hz tone put through a
-    0.01-0.2 Hz band keeps 21% of its variance over 120 s and 8.7% over 400 s, none of it
-    signal. The spectrum returns ~0 at every length.
+    Read off the spectrum rather than off the filter's output: a narrow cutoff needs a long
+    filter, so on a short recording much of the filtered series is edge transient and its
+    variance is not a measure of what was in the band.
 
         sin(2 pi 0.05 t) over 0.01-0.2 Hz -> 1.0
         sin(2 pi 2.0  t) over 0.01-0.2 Hz -> 0.0
@@ -302,14 +296,10 @@ def run_glm_pipeline(
     if events is None:
         events = read_table(events_path) if events_path else None
 
-    # Short-channel confounds are pulled from `haemo`, the same data the design matrix is fit
-    # against. When that data has been bandpass-filtered upstream, the short channels ride
-    # through the same filter, so regressors and data live in the same frequency band. That
-    # is what keeps the regression from re-injecting out-of-band variance the filter removed
-    # (the spectral-misspecification problem of Hallquist 2013; the accepted fix is to filter
-    # data and confounds with the same filter before regressing, which holds here implicitly
-    # because both derive from one filtered recording). External confounds do not get that
-    # for free, which is what `_aux_regressors` filters them for.
+    # short-channel confounds come from `haemo` itself, so they have been through whatever
+    # filter it has and cannot re-inject variance the filter removed: the spectral
+    # misspecification of Hallquist et al. 2013, whose fix is to put data and confounds
+    # through the same filter. External confounds have not, hence `_aux_regressors`
     confound_cols = (_short_channel_regressors(haemo, short_channel, sep_bands)
                      if short_channel else {})
     if aux_path:
@@ -336,9 +326,8 @@ def run_glm_pipeline(
 
     glm_est = fit_glm(haemo, dm, noise_model=noise_model)
 
-    # rebuilt rather than read off `.residuals`: nilearn subtracts the *whitened* design's fit
-    # from unwhitened data there, which under an AR model is neither residual. Identical to
-    # `.residuals` under ols, where whitening is the identity.
+    # the residual in the data's own units. nilearn's `.residuals` subtracts the whitened
+    # design's fit instead, which differs from this under any AR noise model
     # nilearn stores per-channel arrays as (n_times, 1); squeeze removes the trailing dim
     resid_data = np.array([
         np.asarray(res.Y) - np.asarray(res.model.design) @ np.asarray(res.theta)
@@ -429,7 +418,6 @@ def _save_glm_outputs(
     res_path = output_dir / f"{prefix}glm_results.csv"
     _mark_bads(glm_est.to_dataframe()).to_csv(res_path, index=False)
     _sidecar(res_path, "glm_fit")
-    # glm_est.save(str(output_dir / "glm.h5"), overwrite=True)
 
     if contrasts:
         frames = []

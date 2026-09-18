@@ -6,7 +6,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- **The separation bands can come from a `--config` TOML** instead of being typed on every command. They have to be the same at preprocessing and at postprocessing, since the record is stamped with them at the first step and every later step reads that stamp, so a montage whose short end does not sit under 10 mm no longer means remembering two numbers at four places. A flag on the command line still overrides the file
+
+### Changed
+- **A channel that falls between the two separation bands is now reported with its own separation**, not only with the range it fell outside. The run note used to say that channels sat in the gap the package's default bands leave; it now also says where yours actually are and which bound would take them in, which is the difference between knowing a gap exists and being able to decide about it. Nothing about the bands themselves changed: a channel between them is still measured by no section, on purpose
+
 ### Fixed
+- **A run with non-default separation bands was described with the default ones** in the preprocessing report's channel note, so a montage prepared with a raised short bound was told its channels sat in a gap they were not in
 - **The confound-regression residual was not a residual when an AR noise model was asked for.** `--mode glm` with `--noise-model ar1` and up wrote a file that kept most of the drift and systemic signal the regression had just estimated, because the value it was built from subtracts a differenced copy of the fitted model rather than the model. On a bandpassed recording the written residual came within a quarter of a decibel of the regression's own input, meaning the regression was effectively absent from it. Reported effects were never affected: betas, t values and contrasts are computed elsewhere. `--mode denoise` and `--mode rest` were never affected either, and their output is unchanged to the last bit
 - **A prep-only run's spectrum panel no longer presents its simulated bandpass as a stage the run wrote.** With no filtered file on disk the panel simulates the filter to have something to compare against, and that row had started carrying the same title as a real one
 
