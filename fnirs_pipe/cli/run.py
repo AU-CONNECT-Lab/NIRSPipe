@@ -38,7 +38,7 @@ def _noise_model(value: str) -> str:
         f"{value!r}: expected 'ols', 'auto', or 'arN', e.g. ar1 or ar16")
 
 
-_SHORT_CHANNEL_CHOICES = ["none", "mean"]
+_SHORT_CHANNEL_CHOICES = ["none", "mean", "pca"]
 _IGNORE_CHOICES        = ["events", "bids-validation"]
 # analysis levels and the flags each one cannot run without. One table, so a level added
 # here cannot reach the parser without also declaring what it needs
@@ -212,7 +212,11 @@ def _build_parser() -> argparse.ArgumentParser:
                      help="FIR delay bins in scans, comma-separated, e.g. '0,1,2,3,4,5' (only used when --hrf-model fir).")
     glm.add_argument("--short-channel", choices=_SHORT_CHANNEL_CHOICES,
                      help="Short-channel confound regressor strategy. Honoured by every mode: "
-                          "glm fits it alongside the task, denoise and rest on its own.")
+                          "glm fits it alongside the task, denoise and rest on its own. "
+                          "'mean' gives one column per chromophore; 'pca' gives one column "
+                          "per short channel, orthogonalised, which fits the same as entering "
+                          "every short channel and is what the published comparison ranks "
+                          "above the mean.")
     # withheld from --help pending evaluation; both still work when named explicitly
     glm.add_argument("--aux-regressors", action="store_true", default=None,
                      help=argparse.SUPPRESS)

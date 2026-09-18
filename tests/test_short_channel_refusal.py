@@ -89,3 +89,40 @@ def test_the_methods_text_names_short_channels_only_when_they_were_built():
     assert "short-channel" in built["regressors"]
     assert "short-channel" not in skipped["regressors"]
     assert "cosine" in skipped["regressors"]
+
+
+# ---- the pca strategy refuses in exactly the same places ----
+
+@pytest.mark.parametrize("strategy", ["mean", "pca"])
+def test_every_strategy_refuses_a_montage_with_no_short_channel(strategy):
+    with pytest.raises(StageError, match="no channel at or under"):
+        _short_channel_regressors(_haemo([30.0, 35.0, 40.0]), strategy)
+
+
+@pytest.mark.parametrize("strategy", ["mean", "pca"])
+def test_every_strategy_survives_a_subject_whose_short_channels_are_all_bad(strategy, caplog):
+    raw = _haemo([8.0, 35.0])
+    raw.info["bads"] = [ch for ch in raw.ch_names if ch.startswith("S1_D1")]
+    with caplog.at_level("WARNING"):
+        assert _short_channel_regressors(raw, strategy) == {}
+
+
+def test_pca_gives_one_column_per_surviving_short_channel():
+    """Two short pairs, two chromophores, so four columns where the mean gives two."""
+    raw = _haemo([8.0, 9.0, 35.0])
+    out = _short_channel_regressors(raw, "pca")
+    assert len(out) == 4
+    assert all(name.startswith("short_ch_pca") for name in out)
+    assert all(len(col) == raw.n_times for col in out.values())
+
+
+def test_a_rejected_short_channel_stays_out_of_the_pca():
+    """One bad pair out of three leaves four columns, not six: the bad one is not a column.
+
+    The reference implementations do not exclude rejected short channels. One of them in the
+    design matrix reaches every channel's fit, so this keeps the exclusion the mean strategy
+    already had rather than following them.
+    """
+    raw = _haemo([8.0, 9.0, 9.5, 35.0])
+    raw.info["bads"] = [ch for ch in raw.ch_names if ch.startswith("S2_D2")]
+    assert len(_short_channel_regressors(raw, "pca")) == 4

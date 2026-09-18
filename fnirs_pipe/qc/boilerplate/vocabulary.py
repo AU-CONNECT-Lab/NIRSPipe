@@ -128,6 +128,12 @@ def _regressor_phrase(params: dict[str, Any]) -> str:
     sc = params.get("short_channel")
     if sc == "mean":
         parts.append("the mean short-channel time course of each chromophore")
+    # not "the principal components of the short channels": every component is kept, so the
+    # columns span what the short channels themselves span and the decomposition is there
+    # for conditioning. A reader told "principal components" would take it for a reduction
+    elif sc == "pca":
+        parts.append("an orthogonal basis of every short-channel time course, both "
+                     "chromophores decomposed together")
 
     if (drift := _drift_phrase(params)) is not None:
         parts.append(drift)

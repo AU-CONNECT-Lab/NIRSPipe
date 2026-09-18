@@ -69,16 +69,28 @@ def _regressors(raw, bads=(), spike=None):
     return _short_channel_regressors(raw, "mean")
 
 
-def test_the_pca_strategy_is_refused_rather_than_quietly_averaged(haemo):
-    """`--short-channel` no longer offers it, but a `--config` TOML reaches the function
-    past the parser's own choices. Averaging instead of what was asked for would put a
-    different regressor in the design matrix than the run record says ran.
+def test_a_strategy_that_does_not_exist_is_refused_rather_than_quietly_averaged(haemo):
+    """A `--config` TOML reaches this function past the parser's own choices. Averaging
+    instead of what was asked for would put a different regressor in the design matrix than
+    the run record says ran, and the two strategies are not variants of one regressor: the
+    mean is two columns, the basis is one per short channel."""
+    with pytest.raises(ValueError, match="must be 'mean' or 'pca'"):
+        _short_channel_regressors(haemo, "nearest")
 
-    PC1 weights by variance, so one short channel carrying a rhythm of its own dominates the
-    component while the mean stays diluted by the channel count: the two are not variants of
-    one regressor, and substituting either for the other is a different model."""
-    with pytest.raises(ValueError, match="must be 'mean'"):
-        _short_channel_regressors(haemo, "pca")
+
+def test_a_bad_short_channel_does_not_reach_the_basis_either(haemo):
+    """The exclusion is the strategy's shared half, so it holds for both of them."""
+    raw = haemo.copy()
+    raw.info["bads"] = [SHORT_HBO]
+    clean = _short_channel_regressors(raw, "pca")
+
+    spiked = haemo.copy()
+    spiked.info["bads"] = [SHORT_HBO]
+    spiked._data[spiked.ch_names.index(SHORT_HBO)] += SPIKE
+    for name, values in clean.items():
+        # a sign flip is not a difference: the basis is defined up to it
+        assert_allclose(np.abs(values), np.abs(_short_channel_regressors(spiked, "pca")[name]),
+                        err_msg=name)
 
 
 def test_a_bad_short_channel_does_not_reach_the_regressor(haemo):

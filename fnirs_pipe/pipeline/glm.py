@@ -31,7 +31,10 @@ HRFModel   = Literal[
 # arN (e.g. "ar2", "ar3") is also valid but cannot be expressed as a Literal
 NoiseModel = Literal["ols", "ar1", "ar2", "ar3", "ar4", "ar5", "auto"]
 DriftModel = Literal["cosine", "polynomial", "none"]
-SCRStrategy = Literal["mean"]
+SCRStrategy = Literal["mean", "pca"]
+
+# the prefix every short-channel confound column carries, whatever the strategy built it
+SHORT_CH_PREFIX = "short_ch_"
 
 
 def _short_channel_regressors(
@@ -39,10 +42,13 @@ def _short_channel_regressors(
 ) -> dict[str, np.ndarray]:
     from fnirs_pipe.qc.metrics._helpers import long_short_channels
 
-    # a --config TOML reaches this past the CLI's own choices
-    if strategy is not True and strategy != "mean":
+    # a --config TOML can write `short_channel = true`, which reaches this past the CLI's
+    # own choices and predates there being a strategy to name
+    if strategy is True:
+        strategy = "mean"
+    if strategy not in ("mean", "pca"):
         raise ValueError(
-            f"short-channel strategy must be 'mean', got {strategy!r}.")
+            f"short-channel strategy must be 'mean' or 'pca', got {strategy!r}.")
     # not mne_nirs' get_short_channels: that reads distance 0 as short, so a montage with no
     # registered positions would build these out of every channel
     short_names = long_short_channels(haemo, sep_bands)[1]
@@ -80,10 +86,54 @@ def _short_channel_regressors(
     if n_dropped:
         logger.info("short-channel regressors: %d of %d short channels excluded as bad",
                     n_dropped, len(short.ch_names))
+    if strategy == "pca":
+        return _short_channel_basis(np.vstack([hbo_data, hbr_data]))
     return {
         "short_ch_hbo_mean": hbo_data.mean(axis=0),
         "short_ch_hbr_mean": hbr_data.mean(axis=0),
     }
+
+
+def _short_channel_basis(data: np.ndarray) -> dict[str, np.ndarray]:
+    """An orthonormal basis of every short channel, both chromophores in one decomposition.
+
+    ::
+
+        6 short channels x 2 chromophores, 2000 samples
+          -> {"short_ch_pca01": ..., ..., "short_ch_pca12": ...}
+
+    ``data`` is ``(n_channels, n_times)``, chromophores stacked.
+
+    **Every component is kept, and that is not an oversight.** A least-squares fit depends
+    only on the column space of its design matrix, so an orthonormal basis of a full-rank
+    block spans what the raw channels spanned and leaves the residual identical to the last
+    bit. What changes against the mean strategy is the number of columns, two against twice
+    the channel count, not the decomposition: the decomposition is there so the columns are
+    not collinear. Dropping components by explained variance would change the fit, but no
+    implementation does it and no threshold for it has been published, so this does not
+    invent one.
+
+    Steps:
+
+    1. transpose to samples-by-channels and remove each channel's mean, so the first
+       direction describes covariation rather than the offset the intercept already carries
+    2. take the left singular vectors, dropping the numerically zero ones. Two short
+       channels carrying the same signal make the block rank deficient, and those
+       directions are numerical noise rather than components
+    3. scale each to unit variance, so the columns sit beside the drift basis on one scale
+    """
+    centred = data.T - data.T.mean(axis=0)
+    u, singular, _ = np.linalg.svd(centred, full_matrices=False)
+    # the numerical rank, spelled the way `orth` spells it: anything below this is a
+    # direction the data does not actually carry
+    tol = max(centred.shape) * np.finfo(float).eps * (singular[0] if singular.size else 0.0)
+    keep = int((singular > tol).sum())
+    if keep < len(singular):
+        logger.info("short-channel regressors: %d of %d directions are rank deficient and "
+                    "were dropped", len(singular) - keep, len(singular))
+    return {f"short_ch_pca{i + 1:02d}": u[:, i] / u[:, i].std()
+            for i in range(keep) if u[:, i].std() > 0}
+
 
 def _band_fraction(x: np.ndarray, sfreq: float,
                    l_freq: float | None, h_freq: float | None) -> float:
@@ -329,7 +379,8 @@ def run_glm_pipeline(
     # what was built, not what was asked for. The methods sentence is generated from the
     # sidecar, so a regressor that could not be made must not be named in it: a subject
     # whose short channels were all rejected keeps running, and its text has to say so.
-    short_channel_used = short_channel if "short_ch_hbo_mean" in confound_cols else None
+    short_channel_used = short_channel if any(
+        c.startswith(SHORT_CH_PREFIX) for c in confound_cols) else None
 
     dm = build_design_matrix(
         raw=haemo,
