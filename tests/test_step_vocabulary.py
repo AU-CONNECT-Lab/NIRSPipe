@@ -100,10 +100,10 @@ def test_resample_accepts_either_key():
 
 
 def test_the_screening_sentence_names_every_cutoff_that_rejects_a_channel():
-    """Yucel 2021 asks the Methods to state the thresholds a channel was rejected on, and
-    this is the sentence a paper copies. It named SCI and PSP alone for one release after
-    the two stopped deciding anything on their own, so it described a rule the code had
-    replaced: `min_good_frac` is what rejects, and it was not in the paragraph at all.
+    """The Methods have to state the thresholds a channel was rejected on, and this is the
+    sentence a paper copies. It named SCI and PSP alone for one release after the two
+    stopped deciding anything on their own, so it described a rule the code had replaced:
+    `min_good_frac` is what rejects, and it was not in the paragraph at all.
 
     Driven off CRITERIA rather than a list written here, so a new screening criterion that
     never reaches the prose fails instead of shipping silently.

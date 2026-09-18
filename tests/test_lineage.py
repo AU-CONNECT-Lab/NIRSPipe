@@ -11,6 +11,7 @@ import pytest
 from fnirs_pipe.exceptions import StageError
 from fnirs_pipe.utils.lineage import (
     Recorder,
+    carried_params,
     lineage_of,
     path_from,
     require_stage,
@@ -75,6 +76,33 @@ def test_stamp_preserves_unrelated_temp_keys(fake_raw):
     fake_raw.info["temp"] = {"other": 1}
     stamp(fake_raw, stage="od", step="od_conversion")
     assert fake_raw.info["temp"]["other"] == 1
+
+
+# ---- carried_params ----
+
+def test_carried_params_hands_the_previous_params_to_a_re_stamp(fake_raw):
+    """A re-stamp replaces the whole entry, so a parallel branch has to hand them back in."""
+    stamp(fake_raw, stage="errts", step="glm_residuals", noise_model="ar", drift_model="cosine")
+    stamp(fake_raw, stage="errtsbroad", step="glm_residuals_broadband",
+          **{**carried_params(fake_raw), "resample_sfreq": 5.0})
+
+    lin = lineage_of(fake_raw)
+    assert lin.stage == "errtsbroad"
+    assert lin.params == {"noise_model": "ar", "drift_model": "cosine", "resample_sfreq": 5.0}
+
+
+def test_carried_params_has_nothing_to_carry_from_an_unstamped_object(fake_raw):
+    assert carried_params(fake_raw) == {}
+
+
+@pytest.mark.parametrize("name", ["raw", "stage", "step", "source", "path"])
+def test_carried_params_refuses_a_param_named_after_a_stamp_argument(fake_raw, name):
+    """Expanded into stamp() it would bind twice, and the TypeError names no culprit."""
+    stamp(fake_raw, stage="errts", step="glm_residuals")
+    lineage_of(fake_raw).params[name] = "x"
+
+    with pytest.raises(StageError, match=name):
+        carried_params(fake_raw)
 
 
 # ---- require_stage ----

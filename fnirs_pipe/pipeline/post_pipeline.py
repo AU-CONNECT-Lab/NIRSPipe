@@ -27,7 +27,7 @@ from fnirs_pipe.pipeline.denoise import (
 )
 from fnirs_pipe.pipeline.glm import run_glm_pipeline
 from fnirs_pipe.exceptions import StageError
-from fnirs_pipe.utils.lineage import Recorder, lineage_of, stage_of, stamp
+from fnirs_pipe.utils.lineage import Recorder, carried_params, lineage_of, stage_of, stamp
 from fnirs_pipe.qc.metrics._helpers import separation_bands
 from fnirs_pipe.utils.logging import get_logger
 
@@ -372,10 +372,10 @@ def run_post(
                 # Same regression, un-bandpassed input. Re-stamp so it stops sharing the "errts"
                 # stage with the bandpassed residual, whose file it would otherwise be credited to.
                 # carry the regression's own parameters over; a bare re-stamp overwrites them
-                fitted = (lin.params if (lin := lineage_of(raw_resid_bb)) else None) or {}
                 stamp(raw_resid_bb, stage="errtsbroad", step="glm_residuals_broadband",
                       source=raw_haemo,
-                      **{**fitted, "resample_sfreq": config.resample_sfreq})
+                      **{**carried_params(raw_resid_bb),
+                         "resample_sfreq": config.resample_sfreq})
                 _write_step_snirf(raw_resid_bb, config, output_dir, desc="errtsbroad",
                                   rec=rec, source_entities=source_entities)
 

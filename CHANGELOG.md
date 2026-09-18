@@ -13,6 +13,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 - **A channel that falls between the two separation bands is now reported with its own separation**, not only with the range it fell outside. The run note used to say that channels sat in the gap the package's default bands leave; it now also says where yours actually are and which bound would take them in, which is the difference between knowing a gap exists and being able to decide about it. Nothing about the bands themselves changed: a channel between them is still measured by no section, on purpose
+- **A condition page's denoising carpet no longer quotes an SD ratio.** That number is measured over the whole recording, as the panel's greyscale deliberately is, so on a page drawing one condition's window it described columns that were not on screen. The run's own page still carries it, and it is the same number there
 
 ### Fixed
 - **A run with non-default separation bands was described with the default ones** in the preprocessing report's channel note, so a montage prepared with a raised short bound was told its channels sat in a gap they were not in

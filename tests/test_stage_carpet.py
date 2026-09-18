@@ -87,6 +87,16 @@ def test_cut_narrows_the_view_without_rescaling_it():
     assert quiet.std() < 0.3 * whole.std()
 
 
+def test_a_cut_view_drops_the_sd_ratio_from_the_title():
+    """It is measured whole-run, so on a condition's window it would describe other columns."""
+    stages, ref = [("desc-errts", _raw(1e-8))], ("desc-preproc", _raw(1e-6))
+    whole = carpet_compare_figure(stages, "hbo", reference=ref)
+    cut = carpet_compare_figure(stages, "hbo", reference=ref, xlim=(61.0, 119.0))
+
+    assert "SD 0.01×" in whole.layout.annotations[0].text
+    assert cut.layout.annotations[0].text == "desc-errts"
+
+
 def test_no_channels_of_that_chromophore_returns_none():
     assert carpet_compare_figure([("desc-preproc", _raw())], "nope") is None
 
@@ -135,3 +145,31 @@ def test_the_motion_rows_fall_back_to_one_trace_without_a_corrected_recording():
     fig = carpet_compare_figure([("desc-errts", _raw())], raw_gvtd=od,
                                 gvtd_blocks=[("long", od.ch_names)])
     assert [t.name for t in fig.data if t.type == "scatter"] == ["before correction"]
+
+
+# ---- which stage the panel draws ----
+
+def test_the_panel_picks_the_residual_whatever_order_the_stage_list_is_in():
+    """The preference is by name: psd_stages is built elsewhere and may be reordered there."""
+    from fnirs_pipe.qc.subject.report import _carpet_stages
+
+    filtered, resampled, errts = _raw(), _raw(), _raw()
+    listed = [("desc-filtered", filtered), ("desc-resampled", resampled),
+              ("desc-errts", errts)]
+    for order in (listed, listed[::-1]):
+        stages, reference = _carpet_stages(_raw(), order)
+        assert [label for label, _ in stages] == ["desc-errts"]
+        assert stages[0][1] is errts
+        assert reference[0] == "desc-preproc"
+
+
+def test_the_panel_falls_back_to_the_bandpassed_stage_then_to_preproc():
+    from fnirs_pipe.qc.subject.report import _carpet_stages
+
+    filtered, haemo = _raw(), _raw()
+    stages, _ = _carpet_stages(haemo, [("desc-resampled", _raw()),
+                                       ("desc-filtered", filtered)])
+    assert stages == [("desc-filtered", filtered)]
+
+    stages, reference = _carpet_stages(haemo, None)
+    assert stages == [reference] == [("desc-preproc", haemo)]

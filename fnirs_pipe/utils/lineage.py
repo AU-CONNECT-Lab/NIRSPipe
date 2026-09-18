@@ -24,6 +24,7 @@ if TYPE_CHECKING:
     import mne
 
 _KEY = "fnirs_pipe_lineage"
+_RESERVED = ("raw", "stage", "step", "source", "path")
 
 
 @dataclass(frozen=True)
@@ -58,6 +59,20 @@ def stamp(
         _KEY: Lineage(stage, step, src, params, path),
     }
     return raw
+
+
+def carried_params(raw: mne.io.Raw) -> dict[str, Any]:
+    """Params of raw's stamp, for a re-stamp that has to keep them.
+
+    Refuses a param sharing a name with stamp()'s own arguments: expanded into that call
+    it would bind twice, and Python raises before the body can say which key did it.
+    """
+    params = (lin.params if (lin := lineage_of(raw)) else None) or {}
+    if clash := sorted(set(params) & set(_RESERVED)):
+        raise StageError(
+            f"lineage params {clash} share a name with an argument of stamp(); "
+            "rename them at the step that stamped them")
+    return params
 
 
 def path_from(raw: mne.io.Raw) -> str | None:

@@ -120,7 +120,8 @@ def carpet_compare_figure(
     is not drawn and only supplies the SD each title is quoted against. ``raw_gvtd`` is
     intensity or optical density; omitting it drops the motion row. ``xlim`` (t0, t1) cuts the
     columns drawn, not the z-scoring, which stays whole-run so a condition's carpet is on the
-    run's greyscale.
+    run's greyscale. A cut view also drops the titles' SD ratio, which is whole-run for the
+    same reason and would otherwise read as the drawn window's.
 
     ``chromophore`` may be one name or several; each gets its own block. Returns None when
     no channel of any of them survives in every stage.
@@ -138,15 +139,16 @@ def carpet_compare_figure(
             order, groups = _roi_order(names, roi_map)
             ordered = [names[i] for i in order]
             d = raw.get_data(picks=ordered)
-            ref_sd = ref_raw.get_data(picks=ordered).std(axis=1)
-            ref_sd[ref_sd == 0] = 1.0
             blocks.append((chromo, ordered, d, groups))
-            ratios.append((chromo, float(np.median(d.std(axis=1) / ref_sd))))
+            # whole-run, so a cut view would quote columns the panel is not drawing
+            if xlim is None and not (reference is None and label == stages[0][0]):
+                ref_sd = ref_raw.get_data(picks=ordered).std(axis=1)
+                ref_sd[ref_sd == 0] = 1.0
+                ratios.append((chromo, float(np.median(d.std(axis=1) / ref_sd))))
         if not blocks:
             continue
         ratio_text = "   ".join(f"{c.upper()} SD {r:.2f}× {ref_label}" for c, r in ratios)
-        first = not reference and label == stages[0][0]
-        rows.append((label if first else f"{label}  ·  {ratio_text}", raw, blocks))
+        rows.append((f"{label}  ·  {ratio_text}" if ratios else label, raw, blocks))
     if not rows:
         return None
 

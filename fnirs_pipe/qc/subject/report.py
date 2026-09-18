@@ -812,16 +812,18 @@ def _section_haemo(
 
 
 def _carpet_stages(raw_haemo: mne.io.Raw, psd_stages: "list | None") -> tuple:
-    """``([(label, raw)], reference)``: the last haemo stage on disk, and desc-preproc.
+    """``([(label, raw)], reference)``: the denoised haemo stage, and desc-preproc.
 
     One block rather than a chain. The reference is the Beer-Lambert output, drawn in the
     motion section and quoted here only as the SD each title is measured against.
     """
-    later = [(label, raw) for label, raw in (psd_stages or [])
-             if label in ("desc-filtered", "desc-errts")
-             and "hbo" in raw.get_channel_types()]
+    # by name, not by position: a reordering of psd_stages must not swap the residual out
+    haemo = {label: raw for label, raw in (psd_stages or [])
+             if "hbo" in raw.get_channel_types()}
     reference = ("desc-preproc", raw_haemo)
-    return (later[-1:] or [reference]), reference
+    pick = next(((lab, haemo[lab]) for lab in ("desc-errts", "desc-filtered") if lab in haemo),
+                None)
+    return ([pick] if pick else [reference]), reference
 
 
 def _section_stage_carpets(
