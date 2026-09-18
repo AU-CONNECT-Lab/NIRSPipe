@@ -47,15 +47,17 @@ def test_the_roi_matrix_prints_every_cell():
     frame = _roi_frame(["PFC", "TPJ", "M1"])
     fig = fc_roi_matrix_figure({"hbo": frame})
     printed = [t for t in fig.data if getattr(t, "mode", None) == "text"]
-    # the diagonal says nothing and is blanked, so three ROIs leave six cells
-    assert sum(len(t.text) for t in printed) == 6
+    # one half of a symmetric matrix, diagonal blanked: three ROIs leave three cells
+    assert sum(len(t.text) for t in printed) == 3
 
 
-def test_the_roi_diagonal_is_blank():
-    """An ROI's correlation with itself is 1 by construction."""
-    fig = fc_roi_matrix_figure({"hbo": _roi_frame(["PFC", "TPJ"])})
+def test_the_roi_matrix_is_a_triangle_with_a_blank_diagonal():
+    """Symmetric like the channel matrices, so the same half is drawn; and an ROI's
+    correlation with itself is 1 by construction and says nothing."""
+    fig = fc_roi_matrix_figure({"hbo": _roi_frame(["PFC", "TPJ", "M1"])})
     z = np.asarray(next(t for t in fig.data if t.type == "heatmap").z, dtype=float)
-    assert np.isnan(np.diag(z)).all()
+    assert np.isnan(z[np.triu_indices(3)]).all()
+    assert np.isfinite(z[np.tril_indices(3, -1)]).all()
 
 
 def test_the_roi_matrix_declines_rather_than_raises():

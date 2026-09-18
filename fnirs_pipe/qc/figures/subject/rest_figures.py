@@ -295,6 +295,8 @@ def fc_roi_matrix_figure(
             continue
         mat = frame.to_numpy(dtype=float).copy()
         np.fill_diagonal(mat, np.nan)
+        # symmetric, as the channel matrices are, so the same half is drawn
+        mat[np.triu_indices(len(mat), k=1)] = np.nan
         panels.append((frame.index.tolist(), mat, f"ROI FC - {label}"))
     if not panels:
         return None
@@ -304,7 +306,7 @@ def fc_roi_matrix_figure(
     fig = make_subplots(rows=1, cols=len(panels), horizontal_spacing=0.14,
                         subplot_titles=[lab for _, _, lab in panels])
     for col, (names, mat, _label) in enumerate(panels, start=1):
-        matrix_ground(fig, len(names), len(names), 1, col)
+        matrix_ground(fig, len(names), len(names), 1, col, triangle=True)
         fig.add_trace(go.Heatmap(
             z=mat.astype(np.float32), x=names, y=names, zmin=-1.0, zmax=1.0,
             colorscale=CORRELATION_SCALE, showscale=(col == len(panels)),
@@ -316,12 +318,12 @@ def fc_roi_matrix_figure(
         cell_values(fig, mat, names, names, cmap=CORRELATION_SCALE, vmin=-1.0, vmax=1.0,
                     row=1, col=col)
         axes = dict(tickfont=dict(size=9), showgrid=False, zeroline=False, ticks="",
-                    showline=False)
+                    showline=False, constrain="domain")
+        # square cells, and `constrain` on both axes shrinks whichever is not binding rather
+        # than padding its range, so the labels stay against the matrix either way
         fig.update_xaxes(tickangle=-45, **axes, row=1, col=col)
-        # square cells, and `constrain` shrinks the axis rather than padding its range, so
-        # the labels stay against the matrix whichever dimension binds
         fig.update_yaxes(autorange="reversed", scaleanchor=f"x{col if col > 1 else ''}",
-                         scaleratio=1, constrain="domain", **axes, row=1, col=col)
+                         scaleratio=1, **axes, row=1, col=col)
 
     fig.update_annotations(font=dict(size=11, color="#6c757d"))
     fig.update_layout(height=side + 150, plot_bgcolor="white", showlegend=False,
