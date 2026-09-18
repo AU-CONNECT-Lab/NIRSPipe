@@ -67,20 +67,23 @@ SECTION_NOTES = {
         "are also smoothed across adjacent trials. One panel per condition, pooled panel first. "
         "Select a channel.",
     "rest.alff":
-        "Amplitude of Low-Frequency Fluctuations (ALFF) and fractional ALFF (fALFF) per "
-        "channel, computed from the denoised residual time series. HbO in red, HbR in blue. "
-        "Dashed lines mark per-group means. Rejected channels carry no value and so no bar; a "
-        "grey stripe marks where they sat, and they are out of the means.",
+        "Amplitude of Low-Frequency Fluctuations (ALFF) and fractional ALFF (fALFF), computed "
+        "from the denoised residual time series. Where the amplitude is; how much it was and "
+        "which channels it correlated with are in the connectivity panel below.",
     "rest.alff_layout":
-        "The same two measures drawn where the channels are, each channel its "
-        "source-to-detector segment. Each panel is scaled to its own values, so colours compare "
-        "within a panel and not across them. Faded grey channels were rejected. Short channels "
-        "are not drawn.",
+        "One disc per channel at its source-detector midpoint. The amplitude row draws mALFF, "
+        "each channel over its own chromophore's mean, so HbO and HbR share one scale and the "
+        "measured molar value is on the hover; fALFF is already a share. Grey channels carry "
+        "no value, which is what a rejected one has. Short channels are not drawn.",
     "fc.channel_matrix":
-        "Channel-level Pearson correlation matrix computed from the denoised residual time "
-        "series. HbO and HbR are shown as separate heatmaps. A rejected channel is blank: it "
-        "keeps its row and column so every subject's matrix has the same shape, but holds no "
-        "values, so it shows as a grey cross through the matrix.",
+        "The run's channels in one panel: Pearson correlation between channels on top, HbO "
+        "left and HbR right on one scale, and each channel's amplitude and spectral share "
+        "below. All of it is computed from the denoised residual time series. The rows share "
+        "one channel order and the same separation blocks, so a channel is in the same "
+        "relative place throughout; they are not on one x scale, so the correspondence is by "
+        "label and by block. A rejected channel keeps its row and column in the matrices, "
+        "where it shows as a grey cross, and its position in the strips, where it is a ring "
+        "below the measured range.",
     "fc.roi_matrix":
         "The same correlations between ROI-averaged signals rather than between channels, on "
         "the same scale. Channels are averaged before correlating, so this is not the mean of "

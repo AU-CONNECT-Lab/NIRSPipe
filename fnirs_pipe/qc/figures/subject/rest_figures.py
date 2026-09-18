@@ -1,14 +1,13 @@
 """Resting-state QC figures.
 
-alff_falff_figure():    per-channel ALFF and fALFF bar charts (HbO / HbR colour-coded).
-alff_topo_figure():     the same two measures drawn on the optode flat map.
-fc_matrix_figure():     functional connectivity heatmaps, HbO and HbR as separate subplots.
-fc_roi_matrix_figure(): the same, ROI by ROI instead of channel by channel.
+rest_channel_panel():   the run's channels in one panel, FC matrices over ALFF and fALFF.
+alff_topo_figure():     amplitude and spectral share drawn on the optode flat map.
+fc_roi_matrix_figure(): connectivity ROI by ROI instead of channel by channel.
 fc_seed_topo_figure():  seed-to-whole-brain correlations drawn on the optode flat map.
 
-The two flat maps are built on the shared head in :mod:`fnirs_pipe.qc.figures.common.head_map`
-rather than on their own projection, so a channel sits where the report's other head figures
-put it.
+The panel answers how much and with whom, the flat maps answer where. Both flat maps are
+built on the shared head in :mod:`fnirs_pipe.qc.figures.common.head_map` rather than on their
+own projection, so a channel sits where the report's other head figures put it.
 
 # TODO: project ALFF/fALFF onto a brain surface (not just the flat map) via mne_nirs when
 # head coordinates are available.
@@ -16,12 +15,6 @@ put it.
 
 from __future__ import annotations
 
-import base64
-import io
-
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
 import mne
 import numpy as np
 import pandas as pd
@@ -54,182 +47,222 @@ def _pair_of(ch: str) -> str:
     return ch.split(" ")[0]
 
 
-def alff_falff_figure(
-    alff_df: pd.DataFrame,
-    title: str = "ALFF and fALFF per Channel",
-) -> str:
-    """Return base64 PNG of ALFF / fALFF bar charts.
+# The blocks a rest panel's channels are laid out in, and what each is called. Same split and
+# same order as the per-channel table, so a reader moving between them finds the same groups.
+_SEP_BLOCKS = (("long", "long"), ("mid", "neither range"), ("short", "short"))
+# Blank x positions between blocks, so the grouping needs no rule drawn through the panel.
+_BLOCK_GAP = 1.4
+_STRIP_MARK, _CONNECTOR, _REJECTED_INK = 8, "#c3cad1", "#b9c2cb"
+# The panel's two bands, in pixels: the matrices are square and need the room, a strip does
+# not, and a strip added later must not shrink the matrices.
+_PANEL_MATRIX_PX, _PANEL_STRIP_PX = 560, 230
 
-    alff_df must have columns: channel, alff, falff.
-    HbO channels (name ends with ' hbo') are drawn in red; HbR in blue.
-    Rejected channels arrive NaN and so have no bar; a grey stripe marks where they sat, and
-    the mean lines are over the good channels only.
+
+def _pair_blocks(pairs, raw, sep_bands):
+    """The panel's channel order: ``(pairs, x positions, block spans)``.
+
+    Grouped by separation and sorted by name inside a group, which is the per-channel
+    table's order. Sorting by value instead would put an outlier at an end, but each of the
+    panel's rows would then want a different order and none of them would line up.
+
+    Without ``raw`` there is no separation to block by and the pairs are one list, which is
+    what a caller holding only the tables can draw.
     """
-    channels = alff_df["channel"].tolist()
-    alff_vals = alff_df["alff"].to_numpy(dtype=float)
-    falff_vals = alff_df["falff"].to_numpy(dtype=float)
+    groups = {}
+    if raw is not None:
+        from fnirs_pipe.qc.metrics import long_short_channels
+        long_names, short_names = long_short_channels(raw, sep_bands)
+        of = {_pair_of(c): "long" for c in long_names}
+        of.update({_pair_of(c): "short" for c in short_names})
+        for p in pairs:
+            groups.setdefault(of.get(p, "mid"), []).append(p)
+        blocks = [(key, label) for key, label in _SEP_BLOCKS if groups.get(key)]
+    else:
+        groups, blocks = {"long": list(pairs)}, [("long", "")]
 
-    is_hbo = np.array([ch.endswith(" hbo") for ch in channels])
-    is_bad = (alff_df["bad"].to_numpy(dtype=bool) if "bad" in alff_df.columns
-              else np.zeros(len(channels), dtype=bool))
-    colors = [_HBO_COLOR if h else _HBR_COLOR for h in is_hbo]
-    x = np.arange(len(channels))
-
-    fig, (ax_a, ax_f) = plt.subplots(
-        2, 1,
-        figsize=(max(6.0, len(channels) * 0.22), 7),
-        sharex=True,
-    )
-    fig.subplots_adjust(hspace=0.12)
-
-    for ax, vals, ylabel, row_title in (
-        (ax_a, alff_vals,  "ALFF",  "ALFF"),
-        (ax_f, falff_vals, "fALFF", "fALFF"),
-    ):
-        ax.bar(x, vals, color=colors, edgecolor="none", alpha=0.85)
-
-        # a rejected channel's value is NaN, so its bar is missing rather than zero; the
-        # stripe says the gap is a rejection and not a channel that measured nothing
-        for i in np.flatnonzero(is_bad):
-            ax.axvspan(i - 0.5, i + 0.5, color="#eeeeee", lw=0, zorder=0)
-
-        def _mean(mask):
-            sel = vals[mask]
-            return float(np.nanmean(sel)) if np.isfinite(sel).any() else None
-
-        hbo_mean = _mean(is_hbo) if is_hbo.any() else None
-        hbr_mean = _mean(~is_hbo) if (~is_hbo).any() else None
-        if hbo_mean is not None:
-            # ALFF is ~1e-8 and fALFF ~1e-2, so a fixed number of decimals reads 0.0000
-            # on one of the two panels whichever number is chosen
-            ax.axhline(hbo_mean, color=_HBO_COLOR, lw=1.0, ls="--", alpha=0.7,
-                       label=f"HbO mean = {hbo_mean:.4g}")
-        if hbr_mean is not None:
-            ax.axhline(hbr_mean, color=_HBR_COLOR, lw=1.0, ls="--", alpha=0.7,
-                       label=f"HbR mean = {hbr_mean:.4g}")
-
-        ax.set_ylabel(ylabel, fontsize=9)
-        ax.set_title(row_title, fontsize=10, pad=4)
-        ax.legend(fontsize=7, frameon=False)
-        for spine in ("top", "right"):
-            ax.spines[spine].set_visible(False)
-        ax.grid(axis="y", color="#eeeeee", lw=0.6)
-        ax.set_axisbelow(True)
-
-    step = max(1, len(channels) // 30)
-    ax_f.set_xticks(x[::step])
-    ax_f.set_xticklabels(
-        [channels[i] for i in range(0, len(channels), step)],
-        rotation=45, ha="right", fontsize=6,
-    )
-    ax_f.set_xlabel("Channel", fontsize=9)
-
-    # shared legend for colour meaning
-    from matplotlib.patches import Patch
-    legend_handles = [
-        Patch(facecolor=_HBO_COLOR, label="HbO"),
-        Patch(facecolor=_HBR_COLOR, label="HbR"),
-    ]
-    fig.legend(handles=legend_handles, loc="upper right", fontsize=8, frameon=False,
-               bbox_to_anchor=(1.0, 1.0))
-
-    fig.suptitle(title, fontsize=11, y=1.01)
-
-    buf = io.BytesIO()
-    fig.savefig(buf, format="png", dpi=300, bbox_inches="tight")
-    plt.close(fig)
-    buf.seek(0)
-    return base64.b64encode(buf.read()).decode()
+    order, xs, spans, x = [], [], [], 0.0
+    for key, label in blocks:
+        members = sorted(groups.get(key, []))
+        if not members:
+            continue
+        start = x
+        for p in members:
+            order.append(p)
+            xs.append(x)
+            x += 1.0
+        spans.append((start, x - 1.0, label))
+        x += _BLOCK_GAP
+    return order, np.asarray(xs, dtype=float), spans
 
 
-# One matrix cell, in pixels, and the bounds a panel is clipped to. A channel matrix can run
-# to sixty a side and an ROI matrix to four, so the panel is sized off its own count rather
-# than fixed: at a fixed size the first is unreadable and the second is four vast squares.
-_MATRIX_CELL_PX = 18
-_MATRIX_MIN_PX, _MATRIX_MAX_PX = 300, 680
+def _panel_matrix(fig, frame, order, chromo, col, show_bar):
+    """One chromophore's channel matrix into the panel's top row, on the panel's order."""
+    names = [f"{p} {chromo}" for p in order]
+    # to_numpy can hand back a read-only view, and the diagonal is blanked in place
+    mat = np.array(frame.reindex(index=names, columns=names).to_numpy(dtype=float), copy=True)
+    np.fill_diagonal(mat, np.nan)
+    matrix_ground(fig, len(order), len(order), 1, col)
+    fig.add_trace(go.Heatmap(
+        z=mat.astype(np.float32), x=order, y=order, zmin=-1.0, zmax=1.0,
+        colorscale=CORRELATION_SCALE, showscale=show_bar,
+        colorbar=dict(title=dict(text="Pearson r", side="right", font=dict(size=10)),
+                      thickness=12, len=0.46, y=1.0, yanchor="top",
+                      tickfont=dict(size=9), tickvals=[-1, -0.5, 0, 0.5, 1]),
+        hovertemplate="%{y}<br>%{x}<br>r = %{z:.3f}<extra></extra>",
+    ), row=1, col=col)
+    fig.update_xaxes(tickangle=-90, tickfont=dict(size=7), showgrid=False, ticks="",
+                     row=1, col=col)
+    fig.update_yaxes(autorange="reversed", scaleanchor=f"x{col if col > 1 else ''}",
+                     scaleratio=1, constrain="domain", tickfont=dict(size=7),
+                     showgrid=False, ticks="", row=1, col=col)
 
 
-def _matrix_grid(panels: "list[tuple[list[str], np.ndarray, str]]", title: str,
-                 label_all: bool, values: bool):
-    """The shared body of the two FC matrices: one square panel per chromophore.
+def _panel_strip(fig, values, order, xs, measure, label, row, legend):
+    """One measure's row: a marker per chromophore per pair, the two joined.
 
-    ``panels`` is ``(labels, matrix, chromophore label)`` each, already blanked on the
-    diagonal. ``label_all`` prints every tick rather than thinning them, and ``values``
-    prints each cell's number on it, which only fits where the matrix is small.
+    The gap between the two markers is the question a reader brings to a channel, which a
+    row per channel would leave them to reassemble from two adjacent labels.
     """
-    side = float(np.clip(max(len(n) for n, _, _ in panels) * _MATRIX_CELL_PX,
-                         _MATRIX_MIN_PX, _MATRIX_MAX_PX))
-    fig = make_subplots(rows=1, cols=len(panels), horizontal_spacing=0.12,
-                        subplot_titles=[lab for _, _, lab in panels])
+    def value(pair, chromo):
+        got = values.get(pair, {}).get(chromo)
+        return float(got[measure]) if got is not None and measure in got else np.nan
 
-    for col, (names, mat, _label) in enumerate(panels, start=1):
-        matrix_ground(fig, len(names), len(names), 1, col)
-        fig.add_trace(go.Heatmap(
-            # float32 halves the serialised payload and still resolves r far below what the
-            # colour scale or the hover readout distinguishes
-            z=np.asarray(mat, dtype=np.float32), x=names, y=names,
-            zmin=-1.0, zmax=1.0, colorscale=CORRELATION_SCALE,
-            showscale=(col == len(panels)),
-            colorbar=dict(title=dict(text="Pearson r", side="right", font=dict(size=10)),
-                          thickness=12, len=0.78, tickfont=dict(size=9),
-                          tickvals=[-1, -0.5, 0, 0.5, 1]),
-            hovertemplate="%{y}<br>%{x}<br>r = %{z:.3f}<extra></extra>",
-        ), row=1, col=col)
-        if values:
-            cell_values(fig, np.asarray(mat, dtype=float), names, names,
-                        cmap=CORRELATION_SCALE, vmin=-1.0, vmax=1.0, row=1, col=col)
+    seg_x, seg_y = [], []
+    for xi, p in zip(xs, order):
+        a, b = value(p, "hbo"), value(p, "hbr")
+        if np.isfinite(a) and np.isfinite(b):
+            seg_x += [xi, xi, None]
+            seg_y += [a, b, None]
+    fig.add_trace(go.Scatter(x=seg_x, y=seg_y, mode="lines", hoverinfo="skip",
+                             line=dict(color=_CONNECTOR, width=1.5), showlegend=False),
+                  row=row, col=1)
 
-        step = 1 if label_all else max(1, len(names) // 20)
-        ticks = list(range(0, len(names), step))
-        axes = dict(tickmode="array", tickvals=[names[i] for i in ticks],
-                    tickfont=dict(size=8), showgrid=False, zeroline=False,
-                    ticks="", showline=False)
-        fig.update_xaxes(tickangle=-45, **axes, row=1, col=col)
-        # square cells, and `constrain` shrinks the axis rather than padding its range, so
-        # the labels stay against the matrix whichever dimension binds
-        fig.update_yaxes(autorange="reversed", scaleanchor=f"x{col if col > 1 else ''}",
-                         scaleratio=1, constrain="domain", **axes, row=1, col=col)
+    drawn = np.zeros(len(order), dtype=bool)
+    seen = []
+    for chromo, colour, name in (("hbo", _HBO_COLOR, "HbO"), ("hbr", _HBR_COLOR, "HbR")):
+        y = np.array([value(p, chromo) for p in order])
+        ok = np.isfinite(y)
+        drawn |= ok
+        seen.append(y[ok])
+        fig.add_trace(go.Scatter(
+            x=xs[ok], y=y[ok], mode="markers", name=name, showlegend=legend,
+            customdata=[order[i] for i in np.flatnonzero(ok)],
+            marker=dict(size=_STRIP_MARK, color=colour, line=dict(width=0.8, color="white")),
+            hovertemplate="%{customdata}<br>" + label + " = %{y:.3g}<extra></extra>",
+        ), row=row, col=1)
+        if ok.any():
+            # the reference a marker is read against: above or below what this run's own
+            # channels did, which no absolute number supplies
+            fig.add_hline(y=float(np.mean(y[ok])),
+                          line=dict(color=colour, width=1, dash="dash"),
+                          opacity=0.5, row=row, col=1)
 
-    fig.update_annotations(font=dict(size=11, color="#6c757d"))
-    fig.update_layout(height=side + 150, plot_bgcolor="white", showlegend=False,
-                      margin=dict(l=70, r=40, t=62, b=90),
-                      title=dict(text=title, x=0.01, font=dict(size=13)))
+    measured = np.concatenate(seen) if any(len(v) for v in seen) else np.zeros(1)
+    lo, hi = float(np.min(measured)), float(np.max(measured))
+    span = (hi - lo) or abs(hi) or 1.0
+
+    if (~drawn).any():
+        # a rejected channel keeps its position rather than leaving a gap, or half a montage
+        # of rejections reads as a figure with nothing in it. Below the measured range and
+        # not on the zero line: a channel whose amplitude really is near zero belongs on the
+        # axis, and the two states must not land on the same row
+        idx = np.flatnonzero(~drawn)
+        fig.add_trace(go.Scatter(
+            x=xs[idx], y=np.full(len(idx), lo - 0.17 * span), mode="markers",
+            name="rejected", showlegend=legend, customdata=[order[i] for i in idx],
+            marker=dict(size=_STRIP_MARK, symbol="circle-open", color=_REJECTED_INK,
+                        line=dict(color=_REJECTED_INK, width=1.4)),
+            hovertemplate="%{customdata}<br>rejected<extra></extra>",
+        ), row=row, col=1)
+
+    fig.update_yaxes(title_text=label, title_font=dict(size=10), tickfont=dict(size=9),
+                     showgrid=True, gridcolor="#f2f2f2", zeroline=False,
+                     range=[lo - 0.28 * span, hi + 0.12 * span],
+                     row=row, col=1)
+
+
+def rest_channel_panel(
+    fc_df,
+    fc_hbr_df=None,
+    alff_df=None,
+    raw=None,
+    sep_bands=None,
+    title: str = "Resting state per channel: connectivity, amplitude, spectral share",
+):
+    """The run's channels in one panel: FC on top, ALFF and fALFF below.
+
+    Built in the shape of the HbO-HbR correlation panel, which a reader of this report has
+    already learned: two matrices side by side on one colour scale, and a per-pair strip
+    under them. Here the two matrices are the two chromophores rather than two stages, and
+    the strips carry amplitude rather than a correlation.
+
+    **The rows share one channel order and one set of separation blocks**, so a channel is in
+    the same relative place in all of them. They do not share an x *scale*: the matrices are
+    half-width and the strips full-width, so a column and a position correspond as labels and
+    as blocks, not pixel for pixel.
+
+    ``alff_df`` may be None, which is a run that computed no amplitude, and the panel is then
+    the matrices alone. None overall when there is no FC to draw.
+    """
+    frames = {c: f for c, f in (("hbo", fc_df), ("hbr", fc_hbr_df))
+              if f is not None and not f.empty}
+    if not frames:
+        return None
+
+    pairs = sorted({_pair_of(str(c)) for f in frames.values() for c in f.columns})
+    order, xs, spans = _pair_blocks(pairs, raw, sep_bands)
+    if not order:
+        return None
+
+    values = {}
+    if alff_df is not None:
+        for _, row in alff_df.iterrows():
+            name = str(row["channel"])
+            if " " in name:
+                pair, chromo = name.rsplit(" ", 1)
+                values.setdefault(pair, {})[chromo] = row
+
+    measures = [(m, lab) for m, lab in (("alff", "ALFF (M)"), ("falff", "fALFF"))
+                if alff_df is not None and m in alff_df.columns]
+    n_rows = 1 + len(measures)
+    height = _PANEL_MATRIX_PX + _PANEL_STRIP_PX * len(measures) + 150
+    heights = ([_PANEL_MATRIX_PX] + [_PANEL_STRIP_PX] * len(measures))
+    heights = [h / sum(heights) for h in heights]
+    fig = make_subplots(
+        rows=n_rows, cols=2, row_heights=heights, vertical_spacing=0.085,
+        horizontal_spacing=0.07,
+        specs=[[{}, {}]] + [[{"colspan": 2}, None]] * len(measures),
+        subplot_titles=["HbO", "HbR"] + [""] * (2 * len(measures)))
+
+    for col, chromo in enumerate(("hbo", "hbr"), start=1):
+        frame = frames.get(chromo)
+        if frame is not None:
+            _panel_matrix(fig, frame, order, chromo, col, show_bar=(col == len(frames)))
+
+    for row, (measure, label) in enumerate(measures, start=2):
+        _panel_strip(fig, values, order, xs, measure, label, row, legend=(row == 2))
+        fig.update_xaxes(tickmode="array", tickvals=xs, ticktext=order, tickangle=-90,
+                         tickfont=dict(size=8), showgrid=False, zeroline=False,
+                         showticklabels=(row == n_rows), row=row, col=1)
+
+    if measures and len(spans) > 1:
+        for xa, xb, name in spans:
+            fig.add_annotation(x=(xa + xb) / 2, y=1.16, yref="y2 domain", text=f"<b>{name}</b>",
+                               showarrow=False, font=dict(color="#6c757d", size=9),
+                               row=2, col=1)
+
+    for note in fig.layout.annotations:
+        if note.text in ("HbO", "HbR"):
+            note.font = dict(size=12, color="#34495e")
+    fig.update_layout(
+        height=height, plot_bgcolor="white", margin=dict(l=76, r=30, t=96, b=104),
+        legend=dict(orientation="h", yanchor="bottom", y=1.015, x=0.0, font=dict(size=10)),
+        title=dict(text=title, x=0.01, y=0.985, font=dict(size=13)))
     return fig
 
 
-def fc_matrix_figure(
-    fc_df: pd.DataFrame,
-    fc_hbr_df: pd.DataFrame | None = None,
-    title: str = "Functional Connectivity (Pearson r)",
-) -> "go.Figure":
-    """FC heatmaps, one panel per chromophore present.
-
-    compute_fc returns one matrix per chromophore, so HbO arrives in fc_df and HbR in
-    fc_hbr_df. A single matrix holding both is also accepted and split by channel suffix.
-    Diagonal is set to NaN so self-correlations are not shown.
-
-    Blank cells are grey. A rejected channel arrives from compute_fc already NaN, so it shows
-    as a full grey row and column; the diagonal is the one-cell grey line through the middle.
-
-    Every channel keeps its tick up to a point: an unreadable label here is one scroll-zoom
-    away from being readable, which a static image could not offer.
-    """
-    panels: list[tuple[list[str], np.ndarray, str]] = []
-    for frame in (fc_df, fc_hbr_df):
-        if frame is None or frame.empty:
-            continue
-        names = frame.columns.tolist()
-        mat = frame.to_numpy(dtype=float).copy()
-        np.fill_diagonal(mat, np.nan)
-        for suffix, label in ((" hbo", "HbO"), (" hbr", "HbR")):
-            idx = [i for i, c in enumerate(names) if c.endswith(suffix)]
-            if idx:
-                panels.append(([names[i] for i in idx], mat[np.ix_(idx, idx)],
-                               f"FC - {label}"))
-
-    if not panels:
-        raise ValueError("fc_df has no recognised HbO/HbR channels")
-    return _matrix_grid(panels, title, label_all=False, values=False)
+# An ROI matrix is a handful of cells, so it is sized to be read rather than scanned.
+_ROI_CELL_PX, _ROI_MIN_PX, _ROI_MAX_PX = 74, 240, 520
 
 
 def fc_roi_matrix_figure(
@@ -239,10 +272,10 @@ def fc_roi_matrix_figure(
     """The ROI x ROI FC heatmaps, or None if there is nothing to draw.
 
     ``fc_roi`` is {chromophore: ROI x ROI frame}, as :func:`compute_fc_roi` returns it. Same
-    scale as :func:`fc_matrix_figure`, so the ROI view and the channel view can be read
-    against each other. A handful of ROIs means every label fits, so unlike that figure this
-    one labels and annotates every cell. The diagonal is blanked: an ROI's correlation with
-    itself is 1 by construction and says nothing.
+    scale as the channel matrices in :func:`rest_channel_panel`, so the ROI view and the
+    channel view can be read against each other. A handful of ROIs means every label fits, so
+    unlike those this one labels and prints every cell. The diagonal is blanked: an ROI's
+    correlation with itself is 1 by construction and says nothing.
     """
     panels = []
     for chromo, label in (("hbo", "HbO"), ("hbr", "HbR")):
@@ -254,7 +287,36 @@ def fc_roi_matrix_figure(
         panels.append((frame.index.tolist(), mat, f"ROI FC - {label}"))
     if not panels:
         return None
-    return _matrix_grid(panels, title, label_all=True, values=True)
+
+    side = float(np.clip(max(len(n) for n, _, _ in panels) * _ROI_CELL_PX,
+                         _ROI_MIN_PX, _ROI_MAX_PX))
+    fig = make_subplots(rows=1, cols=len(panels), horizontal_spacing=0.14,
+                        subplot_titles=[lab for _, _, lab in panels])
+    for col, (names, mat, _label) in enumerate(panels, start=1):
+        matrix_ground(fig, len(names), len(names), 1, col)
+        fig.add_trace(go.Heatmap(
+            z=mat.astype(np.float32), x=names, y=names, zmin=-1.0, zmax=1.0,
+            colorscale=CORRELATION_SCALE, showscale=(col == len(panels)),
+            colorbar=dict(title=dict(text="Pearson r", side="right", font=dict(size=10)),
+                          thickness=12, len=0.8, tickfont=dict(size=9),
+                          tickvals=[-1, -0.5, 0, 0.5, 1]),
+            hovertemplate="%{y}<br>%{x}<br>r = %{z:.3f}<extra></extra>",
+        ), row=1, col=col)
+        cell_values(fig, mat, names, names, cmap=CORRELATION_SCALE, vmin=-1.0, vmax=1.0,
+                    row=1, col=col)
+        axes = dict(tickfont=dict(size=9), showgrid=False, zeroline=False, ticks="",
+                    showline=False)
+        fig.update_xaxes(tickangle=-45, **axes, row=1, col=col)
+        # square cells, and `constrain` shrinks the axis rather than padding its range, so
+        # the labels stay against the matrix whichever dimension binds
+        fig.update_yaxes(autorange="reversed", scaleanchor=f"x{col if col > 1 else ''}",
+                         scaleratio=1, constrain="domain", **axes, row=1, col=col)
+
+    fig.update_annotations(font=dict(size=11, color="#6c757d"))
+    fig.update_layout(height=side + 150, plot_bgcolor="white", showlegend=False,
+                      margin=dict(l=90, r=40, t=62, b=90),
+                      title=dict(text=title, x=0.01, font=dict(size=13)))
+    return fig
 
 
 def _head_for(raw: mne.io.Raw, sep_bands) -> "dict | None":

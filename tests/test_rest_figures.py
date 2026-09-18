@@ -16,7 +16,7 @@ import pytest
 
 from fnirs_pipe.qc.figures.common.matrix_map import BLANK_CELL, CORRELATION_SCALE
 from fnirs_pipe.qc.figures.subject.rest_figures import (
-    alff_topo_figure, fc_matrix_figure, fc_roi_matrix_figure,
+    alff_topo_figure, fc_roi_matrix_figure, rest_channel_panel,
 )
 
 
@@ -63,34 +63,64 @@ def test_the_roi_matrix_declines_rather_than_raises():
     assert fc_roi_matrix_figure({"hbo": pd.DataFrame()}) is None
 
 
-# ---- the channel matrix ----
+# ---- the channel panel ----
 
-def test_the_channel_matrix_splits_by_chromophore():
-    labels = ["S1_D1 hbo", "S1_D2 hbo"], ["S1_D1 hbr", "S1_D2 hbr"]
-    hbo, hbr = (_roi_frame(l) for l in labels)
-    assert _panels(fc_matrix_figure(hbo)) == ["FC - HbO"]
-    assert _panels(fc_matrix_figure(hbo, hbr)) == ["FC - HbO", "FC - HbR"]
+def _fc_frame(pairs, chromo):
+    labels = [f"{p} {chromo}" for p in pairs]
+    return _roi_frame(labels)
 
 
-def test_the_channel_matrix_keeps_a_rejected_channel_as_a_grey_row():
-    """compute_fc blanks a rejected channel, and the row has to stay in the matrix: a
-    dropped row would renumber the others and hide that anything was rejected."""
-    frame = _roi_frame(["S1_D1 hbo", "S1_D2 hbo", "S2_D1 hbo"])
-    frame.loc["S1_D2 hbo", :] = np.nan
-    frame.loc[:, "S1_D2 hbo"] = np.nan
-    fig = fc_matrix_figure(frame)
+def test_the_panel_splits_the_matrices_by_chromophore():
+    pairs = ["S1_D1", "S1_D2", "S2_D1"]
+    hbo, hbr = _fc_frame(pairs, "hbo"), _fc_frame(pairs, "hbr")
+    assert _panels(rest_channel_panel(hbo, hbr))[:2] == ["HbO", "HbR"]
+    heat = [t for t in rest_channel_panel(hbo, hbr).data if t.type == "heatmap"]
+    assert len(heat) == 2
+    # the matrices are labelled by pair, the chromophore being the panel's own title
+    assert list(heat[0].x) == pairs
+
+
+def test_the_panel_rows_share_one_channel_order():
+    """A channel has to be in the same relative place in every row, or the panel is three
+    figures that happen to be stacked."""
+    pairs = ["S2_D1", "S1_D1", "S1_D2"]
+    alff = pd.DataFrame({"channel": [f"{p} {c}" for p in pairs for c in ("hbo", "hbr")],
+                         "alff": np.arange(6.0), "falff": np.arange(6.0) / 10})
+    fig = rest_channel_panel(_fc_frame(pairs, "hbo"), None, alff)
     heat = next(t for t in fig.data if t.type == "heatmap")
-    assert list(heat.y) == list(frame.index)
-    assert np.isnan(np.asarray(heat.z, dtype=float)[1]).all()
-    # the grey is painted under the cells, so a blank reads as grey and not as the page
-    assert any(sh.fillcolor == BLANK_CELL for sh in fig.layout.shapes)
+    strip = next(ax for name, ax in fig.layout.to_plotly_json().items()
+                 if name.startswith("xaxis") and ax.get("ticktext"))
+    assert list(heat.x) == list(strip["ticktext"])
+
+
+def test_a_rejected_channel_sits_below_the_measured_range_not_on_zero():
+    """A channel whose amplitude really is near zero belongs on the axis; if the two land on
+    the same row a reader cannot tell a dead channel from a rejected one."""
+    pairs = ["S1_D1", "S1_D2"]
+    alff = pd.DataFrame({
+        "channel": [f"{p} {c}" for p in pairs for c in ("hbo", "hbr")],
+        "alff": [1.0, 1.2, np.nan, np.nan], "falff": [0.2, 0.2, np.nan, np.nan]})
+    fig = rest_channel_panel(_fc_frame(pairs, "hbo"), None, alff)
+    ring = next(t for t in fig.data if getattr(t, "name", None) == "rejected")
+    assert all(y < 1.0 for y in ring.y)
+
+
+def test_the_panel_is_the_matrices_alone_without_amplitudes():
+    fig = rest_channel_panel(_fc_frame(["S1_D1", "S1_D2"], "hbo"), None, None)
+    assert [t.type for t in fig.data].count("heatmap") == 1
+    assert not any(getattr(t, "name", None) in ("HbO", "HbR") for t in fig.data)
+
+
+def test_the_panel_declines_rather_than_raises():
+    assert rest_channel_panel(None, None, None) is None
+    assert rest_channel_panel(pd.DataFrame(), None, None) is None
 
 
 def test_both_matrices_use_the_report_s_one_correlation_scale():
     """Three figures used to carry their own copy, so a red cell could have meant +1 in one
     panel and -1 in the next."""
-    frame = _roi_frame(["S1_D1 hbo", "S1_D2 hbo"])
-    for fig in (fc_matrix_figure(frame), fc_roi_matrix_figure({"hbo": _roi_frame(["A", "B"])})):
+    for fig in (rest_channel_panel(_fc_frame(["S1_D1", "S1_D2"], "hbo"), None, None),
+                fc_roi_matrix_figure({"hbo": _roi_frame(["A", "B"])})):
         heat = next(t for t in fig.data if t.type == "heatmap")
         assert [c for _, c in heat.colorscale] ==                [c for _, c in pc.get_colorscale(CORRELATION_SCALE)]
         assert (heat.zmin, heat.zmax) == (-1.0, 1.0)

@@ -16,8 +16,8 @@
 {% if mode != 'rest' %}{% set _ = _sections.append(("Epoch", "Epoch")) %}{% endif %}
 {# three independent conditions, matching the body: glm --fc and denoise --fc draw the
    FC panel too, and used to reach it with no nav entry #}
-{% if rest_alff_path %}{% set _ = _sections.append(("RestALFF", "ALFF/fALFF")) %}{% endif %}
-{% if rest_fc_path %}{% set _ = _sections.append(("RestFC", "FC")) %}{% endif %}
+{% if rest_alff_topo_path %}{% set _ = _sections.append(("RestALFF", "ALFF/fALFF")) %}{% endif %}
+{% if rest_panel_path %}{% set _ = _sections.append(("RestFC", "FC")) %}{% endif %}
 {% if glm_design_path or glm_activation_path %}
   {% set _ = _sections.append(("GLM", "GLM")) %}
 {% endif %}
@@ -404,36 +404,32 @@
 
 {% if mode == 'rest' %}
 <!-- Resting-state results -->
-<details id="RestALFF" {% if rest_alff_path %}open{% endif %}>
+<details id="RestALFF" {% if rest_alff_topo_path %}open{% endif %}>
   <summary>ALFF / fALFF</summary>
   <div class="details-body">
     <p class="step-desc">{{ section_note('rest.alff') }}</p>
-    {% if rest_alff_path %}
-      <img class="responsive" src="{{ rest_alff_path }}" alt="ALFF / fALFF per channel" />
-      <p class="fig-path">{{ rest_alff_path }}</p>
-    {% else %}
-      <div class="placeholder">ALFF not computed — --high-pass and --low-pass are required.</div>
-    {% endif %}
     {% if rest_alff_topo_path %}
-      <h3>On the optode layout</h3>
       <p class="step-desc">{{ section_note('rest.alff_layout') }}</p>
       <iframe class="plotly-frame" src="{{ rest_alff_topo_path }}" title="ALFF / fALFF topography"
               style="height:{{ rest_alff_topo_h }}px"></iframe>
       <p class="fig-path">{{ rest_alff_topo_path }}</p>
+    {% else %}
+      <div class="placeholder">ALFF not computed — --high-pass and --low-pass are required.</div>
     {% endif %}
   </div>
 </details>
 {% endif %}
 
-{% if mode == 'rest' or rest_fc_path %}
-<details id="RestFC" {% if rest_fc_path %}open{% endif %}>
+{% if mode == 'rest' or rest_panel_path %}
+<details id="RestFC" {% if rest_panel_path %}open{% endif %}>
   <summary>Functional Connectivity</summary>
   <div class="details-body">
     <p class="step-desc">{{ section_note('fc.channel_matrix') }}</p>
-    {% if rest_fc_path %}
-      <iframe class="plotly-frame" src="{{ rest_fc_path }}" title="Functional connectivity matrix"
-              style="height:{{ rest_fc_h }}px"></iframe>
-      <p class="fig-path">{{ rest_fc_path }}</p>
+    {% if rest_panel_path %}
+      <iframe class="plotly-frame" src="{{ rest_panel_path }}"
+              title="Connectivity, amplitude and spectral share per channel"
+              style="height:{{ rest_panel_h }}px"></iframe>
+      <p class="fig-path">{{ rest_panel_path }}</p>
     {% else %}
       <div class="placeholder">FC matrix not available.</div>
     {% endif %}
