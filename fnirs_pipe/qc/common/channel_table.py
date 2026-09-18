@@ -230,6 +230,32 @@ def heatmap_args(rows: list[dict]) -> dict[str, Any]:
     }
 
 
+def registration_note(offset: "tuple[float, float] | None") -> "str | None":
+    """What to say when the optode positions were never registered to the head.
+
+    ``offset`` is :func:`fnirs_pipe.qc.metrics.registration_offset`' output, and None means
+    there is nothing to say. One wording for both views, as the separation notes are.
+
+    Worth its own note rather than a figure caption because the figures it invalidates are
+    the ones a reader trusts on sight: a cloud of optodes drawn beside a brain reads as a
+    montage that reaches an unusual part of it, not as a montage in the wrong frame.
+    """
+    if offset is None:
+        return None
+    reach, scalp = offset
+    return (
+        f"The optode positions are not registered to this recording's head coordinates: "
+        f"they sit a median of {reach:.0f} mm from the head centre while the fiducials put "
+        f"the scalp at {scalp:.0f} mm. Everything drawn from positions, the 3-D views, the "
+        f"flat maps and the topographies, is therefore not anatomical, and no channel can "
+        f"be placed on a brain region. Separations are measured between optodes rather "
+        f"than against the head, so the long / short split, the screening and every metric "
+        f"built on them are unaffected. Fixing it needs the digitised nasion and "
+        f"preauricular points the recording was taken with, or a standard montage put in "
+        f"their place; neither can be recovered from the file itself."
+    )
+
+
 def separation_notes(
     scalars: dict,
     rows: list[dict],

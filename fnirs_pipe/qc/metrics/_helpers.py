@@ -236,6 +236,51 @@ def separation_orphans(
             for i, d in zip(picks, dists) if raw.ch_names[i] not in claimed}
 
 
+# How far past the scalp the fiducials describe an optode may sit before the positions and
+# the fiducials are taken to be in different coordinate frames. A registered cap already
+# reaches past 1x, because the cardinal points sit low on the head and the vertex does not.
+REGISTRATION_MAX_RATIO = 2.0
+
+
+def registration_offset(
+    raw: mne.io.Raw, max_ratio: float = REGISTRATION_MAX_RATIO,
+) -> "tuple[float, float] | None":
+    """Evidence that the optodes were never registered to the head, or None.
+
+    ``(where the optodes sit, where the fiducials put the scalp)`` in mm, both measured
+    from the midpoint of the three cardinal points::
+
+        optodes 295 mm out, fiducials 86 mm out  ->  (314.5, 85.9)
+        a digitised cap                          ->  None
+
+    A recording whose SNIRF carries no landmarks still reads as head coordinates, because
+    the reader labels them so and fills the cardinal points from a template. The positions
+    are then the digitiser's own, tens of centimetres from the template head, and every
+    anatomical figure is drawn from them without complaint. Comparing the two is what
+    catches it: they describe the same head or they are in different frames.
+
+    None when nothing can be claimed, which is a montage with no positions, one with no
+    cardinal points, or one whose optodes sit where a head would put them.
+    """
+    from mne._fiff.constants import FIFF
+
+    fids = {d["ident"]: np.asarray(d["r"], float)
+            for d in (raw.info["dig"] or []) if d["kind"] == FIFF.FIFFV_POINT_CARDINAL}
+    cardinal = [fids.get(i) for i in (FIFF.FIFFV_POINT_LPA,
+                                      FIFF.FIFFV_POINT_NASION, FIFF.FIFFV_POINT_RPA)]
+    if any(p is None for p in cardinal):
+        return None
+    centre = np.mean(cardinal, axis=0)
+    scalp = float(np.mean([np.linalg.norm(p - centre) for p in cardinal]))
+    picks = mne.pick_types(raw.info, meg=False, fnirs=True, exclude=[])
+    locs = np.array([raw.info["chs"][i]["loc"][:3] for i in picks], dtype=float)
+    locs = locs[np.any(locs, axis=1)] if len(locs) else locs
+    if not scalp or not len(locs):
+        return None
+    reach = float(np.median(np.linalg.norm(locs - centre, axis=1)))
+    return (reach * 1e3, scalp * 1e3) if reach > max_ratio * scalp else None
+
+
 def _mean_or_none(values) -> "float | None":
     """Mean of a collection of values, or None if it is empty."""
     vals = list(values)

@@ -66,7 +66,7 @@ from fnirs_pipe.qc.boilerplate import collect_software_versions, generate_method
 from fnirs_pipe.qc.common.channel_table import (
     MOTION_SPLIT_COLUMNS, OD_SPLIT_COLUMNS, WHOLE_RUN_ONLY_COLUMNS, channel_columns,
     channel_rows, format_rows, heatmap_args, measured_columns,
-    save_channel_csv, separation_blocks, separation_notes,
+    registration_note, save_channel_csv, separation_blocks, separation_notes,
 )
 from fnirs_pipe.qc.common.figure_io import (
     CENTER_FIGURE_CSS, _fig_href, _pair_fname, _save_b64_png,
@@ -74,8 +74,8 @@ from fnirs_pipe.qc.common.figure_io import (
     extract_markers, get_channel_pairs,
 )
 from fnirs_pipe.qc.metrics import (CV_PASS, EDGE_S, SCI_PASS, edge_to_mid_rms,
-                                  gvtd_channel_blocks, separation_bands,
-                                  separation_orphans)
+                                  gvtd_channel_blocks, registration_offset,
+                                  separation_bands, separation_orphans)
 from fnirs_pipe.qc.metrics._helpers import bands_from_record
 from fnirs_pipe.qc.figures.common._utils import chunk_annotations
 from fnirs_pipe.qc.figures import (
@@ -1839,6 +1839,9 @@ def build_subject_report(
                   f"--high-pass off and giving the low band to --drift-model cosine "
                   f"instead, which projects rather than filters.")
 
+    unregistered = registration_note(registration_offset(raw_intensity))
+    if unregistered:
+        _note(notes, subject, unregistered)
     _note_separation(notes, subject, sqm_vars["sqm"], sqm_vars["channel_rows"],
                      short_channel_requested=bool(getattr(config, "short_channel", None)),
                      orphan_mm=separation_orphans(raw_intensity, sep_bands),
