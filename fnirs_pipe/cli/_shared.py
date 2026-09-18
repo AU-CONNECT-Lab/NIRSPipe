@@ -105,6 +105,18 @@ def separation_bands_from_args(args) -> dict:
     return fields
 
 
+def resolved_separation_bands(args):
+    """The same three flags as the resolved ``Bands`` the metrics take, defaults filled in.
+
+    For a caller that measures channels rather than building a config: the quality record
+    has to be split on the bands the run was processed with, and reaching for
+    :func:`separation_bands` directly would give it the package defaults.
+    """
+    from fnirs_pipe.qc.metrics._helpers import separation_bands
+
+    return separation_bands(type("Args", (), separation_bands_from_args(args)))
+
+
 def add_sci_threshold(container, default: "float | None" = None, note: str = "") -> None:
     """``--sci-threshold``: the coupling line channel screening rejects on.
 

@@ -526,3 +526,35 @@ def test_a_config_toml_can_carry_the_separation_bands():
     assert args == {"short_max_dist": 14.0, "long_min_dist": 16.0, "long_max_dist": 55.0}
     assert _shared.separation_bands_from_args(args) == {
         "short_max_dist": 0.014, "long_min_dist": 0.016, "long_max_dist": 0.055}
+
+
+# ---- the bands reach the quality record ----
+
+def test_the_record_is_split_on_the_run_s_own_bands(tmp_path, monkeypatch):
+    """Nothing on disk records them, so build_sqm_records has to be told.
+
+    The record's `*_long` / `*_short` metrics used to be split on the package defaults
+    whatever the run was given, which on a montage with no channel under 10 mm meant the
+    report described a channel set the regression had not used.
+    """
+    from fnirs_pipe.cli import _shared
+    from fnirs_pipe.qc.subject import sqm_record
+
+    seen = {}
+
+    def _fake(stages, **kw):
+        seen["sep_bands"] = kw.get("sep_bands")
+        return {}
+
+    monkeypatch.setattr(sqm_record, "compute_run_sections", _fake)
+    monkeypatch.setattr(sqm_record, "write_run_sqm", lambda *a, **k: tmp_path / "r.json")
+    monkeypatch.setattr(sqm_record, "scan_runs", lambda _: {"sub-01_task-a": {"preproc": tmp_path}})
+    monkeypatch.setattr(sqm_record, "_bands", lambda _: dict(
+        cardiac_l_freq=0.7, cardiac_h_freq=1.5, resp_l_freq=0.1, resp_h_freq=0.5))
+    monkeypatch.setattr(sqm_record, "_window_s", lambda _: 10.0)
+
+    bands = _shared.resolved_separation_bands({"short_max_dist": 14, "long_min_dist": 25,
+                                               "long_max_dist": None})
+    sqm_record.build_sqm_records(tmp_path, sep_bands=bands)
+
+    assert seen["sep_bands"] == (0.014, 0.025, None)

@@ -1206,6 +1206,7 @@ def build_sqm_records(
     qc_window_s: float | None = None,
     bids_root: Path | None = None,
     labels: "set[str] | None" = None,
+    sep_bands=None,
 ) -> list[Path]:
     """Write one SQM record per run found under nirs_dir. Band edges default to the
     values the run's own sidecars recorded, so a past tree needs no arguments.
@@ -1216,7 +1217,11 @@ def build_sqm_records(
 
     ``bids_root`` rescues the ``raw*`` sections when the tree has been moved since the run:
     the sidecars name the original recording by an absolute path that no longer resolves,
-    but the filename is still correct, so it is searched for there."""
+    but the filename is still correct, so it is searched for there.
+
+    ``sep_bands`` has to be the run's own, unlike the band edges above: nothing on disk
+    records them, so left out they fall back to the package defaults and every ``*_long``
+    and ``*_short`` metric describes a channel set the run did not use."""
     written: list[Path] = []
     for label, stages in scan_runs(Path(nirs_dir)).items():
         if labels is not None and label not in labels:
@@ -1238,7 +1243,8 @@ def build_sqm_records(
         # the remaining runs still get their records
         try:
             sections = compute_run_sections(
-                stages, **bands, qc_window_s=window_s, bids_root=bids_root)
+                stages, **bands, qc_window_s=window_s, bids_root=bids_root,
+                sep_bands=sep_bands)
             written.append(
                 write_run_sqm(Path(nirs_dir), label, stages, sections, bids_root))
         except Exception:

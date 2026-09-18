@@ -199,7 +199,7 @@ Escape hatches:
   --allow-cropped-input        Run on a `fnirs-prep crop` tree, otherwise refused. Motion
                                correction and the bandpass then each see one segment. Prefer
                                preprocessing the uncut recording and cropping the result.
-  --dry-run
+  --dry-run                    Write each subject's run record and script, then stop.
 
 Other:
   --verbose
