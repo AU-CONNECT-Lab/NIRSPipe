@@ -77,6 +77,11 @@ def add_separation_bands(container, note: str = "") -> None:
              + (f" {note}" if note else ""))
 
 
+# One tuple so the flag names, the config keys and the PrepConfig / PostConfig fields cannot
+# drift apart. They are spelled the same in all three places on purpose.
+SEPARATION_BAND_KEYS = ("short_max_dist", "long_min_dist", "long_max_dist")
+
+
 def separation_bands_from_args(args) -> dict:
     """The three flags as PrepConfig / PostConfig fields, in metres, validated together.
 
@@ -94,8 +99,7 @@ def separation_bands_from_args(args) -> dict:
         value = getattr(args, name, None) if not isinstance(args, dict) else args.get(name)
         return None if value is None else float(value) / 1e3
 
-    fields = {name: _mm(name)
-              for name in ("short_max_dist", "long_min_dist", "long_max_dist")}
+    fields = {name: _mm(name) for name in SEPARATION_BAND_KEYS}
     # a class rather than the dict, since separation_bands reads attributes
     validate_bands(separation_bands(type("Args", (), fields)))
     return fields

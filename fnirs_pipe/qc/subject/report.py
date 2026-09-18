@@ -73,7 +73,8 @@ from fnirs_pipe.qc.common.figure_io import (
     _save_figure_html, _save_multi_fig_html,
     extract_markers, get_channel_pairs,
 )
-from fnirs_pipe.qc.metrics import CV_PASS, SCI_PASS, gvtd_channel_blocks, separation_bands
+from fnirs_pipe.qc.metrics import (CV_PASS, SCI_PASS, gvtd_channel_blocks,
+                                  separation_bands, separation_orphans)
 from fnirs_pipe.qc.metrics._helpers import bands_from_record
 from fnirs_pipe.qc.figures.common._utils import chunk_annotations
 from fnirs_pipe.qc.figures import (
@@ -1326,6 +1327,7 @@ def _note_separation(
     sqm: dict,
     rows: list,
     short_channel_requested: bool = False,
+    orphan_mm: "dict[str, float] | None" = None,
 ) -> None:
     """File the montage-split warnings as run notes, one note each.
 
@@ -1334,7 +1336,7 @@ def _note_separation(
     table still learns the split did not come out the way the metrics assume.
     """
     for message in separation_notes(sqm, rows, short_channel_requested,
-                                    bands_from_record(sqm)):
+                                    bands_from_record(sqm), orphan_mm):
         _note(notes, subject, message)
 
 
@@ -1813,7 +1815,8 @@ def build_subject_report(
                                      sci_threshold=getattr(config, "sci_threshold", SCI_PASS),
                                      psp_threshold=getattr(config, "psp_threshold", None))
     _note_separation(notes, subject, sqm_vars["sqm"], sqm_vars["channel_rows"],
-                     short_channel_requested=bool(getattr(config, "short_channel", None)))
+                     short_channel_requested=bool(getattr(config, "short_channel", None)),
+                     orphan_mm=separation_orphans(raw_intensity, sep_bands))
     trigger_vars      = _section_trigger_timeline(raw_intensity, subject, errors, figures_dir)
     ch_summary_vars   = _section_channel_summary(
                             sqm_vars["channel_rows"], subject, errors, figures_dir,

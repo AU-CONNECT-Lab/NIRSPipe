@@ -218,6 +218,7 @@ def separation_notes(
     rows: list[dict],
     short_channel_requested: bool = False,
     sep_bands=None,
+    orphan_mm: "dict[str, float] | None" = None,
 ) -> list[str]:
     """What to say when the montage could not be split the way the metrics assume it was.
 
@@ -228,6 +229,11 @@ def separation_notes(
     channels are measured by no section and show dashes. The third is a run that asked for
     short-channel regression and had no short channel to build it from, which the pipeline
     treats as a warning and carries on past.
+
+    ``orphan_mm`` is :func:`separation_orphans`' output, name -> mm. Given, the second note
+    also says where those channels actually sit and which bound would take them in, which
+    is the difference between a reader knowing the gap exists and knowing what to do about
+    it: the gap is a package default, the separations are this montage's.
 
     Returns the notes in the order they should be printed, empty when the split was clean.
     The caller decides where they go: the subject report files them as run notes, the raw
@@ -247,11 +253,22 @@ def separation_notes(
     n_odd = sum(1 for r in rows if r.get("separation") == "unclassified")
     if n_odd:
         from fnirs_pipe.qc.metrics import unclaimed_separations
+        where = ""
+        if orphan_mm:
+            import math
+            lo, hi = min(orphan_mm.values()), max(orphan_mm.values())
+            span = f"{lo:.1f} mm" if hi - lo < 0.05 else f"{lo:.1f} to {hi:.1f} mm"
+            # ceil for the short bound, floor for the long one: a bound has to reach past
+            # every orphan to take them all in, and rounding the other way excludes one
+            where = (f" Theirs sit at {span}, so --short-max-dist {math.ceil(hi)} would make "
+                     f"them short channels and --long-min-dist {math.floor(lo)} would make "
+                     f"them long; which is right depends on how deep this montage's short "
+                     f"end reaches, which the separations alone do not settle.")
         notes.append(
             f"{n_odd} channel(s) sit at a separation the long and short ranges leave out "
             f"({unclaimed_separations(sep_bands)}). They are in no section, so their row in the "
             f"per-channel table is blank apart from status and HbO-HbR correlation, and "
-            f"they are in none of the scalar metrics.")
+            f"they are in none of the scalar metrics.{where}")
 
     if short_channel_requested:
         short_rows = [r for r in rows if r.get("separation") == "short"]

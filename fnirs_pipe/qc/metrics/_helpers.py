@@ -183,8 +183,8 @@ def long_short_channels(
     would make every channel short; that case is logged and yields no split at all.
 
     A channel in neither band is named in a warning rather than passed over. It takes part
-    in no split section, no GVTD trace and no verdict, and the two bands not meeting is
-    what makes that possible without anything on the page saying so.
+    in no split section, no GVTD trace and no verdict. :func:`separation_orphans` returns
+    those channels with their separations, which is what the reports name them by.
 
     Bad channels stay in both lists. Separation is the only thing being asked about, and
     pick_types drops bads by default, which would leave every metric computed from these
@@ -201,8 +201,8 @@ def long_short_channels(
         logger.warning("no channel falls in either separation range; optode positions "
                        "are probably missing")
         return long_names, short_names
-    claimed = set(long_names) | set(short_names)
-    orphans = {ch: d for ch, d in zip(names, dists) if ch not in claimed}
+    orphans = {ch: d for ch, d in zip(names, dists)
+               if ch not in set(long_names) | set(short_names)}
     key = (tuple(sorted(orphans)), short_max, long_min, long_max)
     if orphans and key not in _ORPHANS_WARNED:
         _ORPHANS_WARNED.add(key)
@@ -212,6 +212,28 @@ def long_short_channels(
             len(orphans), short_max * 1e3, _long_band_phrase(long_min, long_max),
             ", ".join(f"{ch} {d * 1e3:.0f}mm" for ch, d in sorted(orphans.items())))
     return long_names, short_names
+
+
+def separation_orphans(
+    raw: mne.io.Raw, sep_bands: "Bands | None" = None,
+) -> "dict[str, float]":
+    """Channels in neither separation band, name -> separation in mm.
+
+    ``distances 8, 13, 30 mm on the default bands  ->  {"S2_D2 760": 13.0}``
+
+    The same split :func:`long_short_channels` makes, asked the other way round, so a
+    report can name what it left out instead of only counting it. Empty for a clean
+    montage, and empty when nothing fell in either band, which is the positionless case
+    the callers word differently.
+    """
+    long_names, short_names = long_short_channels(raw, sep_bands)
+    if not long_names and not short_names:
+        return {}
+    picks = mne.pick_types(raw.info, meg=False, fnirs=True, exclude=[])
+    dists = mne.preprocessing.nirs.source_detector_distances(raw.info, picks=picks)
+    claimed = set(long_names) | set(short_names)
+    return {raw.ch_names[i]: float(d) * 1e3
+            for i, d in zip(picks, dists) if raw.ch_names[i] not in claimed}
 
 
 def _mean_or_none(values) -> "float | None":

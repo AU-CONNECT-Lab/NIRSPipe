@@ -148,6 +148,15 @@ def run_participant_level(args: dict[str, Any]) -> None:
         toml = load_toml(args["config"])
         logger.debug("loaded post config: %s", args["config"])
 
+    # The separation bands are resolved here rather than in either config builder because only
+    # the post builder is given the TOML, and prep is the step that stamps the bands into the
+    # record. Resolving them in one place is what keeps the record, the regression and the
+    # reports describing the same montage; half a threading is worse than no TOML support.
+    # CLI still wins. `fnirs-prep` has no --config of its own, so its bands stay CLI-only.
+    for _band in _shared.SEPARATION_BAND_KEYS:
+        if args.get(_band) is None and toml.get(_band) is not None:
+            args[_band] = toml[_band]
+
     # cutoffs may come from CLI or TOML; resolve like PostConfig so DB log + report match what post applies
     cfg_high_pass = args.get("high_pass") if args.get("high_pass") is not None else toml.get("high_pass")
     cfg_low_pass  = args.get("low_pass")  if args.get("low_pass")  is not None else toml.get("low_pass")

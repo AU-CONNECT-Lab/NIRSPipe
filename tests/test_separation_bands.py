@@ -476,3 +476,53 @@ def test_the_orphan_warning_repeats_when_the_bands_change(caplog):
         assert caplog.text.count("neither separation band") == first
         long_short_channels(raw, (0.01, 0.02, None))  # different bands: warns again
         assert caplog.text.count("neither separation band") == first + 1
+
+
+def test_the_orphans_are_named_with_their_own_separations():
+    """The gap is a package default; the separations are this montage's. A note that says
+    only "10-15 mm" tells a reader a gap exists, not whether moving a bound by 1 mm or 5
+    would take their channels in."""
+    from fnirs_pipe.qc.metrics import separation_orphans
+
+    raw = _montage([8, 12.8, 13.8, 30])
+    assert separation_orphans(raw) == pytest.approx({"S2_D2 760": 12.8, "S3_D3 760": 13.8})
+    # a clean split has none, and neither does a montage with no positions, which the
+    # callers word as a missing-registration problem instead
+    assert separation_orphans(_montage([8, 30])) == {}
+    assert separation_orphans(_montage([8, 30], positioned=False)) == {}
+    # the bands move it: at 14 mm those two are short, so nothing is orphaned
+    assert separation_orphans(raw, (0.014, 0.015, None)) == {}
+
+
+def test_the_note_says_where_the_orphans_sit_and_which_bound_would_take_them():
+    from fnirs_pipe.qc.common.channel_table import separation_notes
+
+    scalars = {"n_long_channels": 1, "n_short_channels": 1}
+    rows = [{"separation": "unclassified"}, {"separation": "unclassified"}]
+    plain = separation_notes(scalars, rows)[0]
+    assert "10-15 mm" in plain and "Theirs sit at" not in plain
+    named = separation_notes(scalars, rows, orphan_mm={"a": 12.8, "b": 13.8})[0]
+    assert "12.8 to 13.8 mm" in named
+    # ceil the short bound and floor the long one, or a bound is suggested that leaves
+    # one of the orphans out: --long-min-dist 13 still excludes a 12.8 mm channel
+    assert "--short-max-dist 14" in named and "--long-min-dist 12" in named
+    # one orphan, or several at the same separation, reads as a point not a span
+    one = separation_notes(scalars, rows, orphan_mm={"a": 12.8})[0]
+    assert "at 12.8 mm" in one and "to" not in one.split("Theirs sit")[1][:20]
+
+
+def test_a_config_toml_can_carry_the_separation_bands():
+    """They have to be resolved before prep runs, because prep stamps them into the record
+    and only the post config builder is handed the TOML."""
+    from fnirs_pipe.cli import _shared
+
+    assert _shared.SEPARATION_BAND_KEYS == ("short_max_dist", "long_min_dist", "long_max_dist")
+    args = {"short_max_dist": None, "long_min_dist": 16.0}
+    toml = {"short_max_dist": 14.0, "long_min_dist": 25.0, "long_max_dist": 55.0}
+    for band in _shared.SEPARATION_BAND_KEYS:
+        if args.get(band) is None and toml.get(band) is not None:
+            args[band] = toml[band]
+    # the CLI value stands, the two absent ones come from the TOML
+    assert args == {"short_max_dist": 14.0, "long_min_dist": 16.0, "long_max_dist": 55.0}
+    assert _shared.separation_bands_from_args(args) == {
+        "short_max_dist": 0.014, "long_min_dist": 0.016, "long_max_dist": 0.055}

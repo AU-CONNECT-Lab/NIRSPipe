@@ -21,7 +21,8 @@ from fnirs_pipe.qc.common.channel_table import (
     split_table,
 )
 from fnirs_pipe.qc.metrics import SCI_PASS
-from fnirs_pipe.qc.metrics._helpers import _mean_or_none, separation_bands
+from fnirs_pipe.qc.metrics._helpers import (_mean_or_none, separation_bands,
+                                           separation_orphans)
 from fnirs_pipe.qc.common.report_shell import (
     collapse_messages, footer_vars, guard, note, page_vars, render,
 )
@@ -659,7 +660,9 @@ def _process_run(
         "channels": {
             "pairs":  pair_cells,
             "blocks": separation_blocks(pair_cells),
-            "notes":  separation_notes(raw_all, ch_rows),
+            # sep_bands, or a run with non-default bands gets the default gap quoted at it
+            "notes":  separation_notes(raw_all, ch_rows, sep_bands=sep_bands,
+                                       orphan_mm=separation_orphans(raw, sep_bands)),
         },
         "channel_pairs": channel_pairs,
         # one entry per channel that got a motion figure, for that panel's own picker
