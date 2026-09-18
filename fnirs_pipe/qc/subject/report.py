@@ -1331,15 +1331,21 @@ def _note_separation(
     rows: list,
     short_channel_requested: bool = False,
     orphan_mm: "dict[str, float] | None" = None,
+    sep_bands=None,
 ) -> None:
     """File the montage-split warnings as run notes, one note each.
 
     The wording is shared with the raw views; what differs is where it goes. Here it joins
     the report's notes list and the run log, so a reader who never opens the per-channel
     table still learns the split did not come out the way the metrics assume.
+
+    ``sep_bands`` is the run's own. This used to read them back off ``sqm``, which the
+    report assembles in memory and does not stamp, so the note quoted the default gap at a
+    run measured on any other.
     """
     for message in separation_notes(sqm, rows, short_channel_requested,
-                                    bands_from_record(sqm), orphan_mm):
+                                    sep_bands if sep_bands is not None else bands_from_record(sqm),
+                                    orphan_mm):
         _note(notes, subject, message)
 
 
@@ -1835,7 +1841,8 @@ def build_subject_report(
 
     _note_separation(notes, subject, sqm_vars["sqm"], sqm_vars["channel_rows"],
                      short_channel_requested=bool(getattr(config, "short_channel", None)),
-                     orphan_mm=separation_orphans(raw_intensity, sep_bands))
+                     orphan_mm=separation_orphans(raw_intensity, sep_bands),
+                     sep_bands=sep_bands)
     trigger_vars      = _section_trigger_timeline(raw_intensity, subject, errors, figures_dir)
     ch_summary_vars   = _section_channel_summary(
                             sqm_vars["channel_rows"], subject, errors, figures_dir,

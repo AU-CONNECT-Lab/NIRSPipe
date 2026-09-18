@@ -558,3 +558,22 @@ def test_the_record_is_split_on_the_run_s_own_bands(tmp_path, monkeypatch):
     sqm_record.build_sqm_records(tmp_path, sep_bands=bands)
 
     assert seen["sep_bands"] == (0.014, 0.025, None)
+
+
+def test_the_report_note_quotes_the_run_s_own_gap():
+    """The subject report assembles its scalars in memory and does not stamp the bands.
+
+    Reading them back off that dict gave the note the package defaults, so a run measured
+    on any other pair was told its channels sat in a gap it does not have.
+    """
+    from fnirs_pipe.qc.subject.report import _note_separation
+
+    notes: list = []
+    scalars = {"n_long_channels": 1, "n_short_channels": 1}   # no sep_*_mm keys
+    rows = [{"separation": "unclassified"}, {"separation": "unclassified"}]
+
+    _note_separation(notes, "01", scalars, rows, orphan_mm={"a": 15.8, "b": 20.1},
+                     sep_bands=(0.014, 0.025, None))
+
+    assert "14-25 mm" in str(notes[0])
+    assert "10-15 mm" not in str(notes[0])
