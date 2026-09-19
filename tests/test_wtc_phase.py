@@ -102,7 +102,10 @@ def test_a_pairing_that_failed_keeps_its_row():
 def test_the_angle_becomes_a_lag_in_seconds_at_its_own_frequency():
     # +45 deg at 0.10 Hz is an eighth of a 10 s period: 1.25 s, the first member ahead
     out = wtc_phase_by_scale(_result(np.full((3, 4), np.pi / 4)), 0.04, 0.25)
-    at = lambda f: out[np.isclose(out["freq"], f)].iloc[0]
+
+    def at(f):
+        return out[np.isclose(out["freq"], f)].iloc[0]
+
     assert at(0.10)["lag_s"] == pytest.approx(1.25)
     # the same angle is a different delay at a different scale, which is why the band mean
     # cannot be converted
@@ -139,3 +142,119 @@ def test_a_frame_with_no_phase_columns_still_averages():
     out = roi_mean_of_channels(frame, {"pfc": ["S1_D1", "S1_D2"]})
     assert "phase_angle" not in out.columns
     assert out.iloc[0]["coherence"] == pytest.approx(0.5)
+
+
+# ---- end to end, against a lag that is known because it was put there ----
+# The unit tests above feed the statistic a phase map. These build two recordings one of
+# which really is a fixed time ahead of the other, run the real transform over them, and
+# ask for the delay back. A sign error, a conjugate the wrong way round, or a frequency axis
+# off by a row all survive the tests above and none of them survives these.
+
+SFREQ    = 5.0
+DURATION = 400.0
+SIG_FREQ = 0.05           # period 20 s
+LAG_S    = 2.5            # an eighth of that period: +45 deg at SIG_FREQ
+E2E_BAND = (0.03, 0.10)
+E2E_LABELS = ["S1_D1", "S2_D2", "S3_D3"]
+
+
+def _raw_carrying(signal: np.ndarray, seed: int) -> "object":
+    """A haemoglobin recording whose HbO channels all carry ``signal`` plus their own noise."""
+    import mne
+    rng = np.random.default_rng(seed)
+    names = [f"{label} {c}" for label in E2E_LABELS for c in ("hbo", "hbr")]
+    types = [c for _ in E2E_LABELS for c in ("hbo", "hbr")]
+    info = mne.create_info(names, SFREQ, types)
+    for i, ch in enumerate(info["chs"]):
+        loc = np.zeros(12)
+        loc[3:6] = [i * 0.05, 0.0, 0.0]
+        loc[6:9] = [i * 0.05 + 0.03, 0.0, 0.0]       # 30 mm, so nothing reads as short
+        loc[:3] = (loc[3:6] + loc[6:9]) / 2
+        ch["loc"] = loc
+    data = np.empty((len(names), signal.size))
+    for i, ch_type in enumerate(types):
+        noise = rng.standard_normal(signal.size)
+        data[i] = 1e-6 * (signal + 0.2 * noise if ch_type == "hbo" else noise)
+    return mne.io.RawArray(data, info, verbose="ERROR")
+
+
+def _dyad_lagged(lag_s: float) -> dict:
+    """Two recordings of one rhythm, the second ``lag_s`` behind the first."""
+    t = np.arange(int(SFREQ * DURATION)) / SFREQ
+    lead   = np.sin(2 * np.pi * SIG_FREQ * t)
+    follow = np.sin(2 * np.pi * SIG_FREQ * (t - lag_s))
+    return {"sub-01": _raw_carrying(lead, 1), "sub-02": _raw_carrying(follow, 2)}
+
+
+def _at_signal_frequency(raws) -> pd.Series:
+    """The per-scale row nearest the rhythm that was put in, averaged over the label pairs."""
+    from fnirs_pipe.pipeline.synchrony import compute_wtc
+    result = compute_wtc(raws, fmin=0.02, fmax=0.2, ch_type="hbo")
+    by = wtc_phase_by_scale(result, *E2E_BAND)
+    freq = by["freq"].unique()[np.argmin(np.abs(by["freq"].unique() - SIG_FREQ))]
+    rows = by[by["freq"] == freq]
+    angle, _, _ = _circular_stats(np.radians(rows["phase_angle"].to_numpy()))
+    return pd.Series({"freq": freq, "angle_deg": np.degrees(angle),
+                      "lag_s": rows["lag_s"].mean(), "n": len(rows)})
+
+
+@pytest.fixture(scope="module")
+def ahead():
+    return _at_signal_frequency(_dyad_lagged(LAG_S))
+
+
+def test_the_delay_that_was_put_in_comes_back_in_seconds(ahead):
+    # the number a reader acts on: sub-01 leads sub-02 by LAG_S, and lag_s says so
+    assert ahead["lag_s"] == pytest.approx(LAG_S, rel=0.05)
+    assert ahead["n"] == len(E2E_LABELS)
+
+
+def test_the_angle_is_the_delay_times_the_frequency_of_its_own_row(ahead):
+    # pinned against theory rather than against a recorded number: a phase of 2 pi f tau,
+    # evaluated at the row's own frequency, not at the nominal one
+    expected = np.degrees(2 * np.pi * ahead["freq"] * LAG_S)
+    assert ahead["angle_deg"] == pytest.approx(expected, abs=3.0)
+
+
+def test_reversing_who_leads_reverses_the_sign():
+    # the half of the measurement coherence cannot give: the same coupling, the other way
+    behind = _at_signal_frequency(_dyad_lagged(-LAG_S))
+    assert behind["lag_s"] == pytest.approx(-LAG_S, rel=0.05)
+
+
+def test_two_members_in_step_report_no_lead():
+    together = _at_signal_frequency(_dyad_lagged(0.0))
+    assert together["angle_deg"] == pytest.approx(0.0, abs=2.0)
+    assert together["lag_s"] == pytest.approx(0.0, abs=0.2)
+
+
+def test_the_spread_is_what_says_the_angle_is_unreadable():
+    """Independent members still produce an angle; only ``phase_sd`` distinguishes it."""
+    from fnirs_pipe.pipeline.synchrony import compute_wtc
+    t = np.arange(int(SFREQ * DURATION)) / SFREQ
+    rng = np.random.default_rng(7)
+    apart = {"sub-01": _raw_carrying(rng.standard_normal(t.size), 11),
+             "sub-02": _raw_carrying(rng.standard_normal(t.size), 12)}
+    band = wtc_band_mean(compute_wtc(apart, fmin=0.02, fmax=0.2, ch_type="hbo"), *E2E_BAND)
+    locked = wtc_band_mean(compute_wtc(_dyad_lagged(LAG_S), fmin=0.02, fmax=0.2,
+                                       ch_type="hbo"), *E2E_BAND)
+    assert band["phase_sd"].mean() > locked["phase_sd"].mean()
+    assert band["phase_angle"].notna().all()      # an angle is still reported, hence the test
+
+
+def test_the_lag_is_only_right_where_the_spread_says_it_is():
+    """``phase_sd`` is the gate, and this is the measurement that says it works."""
+    from fnirs_pipe.pipeline.synchrony import compute_wtc
+    by = wtc_phase_by_scale(
+        compute_wtc(_dyad_lagged(LAG_S), fmin=0.02, fmax=0.2, ch_type="hbo"), *E2E_BAND)
+    per_freq = by.groupby("freq").agg(lag_s=("lag_s", "mean"),
+                                      sd=("phase_sd", "mean")).reset_index()
+    # the rhythm is a single tone, so away from it there is nothing shared to be late by
+    # and the reported lag runs off. Every row whose angle is tight still has it right.
+    tight = per_freq[per_freq["sd"] < 2.0]
+    assert len(tight) >= 4
+    assert tight["lag_s"].to_numpy() == pytest.approx(LAG_S, rel=0.20)
+    # and the row that gets it most wrong is not a quiet failure: it is flagged by a
+    # spread an order of magnitude wider than the best row's
+    worst = per_freq.iloc[int(np.argmax(np.abs(per_freq["lag_s"] - LAG_S)))]
+    assert worst["sd"] > 10 * per_freq["sd"].min()

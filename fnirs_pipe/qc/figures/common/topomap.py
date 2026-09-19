@@ -388,7 +388,8 @@ def _assemble(rows, conds, times, open_at, geometry, outlines, opt_xy,
             fig.add_annotation(
                 x=(xdom[0] + xdom[1]) / 2, xref="paper", y=dom[1], yref="paper",
                 text=f"scalp {share:.0%} of brain peak", showarrow=False,
-                yanchor="bottom", yshift=2,
+                # an auto anchor is left or right for a column off the middle, not centre
+                xanchor="center", yanchor="bottom", yshift=2,
                 font=dict(size=10, color="#c0392b" if share >= 0.5 else "#7f8c8d"))
     fig.for_each_annotation(
         lambda a: a.update(font=dict(size=12)) if a.text in conds else None)

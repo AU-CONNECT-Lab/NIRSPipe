@@ -56,6 +56,22 @@ def test_the_selected_coefficients_are_yule_walkers(seed, truth):
     assert np.allclose(ours, theirs, atol=1e-10), f"{ours} vs {theirs}"
 
 
+def test_the_periodogram_autocovariance_equals_the_direct_one():
+    """The order search takes its autocovariance through an FFT because `np.correlate` is a
+    direct O(n^2) convolution: 18 ms against 0.8 ms on a ten-minute recording, called once
+    per pass per channel. Same numbers, so this pins that the speed changed and the estimate
+    did not."""
+    rng = np.random.default_rng(20)
+    for n in (997, 4096, 5000):                 # one prime, one power of two, one neither
+        x = _ar_series(rng, n, [0.6, -0.2])
+        x0 = x - x.mean()
+        direct = np.correlate(x0, x0, mode="full")[n - 1:n + 10] / n
+        size = 1 << int(np.ceil(np.log2(2 * n)))
+        spec = np.fft.rfft(x0, size)
+        fast = np.fft.irfft(spec * np.conj(spec), size)[:11] / n
+        assert np.allclose(direct, fast, atol=1e-12), f"n={n}"
+
+
 def test_bic_recovers_a_known_ar1():
     rng = np.random.default_rng(1)
     rho = bic_ar_order(_ar_series(rng, 8000, [0.7]), pmax=20)

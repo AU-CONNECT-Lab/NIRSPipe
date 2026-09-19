@@ -1,4 +1,5 @@
 from __future__ import annotations
+import gc
 from pathlib import Path
 from typing import Any, Literal
 
@@ -365,8 +366,13 @@ def _fit_glm_ar_irls(haemo: mne.io.Raw, design_matrix: pd.DataFrame, spec: str) 
     pmax = resolve_pmax(spec, haemo.info["sfreq"])
     logger.debug("ar_irls: pmax %d over %d channels", pmax, len(haemo.ch_names))
     design = design_matrix.values
-    results = {ch: fit_channel(haemo.get_data(picks=[ch])[0], design, pmax)
-               for ch in haemo.ch_names}
+    results = {}
+    for ch in haemo.ch_names:
+        results[ch] = fit_channel(haemo.get_data(picks=[ch])[0], design, pmax)
+        # the robust fits leave reference cycles holding one design-sized array each, and
+        # the default thresholds let them pile up: measured at 2.0 GB over ten channels of a
+        # 45-regressor design against 0.11 GB with this, for 4% more time
+        gc.collect(0)
     return RegressionResults(haemo.info, results, design_matrix)
 
 

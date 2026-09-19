@@ -195,6 +195,7 @@ def run_hyper_post(
         window_result,
         wtc_band_mean,
         wtc_grid_params,
+        wtc_phase_by_scale,
     )
     from fnirs_pipe.qc.common.figure_io import _pair_fname, get_channel_pairs, pair_slug
     from fnirs_pipe.qc.common.report_shell import guard, note
@@ -330,6 +331,15 @@ def run_hyper_post(
             logger.info("%s | phase arrows drawn against the phase-scrambled null (%s)",
                         scope, ch_type)
 
+    def _phase_scale(result, scope_name: str, ch_type: str):
+        """The per-frequency phase for one scope, which is where an angle becomes a delay."""
+        if result is None or not result.pairs:
+            return None
+        df = None
+        with guard(f"WTC phase by scale ({scope_name} {ch_type})", errors, scope):
+            df = wtc_phase_by_scale(result, band_fmin, band_fmax, mask_coi=wtc_mask_coi)
+        return df
+
     def _band_means(result, kind: str, ch_type: str):
         if result is None or not result.pairs:
             return None
@@ -433,6 +443,7 @@ def run_hyper_post(
         """
         out: dict = {"chan": None, "roichan": None, "roihom": None,
                      "cond_chan": [], "cond_roi": [], "cond_roihom": [],
+                     "phasescale": None, "cond_phasescale": [],
                      "result": None, "cond_wtc": [], "cond_bands": []}
 
         wtc_result: WTCResult | None = None
@@ -457,6 +468,7 @@ def run_hyper_post(
         if chan_band_df is not None and wtc_save_maps:
             _save_maps(wtc_result, "wtc", ch_type)
 
+        out["phasescale"] = _phase_scale(wtc_result, "whole run", ch_type)
         out["result"] = wtc_result
         out["roichan"] = _roi_band(chan_band_df, ch_type, "whole run")
         out["roihom"] = _roi_hom_band(chan_band_df, ch_type, "whole run")
@@ -510,6 +522,11 @@ def run_hyper_post(
             cond_chan.insert(0, "condition", label)
             out["cond_chan"].append(_tag(cond_chan, ch_type))
 
+            cond_scale = _phase_scale(cond_wtc, f"condition {label}", ch_type)
+            if cond_scale is not None and not cond_scale.empty:
+                cond_scale.insert(0, "condition", label)
+                out["cond_phasescale"].append(_tag(cond_scale, ch_type))
+
         return out
 
     if wtc_significance:
@@ -546,6 +563,12 @@ def run_hyper_post(
         logger.info("WTC homologous ROI means saved: %s",
                     _write_df_tsv(roi_hom_df, "wtc-roihom", "hyper_wtc_roihom"))
 
+    phase_scale_df = _stack("phasescale")
+    if phase_scale_df is not None:
+        logger.info("WTC phase per scale saved: %s",
+                    _write_df_tsv(phase_scale_df, "wtc-phasescale",
+                                  "hyper_wtc_phasescale"))
+
     # the windows are the one thing a reader cannot reconstruct from the table
     spans = {label: [round(t0, 3), round(t1, 3)] for label, t0, t1 in cond_windows}
     cond_chan_frames = [f for r in passes.values() for f in r["cond_chan"]]
@@ -565,6 +588,14 @@ def run_hyper_post(
         logger.info("WTC homologous ROI means per condition saved: %s",
                     _write_df_tsv(pd.concat(cond_hom_frames, ignore_index=True),
                                   "wtcbycond-roihom", "hyper_wtc_bycondition_roihom",
+                                  condition_windows_s=spans))
+
+    cond_scale_frames = [f for r in passes.values() for f in r["cond_phasescale"]]
+    if cond_scale_frames:
+        logger.info("WTC phase per scale per condition saved: %s",
+                    _write_df_tsv(pd.concat(cond_scale_frames, ignore_index=True),
+                                  "wtcbycond-phasescale",
+                                  "hyper_wtc_bycondition_phasescale",
                                   condition_windows_s=spans))
 
     # ---- ISC, which is a cut and not a slice ----
