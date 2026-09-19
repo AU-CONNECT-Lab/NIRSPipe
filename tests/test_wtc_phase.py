@@ -258,3 +258,79 @@ def test_the_lag_is_only_right_where_the_spread_says_it_is():
     # spread an order of magnitude wider than the best row's
     worst = per_freq.iloc[int(np.argmax(np.abs(per_freq["lag_s"] - LAG_S)))]
     assert worst["sd"] > 10 * per_freq["sd"].min()
+
+
+# ---- what lands on disk ----
+# The band columns ride along on a frame the run already wrote. The per-scale table is a new
+# file, so these check it exists, is shaped like its siblings, and still holds the right
+# number after a full run rather than only in the function that computes it.
+
+CONDITIONS = [("rest", 0.0, 180.0), ("task", 200.0, 380.0)]
+
+
+@pytest.fixture(scope="module")
+def report(tmp_path_factory):
+    import mne
+    from fnirs_pipe.pipeline.hyperscanning import GroupEntry
+    from fnirs_pipe.qc.hyper.hyper_report import build_hyper_post_report
+
+    dyad = _dyad_lagged(LAG_S)
+    descs, onsets, durs = zip(*[(d, t0, t1 - t0) for d, t0, t1 in CONDITIONS])
+    for raw in dyad.values():
+        raw.set_annotations(mne.Annotations(list(onsets), list(durs), list(descs)))
+
+    out = tmp_path_factory.mktemp("phase")
+    build_hyper_post_report(
+        group_id="G1", task="tap",
+        group=[GroupEntry("G1", "sub-01", "tap"), GroupEntry("G1", "sub-02", "tap")],
+        aligned_raws=dyad, offsets={"sub-01": 0.0, "sub-02": 0.0}, output_dir=out,
+        roi_map={"L": ["S1_D1", "S2_D2"], "R": ["S3_D3"]}, wtc_roi_min_channels=1,
+        wtc_fmin=0.02, wtc_fmax=0.2, wtc_band_fmin=E2E_BAND[0], wtc_band_fmax=E2E_BAND[1],
+        wtc_by_condition=True, wtc_chroma=("hbo", "hbr"),
+    )
+    return out / "group-G1" / "nirs"
+
+
+def _table(report, kind):
+    return pd.read_csv(report / f"group-G1_task-tap_hyper-{kind}.tsv", sep="\t")
+
+
+def test_the_band_table_carries_the_three_phase_columns(report):
+    df = _table(report, "wtc")
+    assert {"phase_angle", "phase_sd", "phase_n"} <= set(df.columns)
+    assert (df["phase_n"] > 0).all()
+
+
+def test_the_per_scale_table_is_written_and_shaped_like_its_siblings(report):
+    df = _table(report, "wtc-phasescale")
+    assert df.columns[0] == "chromophore"          # the coarsest grouping key, as elsewhere
+    assert {"freq", "phase_angle", "phase_sd", "phase_n", "lag_s"} <= set(df.columns)
+    counts = df["chromophore"].value_counts().to_dict()
+    assert set(counts) == {"hbo", "hbr"} and counts["hbo"] == counts["hbr"]
+
+
+def test_the_written_lag_is_still_the_lag_that_was_put_in(report):
+    """The point of the file. A table that round-tripped the plumbing but lost the sign or
+    the scaling would pass every other test here."""
+    df = _table(report, "wtc-phasescale")
+    hbo = df[(df["chromophore"] == "hbo") & (df["phase_sd"] < 2.0)]
+    assert not hbo.empty
+    assert hbo["lag_s"].mean() == pytest.approx(LAG_S, rel=0.20)
+    assert (hbo["lag_s"] > 0).all()                # sub-01 leads, and the file says so
+
+
+def test_each_condition_gets_its_own_per_scale_rows(report):
+    df = _table(report, "wtcbycond-phasescale")
+    assert set(df["condition"]) == {d for d, _, _ in CONDITIONS}
+    assert df.columns[0] == "chromophore" and df.columns[1] == "condition"
+    # the rhythm runs through the whole recording, so both conditions carry the same lead
+    tight = df[df["phase_sd"] < 2.0]
+    for cond, rows in tight.groupby("condition"):
+        assert rows["lag_s"].mean() == pytest.approx(LAG_S, rel=0.25), cond
+
+
+def test_the_per_scale_sidecar_records_the_band_it_was_cut_to(report):
+    import json
+    params = json.loads(
+        (report / "group-G1_task-tap_hyper-wtc-phasescale.json").read_text())["parameters"]
+    assert (params["band_fmin"], params["band_fmax"]) == E2E_BAND
