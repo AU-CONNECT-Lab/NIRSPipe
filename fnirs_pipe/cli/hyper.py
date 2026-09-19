@@ -198,6 +198,7 @@ def cmd_run(
     bads_scope: str, isc_threshold: "float | None", isc_whiten: int,
     isc_max_lag: float, isc_phase_null: int,
     isc_fmin: "float | None", isc_fmax: "float | None",
+    no_report: bool,
     sci_threshold: float,
     normalize: bool, no_align: bool, tstart: float | None, tend: float | None,
     short_max_dist: float | None, long_min_dist: float | None,
@@ -372,6 +373,7 @@ def cmd_run(
             isc_max_lag_s=isc_max_lag,
             isc_phase_null=isc_phase_null,
             isc_band=isc_band,
+            no_report=no_report,
             sci_threshold=sci_threshold,
             sep_bands=sep_bands,
             analysis_window=analysis_window,
@@ -754,6 +756,12 @@ def _build_parser() -> argparse.ArgumentParser:
                           "absolute cut, which is what reproducing a fixed threshold needs; "
                           "it is scale-dependent, and the scale moves with --desc, the "
                           "passband, --isc-whiten and --isc-max-lag.")
+    run.add_argument("--no-report", action="store_true",
+                     help="Write the tables and skip the HTML report and its figures. The "
+                          "figures are most of what this step puts on disk, and an analysis "
+                          "that reads the tables never opens them. Everything else is "
+                          "unchanged: the same numbers, the same files, the same npz when "
+                          "--wtc-save-maps is given.")
     run.add_argument("--isc-fmin", type=float, default=None, metavar="HZ",
                      help="Band-limit each member before the correlation, low edge. Defaults "
                           "to --wtc-band-fmin, so ISC and the WTC band mean describe the same "

@@ -316,6 +316,10 @@ QC_NOT_EXPOSED = {
             # display only: it decides where a phase arrow is drawn on the WTC maps and
             # changes no table or figure value, so the page has nothing to preview for it
             "--wtc-arrow-min",
+            # the page exists to show the report; a run started from it that writes no
+            # report leaves the user looking at an empty panel with no way to tell the run
+            # from a failure. It is for a batch that will be read as tables
+            "--no-report",
             # ISC follows --wtc-band-fmin/fmax unless overridden, and following it is the
             # point: the two are averages of one coherency and comparing them needs one
             # band. A second pair of controls could only be used to split them, with

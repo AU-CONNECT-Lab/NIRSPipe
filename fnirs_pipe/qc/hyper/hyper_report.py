@@ -726,13 +726,15 @@ def build_hyper_post_report(
     isc_threshold: "float | None" = None,
     isc_whiten: int = 0,
     isc_max_lag_s: float = 0.0,
+    isc_band: "tuple[float | None, float | None] | None" = None,
     isc_phase_null: int = 0,
     sci_threshold: float = SCI_PASS,
     sep_bands=None,
     cond_windows: "list[tuple[str, float, float]] | None" = None,
     analysis_window: "tuple[float, float] | None" = None,
+    no_report: bool = False,
     result: "HyperPostResult | None" = None,
-) -> Path:
+) -> "Path | None":
     """Build hyperscanning post-QC report.
 
     Sections:
@@ -1144,12 +1146,19 @@ def build_hyper_post_report(
                 wtc_mask_coi=wtc_mask_coi, wtc_roi_min_channels=wtc_roi_min_channels,
                 wtc_chroma=wtc_chroma, isc_whiten=isc_whiten,
                 isc_max_lag_s=isc_max_lag_s, isc_phase_null=isc_phase_null,
+                isc_band=isc_band,
                 roi_map=roi_map, sep_bands=sep_bands,
                 analysis_window=analysis_window,
             ),
             subject_ids=subject_ids, pairings=pairings, align_info=align_info,
             cond_windows=cond_windows, errors=errors, notes=notes, scope=scope,
         )
+    # Everything above is the analysis and has already written its tables; everything below
+    # draws them. The figures are most of this step's output on disk, and a study that reads
+    # the tables never opens them.
+    if no_report:
+        logger.info("group-%s | --no-report: tables written, figures skipped", group_id)
+        return None
     chroma       = result.chroma
     band_fmin    = result.band_fmin
     band_fmax    = result.band_fmax
