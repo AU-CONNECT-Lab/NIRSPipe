@@ -27,6 +27,7 @@ from fnirs_pipe.cli.run import (
     _HRF_CHOICES,
     _NOISE_CHOICES,
     _SHORT_CHANNEL_CHOICES,
+    NOISE_MODEL_PATTERN,
 )
 
 from fnirs_pipe.pipeline.denoise import (
@@ -334,7 +335,7 @@ def _postprocessing():
                           html.Div([
                               dbc.Input(id="an-noise-model", value="auto", debounce=True,
                                         list="an-noise-model-suggest",
-                                        pattern="ols|auto|ar[1-9][0-9]*"),
+                                        pattern=NOISE_MODEL_PATTERN),
                               html.Datalist(id="an-noise-model-suggest",
                                             children=[html.Option(value=c)
                                                       for c in _NOISE_CHOICES]),

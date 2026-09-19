@@ -22,20 +22,22 @@ _HRF_CHOICES           = [
 # what the GUI dropdown offers and the help lists. "auto" is mne-nirs' own rule, an AR order
 # of 4x the sampling rate; the low orders are fMRI defaults arriving through nilearn, where a
 # sampling rate an order of magnitude slower makes one lag enough
-_NOISE_CHOICES         = ["auto", "ols", "ar1", "ar2", "ar3", "ar4", "ar5"]
+_NOISE_CHOICES         = ["auto", "ols", "ar1", "ar2", "ar3", "ar4", "ar5", "ar_irls"]
+# the one rule, shared with the GUI's `pattern` so the browser refuses what argparse would
+NOISE_MODEL_PATTERN    = r"ols|auto|ar[1-9][0-9]*|ar_irls(?:[1-9][0-9]*)?"
 _DRIFT_CHOICES         = ["cosine", "polynomial", "none"]
 
 def _noise_model(value: str) -> str:
-    """``ols``, ``auto``, or ``arN`` for any order the library will take.
+    """``ols``, ``auto``, ``arN`` for any order the library will take, or ``ar_irls``.
 
     A closed list is what lost ``auto`` when this CLI moved to argparse, and what the
     package measures is no reason to stop a caller passing something else. The dropdown and
     the help still name the common ones.
     """
-    if value in _NOISE_CHOICES or re.fullmatch(r"ar[1-9][0-9]*", value):
+    if re.fullmatch(NOISE_MODEL_PATTERN, value):
         return value
     raise argparse.ArgumentTypeError(
-        f"{value!r}: expected 'ols', 'auto', or 'arN', e.g. ar1 or ar16")
+        f"{value!r}: expected 'ols', 'auto', 'arN' (e.g. ar1 or ar16), or 'ar_irls'")
 
 
 _SHORT_CHANNEL_CHOICES = ["none", "mean", "pca"]
@@ -196,12 +198,16 @@ def _build_parser() -> argparse.ArgumentParser:
     glm.add_argument("--hrf-model",   choices=_HRF_CHOICES,
                      help="HRF basis. 'spm + derivative' adds temporal derivative column.")
     glm.add_argument("--noise-model", type=_noise_model, metavar="MODEL",
-                     help="Residual autocorrelation model, default 'auto'. 'ols', 'auto', or "
-                          "'arN' for any order. 'auto' is an AR order of 4x the sampling "
-                          "rate, which is what the fNIRS implementations use; the low orders "
-                          "come from fMRI, where a sampling rate an order of magnitude "
-                          "slower makes one lag enough. An order too low for the sampling "
-                          "rate leaves a task contrast's t values several times too large.")
+                     help="Residual autocorrelation model, default 'auto'. 'ols', 'auto', "
+                          "'arN' for any order, or 'ar_irls'. 'auto' is an AR order of 4x the "
+                          "sampling rate, which is what the fNIRS implementations use; the "
+                          "low orders come from fMRI, where a sampling rate an order of "
+                          "magnitude slower makes one lag enough. An order too low for the "
+                          "sampling rate leaves a task contrast's t values several times too "
+                          "large. 'ar_irls' adds a robust norm on top of the whitening, so "
+                          "residual motion is down-weighted instead of fitted; 'ar_irlsN' "
+                          "pins the largest order it may choose, which otherwise follows the "
+                          "same 4x rule.")
     glm.add_argument("--drift-model", choices=_DRIFT_CHOICES,
                      help="Low-frequency drift regressors in design matrix. Required by "
                           "--mode glm and rest; optional in denoise, where the bandpass detrends.")

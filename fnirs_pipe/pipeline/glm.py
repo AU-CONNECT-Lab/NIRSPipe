@@ -29,7 +29,7 @@ HRFModel   = Literal[
     "fir",
 ]
 # arN (e.g. "ar2", "ar3") is also valid but cannot be expressed as a Literal
-NoiseModel = Literal["ols", "ar1", "ar2", "ar3", "ar4", "ar5", "auto"]
+NoiseModel = Literal["ols", "ar1", "ar2", "ar3", "ar4", "ar5", "auto", "ar_irls"]
 DriftModel = Literal["cosine", "polynomial", "none"]
 SCRStrategy = Literal["mean", "pca"]
 
@@ -346,7 +346,28 @@ def fit_glm(
     noise_model: NoiseModel = "ar1",
 ) -> Any:
     from mne_nirs.statistics import run_glm
-    return run_glm(haemo, design_matrix, noise_model=noise_model)
+    if not noise_model.startswith("ar_irls"):
+        return run_glm(haemo, design_matrix, noise_model=noise_model)
+    return _fit_glm_ar_irls(haemo, design_matrix, noise_model)
+
+
+def _fit_glm_ar_irls(haemo: mne.io.Raw, design_matrix: pd.DataFrame, spec: str) -> Any:
+    """`run_glm`'s own container, filled channel by channel from the robust solver.
+
+    nilearn's `run_glm` has no robust norm, so the loop here replaces it; what goes into
+    `RegressionResults` is the same per-channel object either way, which is what lets the
+    contrast, the tidy frame and the residual extraction stay ignorant of the difference.
+    """
+    from mne_nirs.statistics._glm_level_first import RegressionResults
+
+    from fnirs_pipe.pipeline.ar_irls import fit_channel, resolve_pmax
+
+    pmax = resolve_pmax(spec, haemo.info["sfreq"])
+    logger.debug("ar_irls: pmax %d over %d channels", pmax, len(haemo.ch_names))
+    design = design_matrix.values
+    results = {ch: fit_channel(haemo.get_data(picks=[ch])[0], design, pmax)
+               for ch in haemo.ch_names}
+    return RegressionResults(haemo.info, results, design_matrix)
 
 
 def compute_contrasts(

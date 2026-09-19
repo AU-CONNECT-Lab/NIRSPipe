@@ -230,8 +230,9 @@ def test_the_gui_field_takes_what_the_cli_takes():
     narrower surface the moment the CLI stopped using one, and it pre-selected `ar1`. It is
     free text with a suggestion list now, and its `pattern` is the CLI's rule.
 
-    The two rules are written out separately, one in Python and one as an HTML attribute, so
-    this pins that they agree. A user typing `ar16` into the page and having the browser
+    The rule is now written once and the page imports it, so what is left to pin is that the
+    page still reaches for it: a `pattern=` spelled out again here would be the second copy
+    this test exists to prevent. A user typing `ar16` into the page and having the browser
     refuse it, or the page accepting something the CLI then rejects, are both silent.
     """
     import argparse
@@ -239,14 +240,16 @@ def test_the_gui_field_takes_what_the_cli_takes():
 
     from pathlib import Path
 
-    from fnirs_pipe.cli.run import _noise_model
+    from fnirs_pipe.cli.run import NOISE_MODEL_PATTERN, _noise_model
 
     src = Path("fnirs_pipe/interface/pages/analysis.py").read_text(encoding="utf-8")
     assert 'id="an-noise-model"' in src and 'value="auto"' in src, "the page must default to auto"
-    pattern = re.search(r'pattern="([^"]+)"', src).group(1)
+    assert "pattern=NOISE_MODEL_PATTERN" in src, "the page must use the CLI's rule, not its own copy"
+    assert 'pattern="' not in src, "a literal pattern here is the second copy of the rule"
+    pattern = NOISE_MODEL_PATTERN
 
-    for value in ("auto", "ols", "ar1", "ar5", "ar16", "ar31", "ar100",
-                  "ar0", "banana", "ar", "AR16", "ar1.5", ""):
+    for value in ("auto", "ols", "ar1", "ar5", "ar16", "ar31", "ar100", "ar_irls", "ar_irls40",
+                  "ar0", "banana", "ar", "AR16", "ar1.5", "", "ar_irls0", "irls"):
         browser = bool(re.fullmatch(pattern, value))
         try:
             _noise_model(value)
