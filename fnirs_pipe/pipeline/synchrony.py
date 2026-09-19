@@ -1522,6 +1522,65 @@ def _fisher_z(r: float) -> float:
     return float(np.arctanh(np.clip(r, -0.999999, 0.999999)))
 
 
+def _circular_stats(angles: np.ndarray) -> tuple[float, float, int]:
+    r"""Circular mean and spread of a set of phase angles, in radians, and how many there were.
+
+    ::
+
+      [10 deg, 350 deg]  ->  (0 deg, 0.42 rad, 2), not the 180 deg an arithmetic mean gives
+
+    .. math::
+
+        \bar{a} = \arg(X, Y), \quad X = \sum_i \cos a_i, \quad Y = \sum_i \sin a_i
+
+    and the spread is the circular standard deviation :math:`s = \sqrt{-2 \ln(R/n)}` with
+    :math:`R = \sqrt{X^2 + Y^2}`, which is 0 when every angle agrees and grows without bound
+    as they spread round the circle. Both are the forms Grinsted et al. (2004) define for a
+    wavelet phase.
+
+    ``s`` is reported rather than a confidence interval on the mean: neighbouring cells of a
+    smoothed map are not independent, so an interval computed as though they were is too
+    narrow to mean anything.
+
+    An empty input, or one with no finite angle, gives NaN at ``n = 0``.
+    """
+    a = np.asarray(angles, dtype=float).ravel()
+    a = a[np.isfinite(a)]
+    if a.size == 0:
+        return float("nan"), float("nan"), 0
+    X, Y = float(np.cos(a).sum()), float(np.sin(a).sum())
+    # R/n is the resultant length. Floored so a set spread evenly round the circle reports a
+    # large spread rather than dividing by zero, and capped at 1 because angles that all
+    # agree land a hair above it and would take the square root of a negative
+    resultant = min(max(float(np.hypot(X, Y)) / a.size, 1e-12), 1.0)
+    return float(np.arctan2(Y, X)), float(np.sqrt(-2.0 * np.log(resultant))), int(a.size)
+
+
+def _band_rows(sig, band: np.ndarray) -> "np.ndarray | None":
+    """``sig`` cut to the band's rows, or None when no level was computed or it is the wrong length."""
+    if sig is None:
+        return None
+    arr = np.asarray(sig, dtype=float)
+    return arr[band] if arr.shape[:1] == band.shape else None
+
+
+def _phase_cells(
+    wtc: np.ndarray, in_coi: np.ndarray, sig: "np.ndarray | None", mask_coi: bool,
+) -> np.ndarray:
+    """Which band cells a phase angle may be averaged over: inside the cone, above the level.
+
+    The relative phase of two uncorrelated series is a uniformly random direction, so a mean
+    taken over cells that are not coupled measures the shape of the map rather than a lead.
+    ``sig`` is the per-frequency Monte Carlo level when one was computed, and is applied on
+    the band rows; without one only the cone is required and the caller reads ``phase_n`` to
+    see how weak the mask was.
+    """
+    keep = in_coi if mask_coi else np.ones(wtc.shape, dtype=bool)
+    if sig is not None and np.asarray(sig).shape[:1] == wtc.shape[:1]:
+        keep = keep & (wtc >= np.asarray(sig, dtype=float)[:, None])
+    return keep
+
+
 def wtc_band_mean(
     result: WTCResult,
     fmin: float,
@@ -1562,8 +1621,18 @@ def wtc_band_mean(
     clipped just below 1), which is what group statistics should average: coherence is bounded
     on [0, 1], so its mean across dyads is biased toward the interior.
 
+    ``phase_angle`` is the circular mean of the relative phase over the same band, in degrees,
+    positive meaning the first member leads; ``phase_sd`` is its circular standard deviation,
+    also in degrees and unbounded above; ``phase_n`` is how many cells they were taken over.
+    Coherence says whether a pair is locked, the angle says which of them leads, and the two
+    are independent: a pair can be fully coherent at any fixed lag. The cells are chosen by
+    :func:`_phase_cells`, which is a stricter mask than the coherence uses, and the angle is
+    only readable where ``phase_sd`` is small. **It is a band mean, so it cannot be divided by
+    the frequency to get a lag in seconds**; :func:`wtc_phase_by_scale` is that number.
+
     Returns one row per (pair, label) with columns sub1, sub2, label, coherence, coherence_z,
-    n_valid_frac. A crossed result is keyed by a label pair rather than one label, and gains a
+    n_valid_frac, phase_angle, phase_sd, phase_n. A crossed result is keyed by a label pair
+    rather than one label, and gains a
     ``label2`` column after ``label``: ``label`` is what sub1 contributed, ``label2`` what sub2
     did, and the homologous rows are the ones where they agree.
     A label with no map behind it keeps its row, with NaN in every measured column. That
@@ -1596,10 +1665,12 @@ def wtc_band_mean(
             if data is None:
                 rows.append({**head, "coherence": float("nan"),
                              "coherence_z": float("nan"),
-                             "n_valid_frac": float("nan")})
+                             "n_valid_frac": float("nan"),
+                             "phase_angle": float("nan"),
+                             "phase_sd": float("nan"), "phase_n": 0})
                 continue
 
-            wtc = np.asarray(data["wtc"], dtype=float)[band]
+            wtc = wtc_raw = np.asarray(data["wtc"], dtype=float)[band]
             coi = np.asarray(data["coi"], dtype=float)
             # coi is a period in seconds; 1/coi is the lowest frequency still reliable at
             # that time. A coi of 0 (the very edges) leaves nothing reliable there.
@@ -1613,15 +1684,100 @@ def wtc_band_mean(
 
             valid = np.isfinite(wtc)
             coherence = float(wtc[valid].mean()) if valid.any() else float("nan")
+
+            phase = data.get("phase")
+            if phase is None:
+                angle, spread, n_phase = float("nan"), float("nan"), 0
+            else:
+                keep = _phase_cells(wtc_raw, in_coi, _band_rows(data.get("sig"), band),
+                                    mask_coi)
+                angle, spread, n_phase = _circular_stats(
+                    np.asarray(phase, dtype=float)[band][keep])
+
             rows.append({
                 **head,
                 "coherence": coherence,
                 "coherence_z": _fisher_z(coherence),
                 "n_valid_frac": n_valid_frac,
+                "phase_angle": np.degrees(angle),
+                "phase_sd": np.degrees(spread),
+                "phase_n": n_phase,
             })
 
     columns = ["sub1", "sub2", "label"] + (["label2"] if crossed else [])
-    return pd.DataFrame(rows, columns=columns + ["coherence", "coherence_z", "n_valid_frac"])
+    return pd.DataFrame(rows, columns=columns + ["coherence", "coherence_z", "n_valid_frac",
+                                                 "phase_angle", "phase_sd", "phase_n"])
+
+
+def wtc_phase_by_scale(
+    result: WTCResult,
+    fmin: float,
+    fmax: float,
+    mask_coi: bool = True,
+) -> pd.DataFrame:
+    r"""The same circular statistic as :func:`wtc_band_mean`, but one row per frequency.
+
+    ::
+
+      a pair coherent at 0.1 Hz with the first member 1.25 s ahead
+      ->  freq 0.1, phase_angle +45.0, lag_s +1.25
+
+    A band mean collapses scales whose phase differs, so its angle belongs to no particular
+    frequency and cannot be read as a delay. Resolved per scale it can: a phase of
+    :math:`\theta` at frequency :math:`f` is :math:`\theta / 2 \pi f` seconds, which is what
+    ``lag_s`` carries, positive meaning the first member leads.
+
+    ``lag_s`` wraps. An angle is only known modulo a turn, so a delay longer than half the
+    period at that frequency comes back as a short one of the other sign, and only a
+    ``lag_s`` that agrees across neighbouring scales is a delay rather than an artefact of
+    where it folded. That agreement is the check Grinsted et al. (2004) describe.
+
+    Returns one row per (pair, label, freq), the label pair and a ``label2`` column on a
+    crossed result, as in :func:`wtc_band_mean`. A pairing with no map behind it contributes
+    no rows rather than a NaN one: there is no frequency axis to hang them on.
+    """
+    freqs = np.asarray(result.freqs, dtype=float)
+    band = (freqs >= fmin) & (freqs <= fmax)
+    if not band.any():
+        span = f"{freqs.min():.4f}-{freqs.max():.4f} Hz" if freqs.size else "empty"
+        raise ValueError(
+            f"no WTC frequency bin inside [{fmin}, {fmax}] Hz; the computed axis spans {span}."
+        )
+    band_freqs = freqs[band]
+    crossed = any(isinstance(k, tuple)
+                  for labels in result.pairs.values() for k in labels)
+
+    rows: list[dict] = []
+    for (sub1, sub2), labels in result.pairs.items():
+        for label, data in labels.items():
+            if data is None or data.get("phase") is None:
+                continue
+            label1, label2 = label if isinstance(label, tuple) else (label, label)
+            head = {"sub1": sub1, "sub2": sub2, "label": label1}
+            if crossed:
+                head["label2"] = label2
+
+            wtc = np.asarray(data["wtc"], dtype=float)[band]
+            coi = np.asarray(data["coi"], dtype=float)
+            with np.errstate(divide="ignore"):
+                f_edge = np.where(coi > 1e-10, 1.0 / coi, np.inf)
+            in_coi = band_freqs[:, None] >= f_edge[None, :]
+            keep = _phase_cells(wtc, in_coi, _band_rows(data.get("sig"), band), mask_coi)
+            phase = np.asarray(data["phase"], dtype=float)[band]
+
+            for i, f in enumerate(band_freqs):
+                angle, spread, n = _circular_stats(phase[i][keep[i]])
+                rows.append({
+                    **head, "freq": float(f),
+                    "phase_angle": np.degrees(angle),
+                    "phase_sd": np.degrees(spread),
+                    "phase_n": n,
+                    "lag_s": angle / (2.0 * np.pi * f) if f > 0 else float("nan"),
+                })
+
+    columns = (["sub1", "sub2", "label"] + (["label2"] if crossed else [])
+               + ["freq", "phase_angle", "phase_sd", "phase_n", "lag_s"])
+    return pd.DataFrame(rows, columns=columns)
 
 
 def roi_mean_of_channels(
@@ -1647,6 +1803,13 @@ def roi_mean_of_channels(
 
     ``coherence_z`` is recomputed from the averaged coherence rather than averaged itself, so
     it stays the Fisher z of the number in the same row.
+
+    ``phase_angle`` is averaged circularly, an arithmetic mean of angles being wrong at the
+    wrap. **Its ``phase_sd`` changes meaning here**: at channel level it is the spread of the
+    cells behind one pairing, and here it is the spread of the pairings behind one ROI, so a
+    tight channel angle that disagrees with its neighbours' gives a small one there and a
+    large one here. ``phase_n`` stays a cell count and is summed. The columns are absent when
+    the frame has none, so a caller that built one by hand is unaffected.
     """
     ch_to_roi = {ch: roi for roi, chs in roi_map.items() for ch in chs}
     df = band_df.copy()
@@ -1671,6 +1834,16 @@ def roi_mean_of_channels(
         out = out[~thin].reset_index(drop=True)
     out.insert(out.columns.get_loc("n_valid_frac"), "coherence_z",
                out["coherence"].map(_fisher_z))
+
+    if "phase_angle" in df.columns:
+        def _roi_phase(g: pd.DataFrame) -> pd.Series:
+            angle, spread, _ = _circular_stats(np.radians(g["phase_angle"].to_numpy()))
+            return pd.Series({"phase_angle": np.degrees(angle),
+                              "phase_sd": np.degrees(spread),
+                              "phase_n": int(g["phase_n"].sum())})
+        phase = (df.groupby(keys, sort=False)[["phase_angle", "phase_n"]]
+                   .apply(_roi_phase).reset_index())
+        out = out.merge(phase, on=keys, how="left")
     return out
 
 

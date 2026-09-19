@@ -294,7 +294,8 @@ def test_every_pair_and_label_gets_one_row():
                                   "S2_D2": None}}
     df = wtc_band_mean(WTCResult(pairs=pairs, freqs=FREQS, times=TIMES), 0.04, 0.25)
     assert list(df.columns) == ["sub1", "sub2", "label",
-                                "coherence", "coherence_z", "n_valid_frac"]
+                                "coherence", "coherence_z", "n_valid_frac",
+                                "phase_angle", "phase_sd", "phase_n"]
     assert len(df) == 4
 
 
