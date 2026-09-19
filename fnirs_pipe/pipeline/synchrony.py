@@ -852,7 +852,7 @@ class NullDraws:
                     grouped.insert(0, "condition", condition)
                     cond.append(grouped)
         return (
-            _average_iterations(whole, keys, real=real),
+            (_average_iterations(whole, keys, real=real) if whole else None),
             (_average_iterations(cond, ["condition"] + keys, real=real_by_cond)
              if cond else None),
         )

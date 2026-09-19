@@ -274,6 +274,7 @@ def _draw_condition_pairs(
 
         onsets = _partner_condition_onsets(partner_raw, [w[0] for w in windows])
         end = float(partner_raw.times[-1])
+        fixed_end = float(fixed_raw.times[-1])
         segments = []
         for label, t0, t1 in windows:
             span = float(t1) - float(t0)
@@ -286,7 +287,12 @@ def _draw_condition_pairs(
                 # equal-length stretch of it to stand in
                 refused.setdefault(f"short_{label}", []).append(pid)
                 continue
-            segments.append((label, start, span, float(t0)))
+            # the alignment crop leaves the anchor marker at 0 give or take a rounding
+            # error, and crop refuses a tmin of -1e-14; the tolerance above likewise lets
+            # an end through by up to a millisecond, which crop refuses on the far side
+            start, real_t0 = max(0.0, start), max(0.0, float(t0))
+            span = min(span, end - start, fixed_end - real_t0)
+            segments.append((label, start, span, real_t0))
 
         if not segments:
             continue

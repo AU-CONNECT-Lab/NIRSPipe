@@ -169,3 +169,15 @@ def test_the_hook_gets_the_condition_and_the_pair(stub):
          on_draw=lambda pid, label, pair: got.append((label, sorted(pair))))
     assert got == [("early", sorted([TRUE[0], "sub-p1d03"])),
                    ("late", sorted([TRUE[0], "sub-p1d03"]))]
+
+
+# ---- a null with no whole-run draw ----
+
+def test_the_roi_summary_survives_a_null_that_has_no_whole_run_draw(stub):
+    """The re-paired null is per condition only, so its whole-run list is empty by design."""
+    from fnirs_pipe.pipeline.synchrony import roi_mean_of_homologous  # noqa: F401
+
+    null = _run(["sub-p2d02", "sub-p2d03"], labels=("early", "late"))
+    whole, by_cond = null.summarise_roi({"front": ["S1_D1", "S1_D2"]}, min_channels=2)
+    assert whole is None
+    assert by_cond is not None and set(by_cond["condition"]) == {"early", "late"}
