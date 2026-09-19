@@ -6,10 +6,13 @@ incomparable with the WTC band mean, which the two being averages of the same co
 coherency is the whole reason for wanting.
 """
 
+import logging
+
 import mne
 import numpy as np
 import pytest
 
+from fnirs_pipe.cli.hyper import _warn_band_mismatch
 from fnirs_pipe.pipeline.synchrony import _band_limit, compute_isc
 
 SFREQ = 10.0
@@ -69,3 +72,30 @@ def test_a_band_does_not_destroy_in_band_coupling():
     raws = _pair(shared_hz=0.1)
     narrow, _ = compute_isc(raws, ["sub-01", "sub-02"], "hbo", band=BAND)
     assert np.nanmean(np.diag(narrow)) > 0.8
+
+
+# ---- the two bands are checked against each other, never inherited ----
+# A flag that silently moved a second metric could not be read off the command line it was
+# absent from, so ISC takes only what it was given and a mismatch is reported instead.
+
+def _warnings(caplog, isc_band, wtc=(0.06, 0.15)):
+    caplog.clear()
+    with caplog.at_level(logging.WARNING, logger="fnirs_pipe.cli.hyper"):
+        _warn_band_mismatch(isc_band, *wtc)
+    return [r.getMessage() for r in caplog.records]
+
+
+def test_an_unbanded_isc_beside_a_banded_coherence_warns(caplog):
+    assert any("whole passband" in m for m in _warnings(caplog, None))
+
+
+def test_two_different_bands_warn(caplog):
+    assert any("not comparable" in m for m in _warnings(caplog, (0.02, 0.10)))
+
+
+def test_the_same_band_is_quiet(caplog):
+    assert _warnings(caplog, (0.06, 0.15)) == []
+
+
+def test_no_coherence_band_means_nothing_to_compare(caplog):
+    assert _warnings(caplog, None, wtc=(None, None)) == []

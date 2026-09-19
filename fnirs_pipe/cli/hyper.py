@@ -183,6 +183,34 @@ def _merge_reminder(output_dir: Path) -> None:
         print("\n".join(["", *lines, f"Run `fnirs-hyper merge {output_dir}` for one table per kind."]))
 
 
+def _warn_band_mismatch(isc_band, wtc_band_fmin, wtc_band_fmax) -> None:
+    """Say so when ISC and the coherence are about to describe different frequencies.
+
+    The two are averages of one complex coherency, so comparing them across dyads is only
+    meaningful on one band: zero-lag Pearson r is the power-weighted mean of
+    ``|gamma| cos phi`` and the WTC band mean is the unweighted mean of ``|gamma|^2``. Under
+    a 1/f spectrum an unbanded ISC puts most of its weight below a coherence band that
+    starts at 0.06 Hz, so the two can be uncorrelated with nothing wrong in either.
+
+    Reported rather than enforced: a run may want them apart, and a run that computes no ISC
+    at all should not be made to name a band for it.
+    """
+    wtc_band = (wtc_band_fmin, wtc_band_fmax)
+    if wtc_band == (None, None):
+        return
+    if isc_band is None:
+        logger.warning(
+            "ISC reads the whole passband while the coherence band is %s-%s Hz, so the two "
+            "describe different frequencies and comparing them is not meaningful. Pass "
+            "--isc-fmin/--isc-fmax to put them on one band.",
+            wtc_band_fmin, wtc_band_fmax)
+    elif isc_band != wtc_band:
+        logger.warning(
+            "ISC band %s-%s Hz against coherence band %s-%s Hz: deliberate if you meant it, "
+            "but the two are then not comparable.",
+            isc_band[0], isc_band[1], wtc_band_fmin, wtc_band_fmax)
+
+
 def cmd_run(
     output_dir: Path, pairs_csv: Path, group_id: str | None, task_label: list[str] | None,
     desc: str, roi_mapping: Path | None,
@@ -216,12 +244,11 @@ def cmd_run(
 
     from fnirs_pipe.cli._shared import separation_bands_from_args
 
-    # ISC follows the WTC band unless told otherwise, so the two describe the same
-    # frequencies by default and a comparison between them means something
-    isc_band = (isc_fmin if isc_fmin is not None else wtc_band_fmin,
-                isc_fmax if isc_fmax is not None else wtc_band_fmax)
-    if isc_band == (None, None):
-        isc_band = None
+    # Each metric gets the band it was given, never the other's: a flag that silently moves
+    # a second metric cannot be read off the command line it is absent from, and a reader of
+    # a methods section has no way to recover it. What the two bands are is checked instead.
+    isc_band = (isc_fmin, isc_fmax) if (isc_fmin is not None or isc_fmax is not None) else None
+    _warn_band_mismatch(isc_band, wtc_band_fmin, wtc_band_fmax)
 
     # validated here so a bad triple fails before any dyad is loaded; which of the three the
     # caller actually named is what resolve_group_bands needs, so the dict is what is kept
@@ -763,17 +790,17 @@ def _build_parser() -> argparse.ArgumentParser:
                           "unchanged: the same numbers, the same files, the same npz when "
                           "--wtc-save-maps is given.")
     run.add_argument("--isc-fmin", type=float, default=None, metavar="HZ",
-                     help="Band-limit each member before the correlation, low edge. Defaults "
-                          "to --wtc-band-fmin, so ISC and the WTC band mean describe the same "
-                          "frequencies and can be compared; the two are averages of the same "
-                          "complex coherency and correlating them across dyads is only "
-                          "meaningful on one band. Without it ISC reads whatever the "
-                          "preprocessing passband left, which on an unfiltered stage is "
-                          "dominated by whatever is slowest or loudest. Filtering happens "
-                          "before a condition window is cut, so a short condition carries no "
-                          "edge the whole recording did not have.")
+                     help="Band-limit each member before the correlation, low edge. Without "
+                          "it ISC reads whatever the preprocessing passband left, which on a "
+                          "stage with no low-pass is dominated by the cardiac component; the "
+                          "run warns when that leaves it on different frequencies than "
+                          "--wtc-band-fmin/fmax, since the two metrics are averages of one "
+                          "complex coherency and comparing them needs one band. Set it equal "
+                          "to --wtc-band-fmin for that. Filtering happens before a condition "
+                          "window is cut, so a short condition carries no edge the whole "
+                          "recording did not have.")
     run.add_argument("--isc-fmax", type=float, default=None, metavar="HZ",
-                     help="The high edge of that band; defaults to --wtc-band-fmax.")
+                     help="The high edge of that band. No default: see --isc-fmin.")
     run.add_argument("--isc-whiten", type=int, default=0, metavar="ORDER",
                      help="Fit an autoregressive model of at most this order to each channel "
                           "before the inter-subject correlation and correlate the residuals; "
