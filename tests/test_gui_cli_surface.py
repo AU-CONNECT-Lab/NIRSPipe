@@ -316,6 +316,11 @@ QC_NOT_EXPOSED = {
             # display only: it decides where a phase arrow is drawn on the WTC maps and
             # changes no table or figure value, so the page has nothing to preview for it
             "--wtc-arrow-min",
+            # ISC follows --wtc-band-fmin/fmax unless overridden, and following it is the
+            # point: the two are averages of one coherency and comparing them needs one
+            # band. A second pair of controls could only be used to split them, with
+            # nothing on the page saying which band a given number came from
+            "--isc-fmin", "--isc-fmax",
             # the positive half of a paired flag, and it is the default; the checkbox emits
             # the negative one
             "--wtc-mask-coi",

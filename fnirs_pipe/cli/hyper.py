@@ -197,6 +197,7 @@ def cmd_run(
     wtc_phase_null: int | None, wtc_phase_null_cross: bool,
     bads_scope: str, isc_threshold: "float | None", isc_whiten: int,
     isc_max_lag: float, isc_phase_null: int,
+    isc_fmin: "float | None", isc_fmax: "float | None",
     sci_threshold: float,
     normalize: bool, no_align: bool, tstart: float | None, tend: float | None,
     short_max_dist: float | None, long_min_dist: float | None,
@@ -213,6 +214,13 @@ def cmd_run(
     run_args = dict(locals())
 
     from fnirs_pipe.cli._shared import separation_bands_from_args
+
+    # ISC follows the WTC band unless told otherwise, so the two describe the same
+    # frequencies by default and a comparison between them means something
+    isc_band = (isc_fmin if isc_fmin is not None else wtc_band_fmin,
+                isc_fmax if isc_fmax is not None else wtc_band_fmax)
+    if isc_band == (None, None):
+        isc_band = None
 
     # validated here so a bad triple fails before any dyad is loaded; which of the three the
     # caller actually named is what resolve_group_bands needs, so the dict is what is kept
@@ -363,6 +371,7 @@ def cmd_run(
             isc_whiten=isc_whiten,
             isc_max_lag_s=isc_max_lag,
             isc_phase_null=isc_phase_null,
+            isc_band=isc_band,
             sci_threshold=sci_threshold,
             sep_bands=sep_bands,
             analysis_window=analysis_window,
@@ -745,6 +754,18 @@ def _build_parser() -> argparse.ArgumentParser:
                           "absolute cut, which is what reproducing a fixed threshold needs; "
                           "it is scale-dependent, and the scale moves with --desc, the "
                           "passband, --isc-whiten and --isc-max-lag.")
+    run.add_argument("--isc-fmin", type=float, default=None, metavar="HZ",
+                     help="Band-limit each member before the correlation, low edge. Defaults "
+                          "to --wtc-band-fmin, so ISC and the WTC band mean describe the same "
+                          "frequencies and can be compared; the two are averages of the same "
+                          "complex coherency and correlating them across dyads is only "
+                          "meaningful on one band. Without it ISC reads whatever the "
+                          "preprocessing passband left, which on an unfiltered stage is "
+                          "dominated by whatever is slowest or loudest. Filtering happens "
+                          "before a condition window is cut, so a short condition carries no "
+                          "edge the whole recording did not have.")
+    run.add_argument("--isc-fmax", type=float, default=None, metavar="HZ",
+                     help="The high edge of that band; defaults to --wtc-band-fmax.")
     run.add_argument("--isc-whiten", type=int, default=0, metavar="ORDER",
                      help="Fit an autoregressive model of at most this order to each channel "
                           "before the inter-subject correlation and correlate the residuals; "

@@ -45,6 +45,7 @@ class HyperPostConfig:
     isc_whiten: int = 0
     isc_max_lag_s: float = 0.0
     isc_phase_null: int = 0
+    isc_band: "tuple[float | None, float | None] | None" = None
     roi_map: dict | None = None
     sep_bands: Any = None
     analysis_window: "tuple[float, float] | None" = None
@@ -124,6 +125,7 @@ def write_isc_matrix(
     align: "dict | None" = None,
     step: str = "hyper_isc",
     index_label: str = "channel",
+    **params,
 ) -> None:
     """Write the matrix the ISC panel is drawn from, so the numbers can leave the report.
 
@@ -149,7 +151,8 @@ def write_isc_matrix(
         pd.DataFrame(isc_mat, index=ch_names, columns=ch_names).to_csv(
             tsv_path, sep="\t", index_label=index_label)
         _hyper_sidecar(tsv_path, step, sources,
-                       chromophore=ch_type, subjects=subject_ids, **(align or {}))
+                       chromophore=ch_type, subjects=subject_ids,
+                       **params, **(align or {}))
         logger.info("ISC matrix saved: %s", tsv_path)
     except Exception as exc:
         logger.warning("ISC matrix (%s) not written: %s", ch_type, exc)
@@ -220,6 +223,7 @@ def run_hyper_post(
     wtc_roi_min_channels   = config.wtc_roi_min_channels
     isc_whiten, isc_phase_null = config.isc_whiten, config.isc_phase_null
     isc_max_lag_s          = config.isc_max_lag_s
+    isc_band               = config.isc_band
     chroma, cond_pad_s     = config.chroma, config.cond_pad_s
     roi_map, sep_bands     = config.roi_map, config.sep_bands
     analysis_window        = config.analysis_window
@@ -605,6 +609,18 @@ def run_hyper_post(
     # `window_result` for why each is right.
     isc_pair_frames: list = []
 
+    def _isc_params() -> dict:
+        """What the correlation was computed on, for the sidecar to carry.
+
+        None of it could be read off the file before, so a table computed with the flags
+        unset looked exactly like one computed with them set, which is how a run that
+        silently ignored them went unnoticed for a fortnight.
+        """
+        return {"isc_band_hz": list(isc_band) if isc_band else None,
+                "isc_whiten_max_order": isc_whiten,
+                "isc_max_lag_s": isc_max_lag_s,
+                "isc_phase_null_iter": isc_phase_null}
+
     def _isc_of(ch_type: str, label, window, pair) -> tuple:
         """One scope's ISC: ``((matrix, channels), (matrix, regions), arc level)``."""
         what = f"condition {label}" if label else "whole run"
@@ -615,7 +631,7 @@ def run_hyper_post(
             isc_mat, isc_ch_names, pairs_df, arc_level = compute_isc_pairs(
                 aligned_raws, pair_ids, ch_type, sep_bands, window=window,
                 whiten=isc_whiten, max_lag_s=isc_max_lag_s,
-                n_null=isc_phase_null, seed=wtc_seed)
+                n_null=isc_phase_null, seed=wtc_seed, band=isc_band)
             if isc_mat is None:
                 return channel_level, roi_level, arc_level
             channel_level = (isc_mat, isc_ch_names)
@@ -635,6 +651,7 @@ def run_hyper_post(
             write_isc_matrix(
                 Path(f"{stem}-{ch_type}{slug}.tsv"),
                 isc_mat, isc_ch_names, ch_type, sources, pair_ids, align=align_info,
+                **_isc_params(),
             )
             if roi_map:
                 roi_mat, roi_names = roi_mean_of_isc(

@@ -2019,6 +2019,7 @@ def _isc_rows(
     ch_type: str = "hbo",
     sep_bands=None,
     window: "tuple[float, float] | None" = None,
+    band: "tuple[float | None, float | None] | None" = None,
 ) -> "tuple[np.ndarray, np.ndarray, list[str]] | tuple[None, None, None]":
     """The two members' signals on one montage axis and one clock, ready to correlate.
 
@@ -2067,6 +2068,12 @@ def _isc_rows(
     data1 = _rows(raw1, map1, subject_ids[0])
     data2 = _rows(raw2, map2, subject_ids[1])
 
+    # before the cut, so the window inherits the whole record's edges rather than its own
+    if band:
+        sfreq_hz = float(raw1.info["sfreq"])
+        data1 = _band_limit(data1, sfreq_hz, band)
+        data2 = _band_limit(data2, sfreq_hz, band)
+
     if window is not None:
         sfreq = float(raw1.info["sfreq"])
         first = max(0, int(round(float(window[0]) * sfreq)))
@@ -2092,6 +2099,7 @@ def compute_isc(
     window: "tuple[float, float] | None" = None,
     whiten: int = 0,
     max_lag_s: float = 0.0,
+    band: "tuple[float | None, float | None] | None" = None,
 ) -> tuple[np.ndarray, list[str]] | tuple[None, None]:
     """Compute inter-brain Pearson r matrix (n_ch × n_ch) over long channels.
 
@@ -2144,11 +2152,41 @@ def compute_isc(
     Args:
         ch_type: "hbo" or "hbr".
     """
-    data1, data2, ch_names = _isc_rows(aligned_raws, subject_ids, ch_type, sep_bands, window)
+    data1, data2, ch_names = _isc_rows(aligned_raws, subject_ids, ch_type, sep_bands,
+                                       window, band)
     if ch_names is None:
         return None, None
     max_lag = _lag_samples(aligned_raws, subject_ids, max_lag_s)
     return _isc_matrix(data1, data2, whiten, max_lag)[0], ch_names
+
+
+def _band_limit(data: np.ndarray, sfreq: float, band) -> np.ndarray:
+    """Band-limit the rows that carry data, leaving all-NaN rows alone.
+
+    ISC has no frequency axis of its own: it reads whatever band the preprocessing left, so
+    two runs filtered differently produce correlations that are not comparable, and a
+    correlation compared against a WTC band mean is comparing different frequencies. This is
+    what lets the two be put on one band.
+
+    Filtering happens before the window is cut, so a 300 s condition carries no edge its
+    whole recording did not have. One row of 4000 samples at 10 Hz, band (0.06, 0.15) ->
+    the same row with everything outside those cutoffs removed.
+    """
+    if not band:
+        return data
+    lo, hi = band
+    if lo is None and hi is None:
+        return data
+    from mne.filter import filter_data
+
+    from fnirs_pipe.pipeline.denoise import filter_kwargs
+
+    out = data.copy()
+    usable = ~np.isnan(data).any(axis=1)
+    if usable.any():
+        kwargs = filter_kwargs(sfreq, data.shape[1], lo, hi)
+        out[usable] = filter_data(data[usable], sfreq, lo, hi, verbose="error", **kwargs)
+    return out
 
 
 def _lag_samples(aligned_raws: dict, subject_ids: list[str], max_lag_s: float) -> int:
@@ -2169,6 +2207,7 @@ def compute_isc_pairs(
     max_lag_s: float = 0.0,
     n_null: int = 0,
     seed: int | None = None,
+    band: "tuple[float | None, float | None] | None" = None,
 ) -> "tuple[np.ndarray, list[str], pd.DataFrame, np.ndarray | None] | tuple[None, None, None, None]":
     """The ISC matrix and the same numbers as one row per channel pair, ranked against a null.
 
@@ -2194,7 +2233,8 @@ def compute_isc_pairs(
     double-counting: whitening moves the estimate onto an honest scale, the null measures the
     scale directly, and with both on the null is drawn through the whitening too.
     """
-    data1, data2, ch_names = _isc_rows(aligned_raws, subject_ids, ch_type, sep_bands, window)
+    data1, data2, ch_names = _isc_rows(aligned_raws, subject_ids, ch_type, sep_bands,
+                                       window, band)
     if ch_names is None:
         return None, None, None, None
 

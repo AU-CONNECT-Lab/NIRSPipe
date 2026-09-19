@@ -8,6 +8,7 @@ Does no signal processing itself.
 import json
 import sys
 import time
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -20,7 +21,7 @@ from fnirs_pipe.pipeline.denoise import DEFAULT_FILTER_METHOD, DEFAULT_FILTER_OR
 from fnirs_pipe.pipeline.prep_pipeline import PrepConfig, run_prep
 from fnirs_pipe.utils import unwrap_enum as _v
 from fnirs_pipe.utils import job_db as _jdb
-from fnirs_pipe.utils.logging import get_logger, setup_logging
+from fnirs_pipe.utils.logging import get_logger, setup_logging, thread_log_file
 from fnirs_pipe.utils.run_record import write_run_record
 from fnirs_pipe.utils.run_script import write_run_script
 
@@ -191,167 +192,179 @@ def run_participant_level(args: dict[str, Any]) -> None:
     failed: list[str] = []
 
     try:
-        for subject in participant_label:
+        def _one(subject: str) -> None:
             sub_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             sub_dir = output_dir / f"sub-{subject}"
             log_file = sub_dir / "logs" / f"sub-{subject}.log"
-            setup_logging(verbose=verbose, log_file=log_file)
-            logger.info("sub-%s | starting", subject)
-            # built here purely to record what will be used; the loops below build their own
-            # per-session copies. Resolving now keeps the record even if the run then fails.
-            write_run_record(
-                args, subject, sub_timestamp, output_dir, sub_dir=sub_dir,
-                prep_config=_make_prep_config(subject, None, args),
-                post_config=(_build_post_config(subject, None, args, toml, roi_map=roi_map)
-                             if args.get("mode") else None),
-            )
-            write_run_script(args, subject, sub_timestamp, output_dir, sub_dir=sub_dir)
-
-            # The record and the script are the whole point of a dry run, and both are on
-            # disk by here. Stopping before log_run_start keeps the database free of runs
-            # that never happened.
-            if args.get("dry_run"):
-                logger.info("sub-%s | dry run: wrote the record and the script, processed "
-                            "nothing", subject)
-                continue
-
-            _jdb.log_run_start(
-                db_path, execution_id, subject,
-                sci_threshold=args["sci_threshold"],
-                dpf=args["dpf"],
-                motion_correction=_v(args["motion_correction"]),
-                mode=_v(args["mode"]) if args.get("mode") else None,
-                high_pass=cfg_high_pass,
-                low_pass=cfg_low_pass,
-                hrf_model=_v(args["hrf_model"]) if args.get("hrf_model") else toml.get("hrf_model"),
-            )
-
-            t0 = time.monotonic()
-            subject_status = "SUCCESS"
-            subject_error: str | None = None
-            # keyed by BIDS run stem: every QC figure is per run, so the report loop below
-            # needs each run's own prep output rather than whichever finished last
-            prep_runs: dict[str, tuple] = {}
-            try:
-                sessions: list[str | None] = session_label if session_label else [None]
-
-                for session in sessions:
-                    for task in tasks:
-                        files = get_nirs_files(
-                            layout, subject=subject, session=session,
-                            task=task, filter_file=bids_filter_file,
-                        )
-
-                        if not files:
-                            label = f"sub-{subject}" + (f" ses-{session}" if session else "") + (f" task-{task}" if task else "")
-                            logger.warning("no snirf files found for %s, skipping", label)
-                            continue
-
-                        for snirf_path in files:
-                            src_entities = layout.parse_file_entities(str(snirf_path))
-                            prep_config = _make_prep_config(subject, session, args)
-                            logger.info("processing: %s", snirf_path)
-                            try:
-                                raw = read_snirf(snirf_path)
-                                result = run_prep(raw, prep_config, output_dir=output_dir, source_entities=src_entities, work_dir=work_dir, source_path=snirf_path)
-                                logger.info("finished prep: %s", snirf_path.name)
-                                prep_runs[bids_label(subject, src_entities)] = (raw, result, prep_config)
-                            except Exception:
-                                logger.exception("prep failed for %s", snirf_path)
-                                raise
-
-                post_runs: dict[str, dict] = {}
-                if args.get("mode") is not None:
-                    post_runs = _run_post_for_subject(subject, sessions, args, toml, output_dir, roi_map=roi_map)
-
-                # one SQM record per run, written once both passes have finished so the
-                # post-Beer-Lambert sections can measure the files post actually produced.
-                # The database takes one row per section, which is what its checkpoint
-                # column has always been for.
-                import json as _json
-                from fnirs_pipe.qc.subject.sqm_record import SECTIONS, build_sqm_records, entities_of
-                try:
-                    sqm_paths = build_sqm_records(
-                        sub_dir / "nirs", bids_root=bids_dir,
-                        qc_window_s=args.get("window_length", 10.0),
-                        # nothing on disk records them, so the record would otherwise be
-                        # split on the package defaults whatever this run was told
-                        sep_bands=_shared.resolved_separation_bands(args),
-                        labels=set(prep_runs))
-                except Exception:
-                    logger.error("sub-%s | SQM records failed", subject, exc_info=True)
-                    sqm_paths = []
-                for path in sqm_paths:
-                    logger.info("sub-%s | SQM record -> %s", subject, path.name)
-                    # the record is on disk either way; only the database rows are at risk here
-                    try:
-                        record = _json.loads(path.read_text(encoding="utf-8"))
-                        ents = entities_of(path.stem)
-                        for section in SECTIONS:
-                            if record.get(section):
-                                _jdb.log_sqm(db_path, execution_id, subject, section,
-                                             record[section], session=ents["ses"],
-                                             bids_task=ents["task"])
-                    except Exception:
-                        logger.warning("sub-%s | SQM database rows failed for %s",
-                                       subject, path.name, exc_info=True)
-
-                # one report per run: the figures, the provenance graph and the metrics all
-                # describe a single recording, so a subject holding five tasks gets five
-                for label, (raw, result, run_prep_config) in prep_runs.items():
-                    # rendered before the report, which embeds it: every sidecar it scans is
-                    # on disk by now, and --no-report still leaves the diagram behind
-                    provenance_path = None
-                    try:
-                        from fnirs_pipe.qc.figures.common.provenance_figure import write_provenance
-                        for path in write_provenance(
-                            sub_dir / "nirs", sub_dir / "figures" / label,
-                            stem="provenance", label=label,
-                            title=label + (f"  |  mode: {args['mode']}" if args.get("mode") else ""),
-                        ):
-                            logger.info("sub-%s | provenance -> %s", subject, path)
-                            if path.suffix == ".png":
-                                provenance_path = f"figures/{label}/{path.name}"
-                    except Exception:
-                        logger.warning("%s | provenance graph failed", label, exc_info=True)
-
-                    if args.get("no_report"):
-                        continue
-                    post = post_runs.get(label, {})
-                    run_notes += [(label, n) for n in _emit_subject_report(
-                        subject, sub_dir, raw, result, run_prep_config, args,
-                        post.get("glm_est"), post.get("design_matrix"),
-                        alff_df=post.get("alff_df"), fc_df=post.get("fc_df"),
-                        fc_hbr_df=post.get("fc_hbr_df"), fc_seed=post.get("fc_seed") or {},
-                        fc_roi=post.get("fc_roi") or {},
-                        high_pass=cfg_high_pass, low_pass=cfg_low_pass,
-                        after_haemo=post.get("denoised"),
-                        roi_map=roi_map, provenance_path=provenance_path, sqm_label=label,
-                    ) or []]
-
-                if not args.get("no_report") and prep_runs:
-                    from fnirs_pipe.qc.subject.subject_index import write_subject_index
-                    try:
-                        write_subject_index(subject, sub_dir, " ".join(sys.argv),
-                                            mode=_v(args["mode"]) if args.get("mode") else None)
-                    except Exception:
-                        logger.warning("sub-%s | run index failed", subject, exc_info=True)
-
-            # Recorded rather than raised: the subjects are independent and a rerun skips
-            # what finished, so one bad recording must not strand the rest of the batch.
-            except Exception as exc:
-                subject_status = "FAILED"
-                subject_error = str(exc)
-                logger.exception("sub-%s | failed", subject)
-                print(f"  [error] sub-{subject}: {exc}", file=sys.stderr)
-                failed.append(subject)
-            finally:
-                _jdb.log_run_end(
-                    db_path, execution_id, subject,
-                    status=subject_status,
-                    error_msg=subject_error,
-                    duration_seconds=time.monotonic() - t0,
+            with thread_log_file(log_file), _isolate(subject, failed):
+                logger.info("sub-%s | starting", subject)
+                # built here purely to record what will be used; the loops below build their own
+                # per-session copies. Resolving now keeps the record even if the run then fails.
+                write_run_record(
+                    args, subject, sub_timestamp, output_dir, sub_dir=sub_dir,
+                    prep_config=_make_prep_config(subject, None, args),
+                    post_config=(_build_post_config(subject, None, args, toml, roi_map=roi_map)
+                                 if args.get("mode") else None),
                 )
+                write_run_script(args, subject, sub_timestamp, output_dir, sub_dir=sub_dir)
+
+                # The record and the script are the whole point of a dry run, and both are on
+                # disk by here. Stopping before log_run_start keeps the database free of runs
+                # that never happened.
+                if args.get("dry_run"):
+                    logger.info("sub-%s | dry run: wrote the record and the script, processed "
+                                "nothing", subject)
+                    return
+
+                _jdb.log_run_start(
+                    db_path, execution_id, subject,
+                    sci_threshold=args["sci_threshold"],
+                    dpf=args["dpf"],
+                    motion_correction=_v(args["motion_correction"]),
+                    mode=_v(args["mode"]) if args.get("mode") else None,
+                    high_pass=cfg_high_pass,
+                    low_pass=cfg_low_pass,
+                    hrf_model=_v(args["hrf_model"]) if args.get("hrf_model") else toml.get("hrf_model"),
+                )
+
+                t0 = time.monotonic()
+                subject_status = "SUCCESS"
+                subject_error: str | None = None
+                # keyed by BIDS run stem: every QC figure is per run, so the report loop below
+                # needs each run's own prep output rather than whichever finished last
+                prep_runs: dict[str, tuple] = {}
+                try:
+                    sessions: list[str | None] = session_label if session_label else [None]
+
+                    for session in sessions:
+                        for task in tasks:
+                            files = get_nirs_files(
+                                layout, subject=subject, session=session,
+                                task=task, filter_file=bids_filter_file,
+                            )
+
+                            if not files:
+                                label = f"sub-{subject}" + (f" ses-{session}" if session else "") + (f" task-{task}" if task else "")
+                                logger.warning("no snirf files found for %s, skipping", label)
+                                continue
+
+                            for snirf_path in files:
+                                src_entities = layout.parse_file_entities(str(snirf_path))
+                                prep_config = _make_prep_config(subject, session, args)
+                                logger.info("processing: %s", snirf_path)
+                                try:
+                                    raw = read_snirf(snirf_path)
+                                    result = run_prep(raw, prep_config, output_dir=output_dir, source_entities=src_entities, work_dir=work_dir, source_path=snirf_path)
+                                    logger.info("finished prep: %s", snirf_path.name)
+                                    prep_runs[bids_label(subject, src_entities)] = (raw, result, prep_config)
+                                except Exception:
+                                    logger.exception("prep failed for %s", snirf_path)
+                                    raise
+
+                    post_runs: dict[str, dict] = {}
+                    if args.get("mode") is not None:
+                        post_runs = _run_post_for_subject(subject, sessions, args, toml, output_dir, roi_map=roi_map)
+
+                    # one SQM record per run, written once both passes have finished so the
+                    # post-Beer-Lambert sections can measure the files post actually produced.
+                    # The database takes one row per section, which is what its checkpoint
+                    # column has always been for.
+                    import json as _json
+                    from fnirs_pipe.qc.subject.sqm_record import SECTIONS, build_sqm_records, entities_of
+                    try:
+                        sqm_paths = build_sqm_records(
+                            sub_dir / "nirs", bids_root=bids_dir,
+                            qc_window_s=args.get("window_length", 10.0),
+                            # nothing on disk records them, so the record would otherwise be
+                            # split on the package defaults whatever this run was told
+                            sep_bands=_shared.resolved_separation_bands(args),
+                            labels=set(prep_runs))
+                    except Exception:
+                        logger.error("sub-%s | SQM records failed", subject, exc_info=True)
+                        sqm_paths = []
+                    for path in sqm_paths:
+                        logger.info("sub-%s | SQM record -> %s", subject, path.name)
+                        # the record is on disk either way; only the database rows are at risk here
+                        try:
+                            record = _json.loads(path.read_text(encoding="utf-8"))
+                            ents = entities_of(path.stem)
+                            for section in SECTIONS:
+                                if record.get(section):
+                                    _jdb.log_sqm(db_path, execution_id, subject, section,
+                                                 record[section], session=ents["ses"],
+                                                 bids_task=ents["task"])
+                        except Exception:
+                            logger.warning("sub-%s | SQM database rows failed for %s",
+                                           subject, path.name, exc_info=True)
+
+                    # one report per run: the figures, the provenance graph and the metrics all
+                    # describe a single recording, so a subject holding five tasks gets five
+                    for label, (raw, result, run_prep_config) in prep_runs.items():
+                        # rendered before the report, which embeds it: every sidecar it scans is
+                        # on disk by now, and --no-report still leaves the diagram behind
+                        provenance_path = None
+                        try:
+                            from fnirs_pipe.qc.figures.common.provenance_figure import write_provenance
+                            for path in write_provenance(
+                                sub_dir / "nirs", sub_dir / "figures" / label,
+                                stem="provenance", label=label,
+                                title=label + (f"  |  mode: {args['mode']}" if args.get("mode") else ""),
+                            ):
+                                logger.info("sub-%s | provenance -> %s", subject, path)
+                                if path.suffix == ".png":
+                                    provenance_path = f"figures/{label}/{path.name}"
+                        except Exception:
+                            logger.warning("%s | provenance graph failed", label, exc_info=True)
+
+                        if args.get("no_report"):
+                            continue
+                        post = post_runs.get(label, {})
+                        run_notes += [(label, n) for n in _emit_subject_report(
+                            subject, sub_dir, raw, result, run_prep_config, args,
+                            post.get("glm_est"), post.get("design_matrix"),
+                            alff_df=post.get("alff_df"), fc_df=post.get("fc_df"),
+                            fc_hbr_df=post.get("fc_hbr_df"), fc_seed=post.get("fc_seed") or {},
+                            fc_roi=post.get("fc_roi") or {},
+                            high_pass=cfg_high_pass, low_pass=cfg_low_pass,
+                            after_haemo=post.get("denoised"),
+                            roi_map=roi_map, provenance_path=provenance_path, sqm_label=label,
+                        ) or []]
+
+                    if not args.get("no_report") and prep_runs:
+                        from fnirs_pipe.qc.subject.subject_index import write_subject_index
+                        try:
+                            write_subject_index(subject, sub_dir, " ".join(sys.argv),
+                                                mode=_v(args["mode"]) if args.get("mode") else None)
+                        except Exception:
+                            logger.warning("sub-%s | run index failed", subject, exc_info=True)
+
+                # Recorded rather than raised: the subjects are independent and a rerun skips
+                # what finished, so one bad recording must not strand the rest of the batch.
+                except Exception as exc:
+                    subject_status = "FAILED"
+                    subject_error = str(exc)
+                    logger.exception("sub-%s | failed", subject)
+                    print(f"  [error] sub-{subject}: {exc}", file=sys.stderr)
+                    failed.append(subject)
+                finally:
+                    _jdb.log_run_end(
+                        db_path, execution_id, subject,
+                        status=subject_status,
+                        error_msg=subject_error,
+                        duration_seconds=time.monotonic() - t0,
+                    )
+
+        # Threads rather than processes: the heavy steps are numpy and MNE, which release
+        # the GIL, and one execution_id and one `failed` list stay shared without pickling.
+        n_jobs = max(1, int(args.get("n_jobs") or 1))
+        if n_jobs > 1 and len(participant_label) > 1:
+            from joblib import Parallel, delayed
+            logger.info("%d subjects over %d parallel jobs", len(participant_label), n_jobs)
+            Parallel(n_jobs=n_jobs, prefer="threads")(
+                delayed(_one)(subject) for subject in participant_label)
+        else:
+            for subject in participant_label:
+                _one(subject)
 
         _jdb.update_execution(db_path, execution_id, "FAILED" if failed else "COMPLETED")
         _log_run_notes(run_notes)
@@ -363,6 +376,23 @@ def run_participant_level(args: dict[str, Any]) -> None:
     except Exception:
         _jdb.update_execution(db_path, execution_id, "FAILED")
         raise
+
+
+@contextmanager
+def _isolate(subject: str, failed: list[str]):
+    """Record a subject's failure instead of raising it, so the rest of the batch still runs.
+
+    The inner ``try`` around the pipeline itself already does this for anything the stages
+    raise; this covers the run record, the run script and the database call that sit outside
+    it, which used to end the batch. A subject that failed inside is not listed twice.
+    """
+    try:
+        yield
+    except Exception as exc:
+        logger.exception("sub-%s | failed", subject)
+        print(f"  [error] sub-{subject}: {exc}", file=sys.stderr)
+        if subject not in failed:
+            failed.append(subject)
 
 
 def _log_run_notes(run_notes: "list[tuple[str, str]]") -> None:

@@ -1,6 +1,8 @@
 """Pipeline-wide logging setup."""
 
 import logging
+import threading
+from contextlib import contextmanager
 import sys
 from pathlib import Path
 
@@ -36,6 +38,39 @@ def setup_logging(verbose: bool = False, log_file: Path | None = None) -> None:
 
     # suppress MNE's verbose output
     logging.getLogger("mne").setLevel(logging.WARNING)
+
+
+class _ThreadFileHandler(logging.FileHandler):
+    """A log file that only takes records emitted by the thread that opened it."""
+
+    def __init__(self, log_file: Path) -> None:
+        log_file.parent.mkdir(parents=True, exist_ok=True)
+        super().__init__(log_file, mode="w", encoding="utf-8")
+        self._thread = threading.get_ident()
+        self.setLevel(logging.DEBUG)
+        self.setFormatter(logging.Formatter(_FILE_FMT, datefmt=_DATE_FMT))
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        return threading.get_ident() == self._thread
+
+
+@contextmanager
+def thread_log_file(log_file: Path):
+    """One unit's log file, added beside whatever is already configured rather than replacing it.
+
+    :func:`setup_logging` clears the root handlers, which is right for one run and wrong for
+    several at once: the second unit would take the first one's file away and its records
+    with it. This adds a handler and filters on the calling thread, so parallel units each
+    get their own file and nothing lands in two of them.
+    """
+    root = logging.getLogger("fnirs_pipe")
+    handler = _ThreadFileHandler(log_file)
+    root.addHandler(handler)
+    try:
+        yield handler
+    finally:
+        root.removeHandler(handler)
+        handler.close()
 
 
 def get_logger(name: str) -> logging.Logger:
