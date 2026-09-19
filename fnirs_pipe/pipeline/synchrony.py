@@ -1088,6 +1088,7 @@ def compute_wtc_pair_null(
     sep_bands=None,
     windows: "list[tuple[str, float, float]] | None" = None,
     analysis_window: "tuple[float, float] | None" = None,
+    on_draw: "Callable[[str, dict], None] | None" = None,
 ) -> "NullDraws":
     """Re-paired band means: WTC of one member against people they never interacted with.
 
@@ -1125,6 +1126,11 @@ def compute_wtc_pair_null(
     # fixed side's crop; without that guarantee this cache would serve stale transforms
     cache1: dict[tuple[str, str], _ChannelWavelet] = {}
     for partner_id, aligned in draws:
+        # Making a draw is the expensive half: two recordings read, aligned and cropped. Any
+        # other metric wanting the same re-paired pool has to be computed here rather than
+        # over a second pass, which would double that cost to save a few seconds of its own.
+        if on_draw is not None:
+            on_draw(partner_id, aligned)
         signals = {sid: _long_signals(raw, ch_type, sep_bands) for sid, raw in aligned.items()}
         result = _wtc_over_pairs(
             aligned, signals, fmin, fmax, significance=False, seed=None,

@@ -690,8 +690,7 @@ def run_hyper_post(
             _hyper_sidecar(
                 tsv_path, "hyper_isc_pairs",
                 [p for p in (path_from(r) for r in aligned_raws.values()) if p],
-                isc_whiten=isc_whiten, isc_max_lag_s=isc_max_lag_s,
-                isc_phase_null=isc_phase_null, seed=wtc_seed,
+                **_isc_params(), seed=wtc_seed,
                 chroma=["hbo", "hbr"], conditions=[w[0] for w in cond_windows],
                 **align_info,
             )

@@ -302,12 +302,21 @@ def run_pair_null(
     limit_scales: bool = True,
     roi_map: "dict[str, list[str]] | None" = None,
     roi_min_channels: int = 2,
+    isc_whiten: int = 0,
+    isc_max_lag_s: float = 0.0,
+    isc_band: "tuple[float | None, float | None] | None" = None,
 ) -> Path:
     """Draw, rank and write one group's re-paired null.
 
     Writes ``group-<id>_task-<task>_hyper-wtc-pairnull.tsv`` with the columns the
     phase-scrambled table has, plus the per-condition and homologous-ROI tables where the
     real side has them. Returns the whole-run path.
+
+    The re-paired ISC rides along on the same draws: making one is two recordings read,
+    aligned and cropped, and a correlation over that costs nothing beside it. It is the only
+    null the correlation has, the phase-scrambled one having the same defect here as it does
+    for the coherence and a worse one, a whole-record correlation carrying more of the shared
+    task than a band mean does.
 
     Unlike the phase-scrambled null this runs after the real table rather than around it,
     and takes its band, its mask, its frequency range and its window off that sidecar. Draw
@@ -334,6 +343,9 @@ def run_pair_null(
     mask_coi = bool(real_params["mask_coi"])
     window_s = real_params.get("analysis_window_s")
     analysis_window = tuple(window_s) if window_s else None
+
+    isc_whiten, isc_max_lag_s, isc_band = _isc_settings_of(
+        data_dir / f"{stem}-iscpairs.json", isc_whiten, isc_max_lag_s, isc_band)
 
     raws = load_group_haemo(output_dir, members, desc=desc)
     group_sqm = load_group_sqm(output_dir, members, bads_scope=bads_scope,
@@ -380,7 +392,42 @@ def run_pair_null(
     real_roi_by_cond = _real_table(data_dir / f"{stem}-wtcbycond-roihom.tsv")
 
     frames, cond_frames, roi_frames, roi_cond_frames = [], [], [], []
+    isc_frames: list = []
+    isc_cond_frames: list = []
     refused: dict[str, list[str]] = {}
+
+    def _isc_collector(ch_type: str):
+        """A callback that correlates each drawn pair, whole run and per condition."""
+        from fnirs_pipe.pipeline.synchrony import compute_isc_pairs
+
+        def _collect(partner_id: str, aligned: dict) -> None:
+            ids = [fixed_id, partner_id]
+            scopes = [(None, None)] + [(w[0], (w[1], w[2])) for w in (windows or [])]
+            for label, window in scopes:
+                try:
+                    _, _, pairs, _ = compute_isc_pairs(
+                        aligned, ids, ch_type, sep_bands, window=window,
+                        whiten=isc_whiten, max_lag_s=isc_max_lag_s, band=isc_band)
+                except Exception:
+                    logger.debug("re-paired ISC failed against %s (%s)",
+                                 partner_id, label or "whole run")
+                    continue
+                if pairs is None or pairs.empty:
+                    continue
+                # relabelled to the true pair for the reason the coherence is: every draw
+                # has a different partner, and the summary groups by sub1/sub2
+                pairs = pairs.rename(columns={"r": "coherence"})
+                pairs["sub1"], pairs["sub2"] = true_pair
+                pairs.insert(0, "chromophore", ch_type)
+                pairs["n_valid_frac"] = 1.0
+                if label is None:
+                    isc_frames.append(pairs)
+                else:
+                    pairs.insert(1, "condition", label)
+                    isc_cond_frames.append(pairs)
+
+        return _collect
+
     coverage: dict[str, dict[str, float]] = {}
     partners: list[str] = []
     for ch_type in chroma:
@@ -393,7 +440,8 @@ def run_pair_null(
             draws, true_pair, long_axis_over(aligned_real.values(), ch_type, sep_bands),
             band_fmin, band_fmax, fmin=wtc_fmin, fmax=wtc_fmax, cross=cross,
             limit_scales=limit_scales, mask_coi=mask_coi, ch_type=ch_type,
-            sep_bands=sep_bands, windows=windows, analysis_window=analysis_window)
+            sep_bands=sep_bands, windows=windows, analysis_window=analysis_window,
+            on_draw=_isc_collector(ch_type))
         partners = null.partners or []
 
         whole, by_cond = null.summarise(real=_for_chroma(real, ch_type),
@@ -453,7 +501,76 @@ def run_pair_null(
         _hyper_sidecar(path, step, sources, **extra, **params)
         logger.info("re-paired WTC table saved: %s", path)
 
+    _write_isc_null(isc_frames, isc_cond_frames, data_dir, stem, sources, params, windows,
+                    isc_whiten, isc_max_lag_s, isc_band)
     return out_path
+
+
+def _isc_settings_of(sidecar: Path, whiten: int, max_lag_s: float, band):
+    """The band, whitening and lag the real ISC used, read off its sidecar.
+
+    Taken from the file rather than the command line for the reason the coherence's band is:
+    a null computed on other settings than the table it is subtracted from is not a null of
+    anything. A tree written before those fields existed has none, and then what the caller
+    passed stands, with a line in the log saying the two were not checked against each other.
+    """
+    try:
+        params = json.loads(sidecar.read_text(encoding="utf-8")).get("parameters", {})
+    except Exception:
+        params = {}
+    if "isc_whiten_max_order" not in params:
+        logger.warning("%s records no ISC settings, so the re-paired ISC cannot be checked "
+                       "against the real one; rerun `fnirs-hyper run` to stamp them",
+                       sidecar.name)
+        return whiten, max_lag_s, band
+    stored_band = params.get("isc_band_hz")
+    return (int(params.get("isc_whiten_max_order", whiten)),
+            float(params.get("isc_max_lag_s", max_lag_s)),
+            tuple(stored_band) if stored_band else None)
+
+
+def _isc_real(path: Path, by_condition: bool) -> "pd.DataFrame | None":
+    """The true dyad's ISC in the shape the null summary ranks against, or None.
+
+    The real table carries `r`; the null's summary code is the coherence null's and keys on
+    `coherence`, so the column is renamed rather than the code duplicated. A whole-run row
+    has no condition, which is how the two halves are told apart in one file.
+    """
+    if not path.exists():
+        return None
+    real = pd.read_csv(path, sep="\t").rename(columns={"r": "coherence"})
+    if "condition" not in real.columns:
+        return None if by_condition else real
+    has_cond = real["condition"].notna()
+    part = real[has_cond] if by_condition else real[~has_cond]
+    return part.drop(columns=[] if by_condition else ["condition"]) if not part.empty else None
+
+
+def _write_isc_null(frames, cond_frames, data_dir, stem, sources, params, windows,
+                    isc_whiten, isc_max_lag_s, isc_band) -> None:
+    """Summarise the re-paired correlations and write them beside the coherence tables."""
+    from fnirs_pipe.pipeline.hyperscanning import _hyper_sidecar
+    from fnirs_pipe.pipeline.synchrony import _average_iterations
+    from fnirs_pipe.pipeline.wtc_null import write_tsv
+
+    keys = ["chromophore", "sub1", "sub2", "label", "label2"]
+    isc_params = {k: v for k, v in params.items()
+                  if k not in ("band_fmin", "band_fmax", "wtc_fmin", "wtc_fmax", "mask_coi")}
+    isc_params.update(isc_whiten_max_order=isc_whiten, isc_max_lag_s=isc_max_lag_s,
+                      isc_band_hz=list(isc_band) if isc_band else None)
+
+    for bucket, suffix, step, cond in (
+            (frames, "-isc-pairnull", "hyper_isc_pairnull", False),
+            (cond_frames, "-iscbycond-pairnull", "hyper_isc_bycondition_pairnull", True)):
+        if not bucket:
+            continue
+        real = _isc_real(data_dir / f"{stem}-iscpairs.tsv", by_condition=cond)
+        table = _average_iterations(bucket, (["condition"] if cond else []) + keys, real=real)
+        path = write_tsv(table, data_dir / f"{stem}{suffix}.tsv")
+        _hyper_sidecar(path, step, sources,
+                       **({"conditions": [w[0] for w in windows]} if cond and windows else {}),
+                       **isc_params)
+        logger.info("re-paired ISC saved: %s", path)
 
 
 def _median_coverage(coverage: dict) -> dict:

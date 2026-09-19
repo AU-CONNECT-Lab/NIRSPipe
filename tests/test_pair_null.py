@@ -128,3 +128,19 @@ def test_each_condition_is_cut_from_the_same_draw(stub):
     _, by_cond = null.summarise()
     assert sorted(set(by_cond["condition"])) == ["early", "late"]
     assert set(by_cond["n_iter"]) == {2}
+
+
+# ---- the draw hook ----
+# Making a draw is the expensive half, so any other metric over the same re-paired pool has
+# to ride along on this loop rather than run a second one. The ISC null is the first caller.
+
+def test_every_draw_reaches_the_hook(stub):
+    seen = []
+    _run(["sub-p1d03", "sub-p1d04"], on_draw=lambda pid, aligned: seen.append(pid))
+    assert seen == ["sub-p1d03", "sub-p1d04"]
+
+
+def test_the_hook_gets_the_aligned_pair_not_just_the_name(stub):
+    got = {}
+    _run(["sub-p1d03"], on_draw=lambda pid, aligned: got.update(aligned))
+    assert set(got) == {TRUE[0], "sub-p1d03"}
