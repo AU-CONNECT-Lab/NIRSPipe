@@ -320,11 +320,7 @@ QC_NOT_EXPOSED = {
             # report leaves the user looking at an empty panel with no way to tell the run
             # from a failure. It is for a batch that will be read as tables
             "--no-report",
-            # ISC follows --wtc-band-fmin/fmax unless overridden, and following it is the
-            # point: the two are averages of one coherency and comparing them needs one
-            # band. A second pair of controls could only be used to split them, with
-            # nothing on the page saying which band a given number came from
-            "--isc-fmin", "--isc-fmax",
+
             # the positive half of a paired flag, and it is the default; the checkbox emits
             # the negative one
             "--wtc-mask-coi",
@@ -358,7 +354,7 @@ _QC_FULL_OPTS = dict(
     wtc_fmin=0.004, wtc_fmax=0.2, wtc_band_fmin=0.01, wtc_band_fmax=0.1,
     wtc_mc_count=300, wtc_seed=42, isc_threshold=0.3,
     wtc_phase_null=100, wtc_roi_min_channels=2, wtc_chroma="both",
-    isc_whiten=32, isc_max_lag=2.0, isc_phase_null=100,
+    isc_whiten=32, isc_max_lag=2.0, isc_phase_null=100, isc_fmin=0.06, isc_fmax=0.15,
     hyper_task="rest",
     hyper_flags=["wtc_significance", "wtc_no_mask_coi", "wtc_channel_cross", "wtc_phase_null_cross",
                  "no_by_condition", "bads_subject", "wtc_save_maps", "no_align", "normalize",

@@ -75,6 +75,8 @@ def build_qc_args(command: str, opts: dict) -> list[str]:
         args += _num("--wtc-seed", opts.get("wtc_seed"))
         args += _num("--wtc-phase-null", opts.get("wtc_phase_null"))
         args += _num("--isc-threshold", opts.get("isc_threshold"))
+        args += _num("--isc-fmin", opts.get("isc_fmin"))
+        args += _num("--isc-fmax", opts.get("isc_fmax"))
         args += _num("--wtc-roi-min-channels", opts.get("wtc_roi_min_channels"))
         args += _num("--isc-whiten", opts.get("isc_whiten"))
         args += _num("--isc-max-lag", opts.get("isc_max_lag"))

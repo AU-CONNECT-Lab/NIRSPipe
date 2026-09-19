@@ -359,9 +359,15 @@ def run_participant_level(args: dict[str, Any]) -> None:
         n_jobs = max(1, int(args.get("n_jobs") or 1))
         if n_jobs > 1 and len(participant_label) > 1:
             from joblib import Parallel, delayed
-            logger.info("%d subjects over %d parallel jobs", len(participant_label), n_jobs)
-            Parallel(n_jobs=n_jobs, prefer="threads")(
-                delayed(_one)(subject) for subject in participant_label)
+            from threadpoolctl import threadpool_limits
+            # One BLAS thread per job. Left alone each job opens as many threads as there
+            # are cores and they fight over them: measured at 24% slower than serial on two
+            # subjects, which is the opposite of what the flag was asked for.
+            logger.info("%d subjects over %d parallel jobs, one BLAS thread each",
+                        len(participant_label), n_jobs)
+            with threadpool_limits(limits=1):
+                Parallel(n_jobs=n_jobs, prefer="threads")(
+                    delayed(_one)(subject) for subject in participant_label)
         else:
             for subject in participant_label:
                 _one(subject)

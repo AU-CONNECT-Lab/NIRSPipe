@@ -524,9 +524,12 @@ def _isc_settings_of(sidecar: Path, whiten: int, max_lag_s: float, band):
                        sidecar.name)
         return whiten, max_lag_s, band
     stored_band = params.get("isc_band_hz")
-    return (int(params.get("isc_whiten_max_order", whiten)),
-            float(params.get("isc_max_lag_s", max_lag_s)),
-            tuple(stored_band) if stored_band else None)
+    settings = (int(params.get("isc_whiten_max_order", whiten)),
+                float(params.get("isc_max_lag_s", max_lag_s)),
+                tuple(stored_band) if stored_band else None)
+    logger.info("re-paired ISC follows the real table: band %s, whitening up to AR(%d), "
+                "lag search %gs", settings[2] or "none", settings[0], settings[1])
+    return settings
 
 
 def _isc_real(path: Path, by_condition: bool) -> "pd.DataFrame | None":
