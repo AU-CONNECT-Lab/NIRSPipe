@@ -236,7 +236,7 @@ def _build_parser() -> argparse.ArgumentParser:
     out = p.add_argument_group("output")
     out.add_argument("--no-report", action="store_true", help="Skip the QC HTML report.")
     out.add_argument("--roi-mapping", type=Path, default=None,
-                     help="JSON file mapping ROI labels to lists of channel names, for ROI grouping in the report denoising carpet. Optional.")
+                     help="JSON file mapping ROI labels to lists of channel names. Groups the report denoising carpet, and in rest mode adds the ROI correlation matrix and one seed topography per ROI. Optional.")
     out.add_argument("--n-jobs", type=int, default=1, help="Parallel subject jobs.")
     out.add_argument("--work-dir", type=Path, help="Hash cache directory.")
 
