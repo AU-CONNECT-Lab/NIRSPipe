@@ -107,3 +107,57 @@ def test_a_config_file_saying_true_still_means_mean(monkeypatch, fake_raw):
     with pytest.raises(StageError):          # no short channels, which is the next check
         _short_channel_regressors(fake_raw, True)
     assert captured["called"]
+
+
+# ---- against an independent implementation, not only against itself ----
+
+def test_it_spans_the_same_subspace_as_scipys_orth():
+    """The properties above are self-consistency: any orthonormal basis of the space passes.
+
+    This pins the space itself against a routine written by somebody else. `scipy.linalg.orth`
+    is the analogue of the MATLAB `orth` both reference implementations call, so agreeing with
+    it is agreeing with them. The comparison is the projection matrix rather than the vectors,
+    because a basis is only defined up to rotation and sign inside its span and the GLM sees
+    nothing but the span.
+    """
+    from scipy.linalg import orth
+
+    data = _block(n_ch=8)
+    mine = np.array(list(_short_channel_basis(data).values())).T      # (n_times, k)
+    theirs = orth(data.T - data.T.mean(axis=0))
+
+    assert mine.shape[1] == theirs.shape[1]
+    # P = Q Q^T is the projection onto the span, identical for any basis of one subspace
+    p_mine = mine @ np.linalg.pinv(mine)
+    p_theirs = theirs @ theirs.T
+    assert np.abs(p_mine - p_theirs).max() < 1e-10
+
+
+def test_it_agrees_with_scipy_on_a_rank_deficient_block():
+    """Where the two could differ is the rank tolerance, so test it where rank is short."""
+    from scipy.linalg import orth
+
+    data = _block(n_ch=8, rank=3)
+    mine = np.array(list(_short_channel_basis(data).values())).T
+    theirs = orth(data.T - data.T.mean(axis=0))
+    assert mine.shape[1] == theirs.shape[1] == 3
+
+
+def test_the_components_are_the_principal_ones_of_the_centred_data():
+    """Against an eigendecomposition of the covariance, which is PCA's own definition.
+
+    Catches an axis mistake the span test cannot: centring the wrong dimension leaves a
+    different subspace, but so would several other slips, and this says which one is right.
+    """
+    data = _block(n_ch=5)
+    centred = data.T - data.T.mean(axis=0)
+    eigvals, eigvecs = np.linalg.eigh(np.cov(centred, rowvar=False))
+    order = np.argsort(eigvals)[::-1]
+
+    mine = np.array(list(_short_channel_basis(data).values()))
+    for i, idx in enumerate(order):
+        expected = centred @ eigvecs[:, idx]
+        expected = expected / expected.std()
+        # sign is arbitrary in both decompositions
+        assert min(np.abs(mine[i] - expected).max(),
+                   np.abs(mine[i] + expected).max()) < 1e-6, f"component {i}"

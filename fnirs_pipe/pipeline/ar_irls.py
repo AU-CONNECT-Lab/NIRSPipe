@@ -221,9 +221,14 @@ def fit_channel(y: np.ndarray, design: np.ndarray, pmax: int,
             break
 
     res = _ARIRLSModel(design, rho, fit.weights).fit(y2)
-    # both are plain attributes read at contrast time, so assigning here is what makes the
-    # t value the robust one rather than the weighted least-squares one
+    # all three are plain attributes read at contrast time, so assigning here is what makes
+    # the t value the robust one rather than the weighted least-squares one. The covariance
+    # is taken from the robust fit rather than rebuilt: a weighted normal-equation covariance
+    # misses the correction the robust estimator carries and comes out about 3% small, which
+    # lands straight on the t value. nilearn multiplies cov by dispersion on the way out, so
+    # this divides it back out and leaves MSE reading as the robust variance it is
     res.dispersion = float(fit.scale) ** 2
+    res.cov = np.asarray(fit.cov_params()) / res.dispersion
     res.df_residuals = satterthwaite_df(wx, fit.weights)
     return res
 

@@ -188,6 +188,7 @@ def run_participant_level(args: dict[str, Any]) -> None:
     )
 
     run_notes: list[tuple[str, str]] = []
+    failed: list[str] = []
 
     try:
         for subject in participant_label:
@@ -336,10 +337,14 @@ def run_participant_level(args: dict[str, Any]) -> None:
                     except Exception:
                         logger.warning("sub-%s | run index failed", subject, exc_info=True)
 
+            # Recorded rather than raised: the subjects are independent and a rerun skips
+            # what finished, so one bad recording must not strand the rest of the batch.
             except Exception as exc:
                 subject_status = "FAILED"
                 subject_error = str(exc)
-                raise
+                logger.exception("sub-%s | failed", subject)
+                print(f"  [error] sub-{subject}: {exc}", file=sys.stderr)
+                failed.append(subject)
             finally:
                 _jdb.log_run_end(
                     db_path, execution_id, subject,
@@ -348,8 +353,12 @@ def run_participant_level(args: dict[str, Any]) -> None:
                     duration_seconds=time.monotonic() - t0,
                 )
 
-        _jdb.update_execution(db_path, execution_id, "COMPLETED")
+        _jdb.update_execution(db_path, execution_id, "FAILED" if failed else "COMPLETED")
         _log_run_notes(run_notes)
+        if failed:
+            print(f"{len(failed)} of {len(participant_label)} subject(s) failed: "
+                  f"{', '.join(failed)}", file=sys.stderr)
+            raise SystemExit(1)
 
     except Exception:
         _jdb.update_execution(db_path, execution_id, "FAILED")

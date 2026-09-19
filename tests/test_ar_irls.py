@@ -246,6 +246,29 @@ def test_the_model_object_reproduces_the_robust_fit():
     assert res.dispersion == pytest.approx(rlm.scale ** 2, rel=1e-9)
 
 
+@pytest.mark.parametrize("n_bursts", [0, 10])
+def test_the_standard_error_is_the_robust_one(n_bursts):
+    """The estimate is only half of it: the t value divides by this, so a covariance rebuilt
+    from the weighted normal equations instead of taken from the robust fit is a silent 3%
+    error on every t in the run. Rebuilding it was the first version of this solver and this
+    is what caught it."""
+    rng = np.random.default_rng(19)
+    n = 4000
+    X = _task_design(n)
+    y = X @ np.array([1.0, 0.0]) + _ar_series(rng, n, [0.7, -0.2], scale=0.5)
+    for start in rng.integers(0, n - 40, size=n_bursts):
+        y[start:start + 25] += rng.choice([-1, 1]) * 8.0
+
+    res = fit_channel(y, X, pmax=20)
+    wx = whiten(X, res.model.rho)
+    wy = whiten(y.reshape(-1, 1), res.model.rho).ravel()
+    rlm = sm.RLM(wy, wx, M=sm.robust.norms.TukeyBiweight(c=4.685)).fit()
+
+    assert np.allclose(np.sqrt(np.diag(res.vcov())), rlm.bse, rtol=1e-9)
+    contrast_se = float(np.sqrt(res.vcov(matrix=np.array([1.0, 0.0]))))
+    assert contrast_se == pytest.approx(rlm.bse[0], rel=1e-9)
+
+
 # ---- does it recover the truth, and is the t value calibrated ----
 def test_it_recovers_a_known_beta_through_contaminated_ar_noise():
     rng = np.random.default_rng(14)
