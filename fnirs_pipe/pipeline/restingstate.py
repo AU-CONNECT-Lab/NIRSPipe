@@ -111,6 +111,53 @@ def compute_alff(raw: mne.io.Raw, low_pass: float, high_pass: float) -> pd.DataF
     })
 
 
+_ALFF_COLUMNS = ("alff", "falff", "malff", "zalff")
+
+
+def compute_alff_roi(alff_df: pd.DataFrame, raw: mne.io.Raw,
+                     roi_map: "dict[str, list[str]]") -> pd.DataFrame:
+    r"""ROI-level amplitude: the mean of each ROI's member channels, per chromophore.
+
+    .. math::
+
+        \overline{\mathrm{ALFF}}_A = \frac{1}{|A|} \sum_{c \in A} \mathrm{ALFF}_c
+
+    ::
+
+      alff_df (one row per channel) + {"L": ["S1_D1", ...]}
+        -> one row per (ROI, chromophore) with the four measures averaged
+
+    **The averaging happens after the measure, which is the opposite of**
+    :func:`compute_fc_roi`, and the difference is not cosmetic. An ROI mean signal carries only
+    the part its channels share, so the amplitude measured on it is the ROI's amplitude times
+    its internal coherence: it falls as the ROI grows and as its channels agree less, which
+    makes two ROIs of different size, and two subjects of different coherence, incomparable.
+    A correlation has no such problem, so that product averages first and this one does not.
+
+    ``zalff`` is the column to prefer downstream: it is already standardised within its
+    chromophore, so averaging it matches the form the reference literature reports, and HbO and
+    HbR stay on one scale. Rejected channels are dropped before averaging rather than
+    propagating NaN, the way every other ROI-level product here drops them; ``n_channels``
+    records how many survived, without which a thinly covered ROI reads like a well covered one.
+    """
+    if alff_df is None or alff_df.empty or not roi_map:
+        return pd.DataFrame()
+    by_channel = alff_df.set_index("channel")
+    rows = []
+    for chromophore in ("hbo", "hbr"):
+        for roi, picks in _roi_members(raw, roi_map, chromophore).items():
+            picks = [c for c in picks if c in by_channel.index]
+            values = by_channel.loc[picks, list(_ALFF_COLUMNS)]
+            # a channel blanked after the fact (a short channel regressed out of itself) is
+            # still a member, so count what actually carried a value rather than len(picks)
+            usable = values.dropna(how="all")
+            if usable.empty:
+                continue
+            rows.append({"roi": roi, "chromophore": chromophore, "n_channels": len(usable),
+                         **usable.mean().to_dict()})
+    return pd.DataFrame(rows, columns=["roi", "chromophore", "n_channels", *_ALFF_COLUMNS])
+
+
 def compute_fc(raw: mne.io.Raw, chromophore: str) -> pd.DataFrame:
     r"""Functional connectivity for one chromophore: channel-by-channel Pearson matrix.
 

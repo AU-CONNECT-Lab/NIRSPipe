@@ -604,7 +604,7 @@ def _write_rest_derivatives(
     bandpassed one.
     """
     from fnirs_pipe.io.derivatives import build_output_path, carry_entities
-    from fnirs_pipe.pipeline.restingstate import compute_alff
+    from fnirs_pipe.pipeline.restingstate import _roi_members, compute_alff, compute_alff_roi
 
     entities = carry_entities(source_entities)
 
@@ -627,6 +627,21 @@ def _write_rest_derivatives(
                        list(raw_resid.info["bads"]),
                        low_pass=config.low_pass, high_pass=config.high_pass)
         logger.info("sub-%s | alff -> %s", config.subject, alff_path)
+
+        if config.roi_map:
+            alff_roi_df = compute_alff_roi(alff_df, raw_resid_bb, config.roi_map)
+            if not alff_roi_df.empty:
+                alff_roi_path = build_output_path(
+                    output_dir=output_dir, subject=config.subject, session=config.session,
+                    entities=entities, suffix="alffroi", extension=".tsv",
+                )
+                alff_roi_df.to_csv(alff_roi_path, sep="	", index=False)
+                _deriv_sidecar(alff_roi_path, "alff_roi", rec.path_of(raw_resid_bb),
+                               list(raw_resid.info["bads"]),
+                               low_pass=config.low_pass, high_pass=config.high_pass,
+                               roi_channels={c: _roi_members(raw_resid_bb, config.roi_map, c)
+                                             for c in ("hbo", "hbr")})
+                logger.info("sub-%s | alff_roi -> %s", config.subject, alff_roi_path)
     else:
         logger.warning("sub-%s | skipping ALFF: --high-pass and --low-pass required", config.subject)
 

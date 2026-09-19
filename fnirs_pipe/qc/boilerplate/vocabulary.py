@@ -237,6 +237,7 @@ STEP_SUMMARY = {
     "glm_residuals": "What the model left behind, once the fitted signal was removed.",
     "glm_residuals_broadband": "The same regression without the low-pass, so fALFF keeps a full spectrum.",
     "alff": "Amplitude of low-frequency fluctuation, per channel.",
+    "alff_roi": "Amplitude of low-frequency fluctuation averaged over each ROI's channels.",
     "fc": "Channel-by-channel correlation within one chromophore.",
     "fisher_z": "Fisher r-to-z of a correlation matrix, for group-level statistics.",
     "fc_roi": "Connectivity between ROI-averaged signals.",

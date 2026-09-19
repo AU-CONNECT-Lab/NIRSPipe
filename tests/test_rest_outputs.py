@@ -159,3 +159,54 @@ def test_hbo_and_hbr_are_written_separately(rest_out):
 
     assert all(c.endswith("hbo") for c in hbo.columns)
     assert all(c.endswith("hbr") for c in hbr.columns)
+
+
+# ---- ROI amplitude ----
+
+def _alff_roi(out_dir):
+    hits = list(out_dir.rglob("*_alffroi.tsv"))
+    assert len(hits) == 1, f"expected one alffroi file, found {hits}"
+    return pd.read_csv(hits[0], sep="\t")
+
+
+def test_the_roi_amplitude_table_is_gated_on_the_roi_map(rest_out, haemo, tmp_path):
+    assert not _alff_roi(rest_out).empty
+    assert not list(_rest_run(haemo, tmp_path, roi_map=None).rglob("*_alffroi.tsv"))
+
+
+def test_one_row_per_roi_and_chromophore(rest_out, roi_map):
+    df = _alff_roi(rest_out)
+    assert set(df["chromophore"]) == {"hbo", "hbr"}
+    for chromo in ("hbo", "hbr"):
+        assert list(df[df.chromophore == chromo]["roi"]) == list(roi_map)
+
+
+def test_the_roi_value_is_the_mean_of_its_channels_not_a_measure_of_their_mean(rest_out, roi_map):
+    """The whole point of the product: averaging after the measure, not before. A value built
+    the other way round would sit well below this one."""
+    alff = pd.read_csv(next(rest_out.rglob("*_alff.tsv")), sep="\t").set_index("channel")
+    df = _alff_roi(rest_out).set_index(["chromophore", "roi"])
+
+    for roi, chans in roi_map.items():
+        expected = alff.loc[chans, "zalff"].mean()
+        assert df.loc[("hbo", roi), "zalff"] == pytest.approx(expected)
+
+
+def test_the_count_is_what_survived_screening_not_what_was_asked_for(rest_out, roi_map):
+    """Without it a thinly covered ROI reads like a well covered one. The synthetic montage
+    loses a channel out of one of the two ROIs, so the two counts differ here."""
+    alff = pd.read_csv(next(rest_out.rglob("*_alff.tsv")), sep="	").set_index("channel")
+    df = _alff_roi(rest_out)
+
+    survived = [int(alff.loc[chans, "zalff"].notna().sum()) for chans in roi_map.values()]
+    assert survived != [len(v) for v in roi_map.values()]   # the case is actually exercised
+    assert df[df.chromophore == "hbo"]["n_channels"].tolist() == survived
+
+
+def test_the_sidecar_names_the_members_of_both_chromophores(rest_out, roi_map):
+    path = next(rest_out.rglob("*_alffroi.tsv"))
+    meta = json.loads(path.with_suffix(".json").read_text())
+
+    assert meta["step"] == "alff_roi"
+    assert set(meta["parameters"]["roi_channels"]) == {"hbo", "hbr"}
+    assert list(meta["parameters"]["roi_channels"]["hbo"]) == list(roi_map)
