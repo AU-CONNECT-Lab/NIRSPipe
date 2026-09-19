@@ -28,7 +28,7 @@ length and normalised. All of them read long channels only.
 from __future__ import annotations
 
 import warnings
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from itertools import combinations
 

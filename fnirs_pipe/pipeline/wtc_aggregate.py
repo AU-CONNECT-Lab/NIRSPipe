@@ -28,7 +28,9 @@ logger = get_logger("pipeline.wtc_aggregate")
 # key carries no opinion, so listing them guards the null merges without touching the real
 # tables. null_kind is what keeps the two nulls apart if one is renamed onto the other's
 # path: they answer different questions and a table holding both answers neither
-_MUST_AGREE = ("band_fmin", "band_fmax", "mask_coi", "n_iter", "null_kind", "pair_pool")
+# n_iter is not here: it is a column of the table, not a property of one, so mixing it
+# leaves every row readable and separable. `_warn_mixed_iterations` says what it costs
+_MUST_AGREE = ("band_fmin", "band_fmax", "mask_coi", "null_kind", "pair_pool")
 
 _KINDS = {
     "wtc":                "group_hyper_wtc",
@@ -112,6 +114,33 @@ def _refuse_mixed_shapes(frames: dict[str, pd.DataFrame]) -> None:
         )
 
 
+def _warn_mixed_iterations(seen: dict[str, dict]) -> None:
+    """Warn, not refuse, when the groups' nulls rest on different numbers of draws.
+
+    Unlike a band, ``n_iter`` is a column of the merged table, so a reader can see what each
+    row rests on and split or weight by it. What it costs is the resolution of ``percentile``:
+    a null of 22 draws ranks a real value to about 5%, one of 2 draws to 50%, and one of a
+    single draw has two possible answers. Comparing percentiles across groups without looking
+    at ``n_iter`` treats those as the same number.
+
+    For the re-paired null it is worse than uneven, it is **systematic**. The pool is the
+    other groups whose recording reaches this one's length, so a long recording has few
+    stand-ins and a short one has many, and the resolution of the null ends up correlated
+    with duration. Duration also moves coherence, since a shorter transform loses a larger
+    share of its band to the cone. So the groups with the coarsest null are not a random
+    subset. Report ``n_iter`` beside any percentile drawn from this table.
+    """
+    counts = {name: params["n_iter"] for name, params in seen.items() if "n_iter" in params}
+    if len(set(counts.values())) <= 1:
+        return
+    spread = ", ".join(f"{name.split('_task-')[0]}={n}" for name, n in sorted(counts.items()))
+    logger.warning(
+        "the groups' nulls rest on %d to %d draws, so their percentile columns do not have "
+        "one resolution: %s. The merged table keeps n_iter per row; read it beside any "
+        "percentile, and see that a re-paired null's draw count tracks recording length.",
+        min(counts.values()), max(counts.values()), spread)
+
+
 def _warn_mixed_chromophores(frames: dict[str, pd.DataFrame]) -> None:
     """Warn, not refuse, when the tables do not all carry the same chromophores.
 
@@ -170,6 +199,7 @@ def aggregate_wtc(output_dir: Path, kind: str = "wtc") -> pd.DataFrame:
 
     _refuse_mixed_bands(params)
     _refuse_mixed_shapes(frames)
+    _warn_mixed_iterations(params)
     _warn_mixed_chromophores(frames)
 
     merged = pd.concat(frames.values(), ignore_index=True)

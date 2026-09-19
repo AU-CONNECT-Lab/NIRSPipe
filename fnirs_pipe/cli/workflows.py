@@ -319,7 +319,10 @@ def run_participant_level(args: dict[str, Any]) -> None:
                         if args.get("no_report"):
                             continue
                         post = post_runs.get(label, {})
-                        run_notes += [(label, n) for n in _emit_subject_report(
+                        # extend rather than +=: inside the per-subject function that is a
+                        # rebind, which makes the name local and unreadable, and several
+                        # subjects may be appending at once
+                        run_notes.extend([(label, n) for n in _emit_subject_report(
                             subject, sub_dir, raw, result, run_prep_config, args,
                             post.get("glm_est"), post.get("design_matrix"),
                             alff_df=post.get("alff_df"), fc_df=post.get("fc_df"),
@@ -328,7 +331,7 @@ def run_participant_level(args: dict[str, Any]) -> None:
                             high_pass=cfg_high_pass, low_pass=cfg_low_pass,
                             after_haemo=post.get("denoised"),
                             roi_map=roi_map, provenance_path=provenance_path, sqm_label=label,
-                        ) or []]
+                        ) or []])
 
                     if not args.get("no_report") and prep_runs:
                         from fnirs_pipe.qc.subject.subject_index import write_subject_index

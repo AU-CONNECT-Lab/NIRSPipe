@@ -15,6 +15,8 @@ iteration counts.
 import json
 
 import pandas as pd
+import logging
+
 import pytest
 
 from fnirs_pipe.cli.hyper import _build_parser
@@ -146,20 +148,38 @@ def test_one_chromophore_writes_one_set_of_rows(tmp_path, monkeypatch, make_raw)
 
 # ---- the merge guard ----
 
-def _write_null(root, gid, task, n_iter):
+def _write_null(root, gid, task, n_iter, band_fmin=0.06):
     d = root / f"group-{gid}" / "nirs"
     d.mkdir(parents=True, exist_ok=True)
     tsv = d / f"group-{gid}_task-{task}_hyper-wtc-phasenull.tsv"
+    # n_iter is a column as well as a sidecar field, which is what a merged table keeps
     pd.DataFrame({"sub1": ["a"], "sub2": ["b"], "label": ["S1_D1"],
-                  "coherence": [0.3]}).to_csv(tsv, sep="\t", index=False)
+                  "coherence": [0.3], "n_iter": [n_iter]}).to_csv(tsv, sep="\t", index=False)
     tsv.with_suffix(".json").write_text(json.dumps({"parameters": {
-        "band_fmin": 0.06, "band_fmax": 0.15, "mask_coi": True, "n_iter": n_iter}}))
+        "band_fmin": band_fmin, "band_fmax": 0.15, "mask_coi": True, "n_iter": n_iter}}))
 
 
-def test_nulls_of_different_lengths_refuse_to_merge(tmp_path):
+def test_nulls_of_different_lengths_merge_but_say_so(tmp_path, caplog):
+    """They used to be refused. n_iter is a column, so the rows survive the merge intact.
+
+    A refusal here stopped the whole cohort because one group had a coarser null, on a
+    dataset where the re-paired pool is finite and its size tracks recording length. What
+    the reader needs is the count beside the percentile, and that is in the table.
+    """
     _write_null(tmp_path, "d01", "baseline", 100)
     _write_null(tmp_path, "d02", "baseline", 5)
-    with pytest.raises(ValueError, match="n_iter"):
+    with caplog.at_level(logging.WARNING, logger="fnirs_pipe.pipeline.wtc_aggregate"):
+        merged = aggregate_wtc(tmp_path, kind="wtc-phasenull")
+    assert sorted(merged["group_id"].unique()) == ["d01", "d02"]
+    assert sorted(merged["n_iter"].unique()) == [5, 100]
+    assert any("do not have one resolution" in r.getMessage() for r in caplog.records)
+
+
+def test_a_band_still_refuses_to_merge(tmp_path):
+    """Loosening n_iter must not loosen the band: that one changes what a column means."""
+    _write_null(tmp_path, "d01", "baseline", 100)
+    _write_null(tmp_path, "d02", "baseline", 100, band_fmin=0.02)
+    with pytest.raises(ValueError, match="band_fmin"):
         aggregate_wtc(tmp_path, kind="wtc-phasenull")
 
 

@@ -278,7 +278,10 @@ def _draw_pairs(
             continue
 
         for raw in aligned.values():
-            raw.crop(tmax=float(real_duration))
+            # never past the record's own end: real_duration comes from another recording's
+            # float, and a difference of 1e-9 is enough for crop to refuse outright. The
+            # length test above already holds the draw to real_duration within tolerance.
+            raw.crop(tmax=min(float(real_duration), float(raw.times[-1])))
         if windows:
             coverage[pid] = condition_coverage(aligned[pid], windows)
         drawn += 1
