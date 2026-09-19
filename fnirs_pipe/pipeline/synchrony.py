@@ -814,7 +814,7 @@ class NullDraws:
         across the report. ``real_by_cond`` does the same for the per-condition table.
         """
         return (
-            _average_iterations(self.draws, self.keys, real=real),
+            (_average_iterations(self.draws, self.keys, real=real) if self.draws else None),
             (_average_iterations(self.cond_draws, ["condition"] + self.keys,
                                  real=real_by_cond) if self.cond_draws else None),
         )
@@ -1117,40 +1117,46 @@ def compute_wtc_pair_null(
     The pool is finite, unlike phase randomisation's, so the number of draws is a property of
     the cohort rather than a setting. That is what limits the resolution of ``percentile``.
     """
-    frames: list[pd.DataFrame] = []
+    # no whole-run list: a re-paired draw is one condition, cut from each side's own marker
     cond_frames: list[pd.DataFrame] = []
     hists: dict[tuple, np.ndarray] = {}
     partners: list[str] = []
-    # the fixed member is cut to the same window in every draw, so its transforms are
-    # computed once. The caller guarantees that by refusing a partner that would move the
-    # fixed side's crop; without that guarantee this cache would serve stale transforms
-    cache1: dict[tuple[str, str], _ChannelWavelet] = {}
-    for partner_id, aligned in draws:
-        # Making a draw is the expensive half: two recordings read, aligned and cropped. Any
-        # other metric wanting the same re-paired pool has to be computed here rather than
-        # over a second pass, which would double that cost to save a few seconds of its own.
+    # Keyed per condition as well as per channel: the fixed member's stretch is the same in
+    # every draw *of one condition* and different between conditions, so one cache across
+    # both would serve one condition's transform to another's draw
+    caches: dict[str, dict[tuple[str, str], _ChannelWavelet]] = {}
+    for partner_id, label, pair in draws:
+        # Making a draw is the expensive half: two recordings read and cut. Any other metric
+        # wanting the same re-paired pool has to be computed here rather than over a second
+        # pass, which would double that cost to save a few seconds of its own.
         if on_draw is not None:
-            on_draw(partner_id, aligned)
-        signals = {sid: _long_signals(raw, ch_type, sep_bands) for sid, raw in aligned.items()}
+            on_draw(partner_id, label, pair)
+        signals = {sid: _long_signals(raw, ch_type, sep_bands) for sid, raw in pair.items()}
         result = _wtc_over_pairs(
-            aligned, signals, fmin, fmax, significance=False, seed=None,
-            cross=cross, limit_scales=limit_scales, cache1=cache1, axis=axis)
+            pair, signals, fmin, fmax, significance=False, seed=None,
+            cross=cross, limit_scales=limit_scales,
+            cache1=caches.setdefault(label, {}), axis=axis)
         result = WTCResult(pairs={true_pair: next(iter(result.pairs.values()))},
                            freqs=result.freqs, times=result.times)
-        _collect_draw(result, frames, cond_frames, hists,
+        # the map *is* this condition, so the window is the whole of it. There is no
+        # whole-run draw to collect: the two recordings can be aligned one condition at a
+        # time or not at all, the drift between blocks being what made that necessary.
+        span = float(min(raw.times[-1] for raw in pair.values()))
+        _collect_draw(result, [], cond_frames, hists,
                       band_fmin=band_fmin, band_fmax=band_fmax,
-                      mask_coi=mask_coi, windows=windows,
-                      analysis_window=analysis_window)
-        partners.append(partner_id)
-        logger.info("re-paired WTC: draw %d against %s", len(partners), partner_id)
+                      mask_coi=mask_coi, windows=[(label, 0.0, span)],
+                      analysis_window=None)
+        if partner_id not in partners:
+            partners.append(partner_id)
+        logger.info("re-paired WTC: %s against %s", label, partner_id)
 
-    if not frames:
+    if not cond_frames:
         raise ValueError(
             "no usable partner was drawn, so there is no null. Every candidate was refused: "
             "the log says which test each one failed.")
 
-    keys = ["sub1", "sub2", "label"] + (["label2"] if "label2" in frames[0].columns else [])
-    return NullDraws(draws=frames, cond_draws=cond_frames, keys=keys,
+    keys = ["sub1", "sub2", "label"] + (["label2"] if "label2" in cond_frames[0].columns else [])
+    return NullDraws(draws=[], cond_draws=cond_frames, keys=keys,
                      levels={key: _null_level(hist) for key, hist in hists.items()},
                      partners=partners)
 

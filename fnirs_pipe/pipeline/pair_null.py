@@ -196,6 +196,107 @@ def condition_coverage(
     return out
 
 
+def _partner_condition_onsets(partner_raw, labels) -> "dict[str, float]":
+    """Where each named condition starts in the stand-in's own recording.
+
+    ``condition_windows`` numbers a repeated description ``desc#1``; the annotation it came
+    from carries the bare one, so the lookup strips the suffix. A label the stand-in never
+    entered is absent from the result rather than defaulted, and the caller refuses it.
+    """
+    from fnirs_pipe.qc.common.windows import markers_on_data_axis
+
+    markers = markers_on_data_axis(partner_raw)
+    out: dict[str, float] = {}
+    for label in labels:
+        bare = str(label).split("#")[0]
+        hit = next((m for m in markers if str(m["description"]) == bare), None)
+        if hit is not None:
+            out[label] = float(hit["onset"])
+    return out
+
+
+def _draw_condition_pairs(
+    output_dir: Path,
+    task: str,
+    fixed_id: str,
+    fixed_raw,
+    candidates: list,
+    *,
+    desc: str,
+    bads_scope: str,
+    scope_tasks: "list[str] | None",
+    windows: "list[tuple[str, float, float]]",
+    n_max: "int | None",
+    refused: dict,
+):
+    """Yield ``(partner_id, label, {fixed: segment, partner: segment})``, both the same length.
+
+    Each condition is taken from **the stand-in's own onset**, not from where it sat in the
+    real dyad's clock. Sessions that run to one timetable drift: the first trigger lines up
+    by construction and the gaps between blocks do not, so by the last condition the two
+    recordings are a quarter of a block apart. Cutting the stand-in at the real dyad's window
+    would then correlate one person's conversation against another's silence and call it a
+    null, which reads as "no coupling" for a reason that has nothing to do with coupling.
+
+    Taking each side from its own marker makes every draw the same length as the condition it
+    stands in for, so the whole-record duration stops mattering: it used to have to reach the
+    real dyad's, which on a cohort with a 338 s spread left the longest sessions with no
+    stand-ins at all.
+    """
+    from fnirs_pipe.pipeline.group_io import load_group_haemo
+    from fnirs_pipe.pipeline.group_quality import apply_group_bads, load_group_sqm
+
+    drawn = 0
+    for entry in candidates:
+        if n_max is not None and drawn >= n_max:
+            logger.info("stopping at %d stand-ins, the limit asked for", drawn)
+            break
+        pid = entry.subject_id
+        try:
+            partner = load_group_haemo(output_dir, [entry], desc=desc)
+        except Exception as exc:
+            refused.setdefault("unreadable", []).append(pid)
+            logger.debug("%s refused as a stand-in: %s", pid, exc)
+            continue
+
+        partner_raw = next(iter(partner.values()))
+        if abs(float(partner_raw.info["sfreq"]) - float(fixed_raw.info["sfreq"])) > 1e-6:
+            refused.setdefault("sampling_rate", []).append(pid)
+            continue
+
+        try:
+            apply_group_bads(partner, load_group_sqm(output_dir, [entry], bads_scope=bads_scope,
+                                                     scope_tasks=scope_tasks))
+        except Exception as exc:
+            refused.setdefault("no_quality_record", []).append(pid)
+            logger.warning("%s refused as a stand-in, no quality record: %s", pid, exc)
+            continue
+
+        onsets = _partner_condition_onsets(partner_raw, [w[0] for w in windows])
+        end = float(partner_raw.times[-1])
+        segments = []
+        for label, t0, t1 in windows:
+            span = float(t1) - float(t0)
+            start = onsets.get(label)
+            if start is None:
+                refused.setdefault(f"no_{label}", []).append(pid)
+                continue
+            if start + span > end + _DURATION_TOL_S:
+                # the stand-in's own block is shorter than the real one, so there is no
+                # equal-length stretch of it to stand in
+                refused.setdefault(f"short_{label}", []).append(pid)
+                continue
+            segments.append((label, start, span, float(t0)))
+
+        if not segments:
+            continue
+        drawn += 1
+        for label, start, span, real_t0 in segments:
+            pair = {fixed_id: fixed_raw.copy().crop(tmin=real_t0, tmax=real_t0 + span),
+                    pid: partner_raw.copy().crop(tmin=start, tmax=start + span)}
+            yield pid, label, pair
+
+
 def _draw_pairs(
     output_dir: Path,
     task: str,
@@ -360,12 +461,10 @@ def run_pair_null(
     fixed_id = members[0].subject_id
     true_pair = (members[0].subject_id, members[1].subject_id)
     aligned_duration = min(float(r.times[-1]) for r in aligned_real.values())
-    # what a stand-in has to cover is what the real table describes, which is the analysis
-    # window when there is one rather than the whole aligned recording. Demanding the whole
-    # recording refuses partners whose recording reaches every sample actually compared, and
-    # it takes away the one route out of a cohort whose usable lengths differ: pinning every
-    # dyad to a common --tstart/--tend
-    real_duration = float(analysis_window[1]) if analysis_window else aligned_duration
+    # A stand-in no longer has to match the whole recording's length: each condition is cut
+    # from its own marker on both sides, so what has to agree is the block, and the blocks
+    # are what the trigger defines. That is what lets a cohort whose sessions differ by
+    # minutes draw from its whole pool rather than only from the sessions that ran longer.
     recorded = real_params.get("aligned_duration_s")
     if recorded is not None and abs(float(recorded) - aligned_duration) > _DURATION_TOL_S:
         # the tree moved under the table: the null would describe a different stretch
@@ -389,12 +488,11 @@ def run_pair_null(
             lo, hi = analysis_window
             windows = [w for w in windows if w[1] >= lo and w[2] <= hi]
 
-    real = _real_table(data_dir / f"{stem}-wtc.tsv")
+    # the whole-run tables are not read: this null has no whole-run half to rank against
     real_by_cond = _real_table(data_dir / f"{stem}-wtcbycond.tsv")
-    real_roi = _real_table(data_dir / f"{stem}-wtc-roihom.tsv")
     real_roi_by_cond = _real_table(data_dir / f"{stem}-wtcbycond-roihom.tsv")
 
-    frames, cond_frames, roi_frames, roi_cond_frames = [], [], [], []
+    cond_frames, roi_cond_frames = [], []
     isc_frames: list = []
     isc_cond_frames: list = []
     refused: dict[str, list[str]] = {}
@@ -403,17 +501,17 @@ def run_pair_null(
         """A callback that correlates each drawn pair, whole run and per condition."""
         from fnirs_pipe.pipeline.synchrony import compute_isc_pairs
 
-        def _collect(partner_id: str, aligned: dict) -> None:
+        def _collect(partner_id: str, label: str, pair: dict) -> None:
             ids = [fixed_id, partner_id]
-            scopes = [(None, None)] + [(w[0], (w[1], w[2])) for w in (windows or [])]
-            for label, window in scopes:
+            # the pair *is* the condition, cut from each side's own marker, so there is no
+            # window to take out of it and no whole-run scope to add
+            for _ in (0,):
                 try:
                     _, _, pairs, _ = compute_isc_pairs(
-                        aligned, ids, ch_type, sep_bands, window=window,
+                        pair, ids, ch_type, sep_bands, window=None,
                         whiten=isc_whiten, max_lag_s=isc_max_lag_s, band=isc_band)
                 except Exception:
-                    logger.debug("re-paired ISC failed against %s (%s)",
-                                 partner_id, label or "whole run")
+                    logger.debug("re-paired ISC failed against %s (%s)", partner_id, label)
                     continue
                 if pairs is None or pairs.empty:
                     continue
@@ -423,22 +521,18 @@ def run_pair_null(
                 pairs["sub1"], pairs["sub2"] = true_pair
                 pairs.insert(0, "chromophore", ch_type)
                 pairs["n_valid_frac"] = 1.0
-                if label is None:
-                    isc_frames.append(pairs)
-                else:
-                    pairs.insert(1, "condition", label)
-                    isc_cond_frames.append(pairs)
+                pairs.insert(1, "condition", label)
+                isc_cond_frames.append(pairs)
 
         return _collect
 
     coverage: dict[str, dict[str, float]] = {}
     partners: list[str] = []
     for ch_type in chroma:
-        draws = _draw_pairs(
-            output_dir, task, fixed_id, raws[fixed_id], candidates, desc=desc,
-            bads_scope=bads_scope, scope_tasks=scope_tasks, real_duration=real_duration,
-            real_offset=float(offsets[fixed_id]), n_max=n_max, refused=refused,
-            coverage=coverage, windows=windows)
+        draws = _draw_condition_pairs(
+            output_dir, task, fixed_id, aligned_real[fixed_id], candidates, desc=desc,
+            bads_scope=bads_scope, scope_tasks=scope_tasks, windows=windows,
+            n_max=n_max, refused=refused)
         null = compute_wtc_pair_null(
             draws, true_pair, long_axis_over(aligned_real.values(), ch_type, sep_bands),
             band_fmin, band_fmax, fmin=wtc_fmin, fmax=wtc_fmax, cross=cross,
@@ -447,9 +541,11 @@ def run_pair_null(
             on_draw=_isc_collector(ch_type))
         partners = null.partners or []
 
-        whole, by_cond = null.summarise(real=_for_chroma(real, ch_type),
-                                        real_by_cond=_for_chroma(real_by_cond, ch_type))
-        for part, bucket in ((whole, frames), (by_cond, cond_frames)):
+        _, by_cond = null.summarise(real=None,
+                                    real_by_cond=_for_chroma(real_by_cond, ch_type))
+        # no whole-run row: the two recordings are aligned one condition at a time, so there
+        # is no stretch of them that stands in for the whole session
+        for part, bucket in ((by_cond, cond_frames),):
             if part is not None:
                 part = part.copy()
                 # labelled after the grouping, never before: the summary groups by the
@@ -458,11 +554,11 @@ def run_pair_null(
                 bucket.append(part)
 
         if roi_map:
-            roi_whole, roi_cond = null.summarise_roi(
-                roi_map, real=_for_chroma(real_roi, ch_type),
+            _, roi_cond = null.summarise_roi(
+                roi_map, real=None,
                 real_by_cond=_for_chroma(real_roi_by_cond, ch_type),
                 min_channels=roi_min_channels)
-            for part, bucket in ((roi_whole, roi_frames), (roi_cond, roi_cond_frames)):
+            for part, bucket in ((roi_cond, roi_cond_frames),):
                 if part is not None:
                     part = part.copy()
                     part.insert(0, "chromophore", ch_type)
@@ -479,22 +575,23 @@ def run_pair_null(
         chroma=list(chroma), null_kind="repaired", pair_pool=pool,
         pair_partners=sorted(partners), pair_candidates=len(candidates),
         pair_refused={reason: sorted(set(subs)) for reason, subs in sorted(refused.items())},
-        **({"cond_overlap": _median_coverage(coverage)} if coverage else {}),
+        # no cond_overlap: each side is cut at its own marker, so the overlap is 1 by
+        # construction rather than something the run has to report
+        pair_align="per-condition-marker",
         **wtc_grid_params(aligned_real),
         # the null is subtracted from the real table row by row, so the two have to say
         # they were built on the same clock for that subtraction to mean anything
         **alignment_params(aligned_real),
     )
 
-    out_path = write_tsv(pd.concat(frames, ignore_index=True),
-                         data_dir / f"{stem}-wtc-pairnull.tsv")
-    _hyper_sidecar(out_path, "hyper_wtc_pairnull", sources, **params)
-    logger.info("re-paired WTC band means saved: %s", out_path)
-
+    # Per condition only. A whole-run re-paired null would mean cutting the stand-in at the
+    # real dyad's clock, and the sessions drift apart between blocks, so that table used to
+    # correlate one person's conversation against another's game and rank a real value
+    # against it.
+    out_path = None
     for bucket, suffix, step, extra in (
             (cond_frames, "-wtcbycond-pairnull", "hyper_wtc_bycondition_pairnull",
              {"conditions": [w[0] for w in windows]}),
-            (roi_frames, "-wtc-roihom-pairnull", "hyper_wtc_roihom_pairnull", {}),
             (roi_cond_frames, "-wtcbycond-roihom-pairnull",
              "hyper_wtc_bycondition_roihom_pairnull",
              {"conditions": [w[0] for w in windows]})):
@@ -503,6 +600,12 @@ def run_pair_null(
         path = write_tsv(pd.concat(bucket, ignore_index=True), data_dir / f"{stem}{suffix}.tsv")
         _hyper_sidecar(path, step, sources, **extra, **params)
         logger.info("re-paired WTC table saved: %s", path)
+        out_path = out_path or path
+
+    if out_path is None:
+        raise ValueError(
+            "no usable stand-in was drawn for any condition, so there is no null. The log "
+            "says which test each candidate failed.")
 
     _write_isc_null(isc_frames, isc_cond_frames, data_dir, stem, sources, params, windows,
                     isc_whiten, isc_max_lag_s, isc_band)

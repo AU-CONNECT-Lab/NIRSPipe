@@ -51,37 +51,47 @@ def stub(monkeypatch):
     return seen
 
 
-def _draws(partners):
-    return [(p, {TRUE[0]: object(), p: object()}) for p in partners]
+class _Seg:
+    """Stands in for a cropped Raw: the loop only asks it how long it is."""
+
+    def __init__(self, span=39.0):
+        self.times = np.array([0.0, span])
 
 
-def _run(partners, axis=("S1_D1", "S1_D2"), **kwargs):
-    return compute_wtc_pair_null(_draws(partners), TRUE, list(axis), 0.02, 0.30, **kwargs)
+def _draws(partners, labels=("early",)):
+    """One entry per (partner, condition), which is what drawing per condition yields."""
+    return [(p, label, {TRUE[0]: _Seg(), p: _Seg()})
+            for p in partners for label in labels]
+
+
+def _run(partners, axis=("S1_D1", "S1_D2"), labels=("early",), **kwargs):
+    return compute_wtc_pair_null(_draws(partners, labels), TRUE, list(axis),
+                                 0.02, 0.30, **kwargs)
 
 
 # ---- the pair key ----
 
 def test_every_draw_lands_on_the_real_dyads_row(stub):
     null = _run(["sub-p2d02", "sub-p2d03", "sub-p2d04"])
-    whole, _ = null.summarise()
-    assert set(whole["sub1"]) == {TRUE[0]}
-    assert set(whole["sub2"]) == {TRUE[1]}
+    _, by_cond = null.summarise()
+    assert set(by_cond["sub1"]) == {TRUE[0]}
+    assert set(by_cond["sub2"]) == {TRUE[1]}
 
 
 def test_the_draws_are_averaged_rather_than_kept_apart(stub):
     """Three partners give one row per channel with n_iter 3, not three rows of one."""
     null = _run(["sub-p2d02", "sub-p2d03", "sub-p2d04"])
-    whole, _ = null.summarise()
-    assert len(whole) == 2                       # one row per channel on the axis
-    assert set(whole["n_iter"]) == {3}
+    _, by_cond = null.summarise()
+    assert len(by_cond) == 2                     # one row per channel on the axis
+    assert set(by_cond["n_iter"]) == {3}
     # 0.1, 0.2, 0.3 really averaged, not the last draw standing alone
-    assert whole["null_mean"].tolist() == pytest.approx([0.2, 0.2])
+    assert by_cond["null_mean"].tolist() == pytest.approx([0.2, 0.2])
 
 
 def test_a_partners_own_id_never_reaches_the_table(stub):
     null = _run(["sub-p2d02"])
-    whole, _ = null.summarise()
-    assert "sub-p2d02" not in set(whole["sub1"]) | set(whole["sub2"])
+    _, by_cond = null.summarise()
+    assert "sub-p2d02" not in set(by_cond["sub1"]) | set(by_cond["sub2"])
 
 
 def test_who_each_draw_was_against_is_kept(stub):
@@ -101,8 +111,8 @@ def test_the_real_dyads_axis_is_used_for_every_draw(stub):
 def test_a_label_no_stand_in_carries_still_gets_a_row(stub):
     """A blank row keeps the null subtractable from the real table row by row."""
     null = _run(["sub-p2d02"], axis=("S1_D1", "S1_D2", "S9_D9"))
-    whole, _ = null.summarise()
-    assert sorted(whole["label"]) == ["S1_D1", "S1_D2", "S9_D9"]
+    _, by_cond = null.summarise()
+    assert sorted(by_cond["label"]) == ["S1_D1", "S1_D2", "S9_D9"]
 
 
 # ---- refusals ----
@@ -122,12 +132,25 @@ def test_a_per_frequency_level_is_drawn_for_the_real_pair(stub):
 
 # ---- the conditions ----
 
-def test_each_condition_is_cut_from_the_same_draw(stub):
-    null = _run(["sub-p2d02", "sub-p2d03"],
-                windows=[("early", 0.0, 19.0), ("late", 20.0, 39.0)])
+def test_each_condition_gets_its_own_draw(stub):
+    """Each condition is its own pair of segments, cut at each side's own marker.
+
+    They used to be windowed out of one whole-record draw, which needed both sessions on
+    one timetable. They drift, so the window that held one dyad's conversation held part of
+    another's game, and the null was of that overlap rather than of the condition.
+    """
+    null = _run(["sub-p2d02", "sub-p2d03"], labels=("early", "late"))
     _, by_cond = null.summarise()
     assert sorted(set(by_cond["condition"])) == ["early", "late"]
     assert set(by_cond["n_iter"]) == {2}
+
+
+def test_no_whole_run_draw_is_collected(stub):
+    """There is no stretch standing in for the whole session, so that half stays empty."""
+    null = _run(["sub-p2d02"], labels=("early", "late"))
+    whole, by_cond = null.summarise()
+    assert whole is None
+    assert by_cond is not None and len(by_cond)
 
 
 # ---- the draw hook ----
@@ -136,11 +159,13 @@ def test_each_condition_is_cut_from_the_same_draw(stub):
 
 def test_every_draw_reaches_the_hook(stub):
     seen = []
-    _run(["sub-p1d03", "sub-p1d04"], on_draw=lambda pid, aligned: seen.append(pid))
+    _run(["sub-p1d03", "sub-p1d04"], on_draw=lambda pid, label, pair: seen.append(pid))
     assert seen == ["sub-p1d03", "sub-p1d04"]
 
 
-def test_the_hook_gets_the_aligned_pair_not_just_the_name(stub):
-    got = {}
-    _run(["sub-p1d03"], on_draw=lambda pid, aligned: got.update(aligned))
-    assert set(got) == {TRUE[0], "sub-p1d03"}
+def test_the_hook_gets_the_condition_and_the_pair(stub):
+    got = []
+    _run(["sub-p1d03"], labels=("early", "late"),
+         on_draw=lambda pid, label, pair: got.append((label, sorted(pair))))
+    assert got == [("early", sorted([TRUE[0], "sub-p1d03"])),
+                   ("late", sorted([TRUE[0], "sub-p1d03"]))]
