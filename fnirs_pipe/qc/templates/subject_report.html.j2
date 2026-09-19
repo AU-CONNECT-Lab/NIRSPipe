@@ -440,13 +440,6 @@
               style="height:{{ rest_fc_roi_h }}px"></iframe>
       <p class="fig-path">{{ rest_fc_roi_path }}</p>
     {% endif %}
-    {% if rest_fc_circle_path %}
-      <h3>Connectogram</h3>
-      <p class="step-desc">{{ section_note('fc.connectogram') }}</p>
-      <iframe class="plotly-frame" src="{{ rest_fc_circle_path }}" title="FC connectogram"
-              style="height:{{ rest_fc_circle_h }}px"></iframe>
-      <p class="fig-path">{{ rest_fc_circle_path }}</p>
-    {% endif %}
     {% if rest_fc_seed_path %}
       <h3>Seed topography</h3>
       <p class="step-desc">{{ section_note('fc.seed_topography') }}</p>

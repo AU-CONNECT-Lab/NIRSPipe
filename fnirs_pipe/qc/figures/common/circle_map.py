@@ -1,15 +1,14 @@
-"""The circle every connectogram in the reports is drawn on.
+"""The circle the inter-brain connectogram is drawn on.
 
 Where a node sits, how a chord between two of them bows, and how a node's label is set
-against the ring. One subject's channels against each other and two members' against each
-other are different matrices but the same picture, and a reader who has learned one should
-not have to learn the other.
+against the ring. The geometry is kept apart from the figure that fills it so a second
+circle, should one earn its place, starts from this one rather than from a fresh copy.
 
 Groups are separated by blank circle rather than by a drawn rule: the gap is visible before
-any label is read, and it costs no ink. A dyad circle has two groups, the two members; a
-subject circle has one per source. **Neither colours its nodes by group.** Position already
-separates them, so hue would repeat what the gaps say and spend the reader's colour budget
-on it; the chords need that budget for their value.
+any label is read, and it costs no ink. A dyad circle has two groups, the two members.
+**Nodes carry no colour of their own.** Position already separates the groups, so hue would
+repeat what the gaps say and spend the reader's colour budget on it; the chords need that
+budget for their value.
 """
 
 from __future__ import annotations
@@ -17,10 +16,8 @@ from __future__ import annotations
 import numpy as np
 import plotly.graph_objects as go
 
-# Degrees of blank circle between groups. Two members face each other across a wide split;
-# a subject's sources are many and small, so theirs is narrower or the ring is all gap.
+# Degrees of blank circle between groups: the two members face each other across the split.
 DYAD_GAP = 12.0
-SOURCE_GAP = 5.0
 
 NODE_INK = "#8d9aa6"
 LABEL_INK = "#2c3e50"

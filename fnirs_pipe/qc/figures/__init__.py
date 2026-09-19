@@ -45,7 +45,6 @@ from fnirs_pipe.qc.figures.subject.rest_figures import (
     fc_roi_matrix_figure,
     fc_seed_topo_figure,
 )
-from fnirs_pipe.qc.figures.subject.connectogram import fc_connectogram
 
 __all__ = [
     "build_ts_figure",
@@ -92,5 +91,4 @@ __all__ = [
     "rest_channel_panel",
     "fc_roi_matrix_figure",
     "fc_seed_topo_figure",
-    "fc_connectogram",
 ]
