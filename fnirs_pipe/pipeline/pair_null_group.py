@@ -67,7 +67,7 @@ def _homologous(frame: pd.DataFrame) -> pd.DataFrame:
 
 def _variants(draws: pd.DataFrame, real: pd.DataFrame, roi_map: "dict | None",
               min_channels: int = 2):
-    """Every aggregate the draws on disk can support, as (level, pairings, draws, real).
+    """Every aggregate the draws support, as (granularity, level, pairings, draws, real).
 
     Emitted rather than selected, because which ones exist is a property of the draws and not
     a choice: all 196 pairings only if the null was drawn crossed, regions only if a mapping
@@ -75,7 +75,7 @@ def _variants(draws: pd.DataFrame, real: pd.DataFrame, roi_map: "dict | None",
     implementation used will one day forget it.
     """
     hom_d, hom_r = _homologous(draws), _homologous(real)
-    yield "whole", "homologous", hom_d, hom_r
+    yield "whole", "whole", "homologous", hom_d, hom_r
     # a NaN label2 is a homologous table concatenated beside a crossed one, not a crossed
     # pairing: comparing against NaN is always unequal and would count it as crossed
     crossed = {o for o, part in draws.groupby("occasion")
@@ -92,13 +92,22 @@ def _variants(draws: pd.DataFrame, real: pd.DataFrame, roi_map: "dict | None",
                            "homologous level, which every occasion supports",
                            len(short), draws["occasion"].nunique(), ", ".join(short))
         else:
-            yield "whole", "all", draws, real
+            yield "whole", "whole", "all", draws, real
     for name, channels in (roi_map or {}).items():
         d = hom_d[hom_d["label"].isin(channels)]
         r = hom_r[hom_r["label"].isin(channels)]
         # a thinly covered region is not a region; Nguyen and Miller average the pairings
         if d["label"].nunique() >= min_channels and r["label"].nunique() >= min_channels:
-            yield name, "homologous", d, r
+            yield "roi", name, "homologous", d, r
+    # one test per channel pairing, pooled over occasions, which is the granularity the
+    # field reports at: 27 of 30 WTC studies take the channel pair as the unit and test it
+    # across their sample. Ours is a permutation rather than a t test, the sample being
+    # occasions rather than independent dyads, but the cell is the same cell
+    for label in sorted(hom_d["label"].unique()):
+        d = hom_d[hom_d["label"] == label]
+        r = hom_r[hom_r["label"] == label]
+        if not d.empty and not r.empty:
+            yield "channel", label, "homologous", d, r
 
 
 def _read_tree(output_dir: Path, suffix: str, task: str, chroma: str,
@@ -261,21 +270,24 @@ def write_group_null(output_dir: Path, task: str = "full", chroma: str = "hbo",
     sources = sorted(set(draws.source) | set(real.source))
 
     occ_parts, coh_parts = [], []
-    for level, pairings, d, r in _variants(draws, real, roi_map):
-        logger.info("%s null, level %s over %s pairings: %d occasions, %d channels",
-                    null, level, pairings, d.occasion.nunique(), d.label.nunique())
-        occ_parts.append(by_occasion(d, r).assign(level=level, pairings=pairings))
-        coh_parts.append(by_cohort(d, r, n_resample=n_resample, seed=seed)
-                         .assign(level=level, pairings=pairings))
+    for gran, level, pairings, d, r in _variants(draws, real, roi_map):
+        if gran != "channel":
+            logger.info("%s null, level %s over %s pairings: %d occasions, %d channels",
+                        null, level, pairings, d.occasion.nunique(), d.label.nunique())
+        tag = dict(granularity=gran, level=level, pairings=pairings)
+        occ_parts.append(by_occasion(d, r).assign(**tag))
+        coh_parts.append(by_cohort(d, r, n_resample=n_resample, seed=seed).assign(**tag))
+    n_ch = sum(1 for p in coh_parts if (p["granularity"] == "channel").all())
+    logger.info("%s null, and one level per channel pairing: %d of them", null, n_ch)
 
     def tidy(parts):
         out = pd.concat(parts, ignore_index=True)
-        front = ["level", "pairings", "condition"]
+        front = ["granularity", "level", "pairings", "condition"]
         return out[front + [c for c in out.columns if c not in front]]
 
     params = dict(null_kind=null, chroma=chroma, task=task,
                   n_resample=n_resample, seed=seed,
-                  levels=sorted({p for p in pd.concat(coh_parts).level.unique()}),
+                  granularities=sorted(pd.concat(coh_parts).granularity.unique()),
                   statistic="mean over channel pairings, then over occasions",
                   cell_fdr_family="one condition and level, over occasions and pairings")
     cells = by_cell(output_dir, task, chroma, null)

@@ -12,6 +12,8 @@ All notable changes to this project will be documented in this file.
 ## [0.45.0] - 2026-09-19
 
 ### Added
+- `fnirs-hyper group-null` tests a null above the cell, per occasion and over the cohort, at every granularity the draws support: channel, region, whole brain, and whole brain over all pairings where the null was drawn crossed
+- The per-cell tests carry a Benjamini-Hochberg `q`, one family per condition and granularity. Nothing corrected for multiple comparisons before
 - `fnirs-hyper pair-null` writes the individual draws as `hyper-wtcbycond-pairnull-draws.tsv`, beside the summary
 - `fnirs-hyper pair-null` also writes a re-paired null for the correlation, `hyper-isc-pairnull.tsv` and `hyper-iscbycond-pairnull.tsv`
 - `--isc-fmin` / `--isc-fmax` set the band the inter-subject correlation reads; a run says so when the coherence is on another band
@@ -22,6 +24,7 @@ All notable changes to this project will be documented in this file.
 - Every stage's sidecar records the separation bands the run used
 
 ### Fixed
+- `--wtc-cond-transform` put the real per-condition tables and their phase-scrambled null on different routes, silently. The combination is now refused
 - mALFF and zALFF were biased on any run where one short channel was the whole short-channel regressor. The ROI amplitude table inherited it
 - The re-paired null was read off a shorter stretch of its draws than the real table is read off its own. Both now measure the same window
 - `fnirs-hyper pair-null` died on a dyad rather than returning a null

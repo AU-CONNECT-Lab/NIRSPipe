@@ -156,29 +156,31 @@ def test_the_phase_nulls_draws_are_read_the_same_way(tmp_path):
 ROI = {"front": ["S1_D1", "S1_D2"], "back": ["S2_D1", "S2_D2"], "thin": ["S1_D1"]}
 
 
-def test_a_homologous_draw_offers_the_whole_brain_level_only():
-    got = [(lv, pr) for lv, pr, _, _ in _variants(_draws(), _real(0.4), None)]
-    assert got == [("whole", "homologous")]
+def test_a_homologous_draw_offers_the_whole_brain_level_and_its_channels():
+    got = [(g, lv) for g, lv, _, _, _ in _variants(_draws(), _real(0.4), None)]
+    assert got[0] == ("whole", "whole")
+    assert [lv for g, lv in got if g == "channel"] == CHANNELS
 
 
 def test_a_crossed_draw_also_offers_every_pairing():
     d = _draws().assign(label2=lambda f: f.label)
     crossed = pd.concat([d, d.assign(label2="S9_D9", coherence=0.9)])
-    got = [(lv, pr) for lv, pr, _, _ in _variants(crossed, crossed, None)]
-    assert got == [("whole", "homologous"), ("whole", "all")]
+    got = [(g, lv, pr) for g, lv, pr, _, _ in _variants(crossed, crossed, None)]
+    assert got[:2] == [("whole", "whole", "homologous"), ("whole", "whole", "all")]
 
 
 def test_a_region_map_adds_one_level_per_region_that_has_the_channels():
-    got = [(lv, pr) for lv, pr, _, _ in _variants(_draws(), _real(0.4), ROI)]
-    assert got == [("whole", "homologous"), ("front", "homologous"), ("back", "homologous")]
+    got = [lv for g, lv, _, _, _ in _variants(_draws(), _real(0.4), ROI) if g == "roi"]
+    assert got == ["front", "back"]          # "thin" has one channel, below min_channels
 
 
-def test_the_written_tables_carry_the_level_and_the_pairings(tmp_path):
+def test_the_written_tables_carry_the_granularity_and_the_pairings(tmp_path):
     _write_tree(tmp_path)
     written = write_group_null(tmp_path, roi_map=ROI, n_resample=500, seed=3)
     cohort = pd.read_csv(written[1], sep="	")
-    assert list(cohort.columns[:3]) == ["level", "pairings", "condition"]
-    assert set(cohort.level) == {"whole", "front", "back"}
+    assert list(cohort.columns[:4]) == ["granularity", "level", "pairings", "condition"]
+    assert set(cohort.granularity) == {"whole", "roi", "channel"}
+    assert set(cohort[cohort.granularity == "channel"].level) == set(CHANNELS)
     assert set(cohort.pairings) == {"homologous"}
 
 
