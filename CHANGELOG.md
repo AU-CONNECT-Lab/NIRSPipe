@@ -4,13 +4,26 @@ All notable changes to this project will be documented in this file.
 
 <!-- Format: Keep a Changelog (https://keepachangelog.com/en/1.0.0/) -->
 
-## [Unreleased]
+## [0.45.0] - 2026-09-19
 
 ### Added
 - `fnirs-hyper pair-null` writes the individual draws as `hyper-wtcbycond-pairnull-draws.tsv`, beside the summary
 - `fnirs-hyper pair-null` also writes a re-paired null for the correlation, `hyper-isc-pairnull.tsv` and `hyper-iscbycond-pairnull.tsv`
 - `--isc-fmin` / `--isc-fmax` set the band the inter-subject correlation reads; a run says so when the coherence is on another band
 - `--n-jobs` runs subjects in parallel in `fnirs-pipe participant`, where it was accepted and ignored
+
+### Changed
+- The HbO-HbR panel no longer draws a pass line at r = -0.3, and the metric table no longer grades that number
+- Every stage's sidecar records the separation bands the run used
+
+### Fixed
+- mALFF and zALFF were biased on any run where one short channel was the whole short-channel regressor. The ROI amplitude table inherited it
+- The re-paired null was read off a shorter stretch of its draws than the real table is read off its own. Both now measure the same window
+- `fnirs-hyper pair-null` died on a dyad rather than returning a null
+
+## [0.44.0] - 2026-09-18
+
+### Added
 - `--noise-model ar_irls` alternates autoregressive whitening with a robust refit, so residual motion carries less weight. Slower; `auto` stays the default
 - The dyad coherence tables carry the relative phase: `phase_angle`, `phase_sd` and `phase_n`, positive meaning the first member leads
 - The per-frequency phase is written to `hyper-wtc-phasescale.tsv` and `hyper-wtcbycond-phasescale.tsv`, each with a `lag_s` column
@@ -23,8 +36,6 @@ All notable changes to this project will be documented in this file.
 - The separation bands can be set in a `--config` TOML instead of on every command line
 
 ### Changed
-- The HbO-HbR panel no longer draws a pass line at r = -0.3, and the metric table no longer grades that number
-- Every stage's sidecar records the separation bands the run used
 - The rest report's channel matrix and its ALFF bar chart are one panel, on one channel order
 - A correlation matrix is drawn as a triangle, with its tick labels against the matrix
 - One correlation colour scale serves the whole report, and the ROI matrix is interactive
@@ -35,9 +46,6 @@ All notable changes to this project will be documented in this file.
 - A condition page's denoising carpet no longer quotes an SD ratio measured over the whole recording
 
 ### Fixed
-- mALFF and zALFF were biased on any run where one short channel was the whole short-channel regressor. The ROI amplitude table inherited it
-- The re-paired null was read off a shorter stretch of its draws than the real table is read off its own. Both now measure the same window
-- `fnirs-hyper pair-null` died on a dyad rather than returning a null
 - One bad recording no longer strands every subject queued behind it; the batch finishes and exits non-zero naming what failed
 - `--roi-mapping` help named the denoising carpet only, not the ROI correlation matrix or the seed topographies
 - A short channel could be regressed out of itself, and its ALFF and correlations reached the tables. They are blank now, and the run says which channel

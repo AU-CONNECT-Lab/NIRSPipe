@@ -512,6 +512,7 @@ def run_pair_null(
 
     cond_frames, roi_cond_frames = [], []
     draw_frames: list = []
+    isc_draw_frames: list = []
     isc_frames: list = []
     isc_cond_frames: list = []
     refused: dict[str, list[str]] = {}
@@ -543,6 +544,9 @@ def run_pair_null(
                 pairs["n_valid_frac"] = 1.0
                 pairs.insert(1, "condition", label)
                 isc_cond_frames.append(pairs)
+                # one row per draw as well as the summary, so the correlation can be read
+                # above the cell the way the coherence can
+                isc_draw_frames.append(pairs.assign(draw=partner_id))
 
         return _collect
 
@@ -636,8 +640,8 @@ def run_pair_null(
             "no usable stand-in was drawn for any condition, so there is no null. The log "
             "says which test each candidate failed.")
 
-    _write_isc_null(isc_frames, isc_cond_frames, data_dir, stem, sources, params, windows,
-                    isc_whiten, isc_max_lag_s, isc_band)
+    _write_isc_null(isc_frames, isc_cond_frames, isc_draw_frames, data_dir, stem, sources,
+                    params, windows, isc_whiten, isc_max_lag_s, isc_band)
     return out_path
 
 
@@ -684,8 +688,8 @@ def _isc_real(path: Path, by_condition: bool) -> "pd.DataFrame | None":
     return part.drop(columns=[] if by_condition else ["condition"]) if not part.empty else None
 
 
-def _write_isc_null(frames, cond_frames, data_dir, stem, sources, params, windows,
-                    isc_whiten, isc_max_lag_s, isc_band) -> None:
+def _write_isc_null(frames, cond_frames, draw_frames, data_dir, stem, sources, params,
+                    windows, isc_whiten, isc_max_lag_s, isc_band) -> None:
     """Summarise the re-paired correlations and write them beside the coherence tables."""
     from fnirs_pipe.pipeline.hyperscanning import _hyper_sidecar
     from fnirs_pipe.pipeline.synchrony import _average_iterations
@@ -709,6 +713,14 @@ def _write_isc_null(frames, cond_frames, data_dir, stem, sources, params, window
                        **({"conditions": [w[0] for w in windows]} if cond and windows else {}),
                        **isc_params)
         logger.info("re-paired ISC saved: %s", path)
+
+    if draw_frames:
+        path = write_tsv(pd.concat(draw_frames, ignore_index=True),
+                         data_dir / f"{stem}-iscbycond-pairnull-draws.tsv")
+        _hyper_sidecar(path, "hyper_isc_bycondition_pairnull_draws", sources,
+                       **({"conditions": [w[0] for w in windows]} if windows else {}),
+                       **isc_params)
+        logger.info("re-paired ISC draws saved: %s", path)
 
 
 def _median_coverage(coverage: dict) -> dict:
