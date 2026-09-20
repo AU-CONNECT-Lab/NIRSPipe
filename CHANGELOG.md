@@ -6,6 +6,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- `fnirs-hyper group-null` writes both reads of the cohort test, `test` column `resample` and `paired`; the phase null is only valid read paired above the cell
+
 ### Changed
 - The ROI correlation tables record which channels each region was averaged from, as the seed map and the ROI amplitude table already did
 

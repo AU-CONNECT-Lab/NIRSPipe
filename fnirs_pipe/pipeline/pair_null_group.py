@@ -202,12 +202,22 @@ def by_occasion(draws: pd.DataFrame, real: pd.DataFrame) -> pd.DataFrame:
 
 def by_cohort(draws: pd.DataFrame, real: pd.DataFrame,
               n_resample: int = 20000, seed: int | None = None) -> pd.DataFrame:
-    """The cohort mean against a null that redraws one stand-in per occasion.
+    """The cohort mean against its null, by both reads, one row of each per condition.
 
-    The statistic is the mean over occasions of each occasion's channel mean, and a resample
-    is the same statistic with every occasion's real partner replaced by one of its own
-    stand-ins. Resampling rather than pairing the pools by index, because a draw's position
-    in one occasion's pool means nothing in another's.
+    ``resample`` redraws one stand-in per occasion and ranks the real statistic inside that,
+    so the null's width is the spread between an occasion's own draws. Resampling rather than
+    pairing the pools by index, because a draw's position in one occasion's pool means
+    nothing in another's.
+
+    ``paired`` averages each occasion's draws into one baseline and tests real against it
+    paired over occasions, so the width is the spread between occasions. This is the read the
+    released implementations use, and on the phase null it is the only valid one: phase
+    randomisation is applied one channel at a time, which flattens the surrogate's
+    inter-channel covariance, and a mean over channels then has a null narrower than it
+    should be. A re-paired stand-in is a real recording whose channels covary naturally, so
+    there the two reads answer the same question and should agree.
+
+    ``lift`` is the same number in both rows; what differs is what it is divided by.
     """
     rng = np.random.default_rng(seed)
     rows = []
@@ -219,22 +229,60 @@ def by_cohort(draws: pd.DataFrame, real: pd.DataFrame,
         if not occasions:
             continue
         observed = real_part[real_part.occasion.isin(occasions)].groupby("occasion").coherence.mean()
-        pools = [wide.loc[o].dropna().to_numpy(dtype=float) for o in occasions]
-        pools = [p for p in pools if p.size]
-        null = np.mean([p[rng.integers(0, p.size, n_resample)] for p in pools], axis=0)
+        pools = {o: wide.loc[o].dropna().to_numpy(dtype=float) for o in occasions}
+        pools = {o: p for o, p in pools.items() if p.size}
+        if not pools:
+            continue
+        null = np.mean([p[rng.integers(0, p.size, n_resample)] for p in pools.values()], axis=0)
         value = float(observed.mean())
         # the real statistic counted into its own null, as at occasion level
         rows.append({
-            "condition": cond, "coherence": value,
+            "condition": cond, "test": "resample", "coherence": value,
             "null_mean": float(null.mean()), "null_sd": float(null.std(ddof=1)),
             "null_p95": float(np.percentile(null, 95)),
             "lift": value - float(null.mean()),
             "p": (int((null >= value).sum()) + 1) / (n_resample + 1),
             "n_occasions": len(pools),
-            "n_iter_min": int(min(p.size for p in pools)),
+            "n_iter_min": int(min(p.size for p in pools.values())),
             "n_resample": n_resample,
         })
-    return pd.DataFrame(rows).sort_values("condition", ignore_index=True)
+        rows.append(_paired_row(cond, observed, pools))
+    return (pd.DataFrame(rows)
+            .sort_values(["condition", "test"], ignore_index=True))
+
+
+def _paired_row(cond, observed: pd.Series, pools: "dict[str, np.ndarray]") -> dict:
+    """Real against each occasion's own averaged draws, paired over occasions, one-tailed.
+
+    ::
+
+      3 occasions, real .35 .34 .36 against baselines .34 .34 .35
+        -> lift +0.0067, t over the three differences
+
+    Fewer than three occasions leaves a t with no spread to estimate, so the row carries the
+    lift and no test rather than a number that would be read as one.
+    """
+    from scipy import stats
+
+    baseline = pd.Series({o: float(p.mean()) for o, p in pools.items()})
+    diff = (observed.reindex(baseline.index) - baseline).to_numpy(dtype=float)
+    diff = diff[np.isfinite(diff)]
+    row = {
+        "condition": cond, "test": "paired",
+        "coherence": float(observed.reindex(baseline.index).mean()),
+        "null_mean": float(baseline.mean()),
+        "lift": float(diff.mean()) if diff.size else np.nan,
+        "lift_sd": float(diff.std(ddof=1)) if diff.size > 1 else np.nan,
+        "n_occasions": int(diff.size),
+        "n_positive": int((diff > 0).sum()),
+    }
+    if diff.size >= 3:
+        t, p_two = stats.ttest_1samp(diff, 0.0)
+        row["t"] = float(t)
+        row["df"] = int(diff.size - 1)
+        # one-tailed, the direction the released implementations test: real above its baseline
+        row["p"] = float(p_two / 2 if t > 0 else 1.0 - p_two / 2)
+    return row
 
 
 def by_cell(output_dir: Path, task: str, chroma: str, null: str) -> "pd.DataFrame | None":

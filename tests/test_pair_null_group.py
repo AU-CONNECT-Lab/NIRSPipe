@@ -26,6 +26,11 @@ def _draws(level=0.30, spread=0.01, seed=0):
     return pd.DataFrame(rows)
 
 
+def _resample_rows(frame):
+    """The resample read alone, `by_cohort` writing one row per read per condition."""
+    return frame[frame.test == "resample"]
+
+
 def _real(level):
     return pd.DataFrame([{"chromophore": "hbo", "condition": "game", "occasion": o,
                           "label": c, "coherence": level}
@@ -72,19 +77,19 @@ def test_the_cohort_null_is_tighter_than_one_occasions():
     """Averaging occasions is the whole reason the cohort level can reject where a cell cannot."""
     draws, real = _draws(), _real(0.40)
     occ = by_occasion(draws, real)
-    coh = by_cohort(draws, real, n_resample=2000, seed=1)
+    coh = _resample_rows(by_cohort(draws, real, n_resample=2000, seed=1))
     assert coh.null_sd.iloc[0] < occ.null_sd.mean()
 
 
 def test_a_real_value_inside_the_draws_does_not_clear_the_cohort_null():
     draws = _draws()
     middle = draws.coherence.mean()
-    coh = by_cohort(draws, _real(middle), n_resample=2000, seed=1)
+    coh = _resample_rows(by_cohort(draws, _real(middle), n_resample=2000, seed=1))
     assert coh.p.iloc[0] > 0.05
 
 
 def test_a_real_value_far_above_them_clears_it():
-    coh = by_cohort(_draws(), _real(0.40), n_resample=2000, seed=1)
+    coh = _resample_rows(by_cohort(_draws(), _real(0.40), n_resample=2000, seed=1))
     assert coh.p.iloc[0] == pytest.approx(1 / 2001)
 
 
@@ -189,7 +194,7 @@ def test_the_written_tables_carry_the_granularity_and_the_pairings(tmp_path):
 def test_a_region_is_the_mean_of_its_own_channels(tmp_path):
     _write_tree(tmp_path)
     written = write_group_null(tmp_path, roi_map=ROI, n_resample=500, seed=3)
-    cohort = pd.read_csv(written[1], sep="	").set_index("level")
+    cohort = _resample_rows(pd.read_csv(written[1], sep="	")).set_index("level")
     # every real value is 0.40 here, so each region reports it and so does the whole brain
     for level in ("whole", "front", "back"):
         assert cohort.loc[level, "coherence"] == pytest.approx(0.40)
@@ -315,3 +320,68 @@ def test_no_cell_tables_is_not_an_error(tmp_path):
     written = write_group_null(tmp_path, n_resample=200, seed=3)
     assert all("bycell" not in p.name for p in written)
     assert len(written) == 2
+
+
+# ---- the paired read, which is what the released implementations report ----
+
+def test_both_reads_report_the_same_lift():
+    """They divide it by different things; the numerator is one number."""
+    coh = by_cohort(_draws(), _real(0.40), n_resample=2000, seed=1)
+    assert set(coh.test) == {"resample", "paired"}
+    lifts = coh.groupby("test").lift.first()
+    assert lifts["paired"] == pytest.approx(lifts["resample"], abs=2e-3)
+
+
+def test_the_paired_read_counts_the_occasions_not_the_resamples():
+    coh = by_cohort(_draws(), _real(0.40), n_resample=2000, seed=1)
+    paired = coh[coh.test == "paired"].iloc[0]
+    assert paired.n_occasions == len(OCCASIONS)
+    assert paired.df == len(OCCASIONS) - 1
+    assert paired.n_positive == len(OCCASIONS)
+
+
+def test_a_real_value_inside_the_draws_does_not_clear_the_paired_read_either():
+    draws = _draws()
+    coh = by_cohort(draws, _real(draws.coherence.mean()), n_resample=2000, seed=1)
+    assert coh[coh.test == "paired"].p.iloc[0] > 0.05
+
+
+def _draws_with_spread(delta, means=(0.30, 0.31, 0.29)):
+    """Draws whose occasion means are fixed and whose within-occasion spread is `delta`.
+
+    Each occasion gets its draws symmetrically either side of its mean, so the mean is exact
+    whatever delta is. That isolates the one thing the two reads disagree about.
+    """
+    rows = []
+    for occ, mean in zip(OCCASIONS, means):
+        for k, s in enumerate((-1.5, -0.5, 0.5, 1.5)):
+            for c in CHANNELS:
+                rows.append({"chromophore": "hbo", "condition": "game", "occasion": occ,
+                             "draw": DRAWS[k], "label": c, "coherence": mean + s * delta})
+    return pd.DataFrame(rows)
+
+
+def test_the_paired_read_is_blind_to_the_spread_between_an_occasions_own_draws():
+    """The point of it: a surrogate whose draws agree too well narrows only the resample null.
+
+    Phase randomisation applied one channel at a time does exactly that, which is why its
+    aggregate cannot be ranked inside its own iterations.
+    """
+    tight, wide = _draws_with_spread(0.0005), _draws_with_spread(0.02)
+    means = [d.groupby("occasion").coherence.mean() for d in (tight, wide)]
+    assert means[0].sub(means[1]).abs().max() == pytest.approx(0.0, abs=1e-12)
+    real = _real(0.32)
+    out = [by_cohort(d, real, n_resample=4000, seed=2) for d in (tight, wide)]
+    resample = [o[o.test == "resample"].p.iloc[0] for o in out]
+    paired = [o[o.test == "paired"].p.iloc[0] for o in out]
+    assert resample[0] < resample[1]              # the tighter draws make the null narrower
+    assert paired[0] == pytest.approx(paired[1], abs=1e-9)
+
+
+def test_two_occasions_carry_a_lift_but_no_t():
+    """A t over two differences has no spread to estimate, so the row says so by omission."""
+    draws = _draws()[lambda d: d.occasion.isin(OCCASIONS[:2])]
+    real = _real(0.40)[lambda d: d.occasion.isin(OCCASIONS[:2])]
+    paired = by_cohort(draws, real, n_resample=500, seed=1).query("test == 'paired'").iloc[0]
+    assert np.isfinite(paired.lift)
+    assert pd.isna(paired.get("p", np.nan))
