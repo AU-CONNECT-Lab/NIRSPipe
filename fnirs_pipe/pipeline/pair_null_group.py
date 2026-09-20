@@ -47,8 +47,10 @@ DRAWS_SUFFIX = {
 
 
 def _of_chroma(frame: pd.DataFrame, chroma: str) -> pd.DataFrame:
+    """One chromophore's rows, blanks dropped. The value column is named per table kind."""
     out = frame[frame["chromophore"] == chroma] if "chromophore" in frame else frame
-    return out.dropna(subset=["coherence"])
+    value = next((c for c in ("coherence", "percentile", "null_mean") if c in out.columns), None)
+    return out.dropna(subset=[value]) if value else out
 
 
 def _homologous(frame: pd.DataFrame) -> pd.DataFrame:

@@ -300,6 +300,16 @@ def cmd_run(
     # were read two different ways would put incomparable rows in one table.
     cond_pad = None
     if wtc_cond_transform:
+        if wtc_phase_null:
+            print("[error] --wtc-cond-transform cannot be used with --wtc-phase-null. The "
+                  "flag puts the real per-condition tables on the cut-then-transform route "
+                  "and the null has no way to follow: it reads its conditions out of one "
+                  "whole-run transform per iteration, and matching that would cost a "
+                  "transform per condition per iteration. A null read off a different route "
+                  "than the table it is subtracted from measures the difference between the "
+                  "routes, which is about +0.005 on a 300 s condition here. Drop one of the "
+                  "two.", file=sys.stderr)
+            raise SystemExit(1)
         if not wtc_by_condition:
             print("[error] --wtc-cond-transform needs --wtc-by-condition; there are no "
                   "conditions to transform without it.", file=sys.stderr)
