@@ -13,14 +13,14 @@ from fnirs_pipe.pipeline.pair_null_group import (
 
 CHANNELS = ["S1_D1", "S1_D2", "S2_D1", "S2_D2"]
 OCCASIONS = ["d01", "d03", "d04"]
-STAND_INS = [f"sub-p2d{n:02d}" for n in (5, 6, 7, 8)]
+DRAWS = [f"sub-p2d{n:02d}" for n in (5, 6, 7, 8)]
 
 
 def _draws(level=0.30, spread=0.01, seed=0):
     rng = np.random.default_rng(seed)
-    rows = [{"chromophore": "hbo", "condition": "game", "occasion": o, "stand_in": s,
+    rows = [{"chromophore": "hbo", "condition": "game", "occasion": o, "draw": s,
              "label": c, "coherence": level + rng.normal(0, spread)}
-            for o in OCCASIONS for s in STAND_INS for c in CHANNELS]
+            for o in OCCASIONS for s in DRAWS for c in CHANNELS]
     return pd.DataFrame(rows)
 
 
@@ -60,7 +60,7 @@ def test_the_lift_is_against_that_occasions_own_draw_mean():
     draws = _draws()
     out = by_occasion(draws, _real(0.40)).set_index("occasion")
     for occ in OCCASIONS:
-        own = draws[draws.occasion == occ].groupby("stand_in").coherence.mean().mean()
+        own = draws[draws.occasion == occ].groupby("draw").coherence.mean().mean()
         assert out.loc[occ, "lift"] == pytest.approx(0.40 - own, abs=1e-9)
 
 
@@ -131,3 +131,21 @@ def test_a_tree_with_no_draws_says_what_has_to_run(tmp_path):
     (tmp_path / "group-d01" / "nirs").mkdir(parents=True)
     with pytest.raises(FileNotFoundError, match="pair-null"):
         write_group_null(tmp_path)
+
+
+# ---- the same reading, whichever null drew the draws ----
+
+def test_the_phase_nulls_draws_are_read_the_same_way(tmp_path):
+    """Both nulls differ in what a draw is and in nothing above the cell."""
+    _write_tree(tmp_path)
+    for occ in OCCASIONS:
+        d = tmp_path / f"group-{occ}" / "nirs"
+        src = d / f"group-{occ}_task-full_hyper-wtcbycond-pairnull-draws.tsv"
+        src.rename(d / f"group-{occ}_task-full_hyper-wtcbycond-phasenull-draws.tsv")
+    written = write_group_null(tmp_path, null="phase", n_resample=500, seed=3)
+    assert [p.name for p in written] == [
+        "group_hyper_wtc_bycondition_phasenull_byoccasion.tsv",
+        "group_hyper_wtc_bycondition_phasenull_cohort.tsv"]
+    import json
+    side = json.loads(written[1].with_suffix(".json").read_text())
+    assert side["parameters"]["null_kind"] == "phase"

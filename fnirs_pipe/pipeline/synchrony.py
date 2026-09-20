@@ -801,9 +801,11 @@ class NullDraws:
     # who each draw was against, re-pairing only: its pool is finite and named, so the
     # sidecar can say which recordings the null was built from rather than only how many
     partners: "list[str] | None" = None
-    # the stand-in behind each entry of cond_draws, so the draws can be written out one row
-    # per draw. A test that averages the draws differently needs them, not their summary
-    cond_partners: "list[str] | None" = None
+    # what each entry of cond_draws came from, one id per frame: the stand-in for a
+    # re-paired draw, the iteration for a scrambled one. Kept so the draws can be written
+    # out one row per draw, which a test that averages them before ranking needs and the
+    # summary cannot be taken apart to give
+    cond_draw_ids: "list[str] | None" = None
 
     def summarise(self, real: "pd.DataFrame | None" = None,
                   real_by_cond: "pd.DataFrame | None" = None,
@@ -1045,6 +1047,7 @@ def compute_wtc_phase_null(
 
     frames: list[pd.DataFrame] = []
     cond_frames: list[pd.DataFrame] = []
+    cond_draw_ids: list[str] = []
     hists: dict[tuple, np.ndarray] = {}
     # the unscrambled side is the same signal in every iteration, so its transforms are
     # computed once and reused. Roughly a third of the run: two thirds of an iteration is
@@ -1064,16 +1067,19 @@ def compute_wtc_phase_null(
             # the same axis the real table is built on, without which the null cannot be
             # subtracted from it row by row
             axis=long_axis_over(raws.values(), ch_type, sep_bands))
+        before = len(cond_frames)
         _collect_draw(result, frames, cond_frames, hists,
                       band_fmin=band_fmin, band_fmax=band_fmax,
                       mask_coi=mask_coi, windows=windows,
                       analysis_window=analysis_window)
+        cond_draw_ids.extend([f"iter-{i:04d}"] * (len(cond_frames) - before))
         if (i + 1) % 10 == 0:
             logger.info("phase-scrambled WTC: %d/%d iterations", i + 1, n_iter)
 
     keys = ["sub1", "sub2", "label"] + (["label2"] if "label2" in frames[0].columns else [])
     return NullDraws(draws=frames, cond_draws=cond_frames, keys=keys,
-                      levels={key: _null_level(hist) for key, hist in hists.items()})
+                      levels={key: _null_level(hist) for key, hist in hists.items()},
+                      cond_draw_ids=cond_draw_ids)
 
 
 def compute_wtc_pair_null(
@@ -1122,7 +1128,7 @@ def compute_wtc_pair_null(
     """
     # no whole-run list: a re-paired draw is one condition, cut from each side's own marker
     cond_frames: list[pd.DataFrame] = []
-    cond_partners: list[str] = []
+    cond_draw_ids: list[str] = []
     hists: dict[tuple, np.ndarray] = {}
     partners: list[str] = []
     # Keyed per condition and per segment, not per condition alone: a draw pads the condition
@@ -1154,7 +1160,7 @@ def compute_wtc_pair_null(
                       band_fmin=band_fmin, band_fmax=band_fmax,
                       mask_coi=mask_coi, windows=[(label, *inner)],
                       analysis_window=None)
-        cond_partners.extend([partner_id] * (len(cond_frames) - before))
+        cond_draw_ids.extend([partner_id] * (len(cond_frames) - before))
         if partner_id not in partners:
             partners.append(partner_id)
         logger.info("re-paired WTC: %s against %s", label, partner_id)
@@ -1167,7 +1173,7 @@ def compute_wtc_pair_null(
     keys = ["sub1", "sub2", "label"] + (["label2"] if "label2" in cond_frames[0].columns else [])
     return NullDraws(draws=[], cond_draws=cond_frames, keys=keys,
                      levels={key: _null_level(hist) for key, hist in hists.items()},
-                     partners=partners, cond_partners=cond_partners)
+                     partners=partners, cond_draw_ids=cond_draw_ids)
 
 
 def _average_iterations(frames: "list[pd.DataFrame]", keys: "list[str]",

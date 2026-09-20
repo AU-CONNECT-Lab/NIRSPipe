@@ -164,7 +164,12 @@ def write_wtc_null(
 
     frames, cond_frames = [], []
     roi_frames, roi_cond_frames = [], []
+    draw_frames: list = []
     for ch_type, null in nulls.items():
+        # every iteration kept, not only their summary: a test that averages the draws over
+        # channels before ranking cannot be rebuilt from null_mean and null_p95
+        for draw_id, frame in zip(null.cond_draw_ids or [], null.cond_draws):
+            draw_frames.append(frame.assign(chromophore=ch_type, draw=draw_id))
         part, cond_part = null.summarise(real=_for_chroma(real, ch_type),
                                          real_by_cond=_for_chroma(real_by_cond, ch_type))
         # tagged after the averaging, which groups on the columns it knows and drops the
@@ -212,6 +217,9 @@ def write_wtc_null(
         logger.info("Phase-scrambled WTC per condition saved: %s", cond_path)
 
     for group, stem_suffix, step, extra in (
+            (draw_frames, "-wtcbycond-phasenull-draws",
+             "hyper_wtc_bycondition_phasenull_draws",
+             {"conditions": [w[0] for w in (windows or [])]}),
             (roi_frames, "-wtc-roihom-phasenull", "hyper_wtc_roihom_phasenull", {}),
             (roi_cond_frames, "-wtcbycond-roihom-phasenull",
              "hyper_wtc_bycondition_roihom_phasenull",

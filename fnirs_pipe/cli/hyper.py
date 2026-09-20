@@ -491,14 +491,14 @@ def cmd_band(
 
 
 def cmd_group_null(
-    output_dir: Path, task: str, wtc_chroma: str, n_resample: int,
+    output_dir: Path, task: str, wtc_chroma: str, null: str, n_resample: int,
     seed: int | None, verbose: bool,
 ) -> None:
     """Read the re-paired draws above the cell: one verdict per occasion, one per cohort."""
     from fnirs_pipe.pipeline.pair_null_group import write_group_null
 
     setup_logging(verbose=verbose)
-    for path in write_group_null(output_dir, task=task, chroma=wtc_chroma,
+    for path in write_group_null(output_dir, task=task, chroma=wtc_chroma, null=null,
                                  n_resample=n_resample, seed=seed):
         print(f"group-null -> {path}")
 
@@ -897,6 +897,10 @@ def _build_parser() -> argparse.ArgumentParser:
                             help="Chromophore to read (default hbo). One at a time: the two "
                                  "are separate measurements and averaging across them means "
                                  "nothing.")
+    group_null.add_argument("--null", choices=("repaired", "phase"), default="repaired",
+                            help="Which null's draws to read (default repaired). Both are "
+                                 "read the same way above the cell; they differ in what a "
+                                 "draw is, a stand-in against a scrambled partner.")
     group_null.add_argument("--n-resample", type=int, default=20000,
                             help="Resamples behind the cohort null (default 20000). Each "
                                  "picks one stand-in per occasion, so the finest p it can "

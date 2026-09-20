@@ -33,8 +33,13 @@ from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("pipeline.pair_null_group")
 
-DRAWS_SUFFIX = "_hyper-wtcbycond-pairnull-draws.tsv"
+_TAG = {"repaired": "pairnull", "phase": "phasenull"}
+
 REAL_SUFFIX = "_hyper-wtcbycond.tsv"
+DRAWS_SUFFIX = {
+    "repaired": "_hyper-wtcbycond-pairnull-draws.tsv",
+    "phase": "_hyper-wtcbycond-phasenull-draws.tsv",
+}
 
 
 def _homologous(frame: pd.DataFrame, chroma: str) -> pd.DataFrame:
@@ -53,7 +58,8 @@ def _read_tree(output_dir: Path, suffix: str, task: str, chroma: str) -> pd.Data
     if not frames:
         raise FileNotFoundError(
             f"no group-*_task-{task}{suffix} under {output_dir}. The cohort levels are "
-            f"built from the draws `fnirs-hyper pair-null` writes, so that has to have run.")
+            f"built from the draws a null writes, so `fnirs-hyper pair-null` or a `run "
+            f"--wtc-phase-null` has to have produced them.")
     return pd.concat(frames, ignore_index=True)
 
 
@@ -74,7 +80,7 @@ def by_occasion(draws: pd.DataFrame, real: pd.DataFrame) -> pd.DataFrame:
     """Each occasion's channel mean, ranked in that occasion's own draws."""
     rows = []
     real_mean = real.groupby(["condition", "occasion"]).coherence.mean()
-    draw_mean = draws.groupby(["condition", "occasion", "stand_in"]).coherence.mean()
+    draw_mean = draws.groupby(["condition", "occasion", "draw"]).coherence.mean()
     for (cond, occ), value in real_mean.items():
         try:
             pool = draw_mean.loc[(cond, occ)].to_numpy(dtype=float)
@@ -108,8 +114,8 @@ def by_cohort(draws: pd.DataFrame, real: pd.DataFrame,
     rows = []
     for cond, real_part in real.groupby("condition"):
         wide = (draws[draws.condition == cond]
-                .groupby(["occasion", "stand_in"]).coherence.mean()
-                .unstack("stand_in"))
+                .groupby(["occasion", "draw"]).coherence.mean()
+                .unstack("draw"))
         occasions = [o for o in real_part.occasion.unique() if o in wide.index]
         if not occasions:
             continue
@@ -134,28 +140,29 @@ def by_cohort(draws: pd.DataFrame, real: pd.DataFrame,
 
 
 def write_group_null(output_dir: Path, task: str = "full", chroma: str = "hbo",
-                     n_resample: int = 20000, seed: int | None = None) -> list[Path]:
-    """Both levels, written beside the merged tables."""
+                     null: str = "repaired", n_resample: int = 20000,
+                     seed: int | None = None) -> list[Path]:
+    """Both levels, written beside the merged tables, for whichever null drew the draws."""
     from fnirs_pipe.pipeline.group_io import _hyper_sidecar
 
     output_dir = Path(output_dir)
-    draws = _read_tree(output_dir, DRAWS_SUFFIX, task, chroma)
+    draws = _read_tree(output_dir, DRAWS_SUFFIX[null], task, chroma)
     real = _read_tree(output_dir, REAL_SUFFIX, task, chroma)
     sources = sorted(set(draws.source) | set(real.source))
-    logger.info("group-level re-paired null: %d occasions, %d channels, chroma %s",
-                draws.occasion.nunique(), draws.label.nunique(), chroma)
+    logger.info("group-level %s null: %d occasions, %d channels, chroma %s",
+                null, draws.occasion.nunique(), draws.label.nunique(), chroma)
 
-    params = dict(null_kind="repaired", chroma=chroma, task=task,
+    params = dict(null_kind=null, chroma=chroma, task=task,
                   n_resample=n_resample, seed=seed,
                   channels="homologous", statistic="mean over channels, then over occasions")
     written = []
     for frame, stem, step in (
             (by_occasion(draws, real),
-             "group_hyper_wtc_bycondition_pairnull_byoccasion",
-             "hyper_pair_null_by_occasion"),
+             f"group_hyper_wtc_bycondition_{_TAG[null]}_byoccasion",
+             f"hyper_{null}_null_by_occasion"),
             (by_cohort(draws, real, n_resample=n_resample, seed=seed),
-             "group_hyper_wtc_bycondition_pairnull_cohort",
-             "hyper_pair_null_cohort")):
+             f"group_hyper_wtc_bycondition_{_TAG[null]}_cohort",
+             f"hyper_{null}_null_cohort")):
         path = output_dir / f"{stem}.tsv"
         frame.to_csv(path, sep="\t", index=False)
         _hyper_sidecar(path, step, sources, **params)

@@ -560,8 +560,8 @@ def run_pair_null(
             sep_bands=sep_bands, windows=windows, analysis_window=analysis_window,
             on_draw=_isc_collector(ch_type))
         partners = null.partners or []
-        for pid, frame in zip(null.cond_partners or [], null.cond_draws):
-            draw_frames.append(frame.assign(chromophore=ch_type, stand_in=pid))
+        for draw_id, frame in zip(null.cond_draw_ids or [], null.cond_draws):
+            draw_frames.append(frame.assign(chromophore=ch_type, draw=draw_id))
 
         _, by_cond = null.summarise(real=None,
                                     real_by_cond=_for_chroma(real_by_cond, ch_type))
