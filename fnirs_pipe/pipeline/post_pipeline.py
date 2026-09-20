@@ -551,12 +551,17 @@ def _write_fc_derivatives(
             if not fc_roi_df.empty:
                 fc_roi_path = _path(chromo_entities, "fcroi")
                 fc_roi_df.to_csv(fc_roi_path, sep="	", index_label="roi")
-                _sidecar(fc_roi_path, "fc_roi", chromophore=chromo)
+                # the members, not the map: an ROI correlation averages them into a
+                # signal that exists nowhere else, and which ones survived is a property
+                # of this run, so without them the number cannot be reproduced
+                _sidecar(fc_roi_path, "fc_roi", chromophore=chromo,
+                         roi_channels=_roi_members(raw_resid, config.roi_map, chromo))
                 logger.info("sub-%s | fc_roi (%s) -> %s", config.subject, chromo, fc_roi_path)
 
                 fcroiz_path = _path(chromo_entities, "fcroiz")
                 fisher_z(fc_roi_df).to_csv(fcroiz_path, sep="	", index_label="roi")
-                _sidecar(fcroiz_path, "fisher_z", chromophore=chromo)
+                _sidecar(fcroiz_path, "fisher_z", chromophore=chromo,
+                         roi_channels=_roi_members(raw_resid, config.roi_map, chromo))
                 logger.info("sub-%s | fc_roiz (%s) -> %s", config.subject, chromo, fcroiz_path)
 
                 fc_roi[chromo] = fc_roi_df

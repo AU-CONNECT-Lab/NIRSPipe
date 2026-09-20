@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 <!-- Format: Keep a Changelog (https://keepachangelog.com/en/1.0.0/) -->
 
+## [Unreleased]
+
+### Changed
+- The ROI correlation tables record which channels each region was averaged from, as the seed map and the ROI amplitude table already did
+
 ## [0.45.0] - 2026-09-19
 
 ### Added

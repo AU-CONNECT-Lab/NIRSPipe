@@ -153,6 +153,18 @@ def test_the_seed_sidecar_names_the_channels_each_seed_was_built_from(rest_out, 
     assert resolved != {k: list(v) for k, v in roi_map.items()}, "fixture stopped covering the difference"
 
 
+def test_the_roi_sidecar_names_the_channels_each_roi_was_averaged_from(rest_out, haemo, roi_map):
+    """An ROI correlation averages its members into a signal that exists nowhere else, so
+    without the membership the number cannot be reproduced from the tree."""
+    bads = set(haemo.info["bads"])
+    resolved = {roi: [c for c in chans if c not in bads] for roi, chans in roi_map.items()}
+
+    for suffix, step in (("fcroi", "fc_roi"), ("fcroiz", "fisher_z")):
+        meta = json.loads(_one(rest_out, suffix).with_suffix(".json").read_text(encoding="utf-8"))
+        assert meta["step"] == step
+        assert meta["parameters"]["roi_channels"] == resolved, suffix
+
+
 def test_hbo_and_hbr_are_written_separately(rest_out):
     hbo = pd.read_csv(_one(rest_out, "fc", "hbo"), sep="\t", index_col="channel")
     hbr = pd.read_csv(_one(rest_out, "fc", "hbr"), sep="\t", index_col="channel")

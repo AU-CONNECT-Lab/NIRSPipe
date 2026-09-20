@@ -9,7 +9,7 @@ import pandas as pd
 import pytest
 
 from fnirs_pipe.pipeline.pair_null_group import (
-    _exact_p, _variants, by_cohort, by_occasion, write_group_null)
+    _exact_p, _variants, by_cell, by_cohort, by_occasion, write_group_null)
 
 CHANNELS = ["S1_D1", "S1_D2", "S2_D1", "S2_D2"]
 OCCASIONS = ["d01", "d03", "d04"]
@@ -231,3 +231,53 @@ def test_a_fully_crossed_tree_does_get_it(tmp_path):
     written = write_group_null(tmp_path, n_resample=200, seed=3)
     cohort = pd.read_csv(written[1], sep="\t")
     assert set(cohort.pairings) == {"homologous", "all"}
+
+
+# ---- the per-cell tables, corrected ----
+
+def _write_cells(root, percentiles, n_iter=22):
+    """One per-cell null table per occasion, the shape `pair-null` writes."""
+    for occ, pcts in zip(OCCASIONS, percentiles):
+        d = root / f"group-{occ}" / "nirs"
+        d.mkdir(parents=True, exist_ok=True)
+        pd.DataFrame([{"chromophore": "hbo", "condition": "game", "sub1": "a", "sub2": "b",
+                       "label": c, "coherence": 0.3, "percentile": pct, "n_iter": n_iter}
+                      for c, pct in zip(CHANNELS, pcts)]).to_csv(
+            d / f"group-{occ}_task-full_hyper-wtcbycond-pairnull.tsv", sep="\t", index=False)
+
+
+def test_the_percentile_becomes_an_exact_p(tmp_path):
+    """Beating all 22 is rank 1 of 23, which is the finest p the pool can express."""
+    _write_cells(tmp_path, [[100, 50, 0, 100]] * 3)
+    out = by_cell(tmp_path, "full", "hbo", "repaired")
+    assert out.p.min() == pytest.approx(1 / 23)
+    assert out.p.max() == pytest.approx(1.0)
+
+
+def test_nothing_clears_the_correction_when_the_cells_are_middling(tmp_path):
+    _write_cells(tmp_path, [[50, 55, 45, 50]] * 3)
+    out = by_cell(tmp_path, "full", "hbo", "repaired")
+    assert int((out.q < 0.05).sum()) == 0
+
+
+def test_the_family_is_one_condition_and_is_reported(tmp_path):
+    _write_cells(tmp_path, [[100, 100, 100, 100]] * 3)
+    out = by_cell(tmp_path, "full", "hbo", "repaired")
+    assert set(out.family) == {12}          # 3 occasions x 4 channels, one condition
+    assert set(out.level) == {"channel"}
+
+
+def test_the_cell_table_is_written_beside_the_others(tmp_path):
+    _write_tree(tmp_path)
+    _write_cells(tmp_path, [[100, 50, 0, 100]] * 3)
+    written = write_group_null(tmp_path, n_resample=200, seed=3)
+    assert [p.name for p in written][0] == (
+        "group_hyper_wtc_bycondition_pairnull_bycell.tsv")
+
+
+def test_no_cell_tables_is_not_an_error(tmp_path):
+    """A tree with draws but no per-cell summary still gets the aggregate levels."""
+    _write_tree(tmp_path)
+    written = write_group_null(tmp_path, n_resample=200, seed=3)
+    assert all("bycell" not in p.name for p in written)
+    assert len(written) == 2

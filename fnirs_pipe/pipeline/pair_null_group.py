@@ -36,6 +36,10 @@ logger = get_logger("pipeline.pair_null_group")
 _TAG = {"repaired": "pairnull", "phase": "phasenull"}
 
 REAL_SUFFIX = "_hyper-wtcbycond.tsv"
+CELL_SUFFIX = {
+    "repaired": ("_hyper-wtcbycond-pairnull.tsv", "_hyper-wtcbycond-roihom-pairnull.tsv"),
+    "phase": ("_hyper-wtcbycond-phasenull.tsv", "_hyper-wtcbycond-roihom-phasenull.tsv"),
+}
 DRAWS_SUFFIX = {
     "repaired": "_hyper-wtcbycond-pairnull-draws.tsv",
     "phase": "_hyper-wtcbycond-phasenull-draws.tsv",
@@ -197,6 +201,47 @@ def by_cohort(draws: pd.DataFrame, real: pd.DataFrame,
     return pd.DataFrame(rows).sort_values("condition", ignore_index=True)
 
 
+def by_cell(output_dir: Path, task: str, chroma: str, null: str) -> "pd.DataFrame | None":
+    """The per-cell percentiles a null already wrote, turned into corrected p values.
+
+    ::
+
+      percentile 95.45 off 22 draws  ->  p 0.087, because 21 of 22 beaten is rank 2 of 23
+
+    The stage that writes a cell's percentile runs one dyad at a time and so cannot correct
+    across cells; nothing else in the package does either, which left every per-cell table
+    uncorrected and the correction living in whatever script last read them. One family per
+    condition and level, so the family is a number a reader can state.
+    """
+    from statsmodels.stats.multitest import multipletests
+
+    parts = []
+    for suffix, level in zip(CELL_SUFFIX[null], ("channel", "roi")):
+        try:
+            frame = _read_tree(output_dir, suffix, task, chroma, needs=("percentile",))
+        except FileNotFoundError:
+            continue
+        frame = frame.dropna(subset=["percentile"]).copy()
+        if frame.empty:
+            continue
+        # the real value counted into its own null, as everywhere else here
+        beaten = frame["percentile"] / 100 * frame["n_iter"]
+        frame["p"] = (frame["n_iter"] - beaten + 1) / (frame["n_iter"] + 1)
+        frame["q"] = np.nan
+        for cond, part in frame.groupby("condition"):
+            frame.loc[part.index, "q"] = multipletests(part["p"], method="fdr_bh")[1]
+            frame.loc[part.index, "family"] = len(part)
+        parts.append(frame.assign(level=level))
+    if not parts:
+        return None
+    out = pd.concat(parts, ignore_index=True)
+    front = ["level", "condition", "occasion", "label"]
+    keep = front + [c for c in ("label2", "coherence", "null_mean", "null_sd", "null_p95",
+                                "percentile", "n_iter", "p", "q", "family")
+                    if c in out.columns]
+    return out[keep].sort_values(["level", "condition", "q"], ignore_index=True)
+
+
 def write_group_null(output_dir: Path, task: str = "full", chroma: str = "hbo",
                      null: str = "repaired", roi_map: "dict | None" = None,
                      n_resample: int = 20000, seed: int | None = None) -> list[Path]:
@@ -229,15 +274,26 @@ def write_group_null(output_dir: Path, task: str = "full", chroma: str = "hbo",
     params = dict(null_kind=null, chroma=chroma, task=task,
                   n_resample=n_resample, seed=seed,
                   levels=sorted({p for p in pd.concat(coh_parts).level.unique()}),
-                  statistic="mean over channel pairings, then over occasions")
+                  statistic="mean over channel pairings, then over occasions",
+                  cell_fdr_family="one condition and level, over occasions and pairings")
+    cells = by_cell(output_dir, task, chroma, null)
+    if cells is not None:
+        passing = int((cells["q"] < 0.05).sum())
+        logger.info("%s null, per cell: %d cells, %d at q<0.05", null, len(cells), passing)
+
     written = []
     for frame, stem, step in (
+            ([] if cells is None else cells,
+             f"group_hyper_wtc_bycondition_{_TAG[null]}_bycell",
+             f"hyper_{null}_null_by_cell"),
             (tidy(occ_parts),
              f"group_hyper_wtc_bycondition_{_TAG[null]}_byoccasion",
              f"hyper_{null}_null_by_occasion"),
             (tidy(coh_parts),
              f"group_hyper_wtc_bycondition_{_TAG[null]}_cohort",
              f"hyper_{null}_null_cohort")):
+        if len(frame) == 0:
+            continue
         path = output_dir / f"{stem}.tsv"
         frame.to_csv(path, sep="\t", index=False)
         _hyper_sidecar(path, step, sources, **params)
