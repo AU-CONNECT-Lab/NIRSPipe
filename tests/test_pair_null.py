@@ -58,9 +58,13 @@ class _Seg:
         self.times = np.array([0.0, span])
 
 
-def _draws(partners, labels=("early",)):
-    """One entry per (partner, condition), which is what drawing per condition yields."""
-    return [(p, label, {TRUE[0]: _Seg(), p: _Seg()})
+def _draws(partners, labels=("early",), span=39.0):
+    """One entry per (partner, condition), which is what drawing per condition yields.
+
+    The fourth item is where the condition sits inside the segment: a real draw pads either
+    side, and these stubs carry no pad, so it spans the whole of it.
+    """
+    return [(p, label, {TRUE[0]: _Seg(span), p: _Seg(span)}, (0.0, span))
             for p in partners for label in labels]
 
 
@@ -159,14 +163,15 @@ def test_no_whole_run_draw_is_collected(stub):
 
 def test_every_draw_reaches_the_hook(stub):
     seen = []
-    _run(["sub-p1d03", "sub-p1d04"], on_draw=lambda pid, label, pair: seen.append(pid))
+    _run(["sub-p1d03", "sub-p1d04"],
+         on_draw=lambda pid, label, pair, inner: seen.append(pid))
     assert seen == ["sub-p1d03", "sub-p1d04"]
 
 
 def test_the_hook_gets_the_condition_and_the_pair(stub):
     got = []
     _run(["sub-p1d03"], labels=("early", "late"),
-         on_draw=lambda pid, label, pair: got.append((label, sorted(pair))))
+         on_draw=lambda pid, label, pair, inner: got.append((label, sorted(pair))))
     assert got == [("early", sorted([TRUE[0], "sub-p1d03"])),
                    ("late", sorted([TRUE[0], "sub-p1d03"]))]
 

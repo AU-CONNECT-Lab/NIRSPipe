@@ -801,6 +801,9 @@ class NullDraws:
     # who each draw was against, re-pairing only: its pool is finite and named, so the
     # sidecar can say which recordings the null was built from rather than only how many
     partners: "list[str] | None" = None
+    # the stand-in behind each entry of cond_draws, so the draws can be written out one row
+    # per draw. A test that averages the draws differently needs them, not their summary
+    cond_partners: "list[str] | None" = None
 
     def summarise(self, real: "pd.DataFrame | None" = None,
                   real_by_cond: "pd.DataFrame | None" = None,
@@ -1119,33 +1122,39 @@ def compute_wtc_pair_null(
     """
     # no whole-run list: a re-paired draw is one condition, cut from each side's own marker
     cond_frames: list[pd.DataFrame] = []
+    cond_partners: list[str] = []
     hists: dict[tuple, np.ndarray] = {}
     partners: list[str] = []
-    # Keyed per condition as well as per channel: the fixed member's stretch is the same in
-    # every draw *of one condition* and different between conditions, so one cache across
-    # both would serve one condition's transform to another's draw
-    caches: dict[str, dict[tuple[str, str], _ChannelWavelet]] = {}
-    for partner_id, label, pair in draws:
+    # Keyed per condition and per segment, not per condition alone: a draw pads the condition
+    # with whatever both recordings can spare either side, so the fixed member's stretch is
+    # the same only across draws that got the same pad. Most of a pool does, so the cache
+    # still pays; a stand-in near the end of its recording simply gets its own entry
+    caches: dict[tuple, dict[tuple[str, str], _ChannelWavelet]] = {}
+    for partner_id, label, pair, inner in draws:
         # Making a draw is the expensive half: two recordings read and cut. Any other metric
         # wanting the same re-paired pool has to be computed here rather than over a second
         # pass, which would double that cost to save a few seconds of its own.
         if on_draw is not None:
-            on_draw(partner_id, label, pair)
+            on_draw(partner_id, label, pair, inner)
         signals = {sid: _long_signals(raw, ch_type, sep_bands) for sid, raw in pair.items()}
+        segment = float(min(raw.times[-1] for raw in pair.values()))
+        cache_key = (label, round(float(inner[0]), 3), round(segment, 3))
         result = _wtc_over_pairs(
             pair, signals, fmin, fmax, significance=False, seed=None,
             cross=cross, limit_scales=limit_scales,
-            cache1=caches.setdefault(label, {}), axis=axis)
+            cache1=caches.setdefault(cache_key, {}), axis=axis)
         result = WTCResult(pairs={true_pair: next(iter(result.pairs.values()))},
                            freqs=result.freqs, times=result.times)
-        # the map *is* this condition, so the window is the whole of it. There is no
-        # whole-run draw to collect: the two recordings can be aligned one condition at a
-        # time or not at all, the drift between blocks being what made that necessary.
-        span = float(min(raw.times[-1] for raw in pair.values()))
+        # The segment carries context either side of the condition, so the pad is dropped
+        # here: the transform used it, the band mean must not. There is no whole-run draw to
+        # collect, the two recordings being alignable one condition at a time or not at all.
+        result = window_result(result, *inner)
+        before = len(cond_frames)
         _collect_draw(result, [], cond_frames, hists,
                       band_fmin=band_fmin, band_fmax=band_fmax,
-                      mask_coi=mask_coi, windows=[(label, 0.0, span)],
+                      mask_coi=mask_coi, windows=[(label, *inner)],
                       analysis_window=None)
+        cond_partners.extend([partner_id] * (len(cond_frames) - before))
         if partner_id not in partners:
             partners.append(partner_id)
         logger.info("re-paired WTC: %s against %s", label, partner_id)
@@ -1158,7 +1167,7 @@ def compute_wtc_pair_null(
     keys = ["sub1", "sub2", "label"] + (["label2"] if "label2" in cond_frames[0].columns else [])
     return NullDraws(draws=[], cond_draws=cond_frames, keys=keys,
                      levels={key: _null_level(hist) for key, hist in hists.items()},
-                     partners=partners)
+                     partners=partners, cond_partners=cond_partners)
 
 
 def _average_iterations(frames: "list[pd.DataFrame]", keys: "list[str]",

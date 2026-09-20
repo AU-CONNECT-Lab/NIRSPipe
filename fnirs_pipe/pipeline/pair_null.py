@@ -226,10 +226,11 @@ def _draw_condition_pairs(
     bads_scope: str,
     scope_tasks: "list[str] | None",
     windows: "list[tuple[str, float, float]]",
+    band_fmin: float,
     n_max: "int | None",
     refused: dict,
 ):
-    """Yield ``(partner_id, label, {fixed: segment, partner: segment})``, both the same length.
+    """Yield ``(partner_id, label, {fixed, partner} segments, the condition's place in them)``.
 
     Each condition is taken from **the stand-in's own onset**, not from where it sat in the
     real dyad's clock. Sessions that run to one timetable drift: the first trigger lines up
@@ -245,7 +246,9 @@ def _draw_condition_pairs(
     """
     from fnirs_pipe.pipeline.group_io import load_group_haemo
     from fnirs_pipe.pipeline.group_quality import apply_group_bads, load_group_sqm
+    from fnirs_pipe.pipeline.synchrony import cone_margin_s
 
+    margin = cone_margin_s(band_fmin)
     drawn = 0
     for entry in candidates:
         if n_max is not None and drawn >= n_max:
@@ -292,15 +295,24 @@ def _draw_condition_pairs(
             # an end through by up to a millisecond, which crop refuses on the far side
             start, real_t0 = max(0.0, start), max(0.0, float(t0))
             span = min(span, end - start, fixed_end - real_t0)
-            segments.append((label, start, span, real_t0))
+            # context either side, so the cone of influence reaches into the pad and not
+            # into the condition: the real table is windowed out of a whole-record
+            # transform and a draw cut to the bare block is not, which is the same length
+            # bias the two routes were measured to differ by. Whatever the recordings can
+            # spare, equal on both sides so the pair stays aligned and the same length.
+            lead = min(margin, start, real_t0)
+            trail = min(margin, end - start - span, fixed_end - real_t0 - span)
+            segments.append((label, start, span, real_t0, lead, max(0.0, trail)))
 
         if not segments:
             continue
         drawn += 1
-        for label, start, span, real_t0 in segments:
-            pair = {fixed_id: fixed_raw.copy().crop(tmin=real_t0, tmax=real_t0 + span),
-                    pid: partner_raw.copy().crop(tmin=start, tmax=start + span)}
-            yield pid, label, pair
+        for label, start, span, real_t0, lead, trail in segments:
+            pair = {fixed_id: fixed_raw.copy().crop(tmin=real_t0 - lead,
+                                                    tmax=real_t0 + span + trail),
+                    pid: partner_raw.copy().crop(tmin=start - lead,
+                                                 tmax=start + span + trail)}
+            yield pid, label, pair, (lead, lead + span)
 
 
 def _draw_pairs(
@@ -499,6 +511,7 @@ def run_pair_null(
     real_roi_by_cond = _real_table(data_dir / f"{stem}-wtcbycond-roihom.tsv")
 
     cond_frames, roi_cond_frames = [], []
+    draw_frames: list = []
     isc_frames: list = []
     isc_cond_frames: list = []
     refused: dict[str, list[str]] = {}
@@ -507,14 +520,15 @@ def run_pair_null(
         """A callback that correlates each drawn pair, whole run and per condition."""
         from fnirs_pipe.pipeline.synchrony import compute_isc_pairs
 
-        def _collect(partner_id: str, label: str, pair: dict) -> None:
+        def _collect(partner_id: str, label: str, pair: dict, inner: tuple) -> None:
             ids = [fixed_id, partner_id]
-            # the pair *is* the condition, cut from each side's own marker, so there is no
-            # window to take out of it and no whole-run scope to add
+            # the segment carries context either side of the condition so the coherence's
+            # cone lands in the pad; the correlation reads the condition out of it, filtered
+            # on the whole segment, which is the order `_isc_rows` documents
             for _ in (0,):
                 try:
                     _, _, pairs, _ = compute_isc_pairs(
-                        pair, ids, ch_type, sep_bands, window=None,
+                        pair, ids, ch_type, sep_bands, window=inner,
                         whiten=isc_whiten, max_lag_s=isc_max_lag_s, band=isc_band)
                 except Exception:
                     logger.debug("re-paired ISC failed against %s (%s)", partner_id, label)
@@ -538,7 +552,7 @@ def run_pair_null(
         draws = _draw_condition_pairs(
             output_dir, task, fixed_id, aligned_real[fixed_id], candidates, desc=desc,
             bads_scope=bads_scope, scope_tasks=scope_tasks, windows=windows,
-            n_max=n_max, refused=refused)
+            band_fmin=band_fmin, n_max=n_max, refused=refused)
         null = compute_wtc_pair_null(
             draws, true_pair, long_axis_over(aligned_real.values(), ch_type, sep_bands),
             band_fmin, band_fmax, fmin=wtc_fmin, fmax=wtc_fmax, cross=cross,
@@ -546,6 +560,8 @@ def run_pair_null(
             sep_bands=sep_bands, windows=windows, analysis_window=analysis_window,
             on_draw=_isc_collector(ch_type))
         partners = null.partners or []
+        for pid, frame in zip(null.cond_partners or [], null.cond_draws):
+            draw_frames.append(frame.assign(chromophore=ch_type, stand_in=pid))
 
         _, by_cond = null.summarise(real=None,
                                     real_by_cond=_for_chroma(real_by_cond, ch_type))
@@ -572,6 +588,8 @@ def run_pair_null(
 
     _log_draw_quality(partners, refused, coverage, len(candidates))
 
+    from fnirs_pipe.pipeline.synchrony import cone_margin_s
+
     sources = [p for p in (path_from(r) for r in aligned_real.values()) if p]
     params = dict(
         band_fmin=band_fmin, band_fmax=band_fmax, mask_coi=mask_coi,
@@ -584,6 +602,7 @@ def run_pair_null(
         # no cond_overlap: each side is cut at its own marker, so the overlap is 1 by
         # construction rather than something the run has to report
         pair_align="per-condition-marker",
+        pair_cond_pad_s=round(cone_margin_s(band_fmin), 3),
         **wtc_grid_params(aligned_real),
         # the null is subtracted from the real table row by row, so the two have to say
         # they were built on the same clock for that subtraction to mean anything
@@ -596,6 +615,9 @@ def run_pair_null(
     # against it.
     out_path = None
     for bucket, suffix, step, extra in (
+            (draw_frames, "-wtcbycond-pairnull-draws",
+             "hyper_wtc_bycondition_pairnull_draws",
+             {"conditions": [w[0] for w in windows]}),
             (cond_frames, "-wtcbycond-pairnull", "hyper_wtc_bycondition_pairnull",
              {"conditions": [w[0] for w in windows]}),
             (roi_cond_frames, "-wtcbycond-roihom-pairnull",
@@ -606,7 +628,8 @@ def run_pair_null(
         path = write_tsv(pd.concat(bucket, ignore_index=True), data_dir / f"{stem}{suffix}.tsv")
         _hyper_sidecar(path, step, sources, **extra, **params)
         logger.info("re-paired WTC table saved: %s", path)
-        out_path = out_path or path
+        if suffix != "-wtcbycond-pairnull-draws":
+            out_path = out_path or path
 
     if out_path is None:
         raise ValueError(
