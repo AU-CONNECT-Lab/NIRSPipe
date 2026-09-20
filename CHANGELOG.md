@@ -24,6 +24,7 @@ All notable changes to this project will be documented in this file.
 - Every stage's sidecar records the separation bands the run used
 
 ### Fixed
+- `fnirs-hyper group-null` reported an all-pairings level when only the draws were crossed, ranking a mean over the diagonal inside a null built from every pairing. It also never checked that the draws and the real tables were on one band
 - `--wtc-cond-transform` put the real per-condition tables and their phase-scrambled null on different routes, silently. The combination is now refused
 - mALFF and zALFF were biased on any run where one short channel was the whole short-channel regressor. The ROI amplitude table inherited it
 - The re-paired null was read off a shorter stretch of its draws than the real table is read off its own. Both now measure the same window

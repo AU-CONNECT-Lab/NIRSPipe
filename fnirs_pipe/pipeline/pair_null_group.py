@@ -81,7 +81,17 @@ def _variants(draws: pd.DataFrame, real: pd.DataFrame, roi_map: "dict | None",
     crossed = {o for o, part in draws.groupby("occasion")
                if "label2" in part.columns
                and (part["label"] != part["label2"].fillna(part["label"])).any()}
-    if crossed:
+    # and the real table, which is the half that was missed: a mean over 14 homologous cells
+    # ranked inside a null built from 196 pairings is not the same statistic on both sides.
+    # The centre survives it, the spread does not, and the null of 196 comes out about a
+    # fifth narrower, which moves a p by a factor of two to four in the permissive direction
+    real_crossed = ("label2" in real.columns
+                    and (real["label"] != real["label2"].fillna(real["label"])).any())
+    if crossed and not real_crossed:
+        logger.warning("no all-pairings level: the draws are crossed and the real table is "
+                       "not, so that level would rank a mean over the diagonal inside a null "
+                       "over every pairing. Rerun the real tables with --wtc-channel-cross")
+    if crossed and real_crossed:
         # Mousley's and Zexin's whole-brain mean is over every pairing, not the diagonal.
         # All or none: 196 pairings for one occasion and 14 for the next is not one
         # statistic, and a part-crossed tree is what a rerun looks like half way through
@@ -135,6 +145,21 @@ def _read_tree(output_dir: Path, suffix: str, task: str, chroma: str,
             f"built from the draws a null writes, so `fnirs-hyper pair-null` or a `run "
             f"--wtc-phase-null` has to have produced them.")
     return pd.concat(frames, ignore_index=True)
+
+
+def _band_of(paths: "set[str]") -> set:
+    """The band each table's sidecar records, as a set so a mismatch is visible."""
+    import json
+
+    bands = set()
+    for tsv in paths:
+        side = Path(tsv).with_suffix(".json")
+        if not side.exists():
+            continue
+        params = json.loads(side.read_text()).get("parameters", {})
+        if params.get("band_fmin") is not None:
+            bands.add((params["band_fmin"], params["band_fmax"]))
+    return bands
 
 
 def _exact_p(beaten: int, n: int) -> float:
@@ -268,6 +293,15 @@ def write_group_null(output_dir: Path, task: str = "full", chroma: str = "hbo",
     draws = _read_tree(output_dir, DRAWS_SUFFIX[null], task, chroma, needs=("draw", "label"))
     real = _read_tree(output_dir, REAL_SUFFIX, task, chroma, needs=("label",))
     sources = sorted(set(draws.source) | set(real.source))
+    # A null averaged over one band and a real value over another measure different things,
+    # and a tree part way through a re-band has both. The stages read the band off each
+    # other's sidecars for this reason; nothing checked it once the tables were on disk
+    bands = _band_of(set(draws.source)) | _band_of(set(real.source))
+    if len(bands) > 1:
+        raise ValueError(
+            f"the draws and the real tables are not on one band: {sorted(bands)}. A null "
+            f"averaged over one band cannot be subtracted from a value averaged over "
+            f"another. Finish whichever rerun is in progress before reading this.")
 
     occ_parts, coh_parts = [], []
     for gran, level, pairings, d, r in _variants(draws, real, roi_map):

@@ -8,6 +8,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
+SEP = chr(9)
+
 from fnirs_pipe.pipeline.pair_null_group import (
     _exact_p, _variants, by_cell, by_cohort, by_occasion, write_group_null)
 
@@ -206,33 +208,63 @@ def test_a_table_predating_the_draw_column_is_refused_not_dropped(tmp_path):
         write_group_null(tmp_path, n_resample=200, seed=3)
 
 
+def _cross(path):
+    """Turn a homologous table on disk into a crossed one, as a crossed run writes it."""
+    d = pd.read_csv(path, sep=SEP)
+    pd.concat([d.assign(label2=d.label),
+               d.assign(label2="S9_D9", coherence=0.9)]).to_csv(path, sep=SEP, index=False)
+
+
+def _paths(root, occ):
+    n = root / f"group-{occ}" / "nirs"
+    return (n / f"group-{occ}_task-full_hyper-wtcbycond-pairnull-draws.tsv",
+            n / f"group-{occ}_task-full_hyper-wtcbycond.tsv")
+
+
 def test_a_part_crossed_tree_gets_no_all_pairings_level(tmp_path, caplog):
     """196 pairings for one occasion and 14 for the next is not one statistic."""
     _write_tree(tmp_path)
-    one = (tmp_path / "group-d03" / "nirs"
-           / "group-d03_task-full_hyper-wtcbycond-pairnull-draws.tsv")
-    d = pd.read_csv(one, sep="\t")
-    crossed = pd.concat([d.assign(label2=d.label),
-                         d.assign(label2="S9_D9", coherence=0.9)])
-    crossed.to_csv(one, sep="\t", index=False)
+    for occ in OCCASIONS:
+        _cross(_paths(tmp_path, occ)[1])
+    _cross(_paths(tmp_path, "d03")[0])
 
     written = write_group_null(tmp_path, n_resample=200, seed=3)
-    cohort = pd.read_csv(written[1], sep="\t")
-    assert set(cohort.pairings) == {"homologous"}
+    assert set(pd.read_csv(written[1], sep=SEP).pairings) == {"homologous"}
     assert "homologous only" in caplog.text
+
+
+def test_crossed_draws_against_a_diagonal_real_table_are_refused(tmp_path, caplog):
+    """The half that was missed: it would rank 14 cells inside a null built from 196."""
+    _write_tree(tmp_path)
+    for occ in OCCASIONS:
+        _cross(_paths(tmp_path, occ)[0])
+
+    written = write_group_null(tmp_path, n_resample=200, seed=3)
+    assert set(pd.read_csv(written[1], sep=SEP).pairings) == {"homologous"}
+    assert "the real table is not" in caplog.text
 
 
 def test_a_fully_crossed_tree_does_get_it(tmp_path):
     _write_tree(tmp_path)
     for occ in OCCASIONS:
-        f = (tmp_path / f"group-{occ}" / "nirs"
-             / f"group-{occ}_task-full_hyper-wtcbycond-pairnull-draws.tsv")
-        d = pd.read_csv(f, sep="\t")
-        pd.concat([d.assign(label2=d.label),
-                   d.assign(label2="S9_D9", coherence=0.9)]).to_csv(f, sep="\t", index=False)
+        for f in _paths(tmp_path, occ):
+            _cross(f)
     written = write_group_null(tmp_path, n_resample=200, seed=3)
-    cohort = pd.read_csv(written[1], sep="\t")
-    assert set(cohort.pairings) == {"homologous", "all"}
+    assert set(pd.read_csv(written[1], sep=SEP).pairings) == {"homologous", "all"}
+
+
+def test_two_bands_in_one_tree_are_refused(tmp_path):
+    """A tree part way through a re-band has one band on the draws and another on the real."""
+    import json
+
+    _write_tree(tmp_path)
+    for occ, band in zip(OCCASIONS, [(0.06, 0.15), (0.02, 0.10), (0.06, 0.15)]):
+        for f in _paths(tmp_path, occ):
+            f.with_suffix(".json").write_text(json.dumps(
+                {"parameters": {"band_fmin": band[0], "band_fmax": band[1]}}))
+    with pytest.raises(ValueError, match="not on one band"):
+        write_group_null(tmp_path, n_resample=200, seed=3)
+
 
 
 # ---- the per-cell tables, corrected ----
