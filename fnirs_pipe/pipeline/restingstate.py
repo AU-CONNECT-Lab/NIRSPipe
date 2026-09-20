@@ -10,7 +10,8 @@ from fnirs_pipe.utils.logging import get_logger
 logger = get_logger("post.restingstate")
 
 
-def compute_alff(raw: mne.io.Raw, low_pass: float, high_pass: float) -> pd.DataFrame:
+def compute_alff(raw: mne.io.Raw, low_pass: float, high_pass: float,
+                 exclude: "list[str] | None" = None) -> pd.DataFrame:
     r"""ALFF/fALFF per channel plus cross-channel mALFF/zALFF standardization.
 
     Expects a broadband (detrended, non-lowpassed) residual: fALFF's denominator spans the
@@ -35,6 +36,14 @@ def compute_alff(raw: mne.io.Raw, low_pass: float, high_pass: float) -> pd.DataF
     All four measures are NaN on a rejected channel, and the ``bad`` column says which those
     are. The mALFF/zALFF reference mean and SD already exclude them, so the blanking only
     removes the values themselves.
+
+    ``exclude`` names channels to treat exactly like rejected ones without calling them
+    rejected: blanked, and out of the reference. It exists for a channel whose residual is
+    identically zero because it was the whole short-channel regressor and was fitted against
+    a copy of itself. Blanking such a channel while leaving it in the reference puts a
+    numerical zero in the mean and SD that every other channel is scaled by, which on a
+    nine-channel chromophore moved mALFF by 22%. The ``bad`` column keeps meaning rejected,
+    since that is what the group tables read.
 
     Rest mode produces two residuals and this function must receive the broadband one.
     Connectivity (FC) wants a bandpassed residual (~0.01-0.08 Hz) so cardiac, respiration and
@@ -79,13 +88,15 @@ def compute_alff(raw: mne.io.Raw, low_pass: float, high_pass: float) -> pd.DataF
     zalff_vals = np.zeros_like(alff_vals)
     bads = set(raw.info["bads"])
     is_bad = np.array([c in bads for c in raw.ch_names])
+    # blanked covers both reasons a channel carries no value; is_bad stays rejection-only
+    blanked = np.array([c in bads or c in set(exclude or ()) for c in raw.ch_names])
     for suffix in (" hbo", " hbr"):
         idx = np.array([c.endswith(suffix) for c in raw.ch_names])
         if not idx.any():
             continue
-        # bad channels are still standardized, but they do not define the reference:
+        # blanked channels are still standardized, but they do not define the reference:
         # their ALFF would shift the mean and SD that every good channel is scaled by
-        ref = idx & ~is_bad
+        ref = idx & ~blanked
         if not ref.any():
             ref = idx
         grp_mean = np.nanmean(alff_vals[ref])
@@ -96,10 +107,10 @@ def compute_alff(raw: mne.io.Raw, low_pass: float, high_pass: float) -> pd.DataF
         if grp_std != 0 and np.isfinite(grp_std):
             zalff_vals[idx] = (alff_vals[idx] - grp_mean) / grp_std
 
-    # rejected channels are blanked rather than dropped, so the frame keeps one row per
-    # channel and a group analysis can stack subjects whose rejections differ
+    # blanked rather than dropped, so the frame keeps one row per channel and a group
+    # analysis can stack subjects whose rejections differ
     for vals in (alff_vals, falff_vals, malff_vals, zalff_vals):
-        vals[is_bad] = np.nan
+        vals[blanked] = np.nan
 
     return pd.DataFrame({
         "channel": raw.ch_names,

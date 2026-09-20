@@ -199,3 +199,37 @@ def test_a_table_missing_its_columns_is_refused(tmp_path):
 
     with pytest.raises(ValueError, match="participant_id"):
         _bad_channels_for(str(table), "01")
+
+
+# ---- exclude: blanked for a reason that is not rejection ----
+
+def test_an_excluded_channel_is_blanked_like_a_rejected_one(haemo):
+    frame = compute_alff(haemo, exclude=[GOOD], **BAND).set_index("channel")
+
+    assert frame.loc[GOOD, ["alff", "falff", "malff", "zalff"]].isna().all()
+    # exclude is not rejection, and the group tables read that column
+    assert not frame.loc[GOOD, "bad"]
+
+
+def test_an_excluded_channel_is_out_of_the_standardisation_reference(haemo):
+    """The defect this guards: a channel fitted against itself has ALFF ~0, and leaving it
+    in the reference drags every other channel's mALFF down."""
+    zeroed = haemo.copy()
+    data = zeroed.get_data()
+    data[zeroed.ch_names.index(GOOD)] = 0.0
+    zeroed = mne.io.RawArray(data, zeroed.info, verbose="error")
+
+    kept = compute_alff(zeroed, **BAND).set_index("channel")
+    dropped = compute_alff(zeroed, exclude=[GOOD], **BAND).set_index("channel")
+
+    others = [c for c in kept.index if c != GOOD and c.endswith("hbo")]
+    assert not np.allclose(kept.loc[others, "malff"], dropped.loc[others, "malff"])
+    # with the zero out of the reference the surviving hbo channels average to 1.0
+    assert np.isclose(dropped.loc[others, "malff"].mean(), 1.0)
+
+
+def test_exclude_defaults_to_changing_nothing(haemo):
+    a = compute_alff(haemo, **BAND)
+    b = compute_alff(haemo, exclude=[], **BAND)
+    assert np.allclose(a[["alff", "falff", "malff", "zalff"]],
+                       b[["alff", "falff", "malff", "zalff"]])

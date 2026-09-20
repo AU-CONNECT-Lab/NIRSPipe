@@ -10,8 +10,8 @@ own r, so the same channel sat at a different height in each and comparing one c
 across the step meant finding it twice in two differently ordered lists. One figure, one
 channel order, and the change is the length of a connector.
 
-Separation is what the grouping is for. The HbO–HbR anticorrelation that the −0.3
-threshold tests for is a property of cortical haemodynamics, so it says nothing about a
+Separation is what the grouping is for. The HbO–HbR anticorrelation is a property of
+cortical haemodynamics, so it says nothing about a
 short channel, which only ever sees scalp. Sorted together the short channels land at one
 end of the list and read as the worst channels on the montage when they are simply not
 being asked the same question. The heatmap rows follow the same grouping, so the block
@@ -19,11 +19,13 @@ dividers inside each chromophore mark the long/short boundary rather than wherev
 acquisition order happened to switch.
 
 Both panels read their colour off one reversed RdBu scale, so a shade means the same r
-whether it is a matrix cell or a dot. The verdict is the dashed −0.3 rule rather than a
-third hue: the green/amber/red fills this replaced separated amber from green by ΔE 5.8
-under protanopia, so the one distinction the panel exists to make was unreadable to a
-red-green colourblind reader. A single threshold rule keeps its green, having nothing to
-be confused against.
+whether it is a matrix cell or a dot. **The panel carries no threshold.** It used to draw a
+dashed rule at r = −0.3, dropped 2026-09-19: the number had no source, and on recorded data
+it failed three of six runs and moved across the line when the low-pass was dropped, so it
+was reporting the passband as much as the physiology. The value is worth reading and the
+verdict was not. This also removed the reason the fills are not a third hue, which was that
+green/amber/red separated amber from green by ΔE 5.8 under protanopia; keep them off anyway
+for the same colourblindness reason if a verdict is ever proposed again.
 """
 
 import mne
@@ -51,8 +53,6 @@ _SCALE, _REVERSE = CORRELATION_SCALE, False
 _MUTED, _GRID, _BASELINE = "#888888", "#eeeeee", "#444444"
 # a white fill at r near zero would vanish on a white surface, so the marks carry a ring
 _MARK_EDGE = "#9aa0a6"
-
-_R_THRESHOLD = -0.3
 
 # what the two stages are called wherever they are named
 _BEFORE_LABEL = "before denoising"
@@ -179,7 +179,7 @@ def _add_dumbbell(fig, groups, r_before, r_after, row, col,
     """Per-pair r, one x position per pair, before as an open ring and after filled.
 
     Ordered best→worst inside each group on the *before* value, so one order serves both
-    stages and the −0.3 crossing happens once along the row.
+    stages and a channel sits at the same x in both.
     """
     xs, labels, before, after, spans = [], [], [], [], []
     x = 0.0
@@ -206,8 +206,6 @@ def _add_dumbbell(fig, groups, r_before, r_after, row, col,
     tip = np.asarray(after, dtype=float) if paired else before
 
     fig.add_hline(y=0.0, line=dict(color=_BASELINE, width=1.0), row=row, col=col)
-    fig.add_hline(y=_R_THRESHOLD, line=dict(color="#27ae60", width=1.0, dash="dash"),
-                  opacity=0.7, row=row, col=col)
 
     if paired:
         seg_x, seg_y = [], []
@@ -231,10 +229,6 @@ def _add_dumbbell(fig, groups, r_before, r_after, row, col,
                        + "r = %{y:.3f}<extra></extra>"),
     ), row=row, col=col)
 
-    rule_text = "r = −0.3 (before)" if task_modelled else "r = −0.3"
-    fig.add_annotation(x=xs[-1] + 0.9, y=_R_THRESHOLD, text=rule_text, showarrow=False,
-                       font=dict(color="#27ae60", size=10), xanchor="right",
-                       yanchor="bottom", row=row, col=col)
     if len(spans) > 1:
         for xa, xb, name in spans:
             fig.add_annotation(x=(xa + xb) / 2, y=1.16, text=f"<b>{name}</b>",
@@ -262,8 +256,9 @@ def hbo_hbr_correlation_figure(
     per pair, which is what a run with no denoising and what a condition page both get.
 
     ``task_modelled`` says the after stage is a GLM residual, with the task model taken out
-    as well as the confounds. The -0.3 rule then reads the before stage only, and the rule
-    and the after column are both labelled to say so.
+    as well as the confounds, so the after column is labelled to say so: a model that
+    explained part of the shared response leaves a weaker anticorrelation with nothing
+    having gone wrong.
     """
     groups = _pair_group(raw_haemo, sep_bands)
     order = _channel_order(raw_haemo, groups)

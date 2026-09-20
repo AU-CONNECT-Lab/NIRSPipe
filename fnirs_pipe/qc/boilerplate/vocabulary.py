@@ -494,7 +494,7 @@ METRIC_DISPLAY: dict[str, tuple[str, str, "tuple[float, float] | None", "str | N
     "ch_dist_max":             ("Max separation (m)", ".3f", None, None),
 
     # haemoglobin
-    "hbo_hbr_corr_mean":       ("HbO-HbR corr", ".3f", (-0.3, 0.0), _LOWER),
+    "hbo_hbr_corr_mean":       ("HbO-HbR corr", ".3f", None, _LOWER),
     "cnr_hbo_mean":            ("CNR HbO", ".3f", None, _HIGHER),
     "cnr_hbr_mean":            ("CNR HbR", ".3f", None, _LOWER),
     "cnr_n_epochs":            ("CNR epochs", "d", None, None),

@@ -612,12 +612,13 @@ def _write_rest_derivatives(
 
     alff_df = None
     if raw_resid_bb is not None:
-        alff_df = compute_alff(raw_resid_bb, low_pass=config.low_pass, high_pass=config.high_pass)
-        empty = set(sole_regressor_channels(raw_resid_bb, config.short_channel,
-                                            separation_bands(config)))
-        if empty:
-            rows = alff_df["channel"].isin(empty)
-            alff_df.loc[rows, ["alff", "falff", "malff", "zalff"]] = np.nan
+        # handed in rather than blanked afterwards: a channel fitted against a copy of
+        # itself must also stay out of the mALFF/zALFF reference, and doing that here and
+        # the blanking there is what let a numerical zero into the reference mean
+        empty = sole_regressor_channels(raw_resid_bb, config.short_channel,
+                                        separation_bands(config))
+        alff_df = compute_alff(raw_resid_bb, low_pass=config.low_pass,
+                               high_pass=config.high_pass, exclude=empty)
         alff_path = build_output_path(
             output_dir=output_dir, subject=config.subject, session=config.session,
             entities=entities, suffix="alff", extension=".tsv",
@@ -708,12 +709,18 @@ def _write_step_snirf(haemo: mne.io.Raw, config: PostConfig, output_dir: Path, d
     )
     # on every stage, not just desc-filtered: a later stage is what downstream tools read,
     # and it is the one that has to name its own passband
+    from fnirs_pipe.qc.metrics._helpers import bands_to_record
+
     parameters = {
         "high_pass": config.high_pass,
         "low_pass": config.low_pass,
         "filter_method": config.filter_method,
         "filter_order": config.filter_order if config.filter_method == "iir" else None,
         "resample_sfreq": config.resample_sfreq,
+        # which channels the run treated as short, so a reader of a derivatives tree can
+        # reproduce the split. Without it neither the short-channel regressors nor the
+        # blanking of a channel fitted against itself can be recovered from the file.
+        **bands_to_record(separation_bands(config)),
         **(lin.params if lin else {}),
     }
     # before the write, while the previous run's sidecar is still the one on disk
