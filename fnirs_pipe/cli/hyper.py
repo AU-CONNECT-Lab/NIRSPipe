@@ -490,6 +490,19 @@ def cmd_band(
               "--wtc-save-maps` to write them", file=sys.stderr)
 
 
+def cmd_group_null(
+    output_dir: Path, task: str, wtc_chroma: str, n_resample: int,
+    seed: int | None, verbose: bool,
+) -> None:
+    """Read the re-paired draws above the cell: one verdict per occasion, one per cohort."""
+    from fnirs_pipe.pipeline.pair_null_group import write_group_null
+
+    setup_logging(verbose=verbose)
+    for path in write_group_null(output_dir, task=task, chroma=wtc_chroma,
+                                 n_resample=n_resample, seed=seed):
+        print(f"group-null -> {path}")
+
+
 def cmd_index(output_dir: Path, group_id: str | None, verbose: bool) -> None:
     """Write one dyad index per group-* directory, from the tables already on disk."""
     from fnirs_pipe.qc.hyper.hyper_index import write_hyper_index
@@ -866,6 +879,31 @@ def _build_parser() -> argparse.ArgumentParser:
                            "'band0p05-0p2', so the new tables sit beside the originals "
                            "rather than replacing them.")
     band.set_defaults(func=cmd_band)
+
+    group_null = sub.add_parser(
+        "group-null", parents=[common],
+        help="Read the re-paired draws above the cell: per occasion, and per cohort.",
+        description="`pair-null` ranks each channel of each dyad inside its own draws, which "
+                    "says where a channel stands and spends the pool's resolution on saying "
+                    "it: against 22 stand-ins no cell can reach a p under 1/23, so a test "
+                    "corrected over a thousand cells rejects almost nothing whatever the "
+                    "data does. This averages the channels first and ranks that, once per "
+                    "occasion and once over the cohort, which cannot say which channel and "
+                    "can say whether the pairing beats its null at all. It reads the draws "
+                    "`pair-null` wrote and runs no transform.")
+    group_null.add_argument("--task", default="full",
+                            help="Task whose tables to read (default full).")
+    group_null.add_argument("--wtc-chroma", choices=("hbo", "hbr"), default="hbo",
+                            help="Chromophore to read (default hbo). One at a time: the two "
+                                 "are separate measurements and averaging across them means "
+                                 "nothing.")
+    group_null.add_argument("--n-resample", type=int, default=20000,
+                            help="Resamples behind the cohort null (default 20000). Each "
+                                 "picks one stand-in per occasion, so the finest p it can "
+                                 "express is 1/(n+1).")
+    group_null.add_argument("--seed", type=int, default=None,
+                            help="Seed the resampling, so the cohort p is reproducible.")
+    group_null.set_defaults(func=cmd_group_null)
 
     index = sub.add_parser(
         "index", parents=[common],
