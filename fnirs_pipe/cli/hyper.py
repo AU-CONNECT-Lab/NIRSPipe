@@ -10,6 +10,7 @@ Every command here takes one derivatives directory and nothing else positional.
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -491,15 +492,16 @@ def cmd_band(
 
 
 def cmd_group_null(
-    output_dir: Path, task: str, wtc_chroma: str, null: str, n_resample: int,
-    seed: int | None, verbose: bool,
+    output_dir: Path, task: str, wtc_chroma: str, null: str, roi_mapping: "Path | None",
+    n_resample: int, seed: int | None, verbose: bool,
 ) -> None:
-    """Read the re-paired draws above the cell: one verdict per occasion, one per cohort."""
+    """Read a null's draws above the cell: one verdict per occasion, one per cohort."""
     from fnirs_pipe.pipeline.pair_null_group import write_group_null
 
     setup_logging(verbose=verbose)
+    roi_map = json.loads(Path(roi_mapping).read_text()) if roi_mapping else None
     for path in write_group_null(output_dir, task=task, chroma=wtc_chroma, null=null,
-                                 n_resample=n_resample, seed=seed):
+                                 roi_map=roi_map, n_resample=n_resample, seed=seed):
         print(f"group-null -> {path}")
 
 
@@ -901,6 +903,13 @@ def _build_parser() -> argparse.ArgumentParser:
                             help="Which null's draws to read (default repaired). Both are "
                                  "read the same way above the cell; they differ in what a "
                                  "draw is, a stand-in against a scrambled partner.")
+    group_null.add_argument("--roi-mapping", type=Path, default=None,
+                            help="Region to channel map, the same file the other stages "
+                                 "take. Given it, each region is reported as its own level "
+                                 "beside the whole-brain mean: the region's homologous "
+                                 "pairings averaged, which is the route Nguyen 2020 and "
+                                 "Miller 2019 take. Omitted, only the whole-brain levels "
+                                 "are written.")
     group_null.add_argument("--n-resample", type=int, default=20000,
                             help="Resamples behind the cohort null (default 20000). Each "
                                  "picks one stand-in per occasion, so the finest p it can "

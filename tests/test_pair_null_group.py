@@ -9,7 +9,7 @@ import pandas as pd
 import pytest
 
 from fnirs_pipe.pipeline.pair_null_group import (
-    _exact_p, by_cohort, by_occasion, write_group_null)
+    _exact_p, _variants, by_cohort, by_occasion, write_group_null)
 
 CHANNELS = ["S1_D1", "S1_D2", "S2_D1", "S2_D2"]
 OCCASIONS = ["d01", "d03", "d04"]
@@ -149,3 +149,85 @@ def test_the_phase_nulls_draws_are_read_the_same_way(tmp_path):
     import json
     side = json.loads(written[1].with_suffix(".json").read_text())
     assert side["parameters"]["null_kind"] == "phase"
+
+
+# ---- every level the draws support, without being asked for one ----
+
+ROI = {"front": ["S1_D1", "S1_D2"], "back": ["S2_D1", "S2_D2"], "thin": ["S1_D1"]}
+
+
+def test_a_homologous_draw_offers_the_whole_brain_level_only():
+    got = [(lv, pr) for lv, pr, _, _ in _variants(_draws(), _real(0.4), None)]
+    assert got == [("whole", "homologous")]
+
+
+def test_a_crossed_draw_also_offers_every_pairing():
+    d = _draws().assign(label2=lambda f: f.label)
+    crossed = pd.concat([d, d.assign(label2="S9_D9", coherence=0.9)])
+    got = [(lv, pr) for lv, pr, _, _ in _variants(crossed, crossed, None)]
+    assert got == [("whole", "homologous"), ("whole", "all")]
+
+
+def test_a_region_map_adds_one_level_per_region_that_has_the_channels():
+    got = [(lv, pr) for lv, pr, _, _ in _variants(_draws(), _real(0.4), ROI)]
+    assert got == [("whole", "homologous"), ("front", "homologous"), ("back", "homologous")]
+
+
+def test_the_written_tables_carry_the_level_and_the_pairings(tmp_path):
+    _write_tree(tmp_path)
+    written = write_group_null(tmp_path, roi_map=ROI, n_resample=500, seed=3)
+    cohort = pd.read_csv(written[1], sep="	")
+    assert list(cohort.columns[:3]) == ["level", "pairings", "condition"]
+    assert set(cohort.level) == {"whole", "front", "back"}
+    assert set(cohort.pairings) == {"homologous"}
+
+
+def test_a_region_is_the_mean_of_its_own_channels(tmp_path):
+    _write_tree(tmp_path)
+    written = write_group_null(tmp_path, roi_map=ROI, n_resample=500, seed=3)
+    cohort = pd.read_csv(written[1], sep="	").set_index("level")
+    # every real value is 0.40 here, so each region reports it and so does the whole brain
+    for level in ("whole", "front", "back"):
+        assert cohort.loc[level, "coherence"] == pytest.approx(0.40)
+
+
+# ---- what the guards refuse ----
+
+def test_a_table_predating_the_draw_column_is_refused_not_dropped(tmp_path):
+    """Concatenating it gives NaN and the occasion leaves the groupby without a word."""
+    _write_tree(tmp_path)
+    stale = (tmp_path / "group-d03" / "nirs"
+             / "group-d03_task-full_hyper-wtcbycond-pairnull-draws.tsv")
+    old = pd.read_csv(stale, sep="\t").rename(columns={"draw": "stand_in"})
+    old.to_csv(stale, sep="\t", index=False)
+    with pytest.raises(ValueError, match="no draw column"):
+        write_group_null(tmp_path, n_resample=200, seed=3)
+
+
+def test_a_part_crossed_tree_gets_no_all_pairings_level(tmp_path, caplog):
+    """196 pairings for one occasion and 14 for the next is not one statistic."""
+    _write_tree(tmp_path)
+    one = (tmp_path / "group-d03" / "nirs"
+           / "group-d03_task-full_hyper-wtcbycond-pairnull-draws.tsv")
+    d = pd.read_csv(one, sep="\t")
+    crossed = pd.concat([d.assign(label2=d.label),
+                         d.assign(label2="S9_D9", coherence=0.9)])
+    crossed.to_csv(one, sep="\t", index=False)
+
+    written = write_group_null(tmp_path, n_resample=200, seed=3)
+    cohort = pd.read_csv(written[1], sep="\t")
+    assert set(cohort.pairings) == {"homologous"}
+    assert "homologous only" in caplog.text
+
+
+def test_a_fully_crossed_tree_does_get_it(tmp_path):
+    _write_tree(tmp_path)
+    for occ in OCCASIONS:
+        f = (tmp_path / f"group-{occ}" / "nirs"
+             / f"group-{occ}_task-full_hyper-wtcbycond-pairnull-draws.tsv")
+        d = pd.read_csv(f, sep="\t")
+        pd.concat([d.assign(label2=d.label),
+                   d.assign(label2="S9_D9", coherence=0.9)]).to_csv(f, sep="\t", index=False)
+    written = write_group_null(tmp_path, n_resample=200, seed=3)
+    cohort = pd.read_csv(written[1], sep="\t")
+    assert set(cohort.pairings) == {"homologous", "all"}

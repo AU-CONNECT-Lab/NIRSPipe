@@ -42,18 +42,77 @@ DRAWS_SUFFIX = {
 }
 
 
-def _homologous(frame: pd.DataFrame, chroma: str) -> pd.DataFrame:
+def _of_chroma(frame: pd.DataFrame, chroma: str) -> pd.DataFrame:
     out = frame[frame["chromophore"] == chroma] if "chromophore" in frame else frame
-    if "label2" in out.columns:
-        out = out[out["label"] == out["label2"]]
     return out.dropna(subset=["coherence"])
 
 
-def _read_tree(output_dir: Path, suffix: str, task: str, chroma: str) -> pd.DataFrame:
+def _homologous(frame: pd.DataFrame) -> pd.DataFrame:
+    """The pairings a homologous null draws: both members' own channel.
+
+    A table with no label2 is homologous by construction, and a tree part way through a
+    crossed rerun has both kinds, so a missing label2 reads as the channel's own rather than
+    dropping the row.
+    """
+    if "label2" not in frame.columns:
+        return frame
+    return frame[frame["label"] == frame["label2"].fillna(frame["label"])]
+
+
+def _variants(draws: pd.DataFrame, real: pd.DataFrame, roi_map: "dict | None",
+              min_channels: int = 2):
+    """Every aggregate the draws on disk can support, as (level, pairings, draws, real).
+
+    Emitted rather than selected, because which ones exist is a property of the draws and not
+    a choice: all 196 pairings only if the null was drawn crossed, regions only if a mapping
+    was given. A caller that has to remember a flag to get the level its reference
+    implementation used will one day forget it.
+    """
+    hom_d, hom_r = _homologous(draws), _homologous(real)
+    yield "whole", "homologous", hom_d, hom_r
+    # a NaN label2 is a homologous table concatenated beside a crossed one, not a crossed
+    # pairing: comparing against NaN is always unequal and would count it as crossed
+    crossed = {o for o, part in draws.groupby("occasion")
+               if "label2" in part.columns
+               and (part["label"] != part["label2"].fillna(part["label"])).any()}
+    if crossed:
+        # Mousley's and Zexin's whole-brain mean is over every pairing, not the diagonal.
+        # All or none: 196 pairings for one occasion and 14 for the next is not one
+        # statistic, and a part-crossed tree is what a rerun looks like half way through
+        short = sorted(set(draws["occasion"].unique()) - crossed)
+        if short:
+            logger.warning("no all-pairings level: %d of %d occasions are homologous only "
+                           "(%s). Rerun those with --wtc-pair-cross, or read the whole "
+                           "homologous level, which every occasion supports",
+                           len(short), draws["occasion"].nunique(), ", ".join(short))
+        else:
+            yield "whole", "all", draws, real
+    for name, channels in (roi_map or {}).items():
+        d = hom_d[hom_d["label"].isin(channels)]
+        r = hom_r[hom_r["label"].isin(channels)]
+        # a thinly covered region is not a region; Nguyen and Miller average the pairings
+        if d["label"].nunique() >= min_channels and r["label"].nunique() >= min_channels:
+            yield name, "homologous", d, r
+
+
+def _read_tree(output_dir: Path, suffix: str, task: str, chroma: str,
+               needs: "tuple[str, ...]" = ()) -> pd.DataFrame:
+    """Every occasion's table concatenated, refusing rather than dropping a malformed one.
+
+    A table missing a column the others have concatenates to NaN and then leaves the groupby
+    without a word, taking that occasion's contribution to every mean with it. One table
+    written by an older version of the pipeline is enough, and nothing downstream shows it.
+    """
     frames = []
     for path in sorted(Path(output_dir).rglob(f"group-*_task-{task}{suffix}")):
         found = re.search(r"group-([^_]+)_task-", path.name)
-        frame = _homologous(pd.read_csv(path, sep="\t"), chroma)
+        frame = _of_chroma(pd.read_csv(path, sep="\t"), chroma)
+        missing = [c for c in needs if c not in frame.columns]
+        if missing:
+            raise ValueError(
+                f"{path.name} has no {', '.join(missing)} column, so its occasion would drop "
+                f"out of every mean silently. It predates the column: rerun that dyad's null, "
+                f"or rename the column if the values are current.")
         frames.append(frame.assign(occasion=found.group(1), source=str(path)))
     if not frames:
         raise FileNotFoundError(
@@ -122,8 +181,7 @@ def by_cohort(draws: pd.DataFrame, real: pd.DataFrame,
         observed = real_part[real_part.occasion.isin(occasions)].groupby("occasion").coherence.mean()
         pools = [wide.loc[o].dropna().to_numpy(dtype=float) for o in occasions]
         pools = [p for p in pools if p.size]
-        null = np.array([np.mean([p[rng.integers(p.size)] for p in pools])
-                         for _ in range(n_resample)])
+        null = np.mean([p[rng.integers(0, p.size, n_resample)] for p in pools], axis=0)
         value = float(observed.mean())
         # the real statistic counted into its own null, as at occasion level
         rows.append({
@@ -140,27 +198,44 @@ def by_cohort(draws: pd.DataFrame, real: pd.DataFrame,
 
 
 def write_group_null(output_dir: Path, task: str = "full", chroma: str = "hbo",
-                     null: str = "repaired", n_resample: int = 20000,
-                     seed: int | None = None) -> list[Path]:
-    """Both levels, written beside the merged tables, for whichever null drew the draws."""
+                     null: str = "repaired", roi_map: "dict | None" = None,
+                     n_resample: int = 20000, seed: int | None = None) -> list[Path]:
+    """Every level the draws support, written beside the merged tables.
+
+    Two files, not one per level: the levels differ in two columns and are read against each
+    other, so they belong in one table. `level` is ``whole`` or a region name, `pairings` is
+    which channel pairings entered the mean.
+    """
     from fnirs_pipe.pipeline.group_io import _hyper_sidecar
 
     output_dir = Path(output_dir)
-    draws = _read_tree(output_dir, DRAWS_SUFFIX[null], task, chroma)
-    real = _read_tree(output_dir, REAL_SUFFIX, task, chroma)
+    draws = _read_tree(output_dir, DRAWS_SUFFIX[null], task, chroma, needs=("draw", "label"))
+    real = _read_tree(output_dir, REAL_SUFFIX, task, chroma, needs=("label",))
     sources = sorted(set(draws.source) | set(real.source))
-    logger.info("group-level %s null: %d occasions, %d channels, chroma %s",
-                null, draws.occasion.nunique(), draws.label.nunique(), chroma)
+
+    occ_parts, coh_parts = [], []
+    for level, pairings, d, r in _variants(draws, real, roi_map):
+        logger.info("%s null, level %s over %s pairings: %d occasions, %d channels",
+                    null, level, pairings, d.occasion.nunique(), d.label.nunique())
+        occ_parts.append(by_occasion(d, r).assign(level=level, pairings=pairings))
+        coh_parts.append(by_cohort(d, r, n_resample=n_resample, seed=seed)
+                         .assign(level=level, pairings=pairings))
+
+    def tidy(parts):
+        out = pd.concat(parts, ignore_index=True)
+        front = ["level", "pairings", "condition"]
+        return out[front + [c for c in out.columns if c not in front]]
 
     params = dict(null_kind=null, chroma=chroma, task=task,
                   n_resample=n_resample, seed=seed,
-                  channels="homologous", statistic="mean over channels, then over occasions")
+                  levels=sorted({p for p in pd.concat(coh_parts).level.unique()}),
+                  statistic="mean over channel pairings, then over occasions")
     written = []
     for frame, stem, step in (
-            (by_occasion(draws, real),
+            (tidy(occ_parts),
              f"group_hyper_wtc_bycondition_{_TAG[null]}_byoccasion",
              f"hyper_{null}_null_by_occasion"),
-            (by_cohort(draws, real, n_resample=n_resample, seed=seed),
+            (tidy(coh_parts),
              f"group_hyper_wtc_bycondition_{_TAG[null]}_cohort",
              f"hyper_{null}_null_cohort")):
         path = output_dir / f"{stem}.tsv"
