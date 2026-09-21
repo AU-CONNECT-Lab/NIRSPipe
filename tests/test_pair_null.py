@@ -10,7 +10,7 @@ along with the axis rule that lets a stand-in with a different montage be drawn 
 import numpy as np
 import pytest
 
-from fnirs_pipe.pipeline.hyper import synchrony
+from fnirs_pipe.pipeline.hyper import surrogate
 from fnirs_pipe.pipeline.hyper.surrogate import compute_wtc_pair_null
 from fnirs_pipe.pipeline.hyper.wtc import WTCResult
 
@@ -47,8 +47,8 @@ def stub(monkeypatch):
         return WTCResult(pairs={key: {label: _map(value) for label in (axis or [])}},
                          freqs=FREQS, times=TIMES)
 
-    monkeypatch.setattr(synchrony, "_long_signals", fake_signals)
-    monkeypatch.setattr(synchrony, "_wtc_over_pairs", fake_pairs)
+    monkeypatch.setattr(surrogate, "_long_signals", fake_signals)
+    monkeypatch.setattr(surrogate, "_wtc_over_pairs", fake_pairs)
     return seen
 
 

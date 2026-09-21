@@ -223,16 +223,16 @@ def stub_null(monkeypatch):
     Neither is what these tests are about, and stubbing both keeps them exact: the map is
     fixed, so every number below is arithmetic rather than a coherence estimate.
     """
-    from fnirs_pipe.pipeline.hyper import synchrony
+    from fnirs_pipe.pipeline.hyper import surrogate
 
     result = _result({"S1_D1": _ramp_map(0.2, 0.8)})
-    monkeypatch.setattr(synchrony, "_long_signals",
+    monkeypatch.setattr(surrogate, "_long_signals",
                         lambda raw, ch_type, sep_bands: {"S1_D1": np.arange(8.0)})
     # evaluated as an argument to the stubbed `_wtc_over_pairs`, so stubbing that one is not
     # enough: it reads the montage off recordings these tests do not have
-    monkeypatch.setattr(synchrony, "long_axis_over", lambda *a, **k: ["S1_D1"])
-    monkeypatch.setattr(synchrony, "_wtc_over_pairs", lambda *a, **k: result)
-    return synchrony
+    monkeypatch.setattr(surrogate, "long_axis_over", lambda *a, **k: ["S1_D1"])
+    monkeypatch.setattr(surrogate, "_wtc_over_pairs", lambda *a, **k: result)
+    return surrogate
 
 
 def test_no_windows_leaves_the_second_table_unbuilt(stub_null):

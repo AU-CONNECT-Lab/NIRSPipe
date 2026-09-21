@@ -185,10 +185,10 @@ def run_hyper_post(
     from fnirs_pipe.exceptions import StageError
     from fnirs_pipe.io.derivatives import group_data_dir
     from fnirs_pipe.pipeline.hyper import _hyper_sidecar
-    # straight from synchrony, which defines them. The package re-exports the set, and
+    # straight from the modules that define them. The package re-exports the set, and
     # taking them from there makes the coherence look like a property of the group loader
-    from fnirs_pipe.pipeline.hyper.isc import compute_isc_pairs, roi_mean_of_isc
     from fnirs_pipe.pipeline.hyper._helpers import long_axis_over
+    from fnirs_pipe.pipeline.hyper.isc import compute_isc_pairs, roi_mean_of_isc
     from fnirs_pipe.pipeline.hyper.roi import roi_mean_of_channels, roi_mean_of_homologous
     from fnirs_pipe.pipeline.hyper.wtc import (
         WTCResult,

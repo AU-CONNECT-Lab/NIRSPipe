@@ -17,7 +17,7 @@ per pair is far too slow for a suite. These assert our half of the contract.
 import numpy as np
 import pytest
 
-from fnirs_pipe.pipeline.hyper import synchrony
+from fnirs_pipe.pipeline.hyper import wtc
 
 LABELS = ["S1_D1", "S1_D2", "S2_D2"]
 
@@ -51,7 +51,7 @@ def inputs(make_raw):
 
 def _run(inputs, seed, significance=True, mc_count=300):
     raws, signals = inputs
-    return synchrony._wtc_over_pairs(
+    return wtc._wtc_over_pairs(
         raws, signals, fmin=0.004, fmax=0.2,
         significance=significance, seed=seed, mc_count=mc_count,
     )
