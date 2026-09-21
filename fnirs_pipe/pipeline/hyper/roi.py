@@ -18,8 +18,7 @@ from fnirs_pipe.pipeline.hyper._helpers import _fisher_z
 from fnirs_pipe.pipeline.hyper.wtc import WTCResult, _circular_stats
 from fnirs_pipe.utils.logging import get_logger
 
-# the caller's logger name, kept so existing log filters still match
-logger = get_logger("pipeline.hyperscanning")
+logger = get_logger("pipeline.roi")
 
 
 def _mean_phase(phases: "list[np.ndarray]") -> "np.ndarray | None":

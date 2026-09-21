@@ -11,7 +11,8 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 - The hyperscanning modules moved into `fnirs_pipe.pipeline.hyper`; `pipeline.hyperscanning` is now `pipeline.hyper`
-- Inter-subject correlation split out of `synchrony` into `pipeline.hyper.isc`
+- `pipeline.hyper.synchrony` split into `wtc`, `surrogate`, `coherence`, `roi`, `isc` and `_helpers`
+- The logger `pipeline.hyperscanning` is gone; those modules log under their own names, `pipeline.wtc`, `pipeline.surrogate`, `pipeline.coherence`, `pipeline.roi`, `pipeline.isc`
 - The ROI correlation tables record which channels each region was averaged from, as the seed map and the ROI amplitude table already did
 
 ## [0.45.0] - 2026-09-19

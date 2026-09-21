@@ -27,8 +27,7 @@ from fnirs_pipe.pipeline.hyper._helpers import _fisher_z, _shared_sfreq, long_ax
 from fnirs_pipe.pipeline.hyper.surrogate import phase_scramble
 from fnirs_pipe.utils.logging import get_logger
 
-# the caller's logger name, kept so existing log filters still match
-logger = get_logger("pipeline.hyperscanning")
+logger = get_logger("pipeline.isc")
 
 
 ISC_MAX_AR_ORDER = 32

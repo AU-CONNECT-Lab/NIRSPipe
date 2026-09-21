@@ -31,8 +31,7 @@ from fnirs_pipe.pipeline.hyper.wtc import (
 )
 from fnirs_pipe.utils.logging import get_logger
 
-# the caller's logger name, kept so existing log filters still match
-logger = get_logger("pipeline.hyperscanning")
+logger = get_logger("pipeline.surrogate")
 
 
 def phase_scramble(sig: np.ndarray, rng: np.random.Generator) -> np.ndarray:

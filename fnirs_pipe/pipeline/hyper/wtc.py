@@ -29,8 +29,7 @@ from fnirs_pipe.pipeline.hyper._helpers import (_fisher_z, _long_signals, _share
                                                 long_axis_over)
 from fnirs_pipe.utils.logging import get_logger
 
-# the caller's logger name, kept so existing log filters still match
-logger = get_logger("pipeline.hyperscanning")
+logger = get_logger("pipeline.wtc")
 
 
 @dataclass

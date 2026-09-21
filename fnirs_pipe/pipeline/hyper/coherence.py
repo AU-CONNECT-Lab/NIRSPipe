@@ -19,8 +19,7 @@ from fnirs_pipe.pipeline.hyper._helpers import _long_by_label, _shared_sfreq
 from fnirs_pipe.pipeline.hyper.surrogate import phase_scramble
 from fnirs_pipe.utils.logging import get_logger
 
-# the caller's logger name, kept so existing log filters still match
-logger = get_logger("pipeline.hyperscanning")
+logger = get_logger("pipeline.coherence")
 
 
 def compute_pairwise_coherence(
