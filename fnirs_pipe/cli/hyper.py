@@ -480,7 +480,10 @@ def cmd_run(
         except Exception:
             logger.warning("group-%s | dyad index failed", gid, exc_info=True)
 
-    _merge_reminder(output_dir)
+    try:
+        _merge_reminder(output_dir)      # a hint, never a reason to fail the run
+    except Exception as exc:
+        logger.debug("merge reminder skipped: %s", exc)
 
 
 def cmd_band(
@@ -599,7 +602,14 @@ def cmd_pair_null(
     if failures:
         print(f"\n{failures} group(s) failed", file=sys.stderr)
         raise SystemExit(1)
-    _merge_reminder(output_dir)
+    # a closing hint must not decide the exit code. This one has already cost a run: five
+    # dyads reported failure after every table was written, because the reminder's import
+    # broke under a refactor, and a null that takes an hour a dyad looked like it had lost
+    # its work when it had not
+    try:
+        _merge_reminder(output_dir)
+    except Exception as exc:
+        logger.debug("merge reminder skipped: %s", exc)
 
 def cmd_merge(output_dir: Path, verbose: bool) -> None:
     """Merge every per-dyad WTC band-mean table into one long table per kind."""

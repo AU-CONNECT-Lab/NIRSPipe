@@ -8,7 +8,11 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 - The Hyper Analysis page reaches `pair-null` and `group-null`; the command dropdown offered neither
+- `fnirs-hyper group-null`'s cohort tables carry four corrections, `q` (BH), `q_by`, `q_holm`, `q_bonferroni`, and a `family` column; only the per-cell tables had one
 - `fnirs-hyper group-null` writes both reads of the cohort test, `test` column `resample` and `paired`; the phase null is only valid read paired above the cell
+
+### Fixed
+- `fnirs-hyper run` and `pair-null` no longer fail on the closing merge hint, which reported five dyads failed after every table was written
 
 ### Changed
 - The hyperscanning modules moved into `fnirs_pipe.pipeline.hyper`; `pipeline.hyperscanning` is now `pipeline.hyper`

@@ -285,6 +285,49 @@ def _paired_row(cond, observed: pd.Series, pools: "dict[str, np.ndarray]") -> di
     return row
 
 
+_CORRECTIONS = {"q": "fdr_bh", "q_by": "fdr_by",
+                "q_holm": "holm", "q_bonferroni": "bonferroni"}
+
+
+def correct_cohort(frame: pd.DataFrame) -> pd.DataFrame:
+    """Add a corrected p per method, the family being one condition at one level.
+
+    ::
+
+      channel granularity, 14 channels in condition game1  ->  family 14, four q columns
+
+    Four methods rather than one, because the count depends on which and a report that names
+    no method cannot be read. ``q`` stays Benjamini-Hochberg, so a caller reading that column
+    gets what it always got; BH is also the most permissive of the four on sparse effects,
+    which makes it the choice most favourable to a positive result. ``q_by`` is the version
+    valid under arbitrary dependence and is the conservative bound.
+
+    ``family`` is the number of tests the correction ran over. It matters: at whole-brain
+    granularity the family is one cell, so every q equals its p and no correction happened.
+    A count quoted without it is not interpretable.
+
+    Rows whose ``p`` is absent, which is what a paired test over fewer than three occasions
+    leaves, take no part in any family and keep a blank q.
+    """
+    from statsmodels.stats.multitest import multipletests
+
+    frame = frame.copy()
+    for col in _CORRECTIONS:
+        frame[col] = np.nan
+    frame["family"] = 0
+    keys = [k for k in ("granularity", "pairings", "test", "condition") if k in frame.columns]
+    if "p" not in frame.columns or not keys:
+        return frame
+    for _, part in frame.groupby(keys, dropna=False):
+        usable = part[part["p"].notna()]
+        if usable.empty:
+            continue
+        for col, method in _CORRECTIONS.items():
+            frame.loc[usable.index, col] = multipletests(usable["p"], method=method)[1]
+        frame.loc[part.index, "family"] = len(usable)
+    return frame
+
+
 def by_cell(output_dir: Path, task: str, chroma: str, null: str) -> "pd.DataFrame | None":
     """The per-cell percentiles a null already wrote, turned into corrected p values.
 
@@ -371,7 +414,11 @@ def write_group_null(output_dir: Path, task: str = "full", chroma: str = "hbo",
                   n_resample=n_resample, seed=seed,
                   granularities=sorted(pd.concat(coh_parts).granularity.unique()),
                   statistic="mean over channel pairings, then over occasions",
-                  cell_fdr_family="one condition and level, over occasions and pairings")
+                  cell_fdr_family="one condition and level, over occasions and pairings",
+                  cohort_corrections=dict(_CORRECTIONS),
+                  cohort_correction_family="one condition, one granularity, one pairing set "
+                                           "and one test, over that level's cells; the "
+                                           "`family` column carries its size")
     cells = by_cell(output_dir, task, chroma, null)
     if cells is not None:
         passing = int((cells["q"] < 0.05).sum())
@@ -385,7 +432,7 @@ def write_group_null(output_dir: Path, task: str = "full", chroma: str = "hbo",
             (tidy(occ_parts),
              f"group_hyper_wtc_bycondition_{_TAG[null]}_byoccasion",
              f"hyper_{null}_null_by_occasion"),
-            (tidy(coh_parts),
+            (correct_cohort(tidy(coh_parts)),
              f"group_hyper_wtc_bycondition_{_TAG[null]}_cohort",
              f"hyper_{null}_null_cohort")):
         if len(frame) == 0:

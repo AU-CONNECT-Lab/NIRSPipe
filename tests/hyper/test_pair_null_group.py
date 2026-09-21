@@ -4,6 +4,9 @@ The point of averaging before ranking is that a pool of 22 cannot express a p un
 cell, so these hold the arithmetic that makes a cohort verdict possible at all.
 """
 
+import json
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -11,7 +14,8 @@ import pytest
 SEP = chr(9)
 
 from fnirs_pipe.pipeline.hyper.pair_null_group import (
-    _exact_p, _variants, by_cell, by_cohort, by_occasion, write_group_null)
+    _exact_p, _variants, by_cell, by_cohort, by_occasion, correct_cohort,
+    write_group_null)
 
 CHANNELS = ["S1_D1", "S1_D2", "S2_D1", "S2_D2"]
 OCCASIONS = ["d01", "d03", "d04"]
@@ -385,3 +389,74 @@ def test_two_occasions_carry_a_lift_but_no_t():
     paired = by_cohort(draws, real, n_resample=500, seed=1).query("test == 'paired'").iloc[0]
     assert np.isfinite(paired.lift)
     assert pd.isna(paired.get("p", np.nan))
+
+
+# ---- the corrections on the cohort table ----
+
+def _cohort_frame():
+    """A cohort table shaped the way `write_group_null` assembles one."""
+    rows = []
+    for gran, levels in (("whole", ["whole"]), ("roi", ["front", "back"]),
+                         ("channel", CHANNELS)):
+        for level in levels:
+            for cond, p in (("game", 0.001), ("rest", 0.30)):
+                rows.append({"granularity": gran, "level": level, "pairings": "homologous",
+                             "condition": cond, "test": "paired", "p": p, "lift": 0.01})
+    return pd.DataFrame(rows)
+
+
+def test_the_family_is_the_cells_of_one_condition_at_one_level():
+    out = correct_cohort(_cohort_frame())
+    fam = out.groupby(["granularity", "condition"]).family.first()
+    assert fam[("channel", "game")] == len(CHANNELS)
+    assert fam[("roi", "game")] == 2
+    # one cell is no family, and the column has to say so rather than look corrected
+    assert fam[("whole", "game")] == 1
+
+
+def test_a_family_of_one_leaves_q_equal_to_p():
+    out = correct_cohort(_cohort_frame())
+    whole = out[out.granularity == "whole"]
+    for col in ("q", "q_by", "q_holm", "q_bonferroni"):
+        assert whole[col].to_numpy() == pytest.approx(whole.p.to_numpy())
+
+
+def test_q_stays_benjamini_hochberg_so_an_existing_reader_is_unaffected():
+    from statsmodels.stats.multitest import multipletests
+    out = correct_cohort(_cohort_frame())
+    part = out[(out.granularity == "channel") & (out.condition == "game")]
+    assert part["q"].to_numpy() == pytest.approx(
+        multipletests(part["p"], method="fdr_bh")[1])
+
+
+def test_the_four_methods_are_ordered_bh_then_the_stricter_ones():
+    """BH is the most permissive of the four, which is why it is the one reported."""
+    frame = _cohort_frame()
+    # a family with a spread of p values, so the methods can differ
+    ch = frame[(frame.granularity == "channel") & (frame.condition == "game")].index
+    frame.loc[ch, "p"] = [0.001, 0.02, 0.2, 0.6]
+    out = correct_cohort(frame)
+    part = out.loc[ch]
+    assert (part["q"] <= part["q_by"] + 1e-12).all()
+    assert (part["q"] <= part["q_bonferroni"] + 1e-12).all()
+
+
+def test_a_row_without_a_p_takes_no_part_in_its_family():
+    frame = _cohort_frame()
+    ch = frame[(frame.granularity == "channel") & (frame.condition == "game")].index
+    frame.loc[ch[0], "p"] = np.nan
+    out = correct_cohort(frame)
+    part = out.loc[ch]
+    assert pd.isna(part.loc[ch[0], "q"])
+    assert (part["family"] == len(CHANNELS) - 1).all()
+
+
+def test_the_written_cohort_table_carries_the_corrections(tmp_path):
+    _write_tree(tmp_path)
+    written = write_group_null(tmp_path, roi_map=ROI, n_resample=500, seed=3)
+    cohort = pd.read_csv(written[1], sep="	")
+    for col in ("q", "q_by", "q_holm", "q_bonferroni", "family"):
+        assert col in cohort.columns
+    # the sidecar has to name the family, the count being uninterpretable without it
+    side = json.loads(Path(str(written[1]).replace(".tsv", ".json")).read_text())
+    assert "cohort_correction_family" in side["parameters"]
