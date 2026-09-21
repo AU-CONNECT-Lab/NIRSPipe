@@ -74,7 +74,7 @@ def test_wtc_never_pairs_the_short_channel():
 
 
 def test_isc_reads_the_same_channels_as_wtc():
-    from fnirs_pipe.pipeline.hyper.synchrony import compute_isc
+    from fnirs_pipe.pipeline.hyper.isc import compute_isc
 
     subject_ids = ["sub-10031", "sub-10032"]
     raws = dict(zip(subject_ids, (_haemo("10031"), _haemo("10032"))))
@@ -100,7 +100,7 @@ def _tagged(subject: str, drop: str | None = None) -> mne.io.Raw:
 
 
 def test_isc_matches_channels_by_label_not_position():
-    from fnirs_pipe.pipeline.hyper.synchrony import compute_isc
+    from fnirs_pipe.pipeline.hyper.isc import compute_isc
 
     # sub-B rejected S2_D2, so its remaining channels sit one position earlier than sub-A's
     subject_ids = ["sub-A", "sub-B"]
@@ -125,7 +125,7 @@ def test_the_axis_is_the_union_of_the_two_montages():
 
 
 def test_isc_keeps_a_channel_only_one_member_has():
-    from fnirs_pipe.pipeline.hyper.synchrony import compute_isc
+    from fnirs_pipe.pipeline.hyper.isc import compute_isc
 
     subject_ids = ["sub-A", "sub-B"]
     a, b = _tagged("10031"), _tagged("10032")
@@ -139,7 +139,7 @@ def test_isc_keeps_a_channel_only_one_member_has():
 
 
 def test_the_blanked_column_is_the_one_that_was_named():
-    from fnirs_pipe.pipeline.hyper.synchrony import compute_isc
+    from fnirs_pipe.pipeline.hyper.isc import compute_isc
 
     # rejections reach ISC on info["bads"], the way load_group_haemo leaves them and the
     # way the WTC path reads them
@@ -154,7 +154,7 @@ def test_the_blanked_column_is_the_one_that_was_named():
 
 def test_isc_refuses_two_sampling_rates():
     """WTC raises on this; ISC used to pair sample i with sample i and answer anyway."""
-    from fnirs_pipe.pipeline.hyper.synchrony import compute_isc
+    from fnirs_pipe.pipeline.hyper.isc import compute_isc
 
     a, b = _tagged("10031"), _tagged("10032")
     b.resample(b.info["sfreq"] / 2, verbose="error")
@@ -392,7 +392,7 @@ ISC_LABELS = ["S1_D1", "S2_D2", "S3_D3", "S4_D4"]
 
 
 def _isc_roi(mat, **kwargs):
-    from fnirs_pipe.pipeline.hyper.synchrony import roi_mean_of_isc
+    from fnirs_pipe.pipeline.hyper.isc import roi_mean_of_isc
 
     return roi_mean_of_isc(np.asarray(mat, dtype=float), ISC_LABELS, ISC_ROIS, **kwargs)
 
@@ -442,7 +442,7 @@ def test_a_roi_cell_under_the_minimum_is_left_blank():
 
 def test_no_roi_map_is_no_matrix_rather_than_an_empty_one():
     assert _isc_roi(np.zeros((4, 4)))[0] is not None
-    from fnirs_pipe.pipeline.hyper.synchrony import roi_mean_of_isc
+    from fnirs_pipe.pipeline.hyper.isc import roi_mean_of_isc
 
     assert roi_mean_of_isc(np.zeros((4, 4)), ISC_LABELS, {}) == (None, None)
     assert roi_mean_of_isc(None, ISC_LABELS, ISC_ROIS) == (None, None)

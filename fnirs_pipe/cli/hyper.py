@@ -15,7 +15,7 @@ import sys
 from pathlib import Path
 
 from fnirs_pipe.cli import _shared
-from fnirs_pipe.pipeline.hyper.synchrony import ISC_MAX_AR_ORDER
+from fnirs_pipe.pipeline.hyper.isc import ISC_MAX_AR_ORDER
 from fnirs_pipe.qc.metrics import SCI_PASS
 from fnirs_pipe.utils.logging import get_logger, setup_logging
 

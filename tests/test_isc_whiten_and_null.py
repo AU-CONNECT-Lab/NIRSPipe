@@ -16,7 +16,7 @@ import mne
 import numpy as np
 import pytest
 
-from fnirs_pipe.pipeline.hyper.synchrony import (
+from fnirs_pipe.pipeline.hyper.isc import (
     _ar_whiten, _isc_from_rows, _isc_matrix, compute_isc, compute_isc_pairs,
 )
 from tests._synth import synth_raw

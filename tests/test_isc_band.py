@@ -13,7 +13,7 @@ import numpy as np
 import pytest
 
 from fnirs_pipe.cli.hyper import _warn_band_mismatch
-from fnirs_pipe.pipeline.hyper.synchrony import _band_limit, compute_isc
+from fnirs_pipe.pipeline.hyper.isc import _band_limit, compute_isc
 
 SFREQ = 10.0
 N = 4000

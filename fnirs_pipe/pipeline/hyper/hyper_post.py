@@ -130,7 +130,7 @@ def write_isc_matrix(
     """Write the matrix the ISC panel is drawn from, so the numbers can leave the report.
 
     Both axes carry the montage's channel labels, which is how
-    :func:`~fnirs_pipe.pipeline.hyper.synchrony.compute_isc` pairs the
+    :func:`~fnirs_pipe.pipeline.hyper.isc.compute_isc` pairs the
     two brains: cell (i, j) is the first subject's channel i against the other's channel j.
     Rejected channels are blank rather than absent, so the file's shape is the montage's
     however many channels a given dyad lost.
@@ -187,14 +187,13 @@ def run_hyper_post(
     from fnirs_pipe.pipeline.hyper import _hyper_sidecar
     # straight from synchrony, which defines them. The package re-exports the set, and
     # taking them from there makes the coherence look like a property of the group loader
+    from fnirs_pipe.pipeline.hyper.isc import compute_isc_pairs, roi_mean_of_isc
     from fnirs_pipe.pipeline.hyper.synchrony import (
         WTCResult,
-        compute_isc_pairs,
         compute_wtc,
         long_axis_over,
         roi_mean_of_channels,
-    roi_mean_of_homologous,
-        roi_mean_of_isc,
+        roi_mean_of_homologous,
         window_result,
         wtc_band_mean,
         wtc_grid_params,

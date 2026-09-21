@@ -519,7 +519,7 @@ def run_pair_null(
 
     def _isc_collector(ch_type: str):
         """A callback that correlates each drawn pair, whole run and per condition."""
-        from fnirs_pipe.pipeline.hyper.synchrony import compute_isc_pairs
+        from fnirs_pipe.pipeline.hyper.isc import compute_isc_pairs
 
         def _collect(partner_id: str, label: str, pair: dict, inner: tuple) -> None:
             ids = [fixed_id, partner_id]
