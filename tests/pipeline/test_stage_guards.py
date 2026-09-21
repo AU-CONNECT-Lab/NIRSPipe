@@ -19,7 +19,7 @@ from fnirs_pipe.pipeline.prep_pipeline import PrepConfig, run_prep
 from fnirs_pipe.qc.metrics import compute_prep_haemo_sqm
 from fnirs_pipe.utils.lineage import Recorder, stamp
 
-from ._synth import synth_raw
+from tests._synth import synth_raw
 
 _BANDS = dict(cardiac_l_freq=0.7, cardiac_h_freq=1.5, resp_l_freq=0.2, resp_h_freq=0.5)
 

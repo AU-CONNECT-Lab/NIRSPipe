@@ -10,7 +10,7 @@ import pytest
 from fnirs_pipe.io.snirf import read_snirf, write_snirf
 from fnirs_pipe.utils.lineage import lineage_of, path_from, stage_of
 
-from ._synth import synth_raw
+from tests._synth import synth_raw
 
 
 @pytest.fixture(scope="module")

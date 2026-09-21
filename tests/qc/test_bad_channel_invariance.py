@@ -28,7 +28,7 @@ from fnirs_pipe.qc.metrics import (
     compute_sci_scores,
 )
 from fnirs_pipe.utils.lineage import stamp
-from ._synth import synth_raw
+from tests._synth import synth_raw
 
 CARDIAC = (0.7, 1.5)
 RESP = (0.15, 0.4)

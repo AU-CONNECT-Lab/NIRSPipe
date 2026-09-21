@@ -28,7 +28,7 @@ from numpy.testing import assert_allclose
 
 from fnirs_pipe.pipeline.glm import run_glm_pipeline
 from fnirs_pipe.utils.lineage import stamp
-from ._synth import synth_raw
+from tests._synth import synth_raw
 
 FIT = dict(stim_dur=5.0, hrf_model="spm", drift_model="polynomial",
            high_pass=None, drift_order=1, fir_delays=None)

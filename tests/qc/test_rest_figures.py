@@ -144,7 +144,7 @@ def test_both_matrices_use_the_report_s_one_correlation_scale():
 def haemo():
     import mne
 
-    from ._synth import synth_raw
+    from tests._synth import synth_raw
 
     raw = synth_raw("01", "rest", duration=40.0, motion_onset=None)
     od = mne.preprocessing.nirs.optical_density(raw, verbose="error")

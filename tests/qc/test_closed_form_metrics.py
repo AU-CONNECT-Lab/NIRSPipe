@@ -38,7 +38,7 @@ from fnirs_pipe.qc.metrics import (
     long_short_channels,
 )
 
-from ._synth import synth_raw
+from tests._synth import synth_raw
 
 
 # ---- GCOR ----

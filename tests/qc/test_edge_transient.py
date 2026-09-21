@@ -11,7 +11,7 @@ import pytest
 
 from fnirs_pipe.qc.metrics import EDGE_S, edge_to_mid_rms
 
-from ._synth import synth_raw
+from tests._synth import synth_raw
 
 
 @pytest.fixture(scope="module")

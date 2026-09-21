@@ -29,7 +29,7 @@ from fnirs_pipe.qc.subject.sqm_record import build_sqm_records
 from fnirs_pipe.utils import is_optical_density
 from fnirs_pipe.utils.lineage import stage_of
 
-from ._synth import SFREQ, synth_raw
+from tests._synth import SFREQ, synth_raw
 
 _BANDS = dict(cardiac_l_freq=0.7, cardiac_h_freq=1.5, resp_l_freq=0.2, resp_h_freq=0.5)
 _BASE = dict(dpf=[6.0, 6.0], sci_threshold=0.8, motion_correction="tddr", **_BANDS)

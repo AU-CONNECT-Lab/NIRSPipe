@@ -42,7 +42,7 @@ from fnirs_pipe.qc.subject.sqm_record import (
     scan_runs,
 )
 
-from ._synth import SFREQ, synth_raw
+from tests._synth import SFREQ, synth_raw
 
 _BANDS = dict(cardiac_l_freq=0.7, cardiac_h_freq=1.5, resp_l_freq=0.2, resp_h_freq=0.5)
 # below the synthetic recording's rate, so `resampled` is a different file from `filtered`

@@ -93,7 +93,7 @@ def test_a_denoise_run_records_its_drift_cutoff(tmp_path):
     from fnirs_pipe.pipeline.prep_pipeline import PrepConfig, run_prep
     from fnirs_pipe.utils.lineage import lineage_of
 
-    from ._synth import synth_raw
+    from tests._synth import synth_raw
 
     bands = dict(cardiac_l_freq=0.7, cardiac_h_freq=1.5, resp_l_freq=0.2, resp_h_freq=0.5)
     prepped = run_prep(synth_raw("01", "rest"),
