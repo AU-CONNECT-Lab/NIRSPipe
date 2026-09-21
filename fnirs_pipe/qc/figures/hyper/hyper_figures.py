@@ -870,7 +870,7 @@ def build_screening_strip(coherence_df: "pd.DataFrame") -> "go.Figure | None":
     per-channel percentile is a noisy rank and the count of channels over the line moves with
     the draw while the window's own verdict does not.
 
-    Expects the frame :func:`~fnirs_pipe.pipeline.synchrony.screening_coherence` returns.
+    Expects the frame :func:`~fnirs_pipe.pipeline.hyper.synchrony.screening_coherence` returns.
     None when it is empty.
     """
     if coherence_df is None or coherence_df.empty:

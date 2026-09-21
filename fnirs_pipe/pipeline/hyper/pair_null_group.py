@@ -335,7 +335,7 @@ def write_group_null(output_dir: Path, task: str = "full", chroma: str = "hbo",
     other, so they belong in one table. `level` is ``whole`` or a region name, `pairings` is
     which channel pairings entered the mean.
     """
-    from fnirs_pipe.pipeline.group_io import _hyper_sidecar
+    from fnirs_pipe.pipeline.hyper.group_io import _hyper_sidecar
 
     output_dir = Path(output_dir)
     draws = _read_tree(output_dir, DRAWS_SUFFIX[null], task, chroma, needs=("draw", "label"))

@@ -166,7 +166,7 @@ def cmd_hyper_raw(
     })))
 
     from fnirs_pipe.cli.hyper import _run_groups, _select_groups
-    from fnirs_pipe.pipeline.hyperscanning import (
+    from fnirs_pipe.pipeline.hyper import (
         _raw_to_haemo,
         align_like,
         align_recordings,

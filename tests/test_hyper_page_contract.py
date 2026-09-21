@@ -26,7 +26,7 @@ import mne
 import numpy as np
 import pytest
 
-from fnirs_pipe.pipeline.hyperscanning import GroupEntry
+from fnirs_pipe.pipeline.hyper import GroupEntry
 
 SFREQ, DURATION = 5.0, 400.0
 LABELS = ["S1_D1", "S2_D2", "S3_D3"]

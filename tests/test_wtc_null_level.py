@@ -15,7 +15,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from fnirs_pipe.pipeline.synchrony import (
+from fnirs_pipe.pipeline.hyper.synchrony import (
     NULL_ARROW_QUANTILE, NullDraws, WTCResult, _accumulate_null_hist, _null_level,
 )
 
@@ -226,7 +226,7 @@ def test_the_caption_names_the_level_it_actually_used():
 def test_the_level_survives_a_round_trip_to_disk(tmp_path):
     """It is what the arrows are drawn against, and redrawing a report must not cost the
     hours the null took to produce it."""
-    from fnirs_pipe.pipeline.wtc_store import load_null_levels, save_null_levels
+    from fnirs_pipe.pipeline.hyper.wtc_store import load_null_levels, save_null_levels
 
     levels = {("a", "b", "S1_D1"): np.array([0.31, 0.42, 0.53]),
               ("a", "b", ("S1_D1", "S2_D2")): np.array([0.11, 0.22, 0.33])}
@@ -240,7 +240,7 @@ def test_the_level_survives_a_round_trip_to_disk(tmp_path):
 def test_reband_leaves_the_level_archive_alone(tmp_path):
     """It sits under the same `*_hyper-wtc*.npz` prefix `fnirs-hyper band` globs, but holds
     one row per pair rather than a map, so opening it only produces a warning."""
-    from fnirs_pipe.pipeline.wtc_store import reband_tree, save_null_levels
+    from fnirs_pipe.pipeline.hyper.wtc_store import reband_tree, save_null_levels
 
     save_null_levels({("a", "b", "S1_D1"): np.array([0.3, 0.4, 0.5])},
                      tmp_path / "group-d01_task-full_hyper-wtc-nulllevel-hbo.npz")

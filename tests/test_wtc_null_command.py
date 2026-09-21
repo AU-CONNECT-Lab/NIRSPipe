@@ -20,7 +20,7 @@ import logging
 import pytest
 
 from fnirs_pipe.cli.hyper import _build_parser
-from fnirs_pipe.pipeline.wtc_aggregate import aggregate_wtc
+from fnirs_pipe.pipeline.hyper.wtc_aggregate import aggregate_wtc
 
 
 # The null is drawn and written in two phases, the report sitting between them: the level
@@ -35,7 +35,7 @@ def _draw_and_write(wtc_null, **kwargs):
 
 def _null(frame, cond_frames=(), levels=None):
     """A NullDraws around an already-made frame, for the tests that stub the draw away."""
-    from fnirs_pipe.pipeline.synchrony import NullDraws
+    from fnirs_pipe.pipeline.hyper.synchrony import NullDraws
 
     keys = ["sub1", "sub2", "label"] + (["label2"] if "label2" in frame.columns else [])
     return NullDraws(draws=[frame], cond_draws=list(cond_frames), keys=keys,
@@ -77,8 +77,8 @@ def test_the_null_can_be_crossed_on_its_own():
 # ---- what lands on disk ----
 
 def test_the_sidecar_records_the_iteration_count_and_the_shape(tmp_path, monkeypatch, make_raw):
-    import fnirs_pipe.pipeline.hyperscanning as hyper
-    from fnirs_pipe.pipeline import wtc_null
+    import fnirs_pipe.pipeline.hyper as hyper
+    from fnirs_pipe.pipeline.hyper import wtc_null
 
     frame = pd.DataFrame({"sub1": ["a"], "sub2": ["b"], "label": ["S1_D1"],
                           "coherence": [0.3], "coherence_z": [0.31], "n_valid_frac": [1.0]})
@@ -106,8 +106,8 @@ def test_the_null_tags_each_chromophore_without_mutating_the_frame(tmp_path, mon
     """One pass per chromophore, and the frame each returns is not the null's to
     change. Inserting the column in place worked for HbO and raised on HbR as soon as
     two passes were handed the same object, which a cache or a stub does."""
-    import fnirs_pipe.pipeline.hyperscanning as hyper
-    from fnirs_pipe.pipeline import wtc_null
+    import fnirs_pipe.pipeline.hyper as hyper
+    from fnirs_pipe.pipeline.hyper import wtc_null
 
     frame = pd.DataFrame({"sub1": ["a"], "sub2": ["b"], "label": ["S1_D1"],
                           "coherence": [0.3], "coherence_z": [0.31],
@@ -126,8 +126,8 @@ def test_the_null_tags_each_chromophore_without_mutating_the_frame(tmp_path, mon
 
 
 def test_one_chromophore_writes_one_set_of_rows(tmp_path, monkeypatch, make_raw):
-    import fnirs_pipe.pipeline.hyperscanning as hyper
-    from fnirs_pipe.pipeline import wtc_null
+    import fnirs_pipe.pipeline.hyper as hyper
+    from fnirs_pipe.pipeline.hyper import wtc_null
 
     frame = pd.DataFrame({"sub1": ["a"], "sub2": ["b"], "label": ["S1_D1"],
                           "coherence": [0.3], "coherence_z": [0.31],
@@ -168,7 +168,7 @@ def test_nulls_of_different_lengths_merge_but_say_so(tmp_path, caplog):
     """
     _write_null(tmp_path, "d01", "baseline", 100)
     _write_null(tmp_path, "d02", "baseline", 5)
-    with caplog.at_level(logging.WARNING, logger="fnirs_pipe.pipeline.wtc_aggregate"):
+    with caplog.at_level(logging.WARNING, logger="fnirs_pipe.pipeline.hyper.wtc_aggregate"):
         merged = aggregate_wtc(tmp_path, kind="wtc-phasenull")
     assert sorted(merged["group_id"].unique()) == ["d01", "d02"]
     assert sorted(merged["n_iter"].unique()) == [5, 100]
@@ -193,7 +193,7 @@ def test_nulls_of_one_length_merge(tmp_path):
 def test_merge_covers_every_kind_the_aggregator_has(tmp_path):
     """It asked for a kind the aggregator no longer has, and died before reaching the null."""
     from fnirs_pipe.cli.hyper import cmd_merge
-    from fnirs_pipe.pipeline.wtc_aggregate import _KINDS
+    from fnirs_pipe.pipeline.hyper.wtc_aggregate import _KINDS
 
     _write_null(tmp_path, "d01", "baseline", 100)
     cmd_merge(tmp_path, verbose=False)                        # no kind raises
@@ -274,8 +274,8 @@ def _null_frames():
 def test_windows_add_a_second_table_beside_the_whole_run_one(tmp_path, monkeypatch, make_raw):
     """Two files rather than one, mirroring the real side, where the whole-run and
     per-condition tables are also merged separately."""
-    import fnirs_pipe.pipeline.hyperscanning as hyper
-    from fnirs_pipe.pipeline import wtc_null
+    import fnirs_pipe.pipeline.hyper as hyper
+    from fnirs_pipe.pipeline.hyper import wtc_null
 
     whole, by_cond = _null_frames()
     monkeypatch.setattr(hyper, "compute_wtc_phase_null",
@@ -297,8 +297,8 @@ def test_windows_add_a_second_table_beside_the_whole_run_one(tmp_path, monkeypat
 
 def test_the_windowed_sidecar_names_the_conditions(tmp_path, monkeypatch, make_raw):
     """Without them a table of five conditions and a table of two read the same on disk."""
-    import fnirs_pipe.pipeline.hyperscanning as hyper
-    from fnirs_pipe.pipeline import wtc_null
+    import fnirs_pipe.pipeline.hyper as hyper
+    from fnirs_pipe.pipeline.hyper import wtc_null
 
     whole, by_cond = _null_frames()
     monkeypatch.setattr(hyper, "compute_wtc_phase_null",
@@ -317,8 +317,8 @@ def test_the_windowed_sidecar_names_the_conditions(tmp_path, monkeypatch, make_r
 
 
 def test_no_windows_writes_only_the_whole_run_table(tmp_path, monkeypatch, make_raw):
-    import fnirs_pipe.pipeline.hyperscanning as hyper
-    from fnirs_pipe.pipeline import wtc_null
+    import fnirs_pipe.pipeline.hyper as hyper
+    from fnirs_pipe.pipeline.hyper import wtc_null
 
     whole, _ = _null_frames()
     monkeypatch.setattr(hyper, "compute_wtc_phase_null", lambda *a, **k: _null(whole))
@@ -334,7 +334,7 @@ def test_no_windows_writes_only_the_whole_run_table(tmp_path, monkeypatch, make_
 
 def test_the_per_condition_null_is_its_own_merge_kind():
     """Merging it into the whole-run null would average five conditions into one row."""
-    from fnirs_pipe.pipeline.wtc_aggregate import _KINDS
+    from fnirs_pipe.pipeline.hyper.wtc_aggregate import _KINDS
 
     assert _KINDS["wtcbycond-phasenull"] == "group_hyper_wtc_bycondition_phasenull"
     assert _KINDS["wtc-phasenull"] != _KINDS["wtcbycond-phasenull"]

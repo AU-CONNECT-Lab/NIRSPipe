@@ -22,7 +22,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from fnirs_pipe.pipeline.synchrony import (
+from fnirs_pipe.pipeline.hyper.synchrony import (
     _long_by_label,
     compute_pairwise_coherence,
     compute_wtc,
@@ -122,7 +122,7 @@ def test_the_screening_coherence_stays_hbo():
 @pytest.fixture(scope="module")
 def report(dyad, tmp_path_factory):
     """One report over both chromophores, with the maps archived and the channels crossed."""
-    from fnirs_pipe.pipeline.hyperscanning import GroupEntry
+    from fnirs_pipe.pipeline.hyper import GroupEntry
     from fnirs_pipe.qc.hyper.hyper_report import build_hyper_post_report
 
     out = tmp_path_factory.mktemp("chroma")
@@ -171,7 +171,7 @@ def test_the_maps_are_archived_one_file_per_chromophore(report):
 def test_a_reband_puts_the_chromophore_column_back(report):
     """The archive is per chromophore and says so in its name, so a re-banded table has the
     same shape as the one the run wrote."""
-    from fnirs_pipe.pipeline.wtc_store import reband_tree
+    from fnirs_pipe.pipeline.hyper.wtc_store import reband_tree
 
     written = reband_tree(report.parent.parent, 0.04, 0.09)
     seen = {}
@@ -191,7 +191,7 @@ def test_the_isc_tables_stay_one_file_each(report):
 # ---- one chromophore only ----
 
 def test_asking_for_one_chromophore_writes_only_that_one(dyad, tmp_path):
-    from fnirs_pipe.pipeline.hyperscanning import GroupEntry
+    from fnirs_pipe.pipeline.hyper import GroupEntry
     from fnirs_pipe.qc.hyper.hyper_report import build_hyper_post_report
 
     build_hyper_post_report(
@@ -208,7 +208,7 @@ def test_asking_for_one_chromophore_writes_only_that_one(dyad, tmp_path):
 
 @pytest.mark.parametrize("bad", [(), ("hbt",), ("hbo", "total")])
 def test_an_unknown_chromophore_is_refused(dyad, tmp_path, bad):
-    from fnirs_pipe.pipeline.hyperscanning import GroupEntry
+    from fnirs_pipe.pipeline.hyper import GroupEntry
     from fnirs_pipe.qc.hyper.hyper_report import build_hyper_post_report
 
     with pytest.raises(ValueError, match="wtc_chroma"):
@@ -232,7 +232,7 @@ def _draw_and_write(wtc_null, **kwargs):
 
 def _null(frame, cond_frames=(), levels=None):
     """A NullDraws around an already-made frame, for the tests that stub the draw away."""
-    from fnirs_pipe.pipeline.synchrony import NullDraws
+    from fnirs_pipe.pipeline.hyper.synchrony import NullDraws
 
     keys = ["sub1", "sub2", "label"] + (["label2"] if "label2" in frame.columns else [])
     return NullDraws(draws=[frame], cond_draws=list(cond_frames), keys=keys,
@@ -244,7 +244,7 @@ def _null(frame, cond_frames=(), levels=None):
 def test_the_null_covers_both_chromophores_in_one_table(dyad, tmp_path):
     """A null on one chromophore says nothing about a coupling in the other, so the real
     table's other half would have nothing to be tested against."""
-    from fnirs_pipe.pipeline import wtc_null
+    from fnirs_pipe.pipeline.hyper import wtc_null
 
     path = _draw_and_write(
         wtc_null, group_id="G1", task="tap", aligned_raws=dyad, output_dir=tmp_path,
@@ -259,7 +259,7 @@ def test_the_null_covers_both_chromophores_in_one_table(dyad, tmp_path):
 
 
 def test_the_null_refuses_an_unknown_chromophore(dyad, tmp_path):
-    from fnirs_pipe.pipeline.wtc_null import run_wtc_null
+    from fnirs_pipe.pipeline.hyper.wtc_null import run_wtc_null
 
     with pytest.raises(ValueError, match="chroma"):
         run_wtc_null("G1", "tap", dyad, tmp_path, n_iter=1, chroma=("hbt",))
@@ -299,7 +299,7 @@ def test_tagging_before_the_aggregation_would_lose_the_tag():
     """Why `_tag` runs after every aggregation and not before. `roi_mean_of_channels`
     groups on the columns it knows and drops the rest, so a chromophore column added
     upstream of it vanishes without an error."""
-    from fnirs_pipe.pipeline.synchrony import roi_mean_of_channels
+    from fnirs_pipe.pipeline.hyper.synchrony import roi_mean_of_channels
 
     tagged = pd.DataFrame({
         "chromophore": ["hbo"] * 2,
@@ -320,7 +320,7 @@ def by_condition(dyad, tmp_path_factory):
     A window shorter than one cycle of `--wtc-fmin` is skipped, so at 0.02 Hz these have to
     be at least 50 s.
     """
-    from fnirs_pipe.pipeline.hyperscanning import GroupEntry
+    from fnirs_pipe.pipeline.hyper import GroupEntry
     from fnirs_pipe.qc.hyper.hyper_report import build_hyper_post_report
 
     marked = {sid: raw.copy() for sid, raw in dyad.items()}
@@ -375,7 +375,7 @@ def test_the_null_and_the_report_default_to_the_same_chromophores():
     import inspect
 
     from fnirs_pipe.qc.hyper.hyper_report import build_hyper_post_report
-    from fnirs_pipe.pipeline.wtc_null import run_wtc_null
+    from fnirs_pipe.pipeline.hyper.wtc_null import run_wtc_null
 
     report = inspect.signature(build_hyper_post_report).parameters["wtc_chroma"].default
     null = inspect.signature(run_wtc_null).parameters["chroma"].default
@@ -392,7 +392,7 @@ def _js_var(html: str, name: str):
 
 
 def _page(dyad, where, chroma, **kwargs):
-    from fnirs_pipe.pipeline.hyperscanning import GroupEntry
+    from fnirs_pipe.pipeline.hyper import GroupEntry
     from fnirs_pipe.qc.hyper.hyper_report import build_hyper_post_report
 
     path = build_hyper_post_report(

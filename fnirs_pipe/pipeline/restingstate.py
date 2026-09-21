@@ -183,7 +183,7 @@ def compute_fc(raw: mne.io.Raw, chromophore: str) -> pd.DataFrame:
     A rejected channel's row and column are NaN, not dropped: every subject's matrix keeps the
     same shape and the same channel order, so a group analysis can stack them however their
     rejections differ. It is the package's convention for every channel-by-channel matrix,
-    :func:`fnirs_pipe.pipeline.synchrony.compute_isc` included since 0.30.0.
+    :func:`fnirs_pipe.pipeline.hyper.synchrony.compute_isc` included since 0.30.0.
     ROI-level products do the opposite and drop the rejected channels before averaging (see
     :func:`compute_fc_roi`): a bad channel inside an ROI mean reaches every correlation that
     ROI takes part in, where in a channel matrix it is confined to one row and one column.

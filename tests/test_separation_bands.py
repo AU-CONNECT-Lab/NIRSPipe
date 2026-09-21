@@ -309,7 +309,7 @@ def test_the_writer_and_the_reader_share_one_set_of_keys():
 # bands again is an invitation to type a number that does not match the one on disk.
 
 def _dyad():
-    from fnirs_pipe.pipeline.hyperscanning import GroupEntry
+    from fnirs_pipe.pipeline.hyper import GroupEntry
     return [GroupEntry("G1", "sub-01", "tap"), GroupEntry("G1", "sub-02", "tap")]
 
 
@@ -320,7 +320,7 @@ def _sqm(*per_member):
 
 
 def test_agreeing_records_decide_the_bands():
-    from fnirs_pipe.pipeline.hyperscanning import resolve_group_bands
+    from fnirs_pipe.pipeline.hyper import resolve_group_bands
     bands = (0.012, 0.02, None)
     assert resolve_group_bands(_dyad(), _sqm(bands, bands)) == bands
 
@@ -329,14 +329,14 @@ def test_members_prepped_with_different_bands_are_refused():
     """Not reconciled: the bands also chose what short-channel regression removed from each
     member upstream, so a band taken from both would describe neither. Nothing is lost by
     refusing, since the homologous channel set already intersects by label."""
-    from fnirs_pipe.pipeline.hyperscanning import resolve_group_bands
+    from fnirs_pipe.pipeline.hyper import resolve_group_bands
     with pytest.raises(ValueError, match="different separation bands"):
         resolve_group_bands(_dyad(), _sqm((0.01, 0.015, None), (0.012, 0.02, None)))
 
 
 def test_the_refusal_names_both_members_and_their_bands():
     """A message saying only "they disagree" leaves the operator to grep two records."""
-    from fnirs_pipe.pipeline.hyperscanning import resolve_group_bands
+    from fnirs_pipe.pipeline.hyper import resolve_group_bands
     with pytest.raises(ValueError) as excinfo:
         resolve_group_bands(_dyad(), _sqm((0.01, 0.015, None), (0.012, 0.02, 0.055)))
     message = str(excinfo.value)
@@ -347,7 +347,7 @@ def test_the_refusal_names_both_members_and_their_bands():
 def test_an_unstamped_dyad_falls_back_to_the_defaults_with_a_warning(caplog):
     """Every tree prepped before the bands were stamped. Refusing those outright would make
     them unanalysable, so it is a warning; the value is a guess and says so."""
-    from fnirs_pipe.pipeline.hyperscanning import resolve_group_bands
+    from fnirs_pipe.pipeline.hyper import resolve_group_bands
     with caplog.at_level(logging.WARNING):
         assert resolve_group_bands(_dyad(), _sqm(None, None)) == separation_bands()
     assert "no separation bands stamped" in caplog.text
@@ -357,7 +357,7 @@ def test_an_unstamped_member_is_warned_with_the_bands_it_is_being_given(caplog):
     """The other member's stamp is the best evidence available, so it is what gets applied
     -- but the warning has to name that value rather than the package defaults, or a reader
     is told 10 mm was assumed while 12 mm was used."""
-    from fnirs_pipe.pipeline.hyperscanning import resolve_group_bands
+    from fnirs_pipe.pipeline.hyper import resolve_group_bands
     with caplog.at_level(logging.WARNING):
         assert resolve_group_bands(_dyad(), _sqm((0.012, 0.02, None), None)) == (0.012, 0.02, None)
     assert "sub-02 task-tap" in caplog.text
@@ -365,7 +365,7 @@ def test_an_unstamped_member_is_warned_with_the_bands_it_is_being_given(caplog):
 
 
 def test_a_flag_overrides_the_records_and_says_so(caplog):
-    from fnirs_pipe.pipeline.hyperscanning import resolve_group_bands
+    from fnirs_pipe.pipeline.hyper import resolve_group_bands
     bands = (0.012, 0.02, None)
     with caplog.at_level(logging.WARNING):
         resolved = resolve_group_bands(_dyad(), _sqm(bands, bands),
@@ -377,7 +377,7 @@ def test_a_flag_overrides_the_records_and_says_so(caplog):
 def test_a_flag_left_off_keeps_the_records_value_rather_than_the_package_default():
     """Capping the long band must not silently re-assert 10 / 15 mm on a dyad prepped at
     12 / 20 mm, which is what falling back to `separation_bands()` would do."""
-    from fnirs_pipe.pipeline.hyperscanning import resolve_group_bands
+    from fnirs_pipe.pipeline.hyper import resolve_group_bands
     bands = (0.012, 0.02, None)
     resolved = resolve_group_bands(_dyad(), _sqm(bands, bands), {"long_max_dist": 0.055})
     assert resolved == (0.012, 0.02, 0.055)
@@ -386,7 +386,7 @@ def test_a_flag_left_off_keeps_the_records_value_rather_than_the_package_default
 def test_an_override_of_only_none_values_is_not_an_override(caplog):
     """argparse hands over three Nones when no flag was given, which must not read as a
     request to force the package defaults."""
-    from fnirs_pipe.pipeline.hyperscanning import resolve_group_bands
+    from fnirs_pipe.pipeline.hyper import resolve_group_bands
     bands = (0.012, 0.02, None)
     with caplog.at_level(logging.WARNING):
         resolved = resolve_group_bands(_dyad(), _sqm(bands, bands), {
@@ -398,7 +398,7 @@ def test_an_override_of_only_none_values_is_not_an_override(caplog):
 def test_a_forced_band_is_still_validated():
     """The override merges with the records, so the pair it produces was never validated by
     the CLI: forcing a short edge past the records' long edge has to be caught here."""
-    from fnirs_pipe.pipeline.hyperscanning import resolve_group_bands
+    from fnirs_pipe.pipeline.hyper import resolve_group_bands
     bands = (0.012, 0.02, None)
     with pytest.raises(ValueError, match="overlap"):
         resolve_group_bands(_dyad(), _sqm(bands, bands), {"short_max_dist": 0.03})

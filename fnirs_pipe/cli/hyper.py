@@ -15,7 +15,7 @@ import sys
 from pathlib import Path
 
 from fnirs_pipe.cli import _shared
-from fnirs_pipe.pipeline.synchrony import ISC_MAX_AR_ORDER
+from fnirs_pipe.pipeline.hyper.synchrony import ISC_MAX_AR_ORDER
 from fnirs_pipe.qc.metrics import SCI_PASS
 from fnirs_pipe.utils.logging import get_logger, setup_logging
 
@@ -29,7 +29,7 @@ _BADS_SCOPE_CHOICES = ["run", "subject"]
 def _select_groups(pairs_csv: Path, group_id: str | None, task_label: list[str] | None) -> dict:
     """Parse the group CSV and filter by group_id / task_label. Exits non-zero on empty selection."""
     from fnirs_pipe.exceptions import GroupCSVError
-    from fnirs_pipe.pipeline.hyperscanning import parse_group_csv
+    from fnirs_pipe.pipeline.hyper import parse_group_csv
 
     try:
         groups = parse_group_csv(pairs_csv)
@@ -97,7 +97,7 @@ def _load_aligned_group(output_dir, members, task, desc, no_align, normalize, ba
     `passband_check` is the (fmin, fmax) a metric is about to ask for, checked against the
     bandpass the files record while the sidecars are still in hand.
     """
-    from fnirs_pipe.pipeline.hyperscanning import (
+    from fnirs_pipe.pipeline.hyper import (
         align_recordings,
         apply_group_bads,
         load_group_haemo,
@@ -165,7 +165,7 @@ def _merge_reminder(output_dir: Path) -> None:
     Driven off the aggregator's own kinds and its own glob, so the counts are the ones
     `merge` would use and a new kind cannot be left out.
     """
-    from fnirs_pipe.pipeline.wtc_aggregate import _KINDS
+    from fnirs_pipe.pipeline.hyper.wtc_aggregate import _KINDS
 
     lines = []
     for kind, stem in _KINDS.items():
@@ -262,13 +262,13 @@ def cmd_run(
     from datetime import datetime
 
     from fnirs_pipe.io.derivatives import group_report_dir
-    from fnirs_pipe.pipeline.hyperscanning import (
+    from fnirs_pipe.pipeline.hyper import (
         resolve_analysis_window, resolve_group_bands, write_group_bads,
     )
     from fnirs_pipe.qc.hyper.hyper_report import build_hyper_post_report
     from fnirs_pipe.qc.common.windows import condition_windows
     from fnirs_pipe.qc.metrics._helpers import bands_to_record
-    from fnirs_pipe.pipeline.wtc_null import run_wtc_null, write_wtc_null
+    from fnirs_pipe.pipeline.hyper.wtc_null import run_wtc_null, write_wtc_null
     from fnirs_pipe.utils.run_record import write_group_run_record
 
     setup_logging(verbose=verbose)
@@ -315,7 +315,7 @@ def cmd_run(
                   "conditions to transform without it.", file=sys.stderr)
             raise SystemExit(1)
         if str(wtc_cond_pad_s).lower() == "auto":
-            from fnirs_pipe.pipeline.synchrony import cone_margin_s
+            from fnirs_pipe.pipeline.hyper.synchrony import cone_margin_s
             # the band the means are taken over, which is what the cone has to clear;
             # --wtc-band-fmin falls back to --wtc-fmin exactly as the report resolves it
             cond_pad = cone_margin_s(wtc_band_fmin or wtc_fmin)
@@ -488,7 +488,7 @@ def cmd_band(
     wtc_mask_coi: bool, wtc_suffix: str | None, verbose: bool,
 ) -> None:
     """Re-average every saved WTC map over a new band, without recomputing the transform."""
-    from fnirs_pipe.pipeline.wtc_store import reband_tree
+    from fnirs_pipe.pipeline.hyper.wtc_store import reband_tree
 
     setup_logging(verbose=verbose)
 
@@ -506,7 +506,7 @@ def cmd_group_null(
     n_resample: int, seed: int | None, verbose: bool,
 ) -> None:
     """Read a null's draws above the cell: one verdict per occasion, one per cohort."""
-    from fnirs_pipe.pipeline.pair_null_group import write_group_null
+    from fnirs_pipe.pipeline.hyper.pair_null_group import write_group_null
 
     setup_logging(verbose=verbose)
     roi_map = json.loads(Path(roi_mapping).read_text()) if roi_mapping else None
@@ -559,8 +559,8 @@ def cmd_pair_null(
     """Draw the re-paired null for dyads whose real tables are already on disk."""
     import json
 
-    from fnirs_pipe.pipeline.hyperscanning import parse_group_csv
-    from fnirs_pipe.pipeline.pair_null import run_pair_null
+    from fnirs_pipe.pipeline.hyper import parse_group_csv
+    from fnirs_pipe.pipeline.hyper.pair_null import run_pair_null
 
     setup_logging(verbose=verbose)
 
@@ -603,7 +603,7 @@ def cmd_pair_null(
 
 def cmd_merge(output_dir: Path, verbose: bool) -> None:
     """Merge every per-dyad WTC band-mean table into one long table per kind."""
-    from fnirs_pipe.pipeline.wtc_aggregate import _KINDS, write_aggregate_wtc
+    from fnirs_pipe.pipeline.hyper.wtc_aggregate import _KINDS, write_aggregate_wtc
 
     setup_logging(verbose=verbose)
 

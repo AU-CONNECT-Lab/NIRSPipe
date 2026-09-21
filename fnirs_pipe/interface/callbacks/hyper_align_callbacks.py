@@ -82,7 +82,7 @@ def load_and_align(n_clicks, bids_dir, deriv_dir, group_csv):
         )
 
     from fnirs_pipe.exceptions import AlignmentError
-    from fnirs_pipe.pipeline.hyperscanning import (
+    from fnirs_pipe.pipeline.hyper import (
         align_recordings, load_group_raw_bids, parse_group_csv,
     )
 

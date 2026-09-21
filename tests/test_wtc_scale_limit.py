@@ -14,7 +14,7 @@ compare against the unrestricted transform so that cannot happen silently again.
 import numpy as np
 import pytest
 
-from fnirs_pipe.pipeline.synchrony import _FLAMBDA, _pairwise_wtc, _scale_range
+from fnirs_pipe.pipeline.hyper.synchrony import _FLAMBDA, _pairwise_wtc, _scale_range
 
 pycwt = pytest.importorskip("pycwt")
 

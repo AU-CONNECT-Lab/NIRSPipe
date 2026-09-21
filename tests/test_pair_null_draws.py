@@ -12,9 +12,10 @@ lose the other twenty.
 import numpy as np
 import pytest
 
-from fnirs_pipe.pipeline import group_io, group_quality, hyperscanning
-from fnirs_pipe.pipeline.group_io import GroupEntry
-from fnirs_pipe.pipeline.pair_null import _draw_pairs
+from fnirs_pipe.pipeline import hyper
+from fnirs_pipe.pipeline.hyper import group_io, group_quality
+from fnirs_pipe.pipeline.hyper.group_io import GroupEntry
+from fnirs_pipe.pipeline.hyper.pair_null import _draw_pairs
 
 FIXED = "sub-p1d01"
 REAL_DURATION = 900.0
@@ -56,7 +57,7 @@ def wired(monkeypatch):
     monkeypatch.setattr(group_io, "load_group_haemo", fake_haemo)
     monkeypatch.setattr(group_quality, "load_group_sqm", lambda *a, **k: {})
     monkeypatch.setattr(group_quality, "apply_group_bads", lambda *a, **k: None)
-    monkeypatch.setattr(hyperscanning, "align_recordings", fake_align)
+    monkeypatch.setattr(hyper, "align_recordings", fake_align)
     return state
 
 
@@ -132,7 +133,7 @@ def test_an_unreadable_stand_in_is_counted_rather_than_raised(wired, monkeypatch
 
 def test_the_condition_overlap_is_measured_for_every_draw(wired, monkeypatch):
     """Measured and reported, never used to drop a draw: the user asked for it that way."""
-    monkeypatch.setattr("fnirs_pipe.pipeline.pair_null.condition_coverage",
+    monkeypatch.setattr("fnirs_pipe.pipeline.hyper.pair_null.condition_coverage",
                         lambda raw, windows: {"game1": 0.42})
     drawn, _, coverage = _run(["sub-p2d02"], windows=[("game1", 0.0, 300.0)])
     assert len(drawn) == 1                       # low overlap still counts

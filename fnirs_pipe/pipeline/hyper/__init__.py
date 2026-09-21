@@ -1,4 +1,4 @@
-"""The one name the group modules are reached by: group_io, alignment, group_quality.
+"""The hyperscanning half of the pipeline, and the one name its group modules are reached by.
 
 Keep the re-exports. The wiring tests patch ``compute_wtc_phase_null`` on *this* module and
 ``wtc_null`` looks it up at call time, so dropping a name here breaks a seam, not an import.
@@ -12,7 +12,7 @@ Layering, which nothing should undo::
 
 from __future__ import annotations
 
-from fnirs_pipe.pipeline.alignment import (  # noqa: F401  re-exported
+from fnirs_pipe.pipeline.hyper.alignment import (  # noqa: F401  re-exported
     _stamp_alignment,
     align_like,
     align_recordings,
@@ -22,7 +22,7 @@ from fnirs_pipe.pipeline.alignment import (  # noqa: F401  re-exported
     resolve_analysis_window,
     trim_to_shortest,
 )
-from fnirs_pipe.pipeline.group_io import (  # noqa: F401  re-exported
+from fnirs_pipe.pipeline.hyper.group_io import (  # noqa: F401  re-exported
     GroupEntry,
     _for_task,
     _hyper_sidecar,
@@ -35,7 +35,7 @@ from fnirs_pipe.pipeline.group_io import (  # noqa: F401  re-exported
     unfiltered_stage_note,
     warn_outside_passband,
 )
-from fnirs_pipe.pipeline.group_quality import (  # noqa: F401  re-exported
+from fnirs_pipe.pipeline.hyper.group_quality import (  # noqa: F401  re-exported
     _bad_from_csv,
     _bad_from_sidecar,
     _pairwise,
@@ -48,7 +48,7 @@ from fnirs_pipe.pipeline.group_quality import (  # noqa: F401  re-exported
     resolve_group_bands,
     write_group_bads,
 )
-from fnirs_pipe.pipeline.synchrony import (  # noqa: F401  re-exported
+from fnirs_pipe.pipeline.hyper.synchrony import (  # noqa: F401  re-exported
     WTCResult,
     compute_pairwise_coherence,
     compute_wtc,

@@ -1,6 +1,6 @@
 """What a group's members are worth: rejected channels, screening, and the dyad's record.
 
-Reads :mod:`~fnirs_pipe.pipeline.group_io`; nothing reads this. Everything that reduces two
+Reads :mod:`~fnirs_pipe.pipeline.hyper.group_io`; nothing reads this. Everything that reduces two
 members to one answer applies the same rule: a dyad's channel is usable only while it is
 coupled in **both** of them.
 """
@@ -16,7 +16,7 @@ import numpy as np
 import pandas as pd
 
 from fnirs_pipe.io.derivatives import group_data_dir
-from fnirs_pipe.pipeline.group_io import (
+from fnirs_pipe.pipeline.hyper.group_io import (
     GroupEntry, _for_task, _hyper_sidecar, _member_sqm_files,
 )
 from fnirs_pipe.utils.lineage import path_from

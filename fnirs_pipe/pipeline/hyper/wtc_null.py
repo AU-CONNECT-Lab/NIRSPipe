@@ -72,8 +72,8 @@ def run_wtc_null(
     # imported in the call, not at module load: the wiring tests patch these on the module
     # that defines them, which only a lookup made at call time can see
     from fnirs_pipe.io.derivatives import group_data_dir
-    from fnirs_pipe.pipeline.hyperscanning import compute_wtc_phase_null
-    from fnirs_pipe.pipeline.wtc_store import save_null_levels
+    from fnirs_pipe.pipeline.hyper import compute_wtc_phase_null
+    from fnirs_pipe.pipeline.hyper.wtc_store import save_null_levels
 
     band_fmin = band_fmin if band_fmin is not None else wtc_fmin
     band_fmax = band_fmax if band_fmax is not None else wtc_fmax
@@ -133,7 +133,7 @@ def write_wtc_null(
     regions before they are summarised, so no surrogate is transformed a second time, and
     grouping inside the iteration is what makes it the null of the ROI mean rather than a
     bracket around it. The crossed ``-roichan`` matrix has no null and cannot get one from
-    here; see :func:`~fnirs_pipe.pipeline.synchrony.roi_mean_of_homologous`.
+    here; see :func:`~fnirs_pipe.pipeline.hyper.synchrony.roi_mean_of_homologous`.
 
     ``windows`` adds a second table, ``...hyper-wtcbycond-phasenull.tsv``, with a ``condition``
     column: the null for what ``--wtc-by-condition`` wrote. It mirrors the real side, where
@@ -147,8 +147,8 @@ def write_wtc_null(
     ranked against yet.
     """
     from fnirs_pipe.io.derivatives import group_data_dir
-    from fnirs_pipe.pipeline.hyperscanning import _hyper_sidecar, alignment_params
-    from fnirs_pipe.pipeline.synchrony import wtc_grid_params
+    from fnirs_pipe.pipeline.hyper import _hyper_sidecar, alignment_params
+    from fnirs_pipe.pipeline.hyper.synchrony import wtc_grid_params
     from fnirs_pipe.utils.lineage import path_from
 
     band_fmin = band_fmin if band_fmin is not None else wtc_fmin

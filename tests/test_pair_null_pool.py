@@ -10,8 +10,8 @@ measured rather than declared by the caller.
 import pytest
 
 from fnirs_pipe.exceptions import StageError
-from fnirs_pipe.pipeline.group_io import GroupEntry
-from fnirs_pipe.pipeline.pair_null import condition_coverage, partner_pool
+from fnirs_pipe.pipeline.hyper.group_io import GroupEntry
+from fnirs_pipe.pipeline.hyper.pair_null import condition_coverage, partner_pool
 
 
 def _cohort(task="full", n_groups=3, repeated_people=False):

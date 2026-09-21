@@ -25,8 +25,8 @@ import pytest
 from fnirs_pipe.exceptions import MissingDerivativesError, StageError
 from fnirs_pipe.io.derivatives import find_preproc_snirf
 from fnirs_pipe.io.snirf import long_channel_picks, write_snirf
-from fnirs_pipe.pipeline.hyperscanning import GroupEntry, load_group_haemo
-from fnirs_pipe.pipeline.synchrony import WTCResult, _shared_sfreq, compute_wtc, wtc_band_mean
+from fnirs_pipe.pipeline.hyper import GroupEntry, load_group_haemo
+from fnirs_pipe.pipeline.hyper.synchrony import WTCResult, _shared_sfreq, compute_wtc, wtc_band_mean
 from tests._synth import SHORT_DISTANCE, synth_raw
 
 SHORT_PAIR = "S5_D5"      # the one pair _channel_layout places below 1 cm
@@ -74,7 +74,7 @@ def test_wtc_never_pairs_the_short_channel():
 
 
 def test_isc_reads_the_same_channels_as_wtc():
-    from fnirs_pipe.pipeline.synchrony import compute_isc
+    from fnirs_pipe.pipeline.hyper.synchrony import compute_isc
 
     subject_ids = ["sub-10031", "sub-10032"]
     raws = dict(zip(subject_ids, (_haemo("10031"), _haemo("10032"))))
@@ -100,7 +100,7 @@ def _tagged(subject: str, drop: str | None = None) -> mne.io.Raw:
 
 
 def test_isc_matches_channels_by_label_not_position():
-    from fnirs_pipe.pipeline.synchrony import compute_isc
+    from fnirs_pipe.pipeline.hyper.synchrony import compute_isc
 
     # sub-B rejected S2_D2, so its remaining channels sit one position earlier than sub-A's
     subject_ids = ["sub-A", "sub-B"]
@@ -115,7 +115,7 @@ def test_isc_matches_channels_by_label_not_position():
 
 def test_the_axis_is_the_union_of_the_two_montages():
     """One member's montage is not the axis: each side can carry a label the other lost."""
-    from fnirs_pipe.pipeline.synchrony import long_axis_over
+    from fnirs_pipe.pipeline.hyper.synchrony import long_axis_over
 
     a, b = _tagged("10031"), _tagged("10032")
     a.drop_channels([c for c in a.ch_names if c.startswith("S4_D4")])
@@ -125,7 +125,7 @@ def test_the_axis_is_the_union_of_the_two_montages():
 
 
 def test_isc_keeps_a_channel_only_one_member_has():
-    from fnirs_pipe.pipeline.synchrony import compute_isc
+    from fnirs_pipe.pipeline.hyper.synchrony import compute_isc
 
     subject_ids = ["sub-A", "sub-B"]
     a, b = _tagged("10031"), _tagged("10032")
@@ -139,7 +139,7 @@ def test_isc_keeps_a_channel_only_one_member_has():
 
 
 def test_the_blanked_column_is_the_one_that_was_named():
-    from fnirs_pipe.pipeline.synchrony import compute_isc
+    from fnirs_pipe.pipeline.hyper.synchrony import compute_isc
 
     # rejections reach ISC on info["bads"], the way load_group_haemo leaves them and the
     # way the WTC path reads them
@@ -154,7 +154,7 @@ def test_the_blanked_column_is_the_one_that_was_named():
 
 def test_isc_refuses_two_sampling_rates():
     """WTC raises on this; ISC used to pair sample i with sample i and answer anyway."""
-    from fnirs_pipe.pipeline.synchrony import compute_isc
+    from fnirs_pipe.pipeline.hyper.synchrony import compute_isc
 
     a, b = _tagged("10031"), _tagged("10032")
     b.resample(b.info["sfreq"] / 2, verbose="error")
@@ -164,7 +164,7 @@ def test_isc_refuses_two_sampling_rates():
 
 def test_an_unrecorded_bandpass_is_flagged():
     """--desc defaults to preproc, which is Beer-Lambert output and carries its drift."""
-    from fnirs_pipe.pipeline.hyperscanning import unfiltered_stage_note
+    from fnirs_pipe.pipeline.hyper import unfiltered_stage_note
     from fnirs_pipe.utils.lineage import stamp
 
     raws = {"sub-A": _haemo("10031"), "sub-B": _haemo("10032")}
@@ -177,7 +177,7 @@ def test_an_unrecorded_bandpass_is_flagged():
 
 
 def test_a_recorded_bandpass_is_not_flagged():
-    from fnirs_pipe.pipeline.hyperscanning import unfiltered_stage_note
+    from fnirs_pipe.pipeline.hyper import unfiltered_stage_note
     from fnirs_pipe.utils.lineage import stamp
 
     raws = {"sub-A": _haemo("10031"), "sub-B": _haemo("10032")}
@@ -189,7 +189,7 @@ def test_a_recorded_bandpass_is_not_flagged():
 
 def test_one_filtered_member_is_still_flagged():
     """A dyad half filtered is worse than one not filtered at all, not better."""
-    from fnirs_pipe.pipeline.hyperscanning import unfiltered_stage_note
+    from fnirs_pipe.pipeline.hyper import unfiltered_stage_note
     from fnirs_pipe.utils.lineage import stamp
 
     raws = {"sub-A": _haemo("10031"), "sub-B": _haemo("10032")}
@@ -201,7 +201,7 @@ def test_one_filtered_member_is_still_flagged():
 
 
 def test_coherence_matches_channels_by_label():
-    from fnirs_pipe.pipeline.synchrony import compute_pairwise_coherence
+    from fnirs_pipe.pipeline.hyper.synchrony import compute_pairwise_coherence
 
     raws = {"sub-A": _tagged("10031"), "sub-B": _tagged("10032", drop="S2_D2")}
     df = compute_pairwise_coherence(raws, fmin=0.05, fmax=0.15).set_index("ch_name")
@@ -215,7 +215,7 @@ def test_screening_coherence_drops_a_pair_one_member_lacks():
     # the windowed coherence this replaced kept a blank row per window; the screening pass
     # drops the pair instead, because a channel one member does not have is not a channel
     # the dyad can be screened on and a NaN row would be averaged into the window's mean
-    from fnirs_pipe.pipeline.synchrony import screening_coherence
+    from fnirs_pipe.pipeline.hyper.synchrony import screening_coherence
 
     raws = {"sub-A": _tagged("10031"), "sub-B": _tagged("10032", drop="S2_D2")}
     df = screening_coherence(raws, 0.05, 0.15, n_iter=3, seed=0)
@@ -356,7 +356,7 @@ def test_the_isc_matrix_is_written_beside_the_panel(tmp_path):
     Same contract as the band mean above: what the figure shows and what a stats script reads
     have to be one set of numbers.
     """
-    from fnirs_pipe.pipeline.hyper_post import write_isc_matrix
+    from fnirs_pipe.pipeline.hyper.hyper_post import write_isc_matrix
 
     names = ["S1_D1 hbo", "S2_D2 hbo"]
     mat = np.array([[0.9, np.nan], [0.4, 0.8]])
@@ -375,7 +375,7 @@ def test_the_isc_matrix_is_written_beside_the_panel(tmp_path):
 
 def test_a_failed_isc_write_costs_the_file_and_not_the_report(tmp_path):
     # the report is still readable without the TSV, so the writer swallows its own failure
-    from fnirs_pipe.pipeline.hyper_post import write_isc_matrix
+    from fnirs_pipe.pipeline.hyper.hyper_post import write_isc_matrix
 
     path = tmp_path / "isc.tsv"
     write_isc_matrix(path, np.eye(3), ["a", "b"], "hbo", [], ["sub-01"])   # shapes disagree
@@ -392,7 +392,7 @@ ISC_LABELS = ["S1_D1", "S2_D2", "S3_D3", "S4_D4"]
 
 
 def _isc_roi(mat, **kwargs):
-    from fnirs_pipe.pipeline.synchrony import roi_mean_of_isc
+    from fnirs_pipe.pipeline.hyper.synchrony import roi_mean_of_isc
 
     return roi_mean_of_isc(np.asarray(mat, dtype=float), ISC_LABELS, ISC_ROIS, **kwargs)
 
@@ -442,7 +442,7 @@ def test_a_roi_cell_under_the_minimum_is_left_blank():
 
 def test_no_roi_map_is_no_matrix_rather_than_an_empty_one():
     assert _isc_roi(np.zeros((4, 4)))[0] is not None
-    from fnirs_pipe.pipeline.synchrony import roi_mean_of_isc
+    from fnirs_pipe.pipeline.hyper.synchrony import roi_mean_of_isc
 
     assert roi_mean_of_isc(np.zeros((4, 4)), ISC_LABELS, {}) == (None, None)
     assert roi_mean_of_isc(None, ISC_LABELS, ISC_ROIS) == (None, None)
@@ -451,7 +451,7 @@ def test_no_roi_map_is_no_matrix_rather_than_an_empty_one():
 def test_the_roi_matrix_is_written_beside_the_channel_one(tmp_path):
     """A group analysis over regions reads this file; without it the ROI correlations only
     ever exist inside one page's HTML."""
-    from fnirs_pipe.pipeline.hyper_post import write_isc_matrix
+    from fnirs_pipe.pipeline.hyper.hyper_post import write_isc_matrix
 
     path = tmp_path / "group-G1_task-hold_hyper-isc-roichan-hbo.tsv"
     write_isc_matrix(path, np.array([[0.4, 0.1], [0.2, 0.3]]), ["L", "R"], "hbo",
@@ -468,7 +468,7 @@ def test_the_roi_matrix_is_written_beside_the_channel_one(tmp_path):
 # ---- the quality record reaching the Raw ----
 
 def test_a_rejected_pair_is_marked_at_both_chromophores():
-    from fnirs_pipe.pipeline.hyperscanning import apply_group_bads
+    from fnirs_pipe.pipeline.hyper import apply_group_bads
 
     raw = _haemo("10031")
     raws = {"sub-A": raw}
@@ -486,7 +486,7 @@ def test_a_rejected_pair_never_reaches_the_coherence():
     holds every label the montage has so two dyads that lost different channels still stack,
     and a reader can tell a blank cell from a channel that was never there.
     """
-    from fnirs_pipe.pipeline.hyperscanning import apply_group_bads
+    from fnirs_pipe.pipeline.hyper import apply_group_bads
 
     raws = {"sub-10031": _haemo("10031"), "sub-10032": _haemo("10032")}
     assert all(not r.info["bads"] for r in raws.values())          # the state on disk
@@ -501,7 +501,7 @@ def test_a_rejected_pair_never_reaches_the_coherence():
 
 
 def test_a_subject_with_nothing_rejected_keeps_every_channel():
-    from fnirs_pipe.pipeline.hyperscanning import apply_group_bads
+    from fnirs_pipe.pipeline.hyper import apply_group_bads
 
     raw = _haemo("10031")
     apply_group_bads({"sub-A": raw}, {"sub-A": {"bad_channels": []}})

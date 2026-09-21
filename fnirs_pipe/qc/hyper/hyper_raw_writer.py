@@ -9,7 +9,7 @@ import mne
 import pandas as pd
 
 from fnirs_pipe.io.derivatives import group_data_dir, group_report_dir
-from fnirs_pipe.pipeline.hyperscanning import (
+from fnirs_pipe.pipeline.hyper import (
     GroupEntry, _hyper_sidecar, alignment_params,
 )
 from fnirs_pipe.qc.common.figure_io import (
@@ -32,7 +32,7 @@ from fnirs_pipe.qc.figures.common.head_map import head_geometry
 from fnirs_pipe.qc.metrics.hyper import (
     compute_hyper_sqm, coupled_grid, member_series, motion_summary, screening_summary,
 )
-from fnirs_pipe.pipeline.synchrony import SCREEN_NULL_ITER, screening_coherence
+from fnirs_pipe.pipeline.hyper.synchrony import SCREEN_NULL_ITER, screening_coherence
 from fnirs_pipe.qc.hyper.hyper_usable import usable_scalars, write_usable_table
 from fnirs_pipe.qc.metrics import SCI_PASS
 from fnirs_pipe.qc.common.report_shell import guard, note

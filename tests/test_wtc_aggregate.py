@@ -11,7 +11,7 @@ import json
 import pandas as pd
 import pytest
 
-from fnirs_pipe.pipeline.wtc_aggregate import aggregate_wtc, write_aggregate_wtc
+from fnirs_pipe.pipeline.hyper.wtc_aggregate import aggregate_wtc, write_aggregate_wtc
 
 
 def _table(root, group_id, task, kind="wtc", band=(0.01, 0.1), mask_coi=True,

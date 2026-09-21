@@ -13,7 +13,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from fnirs_pipe.pipeline.synchrony import WTCResult, wtc_band_mean
+from fnirs_pipe.pipeline.hyper.synchrony import WTCResult, wtc_band_mean
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("pipeline.wtc_store")

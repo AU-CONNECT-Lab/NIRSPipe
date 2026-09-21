@@ -15,8 +15,8 @@ import numpy as np
 import pytest
 
 from fnirs_pipe.exceptions import AlignmentError
-from fnirs_pipe.pipeline.hyperscanning import resolve_analysis_window
-from fnirs_pipe.pipeline.synchrony import WTCResult, window_result
+from fnirs_pipe.pipeline.hyper import resolve_analysis_window
+from fnirs_pipe.pipeline.hyper.synchrony import WTCResult, window_result
 
 
 class _Untouchable:

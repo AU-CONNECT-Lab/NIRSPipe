@@ -8,9 +8,9 @@ refuses outright rather than rounding, so a single stand-in took a whole dyad do
 import numpy as np
 import pytest
 
-from fnirs_pipe.pipeline import group_io, group_quality, pair_null
-from fnirs_pipe.pipeline.group_io import GroupEntry
-from fnirs_pipe.pipeline.pair_null import _draw_condition_pairs
+from fnirs_pipe.pipeline.hyper import group_io, group_quality, pair_null
+from fnirs_pipe.pipeline.hyper.group_io import GroupEntry
+from fnirs_pipe.pipeline.hyper.pair_null import _draw_condition_pairs
 
 FIXED = "sub-p1d01"
 WINDOWS = [("baseline", 0.0, 300.0), ("game1", 500.0, 1400.0)]

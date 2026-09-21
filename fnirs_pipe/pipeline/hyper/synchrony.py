@@ -20,7 +20,7 @@ ROI coherence is always computed per channel pair and then averaged. Averaging t
 into one ROI trace first is a different and less sensitive number, and the studies that
 compared the two report the channel route detecting effects the signal route misses.
 
-The callers live in pipeline/hyperscanning.py, which handles the dyad bookkeeping these
+The callers live in pipeline/hyper/__init__.py, which handles the dyad bookkeeping these
 functions assume has already happened: recordings loaded, aligned, trimmed to a common
 length and normalised. All of them read long channels only.
 """
@@ -1472,7 +1472,7 @@ def screening_coherence(
     *that* window is both.
 
     The null pairs one member against a phase-scrambled copy of the other, which is the
-    surrogate :func:`~fnirs_pipe.pipeline.wtc_null.write_wtc_null` uses on the post report. One
+    surrogate :func:`~fnirs_pipe.pipeline.hyper.wtc_null.write_wtc_null` uses on the post report. One
     definition across a dyad's two pages, so "above the null" means one thing on both.
 
     Returns a DataFrame with columns: window, ch_name, sub1, sub2, coherence, null_mean,
@@ -2144,7 +2144,7 @@ def compute_isc(
 
     Cutting the wavelet coherence the same way would be wrong, and that asymmetry is the
     whole of why the two are treated differently here. See
-    :func:`~fnirs_pipe.pipeline.synchrony.window_result`.
+    :func:`~fnirs_pipe.pipeline.hyper.synchrony.window_result`.
 
     Both axes are the *montage's* long channels, rejected ones included, so every dyad's
     matrix has one shape and a group analysis can stack them however their rejections
@@ -2161,7 +2161,7 @@ def compute_isc(
     claims. Everything here is looked up by S-D label.
 
     Rejections arrive on ``raw.info["bads"]``, which is where
-    :func:`fnirs_pipe.pipeline.hyperscanning.load_group_haemo` puts them and the only place
+    :func:`fnirs_pipe.pipeline.hyper.load_group_haemo` puts them and the only place
     the WTC path reads them from. This used to take the resolved rejections a second time as
     a ``bad_channels`` argument and never look at it.
 

@@ -10,7 +10,7 @@ import pytest
 
 SEP = chr(9)
 
-from fnirs_pipe.pipeline.pair_null_group import (
+from fnirs_pipe.pipeline.hyper.pair_null_group import (
     _exact_p, _variants, by_cell, by_cohort, by_occasion, write_group_null)
 
 CHANNELS = ["S1_D1", "S1_D2", "S2_D1", "S2_D2"]

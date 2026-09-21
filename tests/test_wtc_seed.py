@@ -17,7 +17,7 @@ per pair is far too slow for a suite. These assert our half of the contract.
 import numpy as np
 import pytest
 
-from fnirs_pipe.pipeline import synchrony
+from fnirs_pipe.pipeline.hyper import synchrony
 
 LABELS = ["S1_D1", "S1_D2", "S2_D2"]
 

@@ -1,6 +1,6 @@
 """The re-paired null: one member against people they never interacted with.
 
-Split from :mod:`fnirs_pipe.pipeline.wtc_null` rather than folded into it because the two
+Split from :mod:`fnirs_pipe.pipeline.hyper.wtc_null` rather than folded into it because the two
 nulls sit at different levels. Phase randomisation needs one dyad and can run inside the
 per-dyad pass; re-pairing needs the rest of the cohort, so it reads the pairs table and the
 finished derivatives tree and runs after them.
@@ -244,9 +244,9 @@ def _draw_condition_pairs(
     real dyad's, which on a cohort with a 338 s spread left the longest sessions with no
     stand-ins at all.
     """
-    from fnirs_pipe.pipeline.group_io import load_group_haemo
-    from fnirs_pipe.pipeline.group_quality import apply_group_bads, load_group_sqm
-    from fnirs_pipe.pipeline.synchrony import cone_margin_s
+    from fnirs_pipe.pipeline.hyper.group_io import load_group_haemo
+    from fnirs_pipe.pipeline.hyper.group_quality import apply_group_bads, load_group_sqm
+    from fnirs_pipe.pipeline.hyper.synchrony import cone_margin_s
 
     margin = cone_margin_s(band_fmin)
     drawn = 0
@@ -343,9 +343,9 @@ def _draw_pairs(
     real table and invalidate the cached transforms this reuses.
     """
     from fnirs_pipe.exceptions import AlignmentError
-    from fnirs_pipe.pipeline.group_io import load_group_haemo
-    from fnirs_pipe.pipeline.group_quality import apply_group_bads, load_group_sqm
-    from fnirs_pipe.pipeline.hyperscanning import align_recordings
+    from fnirs_pipe.pipeline.hyper.group_io import load_group_haemo
+    from fnirs_pipe.pipeline.hyper.group_quality import apply_group_bads, load_group_sqm
+    from fnirs_pipe.pipeline.hyper import align_recordings
 
     drawn = 0
     for entry in candidates:
@@ -446,14 +446,14 @@ def run_pair_null(
     table being ranked against is already on disk.
     """
     from fnirs_pipe.io.derivatives import group_data_dir
-    from fnirs_pipe.pipeline.group_io import load_group_haemo
-    from fnirs_pipe.pipeline.group_quality import (apply_group_bads, load_group_sqm,
+    from fnirs_pipe.pipeline.hyper.group_io import load_group_haemo
+    from fnirs_pipe.pipeline.hyper.group_quality import (apply_group_bads, load_group_sqm,
                                                    resolve_group_bands)
-    from fnirs_pipe.pipeline.hyperscanning import (_hyper_sidecar, align_recordings,
+    from fnirs_pipe.pipeline.hyper import (_hyper_sidecar, align_recordings,
                                                    alignment_params)
-    from fnirs_pipe.pipeline.synchrony import (compute_wtc_pair_null, long_axis_over,
+    from fnirs_pipe.pipeline.hyper.synchrony import (compute_wtc_pair_null, long_axis_over,
                                                wtc_grid_params)
-    from fnirs_pipe.pipeline.wtc_null import _for_chroma, _real_table, write_tsv
+    from fnirs_pipe.pipeline.hyper.wtc_null import _for_chroma, _real_table, write_tsv
     from fnirs_pipe.qc.common.windows import condition_windows
     from fnirs_pipe.utils.lineage import path_from
 
@@ -519,7 +519,7 @@ def run_pair_null(
 
     def _isc_collector(ch_type: str):
         """A callback that correlates each drawn pair, whole run and per condition."""
-        from fnirs_pipe.pipeline.synchrony import compute_isc_pairs
+        from fnirs_pipe.pipeline.hyper.synchrony import compute_isc_pairs
 
         def _collect(partner_id: str, label: str, pair: dict, inner: tuple) -> None:
             ids = [fixed_id, partner_id]
@@ -592,7 +592,7 @@ def run_pair_null(
 
     _log_draw_quality(partners, refused, coverage, len(candidates))
 
-    from fnirs_pipe.pipeline.synchrony import cone_margin_s
+    from fnirs_pipe.pipeline.hyper.synchrony import cone_margin_s
 
     sources = [p for p in (path_from(r) for r in aligned_real.values()) if p]
     params = dict(
@@ -691,9 +691,9 @@ def _isc_real(path: Path, by_condition: bool) -> "pd.DataFrame | None":
 def _write_isc_null(frames, cond_frames, draw_frames, data_dir, stem, sources, params,
                     windows, isc_whiten, isc_max_lag_s, isc_band) -> None:
     """Summarise the re-paired correlations and write them beside the coherence tables."""
-    from fnirs_pipe.pipeline.hyperscanning import _hyper_sidecar
-    from fnirs_pipe.pipeline.synchrony import _average_iterations
-    from fnirs_pipe.pipeline.wtc_null import write_tsv
+    from fnirs_pipe.pipeline.hyper import _hyper_sidecar
+    from fnirs_pipe.pipeline.hyper.synchrony import _average_iterations
+    from fnirs_pipe.pipeline.hyper.wtc_null import write_tsv
 
     keys = ["chromophore", "sub1", "sub2", "label", "label2"]
     isc_params = {k: v for k, v in params.items()

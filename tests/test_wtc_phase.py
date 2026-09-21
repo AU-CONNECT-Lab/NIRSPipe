@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from fnirs_pipe.pipeline.synchrony import (
+from fnirs_pipe.pipeline.hyper.synchrony import (
     WTCResult,
     _circular_stats,
     roi_mean_of_channels,
@@ -188,7 +188,7 @@ def _dyad_lagged(lag_s: float) -> dict:
 
 def _at_signal_frequency(raws) -> pd.Series:
     """The per-scale row nearest the rhythm that was put in, averaged over the label pairs."""
-    from fnirs_pipe.pipeline.synchrony import compute_wtc
+    from fnirs_pipe.pipeline.hyper.synchrony import compute_wtc
     result = compute_wtc(raws, fmin=0.02, fmax=0.2, ch_type="hbo")
     by = wtc_phase_by_scale(result, *E2E_BAND)
     freq = by["freq"].unique()[np.argmin(np.abs(by["freq"].unique() - SIG_FREQ))]
@@ -230,7 +230,7 @@ def test_two_members_in_step_report_no_lead():
 
 def test_the_spread_is_what_says_the_angle_is_unreadable():
     """Independent members still produce an angle; only ``phase_sd`` distinguishes it."""
-    from fnirs_pipe.pipeline.synchrony import compute_wtc
+    from fnirs_pipe.pipeline.hyper.synchrony import compute_wtc
     t = np.arange(int(SFREQ * DURATION)) / SFREQ
     rng = np.random.default_rng(7)
     apart = {"sub-01": _raw_carrying(rng.standard_normal(t.size), 11),
@@ -244,7 +244,7 @@ def test_the_spread_is_what_says_the_angle_is_unreadable():
 
 def test_the_lag_is_only_right_where_the_spread_says_it_is():
     """``phase_sd`` is the gate, and this is the measurement that says it works."""
-    from fnirs_pipe.pipeline.synchrony import compute_wtc
+    from fnirs_pipe.pipeline.hyper.synchrony import compute_wtc
     by = wtc_phase_by_scale(
         compute_wtc(_dyad_lagged(LAG_S), fmin=0.02, fmax=0.2, ch_type="hbo"), *E2E_BAND)
     per_freq = by.groupby("freq").agg(lag_s=("lag_s", "mean"),
@@ -271,7 +271,7 @@ CONDITIONS = [("rest", 0.0, 180.0), ("task", 200.0, 380.0)]
 @pytest.fixture(scope="module")
 def report(tmp_path_factory):
     import mne
-    from fnirs_pipe.pipeline.hyperscanning import GroupEntry
+    from fnirs_pipe.pipeline.hyper import GroupEntry
     from fnirs_pipe.qc.hyper.hyper_report import build_hyper_post_report
 
     dyad = _dyad_lagged(LAG_S)

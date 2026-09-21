@@ -6,7 +6,7 @@ import mne
 import numpy as np
 
 from fnirs_pipe.io.snirf import _DRIFT_KEYS
-from fnirs_pipe.pipeline.group_io import (
+from fnirs_pipe.pipeline.hyper.group_io import (
     _low_edge,
     unfiltered_stage_note,
     warn_outside_passband,

@@ -220,8 +220,8 @@ def test_alignment_carries_the_passband_forward(make_raw):
     whole-record correlation is being run on drift, and with it gone it said so on every run,
     filtered or not.
     """
-    from fnirs_pipe.pipeline.alignment import trim_to_shortest
-    from fnirs_pipe.pipeline.group_io import unfiltered_stage_note
+    from fnirs_pipe.pipeline.hyper.alignment import trim_to_shortest
+    from fnirs_pipe.pipeline.hyper.group_io import unfiltered_stage_note
 
     raws = {}
     for sid in ("sub-01", "sub-02"):
@@ -244,8 +244,8 @@ def test_alignment_carries_the_passband_forward(make_raw):
 
 def test_an_unfiltered_stage_is_still_reported_after_alignment(make_raw):
     """The carry-forward must not silence the warning it was blocking."""
-    from fnirs_pipe.pipeline.alignment import trim_to_shortest
-    from fnirs_pipe.pipeline.group_io import unfiltered_stage_note
+    from fnirs_pipe.pipeline.hyper.alignment import trim_to_shortest
+    from fnirs_pipe.pipeline.hyper.group_io import unfiltered_stage_note
 
     raws = {}
     for sid in ("sub-01", "sub-02"):

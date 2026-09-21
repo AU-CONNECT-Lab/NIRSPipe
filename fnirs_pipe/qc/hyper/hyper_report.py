@@ -14,8 +14,8 @@ import numpy as np
 from fnirs_pipe.io.derivatives import (
     group_data_dir, group_report_dir, subject_report_dir,
 )
-from fnirs_pipe.pipeline.hyper_post import HyperPostResult
-from fnirs_pipe.pipeline.hyperscanning import (
+from fnirs_pipe.pipeline.hyper.hyper_post import HyperPostResult
+from fnirs_pipe.pipeline.hyper import (
     GroupEntry, alignment_params, unfiltered_stage_note,
 )
 from fnirs_pipe.qc.common.channel_table import (
@@ -797,12 +797,12 @@ def build_hyper_post_report(
 
     ``wtc_save_maps`` writes the full time-frequency maps beside the tables as ``.npz``, one
     per chromophore, so a different band can be averaged later without a second wavelet
-    transform. See :mod:`fnirs_pipe.pipeline.wtc_store`. ``wtc_limit_scales`` computes only the scales inside
+    transform. See :mod:`fnirs_pipe.pipeline.hyper.wtc_store`. ``wtc_limit_scales`` computes only the scales inside
     ``[wtc_fmin, wtc_fmax]`` plus margin, which is most of the runtime and, given that the
     scales land on pycwt's own grid and the margin exceeds the scale-smoothing window,
     reproduces the unrestricted coherences bit for bit.
 
-    ``result`` is an already-computed :class:`~fnirs_pipe.pipeline.hyper_post.HyperPostResult`.
+    ``result`` is an already-computed :class:`~fnirs_pipe.pipeline.hyper.hyper_post.HyperPostResult`.
     Passed one, this draws it and runs no transform, which is how a page is rebuilt after a
     figure or a caption changes without paying for the wavelet pass again. Left at None the
     analysis is run here from the ``wtc_*`` arguments, which is what the CLI does. The
@@ -813,8 +813,8 @@ def build_hyper_post_report(
     when no Monte Carlo level was computed. Display only: no table or figure value changes
     with it. ``None`` takes :data:`~fnirs_pipe.qc.figures.hyper.hyper_post_figures.ARROW_MIN_COHERENCE`.
     """
-    from fnirs_pipe.pipeline.hyper_post import HyperPostConfig, run_hyper_post
-    from fnirs_pipe.pipeline.hyperscanning import WTCResult, roi_maps_from_channels
+    from fnirs_pipe.pipeline.hyper.hyper_post import HyperPostConfig, run_hyper_post
+    from fnirs_pipe.pipeline.hyper import WTCResult, roi_maps_from_channels
     from fnirs_pipe.qc.figures.hyper.hyper_post_figures import (
         ARROW_MIN_COHERENCE,
         build_isc_panel,

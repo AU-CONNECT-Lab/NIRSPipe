@@ -15,8 +15,8 @@ import pytest
 
 from fnirs_pipe.cli.hyper import _build_parser
 from fnirs_pipe.exceptions import StageError
-from fnirs_pipe.pipeline.pair_null import real_table_params
-from fnirs_pipe.pipeline.wtc_aggregate import aggregate_wtc
+from fnirs_pipe.pipeline.hyper.pair_null import real_table_params
+from fnirs_pipe.pipeline.hyper.wtc_aggregate import aggregate_wtc
 
 _REAL = {"band_fmin": 0.06, "band_fmax": 0.15, "wtc_fmin": 0.004, "wtc_fmax": 0.20,
          "mask_coi": True, "aligned_duration_s": 900.0}
@@ -158,7 +158,7 @@ def test_an_roi_mapping_is_read_rather_than_crashing(tmp_path, monkeypatch):
     The call is stubbed because what is under test is the command's own argument handling,
     not the draw; the draw has its own tests and needs a derivatives tree.
     """
-    import fnirs_pipe.pipeline.pair_null as pair_null
+    import fnirs_pipe.pipeline.hyper.pair_null as pair_null
     from fnirs_pipe.cli.hyper import cmd_pair_null
 
     (tmp_path / "roi.json").write_text('{"pfc": ["S1_D1", "S1_D2"]}')
@@ -204,7 +204,7 @@ def test_the_real_table_records_the_window_it_describes():
     """
     import inspect
 
-    from fnirs_pipe.pipeline import hyper_post
+    from fnirs_pipe.pipeline.hyper import hyper_post
 
     src = inspect.getsource(hyper_post.run_hyper_post)
     assert "analysis_window_s" in src, (

@@ -15,7 +15,7 @@ clearing the cone would still return plausible numbers.
 import numpy as np
 import pytest
 
-from fnirs_pipe.pipeline.synchrony import (
+from fnirs_pipe.pipeline.hyper.synchrony import (
     _cwt, _FLAMBDA, _pair_from_prepared, _prepare_channel, _trim_pair, _wavelet_grid,
     cone_margin_s,
 )
@@ -42,7 +42,7 @@ def _at_length(grid, n_fft):
     at the length asked for and smooth at the length it picked for itself.
     """
     from dataclasses import replace
-    from fnirs_pipe.pipeline.synchrony import _morlet
+    from fnirs_pipe.pipeline.hyper.synchrony import _morlet
     mother = _morlet()
     mother.n_fft = n_fft
     return replace(grid, n_fft=n_fft, mother=mother)

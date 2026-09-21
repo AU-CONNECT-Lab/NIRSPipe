@@ -61,7 +61,7 @@ def markers_on_data_axis(raw: "mne.io.Raw") -> list[dict]:
 
     Annotations of a cropped recording still sit on the original recording's axis, with the
     offset held in ``first_time``, while the data axis and everything computed from it start
-    at zero. :func:`~fnirs_pipe.pipeline.hyperscanning.align_recordings` crops every member
+    at zero. :func:`~fnirs_pipe.pipeline.hyper.align_recordings` crops every member
     from its first shared trigger, so raw annotation onsets are late by that trigger's onset
     against any figure or window drawn on the aligned clock.
 

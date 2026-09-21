@@ -72,7 +72,7 @@ def triad():
 
 def _run(members, where, **kwargs):
     """Build the post report over `members` and return the directory it wrote into."""
-    from fnirs_pipe.pipeline.hyperscanning import GroupEntry
+    from fnirs_pipe.pipeline.hyper import GroupEntry
     from fnirs_pipe.qc.hyper.hyper_report import build_hyper_post_report
 
     ids = list(members)

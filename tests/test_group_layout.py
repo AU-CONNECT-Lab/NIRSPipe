@@ -13,7 +13,7 @@ from fnirs_pipe.io.derivatives import (
     group_report_dir,
     subject_report_dir,
 )
-from fnirs_pipe.pipeline.hyperscanning import GroupEntry, write_group_bads
+from fnirs_pipe.pipeline.hyper import GroupEntry, write_group_bads
 
 
 def _group(task="hold"):

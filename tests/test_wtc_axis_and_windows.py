@@ -14,7 +14,7 @@ come out half empty rather than as an error.
 import numpy as np
 import pytest
 
-from fnirs_pipe.pipeline.synchrony import _mean_phase
+from fnirs_pipe.pipeline.hyper.synchrony import _mean_phase
 from fnirs_pipe.qc.figures.hyper.hyper_post_figures import _log_freq_ticks
 
 # pycwt's default grid: 12 sub-octaves per octave, so neighbours differ by 2 ** (1 / 12)
@@ -199,7 +199,7 @@ def test_no_table_name_matches_two_merge_kinds():
     """`hyper-wtcbycond.tsv` matching the `wtc` kind would concatenate the per-condition rows
     into the whole-run table, leaving the `condition` column half empty instead of erroring.
     """
-    from fnirs_pipe.pipeline.wtc_aggregate import _KINDS, _entities
+    from fnirs_pipe.pipeline.hyper.wtc_aggregate import _KINDS, _entities
 
     names = [f"group-07_task-rest_hyper-{kind}.tsv" for kind in _KINDS]
     for name in names:
@@ -208,7 +208,7 @@ def test_no_table_name_matches_two_merge_kinds():
 
 
 def test_the_per_condition_tables_are_merged_under_their_own_names():
-    from fnirs_pipe.pipeline.wtc_aggregate import _KINDS
+    from fnirs_pipe.pipeline.hyper.wtc_aggregate import _KINDS
 
     assert _KINDS["wtcbycond"] != _KINDS["wtc"]
     assert _KINDS["wtcbycond-roichan"] != _KINDS["wtc-roichan"]

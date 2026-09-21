@@ -130,7 +130,7 @@ def write_isc_matrix(
     """Write the matrix the ISC panel is drawn from, so the numbers can leave the report.
 
     Both axes carry the montage's channel labels, which is how
-    :func:`~fnirs_pipe.pipeline.synchrony.compute_isc` pairs the
+    :func:`~fnirs_pipe.pipeline.hyper.synchrony.compute_isc` pairs the
     two brains: cell (i, j) is the first subject's channel i against the other's channel j.
     Rejected channels are blank rather than absent, so the file's shape is the montage's
     however many channels a given dyad lost.
@@ -138,13 +138,13 @@ def write_isc_matrix(
     ``step`` and ``index_label`` are what let this serve the ROI means of those matrices
     too, which are the same square shape over regions instead of channels.
 
-    ``align`` is what :func:`~fnirs_pipe.pipeline.hyperscanning.alignment_params` returned.
+    ``align`` is what :func:`~fnirs_pipe.pipeline.hyper.alignment_params` returned.
     ISC is a correlation between two members sample by sample, so it is the metric a missed
     alignment damages most, and the file says which one it got.
 
     A failure here costs the file and not the panel: the report is still readable without it.
     """
-    from fnirs_pipe.pipeline.hyperscanning import _hyper_sidecar
+    from fnirs_pipe.pipeline.hyper import _hyper_sidecar
 
     try:
         tsv_path.parent.mkdir(parents=True, exist_ok=True)
@@ -184,10 +184,10 @@ def run_hyper_post(
     """
     from fnirs_pipe.exceptions import StageError
     from fnirs_pipe.io.derivatives import group_data_dir
-    from fnirs_pipe.pipeline.hyperscanning import _hyper_sidecar
-    # straight from synchrony, which defines them. hyperscanning re-exports the set, and
+    from fnirs_pipe.pipeline.hyper import _hyper_sidecar
+    # straight from synchrony, which defines them. The package re-exports the set, and
     # taking them from there makes the coherence look like a property of the group loader
-    from fnirs_pipe.pipeline.synchrony import (
+    from fnirs_pipe.pipeline.hyper.synchrony import (
         WTCResult,
         compute_isc_pairs,
         compute_wtc,
@@ -262,7 +262,7 @@ def run_hyper_post(
 
         The alternative to reading the window out of the whole-run transform, for a caller
         who wants each condition transformed on its own. What the padding buys is the cone:
-        with a margin past :func:`~fnirs_pipe.pipeline.synchrony.cone_margin_s` it lands
+        with a margin past :func:`~fnirs_pipe.pipeline.hyper.synchrony.cone_margin_s` it lands
         outside the condition instead of eating its edges, which is the whole difference
         between this and cutting a condition to its own boundaries.
 
@@ -302,7 +302,7 @@ def run_hyper_post(
         holds both chromophores and two archives cannot share one name. ``fnirs-hyper band``
         globs ``*_hyper-wtc*.npz``, which this still matches.
         """
-        from fnirs_pipe.pipeline.wtc_store import save_wtc
+        from fnirs_pipe.pipeline.hyper.wtc_store import save_wtc
         npz_path = (group_data_dir(output_dir, group_id)
                     / f"group-{group_id}_task-{task}_hyper-{kind}-{ch_type}.npz")
         with guard(f"Saving WTC maps ({kind} {ch_type})", errors, scope):
@@ -319,7 +319,7 @@ def run_hyper_post(
         Absent unless --wtc-phase-null ran for this dyad, which is the usual case: the maps then
         keep whatever they had, and the arrows fall back to the flat --wtc-arrow-min.
         """
-        from fnirs_pipe.pipeline.wtc_store import load_null_levels
+        from fnirs_pipe.pipeline.hyper.wtc_store import load_null_levels
         npz_path = (group_data_dir(output_dir, group_id)
                     / f"group-{group_id}_task-{task}_hyper-wtc-nulllevel-{ch_type}.npz")
         if result is None or not npz_path.exists():

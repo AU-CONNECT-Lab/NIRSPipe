@@ -59,7 +59,7 @@ def cmd_hyper(
     session_label: str | None, sci_threshold: float, port: int | None,
 ) -> None:
     """Launch interactive hyperscanning QC viewer with section ratings and channel decisions."""
-    from fnirs_pipe.pipeline.hyperscanning import parse_group_csv
+    from fnirs_pipe.pipeline.hyper import parse_group_csv
     from fnirs_pipe.qc.rating.app import HyperRatingApp
 
     name_parts = [f"group-{group_id}"]

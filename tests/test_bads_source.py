@@ -19,7 +19,7 @@ import json
 import pandas as pd
 import pytest
 
-from fnirs_pipe.pipeline.hyperscanning import GroupEntry, load_group_sqm
+from fnirs_pipe.pipeline.hyper import GroupEntry, load_group_sqm
 
 BADS_TAP = ["S6_D5 760", "S6_D5 850"]
 BADS_REST = ["S7_D6 760"]
