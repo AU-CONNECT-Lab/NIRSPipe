@@ -14,7 +14,7 @@ come out half empty rather than as an error.
 import numpy as np
 import pytest
 
-from fnirs_pipe.pipeline.hyper.synchrony import _mean_phase
+from fnirs_pipe.pipeline.hyper.roi import _mean_phase
 from fnirs_pipe.qc.figures.hyper.hyper_post_figures import _log_freq_ticks
 
 # pycwt's default grid: 12 sub-octaves per octave, so neighbours differ by 2 ** (1 / 12)

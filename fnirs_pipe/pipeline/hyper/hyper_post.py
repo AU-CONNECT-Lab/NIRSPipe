@@ -188,12 +188,11 @@ def run_hyper_post(
     # straight from synchrony, which defines them. The package re-exports the set, and
     # taking them from there makes the coherence look like a property of the group loader
     from fnirs_pipe.pipeline.hyper.isc import compute_isc_pairs, roi_mean_of_isc
-    from fnirs_pipe.pipeline.hyper.synchrony import (
+    from fnirs_pipe.pipeline.hyper._helpers import long_axis_over
+    from fnirs_pipe.pipeline.hyper.roi import roi_mean_of_channels, roi_mean_of_homologous
+    from fnirs_pipe.pipeline.hyper.wtc import (
         WTCResult,
         compute_wtc,
-        long_axis_over,
-        roi_mean_of_channels,
-        roi_mean_of_homologous,
         window_result,
         wtc_band_mean,
         wtc_grid_params,
@@ -261,7 +260,7 @@ def run_hyper_post(
 
         The alternative to reading the window out of the whole-run transform, for a caller
         who wants each condition transformed on its own. What the padding buys is the cone:
-        with a margin past :func:`~fnirs_pipe.pipeline.hyper.synchrony.cone_margin_s` it lands
+        with a margin past :func:`~fnirs_pipe.pipeline.hyper.wtc.cone_margin_s` it lands
         outside the condition instead of eating its edges, which is the whole difference
         between this and cutting a condition to its own boundaries.
 

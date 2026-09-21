@@ -73,7 +73,7 @@ def cmd_crop(
                 print("[error] --margin auto requires --band-fmin (the lowest frequency the "
                       "analysis will average over).", file=sys.stderr)
                 raise SystemExit(1)
-            from fnirs_pipe.pipeline.hyper.synchrony import cone_margin_s
+            from fnirs_pipe.pipeline.hyper.wtc import cone_margin_s
             margin = cone_margin_s(band_fmin)
         else:
             margin = float(margin_s)

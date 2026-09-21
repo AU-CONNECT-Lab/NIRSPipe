@@ -48,14 +48,20 @@ from fnirs_pipe.pipeline.hyper.group_quality import (  # noqa: F401  re-exported
     resolve_group_bands,
     write_group_bads,
 )
-from fnirs_pipe.pipeline.hyper.synchrony import (  # noqa: F401  re-exported
-    WTCResult,
+from fnirs_pipe.pipeline.hyper.coherence import (  # noqa: F401  re-exported
     compute_pairwise_coherence,
-    compute_wtc,
-    compute_wtc_pair_null,
-    compute_wtc_phase_null,
+)
+from fnirs_pipe.pipeline.hyper.roi import (  # noqa: F401  re-exported
     roi_maps_from_channels,
     roi_mean_of_channels,
+)
+from fnirs_pipe.pipeline.hyper.surrogate import (  # noqa: F401  re-exported
+    compute_wtc_pair_null,
+    compute_wtc_phase_null,
+)
+from fnirs_pipe.pipeline.hyper.wtc import (  # noqa: F401  re-exported
+    WTCResult,
+    compute_wtc,
     window_result,
     wtc_band_mean,
 )

@@ -283,7 +283,7 @@ def crop_snirf(
     span that was asked for as ``crop_analysis_windows_s``. A segment cut to its own
     boundaries cannot be analysed at those boundaries by anything that convolves, which is
     every wavelet method; the margin is what a later stage windows back off. See
-    :func:`~fnirs_pipe.pipeline.hyper.synchrony.cone_margin_s` for the width that suffices.
+    :func:`~fnirs_pipe.pipeline.hyper.wtc.cone_margin_s` for the width that suffices.
 
     ``input_desc`` cuts a pipeline stage instead of a recording: `bids_dir` is then a
     derivatives tree and the file carrying that desc- entity is the input, e.g. "errts" for

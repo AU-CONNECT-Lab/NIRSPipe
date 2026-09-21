@@ -35,7 +35,7 @@ def _draw_and_write(wtc_null, **kwargs):
 
 def _null(frame, cond_frames=(), levels=None):
     """A NullDraws around an already-made frame, for the tests that stub the draw away."""
-    from fnirs_pipe.pipeline.hyper.synchrony import NullDraws
+    from fnirs_pipe.pipeline.hyper.surrogate import NullDraws
 
     keys = ["sub1", "sub2", "label"] + (["label2"] if "label2" in frame.columns else [])
     return NullDraws(draws=[frame], cond_draws=list(cond_frames), keys=keys,

@@ -15,9 +15,13 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from fnirs_pipe.pipeline.hyper.synchrony import (
-    NULL_ARROW_QUANTILE, NullDraws, WTCResult, _accumulate_null_hist, _null_level,
+from fnirs_pipe.pipeline.hyper.surrogate import (
+    NULL_ARROW_QUANTILE,
+    NullDraws,
+    _accumulate_null_hist,
+    _null_level,
 )
+from fnirs_pipe.pipeline.hyper.wtc import WTCResult
 
 FREQS = np.array([0.02, 0.06, 0.15])
 KEYS = ["sub1", "sub2", "label"]

@@ -23,7 +23,8 @@ from scipy.linalg import solve_toeplitz
 from scipy.signal import lfilter
 
 from fnirs_pipe.io.snirf import long_channel_picks
-from fnirs_pipe.pipeline.hyper.synchrony import _fisher_z, _shared_sfreq, long_axis_over
+from fnirs_pipe.pipeline.hyper._helpers import _fisher_z, _shared_sfreq, long_axis_over
+from fnirs_pipe.pipeline.hyper.surrogate import phase_scramble
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("pipeline.isc")
@@ -267,7 +268,7 @@ def compute_isc(
 
     Cutting the wavelet coherence the same way would be wrong, and that asymmetry is the
     whole of why the two are treated differently here. See
-    :func:`~fnirs_pipe.pipeline.hyper.synchrony.window_result`.
+    :func:`~fnirs_pipe.pipeline.hyper.wtc.window_result`.
 
     Both axes are the *montage's* long channels, rejected ones included, so every dyad's
     matrix has one shape and a group analysis can stack them however their rejections

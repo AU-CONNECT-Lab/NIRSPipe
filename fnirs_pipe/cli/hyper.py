@@ -315,7 +315,7 @@ def cmd_run(
                   "conditions to transform without it.", file=sys.stderr)
             raise SystemExit(1)
         if str(wtc_cond_pad_s).lower() == "auto":
-            from fnirs_pipe.pipeline.hyper.synchrony import cone_margin_s
+            from fnirs_pipe.pipeline.hyper.wtc import cone_margin_s
             # the band the means are taken over, which is what the cone has to clear;
             # --wtc-band-fmin falls back to --wtc-fmin exactly as the report resolves it
             cond_pad = cone_margin_s(wtc_band_fmin or wtc_fmin)

@@ -10,6 +10,8 @@ All notable changes to this project will be documented in this file.
 - `fnirs-hyper group-null` writes both reads of the cohort test, `test` column `resample` and `paired`; the phase null is only valid read paired above the cell
 
 ### Changed
+- The hyperscanning modules moved into `fnirs_pipe.pipeline.hyper`; `pipeline.hyperscanning` is now `pipeline.hyper`
+- Inter-subject correlation split out of `synchrony` into `pipeline.hyper.isc`
 - The ROI correlation tables record which channels each region was averaged from, as the seed map and the ROI amplitude table already did
 
 ## [0.45.0] - 2026-09-19

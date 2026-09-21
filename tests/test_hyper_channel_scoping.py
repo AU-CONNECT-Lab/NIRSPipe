@@ -26,7 +26,8 @@ from fnirs_pipe.exceptions import MissingDerivativesError, StageError
 from fnirs_pipe.io.derivatives import find_preproc_snirf
 from fnirs_pipe.io.snirf import long_channel_picks, write_snirf
 from fnirs_pipe.pipeline.hyper import GroupEntry, load_group_haemo
-from fnirs_pipe.pipeline.hyper.synchrony import WTCResult, _shared_sfreq, compute_wtc, wtc_band_mean
+from fnirs_pipe.pipeline.hyper._helpers import _shared_sfreq
+from fnirs_pipe.pipeline.hyper.wtc import WTCResult, compute_wtc, wtc_band_mean
 from tests._synth import SHORT_DISTANCE, synth_raw
 
 SHORT_PAIR = "S5_D5"      # the one pair _channel_layout places below 1 cm
@@ -115,7 +116,7 @@ def test_isc_matches_channels_by_label_not_position():
 
 def test_the_axis_is_the_union_of_the_two_montages():
     """One member's montage is not the axis: each side can carry a label the other lost."""
-    from fnirs_pipe.pipeline.hyper.synchrony import long_axis_over
+    from fnirs_pipe.pipeline.hyper._helpers import long_axis_over
 
     a, b = _tagged("10031"), _tagged("10032")
     a.drop_channels([c for c in a.ch_names if c.startswith("S4_D4")])
@@ -201,7 +202,7 @@ def test_one_filtered_member_is_still_flagged():
 
 
 def test_coherence_matches_channels_by_label():
-    from fnirs_pipe.pipeline.hyper.synchrony import compute_pairwise_coherence
+    from fnirs_pipe.pipeline.hyper.coherence import compute_pairwise_coherence
 
     raws = {"sub-A": _tagged("10031"), "sub-B": _tagged("10032", drop="S2_D2")}
     df = compute_pairwise_coherence(raws, fmin=0.05, fmax=0.15).set_index("ch_name")
@@ -215,7 +216,7 @@ def test_screening_coherence_drops_a_pair_one_member_lacks():
     # the windowed coherence this replaced kept a blank row per window; the screening pass
     # drops the pair instead, because a channel one member does not have is not a channel
     # the dyad can be screened on and a NaN row would be averaged into the window's mean
-    from fnirs_pipe.pipeline.hyper.synchrony import screening_coherence
+    from fnirs_pipe.pipeline.hyper.coherence import screening_coherence
 
     raws = {"sub-A": _tagged("10031"), "sub-B": _tagged("10032", drop="S2_D2")}
     df = screening_coherence(raws, 0.05, 0.15, n_iter=3, seed=0)

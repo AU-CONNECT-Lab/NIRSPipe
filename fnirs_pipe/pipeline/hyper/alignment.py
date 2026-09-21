@@ -267,7 +267,7 @@ def resolve_analysis_window(
     **It returns a window; it does not cut.** The recordings stay whole and the window is
     taken out of the wavelet transform afterwards, which is the same route
     ``--wtc-by-condition`` takes and for the reason recorded in
-    :func:`~fnirs_pipe.pipeline.hyper.synchrony.window_result`: a cut stretch transformed on its
+    :func:`~fnirs_pipe.pipeline.hyper.wtc.window_result`: a cut stretch transformed on its
     own has two edges of its own, and its cone of influence eats a share of the band that
     grows as the window shortens, so the coherence over a 300 s cut comes out higher than
     the same 300 s read out of the whole record. This used to cut, so it was the one entry in

@@ -22,12 +22,9 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from fnirs_pipe.pipeline.hyper.synchrony import (
-    _long_by_label,
-    compute_pairwise_coherence,
-    compute_wtc,
-    wtc_band_mean,
-)
+from fnirs_pipe.pipeline.hyper._helpers import _long_by_label
+from fnirs_pipe.pipeline.hyper.coherence import compute_pairwise_coherence
+from fnirs_pipe.pipeline.hyper.wtc import compute_wtc, wtc_band_mean
 
 SFREQ = 5.0
 DURATION = 400.0
@@ -232,7 +229,7 @@ def _draw_and_write(wtc_null, **kwargs):
 
 def _null(frame, cond_frames=(), levels=None):
     """A NullDraws around an already-made frame, for the tests that stub the draw away."""
-    from fnirs_pipe.pipeline.hyper.synchrony import NullDraws
+    from fnirs_pipe.pipeline.hyper.surrogate import NullDraws
 
     keys = ["sub1", "sub2", "label"] + (["label2"] if "label2" in frame.columns else [])
     return NullDraws(draws=[frame], cond_draws=list(cond_frames), keys=keys,
@@ -299,7 +296,7 @@ def test_tagging_before_the_aggregation_would_lose_the_tag():
     """Why `_tag` runs after every aggregation and not before. `roi_mean_of_channels`
     groups on the columns it knows and drops the rest, so a chromophore column added
     upstream of it vanishes without an error."""
-    from fnirs_pipe.pipeline.hyper.synchrony import roi_mean_of_channels
+    from fnirs_pipe.pipeline.hyper.roi import roi_mean_of_channels
 
     tagged = pd.DataFrame({
         "chromophore": ["hbo"] * 2,

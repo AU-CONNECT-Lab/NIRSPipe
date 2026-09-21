@@ -246,7 +246,7 @@ def _draw_condition_pairs(
     """
     from fnirs_pipe.pipeline.hyper.group_io import load_group_haemo
     from fnirs_pipe.pipeline.hyper.group_quality import apply_group_bads, load_group_sqm
-    from fnirs_pipe.pipeline.hyper.synchrony import cone_margin_s
+    from fnirs_pipe.pipeline.hyper.wtc import cone_margin_s
 
     margin = cone_margin_s(band_fmin)
     drawn = 0
@@ -451,8 +451,9 @@ def run_pair_null(
                                                    resolve_group_bands)
     from fnirs_pipe.pipeline.hyper import (_hyper_sidecar, align_recordings,
                                                    alignment_params)
-    from fnirs_pipe.pipeline.hyper.synchrony import (compute_wtc_pair_null, long_axis_over,
-                                               wtc_grid_params)
+    from fnirs_pipe.pipeline.hyper._helpers import long_axis_over
+    from fnirs_pipe.pipeline.hyper.surrogate import compute_wtc_pair_null
+    from fnirs_pipe.pipeline.hyper.wtc import wtc_grid_params
     from fnirs_pipe.pipeline.hyper.wtc_null import _for_chroma, _real_table, write_tsv
     from fnirs_pipe.qc.common.windows import condition_windows
     from fnirs_pipe.utils.lineage import path_from
@@ -592,7 +593,7 @@ def run_pair_null(
 
     _log_draw_quality(partners, refused, coverage, len(candidates))
 
-    from fnirs_pipe.pipeline.hyper.synchrony import cone_margin_s
+    from fnirs_pipe.pipeline.hyper.wtc import cone_margin_s
 
     sources = [p for p in (path_from(r) for r in aligned_real.values()) if p]
     params = dict(
@@ -692,7 +693,7 @@ def _write_isc_null(frames, cond_frames, draw_frames, data_dir, stem, sources, p
                     windows, isc_whiten, isc_max_lag_s, isc_band) -> None:
     """Summarise the re-paired correlations and write them beside the coherence tables."""
     from fnirs_pipe.pipeline.hyper import _hyper_sidecar
-    from fnirs_pipe.pipeline.hyper.synchrony import _average_iterations
+    from fnirs_pipe.pipeline.hyper.surrogate import _average_iterations
     from fnirs_pipe.pipeline.hyper.wtc_null import write_tsv
 
     keys = ["chromophore", "sub1", "sub2", "label", "label2"]
