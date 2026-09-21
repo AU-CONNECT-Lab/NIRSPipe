@@ -36,6 +36,7 @@ Ordered by how often each has come up, not by when it might happen.
 - All short channels as separate confound regressors, instead of their mean. The published comparison ranks it above the mean, and the change is bounded
 - Pooling the dyad phase angle across a cohort. Each pair's lead now has an angle and a spread; combining angles over dyads needs circular statistics rather than the route the coherence takes, and which test to use is better chosen once the spread has been seen on a real cohort than picked in advance
 - Phase locking value beside the coherence. It is blind to amplitude, so it asks something neither shipped metric does, and most of it falls out of a transform already computed. It would be off by default, as the other inter-brain metrics are
+- Cluster-based permutation over the coherence plane in time and scale. Neighbouring cells are not independent, so connected regions rather than single cells are the unit a correction should be built on
 - Directed coupling, by transfer entropy, Granger causality or the phase slope. Assessed and not planned: each reads direction off a lag, and two people's haemodynamic responses differ by more than the lags being measured. The wavelet phase angle now shipping answers the same question without inferring a cause from a delay
 
 **Quality control**
