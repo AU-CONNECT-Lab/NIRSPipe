@@ -203,7 +203,8 @@ def test_no_report_writer_names_a_stylesheet():
     # nothing outside the shell calls it, so the one look reaches every page through
     # page_vars and there is no keyword to forget. Not `extra_css`, which is per-figure CSS
     # injected into an iframe and is a different thing.
-    qc = pathlib.Path(__file__).resolve().parents[1] / "fnirs_pipe" / "qc"
+    import fnirs_pipe.qc as qc_pkg
+    qc = pathlib.Path(qc_pkg.__file__).resolve().parent
     for path in sorted(qc.rglob("*.py")):
         if path.name == "report_shell.py":
             continue

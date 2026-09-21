@@ -32,8 +32,8 @@ def _walk(component, found):
 
 @pytest.fixture(scope="module")
 def registered():
-    pages = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                         "fnirs_pipe", "interface", "pages")
+    import fnirs_pipe.interface as interface_pkg
+    pages = os.path.join(os.path.dirname(interface_pkg.__file__), "pages")
     dash.Dash(__name__, use_pages=True, pages_folder=pages, suppress_callback_exceptions=True)
 
     import fnirs_pipe.interface.callbacks._sections               # noqa: F401

@@ -16,8 +16,10 @@ import glob
 import tomllib
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
-PACKAGE = ROOT / "fnirs_pipe"
+import fnirs_pipe
+
+PACKAGE = Path(fnirs_pipe.__file__).resolve().parent
+ROOT = PACKAGE.parent
 
 
 def _patterns() -> list[str]:
