@@ -90,15 +90,6 @@ def _run_section():
                      "–",
                      dbc.Input(id="hy-isc-fmax", type="number", step=0.01,
                                placeholder="whole passband")),
-                # its own pair rather than following the one above: the correlation and the
-                # coherence are comparable only on one band, and a control that cannot be
-                # seen is a band nobody can report
-                band("ISC band (Hz)",
-                     dbc.Input(id="hy-isc-fmin", type="number", step=0.001,
-                               placeholder="whole passband"),
-                     "–",
-                     dbc.Input(id="hy-isc-fmax", type="number", step=0.01,
-                               placeholder="whole passband")),
                 field("Chromophore",
                       dcc.Dropdown(id="hy-wtc-chroma",
                                    options=[{"label": "HbO and HbR", "value": "both"},

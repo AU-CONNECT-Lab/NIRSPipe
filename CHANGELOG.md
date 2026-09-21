@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
 - `fnirs-hyper group-null` writes both reads of the cohort test, `test` column `resample` and `paired`; the phase null is only valid read paired above the cell
 
 ### Fixed
+- The Hyper Analysis page would not load: its ISC band field was declared twice, and Dash refuses a duplicate id
 - `fnirs-hyper run` and `pair-null` no longer fail on the closing merge hint, which reported five dyads failed after every table was written
 
 ### Changed
