@@ -23,6 +23,8 @@ _DESC_CHOICES = [desc for desc, domain in _DOMAIN.items() if domain == "haemo"]
 
 _COMMANDS = [
     {"label": "Analyse dyads (run)", "value": "run"},
+    {"label": "Re-paired null (pair-null)", "value": "pair-null"},
+    {"label": "Read the draws above the cell (group-null)", "value": "group-null"},
     {"label": "Re-average saved WTC maps (band)", "value": "band"},
     {"label": "Merge WTC tables across dyads (merge)", "value": "merge"},
     {"label": "Rebuild the dyad landing pages (index)", "value": "index"},
@@ -189,6 +191,39 @@ def _pair_null_section():
     ))
 
 
+def _group_null_section():
+    return html.Div(id="hy-groupnull-section", children=card(
+        "Null above the cell",
+        params(
+            field("Task",
+                  dbc.Input(id="hy-gn-task", type="text", placeholder="full")),
+            field("Chromophore",
+                  dbc.Select(id="hy-gn-chroma",
+                             options=[{"label": "HbO", "value": "hbo"},
+                                      {"label": "HbR", "value": "hbr"}],
+                             value="hbo")),
+            field("Draws to read",
+                  dbc.Select(id="hy-gn-null",
+                             options=[{"label": "Re-paired", "value": "repaired"},
+                                      {"label": "Phase-scrambled", "value": "phase"}],
+                             value="repaired")),
+            field("ROI mapping",
+                  dbc.Input(id="hy-gn-roi-mapping", type="text",
+                            placeholder="path to roi.json, optional"),
+                  span=PATH),
+            field("Resamples",
+                  dbc.Input(id="hy-gn-resample", type="number", min=1, step=1000,
+                            value=20000)),
+            field("Seed",
+                  dbc.Input(id="hy-gn-seed", type="number", placeholder="none")),
+        ),
+        subtitle="Averages the channels before ranking, once per occasion and once over the "
+                 "cohort. It cannot say which channel, and in exchange it can say whether the "
+                 "pairing beats its null at all. Reads what pair-null wrote and runs no "
+                 "transform, so one chromophore at a time.",
+    ))
+
+
 def _band_section():
     return html.Div(id="hy-band-section", children=card(
         "Re-average saved WTC maps",
@@ -257,6 +292,7 @@ layout = dbc.Container([
             _scope(),
             _run_section(),
             _pair_null_section(),
+            _group_null_section(),
             _band_section(),
             _window_section(),
             card("Report preview", html.Div(id="hy-report-preview")),

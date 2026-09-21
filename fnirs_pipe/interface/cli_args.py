@@ -12,7 +12,7 @@ from __future__ import annotations
 _AGGREGATE = ("cohort", "cohort-hyper", "provenance")
 
 # fnirs-hyper subcommands, which take one output_dir and their own flags
-_HYPER = ("run", "pair-null", "band", "merge", "index")
+_HYPER = ("run", "pair-null", "group-null", "band", "merge", "index")
 
 
 def _num(flag: str, value) -> list[str]:
@@ -60,6 +60,17 @@ def build_qc_args(command: str, opts: dict) -> list[str]:
             args.append("--wtc-pair-cross")
         if "bads_subject" in (opts.get("hyper_flags") or []):
             args += ["--bads-scope", "subject"]
+        return args
+
+    # reads the draws `pair-null` wrote, so the band, the mask and the window are whatever
+    # those tables carry. Only what to read and how finely to resample is this form's
+    if command == "group-null":
+        args += _text("--task", opts.get("gn_task"))
+        args += _text("--wtc-chroma", opts.get("gn_chroma"))
+        args += _text("--null", opts.get("gn_null"))
+        args += _text("--roi-mapping", opts.get("gn_roi_mapping"))
+        args += _num("--n-resample", opts.get("gn_resample"))
+        args += _num("--seed", opts.get("gn_seed"))
         return args
 
     if command == "run":

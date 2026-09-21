@@ -15,11 +15,13 @@ _SECTIONS = {
     "run":  {"hy-run-section", "hy-window-section"},
     # the pool and the limit are its own; the rest of the selection is the run form's
     "pair-null": {"hy-run-section", "hy-pairnull-section"},
+    # reads finished tables, so it shares nothing with the run form
+    "group-null": {"hy-groupnull-section"},
     "band": {"hy-band-section"},
 }
 
-_ALL_SECTIONS = ("hy-run-section", "hy-pairnull-section", "hy-band-section",
-                 "hy-window-section")
+_ALL_SECTIONS = ("hy-run-section", "hy-pairnull-section", "hy-groupnull-section",
+                 "hy-band-section", "hy-window-section")
 
 # report each command writes, relative to output_dir, best match first. The hyper level names
 # its file after the group, so it is found by glob rather than named here.
@@ -45,6 +47,9 @@ _STATES = [
     State("hy-flags", "value"),
     State("hy-pair-pool", "value"), State("hy-pair-max", "value"),
     State("hy-pair-flags", "value"),
+    State("hy-gn-task", "value"), State("hy-gn-chroma", "value"),
+    State("hy-gn-null", "value"), State("hy-gn-roi-mapping", "value"),
+    State("hy-gn-resample", "value"), State("hy-gn-seed", "value"),
     State("hy-band-fmin", "value"), State("hy-band-fmax", "value"),
     State("hy-band-suffix", "value"), State("hy-band-flags", "value"),
     State("hy-tstart", "value"), State("hy-tend", "value"),
@@ -56,6 +61,8 @@ _KEYS = ["output_dir", "pairs_csv", "group_id", "desc", "roi_mapping",
          "isc_whiten", "isc_max_lag", "isc_fmin", "isc_fmax", "isc_phase_null",
          "wtc_chroma", "hyper_task", "hyper_flags",
          "wtc_pair_pool", "wtc_pair_max", "pair_flags",
+         "gn_task", "gn_chroma", "gn_null", "gn_roi_mapping",
+         "gn_resample", "gn_seed",
          "band_fmin", "band_fmax", "band_suffix", "band_flags",
          "tstart", "tend"]
 

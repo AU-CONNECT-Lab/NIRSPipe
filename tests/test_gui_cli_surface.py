@@ -343,6 +343,7 @@ QC_NOT_EXPOSED = {
         # a speed setting whose kept scales land on pycwt's own grid, so the coherences
         # match the unrestricted ones bit for bit. Nothing about the result moves with it
         "--wtc-limit-scales", "--no-wtc-limit-scales"},
+    "group-null": {"--verbose"},
     "merge": {"--verbose"},
     # every group-* directory by default, which is the whole shape of the aggregate form
     "index": {"--verbose", "--group-id"},
@@ -360,6 +361,8 @@ _QC_FULL_OPTS = dict(
                  "no_by_condition", "bads_subject", "wtc_save_maps", "no_align", "normalize",
                  "check_only"],
     wtc_pair_pool="position", wtc_pair_max=20, pair_flags=["wtc_pair_cross"],
+    gn_task="full", gn_chroma="hbo", gn_null="repaired",
+    gn_roi_mapping="/roi.json", gn_resample=20000, gn_seed=7,
     band_fmin=0.05, band_fmax=0.2, band_suffix="band0p05-0p2",
     band_flags=["band_no_mask_coi"],
     tstart=0.0, tend=60.0,
