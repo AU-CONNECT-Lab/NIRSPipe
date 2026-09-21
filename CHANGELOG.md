@@ -13,7 +13,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 - The Hyper Analysis page would not load: its ISC band field was declared twice, and Dash refuses a duplicate id
-- `fnirs-hyper run` and `pair-null` no longer fail on the closing merge hint, which reported five dyads failed after every table was written
+- `fnirs-hyper run` and `pair-null` no longer fail on the closing merge hint
 
 ### Changed
 - The hyperscanning modules moved into `fnirs_pipe.pipeline.hyper`; `pipeline.hyperscanning` is now `pipeline.hyper`

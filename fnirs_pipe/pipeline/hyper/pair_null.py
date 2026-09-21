@@ -229,6 +229,7 @@ def _draw_condition_pairs(
     band_fmin: float,
     n_max: "int | None",
     refused: dict,
+    window_sources: "dict[str, tuple[str, float]] | None" = None,
 ):
     """Yield ``(partner_id, label, {fixed, partner} segments, the condition's place in them)``.
 
@@ -249,6 +250,7 @@ def _draw_condition_pairs(
     from fnirs_pipe.pipeline.hyper.wtc import cone_margin_s
 
     margin = cone_margin_s(band_fmin)
+    window_sources = window_sources or {}
     drawn = 0
     for entry in candidates:
         if n_max is not None and drawn >= n_max:
@@ -275,15 +277,22 @@ def _draw_condition_pairs(
             logger.warning("%s refused as a stand-in, no quality record: %s", pid, exc)
             continue
 
-        onsets = _partner_condition_onsets(partner_raw, [w[0] for w in windows])
+        # asked for the conditions, not the window labels: the annotation carries a condition
+        # description and a window is an offset into one
+        wanted = [window_sources.get(w[0], (w[0], 0.0))[0] for w in windows]
+        onsets = _partner_condition_onsets(partner_raw, wanted)
         end = float(partner_raw.times[-1])
         fixed_end = float(fixed_raw.times[-1])
         segments = []
         for label, t0, t1 in windows:
             span = float(t1) - float(t0)
-            start = onsets.get(label)
+            cond, offset = window_sources.get(label, (label, 0.0))
+            base = onsets.get(cond)
+            # the stand-in's own condition marker plus the window's offset into it, so each
+            # side is cut at the same place in its own session rather than on one clock
+            start = None if base is None else base + offset
             if start is None:
-                refused.setdefault(f"no_{label}", []).append(pid)
+                refused.setdefault(f"no_{cond}", []).append(pid)
                 continue
             if start + span > end + _DURATION_TOL_S:
                 # the stand-in's own block is shorter than the real one, so there is no
@@ -455,7 +464,7 @@ def run_pair_null(
     from fnirs_pipe.pipeline.hyper.surrogate import compute_wtc_pair_null
     from fnirs_pipe.pipeline.hyper.wtc import wtc_grid_params
     from fnirs_pipe.pipeline.hyper.wtc_null import _for_chroma, _real_table, write_tsv
-    from fnirs_pipe.qc.common.windows import condition_windows
+    from fnirs_pipe.qc.common.windows import condition_windows, split_windows
     from fnirs_pipe.utils.lineage import path_from
 
     data_dir = group_data_dir(output_dir, group_id)
@@ -501,11 +510,23 @@ def run_pair_null(
                 group_id, task, len(candidates), pool)
 
     windows: list = []
+    # {window label: (condition label, seconds into that condition)}, empty unless the real
+    # table was written on a window grid. A draw cuts each side at its own marker, so for a
+    # window it needs the condition it belongs to and how far into it the window starts
+    window_sources: dict = {}
     if (data_dir / f"{stem}-wtcbycond.tsv").exists():
         windows = condition_windows(aligned_real[fixed_id], min_duration=1.0 / wtc_fmin)
         if analysis_window is not None:
             lo, hi = analysis_window
             windows = [w for w in windows if w[1] >= lo and w[2] <= hi]
+        # taken off the sidecar rather than the command line, for the same reason the band
+        # and the mask are: a null resolved on a different grid than the table it is
+        # subtracted from measures the grid, not the pairing
+        if real_params.get("wtc_window_s"):
+            windows, window_sources = split_windows(
+                windows, float(real_params["wtc_window_s"]))
+            logger.info("null on the real table's window grid: %d window(s) of %.1f s",
+                        len(windows), float(real_params["wtc_window_s"]))
 
     # the whole-run tables are not read: this null has no whole-run half to rank against
     real_by_cond = _real_table(data_dir / f"{stem}-wtcbycond.tsv")
@@ -557,7 +578,8 @@ def run_pair_null(
         draws = _draw_condition_pairs(
             output_dir, task, fixed_id, aligned_real[fixed_id], candidates, desc=desc,
             bads_scope=bads_scope, scope_tasks=scope_tasks, windows=windows,
-            band_fmin=band_fmin, n_max=n_max, refused=refused)
+            band_fmin=band_fmin, n_max=n_max, refused=refused,
+            window_sources=window_sources)
         null = compute_wtc_pair_null(
             draws, true_pair, long_axis_over(aligned_real.values(), ch_type, sep_bands),
             band_fmin, band_fmax, fmin=wtc_fmin, fmax=wtc_fmax, cross=cross,
@@ -607,6 +629,8 @@ def run_pair_null(
         # no cond_overlap: each side is cut at its own marker, so the overlap is 1 by
         # construction rather than something the run has to report
         pair_align="per-condition-marker",
+        **({"wtc_window_s": float(real_params["wtc_window_s"])}
+           if real_params.get("wtc_window_s") else {}),
         pair_cond_pad_s=round(cone_margin_s(band_fmin), 3),
         **wtc_grid_params(aligned_real),
         # the null is subtracted from the real table row by row, so the two have to say

@@ -36,6 +36,7 @@ class HyperPostConfig:
     wtc_mc_count: int = 300
     wtc_channel_cross: bool = False
     wtc_by_condition: bool = False
+    wtc_window_s: "float | None" = None
     wtc_cond_pad_s: float | None = None
     wtc_limit_scales: bool = True
     wtc_save_maps: bool = False
@@ -244,6 +245,10 @@ def run_hyper_post(
             # this table has always recorded it while the table itself did not
             **({"analysis_window_s": [round(x, 3) for x in analysis_window]}
                if analysis_window is not None else {}),
+            # the window grid, without which the null cannot resolve the same one; a table
+            # of conditions and a table of equal-length windows are not comparable
+            **({"wtc_window_s": round(float(config.wtc_window_s), 3)}
+               if config.wtc_window_s else {}),
             wtc_fmin=wtc_fmin, wtc_fmax=wtc_fmax, chroma=list(chroma),
             **wtc_grid_params(aligned_raws), **align_info, **extra,
         )

@@ -111,3 +111,62 @@ def test_the_condition_is_padded_and_its_place_reported(wired):
     assert lo == 0.0 and hi == pytest.approx(300.0)
     for raw in pair.values():
         assert float(raw.times[-1]) == pytest.approx(300.0 + 47.14, abs=0.02)
+
+
+# ---- equal-length windows: the stand-in is cut at its own marker plus the offset ----
+
+def _run_windows(state, windows, sources, partners=("sub-p2d02",), fixed_duration=1600.0):
+    refused: dict = {}
+    drawn = list(_draw_condition_pairs(
+        "/out", "full", FIXED, _Raw(fixed_duration),
+        [GroupEntry("dXX", p, "full") for p in partners],
+        desc="preproc", bads_scope="run", scope_tasks=["full"],
+        windows=windows, band_fmin=BAND_FMIN, n_max=None, refused=refused,
+        window_sources=sources))
+    return drawn, refused
+
+
+def test_a_window_is_cut_at_the_partners_own_marker_plus_its_offset(wired):
+    """The whole point: the offset rides on the stand-in's clock, not the real dyad's."""
+    from fnirs_pipe.qc.common.windows import split_windows
+
+    windows, sources = split_windows([("game1", 500.0, 1400.0)], 300.0)
+    assert [w[0] for w in windows] == ["game1-w1", "game1-w2", "game1-w3"]
+    # the stand-in entered game1 100 s earlier than the real dyad did
+    wired["onsets"] = {"game1": 400.0}
+    drawn, refused = _run_windows(wired, windows, sources)
+    assert refused == {}
+    assert [label for _, label, *_ in drawn] == ["game1-w1", "game1-w2", "game1-w3"]
+
+
+def test_every_window_of_a_draw_is_the_same_length(wired):
+    from fnirs_pipe.qc.common.windows import split_windows
+
+    windows, sources = split_windows([("baseline", 0.0, 300.0), ("game1", 500.0, 1400.0)], 300.0)
+    wired["onsets"] = {"baseline": 0.0, "game1": 450.0}
+    drawn, _ = _run_windows(wired, windows, sources)
+    spans = set()
+    for _, _, pair, inner in drawn:
+        for raw in pair.values():
+            spans.add(round(float(raw.times[-1]), 3))
+        assert round(inner[1] - inner[0], 3) == 300.0
+    # one span per distinct pad, and every analysed stretch is 300 s whatever the pad
+    assert len(spans) <= 2
+
+
+def test_a_partner_too_short_for_a_late_window_is_refused_by_condition_name(wired):
+    """Refused under the condition, not the window: the marker is what it lacks."""
+    from fnirs_pipe.qc.common.windows import split_windows
+
+    windows, sources = split_windows([("game1", 500.0, 1400.0)], 300.0)
+    wired["onsets"] = {}                    # never entered game1
+    _, refused = _run_windows(wired, windows, sources)
+    assert list(refused) == ["no_game1"]
+
+
+def test_without_a_mapping_the_labels_are_the_conditions_themselves(wired):
+    """No window grid means the old behaviour, exactly."""
+    wired["onsets"] = {"baseline": 0.0, "game1": 480.0}
+    drawn, refused = _run_windows(wired, WINDOWS, {})
+    assert [label for _, label, *_ in drawn] == ["baseline", "game1"]
+    assert refused == {}

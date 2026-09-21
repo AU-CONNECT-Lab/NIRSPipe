@@ -294,7 +294,7 @@ def correct_cohort(frame: pd.DataFrame) -> pd.DataFrame:
 
     ::
 
-      channel granularity, 14 channels in condition game1  ->  family 14, four q columns
+      channel granularity, N channels in one condition  ->  family N, four q columns
 
     Four methods rather than one, because the count depends on which and a report that names
     no method cannot be read. ``q`` stays Benjamini-Hochberg, so a caller reading that column

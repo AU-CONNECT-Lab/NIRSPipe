@@ -220,7 +220,7 @@ def cmd_run(
     wtc_significance: bool, wtc_mc_count: int, wtc_seed: int | None,
     wtc_mask_coi: bool, wtc_roi_min_channels: int, wtc_arrow_min: float,
     wtc_channel_cross: bool,
-    wtc_by_condition: bool, wtc_chroma: str,
+    wtc_by_condition: bool, wtc_chroma: str, wtc_window_s: "float | None",
     wtc_cond_transform: bool, wtc_cond_pad_s: "float | None",
     wtc_limit_scales: bool, wtc_save_maps: bool,
     wtc_phase_null: int | None, wtc_phase_null_cross: bool,
@@ -266,13 +266,23 @@ def cmd_run(
         resolve_analysis_window, resolve_group_bands, write_group_bads,
     )
     from fnirs_pipe.qc.hyper.hyper_report import build_hyper_post_report
-    from fnirs_pipe.qc.common.windows import condition_windows
+    from fnirs_pipe.qc.common.windows import condition_windows, split_windows
     from fnirs_pipe.qc.metrics._helpers import bands_to_record
     from fnirs_pipe.pipeline.hyper.wtc_null import run_wtc_null, write_wtc_null
     from fnirs_pipe.utils.run_record import write_group_run_record
 
     setup_logging(verbose=verbose)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    if wtc_window_s is not None:
+        if not wtc_by_condition:
+            print("[error] --wtc-window-s needs --by-condition; there are no conditions to "
+                  "cut into windows without it.", file=sys.stderr)
+            raise SystemExit(1)
+        if wtc_window_s <= 0:
+            print(f"[error] --wtc-window-s must be positive, got {wtc_window_s}",
+                  file=sys.stderr)
+            raise SystemExit(1)
 
     if wtc_channel_cross and roi_mapping is None:
         print("[warn] --wtc-channel-cross without --roi-mapping: the crossed channel table "
@@ -355,6 +365,15 @@ def cmd_run(
                 print(f"     [info] {len(dropped)} condition(s) outside "
                       f"--tstart/--tend: {', '.join(dropped)}")
             cond_windows = inside
+        if wtc_window_s and cond_windows:
+            # equal-length windows replace the conditions as the unit of analysis, so the
+            # estimation problem is identical everywhere and what is left between windows
+            # is the condition. The null resolves the same grid off the same reference.
+            cond_windows, _ = split_windows(cond_windows, wtc_window_s)
+            if not cond_windows:
+                print(f"     [warn] --wtc-window-s {wtc_window_s}: no condition is long "
+                      "enough for one window, so there is nothing per condition to report",
+                      file=sys.stderr)
         # Before the report, not after: the level the phase arrows are drawn against comes
         # out of the surrogates, and the figures are built inside the report. The table this
         # returns is written after it instead, its percentile column being a rank against
@@ -397,7 +416,7 @@ def cmd_run(
             wtc_seed=wtc_seed,
             wtc_mc_count=wtc_mc_count,
             wtc_channel_cross=wtc_channel_cross,
-            wtc_by_condition=wtc_by_condition,
+            wtc_by_condition=wtc_by_condition, wtc_window_s=wtc_window_s,
             wtc_cond_pad_s=cond_pad,
             cond_windows=cond_windows,
             wtc_limit_scales=wtc_limit_scales,
@@ -602,10 +621,8 @@ def cmd_pair_null(
     if failures:
         print(f"\n{failures} group(s) failed", file=sys.stderr)
         raise SystemExit(1)
-    # a closing hint must not decide the exit code. This one has already cost a run: five
-    # dyads reported failure after every table was written, because the reminder's import
-    # broke under a refactor, and a null that takes an hour a dyad looked like it had lost
-    # its work when it had not
+    # a closing hint must not decide the exit code: a long stage that has written every
+    # table is finished, whatever a reminder about the next command does afterwards
     try:
         _merge_reminder(output_dir)
     except Exception as exc:
@@ -737,6 +754,18 @@ def _build_parser() -> argparse.ArgumentParser:
                           "channels are noisier than ROI averages, so treat the off-diagonal "
                           "as exploratory and correct for the number of tests. Does not "
                           "affect the null: see --wtc-phase-null-cross.")
+    run.add_argument("--wtc-window-s", type=float, default=None, metavar="SECONDS",
+                     help="Cut every condition into non-overlapping windows of this length "
+                          "and make the window the unit instead of the condition. Needs "
+                          "--by-condition. A condition's own length decides the width of a "
+                          "resampled null and how many cycles of the band's slowest "
+                          "oscillation the block holds, so conditions of different length "
+                          "are not estimating the same quantity; equal windows remove that "
+                          "and what is left between windows is the condition. The remainder "
+                          "past the last whole window is dropped, and a condition too short "
+                          "for one window is left out rather than entered on other terms. "
+                          "`pair-null` reads this off the sidecar, so both sides resolve the "
+                          "same grid.")
     run.add_argument("--by-condition", "--wtc-by-condition", dest="wtc_by_condition",
                      action=argparse.BooleanOptionalAction, default=True,
                      help="Read the coherence out of each task annotation's own window, "

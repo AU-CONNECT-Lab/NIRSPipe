@@ -140,3 +140,62 @@ def condition_windows(
     logger.info("condition windows: %d kept, %d took their own duration and %d ran to the "
                 "next trigger", len(windows), n_from_duration, len(markers) - n_from_duration)
     return windows
+
+
+def split_windows(
+    windows: "list[tuple[str, float, float]]",
+    length_s: float,
+) -> "tuple[list[tuple[str, float, float]], dict[str, tuple[str, float]]]":
+    """Cut each window into non-overlapping windows of one length, and say where each came from.
+
+    ::
+
+      [("rest", 0.0, 100.0), ("task", 200.0, 500.0)], length 100.0
+        -> [("rest-w1", 0.0, 100.0), ("task-w1", 200.0, 300.0),
+            ("task-w2", 300.0, 400.0), ("task-w3", 400.0, 500.0)],
+           {"rest-w1": ("rest", 0.0), "task-w1": ("task", 0.0),
+            "task-w2": ("task", 100.0), "task-w3": ("task", 200.0)}
+
+    Why a caller wants this: a condition's own length decides things that have nothing to do
+    with the condition. The width of a resampled null, and the number of cycles of the band's
+    slowest oscillation the block contains, both track duration, so two conditions of
+    different length are not estimating the same quantity however carefully each is computed.
+    Making the unit an equal-length window removes that, and what remains between windows is
+    the condition.
+
+    The remainder is dropped rather than kept short, which is the point: a window of another
+    length would reintroduce exactly what this removes. A window shorter than ``length_s``
+    therefore yields nothing and is logged, so a condition too short to hold one disappears
+    from the analysis rather than entering it on different terms.
+
+    The second return value is what a null needs. A draw cuts the stand-in at its own marker
+    for the condition, not at the real dyad's clock, so for a window it needs the condition
+    the window belongs to and how far into it the window starts. Returned explicitly rather
+    than parsed back out of the label, because ``condition_windows`` already numbers a
+    repeated description ``desc#2`` and a second numbering scheme on top of that is a
+    collision waiting to happen.
+    """
+    if length_s <= 0:
+        raise ValueError(f"length_s must be positive, got {length_s}")
+
+    out: list[tuple[str, float, float]] = []
+    sources: dict[str, tuple[str, float]] = {}
+    for label, tstart, tstop in windows:
+        span = float(tstop) - float(tstart)
+        n = int(span // length_s)
+        if n < 1:
+            logger.info("condition %s spans %.1fs, under the %.1fs window: no window fits",
+                        label, span, length_s)
+            continue
+        for i in range(n):
+            offset = i * length_s
+            sub = f"{label}-w{i + 1}"
+            out.append((sub, float(tstart) + offset, float(tstart) + offset + length_s))
+            sources[sub] = (label, offset)
+        left = span - n * length_s
+        if left > 1.0:
+            logger.info("condition %s: %d window(s) of %.1fs, %.1fs left over and dropped",
+                        label, n, length_s, left)
+    logger.info("equal-length windows: %d of %.1fs from %d condition(s)",
+                len(out), length_s, len({s[0] for s in sources.values()}))
+    return out, sources
