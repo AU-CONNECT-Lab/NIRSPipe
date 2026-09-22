@@ -94,6 +94,32 @@ def derivative_path(output_dir, suffix: str, extension: str, **entities) -> Path
     return Path(output_dir) / relative
 
 
+def figure_name(label: str, desc: str, *, suffix: str = "nirs",
+                extension: str = ".html", **entities) -> str:
+    """One figure's filename. ``desc`` names the panel, ``suffix`` names what it draws.
+
+    ``("sub-01_task-rest", "carpet")``        -> ``"sub-01_task-rest_desc-carpet_nirs.html"``
+    ``("sub-01_task-rest", "detail", channel="S1D1")``
+        -> ``"sub-01_task-rest_chan-S1D1_desc-detail_nirs.html"``
+
+    The label is in the name because a subject's runs share one ``figures/`` folder. They
+    used to be kept apart by a subdirectory per run, which meant the same panel was called
+    the same thing in two places and neither name said which run it was.
+    """
+    carried = _label_entities(label)
+    return derivative_path("", suffix, extension, datatype="figures", desc=desc,
+                           **carried, **entities).name
+
+
+def _label_entities(label: str) -> dict:
+    """The entities a run or dyad label carries, for a caller that has only the label."""
+    from fnirs_pipe.io.derivatives import entity_of
+
+    return {key: entity_of(label, short)
+            for key, short in (("subject", "sub"), ("group", "group"),
+                               ("session", "ses"), ("task", "task"), ("run", "run"))}
+
+
 def report_name(label: str, *, desc: "str | None" = None,
                 condition: "str | None" = None, pairing: "str | None" = None) -> str:
     """One report page's filename, from the run label the QC code passes around.
@@ -108,13 +134,8 @@ def report_name(label: str, *, desc: "str | None" = None,
     `_qc_mne.html` and a subject index shaped like a run report), and `.html` on a `nirs`
     suffix claimed to be a snirf's sidecar.
     """
-    from fnirs_pipe.io.derivatives import entity_of
-
-    carried = {key: entity_of(label, short)
-               for key, short in (("subject", "sub"), ("group", "group"),
-                                  ("session", "ses"), ("task", "task"), ("run", "run"))}
     return derivative_path("", "report", ".html", condition=condition, desc=desc,
-                           pairing=pairing, **carried).name
+                           pairing=pairing, **_label_entities(label)).name
 
 
 def parse_path(path) -> dict:
