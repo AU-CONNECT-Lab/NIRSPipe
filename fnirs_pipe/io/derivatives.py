@@ -269,11 +269,13 @@ def write_dataset_description(output_dir: Path) -> None:
     the path is busy at the instant it flips, which Windows offers no way around, but that is
     a retry rather than a tree that looks invalid.
     """
+    from fnirs_pipe import __version__
+
     desc = {
         "Name": "fnirs-pipe output",
         "BIDSVersion": "1.8.0",
         "DatasetType": "derivative",
-        "GeneratedBy": [{"Name": "fnirs-pipe"}],
+        "GeneratedBy": [{"Name": "fnirs-pipe", "Version": __version__}],
     }
     output_dir.mkdir(parents=True, exist_ok=True)
     path = output_dir / "dataset_description.json"

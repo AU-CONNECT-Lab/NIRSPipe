@@ -297,13 +297,13 @@ def _build_parser() -> argparse.ArgumentParser:
                         help="Static raw QC report for a single participant.")
     pr.add_argument("bids_dir",   type=Path, help="BIDS dataset root")
     pr.add_argument("output_dir", type=Path, help="fnirs-pipe derivatives directory")
-    pr.add_argument("--participant-label", nargs="+", action="extend", required=True,
+    pr.add_argument("--participant-label", "--participant_label", nargs="+", action="extend", required=True,
                     type=_shared.BidsLabel,
                     help="Subject ID(s) to inspect, e.g. '01'. One report set per subject, "
                          "and one subject's failure does not stop the rest.")
-    pr.add_argument("--session-label", nargs="+", action="extend", type=_shared.BidsLabel,
+    pr.add_argument("--session-label", "--session_label", nargs="+", action="extend", type=_shared.BidsLabel,
                     help="Session label(s) to include.")
-    pr.add_argument("--task-label",    nargs="+", action="extend", type=_shared.BidsLabel,
+    pr.add_argument("--task-label", "--task_label",    nargs="+", action="extend", type=_shared.BidsLabel,
                     help="Task label(s) to include.")
     pr.add_argument("--dpf", nargs="+", type=float, action="extend", required=True,
                     help="Differential pathlength factor. One value or one per wavelength.")
@@ -343,7 +343,10 @@ def _build_parser() -> argparse.ArgumentParser:
                          "Default none, which reports it uncorrected; the counts and the "
                          "GVTD series then have no corrected stage to be measured on, which "
                          "is what `fnirs-pipe run` gives them.")
-    pr.add_argument("--skip-bids-validation", action=argparse.BooleanOptionalAction, default=False)
+    pr.add_argument(
+        "--skip-bids-validation", "--skip_bids_validation",
+        "--skip_bids_validator", dest="skip_bids_validation",
+        action=argparse.BooleanOptionalAction, default=False)
     pr.set_defaults(func=cmd_prep_raw)
 
     hr = sub.add_parser("hyper-raw",
@@ -367,9 +370,12 @@ def _build_parser() -> argparse.ArgumentParser:
     hr.add_argument("--coh-fmax", "--fmax", dest="coherence_fmax", type=float, default=0.10,
                     help="Upper bound (Hz) of that band.")
     _shared.add_separation_bands(hr)
-    hr.add_argument("--session-label", nargs="+", action="extend", type=_shared.BidsLabel,
+    hr.add_argument("--session-label", "--session_label", nargs="+", action="extend", type=_shared.BidsLabel,
                     help="Session label(s) to include.")
-    hr.add_argument("--skip-bids-validation", action=argparse.BooleanOptionalAction, default=False)
+    hr.add_argument(
+        "--skip-bids-validation", "--skip_bids_validation",
+        "--skip_bids_validator", dest="skip_bids_validation",
+        action=argparse.BooleanOptionalAction, default=False)
     hr.set_defaults(func=cmd_hyper_raw)
 
     gr = sub.add_parser(

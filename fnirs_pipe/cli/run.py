@@ -74,13 +74,14 @@ def _build_parser() -> argparse.ArgumentParser:
     _shared.add_sci_threshold(prep)
 
     sel = p.add_argument_group("subject / session / task selection")
-    sel.add_argument("--participant-label", nargs="+", action="extend",
+    sel.add_argument("--participant-label", "--participant_label", nargs="+", action="extend",
                      type=_shared.BidsLabel, help="Subject ID(s) to process.")
-    sel.add_argument("--session-label",     nargs="+", action="extend",
+    sel.add_argument("--session-label", "--session_label", nargs="+", action="extend",
                      type=_shared.BidsLabel, help="Session label(s) to process.")
-    sel.add_argument("--task-label",        nargs="+", action="extend",
+    sel.add_argument("--task-label", "--task_label", nargs="+", action="extend",
                      type=_shared.BidsLabel, help="Task label(s) to process.")
-    sel.add_argument("--bids-filter-file",  type=Path, help="JSON file with extra pybids query filters.")
+    sel.add_argument("--bids-filter-file", "--bids_filter_file", type=Path,
+                     help="JSON file with extra pybids query filters.")
 
     prep_opt = p.add_argument_group("preprocessing (optional)")
     prep_opt.add_argument("--motion-correction", choices=_MOTION_CHOICES, default="tddr",
@@ -243,13 +244,17 @@ def _build_parser() -> argparse.ArgumentParser:
     out.add_argument("--no-report", action="store_true", help="Skip the QC HTML report.")
     out.add_argument("--roi-mapping", type=Path, default=None,
                      help="JSON file mapping ROI labels to lists of channel names. Groups the report denoising carpet, and in rest mode adds the ROI correlation matrix and one seed topography per ROI. Optional.")
-    out.add_argument("--n-jobs", type=int, default=1, help="Parallel subject jobs.")
-    out.add_argument("--work-dir", type=Path, help="Hash cache directory.")
+    # --nprocs / --n_cpus are what the BIDS Apps interface calls this one
+    out.add_argument("--n-jobs", "--n_jobs", "--nprocs", "--n_cpus",
+                     dest="n_jobs", type=int, default=1, help="Parallel subject jobs.")
+    out.add_argument("--work-dir", "--work_dir", type=Path, help="Hash cache directory.")
 
     esc = p.add_argument_group("escape hatches")
     esc.add_argument("--ignore", nargs="+", action="extend", choices=_IGNORE_CHOICES,
                      help="Processing aspects to skip.")
-    esc.add_argument("--skip-bids-validation", action="store_true", help="Skip BIDS validation.")
+    esc.add_argument("--skip-bids-validation", "--skip_bids_validation", "--skip_bids_validator",
+                     dest="skip_bids_validation", action="store_true",
+                     help="Skip BIDS validation.")
     esc.add_argument("--allow-cropped-input", action="store_true",
                      help="Run on a `fnirs-prep crop` tree, which is otherwise refused. "
                           "Every condition is then preprocessed on its own, and motion "

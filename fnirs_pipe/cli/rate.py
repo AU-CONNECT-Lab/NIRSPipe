@@ -95,7 +95,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
     pr = sub.add_parser("rate", help="Launch QC rating interface.")
     pr.add_argument("output_dir", type=Path, help="fnirs-pipe output directory.")
-    pr.add_argument("--participant-label", nargs="+", action="extend",
+    pr.add_argument("--participant-label", "--participant_label", nargs="+", action="extend",
                     type=_shared.BidsLabel,
                     help="Subject ID(s) to open. Default: all found.")
     pr.add_argument("--port", type=int, default=None,
@@ -105,11 +105,11 @@ def _build_parser() -> argparse.ArgumentParser:
     pw = sub.add_parser("raw", help="Launch interactive raw QC viewer.")
     pw.add_argument("output_dir", type=Path, help="fnirs-pipe output directory.")
     # one subject, not a list: the viewer opens one recording at a time
-    pw.add_argument("--participant-label", required=True, type=_shared.BidsLabel,
+    pw.add_argument("--participant-label", "--participant_label", required=True, type=_shared.BidsLabel,
                     help="Subject ID to open, e.g. '01'.")
-    pw.add_argument("--session-label", default=None, type=_shared.BidsLabel,
+    pw.add_argument("--session-label", "--session_label", default=None, type=_shared.BidsLabel,
                     help="Session label.")
-    pw.add_argument("--task-label", default=None, type=_shared.BidsLabel,
+    pw.add_argument("--task-label", "--task_label", default=None, type=_shared.BidsLabel,
                     help="Task label.")
     pw.add_argument("--sci-threshold", type=float, default=0.8,
                     help="SCI threshold for pre-highlighting bad channels.")
@@ -121,12 +121,12 @@ def _build_parser() -> argparse.ArgumentParser:
     ph.add_argument("output_dir", type=Path, help="fnirs-pipe output directory.")
     ph.add_argument("--group-id", required=True, type=_shared.BidsLabel,
                     help="Group ID to open, e.g. 'A'.")
-    ph.add_argument("--task-label", required=True, type=_shared.BidsLabel,
+    ph.add_argument("--task-label", "--task_label", required=True, type=_shared.BidsLabel,
                     help="Task label, e.g. 'tapping'.")
     ph.add_argument("--pairs-csv", type=Path, required=True,
                     help="CSV with columns: group_id, subject_id, task (same as fnirs-qc hyper-raw). "
                          "Used to look up subject IDs in this group.")
-    ph.add_argument("--session-label", default=None, type=_shared.BidsLabel,
+    ph.add_argument("--session-label", "--session_label", default=None, type=_shared.BidsLabel,
                     help="Session label.")
     ph.add_argument("--sci-threshold", type=float, default=0.8, help="SCI threshold.")
     ph.add_argument("--port", type=int, default=None,

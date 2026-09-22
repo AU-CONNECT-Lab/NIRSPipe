@@ -194,7 +194,7 @@ def pairs_selection() -> argparse.ArgumentParser:
                         "(group_id, task) pair is processed as one session.")
     p.add_argument("--group-id", default=None, type=BidsLabel,
                    help="Process only this group_id. Omit to process all groups.")
-    p.add_argument("--task-label", nargs="+", action="extend", type=BidsLabel,
+    p.add_argument("--task-label", "--task_label", nargs="+", action="extend", type=BidsLabel,
                    help="Task label(s) to include, filtering the pairs table.")
     return p
 

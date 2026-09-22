@@ -80,6 +80,8 @@ def deriv_nirs_dir(derivatives_dir: Path, deriv_name: str, sub: str, ses: str | 
 
 
 def ensure_dataset_description(deriv_root: Path, name: str, generated_by: str) -> None:
+    from fnirs_pipe import __version__
+
     desc_path = deriv_root / "dataset_description.json"
     if desc_path.exists():
         return
@@ -88,7 +90,7 @@ def ensure_dataset_description(deriv_root: Path, name: str, generated_by: str) -
         "Name": name,
         "BIDSVersion": "1.8.0",
         "DatasetType": "derivative",
-        "GeneratedBy": [{"Name": generated_by}],
+        "GeneratedBy": [{"Name": generated_by, "Version": __version__}],
     }, indent=2))
 
 

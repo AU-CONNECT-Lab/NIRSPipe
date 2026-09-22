@@ -88,6 +88,22 @@ _APP_LEVEL_IDS = {"dp-run-store"}
 _PREFIXES = ("an-", "qc-", "bp-", "dp-", "ha-", "rc-")
 
 
+def _canonical_flags(action) -> set[str]:
+    """One spelling per option, plus its ``--no-`` form where the action has one.
+
+    ``--participant-label`` / ``--participant_label`` / ``--n_cpus`` are the same option
+    under two or three spellings, not three things the GUI has to grow a control for, so
+    the sweep counts the first long spelling and drops the rest. ``BooleanOptionalAction``
+    builds a ``--no-`` form off every spelling, so only the canonical one's is kept.
+    """
+    longs = [f for f in action.option_strings if f.startswith("--")]
+    if not longs:
+        return set()
+    primary = longs[0]
+    negated = f"--no-{primary.removeprefix('--')}"
+    return {primary} | ({negated} if negated in longs else set())
+
+
 def _group_flags(prefix: str) -> set[str]:
     """Every long flag in the CLI argument groups whose title starts with *prefix*."""
     parser = _build_parser()
@@ -96,8 +112,7 @@ def _group_flags(prefix: str) -> set[str]:
         for group in parser._action_groups
         if group.title and group.title.startswith(prefix)
         for action in group._group_actions
-        for flag in action.option_strings
-        if flag.startswith("--")
+        for flag in _canonical_flags(action)
     }
 
 
@@ -397,8 +412,8 @@ def _hyper_subparsers():
 
 def _qc_flags(command: str) -> set[str]:
     parser = (_hyper_subparsers() if command in _HYPER else _qc_subparsers())[command]
-    return {flag for action in parser._actions for flag in action.option_strings
-            if flag.startswith("--") and action.dest != "help"}
+    return {flag for action in parser._actions if action.dest != "help"
+            for flag in _canonical_flags(action)}
 
 
 def _qc_emitted(command: str) -> set[str]:
@@ -539,8 +554,8 @@ def _prep_flags(subcommand: str) -> set[str]:
     parser = _prep_subparsers()[subcommand]
     if subcommand == "edit-markers":
         parser = _subcommands(lambda: parser)["apply"]
-    return {flag for action in parser._actions for flag in action.option_strings
-            if flag.startswith("--") and action.dest != "help"}
+    return {flag for action in parser._actions if action.dest != "help"
+            for flag in _canonical_flags(action)}
 
 
 def _prep_emitted(subcommand: str) -> set[str]:
@@ -650,8 +665,8 @@ _RAW_QC_FULL_OPTS = dict(
 
 def _raw_qc_flags(command: str) -> set[str]:
     parser = _qc_subparsers()[command]
-    return {flag for action in parser._actions for flag in action.option_strings
-            if flag.startswith("--") and action.dest != "help"}
+    return {flag for action in parser._actions if action.dest != "help"
+            for flag in _canonical_flags(action)}
 
 
 def _raw_qc_emitted(command: str) -> set[str]:

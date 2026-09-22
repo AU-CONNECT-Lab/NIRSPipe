@@ -20,12 +20,12 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--version", action="version", version=f"fnirs-recon {__version__}")
     p.add_argument("input_file", type=Path, help="Input snirf file.")
     p.add_argument("bids_dir",   type=Path, help="Output BIDS dataset directory.")
-    p.add_argument("--participant-label", required=True, type=_shared.BidsLabel,
+    p.add_argument("--participant-label", "--participant_label", required=True, type=_shared.BidsLabel,
                    help="Subject label, e.g. '01' or 'patient01'. BIDS has no group folders, "
                         "so encode patient/control in the label if IDs overlap.")
-    p.add_argument("--task-label", required=True, type=_shared.BidsLabel,
+    p.add_argument("--task-label", "--task_label", required=True, type=_shared.BidsLabel,
                    help="Task label, e.g. tapping.")
-    p.add_argument("--session-label", default=None, type=_shared.BidsLabel,
+    p.add_argument("--session-label", "--session_label", default=None, type=_shared.BidsLabel,
                    help="Session label. Omit if dataset has no session layer.")
     p.add_argument("--run-label", default=None, type=_shared.BidsLabel,
                    help="Run index, e.g. 01.")

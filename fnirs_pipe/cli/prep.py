@@ -233,16 +233,22 @@ def cmd_markers_apply(
 
 
 def _add_selection(sp) -> None:
-    sp.add_argument("--participant-label", nargs="+", action="extend", required=True,
-                    type=_shared.BidsLabel, help="Subject ID(s) to process.")
-    sp.add_argument("--session-label", default=None, type=_shared.BidsLabel,
+    sp.add_argument("--participant-label", "--participant_label", nargs="+",
+                    action="extend", required=True, type=_shared.BidsLabel,
+                    help="Subject ID(s) to process.")
+    sp.add_argument("--session-label", "--session_label", default=None, type=_shared.BidsLabel,
                     help="Session label.")
-    sp.add_argument("--task-label",    default=None, type=_shared.BidsLabel,
+    sp.add_argument("--task-label", "--task_label", default=None, type=_shared.BidsLabel,
                     help="Task label.")
-    sp.add_argument("--run-label",     default=None, type=_shared.BidsLabel,
+    sp.add_argument("--run-label", "--run_label", default=None, type=_shared.BidsLabel,
                     help="Run label.")
-    sp.add_argument("--n-jobs", type=int, default=1, help="Parallel subject jobs.")
-    sp.add_argument("--skip-bids-validation", action=argparse.BooleanOptionalAction, default=False)
+    # --nprocs / --n_cpus are what the BIDS Apps interface calls this one
+    sp.add_argument("--n-jobs", "--n_jobs", "--nprocs", "--n_cpus", dest="n_jobs",
+                    type=int, default=1, help="Parallel subject jobs.")
+    sp.add_argument(
+        "--skip-bids-validation", "--skip_bids_validation",
+        "--skip_bids_validator", dest="skip_bids_validation",
+        action=argparse.BooleanOptionalAction, default=False)
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -296,7 +302,10 @@ def _build_parser() -> argparse.ArgumentParser:
     align.add_argument("derivatives_dir", type=Path, help="Derivatives output directory.")
     align.add_argument("--group-csv", type=Path, required=True,
                        help="CSV with group_id, subject_id, task columns.")
-    align.add_argument("--skip-bids-validation", action=argparse.BooleanOptionalAction, default=False)
+    align.add_argument(
+        "--skip-bids-validation", "--skip_bids_validation",
+        "--skip_bids_validator", dest="skip_bids_validation",
+        action=argparse.BooleanOptionalAction, default=False)
     align.set_defaults(func=cmd_align)
 
     markers = sub.add_parser("edit-markers", help="Edit markers in SNIRF files.")
