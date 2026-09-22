@@ -27,6 +27,7 @@ _ALL_SECTIONS = ("hy-run-section", "hy-pairnull-section", "hy-groupnull-section"
 # its file after the group, so it is found by glob rather than named here.
 _STATES = [
     State("hy-output-dir", "value"),
+    State("hy-derivatives-dir", "value"),
     State("hy-pairs-csv", "value"), State("hy-group-id", "value"),
     State("hy-desc", "value"), State("hy-roi-mapping", "value"),
     State("hy-wtc-fmin", "value"), State("hy-wtc-fmax", "value"),
@@ -51,7 +52,7 @@ _STATES = [
     State("hy-tstart", "value"), State("hy-tend", "value"),
 ]
 
-_KEYS = ["output_dir", "pairs_csv", "group_id", "desc", "roi_mapping",
+_KEYS = ["output_dir", "derivatives_dir", "pairs_csv", "group_id", "desc", "roi_mapping",
          "wtc_fmin", "wtc_fmax", "wtc_band_fmin", "wtc_band_fmax", "wtc_mc_count",
          "wtc_seed", "isc_threshold", "wtc_phase_null", "wtc_roi_min_channels",
          "wtc_window_s",

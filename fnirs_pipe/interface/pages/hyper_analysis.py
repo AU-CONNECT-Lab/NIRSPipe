@@ -51,6 +51,12 @@ def _run_section():
         "Dyad analysis",
         section("Inputs",
             params(
+                # only these two commands open a member's recording, and this section is
+                # shown for exactly those two
+                field("Source derivatives",
+                      dbc.Input(id="hy-derivatives-dir", type="text",
+                                placeholder="tree fnirs-pipe wrote, holding sub-*/nirs/"),
+                      span=PATH),
                 field("Pairs CSV",
                       dbc.Input(id="hy-pairs-csv", type="text",
                                 placeholder="path to pairs.csv"),

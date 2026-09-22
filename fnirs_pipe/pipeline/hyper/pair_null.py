@@ -216,7 +216,7 @@ def _partner_condition_onsets(partner_raw, labels) -> "dict[str, float]":
 
 
 def _draw_condition_pairs(
-    output_dir: Path,
+    derivatives_dir: Path,
     task: str,
     fixed_id: str,
     fixed_raw,
@@ -258,7 +258,7 @@ def _draw_condition_pairs(
             break
         pid = entry.subject_id
         try:
-            partner = load_group_haemo(output_dir, [entry], desc=desc)
+            partner = load_group_haemo(derivatives_dir, [entry], desc=desc)
         except Exception as exc:
             refused.setdefault("unreadable", []).append(pid)
             logger.debug("%s refused as a stand-in: %s", pid, exc)
@@ -270,7 +270,7 @@ def _draw_condition_pairs(
             continue
 
         try:
-            apply_group_bads(partner, load_group_sqm(output_dir, [entry], bads_scope=bads_scope,
+            apply_group_bads(partner, load_group_sqm(derivatives_dir, [entry], bads_scope=bads_scope,
                                                      scope_tasks=scope_tasks))
         except Exception as exc:
             refused.setdefault("no_quality_record", []).append(pid)
@@ -325,7 +325,7 @@ def _draw_condition_pairs(
 
 
 def _draw_pairs(
-    output_dir: Path,
+    derivatives_dir: Path,
     task: str,
     fixed_id: str,
     fixed_raw,
@@ -364,7 +364,7 @@ def _draw_pairs(
             break
         pid = entry.subject_id
         try:
-            partner = load_group_haemo(output_dir, [entry], desc=desc)
+            partner = load_group_haemo(derivatives_dir, [entry], desc=desc)
         except Exception as exc:
             refused.setdefault("unreadable", []).append(pid)
             # one line each would be the whole log on a cohort only partly preprocessed;
@@ -378,7 +378,7 @@ def _draw_pairs(
             continue
 
         try:
-            apply_group_bads(partner, load_group_sqm(output_dir, [entry], bads_scope=bads_scope,
+            apply_group_bads(partner, load_group_sqm(derivatives_dir, [entry], bads_scope=bads_scope,
                                                      scope_tasks=scope_tasks))
         except Exception as exc:
             # a stand-in with no quality record keeps every channel, which would let a
@@ -421,6 +421,7 @@ def run_pair_null(
     task: str,
     members: list,
     groups: dict,
+    derivatives_dir: Path,
     output_dir: Path,
     *,
     pool: str = "position",
@@ -479,8 +480,8 @@ def run_pair_null(
     isc_whiten, isc_max_lag_s, isc_band = _isc_settings_of(
         data_dir / f"{stem}-iscpairs.json", isc_whiten, isc_max_lag_s, isc_band)
 
-    raws = load_group_haemo(output_dir, members, desc=desc)
-    group_sqm = load_group_sqm(output_dir, members, bads_scope=bads_scope,
+    raws = load_group_haemo(derivatives_dir, members, desc=desc)
+    group_sqm = load_group_sqm(derivatives_dir, members, bads_scope=bads_scope,
                                scope_tasks=scope_tasks)
     apply_group_bads(raws, group_sqm)
     sep_bands = resolve_group_bands(members, group_sqm)
@@ -576,7 +577,7 @@ def run_pair_null(
     partners: list[str] = []
     for ch_type in chroma:
         draws = _draw_condition_pairs(
-            output_dir, task, fixed_id, aligned_real[fixed_id], candidates, desc=desc,
+            derivatives_dir, task, fixed_id, aligned_real[fixed_id], candidates, desc=desc,
             bads_scope=bads_scope, scope_tasks=scope_tasks, windows=windows,
             band_fmin=band_fmin, n_max=n_max, refused=refused,
             window_sources=window_sources)

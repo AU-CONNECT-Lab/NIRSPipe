@@ -254,45 +254,59 @@ def test_qc_subcommands_and_fmin_dest():
 
 
 def test_hyper_stage_and_band_flags():
-    args = hyper_cli._build_parser().parse_args(
-        ["run", "/o", "--pairs-csv", "p.csv", "--desc", "errts",
+    args = hyper_cli._parsers()["fnirs-hyper"].parse_args(
+        ["/deriv", "/o", "group", "--pairs-csv", "p.csv", "--desc", "errts",
          "--wtc-band-fmin", "0.03", "--wtc-band-fmax", "0.10"]
     )
-    assert args.func is hyper_cli.cmd_run
+    assert hyper_cli.COMMANDS["fnirs-hyper"] is hyper_cli.cmd_run
     assert (args.desc, args.wtc_band_fmin, args.wtc_band_fmax) == ("errts", 0.03, 0.10)
 
 
 def test_hyper_reads_preproc_unless_told_otherwise():
     # the band bounds stay None so the report can say it averaged the whole axis
-    args = hyper_cli._build_parser().parse_args(["run", "/o", "--pairs-csv", "p.csv"])
+    args = hyper_cli._parsers()["fnirs-hyper"].parse_args(
+        ["/deriv", "/o", "group", "--pairs-csv", "p.csv"])
     assert args.desc == "preproc"
     assert (args.wtc_band_fmin, args.wtc_band_fmax) == (None, None)
 
 
-def test_hyper_takes_one_derivatives_directory_and_no_bids():
-    """Every subcommand reads derivatives only, so none of them accepts a BIDS positional
-    it would then ignore."""
-    for argv in (["run", "/o", "--pairs-csv", "p.csv"], ["band", "/o", "--wtc-band-fmin", "0.1",
-                 "--wtc-band-fmax", "0.2"], ["merge", "/o"]):
-        args = hyper_cli._build_parser().parse_args(argv)
-        assert str(args.output_dir) in ("/o", "\\o")
+def test_hyper_reads_derivatives_and_never_raw_bids():
+    """Every command here reads a derivatives tree, so none accepts a raw BIDS positional.
+
+    Only the two that open a member's own recording take a source tree at all; giving the
+    rest one would be a positional they never read.
+    """
+    cases = {
+        "fnirs-hyper":          ["/deriv", "/o", "group", "--pairs-csv", "p.csv"],
+        "fnirs-hyper-pairnull": ["/deriv", "/o", "group", "--pairs-csv", "p.csv"],
+        "fnirs-hyper-band":     ["/o", "group", "--wtc-band-fmin", "0.1",
+                                 "--wtc-band-fmax", "0.2"],
+        "fnirs-hyper-merge":    ["/o", "group"],
+    }
+    reads_subjects = {"fnirs-hyper", "fnirs-hyper-pairnull"}
+    for prog, argv in cases.items():
+        args = hyper_cli._parsers()[prog].parse_args(argv)
+        assert args.output_dir == Path("/o")
         assert not hasattr(args, "bids_dir")
+        assert hasattr(args, "derivatives_dir") is (prog in reads_subjects)
 
 
 def test_the_band_flags_are_shared_between_run_and_band():
     """One name per parameter: `band` reuses the `run` flags rather than carrying
     --band-fmin / --mask-coi under a second name that has to be kept in step."""
-    flags = {f for a in hyper_cli._build_parser()._actions for f in a.option_strings}
+    flags = {f for parser in hyper_cli._parsers().values()
+             for a in parser._actions for f in a.option_strings}
     assert not ({"--band-fmin", "--band-fmax", "--mask-coi", "--suffix"} & flags)
-    for argv in (["run", "/o", "--pairs-csv", "p.csv"],
-                 ["band", "/o", "--wtc-band-fmin", "0.1", "--wtc-band-fmax", "0.2"]):
-        args = hyper_cli._build_parser().parse_args(argv)
+    for prog, argv in (("fnirs-hyper", ["/deriv", "/o", "group", "--pairs-csv", "p.csv"]),
+                       ("fnirs-hyper-band",
+                        ["/o", "group", "--wtc-band-fmin", "0.1", "--wtc-band-fmax", "0.2"])):
+        args = hyper_cli._parsers()[prog].parse_args(argv)
         assert hasattr(args, "wtc_band_fmin") and hasattr(args, "wtc_mask_coi")
 
 
 def test_band_needs_a_band(capsys):
     with pytest.raises(SystemExit):
-        hyper_cli.main(["band", "/o"])
+        hyper_cli.main_band(["/o", "group"])
     assert "--wtc-band-fmin" in capsys.readouterr().err
 
 

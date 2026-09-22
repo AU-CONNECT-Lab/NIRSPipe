@@ -11,8 +11,21 @@ from __future__ import annotations
 # fnirs-qc commands whose whole argument list is one output_dir
 _AGGREGATE = ("cohort", "cohort-hyper", "provenance")
 
-# fnirs-hyper subcommands, which take one output_dir and their own flags
-_HYPER = ("run", "pair-null", "group-null", "band", "merge", "index")
+# Each dyad command is its own console script, because they do not take the same
+# positionals: `run` and `pair-null` read each member's recording out of a source tree, the
+# rest only re-read tables this package already wrote. The page keeps the short names.
+_HYPER_PROG = {
+    "run":        "fnirs-hyper",
+    "pair-null":  "fnirs-hyper-pairnull",
+    "group-null": "fnirs-hyper-groupnull",
+    "band":       "fnirs-hyper-band",
+    "merge":      "fnirs-hyper-merge",
+    "index":      "fnirs-hyper-index",
+}
+_HYPER = tuple(_HYPER_PROG)
+
+# the two that open subject data, and so need the source tree as well as the output one
+_HYPER_READS_SUBJECTS = ("run", "pair-null")
 
 
 def _num(flag: str, value) -> list[str]:
@@ -32,7 +45,10 @@ def build_qc_args(command: str, opts: dict) -> list[str]:
     if command in _AGGREGATE:
         return ["fnirs-qc", command, opts["output_dir"]]
 
-    args = ["fnirs-hyper", command, opts["output_dir"]]
+    args = [_HYPER_PROG[command]]
+    if command in _HYPER_READS_SUBJECTS:
+        args.append(opts["derivatives_dir"])
+    args += [opts["output_dir"], "group"]
 
     # the band and the COI switch are shared with `run`; only the suffix is this one's own
     if command == "band":
@@ -131,6 +147,8 @@ def missing(command: str, opts: dict) -> str | None:
         if opts.get("band_fmin") is None or opts.get("band_fmax") is None:
             return "band needs both a band start and end."
         return None
+    if command in _HYPER_READS_SUBJECTS and not opts.get("derivatives_dir"):
+        return f"{command} reads each member's recording, so it needs a source derivatives directory."
     if command == "run" and not opts.get("pairs_csv"):
         return "The dyad analysis needs a pairs CSV."
     return None

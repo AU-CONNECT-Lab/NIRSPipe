@@ -13,7 +13,7 @@ import json
 import pandas as pd
 import pytest
 
-from fnirs_pipe.cli.hyper import _build_parser
+from fnirs_pipe.cli.hyper import _parsers
 from fnirs_pipe.exceptions import StageError
 from fnirs_pipe.pipeline.hyper.pair_null import real_table_params
 from fnirs_pipe.pipeline.hyper.wtc_aggregate import aggregate_wtc
@@ -64,7 +64,8 @@ def test_an_unreadable_sidecar_is_refused(tmp_path):
 # ---- the command surface ----
 
 def _parse(*argv):
-    return _build_parser().parse_args(["pair-null", "/out", "--pairs-csv", "/p.csv", *argv])
+    return _parsers()["fnirs-hyper-pairnull"].parse_args(
+        ["/deriv", "/out", "group", "--pairs-csv", "/p.csv", *argv])
 
 
 def test_the_pool_keeps_a_members_position_unless_told_otherwise():
@@ -170,7 +171,8 @@ def test_an_roi_mapping_is_read_rather_than_crashing(tmp_path, monkeypatch):
     monkeypatch.setattr(pair_null, "run_pair_null",
                         lambda *a, **k: seen.update(k) or tmp_path / "out.tsv")
     cmd_pair_null(
-        output_dir=tmp_path, pairs_csv=tmp_path / "pairs.csv", group_id="d01",
+        derivatives_dir=tmp_path, output_dir=tmp_path,
+        pairs_csv=tmp_path / "pairs.csv", group_id="d01",
         task_label=None, desc="errts", roi_mapping=str(tmp_path / "roi.json"),
         bads_scope="run", wtc_chroma="both", wtc_pair_pool="position",
         wtc_pair_max=None, wtc_pair_cross=False, wtc_roi_min_channels=2,
@@ -187,7 +189,8 @@ def test_an_unreadable_roi_mapping_exits_rather_than_tracebacks(tmp_path):
         "group_id,subject_id,task\nd01,sub-a,full\nd01,sub-b,full\n")
     with pytest.raises(SystemExit):
         cmd_pair_null(
-            output_dir=tmp_path, pairs_csv=tmp_path / "pairs.csv", group_id=None,
+            derivatives_dir=tmp_path, output_dir=tmp_path,
+            pairs_csv=tmp_path / "pairs.csv", group_id=None,
             task_label=None, desc="errts", roi_mapping=str(tmp_path / "roi.json"),
             bads_scope="run", wtc_chroma="both", wtc_pair_pool="position",
             wtc_pair_max=None, wtc_pair_cross=False, wtc_roi_min_channels=2,

@@ -81,7 +81,7 @@ def _run_groups(groups: dict, process) -> None:
         raise SystemExit(1)
 
 
-def _load_aligned_group(output_dir, members, task, desc, no_align, normalize, bads_scope,
+def _load_aligned_group(derivatives_dir, members, task, desc, no_align, normalize, bads_scope,
                         passband_check=None, scope_tasks=None):
     """Load one dyad, put both recordings on one time axis, and mark the rejected channels.
 
@@ -107,10 +107,10 @@ def _load_aligned_group(output_dir, members, task, desc, no_align, normalize, ba
         trim_to_shortest,
     )
 
-    raws = load_group_haemo(output_dir, members, desc=desc)
+    raws = load_group_haemo(derivatives_dir, members, desc=desc)
     if passband_check is not None:
         warn_outside_passband(raws, *passband_check)
-    group_sqm = load_group_sqm(output_dir, members, bads_scope=bads_scope,
+    group_sqm = load_group_sqm(derivatives_dir, members, bads_scope=bads_scope,
                                scope_tasks=scope_tasks)
     apply_group_bads(raws, group_sqm)
     if no_align:
@@ -213,7 +213,8 @@ def _warn_band_mismatch(isc_band, wtc_band_fmin, wtc_band_fmax) -> None:
 
 
 def cmd_run(
-    output_dir: Path, pairs_csv: Path, group_id: str | None, task_label: list[str] | None,
+    derivatives_dir: Path, output_dir: Path,
+    pairs_csv: Path, group_id: str | None, task_label: list[str] | None,
     desc: str, roi_mapping: Path | None,
     wtc_fmin: float, wtc_fmax: float,
     wtc_band_fmin: float | None, wtc_band_fmax: float | None,
@@ -340,7 +341,7 @@ def cmd_run(
 
     def _process(gid, task, members):
         aligned_raws, offsets, group_sqm = _load_aligned_group(
-            output_dir, members, task, desc, no_align, normalize, bads_scope,
+            derivatives_dir, members, task, desc, no_align, normalize, bads_scope,
             passband_check=(wtc_fmin, wtc_fmax), scope_tasks=scope_tasks)
         analysis_window = resolve_analysis_window(aligned_raws, tstart, tend)
         sep_bands = resolve_group_bands(members, group_sqm, bands_override)
@@ -563,6 +564,7 @@ def cmd_index(output_dir: Path, group_id: str | None, verbose: bool) -> None:
 
 
 def cmd_pair_null(
+    derivatives_dir: Path,
     output_dir: Path,
     pairs_csv: Path,
     group_id: str | None,
@@ -608,7 +610,7 @@ def cmd_pair_null(
         print(f"  -> {gid}/{task}", flush=True)
         try:
             path = run_pair_null(
-                gid, task, members, all_groups, output_dir,
+                gid, task, members, all_groups, derivatives_dir, output_dir,
                 pool=wtc_pair_pool, n_max=wtc_pair_max, desc=desc,
                 bads_scope=bads_scope, scope_tasks=scope_tasks, chroma=chroma,
                 cross=wtc_pair_cross, limit_scales=wtc_limit_scales,
@@ -646,7 +648,38 @@ def cmd_merge(output_dir: Path, verbose: bool) -> None:
         print(f"no hyper-wtc tables under {output_dir}; run `fnirs-hyper run` first")
 
 
-def _build_parser() -> argparse.ArgumentParser:
+# `group` is the only level these commands have: a dyad is two subjects, so nothing here
+# can run one participant at a time. Spelled out anyway, because the positional is what
+# makes the command the shape a BIDS App runner expects.
+_LEVELS = ["group"]
+
+
+def _command_parser(prog: str, description: str, *, reads_subjects: bool,
+                    parents: "list[argparse.ArgumentParser]") -> argparse.ArgumentParser:
+    """One command's own parser, positionals included.
+
+    ``reads_subjects`` is what separates the two kinds of command here. `run` and
+    `pair-null` read each member's own recording, so they take the tree that holds it and
+    write to a second one. The rest re-read tables this package already wrote and have no
+    subject data to open, so a source tree would be a positional they ignore.
+    """
+    from fnirs_pipe import __version__
+
+    p = argparse.ArgumentParser(prog=prog, description=description, parents=parents)
+    p.add_argument("--version", action="version", version=f"{prog} {__version__}")
+    if reads_subjects:
+        p.add_argument("derivatives_dir", type=Path,
+                       help="BIDS derivatives directory fnirs-pipe wrote, holding each "
+                            "member's sub-<id>/nirs/ recordings.")
+    p.add_argument("output_dir", type=Path,
+                   help="Where the dyad results go. Keep it apart from the source tree so "
+                        "each carries its own dataset_description.json.")
+    p.add_argument("analysis_level", choices=_LEVELS,
+                   help="Always `group`: every metric here needs both members present.")
+    return p
+
+
+def _parsers() -> dict[str, argparse.ArgumentParser]:
     from fnirs_pipe import __version__
 
     # --wtc-band-fmin/fmax and --wtc-mask-coi mean the same thing to `run` and to `band`, so
@@ -670,8 +703,6 @@ def _build_parser() -> argparse.ArgumentParser:
                                 "as n_valid_frac either way.")
 
     common = argparse.ArgumentParser(add_help=False)
-    common.add_argument("output_dir", type=Path,
-                        help="fnirs-pipe derivatives directory. No BIDS input is read.")
     common.add_argument("--verbose", action="store_true")
 
     # the dyad selection and the alignment window are the same parameters `fnirs-qc
@@ -679,17 +710,11 @@ def _build_parser() -> argparse.ArgumentParser:
     pairs = _shared.pairs_selection()
     window = _shared.alignment_window()
 
-    p = argparse.ArgumentParser(
-        prog="fnirs-hyper",
-        description="Hyperscanning analysis: wavelet coherence, inter-subject correlation "
-                    "and the phase-scrambled null, computed over a derivatives tree that "
-                    "fnirs-pipe has already written.",
-    )
-    p.add_argument("--version", action="version", version=f"fnirs-hyper {__version__}")
-    sub = p.add_subparsers(required=True, metavar="COMMAND")
-
-    run = sub.add_parser("run", parents=[common, pairs, window, band_opts],
-                         help="WTC + ISC report per dyad, and the null with --wtc-phase-null.")
+    run = _command_parser(
+        "fnirs-hyper",
+        "Hyperscanning analysis: wavelet coherence, inter-subject correlation and the "
+        "phase-scrambled null, over a derivatives tree fnirs-pipe has already written.",
+        reads_subjects=True, parents=[common, pairs, window, band_opts])
     run.add_argument("--desc", default="preproc",
                      help="desc entity of the per-subject stage the inter-brain metrics read, "
                           "e.g. 'preproc' (Beer-Lambert output) or 'errts' (confound-regression "
@@ -917,23 +942,19 @@ def _build_parser() -> argparse.ArgumentParser:
                                  "record, and members prepped with different bands are "
                                  "refused. Pass this only for a tree prepped before the "
                                  "stamp existed. A band left off keeps the records' value.")
-    run.set_defaults(func=cmd_run)
 
-    band = sub.add_parser(
-        "band", parents=[common, band_opts],
-        help="Re-average saved WTC maps over another band, with no second transform.",
-        description="Re-averages the maps a `run --wtc-save-maps` saved, so no wavelet "
+    band = _command_parser(
+        "fnirs-hyper-band", reads_subjects=False, parents=[common, band_opts],
+        description="Re-averages the maps a `fnirs-hyper --wtc-save-maps` saved, so no wavelet "
                     "transform runs a second time. Writes tables, not a report. "
                     "--wtc-band-fmin and --wtc-band-fmax are both required here.")
     band.add_argument("--wtc-suffix", default=None,
                       help="Name added to each output TSV. Defaults to the band, e.g. "
                            "'band0p05-0p2', so the new tables sit beside the originals "
                            "rather than replacing them.")
-    band.set_defaults(func=cmd_band)
 
-    group_null = sub.add_parser(
-        "group-null", parents=[common],
-        help="Read the re-paired draws above the cell: per occasion, and per cohort.",
+    group_null = _command_parser(
+        "fnirs-hyper-groupnull", reads_subjects=False, parents=[common],
         description="`pair-null` ranks each channel of each dyad inside its own draws, which "
                     "says where a channel stands and spends the pool's resolution on saying "
                     "it: against 22 stand-ins no cell can reach a p under 1/23, so a test "
@@ -965,11 +986,9 @@ def _build_parser() -> argparse.ArgumentParser:
                                  "express is 1/(n+1).")
     group_null.add_argument("--seed", type=int, default=None,
                             help="Seed the resampling, so the cohort p is reproducible.")
-    group_null.set_defaults(func=cmd_group_null)
 
-    index = sub.add_parser(
-        "index", parents=[common],
-        help="Rebuild the dyad landing page from the tables already on disk.",
+    index = _command_parser(
+        "fnirs-hyper-index", reads_subjects=False, parents=[common],
         description="Writes group-<id>_index.html, one row per analysed window, linking to "
                     "that window's report. `run` writes it too; this rebuilds it for a tree "
                     "produced earlier, or after the pages were regenerated by hand. It "
@@ -979,11 +998,9 @@ def _build_parser() -> argparse.ArgumentParser:
                     "first lists them as separate tasks.")
     index.add_argument("--group-id", default=None,
                        help="Only this dyad. Every group-* directory by default.")
-    index.set_defaults(func=cmd_index)
 
-    pair = sub.add_parser(
-        "pair-null", parents=[common, pairs],
-        help="Draw the re-paired null: each dyad against members of the other dyads.",
+    pair = _command_parser(
+        "fnirs-hyper-pairnull", reads_subjects=True, parents=[common, pairs],
         description="Recomputes the coherence of one member against people they never "
                     "interacted with, drawn from the other groups of the same task, and "
                     "writes group-*_task-*_hyper-wtc-pairnull.tsv beside the real tables. "
@@ -1030,30 +1047,74 @@ def _build_parser() -> argparse.ArgumentParser:
     pair.add_argument("--wtc-limit-scales", action=argparse.BooleanOptionalAction, default=True,
                       help="Compute only the scales inside the frequency range plus margin "
                            "(default on), as in `run`.")
-    pair.set_defaults(func=cmd_pair_null)
 
-    merge = sub.add_parser(
-        "merge", parents=[common],
-        help="Merge the per-dyad band-mean tables into one long table per kind.",
+    merge = _command_parser(
+        "fnirs-hyper-merge", reads_subjects=False, parents=[common],
         description="Concatenates every group-*_task-*_hyper-wtc*.tsv under the tree into "
                     "one table per kind at its root, adding group_id and task columns, so a "
                     "cohort analysis reads one file. Refuses to merge tables that disagree "
                     "on the band, on mask_coi, on the null's iteration count or on which null "
                     "they are.")
-    merge.set_defaults(func=cmd_merge)
 
-    return p
+    return {p.prog: p for p in (run, band, group_null, index, pair, merge)}
+
+
+# each console script and the function it hands off to. One table, so a command cannot be
+# registered in pyproject.toml without something here saying what it runs
+COMMANDS = {
+    "fnirs-hyper":           cmd_run,
+    "fnirs-hyper-pairnull":  cmd_pair_null,
+    "fnirs-hyper-groupnull": cmd_group_null,
+    "fnirs-hyper-band":      cmd_band,
+    "fnirs-hyper-index":     cmd_index,
+    "fnirs-hyper-merge":     cmd_merge,
+}
+
+
+def _dispatch(prog: str, func, argv, *, require: "tuple[str, ...]" = ()) -> None:
+    """Parse one command's own argv and hand the rest to its implementation.
+
+    ``analysis_level`` is dropped: it is there to make the command the shape a BIDS App
+    runner expects, and `group` is its only value, so nothing downstream reads it.
+    """
+    args = _parsers()[prog].parse_args(argv)
+
+    for dest in require:
+        if getattr(args, dest) is None:
+            print(f"Error: Missing option '--{dest.replace('_', '-')}'.", file=sys.stderr)
+            raise SystemExit(1)
+
+    kw = {k: v for k, v in vars(args).items() if k != "analysis_level"}
+    source = kw.get("derivatives_dir")
+    if source is not None and Path(source).resolve() == Path(kw["output_dir"]).resolve():
+        print("Error: the source and the output directory are the same. Each tree carries "
+              "its own dataset_description.json, so one path cannot be both.",
+              file=sys.stderr)
+        raise SystemExit(1)
+    func(**kw)
 
 
 def main(argv: list[str] | None = None) -> None:
-    args = _build_parser().parse_args(argv)
+    _dispatch("fnirs-hyper", COMMANDS["fnirs-hyper"], argv)
 
-    if args.func is cmd_band:
-        for flag, value in (("--wtc-band-fmin", args.wtc_band_fmin),
-                            ("--wtc-band-fmax", args.wtc_band_fmax)):
-            if value is None:
-                print(f"Error: Missing option '{flag}'.", file=sys.stderr)
-                raise SystemExit(1)
 
-    kw = {k: v for k, v in vars(args).items() if k != "func"}
-    args.func(**kw)
+def main_pair_null(argv: list[str] | None = None) -> None:
+    _dispatch("fnirs-hyper-pairnull", COMMANDS["fnirs-hyper-pairnull"], argv)
+
+
+def main_group_null(argv: list[str] | None = None) -> None:
+    _dispatch("fnirs-hyper-groupnull", COMMANDS["fnirs-hyper-groupnull"], argv)
+
+
+def main_index(argv: list[str] | None = None) -> None:
+    _dispatch("fnirs-hyper-index", COMMANDS["fnirs-hyper-index"], argv)
+
+
+def main_merge(argv: list[str] | None = None) -> None:
+    _dispatch("fnirs-hyper-merge", COMMANDS["fnirs-hyper-merge"], argv)
+
+
+def main_band(argv: list[str] | None = None) -> None:
+    # the band is the whole point of this one, so it is required here and optional on `run`
+    _dispatch("fnirs-hyper-band", COMMANDS["fnirs-hyper-band"], argv,
+              require=("wtc_band_fmin", "wtc_band_fmax"))

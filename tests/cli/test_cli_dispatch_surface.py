@@ -20,9 +20,27 @@ import pytest
 MODULES = ["fnirs_pipe.cli.qc", "fnirs_pipe.cli.prep", "fnirs_pipe.cli.hyper"]
 
 
+# dests that never reach the function: --help and --version print and exit without landing
+# in the namespace, func is the dispatch handle, and analysis_level is parsed to give the
+# command a BIDS App shape and dropped before the call
+_NOT_A_PARAMETER = {"help", "version", "func", "==", "analysis_level"}
+
+
+def _dests(parser):
+    return {a.dest for a in parser._actions if a.dest not in _NOT_A_PARAMETER}
+
+
 def _commands(module_name):
     """[(command path, function, {dest names the parser produces})] for one CLI module."""
     module = importlib.import_module(module_name)
+
+    # a CLI that ships one console script per command names them in COMMANDS instead of
+    # hanging them off subparsers, so there is no tree to walk
+    if hasattr(module, "COMMANDS"):
+        parsers = module._parsers()
+        return [(prog, func, _dests(parsers[prog]))
+                for prog, func in module.COMMANDS.items()]
+
     parser = module._build_parser()
     out = []
 
@@ -34,9 +52,7 @@ def _commands(module_name):
                 return
         func = p.get_default("func")
         if func is not None:
-            dests = {a.dest for a in p._actions
-                     if a.dest not in ("help", "func") and a.dest != "=="}
-            out.append((path, func, dests))
+            out.append((path, func, _dests(p)))
 
     walk(parser, module_name.rsplit(".", 1)[-1])
     return out

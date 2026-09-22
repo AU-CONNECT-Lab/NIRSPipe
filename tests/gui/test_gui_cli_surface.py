@@ -102,7 +102,7 @@ def _alias_map() -> dict[str, frozenset[str]]:
     write-off naming either spelling as covering only that one.
     """
     parsers = [_build_parser(), *_qc_subparsers().values(),
-               *_hyper_subparsers().values(), *_prep_subparsers().values()]
+               *_hyper_parsers_by_command().values(), *_prep_subparsers().values()]
     out: dict[str, frozenset[str]] = {}
     for parser in parsers:
         for action in parser._actions:
@@ -379,7 +379,7 @@ QC_NOT_EXPOSED = {
 }
 
 _QC_FULL_OPTS = dict(
-    output_dir="/out", pairs_csv="/pairs.csv", group_id="01",
+    derivatives_dir="/deriv", output_dir="/out", pairs_csv="/pairs.csv", group_id="01",
     desc="errts", roi_mapping="/roi.json",
     wtc_fmin=0.004, wtc_fmax=0.2, wtc_band_fmin=0.01, wtc_band_fmax=0.1,
     wtc_mc_count=300, wtc_seed=42, isc_threshold=0.3,
@@ -411,9 +411,13 @@ def _build_qc_parser():
     return build()
 
 
-def _build_hyper_parser():
-    from fnirs_pipe.cli.hyper import _build_parser as build
-    return build()
+def _hyper_parsers_by_command():
+    """Each dyad command's own parser, keyed the way the page names it."""
+    from fnirs_pipe.cli.hyper import _parsers
+    from fnirs_pipe.interface.cli_args import _HYPER_PROG
+
+    built = _parsers()
+    return {command: built[prog] for command, prog in _HYPER_PROG.items()}
 
 
 def _qc_subparsers():
@@ -421,12 +425,13 @@ def _qc_subparsers():
 
 
 def _hyper_subparsers():
-    return _subcommands(_build_hyper_parser)
+    return _hyper_parsers_by_command()
 
 
 def _qc_flags(command: str) -> set[str]:
     parser = (_hyper_subparsers() if command in _HYPER else _qc_subparsers())[command]
-    return {flag for action in parser._actions if action.dest != "help"
+    return {flag for action in parser._actions
+            if action.dest not in ("help", "version")
             for flag in _long_flags(action)}
 
 
@@ -479,15 +484,17 @@ def test_the_written_off_qc_flags_still_exist(command):
 def test_the_generated_qc_command_parses(command):
     argv = build_qc_args(command, _QC_FULL_OPTS)
     if command in _HYPER:
-        assert argv[:2] == ["fnirs-hyper", command]
-        _build_hyper_parser().parse_args(argv[1:])   # raises SystemExit on an unknown flag
+        from fnirs_pipe.interface.cli_args import _HYPER_PROG
+        assert argv[0] == _HYPER_PROG[command]
+        # raises SystemExit on an unknown flag or a missing positional
+        _hyper_parsers_by_command()[command].parse_args(argv[1:])
     else:
         assert argv[:2] == ["fnirs-qc", command]
         _build_qc_parser().parse_args(argv[1:])
 
 
 def test_neither_tool_on_this_page_asks_for_a_bids_directory():
-    """Both read derivatives only, which is why the page has one directory field."""
+    """Both read derivatives rather than raw BIDS, whichever tree they are pointed at."""
     for command in _QC_OFFERED:
         argv = build_qc_args(command, _QC_FULL_OPTS)
         assert "/bids" not in argv
@@ -496,7 +503,7 @@ def test_neither_tool_on_this_page_asks_for_a_bids_directory():
 def test_a_space_separated_box_repeats_its_flag_rather_than_joining():
     """argparse nargs="+" takes repeats; one string with a space in it is one label."""
     argv = build_qc_args("run", dict(_QC_FULL_OPTS, hyper_task="rest tap"))
-    args = _build_hyper_parser().parse_args(argv[1:])
+    args = _hyper_parsers_by_command()["run"].parse_args(argv[1:])
     assert args.task_label == ["rest", "tap"]
 
 

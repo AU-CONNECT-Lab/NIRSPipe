@@ -19,7 +19,7 @@ import logging
 
 import pytest
 
-from fnirs_pipe.cli.hyper import _build_parser
+from fnirs_pipe.cli.hyper import _parsers
 from fnirs_pipe.pipeline.hyper.wtc_aggregate import aggregate_wtc
 
 
@@ -43,7 +43,8 @@ def _null(frame, cond_frames=(), levels=None):
 
 
 def _hyper(*argv):
-    return _build_parser().parse_args(["run", "/out", "--pairs-csv", "/p.csv", *argv])
+    return _parsers()["fnirs-hyper"].parse_args(
+        ["/deriv", "/out", "group", "--pairs-csv", "/p.csv", *argv])
 
 
 # ---- the null is opt-in ----

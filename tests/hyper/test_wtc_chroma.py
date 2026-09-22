@@ -267,27 +267,28 @@ def test_the_null_refuses_an_unknown_chromophore(dyad, tmp_path):
 def test_the_flag_defaults_to_both():
     """Taken knowing it doubles the runtime of every existing command: reporting HbO alone
     is the field's habit rather than a defended choice, and the references do not back it."""
-    from fnirs_pipe.cli.hyper import _build_parser
+    from fnirs_pipe.cli.hyper import _parsers
 
-    args = _build_parser().parse_args(["run", "out", "--pairs-csv", "pairs.csv"])
+    args = _parsers()["fnirs-hyper"].parse_args(
+        ["deriv", "out", "group", "--pairs-csv", "pairs.csv"])
     assert args.wtc_chroma == "both"
 
 
 @pytest.mark.parametrize("value", ["hbo", "hbr", "both"])
 def test_the_flag_takes_the_three_settings(value):
-    from fnirs_pipe.cli.hyper import _build_parser
+    from fnirs_pipe.cli.hyper import _parsers
 
-    args = _build_parser().parse_args(
-        ["run", "out", "--pairs-csv", "pairs.csv", "--wtc-chroma", value])
+    args = _parsers()["fnirs-hyper"].parse_args(
+        ["deriv", "out", "group", "--pairs-csv", "pairs.csv", "--wtc-chroma", value])
     assert args.wtc_chroma == value
 
 
 def test_the_flag_refuses_anything_else():
-    from fnirs_pipe.cli.hyper import _build_parser
+    from fnirs_pipe.cli.hyper import _parsers
 
     with pytest.raises(SystemExit):
-        _build_parser().parse_args(
-            ["run", "out", "--pairs-csv", "pairs.csv", "--wtc-chroma", "hbt"])
+        _parsers()["fnirs-hyper"].parse_args(
+            ["deriv", "out", "group", "--pairs-csv", "pairs.csv", "--wtc-chroma", "hbt"])
 
 
 # ---- the traps the structure exists to avoid ----
