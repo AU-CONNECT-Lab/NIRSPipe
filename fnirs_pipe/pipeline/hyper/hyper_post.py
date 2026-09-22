@@ -184,7 +184,7 @@ def run_hyper_post(
     the footer of the page this result is drawn on and not only the run log.
     """
     from fnirs_pipe.exceptions import StageError
-    from fnirs_pipe.io.derivatives import group_data_dir
+    from fnirs_pipe.io.derivatives import group_data_dir, hyper_stem
     from fnirs_pipe.pipeline.hyper import _hyper_sidecar
     # straight from the modules that define them. The package re-exports the set, and
     # taking them from there makes the coherence look like a property of the group loader
@@ -234,7 +234,7 @@ def run_hyper_post(
 
     def _write_df_tsv(df, kind: str, step: str, **extra) -> Path:
         tsv_path = (group_data_dir(output_dir, group_id)
-                    / f"group-{group_id}_task-{task}_hyper-{kind}.tsv")
+                    / f"{hyper_stem(group_id, task)}-{kind}.tsv")
         df.to_csv(tsv_path, sep="\t", index=False)
         _hyper_sidecar(
             tsv_path, step,
@@ -307,7 +307,7 @@ def run_hyper_post(
         """
         from fnirs_pipe.pipeline.hyper.wtc_store import save_wtc
         npz_path = (group_data_dir(output_dir, group_id)
-                    / f"group-{group_id}_task-{task}_hyper-{kind}-{ch_type}.npz")
+                    / f"{hyper_stem(group_id, task)}-{kind}-{ch_type}.npz")
         with guard(f"Saving WTC maps ({kind} {ch_type})", errors, scope):
             save_wtc(result, npz_path)
 
@@ -324,7 +324,7 @@ def run_hyper_post(
         """
         from fnirs_pipe.pipeline.hyper.wtc_store import load_null_levels
         npz_path = (group_data_dir(output_dir, group_id)
-                    / f"group-{group_id}_task-{task}_hyper-wtc-nulllevel-{ch_type}.npz")
+                    / f"{hyper_stem(group_id, task)}-wtc-nulllevel-{ch_type}.npz")
         if result is None or not npz_path.exists():
             return
         with guard(f"WTC null level ({ch_type})", errors, scope):
@@ -687,7 +687,7 @@ def run_hyper_post(
         # everything it writes, and a correlation was averaged over no band at all
         with guard("ISC pair table", errors, scope):
             tsv_path = (group_data_dir(output_dir, group_id)
-                        / f"group-{group_id}_task-{task}_hyper-iscpairs.tsv")
+                        / f"{hyper_stem(group_id, task)}-iscpairs.tsv")
             pd.concat(isc_pair_frames, ignore_index=True).to_csv(tsv_path, sep="\t",
                                                                  index=False)
             _hyper_sidecar(

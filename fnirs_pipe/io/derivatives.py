@@ -111,6 +111,17 @@ def group_data_dir(output_dir: Path, group_id: str, session: str | None = None) 
     return folder
 
 
+def hyper_stem(group_id: str, task: str) -> str:
+    """The prefix every dyad table and archive shares.
+
+    ``("G1", "rest")`` -> ``"group-G1_task-rest_hyper"``
+
+    Written out by hand in five modules before this, so the group and task entities could
+    drift apart from the readers that parse them back out.
+    """
+    return f"group-{group_id}_task-{task}_hyper"
+
+
 def data_state(raw: Any) -> dict[str, Any]:
     """Shape of the signal as written, so a sidecar records what the step left behind.
 

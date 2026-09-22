@@ -454,7 +454,7 @@ def run_pair_null(
     and write are one step for the same reason: there is nothing to write between them, the
     table being ranked against is already on disk.
     """
-    from fnirs_pipe.io.derivatives import group_data_dir
+    from fnirs_pipe.io.derivatives import group_data_dir, hyper_stem
     from fnirs_pipe.pipeline.hyper.group_io import load_group_haemo
     from fnirs_pipe.pipeline.hyper.group_quality import (apply_group_bads, load_group_sqm,
                                                    resolve_group_bands)
@@ -468,7 +468,7 @@ def run_pair_null(
     from fnirs_pipe.utils.lineage import path_from
 
     data_dir = group_data_dir(output_dir, group_id)
-    stem = f"group-{group_id}_task-{task}_hyper"
+    stem = hyper_stem(group_id, task)
     real_params = real_table_params(data_dir, stem)
     band_fmin, band_fmax = real_params["band_fmin"], real_params["band_fmax"]
     wtc_fmin, wtc_fmax = real_params["wtc_fmin"], real_params["wtc_fmax"]

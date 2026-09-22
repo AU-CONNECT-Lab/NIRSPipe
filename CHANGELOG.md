@@ -14,7 +14,7 @@ BIDS App alignment and the output naming rework. Renames land in later entries h
 
 ### Changed
 - A GUI page whose command should have written a report and did not now says so, instead of the line it shares with commands that write only tables
-- Entity parsing, the channel-decisions path and the quality-record name each have one definition; they had three, four and five
+- Entity parsing, the channel-decisions path, the quality-record name and the dyad table stem each have one definition; they had three, four, five and nine
 
 ## [0.46.0] - 2026-09-21
 

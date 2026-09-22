@@ -37,7 +37,7 @@ from fnirs_pipe.qc.figures.hyper.group_hyper_figures import (
     cohort_order,
 )
 from fnirs_pipe.qc.metrics.hyper import NULL_ALPHA_PCT
-from fnirs_pipe.qc.subject.sqm_record import record_glob, record_label
+from fnirs_pipe.qc.subject.sqm_record import RECORD_SUFFIX, record_label
 from fnirs_pipe.qc.common.report_shell import footer_vars, guard, note, page_vars, render
 from fnirs_pipe.utils.logging import get_logger
 
@@ -124,7 +124,7 @@ def collect_rows(output_dir: Path) -> list[dict]:
     is two rows and neither is silently the other.
     """
     rows: list[dict] = []
-    for record_path in sorted(output_dir.glob(f"group-*/nirs/{record_glob()}")):
+    for record_path in sorted(output_dir.glob(f"group-*/nirs/*{RECORD_SUFFIX}")):
         record = _read_json(record_path)
         if not record or record.get("step") != "hyper_sqm":
             continue

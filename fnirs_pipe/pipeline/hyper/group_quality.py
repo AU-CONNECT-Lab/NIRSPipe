@@ -15,7 +15,7 @@ import mne
 import numpy as np
 import pandas as pd
 
-from fnirs_pipe.io.derivatives import group_data_dir
+from fnirs_pipe.io.derivatives import group_data_dir, hyper_stem
 from fnirs_pipe.pipeline.hyper.group_io import (
     GroupEntry, _for_task, _hyper_sidecar, _member_sqm_files,
 )
@@ -66,7 +66,7 @@ def write_group_bads(
                 "rejected_in": ";".join(sources.get(channel) or [task]),
             })
 
-    out_path = group_data_dir(output_dir, gid) / f"group-{gid}_task-{task}_hyper-bads.tsv"
+    out_path = group_data_dir(output_dir, gid) / f"{hyper_stem(gid, task)}-bads.tsv"
     columns = ["group_id", "task", "subject_id", "channel", "bads_scope", "rejected_in"]
     pd.DataFrame(rows, columns=columns).to_csv(out_path, sep="	", index=False)
     _hyper_sidecar(out_path, "hyper_bads", [], bads_scope=bads_scope)
@@ -266,7 +266,7 @@ def compute_group_sqm_raw(
                 "is_bad":     ch in bad_channels,
             })
 
-    stem = f"group-{gid}_task-{task}_hyper-raw"
+    stem = hyper_stem(gid, task) + "-raw"
     sources = [p for p in (path_from(raws[e.subject_id]) for e in group) if p]
 
     scalar_path = data_dir / f"{stem}_sqm.tsv"
@@ -326,14 +326,14 @@ def load_group_sqm(
     if bads_scope not in ("run", "subject"):
         raise ValueError(f"bads_scope must be 'run' or 'subject', got {bads_scope!r}")
 
-    from fnirs_pipe.qc.subject.sqm_record import raw_verdict_view, record_glob
+    from fnirs_pipe.qc.subject.sqm_record import RECORD_SUFFIX, raw_verdict_view
 
     result: dict[str, dict] = {}
     for entry in group:
         sqm: dict = {}
         # the long-channel view is the one a quality judgement wants, with raw standing in
         # when the montage has no short channels to exclude
-        records = _member_sqm_files(output_dir, entry, record_glob(f"{entry.subject_id}*"))
+        records = _member_sqm_files(output_dir, entry, f"{entry.subject_id}*{RECORD_SUFFIX}")
         for record_path in _for_task(records, entry.task):
             try:
                 record = json.loads(record_path.read_text(encoding="utf-8"))

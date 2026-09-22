@@ -185,9 +185,9 @@ class RawRatingApp:
         self.output_dir     = output_dir
         self.sci_threshold  = sci_threshold
         self.ratings_path   = self._ratings_path(self.stem)
+        run = {k: entity_of(self.stem, k) for k in ("sub", "task", "ses")}
         self.decisions_path = channel_decisions_path(
-            output_dir, entity_of(self.stem, "sub") or "unknown",
-            task=entity_of(self.stem, "task"), session=entity_of(self.stem, "ses"))
+            output_dir, run["sub"], run["task"], run["ses"])
         self.app = Flask(__name__)
         self._setup_routes()
 

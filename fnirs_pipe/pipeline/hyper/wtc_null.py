@@ -71,7 +71,7 @@ def run_wtc_null(
     """
     # imported in the call, not at module load: the wiring tests patch these on the module
     # that defines them, which only a lookup made at call time can see
-    from fnirs_pipe.io.derivatives import group_data_dir
+    from fnirs_pipe.io.derivatives import group_data_dir, hyper_stem
     from fnirs_pipe.pipeline.hyper import compute_wtc_phase_null
     from fnirs_pipe.pipeline.hyper.wtc_store import save_null_levels
 
@@ -88,7 +88,7 @@ def run_wtc_null(
         n_iter, "crossed" if cross else "homologous", "+".join(chroma))
 
     data_dir = group_data_dir(output_dir, group_id)
-    stem = f"group-{group_id}_task-{task}_hyper"
+    stem = hyper_stem(group_id, task)
     nulls: dict = {}
     for ch_type in chroma:
         null = compute_wtc_phase_null(
@@ -146,7 +146,7 @@ def write_wtc_null(
     the null's business. A tree without them still gets a null, just one nothing has been
     ranked against yet.
     """
-    from fnirs_pipe.io.derivatives import group_data_dir
+    from fnirs_pipe.io.derivatives import group_data_dir, hyper_stem
     from fnirs_pipe.pipeline.hyper import _hyper_sidecar, alignment_params
     from fnirs_pipe.pipeline.hyper.wtc import wtc_grid_params
     from fnirs_pipe.utils.lineage import path_from
@@ -156,7 +156,7 @@ def write_wtc_null(
     chroma = tuple(nulls)
 
     data_dir = group_data_dir(output_dir, group_id)
-    stem = f"group-{group_id}_task-{task}_hyper"
+    stem = hyper_stem(group_id, task)
     real = _real_table(data_dir / f"{stem}-wtc.tsv")
     real_by_cond = _real_table(data_dir / f"{stem}-wtcbycond.tsv")
     real_roi = _real_table(data_dir / f"{stem}-wtc-roihom.tsv")

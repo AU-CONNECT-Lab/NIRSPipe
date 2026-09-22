@@ -140,20 +140,13 @@ def entities_of(label: str) -> dict[str, str | None]:
     return {key: entity_of(label, key) for key in ("ses", "task", "run")}
 
 
+# what record_path writes, for the readers that glob for it. Four of them spelled it out by
+# hand, which is one rename away from a cohort page that silently aggregates nothing
+RECORD_SUFFIX = "_desc-sqm_nirs.json"
+
+
 def record_path(nirs_dir: Path, label: str) -> Path:
-    return Path(nirs_dir) / f"{label}_desc-sqm_nirs.json"
-
-
-def record_glob(label: str = "*", desc: str = "sqm") -> str:
-    """What :func:`record_path` writes, as a glob, so readers cannot spell it differently.
-
-    ``record_glob()`` -> ``"*_desc-sqm_nirs.json"``
-    ``record_glob(desc="sqm*")`` -> catches the ``sqmraw`` record too
-
-    Four readers used to write this name out by hand, which is one rename away from a
-    cohort page that silently aggregates nothing.
-    """
-    return f"{label}_desc-{desc}_nirs.json"
+    return Path(nirs_dir) / (label + RECORD_SUFFIX)
 
 
 def record_label(path: "Path | str") -> str:
