@@ -14,9 +14,8 @@ from typing import Any
 import mne
 from mne_nirs.io.snirf import write_raw_snirf
 
+from fnirs_pipe.io.derivatives import entity_of
 from fnirs_pipe.utils.lineage import stamp
-
-_DESC_RE = re.compile(r"_desc-([A-Za-z0-9]+)[_.]")
 
 
 def _zero_first_time(raw: mne.io.Raw) -> mne.io.Raw:
@@ -91,8 +90,7 @@ def read_snirf(path: Path | str, **kwargs: Any) -> mne.io.Raw:
     sidecar = _sidecar(path)
     _restore_bads(raw, sidecar)
     params = sidecar.get("parameters") or {}
-    desc = _DESC_RE.search(path.name)
-    return stamp(raw, stage=desc.group(1) if desc else "raw", step="load", path=path.as_posix(),
+    return stamp(raw, stage=entity_of(path, "desc") or "raw", step="load", path=path.as_posix(),
                  **{k: params[k] for k in _FILTER_KEYS + _DRIFT_KEYS
                     if params.get(k) is not None})
 

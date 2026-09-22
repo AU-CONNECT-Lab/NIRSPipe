@@ -9,6 +9,7 @@ import dash_bootstrap_components as dbc
 from dash import ALL, Input, Output, State, callback, ctx, html, no_update
 
 from fnirs_pipe.interface.callbacks._cli_run import run_and_report
+from fnirs_pipe.io.derivatives import channel_decisions_path
 from fnirs_pipe.interface.cli_args import build_raw_qc_args, missing_raw_qc
 from fnirs_pipe.interface.theme import style_figure
 
@@ -320,8 +321,9 @@ def _ha_cd_btn(sid: str, pair: str, state: str) -> dbc.Button:
 
 
 def _ha_decisions_path(deriv_dir: str, sid: str, task: str) -> Path:
-    sub_label = sid.removeprefix("sub-")
-    return Path(deriv_dir) / f"sub-{sub_label}_task-{task}_raw_channel_decisions.json"
+    # no session: this page holds none, so a two-session tree reads a path the raw QC
+    # page never wrote. See channel_decisions_path
+    return channel_decisions_path(Path(deriv_dir), sid, task=task)
 
 
 def _read_ha_decisions(deriv_dir: str, subject_ids: list, task: str) -> dict:
@@ -549,9 +551,6 @@ def click_ha_cd(n_clicks_list, group_val, bids_dir, group_csv, deriv_dir, cardia
 
 # ── Static QC report for the dyads in the CSV ────────────────────────────────
 
-_HYPER_RAW_REPORT = ["group-*/group-*_desc-hyperraw_nirs.html"]
-
-
 @callback(
     Output("ha-report-status",  "children"),
     Output("ha-report-preview", "children"),
@@ -585,5 +584,4 @@ def write_hyper_raw_report(n_clicks, bids_dir, deriv_dir, group_csv, group_val,
         return dbc.Alert(problem, color="warning", className="mb-0 py-2"), None
 
     argv = build_raw_qc_args("hyper-raw", opts)
-    return run_and_report({"argv": argv, "command": "hyper-raw", "output_dir": deriv_dir},
-                          {"hyper-raw": _HYPER_RAW_REPORT})
+    return run_and_report({"argv": argv, "command": "hyper-raw", "output_dir": deriv_dir})

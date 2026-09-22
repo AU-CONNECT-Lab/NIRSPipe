@@ -12,6 +12,10 @@ BIDS App alignment and the output naming rework. Renames land in later entries h
 - Every long CLI flag also answers to its underscore spelling; `--n-jobs` also to `--nprocs` and `--n_cpus`, `--skip-bids-validation` to `--skip_bids_validator`
 - `dataset_description.json` records the package version under `GeneratedBy`
 
+### Changed
+- A GUI page whose command should have written a report and did not now says so, instead of the line it shares with commands that write only tables
+- Entity parsing, the channel-decisions path and the quality-record name each have one definition; they had three, four and five
+
 ## [0.46.0] - 2026-09-21
 
 ### Added

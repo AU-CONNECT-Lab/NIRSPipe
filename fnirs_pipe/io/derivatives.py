@@ -14,10 +14,6 @@ from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("io.derivatives")
 
-# same entity pattern read_snirf parses the stage back out of
-_DESC_RE = re.compile(r"_desc-([A-Za-z0-9]+)[_.]")
-
-
 def carry_entities(source_entities: dict[str, str] | None) -> dict[str, str]:
     """Keep only task/run from source entities so output filenames mirror the input."""
     return {k: v for k, v in (source_entities or {}).items() if k in ("task", "run")}
@@ -63,6 +59,27 @@ def build_output_path(
     ]
     filename = "_".join(filename_parts) + f"_{suffix}{extension}"
     return folder / filename
+
+
+def channel_decisions_path(
+    output_dir: Path, subject: str, task: str | None = None, session: str | None = None,
+) -> Path:
+    """Where the raw QC page keeps a run's per-channel keep/drop decisions.
+
+    ``(out, "01", task="rest")`` -> ``out/sub-01_task-rest_raw_channel_decisions.json``
+
+    One function because four call sites built this name by hand: the rating server, the
+    dyad rating server, the Hyper Preparation page and the Data Prep page. They agreed on
+    the parts by convention alone, and the Hyper Preparation one left the session out, so
+    on a two-session tree it reads a path the others never write. That call still passes no
+    session because the page holds none; the mismatch is now in one place instead of four.
+    """
+    parts = [f"sub-{str(subject).removeprefix('sub-')}"]
+    if session:
+        parts.append(f"ses-{session}")
+    if task:
+        parts.append(f"task-{task}")
+    return Path(output_dir) / ("_".join(parts) + "_raw_channel_decisions.json")
 
 
 def subject_report_dir(output_dir: Path, subject_id: str) -> Path:
@@ -133,8 +150,18 @@ def write_sidecar_json(out_path: Path, provenance: dict[str, Any]) -> None:
 
 
 
-def _entity(name: str, path: Path) -> str | None:
-    m = re.search(rf"_{name}-([A-Za-z0-9]+)", path.name)
+def entity_of(path: "Path | str", name: str) -> str | None:
+    """Read one BIDS entity back out of a filename, or None when it carries no such key.
+
+    ``entity_of("sub-01_task-rest_desc-preproc_nirs.snirf", "desc")`` -> ``"preproc"``
+
+    The one place the package parses an entity out of a name. It used to be three separate
+    regexes in three modules, which is how a rename can leave two of them reading and the
+    third silently finding nothing. A label is alphanumeric by BIDS definition, so the
+    match ends at the underscore or dot that follows it.
+    """
+    # ^ as well as _, so the leading sub- or group- is readable too
+    m = re.search(rf"(?:^|_){name}-([A-Za-z0-9]+)", getattr(path, "name", path))
     return m.group(1) if m else None
 
 
@@ -160,7 +187,7 @@ def select_one_run(
     """
     for name, value in (("ses", session), ("run", run)):
         if value is not None:
-            candidates = [p for p in candidates if _entity(name, p) == value]
+            candidates = [p for p in candidates if entity_of(p, name) == value]
 
     if not candidates:
         raise MissingDerivativesError(
@@ -171,7 +198,7 @@ def select_one_run(
         return candidates[0]
 
     def _spread(name: str) -> str:
-        found = sorted({v for p in candidates if (v := _entity(name, p))})
+        found = sorted({v for p in candidates if (v := entity_of(p, name))})
         return f"{name}: {', '.join(found)}" if len(found) > 1 else ""
 
     varies = ", ".join(x for x in (_spread("ses"), _spread("run")) if x)
@@ -237,10 +264,10 @@ def find_preproc_snirf(
         if untasked and not any("_task-" in p.name for p in untasked):
             candidates = untasked
     if not candidates:
-        available = sorted({m.group(1) for p in _glob(f"{subject_id}_*_nirs.snirf")
-                            if (m := _DESC_RE.search(p.name))})
-        tasks = sorted({m.group(1) for p in _glob(f"{subject_id}_*desc-{desc}_nirs.snirf")
-                        if (m := re.search(r"_task-([A-Za-z0-9]+)", p.name))})
+        available = sorted({found for p in _glob(f"{subject_id}_*_nirs.snirf")
+                            if (found := entity_of(p, "desc"))})
+        tasks = sorted({found for p in _glob(f"{subject_id}_*desc-{desc}_nirs.snirf")
+                        if (found := entity_of(p, "task"))})
         where = ", ".join(str(d) for d in nirs_dirs)
         raise MissingDerivativesError(
             f"No desc-{desc} snirf found for {subject_id} (task={task}) in {where}. "

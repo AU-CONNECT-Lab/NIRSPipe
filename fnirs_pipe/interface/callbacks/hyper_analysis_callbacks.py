@@ -25,11 +25,6 @@ _ALL_SECTIONS = ("hy-run-section", "hy-pairnull-section", "hy-groupnull-section"
 
 # report each command writes, relative to output_dir, best match first. The hyper level names
 # its file after the group, so it is found by glob rather than named here.
-_REPORTS = {
-    # the second pattern finds a tree written before the reports moved into group-<id>/
-    "run": ["group-*/group-*_desc-hyperpost_nirs.html", "group-*_hyper*.html"],
-}
-
 _STATES = [
     State("hy-output-dir", "value"),
     State("hy-pairs-csv", "value"), State("hy-group-id", "value"),
@@ -109,4 +104,4 @@ def generate_command(n_clicks, command, *values):
     prevent_initial_call=True,
 )
 def run_command(n_clicks, stored):
-    return run_and_report(stored, _REPORTS)
+    return run_and_report(stored)

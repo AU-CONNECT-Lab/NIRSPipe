@@ -68,11 +68,10 @@ from typing import Any
 import mne
 import numpy as np
 
+from fnirs_pipe.io.derivatives import entity_of
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("qc.sqm_record")
-
-_DESC_RE = re.compile(r"_desc-([A-Za-z0-9]+)_nirs\.snirf$")
 
 # the post-Beer-Lambert stages, in the order the pipeline writes them. Each is its own
 # section named after the file it measured, which is the rule every other section follows.
@@ -128,24 +127,42 @@ def scan_runs(nirs_dir: Path) -> dict[str, dict[str, Path]]:
     """
     runs: dict[str, dict[str, Path]] = {}
     for path in sorted(Path(nirs_dir).glob("*_desc-*_nirs.snirf")):
-        match = _DESC_RE.search(path.name)
-        if match is None:
+        stage = entity_of(path, "desc")
+        if stage is None:
             continue
         label = path.name[: path.name.index("_desc-")]
-        runs.setdefault(label, {})[match.group(1)] = path
+        runs.setdefault(label, {})[stage] = path
     return runs
 
 
 def entities_of(label: str) -> dict[str, str | None]:
     """Pull the BIDS entities back out of a run label, for the columns a database wants."""
-    return {
-        key: (m.group(1) if (m := re.search(rf"_{key}-([A-Za-z0-9]+)", label)) else None)
-        for key in ("ses", "task", "run")
-    }
+    return {key: entity_of(label, key) for key in ("ses", "task", "run")}
 
 
 def record_path(nirs_dir: Path, label: str) -> Path:
     return Path(nirs_dir) / f"{label}_desc-sqm_nirs.json"
+
+
+def record_glob(label: str = "*", desc: str = "sqm") -> str:
+    """What :func:`record_path` writes, as a glob, so readers cannot spell it differently.
+
+    ``record_glob()`` -> ``"*_desc-sqm_nirs.json"``
+    ``record_glob(desc="sqm*")`` -> catches the ``sqmraw`` record too
+
+    Four readers used to write this name out by hand, which is one rename away from a
+    cohort page that silently aggregates nothing.
+    """
+    return f"{label}_desc-{desc}_nirs.json"
+
+
+def record_label(path: "Path | str") -> str:
+    """The run label a record is named for: the inverse of :func:`record_path`.
+
+    ``"sub-01_task-rest_desc-sqm_nirs.json"`` -> ``"sub-01_task-rest"``
+    """
+    name = getattr(path, "name", path)
+    return name[: name.index("_desc-")]
 
 
 def _sidecar(path: Path) -> dict[str, Any]:

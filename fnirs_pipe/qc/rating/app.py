@@ -8,6 +8,7 @@ from pathlib import Path
 
 from flask import Flask, jsonify, request, send_from_directory
 
+from fnirs_pipe.io.derivatives import channel_decisions_path, entity_of
 from fnirs_pipe.qc.metrics import SCI_PASS
 from fnirs_pipe.utils.logging import get_logger
 from fnirs_pipe.utils.net import resolve_port
@@ -183,11 +184,10 @@ class RawRatingApp:
         self.stem           = html_path.stem          # e.g. "sub-01_task-rest_desc-raw_nirs"
         self.output_dir     = output_dir
         self.sci_threshold  = sci_threshold
-        # Strip BIDS suffix so sidecar JSON keeps the legacy "_raw_*.json" naming
-        # (also matches the hard-coded paths in hyper_align_callbacks / hyper rating app).
-        bids_prefix = self.stem.removesuffix("_desc-raw_nirs")
         self.ratings_path   = self._ratings_path(self.stem)
-        self.decisions_path = output_dir / f"{bids_prefix}_raw_channel_decisions.json"
+        self.decisions_path = channel_decisions_path(
+            output_dir, entity_of(self.stem, "sub") or "unknown",
+            task=entity_of(self.stem, "task"), session=entity_of(self.stem, "ses"))
         self.app = Flask(__name__)
         self._setup_routes()
 
@@ -363,12 +363,8 @@ class HyperRatingApp:
             return {"ratings": {}, "notes": {}}
 
     def _decisions_path(self, sid: str) -> Path:
-        sub_prefix = sid if sid.startswith("sub-") else f"sub-{sid}"
-        parts = [sub_prefix]
-        if self.session:
-            parts.append(f"ses-{self.session}")
-        parts.append(f"task-{self.task}")
-        return self.output_dir / ("_".join(parts) + "_raw_channel_decisions.json")
+        return channel_decisions_path(self.output_dir, sid,
+                                      task=self.task, session=self.session)
 
     def _load_decisions(self) -> dict:
         """Return {sid: {ch: state}} by flattening each subject's run-level JSON."""

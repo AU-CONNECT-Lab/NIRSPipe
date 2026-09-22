@@ -12,6 +12,7 @@ from fnirs_pipe.io.derivatives import group_data_dir, group_report_dir
 from fnirs_pipe.pipeline.hyper import (
     GroupEntry, _hyper_sidecar, alignment_params,
 )
+from fnirs_pipe.qc.subject.sqm_record import record_path
 from fnirs_pipe.qc.common.figure_io import (
     _pair_fname, _save_figure_html, _save_multi_fig_html, get_channel_pairs,
 )
@@ -311,7 +312,7 @@ def _process_hyper_raw_group(
                 sqm_dir / f"{label}_hyper-usable.tsv", grid, subject_ids, conditions,
                 sources=[p for p in (path_from(raw) for raw in aligned_raws.values()) if p],
                 sci_threshold=sci_threshold)
-    sqm_path = sqm_dir / f"{label}_desc-sqm_nirs.json"
+    sqm_path = record_path(sqm_dir, label)
     sqm_path.write_text(json.dumps(_hyper_sqm_record(sqm, aligned_raws), indent=2,
                                   default=str), encoding="utf-8")
     logger.info("Hyper SQM JSON -> %s", sqm_path)

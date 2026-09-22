@@ -37,6 +37,7 @@ from fnirs_pipe.qc.figures.hyper.group_hyper_figures import (
     cohort_order,
 )
 from fnirs_pipe.qc.metrics.hyper import NULL_ALPHA_PCT
+from fnirs_pipe.qc.subject.sqm_record import record_glob, record_label
 from fnirs_pipe.qc.common.report_shell import footer_vars, guard, note, page_vars, render
 from fnirs_pipe.utils.logging import get_logger
 
@@ -73,6 +74,7 @@ _COLUMNS = (
 
 _USABLE_KEYS = ("n_long_pairs", "n_windows", "usable_pairs_mean", "usable_window_frac",
                 "one_member_frac", "neither_frac", "usable_stretch_s")
+
 
 
 def _read_json(path: Path) -> dict:
@@ -122,11 +124,11 @@ def collect_rows(output_dir: Path) -> list[dict]:
     is two rows and neither is silently the other.
     """
     rows: list[dict] = []
-    for record_path in sorted(output_dir.glob("group-*/nirs/*_desc-sqm_nirs.json")):
+    for record_path in sorted(output_dir.glob(f"group-*/nirs/{record_glob()}")):
         record = _read_json(record_path)
         if not record or record.get("step") != "hyper_sqm":
             continue
-        label = record_path.name.removesuffix("_desc-sqm_nirs.json")
+        label = record_label(record_path)
         group_dir = record_path.parent.parent
         table = _read_tsv(record_path.parent / f"{label}_hyper-usable.tsv")
         screening = record.get("screening") or {}

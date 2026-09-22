@@ -326,14 +326,14 @@ def load_group_sqm(
     if bads_scope not in ("run", "subject"):
         raise ValueError(f"bads_scope must be 'run' or 'subject', got {bads_scope!r}")
 
-    from fnirs_pipe.qc.subject.sqm_record import raw_verdict_view
+    from fnirs_pipe.qc.subject.sqm_record import raw_verdict_view, record_glob
 
     result: dict[str, dict] = {}
     for entry in group:
         sqm: dict = {}
         # the long-channel view is the one a quality judgement wants, with raw standing in
         # when the montage has no short channels to exclude
-        records = _member_sqm_files(output_dir, entry, f"{entry.subject_id}*_desc-sqm_nirs.json")
+        records = _member_sqm_files(output_dir, entry, record_glob(f"{entry.subject_id}*"))
         for record_path in _for_task(records, entry.task):
             try:
                 record = json.loads(record_path.read_text(encoding="utf-8"))

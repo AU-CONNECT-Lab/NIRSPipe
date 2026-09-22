@@ -26,6 +26,21 @@ def preview_text(argv: list[str], shell: str) -> str:
     return f" {cont}\n".join([" ".join(argv[:2])] + [f"  {a}" for a in argv[2:]])
 
 
+# The landing page each command writes, newest match wins. A command absent from this table
+# writes tables and no report; a command present here that produced nothing is a failure,
+# not a quiet "not found". Keeping the five tables that used to live on four pages in one
+# place is what makes a renamed report show up as one broken page rather than none.
+REPORT_PATTERNS: dict[str, list[str]] = {
+    "prep-raw":     ["sub-*/sub-*_desc-raw_nirs.html"],
+    "hyper-raw":    ["group-*/group-*_desc-hyperraw_nirs.html"],
+    # the second pattern finds a tree written before the reports moved into group-<id>/
+    "run":          ["group-*/group-*_desc-hyperpost_nirs.html", "group-*_hyper*.html"],
+    "index":        ["group-*/group-*_index.html"],
+    "cohort":       ["cohort_nirs.html"],
+    "cohort-hyper": ["cohort_hyper_nirs.html"],
+}
+
+
 def find_report(patterns: list[str], output_dir: Path) -> Path | None:
     """The newest HTML matching what this command is known to write."""
     candidates: list[Path] = []
@@ -36,7 +51,7 @@ def find_report(patterns: list[str], output_dir: Path) -> Path | None:
     return max(candidates, key=lambda p: p.stat().st_mtime) if candidates else None
 
 
-def run_and_report(stored: dict | None, reports: dict[str, list[str]]):
+def run_and_report(stored: dict | None):
     if not stored or not stored.get("argv"):
         return dbc.Alert("Click 'Generate command' first.", color="warning",
                          className="mb-0"), None
@@ -61,11 +76,19 @@ def run_and_report(stored: dict | None, reports: dict[str, list[str]]):
     if not ok:
         return alert, None
 
-    report = find_report(reports.get(stored["command"], []), Path(stored["output_dir"]))
+    patterns = REPORT_PATTERNS.get(stored["command"])
+    if patterns is None:
+        return alert, html.Small("This command writes tables, not a report.",
+                                 className="text-muted")
+
+    report = find_report(patterns, Path(stored["output_dir"]))
     if report is None:
-        return alert, html.Small(
-            "This command writes tables rather than a report, or the report was not found.",
-            className="text-muted")
+        # the command is known to write a page and did not, so say so instead of reading
+        # as "nothing to show here": a pattern left behind by a rename looks identical
+        return alert, dbc.Alert([
+            html.Div("The run finished but its report is missing.", className="fw-bold"),
+            html.Small(f"Looked for {', '.join(patterns)} under {stored['output_dir']}."),
+        ], color="warning", className="mb-0")
 
     return alert, html.Div([
         html.Small(str(report), className="text-muted d-block mb-2"),

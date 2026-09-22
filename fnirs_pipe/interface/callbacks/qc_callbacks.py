@@ -10,11 +10,6 @@ from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("interface.qc_callbacks")
 
-_REPORTS = {
-    "cohort":       ["cohort_nirs.html"],
-    "cohort-hyper": ["cohort_hyper_nirs.html"],
-}
-
 
 @callback(
     Output("qc-command-preview", "children"),
@@ -45,4 +40,4 @@ def generate_command(n_clicks, command, output_dir, shell):
     prevent_initial_call=True,
 )
 def run_command(n_clicks, stored):
-    return run_and_report(stored, _REPORTS)
+    return run_and_report(stored)

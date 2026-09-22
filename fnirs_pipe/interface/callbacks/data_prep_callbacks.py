@@ -16,6 +16,7 @@ from fnirs_pipe.interface.callbacks._sections import rng, summary, value
 from fnirs_pipe.interface.cli_args import build_raw_qc_args, missing_raw_qc
 from fnirs_pipe.interface.grid import rows_minus_clicked
 from fnirs_pipe.interface.theme import style_figure
+from fnirs_pipe.io.derivatives import channel_decisions_path
 from fnirs_pipe.qc.common.channel_table import channel_columns
 
 # Server-side cache: cache_key -> _process_run result dict (large figures stay here)
@@ -1129,14 +1130,13 @@ def _decisions_file_info(snirf_path: str, output_dir: str) -> tuple[Path, str]:
     ses       = entities.get("ses")
     task      = entities.get("task")
     run       = entities.get("run")
-    base_parts = [f"sub-{sub}"]
-    if ses:  base_parts.append(f"ses-{ses}")
-    if task: base_parts.append(f"task-{task}")
-    html_stem  = "_".join(base_parts) + "_raw"
-    run_parts  = list(base_parts)
+    run_parts = [f"sub-{sub}"]
+    if ses:  run_parts.append(f"ses-{ses}")
+    if task: run_parts.append(f"task-{task}")
+    # the run entity separates two recordings of one task inside the file, not across files
     if run:  run_parts.append(f"run-{run}")
-    run_label  = "_".join(run_parts)
-    return Path(output_dir) / f"{html_stem}_channel_decisions.json", run_label
+    return (channel_decisions_path(Path(output_dir), sub, task=task, session=ses),
+            "_".join(run_parts))
 
 
 def _read_decisions(dec_path: Path, run_label: str) -> dict:
@@ -1349,9 +1349,6 @@ def click_cd(_, dec_state, run_store):
 
 # ── Static QC report for the loaded run ──────────────────────────────────────
 
-_RAW_REPORT = ["sub-*/sub-*_desc-raw_nirs.html"]
-
-
 @callback(
     Output("dp-report-status",  "children"),
     Output("dp-report-preview", "children"),
@@ -1394,8 +1391,7 @@ def write_raw_report(
         return dbc.Alert(problem, color="warning", className="mb-0 py-2"), None
 
     argv = build_raw_qc_args("prep-raw", opts)
-    return run_and_report({"argv": argv, "command": "prep-raw", "output_dir": output_dir},
-                          {"prep-raw": _RAW_REPORT})
+    return run_and_report({"argv": argv, "command": "prep-raw", "output_dir": output_dir})
 
 
 @callback(
