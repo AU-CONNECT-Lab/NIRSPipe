@@ -16,6 +16,7 @@ BIDS App alignment and the output naming rework. Renames land in later entries h
 
 ### Changed
 - **Breaking**: each `fnirs-hyper` subcommand is its own console script now, taking `[<source tree>] <output tree> group`; `run` and `pair-null` read the source tree, the other four only re-read what this package wrote
+- `fnirs-prep`'s output positional is named `output_dir`, not `derivatives_dir`; that name now means the tree `fnirs-hyper` reads
 - A GUI page whose command should have written a report and did not now says so, instead of the line it shares with commands that write only tables
 - Entity parsing, the channel-decisions path, the quality-record name and the dyad table stem each have one definition; they had three, four, five and nine
 

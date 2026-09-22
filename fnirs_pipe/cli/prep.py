@@ -43,7 +43,7 @@ def _report(results: list[tuple]) -> None:
 
 
 def cmd_crop(
-    bids_dir: Path, derivatives_dir: Path, participant_label: list[str],
+    bids_dir: Path, output_dir: Path, participant_label: list[str],
     session_label: str | None, task_label: str | None, run_label: str | None,
     tmin: float | None, tmax: float | None, segments_path: Path | None,
     combine: bool, align: str, trigger_name: str | None, input_desc: str | None,
@@ -83,7 +83,7 @@ def cmd_crop(
 
     def _crop_one(sub):
         return crop_snirf(
-            bids_dir, derivatives_dir, sub,
+            bids_dir, output_dir, sub,
             ses=session_label, task=task_label, run=run_label,
             tmin=tmin, tmax=tmax,
             segments_path=segments_path,
@@ -98,7 +98,7 @@ def cmd_crop(
 
 
 def cmd_align(
-    bids_dir: Path, derivatives_dir: Path, group_csv: Path, skip_bids_validation: bool,
+    bids_dir: Path, output_dir: Path, group_csv: Path, skip_bids_validation: bool,
 ) -> None:
     """Align multi-subject recordings by shared trigger and write SNIRF files."""
     import pandas as pd
@@ -140,9 +140,9 @@ def cmd_align(
             continue
 
         ensure_dataset_description(
-            derivatives_dir / _DERIV_NAME, _DERIV_NAME, "fnirs-prep align"
+            output_dir / _DERIV_NAME, _DERIV_NAME, "fnirs-prep align"
         )
-        copy_dataset_root(bids_dir, derivatives_dir / _DERIV_NAME)
+        copy_dataset_root(bids_dir, output_dir / _DERIV_NAME)
 
         offset_rows: list[dict] = []
         for entry in group:
@@ -158,7 +158,7 @@ def cmd_align(
                 continue
 
             stem     = bids_stem(snirf_path)
-            out_dir  = deriv_nirs_dir(derivatives_dir, _DERIV_NAME, sub_label, None)
+            out_dir  = deriv_nirs_dir(output_dir, _DERIV_NAME, sub_label, None)
             out_dir.mkdir(parents=True, exist_ok=True)
             copy_sidecars(snirf_path, stem, out_dir)
 
@@ -177,7 +177,7 @@ def cmd_align(
             })
 
         offsets_path = (
-            derivatives_dir / _DERIV_NAME
+            output_dir / _DERIV_NAME
             / f"group-{group_id}_task-{task}_align-offsets.tsv"
         )
         pd.DataFrame(offset_rows).to_csv(offsets_path, sep="\t", index=False)
@@ -206,7 +206,7 @@ def cmd_markers_export(
 
 
 def cmd_markers_apply(
-    bids_dir: Path, derivatives_dir: Path, participant_label: list[str],
+    bids_dir: Path, output_dir: Path, participant_label: list[str],
     session_label: str | None, task_label: str | None, run_label: str | None,
     tsv: Path | None, shift: float | None, set_duration: float | None,
     rename: list[str] | None, n_jobs: int, skip_bids_validation: bool,
@@ -223,7 +223,7 @@ def cmd_markers_apply(
 
     def _apply_one(sub):
         return apply_markers(
-            bids_dir, derivatives_dir, sub,
+            bids_dir, output_dir, sub,
             ses=session_label, task=task_label, run=run_label,
             tsv=tsv, shift=shift, set_duration=set_duration, rename=rename,
             validate=not skip_bids_validation,
@@ -262,7 +262,8 @@ def _build_parser() -> argparse.ArgumentParser:
     crop = sub.add_parser("crop", help="Crop SNIRFs to a time window or segments.")
     crop.add_argument("bids_dir",        type=Path, help="BIDS dataset root, or a "
                                                          "derivatives tree with --input-desc.")
-    crop.add_argument("derivatives_dir", type=Path, help="Derivatives output directory.")
+    crop.add_argument("output_dir", type=Path,
+                  help="Where the derived tree goes. A `cropped/` subtree is created under it, so point this at a derivatives root rather than at one dataset.")
     _add_selection(crop)
     crop.add_argument("--tmin", type=float, default=None, help="Start time in seconds (single segment).")
     crop.add_argument("--tmax", type=float, default=None, help="End time in seconds (single segment).")
@@ -299,7 +300,8 @@ def _build_parser() -> argparse.ArgumentParser:
 
     align = sub.add_parser("align", help="Align multi-subject recordings by shared trigger.")
     align.add_argument("bids_dir",        type=Path, help="BIDS dataset root.")
-    align.add_argument("derivatives_dir", type=Path, help="Derivatives output directory.")
+    align.add_argument("output_dir", type=Path,
+                   help="Where the derived tree goes. An `aligned/` subtree is created under it.")
     align.add_argument("--group-csv", type=Path, required=True,
                        help="CSV with group_id, subject_id, task columns.")
     align.add_argument(
@@ -319,7 +321,8 @@ def _build_parser() -> argparse.ArgumentParser:
 
     app = msub.add_parser("apply", help="Apply marker edits (tsv/shift/set-duration/rename).")
     app.add_argument("bids_dir",        type=Path, help="BIDS dataset root.")
-    app.add_argument("derivatives_dir", type=Path, help="Derivatives output directory.")
+    app.add_argument("output_dir", type=Path,
+                 help="Where the derived tree goes. A `marker_edited/` subtree is created under it.")
     _add_selection(app)
     app.add_argument("--tsv", type=Path, default=None,
                      help="Edited events TSV to apply (same file applied to all subjects).")
