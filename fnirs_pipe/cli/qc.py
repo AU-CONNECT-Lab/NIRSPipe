@@ -158,7 +158,14 @@ def cmd_hyper_raw(
 ) -> None:
     """Generate hyperscanning raw QC report from BIDS raw data."""
     from fnirs_pipe.cli._shared import separation_bands_from_args
+    from fnirs_pipe.io.derivatives import write_bidsignore, write_dataset_description
     from fnirs_pipe.qc.metrics._helpers import separation_bands
+
+    # this writes group-*/ too, so the tree it lands in gets the same stamp fnirs-hyper
+    # gives it, whichever of the two runs first
+    write_dataset_description(output_dir, name="fnirs-hyper output",
+                              generated_by="fnirs-hyper", source=bids_dir)
+    write_bidsignore(output_dir)
 
     sep_bands = separation_bands(type("Bands", (), separation_bands_from_args({
         "short_max_dist": short_max_dist, "long_min_dist": long_min_dist,

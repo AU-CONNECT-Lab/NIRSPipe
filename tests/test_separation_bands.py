@@ -207,7 +207,7 @@ def test_the_flags_are_validated_together_rather_than_one_at_a_time():
 def test_every_cli_that_splits_channels_offers_the_flags():
     """Four commands split a montage; a fifth that grew the split later must not quietly
     keep the constants."""
-    from fnirs_pipe.cli.hyper import _build_parser as hyper_parser
+    from fnirs_pipe.cli.hyper import _parsers as hyper_parsers
     from fnirs_pipe.cli.qc import _build_parser as qc_parser
     from fnirs_pipe.cli.run import _build_parser as run_parser
 
@@ -223,7 +223,7 @@ def test_every_cli_that_splits_channels_offers_the_flags():
     assert wanted <= _flags(run_parser())
     assert wanted <= _flags(qc_parser(), "prep-raw")
     assert wanted <= _flags(qc_parser(), "hyper-raw")
-    assert wanted <= _flags(hyper_parser(), "run")
+    assert wanted <= _flags(hyper_parsers()["fnirs-hyper"])
 
 
 def test_no_cli_offers_a_gvtd_channel_set_any_more():

@@ -262,7 +262,9 @@ def cmd_run(
     import json
     from datetime import datetime
 
-    from fnirs_pipe.io.derivatives import group_report_dir
+    from fnirs_pipe.io.derivatives import (
+        group_report_dir, write_bidsignore, write_dataset_description,
+    )
     from fnirs_pipe.pipeline.hyper import (
         resolve_analysis_window, resolve_group_bands, write_group_bads,
     )
@@ -273,6 +275,9 @@ def cmd_run(
     from fnirs_pipe.utils.run_record import write_group_run_record
 
     setup_logging(verbose=verbose)
+    write_dataset_description(output_dir, name="fnirs-hyper output",
+                              generated_by="fnirs-hyper", source=derivatives_dir)
+    write_bidsignore(output_dir)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
     if wtc_window_s is not None:
@@ -583,10 +588,14 @@ def cmd_pair_null(
     """Draw the re-paired null for dyads whose real tables are already on disk."""
     import json
 
+    from fnirs_pipe.io.derivatives import write_bidsignore, write_dataset_description
     from fnirs_pipe.pipeline.hyper import parse_group_csv
     from fnirs_pipe.pipeline.hyper.pair_null import run_pair_null
 
     setup_logging(verbose=verbose)
+    write_dataset_description(output_dir, name="fnirs-hyper output",
+                              generated_by="fnirs-hyper", source=derivatives_dir)
+    write_bidsignore(output_dir)
 
     # the pool comes from every group in the table, the targets from the selection: a null
     # drawn only from the dyads the caller happened to name would be a different null

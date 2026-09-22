@@ -11,6 +11,8 @@ BIDS App alignment and the output naming rework. Renames land in later entries h
 ### Added
 - Every long CLI flag also answers to its underscore spelling; `--n-jobs` also to `--nprocs` and `--n_cpus`, `--skip-bids-validation` to `--skip_bids_validator`
 - `dataset_description.json` records the package version under `GeneratedBy`
+- Each output tree carries a `.bidsignore` waving through reports, logs and figures, and nothing else
+- A dyad tree's `dataset_description.json` names the tree it was computed from under `SourceDatasets`
 
 ### Changed
 - **Breaking**: each `fnirs-hyper` subcommand is its own console script now, taking `[<source tree>] <output tree> group`; `run` and `pair-null` read the source tree, the other four only re-read what this package wrote

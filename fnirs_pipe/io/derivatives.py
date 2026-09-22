@@ -296,25 +296,69 @@ _REPLACE_TRIES = 5
 _REPLACE_WAIT_S = 0.05
 
 
-def write_dataset_description(output_dir: Path) -> None:
+# what a reader should not hold against the tree: the reports and their figures are for
+# people, and BIDS says nothing about either
+_BIDSIGNORE = ("*.html", "logs/", "figures/")
+
+
+def write_bidsignore(output_dir: Path) -> None:
+    """Register the paths BIDS has no say over, so a validator skips rather than flags them.
+
+    Only reports, logs and the figures inside them. Every data product stays on the
+    validator's books, dyad tables included: a result nothing can index is a result nobody
+    else's tooling can read.
+    """
+    output_dir.mkdir(parents=True, exist_ok=True)
+    (output_dir / ".bidsignore").write_text("\n".join(_BIDSIGNORE) + "\n", encoding="utf-8")
+
+
+def _source_dataset(source: Path) -> dict:
+    """One SourceDatasets entry for the tree this output was computed from.
+
+    Reads the source's own description so the entry carries which tool and which version
+    wrote it, which is the thing a reader cannot recover from the dyad tables themselves.
+    """
+    entry: dict = {"URL": source.resolve().as_uri()}
+    try:
+        desc = json.loads((source / "dataset_description.json").read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return entry
+    made_by = (desc.get("GeneratedBy") or [{}])[0]
+    if made_by.get("Version"):
+        entry["Version"] = made_by["Version"]
+    if made_by.get("Name"):
+        entry["Name"] = made_by["Name"]
+    return entry
+
+
+def write_dataset_description(
+    output_dir: Path, *, name: str = "fnirs-pipe output",
+    generated_by: str = "fnirs-pipe", source: "Path | None" = None,
+) -> None:
     """Write dataset_description.json for the derivatives dataset.
 
     Every run writes this, so two started against one output directory write the same path.
-    The content is fixed: a run that finds it already correct leaves it alone, which is what
-    keeps concurrent runs off each other rather than the rename. Where it does have to be
-    written it goes to a temporary first, since the plain write truncates and a reader in
-    between sees an empty file and reports the tree as bad BIDS. A reader can still be told
-    the path is busy at the instant it flips, which Windows offers no way around, but that is
-    a retry rather than a tree that looks invalid.
+    The content is fixed for one run: a run that finds it already correct leaves it alone,
+    which is what keeps concurrent runs off each other rather than the rename. Where it does
+    have to be written it goes to a temporary first, since the plain write truncates and a
+    reader in between sees an empty file and reports the tree as bad BIDS. A reader can still
+    be told the path is busy at the instant it flips, which Windows offers no way around, but
+    that is a retry rather than a tree that looks invalid.
+
+    ``source`` is the tree this one was computed from. It is what lets a reader of a dyad
+    result recover which preprocessing produced its inputs, and it has no correct value while
+    a tool writes back into the tree it read.
     """
     from fnirs_pipe import __version__
 
     desc = {
-        "Name": "fnirs-pipe output",
+        "Name": name,
         "BIDSVersion": "1.8.0",
         "DatasetType": "derivative",
-        "GeneratedBy": [{"Name": "fnirs-pipe", "Version": __version__}],
+        "GeneratedBy": [{"Name": generated_by, "Version": __version__}],
     }
+    if source is not None:
+        desc["SourceDatasets"] = [_source_dataset(Path(source))]
     output_dir.mkdir(parents=True, exist_ok=True)
     path = output_dir / "dataset_description.json"
     text = json.dumps(desc, indent=2)

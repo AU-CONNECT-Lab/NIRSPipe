@@ -15,7 +15,7 @@ from typing import Any
 
 from fnirs_pipe.cli import _shared
 from fnirs_pipe.io.bids import bids_label, get_layout, get_nirs_files
-from fnirs_pipe.io.derivatives import write_dataset_description
+from fnirs_pipe.io.derivatives import write_bidsignore, write_dataset_description
 from fnirs_pipe.io.snirf import read_snirf
 from fnirs_pipe.pipeline.denoise import DEFAULT_FILTER_METHOD, DEFAULT_FILTER_ORDER
 from fnirs_pipe.pipeline.prep_pipeline import PrepConfig, run_prep
@@ -141,6 +141,7 @@ def run_participant_level(args: dict[str, Any]) -> None:
     if not participant_label:
         participant_label = layout.get_subjects()
     write_dataset_description(output_dir)
+    write_bidsignore(output_dir)
 
     toml: dict[str, Any] = {}
     if args.get("config"):
