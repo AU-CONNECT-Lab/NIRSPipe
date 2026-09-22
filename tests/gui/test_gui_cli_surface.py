@@ -88,20 +88,34 @@ _APP_LEVEL_IDS = {"dp-run-store"}
 _PREFIXES = ("an-", "qc-", "bp-", "dp-", "ha-", "rc-")
 
 
-def _canonical_flags(action) -> set[str]:
-    """One spelling per option, plus its ``--no-`` form where the action has one.
+def _long_flags(action) -> set[str]:
+    """Every long spelling the action answers to, ``--no-`` forms included."""
+    return {f for f in action.option_strings if f.startswith("--")}
 
-    ``--participant-label`` / ``--participant_label`` / ``--n_cpus`` are the same option
-    under two or three spellings, not three things the GUI has to grow a control for, so
-    the sweep counts the first long spelling and drops the rest. ``BooleanOptionalAction``
-    builds a ``--no-`` form off every spelling, so only the canonical one's is kept.
+
+def _alias_map() -> dict[str, frozenset[str]]:
+    """Every long spelling of one option, keyed by each of them.
+
+    ``--coh-fmin`` / ``--fmin`` and ``--participant-label`` / ``--participant_label`` are
+    each one option under two names. Without this the sweeps below would read a second
+    spelling as a second thing for the page to grow a control for, and would read a
+    write-off naming either spelling as covering only that one.
     """
-    longs = [f for f in action.option_strings if f.startswith("--")]
-    if not longs:
-        return set()
-    primary = longs[0]
-    negated = f"--no-{primary.removeprefix('--')}"
-    return {primary} | ({negated} if negated in longs else set())
+    parsers = [_build_parser(), *_qc_subparsers().values(),
+               *_hyper_subparsers().values(), *_prep_subparsers().values()]
+    out: dict[str, frozenset[str]] = {}
+    for parser in parsers:
+        for action in parser._actions:
+            longs = frozenset(_long_flags(action))
+            for flag in longs:
+                out[flag] = longs
+    return out
+
+
+def _with_aliases(flags: set[str]) -> set[str]:
+    """*flags* plus every other spelling of the same options."""
+    alias = _alias_map()
+    return {spelling for f in flags for spelling in alias.get(f, (f,))}
 
 
 def _group_flags(prefix: str) -> set[str]:
@@ -112,7 +126,7 @@ def _group_flags(prefix: str) -> set[str]:
         for group in parser._action_groups
         if group.title and group.title.startswith(prefix)
         for action in group._group_actions
-        for flag in _canonical_flags(action)
+        for flag in _long_flags(action)
     }
 
 
@@ -151,7 +165,7 @@ def _emitted_any_mode() -> set[str]:
 # ---- the flag surface ----
 
 def test_every_flag_is_offered_or_written_off():
-    missing = _cli_flags() - _emitted_any_mode() - set(NOT_EXPOSED)
+    missing = _cli_flags() - _with_aliases(_emitted_any_mode() | set(NOT_EXPOSED))
     assert not missing, (
         f"the CLI grew {sorted(missing)} and the analysis page cannot send them; "
         f"add a control, or add them to NOT_EXPOSED with a reason"
@@ -413,7 +427,7 @@ def _hyper_subparsers():
 def _qc_flags(command: str) -> set[str]:
     parser = (_hyper_subparsers() if command in _HYPER else _qc_subparsers())[command]
     return {flag for action in parser._actions if action.dest != "help"
-            for flag in _canonical_flags(action)}
+            for flag in _long_flags(action)}
 
 
 def _qc_emitted(command: str) -> set[str]:
@@ -447,7 +461,8 @@ def test_the_dyad_analysis_left_fnirs_qc():
 
 @pytest.mark.parametrize("command", _QC_OFFERED)
 def test_every_flag_of_an_offered_command_is_sendable_or_written_off(command):
-    missing = _qc_flags(command) - _qc_emitted(command) - QC_NOT_EXPOSED.get(command, set())
+    missing = _qc_flags(command) - _with_aliases(
+        _qc_emitted(command) | QC_NOT_EXPOSED.get(command, set()))
     assert not missing, (
         f"{command} grew {sorted(missing)} and the page cannot send them; "
         f"add a control, or add them to QC_NOT_EXPOSED with a reason"
@@ -555,7 +570,7 @@ def _prep_flags(subcommand: str) -> set[str]:
     if subcommand == "edit-markers":
         parser = _subcommands(lambda: parser)["apply"]
     return {flag for action in parser._actions if action.dest != "help"
-            for flag in _canonical_flags(action)}
+            for flag in _long_flags(action)}
 
 
 def _prep_emitted(subcommand: str) -> set[str]:
@@ -575,8 +590,8 @@ def test_the_batch_page_reaches_every_prep_subcommand():
 
 @pytest.mark.parametrize("subcommand", sorted(set(_PREP_SUBCOMMAND.values())))
 def test_every_prep_flag_is_sendable_or_written_off(subcommand):
-    missing = (_prep_flags(subcommand) - _prep_emitted(subcommand)
-               - PREP_NOT_EXPOSED.get(subcommand, set()))
+    missing = _prep_flags(subcommand) - _with_aliases(
+        _prep_emitted(subcommand) | PREP_NOT_EXPOSED.get(subcommand, set()))
     assert not missing, (
         f"{subcommand} grew {sorted(missing)} and Batch Prep cannot send them; "
         f"add a control, or add them to PREP_NOT_EXPOSED with a reason"
@@ -666,7 +681,7 @@ _RAW_QC_FULL_OPTS = dict(
 def _raw_qc_flags(command: str) -> set[str]:
     parser = _qc_subparsers()[command]
     return {flag for action in parser._actions if action.dest != "help"
-            for flag in _canonical_flags(action)}
+            for flag in _long_flags(action)}
 
 
 def _raw_qc_emitted(command: str) -> set[str]:
@@ -680,8 +695,8 @@ def test_the_qc_pages_reach_the_raw_report_commands(command):
 
 @pytest.mark.parametrize("command", _RAW_QC)
 def test_every_raw_qc_flag_is_sendable_or_written_off(command):
-    missing = (_raw_qc_flags(command) - _raw_qc_emitted(command)
-               - RAW_QC_NOT_EXPOSED.get(command, set()))
+    missing = _raw_qc_flags(command) - _with_aliases(
+        _raw_qc_emitted(command) | RAW_QC_NOT_EXPOSED.get(command, set()))
     assert not missing, (
         f"{command} grew {sorted(missing)} and the QC page cannot send them; "
         f"add a control, or add them to RAW_QC_NOT_EXPOSED with a reason"
