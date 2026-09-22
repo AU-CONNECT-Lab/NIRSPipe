@@ -261,6 +261,7 @@ def cmd_provenance(output_dir: Path) -> None:
 
     Reads the JSON sidecars already on disk, so it works on any past run.
     """
+    from fnirs_pipe.qc.common.figure_io import figure_namer
     from fnirs_pipe.qc.figures.common.provenance_figure import write_provenance
 
     # the root is always searched too: hyper-raw writes its group TSVs there, not under nirs/
@@ -276,14 +277,13 @@ def cmd_provenance(output_dir: Path) -> None:
     for nirs_dir in targets:
         dest = nirs_dir.parent if nirs_dir.name == "nirs" else nirs_dir
         # a subject holds one graph per run; anything else (a group tree, the root) has no
-        # run entity to split on and keeps its single graph. Same destinations and stem the
+        # run entity to split on and keeps its single graph. Same destinations and names the
         # run itself uses, so re-rendering refreshes the images an already-written QC
         # report points at
         runs = list(scan_runs(nirs_dir)) if dest.name.startswith("sub-") else []
-        jobs = ([(dest / "figures" / label, label) for label in runs]
-                or [(dest / "figures", None)])
-        for out_dir, label in jobs:
-            written = write_provenance(nirs_dir, out_dir, stem="provenance",
+        for label in runs or [None]:
+            written = write_provenance(nirs_dir, dest / "figures",
+                                       figure_namer(label or dest.name),
                                        title=label or dest.name, label=label)
             for path in written:
                 print(f"{path}")

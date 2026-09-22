@@ -94,7 +94,7 @@ def derivative_path(output_dir, suffix: str, extension: str, **entities) -> Path
     return Path(output_dir) / relative
 
 
-def figure_name(label: str, desc: str, *, suffix: str = "nirs",
+def figure_name(stem: str, desc: str, *, suffix: str = "nirs",
                 extension: str = ".html", **entities) -> str:
     """One figure's filename. ``desc`` names the panel, ``suffix`` names what it draws.
 
@@ -102,11 +102,12 @@ def figure_name(label: str, desc: str, *, suffix: str = "nirs",
     ``("sub-01_task-rest", "detail", channel="S1D1")``
         -> ``"sub-01_task-rest_chan-S1D1_desc-detail_nirs.html"``
 
-    The label is in the name because a subject's runs share one ``figures/`` folder. They
+    The run stem is in the name because a subject's runs share one ``figures/`` folder. They
     used to be kept apart by a subdirectory per run, which meant the same panel was called
-    the same thing in two places and neither name said which run it was.
+    the same thing in two places and neither name said which run it was. It is ``stem`` and
+    not ``label`` because ``label-`` is itself an entity a caller passes through here.
     """
-    carried = _label_entities(label)
+    carried = _label_entities(stem)
     return derivative_path("", suffix, extension, datatype="figures", desc=desc,
                            **carried, **entities).name
 

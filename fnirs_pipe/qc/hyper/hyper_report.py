@@ -31,6 +31,7 @@ from fnirs_pipe.io.naming import report_name
 from fnirs_pipe.qc.common.figure_io import (
     _fig_href,
     _pair_fname,
+    figure_namer,
     pair_slug,
     _save_figure_html,
     save_png,
@@ -898,10 +899,10 @@ def build_hyper_post_report(
         for sid in subject_ids
     ]
 
-    # One subdirectory per group and task, the way a per-run subject report gets one: a
-    # group with five cropped tasks writes five sets of these and they would otherwise
-    # overwrite each other under one figures/.
-    figures_dir = group_report_dir(output_dir, group_id) / "figures" / scope
+    # The scope is in every figure's name rather than in a subdirectory of its own, so a
+    # group with five cropped tasks writes five sets of these into one figures/ without
+    # them overwriting each other, and each file says which task it is of.
+    figures_dir = group_report_dir(output_dir, group_id) / "figures"
 
     def _fig(b64: "str | None", name: str) -> "str | None":
         """One figure onto disk, returning the URL the page links it by, or None.
@@ -924,23 +925,26 @@ def build_hyper_post_report(
         if fig is None:
             return None
         height = _save_figure_html(fig, figures_dir / name, views=views)
-        return {"wtc": _fig_href(figures_dir, name), "h": height}
+        return {"wtc": _fig_href(name), "h": height}
 
 
     def _maps(dest: dict, result, pair_key, pair_label: str, axis: list[str],
-              stem: str, ch_type: str, suffix: str, what: str, page,
+              fig_name, axis_entity: str, ch_type: str, what: str, page,
+              entities: "dict | None" = None,
               interactive: bool = False, view_spans=None) -> None:
         """Fill ``dest`` with one coherence map per pairing of ``axis`` against itself.
 
         ::
 
           axis ["S1_D1", "S1_D2"], crossed
-            -> dest["S1_D1"]["S1_D2"] = {"wtc": "figures/.../wtc_hbo_S1D1_x_S1D2.png"}
+            -> dest["S1_D1"]["S1_D2"] = {"wtc": "figures/..._chan-S1D1xS1D2_desc-wtcmap_nirs.png"}
 
         Both map panels are built here, the channels with the channel axis and the ROIs with
-        the ROI labels, so the two cannot drift in how they key or name their files. The
-        nesting is ``[label of the first member][label of the second]`` and is written even
-        for an uncrossed run, which fills only the diagonal: the page then reads one shape
+        the ROI labels, so the two cannot drift in how they key or name their files.
+        ``axis_entity`` is which entity the axis goes in, ``channel`` for the one and
+        ``label`` for the other; a crossed pairing joins the two with an ``x``, the way a
+        pair of members is spelled. The nesting is ``[label of the first member][label of
+        the second]`` and is written even for an uncrossed run, which fills only the diagonal: the page then reads one shape
         and shows one selector instead of two.
 
         A pairing the result has no entry for, or whose builder failed, lands as ``None``
@@ -964,11 +968,13 @@ def build_hyper_post_report(
                     key = (label1, label2) if wtc_channel_cross else label1
                     data = result.pairs.get(pair_key, {}).get(key)
                     site = label1 if label1 == label2 else f"{label1} × {label2}"
-                    ext = "html" if interactive else "png"
-                    fname = (f"{stem}_{_pair_fname(label1)}{suffix}.{ext}"
-                             if label1 == label2 else
-                             f"{stem}_{_pair_fname(label1)}_x_{_pair_fname(label2)}"
-                             f"{suffix}.{ext}")
+                    axis_value = (_pair_fname(label1) if label1 == label2 else
+                                  f"{_pair_fname(label1)}x{_pair_fname(label2)}")
+                    fname = fig_name(
+                        "wtcmap", extension=".html" if interactive else ".png",
+                        chromophore=ch_type,
+                        pairing=_pair_slug(pair_key).lstrip("_") or None,
+                        **{axis_entity: axis_value}, **(entities or {}))
                     build = (build_wtc_map_interactive if interactive
                              else build_wtc_channel)
                     with guard(f"wtc map {site} ({what}, {ch_type}) figure",
@@ -986,7 +992,8 @@ def build_hyper_post_report(
                 row[label2] = entry or {"wtc": None}
             dest[label1] = row
 
-    def _figure_set(result, chan_band_df, ch_type: str, page, suffix: str = "",
+    def _figure_set(result, chan_band_df, ch_type: str, page,
+                    cond_slug: "str | None" = None,
                     roi_view_of: "dict | None" = None,
                     pair: "tuple[str, str] | None" = None) -> dict:
         """Every figure one WTC result yields: the maps and the three matrices.
@@ -996,9 +1003,10 @@ def build_hyper_post_report(
         pictures a window used to get. Nothing here decides per panel whether a condition
         has it; the only difference between the two calls is what result comes in.
 
-        ``suffix`` names the files, ``""`` for the run and ``"_<slug>"`` for a window, the
-        same rule a per-condition subject page names its panels by. That is what lets both
-        sets sit in one ``figures/`` directory without the window overwriting the run.
+        ``cond_slug`` names the files, absent for the run and the window's own label for a
+        window, the same rule a per-condition subject page names its panels by. That is what
+        lets both sets sit in one ``figures/`` directory without the window overwriting the
+        run.
 
         Returns ``{"per_channel", "per_roi"}``. The two cross matrices are not
         here: they carry both chromophores on one pair of axes, so they are built once per
@@ -1017,14 +1025,15 @@ def build_hyper_post_report(
         files from the next pairing's.
         """
         out: dict = _empty_figures()
-        what = f"condition {suffix.lstrip('_')}" if suffix else "whole run"
+        what = f"condition {cond_slug}" if cond_slug else "whole run"
+        fig_name = figure_namer(scope, cond_slug)
 
         pair_key = pair if pair is not None else (
             next(iter(result.pairs)) if result and result.pairs else None)
         pair_label = f"{pair_key[0]} × {pair_key[1]}" if pair_key else ""
 
         _maps(out["per_channel"], result, pair_key, pair_label, chan_axis,
-              f"wtc_{ch_type}{_pair_slug(pair_key)}", ch_type, suffix, what, page)
+              fig_name, "channel", ch_type, what, page)
 
         if not roi_map:
             return out
@@ -1042,14 +1051,15 @@ def build_hyper_post_report(
 
         if roi_view_of is not None:
             out["per_roi"] = {
-                label1: {label2: ({**entry, "wtc": entry["wtc"] + "#" + suffix.lstrip("_")}
+                label1: {label2: ({**entry, "wtc": entry["wtc"] + "#" + cond_slug}
                                   if entry.get("wtc") else entry)
                          for label2, entry in row.items()}
                 for label1, row in roi_view_of.items()
             }
         else:
             _maps(out["per_roi"], roi_wtc, roi_pair_key, pair_label, roi_labels,
-                  f"wtcroi_{ch_type}{_pair_slug(pair_key)}", ch_type, suffix, what, page,
+                  fig_name, "label", ch_type, what, page,
+                  entities={"aggregation": "roi"},
                   interactive=True, view_spans=roi_view_spans)
 
         return out
@@ -1077,12 +1087,12 @@ def build_hyper_post_report(
             # the same panels the run's own page gets, over this window. The ROI maps are
             # the run's files at this window's fragment, where that route is on
             cond_figs.append(_figure_set(
-                cond_wtc, cond_chan, ch_type, (pair, label), f"_{_pair_fname(label)}",
+                cond_wtc, cond_chan, ch_type, (pair, label), _pair_fname(label),
                 roi_view_of=(run_figs["per_roi"] if roi_view_spans else None),
                 pair=pair))
         return {"run_figs": run_figs, "cond_figs": cond_figs}
 
-    def _matrix_set(bands: dict, suffix: str, what: str, page,
+    def _matrix_set(bands: dict, cond_slug: "str | None", what: str, page,
                     pair: "tuple[str, str] | None" = None) -> dict:
         """The two cross matrices for one scope, both chromophores on one pair of axes.
 
@@ -1098,13 +1108,15 @@ def build_hyper_post_report(
         head. The maps above stay per chromophore because a map is a picture of one pairing
         and there is no comparison to draw inside it.
 
-        ``suffix`` names the files, ``""`` for the run and ``"_<slug>"`` for a window, the
-        same rule the figure sets follow. No chromophore in the name any more, so a re-run
-        leaves the old per-chromophore files behind; they are not linked from anywhere.
+        ``cond_slug`` names the files, absent for the run and the window's own label for a
+        window, the same rule the figure sets follow. No chromophore in the name, both being
+        on one pair of axes.
         """
         out: dict = {"chan_matrix": {}, "roi_matrix": {}}
         if not wtc_channel_cross:
             return out
+        fig_name = figure_namer(scope, cond_slug)
+        pairing = _pair_slug(pair).lstrip("_") or None
 
         def _named(key: str) -> dict:
             return {_CHROMA_LABEL[c]: (bands.get(c) or {}).get(key) for c in chroma}
@@ -1123,14 +1135,16 @@ def build_hyper_post_report(
                                               for lab in (*df["label"], *df["label2"])})
                 out["chan_matrix"] = _fig_html(build_wtc_cross_matrix(
                     chan_dfs, labels, pair_ids, band_fmin, band_fmax, kind="channel"),
-                    f"wtc_chanmatrix{_pair_slug(pair)}{suffix}.html") or {}
+                    fig_name("wtcmatrix", suffix="relmat", pairing=pairing,
+                             aggregation="chan")) or {}
 
         roi_dfs = {k: _slice_pair(v, pair) for k, v in _named("roichan").items()}
         if roi_map and any(_crossed(df) for df in roi_dfs.values()):
             with guard(f"wtc-roi-matrix ({what}) figure", page_errors[page], scope):
                 out["roi_matrix"] = _fig_html(build_wtc_cross_matrix(
                     roi_dfs, roi_labels, pair_ids, band_fmin, band_fmax, "ROI"),
-                    f"wtc_roimatrix{_pair_slug(pair)}{suffix}.html") or {}
+                    fig_name("wtcmatrix", suffix="relmat", pairing=pairing,
+                             aggregation="roi")) or {}
         return out
 
     # ---- the analysis, which is not this module's ----
@@ -1188,13 +1202,14 @@ def build_hyper_post_report(
             return {}
         arc_level = result.isc_levels.get(pair, {}).get(label, {}).get(ch_type)
         what = f"condition {label}" if label else "whole run"
-        suffix = f"_{_pair_fname(label)}" if label else ""
+        fig_name = figure_namer(scope, _pair_fname(label) if label else None)
         panel: dict = {}
         with guard(f"ISC panel ({what}, {ch_type})", page_errors[(pair, label)], scope):
             panel = _fig_html(build_isc_panel(
                 isc_mat, isc_ch_names, list(pair),
                 ch_type=ch_type, isc_threshold=isc_threshold, arc_level=arc_level,
-            ), f"isc_{ch_type}{_pair_slug(pair)}{suffix}.html") or {}
+            ), fig_name("iscpanel", chromophore=ch_type,
+                        pairing=_pair_slug(pair).lstrip("_") or None)) or {}
         return panel
 
     def _isc_roi_matrix_of(pair, label) -> dict:
@@ -1210,11 +1225,12 @@ def build_hyper_post_report(
         if all(mat is None for mat, _ in mats.values()):
             return {}
         what = f"condition {label}" if label else "whole run"
-        suffix = f"_{_pair_fname(label)}" if label else ""
+        fig_name = figure_namer(scope, _pair_fname(label) if label else None)
         out: dict = {}
         with guard(f"ISC ROI matrix ({what})", page_errors[(pair, label)], scope):
             out = _fig_html(build_isc_roi_matrix(mats, list(pair)),
-                            f"isc_roimatrix{_pair_slug(pair)}{suffix}.html") or {}
+                            fig_name("iscmatrix", suffix="relmat", aggregation="roi",
+                                     pairing=_pair_slug(pair).lstrip("_") or None)) or {}
         return out
 
     isc_panels: dict = {}
@@ -1282,7 +1298,7 @@ def build_hyper_post_report(
     nav_pages = [(None, "Whole run")] + [(label, label) for label, _, _ in cond_windows]
 
     # Rendered here rather than by the caller: every sidecar the scan reads was written by
-    # the passes above, so this is the first moment the graph is complete. Same stem
+    # the passes above, so this is the first moment the graph is complete. Same namer
     # `fnirs-qc provenance` uses, so re-running that refreshes the image this report links.
     provenance_path = None
     with guard("Provenance diagram", errors, scope):
@@ -1291,7 +1307,7 @@ def build_hyper_post_report(
         for written in write_provenance(
             group_data_dir(output_dir, group_id),
             group_report_dir(output_dir, group_id) / "figures",
-            stem="provenance", title=f"group-{group_id}_task-{task}",
+            figure_namer(scope), title=f"group-{group_id}_task-{task}",
         ):
             if written.suffix == ".png":
                 provenance_path = f"figures/{written.name}"
@@ -1459,7 +1475,7 @@ def build_hyper_post_report(
         pair_figs = {c: _figures_for(c, passes[c], pr) for c in chroma}
         run_matrices = _matrix_set(
             {c: {"chan": passes[c]["chan"], "roichan": passes[c]["roichan"]}
-             for c in chroma}, "", "whole run", (pr, None), pr)
+             for c in chroma}, None, "whole run", (pr, None), pr)
 
         def _cond_bands(i: int) -> dict:
             return {c: (passes[c]["cond_bands"][i]
@@ -1475,7 +1491,7 @@ def build_hyper_post_report(
             bands = _cond_bands(i)
             written = _render_page(
                 figs,
-                _matrix_set(bands, f"_{_pair_fname(label)}", f"condition {label}",
+                _matrix_set(bands, _pair_fname(label), f"condition {label}",
                             (pr, label), pr),
                 [(label, bands, label)], label, (tstart, tstop), pr)
             logger.info("group-%s | %s condition %s -> %s",

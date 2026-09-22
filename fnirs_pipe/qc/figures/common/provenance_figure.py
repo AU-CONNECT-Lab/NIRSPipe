@@ -144,11 +144,14 @@ def provenance_figure(nodes: dict[str, Node], title: str | None = None):
 def write_provenance(
     nirs_dir: Path,
     out_dir: Path,
-    stem: str,
+    fig_name,
     title: str | None = None,
     label: str | None = None,
 ) -> list[Path]:
-    """Render the graph for nirs_dir into out_dir as <stem>.png and <stem>.mmd.
+    """Render the graph for nirs_dir into out_dir as a PNG and its mermaid source.
+
+    ``fig_name`` is a :func:`~fnirs_pipe.qc.common.figure_io.figure_namer`, so both files
+    are named the way every other figure in the tree is and carry the run they are of.
 
     ``label`` restricts the graph to one BIDS run; see :func:`scan`.
 
@@ -167,13 +170,13 @@ def write_provenance(
 
     fig = provenance_figure(nodes, title=title)
     if fig is not None:
-        png = out_dir / f"{stem}.png"
+        png = out_dir / fig_name("provenance", extension=".png")
         fig.savefig(png, dpi=300, bbox_inches="tight")
         import matplotlib.pyplot as plt
         plt.close(fig)
         written.append(png)
 
-    mmd = out_dir / f"{stem}.mmd"
+    mmd = out_dir / fig_name("provenance", extension=".mmd")
     mmd.write_text(to_mermaid(nodes), encoding="utf-8")
     written.append(mmd)
     return written

@@ -12,6 +12,7 @@ from fnirs_pipe.qc.common.channel_table import CHANNEL_METRICS_SUFFIX
 from fnirs_pipe.qc.common.report_shell import outlier_flags as _outlier_flags
 from fnirs_pipe.qc.subject.subject_index import (
     _COLUMNS,
+    _condition_hrefs,
     _links,
     collect_bad_channels,
     collect_runs,
@@ -134,3 +135,22 @@ def test_the_index_rows_carry_the_links_and_the_marks(tmp_path):
     gvtd_column = next(i for i, (head, _, _) in enumerate(_COLUMNS) if head == "GVTD p95")
     assert [row["metrics"][gvtd_column]["flagged"] for row in rows] == [False] * 4 + [True]
     assert all(link["text"] == "channels" for row in rows for link in row["links"])
+
+
+# ---- the condition pages, whose name the writer and this reader must agree on ----
+
+def test_a_condition_page_is_found_where_the_report_writes_it(tmp_path):
+    """The two ends of one name, bound together rather than spelled twice.
+
+    They came apart once already: the writer still spelled `_desc-<slug>_qc.html` after the
+    reports were renamed, the nav strip inside those pages already asked for the new name,
+    and this reader looked for a third spelling. Nothing was red, and every per-condition
+    link on the index and on the pages themselves was dead.
+    """
+    from fnirs_pipe.qc.subject.report import condition_page_name
+
+    label = _run(tmp_path, "rest")
+    page = tmp_path / condition_page_name(label, "game 1")
+    page.write_text("")
+
+    assert _condition_hrefs(tmp_path, label, ["game 1", "video"]) == [page.name, None]

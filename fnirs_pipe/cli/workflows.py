@@ -322,14 +322,15 @@ def run_participant_level(args: dict[str, Any]) -> None:
                         provenance_path = None
                         try:
                             from fnirs_pipe.qc.figures.common.provenance_figure import write_provenance
+                            from fnirs_pipe.qc.common.figure_io import figure_namer
                             for path in write_provenance(
-                                sub_dir / "nirs", sub_dir / "figures" / label,
-                                stem="provenance", label=label,
+                                sub_dir / "nirs", sub_dir / "figures",
+                                figure_namer(label), label=label,
                                 title=label + (f"  |  mode: {args['mode']}" if args.get("mode") else ""),
                             ):
                                 logger.info("sub-%s | provenance -> %s", subject, path)
                                 if path.suffix == ".png":
-                                    provenance_path = f"figures/{label}/{path.name}"
+                                    provenance_path = f"figures/{path.name}"
                         except Exception:
                             logger.warning("%s | provenance graph failed", label, exc_info=True)
 
@@ -348,6 +349,7 @@ def run_participant_level(args: dict[str, Any]) -> None:
                             high_pass=cfg_high_pass, low_pass=cfg_low_pass,
                             after_haemo=post.get("denoised"),
                             roi_map=roi_map, provenance_path=provenance_path, sqm_label=label,
+                            roi_map_name=_roi_map_name(args),
                         ) or []])
 
                     if not args.get("no_report") and prep_runs:
@@ -502,7 +504,7 @@ def _make_prep_config(subject: str, session: str | None, args: dict[str, Any]) -
     )
 
 
-def _emit_subject_report(subject, sub_dir, last_raw, last_result, prep_config, args, glm_est, dm, alff_df=None, fc_df=None, fc_hbr_df=None, fc_seed=None, fc_roi=None, high_pass=None, low_pass=None, after_haemo=None, roi_map=None, provenance_path=None, sqm_label=None):
+def _emit_subject_report(subject, sub_dir, last_raw, last_result, prep_config, args, glm_est, dm, alff_df=None, fc_df=None, fc_hbr_df=None, fc_seed=None, fc_roi=None, high_pass=None, low_pass=None, after_haemo=None, roi_map=None, provenance_path=None, sqm_label=None, roi_map_name=None):
     import mne
     import numpy as np
     from fnirs_pipe.qc.subject.report import build_subject_report
@@ -558,6 +560,7 @@ def _emit_subject_report(subject, sub_dir, last_raw, last_result, prep_config, a
         roi_map=roi_map,
         provenance_path=provenance_path,
         sqm_label=sqm_label,
+        roi_map_name=roi_map_name,
     )
 
 

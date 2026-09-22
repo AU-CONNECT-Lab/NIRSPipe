@@ -11,10 +11,22 @@ catches what it was not handed, by looking at the assembled values rather than a
 names somebody has to remember to extend.
 """
 
+from fnirs_pipe.qc.common.figure_io import figure_namer
 from fnirs_pipe.qc.subject.report import (
     _blanked, _carpet_views, _condition_carpet, _figure_leaks,
     _segments_in_window,
 )
+
+RUN = figure_namer("sub-01_task-full")
+
+
+def fig(desc, condition=None, **entities):
+    """A figure URL as a page carries it, named by the writers' own namer.
+
+    Spelling these by hand is how the check and the writers drifted apart before: the test
+    agreed with itself and neither half agreed with what lands on disk.
+    """
+    return "figures/" + figure_namer("sub-01_task-full", condition)(desc, **entities)
 
 
 # ---- blanking a section keeps its type ----
@@ -47,64 +59,68 @@ def test_a_flag_blanks_to_none_not_to_zero():
 # ---- and the guard for what blanking never saw ----
 
 def test_the_conditions_own_figures_are_not_leaks():
-    # every panel a condition page rebuilds is written as <panel>_<slug>, so the check is a
-    # suffix rather than a list of panel names nobody would remember to extend
-    page = {"channel_summary_path": "figures/x/channel_summary_game1.html",
-            "sci_psp_panel_path":   "figures/x/sci_psp_panel_game1.html",
-            "carpet_gvtd_path":     "figures/x/carpet_gvtd_game1.html",
-            "bad_segment_zoom_path": "figures/x/bad_segment_zoom_game1.png"}
+    # every panel a condition page rebuilds carries the condition in its own cond- entity,
+    # so the check reads that entity rather than a list of panel names nobody would
+    # remember to extend
+    page = {"channel_summary_path": fig("chsummary", "game1", suffix="qc"),
+            "sci_psp_panel_path":   fig("scipsp", "game1"),
+            "carpet_gvtd_path":     fig("carpet", "game1"),
+            "bad_segment_zoom_path": fig("badsegmentzoom", "game1", extension=".png")}
     assert _figure_leaks(page, "game1") == []
 
 
 def test_a_longer_label_starting_with_this_one_is_still_a_leak():
     # "game1" must not accept "game10"'s figures, nor the other way round
-    assert _figure_leaks({"a": "figures/x/carpet_gvtd_game10.html"}, "game1")
-    assert _figure_leaks({"a": "figures/x/carpet_gvtd_game1.html"}, "game10")
+    assert _figure_leaks({"a": fig("carpet", "game10")}, "game1")
+    assert _figure_leaks({"a": fig("carpet", "game1")}, "game10")
 
 
 def test_the_provenance_graph_is_not_a_leak():
     # it describes the run's file lineage, which is the same for every condition
-    assert _figure_leaks({"provenance_path": "figures/x/provenance.png"}, "game1") == []
+    assert _figure_leaks({"provenance_path": fig("provenance", extension=".png")},
+                         "game1") == []
 
 
 def test_the_glm_design_matrix_is_not_a_leak():
     # one model over the whole recording with every condition drawn as a column of it, so
     # it reads as the model rather than as this condition
     assert _figure_leaks(
-        {"glm_design_path": "figures/x/glm_design_timeseries.png",
-         "glm_design_heatmap_path": "figures/x/glm_design_heatmap.png"}, "game1") == []
+        {"glm_design_path": fig("timeseries", suffix="design", extension=".png"),
+         "glm_design_heatmap_path": fig("heatmap", suffix="design", extension=".png")},
+        "game1") == []
 
 
 def test_the_glm_activation_still_has_to_be_this_conditions():
     # unlike the design matrix, an activation map is one condition's and nothing on it says
     # which, so the run's own must not survive
-    assert _figure_leaks({"glm_activation_path": "figures/x/glm_activation_video.png"},
-                         "game1")
+    assert _figure_leaks(
+        {"glm_activation_path": fig("glmactivation", "video", suffix="nirsmap",
+                                    extension=".png")}, "game1")
 
 
 def test_a_run_wide_figure_is_reported():
     # the case that actually happened
-    leaks = _figure_leaks({"denoise_carpet_path": "figures/x/denoise_carpet.png"}, "game1")
-    assert leaks == ["denoise_carpet_path=denoise_carpet.png"]
+    name = RUN("carpetstage")
+    leaks = _figure_leaks({"denoise_carpet_path": f"figures/{name}"}, "game1")
+    assert leaks == [f"denoise_carpet_path={name}"]
 
 
 def test_another_conditions_figure_is_a_leak():
     # a copied payload pointing at the neighbour's is worse than a run-wide figure, since
     # the page would look per-condition and be the wrong condition
     assert _figure_leaks(
-        {"channel_summary_path": "figures/x/channel_summary_video.html"}, "game1")
-    assert _figure_leaks({"carpet_gvtd_path": "figures/x/carpet_gvtd_video.html"}, "game1")
+        {"channel_summary_path": fig("chsummary", "video", suffix="qc")}, "game1")
+    assert _figure_leaks({"carpet_gvtd_path": fig("carpet", "video")}, "game1")
 
 
 def test_values_that_are_not_figure_paths_are_ignored():
     page = {"subject": "01", "sqm": {"sci_mean": 0.9}, "n_bad": 2,
-            "index_href": "sub-01_task-full_qc.html", "nothing": None}
+            "index_href": "sub-01_task-full_report.html", "nothing": None}
     assert _figure_leaks(page, "game1") == []
 
 
 def test_several_leaks_are_all_reported():
-    leaks = _figure_leaks({"a": "figures/x/carpet_gvtd.html",
-                           "b": "figures/x/psd_panel.html"}, "game1")
+    leaks = _figure_leaks({"a": fig("carpet"), "b": fig("psd")}, "game1")
     assert len(leaks) == 2
 
 
@@ -113,34 +129,39 @@ def test_several_leaks_are_all_reported():
 def test_a_fragment_naming_this_condition_is_not_a_leak():
     # the per-channel motion figures are one file per channel carrying every condition's
     # window, because the traces are identical across conditions and only the axes move
+    motion = fig("motion", channel="S1D1")
     page = {"motion_detail_pairs": [
-        {"pair": "S1D1", "path": "figures/x/motion_detail_S1D1.html#game1", "h": 400}]}
+        {"pair": "S1D1", "path": f"{motion}#game1", "h": 400}]}
     assert _figure_leaks(page, "game1") == []
 
 
 def test_the_same_file_with_no_fragment_is_still_a_leak():
+    motion = RUN("motion", channel="S1D1")
     page = {"motion_detail_pairs": [
-        {"pair": "S1D1", "path": "figures/x/motion_detail_S1D1.html", "h": 400}]}
-    assert _figure_leaks(page, "game1") == ["motion_detail_pairs=motion_detail_S1D1.html"]
+        {"pair": "S1D1", "path": f"figures/{motion}", "h": 400}]}
+    assert _figure_leaks(page, "game1") == [f"motion_detail_pairs={motion}"]
 
 
 def test_a_fragment_naming_another_condition_is_a_leak():
+    motion = RUN("motion", channel="S1D1")
     page = {"motion_detail_pairs": [
-        {"pair": "S1D1", "path": "figures/x/motion_detail_S1D1.html#video", "h": 400}]}
+        {"pair": "S1D1", "path": f"figures/{motion}#video", "h": 400}]}
     assert _figure_leaks(page, "game1")
 
 
 def test_the_per_channel_panels_are_checked_at_all():
     # they arrive as a list of dicts rather than a path, which the check used to skip, and
     # they are the panels there are the most files of
-    page = {"ch_detail_pairs": [{"pair": "S1D1", "path": "figures/x/ch_detail_S1D1.html"}]}
-    assert _figure_leaks(page, "game1") == ["ch_detail_pairs=ch_detail_S1D1.html"]
+    detail = RUN("detail", channel="S1D1")
+    page = {"ch_detail_pairs": [{"pair": "S1D1", "path": f"figures/{detail}"}]}
+    assert _figure_leaks(page, "game1") == [f"ch_detail_pairs={detail}"]
 
 
 def test_the_carpet_reaches_a_condition_page_as_a_fragment_too():
-    page = _condition_carpet({"carpet_gvtd_path": "figures/x/carpet_gvtd.html",
+    carpet = f"figures/{RUN('carpet')}"
+    page = _condition_carpet({"carpet_gvtd_path": carpet,
                               "carpet_gvtd_h": 600}, "game1")
-    assert page["carpet_gvtd_path"] == "figures/x/carpet_gvtd.html#game1"
+    assert page["carpet_gvtd_path"] == f"{carpet}#game1"
     assert page["carpet_gvtd_h"] == 600
     assert _figure_leaks(page, "game1") == []
 

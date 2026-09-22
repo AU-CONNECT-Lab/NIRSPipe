@@ -52,7 +52,7 @@ Report sections
 import base64
 import json
 from contextlib import contextmanager
-from fnirs_pipe.io.naming import report_name
+from fnirs_pipe.io.naming import parse_path, report_name
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -72,7 +72,7 @@ from fnirs_pipe.qc.common.channel_table import (
 from fnirs_pipe.qc.common.figure_io import (
     CENTER_FIGURE_CSS, _fig_href, _pair_fname, _save_b64_png,
     _save_figure_html, _save_multi_fig_html,
-    extract_markers, get_channel_pairs,
+    extract_markers, figure_namer, get_channel_pairs,
 )
 from fnirs_pipe.qc.metrics import (CV_PASS, EDGE_S, SCI_PASS, edge_to_mid_rms,
                                   gvtd_channel_blocks, registration_offset,
@@ -227,7 +227,7 @@ def _save_plotly_html(fig, path: Path, div_id: str | None = None, extra_css: str
     """:func:`_save_figure_html` plus the URL this report must link to the file by."""
     h = _save_figure_html(fig, path, extra_css=extra_css, div_id=div_id, views=views,
                           extra_js=extra_js)
-    return _fig_href(path.parent, path.name), h
+    return _fig_href(path.name), h
 
 
 # ---------------------------------------------------------------------------
@@ -261,11 +261,11 @@ def _section_sci(
     subject: str,
     errors: list,
     figures_dir: Path,
-    suffix: str = "",
+    fig_name,
 ) -> dict:
     """The SCI/PSP/CV panel, per channel and per window.
 
-    ``suffix`` names the figure, so a per-condition page writes its own instead of
+    ``fig_name`` names the figure, so a per-condition page writes its own instead of
     overwriting the run's. Handed a ``windowed`` whose matrices are already sliced to one
     condition, this panel is that condition's: nothing inside it filters or re-measures,
     which is why a real slice works here where the carpet has to be narrowed instead.
@@ -316,7 +316,7 @@ def _section_sci(
             cv_win_times=cv_win_times,
         )
         sci_psp_panel_path, sci_psp_panel_h = _save_plotly_html(
-            fig, figures_dir / f"sci_psp_panel{suffix}.html"
+            fig, figures_dir / fig_name("scipsp")
         )
 
     return {"sci_psp_panel_path": sci_psp_panel_path, "sci_psp_panel_h": sci_psp_panel_h,
@@ -351,10 +351,10 @@ def _section_channel_detail(
     subject: str,
     errors: list,
     figures_dir: Path,
+    fig_name,
     max_pts: int = 4000,
     cardiac: "tuple[float, float] | None" = None,
     resp: "tuple[float, float] | None" = None,
-    suffix: str = "",
     sep_bands=None,
 ) -> dict:
     from fnirs_pipe.qc.metrics import long_short_channels
@@ -375,10 +375,10 @@ def _section_channel_detail(
                 raw_haemo, markers, pair, max_pts,
                 cardiac=cardiac, resp=resp, epoch=False,
             )
-            fname = f"ch_detail_{_pair_fname(pair)}{suffix}.html"
+            fname = fig_name("detail", channel=_pair_fname(pair))
             h = _save_multi_fig_html([detail_fig, psd_fig], figures_dir / fname)
             is_short = pair in short_pairs
-            saved.append({"pair": pair, "path": _fig_href(figures_dir, fname), "h": h,
+            saved.append({"pair": pair, "path": _fig_href(fname), "h": h,
                           "label": f"{pair} (short)" if is_short else pair,
                           "short": is_short})
     return {"channel_pairs": saved}
@@ -449,8 +449,8 @@ def _section_motion_detail(
     subject: str,
     errors: list,
     figures_dir: Path,
+    fig_name,
     condition_spans: "list[tuple[str, float, float]] | None" = None,
-    filename: str = "motion_detail_{ch}.html",
 ) -> dict:
     """The built per-channel motion figures written out, one file per channel.
 
@@ -465,16 +465,16 @@ def _section_motion_detail(
     quiet condition under the run's scale is a flat line. ``rescale_y_to_window`` says why at
     length; ``window_view_spec`` is the same measurement, handed over rather than applied.
 
-    ``filename`` takes the channel's sanitised name at ``{ch}``. The raw viewer names every
-    figure it writes for BIDS and passes its own pattern; the default is this report's.
+    ``fig_name`` is the run's namer; the channel goes in as an entity, so the raw viewer
+    and this report spell these the same way.
     """
     saved = []
     for ch, fig in figures:
         with _guard(f"Motion detail {ch}", errors, subject):
             views = _condition_views(fig, condition_spans or [])
-            fname = filename.format(ch=_pair_fname(ch))
+            fname = fig_name("motion", channel=_pair_fname(ch))
             h = _save_multi_fig_html([fig], figures_dir / fname, views=views)
-            saved.append({"pair": ch, "path": _fig_href(figures_dir, fname), "h": h})
+            saved.append({"pair": ch, "path": _fig_href(fname), "h": h})
     return {"motion_detail_pairs": saved}
 
 
@@ -488,12 +488,12 @@ def _section_psd_detail(
     subject: str,
     errors: list,
     figures_dir: Path,
+    fig_name,
     l_freq: float | None = None,
     h_freq: float | None = 0.4,
     cardiac: "tuple[float, float] | None" = None,
     resp: "tuple[float, float] | None" = None,
     psd_stages: "list[tuple[str, mne.io.Raw]] | None" = None,
-    suffix: str = "",
 ) -> dict:
     pairs = get_channel_pairs(raw_haemo)
     saved = []
@@ -515,7 +515,7 @@ def _section_psd_detail(
             fig = psd_figure(raw_sub, l_freq=l_freq, h_freq=h_freq, fmax=2.0,
                              title=f"PSD — {pair}", cardiac=cardiac, resp=resp,
                              stages=stages_sub)
-            fname = f"psd_detail_{_pair_fname(pair)}{suffix}.html"
+            fname = fig_name("psddetail", channel=_pair_fname(pair))
             path, h = _save_plotly_html(fig, figures_dir / fname)
             saved.append({"pair": pair, "path": path, "h": h})
     return {"psd_detail_pairs": saved}
@@ -567,17 +567,17 @@ def _section_motion(
     subject: str,
     errors: list,
     figures_dir: Path,
+    fig_name,
     windowed: dict | None = None,
     raw_before_motion: mne.io.Raw | None = None,
     raw_after_motion: mne.io.Raw | None = None,
-    suffix: str = "",
     condition_spans: "list[tuple[str, float, float]] | None" = None,
     skip_carpet: bool = False,
     window: "tuple[float, float] | None" = None,
 ) -> dict:
     """The carpet and GVTD panel, with the flagged spans drawn over it.
 
-    ``suffix`` names the bad-segment zoom, so a per-condition page writes its own rather
+    ``fig_name`` names the bad-segment zoom, so a per-condition page writes its own rather
     than overwriting the run's. The carpet is not written per condition at all: it is
     narrowed to one **after** the panel is built, which is the only correct way to make this
     figure per condition, and narrowing moves nothing but the x range. So the run's file
@@ -631,7 +631,7 @@ def _section_motion(
                                      raw_after=raw_after_motion,
                                      channel_set=gvtd_set, blocks=gvtd_blocks)
             carpet_gvtd_path, carpet_gvtd_h = _save_plotly_html(
-                fig, figures_dir / "carpet_gvtd.html",
+                fig, figures_dir / fig_name("carpet"),
                 views=_carpet_views(fig, condition_spans or []))
 
     with _guard("Bad segment zoom", errors, subject):
@@ -645,9 +645,9 @@ def _section_motion(
                 ch_names=rep_chs or raw_long.ch_names[:3],
                 raw_before=raw_before_motion,
             )
-            _save_b64_png(b64, figures_dir / f"bad_segment_zoom{suffix}.png")
-            bad_segment_zoom_path = _fig_href(figures_dir,
-                                              f"bad_segment_zoom{suffix}.png")
+            zoom_name = fig_name("badsegmentzoom", extension=".png")
+            _save_b64_png(b64, figures_dir / zoom_name)
+            bad_segment_zoom_path = _fig_href(zoom_name)
 
     return {
         "carpet_gvtd_path": carpet_gvtd_path,
@@ -665,13 +665,13 @@ def _section_haemo(
     subject: str,
     errors: list,
     figures_dir: Path,
+    fig_name,
     l_freq: float | None = None,
     h_freq: float | None = None,
     raw_errts: mne.io.Raw | None = None,
     psd_stages: "list[tuple[str, mne.io.Raw]] | None" = None,
     record: dict | None = None,
     sep_bands=None,
-    suffix: str = "",
     crop: "tuple[float, float] | None" = None,
     psd: bool = True,
     mode: str | None = None,
@@ -728,7 +728,7 @@ def _section_haemo(
         # the panel sizes itself to the page: its matrix is square-constrained and only the
         # browser knows how wide the column is. See `fit_js`.
         hbo_hbr_path, hbo_hbr_h = _save_plotly_html(
-            fig, figures_dir / f"hbo_hbr_corr{suffix}.html",
+            fig, figures_dir / fig_name("hbohbrcorr"),
             extra_js=hbo_hbr_fit_js(fig))
 
     # Recomputed rather than read from the record: the record measures each stage on the
@@ -786,7 +786,7 @@ def _section_haemo(
                                        denoise_stage_panels(stage_metrics))
             if fig is not None:
                 stage_metrics_path, stage_metrics_h = _save_plotly_html(
-                    fig, figures_dir / f"denoise_stage_metrics{suffix}.html")
+                    fig, figures_dir / fig_name("denoisestages"))
 
     if psd:
         with _guard("PSD figure", errors, subject):
@@ -795,7 +795,8 @@ def _section_haemo(
                 cardiac=(config.cardiac_l_freq, config.cardiac_h_freq),
                 resp=(config.resp_l_freq, config.resp_h_freq),
                 stages=psd_stages_cut)
-            psd_panel_path, psd_panel_h = _save_plotly_html(fig_psd_custom, figures_dir / f"psd_panel{suffix}.html")
+            psd_panel_path, psd_panel_h = _save_plotly_html(
+                fig_psd_custom, figures_dir / fig_name("psd"))
     return {
         "hbo_hbr_path":   hbo_hbr_path,
         "hbo_hbr_h":      hbo_hbr_h,
@@ -830,10 +831,10 @@ def _section_stage_carpets(
     roi_map: "dict | None",
     raw_gvtd: "mne.io.Raw | None",
     span: "tuple[float, float] | None",
-    suffix: str,
     subject: str,
     errors: list,
     figures_dir: Path,
+    fig_name,
     raw_gvtd_after: "mne.io.Raw | None" = None,
     gvtd_blocks: "list | None" = None,
 ) -> dict:
@@ -851,7 +852,7 @@ def _section_stage_carpets(
                                     raw_gvtd_after=raw_gvtd_after, gvtd_blocks=gvtd_blocks,
                                     xlim=span, reference=reference)
         if fig is not None:
-            path, h = _save_plotly_html(fig, figures_dir / f"carpet_stage{suffix}.html")
+            path, h = _save_plotly_html(fig, figures_dir / fig_name("carpetstage"))
             panels.append({"label": "", "path": path, "h": h})
     return {"carpet_panels": panels,
             "carpet_stage_labels": [lab for lab, _ in stages]}
@@ -862,9 +863,9 @@ def _section_epoch_preview(
     subject: str,
     errors: list,
     figures_dir: Path,
+    fig_name,
     epoch_tmin: float = -5.0,
     epoch_tmax: float = 25.0,
-    suffix: str = "",
     sep_bands=None,
 ) -> dict:
     epoch_preview_path = None
@@ -874,7 +875,7 @@ def _section_epoch_preview(
                                          epoch_tmax=epoch_tmax, sep_bands=sep_bands)
         if fig is not None:
             epoch_preview_path, epoch_preview_h = _save_plotly_html(
-                fig, figures_dir / f"epoch_preview{suffix}.html"
+                fig, figures_dir / fig_name("epochmean")
             )
     return {"epoch_preview_path": epoch_preview_path, "epoch_preview_h": epoch_preview_h}
 
@@ -884,6 +885,7 @@ def _section_trigger_timeline(
     subject: str,
     errors: list,
     figures_dir: Path,
+    fig_name,
 ) -> dict:
     """Every event on one time axis, one row per condition.
 
@@ -897,7 +899,7 @@ def _section_trigger_timeline(
         markers = extract_markers(raw)
         fig = build_trigger_timeline_single(markers, condition_colors(markers))
         if fig is not None:
-            path, h = _save_plotly_html(fig, figures_dir / "trigger_timeline.html")
+            path, h = _save_plotly_html(fig, figures_dir / fig_name("trigger"))
     return {"trigger_timeline_path": path, "trigger_timeline_h": h}
 
 
@@ -907,6 +909,7 @@ def _section_trial_qc(
     subject: str,
     errors: list,
     figures_dir: Path,
+    fig_name,
 ) -> dict:
     """Each trial window scored on its own, so one bad trial is visible before averaging.
 
@@ -945,7 +948,8 @@ def _section_trial_qc(
                 for (_, _, _, onset), label, sqm in zip(windows, labels, sqms)]
         fig = trial_quality_heatmap(labels, sqms)
         if fig is not None:
-            path, h = _save_plotly_html(fig, figures_dir / "trial_qc.html")
+            path, h = _save_plotly_html(fig, figures_dir / fig_name("trialqc",
+                                                                       suffix="qc"))
     return {"trial_qc_path": path, "trial_qc_h": h, "trial_qc_window": window,
             "trial_qc_rows": rows}
 
@@ -953,10 +957,10 @@ def _section_trial_qc(
 def _condition_trial_qc(
     rows: list,
     span: "tuple[float, float]",
-    suffix: str,
     subject: str,
     errors: list,
     figures_dir: Path,
+    fig_name,
     min_trials: int,
 ) -> dict:
     """The run's per-trial table cut to the trials whose onset falls in one condition.
@@ -991,7 +995,8 @@ def _condition_trial_qc(
     with _guard("Per-trial quality", errors, subject):
         fig = trial_quality_heatmap([label for label, _ in keep], [sqm for _, sqm in keep])
         if fig is not None:
-            path, h = _save_plotly_html(fig, figures_dir / f"trial_qc{suffix}.html")
+            path, h = _save_plotly_html(fig, figures_dir / fig_name("trialqc",
+                                                                       suffix="qc"))
     return {"trial_qc_path": path, "trial_qc_h": h, "condition_trial_reason": ""}
 
 
@@ -1001,7 +1006,9 @@ def _section_condition_trial_images(
     subject: str,
     errors: list,
     figures_dir: Path,
+    fig_name,
     roi_map: dict | None = None,
+    roi_map_name: "str | None" = None,
     epoch_tmin: float = -5.0,
     epoch_tmax: float = 25.0,
     min_trials: int = 2,
@@ -1023,19 +1030,20 @@ def _section_condition_trial_images(
 
     out: dict = {}
 
-    def _collect(figs_by_label, prefix, key, name):
+    def _collect(figs_by_label, entities, key, name):
         for label, figs in (figs_by_label or {}).items():
-            fname = f"{prefix}_{_pair_fname(name)}_{_pair_fname(label)}.html"
+            fname = fig_name("trialimage", condition=_pair_fname(label), **entities)
             h = _save_multi_fig_html(figs, figures_dir / fname)
             entry = out.setdefault(label, {"trial_image_pairs": [], "trial_image_roi_pairs": []})
-            entry[key].append({"pair": name, "path": _fig_href(figures_dir, fname), "h": h})
+            entry[key].append({"pair": name, "path": _fig_href(fname), "h": h})
 
     for roi_name, chans in (roi_map or {}).items():
         with _guard(f"condition trial image ROI {roi_name}", errors, subject):
             _collect(build_roi_trial_image_by_condition(
                 epoch_haemo, str(roi_name), chans, spans, epoch_tmin, epoch_tmax,
-                min_trials=min_trials), "trialimage_roi", "trial_image_roi_pairs",
-                str(roi_name))
+                min_trials=min_trials),
+                {"segmentation": roi_map_name, "label": _pair_fname(str(roi_name))},
+                "trial_image_roi_pairs", str(roi_name))
 
     # HbO only, as the run's own trial image is, and for the same reason: single-trial HbR
     # is too low-amplitude to read as an image
@@ -1043,7 +1051,8 @@ def _section_condition_trial_images(
         with _guard(f"condition trial image {ch}", errors, subject):
             _collect(build_trial_image_by_condition(
                 epoch_haemo, ch, spans, epoch_tmin, epoch_tmax,
-                min_trials=min_trials), "trialimage", "trial_image_pairs", ch)
+                min_trials=min_trials), {"channel": _pair_fname(ch)},
+                "trial_image_pairs", ch)
     return out
 
 
@@ -1052,9 +1061,9 @@ def _section_evoked_topomap(
     subject: str,
     errors: list,
     figures_dir: Path,
+    fig_name,
     epoch_tmin: float = -5.0,
     epoch_tmax: float = 25.0,
-    suffix: str = "",
     sep_bands=None,
 ) -> dict:
     """The evoked response per channel, long and short rows, with a time slider.
@@ -1068,8 +1077,9 @@ def _section_evoked_topomap(
                                         epoch_tmax=epoch_tmax, sep_bands=sep_bands)
         if fig is not None:
             # it sets its own width, so without this it sits at the left of a wide page
-            path, h = _save_plotly_html(fig, figures_dir / f"evoked_topomap{suffix}.html",
-                                        extra_css=CENTER_FIGURE_CSS)
+            path, h = _save_plotly_html(
+                fig, figures_dir / fig_name("evokedtopo", suffix="nirsmap"),
+                extra_css=CENTER_FIGURE_CSS)
     return {"evoked_topomap_path": path, "evoked_topomap_h": h}
 
 
@@ -1078,7 +1088,9 @@ def _section_trial_image(
     subject: str,
     errors: list,
     figures_dir: Path,
+    fig_name,
     roi_map: dict | None = None,
+    roi_map_name: "str | None" = None,
     epoch_tmin: float = -5.0,
     epoch_tmax: float = 25.0,
 ) -> dict:
@@ -1092,9 +1104,10 @@ def _section_trial_image(
         with _guard(f"trial image ROI {roi_name}", errors, subject):
             figs = build_roi_trial_image_figure(raw_haemo, str(roi_name), chans, epoch_tmin, epoch_tmax)
             if figs:
-                fname = f"trialimage_roi_{_pair_fname(str(roi_name))}.html"
+                fname = fig_name("trialimage", segmentation=roi_map_name,
+                                 label=_pair_fname(str(roi_name)))
                 h = _save_multi_fig_html(figs, figures_dir / fname)
-                roi_saved.append({"pair": str(roi_name), "path": _fig_href(figures_dir, fname), "h": h})
+                roi_saved.append({"pair": str(roi_name), "path": _fig_href(fname), "h": h})
 
     saved = []
     # HbO only: single-trial HbR is too low-amplitude to read as an image, and the HbO/HbR
@@ -1103,9 +1116,9 @@ def _section_trial_image(
         with _guard(f"trial image {ch}", errors, subject):
             figs = build_trial_image_figure(raw_haemo, ch, epoch_tmin, epoch_tmax)
             if figs:
-                fname = f"trialimage_{_pair_fname(ch)}.html"
+                fname = fig_name("trialimage", channel=_pair_fname(ch))
                 h = _save_multi_fig_html(figs, figures_dir / fname)
-                saved.append({"pair": ch, "path": _fig_href(figures_dir, fname), "h": h})
+                saved.append({"pair": ch, "path": _fig_href(fname), "h": h})
     return {"trial_image_pairs": saved, "trial_image_roi_pairs": roi_saved}
 
 
@@ -1353,14 +1366,14 @@ def _section_channel_summary(
     subject: str,
     errors: list,
     figures_dir: Path,
+    fig_name,
     sci_thresh: float = SCI_PASS,
-    name: str = "channel_summary.html",
 ) -> dict:
-    """``name`` so a per-condition page writes its own grid instead of overwriting the run's."""
+    """``fig_name`` so a per-condition page writes its own grid instead of overwriting the run's."""
     path, h = None, 0
     with _guard("Channel quality summary", errors, subject):
         fig = channel_quality_heatmap(sci_thresh=sci_thresh, **heatmap_args(rows))
-        path, h = _save_plotly_html(fig, figures_dir / name)
+        path, h = _save_plotly_html(fig, figures_dir / fig_name("chsummary", suffix="qc"))
     return {"channel_summary_path": path, "channel_summary_h": h}
 
 
@@ -1397,12 +1410,12 @@ def _section_brain(
     subject: str,
     errors: list,
     figures_dir: Path,
+    fig_name,
     ch_names_brain: list[str] | None = None,
-    suffix: str = "",
 ) -> dict:
     """The 3D quality views and the optode flat map, side by side in one PNG.
 
-    ``suffix`` names the file, so a per-condition page writes its own. Both figures colour a
+    ``fig_name`` names the file, so a per-condition page writes its own. Both figures colour a
     channel by its SCI against the run's line and mark the rejected ones, and a condition has
     both of those of its own, so this is a real per-condition figure rather than a narrowed
     view: nothing in it is a time series.
@@ -1413,6 +1426,7 @@ def _section_brain(
             import io as _io
             from PIL import Image as _PILImage
 
+            views_name = fig_name("brainviews", extension=".png")
             ch_names = ch_names_brain if ch_names_brain is not None else list(sci_scores.keys())
             brain_b64 = quality_brain_views(ch_names, coords_head, good_mask,
                                             raw=raw_intensity, sci_scores=sci_scores)
@@ -1434,13 +1448,13 @@ def _section_brain(
                 out.convert("RGB").save(buf, format="PNG", optimize=True)
                 buf.seek(0)
                 combined_b64 = base64.b64encode(buf.read()).decode()
-                _save_b64_png(combined_b64, figures_dir / f"brain_views{suffix}.png")
+                _save_b64_png(combined_b64, figures_dir / views_name)
             elif brain_b64:
-                _save_b64_png(brain_b64, figures_dir / f"brain_views{suffix}.png")
+                _save_b64_png(brain_b64, figures_dir / views_name)
             else:
                 raise RuntimeError("brain_b64 is None")
 
-            brain_views_path = _fig_href(figures_dir, f"brain_views{suffix}.png")
+            brain_views_path = _fig_href(views_name)
     return {"brain_views_path": brain_views_path}
 
 
@@ -1452,6 +1466,7 @@ def _section_glm(
     subject: str,
     errors: list,
     figures_dir: Path,
+    fig_name,
     segments: "dict | None" = None,
 ) -> dict:
     glm_design_path = None
@@ -1468,12 +1483,14 @@ def _section_glm(
         ]
         with _guard("GLM design matrix (timeseries)", errors, subject):
             b64 = design_matrix_static_figure(design_matrix, conditions, segments=segments)
-            _save_b64_png(b64, figures_dir / "glm_design_timeseries.png")
-            glm_design_path = _fig_href(figures_dir, "glm_design_timeseries.png")
+            name = fig_name("timeseries", suffix="design", extension=".png")
+            _save_b64_png(b64, figures_dir / name)
+            glm_design_path = _fig_href(name)
         with _guard("GLM design matrix (heatmap)", errors, subject):
             b64 = design_matrix_heatmap(design_matrix, conditions=conditions)
-            _save_b64_png(b64, figures_dir / "glm_design_heatmap.png")
-            glm_design_heatmap_path = _fig_href(figures_dir, "glm_design_heatmap.png")
+            name = fig_name("heatmap", suffix="design", extension=".png")
+            _save_b64_png(b64, figures_dir / name)
+            glm_design_heatmap_path = _fig_href(name)
 
     # One file per condition behind a switch, not one tall image: five conditions stacked
     # reach ~3500 px, where a condition cannot be looked at on its own and two cannot be
@@ -1500,10 +1517,11 @@ def _section_glm(
                     if slug in used:
                         slug = f"{slug}{len(used) + 1}"
                     used.add(slug)
-                    name = f"glm_activation_{slug}.png"
+                    name = fig_name("glmactivation", suffix="nirsmap",
+                                    extension=".png", condition=slug)
                     _save_b64_png(b64, figures_dir / name)
                     glm_activation_conditions.append(
-                        {"label": label, "path": _fig_href(figures_dir, name)})
+                        {"label": label, "path": _fig_href(name)})
                 # the first condition is what the img element loads before anything is
                 # picked, and it is also what still gates the GLM section being open
                 if glm_activation_conditions:
@@ -1523,10 +1541,12 @@ def _section_rest(
     subject: str,
     errors: list,
     figures_dir: Path,
+    fig_name,
     fc_hbr_df: "Any | None" = None,
     fc_seed: dict | None = None,
     fc_roi: dict | None = None,
     raw_haemo: "mne.io.Raw | None" = None,
+    roi_map_name: "str | None" = None,
     sep_bands=None,
 ) -> dict:
     panel_path = alff_topo_path = fc_roi_path = fc_seed_path = None
@@ -1537,26 +1557,31 @@ def _section_rest(
                                      sep_bands=sep_bands)
             if fig is not None:
                 panel_path, panel_h = _save_plotly_html(
-                    fig, figures_dir / "rest_panel.html")
+                    fig, figures_dir / fig_name("restpanel"))
     with _guard("ALFF topography", errors, subject):
         if alff_df is not None and raw_haemo is not None:
             fig = alff_topo_figure(raw_haemo, alff_df, sep_bands=sep_bands)
             if fig is not None:   # None means the montage carries no optode positions
                 alff_topo_path, alff_topo_h = _save_plotly_html(
-                    fig, figures_dir / "rest_alff_topo.html")
+                    fig, figures_dir / fig_name("topo", suffix="nirsmap",
+                                                statistic="alff"))
     with _guard("ROI FC matrix", errors, subject):
         if fc_roi:
             fig = fc_roi_matrix_figure(fc_roi)
             if fig is not None:
                 fc_roi_path, fc_roi_h = _save_plotly_html(
-                    fig, figures_dir / "rest_fc_roi.html")
+                    fig, figures_dir / fig_name(
+                        "matrix", suffix="relmat", segmentation=roi_map_name,
+                        aggregation="roi", statistic="pearson"))
     with _guard("FC seed topography", errors, subject):
         if fc_seed and raw_haemo is not None:
             fig = fc_seed_topo_figure(raw_haemo, fc_seed.get("hbo"), fc_seed.get("hbr"),
                                       sep_bands=sep_bands)
             if fig is not None:   # None means the montage carries no optode positions
                 fc_seed_path, fc_seed_h = _save_plotly_html(
-                    fig, figures_dir / "rest_fc_seed.html")
+                    fig, figures_dir / fig_name(
+                        "matrix", suffix="relmat", segmentation=roi_map_name,
+                        aggregation="seed", statistic="pearson"))
     return {"rest_panel_path": panel_path, "rest_panel_h": panel_h,
             "rest_alff_topo_path": alff_topo_path, "rest_alff_topo_h": alff_topo_h,
             "rest_fc_roi_path": fc_roi_path, "rest_fc_roi_h": fc_roi_h,
@@ -1648,13 +1673,17 @@ def build_subject_report(
     roi_map: dict | None = None,
     provenance_path: str | None = None,
     sqm_label: str | None = None,
+    roi_map_name: str | None = None,
 ) -> list[str]:
     """Render the QC report for one run and save as HTML. Returns its run-level notes.
 
     sqm_label is the run this report covers, as a BIDS stem (``sub-01_task-rest``). It picks
-    the SQM record and the intermediate stage files off disk, and it gives the run its own
-    ``figures/<sqm_label>/`` directory so several runs of one subject stop overwriting each
-    other's figures. Passing None keeps the flat ``figures/`` layout.
+    the SQM record and the intermediate stage files off disk, and it goes into every figure's
+    name so several runs of one subject share one ``figures/`` folder without overwriting
+    each other. Passing None falls back to ``sub-<subject>``.
+
+    roi_map_name is the ROI mapping's label, which the figures drawn over ROIs carry so they
+    name the same segmentation their tables do.
 
     provenance_path is the already-rendered flow diagram, relative to out_path
     (the caller renders it: the report embeds, it does not draw).
@@ -1673,8 +1702,10 @@ def build_subject_report(
     raw_gvtd = raw_intensity.copy().pick([c for _, names in gvtd_blocks for c in names])
 
     figures_dir = out_path.parent / "figures"
-    if sqm_label:
-        figures_dir = figures_dir / sqm_label
+    # the run is in every figure's name rather than in a directory of its own, so one
+    # subject's runs share this folder without the same panel being called the same thing
+    # in two places. A run with no label falls back to the subject, as out_path does.
+    fig_name = figure_namer(sqm_label or f"sub-{subject}")
 
     nirs_dir = out_path.parent / "nirs"
     record            = _load_record(nirs_dir, sqm_label, subject, errors)
@@ -1694,11 +1725,11 @@ def build_subject_report(
     ] or None
     sci_vars          = _section_sci(
                             raw_intensity, sci_scores, bad_channels, config,
-                            windowed_section, subject, errors, figures_dir)
+                            windowed_section, subject, errors, figures_dir, fig_name)
     motion_vars       = _section_motion(
                             raw_long, raw_gvtd, gvtd_set, gvtd_blocks,
                             sci_scores, config, segments, subject, errors,
-                            figures_dir, windowed=windowed_section,
+                            figures_dir, fig_name, windowed=windowed_section,
                             raw_before_motion=raw_before_motion,
                             raw_after_motion=raw_after_motion,
                             condition_spans=_record_windows(
@@ -1712,16 +1743,16 @@ def build_subject_report(
     # every condition's window goes into the run's own files, which is what lets the
     # condition pages point at them with a fragment instead of getting copies
     motion_det_vars   = _section_motion_detail(
-                            motion_det_figs, subject, errors, figures_dir,
+                            motion_det_figs, subject, errors, figures_dir, fig_name,
                             condition_spans=_record_windows(record.get("by_condition") or {})
                             if by_condition else [])
     haemo_vars        = _section_haemo(raw_haemo, config, subject, errors, figures_dir,
-                                       l_freq=l_freq, h_freq=h_freq,
+                                       fig_name, l_freq=l_freq, h_freq=h_freq,
                                        raw_errts=raw_errts, psd_stages=psd_stages,
                                        record=record, sep_bands=sep_bands, mode=mode)
     carpet_stages = _carpet_stages(raw_haemo, psd_stages)
-    carpet_vars = _section_stage_carpets(carpet_stages, roi_map, raw_gvtd, None, "",
-                                         subject, errors, figures_dir,
+    carpet_vars = _section_stage_carpets(carpet_stages, roi_map, raw_gvtd, None,
+                                         subject, errors, figures_dir, fig_name,
                                          raw_gvtd_after=raw_after_motion,
                                          gvtd_blocks=gvtd_blocks)
     # the trial window every epoch figure averages over. None on the config means the
@@ -1749,20 +1780,21 @@ def build_subject_report(
     raw_haemo_uncorr  = _uncorrected_haemo(raw_before_motion, config, subject, errors)
     channel_det_vars  = _section_channel_detail(
                             raw_haemo_uncorr if raw_haemo_uncorr is not None else raw_haemo,
-                            subject, errors, figures_dir,
+                            subject, errors, figures_dir, fig_name,
                             cardiac=(config.cardiac_l_freq, config.cardiac_h_freq),
                             resp=(config.resp_l_freq, config.resp_h_freq),
                             sep_bands=sep_bands)
     channel_det_vars["channel_detail_stage"] = (
         "desc-sci" if raw_haemo_uncorr is not None else "desc-preproc")
     psd_det_vars      = _section_psd_detail(raw_haemo, subject, errors, figures_dir,
-                                            l_freq=l_freq, h_freq=h_freq,
+                                            fig_name, l_freq=l_freq, h_freq=h_freq,
                                             cardiac=(config.cardiac_l_freq, config.cardiac_h_freq),
                                             resp=(config.resp_l_freq, config.resp_h_freq),
                                             psd_stages=psd_stages)
     brain_vars        = _section_brain(
                             sci_scores, bad_channels, coords_head, good_mask, raw_intensity,
-                            subject, errors, figures_dir, ch_names_brain=ch_names_brain)
+                            subject, errors, figures_dir, fig_name,
+                            ch_names_brain=ch_names_brain)
     # every figure in the epoch section on the denoised (bandpassed, pre-regression) haemo so
     # drift/noise is gone and the task response is intact; fall back to preproc only if no
     # post-processing ran. The grand mean read the unfiltered preproc until 2026-09-10, which
@@ -1795,23 +1827,26 @@ def build_subject_report(
                             "trial_qc_rows": []}
     else:
         epoch_vars        = _section_epoch_preview(epoch_haemo, subject, errors, figures_dir,
-                                                   epoch_tmin=epoch_tmin,
+                                                   fig_name, epoch_tmin=epoch_tmin,
                                                    epoch_tmax=epoch_tmax,
                                                    sep_bands=sep_bands)
         trial_image_vars  = _section_trial_image(epoch_haemo, subject, errors, figures_dir,
-                                                 roi_map=roi_map,
+                                                 fig_name, roi_map=roi_map,
+                                                 roi_map_name=roi_map_name,
                                                  epoch_tmin=epoch_tmin,
                                                  epoch_tmax=epoch_tmax)
         topomap_vars      = _section_evoked_topomap(epoch_haemo, subject, errors, figures_dir,
-                                                    epoch_tmin=epoch_tmin,
+                                                    fig_name, epoch_tmin=epoch_tmin,
                                                     epoch_tmax=epoch_tmax,
                                                     sep_bands=sep_bands)
         trial_qc_vars     = _section_trial_qc(raw_intensity, config, subject, errors,
-                                              figures_dir)
-    glm_vars          = _section_glm(design_matrix, glm_est, raw_haemo, subject, errors, figures_dir, segments=segments)
-    rest_vars         = _section_rest(alff_df, fc_df, subject, errors, figures_dir, fc_hbr_df=fc_hbr_df,
+                                              figures_dir, fig_name)
+    glm_vars          = _section_glm(design_matrix, glm_est, raw_haemo, subject, errors,
+                                     figures_dir, fig_name, segments=segments)
+    rest_vars         = _section_rest(alff_df, fc_df, subject, errors, figures_dir, fig_name,
+                                      fc_hbr_df=fc_hbr_df,
                                       fc_seed=fc_seed, fc_roi=fc_roi, raw_haemo=raw_haemo,
-                                      sep_bands=sep_bands)
+                                      roi_map_name=roi_map_name, sep_bands=sep_bands)
     sqm_vars          = _section_sqm(sci_scores, bad_channels, subject, errors,
                                      out_dir=out_path.parent / "nirs",
                                      sqm_label=sqm_label,
@@ -1840,9 +1875,10 @@ def build_subject_report(
                      short_channel_requested=bool(getattr(config, "short_channel", None)),
                      orphan_mm=separation_orphans(raw_intensity, sep_bands),
                      sep_bands=sep_bands)
-    trigger_vars      = _section_trigger_timeline(raw_intensity, subject, errors, figures_dir)
+    trigger_vars      = _section_trigger_timeline(raw_intensity, subject, errors,
+                                                  figures_dir, fig_name)
     ch_summary_vars   = _section_channel_summary(
-                            sqm_vars["channel_rows"], subject, errors, figures_dir,
+                            sqm_vars["channel_rows"], subject, errors, figures_dir, fig_name,
                             sci_thresh=getattr(config, "sci_threshold", SCI_PASS))
 
     n_bad    = len(bad_channels)
@@ -1940,48 +1976,50 @@ def build_subject_report(
                 out_path=out_path, out_dir=nirs_dir, sqm_label=sqm_label,
                 figures_dir=figures_dir, sci_scores=sci_scores, errors=errors,
                 # closures rather than another ten parameters: both panels take a long
-                # arg list that already exists here, and only the suffix, the slice and
+                # arg list that already exists here, and only the namer, the slice and
                 # the view span differ per condition
-                remake_sci=lambda suffix, windowed_slice, sci_pc: _section_sci(
+                remake_sci=lambda cond_name, windowed_slice, sci_pc: _section_sci(
                     raw_intensity, sci_pc, bad_channels, config, windowed_slice,
-                    subject, errors, figures_dir, suffix=suffix),
-                remake_motion=lambda slug, span: {
+                    subject, errors, figures_dir, cond_name),
+                remake_motion=lambda cond_name, slug, span: {
                     **_section_motion(
                         raw_long, raw_gvtd, gvtd_set, gvtd_blocks, sci_scores, config,
-                        segments, subject, errors, figures_dir, windowed=windowed_section,
+                        segments, subject, errors, figures_dir, cond_name,
+                        windowed=windowed_section,
                         raw_before_motion=raw_before_motion,
-                        raw_after_motion=raw_after_motion, suffix=f"_{slug}",
+                        raw_after_motion=raw_after_motion,
                         skip_carpet=True, window=span),
                     **_condition_carpet(motion_vars, slug),
                 },
                 # the condition's own SCI and its own rejected set, so the maps show the
                 # verdict printed beside them rather than the run's
-                remake_brain=lambda suffix, sci_pc, cond_bad: _section_brain(
+                remake_brain=lambda cond_name, sci_pc, cond_bad: _section_brain(
                     sci_pc, sorted(cond_bad), coords_head,
                     _good_mask_for(cond_bad, ch_names_brain, sci_pc, good_mask),
-                    raw_intensity, subject, errors, figures_dir,
-                    ch_names_brain=ch_names_brain, suffix=suffix),
+                    raw_intensity, subject, errors, figures_dir, cond_name,
+                    ch_names_brain=ch_names_brain),
                 remake_motion_detail=lambda slug: _condition_motion_detail(
                     motion_det_vars.get("motion_detail_pairs") or [], slug),
-                remake_denoise_carpet=lambda suffix, span: _section_stage_carpets(
-                    carpet_stages, roi_map, raw_gvtd, span, suffix,
-                    subject, errors, figures_dir,
+                remake_denoise_carpet=lambda cond_name, span: _section_stage_carpets(
+                    carpet_stages, roi_map, raw_gvtd, span,
+                    subject, errors, figures_dir, cond_name,
                     raw_gvtd_after=raw_after_motion, gvtd_blocks=gvtd_blocks),
                 # --epoch-single-trial waives the "one row is not a comparison" floor
                 # here as well, for the same reason it waives it on the epoch section
-                remake_trial_qc=lambda suffix, span: _condition_trial_qc(
-                    trial_qc_vars.get("trial_qc_rows") or [], span, suffix,
-                    subject, errors, figures_dir,
+                remake_trial_qc=lambda cond_name, span: _condition_trial_qc(
+                    trial_qc_vars.get("trial_qc_rows") or [], span,
+                    subject, errors, figures_dir, cond_name,
                     min_trials=1 if epoch_single_trial else 2),
                 # a run with nothing to epoch has no trial images on its own page either,
                 # and the pass costs one figure per HbO channel per condition
                 remake_trial_images=None if epoch_skip is not None else (
                     lambda spans: _section_condition_trial_images(
-                        epoch_haemo, spans, subject, errors, figures_dir, roi_map=roi_map,
+                        epoch_haemo, spans, subject, errors, figures_dir, fig_name,
+                        roi_map=roi_map, roi_map_name=roi_map_name,
                         epoch_tmin=epoch_tmin, epoch_tmax=epoch_tmax,
                         min_trials=1 if epoch_single_trial else 2)),
-                remake_cropped=lambda suffix, span: _cropped_sections(
-                    span, suffix, raw_haemo=raw_haemo, epoch_haemo=epoch_haemo,
+                remake_cropped=lambda cond_name, span: _cropped_sections(
+                    span, cond_name, raw_haemo=raw_haemo, epoch_haemo=epoch_haemo,
                     raw_haemo_uncorr=raw_haemo_uncorr, raw_errts=raw_errts,
                     psd_stages=psd_stages, record=record, config=config,
                     l_freq=l_freq, h_freq=h_freq, sep_bands=sep_bands,
@@ -2027,13 +2065,13 @@ def _blanked(section_vars: tuple) -> dict:
 # Nothing else belongs. The spectra and the correlation panels would all look like the
 # condition's, which is why they are rebuilt per condition instead.
 #
-# Everything not listed has to carry the condition's own name, which `_figure_leaks` checks
-# by suffix rather than by listing the panels: a per-panel prefix list would also pass a
-# *different* condition's figure, worse than a run-wide one because the page would look
-# per-condition and be the wrong condition. A `#slug` fragment counts as that name: the
-# carpet and the per-channel motion figures hold every condition's window in one file,
-# since their traces do not vary by condition and only the axes do.
-_CONDITION_PAGE_FIGURES = ("provenance.", "glm_design_", "trigger_timeline.")
+# Everything not listed has to carry the condition in its own `cond-` entity, which
+# `_figure_leaks` reads off the name rather than listing the panels: a per-panel list would
+# also pass a *different* condition's figure, worse than a run-wide one because the page
+# would look per-condition and be the wrong condition. A `#slug` fragment counts as that
+# name: the carpet and the per-channel motion figures hold every condition's window in one
+# file, since their traces do not vary by condition and only the axes do.
+_CONDITION_PAGE_DESCS = frozenset({"provenance", "timeseries", "heatmap", "trigger"})
 
 
 def _figure_leaks(page: dict, label_slug: str) -> "list[str]":
@@ -2057,10 +2095,11 @@ def _figure_leaks(page: dict, label_slug: str) -> "list[str]":
             # figures reach this page: the same traces, so one file carries every view
             if fragment == label_slug:
                 continue
-            # every per-condition figure is written as <panel>_<slug>.<ext>
-            if name.rsplit(".", 1)[0].endswith(f"_{label_slug}"):
+            entities = parse_path(name)
+            # every per-condition figure carries the condition it is of
+            if entities.get("condition") == label_slug:
                 continue
-            if any(name.startswith(ok) for ok in _CONDITION_PAGE_FIGURES):
+            if entities.get("desc") in _CONDITION_PAGE_DESCS:
                 continue
             leaks.append(f"{key}={name}")
     return leaks
@@ -2068,7 +2107,7 @@ def _figure_leaks(page: dict, label_slug: str) -> "list[str]":
 
 def _cropped_sections(
     span: "tuple[float, float]",
-    suffix: str,
+    fig_name,
     *,
     raw_haemo, epoch_haemo, raw_haemo_uncorr, raw_errts, psd_stages, record, config,
     l_freq, h_freq, sep_bands, epoch_tmin, epoch_tmax, subject, errors, figures_dir,
@@ -2128,23 +2167,24 @@ def _cropped_sections(
     psd_ok = len(haemo.times) >= n_fft_floor
     if not psd_ok:
         logger.info("sub-%s | %s holds %d samples against a transform of %d; no spectra",
-                    subject, suffix.lstrip("_") or "the cut", len(haemo.times), n_fft_floor)
+                    subject, fig_name.condition or "the cut", len(haemo.times),
+                    n_fft_floor)
     out: dict = {"psd_too_short": not psd_ok}
     # the one panel handed a span rather than a cropped recording: it holds the stage list,
     # so only it can band-limit the whole run before cutting, which is the order its stage
     # comparison needs. See its docstring.
-    out.update(_section_haemo(raw_haemo, config, subject, errors, figures_dir,
+    out.update(_section_haemo(raw_haemo, config, subject, errors, figures_dir, fig_name,
                               l_freq=l_freq, h_freq=h_freq, raw_errts=raw_errts,
                               psd_stages=psd_stages, record=record, sep_bands=sep_bands,
-                              suffix=suffix, crop=span, psd=psd_ok, mode=mode))
+                              crop=span, psd=psd_ok, mode=mode))
     if psd_ok:
-        out.update(_section_psd_detail(haemo, subject, errors, figures_dir,
+        out.update(_section_psd_detail(haemo, subject, errors, figures_dir, fig_name,
                                        l_freq=l_freq, h_freq=h_freq, psd_stages=stages,
-                                       suffix=suffix, **bands))
+                                       **bands))
     # the bare span, unlike the epoch panels below: nothing in this section epochs any more,
     # so the pad would only show the neighbouring condition's last seconds
     out.update(_section_channel_detail(crop(raw_haemo_uncorr) or haemo, subject, errors,
-                                       figures_dir, suffix=suffix,
+                                       figures_dir, fig_name,
                                        sep_bands=sep_bands, **bands))
     # the same question the run's own page asks, re-asked on the crop: a condition page holds
     # one condition, so a design of one block per condition leaves it a single event and
@@ -2153,16 +2193,27 @@ def _cropped_sections(
     if _no_epoch_reason(epoch_src, epoch_tmin, epoch_tmax,
                         single_trial=epoch_single_trial) is None:
         out.update(_section_epoch_preview(epoch_src, subject, errors,
-                                          figures_dir, epoch_tmin=epoch_tmin,
-                                          epoch_tmax=epoch_tmax, suffix=suffix,
+                                          figures_dir, fig_name, epoch_tmin=epoch_tmin,
+                                          epoch_tmax=epoch_tmax,
                                           sep_bands=sep_bands))
         out.update(_section_evoked_topomap(epoch_src, subject, errors, figures_dir,
-                                           epoch_tmin=epoch_tmin, epoch_tmax=epoch_tmax,
-                                           suffix=suffix, sep_bands=sep_bands))
+                                           fig_name, epoch_tmin=epoch_tmin,
+                                           epoch_tmax=epoch_tmax, sep_bands=sep_bands))
     else:
         out.update({"epoch_preview_path": None, "epoch_preview_h": 0,
                     "evoked_topomap_path": None, "evoked_topomap_h": 0})
     return out
+
+
+def condition_page_name(run_label: str, condition: str) -> str:
+    """One condition's page of a run's report, from the condition's own label.
+
+    ``("sub-01_task-rest", "game 1")`` -> ``"sub-01_task-rest_cond-game1_report.html"``
+
+    Module level and not inside the writer, because the subject index looks these up on
+    disk: the two ends came apart once already and every per-condition link went dead.
+    """
+    return report_name(run_label, condition=_pair_fname(condition))
 
 
 def _condition_timeline(report_vars: dict) -> dict:
@@ -2175,7 +2226,7 @@ def _condition_timeline(report_vars: dict) -> dict:
     can show neither, since both are visible only against the conditions around them.
 
     It carries no per-condition figure, so nothing is recomputed: the same file the run's
-    page points at. ``_CONDITION_PAGE_FIGURES`` lets it past the leak check.
+    page points at. ``_CONDITION_PAGE_DESCS`` lets it past the leak check.
     """
     return {
         "trigger_timeline_path": report_vars.get("trigger_timeline_path"),
@@ -2325,8 +2376,7 @@ def _write_condition_reports(
     def _page_name(label: "str | None") -> str:
         if label is None:
             return out_path.name
-        return report_name(out_path.stem.removesuffix("_report"),
-                           condition=_pair_fname(label))
+        return condition_page_name(out_path.stem.removesuffix("_report"), label)
 
     nav_pages = [(None, "Whole run")] + [(lab, lab) for lab in by_condition]
 
@@ -2344,38 +2394,40 @@ def _write_condition_reports(
         t0, t1 = entry["window_s"]
         span = (t0, t1)
         slug = _pair_fname(label)
+        # one namer per condition, bound to it, so every panel below writes this page's own
+        # file without anybody appending a slug to a bare panel name
+        cond_name = figure_namer(sqm_label, slug)
         cropped: dict = {}
         if remake_cropped is not None:
-            cropped = remake_cropped(f"_{slug}", span)
+            cropped = remake_cropped(cond_name, span)
         rows = channel_rows(cond_record, sci_scores, cond_bad)
         cells = format_rows(rows, cutoffs["sci"], psp_threshold=cutoffs["psp"])
         summary = _section_channel_summary(
-            rows, subject, errors, figures_dir, cutoffs["sci"],
-            name=f"channel_summary_{slug}.html")
+            rows, subject, errors, figures_dir, cond_name, cutoffs["sci"])
         # the SCI/PSP panel over this condition's columns: a real slice, since the figure
         # is handed its matrices and derives nothing from a recording
         panels: dict = {}
         if remake_sci is not None:
-            panels.update(remake_sci(f"_{slug}", _windowed_slice(record, windows, label),
+            panels.update(remake_sci(cond_name, _windowed_slice(record, windows, label),
                                      sliced.get("sci_per_channel") or {}))
         # the bad-segment zoom over this condition's own flagged segments, and the carpet
         # narrowed to it without being written again: measured over the run, viewed over it
         if remake_motion is not None:
-            panels.update(remake_motion(slug, span))
+            panels.update(remake_motion(cond_name, slug, span))
         # the denoising carpet is narrowed the same way but written again here, being a PNG
         # with no view to pick. The carpet and the per-channel motion figures are not: the
         # run's files carry every condition's window and this page addresses one by fragment
         if remake_brain is not None:
-            panels.update(remake_brain(f"_{slug}", sliced.get("sci_per_channel") or {},
+            panels.update(remake_brain(cond_name, sliced.get("sci_per_channel") or {},
                                        cond_bad))
         if remake_motion_detail is not None:
             panels.update(remake_motion_detail(slug))
         if remake_denoise_carpet is not None:
-            panels.update(remake_denoise_carpet(f"_{slug}", span))
+            panels.update(remake_denoise_carpet(cond_name, span))
         # the trial half: rows are this condition's own trials, taken from the run's table
         # and from the run-wide image pass rather than measured again
         if remake_trial_qc is not None:
-            panels.update(remake_trial_qc(f"_{slug}", span))
+            panels.update(remake_trial_qc(cond_name, span))
         panels.update(trial_images.get(label) or {})
         panels.update(cropped)
 
@@ -2388,7 +2440,6 @@ def _write_condition_reports(
         # per-condition version of it would be a different model.
         panels.update(_condition_glm(report_vars, label))
         panels.update(_condition_timeline(report_vars))
-        stem = f"{out_path.stem.removesuffix('_qc')}_desc-{_pair_fname(label)}_qc"
         page = {
             **report_vars, **blanked, **summary, **panels,
             "nav_links": [{"label": text, "href": _page_name(lab),
@@ -2434,7 +2485,7 @@ def _write_condition_reports(
             logger.warning("sub-%s | condition %s still points at run-wide figures (%s); "
                            "they are being dropped", subject, label, ", ".join(leaks))
             page = {**page, **{k.split("=")[0]: None for k in leaks}}
-        out = out_path.with_name(f"{stem}.html")
+        out = out_path.with_name(_page_name(label))
         out.write_text(render("subject_report.html.j2", **page), encoding="utf-8")
         logger.info("sub-%s | condition %s \u2192 %s", subject, label, out.name)
 

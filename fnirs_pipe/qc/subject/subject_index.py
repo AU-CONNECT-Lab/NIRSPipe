@@ -27,6 +27,7 @@ from pathlib import Path
 from fnirs_pipe.qc.boilerplate import collect_software_versions
 from fnirs_pipe.qc.common.report_shell import (
     OUTLIER_Z, footer_vars, guard, outlier_flags, page_vars, render)
+from fnirs_pipe.qc.common.figure_io import figure_namer
 from fnirs_pipe.qc.subject.condition_views import condition_stems
 from fnirs_pipe.io.naming import report_name
 from fnirs_pipe.qc.common.channel_table import CHANNEL_METRICS_SUFFIX
@@ -71,7 +72,7 @@ _REPORTS = (
 # reach the page; the report the row already links is not repeated here.
 _ARTEFACTS = (
     ("MNE",        "{mne_report}"),
-    ("provenance", "figures/{label}/provenance.png"),
+    ("provenance", "figures/{provenance}"),
     ("channels",   "nirs/{label}" + CHANNEL_METRICS_SUFFIX),
     ("aux",        "nirs/{label}_desc-aux_timeseries.tsv.gz"),
 )
@@ -84,6 +85,7 @@ def _names(label: str) -> dict[str, str]:
         "report": report_name(label),
         "raw_report": report_name(label, desc="raw"),
         "mne_report": report_name(label, desc="mne"),
+        "provenance": figure_namer(label)("provenance", extension=".png"),
     }
 
 
@@ -197,14 +199,16 @@ def _condition_hrefs(sub_dir: Path, label: str, names: list[str]) -> list[str | 
     """Each condition's own page under sub_dir, or None where no command wrote one.
 
     The two writers name these differently and both spellings are looked for: `fnirs-pipe`
-    puts the condition in the ``desc-`` entity, `prep-raw` in the ``task-`` one, the rule
+    puts the condition in the ``cond-`` entity, `prep-raw` in the ``task-`` one, the rule
     ``fnirs-prep crop`` set for a segment. Names come from the record rather than from a
     glob, so a task that happens to share a condition's name cannot contribute a row.
     """
+    from fnirs_pipe.qc.subject.report import condition_page_name
+
     raw_stems = condition_stems(f"{label}_desc-raw_nirs", names)
     out: list[str | None] = []
     for name, raw_stem in zip(names, raw_stems):
-        candidates = (f"{label}_desc-{name}_qc.html", f"{raw_stem}.html")
+        candidates = (condition_page_name(label, name), f"{raw_stem}.html")
         out.append(next((c for c in candidates if (sub_dir / c).exists()), None))
     return out
 
@@ -405,21 +409,21 @@ def write_condition_figures(sub_dir: Path, subject: str, groups: list[dict]) -> 
     profile takes the runs together because that is the comparison it is for; the other two
     are of one run's channels and one run's clock and cannot be pooled.
     """
-    from fnirs_pipe.qc.common.figure_io import _save_figure_html
+    from fnirs_pipe.qc.common.figure_io import _save_figure_html, figure_namer
     from fnirs_pipe.qc.figures.subject.group_figures import (
         build_channel_condition_matrix, build_condition_panels, build_condition_timeline,
     )
     from fnirs_pipe.qc.subject.group_writer import _sqm_row
 
-    fig_dir = sub_dir / "figures" / f"sub-{subject}"
+    fig_dir = sub_dir / "figures"
     out: dict = {"profile": None, "per_run": []}
 
     def _save(stem: str, name: str, fig) -> "dict | None":
         if fig is None:
             return None
-        fname = f"{stem}_desc-{name}_nirs.html"
+        fname = figure_namer(stem)(name)
         height = _save_figure_html(fig, fig_dir / fname)
-        return {"src": f"figures/sub-{subject}/{fname}", "h": height,
+        return {"src": f"figures/{fname}", "h": height,
                 "w": getattr(fig.layout, "width", None)}
 
     panels = build_condition_panels(

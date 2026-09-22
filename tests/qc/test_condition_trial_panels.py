@@ -15,9 +15,11 @@ from fnirs_pipe.qc.figures.subject.raw_figures import (
 )
 from fnirs_pipe.qc.common.windows import condition_windows
 from fnirs_pipe.qc.metrics.windowed import SCREEN_WINDOW_S
+from fnirs_pipe.qc.common.figure_io import figure_namer
 from fnirs_pipe.qc.subject.report import _condition_trial_qc
 from tests._synth import synth_raw
 
+TALK = figure_namer("sub-01_task-full", "talk")
 EPOCH = (-5.0, 25.0)
 
 
@@ -80,20 +82,20 @@ def test_a_block_design_gets_no_condition_trial_images():
 def test_condition_trial_qc_slices_the_runs_rows(tmp_path):
     rows = [(30.0, "trial-002", {"sci_mean": 0.9}), (55.0, "trial-003", {"sci_mean": 0.8}),
             (200.0, "trial-009", {"sci_mean": 0.7})]
-    out = _condition_trial_qc(rows, (20.0, 170.0), "_talk", "01", [], tmp_path, min_trials=2)
+    out = _condition_trial_qc(rows, (20.0, 170.0), "01", [], tmp_path, TALK, min_trials=2)
     assert out["trial_qc_path"] and out["condition_trial_reason"] == ""
-    assert (tmp_path / "trial_qc_talk.html").exists()
+    assert (tmp_path / TALK("trialqc", suffix="qc")).exists()
 
 
 def test_a_window_holding_only_its_own_annotation_says_so(tmp_path):
     rows = [(20.0, "trial-001_20s_talk", {"sci_mean": 0.9})]
-    out = _condition_trial_qc(rows, (20.0, 170.0), "_talk", "01", [], tmp_path, min_trials=2)
+    out = _condition_trial_qc(rows, (20.0, 170.0), "01", [], tmp_path, TALK, min_trials=2)
     assert out["trial_qc_path"] is None
     assert "annotation that defines it" in out["condition_trial_reason"]
 
 
 def test_too_few_trials_names_the_count(tmp_path):
     rows = [(30.0, "trial-002", {"sci_mean": 0.9})]
-    out = _condition_trial_qc(rows, (20.0, 170.0), "_talk", "01", [], tmp_path, min_trials=2)
+    out = _condition_trial_qc(rows, (20.0, 170.0), "01", [], tmp_path, TALK, min_trials=2)
     assert out["trial_qc_path"] is None
     assert "1 trial inside its window" in out["condition_trial_reason"]

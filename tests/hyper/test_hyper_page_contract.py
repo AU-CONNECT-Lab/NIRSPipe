@@ -157,13 +157,13 @@ def _file_of(url: str) -> str:
 def _window_in(url: str) -> str:
     """Which window a URL is of, however this panel says so.
 
-    A channel map is one file per window and carries the slug in its name; an ROI map is one
-    file holding every window and carries it as the fragment. Both are the same claim.
+    A channel map is one file per window and carries the window in its cond- entity; an ROI
+    map is one file holding every window and carries it as the fragment. Both are the same
+    claim.
     """
     if "#" in url:
         return url.split("#", 1)[1]
-    tail = Path(url).stem.split("_")[-1]
-    return tail if tail in CONDITIONS else ""
+    return parse_path(Path(url).name).get("condition") or ""
 
 
 def test_every_url_on_the_page_exists_on_disk(pages):
@@ -233,15 +233,28 @@ def test_the_roi_thumbnail_grid_is_gone(pages):
 
 # ---- the ISC panels, which are plain iframes rather than a selector table ----
 
-def _iframe_srcs(html: str, stem: str) -> list:
-    return re.findall(rf'src="((?:[^"]*/)?{stem}[^"]*\.html)"', html)
+def _iframe_srcs(html: str, desc: str, aggregation: "str | None" = None) -> list:
+    """Every figure iframe on the page that is this panel, by entity rather than by prefix.
+
+    A hand-written filename prefix here is how the check and the writer drift apart: both
+    halves read right and neither is what lands on disk.
+    """
+    found = []
+    for src in re.findall(r'src="([^"]*\.html)"', html):
+        entities = parse_path(Path(src).name)
+        if entities.get("desc") != desc:
+            continue
+        if aggregation is not None and entities.get("aggregation") != aggregation:
+            continue
+        found.append(src)
+    return found
 
 
 def test_every_page_draws_the_roi_isc_matrix(pages):
     """The ROI ISC was computed and written to a TSV long before anything drew it, and the
     number table it fed reads the same whether the figure is there or not."""
     for page in pages:
-        found = _iframe_srcs(page.read_text(encoding="utf-8"), "isc_roimatrix")
+        found = _iframe_srcs(page.read_text(encoding="utf-8"), "iscmatrix", "roi")
         assert len(found) == 1, page.name
         assert (page.parent / found[0]).exists(), (page.name, found[0])
 
@@ -251,9 +264,9 @@ def test_every_page_draws_the_two_coherence_matrices(pages):
     the page still renders and every other assertion here still passes."""
     for page in pages:
         html = page.read_text(encoding="utf-8")
-        for stem in ("wtc_roimatrix", "wtc_chanmatrix"):
-            found = _iframe_srcs(html, stem)
-            assert len(found) == 1, (page.name, stem)
+        for aggregation in ("roi", "chan"):
+            found = _iframe_srcs(html, "wtcmatrix", aggregation)
+            assert len(found) == 1, (page.name, aggregation)
             assert (page.parent / found[0]).exists(), (page.name, found[0])
 
 
@@ -261,15 +274,15 @@ def test_the_roi_isc_matrix_is_one_figure_for_both_chromophores(pages):
     """Unlike the channel panels beside it: HbO and HbR share the figure and the scale, so
     there is no chromophore in its name."""
     for page in pages:
-        src = _iframe_srcs(page.read_text(encoding="utf-8"), "isc_roimatrix")[0]
-        assert "hbo" not in src and "hbr" not in src, (page.name, src)
+        src = _iframe_srcs(page.read_text(encoding="utf-8"), "iscmatrix", "roi")[0]
+        assert parse_path(Path(src).name).get("chromophore") is None, (page.name, src)
 
 
 def test_a_condition_page_draws_its_own_roi_isc_matrix(pages):
     """The window slug reaching the filename, the defect the coherence panels had."""
     seen = {}
     for page in pages:
-        src = _iframe_srcs(page.read_text(encoding="utf-8"), "isc_roimatrix")[0]
+        src = _iframe_srcs(page.read_text(encoding="utf-8"), "iscmatrix", "roi")[0]
         assert _window_in(src) == _window_of(page), (page.name, src)
         seen[_window_of(page)] = src
     assert len(set(seen.values())) == len(seen)

@@ -16,6 +16,8 @@ from pathlib import Path
 
 import mne
 
+from fnirs_pipe.io.naming import figure_name
+
 PLOTLY_CDN_URL = "https://cdn.plot.ly/plotly-3.5.0.min.js"
 
 # No scrollbar inside a figure's frame. The page that holds it sizes the frame to the height
@@ -147,8 +149,8 @@ def _save_multi_fig_html(figs: list, path: Path, views: "dict | None" = None) ->
     """Stack multiple Plotly figures in one HTML file. Returns total height px.
 
     ``views`` maps a condition key to the :func:`~fnirs_pipe.qc.subject.condition_views.window_view_spec`
-    that names its window, so ``…/motion_detail_S1D1760.html#video`` opens the run's figure
-    narrowed to that condition and the bare path opens the run's own view.
+    that names its window, so ``…_chan-S1D1760_desc-motion_nirs.html#video`` opens the run's
+    figure narrowed to that condition and the bare path opens the run's own view.
     """
     path.parent.mkdir(parents=True, exist_ok=True)
     head = (
@@ -179,17 +181,51 @@ def _save_multi_fig_html(figs: list, path: Path, views: "dict | None" = None) ->
     return max(total_h, 100)
 
 
-def _fig_href(figures_dir: Path, name: str) -> str:
+def figure_namer(label: str, condition: "str | None" = None, prefix: str = ""):
+    """Names every figure of one run, or of one condition of it, with the label bound in.
+
+    ::
+
+      fig_name = figure_namer("sub-01_task-rest")
+      fig_name("carpet")                  -> "sub-01_task-rest_desc-carpet_nirs.html"
+      fig_name("detail", channel="S1D1")  -> "sub-01_task-rest_chan-S1D1_desc-detail_nirs.html"
+      figure_namer("sub-01_task-rest", "game1")("carpet")
+                                          -> "sub-01_task-rest_cond-game1_desc-carpet_nirs.html"
+      figure_namer("sub-01_task-rest", prefix="raw")("carpet")
+                                          -> "sub-01_task-rest_desc-rawcarpet_nirs.html"
+
+    Binding the label here is what lets one ``figures/`` directory hold every run of a
+    subject. They used to be kept apart by a subdirectory per run, which meant the same
+    panel was called the same thing in two places and neither name said which run it was.
+    Binding the condition is what replaced appending ``_<slug>`` to a bare panel name.
+
+    ``prefix`` is how the raw viewer keeps its panels apart from the pipeline report's in
+    that shared folder: the two draw the same panels at different stages of one run, so
+    both would otherwise ask for ``desc-carpet``. Set in one place rather than spelled into
+    each panel's name, so the two writers call their panels the same thing.
+    """
+    def fig_name(desc: str, *, suffix: str = "nirs", extension: str = ".html",
+                 **entities) -> str:
+        entities.setdefault("condition", condition)
+        return figure_name(label, prefix + desc, suffix=suffix, extension=extension,
+                           **entities)
+
+    # what this namer is bound to, for a caller that has the namer and needs to say so
+    fig_name.label = label
+    fig_name.condition = condition
+    return fig_name
+
+
+def _fig_href(name: str) -> str:
     """URL of a figure as the report must link to it, the report sitting above ``figures/``.
 
-    figures/            + carpet_gvtd.html -> "figures/carpet_gvtd.html"
-    figures/sub-01_task-rest/ + same       -> "figures/sub-01_task-rest/carpet_gvtd.html"
+    ``"sub-01_task-rest_desc-carpet_nirs.html"``
+      -> ``"figures/sub-01_task-rest_desc-carpet_nirs.html"``
 
-    Per-run reports put their figures in a subdirectory so several runs of one subject stop
-    overwriting each other; a caller that passes a bare ``figures/`` still gets the old URL.
+    One line, and it stays a function because it is the one place that knows a report sits
+    directly above its figures. It used to take the directory as well, to pick out the
+    per-run subdirectory that no longer exists.
     """
-    if figures_dir.parent.name == "figures":
-        return f"figures/{figures_dir.name}/{name}"
     return f"figures/{name}"
 
 
@@ -203,8 +239,9 @@ def save_png(b64: str, figures_dir: Path, name: str) -> "str | None":
 
     ::
 
-      save_png(b64, .../group-01/figures, "wtc_hbo_S1D1.png")
-      -> "figures/wtc_hbo_S1D1.png"
+      save_png(b64, .../group-01/figures,
+               "group-G1_task-rest_chromo-hbo_chan-S1D1_desc-wtcmap_nirs.png")
+      -> "figures/group-G1_task-rest_chromo-hbo_chan-S1D1_desc-wtcmap_nirs.png"
 
     The two halves of writing a matplotlib figure out, in one call, because every caller
     does both and a caller that saved without taking the href back used to be how a figure
@@ -214,7 +251,7 @@ def save_png(b64: str, figures_dir: Path, name: str) -> "str | None":
     if not b64:
         return None
     _save_b64_png(b64, figures_dir / name)
-    return _fig_href(figures_dir, name)
+    return _fig_href(name)
 
 
 def pair_slug(pair: "tuple[str, str] | None", n_pairings: int) -> str:

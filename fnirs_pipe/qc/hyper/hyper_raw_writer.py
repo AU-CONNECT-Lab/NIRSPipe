@@ -14,7 +14,8 @@ from fnirs_pipe.pipeline.hyper import (
 )
 from fnirs_pipe.qc.subject.sqm_record import record_path
 from fnirs_pipe.qc.common.figure_io import (
-    _pair_fname, _save_figure_html, _save_multi_fig_html, get_channel_pairs,
+    _pair_fname, _save_figure_html, _save_multi_fig_html, figure_namer,
+    get_channel_pairs,
 )
 from fnirs_pipe.qc.figures.hyper.hyper_figures import (
     _cond_colors,
@@ -153,6 +154,7 @@ def _process_hyper_raw_group(
 
     group_dir = group_report_dir(output_dir, group_id)
     fig_dir   = group_dir / "figures"
+    fig_name  = figure_namer(label, prefix="raw")
     sqm_dir   = group_data_dir(output_dir, group_id, session)
     fig_dir.mkdir(parents=True, exist_ok=True)
 
@@ -216,7 +218,7 @@ def _process_hyper_raw_group(
             fig = fn(*args)
             if fig is None:
                 return
-            fname = f"{label}_desc-{desc}_nirs.html"
+            fname = fig_name(desc)
             h = _save_figure_html(fig, fig_dir / fname)
             figure_paths[name] = {"src": f"figures/{fname}", "h": h}
 
@@ -240,7 +242,7 @@ def _process_hyper_raw_group(
                 fig = build_motion_panel(motion, stage, conditions)
                 if fig is None:
                     continue
-                fname = f"{label}_desc-motion{stage}_nirs.html"
+                fname = fig_name(f"motion{stage}")
                 h = _save_figure_html(fig, fig_dir / fname)
                 figure_paths[f"motion_{stage}"] = {"src": f"figures/{fname}", "h": h}
         if "after" not in motion["stages"]:
@@ -288,14 +290,14 @@ def _process_hyper_raw_group(
                 aligned_raws, pair, subject_ids,
                 cardiac=(cardiac_l_freq, cardiac_h_freq) if cardiac_l_freq is not None else None,
             )
-            fname = f"{label}_desc-ch{_pair_fname(pair)}_nirs.html"
+            fname = fig_name("detail", channel=_pair_fname(pair))
             # No epoch panel: this design gives one block per condition, so a "mean epoch"
             # would average a single trial and draw its first seconds as an evoked response.
             _save_multi_fig_html([trace_fig, psd_fig], fig_dir / fname)
 
     if ch_pairs:
         figure_paths["ch_detail_template"] = (
-            f"figures/{label}_desc-ch{{pair}}_nirs.html"
+            f"figures/{fig_name('detail', channel='{pair}')}"
         )
 
     sqm = compute_hyper_sqm(

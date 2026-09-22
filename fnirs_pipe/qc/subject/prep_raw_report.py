@@ -13,7 +13,7 @@ from fnirs_pipe.qc.subject.condition_views import (
 )
 from fnirs_pipe.qc.common.figure_io import (
     _pair_fname, _save_figure_html, _save_multi_fig_html,
-    extract_markers, get_channel_pairs,
+    extract_markers, figure_namer, get_channel_pairs,
 )
 from fnirs_pipe.qc.common.windows import markers_on_data_axis
 from fnirs_pipe.qc.common.channel_table import (
@@ -181,6 +181,7 @@ def _process_run(
     label   = run["label"]
     session = run.get("session")
     fig_dir = sub_dir / "figures"
+    fig_name = figure_namer(label, prefix="raw")
     sqm_dir = sub_dir / (f"ses-{session}" if session else "") / "nirs"
     fig_dir.mkdir(parents=True, exist_ok=True)
     sqm_dir.mkdir(parents=True, exist_ok=True)
@@ -385,7 +386,7 @@ def _process_run(
                                                              windowed.get("spike_spans_short_s") or []] or None},
                                    raw_after=carpet_after,
                                    channel_set=gvtd_set, blocks=gvtd_blocks)
-        fname = f"{label}_desc-carpet_nirs.html"
+        fname = fig_name("carpet")
         # not written per condition: its GVTD is filtered, its carpet z-scored per channel
         # and its colour scale taken over the run, so a cut would give each condition a
         # scale no other one can be read against. One file, narrowed by URL fragment.
@@ -406,7 +407,7 @@ def _process_run(
             cv_per_channel=(raw_pc.get("raw") or {}).get("cv_per_channel") or {},
             cv_matrix=series.get("cv_matrix"), cv_win_times=series.get("cv_times"),
         )
-        fname = f"{label}_desc-scipsp_nirs.html"
+        fname = fig_name("scipsp")
         h     = _save_figure_html(fig, fig_dir / fname)
         figure_paths["sci_psp"] = {"src": f"figures/{fname}", "h": h}
         sci_psp_inline = {"figure": fig.to_dict()}
@@ -416,7 +417,7 @@ def _process_run(
     with guard("PSD", errors, label):
         fig = build_psd_mean_figure(raw, cardiac=(cardiac_l_freq, cardiac_h_freq))
         if fig:
-            fname = f"{label}_desc-psd_nirs.html"
+            fname = fig_name("psd")
             h     = _save_figure_html(fig, fig_dir / fname)
             figure_paths["psd"] = {"src": f"figures/{fname}", "h": h}
             psd_inline = {"figure": fig.to_dict()}
@@ -426,7 +427,7 @@ def _process_run(
     with guard("Trigger timeline", errors, label):
         fig = build_trigger_timeline_single(markers, cond_colors_)
         if fig:
-            fname = f"{label}_desc-trigger_nirs.html"
+            fname = fig_name("trigger")
             h     = _save_figure_html(fig, fig_dir / fname)
             figure_paths["trigger"] = {"src": f"figures/{fname}", "h": h}
             trigger_timeline_inline = {"figure": fig.to_dict()}
@@ -438,7 +439,7 @@ def _process_run(
         # subject report uses, so the grid and the per-channel table below it read in one
         # order and a short channel never lands in a long channel's verdict
         fig = channel_quality_heatmap(sci_thresh=sci_threshold, **heatmap_args(ch_rows))
-        fname = f"{label}_desc-chsummary_nirs.html"
+        fname = fig_name("chsummary", suffix="qc")
         h     = _save_figure_html(fig, fig_dir / fname)
         figure_paths["ch_summary"] = {"src": f"figures/{fname}", "h": h}
         ch_summary_inline = {"figure": fig.to_dict()}
@@ -469,7 +470,7 @@ def _process_run(
             fig = build_epoch_preview_figure(raw_haemo, epoch_tmin=fig_tmin,
                                              epoch_tmax=fig_tmax, sep_bands=sep_bands)
             if fig:
-                fname = f"{label}_desc-epochmean_nirs.html"
+                fname = fig_name("epochmean")
                 h     = _save_figure_html(fig, fig_dir / fname)
                 figure_paths["epoch_mean"] = {"src": f"figures/{fname}", "h": h}
 
@@ -498,14 +499,14 @@ def _process_run(
             )
             if built:
                 saved = _section_motion_detail(
-                    built, label, errors, fig_dir, condition_spans=cond_windows,
-                    filename=f"{label}_desc-motion{{ch}}_nirs.html",
+                    built, label, errors, fig_dir, fig_name,
+                    condition_spans=cond_windows,
                 )["motion_detail_pairs"]
                 motion_channels = [entry["pair"] for entry in saved]
                 # every one of these is the same four-row layout, so one height serves the
                 # panel and the viewer does not carry eighty-eight of them
                 figure_paths["motion_detail_template"] = {
-                    "src": f"figures/{label}_desc-motion{{ch}}_nirs.html",
+                    "src": f"figures/{fig_name('motion', channel='{ch}')}",
                     "h": saved[0]["h"] if saved else 700,
                 }
 
@@ -525,7 +526,7 @@ def _process_run(
                 if not by_label:
                     continue
                 pair = ch.rsplit(" ", 1)[0]
-                fname = f"{label}_desc-trialimg{_pair_fname(pair)}_nirs.html"
+                fname = fig_name("trialimage", channel=_pair_fname(pair))
                 figs = [f for figs in by_label.values() for f in figs]
                 h = _save_multi_fig_html(figs, fig_dir / fname)
                 trial_img_pairs.append(
@@ -553,13 +554,13 @@ def _process_run(
                     raw_haemo, detail_markers, pair, _MAX_TS_PTS, fig_tmin, fig_tmax,
                     cardiac=(cardiac_l_freq, cardiac_h_freq),
                 )
-                fname = f"{label}_desc-ch{_pair_fname(pair)}_nirs.html"
+                fname = fig_name("detail", channel=_pair_fname(pair))
                 _save_multi_fig_html(
                     [detail_fig, psd_fig, epoch_fig], fig_dir / fname,
                     views=condition_view_table(detail_fig, detail_spans))
         if channel_pairs:
             figure_paths["ch_detail_template"] = (
-                f"figures/{label}_desc-ch{{pair}}_nirs.html"
+                f"figures/{fig_name('detail', channel='{pair}')}"
             )
 
     # `channel_pairs or None` so a run whose Beer-Lambert failed still gets a table, built
@@ -586,7 +587,7 @@ def _process_run(
                 labels, sqms)]
             fig = trial_quality_heatmap(labels, sqms)
             if fig:
-                fname = f"{label}_desc-trialqc_nirs.html"
+                fname = fig_name("trialqc", suffix="qc")
                 h     = _save_figure_html(fig, fig_dir / fname)
                 figure_paths["trial_qc"] = {"src": f"figures/{fname}", "h": h}
                 trial_qc_inline = {"figure": fig.to_dict(), "n_trials": len(labels)}
@@ -783,14 +784,14 @@ def _write_condition_views(ctx: dict, payload: dict, output_path: Path, run_labe
 
     def save_figure(panel: str, slug: str, fig) -> "dict | None":
         """One condition's own figure file, named so `figure_leaks` can recognise it."""
-        fname = f"{run_label}_desc-{panel.replace('_', '')}_{slug}_nirs.html"
+        fname = figure_namer(run_label, slug, prefix="raw")(panel.replace("_", ""))
         h = _save_figure_html(fig, fig_dir / fname)
         return {"src": f"figures/{fname}", "h": h}
 
     def save_stack(panel: str, slug: str, name: str, figs) -> "dict | None":
         """The same, for a panel whose file holds several figures of one channel."""
-        fname = (f"{run_label}_desc-{panel.replace('_', '')}"
-                 f"{_pair_fname(name)}_{slug}_nirs.html")
+        fname = figure_namer(run_label, slug, prefix="raw")(
+            panel.replace("_", ""), channel=_pair_fname(name))
         h = _save_multi_fig_html(list(figs), fig_dir / fname)
         return {"pair": name, "src": f"figures/{fname}", "h": h}
 

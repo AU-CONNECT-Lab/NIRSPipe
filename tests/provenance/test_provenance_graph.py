@@ -10,6 +10,7 @@ import json
 import pytest
 
 from fnirs_pipe.qc.common.provenance import scan, to_mermaid
+from fnirs_pipe.qc.common.figure_io import figure_namer
 from fnirs_pipe.qc.figures.common.provenance_figure import write_provenance
 
 
@@ -324,13 +325,12 @@ def test_a_node_without_data_keeps_a_plain_label(tmp_path):
 
 def test_write_provenance_writes_nothing_without_sidecars(tmp_path):
     out = tmp_path / "out"
-    assert write_provenance(tmp_path, out, stem="sub-01_provenance") == []
+    assert write_provenance(tmp_path, out, figure_namer("sub-01")) == []
 
 
 def test_cmd_provenance_writes_where_the_report_looks_for_it(tmp_path, capsys):
-    # a subject's report embeds figures/<run>/provenance.png by relative path, so
-    # re-rendering has to land on that exact name or an existing report keeps showing the
-    # old diagram
+    # a subject's report embeds the diagram by relative path, so re-rendering has to land
+    # on the name the namer gives or an existing report keeps showing the old diagram
     from fnirs_pipe.cli.qc import cmd_provenance
 
     nirs = tmp_path / "sub-01" / "nirs"
@@ -340,13 +340,14 @@ def test_cmd_provenance_writes_where_the_report_looks_for_it(tmp_path, capsys):
 
     cmd_provenance(tmp_path)
 
-    figures = tmp_path / "sub-01" / "figures" / "sub-01_task-tapping"
-    assert (figures / "provenance.png").exists()
-    assert (figures / "provenance.mmd").exists()
+    figures = tmp_path / "sub-01" / "figures"
+    run = figure_namer("sub-01_task-tapping")
+    assert (figures / run("provenance", extension=".png")).exists()
+    assert (figures / run("provenance", extension=".mmd")).exists()
 
 
 def test_a_tree_with_no_runs_to_split_on_keeps_one_graph(tmp_path):
-    """A group tree carries no run entity, so it lands on the unsuffixed name."""
+    """A group tree carries no run entity, so its one graph is named after the group."""
     from fnirs_pipe.cli.qc import cmd_provenance
 
     nirs = tmp_path / "group-d01" / "nirs"
@@ -355,7 +356,8 @@ def test_a_tree_with_no_runs_to_split_on_keeps_one_graph(tmp_path):
 
     cmd_provenance(tmp_path)
 
-    assert (tmp_path / "group-d01" / "figures" / "provenance.png").exists()
+    name = figure_namer("group-d01")("provenance", extension=".png")
+    assert (tmp_path / "group-d01" / "figures" / name).exists()
 
 
 def test_write_provenance_writes_png_and_mermaid(tmp_path):
@@ -364,7 +366,7 @@ def test_write_provenance_writes_png_and_mermaid(tmp_path):
     _sidecar(nirs, "sub-01_desc-od_nirs", step="od_conversion", sources=["/bids/in.snirf"])
     out = tmp_path / "logs"
 
-    written = write_provenance(nirs, out, stem="sub-01_provenance", title="sub-01")
+    written = write_provenance(nirs, out, figure_namer("sub-01"), title="sub-01")
 
     assert {p.suffix for p in written} == {".png", ".mmd"}
     assert all(p.exists() and p.stat().st_size > 0 for p in written)

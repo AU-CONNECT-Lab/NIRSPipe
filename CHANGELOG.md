@@ -25,7 +25,13 @@ BIDS App alignment and the output naming rework. Renames land in later entries h
 - **Breaking**: each `fnirs-hyper` subcommand is its own console script now, taking `[<source tree>] <output tree> group`; `run` and `pair-null` read the source tree, the other four only re-read what this package wrote
 - `fnirs-prep`'s output positional is named `output_dir`, not `derivatives_dir`; that name now means the tree `fnirs-hyper` reads
 - A GUI page whose command should have written a report and did not now says so, instead of the line it shares with commands that write only tables
-- Entity parsing, the channel-decisions path, the quality-record name and the dyad table stem each have one definition; they had three, four, five and nine
+- **Breaking**: every figure is named by entities and every subject's runs share one `figures/`; the per-run and per-scope subdirectories are gone
+- **Breaking**: the raw viewer's figures take a `raw` prefix on their `desc-`, sharing that folder with the report's own
+- A section builder is handed a namer instead of a filename suffix, and the per-condition leak check reads the `cond-` entity instead of a name suffix and a prefix whitelist
+- Entity parsing, the channel-decisions path, the quality-record name, the dyad table stem and a condition page's name each have one definition; they had three, four, five, nine and three
+
+### Fixed
+- Per-condition report pages were written under a name neither the nav strip inside them nor the subject index looked for, so every link to one was dead
 
 ## [0.46.0] - 2026-09-21
 

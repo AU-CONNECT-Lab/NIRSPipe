@@ -23,7 +23,7 @@ import pandas as pd
 
 from fnirs_pipe.qc.boilerplate import collect_software_versions
 from fnirs_pipe.io.naming import report_name
-from fnirs_pipe.qc.common.figure_io import _pair_fname, pair_slug
+from fnirs_pipe.qc.common.figure_io import _pair_fname, figure_namer, pair_slug
 from fnirs_pipe.qc.common.report_shell import (
     OUTLIER_Z, footer_vars, outlier_flags, page_vars, render)
 from fnirs_pipe.utils.logging import get_logger
@@ -40,7 +40,7 @@ NULL_PERCENTILE = 95
 # disk reach the page; the window page a row already links is not repeated here.
 _ARTEFACTS = (
     ("raw QC",     "{raw_report}"),
-    ("provenance", "figures/provenance.png"),
+    ("provenance", "figures/{provenance}"),
     ("coherence",  "nirs/{stem}_hyper-wtc.tsv"),
     ("null",       "nirs/{stem}_hyper-wtc-phasenull.tsv"),
     ("ISC pairs",  "nirs/{stem}_hyper-iscpairs.tsv"),
@@ -183,7 +183,8 @@ def _links(group_dir: Path, stem: str) -> list[dict[str, str]]:
     return [{"text": text, "href": rel}
             for text, template in _ARTEFACTS
             if (group_dir / (rel := template.format(
-                stem=stem, raw_report=report_name(stem, desc="raw")))).exists()]
+                stem=stem, raw_report=report_name(stem, desc="raw"),
+                provenance=figure_namer(stem)("provenance", extension=".png")))).exists()]
 
 
 def _tasks(nirs_dir: Path, group_id: str) -> "list[str]":
