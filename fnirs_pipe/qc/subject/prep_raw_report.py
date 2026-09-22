@@ -173,7 +173,8 @@ def _process_run(
     )
     from fnirs_pipe.qc.common.screen_scope import resolve_screen_scope
     from fnirs_pipe.qc.subject.sqm_record import (
-        motion_sections, raw_condition_sections, raw_sections, sqm_record_dict,
+        RECORD_SUFFIXES, motion_sections, raw_condition_sections, raw_sections,
+        sqm_record_dict,
     )
 
     label   = run["label"]
@@ -596,7 +597,7 @@ def _process_run(
     # desc-sqmraw, not desc-sqm: the pipeline writes a record at the latter path for the
     # same run, and one silently overwriting the other loses whichever ran first. Same
     # shape as that one, so the group table reads both through one path.
-    sqm_path = sqm_dir / f"{label}_desc-sqmraw_nirs.json"
+    sqm_path = sqm_dir / (label + RECORD_SUFFIXES["sqmraw"])
     sections = {**raw_secs, "windowed": windowed, "per_channel": raw_pc}
     # written whenever the recording carries conditions, independently of `by_condition`:
     # the flag decides what a report shows, the record says what was measured. Deliberately

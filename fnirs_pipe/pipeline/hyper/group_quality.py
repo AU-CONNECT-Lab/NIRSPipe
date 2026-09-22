@@ -15,6 +15,7 @@ import mne
 import numpy as np
 import pandas as pd
 
+from fnirs_pipe.qc.common.channel_table import CHANNEL_METRICS_SUFFIX
 from fnirs_pipe.io.derivatives import group_data_dir, hyper_stem
 from fnirs_pipe.pipeline.hyper.group_io import (
     GroupEntry, _for_task, _hyper_sidecar, _member_sqm_files,
@@ -394,7 +395,7 @@ def load_group_sqm(
         sidecars = _member_sqm_files(output_dir, entry,
                                      f"{entry.subject_id}*_desc-sci_nirs.json")
         csvs     = _member_sqm_files(output_dir, entry,
-                                     f"{entry.subject_id}*_channel_metrics.csv")
+                                     f"{entry.subject_id}*{CHANNEL_METRICS_SUFFIX}")
         marks, read_bads = ((sidecars, _bad_from_sidecar) if sidecars
                             else (csvs, _bad_from_csv))
         kind = "desc-sci sidecar" if sidecars else "channel metrics CSV"
@@ -548,7 +549,7 @@ def _screen_cutoffs(json_path: Path) -> dict:
 
 def _bad_from_csv(csv_path: Path) -> list[str]:
     try:
-        ch_df = pd.read_csv(csv_path)
+        ch_df = pd.read_csv(csv_path, sep="	")
     except Exception:
         return []
     if "is_bad" not in ch_df.columns:

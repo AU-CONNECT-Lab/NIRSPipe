@@ -20,6 +20,7 @@ import pandas as pd
 import pytest
 
 from fnirs_pipe.pipeline.hyper import GroupEntry, load_group_sqm
+from fnirs_pipe.qc.common.channel_table import CHANNEL_METRICS_SUFFIX
 
 BADS_TAP = ["S6_D5 760", "S6_D5 850"]
 BADS_REST = ["S7_D6 760"]
@@ -42,7 +43,8 @@ def _csv(root, task, bads):
     names = ["S1_D1 760", "S6_D5 760", "S6_D5 850", "S7_D6 760"]
     pd.DataFrame({"name": names, "sci": [0.9, 0.2, 0.2, 0.3],
                   "is_bad": [n in bads for n in names]}).to_csv(
-        root / "sub-01" / "nirs" / f"sub-01_task-{task}_channel_metrics.csv", index=False)
+        root / "sub-01" / "nirs" / (f"sub-01_task-{task}" + CHANNEL_METRICS_SUFFIX),
+        index=False, sep=chr(9))
 
 
 def _load(root, scope="run", task="tap"):

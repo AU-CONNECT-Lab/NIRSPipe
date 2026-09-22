@@ -7,7 +7,10 @@ these build a subject folder rather than running anything.
 
 import json
 
+from fnirs_pipe.qc.common.channel_table import CHANNEL_METRICS_SUFFIX
 from fnirs_pipe.qc.common.report_shell import outlier_flags as _outlier_flags
+
+TAB = chr(9)
 from fnirs_pipe.qc.subject.subject_index import (
     _COLUMNS,
     _links,
@@ -22,7 +25,7 @@ def _run(sub_dir, task, *, sci=0.96, gvtd=9e-3, bad_pairs=(), channels=("S1_D1",
     nirs = sub_dir / "nirs"
     nirs.mkdir(parents=True, exist_ok=True)
 
-    (nirs / f"{label}_desc-sqm_nirs.json").write_text(json.dumps({
+    (nirs / f"{label}_desc-sqm_qc.json").write_text(json.dumps({
         "step": "sqm",
         "raw": {"sci_mean": sci, "channel_retention_rate": 1.0, "gvtd_p95": gvtd},
         "motion": {"motion_corrected_pct": 0.1},
@@ -34,11 +37,12 @@ def _run(sub_dir, task, *, sci=0.96, gvtd=9e-3, bad_pairs=(), channels=("S1_D1",
                  "sfreq": 10.0, "duration_s": 300.0},
     }))
 
-    lines = ["name,sci,snr,cv,corr,is_bad"]
+    lines = [TAB.join(["name", "sci", "snr", "cv", "corr", "is_bad"])]
     for pair in channels:
         for wavelength in (760, 850):
-            lines.append(f"{pair} {wavelength},0.9,20,0.1,0.5,{pair in bad_pairs}")
-    (nirs / f"{label}_channel_metrics.csv").write_text("\n".join(lines) + "\n")
+            lines.append(TAB.join([f"{pair} {wavelength}", "0.9", "20", "0.1", "0.5",
+                                   str(pair in bad_pairs)]))
+    (nirs / (label + CHANNEL_METRICS_SUFFIX)).write_text("\n".join(lines) + "\n")
     return label
 
 

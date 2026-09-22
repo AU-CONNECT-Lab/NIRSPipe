@@ -16,6 +16,9 @@ BIDS App alignment and the output naming rework. Renames land in later entries h
 - A dyad tree's `dataset_description.json` names the tree it was computed from under `SourceDatasets`
 
 ### Changed
+- **Breaking**: the quality record is `desc-sqm_qc.json`, not `desc-sqm_nirs.json`; a .json whose suffix is `nirs` is by BIDS definition a snirf's sidecar
+- **Breaking**: the GLM writes `design.tsv`, `desc-glm_nirsmap.tsv` and `desc-contrast_nirsmap.tsv`, tab separated; they were comma-separated `.csv`
+- **Breaking**: per-channel quality is `desc-channel_qc.tsv`, not `channel_metrics.csv`
 - **Breaking**: connectivity and amplitude outputs are named by entities rather than invented suffixes: `desc-hbo_fc.tsv` is `chromo-hbo_stat-pearson_relmat.tsv`, `alffroi.tsv` is `seg-<map>_agg-roi_stat-alff_nirsmap.tsv`, and the ROI map's filename names the `seg-` entity
 - **Breaking**: each `fnirs-hyper` subcommand is its own console script now, taking `[<source tree>] <output tree> group`; `run` and `pair-null` read the source tree, the other four only re-read what this package wrote
 - `fnirs-prep`'s output positional is named `output_dir`, not `derivatives_dir`; that name now means the tree `fnirs-hyper` reads

@@ -140,9 +140,12 @@ def entities_of(label: str) -> dict[str, str | None]:
     return {key: entity_of(label, key) for key in ("ses", "task", "run")}
 
 
-# what record_path writes, for the readers that glob for it. Four of them spelled it out by
-# hand, which is one rename away from a cohort page that silently aggregates nothing
-RECORD_SUFFIX = "_desc-sqm_nirs.json"
+# What record_path writes, for the readers that glob for it. Four of them spelled it out by
+# hand, which is one rename away from a cohort page that silently aggregates nothing.
+# The suffix is `qc`, not `nirs`: a .json whose suffix is nirs is by BIDS definition the
+# sidecar of a snirf, and there is no desc-sqm snirf for this to be the sidecar of.
+RECORD_SUFFIXES = {desc: f"_desc-{desc}_qc.json" for desc in SQM_DESCS}
+RECORD_SUFFIX = RECORD_SUFFIXES["sqm"]
 
 
 def record_path(nirs_dir: Path, label: str) -> Path:
@@ -152,7 +155,7 @@ def record_path(nirs_dir: Path, label: str) -> Path:
 def record_label(path: "Path | str") -> str:
     """The run label a record is named for: the inverse of :func:`record_path`.
 
-    ``"sub-01_task-rest_desc-sqm_nirs.json"`` -> ``"sub-01_task-rest"``
+    ``"sub-01_task-rest_desc-sqm_qc.json"`` -> ``"sub-01_task-rest"``
     """
     name = getattr(path, "name", path)
     return name[: name.index("_desc-")]
@@ -1187,7 +1190,7 @@ def write_run_sqm(
     sections: dict[str, Any],
     bids_root: Path | None = None,
 ) -> Path:
-    """Write ``<label>_desc-sqm_nirs.json``, provenance keys included.
+    """Write ``<label>_desc-sqm_qc.json``, provenance keys included.
 
     The provenance lives in the same file rather than a sidecar beside it: a sidecar for
     ``x.json`` would resolve to ``x.json`` itself. A top-level ``step`` is all the

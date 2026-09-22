@@ -502,18 +502,27 @@ def run_glm_pipeline(
     return haemo, glm_est, dm, raw_resid
 
 
-def _entity_prefix(source_path: str | None) -> str:
-    """BIDS entity prefix carried over from the input file, so per-task outputs do not collide.
+_TAB = "\t"
 
-    .../sub-01_task-tapping_desc-resampled_nirs.snirf -> "sub-01_task-tapping_"
-    unknown source                                    -> ""
+
+def _glm_name(source_path: "str | None", suffix: str, **extra) -> str:
+    """One GLM output's filename, carrying the entities of the recording it was fitted on.
+
+    ``(".../sub-01_task-tapping_desc-resampled_nirs.snirf", "design")``
+        -> ``"sub-01_task-tapping_design.tsv"``
+
+    The input's own ``desc`` is dropped: it describes the recording, not the fit. Anything
+    in ``extra`` is what distinguishes these outputs from each other, so the caller passes
+    ``desc="glm"`` or ``desc="contrast"``.
     """
-    if not source_path:
-        return ""
-    stem = Path(source_path).name.split(".")[0]
-    # drop the desc- entity (it describes the input, not these outputs) and the suffix
-    tokens = [t for t in stem.split("_") if not t.startswith("desc-")][:-1]
-    return "_".join(tokens) + "_" if tokens else ""
+    from fnirs_pipe.io.derivatives import entity_of
+    from fnirs_pipe.io.naming import derivative_path
+
+    stem = Path(source_path).name if source_path else ""
+    carried = {key: entity_of(stem, short)
+               for key, short in (("subject", "sub"), ("session", "ses"),
+                                  ("task", "task"), ("run", "run"))}
+    return derivative_path("", suffix, ".tsv", **carried, **extra).name
 
 
 def _save_glm_outputs(
@@ -547,13 +556,21 @@ def _save_glm_outputs(
         return df
 
     output_dir.mkdir(parents=True, exist_ok=True)
-    prefix = _entity_prefix(source_path)
-    dm_path = output_dir / f"{prefix}design_matrix.csv"
-    design_matrix.to_csv(dm_path, index=False)
+
+    def _named(suffix: str, **extra) -> Path:
+        """The scheme's name for one GLM output, dropped into the directory given here.
+
+        The name comes from the config so it cannot drift; the directory does not, because
+        this function is handed a subject's ``nirs/`` rather than the tree root.
+        """
+        return output_dir / _glm_name(source_path, suffix, **extra)
+
+    dm_path = _named("design")
+    design_matrix.to_csv(dm_path, index=False, sep=_TAB)
     _sidecar(dm_path, "design_matrix")
 
-    res_path = output_dir / f"{prefix}glm_results.csv"
-    _mark_bads(glm_est.to_dataframe()).to_csv(res_path, index=False)
+    res_path = _named("nirsmap", desc="glm")
+    _mark_bads(glm_est.to_dataframe()).to_csv(res_path, index=False, sep=_TAB)
     _sidecar(res_path, "glm_fit")
 
     if contrasts:
@@ -562,8 +579,8 @@ def _save_glm_outputs(
             df = _mark_bads(result.to_dataframe())
             df.insert(0, "contrast", name)
             frames.append(df)
-        con_path = output_dir / f"{prefix}contrasts.csv"
-        pd.concat(frames, ignore_index=True).to_csv(con_path, index=False)
+        con_path = _named("nirsmap", desc="contrast")
+        pd.concat(frames, ignore_index=True).to_csv(con_path, index=False, sep=_TAB)
         _sidecar(con_path, "contrasts")
 
     logger.info("GLM outputs written to %s", output_dir)

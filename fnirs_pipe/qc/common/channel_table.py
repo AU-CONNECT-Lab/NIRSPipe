@@ -593,6 +593,12 @@ Status names the criterion a rejected channel failed. Screening is a union, so a
     return out
 
 
+# The per-channel quality table. Not `_channels.tsv`: that name is BIDS' own, for the
+# optode pairing and channel properties of one recording, and this is scores and the
+# reason a channel was rejected.
+CHANNEL_METRICS_SUFFIX = "_desc-channel_qc.tsv"
+
+
 def save_channel_csv(rows: list[dict], label: str, out_dir: Path,
                      sci_threshold: float | None = None,
                      psp_threshold: float | None = None) -> None:
@@ -607,10 +613,11 @@ def save_channel_csv(rows: list[dict], label: str, out_dir: Path,
     reasons = {r["name"]: r["reason"]
                for r in format_rows(rows, sci_threshold, psp_threshold=psp_threshold)}
     rows = [{**r, "reason": reasons.get(r["name"], "")} for r in rows]
-    out_path = Path(out_dir) / f"{label}_channel_metrics.csv"
+    out_path = Path(out_dir) / (label + CHANNEL_METRICS_SUFFIX)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with out_path.open("w", newline="", encoding="utf-8") as fh:
-        writer = csv.DictWriter(fh, fieldnames=list(CSV_FIELDS), extrasaction="ignore")
+        writer = csv.DictWriter(fh, fieldnames=list(CSV_FIELDS), extrasaction="ignore",
+                                delimiter="	")
         writer.writeheader()
         writer.writerows(rows)
     logger.info("%s | channel metrics CSV saved: %s", label, out_path)

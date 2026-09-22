@@ -28,7 +28,10 @@ from fnirs_pipe.qc.boilerplate import collect_software_versions
 from fnirs_pipe.qc.common.report_shell import (
     OUTLIER_Z, footer_vars, guard, outlier_flags, page_vars, render)
 from fnirs_pipe.qc.subject.condition_views import condition_stems
-from fnirs_pipe.qc.subject.sqm_record import SQM_DESCS, entities_of
+from fnirs_pipe.qc.common.channel_table import CHANNEL_METRICS_SUFFIX
+from fnirs_pipe.qc.subject.sqm_record import (
+    RECORD_SUFFIXES, SQM_DESCS, entities_of,
+)
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("qc.subject_index")
@@ -68,7 +71,7 @@ _REPORTS = (
 _ARTEFACTS = (
     ("MNE",        "{label}_qc_mne.html"),
     ("provenance", "figures/{label}/provenance.png"),
-    ("channels",   "nirs/{label}_channel_metrics.csv"),
+    ("channels",   "nirs/{label}" + CHANNEL_METRICS_SUFFIX),
     ("aux",        "nirs/{label}_desc-aux_timeseries.tsv.gz"),
 )
 
@@ -167,7 +170,7 @@ def _records(nirs_dir: Path) -> list[tuple[str, dict]]:
     """
     by_run: dict[str, Path] = {}
     for desc in SQM_DESCS:
-        for path in sorted(nirs_dir.glob(f"*_desc-{desc}_nirs.json")):
+        for path in sorted(nirs_dir.glob(f"*{RECORD_SUFFIXES[desc]}")):
             by_run.setdefault(path.name[: path.name.index(f"_desc-{desc}")], path)
 
     out: list[tuple[str, dict]] = []
@@ -198,7 +201,7 @@ def _condition_hrefs(sub_dir: Path, label: str, names: list[str]) -> list[str | 
 def collect_bad_channels(sub_dir: Path, labels: list[str]) -> dict:
     """Which source-detector pair each run rejected, over all of the subject's runs.
 
-    Read from each run's ``_channel_metrics.csv``, which carries one ``is_bad`` per channel.
+    Read from each run's ``_desc-channel_qc.tsv``, which carries one ``is_bad`` per channel.
     The two wavelengths of a pair are collapsed into the pair: rejecting one rejects the
     optode, and a grid of 44 rows says nothing 22 rows do not.
 
@@ -212,12 +215,12 @@ def collect_bad_channels(sub_dir: Path, labels: list[str]) -> dict:
     bad_by_label: dict[str, set[str]] = {}
 
     for label in labels:
-        path = sub_dir / "nirs" / f"{label}_channel_metrics.csv"
+        path = sub_dir / "nirs" / (label + CHANNEL_METRICS_SUFFIX)
         if not path.exists():
             continue
         bad: set[str] = set()
         with path.open(encoding="utf-8", newline="") as fh:
-            for entry in csv.DictReader(fh):
+            for entry in csv.DictReader(fh, delimiter="	"):
                 pair = (entry.get("name") or "").rsplit(" ", 1)[0]
                 if not pair:
                     continue

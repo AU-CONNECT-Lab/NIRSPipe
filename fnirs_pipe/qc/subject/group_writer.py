@@ -37,6 +37,7 @@ from fnirs_pipe.qc.subject.sqm_record import (
     POST_BANDPASS_HAEMO_STAGES,
     PRE_BANDPASS_HAEMO_STAGE,
     SECTIONS,
+    RECORD_SUFFIXES,
     SQM_DESCS,
     fill_skipped_long_sections,
 )
@@ -123,7 +124,7 @@ def _scalars(sqm: dict) -> dict:
 
 def _bids_name_from_sqm_path(path: Path) -> str:
     for desc in SQM_DESCS:
-        if (name := path.name.removesuffix(f"_desc-{desc}_nirs.json")) != path.name:
+        if (name := path.name.removesuffix(RECORD_SUFFIXES[desc])) != path.name:
             return name
     return path.stem
 
@@ -168,7 +169,7 @@ def _collect_sqm(
     """
     by_run: dict[str, tuple[Path, str]] = {}
     for desc in SQM_DESCS:
-        for sqm_path in sorted(output_dir.glob(f"{entity_glob}/**/nirs/*_desc-{desc}_nirs.json")):
+        for sqm_path in sorted(output_dir.glob(f"{entity_glob}/**/nirs/*{RECORD_SUFFIXES[desc]}")):
             by_run.setdefault(_bids_name_from_sqm_path(sqm_path), (sqm_path, desc))
 
     full_rows: list[dict] = []

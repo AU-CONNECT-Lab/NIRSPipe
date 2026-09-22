@@ -3,7 +3,7 @@
 Assembled from what the dyads already wrote, never from anything held in memory, so the page
 can be rebuilt for a tree produced weeks ago and a dyad the run skipped is simply absent
 rather than stale. Each dyad contributes its quality record
-(``group-*/nirs/<label>_desc-sqm_nirs.json``) and, where the run wrote one, its usable-time
+(``group-*/nirs/<label>_desc-sqm_qc.json``) and, where the run wrote one, its usable-time
 table (``<label>_hyper-usable.tsv``).
 
 What it reports is what a dyad has and a subject cannot:
