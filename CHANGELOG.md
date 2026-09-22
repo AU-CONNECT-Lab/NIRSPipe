@@ -11,6 +11,7 @@ BIDS App alignment and the output naming rework. Renames land in later entries h
 ### Added
 - Every long CLI flag also answers to its underscore spelling; `--n-jobs` also to `--nprocs` and `--n_cpus`, `--skip-bids-validation` to `--skip_bids_validator`
 - `dataset_description.json` records the package version under `GeneratedBy`
+- `fnirs_pipe/io/naming.py` builds and parses every derivative name from one pybids config, `fnirs_pipe/data/fnirs_pipe_bids_config.json`
 - Each output tree carries a `.bidsignore` waving through reports, logs and figures, and nothing else
 - A dyad tree's `dataset_description.json` names the tree it was computed from under `SourceDatasets`
 

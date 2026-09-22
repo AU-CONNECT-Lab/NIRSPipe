@@ -1,0 +1,51 @@
+{
+    "name": "fnirs_pipe",
+    "entities": [
+        {
+            "name": "group",
+            "pattern": "(?:^|[_/\\\\])group-([a-zA-Z0-9]+)",
+            "directory": "group-{group}"
+        },
+        {
+            "name": "pairing",
+            "pattern": "(?:^|_)pair-([a-zA-Z0-9]+)"
+        },
+        {
+            "name": "chromophore",
+            "pattern": "(?:^|_)chromo-([a-zA-Z0-9]+)"
+        },
+        {
+            "name": "channel",
+            "pattern": "(?:^|_)chan-([a-zA-Z0-9]+)"
+        },
+        {
+            "name": "aggregation",
+            "pattern": "(?:^|_)agg-([a-zA-Z0-9]+)"
+        },
+        {
+            "name": "band",
+            "pattern": "(?:^|_)band-([a-zA-Z0-9]+)"
+        },
+        {
+            "name": "condition",
+            "pattern": "(?:^|_)cond-([a-zA-Z0-9]+)"
+        },
+        {
+            "name": "nulldist",
+            "pattern": "(?:^|_)null-([a-zA-Z0-9]+)"
+        },
+        {
+            "name": "statistic",
+            "pattern": "(?:^|_)stat-([a-zA-Z0-9]+)"
+        }
+    ],
+    "default_path_patterns": [
+        "sub-{subject}[/ses-{session}]/{datatype<nirs>|nirs}/sub-{subject}[_ses-{session}][_task-{task}][_acq-{acquisition}][_run-{run}][_pair-{pairing}][_chromo-{chromophore}][_chan-{channel}][_seg-{segmentation}][_label-{label}][_agg-{aggregation}][_band-{band}][_cond-{condition}][_null-{nulldist}][_stat-{statistic}][_desc-{desc}]_{suffix<nirs|channels|optodes|events|relmat|nirsmap|timeseries|design|qc>}{extension<.snirf|.tsv|.json|.npz|.tsv.gz>|.tsv}",
+        "group-{group}[/ses-{session}]/{datatype<nirs>|nirs}/group-{group}[_ses-{session}][_task-{task}][_acq-{acquisition}][_run-{run}][_pair-{pairing}][_chromo-{chromophore}][_chan-{channel}][_seg-{segmentation}][_label-{label}][_agg-{aggregation}][_band-{band}][_cond-{condition}][_null-{nulldist}][_stat-{statistic}][_desc-{desc}]_{suffix<nirs|channels|optodes|events|relmat|nirsmap|timeseries|design|qc>}{extension<.snirf|.tsv|.json|.npz|.tsv.gz>|.tsv}",
+        "sub-{subject}/{datatype<figures>}/sub-{subject}[_ses-{session}][_task-{task}][_acq-{acquisition}][_run-{run}][_pair-{pairing}][_chromo-{chromophore}][_chan-{channel}][_seg-{segmentation}][_label-{label}][_agg-{aggregation}][_band-{band}][_cond-{condition}][_null-{nulldist}][_stat-{statistic}][_desc-{desc}]_{suffix<nirs|relmat|nirsmap|design|qc>}{extension<.html|.png|.svg>|.html}",
+        "group-{group}/{datatype<figures>}/group-{group}[_ses-{session}][_task-{task}][_acq-{acquisition}][_run-{run}][_pair-{pairing}][_chromo-{chromophore}][_chan-{channel}][_seg-{segmentation}][_label-{label}][_agg-{aggregation}][_band-{band}][_cond-{condition}][_null-{nulldist}][_stat-{statistic}][_desc-{desc}]_{suffix<nirs|relmat|nirsmap|design|qc>}{extension<.html|.png|.svg>|.html}",
+        "sub-{subject}/sub-{subject}[_ses-{session}][_task-{task}][_acq-{acquisition}][_run-{run}][_cond-{condition}][_desc-{desc}]_{suffix<report>}{extension<.html>|.html}",
+        "group-{group}/group-{group}[_ses-{session}][_task-{task}][_acq-{acquisition}][_run-{run}][_pair-{pairing}][_cond-{condition}][_desc-{desc}]_{suffix<report>}{extension<.html>|.html}",
+        "[seg-{segmentation}_][agg-{aggregation}_][band-{band}_][cond-{condition}_][null-{nulldist}_][stat-{statistic}_][desc-{desc}_]{suffix<relmat|nirsmap|qc|report>}{extension<.tsv|.json|.html>|.tsv}"
+    ]
+}
