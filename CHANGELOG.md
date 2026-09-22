@@ -15,6 +15,7 @@ BIDS App alignment and the output naming rework. Renames land in later entries h
 ## [0.46.0] - 2026-09-21
 
 ### Added
+- The Hyper Analysis page sends `--wtc-window-s`; the flag shipped with no control
 - The Hyper Analysis page reaches `pair-null` and `group-null`; the command dropdown offered neither
 - `fnirs-hyper group-null`'s cohort tables carry four corrections, `q` (BH), `q_by`, `q_holm`, `q_bonferroni`, and a `family` column; only the per-cell tables had one
 - `fnirs-hyper group-null` writes both reads of the cohort test, `test` column `resample` and `paired`; the phase null is only valid read paired above the cell

@@ -89,6 +89,7 @@ def build_qc_args(command: str, opts: dict) -> list[str]:
         args += _num("--isc-fmin", opts.get("isc_fmin"))
         args += _num("--isc-fmax", opts.get("isc_fmax"))
         args += _num("--wtc-roi-min-channels", opts.get("wtc_roi_min_channels"))
+        args += _num("--wtc-window-s", opts.get("wtc_window_s"))
         args += _num("--isc-whiten", opts.get("isc_whiten"))
         args += _num("--isc-max-lag", opts.get("isc_max_lag"))
         args += _num("--isc-phase-null", opts.get("isc_phase_null"))

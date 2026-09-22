@@ -99,6 +99,11 @@ def _run_section():
                 field("Min channels per ROI",
                       dbc.Input(id="hy-wtc-roi-min-channels", type="number", min=1, step=1,
                                 placeholder="2")),
+                # left empty the condition is the unit, which is what the CLI defaults to.
+                # Set, conditions of unequal length stop being compared on unequal terms
+                field("Equal windows (s)",
+                      dbc.Input(id="hy-wtc-window-s", type="number", min=1, step=5,
+                                placeholder="condition length")),
             ),
         ),
         section("Coherence null",
