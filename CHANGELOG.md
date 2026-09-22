@@ -6,9 +6,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+BIDS App alignment and the output naming rework. Renames land in later entries here.
+
 ### Added
 - Every long CLI flag also answers to its underscore spelling; `--n-jobs` also to `--nprocs` and `--n_cpus`, `--skip-bids-validation` to `--skip_bids_validator`
 - `dataset_description.json` records the package version under `GeneratedBy`
+
+## [0.46.0] - 2026-09-21
+
+### Added
 - The Hyper Analysis page reaches `pair-null` and `group-null`; the command dropdown offered neither
 - `fnirs-hyper group-null`'s cohort tables carry four corrections, `q` (BH), `q_by`, `q_holm`, `q_bonferroni`, and a `family` column; only the per-cell tables had one
 - `fnirs-hyper group-null` writes both reads of the cohort test, `test` column `resample` and `paired`; the phase null is only valid read paired above the cell
