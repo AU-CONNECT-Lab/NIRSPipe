@@ -9,6 +9,7 @@ must keep the column off rather than print a zero that reads as a result.
 
 import pandas as pd
 
+from fnirs_pipe.io.naming import report_name
 from fnirs_pipe.qc.hyper.hyper_index import NULL_PERCENTILE, _links, _past_null
 
 
@@ -59,9 +60,9 @@ def test_a_tree_with_no_null_gets_no_column():
 def test_only_the_artefacts_on_disk_are_linked(tmp_path):
     stem = "group-d01_task-full"
     (tmp_path / "nirs").mkdir()
-    (tmp_path / f"{stem}_desc-hyperraw_nirs.html").write_text("x", encoding="utf-8")
+    (tmp_path / report_name(stem, desc="raw")).write_text("x", encoding="utf-8")
     (tmp_path / "nirs" / f"{stem}_hyper-wtc.tsv").write_text("x", encoding="utf-8")
 
     links = _links(tmp_path, stem)
     assert [link["text"] for link in links] == ["raw QC", "coherence"]
-    assert links[0]["href"] == f"{stem}_desc-hyperraw_nirs.html"
+    assert links[0]["href"] == report_name(stem, desc="raw")

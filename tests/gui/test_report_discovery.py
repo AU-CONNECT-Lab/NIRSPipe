@@ -15,19 +15,21 @@ import dash_bootstrap_components as dbc
 import pytest
 from dash import html
 
+from fnirs_pipe.io.naming import derivative_path, report_name
 from fnirs_pipe.interface.callbacks._cli_run import (
     REPORT_PATTERNS, find_report, run_and_report,
 )
 
-# what each command actually writes, as the writer spells it. Kept beside the patterns so a
-# rename that updates one and not the other fails here rather than on the page.
+# What each command actually writes. Built rather than spelled out, so this cannot agree
+# with REPORT_PATTERNS while both disagree with the writers: that is what happened when the
+# reports were renamed and two hand-written tables were edited to match each other.
 WRITTEN = {
-    "prep-raw":     "sub-01/sub-01_task-rest_desc-raw_nirs.html",
-    "hyper-raw":    "group-G1/group-G1_task-rest_desc-hyperraw_nirs.html",
-    "run":          "group-G1/group-G1_task-rest_desc-hyperpost_nirs.html",
-    "index":        "group-G1/group-G1_index.html",
-    "cohort":       "cohort_nirs.html",
-    "cohort-hyper": "cohort_hyper_nirs.html",
+    "prep-raw":     "sub-01/" + report_name("sub-01_task-rest", desc="raw"),
+    "hyper-raw":    "group-G1/" + report_name("group-G1_task-rest", desc="raw"),
+    "run":          "group-G1/" + report_name("group-G1_task-rest"),
+    "index":        "group-G1/" + report_name("group-G1", desc="index"),
+    "cohort":       derivative_path("", "report", ".html", desc="subjects").name,
+    "cohort-hyper": derivative_path("", "report", ".html", desc="groups").name,
 }
 
 

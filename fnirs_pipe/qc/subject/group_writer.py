@@ -32,6 +32,7 @@ from fnirs_pipe.qc.common.report_shell import (
     page_vars,
     render,
 )
+from fnirs_pipe.io.naming import derivative_path, report_name
 from fnirs_pipe.qc.subject.sqm_record import (
     OPTIONAL_SECTIONS,
     POST_BANDPASS_HAEMO_STAGES,
@@ -52,7 +53,7 @@ _STRIP_CLICK_JS = (
     "if(!gd||!gd.on){return setTimeout(bind,150);}"
     "gd.on('plotly_click',function(e){var p=e.points&&e.points[0];if(!p||p.customdata==null)return;"
     "var b=Array.isArray(p.customdata)?p.customdata[0]:p.customdata;"
-    "if(b)window.open('../'+b.split('_')[0]+'/'+b+'_desc-raw_nirs.html','_blank');});}"
+    "if(b)window.open('../'+b.split('_')[0]+'/'+b+'_desc-raw_report.html','_blank');});}"
     "bind();})();</script>"
 )
 
@@ -241,7 +242,7 @@ def _summary_meta(df: pd.DataFrame, metric_cols: list[str], descs: list[str]) ->
 
 def _render_group(
     output_dir: Path,
-    out_stem: str,
+    out_desc: str,
     title: str,
     df: pd.DataFrame,
     full_rows: list[dict],
@@ -258,10 +259,10 @@ def _render_group(
     errors: list[str] = []
     notes: list[str] = []
     if df.empty:
-        note(notes, out_stem, "no quality records found, so the report is empty; run the "
+        note(notes, out_desc, "no quality records found, so the report is empty; run the "
                               "pipeline or `fnirs-qc prep-raw` first")
 
-    tsv_path = output_dir / f"{out_stem}.tsv"
+    tsv_path = output_dir / derivative_path("", "qc", ".tsv", desc=out_desc).name
     df.to_csv(tsv_path, sep="\t", index=False)
     logger.info("group TSV  -> %s (rows=%d, cols=%d)", tsv_path, len(df), len(df.columns))
 
@@ -273,7 +274,7 @@ def _render_group(
     if spanning:
         shown = ", ".join(spanning[:6])
         more = f", and {len(spanning) - 6} more" if len(spanning) > 6 else ""
-        note(notes, out_stem,
+        note(notes, out_desc,
              f"{PRE_BANDPASS_HAEMO_STAGE}_* was measured before the bandpass and "
              f"{'/'.join(POST_BANDPASS_HAEMO_STAGES)}_* after it, so the difference between "
              f"such a pair is mostly the filter and not what the step did. "
@@ -282,7 +283,8 @@ def _render_group(
              f"table stores each stage as it stands and does not. *_band_frac carries the "
              f"same trap with a denominator that moves, so read *_band_power instead.")
 
-    fig_dir = output_dir / out_stem
+    # under figures/ so the .bidsignore line covers these as it covers every other figure
+    fig_dir = output_dir / "figures"
     fig_dir.mkdir(parents=True, exist_ok=True)
 
     figure_paths: dict = {}
@@ -290,9 +292,9 @@ def _render_group(
     def _save(name: str, desc: str, fig, extra_js: str = "") -> None:
         if fig is None:
             return
-        fname = f"{out_stem}_desc-{desc}_nirs.html"
+        fname = derivative_path("", "nirs", ".html", datatype="figures", desc=desc).name
         h = _save_figure_html(fig, fig_dir / fname, extra_js=extra_js)
-        figure_paths[name] = {"src": f"{out_stem}/{fname}", "h": h,
+        figure_paths[name] = {"src": f"figures/{fname}", "h": h,
                               "w": getattr(fig.layout, "width", None)}
 
     # one number per run, and the few worst names, which every panel below highlights
@@ -300,7 +302,7 @@ def _render_group(
     worst: list[str] = []
     outliers: dict = {}
     if metric_cols and not df.empty:
-        with guard("Outlier detection", errors, out_stem):
+        with guard("Outlier detection", errors, out_desc):
             outliers = detect_outliers(df, metric_cols)
             scores = deviation_scores(df, metric_cols)
             finite = np.where(np.isfinite(scores), scores, -np.inf)
@@ -311,34 +313,35 @@ def _render_group(
     dropped: list[str] = []
     if not df.empty and metric_cols:
         ordered_cols: list[str] = []
-        with guard("Metric ordering", errors, out_stem):
+        with guard("Metric ordering", errors, out_desc):
             _, ordered_cols = group_metrics(metric_cols)
-        with guard("Deviation strip", errors, out_stem):
+        with guard("Deviation strip", errors, out_desc):
             strip, dropped = build_deviation_strip(df, ordered_cols)
             _save("strip", "strip", strip)
-        with guard("Boxplots", errors, out_stem):
+        with guard("Boxplots", errors, out_desc):
             for i, (box_title, fig) in enumerate(build_grouped_boxes(df, ordered_cols)):
-                fname = f"{out_stem}_desc-box{i}_nirs.html"
+                fname = derivative_path("", "nirs", ".html", datatype="figures",
+                                        desc=f"box{i}").name
                 h = _save_figure_html(fig, fig_dir / fname, extra_js=_STRIP_CLICK_JS)
                 box_panels.append({
-                    "src": f"{out_stem}/{fname}", "h": h,
+                    "src": f"figures/{fname}", "h": h,
                     "w": int(getattr(fig.layout, "width", None) or 300), "title": box_title,
                 })
 
     if dropped:
         shown = ", ".join(dropped[:8])
         more = f", and {len(dropped) - 8} more" if len(dropped) > 8 else ""
-        note(notes, out_stem,
+        note(notes, out_desc,
              f"{len(dropped)} metrics hold the same value on every run, so there is no "
              f"deviation to plot and the overview leaves them out ({shown}{more}). They are "
              f"still in the table.")
 
     _warn_on_mixed_windows(full_rows)
-    with guard("Windowed grid", errors, out_stem):
+    with guard("Windowed grid", errors, out_desc):
         _save("windows", "windows", build_window_grid(full_rows, highlight=worst))
-    with guard("Condition panels", errors, out_stem):
+    with guard("Condition panels", errors, out_desc):
         _save("conditions", "conditions", build_condition_panels(full_rows, highlight=worst))
-    with guard("Condition matrix", errors, out_stem):
+    with guard("Condition matrix", errors, out_desc):
         _save("conditionmatrix", "conditionmatrix",
               build_condition_matrix(full_rows, order=ranked))
 
@@ -347,7 +350,7 @@ def _render_group(
     windows = {float(v) for v in (r.get("qc_window_s") for r in full_rows)
                if isinstance(v, (int, float))}
     if windows - {SCI_WINDOW_S}:
-        note(notes, out_stem,
+        note(notes, out_desc,
              f"the table's sci_win_mean, psp_mean, cv_mean and snr_mean are measured over "
              f"{SCI_WINDOW_S:g} s windows whatever --qc-window is set to, so they stay "
              f"comparable across runs; this cohort binned its windowed panels at "
@@ -356,7 +359,7 @@ def _render_group(
 
     conditions = condition_names(full_rows)
     if not conditions:
-        note(notes, out_stem,
+        note(notes, out_desc,
              "no run carries conditions, so the per-condition panels are absent; the "
              "windowed panel keeps the time axis")
 
@@ -367,7 +370,7 @@ def _render_group(
             heading=title,
             nav_meta=[("runs", len(df)), ("metrics", len(metric_cols))],
         ),
-        **footer_vars(scope=out_stem, errors=errors, notes=notes,
+        **footer_vars(scope=out_desc, errors=errors, notes=notes,
                      versions=collect_software_versions()),
         title=title,
         n_rows=len(df),
@@ -385,7 +388,7 @@ def _render_group(
         table_rows=df.values.tolist(),
         outliers=outliers,
     )
-    html_path = output_dir / f"{out_stem}.html"
+    html_path = output_dir / derivative_path("", "report", ".html", desc=out_desc).name
     html_path.write_text(html, encoding="utf-8")
     logger.info("group HTML -> %s", html_path)
     return html_path
@@ -394,13 +397,13 @@ def _render_group(
 def _build_group(
     output_dir: Path,
     entity_glob: str,
-    out_stem: str,
+    out_desc: str,
     title: str,
     template_name: str = "group_report.html.j2",
 ) -> Path:
     """Glob SQM JSONs and render group report."""
     df, full_rows, descs = _collect_sqm(output_dir, entity_glob)
-    return _render_group(output_dir, out_stem, title, df, full_rows, descs, template_name)
+    return _render_group(output_dir, out_desc, title, df, full_rows, descs, template_name)
 
 
 def rows_to_dataframe(full_rows: list[dict]) -> pd.DataFrame:
@@ -416,7 +419,7 @@ def build_group_raw_report(output_dir: Path) -> Path:
     """Aggregate all sub-XX/nirs/...desc-sqm_nirs.json into cohort_nirs.{tsv,html}."""
     return _build_group(
         output_dir, entity_glob="sub-*",
-        out_stem="cohort_nirs",
+        out_desc="subjects",
         title="Cohort QC (individual subjects)",
     )
 

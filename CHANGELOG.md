@@ -16,6 +16,8 @@ BIDS App alignment and the output naming rework. Renames land in later entries h
 - A dyad tree's `dataset_description.json` names the tree it was computed from under `SourceDatasets`
 
 ### Changed
+- **Breaking**: every report page is `_report.html` with entities: the four spellings (`_qc.html`, `_desc-raw_nirs.html`, `_qc_mne.html`, a subject index shaped like a run report) are one
+- **Breaking**: the cohort pages are `desc-subjects_report.html` and `desc-groups_report.html`, their tables `desc-subjects_qc.tsv` and `desc-groups_qc.tsv`, their figures under `figures/`
 - **Breaking**: the quality record is `desc-sqm_qc.json`, not `desc-sqm_nirs.json`; a .json whose suffix is `nirs` is by BIDS definition a snirf's sidecar
 - **Breaking**: the GLM writes `design.tsv`, `desc-glm_nirsmap.tsv` and `desc-contrast_nirsmap.tsv`, tab separated; they were comma-separated `.csv`
 - **Breaking**: per-channel quality is `desc-channel_qc.tsv`, not `channel_metrics.csv`

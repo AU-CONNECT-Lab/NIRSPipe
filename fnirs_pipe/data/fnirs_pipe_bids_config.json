@@ -46,6 +46,7 @@
         "group-{group}/{datatype<figures>}/group-{group}[_ses-{session}][_task-{task}][_acq-{acquisition}][_run-{run}][_pair-{pairing}][_chromo-{chromophore}][_chan-{channel}][_seg-{segmentation}][_label-{label}][_agg-{aggregation}][_band-{band}][_cond-{condition}][_null-{nulldist}][_stat-{statistic}][_desc-{desc}]_{suffix<nirs|relmat|nirsmap|design|qc>}{extension<.html|.png|.svg>|.html}",
         "sub-{subject}/sub-{subject}[_ses-{session}][_task-{task}][_acq-{acquisition}][_run-{run}][_cond-{condition}][_desc-{desc}]_{suffix<report>}{extension<.html>|.html}",
         "group-{group}/group-{group}[_ses-{session}][_task-{task}][_acq-{acquisition}][_run-{run}][_pair-{pairing}][_cond-{condition}][_desc-{desc}]_{suffix<report>}{extension<.html>|.html}",
+        "{datatype<figures>}/[seg-{segmentation}_][agg-{aggregation}_][cond-{condition}_][stat-{statistic}_][desc-{desc}_]{suffix<nirs|relmat|nirsmap|qc>}{extension<.html|.png|.svg>|.html}",
         "[seg-{segmentation}_][agg-{aggregation}_][band-{band}_][cond-{condition}_][null-{nulldist}_][stat-{statistic}_][desc-{desc}_]{suffix<relmat|nirsmap|qc|report>}{extension<.tsv|.json|.html>|.tsv}"
     ]
 }

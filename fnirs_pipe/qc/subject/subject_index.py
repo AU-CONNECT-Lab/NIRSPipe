@@ -28,6 +28,7 @@ from fnirs_pipe.qc.boilerplate import collect_software_versions
 from fnirs_pipe.qc.common.report_shell import (
     OUTLIER_Z, footer_vars, guard, outlier_flags, page_vars, render)
 from fnirs_pipe.qc.subject.condition_views import condition_stems
+from fnirs_pipe.io.naming import report_name
 from fnirs_pipe.qc.common.channel_table import CHANNEL_METRICS_SUFFIX
 from fnirs_pipe.qc.subject.sqm_record import (
     RECORD_SUFFIXES, SQM_DESCS, entities_of,
@@ -61,19 +62,29 @@ _COLUMNS = (
 # saw both commands has both pages and a run that saw one has one. The row's title links
 # whichever comes first; the rest join the artefact links beside it.
 _REPORTS = (
-    ("pipeline QC", "{label}_qc.html"),
-    ("raw QC",      "{label}_desc-raw_nirs.html"),
+    ("pipeline QC", "{report}"),
+    ("raw QC",      "{raw_report}"),
 )
 
 
 # Other products of a run, as (link text, path relative to sub_dir). Only the ones on disk
 # reach the page; the report the row already links is not repeated here.
 _ARTEFACTS = (
-    ("MNE",        "{label}_qc_mne.html"),
+    ("MNE",        "{mne_report}"),
     ("provenance", "figures/{label}/provenance.png"),
     ("channels",   "nirs/{label}" + CHANNEL_METRICS_SUFFIX),
     ("aux",        "nirs/{label}_desc-aux_timeseries.tsv.gz"),
 )
+
+
+def _names(label: str) -> dict[str, str]:
+    """The substitutions the two tables above use, so each page is spelled in one place."""
+    return {
+        "label": label,
+        "report": report_name(label),
+        "raw_report": report_name(label, desc="raw"),
+        "mne_report": report_name(label, desc="mne"),
+    }
 
 
 # ---- Conditions ----
@@ -152,13 +163,13 @@ def _reports(sub_dir: Path, label: str) -> list[dict[str, str]]:
     """This run's report pages that exist, in _REPORTS order."""
     return [{"text": text, "href": rel}
             for text, template in _REPORTS
-            if (sub_dir / (rel := template.format(label=label))).exists()]
+            if (sub_dir / (rel := template.format(**_names(label)))).exists()]
 
 
 def _links(sub_dir: Path, label: str, extra: list[dict[str, str]] = ()) -> list[dict[str, str]]:
     return list(extra) + [{"text": text, "href": rel}
                           for text, template in _ARTEFACTS
-                          if (sub_dir / (rel := template.format(label=label))).exists()]
+                          if (sub_dir / (rel := template.format(**_names(label)))).exists()]
 
 
 def _records(nirs_dir: Path) -> list[tuple[str, dict]]:
@@ -471,7 +482,7 @@ def write_subject_index(
         run_command=run_command,
         mode=mode or "",
     )
-    out_path = sub_dir / f"sub-{subject}_qc.html"
+    out_path = sub_dir / report_name(f"sub-{subject}", desc="index")
     out_path.write_text(html, encoding="utf-8")
     logger.info("sub-%s | run index saved: %s", subject, out_path)
     return out_path

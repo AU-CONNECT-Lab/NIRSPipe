@@ -7,16 +7,17 @@ these build a subject folder rather than running anything.
 
 import json
 
+from fnirs_pipe.io.naming import report_name
 from fnirs_pipe.qc.common.channel_table import CHANNEL_METRICS_SUFFIX
 from fnirs_pipe.qc.common.report_shell import outlier_flags as _outlier_flags
-
-TAB = chr(9)
 from fnirs_pipe.qc.subject.subject_index import (
     _COLUMNS,
     _links,
     collect_bad_channels,
     collect_runs,
 )
+
+TAB = chr(9)
 
 
 def _run(sub_dir, task, *, sci=0.96, gvtd=9e-3, bad_pairs=(), channels=("S1_D1", "S2_D2")):
@@ -119,7 +120,7 @@ def test_a_tree_without_channel_metrics_says_nothing(tmp_path):
 
 def test_only_the_artefacts_on_disk_are_linked(tmp_path):
     label = _run(tmp_path, "rest")
-    (tmp_path / f"{label}_qc_mne.html").write_text("")
+    (tmp_path / report_name(label, desc="mne")).write_text("")
 
     texts = [link["text"] for link in _links(tmp_path, label)]
     assert texts == ["MNE", "channels"]      # no provenance png, no aux table

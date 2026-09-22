@@ -22,6 +22,7 @@ from pathlib import Path
 import pandas as pd
 
 from fnirs_pipe.qc.boilerplate import collect_software_versions
+from fnirs_pipe.io.naming import report_name
 from fnirs_pipe.qc.common.figure_io import _pair_fname, pair_slug
 from fnirs_pipe.qc.common.report_shell import (
     OUTLIER_Z, footer_vars, outlier_flags, page_vars, render)
@@ -38,7 +39,7 @@ NULL_PERCENTILE = 95
 # Other products of a task, as (link text, path relative to group_dir). Only the ones on
 # disk reach the page; the window page a row already links is not repeated here.
 _ARTEFACTS = (
-    ("raw QC",     "{stem}_desc-hyperraw_nirs.html"),
+    ("raw QC",     "{raw_report}"),
     ("provenance", "figures/provenance.png"),
     ("coherence",  "nirs/{stem}_hyper-wtc.tsv"),
     ("null",       "nirs/{stem}_hyper-wtc-phasenull.tsv"),
@@ -181,7 +182,8 @@ def _isc_mean(nirs_dir: Path, stem: str, label: "str | None" = None,
 def _links(group_dir: Path, stem: str) -> list[dict[str, str]]:
     return [{"text": text, "href": rel}
             for text, template in _ARTEFACTS
-            if (group_dir / (rel := template.format(stem=stem))).exists()]
+            if (group_dir / (rel := template.format(
+                stem=stem, raw_report=report_name(stem, desc="raw")))).exists()]
 
 
 def _tasks(nirs_dir: Path, group_id: str) -> "list[str]":
@@ -217,8 +219,9 @@ def collect_rows(group_dir: Path, group_id: str) -> "list[dict]":
             source = whole if where is None else bycond
             null = whole_null if where is None else bycond_null
             slug = pair_slug(pair, len(pairings))
-            desc = "hyperpost" if label is None else f"{_pair_fname(label)}_hyperpost"
-            report = group_dir / f"{stem}_desc-{desc}{slug}_nirs.html"
+            report = group_dir / report_name(
+                stem, condition=_pair_fname(label) if label else None,
+                pairing=slug.lstrip("_") or None)
             return {
                 "task": task,
                 "condition": label,
@@ -305,7 +308,7 @@ def write_hyper_index(
         has_null=any(row["past_null"] for row in rows),
         run_command=run_command,
     )
-    out_path = group_dir / f"group-{group_id}_index.html"
+    out_path = group_dir / report_name(f"group-{group_id}", desc="index")
     out_path.write_text(html, encoding="utf-8")
     logger.info("group-%s | dyad index saved: %s", group_id, out_path)
     return out_path

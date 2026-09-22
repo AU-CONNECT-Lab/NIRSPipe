@@ -31,6 +31,7 @@ import numpy as np
 import pandas as pd
 
 from fnirs_pipe.qc.boilerplate import collect_software_versions
+from fnirs_pipe.io.naming import derivative_path, report_name
 from fnirs_pipe.qc.common.figure_io import _save_figure_html
 from fnirs_pipe.qc.figures.hyper.group_hyper_figures import (
     build_condition_dials, build_null_strip, build_pair_field, build_usable_bars,
@@ -136,8 +137,8 @@ def collect_rows(output_dir: Path) -> list[dict]:
                       for name, v in (screening.get("windows") or {}).items()
                       if v.get("percentile") is not None}
 
-        report = group_dir / f"{label}_desc-hyperraw_nirs.html"
-        index = group_dir / f"{group_dir.name}_index.html"
+        report = group_dir / report_name(label, desc="raw")
+        index = group_dir / report_name(group_dir.name, desc="index")
         href = next((f"{group_dir.name}/{p.name}" for p in (report, index) if p.exists()),
                     None)
 
@@ -235,7 +236,7 @@ def build_group_hyper_report(output_dir: Path) -> "Path | None":
         note(notes, scope, "no usable-time table found beside the dyad records, so the "
                            "panels that split the usable time are empty")
 
-    tsv_path = output_dir / "cohort_hyper_nirs.tsv"
+    tsv_path = output_dir / derivative_path("", "qc", ".tsv", desc="groups").name
     pd.DataFrame([{k: v for k, v in f.items() if k != "href"} for f in flats]).to_csv(
         tsv_path, sep="\t", index=False)
 
@@ -270,7 +271,7 @@ def build_group_hyper_report(output_dir: Path) -> "Path | None":
                     for label in order],
     )
 
-    out_path = output_dir / "cohort_hyper_nirs.html"
+    out_path = output_dir / derivative_path("", "report", ".html", desc="groups").name
     out_path.write_text(html, encoding="utf-8")
     logger.info("cohort hyper report saved: %s (%d dyads)", out_path, len(rows))
     return out_path

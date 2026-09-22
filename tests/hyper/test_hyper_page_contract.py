@@ -26,6 +26,8 @@ import mne
 import numpy as np
 import pytest
 
+from fnirs_pipe.io.naming import parse_path
+
 from fnirs_pipe.pipeline.hyper import GroupEntry
 
 SFREQ, DURATION = 5.0, 400.0
@@ -104,11 +106,12 @@ def _tables(page: Path) -> tuple:
 
 
 def _window_of(page: Path) -> str:
-    """The condition a page is for, "" for the run's own page."""
-    if "desc-" not in page.name:
-        return ""
-    slug = page.name.split("desc-")[1].split("_")[0]
-    return "" if slug == "hyperpost" else slug
+    """The condition a page is for, "" for the run's own page.
+
+    Read off the cond- entity rather than sliced out of a compound desc-: the run page
+    simply carries no cond- at all.
+    """
+    return parse_path(page.name).get("condition") or ""
 
 
 def _urls(per_ch, per_roi, axis, rois) -> set:

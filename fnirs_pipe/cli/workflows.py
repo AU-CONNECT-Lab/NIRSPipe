@@ -15,6 +15,7 @@ from typing import Any
 
 from fnirs_pipe.cli import _shared
 from fnirs_pipe.io.bids import bids_label, get_layout, get_nirs_files
+from fnirs_pipe.io.naming import report_name
 from fnirs_pipe.io.derivatives import write_bidsignore, write_dataset_description
 from fnirs_pipe.io.snirf import read_snirf
 from fnirs_pipe.pipeline.denoise import DEFAULT_FILTER_METHOD, DEFAULT_FILTER_ORDER
@@ -534,7 +535,7 @@ def _emit_subject_report(subject, sub_dir, last_raw, last_result, prep_config, a
         bad_channels=last_result.bad_channels,
         config=prep_config,
         run_command=" ".join(sys.argv),
-        out_path=sub_dir / f"{sqm_label or f'sub-{subject}'}_qc.html",
+        out_path=sub_dir / report_name(sqm_label or f"sub-{subject}"),
         coords_head=coords_head,
         good_mask=good_mask,
         ch_names_brain=hbo_names,

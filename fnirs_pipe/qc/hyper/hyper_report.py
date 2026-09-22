@@ -27,6 +27,7 @@ from fnirs_pipe.qc.boilerplate.vocabulary import (
     metric_summary,
 )
 from fnirs_pipe.qc.metrics import SCI_PASS
+from fnirs_pipe.io.naming import report_name
 from fnirs_pipe.qc.common.figure_io import (
     _fig_href,
     _pair_fname,
@@ -481,13 +482,13 @@ def build_hyper_report(
     if session:
         name_parts.append(f"ses-{session}")
     name_parts.append(f"task-{task}")
-    output_path = (group_report_dir(output_dir, group_id)
-                   / ("_".join(name_parts) + "_desc-hyperraw_nirs.html"))
+    label = "_".join(name_parts)
+    output_path = group_report_dir(output_dir, group_id) / report_name(label, desc="raw")
 
     # the post report if `fnirs-hyper run` has written one; a raw-only tree has none, and
-    # the index is built from the same coherence tables, so neither link is offered there
-    post = output_path.with_name(
-        output_path.name.replace("_desc-hyperraw_", "_desc-hyperpost_"))
+    # the index is built from the same coherence tables, so neither link is offered there.
+    # The two differ by the desc- entity alone, so neither name is derived from the other
+    post = output_path.with_name(report_name(label))
     post_href = post.name if post.exists() else None
 
     html = render(
@@ -536,7 +537,7 @@ def build_hyper_report(
         # this page's own name, which is what the rating server files a verdict under
         page_stem=output_path.stem,
         post_href=post_href,
-        index_href=f"group-{group_id}_index.html" if post_href else "",
+        index_href=report_name(f"group-{group_id}", desc="index") if post_href else "",
     )
     output_path.write_text(html, encoding="utf-8")
     logger.info("Hyper raw report saved: %s", output_path)
@@ -1270,10 +1271,12 @@ def build_hyper_post_report(
     # the two are not the same number: one carries the whole recording's cone of influence
     # and the other two edges of its own.
     def _page_path(label: "str | None", pair: "tuple[str, str] | None" = None) -> Path:
-        desc = "hyperpost" if label is None else f"{_pair_fname(label)}_hyperpost"
-        return (group_report_dir(output_dir, group_id)
-                / f"group-{group_id}_task-{task}_desc-{desc}"
-                  f"{_pair_slug(pair)}_nirs.html")
+        # the condition and the pairing are entities of their own; the whole-run page for
+        # the only pairing carries neither
+        return group_report_dir(output_dir, group_id) / report_name(
+            f"group-{group_id}_task-{task}",
+            condition=_pair_fname(label) if label else None,
+            pairing=_pair_slug(pair).lstrip("_") or None)
 
     # every page carries the whole strip, so any one of them reaches the others in a click
     nav_pages = [(None, "Whole run")] + [(label, label) for label, _, _ in cond_windows]
@@ -1388,7 +1391,7 @@ def build_hyper_post_report(
             group_id=group_id,
             task=task,
             subject_ids=pair_ids,
-            index_href=f"group-{group_id}_index.html",
+            index_href=report_name(f"group-{group_id}", desc="index"),
             wtc_fmin=wtc_fmin,
             wtc_fmax=wtc_fmax,
             wtc_band_fmin=band_fmin,

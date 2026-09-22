@@ -52,6 +52,7 @@ Report sections
 import base64
 import json
 from contextlib import contextmanager
+from fnirs_pipe.io.naming import report_name
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -1888,7 +1889,7 @@ def build_subject_report(
         subject=subject,
         run_label=sqm_label,
         run_entities={k: v for k, v in entities_of(sqm_label or "").items() if v},
-        index_href=(f"sub-{subject}_qc.html" if sqm_label else None),
+        index_href=(report_name(f"sub-{subject}", desc="index") if sqm_label else None),
         run_command=run_command,
         n_bad=n_bad,
         n_total=n_total,
@@ -2324,7 +2325,8 @@ def _write_condition_reports(
     def _page_name(label: "str | None") -> str:
         if label is None:
             return out_path.name
-        return f"{out_path.stem.removesuffix('_qc')}_desc-{_pair_fname(label)}_qc.html"
+        return report_name(out_path.stem.removesuffix("_report"),
+                           condition=_pair_fname(label))
 
     nav_pages = [(None, "Whole run")] + [(lab, lab) for lab in by_condition]
 
@@ -2449,7 +2451,8 @@ def _build_mne_report(
         report = mne.Report(title=f"sub-{subject} fNIRS QC", verbose=False)
         report.add_raw(raw_intensity, title="Raw intensity", psd=True, butterfly=False)
         report.add_raw(raw_haemo, title="HbO / HbR", psd=True, butterfly=False)
-        mne_path = out_path.with_name(out_path.stem + "_mne.html")
+        mne_path = out_path.with_name(
+            report_name(out_path.stem.removesuffix("_report"), desc="mne"))
         report.save(str(mne_path), overwrite=True, open_browser=False, verbose=False)
         logger.info("sub-%s | MNE report saved: %s", subject, mne_path)
     except Exception as e:

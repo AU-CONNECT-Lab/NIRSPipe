@@ -31,13 +31,16 @@ def preview_text(argv: list[str], shell: str) -> str:
 # not a quiet "not found". Keeping the five tables that used to live on four pages in one
 # place is what makes a renamed report show up as one broken page rather than none.
 REPORT_PATTERNS: dict[str, list[str]] = {
-    "prep-raw":     ["sub-*/sub-*_desc-raw_nirs.html"],
-    "hyper-raw":    ["group-*/group-*_desc-hyperraw_nirs.html"],
-    # the second pattern finds a tree written before the reports moved into group-<id>/
-    "run":          ["group-*/group-*_desc-hyperpost_nirs.html", "group-*_hyper*.html"],
-    "index":        ["group-*/group-*_index.html"],
-    "cohort":       ["cohort_nirs.html"],
-    "cohort-hyper": ["cohort_hyper_nirs.html"],
+    "prep-raw":     ["sub-*/sub-*_desc-raw_report.html"],
+    "hyper-raw":    ["group-*/group-*_desc-raw_report.html"],
+    # the dyad's landing page is its index, which `run` writes too; the task page is the
+    # fallback for a tree whose index failed. A bare `_task-*_report.html` glob would also
+    # match the per-condition and per-pairing pages, and those are not where to land
+    "run":          ["group-*/group-*_desc-index_report.html",
+                     "group-*/group-*_task-*_report.html"],
+    "index":        ["group-*/group-*_desc-index_report.html"],
+    "cohort":       ["desc-subjects_report.html"],
+    "cohort-hyper": ["desc-groups_report.html"],
 }
 
 

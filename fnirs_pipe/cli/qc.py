@@ -8,6 +8,7 @@ from pathlib import Path
 
 from fnirs_pipe import __version__
 
+from fnirs_pipe.io.naming import report_name
 from fnirs_pipe.cli import _shared
 from fnirs_pipe.qc.metrics import SCI_PASS
 from fnirs_pipe.utils.logging import get_logger, setup_logging
@@ -91,7 +92,7 @@ def cmd_prep_raw(
             if ses:  name_parts.append(f"ses-{ses}")
             if task: name_parts.append(f"task-{task}")
             html_path = (subject_report_dir(output_dir, subject)
-                         / ("_".join(name_parts) + "_desc-raw_nirs.html"))
+                         / report_name("_".join(name_parts), desc="raw"))
             print(f"Generating raw QC report: {html_path.name} ...")
             try:
                 build_prep_raw_report(group_runs, html_path, dpf=dpf,

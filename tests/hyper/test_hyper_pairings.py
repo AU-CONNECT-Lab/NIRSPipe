@@ -21,6 +21,8 @@ import mne
 import numpy as np
 import pytest
 
+from fnirs_pipe.io.naming import report_name
+
 from fnirs_pipe.qc.common.figure_io import pair_slug
 
 SFREQ = 5.0
@@ -134,7 +136,7 @@ def test_the_slug_is_empty_while_a_group_holds_one_pairing():
 
 def test_a_triad_writes_one_page_per_pairing(triad, tmp_path):
     folder = _run(triad, tmp_path)
-    pages = sorted(p.name for p in folder.glob("*_desc-hyperpost_*_nirs.html"))
+    pages = sorted(p.name for p in folder.glob("*_pair-*_report.html"))
     assert len(pages) == 3, pages
     # each names the two members it is of, and no two land on one file
     assert len(set(pages)) == 3
@@ -146,8 +148,8 @@ def test_a_dyad_is_named_the_way_it_always_was(triad, tmp_path):
     """The pairing dimension must cost a dyad nothing: one pairing, no suffix."""
     dyad = {sid: triad[sid] for sid in ("sub-01", "sub-02")}
     folder = _run(dyad, tmp_path)
-    assert (folder / "group-G1_task-tap_desc-hyperpost_nirs.html").exists()
-    assert not list(folder.glob("*hyperpost_sub*"))
+    assert (folder / report_name("group-G1_task-tap")).exists()
+    assert not list(folder.glob("*_pair-*"))
 
 
 # ---- the numbers, which is what the collapse got wrong ----
@@ -159,7 +161,7 @@ def test_a_pairing_page_carries_its_own_pairings_coherence(triad, tmp_path):
 
     def mean_of(slug):
         cells = _coherence_cells(
-            folder / f"group-G1_task-tap_desc-hyperpost_{slug}_nirs.html")
+            folder / report_name("group-G1_task-tap", pairing=slug))
         assert cells, slug
         return sum(cells.values()) / len(cells)
 
@@ -173,7 +175,7 @@ def test_no_two_pairings_print_the_same_numbers(triad, tmp_path):
     """The collapse showed up as two pages agreeing cell for cell."""
     folder = _run(triad, tmp_path, wtc_channel_cross=True)
     seen = {slug: _coherence_cells(
-                folder / f"group-G1_task-tap_desc-hyperpost_{slug}_nirs.html")
+                folder / report_name("group-G1_task-tap", pairing=slug))
             for slug in ("sub01xsub02", "sub01xsub03", "sub02xsub03")}
     slugs = list(seen)
     for i, a in enumerate(slugs):
@@ -186,7 +188,7 @@ def test_an_uncrossed_run_still_prints_the_coherence_it_measured(triad, tmp_path
     metric rather than read those rows as the diagonal they are."""
     dyad = {sid: triad[sid] for sid in ("sub-01", "sub-02")}
     folder = _run(dyad, tmp_path)
-    cells = _coherence_cells(folder / "group-G1_task-tap_desc-hyperpost_nirs.html")
+    cells = _coherence_cells(folder / report_name("group-G1_task-tap"))
     assert cells, "an uncrossed run printed no coherence at all"
     assert all(a == b for a, b in cells), "an uncrossed run has nothing off the diagonal"
     assert {a for a, _ in cells} == set(LABELS)

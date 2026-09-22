@@ -7,6 +7,7 @@ from pathlib import Path
 
 import mne
 
+from fnirs_pipe.io.naming import report_name
 from fnirs_pipe.qc.subject.condition_views import (
     carpet_view_table as _carpet_views, condition_view_table,
 )
@@ -856,7 +857,8 @@ def _shell_vars(runs: list[dict], output_path: Path, sub_dir: Path,
             versions=versions,
         ),
         # the subject index is rebuilt by the same command, so the bar can always point at it
-        "index_href": f"sub-{runs[0]['subject_id']}_qc.html" if runs else "",
+        "index_href": (report_name(f"sub-{runs[0]['subject_id']}", desc="index")
+                       if runs else ""),
     }
 
 

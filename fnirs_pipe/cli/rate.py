@@ -8,6 +8,7 @@ from pathlib import Path
 
 from fnirs_pipe import __version__
 
+from fnirs_pipe.io.naming import report_name
 from fnirs_pipe.cli import _shared
 
 
@@ -44,7 +45,7 @@ def cmd_raw(
     if task_label:
         name_parts.append(f"task-{task_label}")
     html_path = (output_dir / f"sub-{participant_label}"
-                 / ("_".join(name_parts) + "_desc-raw_nirs.html"))
+                 / report_name("_".join(name_parts), desc="raw"))
 
     if not html_path.exists():
         print(f"Error: raw report not found: {html_path}", file=sys.stderr)
@@ -66,7 +67,7 @@ def cmd_hyper(
     if session_label:
         name_parts.append(f"ses-{session_label}")
     name_parts.append(f"task-{task_label}")
-    fname = "_".join(name_parts) + "_desc-hyperraw_nirs.html"
+    fname = report_name("_".join(name_parts), desc="raw")
     html_path = output_dir / f"group-{group_id}" / fname
     if not html_path.exists() and (output_dir / fname).exists():
         html_path = output_dir / fname      # a tree written before the group folder existed

@@ -9,6 +9,7 @@ from pathlib import Path
 from flask import Flask, jsonify, request, send_from_directory
 
 from fnirs_pipe.io.derivatives import channel_decisions_path, entity_of
+from fnirs_pipe.io.naming import report_name
 from fnirs_pipe.qc.metrics import SCI_PASS
 from fnirs_pipe.utils.logging import get_logger
 from fnirs_pipe.utils.net import resolve_port
@@ -82,16 +83,17 @@ class FNIRSRatingApp:
 
         @app.route("/sub-<pid>", strict_slashes=False)
         def participant(pid):
-            html_file = self.output_dir / f"sub-{pid}" / f"sub-{pid}_qc.html"
+            html_file = (self.output_dir / f"sub-{pid}"
+                         / report_name(f"sub-{pid}", desc="index"))
             if not html_file.exists():
                 return f"<h2>Report not found: {html_file}</h2>", 404
             return self._inject_base_href(html_file.read_text(encoding="utf-8"), pid)
 
-        # sub-<pid>_qc.html is an index over the subject's runs; its links point at the
-        # per-run reports next to it, which need a route of their own to be reachable here
+        # the subject index links the per-run reports next to it, which need a route of
+        # their own to be reachable here. Only report pages: this is a path from the URL
         @app.route("/sub-<pid>/<report>")
         def run_report(pid, report):
-            if not report.endswith("_qc.html"):
+            if not report.endswith("_report.html"):
                 return "", 404
             html_file = self.output_dir / f"sub-{pid}" / report
             if not html_file.exists():

@@ -94,6 +94,29 @@ def derivative_path(output_dir, suffix: str, extension: str, **entities) -> Path
     return Path(output_dir) / relative
 
 
+def report_name(label: str, *, desc: "str | None" = None,
+                condition: "str | None" = None, pairing: "str | None" = None) -> str:
+    """One report page's filename, from the run label the QC code passes around.
+
+    ``("sub-01_task-rest")``              -> ``"sub-01_task-rest_report.html"``
+    ``("sub-01_task-rest", desc="raw")``  -> ``"sub-01_task-rest_desc-raw_report.html"``
+    ``("group-G1_task-rest", condition="game1")``
+        -> ``"group-G1_task-rest_cond-game1_report.html"``
+
+    The QC code carries a label rather than a set of entities, so the entities are read back
+    out of it. Four spellings used to coexist here (`_qc.html`, `_desc-raw_nirs.html`,
+    `_qc_mne.html` and a subject index shaped like a run report), and `.html` on a `nirs`
+    suffix claimed to be a snirf's sidecar.
+    """
+    from fnirs_pipe.io.derivatives import entity_of
+
+    carried = {key: entity_of(label, short)
+               for key, short in (("subject", "sub"), ("group", "group"),
+                                  ("session", "ses"), ("task", "task"), ("run", "run"))}
+    return derivative_path("", "report", ".html", condition=condition, desc=desc,
+                           pairing=pairing, **carried).name
+
+
 def parse_path(path) -> dict:
     """Read the entities back out of a name :func:`derivative_path` built.
 
