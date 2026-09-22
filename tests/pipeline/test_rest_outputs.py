@@ -15,6 +15,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from fnirs_pipe.io.naming import derivative_path
+
 from fnirs_pipe.pipeline.post_pipeline import PostConfig, run_post
 from fnirs_pipe.pipeline.prep_pipeline import PrepConfig, run_prep
 
@@ -25,6 +27,17 @@ _BANDS = dict(cardiac_l_freq=0.7, cardiac_h_freq=1.5, resp_l_freq=0.2, resp_h_fr
 # every FC product rest mode writes, per chromophore, and whether an ROI map gates it
 _UNGATED = ("fc", "fcz")
 _ROI_GATED = ("fcroi", "fcroiz", "fcseed", "fcseedz")
+
+# What each product is, now that the name carries it in entities rather than in a made-up
+# suffix. The keys are the old names, kept because they read well in the tests below.
+_PRODUCTS = {
+    "fc":      dict(statistic="pearson"),
+    "fcz":     dict(statistic="fisherz"),
+    "fcroi":   dict(segmentation="custom", aggregation="roi", statistic="pearson"),
+    "fcroiz":  dict(segmentation="custom", aggregation="roi", statistic="fisherz"),
+    "fcseed":  dict(segmentation="custom", aggregation="seed", statistic="pearson"),
+    "fcseedz": dict(segmentation="custom", aggregation="seed", statistic="fisherz"),
+}
 
 
 @pytest.fixture(scope="module")
@@ -57,10 +70,23 @@ def rest_out(haemo, roi_map, tmp_path_factory):
     return _rest_run(haemo, tmp_path_factory.mktemp("rest_out"), roi_map)
 
 
+def _expected(out_dir, kind, chromo="hbo"):
+    """Built rather than globbed: a `*_stat-alff_*` glob also matches the ROI version."""
+    return derivative_path(out_dir, "relmat", ".tsv", subject="01", task="rest",
+                           chromophore=chromo, **_PRODUCTS[kind])
+
+
 def _one(out_dir, suffix, chromo="hbo"):
-    hits = [p for p in out_dir.rglob(f"*_desc-{chromo}_{suffix}.tsv")]
-    assert len(hits) == 1, f"expected one {suffix} file for {chromo}, found {hits}"
-    return hits[0]
+    path = _expected(out_dir, suffix, chromo)
+    assert path.is_file(), f"{suffix} ({chromo}) was not written: {path}"
+    return path
+
+
+def _alff(out_dir, roi=False):
+    entities = dict(subject="01", task="rest", statistic="alff")
+    if roi:
+        entities |= dict(segmentation="custom", aggregation="roi")
+    return derivative_path(out_dir, "nirsmap", ".tsv", **entities)
 
 
 # ---- every product is written, for both chromophores ----
@@ -76,7 +102,7 @@ def test_the_roi_products_are_absent_without_a_roi_map(haemo, tmp_path):
     for suffix in _UNGATED:
         assert _one(out, suffix)
     for suffix in _ROI_GATED:
-        assert not list(out.rglob(f"*_{suffix}.tsv"))
+        assert not _expected(out, suffix).exists()
 
 
 # ---- shape and labelling survive the write ----
@@ -176,14 +202,14 @@ def test_hbo_and_hbr_are_written_separately(rest_out):
 # ---- ROI amplitude ----
 
 def _alff_roi(out_dir):
-    hits = list(out_dir.rglob("*_alffroi.tsv"))
-    assert len(hits) == 1, f"expected one alffroi file, found {hits}"
-    return pd.read_csv(hits[0], sep="\t")
+    path = _alff(out_dir, roi=True)
+    assert path.is_file(), f"the ROI amplitude table was not written: {path}"
+    return pd.read_csv(path, sep="\t")
 
 
 def test_the_roi_amplitude_table_is_gated_on_the_roi_map(rest_out, haemo, tmp_path):
     assert not _alff_roi(rest_out).empty
-    assert not list(_rest_run(haemo, tmp_path, roi_map=None).rglob("*_alffroi.tsv"))
+    assert not _alff(_rest_run(haemo, tmp_path, roi_map=None), roi=True).exists()
 
 
 def test_one_row_per_roi_and_chromophore(rest_out, roi_map):
@@ -196,7 +222,7 @@ def test_one_row_per_roi_and_chromophore(rest_out, roi_map):
 def test_the_roi_value_is_the_mean_of_its_channels_not_a_measure_of_their_mean(rest_out, roi_map):
     """The whole point of the product: averaging after the measure, not before. A value built
     the other way round would sit well below this one."""
-    alff = pd.read_csv(next(rest_out.rglob("*_alff.tsv")), sep="\t").set_index("channel")
+    alff = pd.read_csv(_alff(rest_out), sep="\t").set_index("channel")
     df = _alff_roi(rest_out).set_index(["chromophore", "roi"])
 
     for roi, chans in roi_map.items():
@@ -207,7 +233,7 @@ def test_the_roi_value_is_the_mean_of_its_channels_not_a_measure_of_their_mean(r
 def test_the_count_is_what_survived_screening_not_what_was_asked_for(rest_out, roi_map):
     """Without it a thinly covered ROI reads like a well covered one. The synthetic montage
     loses a channel out of one of the two ROIs, so the two counts differ here."""
-    alff = pd.read_csv(next(rest_out.rglob("*_alff.tsv")), sep="	").set_index("channel")
+    alff = pd.read_csv(_alff(rest_out), sep="	").set_index("channel")
     df = _alff_roi(rest_out)
 
     survived = [int(alff.loc[chans, "zalff"].notna().sum()) for chans in roi_map.values()]
@@ -216,7 +242,7 @@ def test_the_count_is_what_survived_screening_not_what_was_asked_for(rest_out, r
 
 
 def test_the_sidecar_names_the_members_of_both_chromophores(rest_out, roi_map):
-    path = next(rest_out.rglob("*_alffroi.tsv"))
+    path = _alff(rest_out, roi=True)
     meta = json.loads(path.with_suffix(".json").read_text())
 
     assert meta["step"] == "alff_roi"

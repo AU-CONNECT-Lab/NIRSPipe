@@ -27,6 +27,20 @@ from fnirs_pipe.utils.run_script import write_run_script
 
 logger = get_logger("cli.workflows")
 
+def _roi_map_name(args: dict[str, Any]) -> str:
+    """The seg- entity every ROI output carries, taken from the map file's own stem.
+
+    ``--roi-mapping /studies/frontal_rois.json`` -> ``"frontalrois"``
+
+    A name rather than a fixed string, so one output tree can hold two ROI definitions
+    instead of the second silently replacing the first.
+    """
+    from fnirs_pipe.io.naming import bids_label
+
+    mapping = args.get("roi_mapping")
+    return bids_label(Path(mapping).stem) if mapping else "custom"
+
+
 def _build_post_config(subject: str, session: str | None, args: dict[str, Any], toml: dict[str, Any], roi_map: dict | None = None) -> Any:
     from fnirs_pipe.pipeline.post_pipeline import PostConfig
 
@@ -78,6 +92,7 @@ def _build_post_config(subject: str, session: str | None, args: dict[str, Any], 
         fc=bool(pick("fc", default=False)),
         combine_runs=pick("combine_runs"),
         roi_map=roi_map,
+        roi_map_name=_roi_map_name(args),
         # the same bands prep split with, so the regression and the reports agree
         **_shared.separation_bands_from_args(args),
     )

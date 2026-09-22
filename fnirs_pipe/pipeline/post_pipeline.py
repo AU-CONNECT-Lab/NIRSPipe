@@ -52,6 +52,9 @@ class PostConfig:
     filter_order:  int = DEFAULT_FILTER_ORDER
 
     roi_map: dict | None = None
+    # names the seg- entity on every ROI output, so one tree can hold two ROI
+    # definitions. Defaults to the stem of the file the map was read from
+    roi_map_name: str = "custom"
 
     # resample
     resample_sfreq: float | None = None
@@ -512,11 +515,16 @@ def _write_fc_derivatives(
                                     separation_bands(config))
     src_bp = rec.path_of(raw_resid)
 
-    def _path(ents: dict, suffix: str) -> Path:
+    def _path(extra: dict, statistic: str) -> Path:
+        """One relationship matrix. What was computed goes in stat-, not in the suffix."""
         return build_output_path(
             output_dir=output_dir, subject=config.subject, session=config.session,
-            entities=ents, suffix=suffix, extension=".tsv",
+            entities={**entities, **extra, "statistic": statistic},
+            suffix="relmat", extension=".tsv",
         )
+
+    def _roi(extra: dict) -> dict:
+        return {**extra, "segmentation": config.roi_map_name}
 
     def _sidecar(path: Path, step: str, **params) -> None:
         _deriv_sidecar(path, step, src_bp, bads, **params)
@@ -534,14 +542,14 @@ def _write_fc_derivatives(
         for ch in (c for c in empty if c in fc_df.index):
             fc_df.loc[ch, :] = np.nan
             fc_df.loc[:, ch] = np.nan
-        chromo_entities = {**entities, "desc": chromo}
+        chromo_entities = {"chromophore": chromo}
 
-        fc_path = _path(chromo_entities, "fc")
+        fc_path = _path(chromo_entities, "pearson")
         fc_df.to_csv(fc_path, sep="	", index_label="channel")
         _sidecar(fc_path, "fc", chromophore=chromo)
         logger.info("sub-%s | fc (%s) -> %s", config.subject, chromo, fc_path)
 
-        fcz_path = _path(chromo_entities, "fcz")
+        fcz_path = _path(chromo_entities, "fisherz")
         fisher_z(fc_df).to_csv(fcz_path, sep="	", index_label="channel")
         _sidecar(fcz_path, "fisher_z", chromophore=chromo)
         logger.info("sub-%s | fcz (%s) -> %s", config.subject, chromo, fcz_path)
@@ -549,7 +557,7 @@ def _write_fc_derivatives(
         if config.roi_map:
             fc_roi_df = compute_fc_roi(raw_resid, config.roi_map, chromo)
             if not fc_roi_df.empty:
-                fc_roi_path = _path(chromo_entities, "fcroi")
+                fc_roi_path = _path(_roi({**chromo_entities, "aggregation": "roi"}), "pearson")
                 fc_roi_df.to_csv(fc_roi_path, sep="	", index_label="roi")
                 # the members, not the map: an ROI correlation averages them into a
                 # signal that exists nowhere else, and which ones survived is a property
@@ -558,7 +566,7 @@ def _write_fc_derivatives(
                          roi_channels=_roi_members(raw_resid, config.roi_map, chromo))
                 logger.info("sub-%s | fc_roi (%s) -> %s", config.subject, chromo, fc_roi_path)
 
-                fcroiz_path = _path(chromo_entities, "fcroiz")
+                fcroiz_path = _path(_roi({**chromo_entities, "aggregation": "roi"}), "fisherz")
                 fisher_z(fc_roi_df).to_csv(fcroiz_path, sep="	", index_label="roi")
                 _sidecar(fcroiz_path, "fisher_z", chromophore=chromo,
                          roi_channels=_roi_members(raw_resid, config.roi_map, chromo))
@@ -570,7 +578,7 @@ def _write_fc_derivatives(
             # two above. Cells for a seed's own channels are NaN, not zero.
             fc_seed_df = compute_fc_seed(raw_resid, config.roi_map, chromo)
             if not fc_seed_df.empty:
-                fcseed_path = _path(chromo_entities, "fcseed")
+                fcseed_path = _path(_roi({**chromo_entities, "aggregation": "seed"}), "pearson")
                 fc_seed_df.to_csv(fcseed_path, sep="	", index_label="roi")
                 # the channels each seed was actually built from, which is the requested map
                 # minus whatever was rejected; without it a reader cannot tell why a cell
@@ -579,7 +587,7 @@ def _write_fc_derivatives(
                          seed_channels=_roi_members(raw_resid, config.roi_map, chromo))
                 logger.info("sub-%s | fc_seed (%s) -> %s", config.subject, chromo, fcseed_path)
 
-                fcseedz_path = _path(chromo_entities, "fcseedz")
+                fcseedz_path = _path(_roi({**chromo_entities, "aggregation": "seed"}), "fisherz")
                 fisher_z(fc_seed_df).to_csv(fcseedz_path, sep="	", index_label="roi")
                 _sidecar(fcseedz_path, "fisher_z", chromophore=chromo)
                 logger.info("sub-%s | fc_seedz (%s) -> %s", config.subject, chromo, fcseedz_path)
@@ -626,7 +634,7 @@ def _write_rest_derivatives(
                                high_pass=config.high_pass, exclude=empty)
         alff_path = build_output_path(
             output_dir=output_dir, subject=config.subject, session=config.session,
-            entities=entities, suffix="alff", extension=".tsv",
+            entities={**entities, "statistic": "alff"}, suffix="nirsmap", extension=".tsv",
         )
         alff_df.to_csv(alff_path, sep="	", index=False)
         _deriv_sidecar(alff_path, "alff", rec.path_of(raw_resid_bb),
@@ -639,7 +647,9 @@ def _write_rest_derivatives(
             if not alff_roi_df.empty:
                 alff_roi_path = build_output_path(
                     output_dir=output_dir, subject=config.subject, session=config.session,
-                    entities=entities, suffix="alffroi", extension=".tsv",
+                    entities={**entities, "segmentation": config.roi_map_name,
+                              "aggregation": "roi", "statistic": "alff"},
+                    suffix="nirsmap", extension=".tsv",
                 )
                 alff_roi_df.to_csv(alff_roi_path, sep="	", index=False)
                 _deriv_sidecar(alff_roi_path, "alff_roi", rec.path_of(raw_resid_bb),

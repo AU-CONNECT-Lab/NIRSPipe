@@ -13,6 +13,8 @@ before the flag existed.
 
 import pytest
 
+from fnirs_pipe.io.naming import derivative_path
+
 from fnirs_pipe.pipeline.post_pipeline import PostConfig, run_post
 from fnirs_pipe.pipeline.prep_pipeline import PrepConfig, run_prep
 
@@ -83,16 +85,22 @@ def fc_no_roi(haemo, tmp_path_factory):
 
 def test_without_the_flag_nothing_connectivity_is_written(plain):
     out, out_dir = plain
-    assert _names(out_dir, "*fc*.tsv") == []
+    assert _names(out_dir, "*_relmat.tsv") == []
     assert out[_FC_DF] is None and out[_FC_ROI] == {} and out[_FC_SEED] == {}
 
 
 def test_the_flag_writes_the_same_family_rest_writes(fc_with_roi):
     out, out_dir = fc_with_roi
-    written = _names(out_dir, "*fc*.tsv")
+    written = _names(out_dir, "*_relmat.tsv")
     for chromo in ("hbo", "hbr"):
-        for suffix in ("fc", "fcz", "fcroi", "fcroiz", "fcseed", "fcseedz"):
-            assert f"sub-01_task-tapping_desc-{chromo}_{suffix}.tsv" in written
+        for entities in (dict(statistic="pearson"), dict(statistic="fisherz"),
+                         dict(segmentation="custom", aggregation="roi", statistic="pearson"),
+                         dict(segmentation="custom", aggregation="roi", statistic="fisherz"),
+                         dict(segmentation="custom", aggregation="seed", statistic="pearson"),
+                         dict(segmentation="custom", aggregation="seed", statistic="fisherz")):
+            expected = derivative_path(out_dir, "relmat", ".tsv", subject="01",
+                                       task="tapping", chromophore=chromo, **entities)
+            assert expected.name in written, expected.name
     assert out[_FC_DF] is not None
     assert sorted(out[_FC_ROI]) == ["hbo", "hbr"]
     assert sorted(out[_FC_SEED]) == ["hbo", "hbr"]
@@ -120,4 +128,4 @@ def test_alff_is_not_written_by_the_glm_mode(fc_no_roi):
     """
     out, out_dir = fc_no_roi
     assert out[_ALFF_DF] is None
-    assert _names(out_dir, "*_alff.tsv") == []
+    assert _names(out_dir, "*_stat-alff_nirsmap.tsv") == []

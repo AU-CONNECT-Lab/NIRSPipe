@@ -14,6 +14,8 @@ import json
 
 import pytest
 
+from fnirs_pipe.io.naming import derivative_path
+
 from fnirs_pipe.pipeline.post_pipeline import PostConfig, run_post
 from fnirs_pipe.pipeline.prep_pipeline import PrepConfig, run_prep
 
@@ -55,7 +57,7 @@ def _names(out_dir, pattern):
 
 def _fc_source(out_dir):
     """The file the FC sidecar credits the correlation to."""
-    sidecar = next(out_dir.rglob("*_desc-hbo_fc.json"))
+    sidecar = next(out_dir.rglob("*_chromo-hbo_stat-pearson_relmat.json"))
     return json.loads(sidecar.read_text())["Sources"][0]
 
 
@@ -86,16 +88,22 @@ def test_an_explicit_none_drift_model_is_not_a_reason_to_regress(haemo, tmp_path
 
 def test_without_the_flag_nothing_connectivity_is_written(haemo, tmp_path):
     out = _denoise(haemo, tmp_path, short_channel="mean")
-    assert _names(tmp_path, "*fc*.tsv") == []
+    assert _names(tmp_path, "*_relmat.tsv") == []
     assert out[_FC_DF] is None and out[_FC_ROI] == {} and out[_FC_SEED] == {}
 
 
 def test_the_flag_writes_the_same_family_rest_writes(haemo, tmp_path, roi_map):
     out = _denoise(haemo, tmp_path, short_channel="mean", roi_map=roi_map, fc=True)
-    written = _names(tmp_path, "*fc*.tsv")
+    written = _names(tmp_path, "*_relmat.tsv")
     for chromo in ("hbo", "hbr"):
-        for suffix in ("fc", "fcz", "fcroi", "fcroiz", "fcseed", "fcseedz"):
-            assert f"sub-01_task-rest_desc-{chromo}_{suffix}.tsv" in written
+        for entities in (dict(statistic="pearson"), dict(statistic="fisherz"),
+                         dict(segmentation="custom", aggregation="roi", statistic="pearson"),
+                         dict(segmentation="custom", aggregation="roi", statistic="fisherz"),
+                         dict(segmentation="custom", aggregation="seed", statistic="pearson"),
+                         dict(segmentation="custom", aggregation="seed", statistic="fisherz")):
+            expected = derivative_path(tmp_path, "relmat", ".tsv", subject="01",
+                                       task="rest", chromophore=chromo, **entities)
+            assert expected.name in written, expected.name
     assert out[_FC_DF] is not None
     assert sorted(out[_FC_ROI]) == ["hbo", "hbr"]
     assert sorted(out[_FC_SEED]) == ["hbo", "hbr"]
@@ -143,4 +151,4 @@ def test_alff_is_not_written_by_the_denoise_mode(haemo, tmp_path):
     """Same reason glm does not write it: the source is bandpassed, so fALFF would be ~1."""
     out = _denoise(haemo, tmp_path, short_channel="mean", fc=True)
     assert out[_ALFF_DF] is None
-    assert _names(tmp_path, "*_alff.tsv") == []
+    assert _names(tmp_path, "*_stat-alff_nirsmap.tsv") == []

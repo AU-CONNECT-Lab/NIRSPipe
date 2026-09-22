@@ -16,6 +16,7 @@ BIDS App alignment and the output naming rework. Renames land in later entries h
 - A dyad tree's `dataset_description.json` names the tree it was computed from under `SourceDatasets`
 
 ### Changed
+- **Breaking**: connectivity and amplitude outputs are named by entities rather than invented suffixes: `desc-hbo_fc.tsv` is `chromo-hbo_stat-pearson_relmat.tsv`, `alffroi.tsv` is `seg-<map>_agg-roi_stat-alff_nirsmap.tsv`, and the ROI map's filename names the `seg-` entity
 - **Breaking**: each `fnirs-hyper` subcommand is its own console script now, taking `[<source tree>] <output tree> group`; `run` and `pair-null` read the source tree, the other four only re-read what this package wrote
 - `fnirs-prep`'s output positional is named `output_dir`, not `derivatives_dir`; that name now means the tree `fnirs-hyper` reads
 - A GUI page whose command should have written a report and did not now says so, instead of the line it shares with commands that write only tables

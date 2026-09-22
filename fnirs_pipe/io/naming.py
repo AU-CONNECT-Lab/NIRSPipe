@@ -29,8 +29,10 @@ _CONFIG_FILE = Path(__file__).parent.parent / "data" / "fnirs_pipe_bids_config.j
 def config():
     """The merged pybids ``Config``: its own entities, its derivatives ones, then ours.
 
-    Order matters, ours last: a name we declare overrides the builtin of the same name,
-    which is how ``datatype`` learns about ``nirs`` and ``figures``.
+    Ours go last so a name we declare would win, though none currently collides: pybids
+    already knows ``seg-``, ``label-`` and ``desc-``, and its ``datatype`` pattern already
+    matches ``nirs/``. Redeclaring one is not merely redundant, it breaks BIDSLayout, whose
+    entity table refuses two rows of the same name.
     """
     from bids.layout import Config
 
@@ -44,6 +46,18 @@ def config():
         entities=[{"name": name, "pattern": pattern} for name, pattern in merged.items()],
         default_path_patterns=spec["default_path_patterns"],
     )
+
+
+def bids_label(text: str, fallback: str = "custom") -> str:
+    """Anything a user typed, reduced to what BIDS allows in an entity value.
+
+    ``"left PFC (dorsal)"`` -> ``"leftPFCdorsal"``;  ``"__"`` -> ``"custom"``
+
+    A label is alphanumeric by definition, so a name carrying a space, a hyphen or an
+    underscore would either be rejected or, worse, read as a second entity.
+    """
+    kept = "".join(ch for ch in str(text) if ch.isalnum())
+    return kept or fallback
 
 
 def layout_config() -> list[str]:

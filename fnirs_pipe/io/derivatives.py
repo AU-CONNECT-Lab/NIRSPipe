@@ -27,38 +27,24 @@ def build_output_path(
     extension: str,
     session: str | None = None,
 ) -> Path:
-    """Construct a BIDS-Derivatives compliant output path.
+    """A derivative's path, with its directory already created.
 
-    All intermediate and final files land in output_dir (no separate work_dir).
-    The desc entity distinguishes processing steps, e.g.::
+    ::
 
-      desc-od, desc-sci, desc-motcorrected, desc-preproc
+      entities={"task": "rest", "desc": "preproc"}, suffix="nirs", extension=".snirf"
+        -> <out>/sub-01/nirs/sub-01_task-rest_desc-preproc_nirs.snirf
 
-    Examples::
-
-      sub-01/nirs/sub-01_desc-od_nirs.snirf              (no session)
-      sub-01/ses-wave1/nirs/sub-01_ses-wave1_desc-od_nirs.snirf
+    The name comes from :mod:`fnirs_pipe.io.naming`, which reads it off the one config every
+    reader parses against. This is the writing half: it exists so a caller that is about to
+    write a file does not have to remember to create the folder, and so a caller that only
+    wants a name can ask naming directly and leave no tree behind.
     """
-    parts = [f"sub-{subject}"]
-    if session:
-        parts.append(f"ses-{session}")
+    from fnirs_pipe.io.naming import derivative_path
 
-    folder = output_dir.joinpath(*parts, "nirs")
-    folder.mkdir(parents=True, exist_ok=True)
-
-    entity_order = ["sub", "ses", "task", "run", "desc"]
-    all_entities = {"sub": subject}
-    if session:
-        all_entities["ses"] = session
-    all_entities.update(entities)
-
-    filename_parts = [
-        f"{key}-{all_entities[key]}"
-        for key in entity_order
-        if key in all_entities
-    ]
-    filename = "_".join(filename_parts) + f"_{suffix}{extension}"
-    return folder / filename
+    path = derivative_path(output_dir, suffix, extension,
+                           subject=subject, session=session, **entities)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return path
 
 
 def channel_decisions_path(

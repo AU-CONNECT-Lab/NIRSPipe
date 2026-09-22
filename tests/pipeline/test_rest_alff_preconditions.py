@@ -38,7 +38,7 @@ def _rest(haemo, tmp_path, **drift):
                         drift_high_pass=0.01, **drift, **_BANDS)
     out = run_post(haemo.copy(), config, output_dir=tmp_path, mode="rest",
                    source_entities={"task": "tapping"})
-    return out[_ALFF_DF], out[_FC_DF], sorted(tmp_path.rglob("*_alff.tsv"))
+    return out[_ALFF_DF], out[_FC_DF], sorted(tmp_path.rglob("*_stat-alff_nirsmap.tsv"))
 
 
 # ---- drift models that do remove a linear trend ----
