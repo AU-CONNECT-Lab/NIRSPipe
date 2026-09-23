@@ -14,6 +14,9 @@ from typing import Any
 import pandas as pd
 
 from fnirs_pipe.utils.logging import get_logger
+from fnirs_pipe.exceptions import StageError
+from fnirs_pipe.io.derivatives import group_output_path
+from fnirs_pipe.pipeline.hyper.roi import roi_mean_of_channels, roi_mean_of_homologous
 
 logger = get_logger("pipeline.hyper_post")
 
@@ -184,14 +187,11 @@ def run_hyper_post(
     ``errors`` and ``notes`` are the report's own lists, so a guard that fails here reaches
     the footer of the page this result is drawn on and not only the run log.
     """
-    from fnirs_pipe.exceptions import StageError
-    from fnirs_pipe.io.derivatives import group_output_path
     from fnirs_pipe.pipeline.hyper import _hyper_sidecar
     # straight from the modules that define them. The package re-exports the set, and
     # taking them from there makes the coherence look like a property of the group loader
     from fnirs_pipe.pipeline.hyper._helpers import long_axis_over
     from fnirs_pipe.pipeline.hyper.isc import compute_isc_pairs, roi_mean_of_isc
-    from fnirs_pipe.pipeline.hyper.roi import roi_mean_of_channels, roi_mean_of_homologous
     from fnirs_pipe.pipeline.hyper.wtc import (
         WTCResult,
         compute_wtc,

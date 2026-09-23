@@ -12,19 +12,19 @@ import mne
 import numpy as np
 
 from fnirs_pipe.io.derivatives import (
-    group_data_dir, group_report_dir, subject_report_dir,
+    group_data_dir, group_report_dir, subject_report_dir, subject_nirs_dirs,
 )
-from fnirs_pipe.pipeline.hyper.hyper_post import HyperPostResult
+from fnirs_pipe.pipeline.hyper.hyper_post import HyperPostResult, HyperPostConfig, run_hyper_post
 from fnirs_pipe.pipeline.hyper import (
-    GroupEntry, alignment_params, unfiltered_stage_note,
+    GroupEntry, alignment_params, unfiltered_stage_note, WTCResult, roi_maps_from_channels,
 )
 from fnirs_pipe.qc.common.channel_table import (
     channel_columns, channel_rows, format_rows, pair_rows,
 )
-from fnirs_pipe.qc.boilerplate import collect_software_versions
+from fnirs_pipe.qc.boilerplate import collect_software_versions, generate_methods_text
 from fnirs_pipe.qc.boilerplate.vocabulary import (
-    MISSING_VALUE, format_metric, is_key_metric, metric_class, metric_label,
-    metric_summary,
+    MISSING_VALUE, format_metric, is_key_metric, metric_class, metric_label, metric_summary,
+    steps_from_sidecars, template_slots,
 )
 from fnirs_pipe.qc.metrics import SCI_PASS
 from fnirs_pipe.io.naming import report_name
@@ -330,8 +330,6 @@ def _member_nirs_dir(output_dir: Path, entry: GroupEntry) -> Path:
     An entry naming no session still finds a session folder, so a tree with one unnamed
     session yields a Methods paragraph rather than the "no sidecars found" note.
     """
-    from fnirs_pipe.io.derivatives import subject_nirs_dirs
-
     found = subject_nirs_dirs(output_dir, entry.subject_id, entry.session)
     if found:
         return found[0]
@@ -362,9 +360,6 @@ def group_methods(
     note rather than a sentence naming both, since a Methods section hedging every
     parameter is worse than one that says which subject it describes.
     """
-    from fnirs_pipe.qc.boilerplate import generate_methods_text
-    from fnirs_pipe.qc.boilerplate.vocabulary import steps_from_sidecars
-
     per_member = {e.subject_id: steps_from_sidecars(_member_nirs_dir(output_dir, e))
                   for e in group}
     chains = list(per_member.values())
@@ -468,7 +463,6 @@ def build_hyper_report(
         sep_bands=sep_bands, errors=errors, notes=notes,
     )
 
-    from fnirs_pipe.qc.boilerplate.vocabulary import template_slots
     versions = collect_software_versions()
     # only the alignment is passed in: it leaves no file, so no sidecar describes it.
     # The coherence sentence comes off the table the writer just wrote.
@@ -817,8 +811,6 @@ def build_hyper_post_report(
     when no Monte Carlo level was computed. Display only: no table or figure value changes
     with it. ``None`` takes :data:`~fnirs_pipe.qc.figures.hyper.hyper_post_figures.ARROW_MIN_COHERENCE`.
     """
-    from fnirs_pipe.pipeline.hyper.hyper_post import HyperPostConfig, run_hyper_post
-    from fnirs_pipe.pipeline.hyper import WTCResult, roi_maps_from_channels
     from fnirs_pipe.qc.figures.hyper.hyper_post_figures import (
         ARROW_MIN_COHERENCE,
         build_isc_panel,
@@ -1310,7 +1302,6 @@ def build_hyper_post_report(
             if written.suffix == ".png":
                 provenance_path = f"figures/{written.name}"
 
-    from fnirs_pipe.qc.boilerplate.vocabulary import template_slots
     versions = collect_software_versions()
     own_steps = [("hyper_alignment", template_slots(
         "hyper_alignment", {"n_subjects": len(subject_ids)}))]

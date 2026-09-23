@@ -25,11 +25,14 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+import json
 
 import numpy as np
 import pandas as pd
+from scipy import stats
 
 from fnirs_pipe.utils.logging import get_logger
+from fnirs_pipe.io.naming import derivative_path
 
 logger = get_logger("pipeline.pair_null_group")
 
@@ -47,8 +50,6 @@ def _tail(**entities) -> str:
     the ones the null writers produce cannot be renamed apart. The ROI map's own name is a
     wildcard: this reads whichever definition the tree was written with.
     """
-    from fnirs_pipe.io.naming import derivative_path
-
     name = derivative_path("", "relmat", ".tsv", group="X", task="T", **entities).name
     return name.split("_task-T", 1)[1]
 
@@ -169,8 +170,6 @@ def _read_tree(output_dir: Path, suffix: str, task: str, chroma: str,
 
 def _band_of(paths: "set[str]") -> set:
     """The band each table's sidecar records, as a set so a mismatch is visible."""
-    import json
-
     bands = set()
     for tsv in paths:
         side = Path(tsv).with_suffix(".json")
@@ -282,8 +281,6 @@ def _paired_row(cond, observed: pd.Series, pools: "dict[str, np.ndarray]") -> di
     Fewer than three occasions leaves a t with no spread to estimate, so the row carries the
     lift and no test rather than a number that would be read as one.
     """
-    from scipy import stats
-
     baseline = pd.Series({o: float(p.mean()) for o, p in pools.items()})
     diff = (observed.reindex(baseline.index) - baseline).to_numpy(dtype=float)
     diff = diff[np.isfinite(diff)]
@@ -443,8 +440,6 @@ def write_group_null(output_dir: Path, task: str = "full", chroma: str = "hbo",
     if cells is not None:
         passing = int((cells["q"] < 0.05).sum())
         logger.info("%s null, per cell: %d cells, %d at q<0.05", null, len(cells), passing)
-
-    from fnirs_pipe.io.naming import derivative_path
 
     # at the root, so no group- and no sub-: what marks a table as cross-dyad is having no
     # analysis unit in its name. The task and the chromophore stay, both being a filter this

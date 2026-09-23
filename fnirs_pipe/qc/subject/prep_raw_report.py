@@ -6,10 +6,11 @@ import json
 from pathlib import Path
 
 import mne
+import numpy as np
 
 from fnirs_pipe.io.naming import report_name
 from fnirs_pipe.qc.subject.condition_views import (
-    carpet_view_table as _carpet_views, condition_view_table,
+    carpet_view_table as _carpet_views, condition_view_table, PSD_NFFT_CAP,
 )
 from fnirs_pipe.qc.common.figure_io import (
     _pair_fname, _save_figure_html, _save_multi_fig_html,
@@ -22,7 +23,10 @@ from fnirs_pipe.qc.common.channel_table import (
     separation_notes,
     split_table,
 )
-from fnirs_pipe.qc.metrics import SCI_PASS
+from fnirs_pipe.qc.metrics import (
+    SCI_PASS, attach_windowed_series, compute_raw_sqm, compute_sci_scores, resolve_cutoffs,
+    screen_channels, screening_scores,
+)
 from fnirs_pipe.qc.metrics._helpers import (_mean_or_none, registration_offset,
                                            separation_bands, separation_orphans)
 from fnirs_pipe.qc.common.report_shell import (
@@ -76,8 +80,6 @@ _CH_COLUMN_VARS = {"ch_columns": _CH_COLUMNS,
 
 def _store_matrices(windowed: dict, series: dict) -> None:
     """The channel-by-window matrices into the record, under the pipeline's own key names."""
-    import numpy as np
-
     for key in ("sci_matrix", "psp_matrix", "cv_matrix",
                 "sci_times", "psp_times", "cv_times"):
         if series.get(key) is not None:
@@ -168,10 +170,6 @@ def _process_run(
         trial_quality_heatmap,
     )
     from fnirs_pipe.qc.boilerplate.vocabulary import metric_rows
-    from fnirs_pipe.qc.metrics import (
-        attach_windowed_series, compute_raw_sqm, compute_sci_scores,
-        resolve_cutoffs, screen_channels, screening_scores,
-    )
     from fnirs_pipe.qc.common.screen_scope import resolve_screen_scope
     from fnirs_pipe.qc.subject.sqm_record import (
         RECORD_SUFFIXES, motion_sections, raw_condition_sections, raw_sections,
@@ -736,8 +734,6 @@ def _psd_maker(raw, cardiac_l_freq: float, cardiac_h_freq: float, build):
     the run's and is left out instead, at the same floor the record stops writing its band
     scalars at.
     """
-    from fnirs_pipe.qc.subject.condition_views import PSD_NFFT_CAP
-
     def remake(t0: float, t1: float):
         lo, hi = max(0.0, float(t0)), min(float(raw.times[-1]), float(t1))
         if hi <= lo:

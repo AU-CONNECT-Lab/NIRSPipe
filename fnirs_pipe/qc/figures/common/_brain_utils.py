@@ -2,6 +2,7 @@
 
 import os
 from functools import lru_cache
+import io as _io
 
 import mne
 import numpy as np
@@ -125,7 +126,6 @@ def render_3views(
     scale: float = 2,
 ) -> list:
     """Render a Scatter3d channel figure at 3 camera angles to image arrays."""
-    import io as _io
     try:
         import plotly.io as pio
         from PIL import Image as PILImage

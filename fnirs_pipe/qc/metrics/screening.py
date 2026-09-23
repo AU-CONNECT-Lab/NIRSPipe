@@ -26,6 +26,8 @@ import mne
 
 from fnirs_pipe.qc.metrics._helpers import GOOD_FRAC_PASS, PSP_PASS, SCI_PASS
 from fnirs_pipe.utils.logging import get_logger
+from fnirs_pipe.qc.metrics.coupling import compute_sci_scores, compute_psp_scores
+from fnirs_pipe.qc.metrics.windowed import good_window_fraction
 
 logger = get_logger("qc.metrics.screening")
 
@@ -62,19 +64,16 @@ class Criterion:
 
 
 def _sci_scorer(raw_od: mne.io.Raw, cardiac_l_freq: float, cardiac_h_freq: float) -> dict:
-    from fnirs_pipe.qc.metrics.coupling import compute_sci_scores
     scores, _ = compute_sci_scores(raw_od, cardiac_l_freq, cardiac_h_freq)
     return scores
 
 
 def _psp_scorer(raw_od: mne.io.Raw, cardiac_l_freq: float, cardiac_h_freq: float) -> dict:
-    from fnirs_pipe.qc.metrics.coupling import compute_psp_scores
     return compute_psp_scores(raw_od, cardiac_l_freq, cardiac_h_freq)
 
 
 def _good_frac_scorer(raw_od: mne.io.Raw, cardiac_l_freq: float, cardiac_h_freq: float,
                       context: dict) -> dict:
-    from fnirs_pipe.qc.metrics.windowed import good_window_fraction
     cutoffs = context.get("cutoffs") or {}
     return good_window_fraction(
         raw_od, cardiac_l_freq, cardiac_h_freq,

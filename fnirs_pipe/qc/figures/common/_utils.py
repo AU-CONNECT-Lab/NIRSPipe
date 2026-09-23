@@ -1,6 +1,9 @@
 """Shared color constants and helpers used across QC figure modules."""
 
 import numpy as np
+import matplotlib.patches as mpatches
+import mne
+import plotly.graph_objects as go
 
 from fnirs_pipe.utils.logging import get_logger
 
@@ -54,8 +57,6 @@ def timeline_row_traces(events, y, color, name, showlegend, hover_tail=""):
     since a run can mix a timed block with an instant cue, so each event picks its own by
     its duration and the two traces share a legend entry.
     """
-    import plotly.graph_objects as go
-
     blocks = [e for e in events if float(e.get("duration") or 0) > _MIN_BLOCK_S]
     ticks  = [e for e in events if float(e.get("duration") or 0) <= _MIN_BLOCK_S]
     traces = []
@@ -240,8 +241,6 @@ def head_outline(ax, xs, ys):
 
     Returns ``(cx, cy, r)`` so the caller can place anything else relative to the head.
     """
-    import matplotlib.patches as mpatches
-
     cx = (max(xs) + min(xs)) / 2
     cy = (max(ys) + min(ys)) / 2
     # 1.18 leaves the outermost optode just inside the scalp rather than on it
@@ -282,8 +281,6 @@ def chunk_annotations(raw, chunk_duration: "float | None"):
 
     ``None`` returns ``raw`` itself, so a caller can pass the option straight through.
     """
-    import mne
-
     if not chunk_duration or chunk_duration <= 0:
         return raw
 

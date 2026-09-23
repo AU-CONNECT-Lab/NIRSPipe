@@ -21,7 +21,7 @@ from pathlib import Path
 import pandas as pd
 
 from fnirs_pipe.qc.boilerplate import collect_software_versions
-from fnirs_pipe.io.naming import report_name
+from fnirs_pipe.io.naming import report_name, derivative_path, parse_path
 from fnirs_pipe.qc.common.figure_io import _pair_fname, figure_namer, pair_slug
 from fnirs_pipe.qc.common.report_shell import (
     OUTLIER_Z, footer_vars, outlier_flags, page_vars, render)
@@ -58,7 +58,6 @@ def _table(stem: str, **entities) -> str:
     that produce those files cannot be renamed apart.
     """
     from fnirs_pipe.io.derivatives import entity_of
-    from fnirs_pipe.io.naming import derivative_path
 
     return derivative_path("", "relmat", ".tsv",
                            group=entity_of(stem, "group"),
@@ -216,8 +215,6 @@ def _tasks(nirs_dir: Path, group_id: str) -> "list[str]":
     Matched on the entities rather than by a regex over the name: the whole-run table is the
     one carrying neither a condition nor a null, which a glob cannot say.
     """
-    from fnirs_pipe.io.naming import parse_path
-
     tasks = set()
     for path in nirs_dir.glob("group-*_stat-wtc_relmat.tsv"):
         entities = parse_path(path.name)

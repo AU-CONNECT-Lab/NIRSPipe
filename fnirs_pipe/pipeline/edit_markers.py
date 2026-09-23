@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from pathlib import Path
+import shutil
 
 import numpy as np
 import pandas as pd
+import mne
 
 from fnirs_pipe.io.auxiliary import write_aux_window
 from fnirs_pipe.io.snirf import write_snirf
@@ -28,7 +30,6 @@ _DERIV_NAME = "marker_edited"
 
 
 def _df_to_annotations(df: pd.DataFrame):
-    import mne
     return mne.Annotations(
         onset=df["onset"].to_numpy(),
         duration=df["duration"].to_numpy(),
@@ -86,8 +87,6 @@ def export_markers(
     Copies the BIDS sidecar if present; otherwise extracts from SNIRF annotations.
     Returns the path to the exported TSV.
     """
-    import shutil
-
     snirf_path = find_snirf(bids_dir, sub, ses, task, run, validate=validate)
     stem = bids_stem(snirf_path)
     out_dir.mkdir(parents=True, exist_ok=True)

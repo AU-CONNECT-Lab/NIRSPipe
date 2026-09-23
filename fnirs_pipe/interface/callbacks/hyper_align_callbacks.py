@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import hashlib
 
 import dash_bootstrap_components as dbc
 from dash import ALL, Input, Output, State, callback, ctx, html, no_update
@@ -12,13 +13,13 @@ from fnirs_pipe.interface.callbacks._cli_run import run_and_report
 from fnirs_pipe.io.derivatives import channel_decisions_path
 from fnirs_pipe.interface.cli_args import build_raw_qc_args, missing_raw_qc
 from fnirs_pipe.interface.theme import style_figure
+from fnirs_pipe.exceptions import AlignmentError
 
 # aligned_raws not JSON-serializable — keep in process memory
 _ALIGNED_CACHE: dict[str, dict] = {}
 
 
 def _cache_key(bids_dir: str, group_csv: str) -> str:
-    import hashlib
     return hashlib.md5(f"{bids_dir}|{group_csv}".encode()).hexdigest()[:16]
 
 
@@ -82,7 +83,6 @@ def load_and_align(n_clicks, bids_dir, deriv_dir, group_csv):
             _HIDE, no_update, no_update, no_update,
         )
 
-    from fnirs_pipe.exceptions import AlignmentError
     from fnirs_pipe.pipeline.hyper import (
         align_recordings, load_group_raw_bids, parse_group_csv,
     )

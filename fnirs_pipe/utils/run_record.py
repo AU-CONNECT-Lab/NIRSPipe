@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from fnirs_pipe.utils import unwrap_enum as _unwrap
+from fnirs_pipe import __version__
 
 
 def _fwd(p: Any) -> str | None:
@@ -72,7 +73,6 @@ def _config_section(config: Any) -> dict[str, Any]:
 def _environment() -> dict[str, Any]:
     """Versions and machine, the same for every record a run writes bar free_mem_gb,
     which is read at the moment of writing."""
-    from fnirs_pipe import __version__
     from fnirs_pipe.qc.boilerplate import collect_software_versions
 
     env: dict[str, Any] = {

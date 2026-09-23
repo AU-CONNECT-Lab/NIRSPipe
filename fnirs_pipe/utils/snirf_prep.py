@@ -8,6 +8,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from fnirs_pipe import __version__
+
 NIRS_SIDECAR_SUFFIXES = ["_nirs.json", "_channels.tsv"]
 NIRS_MONTAGE_SUFFIXES = ["_optodes.tsv", "_coordsystem.json"]
 
@@ -80,8 +82,6 @@ def deriv_nirs_dir(derivatives_dir: Path, deriv_name: str, sub: str, ses: str | 
 
 
 def ensure_dataset_description(deriv_root: Path, name: str, generated_by: str) -> None:
-    from fnirs_pipe import __version__
-
     desc_path = deriv_root / "dataset_description.json"
     if desc_path.exists():
         return

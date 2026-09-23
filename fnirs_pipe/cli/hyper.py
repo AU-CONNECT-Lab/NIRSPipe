@@ -13,12 +13,22 @@ import argparse
 import json
 import sys
 from pathlib import Path
+from datetime import datetime
 
 from fnirs_pipe.cli import _shared
 from fnirs_pipe.io.naming import roi_map_name
 from fnirs_pipe.pipeline.hyper.isc import ISC_MAX_AR_ORDER
 from fnirs_pipe.qc.metrics import SCI_PASS
 from fnirs_pipe.utils.logging import get_logger, setup_logging
+from fnirs_pipe import __version__
+from fnirs_pipe.cli._shared import separation_bands_from_args
+from fnirs_pipe.exceptions import GroupCSVError, AlignmentError, MissingDerivativesError
+from fnirs_pipe.io.derivatives import group_report_dir, write_bidsignore, write_dataset_description
+from fnirs_pipe.io.snirf import long_channel_picks
+from fnirs_pipe.pipeline.hyper import (
+    parse_group_csv, resolve_analysis_window, resolve_group_bands, write_group_bads,
+)
+from fnirs_pipe.qc.metrics._helpers import bands_to_record
 
 setup_logging()
 
@@ -29,9 +39,6 @@ _BADS_SCOPE_CHOICES = ["run", "subject"]
 
 def _select_groups(pairs_csv: Path, group_id: str | None, task_label: list[str] | None) -> dict:
     """Parse the group CSV and filter by group_id / task_label. Exits non-zero on empty selection."""
-    from fnirs_pipe.exceptions import GroupCSVError
-    from fnirs_pipe.pipeline.hyper import parse_group_csv
-
     try:
         groups = parse_group_csv(pairs_csv)
     except GroupCSVError as exc:
@@ -55,8 +62,6 @@ def _select_groups(pairs_csv: Path, group_id: str | None, task_label: list[str] 
 
 def _run_groups(groups: dict, process) -> None:
     """Run process(gid, task, members) -> report_path per group, tally ok/fail, exit non-zero on failure."""
-    from fnirs_pipe.exceptions import AlignmentError, MissingDerivativesError
-
     print(f"Processing {len(groups)} group session(s)...")
     n_ok = n_fail = 0
     for (gid, task), members in groups.items():
@@ -132,8 +137,6 @@ def _quality_summary(aligned_raws: dict, group_sqm: dict, sep_bands=None) -> Non
     set the coherence actually uses rather than what the montage holds. The report says the
     same thing, but only once the run has finished, which with --wtc-phase-null is hours later.
     """
-    from fnirs_pipe.io.snirf import long_channel_picks
-
     for subject_id, raw in aligned_raws.items():
         sqm = group_sqm.get(subject_id, {})
         pairs = {ch.rsplit(" ", 1)[0] for ch in raw.ch_names
@@ -242,8 +245,6 @@ def cmd_run(
     # else runs, so a new option lands in the record without being listed here as well.
     run_args = dict(locals())
 
-    from fnirs_pipe.cli._shared import separation_bands_from_args
-
     # Each metric gets the band it was given, never the other's: a flag that silently moves
     # a second metric cannot be read off the command line it is absent from, and a reader of
     # a methods section has no way to recover it. What the two bands are is checked instead.
@@ -257,18 +258,8 @@ def cmd_run(
         "long_max_dist": long_max_dist,
     })
 
-    import json
-    from datetime import datetime
-
-    from fnirs_pipe.io.derivatives import (
-        group_report_dir, write_bidsignore, write_dataset_description,
-    )
-    from fnirs_pipe.pipeline.hyper import (
-        resolve_analysis_window, resolve_group_bands, write_group_bads,
-    )
     from fnirs_pipe.qc.hyper.hyper_report import build_hyper_post_report
     from fnirs_pipe.qc.common.windows import condition_windows, split_windows
-    from fnirs_pipe.qc.metrics._helpers import bands_to_record
     from fnirs_pipe.pipeline.hyper.wtc_null import run_wtc_null, write_wtc_null
     from fnirs_pipe.utils.run_record import write_group_run_record
 
@@ -588,10 +579,6 @@ def cmd_pair_null(
     verbose: bool,
 ) -> None:
     """Draw the re-paired null for dyads whose real tables are already on disk."""
-    import json
-
-    from fnirs_pipe.io.derivatives import write_bidsignore, write_dataset_description
-    from fnirs_pipe.pipeline.hyper import parse_group_csv
     from fnirs_pipe.pipeline.hyper.pair_null import run_pair_null
 
     setup_logging(verbose=verbose)
@@ -670,8 +657,6 @@ def _command_parser(prog: str, description: str, *, reads_subjects: bool,
     write to a second one. The rest re-read tables this package already wrote and have no
     subject data to open, so a source tree would be a positional they ignore.
     """
-    from fnirs_pipe import __version__
-
     p = argparse.ArgumentParser(prog=prog, description=description, parents=parents)
     p.add_argument("--version", action="version", version=f"{prog} {__version__}")
     if reads_subjects:
@@ -687,8 +672,6 @@ def _command_parser(prog: str, description: str, *, reads_subjects: bool,
 
 
 def _parsers() -> dict[str, argparse.ArgumentParser]:
-    from fnirs_pipe import __version__
-
     # --wtc-band-fmin/fmax and --wtc-mask-coi mean the same thing to `run` and to `band`, so
     # they are declared once rather than spelled twice
     band_opts = argparse.ArgumentParser(add_help=False)

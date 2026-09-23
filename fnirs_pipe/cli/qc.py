@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
+from collections import defaultdict
 
 from fnirs_pipe import __version__
 
@@ -12,6 +13,8 @@ from fnirs_pipe.io.naming import report_name
 from fnirs_pipe.cli import _shared
 from fnirs_pipe.qc.metrics import SCI_PASS
 from fnirs_pipe.utils.logging import get_logger, setup_logging
+from fnirs_pipe.cli._shared import separation_bands_from_args
+from fnirs_pipe.qc.metrics._helpers import separation_bands
 
 setup_logging()
 
@@ -33,11 +36,6 @@ def cmd_prep_raw(
     skip_bids_validation: bool,
 ) -> None:
     """Generate static raw QC reports, one subject at a time."""
-    from collections import defaultdict
-
-    from fnirs_pipe.cli._shared import separation_bands_from_args
-    from fnirs_pipe.qc.metrics._helpers import separation_bands
-
     sep_bands = separation_bands(type("Bands", (), separation_bands_from_args({
         "short_max_dist": short_max_dist, "long_min_dist": long_min_dist,
         "long_max_dist": long_max_dist,
@@ -158,9 +156,7 @@ def cmd_hyper_raw(
     skip_bids_validation: bool,
 ) -> None:
     """Generate hyperscanning raw QC report from BIDS raw data."""
-    from fnirs_pipe.cli._shared import separation_bands_from_args
     from fnirs_pipe.io.derivatives import write_bidsignore, write_dataset_description
-    from fnirs_pipe.qc.metrics._helpers import separation_bands
 
     # this writes group-*/ too, so the tree it lands in gets the same stamp fnirs-hyper
     # gives it, whichever of the two runs first

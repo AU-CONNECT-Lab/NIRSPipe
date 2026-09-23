@@ -26,6 +26,8 @@ from pathlib import Path
 import pandas as pd
 
 from fnirs_pipe.utils.logging import get_logger
+from fnirs_pipe import __version__
+from fnirs_pipe.io.derivatives import write_sidecar_json
 
 logger = get_logger("pipeline.wtc_aggregate")
 
@@ -275,8 +277,6 @@ def write_aggregate_wtc(output_dir: Path, sources: "list[Path]") -> Path | None:
 
     Returns the path, or None when there was nothing to merge.
     """
-    from fnirs_pipe import __version__
-    from fnirs_pipe.io.derivatives import write_sidecar_json
     from fnirs_pipe.io.naming import parse_path
 
     merged = aggregate_wtc(output_dir, sources)

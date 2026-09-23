@@ -13,6 +13,7 @@ import re
 from pathlib import Path
 
 import pandas as pd
+import mne
 
 from fnirs_pipe import __version__
 from fnirs_pipe.io.auxiliary import write_aux_window
@@ -141,8 +142,6 @@ def _crop_raw(
     derivative: bool = False,
     margin_s: float = 0.0,
 ) -> list[Path]:
-    import mne
-
     duration = float(raw.times[-1])
     margin_s = max(0.0, float(margin_s))
 

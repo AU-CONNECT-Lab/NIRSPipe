@@ -17,6 +17,7 @@ from fnirs_pipe.pipeline.denoise import (
 from fnirs_pipe.exceptions import StageError
 from fnirs_pipe.utils.lineage import stamp
 from fnirs_pipe.utils.logging import get_logger
+from fnirs_pipe import __version__
 
 logger = get_logger("post.glm")
 
@@ -534,7 +535,6 @@ def _save_glm_outputs(
     bads: list[str] | None = None,
     **params: Any,
 ) -> None:
-    from fnirs_pipe import __version__
     from fnirs_pipe.io.derivatives import write_sidecar_json
 
     bads = bads or []

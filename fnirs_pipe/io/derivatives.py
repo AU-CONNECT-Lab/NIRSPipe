@@ -11,6 +11,7 @@ from typing import Any
 
 from fnirs_pipe.exceptions import MissingDerivativesError
 from fnirs_pipe.utils.logging import get_logger
+from fnirs_pipe import __version__
 
 logger = get_logger("io.derivatives")
 
@@ -348,8 +349,6 @@ def write_dataset_description(
     result recover which preprocessing produced its inputs, and it has no correct value while
     a tool writes back into the tree it read.
     """
-    from fnirs_pipe import __version__
-
     desc = {
         "Name": name,
         "BIDSVersion": "1.8.0",

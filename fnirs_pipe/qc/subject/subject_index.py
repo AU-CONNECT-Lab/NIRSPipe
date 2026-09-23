@@ -27,7 +27,7 @@ from pathlib import Path
 from fnirs_pipe.qc.boilerplate import collect_software_versions
 from fnirs_pipe.qc.common.report_shell import (
     OUTLIER_Z, footer_vars, guard, outlier_flags, page_vars, render)
-from fnirs_pipe.qc.common.figure_io import figure_namer
+from fnirs_pipe.qc.common.figure_io import figure_namer, _save_figure_html
 from fnirs_pipe.io.naming import report_name
 from fnirs_pipe.qc.common.channel_table import CHANNEL_METRICS_SUFFIX
 from fnirs_pipe.qc.subject.sqm_record import (
@@ -411,7 +411,6 @@ def write_condition_figures(sub_dir: Path, subject: str, groups: list[dict]) -> 
     profile takes the runs together because that is the comparison it is for; the other two
     are of one run's channels and one run's clock and cannot be pooled.
     """
-    from fnirs_pipe.qc.common.figure_io import _save_figure_html, figure_namer
     from fnirs_pipe.qc.figures.subject.group_figures import (
         build_channel_condition_matrix, build_condition_panels, build_condition_timeline,
     )

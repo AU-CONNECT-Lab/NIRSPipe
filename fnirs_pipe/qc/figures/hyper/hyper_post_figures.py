@@ -9,6 +9,9 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.ticker import FixedFormatter, FixedLocator, NullFormatter
+from plotly.subplots import make_subplots
+import plotly.graph_objects as go
 
 from fnirs_pipe.utils.logging import get_logger
 
@@ -59,8 +62,6 @@ def _apply_log_freq_axis(ax, freqs: np.ndarray) -> None:
     Reversed so frequency increases downward, which is how the wavelet coherence figures in
     the literature are drawn.
     """
-    from matplotlib.ticker import FixedFormatter, FixedLocator, NullFormatter
-
     major, minor = _log_freq_ticks(freqs)
     ax.set_yscale("log")
     ax.set_ylim(float(np.max(freqs)), float(np.min(freqs)))   # frequency increases downward
@@ -435,8 +436,6 @@ def build_wtc_map_interactive(
     a map this wide would go with it, but so would the real structure: at the fast end of the
     band the coherence decorrelates in about ten seconds, and those stripes are the data.
     """
-    import plotly.graph_objects as go
-
     if wtc_data is None or len(freqs) == 0 or len(times) == 0:
         return None
 
@@ -602,8 +601,6 @@ def _matrix_panel(fig, z, row_labels, col_labels, subject_ids, *, cmap, vmin, vm
     ``colorbar`` is the bar's layout for the one panel that carries it; every other panel
     passes None and draws none, which is what puts several panels of a figure on one scale.
     """
-    import plotly.graph_objects as go
-
     sub1 = subject_ids[0] if subject_ids else "Sub1"
     sub2 = subject_ids[1] if len(subject_ids) > 1 else "Sub2"
 
@@ -627,8 +624,6 @@ def _circle_traces(fig, z, row_labels, col_labels, subject_ids, *,
     chord runs from a node on the left semicircle to one on the right, because the matrix is
     one brain against the other and has no within-brain cell to draw.
     """
-    import plotly.graph_objects as go
-
     n = len(row_labels)
     ang = np.deg2rad(ring_angles([n, n], gap=_CIRCLE_GAP))
     xy = np.stack([np.cos(ang), np.sin(ang)], axis=1)
@@ -734,8 +729,6 @@ def _cross_matrix_figure(
     drawing. The last panel carries the colorbar and the rest draw none, which is what puts
     them all on one scale.
     """
-    from plotly.subplots import make_subplots
-
     sub1 = subject_ids[0] if subject_ids else "sub1"
     sub2 = subject_ids[1] if len(subject_ids) > 1 else "sub2"
 
@@ -827,8 +820,6 @@ def build_cross_panel(
     Which pairings get a chord is :func:`_arc_rule`. It changes no number, and the subtitle
     over the circle says which of its rules drew them.
     """
-    from plotly.subplots import make_subplots
-
     z = np.asarray(z, dtype=float)
     if z.size == 0 or not len(row_labels):
         return None

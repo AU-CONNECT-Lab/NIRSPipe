@@ -41,14 +41,13 @@ from fnirs_pipe.qc.metrics.hyper import NULL_ALPHA_PCT
 from fnirs_pipe.qc.subject.sqm_record import RECORD_SUFFIX, record_label
 from fnirs_pipe.qc.common.report_shell import footer_vars, guard, note, page_vars, render
 from fnirs_pipe.utils.logging import get_logger
+from fnirs_pipe.io.derivatives import entity_of
 
 logger = get_logger("qc.group_hyper_writer")
 
 
 def _usable_name(label: str) -> str:
     """A dyad's usable-time table, from the ``group-<id>_task-<task>`` stem it shares."""
-    from fnirs_pipe.io.derivatives import entity_of
-
     return derivative_path("", "qc", ".tsv", group=entity_of(label, "group"),
                            session=entity_of(label, "ses"),
                            task=entity_of(label, "task"), desc="usable").name

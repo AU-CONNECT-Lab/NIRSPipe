@@ -21,6 +21,7 @@ import numpy as np
 import pandas as pd
 from scipy.linalg import solve_toeplitz
 from scipy.signal import lfilter
+from mne.filter import filter_data
 
 from fnirs_pipe.io.snirf import long_channel_picks
 from fnirs_pipe.pipeline.hyper._helpers import _fisher_z, _shared_sfreq, long_axis_over
@@ -328,7 +329,6 @@ def _band_limit(data: np.ndarray, sfreq: float, band) -> np.ndarray:
     lo, hi = band
     if lo is None and hi is None:
         return data
-    from mne.filter import filter_data
 
     from fnirs_pipe.pipeline.denoise import filter_kwargs
 

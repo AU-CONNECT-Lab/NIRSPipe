@@ -16,6 +16,9 @@ import mne
 import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+from PIL import Image as _PILImage
+from matplotlib.cm import ScalarMappable
+from matplotlib.colors import Normalize
 
 from fnirs_pipe.utils.logging import get_logger
 
@@ -165,9 +168,6 @@ def _add_shared_colorbar(fig, clim: dict) -> None:
     MNE spaces ``pos_lims``/``lims`` evenly about zero, so a plain symmetric norm over
     RdBu_r reproduces exactly what was rendered.
     """
-    from matplotlib.cm import ScalarMappable
-    from matplotlib.colors import Normalize
-
     vmax = _clim_vmax(clim)
     cax = fig.add_axes([0.36, 0.035, 0.28, 0.022])
     cb = fig.colorbar(ScalarMappable(norm=Normalize(-vmax, vmax), cmap="RdBu_r"),
@@ -418,9 +418,6 @@ def activation_panel(
     rendered = activation_condition_figures(raw_haemo, results_dict, clim, view, size)
     if not rendered:
         return None
-
-    import matplotlib.pyplot as plt
-    from PIL import Image as _PILImage
 
     row_labels = [label for label, _ in rendered]
     row_imgs = [np.array(_PILImage.open(io.BytesIO(base64.b64decode(b64))))

@@ -24,6 +24,12 @@ from fnirs_pipe.qc.figures.common.head_map import (
     head_glyph as _head_glyph,
 )
 from fnirs_pipe.utils.logging import get_logger
+from fnirs_pipe.qc.figures.common.motion_panel import (
+    carpet_z, _maxpool_xy, _px_rows, _span_polygons, add_carpet, carpet_coloraxis,
+)
+from fnirs_pipe.qc.metrics import (
+    GVTD_MOTION_BAND, gvtd_channel_blocks, gvtd_timetrace, spike_segments,
+)
 
 logger = get_logger("qc.figures.hyper")
 
@@ -393,11 +399,6 @@ def motion_series(
 
     Returns ``{}`` when no member carries usable optical density.
     """
-    from fnirs_pipe.qc.figures.common.motion_panel import carpet_z
-    from fnirs_pipe.qc.metrics import (
-        GVTD_MOTION_BAND, gvtd_channel_blocks, gvtd_timetrace, spike_segments,
-    )
-
     have = [sid for sid in subject_ids if sid in intensity_raws]
     if not have:
         return {}
@@ -573,10 +574,6 @@ def build_motion_panel(
     sets = [s for s in motion["sets"] if motion["series"][stage].get(s)]
     if not sets:
         return None
-
-    from fnirs_pipe.qc.figures.common.motion_panel import (
-        _maxpool_xy, _px_rows, _span_polygons, add_carpet, carpet_coloraxis,
-    )
 
     spans_both = motion["spikes_both"].get(stage) or []
     carpets = motion["carpets"].get(stage) or []

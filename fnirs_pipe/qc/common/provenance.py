@@ -12,6 +12,7 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+import copy
 
 from fnirs_pipe.io.derivatives import entity_of
 
@@ -345,8 +346,6 @@ def simplify(nodes: dict[str, Node]) -> dict[str, Node]:
     A drawing step, not a reading one: :func:`scan` still returns every node, which is what
     the interface DAG and the methods text are built on.
     """
-    import copy
-
     groups: dict[tuple, list[Node]] = {}
     for node in nodes.values():
         if node.step is None:

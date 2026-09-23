@@ -5,6 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
 from fnirs_pipe.qc.figures.common._utils import CONDITION_PALETTE, LONG_COLOR, SHORT_COLOR
 
@@ -426,8 +427,6 @@ def build_window_grid(
     ``highlight`` names runs that keep a line of their own, one colour each, the same colour
     in every cell.
     """
-    from plotly.subplots import make_subplots
-
     names = [str(r.get("bids_name", "")) for r in rows]
     picked = [(key, label) for key, label, *_rest in _WINDOW_MATRICES if key in metrics]
     if "gvtd" in metrics:
@@ -530,8 +529,6 @@ def build_condition_timeline(
     HbR trace one click away would be the same blue; ``LONG_COLOR`` and ``SHORT_COLOR`` are
     the separation split every raw-level view already wears.
     """
-    from plotly.subplots import make_subplots
-
     picked = [(key, label) for key, label, *_rest in _WINDOW_MATRICES if key in metrics]
     if "gvtd" in metrics:
         picked.append(("gvtd", "GVTD"))
@@ -616,8 +613,6 @@ def build_condition_panels(
     The windows collapsed into the blocks the run was designed around, which is the form the
     question takes: did this run get worse where everyone got worse, or on its own.
     """
-    from plotly.subplots import make_subplots
-
     conditions = condition_names(rows)
     if len(conditions) < 2:
         return None
@@ -684,8 +679,6 @@ def _condition_heatmap(panels: "list[tuple[str, np.ndarray]]", conditions: list[
     The y labels sit on the left edge only. The panels share the axis, and repeating the
     names over every panel's cells is what made this unreadable.
     """
-    from plotly.subplots import make_subplots
-
     fig = make_subplots(rows=1, cols=len(panels), shared_yaxes=True,
                         subplot_titles=[t for t, _v in panels], horizontal_spacing=0.012)
     for i, (_title, values) in enumerate(panels):

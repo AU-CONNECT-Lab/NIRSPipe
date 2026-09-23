@@ -12,6 +12,7 @@ they must not disagree about is what a colour means.
 from __future__ import annotations
 
 import numpy as np
+import plotly.graph_objects as go
 
 # Diverging and centred on zero, red at +1, because a correlation has a meaningful middle.
 # An unsigned bounded quantity such as a coherence has none and takes a sequential scale.
@@ -82,8 +83,6 @@ def cell_values(fig, z, row_labels, col_labels, *, cmap, vmin, vmax, row, col,
     scale added later. Two text traces rather than one, because a heatmap takes a single
     ``textfont`` for the whole grid and that is the one thing this needs per cell.
     """
-    import plotly.graph_objects as go
-
     n = max(len(row_labels), len(col_labels), 1)
     size = float(np.clip(150.0 / n, 5.0, 14.0))
     groups: dict[str, list] = {"white": [[], [], []], "#111111": [[], [], []]}

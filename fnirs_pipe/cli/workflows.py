@@ -13,9 +13,12 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+import mne
+import numpy as np
+
 from fnirs_pipe.cli import _shared
 from fnirs_pipe.io.bids import bids_label, get_layout, get_nirs_files
-from fnirs_pipe.io.naming import report_name
+from fnirs_pipe.io.naming import report_name, roi_map_name
 from fnirs_pipe.io.derivatives import write_bidsignore, write_dataset_description
 from fnirs_pipe.io.snirf import read_snirf
 from fnirs_pipe.pipeline.denoise import DEFAULT_FILTER_METHOD, DEFAULT_FILTER_ORDER
@@ -25,13 +28,12 @@ from fnirs_pipe.utils import job_db as _jdb
 from fnirs_pipe.utils.logging import get_logger, setup_logging, thread_log_file
 from fnirs_pipe.utils.run_record import write_run_record
 from fnirs_pipe.utils.run_script import write_run_script
+from fnirs_pipe import __version__
 
 logger = get_logger("cli.workflows")
 
 def _roi_map_name(args: dict[str, Any]) -> str:
     """The seg- entity of this run's ROI map, from ``--roi-mapping``."""
-    from fnirs_pipe.io.naming import roi_map_name
-
     return roi_map_name(args.get("roi_mapping"))
 
 
@@ -182,7 +184,6 @@ def run_participant_level(args: dict[str, Any]) -> None:
 
     tasks: list[str | None] = task_label if task_label else [None]
 
-    from fnirs_pipe import __version__
     db_path = output_dir / "logs" / "fnirs_pipe.db"
     execution_id = _jdb.log_execution(
         db_path=db_path,
@@ -498,8 +499,6 @@ def _make_prep_config(subject: str, session: str | None, args: dict[str, Any]) -
 
 
 def _emit_subject_report(subject, sub_dir, last_raw, last_result, prep_config, args, glm_est, dm, alff_df=None, fc_df=None, fc_hbr_df=None, fc_seed=None, fc_roi=None, high_pass=None, low_pass=None, after_haemo=None, roi_map=None, provenance_path=None, sqm_label=None, roi_map_name=None):
-    import mne
-    import numpy as np
     from fnirs_pipe.qc.subject.report import build_subject_report
 
     hbo_picks = mne.pick_types(last_result.raw_haemo.info, fnirs="hbo")
@@ -638,8 +637,6 @@ def _warn_on_split_tree(output_dir: Path) -> None:
 def run_group_level(args: dict[str, Any]) -> None:
     """BIDS Apps `group` entry point — aggregates per-subject (and per-group hyper,
     if present) SQM JSONs into cohort HTML reports under <output_dir>."""
-    from pathlib import Path
-
     from fnirs_pipe.qc.hyper.group_hyper_writer import build_group_hyper_report
     from fnirs_pipe.qc.subject.group_writer import build_group_raw_report
     from fnirs_pipe.qc.subject.sqm_record import RECORD_SUFFIX

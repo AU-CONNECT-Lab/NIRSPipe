@@ -913,8 +913,6 @@ def _condition_sci_psp(build, sci_pc, psp_pc, cv_pc, bad_channels, sci_threshold
     Returns the figure itself, or None when no window of the run's grid falls inside this
     condition, so the caller can write it to a file of its own.
     """
-    import numpy as np
-
     from fnirs_pipe.qc.metrics.windowed import _in_scope, window_centers
 
     def _cut(matrix_key, times_key):

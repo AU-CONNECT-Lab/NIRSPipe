@@ -24,7 +24,9 @@ import mne
 import numpy as np
 import plotly.graph_objects as go
 
-from fnirs_pipe.qc.figures.common.topomap import _LONG_SIZE, _SHORT_SIZE
+from fnirs_pipe.qc.figures.common.topomap import (
+    _LONG_SIZE, _SHORT_SIZE, _glyph_points, _projected_optodes,
+)
 
 # one disc standing for a whole channel has to carry the value on its own, so it is drawn
 # larger than the discs a bar is strung from
@@ -50,8 +52,6 @@ def head_geometry(raw: mne.io.Raw, pairs: list[str]) -> "dict | None":
 
     None when the montage has no usable optode positions.
     """
-    from fnirs_pipe.qc.figures.common.topomap import _glyph_points, _projected_optodes
-
     got = _projected_optodes(raw.info)
     if got is None:
         return None

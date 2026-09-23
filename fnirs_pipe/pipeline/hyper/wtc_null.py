@@ -23,6 +23,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from fnirs_pipe.io.derivatives import group_output_path
+
 logger = logging.getLogger(__name__)
 
 
@@ -147,7 +149,6 @@ def write_wtc_null(
     the null's business. A tree without them still gets a null, just one nothing has been
     ranked against yet.
     """
-    from fnirs_pipe.io.derivatives import group_output_path
     from fnirs_pipe.pipeline.hyper import _hyper_sidecar, alignment_params
     from fnirs_pipe.pipeline.hyper.wtc import wtc_grid_params
     from fnirs_pipe.utils.lineage import path_from

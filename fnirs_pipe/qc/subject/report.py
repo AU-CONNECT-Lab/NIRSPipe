@@ -59,6 +59,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+import html as _html
 
 import mne
 import mne.io
@@ -74,9 +75,10 @@ from fnirs_pipe.qc.common.figure_io import (
     _save_figure_html, _save_multi_fig_html,
     extract_markers, figure_namer, get_channel_pairs,
 )
-from fnirs_pipe.qc.metrics import (CV_PASS, EDGE_S, SCI_PASS, edge_to_mid_rms,
-                                  gvtd_channel_blocks, registration_offset,
-                                  separation_bands, separation_orphans)
+from fnirs_pipe.qc.metrics import (
+    CV_PASS, EDGE_S, SCI_PASS, edge_to_mid_rms, gvtd_channel_blocks, registration_offset,
+    separation_bands, separation_orphans, epochable_events, resolve_cutoffs,
+)
 from fnirs_pipe.qc.metrics._helpers import bands_from_record
 from fnirs_pipe.qc.figures.common._utils import chunk_annotations
 from fnirs_pipe.qc.figures import (
@@ -113,9 +115,10 @@ from fnirs_pipe.qc.figures import (
 from fnirs_pipe.qc.common.report_shell import (
     footer_vars, guard, note, page_vars, render,
 )
-from fnirs_pipe.qc.subject.sqm_record import record_path as _sqm_record_path
+from fnirs_pipe.qc.subject.sqm_record import record_path as _sqm_record_path, entities_of
 from fnirs_pipe.qc.subject.trial_qc import score_trials, trial_windows
 from fnirs_pipe.utils.logging import get_logger
+from fnirs_pipe.qc.metrics.windowed import _in_scope, window_centers
 
 if TYPE_CHECKING:
     from fnirs_pipe.pipeline.prep_pipeline import PrepConfig
@@ -188,8 +191,6 @@ def _no_epoch_reason(
     noisy rather than absent. It waives nothing else. The other two reasons are a run with no
     events and a window that fits inside none of them, and no flag makes either epochable.
     """
-    from fnirs_pipe.qc.metrics import epochable_events
-
     events, event_id = epochable_events(raw_haemo, epoch_tmin, epoch_tmax)
     if len(events) > 0:
         counts = {name: int((events[:, 2] == code).sum()) for name, code in event_id.items()}
@@ -1591,8 +1592,6 @@ def _section_rest(
 
 def _glm_betas_table(df: "Any", conditions: list[str]) -> str:
     """Return an HTML table of per-channel GLM betas (theta)."""
-    import html as _html
-
     df = df[df["Contrast"].isin(conditions)].copy()
     if df.empty:
         return None
@@ -1893,8 +1892,6 @@ def build_subject_report(
     from fnirs_pipe.qc.boilerplate.vocabulary import (
         format_metric, is_key_metric, metric_class, metric_summary,
     )
-
-    from fnirs_pipe.qc.subject.sqm_record import entities_of
 
     run_label_text = sqm_label or f"sub-{subject}"
     report_vars = dict(
@@ -2271,10 +2268,6 @@ def _windowed_slice(record: dict, windows: list, label: str) -> dict:
     channel-averaged series measured over the run, and handing those to a per-condition
     panel would put run-wide stripes over per-condition columns.
     """
-    import numpy as np
-
-    from fnirs_pipe.qc.metrics.windowed import _in_scope, window_centers
-
     windowed = record.get("windowed") or {}
     out: dict = {}
     for matrix_key, times_key in (("sci_matrix", "sci_times"), ("psp_matrix", "psp_times"),
@@ -2358,7 +2351,6 @@ def _write_condition_reports(
         slice_record, with_condition_corr,
     )
     from fnirs_pipe.qc.common.record_views import condition_verdict_view
-    from fnirs_pipe.qc.metrics import resolve_cutoffs
 
     if out_dir is None or sqm_label is None:
         logger.warning("sub-%s | no quality record location; no per-condition pages", subject)

@@ -14,19 +14,20 @@ from fnirs_pipe.exceptions import GroupCSVError
 from fnirs_pipe.exceptions import StageError
 from fnirs_pipe.io.derivatives import find_preproc_snirf
 from fnirs_pipe.io.derivatives import subject_nirs_dirs
+from fnirs_pipe.io.derivatives import write_sidecar_json
+from fnirs_pipe.io.derivatives import select_one_run
 from fnirs_pipe.io.snirf import read_snirf
 from fnirs_pipe.io.tables import read_table
 from fnirs_pipe.utils import is_optical_density
 from fnirs_pipe.utils.lineage import lineage_of
 from fnirs_pipe.utils.lineage import stage_of
 from fnirs_pipe.utils.logging import get_logger
+from fnirs_pipe import __version__
 
 logger = get_logger("pipeline.group_io")
 
 
 def _hyper_sidecar(path: Path, step: str, sources: list[str], **params) -> None:
-    from fnirs_pipe import __version__
-    from fnirs_pipe.io.derivatives import write_sidecar_json
     write_sidecar_json(path, {
         "pipeline_version": __version__,
         "step": step,
@@ -96,8 +97,6 @@ def load_group_raw_bids(bids_dir: Path, group: list[GroupEntry]) -> dict[str, mn
     Raises MissingDerivativesError if no SNIRF is found for any member.
     """
     from fnirs_pipe.io.bids import get_layout, get_nirs_files
-
-    from fnirs_pipe.io.derivatives import select_one_run
 
     layout = get_layout(bids_dir, validate=False)
     result: dict[str, mne.io.Raw] = {}

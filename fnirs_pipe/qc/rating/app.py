@@ -4,6 +4,7 @@ import time
 import webbrowser
 from datetime import datetime, timezone
 from pathlib import Path
+import logging as _logging
 
 from flask import Flask, jsonify, request, send_from_directory
 
@@ -13,6 +14,7 @@ from fnirs_pipe.io.naming import report_name
 from fnirs_pipe.qc.metrics import SCI_PASS
 from fnirs_pipe.utils.logging import get_logger
 from fnirs_pipe.utils.net import resolve_port
+from fnirs_pipe.utils import load_toml
 
 logger = get_logger("qc.rating")
 
@@ -28,7 +30,6 @@ def _utc_now_iso() -> str:
 
 def _serve_forever(app, port: int, log_name: str, ready_delay: float = 1.0, on_ready=None) -> None:
     """Run a Flask app on a daemon thread, fire on_ready, then block until Ctrl+C."""
-    import logging as _logging
     _logging.getLogger("werkzeug").setLevel(_logging.ERROR)
 
     failures: list[OSError] = []
@@ -66,7 +67,6 @@ class FNIRSRatingApp:
                      / f"sub-{subject}_ratings.toml")
         if not toml_path.exists():
             return {"ratings": {}, "notes": {}}
-        from fnirs_pipe.utils import load_toml
         data = load_toml(toml_path)
         ratings = {k: v for k, v in data.items()
                    if isinstance(v, str) and k not in ("subject", "rated_at")}

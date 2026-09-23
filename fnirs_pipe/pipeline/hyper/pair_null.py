@@ -19,7 +19,10 @@ from pathlib import Path
 
 import pandas as pd
 
-from fnirs_pipe.exceptions import StageError
+from fnirs_pipe.exceptions import StageError, AlignmentError
+from fnirs_pipe.io.derivatives import group_output_path
+from fnirs_pipe.pipeline.hyper.surrogate import compute_wtc_pair_null, _average_iterations
+from fnirs_pipe.pipeline.hyper.wtc import cone_margin_s
 
 logger = logging.getLogger(__name__)
 
@@ -247,7 +250,6 @@ def _draw_condition_pairs(
     """
     from fnirs_pipe.pipeline.hyper.group_io import load_group_haemo
     from fnirs_pipe.pipeline.hyper.group_quality import apply_group_bads, load_group_sqm
-    from fnirs_pipe.pipeline.hyper.wtc import cone_margin_s
 
     margin = cone_margin_s(band_fmin)
     window_sources = window_sources or {}
@@ -351,7 +353,6 @@ def _draw_pairs(
     that moves the fixed member's own crop would put the draw on a different clock than the
     real table and invalidate the cached transforms this reuses.
     """
-    from fnirs_pipe.exceptions import AlignmentError
     from fnirs_pipe.pipeline.hyper.group_io import load_group_haemo
     from fnirs_pipe.pipeline.hyper.group_quality import apply_group_bads, load_group_sqm
     from fnirs_pipe.pipeline.hyper import align_recordings
@@ -456,14 +457,12 @@ def run_pair_null(
     and write are one step for the same reason: there is nothing to write between them, the
     table being ranked against is already on disk.
     """
-    from fnirs_pipe.io.derivatives import group_output_path
     from fnirs_pipe.pipeline.hyper.group_io import load_group_haemo
     from fnirs_pipe.pipeline.hyper.group_quality import (apply_group_bads, load_group_sqm,
                                                    resolve_group_bands)
     from fnirs_pipe.pipeline.hyper import (_hyper_sidecar, align_recordings,
                                                    alignment_params)
     from fnirs_pipe.pipeline.hyper._helpers import long_axis_over
-    from fnirs_pipe.pipeline.hyper.surrogate import compute_wtc_pair_null
     from fnirs_pipe.pipeline.hyper.wtc import wtc_grid_params
     from fnirs_pipe.pipeline.hyper.wtc_null import _for_chroma, _real_table, write_tsv
     from fnirs_pipe.qc.common.windows import condition_windows, split_windows
@@ -625,8 +624,6 @@ def run_pair_null(
 
     _log_draw_quality(partners, refused, coverage, len(candidates))
 
-    from fnirs_pipe.pipeline.hyper.wtc import cone_margin_s
-
     sources = [p for p in (path_from(r) for r in aligned_real.values()) if p]
     params = dict(
         band_fmin=band_fmin, band_fmax=band_fmax, mask_coi=mask_coi,
@@ -733,7 +730,6 @@ def _write_isc_null(frames, cond_frames, draw_frames, path_of, sources, params,
     coherence tables do without this function knowing either.
     """
     from fnirs_pipe.pipeline.hyper import _hyper_sidecar
-    from fnirs_pipe.pipeline.hyper.surrogate import _average_iterations
     from fnirs_pipe.pipeline.hyper.wtc_null import write_tsv
 
     keys = ["chromophore", "sub1", "sub2", "label", "label2"]

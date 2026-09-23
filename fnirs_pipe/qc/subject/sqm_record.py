@@ -70,6 +70,7 @@ import numpy as np
 
 from fnirs_pipe.io.derivatives import entity_of
 from fnirs_pipe.utils.logging import get_logger
+from fnirs_pipe import __version__
 
 logger = get_logger("qc.sqm_record")
 
@@ -1165,8 +1166,6 @@ def sqm_record_dict(sections: dict[str, Any], sources: list[str]) -> dict[str, A
     provenance table lists a record's metric names prefixed the way the group table names
     its columns, so the two read as one vocabulary.
     """
-    from fnirs_pipe import __version__
-
     known = (*SECTIONS, *OPTIONAL_SECTIONS)
     metrics = [f"{s}_{k}" for s in known if isinstance(sections.get(s), dict)
                for k in sections[s]]

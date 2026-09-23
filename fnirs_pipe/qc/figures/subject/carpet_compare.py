@@ -11,6 +11,7 @@ from fnirs_pipe.qc.figures.common.motion_panel import (
     carpet_coloraxis, carpet_z,
 )
 from fnirs_pipe.utils import is_optical_density
+from fnirs_pipe.qc.metrics import GVTD_MOTION_BAND, gvtd_timetrace
 
 _CARPET_ROW_PX = 190
 _CHROMO_COLOR = {"hbo": HBO_COLOR, "hbr": HBR_COLOR}
@@ -68,8 +69,6 @@ def _gvtd_rows(raw_before, raw_after, blocks: list):
     ``gvtd_channel_blocks`` already collapses a montage with no long channels to a single
     "all" block, so a fallback here could only put the union back.
     """
-    from fnirs_pipe.qc.metrics import GVTD_MOTION_BAND, gvtd_timetrace
-
     def _od(raw):
         if raw is None:
             return None

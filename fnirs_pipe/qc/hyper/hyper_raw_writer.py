@@ -41,6 +41,7 @@ from fnirs_pipe.qc.common.report_shell import guard, note
 from fnirs_pipe.qc.common.windows import condition_windows, markers_on_data_axis
 from fnirs_pipe.utils.lineage import path_from
 from fnirs_pipe.utils.logging import get_logger
+from fnirs_pipe import __version__
 
 logger = get_logger("qc.hyper_raw_writer")
 
@@ -84,8 +85,6 @@ def _hyper_sqm_record(sqm: dict, aligned_raws: dict[str, mne.io.Raw]) -> dict:
     ``alignment`` is nested rather than flattened in beside the scalars, which are what
     ``metrics`` is counted over: a clock is not a measurement of the dyad.
     """
-    from fnirs_pipe import __version__
-
     metrics = [k for k, v in sqm.items() if isinstance(v, (int, float))]
     return {
         "pipeline_version": __version__,

@@ -6,6 +6,8 @@ import io
 import json
 import re
 from pathlib import Path
+import hashlib
+import pickle
 
 import dash_bootstrap_components as dbc
 import numpy as np
@@ -57,7 +59,6 @@ def _make_cache_key(snirf_path: str, sci_thresh: float, cardiac_l: float, cardia
                     dpf: float, window_s: float, epoch_qc: bool,
                     epoch_tmin: float, epoch_tmax: float,
                     sep_bands=None) -> str:
-    import hashlib
     payload = (f"v{_CACHE_VERSION}|{snirf_path}|{sci_thresh}|{cardiac_l}|{cardiac_h}|{dpf}"
                f"|{window_s}|{epoch_qc}|{epoch_tmin}|{epoch_tmax}"
                f"|{sep_bands}")
@@ -171,8 +172,6 @@ def populate_runs(subject, bids_dir):
 def load_run(run_path, sci_thresh, cardiac_l, cardiac_h, dpf,
              window_s, epoch_qc, epoch_tmin, epoch_tmax,
              short_max_dist, long_min_dist, long_max_dist, output_dir):
-    import pickle
-
     if not run_path:
         return no_update, no_update
     if not output_dir or not Path(output_dir).is_dir():

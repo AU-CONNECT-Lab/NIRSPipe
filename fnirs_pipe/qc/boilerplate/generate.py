@@ -7,6 +7,8 @@ import sys
 from importlib.resources import files
 from typing import Any
 
+from fnirs_pipe import __version__
+
 
 # ---- Citation rendering ----
 
@@ -370,8 +372,6 @@ def step_sentence(step: str | None, params: dict, mode: str | None = None) -> st
 
 
 def collect_software_versions() -> dict[str, str]:
-    from fnirs_pipe import __version__
-
     out = {
         "python": f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
         "fnirs-pipe": __version__,
