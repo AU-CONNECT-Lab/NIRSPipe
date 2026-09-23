@@ -19,7 +19,7 @@ import numpy as np
 from fnirs_pipe.cli import _shared
 from fnirs_pipe.io.bids import bids_label, get_layout, get_nirs_files
 from fnirs_pipe.io.naming import report_name, roi_map_name
-from fnirs_pipe.io.derivatives import write_bidsignore, write_dataset_description
+from fnirs_pipe.io.derivatives import entity_of, write_bidsignore, write_dataset_description
 from fnirs_pipe.io.snirf import read_snirf
 from fnirs_pipe.pipeline.denoise import DEFAULT_FILTER_METHOD, DEFAULT_FILTER_ORDER
 from fnirs_pipe.pipeline.prep_pipeline import PrepConfig, run_prep
@@ -317,8 +317,12 @@ def run_participant_level(args: dict[str, Any]) -> None:
                         try:
                             from fnirs_pipe.qc.figures.common.provenance_figure import write_provenance
                             from fnirs_pipe.qc.common.figure_io import figure_namer
+                            # the run's own nirs/, session level included; the figure stays
+                            # beside the subject's reports
+                            ses = entity_of(label, "ses")
                             for path in write_provenance(
-                                sub_dir / "nirs", sub_dir / "figures",
+                                sub_dir / (f"ses-{ses}" if ses else "") / "nirs",
+                                sub_dir / "figures",
                                 figure_namer(label), label=label,
                                 title=label + (f"  |  mode: {args['mode']}" if args.get("mode") else ""),
                             ):

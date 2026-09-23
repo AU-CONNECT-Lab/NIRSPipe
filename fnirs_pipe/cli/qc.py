@@ -260,27 +260,35 @@ def cmd_provenance(output_dir: Path) -> None:
     from fnirs_pipe.qc.common.figure_io import figure_namer
     from fnirs_pipe.qc.figures.common.provenance_figure import write_provenance
 
-    # the root is always searched too: hyper-raw writes its group TSVs there, not under nirs/
+    from fnirs_pipe.io.derivatives import entity_of
+    from fnirs_pipe.qc.subject.sqm_record import scan_runs
+
+    # the root is always searched too: the merged cross-dyad and group-null tables sit there
     targets = [
         *sorted(output_dir.glob("sub-*/nirs")),
+        *sorted(output_dir.glob("sub-*/ses-*/nirs")),
         *sorted(output_dir.glob("group-*/nirs")),
         output_dir,
     ]
 
-    from fnirs_pipe.qc.subject.sqm_record import scan_runs
-
     total = 0
     for nirs_dir in targets:
         dest = nirs_dir.parent if nirs_dir.name == "nirs" else nirs_dir
-        # a subject holds one graph per run; anything else (a group tree, the root) has no
-        # run entity to split on and keeps its single graph. Same destinations and names the
-        # run itself uses, so re-rendering refreshes the images an already-written QC
-        # report points at
-        runs = list(scan_runs(nirs_dir)) if dest.name.startswith("sub-") else []
-        for label in runs or [None]:
-            written = write_provenance(nirs_dir, dest / "figures",
-                                       figure_namer(label or dest.name),
-                                       title=label or dest.name, label=label)
+        if dest.name.startswith("ses-"):
+            dest = dest.parent  # a subject's figures sit beside its reports, above sessions
+        # Same destinations and names the writers use, so re-rendering refreshes the image
+        # an already-written report points at: a subject gets one graph per run, a group one
+        # per task named as its dyad report names it, and the root a single graph
+        if dest.name.startswith("sub-"):
+            jobs = [(label, label) for label in scan_runs(nirs_dir)]
+        elif dest.name.startswith("group-"):
+            tasks = sorted({entity_of(p, "task") for p in nirs_dir.glob("*.json")} - {None})
+            jobs = [(f"{dest.name}_task-{task}", None) for task in tasks]
+        else:
+            jobs = []
+        for name, label in jobs or [(dest.name, None)]:
+            written = write_provenance(nirs_dir, dest / "figures", figure_namer(name),
+                                       title=name, label=label)
             for path in written:
                 print(f"{path}")
             total += bool(written)
@@ -329,8 +337,8 @@ def _build_parser() -> argparse.ArgumentParser:
     _shared.add_separation_bands(pr)
     pr.add_argument("--by-condition", action="store_true",
                     help="Also write one report per annotated condition, beside the run's "
-                         "own and named the way `fnirs-prep crop` names a segment: the "
-                         "condition becomes the task- entity. Their numbers are sliced out "
+                         "own, as <run>_cond-<condition>_desc-raw_report.html. Their numbers "
+                         "are sliced out "
                          "of the run's windowed pass, so every condition sits on the same "
                          "window grid and the same filter as the run; nothing is cut and "
                          "nothing is re-measured. Each page screens on its own stretch, so "

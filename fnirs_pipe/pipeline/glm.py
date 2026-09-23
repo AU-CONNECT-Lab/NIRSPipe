@@ -391,7 +391,7 @@ def compute_contrasts(
 
     A name the design does not carry raises rather than weighting nothing: a contrast file
     is written by hand against condition labels, and a typo there would otherwise be a
-    silently empty contrast that still lands in `contrasts.csv`.
+    silently empty contrast that still lands in the `desc-contrast_nirsmap.tsv` table.
     """
     columns = list(design_matrix.columns)
     results = {}

@@ -5,7 +5,7 @@ for the exploratory 196-pair channel table also multiplied every surrogate itera
 That coupling was invisible on disk too: the null's sidecar recorded the band but neither the
 iteration count nor the shape, so a 5-iteration probe and a 100-iteration null looked alike.
 
-The null runs inside `fnirs-hyper run`, which is what keeps its band and its stage identical
+The null runs inside `fnirs-hyper`, which is what keeps its band and its stage identical
 to the table it sits beside, and the independence is carried by `--wtc-phase-null-cross`
 instead. These tests hold that independence in place: the null is off unless asked for, its
 crossing is its own decision, the sidecar says what was run, and a merge refuses to mix

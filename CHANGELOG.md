@@ -22,6 +22,10 @@ All notable changes to this project will be documented in this file.
 - Raw condition pages dropped every panel redrawn for the condition as a leak
 - The dyad rating server read its task as `unknown`, so channel decisions went to a file the raw page never reads
 - A collapsed provenance box counted no conditions, the `cond-` entity being unknown to its parser
+- The GLM tables go to the session folder their run's snirfs use, not `sub-<id>/nirs`
+- `fnirs-qc provenance` refreshes the graph a dyad report links, and finds subjects with sessions
+- The dyad quality loader read SCI from the per-channel table as comma separated and silently got none
+- The `--by-condition` help of `fnirs-pipe` and `fnirs-qc prep-raw`, and messages naming `fnirs-hyper run`, describe the current commands and names
 - On a session tree the Hyper Preparation page read and wrote channel decisions under a path the raw QC page never uses
 - `fnirs-prep align` wrote a member of a two-session tree under the wrong session's name and folder
 - A member two groups share is refused by `fnirs-prep align` instead of being silently re-cut by the second group

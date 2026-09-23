@@ -483,7 +483,7 @@ def build_hyper_report(
     label = "_".join(name_parts)
     output_path = group_report_dir(output_dir, group_id) / report_name(label, desc="raw")
 
-    # the post report if `fnirs-hyper run` has written one; a raw-only tree has none, and
+    # the post report if `fnirs-hyper` has written one; a raw-only tree has none, and
     # the index is built from the same coherence tables, so neither link is offered there.
     # The two differ by the desc- entity alone, so neither name is derived from the other
     post = output_path.with_name(report_name(label))

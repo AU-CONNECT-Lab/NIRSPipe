@@ -77,6 +77,13 @@ def test_the_csv_still_works_on_a_tree_that_has_no_sidecars(nirs_dir):
     assert _load(nirs_dir)["bad_channels"] == BADS_TAP
 
 
+def test_the_per_channel_sci_comes_from_the_table_when_there_is_no_sidecar(nirs_dir):
+    # the table is tab separated; read as a CSV it came back as one column and the SCI
+    # was silently absent while the rejected channels, read another way, were not
+    _csv(nirs_dir, "tap", BADS_TAP)
+    assert _load(nirs_dir)["sci_per_channel"]["S6_D5 760"] == 0.2
+
+
 def test_the_sidecar_wins_when_both_are_present(nirs_dir):
     """They agree in practice, so the test uses a disagreement to name the winner."""
     _sidecar(nirs_dir, "tap", BADS_TAP)

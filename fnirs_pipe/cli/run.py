@@ -140,16 +140,15 @@ def _build_parser() -> argparse.ArgumentParser:
                                "flag can fix.")
     prep_opt.add_argument("--by-condition", action="store_true",
                           help="Also write one QC report page per annotated condition, "
-                               "beside the run's own, as desc-<condition>. Their numbers "
+                               "beside the run's own, as cond-<condition>. Their numbers "
                                "are sliced out of the windowed pass already in the quality "
                                "record, so every condition sits on the same window grid and "
-                               "the same filter as the run; nothing is cut and nothing is "
-                               "measured again. Each page carries the scalar panel and the "
-                               "channel table for that condition; the epoch, topography and "
-                               "GLM panels are left blank, since the epoch window is set for "
-                               "a trial and would describe the start of a block. Each page "
-                               "screens on its own stretch, so its verdict is that "
-                               "condition's; the run was processed under the run's.")
+                               "the same filter as the run; nothing is measured again. The "
+                               "spectra, epoch preview and topography are redrawn on a copy "
+                               "cropped to the condition, and the GLM panel shows that "
+                               "condition's activation. Each page screens on its own "
+                               "stretch, so its verdict is that condition's; the run was "
+                               "processed under the run's.")
     prep_opt.add_argument("--gvtd-censor", nargs="?", const="long", default=None,
                           choices=("long", "short", "all"), metavar="SET",
                           help="Mark the frames GVTD flags as BAD_gvtd. The data is annotated, "

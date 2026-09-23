@@ -143,7 +143,7 @@ def real_table_params(real_tsv: Path) -> dict:
     if not sidecar.exists():
         raise StageError(
             f"no real WTC table to rank against: {sidecar} is missing. Run "
-            "`fnirs-hyper run` for this group first; the null reads its band, its mask and "
+            "`fnirs-hyper` for this group first; the null reads its band, its mask and "
             "its clock off that table rather than taking them again from the command line.")
     try:
         params = json.loads(sidecar.read_text()).get("parameters", {})
@@ -155,7 +155,7 @@ def real_table_params(real_tsv: Path) -> dict:
     if missing:
         raise StageError(
             f"{sidecar} does not record {', '.join(missing)}, so the null cannot be built to "
-            "match it. Rerun `fnirs-hyper run` for this group on current code.")
+            "match it. Rerun `fnirs-hyper` for this group on current code.")
     return params
 
 
@@ -506,7 +506,7 @@ def run_pair_null(
         # the tree moved under the table: the null would describe a different stretch
         raise StageError(
             f"the real table was written on {float(recorded):.3f} s of aligned recording but "
-            f"the tree now aligns to {aligned_duration:.3f} s. Rerun `fnirs-hyper run` for "
+            f"the tree now aligns to {aligned_duration:.3f} s. Rerun `fnirs-hyper` for "
             f"group {group_id!r} before drawing its null.")
 
     candidates = partner_pool(groups, group_id, task, pool=pool)
@@ -693,7 +693,7 @@ def _isc_settings_of(sidecar: Path, whiten: int, max_lag_s: float, band):
         params = {}
     if "isc_whiten_max_order" not in params:
         logger.warning("%s records no ISC settings, so the re-paired ISC cannot be checked "
-                       "against the real one; rerun `fnirs-hyper run` to stamp them",
+                       "against the real one; rerun `fnirs-hyper` to stamp them",
                        sidecar.name)
         return whiten, max_lag_s, band
     stored_band = params.get("isc_band_hz")

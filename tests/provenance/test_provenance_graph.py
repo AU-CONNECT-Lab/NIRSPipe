@@ -369,18 +369,37 @@ def test_cmd_provenance_writes_where_the_report_looks_for_it(tmp_path, capsys):
     assert (figures / run("provenance", extension=".mmd")).exists()
 
 
-def test_a_tree_with_no_runs_to_split_on_keeps_one_graph(tmp_path):
-    """A group tree carries no run entity, so its one graph is named after the group."""
+def test_a_group_gets_the_graph_its_dyad_report_links(tmp_path):
+    """One graph per task, under the name the dyad report embeds.
+
+    This used to write `group-d01_desc-provenance`, while the report links
+    `group-d01_task-rest_desc-provenance`, so re-rendering never reached the report.
+    """
     from fnirs_pipe.cli.qc import cmd_provenance
 
     nirs = tmp_path / "group-d01" / "nirs"
     nirs.mkdir(parents=True)
-    _sidecar(nirs, "group-d01_task-rest_hyper-wtc", step="hyper_wtc")
+    _sidecar(nirs, "group-d01_task-rest_stat-wtc_relmat", step="hyper_wtc")
 
     cmd_provenance(tmp_path)
 
-    name = figure_namer("group-d01")("provenance", extension=".png")
+    name = figure_namer("group-d01_task-rest")("provenance", extension=".png")
     assert (tmp_path / "group-d01" / "figures" / name).exists()
+
+
+def test_a_session_tree_is_found_and_drawn_beside_the_reports(tmp_path):
+    # a subject's reports sit in sub-<id>/ whatever its sessions, and so do their figures
+    from fnirs_pipe.cli.qc import cmd_provenance
+
+    nirs = tmp_path / "sub-01" / "ses-a" / "nirs"
+    nirs.mkdir(parents=True)
+    _sidecar(nirs, "sub-01_ses-a_task-tapping_desc-od_nirs", step="od_conversion",
+             sources=["/bids/in.snirf"])
+
+    cmd_provenance(tmp_path)
+
+    name = figure_namer("sub-01_ses-a_task-tapping")("provenance", extension=".png")
+    assert (tmp_path / "sub-01" / "figures" / name).exists()
 
 
 def test_write_provenance_writes_png_and_mermaid(tmp_path):

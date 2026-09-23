@@ -214,7 +214,7 @@ def alignment_window() -> argparse.ArgumentParser:
                    help="Report up to this time (s) on the aligned clock. Omit to run to "
                         "the end; a value past the end is clipped. The window narrows the "
                         "synchrony metrics only: the per-subject quality record describes "
-                        "the whole recording either way. For `fnirs-hyper run` this selects "
+                        "the whole recording either way. For `fnirs-hyper` this selects "
                         "rather than cuts: the wavelet transform is computed over the whole "
                         "recording and the window read out of it, so the window carries the "
                         "recording's cone of influence rather than two edges of its own, "

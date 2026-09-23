@@ -129,3 +129,25 @@ def test_alff_is_not_written_by_the_glm_mode(fc_no_roi):
     out, out_dir = fc_no_roi
     assert out[_ALFF_DF] is None
     assert _names(out_dir, "*_stat-alff_nirsmap.tsv") == []
+
+
+def test_the_glm_tables_sit_beside_the_runs_snirfs_on_a_session_tree(tmp_path):
+    """The design and the GLM tables go to the session folder, as every stage file does.
+
+    The GLM writer was handed `sub-<id>/nirs` with no session level, so on a session tree
+    a run's tables and its snirfs landed in two different folders.
+    """
+    config = PrepConfig(subject="01", session="a", dpf=[6.0, 6.0], sci_threshold=0.8,
+                        motion_correction="tddr", **_BANDS)
+    result = run_prep(synth_raw("01", "tapping"), config, output_dir=tmp_path,
+                      source_entities={"task": "tapping"})
+    post = PostConfig(subject="01", session="a", high_pass=0.01, low_pass=0.1,
+                      hrf_model="spm", noise_model="ols", drift_model="cosine",
+                      drift_high_pass=0.01, drift_order=1, stim_dur=5.0, **_BANDS)
+    run_post(result.raw_haemo.copy(), post, output_dir=tmp_path, mode="glm",
+             source_entities={"task": "tapping"})
+
+    nirs = tmp_path / "sub-01" / "ses-a" / "nirs"
+    assert _names(nirs, "*_design.tsv") and _names(nirs, "*_desc-glm_nirsmap.tsv")
+    assert _names(nirs, "*_desc-errts_nirs.snirf")
+    assert not (tmp_path / "sub-01" / "nirs").exists()

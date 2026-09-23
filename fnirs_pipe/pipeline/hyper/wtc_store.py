@@ -136,7 +136,7 @@ def reband_tree(
     overwriting it, which is the point: the comparison is between them.
 
     An archive carrying a ``chromo-`` entity gets its ``chromophore`` column back, so the
-    re-banded table has the shape ``fnirs-hyper run`` writes.
+    re-banded table has the shape ``fnirs-hyper`` writes.
     """
     tag = suffix or f"{fmin:g}to{fmax:g}".replace(".", "p")
     written: list[Path] = []
@@ -152,7 +152,7 @@ def reband_tree(
             logger.warning("skipping %s: %s", npz_path.name, exc)
             continue
         # the archive is per chromophore and says so in its name; the column puts it back,
-        # so a re-banded table has the same shape as the one `fnirs-hyper run` wrote
+        # so a re-banded table has the same shape as the one `fnirs-hyper` wrote
         ch_type = entities.get("chromophore")
         if ch_type:
             df.insert(0, "chromophore", ch_type)

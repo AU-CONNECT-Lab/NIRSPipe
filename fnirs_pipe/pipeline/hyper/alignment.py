@@ -291,7 +291,7 @@ def crop_aligned_window(
 
     For a metric with no frequency axis of its own, where a window carries no edge the whole
     record would not have had: the Welch coherence and the signal overlays of the raw dyad
-    report. ``fnirs-hyper run`` does **not** use this. Its window goes through
+    report. ``fnirs-hyper`` does **not** use this. Its window goes through
     :func:`resolve_analysis_window` instead and is taken out of the wavelet transform, a cut
     stretch transformed alone having two edges and a cone of influence of its own.
 

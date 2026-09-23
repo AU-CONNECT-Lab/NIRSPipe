@@ -134,7 +134,7 @@ def compute_group_sqm_raw(
     :func:`~fnirs_pipe.qc.subject.sqm_record.raw_verdict_view` from the same three sections the
     per-subject record holds. It used to be one all-channel pass, which put a subject's
     SCI, CV, SNR and GVTD in this table on a different channel set than the same subject's
-    numbers in the individual reports and in `fnirs-hyper run`, so the two could not be
+    numbers in the individual reports and in `fnirs-hyper`, so the two could not be
     read against each other.
     """
     from fnirs_pipe.qc.metrics import resolve_cutoffs, screen_channels, screening_scores
@@ -421,7 +421,7 @@ def load_group_sqm(
                     sqm["sci_per_channel"] = scores
             else:
                 try:
-                    ch_df = pd.read_csv(path)
+                    ch_df = pd.read_csv(path, sep="\t")
                     if {"name", "sci"}.issubset(ch_df.columns):
                         sqm["sci_per_channel"] = dict(
                             zip(ch_df["name"].astype(str),
@@ -590,7 +590,7 @@ def resolve_group_bands(
 ) -> "tuple[float, float, float | None]":
     """The separation bands a dyad's inter-brain metrics run on, read off the members' records.
 
-    ``fnirs-hyper run`` works on derivatives that prep has already split into long and short
+    ``fnirs-hyper`` works on derivatives that prep has already split into long and short
     channels and stamped with the bands it split them by, so being *told* the bands again on
     the command line is an invitation to type a number that does not match the one on disk.
     Reading them back makes that mismatch impossible rather than merely documented.

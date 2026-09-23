@@ -14,7 +14,7 @@ montage than the regression used. The consistency test at the end is what enforc
 The *stamp*: the record carries the bands it was split with, so a reader of an old record
 can tell which separations produced its numbers rather than assuming today's defaults.
 
-The *read-back*: `fnirs-hyper run` takes the bands off the members' records rather than
+The *read-back*: `fnirs-hyper` takes the bands off the members' records rather than
 off its own flags, so the dyad metrics cannot be split one way while the member reports
 were split another. Two members prepped differently are refused rather than reconciled.
 
@@ -305,7 +305,7 @@ def test_the_writer_and_the_reader_share_one_set_of_keys():
 
 
 # ---- Read back from the members' records ----
-# `fnirs-hyper run` works on derivatives prep already split and stamped, so being told the
+# `fnirs-hyper` works on derivatives prep already split and stamped, so being told the
 # bands again is an invitation to type a number that does not match the one on disk.
 
 def _dyad():

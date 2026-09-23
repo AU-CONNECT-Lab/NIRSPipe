@@ -518,7 +518,7 @@ def cmd_band(
     for path in written:
         print(f"reband -> {path}")
     if not written:
-        print(f"no *_stat-wtc_relmat.npz under {output_dir}; rerun `fnirs-hyper run "
+        print(f"no *_stat-wtc_relmat.npz under {output_dir}; rerun `fnirs-hyper "
               "--wtc-save-maps` to write them", file=sys.stderr)
 
 
@@ -558,7 +558,7 @@ def cmd_index(output_dir: Path, group_id: str | None, verbose: bool) -> None:
             print(f"{folder.name} -> {path}")
             wrote += 1
     if not wrote:
-        print(f"no coherence tables under {output_dir}; run `fnirs-hyper run` first")
+        print(f"no coherence tables under {output_dir}; run `fnirs-hyper` first")
 
 
 def cmd_pair_null(
@@ -639,7 +639,7 @@ def cmd_merge(output_dir: Path, verbose: bool) -> None:
     for path in written:
         print(f"{path.name}")
     if not written:
-        print(f"no dyad coherence tables under {output_dir}; run `fnirs-hyper run` first")
+        print(f"no dyad coherence tables under {output_dir}; run `fnirs-hyper` first")
 
 
 # `group` is the only level these commands have: a dyad is two subjects, so nothing here
@@ -999,7 +999,7 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
                     "re-paired partner did the same task, so what survives is coupling "
                     "beyond what the shared task explains. Needs a cohort: the number of "
                     "draws is the number of other groups, which is what limits how finely "
-                    "the percentile can rank. Run it after `fnirs-hyper run`, whose tables "
+                    "the percentile can rank. Run it after `fnirs-hyper`, whose tables "
                     "it reads its band, its mask, its frequency range and its window off.")
     pair.add_argument("--desc", default="preproc",
                       help="desc entity of the per-subject stage the null reads. Must match "

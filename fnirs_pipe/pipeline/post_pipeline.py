@@ -282,6 +282,10 @@ def run_post(
     if source_path is not None:
         rec.register_input(source_path, raw_haemo)
 
+    # the folder the stage snirfs go to, session level included, so the GLM tables sit beside them
+    nirs_dir = output_dir / f"sub-{config.subject}" / (
+        f"ses-{config.session}" if config.session else "") / "nirs"
+
     result = raw_haemo.copy()
 
     aux_path = None
@@ -346,7 +350,7 @@ def run_post(
             **aux_kwargs,
             events_path=config.events_path,
             contrast_def=config.contrast_def,
-            output_dir=str(output_dir / f"sub-{config.subject}" / "nirs"),
+            output_dir=str(nirs_dir),
             source_path=rec.path_of(result),
         )
         _write_step_snirf(raw_resid, config, output_dir, desc="errts", rec=rec, source_entities=source_entities)
@@ -379,7 +383,7 @@ def run_post(
         )
         _, glm_est, dm, raw_resid = run_glm_pipeline(
             result,
-            output_dir=str(output_dir / f"sub-{config.subject}" / "nirs"),
+            output_dir=str(nirs_dir),
             source_path=rec.path_of(result),
             **rest_glm_kwargs,
         )
@@ -449,7 +453,7 @@ def run_post(
                 sep_bands=separation_bands(config),
                 **aux_kwargs,
                 events=pd.DataFrame({"trial_type": [], "onset": [], "duration": []}),
-                output_dir=str(output_dir / f"sub-{config.subject}" / "nirs"),
+                output_dir=str(nirs_dir),
                 source_path=rec.path_of(result),
             )
             _write_step_snirf(raw_resid, config, output_dir, desc="errts", rec=rec, source_entities=source_entities)

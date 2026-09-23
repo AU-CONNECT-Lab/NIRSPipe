@@ -1,6 +1,6 @@
 """The phase-scrambled null, computed and written on its own.
 
-Called from ``fnirs-hyper run`` when ``--wtc-phase-null`` is given, so it inherits that run's
+Called from ``fnirs-hyper`` when ``--wtc-phase-null`` is given, so it inherits that run's
 stage, band and window by construction: a null averaged over a different band is not the
 null for the table it sits beside. Crossing is the one thing it does not inherit. The null
 used to take ``--wtc-channel-cross`` from the real run, so asking for the exploratory
