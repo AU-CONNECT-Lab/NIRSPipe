@@ -89,6 +89,32 @@ CASES = [
      "sub-01/sub-01_task-rest_cond-game1_report.html"),
     # no analysis unit and no task: a merged table spans every dyad and every task, and
     # carries both as columns. Being at the root with no sub-/group- is what marks it.
+    ("the re-paired null of the homologous ROI means, per condition",
+     dict(group="G1", task="rest", segmentation="custom", aggregation="homologous",
+          condition="all", nulldist="pair", statistic="wtc"), "relmat", ".tsv",
+     "group-G1/nirs/group-G1_task-rest_seg-custom_agg-homologous_cond-all_null-pair"
+     "_stat-wtc_relmat.tsv"),
+    ("the same null at full detail, which is a desc- and not a third null",
+     dict(group="G1", task="rest", condition="all", nulldist="pair", statistic="wtc",
+          desc="draws"), "relmat", ".tsv",
+     "group-G1/nirs/group-G1_task-rest_cond-all_null-pair_stat-wtc_desc-draws_relmat.tsv"),
+    ("a re-averaged band, the one output whose band is in its name",
+     dict(group="G1", task="rest", chromophore="hbo", band="0p05to0p2", statistic="wtc"),
+     "relmat", ".tsv",
+     "group-G1/nirs/group-G1_task-rest_chromo-hbo_band-0p05to0p2_stat-wtc_relmat.tsv"),
+    ("the dyad's cross-subject channel quality, which may not be _channels.tsv",
+     dict(group="G1", task="rest", desc="channel"), "qc", ".tsv",
+     "group-G1/nirs/group-G1_task-rest_desc-channel_qc.tsv"),
+    ("one page's human ratings",
+     dict(subject="01", task="rest", desc="rawrating"), "qc", ".json",
+     "sub-01/nirs/sub-01_task-rest_desc-rawrating_qc.json"),
+    # the chromophore leads because pybids' own task- pattern needs a separator before it,
+    # so a root-level name cannot start with task-. Every entity this package declares is
+    # anchored to the start as well as to an underscore, which is why they can.
+    ("one cohort verdict, at the root and therefore across dyads",
+     dict(chromophore="hbo", task="rest", condition="all", nulldist="pair",
+          statistic="wtc", desc="bycell"), "relmat", ".tsv",
+     "chromo-hbo_task-rest_cond-all_null-pair_stat-wtc_desc-bycell_relmat.tsv"),
     ("a cross-dyad summary",
      dict(statistic="wtc"), "relmat", ".tsv",
      "stat-wtc_relmat.tsv"),

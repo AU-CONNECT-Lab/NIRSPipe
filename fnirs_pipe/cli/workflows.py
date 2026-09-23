@@ -29,17 +29,10 @@ from fnirs_pipe.utils.run_script import write_run_script
 logger = get_logger("cli.workflows")
 
 def _roi_map_name(args: dict[str, Any]) -> str:
-    """The seg- entity every ROI output carries, taken from the map file's own stem.
+    """The seg- entity of this run's ROI map, from ``--roi-mapping``."""
+    from fnirs_pipe.io.naming import roi_map_name
 
-    ``--roi-mapping /studies/frontal_rois.json`` -> ``"frontalrois"``
-
-    A name rather than a fixed string, so one output tree can hold two ROI definitions
-    instead of the second silently replacing the first.
-    """
-    from fnirs_pipe.io.naming import bids_label
-
-    mapping = args.get("roi_mapping")
-    return bids_label(Path(mapping).stem) if mapping else "custom"
+    return roi_map_name(args.get("roi_mapping"))
 
 
 def _build_post_config(subject: str, session: str | None, args: dict[str, Any], toml: dict[str, Any], roi_map: dict | None = None) -> Any:

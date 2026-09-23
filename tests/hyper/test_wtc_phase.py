@@ -292,7 +292,9 @@ def report(tmp_path_factory):
 
 
 def _table(report, kind):
-    return pd.read_csv(report / f"group-G1_task-tap_hyper-{kind}.tsv", sep="\t")
+    from tests.hyper._names import name
+
+    return pd.read_csv(report / name("G1", "tap", kind), sep="\t")
 
 
 def test_the_band_table_carries_the_three_phase_columns(report):
@@ -331,6 +333,9 @@ def test_each_condition_gets_its_own_per_scale_rows(report):
 
 def test_the_per_scale_sidecar_records_the_band_it_was_cut_to(report):
     import json
-    params = json.loads(
-        (report / "group-G1_task-tap_hyper-wtc-phasescale.json").read_text())["parameters"]
+
+    from tests.hyper._names import name
+
+    params = json.loads((report / name(
+        "G1", "tap", "wtc-phasescale", extension=".json")).read_text())["parameters"]
     assert (params["band_fmin"], params["band_fmax"]) == E2E_BAND

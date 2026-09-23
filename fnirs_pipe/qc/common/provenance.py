@@ -282,7 +282,7 @@ def _variant_line(members: list[Node], prefix: str) -> str:
       12 hyper-isc outputs -> "hbo, hbr  ·  whole run + 5 conditions"
 
     Two axes, because those are the two a run repeats a step over: what is left of each
-    label once the shared prefix is off, and the ``desc-`` entity. A member without one is
+    label once the shared prefix is off, and the ``cond-`` entity. A member without one is
     the whole run, so it is named rather than counted with the windows.
     """
     suffixes: list[str] = []
@@ -293,11 +293,11 @@ def _variant_line(members: list[Node], prefix: str) -> str:
         tail = tail[len(prefix):].lstrip(" -_") or tail
         if tail not in suffixes:
             suffixes.append(tail)
-        desc = _entity(node.key, "desc")
-        if desc is None:
+        cond = _entity(node.key, "cond")
+        if cond is None:
             whole_run = True
-        elif desc not in descs:
-            descs.append(desc)
+        elif cond not in descs:
+            descs.append(cond)
 
     bits = [", ".join(suffixes)]
     if descs:

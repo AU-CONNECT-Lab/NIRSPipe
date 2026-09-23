@@ -60,6 +60,17 @@ def bids_label(text: str, fallback: str = "custom") -> str:
     return kept or fallback
 
 
+def roi_map_name(mapping) -> str:
+    """The ``seg-`` entity every ROI output carries, taken from the map file's own stem.
+
+    ``"/studies/frontal_rois.json"`` -> ``"frontalrois"``;  ``None`` -> ``"custom"``
+
+    A name rather than a fixed string, so one output tree can hold two ROI definitions
+    instead of the second silently replacing the first.
+    """
+    return bids_label(Path(mapping).stem) if mapping else "custom"
+
+
 def layout_config() -> list[str]:
     """What to hand ``BIDSLayout(config=...)`` so it can index a tree this package wrote.
 
@@ -137,6 +148,55 @@ def report_name(label: str, *, desc: "str | None" = None,
     """
     return derivative_path("", "report", ".html", condition=condition, desc=desc,
                            pairing=pairing, **_label_entities(label)).name
+
+
+def rating_path(output_dir, report_stem: str):
+    """Where the human ratings of one report page are kept.
+
+    ``(out, "sub-01_task-rest_desc-raw_report")``
+        -> ``out/sub-01/nirs/sub-01_task-rest_desc-rawrating_qc.json``
+    ``(out, "sub-01_task-rest_cond-game1_report")``
+        -> ``out/sub-01/nirs/sub-01_task-rest_cond-game1_desc-rating_qc.json``
+
+    One file per rated page, because a run and each of its condition pages are separate
+    reports rated separately. The raw viewer's ratings take ``rawrating`` for the reason its
+    figures take a ``raw`` prefix: the two viewers rate the same run at different stages and
+    would otherwise ask for one name.
+
+    These used to sit loose in the derivatives root under ``_raw_ratings.json``, which is
+    neither a BIDS name nor anywhere a reader would look for a subject's own products.
+    """
+    entities = parse_path(report_stem + ".html")
+    path = derivative_path(
+        output_dir, "qc", ".json",
+        **_label_entities(report_stem),
+        pairing=entities.get("pairing"), condition=entities.get("condition"),
+        # an unlabelled segment of a run is `seg-NN` on the page and has to stay apart from
+        # the run's own rating file, which it would otherwise be written over
+        segmentation=entities.get("segmentation"),
+        desc="rawrating" if entities.get("desc") == "raw" else "rating")
+    # the rating servers write straight to this path, so the folder has to be there
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def channel_decisions_path(output_dir, subject: str, task: "str | None" = None,
+                           session: "str | None" = None):
+    """Where the raw QC page keeps a run's per-channel keep/drop decisions.
+
+    ``(out, "01", task="rest")`` -> ``out/sub-01/nirs/sub-01_task-rest_desc-rawdecision_qc.json``
+
+    One function because four call sites built this name by hand: the rating server, the
+    dyad rating server, the Hyper Preparation page and the Data Prep page. They agreed on
+    the parts by convention alone, and the Hyper Preparation one left the session out, so
+    on a two-session tree it reads a path the others never write. That call still passes no
+    session because the page holds none; the mismatch is now in one place instead of four.
+    """
+    path = derivative_path(output_dir, "qc", ".json",
+                           subject=str(subject).removeprefix("sub-"),
+                           session=session, task=task, desc="rawdecision")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return path
 
 
 def parse_path(path) -> dict:

@@ -128,13 +128,13 @@ def _warn_unverifiable_pool(same_task: dict) -> None:
         len(same_task))
 
 
-def real_table_params(data_dir: Path, stem: str) -> dict:
-    """The real WTC table's own record of how it was computed.
+def real_table_params(real_tsv: Path) -> dict:
+    """The real WTC table's own record of how it was computed, off its sidecar.
 
     Raises rather than falling back on defaults: a null built on a guess about the band is
     worse than no null, because nothing downstream can tell the two apart.
     """
-    sidecar = data_dir / f"{stem}-wtc.json"
+    sidecar = real_tsv.with_suffix(".json")
     if not sidecar.exists():
         raise StageError(
             f"no real WTC table to rank against: {sidecar} is missing. Run "
@@ -433,6 +433,7 @@ def run_pair_null(
     cross: bool = False,
     limit_scales: bool = True,
     roi_map: "dict[str, list[str]] | None" = None,
+    roi_map_name: str = "custom",
     roi_min_channels: int = 2,
     isc_whiten: int = 0,
     isc_max_lag_s: float = 0.0,
@@ -440,7 +441,7 @@ def run_pair_null(
 ) -> Path:
     """Draw, rank and write one group's re-paired null.
 
-    Writes ``group-<id>_task-<task>_hyper-wtc-pairnull.tsv`` with the columns the
+    Writes ``..._cond-all_null-pair_stat-wtc_relmat.tsv`` with the columns the
     phase-scrambled table has, plus the per-condition and homologous-ROI tables where the
     real side has them. Returns the whole-run path.
 
@@ -455,7 +456,7 @@ def run_pair_null(
     and write are one step for the same reason: there is nothing to write between them, the
     table being ranked against is already on disk.
     """
-    from fnirs_pipe.io.derivatives import group_data_dir, hyper_stem
+    from fnirs_pipe.io.derivatives import group_output_path
     from fnirs_pipe.pipeline.hyper.group_io import load_group_haemo
     from fnirs_pipe.pipeline.hyper.group_quality import (apply_group_bads, load_group_sqm,
                                                    resolve_group_bands)
@@ -468,9 +469,15 @@ def run_pair_null(
     from fnirs_pipe.qc.common.windows import condition_windows, split_windows
     from fnirs_pipe.utils.lineage import path_from
 
-    data_dir = group_data_dir(output_dir, group_id)
-    stem = hyper_stem(group_id, task)
-    real_params = real_table_params(data_dir, stem)
+    roi_entities = {"segmentation": roi_map_name, "aggregation": "homologous"}
+
+    def _path(entities: dict) -> Path:
+        return group_output_path(output_dir, group_id, {"task": task, **entities},
+                                 "relmat", ".tsv")
+
+    real_wtc = _path({"statistic": "wtc"})
+    real_by_cond_path = _path({"condition": "all", "statistic": "wtc"})
+    real_params = real_table_params(real_wtc)
     band_fmin, band_fmax = real_params["band_fmin"], real_params["band_fmax"]
     wtc_fmin, wtc_fmax = real_params["wtc_fmin"], real_params["wtc_fmax"]
     mask_coi = bool(real_params["mask_coi"])
@@ -478,7 +485,8 @@ def run_pair_null(
     analysis_window = tuple(window_s) if window_s else None
 
     isc_whiten, isc_max_lag_s, isc_band = _isc_settings_of(
-        data_dir / f"{stem}-iscpairs.json", isc_whiten, isc_max_lag_s, isc_band)
+        _path({"statistic": "isc"}).with_suffix(".json"),
+        isc_whiten, isc_max_lag_s, isc_band)
 
     raws = load_group_haemo(derivatives_dir, members, desc=desc)
     group_sqm = load_group_sqm(derivatives_dir, members, bads_scope=bads_scope,
@@ -515,7 +523,7 @@ def run_pair_null(
     # table was written on a window grid. A draw cuts each side at its own marker, so for a
     # window it needs the condition it belongs to and how far into it the window starts
     window_sources: dict = {}
-    if (data_dir / f"{stem}-wtcbycond.tsv").exists():
+    if real_by_cond_path.exists():
         windows = condition_windows(aligned_real[fixed_id], min_duration=1.0 / wtc_fmin)
         if analysis_window is not None:
             lo, hi = analysis_window
@@ -530,8 +538,9 @@ def run_pair_null(
                         len(windows), float(real_params["wtc_window_s"]))
 
     # the whole-run tables are not read: this null has no whole-run half to rank against
-    real_by_cond = _real_table(data_dir / f"{stem}-wtcbycond.tsv")
-    real_roi_by_cond = _real_table(data_dir / f"{stem}-wtcbycond-roihom.tsv")
+    real_by_cond = _real_table(real_by_cond_path)
+    real_roi_by_cond = _real_table(
+        _path({**roi_entities, "condition": "all", "statistic": "wtc"}))
 
     cond_frames, roi_cond_frames = [], []
     draw_frames: list = []
@@ -644,21 +653,23 @@ def run_pair_null(
     # correlate one person's conversation against another's game and rank a real value
     # against it.
     out_path = None
-    for bucket, suffix, step, extra in (
-            (draw_frames, "-wtcbycond-pairnull-draws",
+    cond_null = {"condition": "all", "nulldist": "pair", "statistic": "wtc"}
+    for bucket, entities, step, extra in (
+            (draw_frames, {**cond_null, "desc": "draws"},
              "hyper_wtc_bycondition_pairnull_draws",
              {"conditions": [w[0] for w in windows]}),
-            (cond_frames, "-wtcbycond-pairnull", "hyper_wtc_bycondition_pairnull",
+            (cond_frames, cond_null, "hyper_wtc_bycondition_pairnull",
              {"conditions": [w[0] for w in windows]}),
-            (roi_cond_frames, "-wtcbycond-roihom-pairnull",
+            (roi_cond_frames, {**roi_entities, **cond_null},
              "hyper_wtc_bycondition_roihom_pairnull",
              {"conditions": [w[0] for w in windows]})):
         if not bucket:
             continue
-        path = write_tsv(pd.concat(bucket, ignore_index=True), data_dir / f"{stem}{suffix}.tsv")
+        path = write_tsv(pd.concat(bucket, ignore_index=True), _path(entities))
         _hyper_sidecar(path, step, sources, **extra, **params)
         logger.info("re-paired WTC table saved: %s", path)
-        if suffix != "-wtcbycond-pairnull-draws":
+        # the draws are the same null at full detail, so they are not what to return
+        if entities.get("desc") != "draws":
             out_path = out_path or path
 
     if out_path is None:
@@ -666,7 +677,7 @@ def run_pair_null(
             "no usable stand-in was drawn for any condition, so there is no null. The log "
             "says which test each candidate failed.")
 
-    _write_isc_null(isc_frames, isc_cond_frames, isc_draw_frames, data_dir, stem, sources,
+    _write_isc_null(isc_frames, isc_cond_frames, isc_draw_frames, _path, sources,
                     params, windows, isc_whiten, isc_max_lag_s, isc_band)
     return out_path
 
@@ -714,9 +725,13 @@ def _isc_real(path: Path, by_condition: bool) -> "pd.DataFrame | None":
     return part.drop(columns=[] if by_condition else ["condition"]) if not part.empty else None
 
 
-def _write_isc_null(frames, cond_frames, draw_frames, data_dir, stem, sources, params,
+def _write_isc_null(frames, cond_frames, draw_frames, path_of, sources, params,
                     windows, isc_whiten, isc_max_lag_s, isc_band) -> None:
-    """Summarise the re-paired correlations and write them beside the coherence tables."""
+    """Summarise the re-paired correlations and write them beside the coherence tables.
+
+    ``path_of`` is the caller's namer, so these land under the same group and task its
+    coherence tables do without this function knowing either.
+    """
     from fnirs_pipe.pipeline.hyper import _hyper_sidecar
     from fnirs_pipe.pipeline.hyper.surrogate import _average_iterations
     from fnirs_pipe.pipeline.hyper.wtc_null import write_tsv
@@ -727,14 +742,16 @@ def _write_isc_null(frames, cond_frames, draw_frames, data_dir, stem, sources, p
     isc_params.update(isc_whiten_max_order=isc_whiten, isc_max_lag_s=isc_max_lag_s,
                       isc_band_hz=list(isc_band) if isc_band else None)
 
-    for bucket, suffix, step, cond in (
-            (frames, "-isc-pairnull", "hyper_isc_pairnull", False),
-            (cond_frames, "-iscbycond-pairnull", "hyper_isc_bycondition_pairnull", True)):
+    for bucket, entities, step, cond in (
+            (frames, {"nulldist": "pair", "statistic": "isc"},
+             "hyper_isc_pairnull", False),
+            (cond_frames, {"condition": "all", "nulldist": "pair", "statistic": "isc"},
+             "hyper_isc_bycondition_pairnull", True)):
         if not bucket:
             continue
-        real = _isc_real(data_dir / f"{stem}-iscpairs.tsv", by_condition=cond)
+        real = _isc_real(path_of({"statistic": "isc"}), by_condition=cond)
         table = _average_iterations(bucket, (["condition"] if cond else []) + keys, real=real)
-        path = write_tsv(table, data_dir / f"{stem}{suffix}.tsv")
+        path = write_tsv(table, path_of(entities))
         _hyper_sidecar(path, step, sources,
                        **({"conditions": [w[0] for w in windows]} if cond and windows else {}),
                        **isc_params)
@@ -742,7 +759,8 @@ def _write_isc_null(frames, cond_frames, draw_frames, data_dir, stem, sources, p
 
     if draw_frames:
         path = write_tsv(pd.concat(draw_frames, ignore_index=True),
-                         data_dir / f"{stem}-iscbycond-pairnull-draws.tsv")
+                         path_of({"condition": "all", "nulldist": "pair",
+                                  "statistic": "isc", "desc": "draws"}))
         _hyper_sidecar(path, "hyper_isc_bycondition_pairnull_draws", sources,
                        **({"conditions": [w[0] for w in windows]} if windows else {}),
                        **isc_params)

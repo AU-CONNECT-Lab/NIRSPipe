@@ -15,6 +15,7 @@ import sys
 from pathlib import Path
 
 from fnirs_pipe.cli import _shared
+from fnirs_pipe.io.naming import roi_map_name
 from fnirs_pipe.pipeline.hyper.isc import ISC_MAX_AR_ORDER
 from fnirs_pipe.qc.metrics import SCI_PASS
 from fnirs_pipe.utils.logging import get_logger, setup_logging
@@ -162,23 +163,20 @@ def _merge_reminder(output_dir: Path) -> None:
     fail on bands that a later run legitimately changed, and would race a parallel run for
     the same three files.
 
-    Driven off the aggregator's own kinds and its own glob, so the counts are the ones
-    `merge` would use and a new kind cannot be left out.
+    Driven off the aggregator's own discovery, so the counts are the ones `merge` would
+    use and a kind added later cannot be left out.
     """
-    from fnirs_pipe.pipeline.hyper.wtc_aggregate import _KINDS
+    from fnirs_pipe.pipeline.hyper.wtc_aggregate import _merged_path, merge_kinds
 
     lines = []
-    for kind, stem in _KINDS.items():
-        parts = list(output_dir.rglob(f"*_hyper-{kind}.tsv"))
-        if not parts:
-            continue
-        merged = output_dir / f"{stem}.tsv"
+    for parts in merge_kinds(output_dir).values():
+        merged = _merged_path(output_dir, parts[0])
         if not merged.exists():
-            lines.append(f"  {len(parts)} {kind} table(s) on disk, never merged")
+            lines.append(f"  {len(parts)} table(s) for {merged.name}, never merged")
             continue
         stale = sum(p.stat().st_mtime > merged.stat().st_mtime for p in parts)
         if stale:
-            lines.append(f"  {len(parts)} {kind} table(s) on disk, {stale} newer than {merged.name}")
+            lines.append(f"  {len(parts)} table(s) for {merged.name}, {stale} newer than it")
 
     if lines:
         print("\n".join(["", *lines, f"Run `fnirs-hyper merge {output_dir}` for one table per kind."]))
@@ -308,6 +306,8 @@ def cmd_run(
         except Exception as exc:
             print(f"[error] failed to load ROI mapping: {exc}", file=sys.stderr)
             raise SystemExit(1)
+    # the seg- entity every ROI table takes, so one tree can hold two ROI definitions
+    roi_name = roi_map_name(roi_mapping)
 
     scope_tasks = sorted({key[1] for key in groups})
 
@@ -412,6 +412,7 @@ def cmd_run(
             offsets=offsets,
             output_dir=output_dir,
             roi_map=roi_map,
+            roi_map_name=roi_name,
             bad_channels=bad_channels,
             subject_sqm=group_sqm,
             wtc_fmin=wtc_fmin,
@@ -459,6 +460,7 @@ def cmd_run(
                 windows=cond_windows,
                 analysis_window=analysis_window,
                 roi_map=roi_map,
+                roi_map_name=roi_name,
             )
             print(f"     null   -> {null_path}")
 
@@ -525,7 +527,7 @@ def cmd_band(
     for path in written:
         print(f"reband -> {path}")
     if not written:
-        print(f"no *_hyper-wtc*.npz under {output_dir}; rerun `fnirs-hyper run "
+        print(f"no *_stat-wtc_relmat.npz under {output_dir}; rerun `fnirs-hyper run "
               "--wtc-save-maps` to write them", file=sys.stderr)
 
 
@@ -623,7 +625,8 @@ def cmd_pair_null(
                 pool=wtc_pair_pool, n_max=wtc_pair_max, desc=desc,
                 bads_scope=bads_scope, scope_tasks=scope_tasks, chroma=chroma,
                 cross=wtc_pair_cross, limit_scales=wtc_limit_scales,
-                roi_map=roi_map, roi_min_channels=wtc_roi_min_channels)
+                roi_map=roi_map, roi_map_name=roi_map_name(roi_mapping),
+                roi_min_channels=wtc_roi_min_channels)
             print(f"     pair null -> {path}")
         except Exception as exc:
             print(f"     [error] {exc}", file=sys.stderr)
@@ -640,21 +643,16 @@ def cmd_pair_null(
         logger.debug("merge reminder skipped: %s", exc)
 
 def cmd_merge(output_dir: Path, verbose: bool) -> None:
-    """Merge every per-dyad WTC band-mean table into one long table per kind."""
-    from fnirs_pipe.pipeline.hyper.wtc_aggregate import _KINDS, write_aggregate_wtc
+    """Merge every per-dyad coherence table into one long table per kind."""
+    from fnirs_pipe.pipeline.hyper.wtc_aggregate import write_all_aggregates
 
     setup_logging(verbose=verbose)
 
-    # driven off the aggregator's own kinds, so removing or adding one cannot leave this
-    # list behind
-    wrote = False
-    for kind in _KINDS:
-        path = write_aggregate_wtc(output_dir, kind=kind)
-        if path is not None:
-            print(f"{kind} -> {path}")
-            wrote = True
-    if not wrote:
-        print(f"no hyper-wtc tables under {output_dir}; run `fnirs-hyper run` first")
+    written = write_all_aggregates(output_dir)
+    for path in written:
+        print(f"{path.name}")
+    if not written:
+        print(f"no dyad coherence tables under {output_dir}; run `fnirs-hyper run` first")
 
 
 # `group` is the only level these commands have: a dyad is two subjects, so nothing here
@@ -1012,7 +1010,7 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
         "fnirs-hyper-pairnull", reads_subjects=True, parents=[common, pairs],
         description="Recomputes the coherence of one member against people they never "
                     "interacted with, drawn from the other groups of the same task, and "
-                    "writes group-*_task-*_hyper-wtc-pairnull.tsv beside the real tables. "
+                    "writes the null-pair tables beside the real ones. "
                     "Unlike --wtc-phase-null, which destroys every temporal structure "
                     "including each member's own time-locked response to the task, a "
                     "re-paired partner did the same task, so what survives is coupling "
@@ -1059,7 +1057,7 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
 
     merge = _command_parser(
         "fnirs-hyper-merge", reads_subjects=False, parents=[common],
-        description="Concatenates every group-*_task-*_hyper-wtc*.tsv under the tree into "
+        description="Concatenates every group-*_task-*_*_relmat.tsv under the tree into "
                     "one table per kind at its root, adding group_id and task columns, so a "
                     "cohort analysis reads one file. Refuses to merge tables that disagree "
                     "on the band, on mask_coi, on the null's iteration count or on which null "

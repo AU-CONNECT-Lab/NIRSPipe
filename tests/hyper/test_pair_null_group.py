@@ -11,11 +11,12 @@ import numpy as np
 import pandas as pd
 import pytest
 
-SEP = chr(9)
-
 from fnirs_pipe.pipeline.hyper.pair_null_group import (
     _exact_p, _variants, by_cell, by_cohort, by_occasion, correct_cohort,
     write_group_null)
+from tests.hyper._names import cohort as _cohort, name
+
+SEP = chr(9)
 
 CHANNELS = ["S1_D1", "S1_D2", "S2_D1", "S2_D2"]
 OCCASIONS = ["d01", "d03", "d04"]
@@ -115,17 +116,16 @@ def _write_tree(root, crossed=False):
             # a crossed real table carries the cells the homologous null never drew
             real = pd.concat([real.assign(label2=real.label),
                               real.assign(label2="S9_D9", coherence=0.9)])
-        draws.to_csv(d / f"group-{occ}_task-full_hyper-wtcbycond-pairnull-draws.tsv",
+        draws.to_csv(d / name(occ, "full", "wtcbycond-pairnull-draws"),
                      sep="\t", index=False)
-        real.to_csv(d / f"group-{occ}_task-full_hyper-wtcbycond.tsv", sep="\t", index=False)
+        real.to_csv(d / name(occ, "full", "wtcbycond"), sep="\t", index=False)
 
 
 def test_both_tables_and_their_sidecars_are_written(tmp_path):
     _write_tree(tmp_path)
     written = write_group_null(tmp_path, n_resample=500, seed=3)
     assert [p.name for p in written] == [
-        "group_hyper_wtc_bycondition_pairnull_byoccasion.tsv",
-        "group_hyper_wtc_bycondition_pairnull_cohort.tsv"]
+        _cohort("pair", "byoccasion"), _cohort("pair", "cohort")]
     for path in written:
         assert path.exists() and path.with_suffix(".json").exists()
 
@@ -134,7 +134,7 @@ def test_a_crossed_real_table_contributes_only_its_homologous_cells(tmp_path):
     """The null draws homologous pairings, so the 0.9 crossed cells have nothing to rank against."""
     _write_tree(tmp_path, crossed=True)
     write_group_null(tmp_path, n_resample=500, seed=3)
-    out = pd.read_csv(tmp_path / "group_hyper_wtc_bycondition_pairnull_cohort.tsv", sep="\t")
+    out = pd.read_csv(tmp_path / _cohort("pair", "cohort"), sep="\t")
     assert out.coherence.iloc[0] == pytest.approx(0.40)
 
 
@@ -151,12 +151,11 @@ def test_the_phase_nulls_draws_are_read_the_same_way(tmp_path):
     _write_tree(tmp_path)
     for occ in OCCASIONS:
         d = tmp_path / f"group-{occ}" / "nirs"
-        src = d / f"group-{occ}_task-full_hyper-wtcbycond-pairnull-draws.tsv"
-        src.rename(d / f"group-{occ}_task-full_hyper-wtcbycond-phasenull-draws.tsv")
+        src = d / name(occ, "full", "wtcbycond-pairnull-draws")
+        src.rename(d / name(occ, "full", "wtcbycond-phasenull-draws"))
     written = write_group_null(tmp_path, null="phase", n_resample=500, seed=3)
     assert [p.name for p in written] == [
-        "group_hyper_wtc_bycondition_phasenull_byoccasion.tsv",
-        "group_hyper_wtc_bycondition_phasenull_cohort.tsv"]
+        _cohort("phase", "byoccasion"), _cohort("phase", "cohort")]
     import json
     side = json.loads(written[1].with_suffix(".json").read_text())
     assert side["parameters"]["null_kind"] == "phase"
@@ -210,7 +209,7 @@ def test_a_table_predating_the_draw_column_is_refused_not_dropped(tmp_path):
     """Concatenating it gives NaN and the occasion leaves the groupby without a word."""
     _write_tree(tmp_path)
     stale = (tmp_path / "group-d03" / "nirs"
-             / "group-d03_task-full_hyper-wtcbycond-pairnull-draws.tsv")
+             / name("d03", "full", "wtcbycond-pairnull-draws"))
     old = pd.read_csv(stale, sep="\t").rename(columns={"draw": "stand_in"})
     old.to_csv(stale, sep="\t", index=False)
     with pytest.raises(ValueError, match="no draw column"):
@@ -225,9 +224,9 @@ def _cross(path):
 
 
 def _paths(root, occ):
-    n = root / f"group-{occ}" / "nirs"
-    return (n / f"group-{occ}_task-full_hyper-wtcbycond-pairnull-draws.tsv",
-            n / f"group-{occ}_task-full_hyper-wtcbycond.tsv")
+    nirs = root / f"group-{occ}" / "nirs"
+    return (nirs / name(occ, "full", "wtcbycond-pairnull-draws"),
+            nirs / name(occ, "full", "wtcbycond"))
 
 
 def test_a_part_crossed_tree_gets_no_all_pairings_level(tmp_path, caplog):
@@ -286,7 +285,7 @@ def _write_cells(root, percentiles, n_iter=22):
         pd.DataFrame([{"chromophore": "hbo", "condition": "game", "sub1": "a", "sub2": "b",
                        "label": c, "coherence": 0.3, "percentile": pct, "n_iter": n_iter}
                       for c, pct in zip(CHANNELS, pcts)]).to_csv(
-            d / f"group-{occ}_task-full_hyper-wtcbycond-pairnull.tsv", sep="\t", index=False)
+            d / name(occ, "full", "wtcbycond-pairnull"), sep="\t", index=False)
 
 
 def test_the_percentile_becomes_an_exact_p(tmp_path):
@@ -315,7 +314,7 @@ def test_the_cell_table_is_written_beside_the_others(tmp_path):
     _write_cells(tmp_path, [[100, 50, 0, 100]] * 3)
     written = write_group_null(tmp_path, n_resample=200, seed=3)
     assert [p.name for p in written][0] == (
-        "group_hyper_wtc_bycondition_pairnull_bycell.tsv")
+        _cohort("pair", "bycell"))
 
 
 def test_no_cell_tables_is_not_an_error(tmp_path):

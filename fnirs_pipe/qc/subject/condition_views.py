@@ -90,10 +90,10 @@ def condition_stem(stem: str, label: str | None, index: int) -> str:
 
     ::
 
-      condition_stem("sub-01_task-full_desc-raw_nirs", "game1", 1)
-      -> "sub-01_task-game1_desc-raw_nirs"
-      condition_stem("sub-01_task-full_desc-raw_nirs", None, 3)
-      -> "sub-01_task-full_desc-raw_nirs_seg-03"
+      condition_stem("sub-01_task-full_desc-raw_report", "game1", 1)
+      -> "sub-01_task-game1_desc-raw_report"
+      condition_stem("sub-01_task-full_desc-raw_report", None, 3)
+      -> "sub-01_task-full_desc-raw_report_seg-03"
 
     A labelled segment takes the label as its ``task-`` entity and an unlabelled one appends
     ``seg-NN``, which is what :func:`fnirs_pipe.pipeline.crop.crop_recording` does and for

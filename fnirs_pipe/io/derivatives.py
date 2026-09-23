@@ -52,20 +52,12 @@ def channel_decisions_path(
 ) -> Path:
     """Where the raw QC page keeps a run's per-channel keep/drop decisions.
 
-    ``(out, "01", task="rest")`` -> ``out/sub-01_task-rest_raw_channel_decisions.json``
-
-    One function because four call sites built this name by hand: the rating server, the
-    dyad rating server, the Hyper Preparation page and the Data Prep page. They agreed on
-    the parts by convention alone, and the Hyper Preparation one left the session out, so
-    on a two-session tree it reads a path the others never write. That call still passes no
-    session because the page holds none; the mismatch is now in one place instead of four.
+    Re-exported from :mod:`fnirs_pipe.io.naming`, which builds it, because four callers
+    already import it from here.
     """
-    parts = [f"sub-{str(subject).removeprefix('sub-')}"]
-    if session:
-        parts.append(f"ses-{session}")
-    if task:
-        parts.append(f"task-{task}")
-    return Path(output_dir) / ("_".join(parts) + "_raw_channel_decisions.json")
+    from fnirs_pipe.io.naming import channel_decisions_path as _path
+
+    return _path(output_dir, subject, task, session)
 
 
 def subject_report_dir(output_dir: Path, subject_id: str) -> Path:
@@ -97,15 +89,31 @@ def group_data_dir(output_dir: Path, group_id: str, session: str | None = None) 
     return folder
 
 
-def hyper_stem(group_id: str, task: str) -> str:
-    """The prefix every dyad table and archive shares.
+def group_output_path(
+    output_dir: Path,
+    group_id: str,
+    entities: dict,
+    suffix: str,
+    extension: str,
+    session: str | None = None,
+) -> Path:
+    """A dyad derivative's path, with its directory already created.
 
-    ``("G1", "rest")`` -> ``"group-G1_task-rest_hyper"``
+    ::
 
-    Written out by hand in five modules before this, so the group and task entities could
-    drift apart from the readers that parse them back out.
+      entities={"task": "rest", "statistic": "wtc"}, suffix="relmat", extension=".tsv"
+        -> <out>/group-G1/nirs/group-G1_task-rest_stat-wtc_relmat.tsv
+
+    The mirror of :func:`build_output_path` for the group side. It replaced a ``hyper_stem``
+    that handed out a prefix for callers to append to, which is how five orthogonal
+    dimensions ended up hyphen-stacked onto the end of one token.
     """
-    return f"group-{group_id}_task-{task}_hyper"
+    from fnirs_pipe.io.naming import derivative_path
+
+    path = derivative_path(output_dir, suffix, extension,
+                           group=group_id, session=session, **entities)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return path
 
 
 def data_state(raw: Any) -> dict[str, Any]:

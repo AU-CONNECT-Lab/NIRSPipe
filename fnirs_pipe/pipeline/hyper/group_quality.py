@@ -16,7 +16,7 @@ import numpy as np
 import pandas as pd
 
 from fnirs_pipe.qc.common.channel_table import CHANNEL_METRICS_SUFFIX
-from fnirs_pipe.io.derivatives import group_data_dir, hyper_stem
+from fnirs_pipe.io.derivatives import group_output_path
 from fnirs_pipe.pipeline.hyper.group_io import (
     GroupEntry, _for_task, _hyper_sidecar, _member_sqm_files,
 )
@@ -67,7 +67,8 @@ def write_group_bads(
                 "rejected_in": ";".join(sources.get(channel) or [task]),
             })
 
-    out_path = group_data_dir(output_dir, gid) / f"{hyper_stem(gid, task)}-bads.tsv"
+    out_path = group_output_path(output_dir, gid, {"task": task, "desc": "bad"},
+                                 "qc", ".tsv")
     columns = ["group_id", "task", "subject_id", "channel", "bads_scope", "rejected_in"]
     pd.DataFrame(rows, columns=columns).to_csv(out_path, sep="	", index=False)
     _hyper_sidecar(out_path, "hyper_bads", [], bads_scope=bads_scope)
@@ -124,8 +125,8 @@ def compute_group_sqm_raw(
     """Compute raw-level SQM (SCI, bad channels) for each group member.
 
     Writes two TSVs under group-{gid}/nirs/, where a subject's own tables sit:
-      group-{gid}_task-{task}_hyper-raw_sqm.tsv      — one row per subject (scalars)
-      group-{gid}_task-{task}_hyper-raw_channels.tsv  — one row per subject × channel
+      group-{gid}_task-{task}_desc-subject_qc.tsv  — one row per subject (scalars)
+      group-{gid}_task-{task}_desc-channel_qc.tsv  — one row per subject × channel
 
     Returns {subject_id: sqm_dict} for use in the HTML report.
 
@@ -145,7 +146,6 @@ def compute_group_sqm_raw(
 
     gid  = group[0].group_id
     task = group[0].task
-    data_dir = group_data_dir(output_dir, gid)
 
     sqm_data: dict[str, dict] = {}
     scalar_rows: list[dict] = []
@@ -267,17 +267,20 @@ def compute_group_sqm_raw(
                 "is_bad":     ch in bad_channels,
             })
 
-    stem = hyper_stem(gid, task) + "-raw"
     sources = [p for p in (path_from(raws[e.subject_id]) for e in group) if p]
 
-    scalar_path = data_dir / f"{stem}_sqm.tsv"
+    scalar_path = group_output_path(output_dir, gid, {"task": task, "desc": "subject"},
+                                    "qc", ".tsv")
     pd.DataFrame(scalar_rows).to_csv(scalar_path, sep="\t", index=False)
     _hyper_sidecar(scalar_path, "group_sqm_raw", sources,
                    sci_threshold=sci_threshold,
                    psp_threshold=cutoffs["psp"],
                    cardiac_l_freq=cardiac_l_freq, cardiac_h_freq=cardiac_h_freq)
 
-    channel_path = data_dir / f"{stem}_channels.tsv"
+    # not `_channels.tsv`: that name is BIDS's own channel description, and this holds
+    # one row per subject and channel of cross-subject quality
+    channel_path = group_output_path(output_dir, gid, {"task": task, "desc": "channel"},
+                                     "qc", ".tsv")
     pd.DataFrame(channel_rows).to_csv(channel_path, sep="\t", index=False)
     _hyper_sidecar(channel_path, "group_sqm_raw_channels", sources,
                    sci_threshold=sci_threshold,

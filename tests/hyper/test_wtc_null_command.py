@@ -20,7 +20,16 @@ import logging
 import pytest
 
 from fnirs_pipe.cli.hyper import _parsers
-from fnirs_pipe.pipeline.hyper.wtc_aggregate import aggregate_wtc
+from fnirs_pipe.pipeline.hyper.wtc_aggregate import aggregate_wtc, merge_kinds
+from tests.hyper._names import name
+
+
+def _merge(root, kind="wtc-phasenull"):
+    """The one kind these tables make, discovered the way `merge` discovers it."""
+    from tests.hyper._names import KINDS
+
+    key = tuple(sorted((k, str(v)) for k, v in KINDS[kind].items()))
+    return aggregate_wtc(root, merge_kinds(root)[key])
 
 
 # The null is drawn and written in two phases, the report sitting between them: the level
@@ -94,7 +103,7 @@ def test_the_sidecar_records_the_iteration_count_and_the_shape(tmp_path, monkeyp
         n_iter=7, wtc_fmin=0.01, wtc_fmax=0.25, band_fmin=0.06, band_fmax=0.15,
         seed=1, cross=False, mask_coi=True)
 
-    assert out.name == "group-d01_task-baseline_hyper-wtc-phasenull.tsv"
+    assert out.name == name("d01", "baseline", "wtc-phasenull")
     params = json.loads(out.with_suffix(".json").read_text())["parameters"]
     assert params["n_iter"] == 7
     assert params["cross"] is False
@@ -152,7 +161,7 @@ def test_one_chromophore_writes_one_set_of_rows(tmp_path, monkeypatch, make_raw)
 def _write_null(root, gid, task, n_iter, band_fmin=0.06):
     d = root / f"group-{gid}" / "nirs"
     d.mkdir(parents=True, exist_ok=True)
-    tsv = d / f"group-{gid}_task-{task}_hyper-wtc-phasenull.tsv"
+    tsv = d / name(gid, task, "wtc-phasenull")
     # n_iter is a column as well as a sidecar field, which is what a merged table keeps
     pd.DataFrame({"sub1": ["a"], "sub2": ["b"], "label": ["S1_D1"],
                   "coherence": [0.3], "n_iter": [n_iter]}).to_csv(tsv, sep="\t", index=False)
@@ -170,7 +179,7 @@ def test_nulls_of_different_lengths_merge_but_say_so(tmp_path, caplog):
     _write_null(tmp_path, "d01", "baseline", 100)
     _write_null(tmp_path, "d02", "baseline", 5)
     with caplog.at_level(logging.WARNING, logger="fnirs_pipe.pipeline.hyper.wtc_aggregate"):
-        merged = aggregate_wtc(tmp_path, kind="wtc-phasenull")
+        merged = _merge(tmp_path)
     assert sorted(merged["group_id"].unique()) == ["d01", "d02"]
     assert sorted(merged["n_iter"].unique()) == [5, 100]
     assert any("do not have one resolution" in r.getMessage() for r in caplog.records)
@@ -181,27 +190,24 @@ def test_a_band_still_refuses_to_merge(tmp_path):
     _write_null(tmp_path, "d01", "baseline", 100)
     _write_null(tmp_path, "d02", "baseline", 100, band_fmin=0.02)
     with pytest.raises(ValueError, match="band_fmin"):
-        aggregate_wtc(tmp_path, kind="wtc-phasenull")
+        _merge(tmp_path)
 
 
 def test_nulls_of_one_length_merge(tmp_path):
     _write_null(tmp_path, "d01", "baseline", 100)
     _write_null(tmp_path, "d02", "baseline", 100)
-    merged = aggregate_wtc(tmp_path, kind="wtc-phasenull")
+    merged = _merge(tmp_path)
     assert sorted(merged["group_id"]) == ["d01", "d02"]
 
 
-def test_merge_covers_every_kind_the_aggregator_has(tmp_path):
-    """It asked for a kind the aggregator no longer has, and died before reaching the null."""
+def test_merge_covers_whatever_is_on_disk(tmp_path):
+    """It used to iterate a hardcoded list of kinds and skip anything not on it."""
     from fnirs_pipe.cli.hyper import cmd_merge
-    from fnirs_pipe.pipeline.hyper.wtc_aggregate import _KINDS
 
     _write_null(tmp_path, "d01", "baseline", 100)
-    cmd_merge(tmp_path, verbose=False)                        # no kind raises
+    cmd_merge(tmp_path, verbose=False)
 
-    assert (tmp_path / "group_hyper_wtc_phasenull.tsv").exists()
-    for kind in _KINDS:
-        aggregate_wtc(tmp_path, kind=kind)
+    assert (tmp_path / "null-phase_stat-wtc_relmat.tsv").exists()
 
 
 # ---- the merge reminder ----
@@ -209,7 +215,7 @@ def test_merge_covers_every_kind_the_aggregator_has(tmp_path):
 def _write_table(root, gid, task, kind="wtc"):
     d = root / f"group-{gid}" / "nirs"
     d.mkdir(parents=True, exist_ok=True)
-    tsv = d / f"group-{gid}_task-{task}_hyper-{kind}.tsv"
+    tsv = d / name(gid, task, kind)
     pd.DataFrame({"sub1": ["a"], "sub2": ["b"], "label": ["S1_D1"],
                   "coherence": [0.3]}).to_csv(tsv, sep="\t", index=False)
     return tsv
@@ -226,7 +232,7 @@ def test_a_run_says_when_nothing_has_been_merged(tmp_path, capsys):
     _merge_reminder(tmp_path)
 
     out = capsys.readouterr().out
-    assert "2 wtc table(s) on disk, never merged" in out
+    assert "2 table(s) for stat-wtc_relmat.tsv, never merged" in out
     assert "fnirs-hyper merge" in out
 
 
@@ -236,11 +242,11 @@ def test_a_run_says_when_the_merged_table_is_behind(tmp_path, capsys):
     from fnirs_pipe.cli.hyper import _merge_reminder
 
     tsv = _write_table(tmp_path, "d01", "baseline")
-    merged = tmp_path / "group_hyper_wtc.tsv"
+    merged = tmp_path / "stat-wtc_relmat.tsv"
     merged.write_text("stale")
     os.utime(merged, (1, 1))                       # older than the dyad table
     _merge_reminder(tmp_path)
-    assert "1 newer than group_hyper_wtc.tsv" in capsys.readouterr().out
+    assert "1 newer than it" in capsys.readouterr().out
 
     os.utime(merged, (tsv.stat().st_mtime + 10,) * 2)
     _merge_reminder(tmp_path)
@@ -248,7 +254,7 @@ def test_a_run_says_when_the_merged_table_is_behind(tmp_path, capsys):
 
 
 def test_the_reminder_counts_what_the_merge_would_take(tmp_path, capsys):
-    """Same glob as the aggregator, so the count cannot disagree with what merge does."""
+    """Same discovery as the aggregator, so the count cannot disagree with what merge does."""
     from fnirs_pipe.cli.hyper import _merge_reminder
 
     _write_table(tmp_path, "d01", "baseline", kind="wtc")
@@ -256,8 +262,8 @@ def test_the_reminder_counts_what_the_merge_would_take(tmp_path, capsys):
     _merge_reminder(tmp_path)
 
     out = capsys.readouterr().out
-    assert "1 wtc table(s)" in out
-    assert "1 wtc-phasenull table(s)" in out
+    assert "1 table(s) for stat-wtc_relmat.tsv" in out
+    assert "1 table(s) for null-phase_stat-wtc_relmat.tsv" in out
 
 
 # ---- the per-condition null ----
@@ -288,8 +294,8 @@ def test_windows_add_a_second_table_beside_the_whole_run_one(tmp_path, monkeypat
         group_id="d01", task="full", aligned_raws=raws, output_dir=tmp_path,
         n_iter=2, chroma=("hbo",), windows=[("rest", 0.0, 30.0), ("talk", 30.0, 60.0)])
 
-    assert out.name == "group-d01_task-full_hyper-wtc-phasenull.tsv"
-    cond_path = out.with_name("group-d01_task-full_hyper-wtcbycond-phasenull.tsv")
+    assert out.name == name("d01", "full", "wtc-phasenull")
+    cond_path = out.with_name(name("d01", "full", "wtcbycond-phasenull"))
     assert cond_path.exists()
     df = pd.read_csv(cond_path, sep="\t")
     assert list(df.columns[:2]) == ["chromophore", "condition"]
@@ -311,7 +317,7 @@ def test_the_windowed_sidecar_names_the_conditions(tmp_path, monkeypatch, make_r
         group_id="d01", task="full", aligned_raws=raws, output_dir=tmp_path,
         n_iter=2, chroma=("hbo",), windows=[("rest", 0.0, 30.0), ("talk", 30.0, 60.0)])
 
-    cond_path = out.with_name("group-d01_task-full_hyper-wtcbycond-phasenull.tsv")
+    cond_path = out.with_name(name("d01", "full", "wtcbycond-phasenull"))
     params = json.loads(cond_path.with_suffix(".json").read_text())["parameters"]
     assert params["conditions"] == ["rest", "talk"]
     assert params["n_iter"] == 2
@@ -330,12 +336,17 @@ def test_no_windows_writes_only_the_whole_run_table(tmp_path, monkeypatch, make_
         group_id="d01", task="full", aligned_raws=raws, output_dir=tmp_path,
         n_iter=1, chroma=("hbo",))
 
-    assert not out.with_name("group-d01_task-full_hyper-wtcbycond-phasenull.tsv").exists()
+    assert not out.with_name(name("d01", "full", "wtcbycond-phasenull")).exists()
 
 
-def test_the_per_condition_null_is_its_own_merge_kind():
-    """Merging it into the whole-run null would average five conditions into one row."""
-    from fnirs_pipe.pipeline.hyper.wtc_aggregate import _KINDS
+def test_the_per_condition_null_is_its_own_merge_kind(tmp_path):
+    """Merging it into the whole-run null would average five conditions into one row.
 
-    assert _KINDS["wtcbycond-phasenull"] == "group_hyper_wtc_bycondition_phasenull"
-    assert _KINDS["wtc-phasenull"] != _KINDS["wtcbycond-phasenull"]
+    They differ by the `cond-` entity, which is what puts them in two merges: the kind a
+    file belongs to is the entity set it carries besides its group and its task.
+    """
+    from fnirs_pipe.pipeline.hyper.wtc_aggregate import merge_kinds
+
+    _write_table(tmp_path, "d01", "full", kind="wtc-phasenull")
+    _write_table(tmp_path, "d01", "full", kind="wtcbycond-phasenull")
+    assert len(merge_kinds(tmp_path)) == 2

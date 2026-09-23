@@ -33,17 +33,37 @@ from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("pipeline.pair_null_group")
 
-_TAG = {"repaired": "pairnull", "phase": "phasenull"}
+_NULL = {"repaired": "pair", "phase": "phase"}
 
-REAL_SUFFIX = "_hyper-wtcbycond.tsv"
+
+def _tail(**entities) -> str:
+    """The part of a dyad table's name after its task, as a glob to find it by.
+
+    ::
+
+      _tail(condition="all", statistic="wtc") -> "_cond-all_stat-wtc_relmat.tsv"
+
+    Built through the namer rather than spelled out, so the tables this module reads and
+    the ones the null writers produce cannot be renamed apart. The ROI map's own name is a
+    wildcard: this reads whichever definition the tree was written with.
+    """
+    from fnirs_pipe.io.naming import derivative_path
+
+    name = derivative_path("", "relmat", ".tsv", group="X", task="T", **entities).name
+    return name.split("_task-T", 1)[1]
+
+
+_BY_COND = {"condition": "all", "statistic": "wtc"}
+_ROI = {"segmentation": "*", "aggregation": "homologous"}
+
+REAL_SUFFIX = _tail(**_BY_COND)
 CELL_SUFFIX = {
-    "repaired": ("_hyper-wtcbycond-pairnull.tsv", "_hyper-wtcbycond-roihom-pairnull.tsv"),
-    "phase": ("_hyper-wtcbycond-phasenull.tsv", "_hyper-wtcbycond-roihom-phasenull.tsv"),
+    kind: (_tail(**_BY_COND, nulldist=null),
+           _tail(**_ROI, **_BY_COND, nulldist=null))
+    for kind, null in _NULL.items()
 }
-DRAWS_SUFFIX = {
-    "repaired": "_hyper-wtcbycond-pairnull-draws.tsv",
-    "phase": "_hyper-wtcbycond-phasenull-draws.tsv",
-}
+DRAWS_SUFFIX = {kind: _tail(**_BY_COND, nulldist=null, desc="draws")
+                for kind, null in _NULL.items()}
 
 
 def _of_chroma(frame: pd.DataFrame, chroma: str) -> pd.DataFrame:
@@ -424,20 +444,22 @@ def write_group_null(output_dir: Path, task: str = "full", chroma: str = "hbo",
         passing = int((cells["q"] < 0.05).sum())
         logger.info("%s null, per cell: %d cells, %d at q<0.05", null, len(cells), passing)
 
+    from fnirs_pipe.io.naming import derivative_path
+
+    # at the root, so no group- and no sub-: what marks a table as cross-dyad is having no
+    # analysis unit in its name. The task and the chromophore stay, both being a filter this
+    # command was given rather than something it merged over; without them a second run for
+    # another task or chromophore silently overwrote the first.
+    common = {"chromophore": chroma, "task": task, "condition": "all",
+              "nulldist": _NULL[null], "statistic": "wtc"}
     written = []
-    for frame, stem, step in (
-            ([] if cells is None else cells,
-             f"group_hyper_wtc_bycondition_{_TAG[null]}_bycell",
-             f"hyper_{null}_null_by_cell"),
-            (tidy(occ_parts),
-             f"group_hyper_wtc_bycondition_{_TAG[null]}_byoccasion",
-             f"hyper_{null}_null_by_occasion"),
-            (correct_cohort(tidy(coh_parts)),
-             f"group_hyper_wtc_bycondition_{_TAG[null]}_cohort",
-             f"hyper_{null}_null_cohort")):
+    for frame, desc, step in (
+            ([] if cells is None else cells, "bycell", f"hyper_{null}_null_by_cell"),
+            (tidy(occ_parts), "byoccasion", f"hyper_{null}_null_by_occasion"),
+            (correct_cohort(tidy(coh_parts)), "cohort", f"hyper_{null}_null_cohort")):
         if len(frame) == 0:
             continue
-        path = output_dir / f"{stem}.tsv"
+        path = derivative_path(output_dir, "relmat", ".tsv", **common, desc=desc)
         frame.to_csv(path, sep="\t", index=False)
         _hyper_sidecar(path, step, sources, **params)
         logger.info("%s: %d rows", path.name, len(frame))

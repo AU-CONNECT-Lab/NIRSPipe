@@ -155,6 +155,13 @@ def _process_hyper_raw_group(
     group_dir = group_report_dir(output_dir, group_id)
     fig_dir   = group_dir / "figures"
     fig_name  = figure_namer(label, prefix="raw")
+
+    def _table(folder: Path, entities: dict, suffix: str = "relmat") -> Path:
+        """One of this dyad's tables, named off the same label its figures are."""
+        from fnirs_pipe.io.naming import derivative_path
+
+        return folder / derivative_path("", suffix, ".tsv", group=group_id, session=session,
+                                        task=task, **entities).name
     sqm_dir   = group_data_dir(output_dir, group_id, session)
     fig_dir.mkdir(parents=True, exist_ok=True)
 
@@ -202,11 +209,12 @@ def _process_hyper_raw_group(
 
     with guard("Coherence tables", errors, label):
         _write_coherence_tsv(
-            coherence_df, sqm_dir / f"{label}_hyper-coherence.tsv",
+            coherence_df, _table(sqm_dir, {"statistic": "coherence"}),
             "hyper_coherence", aligned_raws,
             coherence_fmin=coherence_fmin, coherence_fmax=coherence_fmax)
         _write_coherence_tsv(
-            screening_df, sqm_dir / f"{label}_hyper-screening.tsv",
+            screening_df, _table(sqm_dir, {"condition": "all",
+                                           "statistic": "coherence"}),
             "hyper_screening", aligned_raws,
             coherence_fmin=coherence_fmin, coherence_fmax=coherence_fmax,
             n_iter=SCREEN_NULL_ITER, null="phase_scramble")
@@ -311,7 +319,8 @@ def _process_hyper_raw_group(
         sqm.update(usable_scalars(grid, subject_ids))
         with guard("Usable-time table", errors, label):
             write_usable_table(
-                sqm_dir / f"{label}_hyper-usable.tsv", grid, subject_ids, conditions,
+                _table(sqm_dir, {"desc": "usable"}, suffix="qc"),
+                grid, subject_ids, conditions,
                 sources=[p for p in (path_from(raw) for raw in aligned_raws.values()) if p],
                 sci_threshold=sci_threshold)
     sqm_path = record_path(sqm_dir, label)

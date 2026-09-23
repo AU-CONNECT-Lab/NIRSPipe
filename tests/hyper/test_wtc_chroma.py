@@ -25,6 +25,7 @@ import pytest
 from fnirs_pipe.pipeline.hyper._helpers import _long_by_label
 from fnirs_pipe.pipeline.hyper.coherence import compute_pairwise_coherence
 from fnirs_pipe.pipeline.hyper.wtc import compute_wtc, wtc_band_mean
+from tests.hyper._names import archive, name
 
 SFREQ = 5.0
 DURATION = 400.0
@@ -139,7 +140,7 @@ def test_one_table_holds_both_chromophores(report, kind):
     """Not one file each: the band-mean tables are long-format, so a column keeps the
     filenames stable and a group analysis needs one more grouping key rather than a second
     read. ISC splits per chromophore instead, being a matrix."""
-    df = pd.read_csv(report / f"group-G1_task-tap_hyper-{kind}.tsv", sep="\t")
+    df = pd.read_csv(report / name("G1", "tap", kind), sep="\t")
     counts = df["chromophore"].value_counts().to_dict()
     assert set(counts) == {"hbo", "hbr"}
     assert counts["hbo"] == counts["hbr"]
@@ -149,25 +150,25 @@ def test_one_table_holds_both_chromophores(report, kind):
 def test_the_chromophore_column_comes_first(report):
     """It is the coarsest grouping key in the table, and it survives the ROI aggregation
     only by being re-inserted after it."""
-    df = pd.read_csv(report / "group-G1_task-tap_hyper-wtc.tsv", sep="\t")
+    df = pd.read_csv(report / name("G1", "tap"), sep="\t")
     assert df.columns[0] == "chromophore"
 
 
 def test_the_sidecar_records_which_chromophores_ran(report):
-    params = json.loads((report / "group-G1_task-tap_hyper-wtc.json").read_text())
+    params = json.loads(
+        (report / name("G1", "tap", extension=".json")).read_text())
     assert params["parameters"]["chroma"] == ["hbo", "hbr"]
 
 
 def test_the_maps_are_archived_one_file_per_chromophore(report):
     """The table holds both, so the archive cannot be named after it: two would collide."""
-    archives = sorted(p.name for p in report.glob("*_hyper-wtc-hb*.npz"))
-    assert archives == ["group-G1_task-tap_hyper-wtc-hbo.npz",
-                        "group-G1_task-tap_hyper-wtc-hbr.npz"]
+    archives = sorted(p.name for p in report.glob("*_stat-wtc_relmat.npz"))
+    assert archives == [archive("G1", "tap", "hbo"), archive("G1", "tap", "hbr")]
 
 
 def test_a_reband_puts_the_chromophore_column_back(report):
-    """The archive is per chromophore and says so in its name, so a re-banded table has the
-    same shape as the one the run wrote."""
+    """The archive carries a chromo- entity, so a re-banded table has the same shape as the
+    one the run wrote."""
     from fnirs_pipe.pipeline.hyper.wtc_store import reband_tree
 
     written = reband_tree(report.parent.parent, 0.04, 0.09)
@@ -182,7 +183,7 @@ def test_the_isc_tables_stay_one_file_each(report):
     """ISC is a channel-by-channel matrix, and two cannot share a file the way two long
     tables can, so it keeps the per-chromophore filenames it has always had."""
     for ch_type in ("hbo", "hbr"):
-        assert (report / f"group-G1_task-tap_hyper-isc-{ch_type}.tsv").exists()
+        assert (report / name("G1", "tap", "iscpairs", chromophore=ch_type)).exists()
 
 
 # ---- one chromophore only ----
@@ -198,8 +199,7 @@ def test_asking_for_one_chromophore_writes_only_that_one(dyad, tmp_path):
         wtc_fmin=0.02, wtc_fmax=0.2, wtc_band_fmin=BAND[0], wtc_band_fmax=BAND[1],
         wtc_chroma=("hbr",),
     )
-    df = pd.read_csv(tmp_path / "group-G1" / "nirs" / "group-G1_task-tap_hyper-wtc.tsv",
-                     sep="\t")
+    df = pd.read_csv(tmp_path / "group-G1" / "nirs" / name("G1", "tap"), sep="\t")
     assert df["chromophore"].unique().tolist() == ["hbr"]
 
 
@@ -341,7 +341,7 @@ def by_condition(dyad, tmp_path_factory):
 def test_the_per_condition_tables_carry_both_chromophores(by_condition, kind):
     """Its own code path, and the one where the tag is added to a frame that already has a
     `condition` column: two inserts at position 0, so the order matters."""
-    df = pd.read_csv(by_condition / f"group-G1_task-tap_hyper-{kind}.tsv", sep="\t")
+    df = pd.read_csv(by_condition / name("G1", "tap", kind), sep="\t")
     assert list(df.columns[:2]) == ["chromophore", "condition"]
     counts = df.groupby(["chromophore", "condition"]).size().unstack()
     assert sorted(counts.index) == ["hbo", "hbr"]
@@ -351,15 +351,15 @@ def test_the_per_condition_tables_carry_both_chromophores(by_condition, kind):
 
 def test_the_whole_run_pass_still_stands_beside_the_conditions(by_condition):
     """`--wtc-by-condition` adds windows rather than replacing the whole-run analysis."""
-    whole = pd.read_csv(by_condition / "group-G1_task-tap_hyper-wtc.tsv", sep="\t")
+    whole = pd.read_csv(by_condition / name("G1", "tap"), sep="\t")
     assert "condition" not in whole.columns
     assert set(whole["chromophore"]) == {"hbo", "hbr"}
 
 
 def test_the_condition_windows_reach_the_sidecar(by_condition):
     """The one thing a reader cannot reconstruct from the table."""
-    params = json.loads(
-        (by_condition / "group-G1_task-tap_hyper-wtcbycond.json").read_text())["parameters"]
+    params = json.loads((by_condition / name(
+        "G1", "tap", "wtcbycond", extension=".json")).read_text())["parameters"]
     assert sorted(params["condition_windows_s"]) == ["chat", "quiet"]
     assert params["chroma"] == ["hbo", "hbr"]
 
@@ -439,8 +439,8 @@ def test_every_switched_figure_is_keyed_by_chromophore(dyad, tmp_path):
     html = _page(dyad, tmp_path, ("hbo", "hbr"),
                  roi_map={"L": ["S1_D1", "S2_D2"], "R": ["S3_D3"]},
                  wtc_roi_min_channels=1, wtc_channel_cross=True)
-    for name in ("_PER_CH", "_PER_ROI"):
-        assert sorted(_js_var(html, name)) == ["hbo", "hbr"], name
+    for js_var in ("_PER_CH", "_PER_ROI"):
+        assert sorted(_js_var(html, js_var)) == ["hbo", "hbr"], js_var
 
 
 def test_the_channel_keys_the_selector_uses_exist_for_both_chromophores(dyad, tmp_path):

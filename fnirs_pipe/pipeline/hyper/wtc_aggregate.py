@@ -1,10 +1,17 @@
 """Merge the per-dyad WTC band-mean tables into one long table per study.
 
-``fnirs-hyper run`` writes one ``group-<id>_task-<task>_hyper-wtc.tsv`` per dyad and
-task. A study with twenty dyads and three conditions therefore ends up with sixty files that
-a group analysis has to stitch together by hand, and the stitching is where the mistakes
-live. This produces the stitched table instead, with ``group_id`` and ``task`` carried as
-columns so nothing about a row depends on the filename it came from.
+``fnirs-hyper run`` writes one ``group-<id>_task-<task>_stat-wtc_relmat.tsv`` per dyad and
+task, and a dozen more beside it for the ROI means, the conditions and the nulls. A study
+with twenty dyads and three conditions ends up with hundreds of files that a group analysis
+has to stitch together by hand, and the stitching is where the mistakes live. This produces
+the stitched tables instead, with ``group_id`` and ``task`` carried as columns so nothing
+about a row depends on the filename it came from.
+
+What counts as one kind is not a list kept here: it is the set of entities a file carries
+besides its group and its task. Two files merge together exactly when everything but those
+two agrees, which is the rule a merged name follows as well -- the merged table is the
+inputs' own name with ``group-`` and ``task-`` taken out, so it lands at the root, where
+having no analysis unit in the name is what marks a table as cross-dyad.
 
 The merge refuses more than it warns. A coherence value only means something alongside the
 band it was averaged over, and nothing downstream of a concatenated TSV can recover which
@@ -14,7 +21,6 @@ band a given row used, so a disagreement here is a stop rather than a caveat.
 from __future__ import annotations
 
 import json
-import re
 from pathlib import Path
 
 import pandas as pd
@@ -32,34 +38,56 @@ logger = get_logger("pipeline.wtc_aggregate")
 # leaves every row readable and separable. `_warn_mixed_iterations` says what it costs
 _MUST_AGREE = ("band_fmin", "band_fmax", "mask_coi", "null_kind", "pair_pool")
 
-_KINDS = {
-    "wtc":                "group_hyper_wtc",
-    "wtc-roichan":        "group_hyper_wtc_roichan",
-    # the homologous ROI mean and its null: four rows a condition, the number to report
-    "wtc-roihom":         "group_hyper_wtc_roihom",
-    "wtc-roihom-phasenull":  "group_hyper_wtc_roihom_phasenull",
-    "wtc-phasenull":         "group_hyper_wtc_phasenull",
-    # --wtc-by-condition writes these beside the whole-run pair above; they carry a
-    # `condition` column and are merged separately, never into the whole-run table
-    "wtcbycond":          "group_hyper_wtc_bycondition",
-    "wtcbycond-roichan":  "group_hyper_wtc_bycondition_roichan",
-    "wtcbycond-roihom":   "group_hyper_wtc_bycondition_roihom",
-    "wtcbycond-roihom-phasenull": "group_hyper_wtc_bycondition_roihom_phasenull",
-    # the null for the pair above, windowed off the same transform they are
-    "wtcbycond-phasenull":   "group_hyper_wtc_bycondition_phasenull",
-    # the re-paired null, drawn across the cohort rather than inside one dyad. Merged apart
-    # from the phase-scrambled tables on purpose: same columns, different question
-    "wtc-pairnull":              "group_hyper_wtc_pairnull",
-    "wtc-roihom-pairnull":       "group_hyper_wtc_roihom_pairnull",
-    "wtcbycond-pairnull":        "group_hyper_wtc_bycondition_pairnull",
-    "wtcbycond-roihom-pairnull": "group_hyper_wtc_bycondition_roihom_pairnull",
-}
+# never merged, whatever else they carry. The draws are the same null at full detail and
+# would double every row of it; the per-scale phase table is a different measurement that
+# happens to share these entities. Both are per-dyad files a study reads one at a time.
+_NOT_MERGED = frozenset({"draws"})
 
 
-def _entities(name: str, kind: str) -> tuple[str, str] | None:
-    """('group-07_task-rest_hyper-wtc.tsv', 'wtc') -> ('07', 'rest')."""
-    match = re.fullmatch(rf"group-([A-Za-z0-9]+)_task-([A-Za-z0-9]+)_hyper-{kind}\.tsv", name)
-    return match.groups() if match else None
+def _kind_of(path: Path) -> "tuple | None":
+    """The entity set that decides which merged table a per-dyad file belongs to.
+
+    ::
+
+      group-07_task-rest_cond-all_stat-wtc_relmat.tsv
+        -> (("condition", "all"), ("statistic", "wtc"))
+
+    The group and the task come out, being what varies across the files of one merge; they
+    survive as columns. Everything else is what makes two files the same kind. A file this
+    module has no business merging answers None.
+    """
+    from fnirs_pipe.io.naming import parse_path
+
+    entities = parse_path(path.name)
+    if entities.get("suffix") != "relmat" or entities.get("desc") in _NOT_MERGED:
+        return None
+    if not entities.get("group") or not entities.get("task"):
+        return None
+    dropped = {"group", "task", "suffix", "extension", "datatype", "subject"}
+    return tuple(sorted((k, str(v)) for k, v in entities.items() if k not in dropped))
+
+
+def _merged_path(output_dir: Path, path: Path) -> Path:
+    """Where one per-dyad table's merge lands: its own name with group and task taken out."""
+    from fnirs_pipe.io.naming import derivative_path, parse_path
+
+    entities = {k: v for k, v in parse_path(path.name).items()
+                if k not in ("group", "task", "suffix", "extension", "datatype")}
+    return derivative_path(output_dir, "relmat", ".tsv", **entities)
+
+
+def merge_kinds(output_dir: Path) -> "dict[tuple, list[Path]]":
+    """Every per-dyad table under output_dir, grouped into the merges it would produce.
+
+    The discovery half of :func:`write_aggregate_wtc`, separate so a command can report what
+    is on disk without merging it.
+    """
+    kinds: dict[tuple, list[Path]] = {}
+    for path in sorted(Path(output_dir).rglob("group-*/**/*_relmat.tsv")):
+        kind = _kind_of(path)
+        if kind is not None:
+            kinds.setdefault(kind, []).append(path)
+    return kinds
 
 
 def _band_params(tsv_path: Path) -> dict:
@@ -163,24 +191,19 @@ def _warn_mixed_chromophores(frames: dict[str, pd.DataFrame]) -> None:
             f"; no chromophore column in {', '.join(missing)}" if missing else "")
 
 
-def aggregate_wtc(output_dir: Path, kind: str = "wtc") -> pd.DataFrame:
-    """Concatenate every per-dyad WTC band-mean table under output_dir.
+def aggregate_wtc(output_dir: Path, sources: "list[Path]") -> pd.DataFrame:
+    """Concatenate the per-dyad tables of one kind, as :func:`merge_kinds` grouped them.
 
-    kind is "wtc" for the channel-level tables, "wtc-roichan" for the ROI-level ones,
-    "wtc-phasenull" for the phase-scrambled null, or the "wtcbycond" trio for what
-    ``--wtc-by-condition`` wrote, its ROI means and its own null. Returns an empty frame
-    when nothing matches, so a study that never ran WTC is not an error.
+    Returns an empty frame when every input was unreadable or empty, so a study that never
+    ran WTC is not an error.
     """
-    if kind not in _KINDS:
-        raise ValueError(f"kind must be one of {sorted(_KINDS)}, got {kind!r}")
+    from fnirs_pipe.io.naming import parse_path
 
     frames: dict[str, pd.DataFrame] = {}
     params: dict[str, dict] = {}
-    for tsv_path in sorted(output_dir.rglob(f"*_hyper-{kind}.tsv")):
-        ents = _entities(tsv_path.name, kind)
-        if ents is None:
-            continue
-        group_id, task = ents
+    for tsv_path in sources:
+        entities = parse_path(tsv_path.name)
+        group_id, task = entities.get("group"), entities.get("task")
         try:
             df = pd.read_csv(tsv_path, sep="\t")
         except (OSError, pd.errors.ParserError) as exc:
@@ -194,7 +217,6 @@ def aggregate_wtc(output_dir: Path, kind: str = "wtc") -> pd.DataFrame:
         params[tsv_path.name] = _band_params(tsv_path)
 
     if not frames:
-        logger.info("no hyper-%s tables under %s", kind, output_dir)
         return pd.DataFrame()
 
     _refuse_mixed_bands(params)
@@ -209,35 +231,43 @@ def aggregate_wtc(output_dir: Path, kind: str = "wtc") -> pd.DataFrame:
     return merged.sort_values(sort_cols, ignore_index=True)
 
 
-def write_aggregate_wtc(output_dir: Path, kind: str = "wtc") -> Path | None:
-    """Write the merged table to output_dir, with a sidecar naming its inputs.
+def write_aggregate_wtc(output_dir: Path, sources: "list[Path]") -> Path | None:
+    """Write one kind's merged table to output_dir, with a sidecar naming its inputs.
 
     Returns the path, or None when there was nothing to merge.
     """
     from fnirs_pipe import __version__
     from fnirs_pipe.io.derivatives import write_sidecar_json
+    from fnirs_pipe.io.naming import parse_path
 
-    merged = aggregate_wtc(output_dir, kind=kind)
+    merged = aggregate_wtc(output_dir, sources)
     if merged.empty:
         return None
 
-    out_path = output_dir / f"{_KINDS[kind]}.tsv"
+    out_path = _merged_path(output_dir, sources[0])
+    out_path.parent.mkdir(parents=True, exist_ok=True)
     merged.to_csv(out_path, sep="\t", index=False)
 
-    sources = sorted(p for p in output_dir.rglob(f"*_hyper-{kind}.tsv")
-                     if _entities(p.name, kind))
     # the band is uniform by the time we get here, so one file's parameters describe them all
     band = next((_band_params(p) for p in sources), {})
     write_sidecar_json(out_path, {
         "pipeline_version": __version__,
-        "step": _KINDS[kind],
+        "step": "hyper_merge",
         "Sources": [p.as_posix() for p in sources],
         "parameters": {
             "n_tables": len(sources),
             "n_dyads": int(merged["group_id"].nunique()),
             "tasks": sorted(merged["task"].unique()),
+            "entities": {k: str(v) for k, v in sorted(parse_path(out_path.name).items())
+                         if k not in ("suffix", "extension")},
             **{k: band[k] for k in _MUST_AGREE if k in band},
         },
     })
-    logger.info("merged %d %s tables -> %s", len(sources), kind, out_path)
+    logger.info("merged %d tables -> %s", len(sources), out_path.name)
     return out_path
+
+
+def write_all_aggregates(output_dir: Path) -> "list[Path]":
+    """Every merge the tree supports, one table per kind. The paths written."""
+    return [path for sources in merge_kinds(output_dir).values()
+            if (path := write_aggregate_wtc(output_dir, sources)) is not None]

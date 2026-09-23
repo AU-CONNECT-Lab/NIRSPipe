@@ -258,11 +258,7 @@ STEP_SUMMARY = {
     "hyper_isc": "Correlation of each channel of one brain with each channel of the other.",
     "hyper_isc_roichan": "Channel-level correlations averaged within each ROI.",
     "hyper_isc_pairs": "The same correlations as one row per channel pair.",
-    "group_hyper_wtc": "Every dyad's channel-level coherence, merged into one table.",
-    "group_hyper_wtc_phasenull": "The same merge, over the phase-scrambled null.",
-    "group_hyper_wtc_roichan": "The same merge, over ROI means of channel coherences.",
-    "group_hyper_wtc_roihom": "The same merge, over homologous ROI means.",
-    "group_hyper_wtc_roihom_phasenull": "The same merge, over the homologous ROI null.",
+    "hyper_merge": "Every dyad's table of one kind, merged into one, the dyad and the task kept as columns.",
 }
 
 

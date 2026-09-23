@@ -13,6 +13,7 @@ import pytest
 from fnirs_pipe.pipeline.hyper import surrogate
 from fnirs_pipe.pipeline.hyper.surrogate import compute_wtc_pair_null
 from fnirs_pipe.pipeline.hyper.wtc import WTCResult
+from tests.hyper._names import name
 
 FREQS = np.linspace(0.02, 0.30, 12)
 TIMES = np.arange(40.0)
@@ -200,9 +201,13 @@ def test_the_correlation_keeps_its_draws_too(tmp_path):
              "label": "S1_D1", "label2": "S1_D1", "coherence": 0.2 + 0.01 * i,
              "n_valid_frac": 1.0, "draw": f"sub-p2d{i:02d}"} for i in range(3)]
     draws = [pd.DataFrame([r]) for r in rows]
-    _write_isc_null([], draws, draws, tmp_path, "group-d01_task-full_hyper", [], {}, [],
+
+    def _path(entities):
+        return tmp_path / name("d01", "full", "iscpairs", **entities)
+
+    _write_isc_null([], draws, draws, _path, [], {}, [],
                     isc_whiten=32, isc_max_lag_s=2.0, isc_band=(0.06, 0.15))
 
-    out = tmp_path / "group-d01_task-full_hyper-iscbycond-pairnull-draws.tsv"
+    out = tmp_path / name("d01", "full", "iscbycond-pairnull-draws")
     assert out.exists() and out.with_suffix(".json").exists()
     assert sorted(pd.read_csv(out, sep="\t").draw) == [f"sub-p2d{i:02d}" for i in range(3)]

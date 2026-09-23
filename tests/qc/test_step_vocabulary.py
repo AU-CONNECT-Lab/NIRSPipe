@@ -29,7 +29,7 @@ ALL_STEPS = [
     "hyper_wtc", "hyper_wtc_roichan", "hyper_wtc_phasenull",
     "hyper_isc", "hyper_isc_roichan",
     "hyper_wtc_bycondition", "hyper_wtc_bycondition_roichan",
-    "group_hyper_wtc", "group_hyper_wtc_roichan", "group_hyper_wtc_phasenull",
+    "hyper_merge",
 ]
 
 

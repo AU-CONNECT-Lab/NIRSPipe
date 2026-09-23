@@ -123,7 +123,7 @@ def usable_table(grid: dict, subject_ids: list[str],
 def write_usable_table(path: Path, grid: dict, subject_ids: list[str],
                        conditions: "dict[str, tuple[float, float]] | None",
                        sources: "list[str] | None" = None, **params) -> "Path | None":
-    """Write ``<label>_hyper-usable.tsv`` with its sidecar. None when there is nothing to write."""
+    """Write the usable-time table with its sidecar. None when there is nothing to write."""
     from fnirs_pipe import __version__
     from fnirs_pipe.io.derivatives import write_sidecar_json
 

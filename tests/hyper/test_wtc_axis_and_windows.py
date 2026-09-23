@@ -195,20 +195,26 @@ def test_a_window_is_on_the_aligned_clock_not_the_original_one(windows):
 
 # ---- the merged table names ----
 
-def test_no_table_name_matches_two_merge_kinds():
-    """`hyper-wtcbycond.tsv` matching the `wtc` kind would concatenate the per-condition rows
-    into the whole-run table, leaving the `condition` column half empty instead of erroring.
+def test_no_two_kinds_of_table_share_a_name(tmp_path):
+    """A per-condition table matching the whole-run kind would concatenate its rows into that
+    table, leaving the `condition` column half empty instead of erroring.
     """
-    from fnirs_pipe.pipeline.hyper.wtc_aggregate import _KINDS, _entities
+    from fnirs_pipe.pipeline.hyper.wtc_aggregate import merge_kinds
+    from tests.hyper._names import KINDS, name
 
-    names = [f"group-07_task-rest_hyper-{kind}.tsv" for kind in _KINDS]
-    for name in names:
-        matched = [kind for kind in _KINDS if _entities(name, kind)]
-        assert len(matched) == 1, f"{name} matched {matched}"
+    nirs = tmp_path / "group-07" / "nirs"
+    nirs.mkdir(parents=True)
+    for kind in KINDS:
+        (nirs / name("07", "rest", kind)).write_text("label\tcoherence\nS1_D1\t0.3\n")
+
+    # every kind its own merge, the draws excepted: they are the same null in full
+    kinds = merge_kinds(tmp_path)
+    assert len(kinds) == len(KINDS) - sum("draws" in k for k in KINDS)
+    assert all(len(paths) == 1 for paths in kinds.values())
 
 
-def test_the_per_condition_tables_are_merged_under_their_own_names():
-    from fnirs_pipe.pipeline.hyper.wtc_aggregate import _KINDS
+def test_the_per_condition_tables_are_merged_apart_from_the_whole_run_ones():
+    from tests.hyper._names import name
 
-    assert _KINDS["wtcbycond"] != _KINDS["wtc"]
-    assert _KINDS["wtcbycond-roichan"] != _KINDS["wtc-roichan"]
+    assert name("07", "rest", "wtcbycond") != name("07", "rest", "wtc")
+    assert name("07", "rest", "wtcbycond-roichan") != name("07", "rest", "wtc-roichan")

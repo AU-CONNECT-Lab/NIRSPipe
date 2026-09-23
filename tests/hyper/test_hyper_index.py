@@ -11,6 +11,7 @@ import pandas as pd
 
 from fnirs_pipe.io.naming import report_name
 from fnirs_pipe.qc.hyper.hyper_index import NULL_PERCENTILE, _links, _past_null
+from tests.hyper._names import name
 
 
 def _null_table(**columns) -> pd.DataFrame:
@@ -61,7 +62,7 @@ def test_only_the_artefacts_on_disk_are_linked(tmp_path):
     stem = "group-d01_task-full"
     (tmp_path / "nirs").mkdir()
     (tmp_path / report_name(stem, desc="raw")).write_text("x", encoding="utf-8")
-    (tmp_path / "nirs" / f"{stem}_hyper-wtc.tsv").write_text("x", encoding="utf-8")
+    (tmp_path / "nirs" / name("d01", "full")).write_text("x", encoding="utf-8")
 
     links = _links(tmp_path, stem)
     assert [link["text"] for link in links] == ["raw QC", "coherence"]

@@ -28,10 +28,16 @@ BIDS App alignment and the output naming rework. Renames land in later entries h
 - **Breaking**: every figure is named by entities and every subject's runs share one `figures/`; the per-run and per-scope subdirectories are gone
 - **Breaking**: the raw viewer's figures take a `raw` prefix on their `desc-`, sharing that folder with the report's own
 - A section builder is handed a namer instead of a filename suffix, and the per-condition leak check reads the `cond-` entity instead of a name suffix and a prefix whitelist
-- Entity parsing, the channel-decisions path, the quality-record name, the dyad table stem and a condition page's name each have one definition; they had three, four, five, nine and three
+- **Breaking**: every dyad table is named by entities: `hyper-wtcbycond-roihom-pairnull` is `seg-<map>_agg-homologous_cond-all_null-pair_stat-wtc_relmat`, and the dyad's cross-subject quality tables give `_channels.tsv` back to BIDS
+- **Breaking**: the merged cross-dyad tables are the inputs' own name minus `group-` and `task-`; `fnirs-hyper merge` discovers kinds by entity instead of a 14-row table
+- **Breaking**: human ratings and channel decisions are `desc-rawrating_qc.json` and `desc-rawdecision_qc.json` under the analysis unit; they sat loose in the derivatives root
+- The band stays in the sidecar rather than the filename, as the reference BIDS Apps keep theirs; only `fnirs-hyper band`'s re-averaged tables carry `band-`, being the one output that exists to sit beside another
+- `hyper_stem` is `group_output_path`, the dyad mirror of `build_output_path`, so a caller asks for a path instead of appending to a prefix
+- Entity parsing, the channel-decisions path, the quality-record name, the dyad table name and a condition page's name each have one definition; they had three, four, five, nine and three
 
 ### Fixed
 - Per-condition report pages were written under a name neither the nav strip inside them nor the subject index looked for, so every link to one was dead
+- `fnirs-hyper group-null` wrote every task and chromophore to one filename, so a second run overwrote the first
 
 ## [0.46.0] - 2026-09-21
 

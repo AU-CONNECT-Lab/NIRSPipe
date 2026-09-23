@@ -16,7 +16,6 @@ recording, and the ``kind`` column says which a row came from.
 from __future__ import annotations
 
 import json
-import re
 from pathlib import Path
 
 import pandas as pd
@@ -41,10 +40,30 @@ NULL_PERCENTILE = 95
 _ARTEFACTS = (
     ("raw QC",     "{raw_report}"),
     ("provenance", "figures/{provenance}"),
-    ("coherence",  "nirs/{stem}_hyper-wtc.tsv"),
-    ("null",       "nirs/{stem}_hyper-wtc-phasenull.tsv"),
-    ("ISC pairs",  "nirs/{stem}_hyper-iscpairs.tsv"),
+    ("coherence",  "nirs/{coherence}"),
+    ("null",       "nirs/{null}"),
+    ("ISC pairs",  "nirs/{isc}"),
 )
+
+
+def _table(stem: str, **entities) -> str:
+    """One of a dyad's tables by name, from the ``group-<id>_task-<task>`` stem it shares.
+
+    ::
+
+      _table("group-G1_task-rest", statistic="wtc")
+        -> "group-G1_task-rest_stat-wtc_relmat.tsv"
+
+    Built through the namer rather than spelled out, so this page's links and the writers
+    that produce those files cannot be renamed apart.
+    """
+    from fnirs_pipe.io.derivatives import entity_of
+    from fnirs_pipe.io.naming import derivative_path
+
+    return derivative_path("", "relmat", ".tsv",
+                           group=entity_of(stem, "group"),
+                           session=entity_of(stem, "ses"),
+                           task=entity_of(stem, "task"), **entities).name
 
 
 def _read_tsv(path: Path) -> "pd.DataFrame | None":
@@ -158,16 +177,17 @@ def _isc_mean(nirs_dir: Path, stem: str, label: "str | None" = None,
     The off-diagonal is every site against every other and belongs to the connectogram, not
     to a single number. NaN cells are the channels a member lost and are skipped.
 
-    ``label`` reads a condition's own matrices, written under the ``desc-`` entity its page
+    ``label`` reads a condition's own matrices, written under the ``cond-`` entity its page
     takes. A window analysed before per-condition ISC existed has none, and the row shows a
     dash rather than the run's number.
 
     ``slug`` picks one pairing's matrices out of a group that wrote several.
     """
     out: dict = {}
-    desc = f"_desc-{_pair_fname(label)}" if label else ""
     for chroma in ("hbo", "hbr"):
-        df = _read_tsv(nirs_dir / f"{stem}{desc}_hyper-isc-{chroma}{slug}.tsv")
+        df = _read_tsv(nirs_dir / _table(
+            stem, pairing=slug.lstrip("_") or None, chromophore=chroma,
+            condition=_pair_fname(label) if label else None, statistic="isc"))
         if df is None or df.empty:
             continue
         values = df.set_index(df.columns[0]).to_numpy(dtype=float)
@@ -183,22 +203,37 @@ def _links(group_dir: Path, stem: str) -> list[dict[str, str]]:
     return [{"text": text, "href": rel}
             for text, template in _ARTEFACTS
             if (group_dir / (rel := template.format(
-                stem=stem, raw_report=report_name(stem, desc="raw"),
-                provenance=figure_namer(stem)("provenance", extension=".png")))).exists()]
+                raw_report=report_name(stem, desc="raw"),
+                provenance=figure_namer(stem)("provenance", extension=".png"),
+                coherence=_table(stem, statistic="wtc"),
+                null=_table(stem, nulldist="phase", statistic="wtc"),
+                isc=_table(stem, statistic="isc")))).exists()]
 
 
 def _tasks(nirs_dir: Path, group_id: str) -> "list[str]":
-    """The tasks this dyad has a whole-run coherence table for, in filename order."""
-    pattern = re.compile(rf"group-{re.escape(group_id)}_task-([A-Za-z0-9]+)_hyper-wtc\.tsv")
-    return sorted({m.group(1) for p in nirs_dir.glob("*_hyper-wtc.tsv")
-                   if (m := pattern.fullmatch(p.name))})
+    """The tasks this dyad has a whole-run coherence table for, in filename order.
+
+    Matched on the entities rather than by a regex over the name: the whole-run table is the
+    one carrying neither a condition nor a null, which a glob cannot say.
+    """
+    from fnirs_pipe.io.naming import parse_path
+
+    tasks = set()
+    for path in nirs_dir.glob("group-*_stat-wtc_relmat.tsv"):
+        entities = parse_path(path.name)
+        if entities.get("group") != group_id or not entities.get("task"):
+            continue
+        if {"condition", "nulldist", "aggregation", "desc"} & set(entities):
+            continue
+        tasks.add(entities["task"])
+    return sorted(tasks)
 
 
 def collect_rows(group_dir: Path, group_id: str) -> "list[dict]":
     """One row per analysed window under ``group_dir``, for the index table.
 
     A task contributes its whole-run row and then one row per condition found in its
-    ``hyper-wtcbycond.tsv``. The conditions come in the order that table lists them, which
+    ``cond-all`` table. The conditions come in the order that table lists them, which
     is the order the windows were found in the recording, so the rows read down the session
     rather than alphabetically.
     """
@@ -207,11 +242,12 @@ def collect_rows(group_dir: Path, group_id: str) -> "list[dict]":
 
     for task in _tasks(nirs_dir, group_id):
         stem = f"group-{group_id}_task-{task}"
-        whole = _read_tsv(nirs_dir / f"{stem}_hyper-wtc.tsv")
-        bycond = _read_tsv(nirs_dir / f"{stem}_hyper-wtcbycond.tsv")
+        whole = _read_tsv(nirs_dir / _table(stem, statistic="wtc"))
+        bycond = _read_tsv(nirs_dir / _table(stem, condition="all", statistic="wtc"))
         # written only when the run drew a null; a tree without one keeps the column empty
-        whole_null = _read_tsv(nirs_dir / f"{stem}_hyper-wtc-phasenull.tsv")
-        bycond_null = _read_tsv(nirs_dir / f"{stem}_hyper-wtcbycond-phasenull.tsv")
+        whole_null = _read_tsv(nirs_dir / _table(stem, nulldist="phase", statistic="wtc"))
+        bycond_null = _read_tsv(nirs_dir / _table(stem, condition="all",
+                                                  nulldist="phase", statistic="wtc"))
         # every inter-brain number is of two members, so a group of three contributes three
         # rows per window, one per pairing, rather than one row averaging across them
         pairings = _pairings(whole, bycond)
@@ -236,7 +272,8 @@ def collect_rows(group_dir: Path, group_id: str) -> "list[dict]":
                 "past_null": _past_null(null, where, pair),
                 "valid_frac": _mean_by_chroma(source, "n_valid_frac", where, pair),
                 "isc": _isc_mean(nirs_dir, stem, label, slug),
-                "window": _window_of(nirs_dir / f"{stem}_hyper-wtcbycond.tsv", label),
+                "window": _window_of(
+                    nirs_dir / _table(stem, condition="all", statistic="wtc"), label),
             }
 
         for pair in pairings:
@@ -287,7 +324,8 @@ def write_hyper_index(
 
     chroma = [c for c in ("hbo", "hbr")
               if any(c in row["coherence"] for row in rows)]
-    band = _band(group_dir / "nirs" / f"group-{group_id}_task-{rows[0]['task']}_hyper-wtc.tsv")
+    band = _band(group_dir / "nirs" / _table(
+        f"group-{group_id}_task-{rows[0]['task']}", statistic="wtc"))
 
     html = render(
         "hyper_index.html.j2",

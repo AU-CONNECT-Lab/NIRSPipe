@@ -48,6 +48,7 @@ class HyperPostConfig:
     isc_phase_null: int = 0
     isc_band: "tuple[float | None, float | None] | None" = None
     roi_map: dict | None = None
+    roi_map_name: str = "custom"
     sep_bands: Any = None
     analysis_window: "tuple[float, float] | None" = None
 
@@ -184,7 +185,7 @@ def run_hyper_post(
     the footer of the page this result is drawn on and not only the run log.
     """
     from fnirs_pipe.exceptions import StageError
-    from fnirs_pipe.io.derivatives import group_data_dir, hyper_stem
+    from fnirs_pipe.io.derivatives import group_output_path
     from fnirs_pipe.pipeline.hyper import _hyper_sidecar
     # straight from the modules that define them. The package re-exports the set, and
     # taking them from there makes the coherence look like a property of the group loader
@@ -225,6 +226,8 @@ def run_hyper_post(
     isc_band               = config.isc_band
     chroma, cond_pad_s     = config.chroma, config.cond_pad_s
     roi_map, sep_bands     = config.roi_map, config.sep_bands
+    # the entities every ROI table carries, so one tree can hold two ROI definitions
+    roi_entities           = {"segmentation": config.roi_map_name}
     analysis_window        = config.analysis_window
 
     ref_raw = aligned_raws.get(subject_ids[0]) if subject_ids else None
@@ -232,9 +235,16 @@ def run_hyper_post(
     # pass serves both
     fig_chroma = chroma[0]
 
-    def _write_df_tsv(df, kind: str, step: str, **extra) -> Path:
-        tsv_path = (group_data_dir(output_dir, group_id)
-                    / f"{hyper_stem(group_id, task)}-{kind}.tsv")
+    def _write_df_tsv(df, entities: dict, step: str, **extra) -> Path:
+        """One long-format table, named by what distinguishes it from the others.
+
+        No chromophore entity: these are long tables with a ``chromophore`` column, and no
+        band entity: the band is a parameter of the measurement rather than something that
+        tells two files apart, so it goes in the sidecar below. ``fnirs-hyper band`` is the
+        one writer that needs it in a name, and only because its output sits beside this one.
+        """
+        tsv_path = group_output_path(output_dir, group_id, {"task": task, **entities},
+                                     "relmat", ".tsv")
         df.to_csv(tsv_path, sep="\t", index=False)
         _hyper_sidecar(
             tsv_path, step,
@@ -252,7 +262,7 @@ def run_hyper_post(
             wtc_fmin=wtc_fmin, wtc_fmax=wtc_fmax, chroma=list(chroma),
             **wtc_grid_params(aligned_raws), **align_info, **extra,
         )
-        tables[kind] = tsv_path
+        tables[tsv_path.name] = tsv_path
         return tsv_path
 
     def _transform_condition(tstart: float, tstop: float, ch_type: str):
@@ -298,17 +308,17 @@ def run_hyper_post(
         df.insert(0, "chromophore", ch_type)
         return df
 
-    def _save_maps(result, kind: str, ch_type: str) -> None:
+    def _save_maps(result, ch_type: str) -> None:
         """The full time-frequency maps beside the table, one archive per chromophore.
 
-        Named ``hyper-<kind>-<ch_type>.npz`` rather than after the TSV, because the TSV now
-        holds both chromophores and two archives cannot share one name. ``fnirs-hyper band``
-        globs ``*_hyper-wtc*.npz``, which this still matches.
+        It carries ``chromo-`` where the TSV beside it does not: the TSV is long format and
+        holds both chromophores in a column, and an archive cannot.
         """
         from fnirs_pipe.pipeline.hyper.wtc_store import save_wtc
-        npz_path = (group_data_dir(output_dir, group_id)
-                    / f"{hyper_stem(group_id, task)}-{kind}-{ch_type}.npz")
-        with guard(f"Saving WTC maps ({kind} {ch_type})", errors, scope):
+        npz_path = group_output_path(output_dir, group_id,
+                                     {"task": task, "chromophore": ch_type,
+                                      "statistic": "wtc"}, "relmat", ".npz")
+        with guard(f"Saving WTC maps ({ch_type})", errors, scope):
             save_wtc(result, npz_path)
 
     def _apply_null_level(result, ch_type: str) -> None:
@@ -323,8 +333,10 @@ def run_hyper_post(
         keep whatever they had, and the arrows fall back to the flat --wtc-arrow-min.
         """
         from fnirs_pipe.pipeline.hyper.wtc_store import load_null_levels
-        npz_path = (group_data_dir(output_dir, group_id)
-                    / f"{hyper_stem(group_id, task)}-wtc-nulllevel-{ch_type}.npz")
+        npz_path = group_output_path(output_dir, group_id,
+                                     {"task": task, "chromophore": ch_type,
+                                      "nulldist": "phase", "statistic": "wtc",
+                                      "desc": "level"}, "relmat", ".npz")
         if result is None or not npz_path.exists():
             return
         with guard(f"WTC null level ({ch_type})", errors, scope):
@@ -473,7 +485,7 @@ def run_hyper_post(
         chan_band_df = _band_means(wtc_result, "wtc", ch_type)
         out["chan"] = chan_band_df
         if chan_band_df is not None and wtc_save_maps:
-            _save_maps(wtc_result, "wtc", ch_type)
+            _save_maps(wtc_result, ch_type)
 
         out["phasescale"] = _phase_scale(wtc_result, "whole run", ch_type)
         out["result"] = wtc_result
@@ -560,20 +572,24 @@ def run_hyper_post(
     chan_band_df = _stack("chan")
     if chan_band_df is not None:
         logger.info("WTC band means saved: %s",
-                    _write_df_tsv(chan_band_df, "wtc", "hyper_wtc"))
+                    _write_df_tsv(chan_band_df, {"statistic": "wtc"}, "hyper_wtc"))
     roi_band_df = _stack("roichan")
     if roi_band_df is not None:
         logger.info("WTC ROI means from channels saved: %s",
-                    _write_df_tsv(roi_band_df, "wtc-roichan", "hyper_wtc_roichan"))
+                    _write_df_tsv(roi_band_df,
+                                  {**roi_entities, "aggregation": "roi",
+                                   "statistic": "wtc"}, "hyper_wtc_roichan"))
     roi_hom_df = _stack("roihom")
     if roi_hom_df is not None:
         logger.info("WTC homologous ROI means saved: %s",
-                    _write_df_tsv(roi_hom_df, "wtc-roihom", "hyper_wtc_roihom"))
+                    _write_df_tsv(roi_hom_df,
+                                  {**roi_entities, "aggregation": "homologous",
+                                   "statistic": "wtc"}, "hyper_wtc_roihom"))
 
     phase_scale_df = _stack("phasescale")
     if phase_scale_df is not None:
         logger.info("WTC phase per scale saved: %s",
-                    _write_df_tsv(phase_scale_df, "wtc-phasescale",
+                    _write_df_tsv(phase_scale_df, {"statistic": "wtcphase"},
                                   "hyper_wtc_phasescale"))
 
     # the windows are the one thing a reader cannot reconstruct from the table
@@ -583,25 +599,30 @@ def run_hyper_post(
     if cond_chan_frames:
         logger.info("WTC band means per condition saved: %s",
                     _write_df_tsv(pd.concat(cond_chan_frames, ignore_index=True),
-                                  "wtcbycond", "hyper_wtc_bycondition",
+                                  {"condition": "all", "statistic": "wtc"},
+                                  "hyper_wtc_bycondition",
                                   condition_windows_s=spans))
     if cond_roi_frames:
         logger.info("WTC ROI means per condition saved: %s",
                     _write_df_tsv(pd.concat(cond_roi_frames, ignore_index=True),
-                                  "wtcbycond-roichan", "hyper_wtc_bycondition_roichan",
+                                  {**roi_entities, "aggregation": "roi",
+                                   "condition": "all", "statistic": "wtc"},
+                                  "hyper_wtc_bycondition_roichan",
                                   condition_windows_s=spans))
     cond_hom_frames = [f for r in passes.values() for f in r["cond_roihom"]]
     if cond_hom_frames:
         logger.info("WTC homologous ROI means per condition saved: %s",
                     _write_df_tsv(pd.concat(cond_hom_frames, ignore_index=True),
-                                  "wtcbycond-roihom", "hyper_wtc_bycondition_roihom",
+                                  {**roi_entities, "aggregation": "homologous",
+                                   "condition": "all", "statistic": "wtc"},
+                                  "hyper_wtc_bycondition_roihom",
                                   condition_windows_s=spans))
 
     cond_scale_frames = [f for r in passes.values() for f in r["cond_phasescale"]]
     if cond_scale_frames:
         logger.info("WTC phase per scale per condition saved: %s",
                     _write_df_tsv(pd.concat(cond_scale_frames, ignore_index=True),
-                                  "wtcbycond-phasescale",
+                                  {"condition": "all", "statistic": "wtcphase"},
                                   "hyper_wtc_bycondition_phasescale",
                                   condition_windows_s=spans))
 
@@ -645,14 +666,15 @@ def run_hyper_post(
                 pairs_df.insert(0, "condition", label)
             isc_pair_frames.append(pairs_df)
             sources = [p for p in (path_from(r) for r in aligned_raws.values()) if p]
-            # the desc- entity a condition's page takes, so its table is named the way its
+            # the cond- entity a condition's page takes, so its table is named the way its
             # page is and a reader can pair the two without a rule of their own
-            desc = f"_desc-{_pair_fname(label)}" if label else ""
-            stem = (group_data_dir(output_dir, group_id)
-                    / f"group-{group_id}_task-{task}{desc}_hyper-isc")
-            slug = pair_slug(pair, len(pairings))
+            common = {"task": task,
+                      "pairing": pair_slug(pair, len(pairings)).lstrip("_") or None,
+                      "chromophore": ch_type,
+                      "condition": _pair_fname(label) if label else None,
+                      "statistic": "isc"}
             write_isc_matrix(
-                Path(f"{stem}-{ch_type}{slug}.tsv"),
+                group_output_path(output_dir, group_id, common, "relmat", ".tsv"),
                 isc_mat, isc_ch_names, ch_type, sources, pair_ids, align=align_info,
                 **_isc_params(),
             )
@@ -662,7 +684,10 @@ def run_hyper_post(
                 if roi_mat is not None:
                     roi_level = (roi_mat, roi_names)
                     write_isc_matrix(
-                        Path(f"{stem}-roichan-{ch_type}{slug}.tsv"),
+                        group_output_path(
+                            output_dir, group_id,
+                            {**common, **roi_entities, "aggregation": "roi"},
+                            "relmat", ".tsv"),
                         roi_mat, roi_names, ch_type, sources, pair_ids, align=align_info,
                         step="hyper_isc_roichan", index_label="roi",
                     )
@@ -686,8 +711,9 @@ def run_hyper_post(
         # its own writer rather than _write_df_tsv: that one stamps the WTC band and grid on
         # everything it writes, and a correlation was averaged over no band at all
         with guard("ISC pair table", errors, scope):
-            tsv_path = (group_data_dir(output_dir, group_id)
-                        / f"{hyper_stem(group_id, task)}-iscpairs.tsv")
+            tsv_path = group_output_path(output_dir, group_id,
+                                         {"task": task, "statistic": "isc"},
+                                         "relmat", ".tsv")
             pd.concat(isc_pair_frames, ignore_index=True).to_csv(tsv_path, sep="\t",
                                                                  index=False)
             _hyper_sidecar(
@@ -697,7 +723,7 @@ def run_hyper_post(
                 chroma=["hbo", "hbr"], conditions=[w[0] for w in cond_windows],
                 **align_info,
             )
-            tables["iscpairs"] = tsv_path
+            tables[tsv_path.name] = tsv_path
             logger.info("ISC pair table saved: %s", tsv_path)
 
     return HyperPostResult(

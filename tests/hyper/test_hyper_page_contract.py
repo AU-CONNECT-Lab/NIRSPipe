@@ -511,13 +511,15 @@ def test_the_coherence_column_is_named_for_the_statistic(pages):
 
 
 def test_the_roi_correlation_reaches_disk_for_every_scope(pages):
-    """Written beside the channel matrix and under the same desc- entity, so a group
+    """Written beside the channel matrix and under the same cond- entity, so a group
     analysis over regions does not have to regroup every dyad itself."""
     nirs = next(p for p in pages).parent / "nirs"
-    written = {p.name for p in nirs.glob("*hyper-isc-roichan-*.tsv")}
-    assert any("desc-" not in n for n in written), written
+    written = {p.name: parse_path(p.name)
+               for p in nirs.glob("*_stat-isc_relmat.tsv")
+               if parse_path(p.name).get("aggregation") == "roi"}
+    assert any("condition" not in e for e in written.values()), written
     for label in CONDITIONS:
-        assert any(f"desc-{label}" in n for n in written), (label, written)
+        assert any(e.get("condition") == label for e in written.values()), (label, written)
 
 
 def test_a_rejected_pairing_reads_as_a_dash_and_not_as_nan(pages):

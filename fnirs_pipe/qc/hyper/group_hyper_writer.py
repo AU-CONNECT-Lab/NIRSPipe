@@ -4,7 +4,7 @@ Assembled from what the dyads already wrote, never from anything held in memory,
 can be rebuilt for a tree produced weeks ago and a dyad the run skipped is simply absent
 rather than stale. Each dyad contributes its quality record
 (``group-*/nirs/<label>_desc-sqm_qc.json``) and, where the run wrote one, its usable-time
-table (``<label>_hyper-usable.tsv``).
+table (the dyad's ``desc-usable_qc.tsv``).
 
 What it reports is what a dyad has and a subject cannot:
 
@@ -43,6 +43,15 @@ from fnirs_pipe.qc.common.report_shell import footer_vars, guard, note, page_var
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("qc.group_hyper_writer")
+
+
+def _usable_name(label: str) -> str:
+    """A dyad's usable-time table, from the ``group-<id>_task-<task>`` stem it shares."""
+    from fnirs_pipe.io.derivatives import entity_of
+
+    return derivative_path("", "qc", ".tsv", group=entity_of(label, "group"),
+                           session=entity_of(label, "ses"),
+                           task=entity_of(label, "task"), desc="usable").name
 
 # Below this many dyads a cohort has no middle to measure a dyad against: the median and the
 # outlier rule both need one. The panels still draw, carrying the line that says so.
@@ -131,7 +140,7 @@ def collect_rows(output_dir: Path) -> list[dict]:
             continue
         label = record_label(record_path)
         group_dir = record_path.parent.parent
-        table = _read_tsv(record_path.parent / f"{label}_hyper-usable.tsv")
+        table = _read_tsv(record_path.parent / _usable_name(label))
         screening = record.get("screening") or {}
         percentile = {name: float(v["percentile"])
                       for name, v in (screening.get("windows") or {}).items()

@@ -16,7 +16,14 @@ import pytest
 from fnirs_pipe.cli.hyper import _parsers
 from fnirs_pipe.exceptions import StageError
 from fnirs_pipe.pipeline.hyper.pair_null import real_table_params
-from fnirs_pipe.pipeline.hyper.wtc_aggregate import aggregate_wtc
+from fnirs_pipe.pipeline.hyper.wtc_aggregate import aggregate_wtc, merge_kinds
+from tests.hyper._names import KINDS, name
+
+
+def _merge(root, kind):
+    """One kind's merge, discovered the way `merge` discovers it."""
+    key = tuple(sorted((k, str(v)) for k, v in KINDS[kind].items()))
+    return aggregate_wtc(root, merge_kinds(root)[key])
 
 _REAL = {"band_fmin": 0.06, "band_fmax": 0.15, "wtc_fmin": 0.004, "wtc_fmax": 0.20,
          "mask_coi": True, "aligned_duration_s": 900.0}
@@ -25,40 +32,38 @@ _REAL = {"band_fmin": 0.06, "band_fmax": 0.15, "wtc_fmin": 0.004, "wtc_fmax": 0.
 def _real_table(root, gid="d01", task="full", params=None, kind="wtc"):
     d = root / f"group-{gid}" / "nirs"
     d.mkdir(parents=True, exist_ok=True)
-    stem = f"group-{gid}_task-{task}_hyper"
-    tsv = d / f"{stem}-{kind}.tsv"
+    tsv = d / name(gid, task, kind)
     pd.DataFrame({"chromophore": ["hbo"], "sub1": ["a"], "sub2": ["b"],
                   "label": ["S1_D1"], "coherence": [0.3]}).to_csv(tsv, sep="\t", index=False)
     tsv.with_suffix(".json").write_text(
         json.dumps({"parameters": _REAL if params is None else params}))
-    return d, stem
+    return tsv
 
 
 # ---- the parameters come off the real table ----
 
 def test_the_band_and_the_mask_are_read_back_rather_than_retyped(tmp_path):
-    d, stem = _real_table(tmp_path)
-    got = real_table_params(d, stem)
+    got = real_table_params(_real_table(tmp_path))
     assert (got["band_fmin"], got["band_fmax"], got["mask_coi"]) == (0.06, 0.15, True)
 
 
 def test_no_real_table_is_refused_by_name(tmp_path):
     with pytest.raises(StageError, match="no real WTC table"):
-        real_table_params(tmp_path, "group-d01_task-full_hyper")
+        real_table_params(tmp_path / name("d01", "full"))
 
 
 def test_a_sidecar_missing_the_band_is_refused_rather_than_defaulted(tmp_path):
     """A null built on a guess about the band is worse than none: nothing can tell them apart."""
-    d, stem = _real_table(tmp_path, params={"wtc_fmin": 0.004, "wtc_fmax": 0.20})
+    tsv = _real_table(tmp_path, params={"wtc_fmin": 0.004, "wtc_fmax": 0.20})
     with pytest.raises(StageError, match="band_fmin"):
-        real_table_params(d, stem)
+        real_table_params(tsv)
 
 
 def test_an_unreadable_sidecar_is_refused(tmp_path):
-    d, stem = _real_table(tmp_path)
-    (d / f"{stem}-wtc.json").write_text("{not json")
+    tsv = _real_table(tmp_path)
+    tsv.with_suffix(".json").write_text("{not json")
     with pytest.raises(StageError, match="unreadable"):
-        real_table_params(d, stem)
+        real_table_params(tsv)
 
 
 # ---- the command surface ----
@@ -101,7 +106,7 @@ def test_it_does_not_take_from_the_command_line_what_it_reads_off_the_table(flag
 def _write_null(root, gid, task, kind, **params):
     d = root / f"group-{gid}" / "nirs"
     d.mkdir(parents=True, exist_ok=True)
-    tsv = d / f"group-{gid}_task-{task}_hyper-{kind}.tsv"
+    tsv = d / name(gid, task, kind)
     pd.DataFrame({"sub1": ["a"], "sub2": ["b"], "label": ["S1_D1"],
                   "null_mean": [0.3]}).to_csv(tsv, sep="\t", index=False)
     tsv.with_suffix(".json").write_text(json.dumps({"parameters": {
@@ -113,8 +118,8 @@ def test_the_two_nulls_merge_into_separate_files(tmp_path):
     _write_null(tmp_path, "d01", "full", "wtc-phasenull", n_iter=100, null_kind="phase")
     _write_null(tmp_path, "d01", "full", "wtc-pairnull", n_iter=22,
                 null_kind="repaired", pair_pool="position")
-    assert len(aggregate_wtc(tmp_path, kind="wtc-phasenull")) == 1
-    assert len(aggregate_wtc(tmp_path, kind="wtc-pairnull")) == 1
+    assert len(_merge(tmp_path, "wtc-phasenull")) == 1
+    assert len(_merge(tmp_path, "wtc-pairnull")) == 1
 
 
 def test_a_pair_null_renamed_onto_the_phase_null_path_is_refused(tmp_path):
@@ -122,7 +127,7 @@ def test_a_pair_null_renamed_onto_the_phase_null_path_is_refused(tmp_path):
     _write_null(tmp_path, "d01", "full", "wtc-phasenull", n_iter=22, null_kind="phase")
     _write_null(tmp_path, "d02", "full", "wtc-phasenull", n_iter=22, null_kind="repaired")
     with pytest.raises(ValueError, match="null_kind"):
-        aggregate_wtc(tmp_path, kind="wtc-phasenull")
+        _merge(tmp_path, "wtc-phasenull")
 
 
 def test_two_pools_refuse_to_merge(tmp_path):
@@ -132,14 +137,14 @@ def test_two_pools_refuse_to_merge(tmp_path):
     _write_null(tmp_path, "d02", "full", "wtc-pairnull", n_iter=44,
                 null_kind="repaired", pair_pool="any")
     with pytest.raises(ValueError, match="n_iter|pair_pool"):
-        aggregate_wtc(tmp_path, kind="wtc-pairnull")
+        _merge(tmp_path, "wtc-pairnull")
 
 
 def test_one_pool_merges(tmp_path):
     for gid in ("d01", "d02"):
         _write_null(tmp_path, gid, "full", "wtc-pairnull", n_iter=22,
                     null_kind="repaired", pair_pool="position")
-    assert sorted(aggregate_wtc(tmp_path, kind="wtc-pairnull")["group_id"]) == ["d01", "d02"]
+    assert sorted(_merge(tmp_path, "wtc-pairnull")["group_id"]) == ["d01", "d02"]
 
 
 def test_merge_covers_the_new_kinds(tmp_path):
@@ -148,7 +153,7 @@ def test_merge_covers_the_new_kinds(tmp_path):
     _write_null(tmp_path, "d01", "full", "wtc-pairnull", n_iter=22,
                 null_kind="repaired", pair_pool="position")
     cmd_merge(tmp_path, verbose=False)
-    assert (tmp_path / "group_hyper_wtc_pairnull.tsv").exists()
+    assert (tmp_path / "null-pair_stat-wtc_relmat.tsv").exists()
 
 
 # ---- the ROI mapping path, which only a real run exercised ----

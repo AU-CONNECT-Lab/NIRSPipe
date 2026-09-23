@@ -1,6 +1,6 @@
 """Save the WTC time-frequency maps to disk, and re-average a saved one over a new band.
 
-The band mean written to ``hyper-wtc.tsv`` is the cheap half of the calculation: the wavelet
+The band mean written beside the archive is the cheap half of the calculation: the wavelet
 transform costs minutes per dyad, the averaging costs milliseconds. Keeping only the mean
 therefore made "would the result hold over 0.05 to 0.20 Hz?" a question that had to be
 answered by recomputing everything. The maps saved here answer it offline.
@@ -132,19 +132,21 @@ def reband_tree(
     The new tables are named after the band so they sit next to the original without
     overwriting it, which is the point: the comparison is between them.
 
-    An archive whose name ends in the chromophore gets its ``chromophore`` column back, so
-    the re-banded table has the shape ``fnirs-hyper run`` writes. An archive written before
-    the chromophore was in the name has no column, and its rows are HbO.
+    An archive carrying a ``chromo-`` entity gets its ``chromophore`` column back, so the
+    re-banded table has the shape ``fnirs-hyper run`` writes.
     """
     from fnirs_pipe import __version__
     from fnirs_pipe.io.derivatives import write_sidecar_json
 
-    tag = suffix or f"band{fmin:g}-{fmax:g}".replace(".", "p")
+    from fnirs_pipe.io.naming import derivative_path, parse_path
+
+    tag = suffix or f"{fmin:g}to{fmax:g}".replace(".", "p")
     written: list[Path] = []
-    for npz_path in sorted(output_dir.rglob("*_hyper-wtc*.npz")):
-        # the null levels sit under the same prefix but hold one row per pair, not a map;
+    for npz_path in sorted(output_dir.rglob("*_stat-wtc_relmat.npz")):
+        entities = parse_path(npz_path.name)
+        # the null levels sit under the same entities but hold one row per pair, not a map;
         # without this they would be opened, found to have no map in them, and warned about
-        if "-nulllevel-" in npz_path.stem:
+        if entities.get("desc") == "level":
             continue
         try:
             df = reband(npz_path, fmin, fmax, mask_coi=mask_coi)
@@ -153,11 +155,16 @@ def reband_tree(
             continue
         # the archive is per chromophore and says so in its name; the column puts it back,
         # so a re-banded table has the same shape as the one `fnirs-hyper run` wrote
-        ch_type = next((c for c in ("hbo", "hbr")
-                        if npz_path.stem.endswith(f"-{c}")), None)
+        ch_type = entities.get("chromophore")
         if ch_type:
             df.insert(0, "chromophore", ch_type)
-        out_path = npz_path.with_name(f"{npz_path.stem}-{tag}.tsv")
+        # the band is in the name here and nowhere else in the scheme: these tables exist to
+        # sit beside the one the run wrote, and the band is the only thing telling them apart
+        out_path = derivative_path(
+            output_dir, "relmat", ".tsv",
+            **{k: v for k, v in entities.items()
+               if k not in ("suffix", "extension", "datatype")},
+            band=tag)
         df.to_csv(out_path, sep="\t", index=False)
         write_sidecar_json(out_path, {
             "pipeline_version": __version__,

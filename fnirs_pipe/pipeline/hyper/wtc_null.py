@@ -71,7 +71,7 @@ def run_wtc_null(
     """
     # imported in the call, not at module load: the wiring tests patch these on the module
     # that defines them, which only a lookup made at call time can see
-    from fnirs_pipe.io.derivatives import group_data_dir, hyper_stem
+    from fnirs_pipe.io.derivatives import group_output_path
     from fnirs_pipe.pipeline.hyper import compute_wtc_phase_null
     from fnirs_pipe.pipeline.hyper.wtc_store import save_null_levels
 
@@ -87,8 +87,6 @@ def run_wtc_null(
         "per chromophore (%s).",
         n_iter, "crossed" if cross else "homologous", "+".join(chroma))
 
-    data_dir = group_data_dir(output_dir, group_id)
-    stem = hyper_stem(group_id, task)
     nulls: dict = {}
     for ch_type in chroma:
         null = compute_wtc_phase_null(
@@ -98,8 +96,10 @@ def run_wtc_null(
             sep_bands=sep_bands, windows=windows, analysis_window=analysis_window)
         nulls[ch_type] = null
         if getattr(null, "levels", None):
-            save_null_levels(null.levels,
-                             data_dir / f"{stem}-wtc-nulllevel-{ch_type}.npz")
+            save_null_levels(null.levels, group_output_path(
+                output_dir, group_id,
+                {"task": task, "chromophore": ch_type, "nulldist": "phase",
+                 "statistic": "wtc", "desc": "level"}, "relmat", ".npz"))
     return nulls
 
 
@@ -120,22 +120,23 @@ def write_wtc_null(
     windows: "list[tuple[str, float, float]] | None" = None,
     analysis_window: "tuple[float, float] | None" = None,
     roi_map: "dict[str, list[str]] | None" = None,
+    roi_map_name: str = "custom",
 ) -> Path:
     """Rank what :func:`run_wtc_null` drew against the real band means, and write it.
 
-    Writes ``group-<id>_task-<task>_hyper-wtc-phasenull.tsv``, one table with a ``chromophore``
+    Writes ``..._null-phase_stat-wtc_relmat.tsv``, one table with a ``chromophore``
     column, matching the real band-mean tables. The sidecar additionally records ``n_iter``,
     ``cross`` and ``chroma``, without which a 5-iteration probe and a 100-iteration null are
     indistinguishable on disk.
 
-    ``roi_map`` adds ``...hyper-wtc-roihom-phasenull.tsv``, the null for the homologous ROI
-    means in ``...hyper-wtc-roihom.tsv``. It is free: the iterations are grouped into
+    ``roi_map`` adds the ``agg-homologous`` twin, the null for the homologous ROI
+    means beside it. It is free: the iterations are grouped into
     regions before they are summarised, so no surrogate is transformed a second time, and
     grouping inside the iteration is what makes it the null of the ROI mean rather than a
     bracket around it. The crossed ``-roichan`` matrix has no null and cannot get one from
     here; see :func:`~fnirs_pipe.pipeline.hyper.roi.roi_mean_of_homologous`.
 
-    ``windows`` adds a second table, ``...hyper-wtcbycond-phasenull.tsv``, with a ``condition``
+    ``windows`` adds a second table, the ``cond-all`` twin, with a ``condition``
     column: the null for what ``--wtc-by-condition`` wrote. It mirrors the real side, where
     the whole-run and per-condition tables are also two files merged separately. Returns the
     whole-run path either way; the per-condition one sits beside it.
@@ -146,7 +147,7 @@ def write_wtc_null(
     the null's business. A tree without them still gets a null, just one nothing has been
     ranked against yet.
     """
-    from fnirs_pipe.io.derivatives import group_data_dir, hyper_stem
+    from fnirs_pipe.io.derivatives import group_output_path
     from fnirs_pipe.pipeline.hyper import _hyper_sidecar, alignment_params
     from fnirs_pipe.pipeline.hyper.wtc import wtc_grid_params
     from fnirs_pipe.utils.lineage import path_from
@@ -155,12 +156,18 @@ def write_wtc_null(
     band_fmax = band_fmax if band_fmax is not None else wtc_fmax
     chroma = tuple(nulls)
 
-    data_dir = group_data_dir(output_dir, group_id)
-    stem = hyper_stem(group_id, task)
-    real = _real_table(data_dir / f"{stem}-wtc.tsv")
-    real_by_cond = _real_table(data_dir / f"{stem}-wtcbycond.tsv")
-    real_roi = _real_table(data_dir / f"{stem}-wtc-roihom.tsv")
-    real_roi_by_cond = _real_table(data_dir / f"{stem}-wtcbycond-roihom.tsv")
+    roi_entities = {"segmentation": roi_map_name, "aggregation": "homologous"}
+
+    def _path(entities: dict, extension: str = ".tsv") -> Path:
+        return group_output_path(output_dir, group_id, {"task": task, **entities},
+                                 "relmat", extension)
+
+    # the four real tables this null is ranked against, each the same name minus `null-`
+    real = _real_table(_path({"statistic": "wtc"}))
+    real_by_cond = _real_table(_path({"condition": "all", "statistic": "wtc"}))
+    real_roi = _real_table(_path({**roi_entities, "statistic": "wtc"}))
+    real_roi_by_cond = _real_table(
+        _path({**roi_entities, "condition": "all", "statistic": "wtc"}))
 
     frames, cond_frames = [], []
     roi_frames, roi_cond_frames = [], []
@@ -204,29 +211,35 @@ def write_wtc_null(
         # they were built on the same clock for that subtraction to mean anything
         **alignment_params(aligned_raws),
     )
-    out_path = data_dir / f"{stem}-wtc-phasenull.tsv"
+    out_path = _path({"nulldist": "phase", "statistic": "wtc"})
     pd.concat(frames, ignore_index=True).to_csv(out_path, sep="\t", index=False)
     _hyper_sidecar(out_path, "hyper_wtc_phasenull", sources, **params)
     logger.info("Phase-scrambled WTC band means saved: %s", out_path)
 
     if cond_frames:
-        cond_path = data_dir / f"{stem}-wtcbycond-phasenull.tsv"
+        cond_path = _path({"condition": "all", "nulldist": "phase",
+                           "statistic": "wtc"})
         pd.concat(cond_frames, ignore_index=True).to_csv(cond_path, sep="\t", index=False)
         _hyper_sidecar(cond_path, "hyper_wtc_bycondition_phasenull", sources,
                        conditions=[w[0] for w in (windows or [])], **params)
         logger.info("Phase-scrambled WTC per condition saved: %s", cond_path)
 
-    for group, stem_suffix, step, extra in (
-            (draw_frames, "-wtcbycond-phasenull-draws",
+    for group, entities, step, extra in (
+            (draw_frames,
+             {"condition": "all", "nulldist": "phase", "statistic": "wtc",
+              "desc": "draws"},
              "hyper_wtc_bycondition_phasenull_draws",
              {"conditions": [w[0] for w in (windows or [])]}),
-            (roi_frames, "-wtc-roihom-phasenull", "hyper_wtc_roihom_phasenull", {}),
-            (roi_cond_frames, "-wtcbycond-roihom-phasenull",
+            (roi_frames, {**roi_entities, "nulldist": "phase", "statistic": "wtc"},
+             "hyper_wtc_roihom_phasenull", {}),
+            (roi_cond_frames,
+             {**roi_entities, "condition": "all", "nulldist": "phase",
+              "statistic": "wtc"},
              "hyper_wtc_bycondition_roihom_phasenull",
              {"conditions": [w[0] for w in (windows or [])]})):
         if not group:
             continue
-        path = data_dir / f"{stem}{stem_suffix}.tsv"
+        path = _path(entities)
         write_tsv(pd.concat(group, ignore_index=True), path)
         _hyper_sidecar(path, step, sources, **extra, **params)
         logger.info("Phase-scrambled WTC ROI means saved: %s", path)

@@ -9,6 +9,7 @@ from pathlib import Path
 from flask import Flask, jsonify, request, send_from_directory
 
 from fnirs_pipe.io.derivatives import channel_decisions_path, entity_of
+from fnirs_pipe.io.naming import rating_path
 from fnirs_pipe.io.naming import report_name
 from fnirs_pipe.qc.metrics import SCI_PASS
 from fnirs_pipe.utils.logging import get_logger
@@ -183,7 +184,7 @@ class RawRatingApp:
 
     def __init__(self, html_path: Path, output_dir: Path, sci_threshold: float = SCI_PASS):
         self.html_path      = html_path
-        self.stem           = html_path.stem          # e.g. "sub-01_task-rest_desc-raw_nirs"
+        self.stem           = html_path.stem        # "sub-01_task-rest_desc-raw_report"
         self.output_dir     = output_dir
         self.sci_threshold  = sci_threshold
         self.ratings_path   = self._ratings_path(self.stem)
@@ -194,13 +195,8 @@ class RawRatingApp:
         self._setup_routes()
 
     def _ratings_path(self, stem: str) -> Path:
-        """One file per rated page, named after the page's own stem.
-
-        A run and each of its per-condition pages are separate reports and are rated
-        separately, so they get separate files rather than one keyed by whichever page the
-        server was launched on. The stem comes back from the page itself.
-        """
-        return self.output_dir / f"{stem.removesuffix('_desc-raw_nirs')}_raw_ratings.json"
+        """One file per rated page, from the page's own stem. See :func:`rating_path`."""
+        return rating_path(self.output_dir, stem)
 
     def _load_ratings(self, stem: "str | None" = None) -> dict:
         path = self._ratings_path(stem) if stem else self.ratings_path
@@ -343,16 +339,13 @@ class HyperRatingApp:
         self._setup_routes()
 
     def _ratings_path(self, stem: str) -> Path:
-        """One file per rated page, named after the page's own stem.
+        """One file per rated page, from the page's own stem. See :func:`rating_path`.
 
-        The raw dyad report, the post report and each of its per-condition pages are
-        separate reports and are rated separately. The raw one keeps its legacy
-        ``_hyper-raw_ratings.json`` name; the rest are named after themselves.
+        The raw dyad report, the post report and each of its per-condition and per-pairing
+        pages are separate reports and are rated separately; the entities in the page's own
+        name are what keeps their rating files apart.
         """
-        if stem.endswith("_desc-hyperraw_nirs"):
-            return self.output_dir / (
-                stem.removesuffix("_desc-hyperraw_nirs") + "_hyper-raw_ratings.json")
-        return self.html_path.parent / f"{stem}_ratings.json"
+        return rating_path(self.output_dir, stem)
 
     def _load_ratings(self, stem: "str | None" = None) -> dict:
         path = self._ratings_path(stem) if stem else self.ratings_path

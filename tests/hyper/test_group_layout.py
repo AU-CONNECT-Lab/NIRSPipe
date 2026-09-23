@@ -43,7 +43,8 @@ def test_the_excluded_channels_land_in_the_group_folder(tmp_path):
 
     path = write_group_bads(tmp_path, _group(), sqm, "subject")
 
-    assert path == tmp_path / "group-G1" / "nirs" / "group-G1_task-hold_hyper-bads.tsv"
+    assert path == (tmp_path / "group-G1" / "nirs"
+                    / "group-G1_task-hold_desc-bad_qc.tsv")
     rows = pd.read_csv(path, sep="\t")
     assert rows["rejected_in"].tolist() == ["hold;rest"]
 
