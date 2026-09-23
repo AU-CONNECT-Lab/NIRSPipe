@@ -624,11 +624,11 @@ def _warn_on_split_tree(output_dir: Path) -> None:
     Two output directories means two records for one run, and the rule preferring the
     pipeline record over the `prep-raw` one can only choose between records one glob found.
     """
-    from fnirs_pipe.qc.subject.sqm_record import SQM_DESCS
+    from fnirs_pipe.qc.subject.sqm_record import RECORD_SUFFIXES
 
     for sub in (output_dir / "qc", output_dir / "derivatives"):
-        if sub.is_dir() and any(sub.glob(f"*/**/nirs/*_desc-{desc}_nirs.json")
-                                for desc in SQM_DESCS):
+        if sub.is_dir() and any(any(sub.glob(f"*/**/nirs/*{suffix}"))
+                                for suffix in RECORD_SUFFIXES.values()):
             logger.warning(
                 "quality records under %s are not part of this cohort page; point both "
                 "`fnirs-pipe` and `fnirs-qc prep-raw` at one output directory, or aggregate "

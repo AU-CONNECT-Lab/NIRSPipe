@@ -269,9 +269,9 @@ def _common_prefix(labels: list[str]) -> str:
 
     ::
 
-      ["hyper-isc-hbo", "hyper-isc-hbo (baseline)", "hyper-isc-hbr"] -> "hyper-isc"
+      ["relmat isc hbo", "relmat isc hbo (baseline)", "relmat isc hbr"] -> "relmat isc"
 
-    A raw character-wise prefix of that set is ``hyper-isc-hb``, half a word, so where the
+    A raw character-wise prefix of that set is ``relmat isc hb``, half a word, so where the
     labels carry on past the prefix it backs off to the last separator inside it.
     """
     prefix = labels[0]
@@ -288,7 +288,7 @@ def _variant_line(members: list[Node], prefix: str) -> str:
 
     ::
 
-      12 hyper-isc outputs -> "hbo, hbr  ·  whole run + 5 conditions"
+      12 relmat isc outputs -> "hbo, hbr  ·  whole run + 5 conditions"
 
     Two axes, because those are the two a run repeats a step over: what is left of each
     label once the shared prefix is off, and the ``cond-`` entity. A member without one is
@@ -336,7 +336,7 @@ def simplify(nodes: dict[str, Node]) -> dict[str, Node]:
 
     ::
 
-      2 inputs + 12 hyper-isc + 4 hyper-wtc -> 2 inputs + 1 hyper-isc box + 4
+      2 inputs + 12 relmat isc + 4 relmat wtc -> 2 inputs + 1 relmat isc box + 4
 
     Siblings are collapsed when they share a step *and* a source set, which is what makes
     the merged box's arrows the members' own arrows rather than an approximation of them.

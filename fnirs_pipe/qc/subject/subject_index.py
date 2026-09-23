@@ -194,21 +194,20 @@ def _records(nirs_dir: Path) -> list[tuple[str, dict]]:
     return out
 
 
-def _condition_hrefs(sub_dir: Path, label: str, names: list[str]) -> list[str | None]:
-    """Each condition's own page under sub_dir, or None where no command wrote one.
+def _condition_pages(sub_dir: Path, label: str,
+                     names: list[str]) -> list[list[dict[str, str]]]:
+    """Each condition's pages under sub_dir that exist, in _REPORTS order.
 
-    Both writers' pages are looked for, `fnirs-pipe`'s first; the raw viewer's differ only
-    by ``desc-raw``. Names come from the record rather than from a glob, so a task that
-    happens to share a condition's name cannot contribute a row.
+    Both writers' pages are looked for; the raw viewer's differ only by ``desc-raw``. Names
+    come from the record rather than from a glob, so a task that happens to share a
+    condition's name cannot contribute a row.
     """
     from fnirs_pipe.qc.subject.report import condition_page_name
 
-    out: list[str | None] = []
-    for name in names:
-        candidates = (condition_page_name(label, name),
-                      condition_page_name(label, name, desc="raw"))
-        out.append(next((c for c in candidates if (sub_dir / c).exists()), None))
-    return out
+    return [[{"text": text, "href": page}
+             for (text, _), desc in zip(_REPORTS, (None, "raw"))
+             if (sub_dir / (page := condition_page_name(label, name, desc=desc))).exists()]
+            for name in names]
 
 
 def collect_bad_channels(sub_dir: Path, labels: list[str]) -> dict:
@@ -307,12 +306,14 @@ def collect_runs(sub_dir: Path) -> list[dict]:
 
 
 def _cond_row(name: str, kind: str, href: "str | None", span: str,
-              kept: "tuple[int, int] | None", values: dict) -> dict:
+              kept: "tuple[int, int] | None", values: dict,
+              links: "list[dict[str, str]]" = ()) -> dict:
     """One Conditions row, the values formatted by :data:`_COND_COLUMNS`."""
     return {
         "name": name,
         "kind": kind,
         "href": href,
+        "links": list(links),
         "span": span,
         "kept": f"{kept[0]}/{kept[1]}" if kept else None,
         "metrics": [
@@ -364,11 +365,13 @@ def collect_conditions(sub_dir: Path) -> list[dict]:
             f"0–{duration_s:.0f} s" if duration_s else "",
             (n_channels - (shape.get("n_bad") or 0), n_channels) if n_channels else None,
             _whole_run_values(record, duration_s),
+            reports[1:],
         )]
 
         windows: list[tuple[str, float, float]] = []
-        hrefs = _condition_hrefs(sub_dir, label, list(by_condition))
-        for (name, block), page in zip(by_condition.items(), hrefs):
+        # a condition both commands wrote has two pages, linked the way a run's two are
+        all_pages = _condition_pages(sub_dir, label, list(by_condition))
+        for (name, block), pages in zip(by_condition.items(), all_pages):
             window = block.get("window_s") or []
             t0, t1 = (float(window[0]), float(window[1])) if len(window) == 2 else (0.0, 0.0)
             windows.append((name, t0, t1))
@@ -379,11 +382,12 @@ def collect_conditions(sub_dir: Path) -> list[dict]:
             for key in ("spike_pct_frames", "motion_corrected_pct"):
                 values[key] = (block.get("scalars") or {}).get(key)
             rows.append(_cond_row(
-                name, "view", page,
+                name, "view", pages[0]["href"] if pages else None,
                 f"{t0:.0f}–{t1:.0f} s",
                 (n_channels - len(block.get("bad_channels") or []), n_channels)
                 if n_channels else None,
                 values,
+                pages[1:],
             ))
 
         # a condition is marked against the run's other conditions, the whole-run row

@@ -120,6 +120,11 @@ tr.cond-whole td { background: #f4f6f8; font-weight: 600; }
       <td>
         {% if row.href %}<a href="{{ row.href }}">{{ row.name }}</a>
         {% else %}{{ row.name }} <span class="muted">(no page)</span>{% endif %}
+        {% if row.links %}
+        <span class="run-links">
+          {% for link in row.links %}<a href="{{ link.href }}">{{ link.text }}</a>{% endfor %}
+        </span>
+        {% endif %}
       </td>
       <td>{{ row.kind }}</td>
       <td class="num">{{ row.span or '&mdash;' }}</td>

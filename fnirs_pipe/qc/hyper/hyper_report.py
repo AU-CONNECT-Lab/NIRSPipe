@@ -755,7 +755,7 @@ def build_hyper_post_report(
     group analysis reads the same values the figures were drawn from.
 
     ``wtc_channel_cross`` crosses every long channel with every other, 14 channels giving 196
-    rows in ``hyper-wtc.tsv`` instead of 14. The extra pairs reach the TSV and the crossed
+    rows in ``stat-wtc_relmat.tsv`` instead of 14. The extra pairs reach the TSV and the crossed
     matrix, while the map selector keeps the homologous ones: 196 options is not a list
     anybody reads through, and drawing a full frequency × time map for each of them per
     chromophore is most of what the figures cost. Crossing is also what produces the
@@ -763,7 +763,7 @@ def build_hyper_post_report(
 
     ``wtc_by_condition`` repeats the whole coherence analysis inside each task annotation's
     own window, on top of the whole-run pass, which stays as it was. The band means of every
-    window land in one ``hyper-wtcbycond.tsv`` with a ``condition`` column, and each window
+    window land in one ``cond-all_stat-wtc_relmat.tsv`` with a ``condition`` column, and each window
     gets its own figures. See :func:`condition_windows` for how a window is decided, and note
     that the runtime is roughly doubled: the windows together are about one more pass over
     the recording.

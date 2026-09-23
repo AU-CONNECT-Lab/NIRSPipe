@@ -12,7 +12,7 @@ from fnirs_pipe.qc.common.channel_table import CHANNEL_METRICS_SUFFIX
 from fnirs_pipe.qc.common.report_shell import outlier_flags as _outlier_flags
 from fnirs_pipe.qc.subject.subject_index import (
     _COLUMNS,
-    _condition_hrefs,
+    _condition_pages,
     _links,
     collect_bad_channels,
     collect_runs,
@@ -153,7 +153,8 @@ def test_a_condition_page_is_found_where_the_report_writes_it(tmp_path):
     page = tmp_path / condition_page_name(label, "game 1")
     page.write_text("")
 
-    assert _condition_hrefs(tmp_path, label, ["game 1", "video"]) == [page.name, None]
+    assert _condition_pages(tmp_path, label, ["game 1", "video"]) == [
+        [{"text": "pipeline QC", "href": page.name}], []]
 
 
 def _write_raw_condition_pages(monkeypatch, sub_dir, run_label, report_stem, conditions):
@@ -181,8 +182,9 @@ def test_a_raw_condition_page_is_found_where_prep_raw_writes_it(tmp_path, monkey
     label = _run(tmp_path, "rest")
     _write_raw_condition_pages(monkeypatch, tmp_path, label, label, ["game 1", "video"])
 
-    hrefs = _condition_hrefs(tmp_path, label, ["game 1", "video"])
-    assert all(href and (tmp_path / href).exists() for href in hrefs)
+    pages = _condition_pages(tmp_path, label, ["game 1", "video"])
+    assert [[p["text"] for p in found] for found in pages] == [["raw QC"], ["raw QC"]]
+    assert all((tmp_path / p["href"]).exists() for found in pages for p in found)
 
 
 def test_two_runs_in_one_raw_report_get_pages_of_their_own(tmp_path, monkeypatch):
@@ -204,3 +206,20 @@ def test_a_label_that_repeats_once_reduced_gets_no_second_page(tmp_path, monkeyp
                                ["game-1", "game 1"])
 
     assert len(list(tmp_path.glob("*_cond-*_report.html"))) == 1
+
+
+def test_a_condition_both_commands_wrote_links_both_pages(tmp_path, monkeypatch):
+    """The index row links the pipeline's page and lists the raw viewer's beside it.
+
+    It linked only the first page it found, so on a tree both commands wrote every raw
+    condition page was reachable from nowhere, the raw run page not linking them either.
+    """
+    from fnirs_pipe.qc.subject.report import condition_page_name
+
+    label = _run(tmp_path, "rest")
+    _write_raw_condition_pages(monkeypatch, tmp_path, label, label, ["game1", "video"])
+    (tmp_path / condition_page_name(label, "game1")).write_text("")
+
+    pages = _condition_pages(tmp_path, label, ["game1", "video"])
+    assert [[p["text"] for p in found] for found in pages] == [
+        ["pipeline QC", "raw QC"], ["raw QC"]]

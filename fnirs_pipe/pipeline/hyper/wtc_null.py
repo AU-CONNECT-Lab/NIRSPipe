@@ -54,7 +54,7 @@ def run_wtc_null(
     """Draw the null for one dyad and write the level its phase arrows are read against.
 
     The expensive half: ``n_iter`` full WTC runs per chromophore. Writes
-    ``...hyper-wtc-nulllevel-<chroma>.npz``, the coherence a cell has to clear at each
+    ``..._chromo-<chroma>_null-phase_stat-wtc_desc-level_relmat.npz``, the coherence a cell has to clear at each
     frequency to beat the null, and returns ``{chromophore: NullDraws}`` for
     :func:`write_wtc_null` to rank once the real tables exist.
 
