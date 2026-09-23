@@ -9,8 +9,11 @@ recover which preprocessing produced its inputs.
 from __future__ import annotations
 
 import json
+from fnmatch import fnmatch
 
-from fnirs_pipe.io.derivatives import write_bidsignore, write_dataset_description
+from fnirs_pipe.io.derivatives import (
+    JSON_ONLY_DESCS, write_bidsignore, write_dataset_description,
+)
 
 # extensions a reader is expected to index. None of them may be waved through.
 DATA_EXTENSIONS = (".tsv", ".snirf", ".json", ".npz", ".gz", ".csv")
@@ -48,19 +51,49 @@ def test_an_unreadable_source_still_leaves_a_usable_pointer(tmp_path):
     assert "Version" not in entry
 
 
-def test_only_reports_logs_and_figures_are_waved_through(tmp_path):
+def _ignore_lines(tmp_path):
     write_bidsignore(tmp_path)
-    lines = (tmp_path / ".bidsignore").read_text(encoding="utf-8").split()
+    return (tmp_path / ".bidsignore").read_text(encoding="utf-8").split()
+
+
+def test_only_reports_logs_figures_and_json_only_records_are_waved_through(tmp_path):
+    lines = _ignore_lines(tmp_path)
 
     # no trailing slash: bids-validator 3.0.2 matches nothing against `figures/`, so the
     # gitignore spelling for a directory left every figure on its books
-    assert set(lines) == {"*.html", "logs", "figures"}
+    assert set(lines) == {"*.html", "logs", "figures",
+                          *(f"*_desc-{desc}_qc.json" for desc in JSON_ONLY_DESCS)}
     assert not any(line.endswith("/") for line in lines)
     for line in lines:
-        assert not line.endswith(DATA_EXTENSIONS), (
+        # a data extension only ever behind one exact desc, never as a bare wildcard
+        assert not line.endswith(DATA_EXTENSIONS) or line.startswith("*_desc-"), (
             f"{line} exempts a data product; dyad tables and every other output stay on the "
             f"validator's books"
         )
+
+
+def test_the_ignored_records_are_the_ones_the_writers_name(tmp_path):
+    """Each JSON-only record the package writes is ignored, and nothing with a data file is.
+
+    The desc names live in three modules, so the list is bound to the writers here rather
+    than trusted to stay in step with them.
+    """
+    from fnirs_pipe.io.derivatives import channel_decisions_path
+    from fnirs_pipe.io.naming import rating_path
+    from fnirs_pipe.qc.subject.sqm_record import RECORD_SUFFIXES
+
+    lines = _ignore_lines(tmp_path)
+    written = [f"sub-01_task-rest{suffix}" for suffix in RECORD_SUFFIXES.values()] + [
+        rating_path(tmp_path, "sub-01_task-rest_desc-raw_report").name,
+        rating_path(tmp_path, "sub-01_task-rest_report").name,
+        channel_decisions_path(tmp_path, "01", task="rest").name,
+        "group-G1_task-rest_desc-sqm_qc.json",
+    ]
+    kept = ["sub-01_task-rest_desc-preproc_nirs.json", "sub-01_task-rest_desc-channel_qc.tsv",
+            "group-G1_task-rest_desc-usable_qc.tsv", "group-G1_task-rest_stat-wtc_relmat.json"]
+
+    assert all(any(fnmatch(name, line) for line in lines) for name in written)
+    assert not any(fnmatch(name, line) for name in kept for line in lines)
 
 
 def test_the_stamp_is_rewritten_when_the_source_changes(tmp_path):

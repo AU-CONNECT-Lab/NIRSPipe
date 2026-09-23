@@ -298,15 +298,22 @@ _REPLACE_WAIT_S = 0.05
 # of this name at any depth", but bids-validator 3.0.2 matches nothing with it, so
 # `figures/` left every figure under `sub-*/figures/` and `group-*/figures/` on the
 # validator's books. Measured, not assumed: see the handoff.
-_BIDSIGNORE = ("*.html", "logs", "figures")
+#
+# The records that are a JSON with no data file beside them: the quality records, the
+# human ratings and the channel decisions. A validator reads any such JSON as a sidecar
+# whose data file is missing. Named one by one, never `*.json`, so every real sidecar and
+# every table stays checked.
+JSON_ONLY_DESCS = ("sqm", "sqmraw", "rating", "rawrating", "rawdecision")
+_BIDSIGNORE = ("*.html", "logs", "figures",
+               *(f"*_desc-{desc}_qc.json" for desc in JSON_ONLY_DESCS))
 
 
 def write_bidsignore(output_dir: Path) -> None:
     """Register the paths BIDS has no say over, so a validator skips rather than flags them.
 
-    Only reports, logs and the figures inside them. Every data product stays on the
-    validator's books, dyad tables included: a result nothing can index is a result nobody
-    else's tooling can read.
+    Reports, logs, the figures inside them, and the JSON-only records. Every table and every
+    file with a sidecar stays on the validator's books, dyad tables included: a result
+    nothing can index is a result nobody else's tooling can read.
     """
     output_dir.mkdir(parents=True, exist_ok=True)
     (output_dir / ".bidsignore").write_text("\n".join(_BIDSIGNORE) + "\n", encoding="utf-8")
