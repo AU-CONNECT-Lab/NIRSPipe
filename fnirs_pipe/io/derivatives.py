@@ -290,9 +290,14 @@ _REPLACE_TRIES = 5
 _REPLACE_WAIT_S = 0.05
 
 
-# what a reader should not hold against the tree: the reports and their figures are for
-# people, and BIDS says nothing about either
-_BIDSIGNORE = ("*.html", "logs/", "figures/")
+# What a reader should not hold against the tree: the reports and their figures are for
+# people, and BIDS says nothing about either.
+#
+# No trailing slash on the two directories. It is the gitignore spelling for "a directory
+# of this name at any depth", but bids-validator 3.0.2 matches nothing with it, so
+# `figures/` left every figure under `sub-*/figures/` and `group-*/figures/` on the
+# validator's books. Measured, not assumed: see the handoff.
+_BIDSIGNORE = ("*.html", "logs", "figures")
 
 
 def write_bidsignore(output_dir: Path) -> None:

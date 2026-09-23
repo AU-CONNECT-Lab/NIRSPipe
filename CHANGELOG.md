@@ -38,6 +38,7 @@ BIDS App alignment and the output naming rework. Renames land in later entries h
 ### Fixed
 - Per-condition report pages were written under a name neither the nav strip inside them nor the subject index looked for, so every link to one was dead
 - `fnirs-hyper group-null` wrote every task and chromophore to one filename, so a second run overwrote the first
+- The `.bidsignore` waved nothing through: bids-validator matches nothing against `figures/` or `logs/`, so every figure stayed on its books
 
 ## [0.46.0] - 2026-09-21
 

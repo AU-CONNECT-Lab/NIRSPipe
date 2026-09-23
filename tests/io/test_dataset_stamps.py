@@ -52,7 +52,10 @@ def test_only_reports_logs_and_figures_are_waved_through(tmp_path):
     write_bidsignore(tmp_path)
     lines = (tmp_path / ".bidsignore").read_text(encoding="utf-8").split()
 
-    assert set(lines) == {"*.html", "logs/", "figures/"}
+    # no trailing slash: bids-validator 3.0.2 matches nothing against `figures/`, so the
+    # gitignore spelling for a directory left every figure on its books
+    assert set(lines) == {"*.html", "logs", "figures"}
+    assert not any(line.endswith("/") for line in lines)
     for line in lines:
         assert not line.endswith(DATA_EXTENSIONS), (
             f"{line} exempts a data product; dyad tables and every other output stay on the "
