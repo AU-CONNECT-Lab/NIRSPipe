@@ -7,10 +7,15 @@ disk can tell the two apart.
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 import mne
 import numpy as np
 
 from fnirs_pipe.exceptions import AlignmentError
+from fnirs_pipe.io.snirf import write_snirf
+from fnirs_pipe.utils.snirf_prep import annotations_to_df, bids_stem, copy_sidecars
 from fnirs_pipe.utils.lineage import lineage_of
 from fnirs_pipe.utils.lineage import path_from
 from fnirs_pipe.utils.lineage import stamp
@@ -109,12 +114,6 @@ def write_aligned_member(raw_aligned: mne.io.Raw, snirf_path, out_dir, group_id:
     has to carry are still needed there. Read off the lineage stamp, like
     :func:`alignment_params`, so the sidecar cannot claim an alignment that did not run.
     """
-    import json
-    from pathlib import Path
-
-    from fnirs_pipe.io.snirf import write_snirf
-    from fnirs_pipe.utils.snirf_prep import annotations_to_df, bids_stem, copy_sidecars
-
     snirf_path, out_dir = Path(snirf_path), Path(out_dir)
     stem = bids_stem(snirf_path)
     out_dir.mkdir(parents=True, exist_ok=True)
