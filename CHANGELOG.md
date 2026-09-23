@@ -6,7 +6,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
-BIDS App alignment and the output naming rework. Renames land in later entries here.
+## [0.47.0] - 2026-09-23
+
+BIDS App alignment and the output naming rework: every derivative name now comes from one config.
 
 ### Added
 - Every long CLI flag also answers to its underscore spelling; `--n-jobs` also to `--nprocs` and `--n_cpus`, `--skip-bids-validation` to `--skip_bids_validator`
