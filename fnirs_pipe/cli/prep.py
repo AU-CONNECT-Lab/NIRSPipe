@@ -101,16 +101,12 @@ def cmd_align(
     bids_dir: Path, output_dir: Path, group_csv: Path, skip_bids_validation: bool,
 ) -> None:
     """Align multi-subject recordings by shared trigger and write SNIRF files."""
-    import pandas as pd
-
     from fnirs_pipe.exceptions import AlignmentError
     from fnirs_pipe.pipeline.hyper import (
-        align_recordings, load_group_raw_bids, parse_group_csv,
+        align_recordings, load_group_raw_bids, parse_group_csv, write_aligned_member,
     )
-    from fnirs_pipe.io.snirf import write_snirf
     from fnirs_pipe.utils.snirf_prep import (
-        annotations_to_df, bids_stem, copy_sidecars, deriv_nirs_dir,
-        copy_dataset_root, ensure_dataset_description, find_snirf,
+        deriv_nirs_dir, copy_dataset_root, ensure_dataset_description, find_snirf,
     )
 
     _DERIV_NAME = "aligned"
@@ -144,7 +140,6 @@ def cmd_align(
         )
         copy_dataset_root(bids_dir, output_dir / _DERIV_NAME)
 
-        offset_rows: list[dict] = []
         for entry in group:
             sub_label = entry.subject_id.removeprefix("sub-")
             try:
@@ -157,31 +152,10 @@ def cmd_align(
                 n_fail += 1
                 continue
 
-            stem     = bids_stem(snirf_path)
-            out_dir  = deriv_nirs_dir(output_dir, _DERIV_NAME, sub_label, None)
-            out_dir.mkdir(parents=True, exist_ok=True)
-            copy_sidecars(snirf_path, stem, out_dir)
-
-            out_snirf   = out_dir / f"{stem}_nirs.snirf"
-            raw_aligned = aligned_raws[entry.subject_id]
-            write_snirf(raw_aligned, out_snirf)
-            annotations_to_df(raw_aligned).to_csv(
-                out_dir / f"{stem}_events.tsv", sep="\t", index=False
-            )
-
+            out_snirf = write_aligned_member(
+                aligned_raws[entry.subject_id], snirf_path,
+                deriv_nirs_dir(output_dir, _DERIV_NAME, sub_label, None), group_id)
             print(f"  {entry.subject_id}: offset={offsets[entry.subject_id]:.3f}s -> {out_snirf.name}")
-            offset_rows.append({
-                "subject_id": entry.subject_id,
-                "offset_s":   round(offsets[entry.subject_id], 3),
-                "duration_s": round(raw_aligned.times[-1], 1),
-            })
-
-        offsets_path = (
-            output_dir / _DERIV_NAME
-            / f"group-{group_id}_task-{task}_align-offsets.tsv"
-        )
-        pd.DataFrame(offset_rows).to_csv(offsets_path, sep="\t", index=False)
-        print(f"  Offsets: {offsets_path.name}")
 
     if n_fail:
         raise SystemExit(1)

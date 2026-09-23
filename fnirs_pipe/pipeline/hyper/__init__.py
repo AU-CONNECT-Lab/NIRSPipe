@@ -21,6 +21,7 @@ from fnirs_pipe.pipeline.hyper.alignment import (  # noqa: F401  re-exported
     normalize_raws,
     resolve_analysis_window,
     trim_to_shortest,
+    write_aligned_member,
 )
 from fnirs_pipe.pipeline.hyper.group_io import (  # noqa: F401  re-exported
     GroupEntry,

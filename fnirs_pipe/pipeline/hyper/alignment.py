@@ -94,6 +94,53 @@ def alignment_params(raws: dict[str, mne.io.Raw]) -> dict:
     return out
 
 
+def write_aligned_member(raw_aligned: mne.io.Raw, snirf_path, out_dir, group_id: str):
+    """One member's aligned recording, its events and its sidecar, beside each other.
+
+    ::
+
+      out_dir/sub-01_task-rest_nirs.snirf, _events.tsv, and _nirs.json gaining
+      {"align_group": "G1", "align_step": "align_recordings", "align_trigger": "start",
+       "align_offset_s": 22.4, "aligned_duration_s": 3900.0}
+
+    The offset goes in the member's own sidecar, as a shift a step applied to one file is
+    recorded beside that file, rather than in a group table in a tree that is read as an
+    input next. The copied BIDS sidecar is added to, not replaced: the fields a raw recording
+    has to carry are still needed there. Read off the lineage stamp, like
+    :func:`alignment_params`, so the sidecar cannot claim an alignment that did not run.
+    """
+    import json
+    from pathlib import Path
+
+    from fnirs_pipe.io.snirf import write_snirf
+    from fnirs_pipe.utils.snirf_prep import annotations_to_df, bids_stem, copy_sidecars
+
+    snirf_path, out_dir = Path(snirf_path), Path(out_dir)
+    stem = bids_stem(snirf_path)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    copy_sidecars(snirf_path, stem, out_dir)
+
+    out_snirf = out_dir / f"{stem}_nirs.snirf"
+    write_snirf(raw_aligned, out_snirf)
+    annotations_to_df(raw_aligned).to_csv(out_dir / f"{stem}_events.tsv", sep="\t",
+                                          index=False)
+
+    lin = lineage_of(raw_aligned)
+    if lin is None or lin.stage != ALIGN_STAGE:
+        raise AlignmentError(f"{stem}: carries no alignment stamp, so it was not aligned")
+    sidecar = out_dir / f"{stem}_nirs.json"
+    fields = json.loads(sidecar.read_text(encoding="utf-8")) if sidecar.exists() else {}
+    fields.update({
+        "align_group": group_id,
+        "align_step": lin.step,
+        "align_trigger": lin.params.get("trigger"),
+        "align_offset_s": round(float(lin.params.get("offset_s") or 0.0), 3),
+        "aligned_duration_s": lin.params.get("duration_s"),
+    })
+    sidecar.write_text(json.dumps(fields, indent=2), encoding="utf-8")
+    return out_snirf
+
+
 def align_recordings(
     raws: dict[str, mne.io.Raw],
     task: str,

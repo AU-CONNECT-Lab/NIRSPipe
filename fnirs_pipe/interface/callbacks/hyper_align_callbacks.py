@@ -235,11 +235,8 @@ def export_snirfs(n_clicks, bids_dir, deriv_dir, group_csv):
         return dbc.Alert("Load and align first.", color="warning",
                          className="mb-0 py-2")
 
-    import pandas as pd
-
-    from fnirs_pipe.io.snirf import write_snirf
+    from fnirs_pipe.pipeline.hyper import write_aligned_member
     from fnirs_pipe.utils.snirf_prep import (
-        annotations_to_df, bids_stem, copy_sidecars,
         deriv_nirs_dir, ensure_dataset_description, find_snirf,
     )
 
@@ -253,43 +250,16 @@ def export_snirfs(n_clicks, bids_dir, deriv_dir, group_csv):
         ensure_dataset_description(
             deriv_path / _DERIV_NAME, _DERIV_NAME, "fnirs-gui hyper-align"
         )
-        offset_rows: list[dict] = []
         for sid in info["subject_ids"]:
             sub_label = sid.removeprefix("sub-")
             try:
                 snirf_path = find_snirf(bids_path, sub_label, None, task, None)
-            except Exception as exc:
-                errors.append(f"{sid}: {exc}")
-                continue
-
-            stem    = bids_stem(snirf_path)
-            out_dir = deriv_nirs_dir(deriv_path, _DERIV_NAME, sub_label, None)
-            out_dir.mkdir(parents=True, exist_ok=True)
-            copy_sidecars(snirf_path, stem, out_dir)
-
-            out_snirf   = out_dir / f"{stem}_nirs.snirf"
-            raw_aligned = info["aligned_raws"][sid]
-            try:
-                write_snirf(raw_aligned, out_snirf)
-                annotations_to_df(raw_aligned).to_csv(
-                    out_dir / f"{stem}_events.tsv", sep="\t", index=False,
-                )
+                out_snirf = write_aligned_member(
+                    info["aligned_raws"][sid], snirf_path,
+                    deriv_nirs_dir(deriv_path, _DERIV_NAME, sub_label, None), group_id)
                 written.append(out_snirf.name)
             except Exception as exc:
                 errors.append(f"{sid}: {exc}")
-                continue
-
-            offset_rows.append({
-                "subject_id": sid,
-                "offset_s":   round(info["offsets"].get(sid, 0.0), 3),
-                "duration_s": round(raw_aligned.times[-1], 1),
-            })
-
-        offsets_path = (
-            deriv_path / _DERIV_NAME
-            / f"group-{group_id}_task-{task}_align-offsets.tsv"
-        )
-        pd.DataFrame(offset_rows).to_csv(offsets_path, sep="\t", index=False)
 
     parts = [f"Written {len(written)} file(s)."]
     if errors:

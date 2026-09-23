@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - **Breaking**: the raw viewer's condition pages are `cond-<label>_desc-raw_report.html` under the run's own label; they swapped the condition into `task-`
 - **Breaking**: the dyad cohort page's figures are `desc-groups<panel>_nirs.html`, not `cohort_hyper_<panel>.html`
+- **Breaking**: `fnirs-prep align` records each member's offset in its own `_nirs.json` and no longer writes `align-offsets.tsv`
 - Provenance node labels read every entity, so a table's label names its measure and slices instead of repeating the filename
 
 ### Fixed
