@@ -18,6 +18,9 @@ from fnirs_pipe.exceptions import StageError
 from fnirs_pipe.utils.lineage import stamp
 from fnirs_pipe.utils.logging import get_logger
 from fnirs_pipe import __version__
+from fnirs_pipe.io.auxiliary import TIME_COLUMN, read_aux_table, resample_to_grid
+from fnirs_pipe.io.derivatives import entity_of, write_sidecar_json
+from fnirs_pipe.io.naming import derivative_path
 
 logger = get_logger("post.glm")
 
@@ -228,8 +231,6 @@ def _aux_regressors(
     design matrix spans what sits above the low-pass, which for a motion sensor is most of
     its power, so this filter is not optional.
     """
-    from fnirs_pipe.io.auxiliary import TIME_COLUMN, read_aux_table, resample_to_grid
-
     table = read_aux_table(Path(aux_path))
     available = [c for c in table.columns if c != TIME_COLUMN]
     if channels:
@@ -516,9 +517,6 @@ def _glm_name(source_path: "str | None", suffix: str, **extra) -> str:
     in ``extra`` is what distinguishes these outputs from each other, so the caller passes
     ``desc="glm"`` or ``desc="contrast"``.
     """
-    from fnirs_pipe.io.derivatives import entity_of
-    from fnirs_pipe.io.naming import derivative_path
-
     stem = Path(source_path).name if source_path else ""
     carried = {key: entity_of(stem, short)
                for key, short in (("subject", "sub"), ("session", "ses"),
@@ -535,8 +533,6 @@ def _save_glm_outputs(
     bads: list[str] | None = None,
     **params: Any,
 ) -> None:
-    from fnirs_pipe.io.derivatives import write_sidecar_json
-
     bads = bads or []
 
     def _sidecar(path: Path, step: str) -> None:

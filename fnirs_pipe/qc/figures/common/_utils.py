@@ -1,7 +1,6 @@
 """Shared color constants and helpers used across QC figure modules."""
 
 import numpy as np
-import matplotlib.patches as mpatches
 import mne
 import plotly.graph_objects as go
 
@@ -241,7 +240,9 @@ def head_outline(ax, xs, ys):
 
     Returns ``(cx, cy, r)`` so the caller can place anything else relative to the head.
     """
-    cx = (max(xs) + min(xs)) / 2
+    import matplotlib.patches as mpatches
+
+    cx =(max(xs) + min(xs)) / 2
     cy = (max(ys) + min(ys)) / 2
     # 1.18 leaves the outermost optode just inside the scalp rather than on it
     r = max(max(abs(x - cx) for x in xs), max(abs(y - cy) for y in ys)) * 1.18

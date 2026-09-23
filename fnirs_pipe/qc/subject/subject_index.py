@@ -34,6 +34,7 @@ from fnirs_pipe.qc.subject.sqm_record import (
     RECORD_SUFFIXES, SQM_DESCS, entities_of,
 )
 from fnirs_pipe.utils.logging import get_logger
+from fnirs_pipe.qc.subject.condition_views import span_share
 
 logger = get_logger("qc.subject_index")
 
@@ -327,8 +328,6 @@ def _cond_row(name: str, kind: str, href: "str | None", span: str,
 
 def _whole_run_values(record: dict, duration_s: "float | None") -> dict:
     """The Conditions table's whole-run row, measured the way its condition rows are."""
-    from fnirs_pipe.qc.subject.condition_views import span_share
-
     long_section = record.get("raw_long") or record.get("raw") or {}
     windowed = record.get("windowed") or {}
     values = {key: long_section.get(key)

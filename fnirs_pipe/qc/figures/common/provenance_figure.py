@@ -4,10 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import matplotlib
-import matplotlib.patches as mpatches
-import matplotlib.pyplot as plt
-
 from fnirs_pipe.qc.common.provenance import Node, scan, simplify, to_mermaid
 
 # ---- Palette (shared with the interface DAG, fnirs_pipe/interface/pages/analysis.py) ----
@@ -54,7 +50,10 @@ def provenance_figure(nodes: dict[str, Node], title: str | None = None):
     backwards. Each box shows the output name, the step and settings that produced it,
     and the shape of the data at that point.
     """
+    import matplotlib
     matplotlib.use("Agg")
+    import matplotlib.patches as mpatches
+    import matplotlib.pyplot as plt
 
     if not nodes:
         return None

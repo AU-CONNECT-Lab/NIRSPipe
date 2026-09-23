@@ -34,6 +34,12 @@ from fnirs_pipe.qc.common.report_shell import (
 )
 from fnirs_pipe.qc.subject.trial_qc import score_trials, trial_windows
 from fnirs_pipe.utils.logging import get_logger
+from fnirs_pipe.qc.boilerplate import collect_software_versions, generate_methods_text
+from fnirs_pipe.qc.boilerplate.vocabulary import metric_rows
+from fnirs_pipe.qc.common.screen_scope import resolve_screen_scope
+from fnirs_pipe.qc.subject.sqm_record import (
+    RECORD_SUFFIXES, motion_sections, raw_condition_sections, raw_sections, sqm_record_dict,
+)
 
 logger = get_logger("qc.prep_raw_report")
 
@@ -168,12 +174,6 @@ def _process_run(
         channel_quality_heatmap,
         condition_colors,
         trial_quality_heatmap,
-    )
-    from fnirs_pipe.qc.boilerplate.vocabulary import metric_rows
-    from fnirs_pipe.qc.common.screen_scope import resolve_screen_scope
-    from fnirs_pipe.qc.subject.sqm_record import (
-        RECORD_SUFFIXES, motion_sections, raw_condition_sections, raw_sections,
-        sqm_record_dict,
     )
 
     label   = run["label"]
@@ -840,8 +840,6 @@ def _shell_vars(runs: list[dict], output_path: Path, sub_dir: Path,
     on a tree where only this command has run they describe that one step rather than a
     pipeline that has not happened yet.
     """
-    from fnirs_pipe.qc.boilerplate import collect_software_versions, generate_methods_text
-
     session = runs[0].get("session") if runs else None
     nirs_dir = sub_dir / (f"ses-{session}" if session else "") / "nirs"
     versions = collect_software_versions()

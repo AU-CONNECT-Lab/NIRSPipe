@@ -8,6 +8,7 @@ from importlib.resources import files
 from typing import Any
 
 from fnirs_pipe import __version__
+from fnirs_pipe.qc.boilerplate.vocabulary import boilerplate_key, step_summary, template_slots
 
 
 # ---- Citation rendering ----
@@ -360,10 +361,6 @@ def step_sentence(step: str | None, params: dict, mode: str | None = None) -> st
     The Methods sentence where there is one, without its citations; otherwise the plain
     description of a bookkeeping step. Empty for a step this module has never heard of.
     """
-    from fnirs_pipe.qc.boilerplate.vocabulary import (
-        boilerplate_key, step_summary, template_slots,
-    )
-
     key = boilerplate_key(step, params, mode)
     section = _load_steps().get(key) if key else None
     if not section:

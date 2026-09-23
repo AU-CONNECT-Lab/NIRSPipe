@@ -7,6 +7,7 @@ from fnirs_pipe.qc.metrics._helpers import GOOD_FRAC_PASS
 from fnirs_pipe.utils.logging import get_logger
 
 from fnirs_pipe.qc.figures.common._utils import AXIS_TEXT_COLOR
+from fnirs_pipe.qc.boilerplate.vocabulary import higher_is_better, format_metric
 
 logger = get_logger("qc.figures.sci_psp")
 
@@ -176,8 +177,6 @@ _TRIAL_METRICS = [
 
 def _trial_metric_specs() -> list[tuple[str, str, bool]]:
     """_TRIAL_METRICS resolved against the registry, as (key, label, higher_is_better)."""
-    from fnirs_pipe.qc.boilerplate.vocabulary import higher_is_better
-
     specs = []
     for key, label in _TRIAL_METRICS:
         higher = higher_is_better(key)
@@ -211,8 +210,6 @@ def trial_quality_heatmap(
 
     Returns None when no metric survives on any trial (nothing to draw).
     """
-    from fnirs_pipe.qc.boilerplate.vocabulary import format_metric
-
     present = [m for m in _trial_metric_specs()
                if any(isinstance(s.get(m[0]), (int, float)) for s in trial_sqms)]
     if not present or not trial_labels:

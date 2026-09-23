@@ -21,6 +21,7 @@ from fnirs_pipe.qc.figures.common._utils import (
     timeline_row_traces,
 )
 from fnirs_pipe.qc.metrics._helpers import epochable_events
+from fnirs_pipe.qc.common.channel_table import _neither_range_title
 
 logger = get_logger("qc.figures")
 
@@ -598,7 +599,6 @@ def _psd_groups(
     A montage whose separations fall in neither range gets a third curve rather than being
     folded into "long". Returns one unnamed mean when there is no usable split at all.
     """
-    from fnirs_pipe.qc.common.channel_table import _neither_range_title
     from fnirs_pipe.qc.metrics import long_short_channels
 
     try:

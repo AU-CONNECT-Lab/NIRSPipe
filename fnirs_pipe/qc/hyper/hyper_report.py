@@ -47,6 +47,11 @@ from fnirs_pipe.qc.common.report_shell import (
 )
 from fnirs_pipe.qc.common.windows import crop_provenance, markers_on_data_axis
 from fnirs_pipe.utils.logging import get_logger
+from fnirs_pipe.qc.common.record_views import condition_set_view
+from fnirs_pipe.qc.figures.hyper.hyper_post_figures import (
+    ARROW_MIN_COHERENCE, build_isc_panel, build_isc_roi_matrix, build_wtc_channel,
+    build_wtc_cross_matrix, build_wtc_map_interactive, wtc_condition_views,
+)
 
 logger = get_logger("qc.hyper_report")
 
@@ -263,8 +268,6 @@ def condition_subject_metrics(
     absent, which is the honest answer: the values cannot be recovered from the whole-run
     scalars.
     """
-    from fnirs_pipe.qc.common.record_views import condition_set_view
-
     if not windows:
         return {}
 
@@ -811,16 +814,6 @@ def build_hyper_post_report(
     when no Monte Carlo level was computed. Display only: no table or figure value changes
     with it. ``None`` takes :data:`~fnirs_pipe.qc.figures.hyper.hyper_post_figures.ARROW_MIN_COHERENCE`.
     """
-    from fnirs_pipe.qc.figures.hyper.hyper_post_figures import (
-        ARROW_MIN_COHERENCE,
-        build_isc_panel,
-        build_isc_roi_matrix,
-        build_wtc_channel,
-        build_wtc_cross_matrix,
-        build_wtc_map_interactive,
-        wtc_condition_views,
-    )
-
     arrow_min = ARROW_MIN_COHERENCE if wtc_arrow_min is None else float(wtc_arrow_min)
 
     errors: list[str] = []

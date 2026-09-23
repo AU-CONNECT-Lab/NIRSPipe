@@ -12,6 +12,8 @@ All notable changes to this project will be documented in this file.
 - `.bidsignore` names the five JSON-only records (quality, ratings, channel decisions); every table stays checked
 - **Breaking**: `fnirs-prep align` records each member's offset in its own `_nirs.json` and no longer writes `align-offsets.tsv`
 - 128 function-level imports of modules their file already loads move to module level; startup is unchanged
+- `mne_nirs` is imported only when a SNIRF is written; `fnirs-hyper --help` takes 0.9 s instead of 2.3 s
+- A further 41 cheap package imports move to module level; no command's startup loads anything more
 - Provenance node labels read every entity, so a table's label names its measure and slices instead of repeating the filename
 
 ### Fixed

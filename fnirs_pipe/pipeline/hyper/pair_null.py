@@ -23,6 +23,8 @@ from fnirs_pipe.exceptions import StageError, AlignmentError
 from fnirs_pipe.io.derivatives import group_output_path
 from fnirs_pipe.pipeline.hyper.surrogate import compute_wtc_pair_null, _average_iterations
 from fnirs_pipe.pipeline.hyper.wtc import cone_margin_s
+from fnirs_pipe.pipeline.hyper.wtc_null import _for_chroma, _real_table, write_tsv
+from fnirs_pipe.qc.common.windows import condition_windows, split_windows
 
 logger = logging.getLogger(__name__)
 
@@ -464,8 +466,6 @@ def run_pair_null(
                                                    alignment_params)
     from fnirs_pipe.pipeline.hyper._helpers import long_axis_over
     from fnirs_pipe.pipeline.hyper.wtc import wtc_grid_params
-    from fnirs_pipe.pipeline.hyper.wtc_null import _for_chroma, _real_table, write_tsv
-    from fnirs_pipe.qc.common.windows import condition_windows, split_windows
     from fnirs_pipe.utils.lineage import path_from
 
     roi_entities = {"segmentation": roi_map_name, "aggregation": "homologous"}
@@ -730,7 +730,6 @@ def _write_isc_null(frames, cond_frames, draw_frames, path_of, sources, params,
     coherence tables do without this function knowing either.
     """
     from fnirs_pipe.pipeline.hyper import _hyper_sidecar
-    from fnirs_pipe.pipeline.hyper.wtc_null import write_tsv
 
     keys = ["chromophore", "sub1", "sub2", "label", "label2"]
     isc_params = {k: v for k, v in params.items()

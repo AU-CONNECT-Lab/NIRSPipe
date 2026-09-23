@@ -18,7 +18,6 @@ from pathlib import Path
 
 import mne
 import mne.io
-from mne.preprocessing.nirs import scalp_coupling_index, beer_lambert_law
 
 from fnirs_pipe import __version__
 from fnirs_pipe.io.auxiliary import aux_table_path, write_aux_table
@@ -31,6 +30,7 @@ from fnirs_pipe.utils import is_optical_density
 from fnirs_pipe.utils.lineage import Recorder, lineage_of, stage_of, stamp
 from fnirs_pipe.utils.logging import get_logger
 from fnirs_pipe.qc.metrics import resolve_cutoffs, screen_channels, screening_scores
+from fnirs_pipe.qc.common.screen_scope import resolve_screen_scope
 
 logger = get_logger("pipeline.prep")
 
@@ -43,6 +43,7 @@ def intensity_to_od(raw: mne.io.Raw) -> mne.io.Raw:
 # Step 2: SCI / bad channel pruning
 def compute_sci(raw_od: mne.io.Raw, cardiac_l_freq: float, cardiac_h_freq: float) -> dict[str, float]:
     """Return SCI score per channel name."""
+    from mne.preprocessing.nirs import scalp_coupling_index
     scores = scalp_coupling_index(raw_od, l_freq=cardiac_l_freq, h_freq=cardiac_h_freq)
     return dict(zip(raw_od.ch_names, scores))
 
@@ -83,8 +84,6 @@ def mark_bad_channels(
     them on their own.
     Raises StageError if the criteria leave no usable channel.
     """
-    from fnirs_pipe.qc.common.screen_scope import resolve_screen_scope
-
     cutoffs = resolve_cutoffs(sci=threshold, psp=psp_threshold, good_frac=min_good_frac)
     scope = resolve_screen_scope(raw_od, screen_scope)
     sci_scores = compute_sci(raw_od, cardiac_l_freq, cardiac_h_freq)
@@ -111,7 +110,8 @@ def mark_bad_channels(
 # Step 4: Beer-Lambert
 def od_to_haemo(raw_od: mne.io.Raw, dpf: list[float]) -> mne.io.Raw:
     """Convert OD to haemoglobin concentration via Beer-Lambert law."""
-    ppf = dpf[0] if len(dpf) == 1 else dpf
+    from mne.preprocessing.nirs import beer_lambert_law
+    ppf =dpf[0] if len(dpf) == 1 else dpf
     haemo = beer_lambert_law(raw_od, ppf=ppf)
     return stamp(haemo, stage="preproc", step="beer_lambert", source=raw_od, dpf=dpf)
 

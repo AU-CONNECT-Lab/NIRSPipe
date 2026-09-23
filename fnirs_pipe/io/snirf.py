@@ -12,7 +12,6 @@ from pathlib import Path
 from typing import Any
 
 import mne
-from mne_nirs.io.snirf import write_raw_snirf
 
 from fnirs_pipe.io.derivatives import entity_of
 from fnirs_pipe.utils.lineage import stamp
@@ -43,6 +42,9 @@ def write_snirf(raw: mne.io.Raw, out_path: Path) -> None:
     if raw.first_time:
         raw = _zero_first_time(raw)
     out_path.parent.mkdir(parents=True, exist_ok=True)
+    # in the call: mne_nirs costs 2.4 s to import, and every command's startup reads this module
+    from mne_nirs.io.snirf import write_raw_snirf
+
     write_raw_snirf(_patch_haemo_wavelengths(raw), str(out_path))
 
 

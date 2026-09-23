@@ -26,6 +26,7 @@ from fnirs_pipe.qc.common.figure_io import _pair_fname, figure_namer, pair_slug
 from fnirs_pipe.qc.common.report_shell import (
     OUTLIER_Z, footer_vars, outlier_flags, page_vars, render)
 from fnirs_pipe.utils.logging import get_logger
+from fnirs_pipe.io.derivatives import entity_of
 
 logger = get_logger("qc.hyper_index")
 
@@ -57,8 +58,6 @@ def _table(stem: str, **entities) -> str:
     Built through the namer rather than spelled out, so this page's links and the writers
     that produce those files cannot be renamed apart.
     """
-    from fnirs_pipe.io.derivatives import entity_of
-
     return derivative_path("", "relmat", ".tsv",
                            group=entity_of(stem, "group"),
                            session=entity_of(stem, "ses"),

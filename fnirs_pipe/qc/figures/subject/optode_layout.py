@@ -7,7 +7,6 @@ import io
 import mne
 import numpy as np
 import plotly.graph_objects as go
-import matplotlib.pyplot as plt
 
 from fnirs_pipe.qc.metrics import SCI_PASS
 
@@ -27,7 +26,9 @@ def optode_layout_static(
     rather than a quality map: a channel rejected on its coupled-window share was drawn
     green beside a table calling it BAD. A rejected pair is red now whatever its SCI.
     """
-    picks = mne.pick_types(raw.info, fnirs=True)
+    import matplotlib.pyplot as plt
+
+    picks =mne.pick_types(raw.info, fnirs=True)
     if not len(picks):
         return None
 

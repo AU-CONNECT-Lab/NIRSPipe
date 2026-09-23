@@ -17,6 +17,9 @@ from fnirs_pipe.utils.logging import get_logger
 from fnirs_pipe.exceptions import StageError
 from fnirs_pipe.io.derivatives import group_output_path
 from fnirs_pipe.pipeline.hyper.roi import roi_mean_of_channels, roi_mean_of_homologous
+from fnirs_pipe.pipeline.hyper.isc import compute_isc_pairs, roi_mean_of_isc
+from fnirs_pipe.qc.common.figure_io import _pair_fname, get_channel_pairs, pair_slug
+from fnirs_pipe.qc.common.windows import condition_windows
 
 logger = get_logger("pipeline.hyper_post")
 
@@ -191,7 +194,6 @@ def run_hyper_post(
     # straight from the modules that define them. The package re-exports the set, and
     # taking them from there makes the coherence look like a property of the group loader
     from fnirs_pipe.pipeline.hyper._helpers import long_axis_over
-    from fnirs_pipe.pipeline.hyper.isc import compute_isc_pairs, roi_mean_of_isc
     from fnirs_pipe.pipeline.hyper.wtc import (
         WTCResult,
         compute_wtc,
@@ -200,9 +202,7 @@ def run_hyper_post(
         wtc_grid_params,
         wtc_phase_by_scale,
     )
-    from fnirs_pipe.qc.common.figure_io import _pair_fname, get_channel_pairs, pair_slug
     from fnirs_pipe.qc.common.report_shell import guard, note
-    from fnirs_pipe.qc.common.windows import condition_windows
     from fnirs_pipe.utils.lineage import path_from
 
     errors = errors if errors is not None else []

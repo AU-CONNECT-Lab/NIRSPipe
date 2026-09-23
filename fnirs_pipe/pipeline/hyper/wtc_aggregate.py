@@ -28,6 +28,7 @@ import pandas as pd
 from fnirs_pipe.utils.logging import get_logger
 from fnirs_pipe import __version__
 from fnirs_pipe.io.derivatives import write_sidecar_json
+from fnirs_pipe.io.naming import parse_path, derivative_path
 
 logger = get_logger("pipeline.wtc_aggregate")
 
@@ -58,8 +59,6 @@ def _kind_of(path: Path) -> "tuple | None":
     survive as columns. Everything else is what makes two files the same kind. A file this
     module has no business merging answers None.
     """
-    from fnirs_pipe.io.naming import parse_path
-
     entities = parse_path(path.name)
     if entities.get("suffix") != "relmat" or entities.get("desc") in _NOT_MERGED:
         return None
@@ -71,8 +70,6 @@ def _kind_of(path: Path) -> "tuple | None":
 
 def _merged_path(output_dir: Path, path: Path) -> Path:
     """Where one per-dyad table's merge lands: its own name with group and task taken out."""
-    from fnirs_pipe.io.naming import derivative_path, parse_path
-
     entities = {k: v for k, v in parse_path(path.name).items()
                 if k not in ("group", "task", "suffix", "extension", "datatype")}
     return derivative_path(output_dir, "relmat", ".tsv", **entities)
@@ -237,8 +234,6 @@ def aggregate_wtc(output_dir: Path, sources: "list[Path]") -> pd.DataFrame:
     Returns an empty frame when every input was unreadable or empty, so a study that never
     ran WTC is not an error.
     """
-    from fnirs_pipe.io.naming import parse_path
-
     frames: dict[str, pd.DataFrame] = {}
     params: dict[str, dict] = {}
     for tsv_path in sources:
@@ -277,8 +272,6 @@ def write_aggregate_wtc(output_dir: Path, sources: "list[Path]") -> Path | None:
 
     Returns the path, or None when there was nothing to merge.
     """
-    from fnirs_pipe.io.naming import parse_path
-
     merged = aggregate_wtc(output_dir, sources)
     if merged.empty:
         return None

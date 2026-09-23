@@ -71,6 +71,10 @@ import numpy as np
 from fnirs_pipe.io.derivatives import entity_of
 from fnirs_pipe.utils.logging import get_logger
 from fnirs_pipe import __version__
+from fnirs_pipe.qc.subject.condition_views import (
+    PSD_NFFT_CAP, condition_haemo_scalars, condition_scalars, condition_set_scalars,
+    condition_slices_from_record, span_counts,
+)
 
 logger = get_logger("qc.sqm_record")
 
@@ -649,7 +653,6 @@ def condition_sections(
     screening windows.
     """
     from fnirs_pipe.io.snirf import read_snirf
-    from fnirs_pipe.qc.subject.condition_views import PSD_NFFT_CAP, condition_haemo_scalars
     from fnirs_pipe.qc.common.windows import condition_windows
     from fnirs_pipe.qc.metrics import long_short_channels
     from fnirs_pipe.qc.metrics.windowed import SCREEN_WINDOW_S
@@ -727,9 +730,6 @@ def _condition_entries(
     of ``sections`` rather than measured, so the two writers cannot end up with different
     numbers for one recording.
     """
-    from fnirs_pipe.qc.subject.condition_views import (
-        condition_scalars, condition_set_scalars, condition_slices_from_record, span_counts,
-    )
     from fnirs_pipe.qc.metrics import long_short_channels, screen_channels
     from fnirs_pipe.qc.metrics.screening import CRITERIA
     from fnirs_pipe.qc.metrics.windowed import condition_window_means

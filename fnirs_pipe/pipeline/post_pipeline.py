@@ -31,6 +31,10 @@ from fnirs_pipe.utils.lineage import Recorder, carried_params, lineage_of, stage
 from fnirs_pipe.qc.metrics._helpers import separation_bands
 from fnirs_pipe.utils.logging import get_logger
 from fnirs_pipe import __version__
+from fnirs_pipe.io.derivatives import (
+    write_sidecar_json, build_output_path, carry_entities, data_state,
+)
+from fnirs_pipe.io.snirf import write_snirf
 
 logger = get_logger("post.pipeline")
 
@@ -466,8 +470,6 @@ def run_post(
     return result, glm_est, dm, alff_df, fc_df, fc_hbr_df, fc_seed, fc_roi
 
 def _deriv_sidecar(path: Path, step: str, source: str | None, bads: list[str], **params) -> None:
-    from fnirs_pipe.io.derivatives import write_sidecar_json
-
     write_sidecar_json(path, {
         "pipeline_version": __version__,
         "step": step,
@@ -495,7 +497,6 @@ def _write_fc_derivatives(
     Correlating a task residual is what makes the result connectivity rather than a map of
     who responded to the same stimulus, so the distinction lives in the caller, not here.
     """
-    from fnirs_pipe.io.derivatives import build_output_path, carry_entities
     from fnirs_pipe.pipeline.restingstate import (
         _roi_members, compute_fc, compute_fc_roi, compute_fc_seed, fisher_z,
     )
@@ -612,7 +613,6 @@ def _write_rest_derivatives(
     ALFF/fALFF use the broadband residual (raw_resid_bb); every FC product uses the
     bandpassed one.
     """
-    from fnirs_pipe.io.derivatives import build_output_path, carry_entities
     from fnirs_pipe.pipeline.restingstate import _roi_members, compute_alff, compute_alff_roi
 
     entities = carry_entities(source_entities)
@@ -699,9 +699,6 @@ def _warn_if_replacing_another_analysis(out_path: Path, parameters: dict, subjec
 
 
 def _write_step_snirf(haemo: mne.io.Raw, config: PostConfig, output_dir: Path, desc: str, rec: Recorder, source_entities: dict[str, str] | None = None) -> Path:
-    from fnirs_pipe.io.derivatives import build_output_path, carry_entities, data_state, write_sidecar_json
-    from fnirs_pipe.io.snirf import write_snirf
-
     entities = carry_entities(source_entities)
     entities["desc"] = desc
     lin = lineage_of(haemo)

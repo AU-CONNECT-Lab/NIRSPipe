@@ -29,7 +29,6 @@ import json
 
 import numpy as np
 import pandas as pd
-from scipy import stats
 
 from fnirs_pipe.utils.logging import get_logger
 from fnirs_pipe.io.naming import derivative_path
@@ -281,6 +280,8 @@ def _paired_row(cond, observed: pd.Series, pools: "dict[str, np.ndarray]") -> di
     Fewer than three occasions leaves a t with no spread to estimate, so the row carries the
     lift and no test rather than a number that would be read as one.
     """
+    from scipy import stats
+
     baseline = pd.Series({o: float(p.mean()) for o, p in pools.items()})
     diff = (observed.reindex(baseline.index) - baseline).to_numpy(dtype=float)
     diff = diff[np.isfinite(diff)]

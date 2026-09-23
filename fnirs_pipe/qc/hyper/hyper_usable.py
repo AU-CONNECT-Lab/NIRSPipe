@@ -21,6 +21,7 @@ import pandas as pd
 from fnirs_pipe.qc.metrics.hyper import dyad_status
 from fnirs_pipe.utils.logging import get_logger
 from fnirs_pipe import __version__
+from fnirs_pipe.io.derivatives import write_sidecar_json
 
 logger = get_logger("qc.hyper_usable")
 
@@ -125,8 +126,6 @@ def write_usable_table(path: Path, grid: dict, subject_ids: list[str],
                        conditions: "dict[str, tuple[float, float]] | None",
                        sources: "list[str] | None" = None, **params) -> "Path | None":
     """Write the usable-time table with its sidecar. None when there is nothing to write."""
-    from fnirs_pipe.io.derivatives import write_sidecar_json
-
     table = usable_table(grid, subject_ids, conditions)
     if table.empty:
         return None

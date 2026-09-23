@@ -17,6 +17,7 @@ from fnirs_pipe.pipeline.hyper.wtc import WTCResult, wtc_band_mean
 from fnirs_pipe.utils.logging import get_logger
 from fnirs_pipe import __version__
 from fnirs_pipe.io.derivatives import write_sidecar_json
+from fnirs_pipe.io.naming import derivative_path, parse_path
 
 logger = get_logger("pipeline.wtc_store")
 
@@ -137,8 +138,6 @@ def reband_tree(
     An archive carrying a ``chromo-`` entity gets its ``chromophore`` column back, so the
     re-banded table has the shape ``fnirs-hyper run`` writes.
     """
-    from fnirs_pipe.io.naming import derivative_path, parse_path
-
     tag = suffix or f"{fmin:g}to{fmax:g}".replace(".", "p")
     written: list[Path] = []
     for npz_path in sorted(output_dir.rglob("*_stat-wtc_relmat.npz")):

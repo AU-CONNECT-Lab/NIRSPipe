@@ -119,6 +119,13 @@ from fnirs_pipe.qc.subject.sqm_record import record_path as _sqm_record_path, en
 from fnirs_pipe.qc.subject.trial_qc import score_trials, trial_windows
 from fnirs_pipe.utils.logging import get_logger
 from fnirs_pipe.qc.metrics.windowed import _in_scope, window_centers
+from fnirs_pipe.qc.boilerplate.vocabulary import (
+    format_metric, is_key_metric, metric_class, metric_summary,
+)
+from fnirs_pipe.qc.common.record_views import condition_verdict_view
+from fnirs_pipe.qc.subject.condition_views import (
+    condition_view_table, carpet_view_table, slice_record, with_condition_corr,
+)
 
 if TYPE_CHECKING:
     from fnirs_pipe.pipeline.prep_pipeline import PrepConfig
@@ -440,8 +447,6 @@ def _condition_views(fig, spans: "list[tuple[str, float, float]]") -> "dict | No
     The table is assembled by :func:`~fnirs_pipe.qc.subject.condition_views.condition_view_table`,
     which the raw viewer builds its own fragment views with, so the two cannot fork.
     """
-    from fnirs_pipe.qc.subject.condition_views import condition_view_table
-
     return condition_view_table(fig, spans)
 
 
@@ -545,8 +550,6 @@ def _segments_in_window(segments: dict | None,
 
 def _carpet_views(fig, spans: "list[tuple[str, float, float]]") -> "dict | None":
     """Each condition's window on the carpet, shared with the raw viewer's own carpet."""
-    from fnirs_pipe.qc.subject.condition_views import carpet_view_table
-
     return carpet_view_table(fig, spans)
 
 
@@ -1889,10 +1892,6 @@ def build_subject_report(
         else "badge-red"
     )
 
-    from fnirs_pipe.qc.boilerplate.vocabulary import (
-        format_metric, is_key_metric, metric_class, metric_summary,
-    )
-
     run_label_text = sqm_label or f"sub-{subject}"
     report_vars = dict(
         # the run names the page; that it is a QC report is what the reader opened. A
@@ -2347,11 +2346,6 @@ def _write_condition_reports(
     The channel set is the run's throughout, since one set has to serve every condition. The
     *verdict* is not: each page screens on its own stretch.
     """
-    from fnirs_pipe.qc.subject.condition_views import (
-        slice_record, with_condition_corr,
-    )
-    from fnirs_pipe.qc.common.record_views import condition_verdict_view
-
     if out_dir is None or sqm_label is None:
         logger.warning("sub-%s | no quality record location; no per-condition pages", subject)
         return
