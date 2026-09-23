@@ -116,6 +116,17 @@ def write_aligned_member(raw_aligned: mne.io.Raw, snirf_path, out_dir, group_id:
     """
     snirf_path, out_dir = Path(snirf_path), Path(out_dir)
     stem = bids_stem(snirf_path)
+    sidecar = out_dir / f"{stem}_nirs.json"
+    # the tree holds one copy per recording, so a member two groups share would carry
+    # whichever group was written last, cut at the other group's offset
+    try:
+        earlier = json.loads(sidecar.read_text(encoding="utf-8")).get("align_group")
+    except (OSError, json.JSONDecodeError):
+        earlier = None
+    if earlier is not None and earlier != group_id:
+        raise AlignmentError(
+            f"{stem} is already aligned for group {earlier}, and group {group_id} would "
+            f"overwrite it; align groups that share a member into separate output trees")
     out_dir.mkdir(parents=True, exist_ok=True)
     copy_sidecars(snirf_path, stem, out_dir)
 
@@ -127,8 +138,7 @@ def write_aligned_member(raw_aligned: mne.io.Raw, snirf_path, out_dir, group_id:
     lin = lineage_of(raw_aligned)
     if lin is None or lin.stage != ALIGN_STAGE:
         raise AlignmentError(f"{stem}: carries no alignment stamp, so it was not aligned")
-    sidecar = out_dir / f"{stem}_nirs.json"
-    fields = json.loads(sidecar.read_text(encoding="utf-8")) if sidecar.exists() else {}
+    fields =json.loads(sidecar.read_text(encoding="utf-8")) if sidecar.exists() else {}
     fields.update({
         "align_group": group_id,
         "align_step": lin.step,

@@ -20,6 +20,9 @@ All notable changes to this project will be documented in this file.
 - Raw condition pages dropped every panel redrawn for the condition as a leak
 - The dyad rating server read its task as `unknown`, so channel decisions went to a file the raw page never reads
 - A collapsed provenance box counted no conditions, the `cond-` entity being unknown to its parser
+- On a session tree the Hyper Preparation page read and wrote channel decisions under a path the raw QC page never uses
+- `fnirs-prep align` wrote a member of a two-session tree under the wrong session's name and folder
+- A member two groups share is refused by `fnirs-prep align` instead of being silently re-cut by the second group
 - On a tree both commands wrote, no page linked the raw condition pages; the index's Conditions rows now list them beside the pipeline's
 - `fnirs-pipe group` warned of a split tree whenever a `qc/` or `derivatives/` folder existed, and looked for pre-rename record names
 

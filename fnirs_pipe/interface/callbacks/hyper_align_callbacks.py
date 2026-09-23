@@ -10,7 +10,7 @@ import dash_bootstrap_components as dbc
 from dash import ALL, Input, Output, State, callback, ctx, html, no_update
 
 from fnirs_pipe.interface.callbacks._cli_run import run_and_report
-from fnirs_pipe.io.derivatives import channel_decisions_path
+from fnirs_pipe.io.derivatives import channel_decisions_path, entity_of
 from fnirs_pipe.interface.cli_args import build_raw_qc_args, missing_raw_qc
 from fnirs_pipe.interface.theme import style_figure
 from fnirs_pipe.exceptions import AlignmentError
@@ -83,9 +83,8 @@ def load_and_align(n_clicks, bids_dir, deriv_dir, group_csv):
             _HIDE, no_update, no_update, no_update,
         )
 
-    from fnirs_pipe.pipeline.hyper import (
-        align_recordings, load_group_raw_bids, parse_group_csv,
-    )
+    from fnirs_pipe.io.snirf import read_snirf
+    from fnirs_pipe.pipeline.hyper import align_recordings, member_snirfs, parse_group_csv
 
     try:
         groups = parse_group_csv(Path(group_csv))
@@ -101,12 +100,15 @@ def load_and_align(n_clicks, bids_dir, deriv_dir, group_csv):
 
     for (group_id, task), group in groups.items():
         try:
-            raws = load_group_raw_bids(Path(bids_dir), group)
+            paths = member_snirfs(Path(bids_dir), group)
+            raws = {sid: read_snirf(p, verbose=False) for sid, p in paths.items()}
             aligned_raws, offsets = align_recordings(raws, task)
             all_aligned[(group_id, task)] = {
                 "aligned_raws": aligned_raws,
                 "offsets":      offsets,
                 "subject_ids":  [e.subject_id for e in group],
+                # the file each member was read from, which export and decisions follow
+                "paths":        paths,
             }
         except AlignmentError as exc:
             errors.append(f"Group {group_id}/{task}: {exc}")
@@ -236,13 +238,10 @@ def export_snirfs(n_clicks, bids_dir, deriv_dir, group_csv):
                          className="mb-0 py-2")
 
     from fnirs_pipe.pipeline.hyper import write_aligned_member
-    from fnirs_pipe.utils.snirf_prep import (
-        deriv_nirs_dir, ensure_dataset_description, find_snirf,
-    )
+    from fnirs_pipe.utils.snirf_prep import deriv_nirs_dir, ensure_dataset_description
 
     _DERIV_NAME = "aligned"
     deriv_path  = Path(deriv_dir)
-    bids_path   = Path(bids_dir)
     written: list[str] = []
     errors:  list[str] = []
 
@@ -251,12 +250,12 @@ def export_snirfs(n_clicks, bids_dir, deriv_dir, group_csv):
             deriv_path / _DERIV_NAME, _DERIV_NAME, "fnirs-gui hyper-align"
         )
         for sid in info["subject_ids"]:
-            sub_label = sid.removeprefix("sub-")
+            path = info["paths"][sid]
+            out_dir = deriv_nirs_dir(deriv_path, _DERIV_NAME, sid.removeprefix("sub-"),
+                                     entity_of(path, "ses"))
             try:
-                snirf_path = find_snirf(bids_path, sub_label, None, task, None)
-                out_snirf = write_aligned_member(
-                    info["aligned_raws"][sid], snirf_path,
-                    deriv_nirs_dir(deriv_path, _DERIV_NAME, sub_label, None), group_id)
+                out_snirf = write_aligned_member(info["aligned_raws"][sid], path,
+                                                 out_dir, group_id)
                 written.append(out_snirf.name)
             except Exception as exc:
                 errors.append(f"{sid}: {exc}")
@@ -290,16 +289,17 @@ def _ha_cd_btn(sid: str, pair: str, state: str) -> dbc.Button:
     )
 
 
-def _ha_decisions_path(deriv_dir: str, sid: str, task: str) -> Path:
-    # no session: this page holds none, so a two-session tree reads a path the raw QC
-    # page never wrote. See channel_decisions_path
-    return channel_decisions_path(Path(deriv_dir), sid, task=task)
+def _ha_decisions_path(deriv_dir: str, sid: str, task: str, source: Path) -> Path:
+    # the session of the file this member was read from, which is the one the raw QC
+    # page files its decisions under
+    return channel_decisions_path(Path(deriv_dir), sid, task=task,
+                                  session=entity_of(source, "ses"))
 
 
-def _read_ha_decisions(deriv_dir: str, subject_ids: list, task: str) -> dict:
+def _read_ha_decisions(deriv_dir: str, subject_ids: list, task: str, paths: dict) -> dict:
     decisions: dict = {}
     for sid in subject_ids:
-        path = _ha_decisions_path(deriv_dir, sid, task)
+        path = _ha_decisions_path(deriv_dir, sid, task, paths[sid])
         if path.exists():
             try:
                 data = json.loads(path.read_text(encoding="utf-8"))
@@ -311,9 +311,9 @@ def _read_ha_decisions(deriv_dir: str, subject_ids: list, task: str) -> dict:
     return decisions
 
 
-def _write_ha_decisions(deriv_dir: str, task: str, decisions: dict) -> None:
+def _write_ha_decisions(deriv_dir: str, task: str, decisions: dict, paths: dict) -> None:
     for sid, ch_map in decisions.items():
-        path = _ha_decisions_path(deriv_dir, sid, task)
+        path = _ha_decisions_path(deriv_dir, sid, task, paths[sid])
         existing: dict = {}
         if path.exists():
             try:
@@ -449,7 +449,7 @@ def load_ha_decisions(group_val, bids_dir, group_csv, deriv_dir, cardiac_l, card
     ch_pairs   = _ha_ch_pairs_from_haemo(aligned_raws, subject_ids)
     sci_by_sid = _compute_sci_from_cw(aligned_raws, subject_ids, cardiac_l, cardiac_h)
     decisions  = (
-        _read_ha_decisions(deriv_dir, subject_ids, task)
+        _read_ha_decisions(deriv_dir, subject_ids, task, info["paths"])
         if deriv_dir else {s: {} for s in subject_ids}
     )
 
@@ -502,7 +502,7 @@ def click_ha_cd(n_clicks_list, group_val, bids_dir, group_csv, deriv_dir, cardia
     subject_ids  = info["subject_ids"]
     aligned_raws = info["aligned_raws"]
 
-    decisions  = _read_ha_decisions(deriv_dir, subject_ids, task)
+    decisions  = _read_ha_decisions(deriv_dir, subject_ids, task, info["paths"])
     state_key  = f"{pair} hbo"
     cur_state  = decisions.get(sid, {}).get(state_key, "unrated")
     if cur_state not in _HA_CD_STATES:
@@ -510,7 +510,7 @@ def click_ha_cd(n_clicks_list, group_val, bids_dir, group_csv, deriv_dir, cardia
     next_state = _HA_CD_STATES[(_HA_CD_STATES.index(cur_state) + 1) % len(_HA_CD_STATES)]
 
     decisions.setdefault(sid, {})[state_key] = next_state
-    _write_ha_decisions(deriv_dir, task, decisions)
+    _write_ha_decisions(deriv_dir, task, decisions, info["paths"])
 
     ch_pairs   = _ha_ch_pairs_from_haemo(aligned_raws, subject_ids)
     sci_by_sid = _compute_sci_from_cw(aligned_raws, subject_ids, cardiac_l, cardiac_h)

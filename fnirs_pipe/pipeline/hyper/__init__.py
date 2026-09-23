@@ -32,6 +32,7 @@ from fnirs_pipe.pipeline.hyper.group_io import (  # noqa: F401  re-exported
     load_group_haemo,
     load_group_raw_bids,
     load_group_stage,
+    member_snirfs,
     parse_group_csv,
     unfiltered_stage_note,
     warn_outside_passband,

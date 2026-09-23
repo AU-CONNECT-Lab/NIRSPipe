@@ -96,20 +96,32 @@ def load_group_raw_bids(bids_dir: Path, group: list[GroupEntry]) -> dict[str, mn
     Returns {subject_id: raw_intensity}.
     Raises MissingDerivativesError if no SNIRF is found for any member.
     """
+    return {sid: read_snirf(path, verbose=False)
+            for sid, path in member_snirfs(bids_dir, group).items()}
+
+
+def member_snirfs(bids_dir: Path, group: list[GroupEntry],
+                  validate: bool = False) -> dict[str, Path]:
+    """The one raw SNIRF each member's CSV row names, ``{subject_id: path}``.
+
+    One lookup for everything that follows a member's recording: loading it, writing its
+    aligned copy under the same stem, and naming the session its channel decisions sit in.
+    They used to look it up separately, and the writers passed no session, so on a
+    two-session tree the aligned copy could take its name and sidecars from the other one.
+    """
     from fnirs_pipe.io.bids import get_layout, get_nirs_files
 
-    layout = get_layout(bids_dir, validate=False)
-    result: dict[str, mne.io.Raw] = {}
+    layout = get_layout(bids_dir, validate=validate)
+    out: dict[str, Path] = {}
     for entry in group:
         sub_label = entry.subject_id.removeprefix("sub-")
         files = get_nirs_files(layout, subject=sub_label, session=entry.session,
                                task=entry.task)
-        path = select_one_run(
+        out[entry.subject_id] = Path(select_one_run(
             sorted(files), what="raw SNIRF in BIDS", subject_id=entry.subject_id,
             task=entry.task, session=entry.session, run=entry.run,
-        )
-        result[entry.subject_id] = read_snirf(path, verbose=False)
-    return result
+        ))
+    return out
 
 
 def load_group_haemo(

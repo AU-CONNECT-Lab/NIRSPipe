@@ -102,11 +102,13 @@ def cmd_align(
 ) -> None:
     """Align multi-subject recordings by shared trigger and write SNIRF files."""
     from fnirs_pipe.exceptions import AlignmentError
+    from fnirs_pipe.io.derivatives import entity_of
+    from fnirs_pipe.io.snirf import read_snirf
     from fnirs_pipe.pipeline.hyper import (
-        align_recordings, load_group_raw_bids, parse_group_csv, write_aligned_member,
+        align_recordings, member_snirfs, parse_group_csv, write_aligned_member,
     )
     from fnirs_pipe.utils.snirf_prep import (
-        deriv_nirs_dir, copy_dataset_root, ensure_dataset_description, find_snirf,
+        deriv_nirs_dir, copy_dataset_root, ensure_dataset_description,
     )
 
     _DERIV_NAME = "aligned"
@@ -122,7 +124,8 @@ def cmd_align(
         print(f"Group {group_id} task-{task} ({len(group)} subjects)")
 
         try:
-            raws = load_group_raw_bids(bids_dir, group)
+            paths = member_snirfs(bids_dir, group, validate=not skip_bids_validation)
+            raws = {sid: read_snirf(p, verbose=False) for sid, p in paths.items()}
         except Exception as exc:
             print(f"  [error] loading: {exc}", file=sys.stderr)
             n_fail += 1
@@ -141,20 +144,17 @@ def cmd_align(
         copy_dataset_root(bids_dir, output_dir / _DERIV_NAME)
 
         for entry in group:
-            sub_label = entry.subject_id.removeprefix("sub-")
+            path = paths[entry.subject_id]
+            out_dir = deriv_nirs_dir(output_dir, _DERIV_NAME,
+                                     entry.subject_id.removeprefix("sub-"),
+                                     entity_of(path, "ses"))
             try:
-                snirf_path = find_snirf(
-                    bids_dir, sub_label, None, task, None,
-                    validate=not skip_bids_validation,
-                )
-            except Exception as exc:
+                out_snirf = write_aligned_member(aligned_raws[entry.subject_id], path,
+                                                 out_dir, group_id)
+            except AlignmentError as exc:
                 print(f"  {entry.subject_id}: [error] {exc}", file=sys.stderr)
                 n_fail += 1
                 continue
-
-            out_snirf = write_aligned_member(
-                aligned_raws[entry.subject_id], snirf_path,
-                deriv_nirs_dir(output_dir, _DERIV_NAME, sub_label, None), group_id)
             print(f"  {entry.subject_id}: offset={offsets[entry.subject_id]:.3f}s -> {out_snirf.name}")
 
     if n_fail:
