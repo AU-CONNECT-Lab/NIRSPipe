@@ -68,7 +68,9 @@ def test_the_raw_qc_report_lands_in_the_subject_folder(tmp_path):
     """It used to sit loose in the root, one file per run beside the study's own."""
     from fnirs_pipe.qc.subject.prep_raw_report import build_prep_raw_report
 
-    out = subject_report_dir(tmp_path, "01") / "sub-01_task-hold_desc-raw_nirs.html"
+    from fnirs_pipe.io.naming import report_name
+
+    out = subject_report_dir(tmp_path, "01") / report_name("sub-01_task-hold", desc="raw")
     build_prep_raw_report([], out, cardiac_l_freq=0.7, cardiac_h_freq=1.5, dpf=[6.0])
 
     assert out.exists()

@@ -216,7 +216,7 @@ tr.cond-whole td { background: #f4f6f8; font-weight: 600; }
 <p class="subtitle" style="margin-top:0.6rem;">
   {{ channels.n_clean }} of {{ channels.n_pairs }} source-detector pairs survived every run.
   Both wavelengths of a pair are collapsed into one row: rejecting either rejects the optode.
-  Read from each run's <code>_channel_metrics.csv</code>; this is the set
+  Read from each run's <code>_desc-channel_qc.tsv</code>; this is the set
   <code>--bads-scope subject</code> takes the union of.
   {% if channels.clean %}
   <br /><span class="muted">Kept everywhere: {{ channels.clean | join(', ') }}</span>

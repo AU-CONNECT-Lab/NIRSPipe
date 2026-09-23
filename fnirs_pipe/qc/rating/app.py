@@ -1,5 +1,4 @@
 import json
-import re
 import threading
 import time
 import webbrowser
@@ -329,11 +328,10 @@ class HyperRatingApp:
         self.output_dir    = output_dir
         self.subject_ids   = list(subject_ids)
         self.sci_threshold = sci_threshold
-        stem = html_path.stem  # "group-A[_ses-01]_task-tapping_desc-hyperraw_nirs"
-        m = re.match(r"group-([^_]+)(?:_ses-([^_]+))?_task-(.+?)_desc-hyperraw_nirs$", stem)
-        self.group_id  = m.group(1) if m else "unknown"
-        self.session   = m.group(2) if m else None
-        self.task      = m.group(3) if m else "unknown"
+        stem = html_path.stem  # "group-A[_ses-01]_task-tapping_desc-raw_report"
+        self.group_id  = entity_of(stem, "group") or "unknown"
+        self.session   = entity_of(stem, "ses")
+        self.task      = entity_of(stem, "task") or "unknown"
         self.ratings_path = self._ratings_path(stem)
         self.app = Flask(__name__)
         self._setup_routes()

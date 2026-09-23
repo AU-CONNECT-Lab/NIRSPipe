@@ -28,7 +28,6 @@ from fnirs_pipe.qc.boilerplate import collect_software_versions
 from fnirs_pipe.qc.common.report_shell import (
     OUTLIER_Z, footer_vars, guard, outlier_flags, page_vars, render)
 from fnirs_pipe.qc.common.figure_io import figure_namer
-from fnirs_pipe.qc.subject.condition_views import condition_stems
 from fnirs_pipe.io.naming import report_name
 from fnirs_pipe.qc.common.channel_table import CHANNEL_METRICS_SUFFIX
 from fnirs_pipe.qc.subject.sqm_record import (
@@ -198,17 +197,16 @@ def _records(nirs_dir: Path) -> list[tuple[str, dict]]:
 def _condition_hrefs(sub_dir: Path, label: str, names: list[str]) -> list[str | None]:
     """Each condition's own page under sub_dir, or None where no command wrote one.
 
-    The two writers name these differently and both spellings are looked for: `fnirs-pipe`
-    puts the condition in the ``cond-`` entity, `prep-raw` in the ``task-`` one, the rule
-    ``fnirs-prep crop`` set for a segment. Names come from the record rather than from a
-    glob, so a task that happens to share a condition's name cannot contribute a row.
+    Both writers' pages are looked for, `fnirs-pipe`'s first; the raw viewer's differ only
+    by ``desc-raw``. Names come from the record rather than from a glob, so a task that
+    happens to share a condition's name cannot contribute a row.
     """
     from fnirs_pipe.qc.subject.report import condition_page_name
 
-    raw_stems = condition_stems(f"{label}_desc-raw_nirs", names)
     out: list[str | None] = []
-    for name, raw_stem in zip(names, raw_stems):
-        candidates = (condition_page_name(label, name), f"{raw_stem}.html")
+    for name in names:
+        candidates = (condition_page_name(label, name),
+                      condition_page_name(label, name, desc="raw"))
         out.append(next((c for c in candidates if (sub_dir / c).exists()), None))
     return out
 
@@ -450,7 +448,7 @@ def write_subject_index(
     run_command: str,
     mode: str | None = None,
 ) -> Path | None:
-    """Render sub-<subject>_qc.html as the index over the subject's per-run reports."""
+    """Render sub-<subject>_desc-index_report.html as the index over the subject's per-run reports."""
     rows = collect_runs(sub_dir)
     if not rows:
         logger.warning("sub-%s | no SQM records found, index not written", subject)

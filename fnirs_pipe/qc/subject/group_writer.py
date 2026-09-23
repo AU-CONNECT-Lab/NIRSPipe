@@ -416,7 +416,7 @@ def rows_to_dataframe(full_rows: list[dict]) -> pd.DataFrame:
 
 
 def build_group_raw_report(output_dir: Path) -> Path:
-    """Aggregate all sub-XX/nirs/...desc-sqm_nirs.json into cohort_nirs.{tsv,html}."""
+    """Aggregate all sub-XX/nirs/...desc-sqm_qc.json into desc-subjects_{qc.tsv,report.html}."""
     return _build_group(
         output_dir, entity_glob="sub-*",
         out_desc="subjects",

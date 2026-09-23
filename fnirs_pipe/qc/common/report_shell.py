@@ -195,7 +195,7 @@ def nav_bar(
     ::
 
       nav_bar([("Motion", "Motion"), ("GLM", "GLM")], key="__sub-01_task-chat",
-              index="sub-01_qc.html")
+              index="sub-01_desc-index_report.html")
       -> Summary | Motion  GLM | Provenance  Methods | <- All runs
 
     A section is ``(id, name)``, anchored at ``#id``, or ``(id, name, href)`` where the

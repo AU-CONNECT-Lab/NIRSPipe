@@ -1278,11 +1278,8 @@ def build_hyper_post_report(
         for chs in bad_channels.values():
             bad_pairs_all |= {c.rsplit(" ", 1)[0] for c in chs}
 
-    # desc-hyperpost, matching the raw report's desc-hyperraw: the two are one pair of
-    # pages and were named by two conventions, one BIDS-shaped and one not.
-    #
-    # A condition keeps the run's task- entity and takes a desc- of its own,
-    # `..._task-full_desc-baseline_hyperpost_nirs.html`, which is the rule the subject
+    # A condition keeps the run's task- entity and takes a cond- of its own,
+    # `..._task-full_cond-baseline_report.html`, which is the rule the subject
     # report follows. Putting the label in `task-` instead would name a condition page the
     # same as the run page of a tree where that condition was cropped to its own task, and
     # the two are not the same number: one carries the whole recording's cone of influence

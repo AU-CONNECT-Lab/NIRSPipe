@@ -205,7 +205,7 @@ def _headline_rows(flats: list[dict]) -> list[dict]:
 
 
 def build_group_hyper_report(output_dir: Path) -> "Path | None":
-    """Render ``cohort_hyper_nirs.html`` over every dyad in a derivatives tree.
+    """Render ``desc-groups_report.html`` over every dyad in a derivatives tree.
 
     Returns the path, or None when the tree holds no dyad record, which is what a tree that
     has only seen the per-subject pipeline looks like.
@@ -233,7 +233,9 @@ def build_group_hyper_report(output_dir: Path) -> "Path | None":
             fig = builder(rows, order)
             if fig is None:
                 continue
-            fname = f"cohort_hyper_{name}.html"
+            # the subjects' cohort page draws into this same folder, so these take a prefix
+            fname = derivative_path("", "nirs", ".html", datatype="figures",
+                                    desc="groups" + name.replace("_", "")).name
             figure_paths[name] = {"src": f"figures/{fname}",
                                   "h": _save_figure_html(fig, fig_dir / fname)}
 

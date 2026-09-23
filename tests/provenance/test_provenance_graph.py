@@ -63,13 +63,36 @@ def test_empty_directory_yields_no_nodes(tmp_path):
 
 @pytest.mark.parametrize("key, expected", [
     ("sub-01_task-tapping_desc-preproc_nirs", "preproc"),   # generic suffix, desc wins
-    ("sub-01_task-tapping_desc-hbo_fc", "fc (hbo)"),        # both informative
-    ("sub-01_task-tapping_alff", "alff"),                   # no desc
+    ("sub-01_task-tapping_chromo-hbo_seg-custom_agg-roi_stat-fisherz_relmat",
+     "relmat fisherz hbo custom roi"),                      # the measure, then the slices
+    ("sub-01_task-tapping_stat-alff_nirsmap", "nirsmap alff"),
+    ("sub-01_task-tapping_desc-glm_nirsmap", "nirsmap glm"),
+    ("group-G1_task-rest_chromo-hbo_cond-game1_stat-isc_relmat", "relmat isc hbo (game1)"),
+    ("sub-01_task-tapping_design", "design"),               # nothing past who it belongs to
     ("design_matrix", "design_matrix"),                     # no BIDS entities at all
 ])
 def test_label_shortens_the_filename(tmp_path, key, expected):
     _sidecar(tmp_path, key, step="a_step")
     assert scan(tmp_path)[key].label == expected
+
+
+def test_a_collapsed_box_counts_the_conditions_it_holds(tmp_path):
+    """Two chromophores times the whole run and two conditions, drawn as one box.
+
+    The condition count reads the `cond-` entity, which the entity pattern here did not
+    know, so every member counted as the whole run and the box said no condition at all.
+    """
+    from fnirs_pipe.qc.common.provenance import simplify
+
+    root = ["/bids/group-G1_task-rest_desc-errts_nirs.snirf"]
+    for chromo in ("hbo", "hbr"):
+        for cond in ("", "_cond-game1", "_cond-video"):
+            _sidecar(tmp_path, f"group-G1_task-rest_chromo-{chromo}{cond}_stat-isc_relmat",
+                     step="isc", sources=root)
+
+    (box,) = [n for n in simplify(scan(tmp_path)).values() if n.step == "isc"]
+    assert box.label == "relmat isc"
+    assert box.state == "hbo, hbr  ·  whole run + 2 conditions"
 
 
 # ---- domains ----

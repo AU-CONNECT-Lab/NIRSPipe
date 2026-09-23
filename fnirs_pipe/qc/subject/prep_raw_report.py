@@ -762,12 +762,11 @@ def _write_condition_views(ctx: dict, payload: dict, output_path: Path, run_labe
     copy of the numbers free to disagree with the first.
 
     Each page is the same viewer with a single entry, so nothing about how these are read has
-    to be learned twice. The file name comes from :func:`condition_stems`, which follows the
-    rule ``fnirs-prep crop`` set for a segment: the condition becomes the ``task-`` entity.
+    to be learned twice. The file name comes from :func:`condition_page_name`, keyed by the
+    run's own label and not the report's, since one report holds every run of a task.
     """
-    from fnirs_pipe.qc.subject.condition_views import (
-        condition_payloads, condition_stem, condition_stems,
-    )
+    from fnirs_pipe.qc.subject.condition_views import condition_payloads
+    from fnirs_pipe.qc.subject.report import condition_page_name
 
     sqm_path = ctx.get("sqm_path")
     if sqm_path is None or not Path(sqm_path).exists():
@@ -807,19 +806,27 @@ def _write_condition_views(ctx: dict, payload: dict, output_path: Path, run_labe
     )
     if not views:
         return
-    stems = condition_stems(output_path.stem, [label for label, _ in views])
-    for i, ((label, view), stem) in enumerate(zip(views, stems), start=1):
-        view_label = condition_stem(run_label, label, i)
+    written: set[str] = set()
+    for label, view in views:
+        slug = _pair_fname(label)
+        # the slug also names this condition's figures and URL fragments, so a page of its
+        # own could only show another condition's files under this one's numbers
+        if not slug or slug in written:
+            logger.warning("%s | condition %r reduces to the slug %r, empty or taken by an "
+                           "earlier one; no page for it", run_label, label, slug)
+            continue
+        written.add(slug)
+        out = output_path.with_name(condition_page_name(run_label, label, desc="raw"))
+        view_label = f"{run_label}_cond-{slug}"
         html = render(
             "raw_viewer.html",
             run_labels_json=json.dumps([view_label]),
             run_labels=[view_label],
-            stem=stem,
+            stem=out.stem,
             data_json=json.dumps([view]),
             **ctx["shell"],
             **_CH_COLUMN_VARS,
         )
-        out = output_path.with_name(f"{stem}.html")
         out.write_text(html, encoding="utf-8")
         logger.info("condition %s \u2192 %s", label, out.name)
 
@@ -884,7 +891,7 @@ def build_prep_raw_report(
     """Generate raw QC report: lightweight HTML + per-run folders with figure HTMLs + SQM JSON.
 
     ``by_condition`` writes one extra report per annotated condition beside the run's own,
-    named the way ``fnirs-prep crop`` names a segment. They are separate files rather than a
+    carrying the condition in its ``cond-`` entity. They are separate files rather than a
     switch inside this one because this report is already long, and their numbers are sliced
     out of the run's windowed pass rather than measured on a cut of it. See
     :mod:`fnirs_pipe.qc.subject.condition_views`.

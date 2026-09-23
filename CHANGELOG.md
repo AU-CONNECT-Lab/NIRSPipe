@@ -6,6 +6,18 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+- **Breaking**: the raw viewer's condition pages are `cond-<label>_desc-raw_report.html` under the run's own label; they swapped the condition into `task-`
+- **Breaking**: the dyad cohort page's figures are `desc-groups<panel>_nirs.html`, not `cohort_hyper_<panel>.html`
+- Provenance node labels read every entity, so a table's label names its measure and slices instead of repeating the filename
+
+### Fixed
+- The subject index linked no raw condition page, looking for the pre-rename `desc-raw_nirs` spelling
+- Two runs in one raw report wrote their condition pages to one file
+- Raw condition pages dropped every panel redrawn for the condition as a leak
+- The dyad rating server read its task as `unknown`, so channel decisions went to a file the raw page never reads
+- A collapsed provenance box counted no conditions, the `cond-` entity being unknown to its parser
+
 ## [0.47.0] - 2026-09-23
 
 BIDS App alignment and the output naming rework: every derivative name now comes from one config.

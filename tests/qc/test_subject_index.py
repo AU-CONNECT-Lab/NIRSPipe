@@ -154,3 +154,53 @@ def test_a_condition_page_is_found_where_the_report_writes_it(tmp_path):
     page.write_text("")
 
     assert _condition_hrefs(tmp_path, label, ["game 1", "video"]) == [page.name, None]
+
+
+def _write_raw_condition_pages(monkeypatch, sub_dir, run_label, report_stem, conditions):
+    """Drive the raw viewer's page writer with the payloads stubbed, which is all it names."""
+    from fnirs_pipe.qc.subject import condition_views, prep_raw_report as prr
+
+    record = sub_dir / f"{run_label}_record.json"
+    record.write_text(json.dumps({"by_condition": {c: {} for c in conditions}}))
+    monkeypatch.setattr(condition_views, "condition_payloads",
+                        lambda payload, **kw: [(c, {}) for c in conditions])
+    out = sub_dir / report_name(report_stem, desc="raw")
+    ctx = {"sqm_path": record, "fig_dir": sub_dir / "figures", "sci_scores": {},
+           "bad_channels": set(), "channel_pairs": [], "series": {}, "cutoffs": {},
+           "shell": prr._shell_vars([], out, sub_dir, 0.8)}
+    prr._write_condition_views(ctx, {}, out, run_label, 0.8)
+
+
+def test_a_raw_condition_page_is_found_where_prep_raw_writes_it(tmp_path, monkeypatch):
+    """The raw viewer's writer and this reader, end to end.
+
+    The writer took its name from the report's stem, `..._desc-raw_report` since the rename,
+    while this reader still asked for `..._desc-raw_nirs`, so every raw condition link on
+    the index was dead.
+    """
+    label = _run(tmp_path, "rest")
+    _write_raw_condition_pages(monkeypatch, tmp_path, label, label, ["game 1", "video"])
+
+    hrefs = _condition_hrefs(tmp_path, label, ["game 1", "video"])
+    assert all(href and (tmp_path / href).exists() for href in hrefs)
+
+
+def test_two_runs_in_one_raw_report_get_pages_of_their_own(tmp_path, monkeypatch):
+    # one raw report holds every run of a task, so a page named off the report's stem
+    # would leave the second run's condition written over the first's
+    for run in ("01", "02"):
+        _write_raw_condition_pages(monkeypatch, tmp_path, f"sub-01_task-rest_run-{run}",
+                                   "sub-01_task-rest", ["game1"])
+
+    pages = sorted(p.name for p in tmp_path.glob("*_cond-game1_desc-raw_report.html"))
+    assert pages == ["sub-01_task-rest_run-01_cond-game1_desc-raw_report.html",
+                     "sub-01_task-rest_run-02_cond-game1_desc-raw_report.html"]
+
+
+def test_a_label_that_repeats_once_reduced_gets_no_second_page(tmp_path, monkeypatch):
+    # its figures and URL fragments carry the same slug, so a page of its own would show
+    # the first condition's files under the second one's numbers
+    _write_raw_condition_pages(monkeypatch, tmp_path, "sub-01_task-rest", "sub-01_task-rest",
+                               ["game-1", "game 1"])
+
+    assert len(list(tmp_path.glob("*_cond-*_report.html"))) == 1

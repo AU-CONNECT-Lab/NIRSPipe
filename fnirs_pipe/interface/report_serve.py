@@ -1,7 +1,7 @@
 """Serving generated QC reports back into the GUI as an inline preview.
 
 An `html.Iframe(srcDoc=...)` would be enough for the reports the QC writer makes
-self-contained, and wrong for the cohort ones: `cohort_nirs.html` is an iframe shell whose
+self-contained, and wrong for the cohort ones: `desc-subjects_report.html` is an iframe shell whose
 panels are sibling files, and a `srcdoc` document has no base URL for a relative `src` to
 resolve against, so every panel inside it would come up blank.
 

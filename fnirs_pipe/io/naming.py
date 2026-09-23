@@ -171,9 +171,6 @@ def rating_path(output_dir, report_stem: str):
         output_dir, "qc", ".json",
         **_label_entities(report_stem),
         pairing=entities.get("pairing"), condition=entities.get("condition"),
-        # an unlabelled segment of a run is `seg-NN` on the page and has to stay apart from
-        # the run's own rating file, which it would otherwise be written over
-        segmentation=entities.get("segmentation"),
         desc="rawrating" if entities.get("desc") == "raw" else "rating")
     # the rating servers write straight to this path, so the folder has to be there
     path.parent.mkdir(parents=True, exist_ok=True)

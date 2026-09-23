@@ -238,7 +238,7 @@ def cmd_hyper_raw(
 
 
 def cmd_group_raw(output_dir: Path) -> None:
-    """Aggregate per-subject SQMs into cohort_nirs.tsv + cohort_nirs.html."""
+    """Aggregate per-subject SQMs into desc-subjects_qc.tsv + desc-subjects_report.html."""
     from fnirs_pipe.qc.subject.group_writer import build_group_raw_report
 
     path = build_group_raw_report(output_dir)
@@ -246,7 +246,7 @@ def cmd_group_raw(output_dir: Path) -> None:
 
 
 def cmd_group_hyper_raw(output_dir: Path) -> None:
-    """Aggregate per-group hyper SQMs into cohort_hyper_nirs.tsv + cohort_hyper_nirs.html."""
+    """Aggregate per-group hyper SQMs into desc-groups_qc.tsv + desc-groups_report.html."""
     from fnirs_pipe.qc.hyper.group_hyper_writer import build_group_hyper_report
 
     path = build_group_hyper_report(output_dir)

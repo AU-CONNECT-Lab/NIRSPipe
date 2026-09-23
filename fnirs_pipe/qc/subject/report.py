@@ -2205,15 +2205,19 @@ def _cropped_sections(
     return out
 
 
-def condition_page_name(run_label: str, condition: str) -> str:
+def condition_page_name(run_label: str, condition: str, desc: "str | None" = None) -> str:
     """One condition's page of a run's report, from the condition's own label.
 
     ``("sub-01_task-rest", "game 1")`` -> ``"sub-01_task-rest_cond-game1_report.html"``
+    ``("sub-01_task-rest", "game 1", desc="raw")``
+        -> ``"sub-01_task-rest_cond-game1_desc-raw_report.html"``
 
     Module level and not inside the writer, because the subject index looks these up on
-    disk: the two ends came apart once already and every per-condition link went dead.
+    disk: the two ends came apart once already and every per-condition link went dead. The
+    raw viewer's pages take ``desc="raw"``, as its run page does, and the same slug its
+    figures and URL fragments carry.
     """
-    return report_name(run_label, condition=_pair_fname(condition))
+    return report_name(run_label, condition=_pair_fname(condition), desc=desc)
 
 
 def _condition_timeline(report_vars: dict) -> dict:

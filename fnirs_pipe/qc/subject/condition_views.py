@@ -15,10 +15,9 @@ verdict, and the run's own page carries it, one click away through the run index
 
 from __future__ import annotations
 
-import re
-
 import numpy as np
 
+from fnirs_pipe.io.naming import parse_path
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("qc.condition_views")
@@ -37,7 +36,9 @@ UNSLICEABLE = ("cp_per_channel", "temporal_derivative_variance",
                # stored, so there is nothing on disk to count over one condition's window
                "spike_pct_per_channel",
                # both vary over the recording and neither has a windowed series stored
-               "mean_amp_per_channel", "motion_corrected_frac_per_channel")
+               "mean_amp_per_channel", "motion_corrected_frac_per_channel",
+               # every condition's share side by side; a page slices its own from the series
+               "good_frac_by_condition_per_channel")
 
 # Keys that describe the montage rather than the recording, so the run's value is also the
 # condition's. Named rather than left out of both lists above, which is the same silence a
@@ -83,52 +84,6 @@ def span_share(spans, t0: float, t1: float) -> "float | None":
     for onset, duration in spans or []:
         covered += max(0.0, min(t1, float(onset) + float(duration)) - max(t0, float(onset)))
     return covered / (t1 - t0)
-
-
-def condition_stem(stem: str, label: str | None, index: int) -> str:
-    """A per-condition file's stem, by the rule ``fnirs-prep crop`` already uses.
-
-    ::
-
-      condition_stem("sub-01_task-full_desc-raw_report", "game1", 1)
-      -> "sub-01_task-game1_desc-raw_report"
-      condition_stem("sub-01_task-full_desc-raw_report", None, 3)
-      -> "sub-01_task-full_desc-raw_report_seg-03"
-
-    A labelled segment takes the label as its ``task-`` entity and an unlabelled one appends
-    ``seg-NN``, which is what :func:`fnirs_pipe.pipeline.crop.crop_recording` does and for
-    the reason recorded there: the segments become separate tasks of a valid dataset rather
-    than one task nothing can tell apart.
-
-    Unlike crop, the label here comes from an annotation rather than from a table the user
-    wrote, so it is reduced to the alphanumerics a BIDS entity allows. ``condition_windows``
-    numbers a repeated description ``desc#1``, ``desc#2``, and a ``#`` cannot go in a
-    filename.
-    """
-    safe = re.sub(r"[^a-zA-Z0-9]", "", label or "")
-    if not safe:
-        return f"{stem}_seg-{index:02d}"
-    return re.sub(r"task-[^_]+", f"task-{safe}", stem)
-
-
-def condition_stems(stem: str, labels: "list[str]") -> "list[str]":
-    """:func:`condition_stem` over a run's labels, with collisions broken by index.
-
-    Stripping the non-alphanumerics can map two labels onto one stem ("game-1" and
-    "game 1"), which would leave two views writing to one file and the second silently
-    winning. A collision keeps the first and suffixes the rest.
-    """
-    out: list[str] = []
-    seen: set[str] = set()
-    for i, label in enumerate(labels, start=1):
-        cand = condition_stem(stem, label, i)
-        if cand in seen:
-            logger.warning("condition %r collides with an earlier label on %s; "
-                           "suffixing it", label, cand)
-            cand = f"{cand}_seg-{i:02d}"
-        seen.add(cand)
-        out.append(cand)
-    return out
 
 
 def slice_record(record_view: dict, sliced: "dict[str, dict[str, float]]") -> dict:
@@ -514,10 +469,10 @@ def figure_leaks(figure_paths: dict, slug: str) -> "list[str]":
 
     ::
 
-      {"psd": {"src": "figures/sub-01_desc-psd_nirs.html"}}, "video"  ->  ["psd"]
+      {"psd": {"src": "figures/sub-01_desc-rawpsd_nirs.html"}}, "video"  ->  ["psd"]
 
     A figure reaches a condition page one of three ways, and each leaves a mark: rewritten
-    for the condition (``…_<slug>_nirs.html``), addressed at the condition's window
+    for the condition (its ``cond-`` entity is the slug), addressed at the condition's window
     (``…#<slug>``), or kept whole on purpose (:data:`CONDITION_PAGE_FIGURES`). Anything else
     is the run's figure sitting under this condition's numbers with nothing to say so, which
     is what happened to every panel here before the pages read the record.
@@ -535,7 +490,7 @@ def figure_leaks(figure_paths: dict, slug: str) -> "list[str]":
         name, _, fragment = src.rsplit("/", 1)[-1].partition("#")
         if fragment == slug:
             continue
-        if name.rsplit(".", 1)[0].endswith(f"_{slug}_nirs"):
+        if parse_path(name).get("condition") == slug:
             continue
         leaks.append(key)
     return leaks

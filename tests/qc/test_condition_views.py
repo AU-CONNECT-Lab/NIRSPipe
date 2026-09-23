@@ -1,61 +1,48 @@
 """Per-condition QC views: what they are named, and what they refuse to carry over.
 
-The naming follows `fnirs-prep crop`, which already made this call: a labelled segment takes
-the label as its task- entity, an unlabelled one gets seg-NN. Two things differ from crop and
-both are pinned here. The labels come from annotations rather than from a table someone
-wrote, so they can hold characters a filename cannot and can collide once reduced; and a
-view that cannot honestly fill a column drops it rather than printing a whole-run number
-beside per-condition ones.
+A view that cannot honestly fill a column drops it rather than printing a whole-run number
+beside per-condition ones, and a figure reaches a condition page only if its own name says
+it is that condition's.
 """
 
 import numpy as np
 import plotly.graph_objects as go
 import pytest
 
+from fnirs_pipe.qc.common.figure_io import figure_namer
 from fnirs_pipe.qc.subject.condition_views import (
-    UNSLICEABLE, condition_stem, condition_stems, rescale_y_to_window, slice_record,
+    UNSLICEABLE, figure_leaks, rescale_y_to_window, slice_record,
     carpet_window_spec, window_view_spec, zoom_to_condition,
 )
 
-STEM = "sub-01_task-full_desc-raw_nirs"
+
+# ---- which figures a raw condition page keeps ----
+
+def _src(name: str) -> dict:
+    return {"src": f"figures/{name}"}
 
 
-# ---- naming, crop's rule ----
+def test_a_figure_named_for_the_condition_is_kept():
+    """The name `prep-raw` gives a condition's own figure is the one this check accepts.
 
-def test_a_labelled_condition_replaces_the_task_entity():
-    assert condition_stem(STEM, "game1", 1) == "sub-01_task-game1_desc-raw_nirs"
-
-
-def test_the_desc_entity_survives_the_way_it_does_through_crop():
-    assert condition_stem("sub-01_task-full_desc-errts_nirs", "baseline", 1) == \
-        "sub-01_task-baseline_desc-errts_nirs"
-
-
-def test_an_unlabelled_condition_appends_a_segment_number():
-    assert condition_stem(STEM, None, 3) == f"{STEM}_seg-03"
-    assert condition_stem(STEM, "", 3) == f"{STEM}_seg-03"
+    It used to look for a `_<slug>_nirs` ending, which no figure has carried since the
+    condition moved into its own entity, so every rewritten panel was dropped as a leak.
+    """
+    name = figure_namer("sub-01_task-rest", "game1", prefix="raw")("psd")
+    assert figure_leaks({"psd": _src(name)}, "game1") == []
 
 
-def test_a_label_is_reduced_to_what_a_bids_entity_allows():
-    # condition_windows numbers a repeated description "desc#1", and a # cannot go in a
-    # filename; a label that reduces to nothing falls back to seg-NN rather than to task-
-    assert condition_stem(STEM, "game 1", 1) == "sub-01_task-game1_desc-raw_nirs"
-    assert condition_stem(STEM, "talk#2", 1) == "sub-01_task-talk2_desc-raw_nirs"
-    assert condition_stem(STEM, "###", 4) == f"{STEM}_seg-04"
+def test_the_run_wide_figure_and_another_conditions_are_both_leaks():
+    run_wide = figure_namer("sub-01_task-rest", prefix="raw")("psd")
+    other = figure_namer("sub-01_task-rest", "game10", prefix="raw")("psd")
+    assert figure_leaks({"a": _src(run_wide), "b": _src(other)}, "game1") == ["a", "b"]
 
 
-def test_labels_that_collide_once_reduced_do_not_share_a_file():
-    # two views writing one path would leave the second silently winning
-    stems = condition_stems(STEM, ["game-1", "game 1"])
-    assert len(set(stems)) == 2
-    assert stems[0] == "sub-01_task-game1_desc-raw_nirs"
-
-
-def test_distinct_labels_are_left_alone():
-    stems = condition_stems(STEM, ["baseline", "game1", "video"])
-    assert stems == ["sub-01_task-baseline_desc-raw_nirs",
-                     "sub-01_task-game1_desc-raw_nirs",
-                     "sub-01_task-video_desc-raw_nirs"]
+def test_a_window_fragment_and_the_whole_run_panels_pass():
+    carpet = figure_namer("sub-01_task-rest", prefix="raw")("carpet")
+    layout = figure_namer("sub-01_task-rest", prefix="raw")("layout")
+    assert figure_leaks({"carpet": {"src": f"figures/{carpet}#game1"},
+                         "layout": _src(layout)}, "game1") == []
 
 
 # ---- what a view carries ----

@@ -13,7 +13,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-_ENTITY_RE = re.compile(r"^(sub|ses|task|run|acq|desc|group)-(.+)$")
+from fnirs_pipe.io.derivatives import entity_of
+
+_ENTITY_RE = re.compile(r"^([a-z]+)-([A-Za-z0-9]+)$")
+
+# entities that say whose file it is, which every node of one graph shares
+_IDENTITY = frozenset({"sub", "ses", "task", "acq", "run", "group"})
 
 # Signal domain per node, used to colour the diagram.
 _DOMAIN = {
@@ -54,13 +59,21 @@ def _is_checkpoint(data: dict[str, Any]) -> bool:
 
 
 def _label(key: str) -> str:
-    """Short display name: the BIDS suffix, qualified by desc- when both carry meaning.
+    """Short display name: the suffix and the entity values that set this file apart.
 
-    sub-01_task-tapping_desc-preproc_nirs -> "preproc"   (generic 'nirs' suffix, desc wins)
-    sub-01_task-tapping_desc-hbo_fc       -> "fc (hbo)"  (both informative)
-    sub-01_task-tapping_alff              -> "alff"      (no desc)
-    sub-01_task-tapping_design_matrix     -> "design_matrix"  (multi-token suffix)
-    design_matrix                         -> "design_matrix"  (no BIDS entities at all)
+    ::
+
+      sub-01_task-rest_desc-preproc_nirs                   -> "preproc"
+      sub-01_task-rest_chromo-hbo_stat-pearson_relmat      -> "relmat pearson hbo"
+      group-G1_task-rest_chromo-hbo_cond-game1_stat-isc_relmat -> "relmat isc hbo (game1)"
+      sub-01_task-rest_design                              -> "design"
+      design_matrix                                        -> "design_matrix"
+
+    On the generic ``nirs`` suffix the desc is the name, the stage the signal is at. The
+    measure comes before the slices so a collapsed box's shared prefix names it. The
+    condition goes in parentheses and nowhere else, because :func:`_variant_line` reads a
+    label's head as what the siblings of a collapsed box differ by and counts the
+    conditions apart from it.
     """
     entities: dict[str, str] = {}
     rest: list[str] = []
@@ -73,10 +86,14 @@ def _label(key: str) -> str:
     if not entities:
         return key
     suffix = "_".join(rest)
-    desc = entities.get("desc")
+    cond = entities.pop("cond", None)
+    qualifiers = [v for k, v in sorted(entities.items(), key=lambda kv: kv[0] not in
+                                       ("stat", "desc")) if k not in _IDENTITY]
     if suffix in ("", "nirs"):
-        return desc or suffix or key
-    return f"{suffix} ({desc})" if desc else suffix
+        head = entities.get("desc") or suffix or key
+    else:
+        head = " ".join([suffix, *qualifiers])
+    return f"{head} ({cond})" if cond else head
 
 
 def _step_detail(step: str | None, params: dict[str, Any]) -> str:
@@ -247,14 +264,6 @@ def _assign_depth(nodes: dict[str, Node]) -> None:
 _COLLAPSE_MIN = 3
 
 
-def _entity(key: str, name: str) -> "str | None":
-    """One BIDS entity out of a filename stem, or None."""
-    for token in key.split("_"):
-        if (m := _ENTITY_RE.match(token)) and m.group(1) == name:
-            return m.group(2)
-    return None
-
-
 def _common_prefix(labels: list[str]) -> str:
     """The name a set of sibling labels shares, cut at a separator.
 
@@ -293,7 +302,7 @@ def _variant_line(members: list[Node], prefix: str) -> str:
         tail = tail[len(prefix):].lstrip(" -_") or tail
         if tail not in suffixes:
             suffixes.append(tail)
-        cond = _entity(node.key, "cond")
+        cond = entity_of(node.key, "cond")
         if cond is None:
             whole_run = True
         elif cond not in descs:
@@ -318,7 +327,7 @@ def _qualify_roots(nodes: dict[str, Node]) -> None:
     for node in roots:
         seen[node.label] = seen.get(node.label, 0) + 1
     for node in roots:
-        if seen[node.label] > 1 and (sub := _entity(node.key, "sub")):
+        if seen[node.label] > 1 and (sub := entity_of(node.key, "sub")):
             node.label = f"{node.label} ({sub})"
 
 
