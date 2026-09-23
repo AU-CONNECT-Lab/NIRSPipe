@@ -280,3 +280,49 @@ def test_uniform_chromophores_warn_about_nothing(tmp_path, caplog):
     with caplog.at_level(logging.WARNING):
         _merge(tmp_path)
     assert "same chromophores" not in caplog.text
+
+
+# ---- wide matrices, which the entity-driven discovery started merging ----
+# The old kind table listed only the long band-mean tables, so the ISC matrices were never
+# merged. Discovering kinds by entity picks them up, and a matrix's columns are its data.
+
+def _matrix(root, group_id, task, channels, index="channel"):
+    """One dyad's ISC matrix, the shape `write_isc_matrix` writes."""
+    path = group_output_path(root, group_id,
+                             {"task": task, "chromophore": "hbo", "statistic": "isc"},
+                             "relmat", ".tsv")
+    frame = pd.DataFrame({c: [0.3] * len(channels) for c in channels}, index=channels)
+    frame.index.name = index
+    frame.to_csv(path, sep="\t")
+    return path
+
+
+ISC = {"chromophore": "hbo", "statistic": "isc"}
+
+
+def test_matrices_over_one_channel_set_merge(tmp_path):
+    _matrix(tmp_path, "01", "rest", ["S1_D1", "S1_D2"])
+    _matrix(tmp_path, "02", "rest", ["S1_D1", "S1_D2"])
+
+    merged = _merge(tmp_path, ISC)
+    assert list(merged.columns) == ["group_id", "task", "channel", "S1_D1", "S1_D2"]
+    assert sorted(merged["group_id"].unique()) == ["01", "02"]
+
+
+def test_matrices_over_different_channel_sets_are_refused(tmp_path):
+    """A blank cell in a concatenated matrix is indistinguishable from a measured zero."""
+    _matrix(tmp_path, "01", "rest", ["S1_D1", "S1_D2"])
+    _matrix(tmp_path, "02", "rest", ["S1_D1", "S2_D2"])
+
+    with pytest.raises(ValueError, match="do not cover the same channels"):
+        _merge(tmp_path, ISC)
+
+
+def test_a_long_table_missing_a_column_is_still_only_a_warning(tmp_path, caplog):
+    """The matrix guard must not catch the long tables, whose own rule is laxer."""
+    import logging
+
+    _table(tmp_path, "01", "rest", chroma=("hbo", "hbr"))
+    _table(tmp_path, "02", "rest")
+    with caplog.at_level(logging.WARNING):
+        assert len(_merge(tmp_path)) == 6
