@@ -208,3 +208,36 @@ def test_without_a_mapping_the_labels_are_the_conditions_themselves(wired):
     drawn, refused = _run_windows(wired, WINDOWS, {})
     assert [label for _, label, *_ in drawn] == ["baseline", "game1"]
     assert refused == {}
+
+
+# ---- a repeated condition is found by its number, not by its name alone ----
+
+def _markers(monkeypatch, *pairs):
+    marks = [{"description": d, "onset": t, "duration": 300.0} for d, t in pairs]
+    monkeypatch.setattr("fnirs_pipe.qc.common.windows.markers_on_data_axis", lambda raw: marks)
+
+
+def test_a_numbered_repeat_finds_that_occurrence_in_the_stand_in(monkeypatch):
+    """game1#2 is the second game1 block; the first would pair two different blocks."""
+    _markers(monkeypatch, ("game1", 100.0), ("game1", 900.0))
+    assert pair_null._partner_condition_onsets(None, ["game1#1", "game1#2"]) == {
+        "game1#1": 100.0, "game1#2": 900.0}
+
+
+def test_occurrences_are_counted_in_time_order(monkeypatch):
+    _markers(monkeypatch, ("game1", 900.0), ("talk", 500.0), ("game1", 100.0))
+    assert pair_null._partner_condition_onsets(None, ["game1#2", "talk"]) == {
+        "game1#2": 900.0, "talk": 500.0}
+
+
+def test_a_repeat_the_stand_in_never_reached_is_absent(monkeypatch):
+    """Absent, so the draw refuses it, rather than falling back on the first block."""
+    _markers(monkeypatch, ("game1", 100.0))
+    assert pair_null._partner_condition_onsets(None, ["game1#1", "game1#2"]) == {
+        "game1#1": 100.0}
+
+
+def test_a_description_carrying_a_hash_is_its_own_label(monkeypatch):
+    _markers(monkeypatch, ("trial#b", 100.0), ("block#3", 400.0))
+    assert pair_null._partner_condition_onsets(None, ["trial#b", "block#3"]) == {
+        "trial#b": 100.0, "block#3": 400.0}

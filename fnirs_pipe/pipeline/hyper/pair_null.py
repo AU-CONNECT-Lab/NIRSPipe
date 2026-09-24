@@ -162,19 +162,28 @@ def real_table_params(real_tsv: Path) -> dict:
 def _partner_condition_onsets(partner_raw, labels) -> "dict[str, float]":
     """Where each named condition starts in the stand-in's own recording.
 
-    ``condition_windows`` numbers a repeated description ``desc#1``; the annotation it came
-    from carries the bare one, so the lookup strips the suffix. A label the stand-in never
-    entered is absent from the result rather than defaulted, and the caller refuses it.
+    ``condition_windows`` numbers a repeated description ``desc#1``, ``desc#2`` in time
+    order and the annotation carries the bare one, so ``desc#k`` is the k-th ``desc`` by
+    onset. A label the stand-in never reached is absent from the result rather than
+    defaulted, and the caller refuses it.
+
+    ::
+
+        stand-in marks game1 at 100 s and 900 s, labels ["game1#2"] -> {"game1#2": 900.0}
     """
     from fnirs_pipe.qc.common.windows import markers_on_data_axis
 
-    markers = markers_on_data_axis(partner_raw)
+    markers = sorted(markers_on_data_axis(partner_raw), key=lambda m: float(m["onset"]))
+    descriptions = {str(m["description"]) for m in markers}
     out: dict[str, float] = {}
     for label in labels:
-        bare = str(label).split("#")[0]
-        hit = next((m for m in markers if str(m["description"]) == bare), None)
-        if hit is not None:
-            out[label] = float(hit["onset"])
+        bare, sep, number = str(label).rpartition("#")
+        # a description that itself carries a "#" is its own label, not a numbered repeat
+        if not (sep and number.isdigit()) or str(label) in descriptions:
+            bare, number = str(label), "1"
+        onsets = [float(m["onset"]) for m in markers if str(m["description"]) == bare]
+        if len(onsets) >= int(number):
+            out[label] = onsets[int(number) - 1]
     return out
 
 

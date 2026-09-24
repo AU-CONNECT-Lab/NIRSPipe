@@ -27,6 +27,7 @@ All notable changes to this project will be documented in this file.
 - A collapsed provenance box counted no conditions, the `cond-` entity being unknown to its parser
 - Merging the per-pairing tables of groups of three or more wrote every pairing to one file; the merged name keeps `pair-`
 - `fnirs-prep crop` wrote two segments sharing a `task` label to one file; it now refuses them
+- The re-paired null cut every repeat of a condition from the stand-in's first block of it, not the matching one
 - `fnirs-hyper-band --wtc-suffix` is reduced to a valid `band-` value, and its help shows the real default
 - The `fnirs-hyper-merge` help lists what refuses a merge and what only warns
 - The raw viewer's condition pages name their channel-summary and trial tables `_qc`, as its run page does
