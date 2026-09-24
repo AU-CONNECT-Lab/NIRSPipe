@@ -466,8 +466,7 @@ def _section_motion_detail(
     Every condition shows the same traces: these figures are measured over the run and only
     the view moves, the way ``_section_motion`` narrows the carpet. So the file is written
     once and carries each condition's window as a table the page picks from by URL fragment,
-    where it used to be written again per condition. The six copies one channel took were
-    identical but for a few axis numbers, and on a two-subject tree they came to 388 MB.
+    rather than once per condition as copies identical but for a few axis numbers.
 
     The y axes follow the window, which the carpet's do not: its colour scale is one scale
     across conditions by design, while these rows are read for the shape of a trace and a
@@ -699,7 +698,7 @@ def _section_haemo(
     analysis passband before subtracting them, deliberately (see
     :func:`~fnirs_pipe.qc.metrics.comparable_stage_metrics`), and at a 0.01 Hz high-pass
     that FIR runs about 330 s, longer than a 300 s condition. Cut first and it is filtered
-    against its own two edges, which is the mismatch the old 0.02 Hz workaround existed for.
+    against its own two edges.
 
     So the stages are band-limited over the whole run and cut afterwards, the order the
     pipeline itself uses, and ``comparable_stage_metrics`` is then told not to filter again.
@@ -982,8 +981,8 @@ def _condition_trial_qc(
     on one page always describe the same set of trials.
 
     The reason a page has no panel travels back with the result, because an empty section
-    explains nothing and this one is empty on every real recording the package has been run
-    on so far: the reason is what a reader will actually see here.
+    explains nothing and on a block design this one is always empty: the reason is what a
+    reader will actually see here.
     """
     t0, t1 = float(span[0]), float(span[1])
     keep = [(label, sqm) for onset, label, sqm in rows if t0 < onset < t1]
@@ -1177,10 +1176,9 @@ def _load_stage_raw(
 ) -> "mne.io.Raw | None":
     """One of the run's stage files, read back off disk.
 
-    The optical density either side of the motion step used to travel here in memory on
-    ``PrepResult``, two full recordings held for the length of a run to draw two figures.
-    They are on disk as ``desc-sci`` and ``desc-motcorrected``, which is where the quality
-    record reads them from, so the report reads the same files rather than a copy.
+    The optical density either side of the motion step is on disk as ``desc-sci`` and
+    ``desc-motcorrected``, which is where the quality record reads it from, so the report
+    reads the same files rather than holding two full recordings in memory.
     """
     if out_dir is None or sqm_label is None:
         return None
@@ -1358,9 +1356,8 @@ def _note_separation(
     the report's notes list and the run log, so a reader who never opens the per-channel
     table still learns the split did not come out the way the metrics assume.
 
-    ``sep_bands`` is the run's own. This used to read them back off ``sqm``, which the
-    report assembles in memory and does not stamp, so the note quoted the default gap at a
-    run measured on any other.
+    ``sep_bands`` is the run's own, not read back off ``sqm``: the report assembles that in
+    memory and does not stamp it, so the note would quote the default gap at any run.
     """
     for message in separation_notes(sqm, rows, short_channel_requested,
                                     sep_bands if sep_bands is not None else bands_from_record(sqm),
@@ -1813,14 +1810,13 @@ def build_subject_report(
                             ch_names_brain=ch_names_brain)
     # every figure in the epoch section on the denoised (bandpassed, pre-regression) haemo so
     # drift/noise is gone and the task response is intact; fall back to preproc only if no
-    # post-processing ran. The grand mean read the unfiltered preproc until 2026-09-10, which
-    # left cardiac ripple on a curve the section is read for the shape of, and made the three
-    # figures under one heading describe two different stages.
+    # post-processing ran. The unfiltered preproc would leave cardiac ripple on a curve read
+    # for its shape, and make the figures under one heading describe two different stages.
     epoch_haemo       = after_haemo if after_haemo is not None else raw_haemo
     epoch_skip        = _no_epoch_reason(raw_haemo, epoch_tmin, epoch_tmax,
                                          single_trial=epoch_single_trial)
-    # the window note only matters to figures that get drawn; asked before the skip it told a
-    # reader to widen a window for a section that is not there
+    # the window note only matters to figures that get drawn; asked before the skip it would
+    # tell a reader to widen a window for a section that is not there
     if epoch_skip is None and getattr(config, "epoch_tmin", None) is None:
         outruns = _epoch_window_mismatch(raw_haemo, epoch_tmax)
         if outruns is not None:
@@ -2191,7 +2187,7 @@ def _cropped_sections(
         out.update(_section_psd_detail(haemo, subject, errors, figures_dir, fig_name,
                                        l_freq=l_freq, h_freq=h_freq, psd_stages=stages,
                                        **bands))
-    # the bare span, unlike the epoch panels below: nothing in this section epochs any more,
+    # the bare span, unlike the epoch panels below: nothing in this section epochs,
     # so the pad would only show the neighbouring condition's last seconds
     out.update(_section_channel_detail(crop(raw_haemo_uncorr) or haemo, subject, errors,
                                        figures_dir, fig_name,

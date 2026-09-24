@@ -199,7 +199,7 @@ def _short_run_labels(runs: list[str]) -> list[str]:
 
     ::
 
-        ["sub-01_task-full", "sub-02_task-full"]  ->  ["sub-01", "sub-02"]
+        ["sub-01_task-rest", "sub-02_task-rest"]  ->  ["sub-01", "sub-02"]
 
     An axis with one tick per run has no room for the part of the name that is the same on
     all of them. The full name stays in the hover.
@@ -677,7 +677,7 @@ def _condition_heatmap(panels: "list[tuple[str, np.ndarray]]", conditions: list[
     reading the same way, since a reader who learned the colour on one meets it on the other.
 
     The y labels sit on the left edge only. The panels share the axis, and repeating the
-    names over every panel's cells is what made this unreadable.
+    names over every panel's cells makes this unreadable.
     """
     fig = make_subplots(rows=1, cols=len(panels), shared_yaxes=True,
                         subplot_titles=[t for t, _v in panels], horizontal_spacing=0.012)

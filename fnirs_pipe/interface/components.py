@@ -1,9 +1,7 @@
 """Layout kit shared by the interface's pages.
 
-Each page used to carry its own ``_card`` and lay parameters out with ``dbc.Row`` plus a
-hardcoded ``width=``, which put a different column count on every card and stretched the
-inputs on a wide screen. Here a parameter block is one grid that fits as many columns as
-the content area allows, so blocks line up with each other and reflow on their own.
+A parameter block is one grid that fits as many columns as the content area allows, so
+blocks line up with each other and reflow on their own.
 
     params(field("DPF", dbc.Input(id="an-dpf")),
            band("Cardiac band (Hz)", lo_input, "-", hi_input))

@@ -274,9 +274,7 @@ def compute_isc(
     :func:`fnirs_pipe.pipeline.restingstate.compute_fc` follows for the same reason. A
     rejected channel of sub1 leaves a blank row and one of sub2 a blank column -- never
     both, since sub1's copy of a channel is not needed to correlate sub2's against
-    everything else. The axes carried sub1's *surviving* channels until 0.30.0, which left
-    a matrix whose shape moved with the rejections and dropped sub2's own channels wherever
-    sub1 had lost the same one.
+    everything else.
 
     Position is not a safe key: a participant with one more rejected channel than the other
     shifts every channel after it, so column j would hold a different pair than its label
@@ -284,8 +282,7 @@ def compute_isc(
 
     Rejections arrive on ``raw.info["bads"]``, which is where
     :func:`fnirs_pipe.pipeline.hyper.load_group_haemo` puts them and the only place
-    the WTC path reads them from. This used to take the resolved rejections a second time as
-    a ``bad_channels`` argument and never look at it.
+    the WTC path reads them from.
 
     Raises ValueError if the members were recorded at different sampling rates, which is
     the refusal WTC has always made: alignment equalises duration, not rate.

@@ -264,7 +264,7 @@ Keep `OUTPUT_DIR` apart from `DERIVATIVES_DIR`, so each tree carries its own `da
 
 `fnirs-hyper` computes wavelet coherence and inter-subject correlation for each dyad in the pairs file, one report per group. A group of more than two gets one report, one set of figures and one ISC table per pairing, tagged `pair-<sub1>x<sub2>`, the transform still running once over the whole group. `--check-only` aligns each dyad, prints what the metrics would be computed on, and stops, which is how to check a cohort's channel budget before a run that with a null takes hours. `--no-report` writes the tables and skips the HTML and its figures.
 
-`--wtc-significance` draws `--wtc-mc-count` surrogate series per channel pair, 300 by default, and the runtime scales with that count. `--wtc-channel-cross` pairs every long channel with every other across the two brains, 196 values instead of 14, and adds the channel x channel matrix of band means, the ROI x ROI matrix under `--roi-mapping`, and a per-brain selector on each map panel. Every map carries relative phase as arrows, so a pair moving together is distinguishable from one moving together a few seconds apart; they are drawn against the null's per-frequency level where one exists, and above the flat `--wtc-arrow-min` where none does.
+`--wtc-significance` draws `--wtc-mc-count` surrogate series per channel pair, 300 by default, and the runtime scales with that count. `--wtc-channel-cross` pairs every long channel with every other across the two brains, n² values instead of n, and adds the channel x channel matrix of band means, the ROI x ROI matrix under `--roi-mapping`, and a per-brain selector on each map panel. Every map carries relative phase as arrows, so a pair moving together is distinguishable from one moving together a few seconds apart; they are drawn against the null's per-frequency level where one exists, and above the flat `--wtc-arrow-min` where none does.
 
 Per-condition results are on by default: the coherence is read out of each task annotation's own window, one result per block, and `--no-by-condition` turns that off. Each window is read off the whole-run transform rather than transformed on its own, so it costs almost nothing and a short condition is not inflated by its own edges. `--wtc-cond-transform` transforms each condition separately instead, keeping `--wtc-cond-pad-s` seconds either side and windowing them back off; with the `auto` margin the numbers match the default route, so it is a form a methods section can describe rather than a different result. `--wtc-limit-scales`, on by default, computes only the scales inside the band plus margin, bit for bit identical to the unrestricted transform. `--wtc-window-s` cuts every condition into non-overlapping windows of that length and makes the window the unit, so conditions of different length estimate the same thing.
 
@@ -274,7 +274,7 @@ Per-condition results are on by default: the coherence is read out of each task 
 
 `--wtc-whiten SECONDS` prewhitens each long channel with an autoregressive model of that many seconds of order before the coherence, one order for every channel of both members. Off by default; the phase-scrambled null follows it and the sidecars record it.
 
-The correlation side has its own flags, all off by default. `--isc-fmin` / `--isc-fmax` band-limit each member before the correlation; without them ISC reads whatever the preprocessing passband left, and the run warns when that differs from the WTC band. `--isc-whiten ORDER` correlates autoregressive residuals rather than the series, putting r back on the scale its sample count implies; it shrinks r by roughly a factor of six, so a whitened matrix does not compare with an unwhitened one. `--isc-max-lag SECONDS` keeps the strongest correlation over every shift within that many seconds either way and reports the winning shift, since two people's responses do not peak at the same instant. `--isc-phase-null N` ranks each correlation against N phase-scrambled surrogates, the null a maximum over many shifts needs. All of them write into the long `stat-isc_relmat.tsv`, one row per channel pair. `--isc-threshold` forces an absolute cut on the connectogram; left alone, a chord is drawn where the pairing beats its own null, or for the strongest tenth when none was drawn.
+The correlation side has its own flags, all off by default. `--isc-fmin` / `--isc-fmax` band-limit each member before the correlation; without them ISC reads whatever the preprocessing passband left, and the run warns when that differs from the WTC band. `--isc-whiten ORDER` correlates autoregressive residuals rather than the series, putting r back on the scale its sample count implies; it shrinks r substantially, so a whitened matrix does not compare with an unwhitened one. `--isc-max-lag SECONDS` keeps the strongest correlation over every shift within that many seconds either way and reports the winning shift, since two people's responses do not peak at the same instant. `--isc-phase-null N` ranks each correlation against N phase-scrambled surrogates, the null a maximum over many shifts needs. All of them write into the long `stat-isc_relmat.tsv`, one row per channel pair. `--isc-threshold` forces an absolute cut on the connectogram; left alone, a chord is drawn where the pairing beats its own null, or for the strongest tenth when none was drawn.
 
 `fnirs-hyper-pairnull` is the second null: each member's coherence against people they never interacted with, drawn from the other groups of the same task. A phase-scrambled partner destroys each member's own time-locked response to the task; a re-paired one did the same task, so what survives is coupling beyond what the shared task explains. It needs a cohort, reads its band, mask, frequency range and window off the real tables, and so runs after `fnirs-hyper`. `--wtc-pair-pool position` (the default) replaces a member only with another group's member at the same index, which is the only safe pool when one person appears in several groups. The next `fnirs-hyper` run picks up its per-condition arrow levels.
 
@@ -479,29 +479,29 @@ derivatives/fnirs-hyper/
 ├── stat-wtc_relmat.tsv                  # fnirs-hyper-merge: every dyad in one table per kind
 ├── stat-isc_relmat.tsv
 ├── ...
-└── group-G1003/
-    ├── group-G1003_desc-index_report.html           # one row per analysed window
-    ├── group-G1003_task-<t>_report.html             # dyad report
-    ├── group-G1003_task-<t>_cond-<c>_report.html    # one per condition
-    ├── group-G1003_task-<t>_desc-raw_report.html    # fnirs-qc hyper-raw
+└── group-G01/
+    ├── group-G01_desc-index_report.html           # one row per analysed window
+    ├── group-G01_task-<t>_report.html             # dyad report
+    ├── group-G01_task-<t>_cond-<c>_report.html    # one per condition
+    ├── group-G01_task-<t>_desc-raw_report.html    # fnirs-qc hyper-raw
     ├── figures/
-    ├── logs/group-G1003_task-<t>.toml
-    └── nirs/                                        # every table has a .json sidecar
-        ├── group-G1003_task-<t>_stat-wtc_relmat.tsv                 # band means, one row per channel pair
-        ├── group-G1003_task-<t>_cond-all_stat-wtc_relmat.tsv        # the same, one row per condition window
-        ├── group-G1003_task-<t>_stat-wtcphase_relmat.tsv            # relative phase and lag, per frequency
-        ├── group-G1003_task-<t>_seg-<roi>_agg-homologous_stat-wtc_relmat.tsv  # + --roi-mapping
-        ├── group-G1003_task-<t>_null-phase_stat-wtc_relmat.tsv      # + --wtc-phase-null
-        ├── group-G1003_task-<t>_null-pair_stat-wtc_relmat.tsv       # fnirs-hyper-pairnull
-        ├── group-G1003_task-<t>_cond-all_null-pair_stat-wtc_desc-draws_relmat.tsv  # every draw
-        ├── group-G1003_task-<t>_chromo-hbo_stat-wtc_relmat.npz      # + --wtc-save-maps
-        ├── group-G1003_task-<t>_chromo-hbo_band-<band>_stat-wtc_relmat.tsv  # fnirs-hyper-band
-        ├── group-G1003_task-<t>_chromo-hbo_stat-isc_relmat.tsv      # ISC matrix, per chromophore
-        ├── group-G1003_task-<t>_stat-isc_relmat.tsv                 # ISC, one row per channel pair
-        ├── group-G1003_task-<t>_desc-usable_qc.tsv                  # shared usable time
-        ├── group-G1003_task-<t>_desc-subject_qc.tsv                 # per-member quality
-        ├── group-G1003_task-<t>_desc-channel_qc.tsv
-        └── group-G1003_task-<t>_desc-bad_qc.tsv
+    ├── logs/group-G01_task-<t>.toml
+    └── nirs/                                      # every table has a .json sidecar
+        ├── group-G01_task-<t>_stat-wtc_relmat.tsv                 # band means, one row per channel pair
+        ├── group-G01_task-<t>_cond-all_stat-wtc_relmat.tsv        # the same, one row per condition window
+        ├── group-G01_task-<t>_stat-wtcphase_relmat.tsv            # relative phase and lag, per frequency
+        ├── group-G01_task-<t>_seg-<roi>_agg-homologous_stat-wtc_relmat.tsv  # + --roi-mapping
+        ├── group-G01_task-<t>_null-phase_stat-wtc_relmat.tsv      # + --wtc-phase-null
+        ├── group-G01_task-<t>_null-pair_stat-wtc_relmat.tsv       # fnirs-hyper-pairnull
+        ├── group-G01_task-<t>_cond-all_null-pair_stat-wtc_desc-draws_relmat.tsv  # every draw
+        ├── group-G01_task-<t>_chromo-hbo_stat-wtc_relmat.npz      # + --wtc-save-maps
+        ├── group-G01_task-<t>_chromo-hbo_band-<band>_stat-wtc_relmat.tsv  # fnirs-hyper-band
+        ├── group-G01_task-<t>_chromo-hbo_stat-isc_relmat.tsv      # ISC matrix, per chromophore
+        ├── group-G01_task-<t>_stat-isc_relmat.tsv                 # ISC, one row per channel pair
+        ├── group-G01_task-<t>_desc-usable_qc.tsv                  # shared usable time
+        ├── group-G01_task-<t>_desc-subject_qc.tsv                 # per-member quality
+        ├── group-G01_task-<t>_desc-channel_qc.tsv
+        └── group-G01_task-<t>_desc-bad_qc.tsv
 ```
 
 Long tables (WTC band means, the ISC pair table, ALFF) carry a `chromophore` column; wide matrices take `chromo-` in the name instead. A group of more than two members writes one report and one set of pairwise tables per pairing, tagged `pair-<sub1>x<sub2>`. `fnirs-hyper-merge` writes each merged table under the per-dyad name with `group-` and `task-` dropped, since the merged table spans every group and task.

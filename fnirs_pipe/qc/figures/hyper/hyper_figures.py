@@ -308,11 +308,11 @@ def build_usable_time(
 # The motion panel is two figures, one for the recording as it arrived and one for the
 # motion-corrected file, rather than one figure carrying both. They hold the same rows in
 # the same order on the same axes, so the correction is read by looking from one to the
-# other; stacking before and after in one figure doubled its height and put the comparison
-# between rows that were already a channel set apart.
+# other; stacking before and after in one figure would double its height and put the
+# comparison between rows that are already a channel set apart.
 
 # Colour is the member, and nothing else: the channel set is the row, and before/after is
-# the figure. A third thing encoded in hue is what made the earlier draft unreadable.
+# the figure. A third thing encoded in hue makes the figure unreadable.
 _MEMBER_COLOURS = ["#4c72b0", "#c44e52", "#55a868", "#8172b3"]
 # The shared floor under both traces. Grey rather than a fourth member colour, since it
 # belongs to the pair and not to either of them.

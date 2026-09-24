@@ -148,7 +148,7 @@ def _matched_od_after(
         ch_names = [S1_D1 760, S1_D1 850];  after has both, 10 Hz, same n_times  -> (2, N)
         ch_names = [S1_D1 760, S1_D1 850];  after has only S1_D1 760             -> None
 
-    A near miss is worse than nothing here: GVTD over a different channel set differs
+    A near miss is worse than nothing here: GVTD over a different channel set can differ
     several-fold on one recording, and the panel would show that as an effect of the
     correction. The corrected file is already OD, so the conversion is only for the case
     where a caller hands over intensity.
@@ -257,9 +257,9 @@ def _blocked_carpet(z, z_after, blocks):
     """The carpet's y labels and ``[(set name, first row, last row), ...]`` for its blocks.
 
     The images pass through untouched: the blocks sit directly on top of each other and the
-    seam between them is a thin drawn rule (see :func:`_carpet_band_marks`). It used to be a
-    blank channel row, which is a whole channel high and read as a margin between two
-    separate figures rather than as a division inside one::
+    seam between them is a thin drawn rule (see :func:`_carpet_band_marks`). A blank channel
+    row would be a whole channel high and read as a margin between two separate figures
+    rather than as a division inside one::
 
         blocks [("long", [a, b]), ("short", [c])]
         -> labels [a, b, c], spans [("long", 0, 1), ("short", 2, 2)]

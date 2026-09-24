@@ -183,7 +183,7 @@ a:hover { color: var(--fp-accent-dark); }
 
 /* ---- Tables ---- */
 /* AG Grid's theming API defines these on the grid root itself, so a descendant selector is
-   what outranks it. The values carry over the look the DataTables had. */
+   what outranks it. */
 .fp-grid .ag-root-wrapper {
   --ag-font-family:               var(--fp-sans);
   --ag-font-size:                 0.8rem;
@@ -203,8 +203,8 @@ a:hover { color: var(--fp-accent-dark); }
   border-radius: var(--fp-radius);
 }
 
-/* the cross row_deletable used to draw; content rather than row data, so the dicts the
-   callbacks read carry no column the tables never had */
+/* the delete cross; content rather than row data, so the dicts the
+   callbacks read carry no display-only column */
 .fp-grid .ag-cell.fp-grid-del {
   cursor: pointer;
   color: var(--fp-muted);
@@ -214,7 +214,7 @@ a:hover { color: var(--fp-accent-dark); }
 .fp-grid .ag-cell.fp-grid-del::after { content: "✕"; }
 .fp-grid .ag-cell.fp-grid-del:hover { color: var(--fp-bad); }
 
-/* the denser of the two table sizes, and the height cap style_table used to set */
+/* the denser of the two table sizes, with its height cap */
 .fp-grid-sm .ag-root-wrapper {
   --ag-font-size:               0.78rem;
   --ag-header-font-size:        0.78rem;

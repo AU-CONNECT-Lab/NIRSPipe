@@ -83,11 +83,7 @@ def _drift_phrase(params: dict[str, Any]) -> str | None:
 
 
 def _filter_phrase(params: dict[str, Any]) -> str:
-    """Name the filter that ran.
-
-    The templates used to spell one family into the sentence, so every run described
-    whichever one the text happened to name rather than the one it used.
-    """
+    """Name the filter that ran, from the recorded method rather than a fixed family."""
     method, order = params.get("filter_method"), params.get("filter_order")
     if method == "iir":
         return ("a zero-phase Butterworth filter "
@@ -452,17 +448,16 @@ def is_key_metric(metric: str) -> bool:
 # Format is a Python format spec, plus "pct" for a 0-1 fraction written as a percentage.
 #
 # Direction and thresholds are separate facts and most metrics have only the first. The
-# direction is which end is the better one, which METRIC_SUMMARY has always stated in prose
+# direction is which end is the better one, which METRIC_SUMMARY states in prose
 # ("Lower is cleaner"); a threshold is a defensible cutoff, which far fewer metrics have.
-# Keeping them together meant a metric with no published cutoff also had no machine-readable
-# direction, so anything that needs to rank without judging -- the per-trial heatmap, which
-# colours relative to what one recording actually did -- had to hardcode its own copy.
+# Kept apart, a metric with no published cutoff still has a machine-readable direction, so
+# anything that ranks without judging (the per-trial heatmap, which colours relative to
+# what one recording actually did) needs no copy of its own.
 #
 # So: direction None means descriptive, with no better end, and nothing may colour or rank
 # it. Thresholds None means no established cutoff, and it prints uncoloured rather than
 # against an invented one; a threshold without a direction is meaningless and the tests
-# reject it. "higher" tests ``v >= ok``, "lower" tests ``v < ok``, which is what each of the
-# original three call sites did.
+# reject it. "higher" tests ``v >= ok``, "lower" tests ``v < ok``.
 
 _HIGHER, _LOWER = "higher", "lower"
 

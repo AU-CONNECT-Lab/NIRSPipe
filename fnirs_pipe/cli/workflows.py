@@ -388,8 +388,7 @@ def run_participant_level(args: dict[str, Any]) -> None:
             from joblib import Parallel, delayed
             from threadpoolctl import threadpool_limits
             # One BLAS thread per job. Left alone each job opens as many threads as there
-            # are cores and they fight over them: measured at 24% slower than serial on two
-            # subjects, which is the opposite of what the flag was asked for.
+            # are cores and they fight over them, which can end up slower than serial.
             logger.info("%d subjects over %d parallel jobs, one BLAS thread each",
                         len(participant_label), n_jobs)
             with threadpool_limits(limits=1):
@@ -417,7 +416,7 @@ def _isolate(subject: str, failed: list[str]):
 
     The inner ``try`` around the pipeline itself already does this for anything the stages
     raise; this covers the run record, the run script and the database call that sit outside
-    it, which used to end the batch. A subject that failed inside is not listed twice.
+    it, which would otherwise end the batch. A subject that failed inside is not listed twice.
     """
     try:
         yield

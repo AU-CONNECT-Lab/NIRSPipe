@@ -52,8 +52,7 @@ _COLUMNS = (
     ("SCI mean",      ("raw_long_sci_mean", "raw_sci_mean"),                             "{:.2f}"),
     ("GVTD p95",      ("raw_long_gvtd_p95", "raw_gvtd_p95"),                             "{:.2e}"),
     # a fraction of the recording, not a percentage: `motion_corrected_pct` is the mean of
-    # a per-sample boolean. Printed with `{:.1f}%` this column said 0.2% where the run's own
-    # report, which formats it through the metric registry's "pct", said 17.4%
+    # a per-sample boolean, so `{:.1f}%` would print it 100 times too small
     ("Motion corr.",  ("motion_motion_corrected_pct",),                                  "{:.1%}"),
     ("HbO-HbR corr",  ("preproc_long_hbo_hbr_corr_mean", "preproc_hbo_hbr_corr_mean"),   "{:+.2f}"),
 )
@@ -141,8 +140,8 @@ def _shape(nirs_dir: Path, label: str, record: dict | None = None) -> dict:
 
     ::
 
-      per_channel.raw.sci_per_channel holding 44 entries, raw.channel_retention_rate 0.75
-      -> {"n_channels": 44, "n_bad": 11}
+      per_channel.raw.sci_per_channel holding 40 entries, raw.channel_retention_rate 0.75
+      -> {"n_channels": 40, "n_bad": 10}
     """
     for desc in ("preproc", "od"):
         path = nirs_dir / f"{label}_desc-{desc}_nirs.json"
@@ -231,7 +230,7 @@ def collect_bad_channels(sub_dir: Path, labels: list[str]) -> dict:
 
     Read from each run's ``_desc-channel_qc.tsv``, which carries one ``is_bad`` per channel.
     The two wavelengths of a pair are collapsed into the pair: rejecting one rejects the
-    optode, and a grid of 44 rows says nothing 22 rows do not.
+    optode, and a row per wavelength says nothing a row per pair does not.
 
     Returns ``{"rejected": [{"pair", "bad_in", "n_bad"}], "clean", "n_pairs", "n_clean"}``.
     Only the rejected pairs get a row, ordered by how many runs rejected them and then by

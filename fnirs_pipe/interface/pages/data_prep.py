@@ -30,7 +30,7 @@ _SQM_ROW_CLASS = {
     "qm-bad":  "data.cls == 'qm-bad'",
 }
 
-# the DataTable's tooltip_duration=None never timed out; this is the nearest AG Grid has
+# AG Grid has no tooltip that never times out; a minute is the nearest it gets
 _SQM_GRID = {**AUTO_HEIGHT, "tooltipShowDelay": 300, "tooltipHideDelay": 60000}
 
 _NUM = {"editable": True, "cellDataType": "number", "cellEditor": "agNumberCellEditor"}
@@ -213,7 +213,7 @@ layout = dbc.Container([
             params(
                 field("Subject ID",
                       dbc.Input(id="dp-manual-subject", type="text",
-                                placeholder="e.g. 10031", debounce=True)),
+                                placeholder="e.g. 01", debounce=True)),
                 field("Run",
                       dcc.Dropdown(id="dp-run-dropdown", options=[],
                                    placeholder="Select run"),

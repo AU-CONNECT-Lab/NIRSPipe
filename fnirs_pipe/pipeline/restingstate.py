@@ -41,8 +41,8 @@ def compute_alff(raw: mne.io.Raw, low_pass: float, high_pass: float,
     rejected: blanked, and out of the reference. It exists for a channel whose residual is
     identically zero because it was the whole short-channel regressor and was fitted against
     a copy of itself. Blanking such a channel while leaving it in the reference puts a
-    numerical zero in the mean and SD that every other channel is scaled by, which on a
-    nine-channel chromophore moved mALFF by 22%. The ``bad`` column keeps meaning rejected,
+    numerical zero in the mean and SD that every other channel is scaled by, which shifts
+    every other channel's mALFF. The ``bad`` column keeps meaning rejected,
     since that is what the group tables read.
 
     Rest mode produces two residuals and this function must receive the broadband one.

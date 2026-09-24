@@ -424,8 +424,8 @@ def coupled_windows(
 
     ::
 
-      -> {"fractions": {ch: 0.77, ...}, "mask": (44, 390), "centers": (390,),
-          "sci": (44, 390), "psp": (44, 390), "channel_order": [...]}
+      -> {"fractions": {ch: 0.77, ...}, "mask": (n_ch, 390), "centers": (390,),
+          "sci": (n_ch, 390), "psp": (n_ch, 390), "channel_order": [...]}
 
     The share is what screening reads and the grid is what a figure over time draws, and they
     have to be the same measurement: a panel that recomputed its own mask could shade a
@@ -474,8 +474,8 @@ def condition_window_means(
 
     ::
 
-      matrix (44, 390) on a 10 s grid, a condition running 543.7 to 1443.7 s
-      -> {"game1": (44,) means over the 90 columns whose centres fall inside it}
+      matrix (n_ch, 390) on a 10 s grid, a condition running 543.7 to 1443.7 s
+      -> {"game1": (n_ch,) means over the 90 columns whose centres fall inside it}
 
     ``matrix`` is reduced over its last axis, so a per-channel metric (channels x windows)
     gives one value per channel and a single series (windows,) gives one scalar.

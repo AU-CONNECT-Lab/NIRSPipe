@@ -125,8 +125,8 @@ class FNIRSRatingApp:
         data = request.json
         if not data or "id" not in data:
             return jsonify({"status": "fail", "message": "Missing id"}), 400
-        # removeprefix, not lstrip: lstrip takes a character set, so "sub-bus01" came back
-        # as "01" and that subject's ratings overwrote sub-01's
+        # removeprefix, not lstrip: lstrip takes a character set, so "sub-bus01" would come
+        # back as "01" and that subject's ratings would overwrite sub-01's
         subject = data["id"].removeprefix("sub-")
         ratings = data.get("ratings", {})
         notes   = data.get("notes", {})

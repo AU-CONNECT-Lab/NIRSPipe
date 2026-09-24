@@ -15,7 +15,7 @@
 ] %}
 {% if mode != 'rest' %}{% set _ = _sections.append(("Epoch", "Epoch")) %}{% endif %}
 {# three independent conditions, matching the body: glm --fc and denoise --fc draw the
-   FC panel too, and used to reach it with no nav entry #}
+   FC panel too #}
 {% if rest_alff_topo_path %}{% set _ = _sections.append(("RestALFF", "ALFF/fALFF")) %}{% endif %}
 {% if rest_panel_path %}{% set _ = _sections.append(("RestFC", "FC")) %}{% endif %}
 {% if glm_design_path or glm_activation_path %}
@@ -547,8 +547,8 @@
   {% endif %}
 
   {% if sqm_split %}
-  {#- what used to be a paragraph above the table: it is about the Channel set column rather
-      than about any one metric, so it hangs off that column's header -#}
+  {#- this help is about the Channel set column rather than about any one metric, so it
+      hangs off that column's header -#}
   {%- set set_help = "Long is the set the verdict is read off. Short is left uncoloured: a"
       ~ " short channel's coupling is high by construction and has no established threshold,"
       ~ " so the column answers whether the regressors those channels feed are trustworthy"
@@ -576,9 +576,8 @@
   {%- macro qm_cells(d, cols, is_long) %}{% for key, text in cols %}{% set v = d.get(key) %}<td class="qv {{ cell_class(key, v, is_long) }}">{{ mv(key, v) }}</td>{% endfor %}{% endmacro -%}
   {#- ``lead`` is the channel count, which only the optical-density table carries -#}
   {%- macro qm_row(name, d, cols, is_long, lead=none) %}<tr><td>{{ name }}</td>{% if lead is not none %}<td>{{ lead }}</td>{% endif %}{{ qm_cells(d, cols, is_long) }}</tr>{% endmacro -%}
-  {#- one table per signal domain. They used to share one, with a spanning header over each
-      half and a rule down the join; two tables say the same thing without a reader having to
-      find the join, and each gets the column spacing of its own content -#}
+  {#- one table per signal domain, so a reader has no join to find and each table gets the
+      column spacing of its own content -#}
   <h3 class="qm-sub">Original recording &mdash; optical density</h3>
   <div style="overflow-x:auto;">
   <table class="qm-table qm-split qm-flat">
@@ -632,9 +631,9 @@
       the columns measure the same thing: a stage before the bandpass and one after it carry
       different frequency content, and the raw difference between their metrics is mostly the
       filter. They will not match the per-stage values in the metrics table, which are
-      measured on each stage as stored, and the gap is almost entirely on the one stage the
-      bandpass has not reached: measured on this dataset, the stages after it agree with the
-      table to three decimals while the unfiltered one moves by a factor of two or more.
+      measured on each stage as stored, and the gap is expected mostly on the stage the
+      bandpass has not reached: the stages after it already carry the passband, so applying
+      it again changes them little, while the unfiltered stage can move a long way.
     {% else %}
       No passband was requested, so every panel is measured on each stage as stored and
       differences across a filtering step should be read with that in mind.
@@ -656,8 +655,7 @@
        {% if gvtd_channel_set == 'long' %}long channels only{% else %}every channel{% endif %}.
      {% endif %}</p>
   {%- set motion_note = ' (motion before&rarr;after)' %}
-  {#- the GVTD-threshold paragraph that used to sit here says what the gvtd_thresh tooltip
-      already says, and is left to it -#}
+  {#- the GVTD threshold is explained by the gvtd_thresh tooltip, not a paragraph here -#}
   {#- A condition has one side of the motion step rather than both, and the two sides are
       not the same side for every row: the GVTD series is stored off the corrected file and
       the spike and footprint spans off the uncorrected one. So each row says which stage it

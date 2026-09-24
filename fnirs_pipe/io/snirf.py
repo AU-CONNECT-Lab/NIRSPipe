@@ -1,8 +1,5 @@
 """
 snirf file read/write (wraps MNE-NIRS + h5py).
-
-References:
-https://mne.tools/stable/auto_tutorials/io/30_reading_fnirs_data.html
 """
 
 

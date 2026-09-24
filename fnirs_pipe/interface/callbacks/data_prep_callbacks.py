@@ -1223,8 +1223,7 @@ def _build_decisions_table(pair_cells: list[dict], blocks: list, notes: list,
 
     Rows arrive from fnirs_pipe.qc.common.channel_table with their numbers formatted and their
     cells classed, so this table, the raw viewer's and the subject report's cannot print one
-    channel three ways. It used to show SCI alone, looked up under a key the raw recording
-    does not use, so every row read as a dash.
+    channel three ways.
     """
     n_cols = len(_CH_COLUMNS) + 1  # the columns, plus the decision chip
 
@@ -1271,8 +1270,7 @@ def _build_decisions_table(pair_cells: list[dict], blocks: list, notes: list,
 def _cached_channels(cache_key) -> tuple[list, list, list]:
     """The run's per-channel rows as ``(pair_cells, blocks, notes)``, empty when uncached.
 
-    One reader for both decisions callbacks: they render the same table and used to build
-    its inputs separately.
+    One reader for both decisions callbacks, since they render the same table.
     """
     channels = (_RESULT_CACHE.get(cache_key, {}) or {}).get("channels") or {}
     return channels.get("pairs", []), channels.get("blocks", []), channels.get("notes", [])

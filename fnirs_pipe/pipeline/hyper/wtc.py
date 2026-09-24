@@ -414,7 +414,7 @@ def _pairwise_wtc(
     and the saving is proportional. See :func:`_scale_range` for why the retained numbers do
     not change.
 
-    Backend: `pycwt.wct <https://pycwt.readthedocs.io/en/development/reference/#pycwt.wct>`_.
+    Backend: ``pycwt.wct``.
     """
     import pycwt
 

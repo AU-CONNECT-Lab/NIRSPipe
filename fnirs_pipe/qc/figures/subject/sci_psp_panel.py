@@ -249,7 +249,7 @@ def trial_quality_heatmap(
     ))
     # square markers on a fixed pitch, the form the channel quality grid above this panel
     # uses, so the two line up at the same left edge and carry the same size of cell. The
-    # width is the figure's own: stretched to the page, five trials came out as five bands
+    # width is the figure's own: stretched to the page, five trials would come out as five bands
     _MARGIN = dict(l=70, r=20, t=20, b=100)
     fig.update_layout(
         xaxis=dict(tickvals=[i * _SPACING for i in range(n_trials)], ticktext=trial_labels,

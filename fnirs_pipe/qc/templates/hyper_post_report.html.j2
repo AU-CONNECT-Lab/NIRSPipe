@@ -23,15 +23,15 @@
   letter-spacing: 0.03em; margin: 0 0 0.1rem 0.1rem;
 }
 /* The channel map is a still drawn at 100% of a page that has no maximum width, so on a
-   wide monitor it grew past the live ROI map stacked under it and the two panels of one
-   section read at two different sizes. Capped at that map's height ({{ MAP_FRAME_H }}px,
+   wide monitor it would grow past the live ROI map stacked under it and the two panels of
+   one section would read at two sizes. Capped at that map's height ({{ MAP_FRAME_H }}px,
    the iframes below), after which it keeps its aspect and centres instead of growing. */
 .chroma-stack > img.responsive {
   max-height: {{ MAP_FRAME_H }}px; width: auto; max-width: 100%; margin: 0 auto;
 }
-/* The one block-level warning this page can raise. Everything else that used to be an
-   orange panel is a .qm-note, the grey aside the subject report explains itself with:
-   a caveat printed on every page stops being read as a caveat. */
+/* The one block-level warning this page can raise. Every other caveat is a .qm-note, the
+   grey aside the subject report explains itself with: a caveat printed on every page stops
+   being read as a caveat. */
 .too-short { color: var(--warn); font-size: 0.8rem; border-left: 3px solid var(--warn);
              padding: 0.3rem 0.7rem; margin: 0.6rem 0; }
 {% endblock %}
@@ -348,7 +348,7 @@
   of them.</p>
 {#- one table per kind of pairing, not one grid announcing each kind on a row spanning it.
     A crossed dyad's channel table is hundreds of rows and the ROI tables are a handful, so
-    they were never read side by side; separate tables let each carry only the columns it
+    they are not read side by side; separate tables let each carry only the columns it
     filled. -#}
 <div class="qm-box">
   {% for table in number_tables %}
@@ -435,7 +435,7 @@ var _PER_ROI      = {{ per_roi_post_json | safe }};
 var _ROI_LABELS   = {{ roi_labels_json | safe }};
 var _ALIGN        = {{ alignment_json | safe }};
 
-// Nothing on this page is behind a chromophore control any more: every panel carries one
+// Nothing on this page is behind a chromophore control: every panel carries one
 // image per chromophore, stacked and labelled, and _CHROMA is the order they sit in. What a
 // variable below holds is a path under figures/, never the figure, so picking a channel
 // points an img somewhere else and the browser fetches that one file.

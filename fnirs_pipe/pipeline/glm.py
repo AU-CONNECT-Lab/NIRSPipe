@@ -303,10 +303,6 @@ def build_design_matrix(
       drift_order  only used when drift_model='polynomial'
       events       columns 'onset', 'duration', 'trial_type'; None → read from snirf
                    annotations, skipping the BAD_/EDGE_ spans
-
-    Refs:
-      https://mne.tools/mne-nirs/dev/_modules/mne_nirs/experimental_design/_experimental_design.html#make_first_level_design_matrix
-      https://nilearn.github.io/dev/modules/generated/nilearn.glm.first_level.make_first_level_design_matrix.html
     """
 
     from nilearn.glm.first_level import make_first_level_design_matrix
@@ -372,8 +368,7 @@ def _fit_glm_ar_irls(haemo: mne.io.Raw, design_matrix: pd.DataFrame, spec: str) 
     for ch in haemo.ch_names:
         results[ch] = fit_channel(haemo.get_data(picks=[ch])[0], design, pmax)
         # the robust fits leave reference cycles holding one design-sized array each, and
-        # the default thresholds let them pile up: measured at 2.0 GB over ten channels of a
-        # 45-regressor design against 0.11 GB with this, for 4% more time
+        # the default thresholds let them pile up, and one collection per channel is cheap
         gc.collect(0)
     return RegressionResults(haemo.info, results, design_matrix)
 

@@ -193,9 +193,9 @@ def gvtd_channel_picks(
     what the figure prints and what the record stores, and a wrong label makes two runs look
     comparable when they are not.
 
-    Example: a 40-channel montage with 22 long and 18 out-of-band channels returns
-    ``(22 names, "long")``; the same call on an unregistered montage returns
-    ``(40 names, "all")``.
+    Example: an n-channel montage with n_long long and the rest out of band returns
+    ``(n_long names, "long")``; the same call on an unregistered montage returns
+    ``(n names, "all")``.
     """
     long_names, short_names = long_short_channels(raw, sep_bands)
     wanted = channel_set or "long"
@@ -225,9 +225,9 @@ def gvtd_channel_blocks(
     short channels the canonical set left out, so the panel can show their quality without
     changing the number the run is judged on::
 
-        44-channel montage, 28 long + 16 short  ->  [("long", 28), ("short", 16)]
-        hyper montage, 22 long + 0 short        ->  [("long", 22)]
-        unregistered montage, no long channels  ->  [("all", 40)]
+        montage of n_long long + n_short short  ->  [("long", n_long), ("short", n_short)]
+        montage with no short channels          ->  [("long", n_long)]
+        unregistered montage, no long channels  ->  [("all", n)]
 
     The fallback set gets no second block: it already contains the short channels, and a row
     for a subset of the row above it would be read as a comparison between two independent

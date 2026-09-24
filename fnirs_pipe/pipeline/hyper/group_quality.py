@@ -49,8 +49,8 @@ def write_group_bads(
 ) -> Path:
     """Write the rejected channels the inter-brain metrics actually excluded, one row each.
 
-    The channel set is a decision that changes every coherence value, and until now it was
-    only visible in the log. Columns: group_id, task, subject_id, channel, bads_scope,
+    The channel set is a decision that changes every coherence value, so it is written here
+    rather than only logged. Columns: group_id, task, subject_id, channel, bads_scope,
     rejected_in. ``rejected_in`` lists the runs whose quality metrics rejected the channel,
     which under ``--bads-scope subject`` is how a condition that was clean on its own comes
     to lose a channel.
@@ -132,10 +132,8 @@ def compute_group_sqm_raw(
 
     The dict is the long-channel verdict, assembled by
     :func:`~fnirs_pipe.qc.subject.sqm_record.raw_verdict_view` from the same three sections the
-    per-subject record holds. It used to be one all-channel pass, which put a subject's
-    SCI, CV, SNR and GVTD in this table on a different channel set than the same subject's
-    numbers in the individual reports and in `fnirs-hyper`, so the two could not be
-    read against each other.
+    per-subject record holds, so a subject's SCI, CV, SNR and GVTD here sit on the same
+    channel set as the same subject's numbers in the individual reports and in `fnirs-hyper`.
     """
     from fnirs_pipe.qc.metrics import resolve_cutoffs, screen_channels, screening_scores
     from fnirs_pipe.qc.common.screen_scope import resolve_screen_scope
@@ -298,8 +296,7 @@ def load_group_sqm(
 
     A subject has one record and one channel-metrics CSV per run, and every entry names the
     task it belongs to, so the run's own files are the ones read. Reading all of them and
-    letting the last win, as this used to, meant a five-task subject had four tasks quietly
-    analysed with a fifth task's rejected channels.
+    letting the last win would analyse every task with the last task's rejected channels.
 
     ``bads_scope`` decides what counts as a bad channel:
 

@@ -200,8 +200,8 @@ def zoom_to_condition(figure, t0: float, t1: float):
     a cropped recording to the figure builders instead would recompute what they derive
     internally, and all three of those derivations are run-wide on purpose:
     ``carpet_gvtd_figure`` filters GVTD at 0.01-0.5 Hz, z-scores each channel, and picks a
-    threshold off the distribution. On a 900 s piece the 0.01 Hz filter is the same
-    mismatch the old 0.02 Hz workaround existed for, each condition would get its own
+    threshold off the distribution. On a short piece the 0.01 Hz filter would run against
+    the piece's own two edges, each condition would get its own
     per-channel mean and SD so no two carpets could be read against each other, and each
     would get its own threshold line. That figure's own docstring makes this argument for
     the corrected-versus-uncorrected pair; it holds the same way across conditions.
@@ -257,9 +257,9 @@ def rescale_y_to_window(figure, t0: float, t1: float):
 
     The companion of :func:`zoom_to_condition`, which narrows the view along time and leaves
     the y axes pinned to the whole run. That pinning is what a quiet condition runs into:
-    measured on this dataset, baseline's GVTD peaks reach 18% of an axis set by video's, so
-    the row reads as a flat line and the threshold rule sits at 3% of the row height, and the
-    panel stops answering the question it is on the page for.
+    its GVTD peaks can fill a small fraction of an axis set by a louder condition, so the row
+    reads as a flat line with the threshold rule near its floor, and the panel stops
+    answering the question it is on the page for.
 
     What the run-wide axis bought is a comparison between conditions by eye. Each page
     already carries that comparison as a number, per condition and to three figures, so this
@@ -715,7 +715,7 @@ def condition_payloads(
             "split": split,
             "motion_split": motion_split,
             # every channel, and the three sets are in the tables. Not "no short channels":
-            # this montage has them, and the Short rows below say so
+            # the Short rows below say whether the montage has them
             "channel_set": "every channel",
         }
         d["channels"] = {
@@ -842,7 +842,7 @@ def slice_time_traces(figure: dict, t0: float, t1: float) -> dict:
 
     ::
 
-      44 traces of 4427 points, 3602.4 to 3902.5 s  ->  44 traces of ~1300
+      n traces of 4427 points, 3602.4 to 3902.5 s  ->  n traces of ~1300
 
     The companion of :func:`zoom_to_condition` and the choice between them is not a matter
     of taste. Narrowing sets the axis and leaves the run's samples in the trace, which is
@@ -1066,7 +1066,7 @@ def condition_set_scalars(
 
     ::
 
-        sliced["sci_per_channel"] over 44 channels, 28 long and 16 short
+        sliced["sci_per_channel"] over a montage of long and short channels
         -> {"all": {...}, "long": {...}, "short": {...}}
 
     Every metric here is a mean over the row's channels, which is the whole of what a set

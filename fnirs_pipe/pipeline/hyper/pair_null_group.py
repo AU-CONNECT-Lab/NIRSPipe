@@ -2,7 +2,7 @@
 
 ``pair-null`` ranks each channel of each dyad inside its own draws, which asks where a
 channel stands and answers it with whatever resolution the pool allows: a cell drawn against
-22 stand-ins cannot reach a p below 1/23, so a per-cell test corrected over a thousand cells
+n stand-ins cannot reach a p below 1/(n+1), so a per-cell test corrected over many cells
 is close to unable to reject whatever the data does. Averaging first spends that resolution
 differently. It cannot say which channel, and in exchange it can say whether the pairing
 beats its null at all.
@@ -90,7 +90,7 @@ def _variants(draws: pd.DataFrame, real: pd.DataFrame, roi_map: "dict | None",
     """Every aggregate the draws support, as (granularity, level, pairings, draws, real).
 
     Emitted rather than selected, because which ones exist is a property of the draws and not
-    a choice: all 196 pairings only if the null was drawn crossed, regions only if a mapping
+    a choice: all n^2 pairings only if the null was drawn crossed, regions only if a mapping
     was given. A caller that has to remember a flag to get the level its reference
     implementation used will one day forget it.
     """
@@ -101,10 +101,9 @@ def _variants(draws: pd.DataFrame, real: pd.DataFrame, roi_map: "dict | None",
     crossed = {o for o, part in draws.groupby("occasion")
                if "label2" in part.columns
                and (part["label"] != part["label2"].fillna(part["label"])).any()}
-    # and the real table, which is the half that was missed: a mean over 14 homologous cells
-    # ranked inside a null built from 196 pairings is not the same statistic on both sides.
-    # The centre survives it, the spread does not, and the null of 196 comes out about a
-    # fifth narrower, which moves a p by a factor of two to four in the permissive direction
+    # and the real table: a mean over n homologous cells ranked inside a null built from n^2
+    # pairings is not the same statistic on both sides. The centre survives it, the spread
+    # does not, and the narrower n^2 null moves a p in the permissive direction
     real_crossed = ("label2" in real.columns
                     and (real["label"] != real["label2"].fillna(real["label"])).any())
     if crossed and not real_crossed:
@@ -112,8 +111,8 @@ def _variants(draws: pd.DataFrame, real: pd.DataFrame, roi_map: "dict | None",
                        "not, so that level would rank a mean over the diagonal inside a null "
                        "over every pairing. Rerun the real tables with --wtc-channel-cross")
     if crossed and real_crossed:
-        # Mousley's and Zexin's whole-brain mean is over every pairing, not the diagonal.
-        # All or none: 196 pairings for one occasion and 14 for the next is not one
+        # A whole-brain mean is over every pairing, not the diagonal.
+        # All or none: n^2 pairings for one occasion and n for the next is not one
         # statistic, and a part-crossed tree is what a rerun looks like half way through
         short = sorted(set(draws["occasion"].unique()) - crossed)
         if short:
@@ -185,10 +184,10 @@ def _exact_p(beaten: int, n: int) -> float:
 
     ::
 
-      beat all 22 of 22  ->  1/23 = 0.043, the smallest a pool of 22 can express
+      beat all 19 of 19  ->  1/20 = 0.05, the smallest a pool of 19 can express
 
     The real value is counted into its own null, which is what keeps the test exact rather
-    than letting a pool of 22 report a p of 0.
+    than letting a pool of 19 report a p of 0.
     """
     return (n - beaten + 1) / (n + 1)
 
@@ -351,11 +350,11 @@ def by_cell(output_dir: Path, task: str, chroma: str, null: str) -> "pd.DataFram
 
     ::
 
-      percentile 95.45 off 22 draws  ->  p 0.087, because 21 of 22 beaten is rank 2 of 23
+      percentile 94.74 off 19 draws  ->  p 0.1, because 18 of 19 beaten is rank 2 of 20
 
     The stage that writes a cell's percentile runs one dyad at a time and so cannot correct
-    across cells; nothing else in the package does either, which left every per-cell table
-    uncorrected and the correction living in whatever script last read them. One family per
+    across cells, and nothing else in the package does either, so without this the correction
+    would live in whatever script last read the tables. One family per
     condition and level, so the family is a number a reader can state.
     """
     from statsmodels.stats.multitest import multipletests
@@ -387,7 +386,7 @@ def by_cell(output_dir: Path, task: str, chroma: str, null: str) -> "pd.DataFram
     return out[keep].sort_values(["level", "condition", "q"], ignore_index=True)
 
 
-def write_group_null(output_dir: Path, task: str = "full", chroma: str = "hbo",
+def write_group_null(output_dir: Path, task: str, chroma: str = "hbo",
                      null: str = "repaired", roi_map: "dict | None" = None,
                      n_resample: int = 20000, seed: int | None = None) -> list[Path]:
     """Every level the draws support, written beside the merged tables.

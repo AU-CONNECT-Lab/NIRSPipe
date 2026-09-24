@@ -15,7 +15,7 @@ def _shared_sfreq(raws: dict[str, mne.io.Raw]) -> float:
 
     Every metric here reads the rate off one participant and applies it to the pair, so a
     mismatch does not fail, it silently mislabels the frequency axis of the other. Alignment
-    equalises duration, not rate, and the input stage is now the caller's choice, so two
+    equalises duration, not rate, and the input stage is the caller's choice, so two
     participants can arrive resampled differently.
     """
     if not raws:

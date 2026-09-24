@@ -22,8 +22,8 @@ logger = get_logger("qc.metrics.coupling")
 # part of what PSP measures, not smoothing: it moves the spread between good and bad channels
 PSP_WINDOW_S = 10.0
 # CV is sigma/mu, so a longer window admits slower variation into sigma and the number grows
-# with the recording: measured over one recording it reads 1.34% at 10 s and 8.71% whole-run,
-# which is the drift, not the noise CV_PASS was set for. Pinned for the same reason PSP is,
+# with the recording: a whole-run CV reads well above a 10 s one, and the difference is
+# the drift, not the noise CV_PASS was set for. Pinned for the same reason PSP is,
 # and to the same length so the two scalars describe the same stretch of recording.
 CV_WINDOW_S = 10.0
 # SCI on that same pinned grid. `sci_mean` is the whole-run correlation of the two

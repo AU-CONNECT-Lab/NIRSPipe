@@ -67,7 +67,7 @@ class PostConfig:
     # GLM (glm mode)
     stim_dur:        float | None          = None
     hrf_model:       str | None            = None
-    # every mode fits it now, so the library carries the default too rather than leaving a
+    # every mode fits it, so the library carries the default too rather than leaving a
     # direct caller to pass None into nilearn. "auto" is an AR order of 4x the sampling rate
     noise_model:     str                   = "auto"
     drift_model:     str | None            = None

@@ -658,9 +658,9 @@ def _merge_scopes(kind: str, axis: list[str], per_scope: list) -> dict:
             "rows": [{"a": "S1_D1", "b": "S1_D2",
                       "cells": {"Whole run": {"HbO WTC": "0.241"}, "rest": {...}}}]}
 
-    Stacked instead, the channel pairings of a 14-channel crossed dyad are 196 rows per
-    condition and the whole run's copy of a pairing is hundreds of rows away from the
-    condition's. Side by side, the comparison a block design is run for is one row.
+    Stacked instead, a crossed dyad's pairings are n^2 rows per condition and the whole
+    run's copy of a pairing is hundreds of rows away from the condition's. Side by side, the
+    comparison a block design is run for is one row.
 
     ``columns`` is the union over the scopes, which is what lets one header stand over all
     of them; a scope that filled fewer leaves its cells empty rather than shifting the rest.
@@ -775,9 +775,9 @@ def build_hyper_post_report(
     [wtc_band_fmin, wtc_band_fmax] and written as a TSV under the group's nirs/, so a
     group analysis reads the same values the figures were drawn from.
 
-    ``wtc_channel_cross`` crosses every long channel with every other, 14 channels giving 196
-    rows in ``stat-wtc_relmat.tsv`` instead of 14. The extra pairs reach the TSV and the crossed
-    matrix, while the map selector keeps the homologous ones: 196 options is not a list
+    ``wtc_channel_cross`` crosses every long channel with every other, n channels giving n^2
+    rows in ``stat-wtc_relmat.tsv`` instead of n. The extra pairs reach the TSV and the crossed
+    matrix, while the map selector keeps the homologous ones: n^2 options is not a list
     anybody reads through, and drawing a full frequency × time map for each of them per
     chromophore is most of what the figures cost. Crossing is also what produces the
     ROI × ROI matrix, since the ROI numbers are grouped from the channel ones.
@@ -922,9 +922,9 @@ def build_hyper_post_report(
     def _fig(b64: "str | None", name: str) -> "str | None":
         """One figure onto disk, returning the URL the page links it by, or None.
 
-        Every figure in this report goes out as a file. Embedding them instead is what took
-        this page to 174 MB on a 14-channel dyad: a coherence map is 51 x 3962 cells, and
-        the page carried one of them per channel per chromophore.
+        Every figure in this report goes out as a file. Embedded, they would take this page
+        to hundreds of megabytes: a coherence map is scales x samples cells, and the page
+        would carry one of them per channel per chromophore.
         """
         return save_png(b64, figures_dir, name)
 
@@ -969,7 +969,7 @@ def build_hyper_post_report(
         ``interactive`` writes each map as its own Plotly page instead of a PNG, and the
         entry then carries the iframe's height beside its URL. The ROI panel takes it and
         the channel panel does not, on volume alone: both cost about 3 MB a map, and a
-        14-channel crossed dyad has 2352 channel maps against 192 ROI ones.
+        crossed dyad has n^2 channel pairings against a handful of ROI ones.
 
         ``view_spans`` puts every condition's window into the file as well, so the run's
         page and each condition's are one file addressed by URL fragment. Interactive only:
@@ -1014,8 +1014,8 @@ def build_hyper_post_report(
         """Every figure one WTC result yields: the maps and the three matrices.
 
         Called once with the whole-run result and again with each condition window's, so a
-        condition page carries the panels the run's own page carries instead of the two
-        pictures a window used to get. Nothing here decides per panel whether a condition
+        condition page carries the panels the run's own page carries. Nothing here decides
+        per panel whether a condition
         has it; the only difference between the two calls is what result comes in.
 
         ``cond_slug`` names the files, absent for the run and the window's own label for a
@@ -1119,7 +1119,7 @@ def build_hyper_post_report(
         One figure per matrix rather than one per chromophore, which is the one thing on
         this page that is not built per chromophore. HbO and HbR are run as a consistency
         check on each other, and side by side on one colour scale is that check; stacked as
-        two figures with a colorbar each, they were two results a reader had to hold in their
+        two figures with a colorbar each, they are two results a reader has to hold in their
         head. The maps above stay per chromophore because a map is a picture of one pairing
         and there is no comparison to draw inside it.
 
@@ -1303,7 +1303,7 @@ def build_hyper_post_report(
             bad_pairs_all |= {c.rsplit(" ", 1)[0] for c in chs}
 
     # A condition keeps the run's task- entity and takes a cond- of its own,
-    # `..._task-full_cond-baseline_report.html`, which is the rule the subject
+    # `..._task-experiment_cond-baseline_report.html`, which is the rule the subject
     # report follows. Putting the label in `task-` instead would name a condition page the
     # same as the run page of a tree where that condition was cropped to its own task, and
     # the two are not the same number: one carries the whole recording's cone of influence

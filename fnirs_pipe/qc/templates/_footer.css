@@ -20,9 +20,9 @@
 
 /* The provenance graph is only as wide as the chain is long and as tall as the run has
    parallel outputs, so it is the one figure in a report that can come out portrait. Drawn at
-   100% of the page width a dyad's filled a screen and a half. Sized to its own drawing and
-   capped instead, which leaves a wide subject graph where it was: its natural width already
-   exceeds the page, so max-width still takes it to the full column. */
+   100% of the page width a dyad's would fill a screen and a half, so it is sized to its own
+   drawing and capped; a wide subject graph's natural width already exceeds the page, so
+   max-width still takes it to the full column. */
 img.prov-graph { width: auto; max-width: 100%; max-height: 560px; margin: 0 auto;
                  display: block; border: none; }
 

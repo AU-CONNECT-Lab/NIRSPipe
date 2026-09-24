@@ -25,11 +25,9 @@
 .cd-table .cd-cell { padding-left: 0.4rem; padding-right: 0.4rem; }
 {% endblock %}
 
-{# One cell per section, anchored to it, as the subject and post bars are. Every id that has
-   ever been rated is kept even where the section it names was rewritten: a rating is filed
-   under the id, so renaming one leaves an old verdict on disk with no cell to show it in.
-   `Triggers` is the one that lost its own section; it folded into Alignment, which is where
-   a reader looking for it now goes. #}
+{# One cell per section, anchored to it, as the subject and post bars are. An id may differ
+   from the anchor it points at (`Signal_Quality` for #Quality): a rating is filed under the
+   id, so renaming one leaves an old verdict on disk with no cell to show it in. #}
 {% set nav_modules = [nav_bar([
   ("Alignment", "Alignment"),
   ("Usable", "Usable time"),

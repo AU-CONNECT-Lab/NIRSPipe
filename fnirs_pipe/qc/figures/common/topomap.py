@@ -1,10 +1,10 @@
 """Channel-wise scalp maps of the evoked response, drawn as coloured source-detector paths.
 
 Each channel is painted along the path between its own source and detector, so the map shows
-what was measured and nothing else. The interpolated version this replaced (MNE's
-``plot_topomap``, an EEG rendering) filled the scalp between channels with a smooth field,
-which on a montage of a few dozen sparse channels is mostly invented: a pattern that looked
-spatially resolved came from the interpolator, not the optodes.
+what was measured and nothing else. An interpolated map (MNE's ``plot_topomap``, an EEG
+rendering) fills the scalp between channels with a smooth field, which on a montage of a few
+dozen sparse channels is mostly invented: a pattern that looks spatially resolved comes from
+the interpolator, not the optodes.
 
 Short channels get their own row on the same colour scale as the long ones. They are too
 shallow to reach cortex, so a short row as strongly coloured as the long row above it says
@@ -30,8 +30,8 @@ _SAMPLES     = 26      # markers laid along a long channel to read as a continuo
 _TRIM        = 0.16    # fraction of the path left bare at each end, so optodes stay visible
 # Marker size is in pixels while a head scales with its container, so these are read
 # against the smallest head this grid draws: chromophore x separation rows against one
-# column per condition. Narrowed from 9/15 on 2026-09-12, where a channel bar was thick
-# enough to swallow the head under it. The dyad report's heads carry the same pair.
+# column per condition. Much thicker and a channel bar swallows the head under it. The
+# dyad report's heads carry the same pair.
 _LONG_SIZE   = 7
 _SHORT_SIZE  = 12      # a short channel is too stubby to read as a path; draw one disc
 
@@ -41,8 +41,8 @@ _FRAME_STOP  = 20.0    # past the canonical response; frames beyond this carry n
 _OPEN_AT     = 6.0     # canonical HbO peak, so the figure opens on the informative frame
 
 # ---- Colour ----
-# a percentile, not the max: one stray condition (a mis-triggered event with two trials) used
-# to set the scale for every panel and washed the real conditions out to white
+# a percentile, not the max: one stray condition (a mis-triggered event with two trials)
+# would set the scale for every panel and wash the real conditions out to white
 _SCALE_PCT   = 99.5
 # below this a condition is single-trial noise: drawn, but not consulted for the range
 _SCALE_MIN_TRIALS = 3

@@ -22,9 +22,9 @@ def optode_layout_static(
 ) -> str | None:
     """Matplotlib static optode flat map. Returns base64 PNG or None.
 
-    ``bad_channels`` was accepted and ignored until 2026-09-09, which made this an SCI map
-    rather than a quality map: a channel rejected on its coupled-window share was drawn
-    green beside a table calling it BAD. A rejected pair is red now whatever its SCI.
+    A pair in ``bad_channels`` is red whatever its SCI, so this is a quality map rather than
+    an SCI map: a channel rejected on its coupled-window share is never drawn green beside a
+    table calling it BAD.
     """
     import matplotlib.pyplot as plt
 

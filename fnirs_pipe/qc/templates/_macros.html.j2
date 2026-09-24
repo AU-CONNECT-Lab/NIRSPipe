@@ -1,9 +1,5 @@
 {# Shared Jinja macros for QC report templates.
-   Usage: {% from "_macros.html.j2" import subject_metrics %}
-
-   The `card` macro lived here until every report took the document look, where a section is
-   a heading with a disclosure triangle and a filled panel around it is chrome. It is gone
-   rather than left unused: the only thing it was good for was building the look back. #}
+   Usage: {% from "_macros.html.j2" import subject_metrics %} #}
 
 {# Per-subject quality metrics: one table per channel set, one column per metric, one row
    per member. Tables come from hyper_report.subject_metric_tables.

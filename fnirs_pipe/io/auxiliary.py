@@ -180,8 +180,8 @@ def write_aux_window(
     Aux keeps the rate it was recorded at. Resampling is a postprocessing decision and
     `resample_to_grid` is where it belongs.
 
-        source 0 to 600 s at 98.67 Hz, windows [(100, 400)]
-            -> one channel of 29601 samples stamped 0 to 300 s
+        source 0 to 600 s at 100 Hz, windows [(100, 400)]
+            -> one channel of 30001 samples stamped 0 to 300 s
 
     Parameters
     ----------

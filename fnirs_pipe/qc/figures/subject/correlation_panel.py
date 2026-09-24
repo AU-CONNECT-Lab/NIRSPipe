@@ -5,10 +5,9 @@ Top row:    one channel × channel Pearson r heatmap per stage, before and after
 Bottom row: per-pair HbO–HbR r as a dumbbell, before → after, grouped by source-detector
             separation.
 
-The two stages used to be two separate figures, each with its own bar chart sorted by its
-own r, so the same channel sat at a different height in each and comparing one channel
-across the step meant finding it twice in two differently ordered lists. One figure, one
-channel order, and the change is the length of a connector.
+Both stages share one figure and one channel order, so a channel sits at the same height
+before and after and the change is the length of a connector. Two figures each sorted by
+their own r would put it at two heights in two differently ordered lists.
 
 Separation is what the grouping is for. The HbO–HbR anticorrelation is a property of
 cortical haemodynamics, so it says nothing about a
@@ -19,13 +18,11 @@ dividers inside each chromophore mark the long/short boundary rather than wherev
 acquisition order happened to switch.
 
 Both panels read their colour off one reversed RdBu scale, so a shade means the same r
-whether it is a matrix cell or a dot. **The panel carries no threshold.** It used to draw a
-dashed rule at r = −0.3, dropped 2026-09-19: the number had no source, and on recorded data
-it failed three of six runs and moved across the line when the low-pass was dropped, so it
-was reporting the passband as much as the physiology. The value is worth reading and the
-verdict was not. This also removed the reason the fills are not a third hue, which was that
-green/amber/red separated amber from green by ΔE 5.8 under protanopia; keep them off anyway
-for the same colourblindness reason if a verdict is ever proposed again.
+whether it is a matrix cell or a dot. **The panel carries no threshold.** A fixed cut such
+as r = -0.3 has no source, and which side of it a run lands on moves with the low-pass edge,
+so it reports the passband as much as the physiology. The value is worth reading and a
+verdict is not. Any future verdict should also stay off green/amber/red, which separates
+amber from green by only ΔE 5.8 under protanopia.
 """
 
 import mne
@@ -61,9 +58,9 @@ _AFTER_LABEL_GLM = "after GLM (task removed)"
 
 # ---- Layout ----
 # The heatmap is square-constrained, so its side is min(column width, row height). A row
-# height fixed in advance is what made the row the binding one on a wide page: 15 px cells
-# with the spare width spent on blank range either side of the matrix, which is also what
-# pushed the y tick labels away from it. The row is sized off the channel count instead,
+# height fixed in advance makes the row the binding one on a wide page: small cells with
+# the spare width spent on blank range either side of the matrix, which also pushes the y
+# tick labels away from it. The row is sized off the channel count instead,
 # and `constrain="domain"` below shrinks the axis rather than padding its range, so the
 # labels stay against the matrix whichever dimension binds. These are the height the file is
 # written with; `fit_js` replaces it with the one that fits the page the figure is opened on.
@@ -300,9 +297,9 @@ def hbo_hbr_correlation_figure(
     xs, labels = _add_dumbbell(fig, groups, r_b, r_a, dumbbell_row, 1,
                                after_label=after_label, task_modelled=task_modelled)
 
-    # Every channel keeps its label: unlike the static panel this replaced, an unreadable
+    # Every channel keeps its label: unlike a static panel, an unreadable
     # tick here is one scroll-zoom away from being readable, so subsampling them buys
-    # nothing. The size only has to keep 44-ish channels legible unzoomed.
+    # nothing. The size only has to keep a few dozen channels legible unzoomed.
     tick_fs = int(np.clip(480 / max(n_ch, 1), 5, 10))
     for col in range(1, cols + 1):
         x_axis = "x" if col == 1 else "x2"

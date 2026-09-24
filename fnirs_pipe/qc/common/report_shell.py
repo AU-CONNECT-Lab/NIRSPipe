@@ -283,8 +283,8 @@ def collapse_messages(messages: list[str]) -> list[str]:
     """One line per distinct message, in first-seen order, counted when it repeats.
 
     ["Channel S1_D1: no data", "Channel S1_D2: no data"] stays two lines; the same
-    message twice becomes one line ending in " (x2)". A per-channel section that fails
-    the same way on every channel used to print forty identical lines.
+    message twice becomes one line ending in " (x2)", so a per-channel section that fails
+    the same way on every channel prints one line rather than one per channel.
 
     Public because the raw viewer prints its own lists: it renders in JavaScript and can
     never share the footer's markup, but the strings it renders come from here.

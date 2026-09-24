@@ -176,7 +176,7 @@ def screening_coherence(
             # second is the window's verdict. Per channel, a rank among that channel's own
             # draws, which at an affordable iteration count is noisy. Per window, the rank
             # of the channel mean among the null's channel means: the channels are pooled
-            # before the comparison, so it tests the dyad rather than fourteen channels.
+            # before the comparison, so it tests the dyad rather than each channel.
             mean_null = null.mean(axis=1)
             window_pct = float((mean_null < real.mean()).mean() * 100)
             for i, label in enumerate(labels):

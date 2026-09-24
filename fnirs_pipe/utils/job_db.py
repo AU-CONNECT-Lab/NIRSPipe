@@ -365,7 +365,7 @@ def _get_conn(db_path: Path) -> sqlite3.Connection:
     db_path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(db_path, timeout=_LOCK_TIMEOUT_S)
     # before anything that can block: switching journal mode is not covered by it, but
-    # everything after is, and this used to be set one line too late
+    # everything after is
     conn.execute(f"PRAGMA busy_timeout={int(_LOCK_TIMEOUT_S * 1000)}")
     if conn.execute("PRAGMA journal_mode").fetchone()[0].lower() != "wal":
         try:

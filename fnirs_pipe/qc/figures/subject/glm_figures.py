@@ -228,7 +228,6 @@ def _save_glm_brain(
 
         # Replicate plot_glm_surface_projection internally so we can pass
         # time_viewer=False — required for offscreen rendering (no iren available)
-        # https://mne.tools/mne-nirs/stable/_modules/mne_nirs/visualisation/_plot_GLM_surface_projection.html#plot_glm_surface_projection
         if ch_col is not None:
             results_df = results_df.set_index(ch_col).loc[raw_hbo.ch_names].reset_index()
         ea = EvokedArray(results_df[coef_col].values[:, np.newaxis], raw_hbo.info.copy())

@@ -201,7 +201,7 @@ def _group_null_section():
         "Null above the cell",
         params(
             field("Task",
-                  dbc.Input(id="hy-gn-task", type="text", placeholder="full")),
+                  dbc.Input(id="hy-gn-task", type="text", placeholder="task label (required)")),
             field("Chromophore",
                   dbc.Select(id="hy-gn-chroma",
                              options=[{"label": "HbO", "value": "hbo"},

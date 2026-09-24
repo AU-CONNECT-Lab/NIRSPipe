@@ -125,7 +125,7 @@ def _retitle_recording_sidecar(out_snirf: Path, raw_seg, source_path: Path,
 
     ::
 
-        source TaskName "full", 3000 s; segment named task-early, 120 s from 30 s
+        source TaskName "rest", 3000 s; segment named task-early, 120 s from 30 s
           -> TaskName "early", RecordingDuration 120.0, crop_windows_s [[30.0, 150.0]]
 
     BIDS derives the task label from ``TaskName``, so a segment renamed onto its own task
@@ -165,9 +165,9 @@ def _segment_stems(segments_df: pd.DataFrame, stem: str) -> list[str]:
 
     ::
 
-        stem "sub-01_task-full", task column ["early", "late"]
+        stem "sub-01_task-rest", task column ["early", "late"]
           -> ["sub-01_task-early", "sub-01_task-late"]
-        one row and no task column -> ["sub-01_task-full"]
+        one row and no task column -> ["sub-01_task-rest"]
 
     A column with nothing typed in it counts as absent, which is what the GUI sends.
     """

@@ -2,10 +2,9 @@
 
 Called from ``fnirs-hyper`` when ``--wtc-phase-null`` is given, so it inherits that run's
 stage, band and window by construction: a null averaged over a different band is not the
-null for the table it sits beside. Crossing is the one thing it does not inherit. The null
-used to take ``--wtc-channel-cross`` from the real run, so asking for the exploratory
-196-pair channel table also multiplied the surrogate cost by 14; it is now the null's own
-decision, ``--wtc-phase-null-cross``, and defaults to off.
+null for the table it sits beside. Crossing is the one thing it does not inherit: it is the
+null's own decision, ``--wtc-phase-null-cross``, off by default, because n channels crossed
+give n^2 pairings and so n times the surrogate cost of the n homologous ones.
 
 The chromophores are inherited, unlike crossing: a null missing one leaves that half of the
 real table with nothing to be tested against, which is not a saving worth offering.

@@ -19,9 +19,6 @@ logger = get_logger("post.denoise")
 # leaves an fNIRS low-pass with its stopband above the cardiac band. FIR stays available for
 # the one thing Butterworth cannot do, linear phase.
 
-# https://mne.tools/stable/generated/mne.io.Raw.html#mne.io.Raw.filter
-# https://mne.tools/mne-nirs/stable/auto_examples/general/plot_30_frequency.html
-
 FILTER_METHODS = ("iir", "fir")
 DEFAULT_FILTER_METHOD = "iir"
 DEFAULT_FILTER_ORDER = 4
@@ -183,7 +180,6 @@ def bandpass_filter(
     method: str = DEFAULT_FILTER_METHOD,
     order: int = DEFAULT_FILTER_ORDER,
 ) -> mne.io.Raw:
-    # https://mne.tools/stable/generated/mne.io.Raw.html#mne.io.Raw.filter
     kwargs = filter_kwargs(haemo.info["sfreq"], haemo.n_times, l_freq, h_freq, method, order)
     haemo.filter(l_freq=l_freq, h_freq=h_freq, **kwargs)
     # order is meaningless for FIR, so it is not recorded there: a sidecar reader should see
@@ -195,6 +191,5 @@ def bandpass_filter(
 
 
 def resample(haemo: mne.io.Raw, sfreq: float) -> mne.io.Raw:
-    # https://mne.tools/stable/generated/mne.io.Raw.html#mne.io.Raw.resample
     haemo.resample(sfreq)
     return stamp(haemo, stage="resampled", step="resample", source=haemo, sfreq=sfreq)

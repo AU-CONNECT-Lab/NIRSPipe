@@ -67,8 +67,8 @@ def alignment_params(raws: dict[str, mne.io.Raw]) -> dict:
        "align_offset_s": {"sub-01": 0.0, "sub-02": 22.4},
        "aligned_duration_s": 3900.0}
 
-    Every inter-brain metric assumes the members share a time axis, and until this nothing
-    on disk said whether they had been put on one. ``aligned: null`` means the recordings
+    Every inter-brain metric assumes the members share a time axis, and this is what says on
+    disk whether they were put on one. ``aligned: null`` means the recordings
     reached the metric without going through either route, which is the case worth catching:
     a reader cannot tell it from a successful alignment by looking at the numbers.
 
@@ -327,9 +327,7 @@ def resolve_analysis_window(
     :func:`~fnirs_pipe.pipeline.hyper.wtc.window_result`: a cut stretch transformed on its
     own has two edges of its own, and its cone of influence eats a share of the band that
     grows as the window shortens, so the coherence over a 300 s cut comes out higher than
-    the same 300 s read out of the whole record. This used to cut, so it was the one entry in
-    this pipeline still paying that cost. Numbers from before that change are not
-    reproducible with it.
+    the same 300 s read out of the whole record.
 
     ``tend`` past the end of the data is clipped rather than refused: recordings differ in
     length and an over-long window is a request for "to the end", not a mistake. A ``tstart``

@@ -135,7 +135,7 @@ def _load_aligned_group(derivatives_dir, members, task, desc, no_align, normaliz
 def _quality_summary(aligned_raws: dict, group_sqm: dict, sep_bands=None) -> None:
     """Print what the metrics are about to be computed on, one line per subject.
 
-    ``sub-01  long 12/14  bad 2  mean SCI 0.86  from: tapping``
+    ``sub-01  long 18/20  bad 2  mean SCI 0.86  from: tapping``
 
     Counted off the aligned Raw after the rejections are applied, so it describes the channel
     set the coherence actually uses rather than what the montage holds. The report says the
@@ -318,8 +318,7 @@ def cmd_run(
                   "whole-run transform per iteration, and matching that would cost a "
                   "transform per condition per iteration. A null read off a different route "
                   "than the table it is subtracted from measures the difference between the "
-                  "routes, which is about +0.005 on a 300 s condition here. Drop one of the "
-                  "two.", file=sys.stderr)
+                  "routes. Drop one of the two.", file=sys.stderr)
             raise SystemExit(1)
         if not wtc_by_condition:
             print("[error] --wtc-cond-transform needs --wtc-by-condition; there are no "
@@ -801,8 +800,8 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
                           "default scale range unused, and the saving is proportional. The "
                           "kept scales land on pycwt's own grid and the margin is wider than "
                           "the scale-smoothing window, so the coherences match the "
-                          "unrestricted ones bit for bit. --no-wtc-limit-scales restores the "
-                          "old behaviour.")
+                          "unrestricted ones bit for bit. --no-wtc-limit-scales computes "
+                          "every scale.")
     run.add_argument("--wtc-save-maps", action="store_true",
                      help="Save the full time-frequency coherence maps beside each TSV as "
                           "npz, so a different band can be averaged later with `fnirs-hyper "
@@ -886,8 +885,8 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
                           "them rests on far fewer independent observations than it has "
                           "samples and the value it reaches with nothing coupled is "
                           "correspondingly large; whitening puts r back on the scale its "
-                          "sample count implies. It also shrinks r by roughly a factor of "
-                          f"six, so a whitened matrix is not comparable with an unwhitened "
+                          "sample count implies. It also shrinks r, so a whitened matrix is "
+                          "not comparable with an unwhitened "
                           f"one. The published work that whitens uses {ISC_MAX_AR_ORDER} as "
                           "the ceiling and picks the order per channel by BIC, which is what "
                           "passing that number does. The order each channel used reaches "
@@ -946,14 +945,14 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
         "fnirs-hyper-groupnull", reads_subjects=False, parents=[common],
         description="fnirs-hyper-pairnull ranks each channel of each dyad inside its own draws, which "
                     "says where a channel stands and spends the pool's resolution on saying "
-                    "it: against 22 stand-ins no cell can reach a p under 1/23, so a test "
+                    "it: against n stand-ins no cell can reach a p under 1/(n+1), so a test "
                     "corrected over a thousand cells rejects almost nothing whatever the "
                     "data does. This averages the channels first and ranks that, once per "
                     "occasion and once over the cohort, which cannot say which channel and "
                     "can say whether the pairing beats its null at all. It reads the draws "
                     "fnirs-hyper-pairnull wrote and runs no transform.")
-    group_null.add_argument("--task", default="full",
-                            help="Task whose tables to read (default full).")
+    group_null.add_argument("--task", required=True,
+                            help="Task whose tables to read, one at a time.")
     group_null.add_argument("--wtc-chroma", choices=("hbo", "hbr"), default="hbo",
                             help="Chromophore to read (default hbo). One at a time: the two "
                                  "are separate measurements and averaging across them means "
@@ -966,8 +965,7 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
                             help="Region to channel map, the same file the other stages "
                                  "take. Given it, each region is reported as its own level "
                                  "beside the whole-brain mean: the region's homologous "
-                                 "pairings averaged, which is the route Nguyen 2020 and "
-                                 "Miller 2019 take. Omitted, only the whole-brain levels "
+                                 "pairings averaged. Omitted, only the whole-brain levels "
                                  "are written.")
     group_null.add_argument("--n-resample", type=int, default=20000,
                             help="Resamples behind the cohort null (default 20000). Each "

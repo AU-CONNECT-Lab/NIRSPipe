@@ -2,10 +2,7 @@
 
 The subject report, the raw viewer and the GUI all answer the same question channel by
 channel: what did this channel score, was it kept, and which separation block is it in.
-Each of them used to assemble that answer itself, from different halves of the record, so
-the three disagreed: the raw viewer read one metric where the report read five, the GUI
-looked up SCI under a key the raw recording does not use and printed a dash for every
-channel, and only the report knew about the long/short split at all.
+Assembled here once, so the three cannot read different halves of the record and disagree.
 
 Everything here reads an SQM record and returns plain dicts. Nothing computes a metric and
 nothing renders: the record is the single measurement, and a view that wants a number it

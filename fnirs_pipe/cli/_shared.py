@@ -218,7 +218,5 @@ def alignment_window() -> argparse.ArgumentParser:
                         "rather than cuts: the wavelet transform is computed over the whole "
                         "recording and the window read out of it, so the window carries the "
                         "recording's cone of influence rather than two edges of its own, "
-                        "and a condition falling outside it is dropped from the run. This "
-                        "cut the recording until now, so numbers from before are not "
-                        "reproducible with it.")
+                        "and a condition falling outside it is dropped from the run.")
     return p

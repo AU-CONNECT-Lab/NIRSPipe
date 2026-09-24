@@ -78,9 +78,8 @@ def group_report_dir(output_dir: Path, group_id: str) -> Path:
 def group_data_dir(output_dir: Path, group_id: str, session: str | None = None) -> Path:
     """A group's tables, sidecars and quality record: ``group-<id>/[ses-<s>/]nirs``.
 
-    The mirror of a subject's ``sub-<id>/[ses-<s>/]nirs``. These used to sit loose in the
-    derivatives root, where a study of 25 dyads over 5 tasks put two thousand files
-    between the reader and the subject folders.
+    The mirror of a subject's ``sub-<id>/[ses-<s>/]nirs``. Loose in the derivatives root, a
+    cohort's group files would sit between the reader and the subject folders.
     """
     folder = group_report_dir(output_dir, group_id)
     if session:
@@ -105,9 +104,8 @@ def group_output_path(
       entities={"task": "rest", "statistic": "wtc"}, suffix="relmat", extension=".tsv"
         -> <out>/group-G1/nirs/group-G1_task-rest_stat-wtc_relmat.tsv
 
-    The mirror of :func:`build_output_path` for the group side. It replaced a ``hyper_stem``
-    that handed out a prefix for callers to append to, which is how five orthogonal
-    dimensions ended up hyphen-stacked onto the end of one token.
+    The mirror of :func:`build_output_path` for the group side. It builds the whole name
+    rather than handing out a prefix to append to, so each dimension stays its own entity.
     """
     from fnirs_pipe.io.naming import derivative_path
 
@@ -161,10 +159,9 @@ def entity_of(path: "Path | str", name: str) -> str | None:
 
     ``entity_of("sub-01_task-rest_desc-preproc_nirs.snirf", "desc")`` -> ``"preproc"``
 
-    The one place the package parses an entity out of a name. It used to be three separate
-    regexes in three modules, which is how a rename can leave two of them reading and the
-    third silently finding nothing. A label is alphanumeric by BIDS definition, so the
-    match ends at the underscore or dot that follows it.
+    The one place the package parses an entity out of a name, so a rename cannot leave one
+    reader matching and another silently finding nothing. A label is alphanumeric by BIDS
+    definition, so the match ends at the underscore or dot that follows it.
     """
     # ^ as well as _, so the leading sub- or group- is readable too
     m = re.search(rf"(?:^|_){name}-([A-Za-z0-9]+)", getattr(path, "name", path))
@@ -185,11 +182,10 @@ def select_one_run(
     ``[sub-01_ses-a_x, sub-01_ses-b_x], session="a"`` -> the ses-a one
     ``[sub-01_ses-a_x, sub-01_ses-b_x], session=None`` -> raises, naming a and b
 
-    One recording per group member is what every inter-brain metric assumes, and the two
-    places that used to pick one both took the first match in sorted order. A subject with
-    two sessions or two runs of the same task then had one of them silently analysed and the
-    other silently dropped, with nothing in the output saying which. Ambiguity is refused
-    here instead: naming the session or the run is a decision only the caller can make.
+    One recording per group member is what every inter-brain metric assumes. Taking the
+    first match would silently analyse one of a subject's two sessions or runs and drop the
+    other, with nothing in the output saying which, so ambiguity is refused: naming the
+    session or the run is a decision only the caller can make.
     """
     for name, value in (("ses", session), ("run", run)):
         if value is not None:
@@ -296,8 +292,8 @@ _REPLACE_WAIT_S = 0.05
 #
 # No trailing slash on the two directories. It is the gitignore spelling for "a directory
 # of this name at any depth", but bids-validator 3.0.2 matches nothing with it, so
-# `figures/` left every figure under `sub-*/figures/` and `group-*/figures/` on the
-# validator's books. Measured, not assumed: see the handoff.
+# `figures/` would leave every figure under `sub-*/figures/` and `group-*/figures/` on the
+# validator's books.
 #
 # The records that are a JSON with no data file beside them: the quality records, the
 # human ratings and the channel decisions. A validator reads any such JSON as a sidecar

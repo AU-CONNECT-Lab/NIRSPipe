@@ -21,8 +21,8 @@ select#run-select {
   padding: 0.2rem 0.4rem; background: #f8f9fa;
 }
 
-/* grids. The panels that sit side by side stay side by side; what goes is the chrome that
-   used to box each one, the page reading as a document the way the subject report does. */
+/* grids. The panels that sit side by side stay side by side, unboxed, so the page reads
+   as a document the way the subject report does. */
 .row { display: grid; gap: 1.25rem; margin-bottom: 0.5rem; }
 .panel-head { font-size: 0.9rem; font-weight: 600; color: #34495e; margin: 0 0 0.3rem; }
 .panel-head .hint { font-weight: 400; }
@@ -81,8 +81,8 @@ select#run-select {
 
 {# The sections this viewer draws, once per run it holds: `group` is the run index, so a
    viewer holding several shows one run's cells at a time. Rating ids carry the run label so
-   a subject's runs do not share a key, and the three that existed before this bar listed
-   every panel keep their spelling, an id being what a saved rating is filed under. #}
+   a subject's runs do not share a key; an id is what a saved rating is filed under, so
+   respelling one orphans the ratings already on disk. #}
 {% set _sections = [
   ("_Layout", "Layout", "#Layout"),
   ("_Raw_Signal", "Raw", "#RawSignal"),
@@ -805,8 +805,8 @@ function loadSqm() {
 
 // Rows arrive labelled, formatted and coloured: the labels, number formats, thresholds and
 // tooltips all live in the metric registry (fnirs_pipe.qc.boilerplate.vocabulary), which the
-// subject report reads too. This used to hold its own copy of the cutoffs, and the two views
-// of one recording could disagree about whether a channel set passed.
+// subject report reads too, so the two views of one recording cannot disagree about whether
+// a channel set passed.
 function renderSqm(d) {
   function li(label, value, c, tip) {
     return "<li><span class='ql'" + (tip ? " title='" + _esc(tip) + "'" : "") + ">"

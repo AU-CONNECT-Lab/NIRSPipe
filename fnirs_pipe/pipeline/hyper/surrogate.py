@@ -281,8 +281,7 @@ def compute_wtc_phase_null(
 
     Cost is ``n_iter`` times a full WTC run. Significance contours are never computed here:
     this table *is* the null, so a second null inside it would be redundant and slow. The
-    surrogate maps are not saved either, but they are no longer only averaged: each one is
-    counted into a per-frequency histogram on the way past, and ``NullDraws.levels`` is
+    surrogate maps are not saved either; each one is counted into a per-frequency histogram on the way past, and ``NullDraws.levels`` is
     ``{(sub1, sub2, label): ndarray(n_freqs,)}``, the coherence a cell has to clear at each
     frequency to beat the null. That is what the phase arrows are drawn against, and it has
     to be per frequency: surrogate coherence is not flat in frequency, it rises at both ends

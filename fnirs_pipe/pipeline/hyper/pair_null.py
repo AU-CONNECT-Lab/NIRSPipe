@@ -52,8 +52,8 @@ def partner_pool(
 
     ::
 
-        pairs with groups d01..d03, two members each
-        partner_pool(groups, "d01", "full")  -> [d02's member 1, d03's member 1]
+        pairs with groups G1..G3, two members each
+        partner_pool(groups, "G1", "rest")  -> [G2's member 1, G3's member 1]
 
     ``position`` keeps a member's role: where the two members of a group are not
     interchangeable, only the other groups' member at the same index is a valid stand-in.
@@ -116,8 +116,8 @@ def _warn_unverifiable_pool(same_task: dict) -> None:
     The refusal above catches a cohort of repeated people only where the same person keeps
     one ``subject_id`` across groups, which is how BIDS encodes it: a stable ``sub-`` label
     and a ``ses-`` label per visit, and ``parse_group_csv`` takes a ``session`` column for
-    exactly that. A table that instead bakes the visit into the subject id, ``sub-p1d01``
-    and ``sub-p1d03`` for one person, looks identical to a table of strangers, and nothing
+    exactly that. A table that instead bakes the visit into the subject id, ``sub-01v1``
+    and ``sub-01v2`` for one person, looks identical to a table of strangers, and nothing
     on disk distinguishes them. So where every id is unique the check has not passed, it has
     had nothing to test, and the difference matters: under `any` a repeated person would be
     ranked against another recording of themselves.
@@ -216,14 +216,13 @@ def _draw_condition_pairs(
     Each condition is taken from **the stand-in's own onset**, not from where it sat in the
     real dyad's clock. Sessions that run to one timetable drift: the first trigger lines up
     by construction and the gaps between blocks do not, so by the last condition the two
-    recordings are a quarter of a block apart. Cutting the stand-in at the real dyad's window
+    recordings can be well apart. Cutting the stand-in at the real dyad's window
     would then correlate one person's conversation against another's silence and call it a
     null, which reads as "no coupling" for a reason that has nothing to do with coupling.
 
     Taking each side from its own marker makes every draw the same length as the condition it
-    stands in for, so the whole-record duration stops mattering: it used to have to reach the
-    real dyad's, which on a cohort with a 338 s spread left the longest sessions with no
-    stand-ins at all.
+    stands in for, so the whole-record duration does not matter and a stand-in shorter than
+    the real dyad's recording is still usable.
     """
     from fnirs_pipe.pipeline.hyper.group_io import load_group_haemo
     from fnirs_pipe.pipeline.hyper.group_quality import apply_group_bads, load_group_sqm
@@ -396,10 +395,10 @@ def run_pair_null(
     fixed_id = members[0].subject_id
     true_pair = (members[0].subject_id, members[1].subject_id)
     aligned_duration = min(float(r.times[-1]) for r in aligned_real.values())
-    # A stand-in no longer has to match the whole recording's length: each condition is cut
-    # from its own marker on both sides, so what has to agree is the block, and the blocks
-    # are what the trigger defines. That is what lets a cohort whose sessions differ by
-    # minutes draw from its whole pool rather than only from the sessions that ran longer.
+    # A stand-in need not match the whole recording's length: each condition is cut from its
+    # own marker on both sides, so what has to agree is the block, and the blocks are what
+    # the trigger defines. That is what lets a cohort whose sessions differ by minutes draw
+    # from its whole pool rather than only from the sessions that ran longer.
     recorded = real_params.get("aligned_duration_s")
     if recorded is not None and abs(float(recorded) - aligned_duration) > _DURATION_TOL_S:
         # the tree moved under the table: the null would describe a different stretch
@@ -551,7 +550,7 @@ def run_pair_null(
     )
 
     # Per condition only. A whole-run re-paired null would mean cutting the stand-in at the
-    # real dyad's clock, and the sessions drift apart between blocks, so that table used to
+    # real dyad's clock, and the sessions drift apart between blocks, so that table would
     # correlate one person's conversation against another's game and rank a real value
     # against it.
     out_path = None

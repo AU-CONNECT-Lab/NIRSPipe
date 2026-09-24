@@ -30,9 +30,8 @@ _DRIFT_CHOICES         = ["cosine", "polynomial", "none"]
 def _noise_model(value: str) -> str:
     """``ols``, ``auto``, ``arN`` for any order the library will take, or ``ar_irls``.
 
-    A closed list is what lost ``auto`` when this CLI moved to argparse, and what the
-    package measures is no reason to stop a caller passing something else. The dropdown and
-    the help still name the common ones.
+    A pattern rather than a closed list: what the package measures is no reason to stop a
+    caller passing something else. The dropdown and the help still name the common ones.
     """
     if re.fullmatch(NOISE_MODEL_PATTERN, value):
         return value

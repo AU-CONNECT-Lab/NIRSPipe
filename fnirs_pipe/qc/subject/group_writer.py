@@ -252,8 +252,7 @@ def _render_group(
     """Render TSV + HTML for an already-collected group of SQM rows.
 
     Every panel is built under its own guard, so a metric one cohort cannot plot costs that
-    panel and not the report. It used to cost the report: this function had no error
-    handling at all, where every other report builder loses a single section.
+    panel and not the report, as in every other report builder.
     """
     output_dir.mkdir(parents=True, exist_ok=True)
     errors: list[str] = []

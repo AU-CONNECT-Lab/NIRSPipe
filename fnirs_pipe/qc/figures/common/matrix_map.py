@@ -1,8 +1,8 @@
 """The conventions every matrix panel in the reports is drawn with.
 
 Which colour scale a quantity takes, what a cell with no value looks like, and how a cell's
-number is printed on top of it. Three figures used to carry their own copy of the
-correlation scale alone, so a red cell could have meant +1 in one panel and -1 in the next.
+number is printed on top of it. One copy, so a red cell cannot mean +1 in one panel and -1
+in the next.
 
 Layout stays with each figure: a lower-triangle channel matrix with separation dividers, a
 pair of square per-chromophore matrices and a cross-brain grid are different pictures. What

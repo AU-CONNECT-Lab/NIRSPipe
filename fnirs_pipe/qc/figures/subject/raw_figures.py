@@ -54,10 +54,10 @@ def _ch_colors(raw: mne.io.Raw, short_thresh: float) -> list[str]:
 def psd_layout(height: int = 220, cardiac=None, resp=None) -> dict:
     """Layout for a single-panel PSD, with the physiological bands shaded.
 
-    ``cardiac`` and ``resp`` are the run's own ``(l_freq, h_freq)``, which is the point: the
-    band edges used to be constants here, so a study of infants (cardiac near 2 Hz) got a
-    stripe drawn over the adult band and a reader checking whether a channel carries a pulse
-    was looking at the wrong place. Passing None omits that band, and the colours and
+    ``cardiac`` and ``resp`` are the run's own ``(l_freq, h_freq)``, which is the point: with
+    constant edges a study of infants (cardiac near 2 Hz) would get a stripe drawn over the
+    adult band, and a reader checking whether a channel carries a pulse would look in the
+    wrong place. Passing None omits that band, and the colours and
     frequencies both come from the same place the multi-stage PSD figure reads them from.
     """
     bands = physio_bands(cardiac, resp)
@@ -351,8 +351,7 @@ def build_channel_figure(
                         epoch_fig.add_vline(
                             x=0, line=dict(color="#7f8c8d", width=1, dash="dash"),
                             row=i, col=1)
-                        # one scale over the rows, which the side-by-side layout had from
-                        # shared_yaxes; without it each condition autoscales to itself
+                        # one scale over the rows, or each condition autoscales to itself
                         epoch_fig.update_yaxes(
                             title_text="Conc. (µmol/L)", gridcolor="#eeeeee",
                             row=i, col=1, **({} if i == 1 else {"matches": "y"}))
@@ -1032,8 +1031,7 @@ def build_epoch_preview_figure(
             keep = {n for n in names if n.endswith(chromo)}
             return [i for i, n in enumerate(epochs.ch_names) if n in keep]
 
-        # every channel when the montage has no split to make, so a probe without short
-        # channels keeps the figure it always had
+        # every channel in one figure when the montage has no short channels to split off
         traces = []
         for chromo, color in (("hbo", HBO_COLOR), ("hbr", HBR_COLOR)):
             lp, sp = _picks(long_names, chromo), _picks(short_names, chromo)
@@ -1104,9 +1102,8 @@ def build_epoch_preview_figure(
             fig.add_hline(y=0, line=dict(color="#cccccc", width=1), row=i, col=1)
             fig.add_vline(x=0, line=dict(color="#7f8c8d", width=1, dash="dash"),
                           row=i, col=1)
-            # one y scale for every row, which the side-by-side layout got for free from
-            # shared_yaxes: without it each condition autoscales and the panel stops being
-            # a comparison
+            # one y scale for every row: without it each condition autoscales and the panel
+            # stops being a comparison
             fig.update_yaxes(title_text="Conc. (µmol/L)", gridcolor="#eeeeee",
                              row=i, col=1,
                              **({"range": yrange} if i == 1 else {"matches": "y"}))

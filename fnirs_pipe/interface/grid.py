@@ -1,19 +1,18 @@
 """Defaults shared by the interface's AG Grid tables.
 
-These replaced `dash_table.DataTable`, which was styled through component props. AG Grid is
-styled through `--ag-*` custom properties in `assets/interface.css` instead, so what is left
-here is the behaviour those tables had, plus the delete column `row_deletable` used to draw.
+AG Grid is styled through `--ag-*` custom properties in `assets/interface.css`, so what is
+here is the tables' behaviour, plus the delete column.
 """
 
 from __future__ import annotations
 
-# off so the grids behave as the DataTables did; neither offered sorting or filtering
+# no sorting or filtering
 COL_DEF = {"sortable": False, "filter": False, "resizable": True}
 
 AUTO_HEIGHT = {"domLayout": "autoHeight"}
 
 # The glyph is drawn by CSS rather than carried in the row data, so the dicts the callbacks
-# read stay exactly the columns they were.
+# read hold only the data columns.
 DEL_COL = {
     "headerName": "", "field": "_del", "editable": False,
     "width": 34, "minWidth": 34, "maxWidth": 34,

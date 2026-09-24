@@ -21,7 +21,7 @@ UNCLASSIFIED_COLOR = "#95a5a6"
 
 # Tick and axis text. A figure that leaves this unset is coloured by whoever renders it:
 # the CLI gets plotly's template default (#2a3f5f) and the interface gets its own page
-# colour, so one recording's channel labels came out two different colours in two views.
+# colour, so one recording's channel labels would come out two different colours in two views.
 # The interface keeps whatever a figure sets for itself, so setting it here settles both.
 AXIS_TEXT_COLOR = "#2a3f5f"
 

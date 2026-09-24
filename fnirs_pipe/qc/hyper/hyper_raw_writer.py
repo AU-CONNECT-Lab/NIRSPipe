@@ -102,9 +102,8 @@ def _condition_spans(raw: "mne.io.Raw | None") -> dict:
     The dict is what every panel that splits by condition reads, so none of them can be
     drawn against a different set of blocks. The rule behind it is
     :func:`~fnirs_pipe.qc.common.windows.condition_windows` rather than a second copy of it here.
-    The copy took each annotation's own duration, which on a system that writes
-    zero-duration triggers gave every block a zero-length span, and keyed the dict on the
-    bare description, which kept only the last occurrence of a repeated one.
+    Taking each annotation's own duration would give zero-duration triggers zero-length
+    spans, and keying on the bare description would keep only the last of a repeated one.
 
     ``min_duration`` is 0: these windows only split panels, so no frequency has to fit
     inside one and nothing is dropped for being short.

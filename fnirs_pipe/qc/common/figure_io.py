@@ -4,7 +4,7 @@ Two families, because the package draws with two libraries. Plotly figures becom
 standalone iframe-ready HTML; matplotlib figures arrive already encoded and are decoded
 to a PNG file. Both end in ``figures/`` beside the report, which is what keeps a report
 page small: the page carries a URL per figure and the browser fetches the one being
-looked at. Embedding them instead is what took one hyperscanning report to 174 MB.
+looked at. Embedding them instead makes a figure-heavy report very large.
 """
 
 from __future__ import annotations
@@ -195,9 +195,8 @@ def figure_namer(label: str, condition: "str | None" = None, prefix: str = ""):
                                           -> "sub-01_task-rest_desc-rawcarpet_nirs.html"
 
     Binding the label here is what lets one ``figures/`` directory hold every run of a
-    subject. They used to be kept apart by a subdirectory per run, which meant the same
-    panel was called the same thing in two places and neither name said which run it was.
-    Binding the condition is what replaced appending ``_<slug>`` to a bare panel name.
+    subject, each name saying which run it is; binding the condition does the same for a
+    condition's panels.
 
     ``prefix`` is how the raw viewer keeps its panels apart from the pipeline report's in
     that shared folder: the two draw the same panels at different stages of one run, so
@@ -223,8 +222,7 @@ def _fig_href(name: str) -> str:
       -> ``"figures/sub-01_task-rest_desc-carpet_nirs.html"``
 
     One line, and it stays a function because it is the one place that knows a report sits
-    directly above its figures. It used to take the directory as well, to pick out the
-    per-run subdirectory that no longer exists.
+    directly above its figures.
     """
     return f"figures/{name}"
 
@@ -244,8 +242,8 @@ def save_png(b64: str, figures_dir: Path, name: str) -> "str | None":
       -> "figures/group-G1_task-rest_chromo-hbo_chan-S1D1_desc-wtcmap_nirs.png"
 
     The two halves of writing a matplotlib figure out, in one call, because every caller
-    does both and a caller that saved without taking the href back used to be how a figure
-    reached disk and never reached the page. An empty or absent b64 returns None, so a
+    does both and saving without taking the href back leaves a figure on disk that never
+    reaches the page. An empty or absent b64 returns None, so a
     builder that declined to draw leaves the page's ``{% if %}`` gate closed.
     """
     if not b64:
@@ -260,7 +258,7 @@ def pair_slug(pair: "tuple[str, str] | None", n_pairings: int) -> str:
     Every inter-brain figure is of two members, so a group of three writes three of
     everything and each needs a name of its own. A dyad has exactly one pairing, where the
     slug would distinguish nothing and rename every file for no reason, so it is empty
-    there: a dyad's output is spelled the way it always was.
+    there.
 
     ::
 

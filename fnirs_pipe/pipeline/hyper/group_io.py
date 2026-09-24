@@ -106,8 +106,8 @@ def member_snirfs(bids_dir: Path, group: list[GroupEntry],
 
     One lookup for everything that follows a member's recording: loading it, writing its
     aligned copy under the same stem, and naming the session its channel decisions sit in.
-    They used to look it up separately, and the writers passed no session, so on a
-    two-session tree the aligned copy could take its name and sidecars from the other one.
+    Separate lookups that dropped the session could, on a two-session tree, give the aligned
+    copy its name and sidecars from the other session.
     """
     from fnirs_pipe.io.bids import get_layout, get_nirs_files
 

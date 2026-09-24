@@ -107,8 +107,8 @@ def _arrow_mask(wtc_arr, sig, freqs, freq_coi, arrow_min: float = ARROW_MIN_COHE
       a 51 x 3962 map -> a boolean of the same shape, usually a few percent True
 
     Two conditions, and both matter. **Inside the cone**, because a coefficient built against
-    the padding has a phase built against the padding too, and the old figure drew those
-    arrows at the same weight as the rest. **Above the level**, the Monte Carlo one when
+    the padding has a phase built against the padding too, and without the mask those
+    arrows draw at the same weight as the rest. **Above the level**, the Monte Carlo one when
     ``--wtc-significance`` produced it and ``arrow_min`` otherwise, because the relative
     phase of two uncorrelated series is a uniformly random direction and a field of those
     reads as structure to the eye.
@@ -156,12 +156,12 @@ def build_wtc_channel(
       computed.
     - one **span bar per block** above the axes with a line at each end of it, and one
       legend entry per condition in the top right. A block design repeats a condition, so a
-      label on every bar printed the same word once per block. The bar runs the block's
+      label on every bar would print the same word once per block. The bar runs the block's
       actual length, so the gaps between blocks are visible:
       a recording is continuous and its untasked stretches are data like any other, which a
-      set of onset lines alone made look like block boundaries. The interactive version
-      shaded each block on the map instead, under an opaque heatmap, so nothing showed;
-      moving the span outside the axes is that information back where it cannot be covered.
+      set of onset lines alone would make look like block boundaries. Shading each block on
+      the map would put it under an opaque heatmap where nothing shows; outside the axes the
+      span cannot be covered.
     """
     if wtc_data is None or len(freqs) == 0 or len(times) == 0:
         return None
@@ -258,7 +258,7 @@ _INTERACTIVE_PLOT_H = 430
 
 # The cross panel's height, the same way. Two square panels side by side, so this is what
 # decides how large a square gets: the width is the page's, and the aspect constraint
-# letterboxes whatever the height does not use. At 550 a matrix came out around 400 px on a
+# letterboxes whatever the height does not use. Much lower and a matrix comes out small on a
 # wide monitor with a third of the panel blank to either side of it.
 PANEL_HEIGHT = 720
 
@@ -275,8 +275,7 @@ _ARROW_NAME = "wtcarrow"
 # still at the height of the live ROI map under it, so on any monitor wide enough the aspect
 # alone decides how much of the column is left blank beside it: with the colorbar and labels
 # these 5 inches per inch come out near 3.1, which fills the width of a 1920 page at that
-# cap. At the 3.06 this started from the panel was half again as tall as the map below it and
-# at 4 it left a sixth of the page white.
+# cap.
 WTC_FIGSIZE = (15.0, 3.0)
 WTC_QUIVER_SCALE = 52.0
 
@@ -336,7 +335,7 @@ def _arrow_annotations(wtc_data: dict, freqs: np.ndarray, times: np.ndarray,
             arrows.append(dict(
                 # a log axis takes an annotation's coordinate in log10, not in Hz. Given in
                 # Hz every arrow lands off the plot and is clipped away with no error at
-                # all, which is how this was drawing nothing
+                # all
                 x=float(times[t_i]), y=float(np.log10(freqs[f_i])),
                 ax=-_INTERACTIVE_ARROW_PX * np.cos(a),
                 ay=_INTERACTIVE_ARROW_PX * np.sin(a),
@@ -420,8 +419,8 @@ def build_wtc_map_interactive(
 
     Same map, same cone, same arrow rule, same span bars and legend. What it adds is hover
     (time, frequency and coherence per cell) and zoom, which is the whole reason the ROI
-    panel takes this and the channel panels stay PNG: a per-channel map costs the same 3 MB
-    and there are 2352 of them on a 14-channel crossed dyad against 192 ROI maps.
+    panel takes this and the channel panels stay PNG: a per-channel map costs the same 3 MB,
+    and a crossed dyad has n^2 channel pairings against a handful of ROI ones.
 
     **Each arrow is an annotation anchored in data with its tail offset in pixels**
     (``axref="pixel"``), which is what ``angles="uv"`` gives the matplotlib panel: the head
@@ -794,11 +793,11 @@ def build_cross_panel(
 
     ::
 
-      a 14 x 14 of ISC values -> [ matrix with every cell printed | connectogram ]
+      an n x n of ISC values -> [ matrix with every cell printed | connectogram ]
 
     The two panels answer different questions off one set of numbers, which is why both are
     on the page. **The matrix is the record**: every cell carries its value, blanks included,
-    so a pairing can be looked up. **The circle is the shape**: an eye reads 196 printed
+    so a pairing can be looked up. **The circle is the shape**: an eye reads n^2 printed
     numbers as a texture, and the chords say which sites the strong pairings actually land
     on.
 
@@ -899,9 +898,8 @@ def build_wtc_cross_matrix(
     **The two chromophores share the figure and the scale.** HbO and HbR are two parallel
     passes, never mixed and never averaged, and what they are both run for is the check that
     a coupling shows in each; side by side on one colorbar is that check, where one above the
-    other on two colorbars was two results a reader had to hold in their head. The panels
-    were a heatmap and a connectogram of the same numbers until 2026-09-12, and the circle is
-    the half that went: a coherence grid is small enough that the heatmap already carries its
+    other on two colorbars is two results a reader has to hold in their head. There is no
+    connectogram: a coherence grid is small enough that the heatmap already carries its
     shape, and the second chromophore is the comparison worth the width. :func:`build_isc_panel`
     keeps its circle, having a null to rank the pairings by; the ROI ISC matrices have none
     and are laid out like this one.
@@ -940,7 +938,7 @@ def build_wtc_cross_matrix(
         panels, labels, subject_ids,
         cmap=COHERENCE_SCALE, vmin=0, vmax=1, value_label="coherence",
         title=(f"Inter-brain coherence, {kind} × {kind}, "
-               f"band {band_fmin:.3g}-{band_fmax:.3g} Hz  —  {sub1} × {sub2}"),
+               f"band {band_fmin:.3g}-{band_fmax:.3g} Hz  ·  {sub1} × {sub2}"),
         kind=kind)
 
 
@@ -1020,7 +1018,7 @@ def build_isc_panel(
         np.asarray(isc_mat, dtype=float), list(ch_names), list(ch_names), subject_ids,
         cmap=CORRELATION_SCALE, vmin=-1, vmax=1, value_label="Pearson r",
         matrix_title=f"ISC matrix ({type_label})",
-        suptitle=f"Inter-brain Synchrony ({type_label})  —  {sub1_label} × {sub2_label}",
+        suptitle=f"Inter-brain Synchrony ({type_label})  ·  {sub1_label} × {sub2_label}",
         arc_threshold=isc_threshold,
         arc_level=arc_level,
         arc_quantile=ARC_FALLBACK_QUANTILE,
@@ -1066,5 +1064,5 @@ def build_isc_roi_matrix(isc_by_chroma: dict, subject_ids: list[str]):
     return _cross_matrix_figure(
         panels, labels, subject_ids,
         cmap=CORRELATION_SCALE, vmin=-1, vmax=1, value_label="Pearson r",
-        title=f"Inter-brain synchrony, ROI \u00d7 ROI  \u2014  {sub1} \u00d7 {sub2}",
+        title=f"Inter-brain synchrony, ROI \u00d7 ROI  \u00b7  {sub1} \u00d7 {sub2}",
         kind="ROI")

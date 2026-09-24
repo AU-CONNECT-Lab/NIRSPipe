@@ -153,8 +153,8 @@ def _process_run(
     """Compute all data, save figure HTMLs + SQM JSON. Returns (inline dict, context).
 
     A panel that fails costs that panel and lands in the returned ``errors``, which the
-    viewer prints for the selected run. Failures used to reach the log only, so a viewer
-    missing half its figures looked the same as one whose recording had nothing to plot.
+    viewer prints for the selected run, so a viewer missing half its figures does not look
+    the same as one whose recording had nothing to plot.
 
     The second return value is what the per-condition views need and the viewer must never
     see: the windowed matrices, the record and the condition windows. It is kept out of the

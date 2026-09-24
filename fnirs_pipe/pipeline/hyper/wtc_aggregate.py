@@ -188,7 +188,7 @@ def _warn_mixed_iterations(seen: dict[str, dict]) -> None:
 
     Unlike a band, ``n_iter`` is a column of the merged table, so a reader can see what each
     row rests on and split or weight by it. What it costs is the resolution of ``percentile``:
-    a null of 22 draws ranks a real value to about 5%, one of 2 draws to 50%, and one of a
+    a null of 20 draws ranks a real value to about 5%, one of 2 draws to 50%, and one of a
     single draw has two possible answers. Comparing percentiles across groups without looking
     at ``n_iter`` treats those as the same number.
 

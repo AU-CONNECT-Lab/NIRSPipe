@@ -1,9 +1,7 @@
 """Every derivative name this package writes, built from and parsed against one table.
 
 The table is ``fnirs_pipe/data/fnirs_pipe_bids_config.json``: the entities this package adds
-to the ones pybids already knows, and the path patterns each kind of output follows. Names
-used to be assembled by hand in forty-odd modules, which is how five orthogonal dimensions
-ended up hyphen-stacked into a single token that only a regex could take apart again.
+to the ones pybids already knows, and the path patterns each kind of output follows.
 
 Two functions, and they are inverses:
 
@@ -89,7 +87,7 @@ def derivative_path(output_dir, suffix: str, extension: str, **entities) -> Path
 
     Entities whose value is None are dropped, so a caller can pass ``session=None`` without
     branching. Raises ValueError when no pattern fits, which is the failure worth having:
-    silently returning a name outside the scheme is how the old hand-built strings drifted.
+    silently returning a name outside the scheme would let the names drift apart.
     """
     from bids.layout.writing import build_path
 
@@ -113,10 +111,9 @@ def figure_name(stem: str, desc: str, *, suffix: str = "nirs",
     ``("sub-01_task-rest", "detail", channel="S1D1")``
         -> ``"sub-01_task-rest_chan-S1D1_desc-detail_nirs.html"``
 
-    The run stem is in the name because a subject's runs share one ``figures/`` folder. They
-    used to be kept apart by a subdirectory per run, which meant the same panel was called
-    the same thing in two places and neither name said which run it was. It is ``stem`` and
-    not ``label`` because ``label-`` is itself an entity a caller passes through here.
+    The run stem is in the name because a subject's runs share one ``figures/`` folder. It
+    is ``stem`` and not ``label`` because ``label-`` is itself an entity a caller passes
+    through here.
     """
     carried = _label_entities(stem)
     return derivative_path("", suffix, extension, datatype="figures", desc=desc,
@@ -142,9 +139,7 @@ def report_name(label: str, *, desc: "str | None" = None,
         -> ``"group-G1_task-rest_cond-game1_report.html"``
 
     The QC code carries a label rather than a set of entities, so the entities are read back
-    out of it. Four spellings used to coexist here (`_qc.html`, `_desc-raw_nirs.html`,
-    `_qc_mne.html` and a subject index shaped like a run report), and `.html` on a `nirs`
-    suffix claimed to be a snirf's sidecar.
+    out of it.
     """
     return derivative_path("", "report", ".html", condition=condition, desc=desc,
                            pairing=pairing, **_label_entities(label)).name
@@ -162,9 +157,6 @@ def rating_path(output_dir, report_stem: str):
     reports rated separately. The raw viewer's ratings take ``rawrating`` for the reason its
     figures take a ``raw`` prefix: the two viewers rate the same run at different stages and
     would otherwise ask for one name.
-
-    These used to sit loose in the derivatives root under ``_raw_ratings.json``, which is
-    neither a BIDS name nor anywhere a reader would look for a subject's own products.
     """
     entities = parse_path(report_stem + ".html")
     path = derivative_path(
@@ -183,11 +175,10 @@ def channel_decisions_path(output_dir, subject: str, task: "str | None" = None,
 
     ``(out, "01", task="rest")`` -> ``out/sub-01/nirs/sub-01_task-rest_desc-rawdecision_qc.json``
 
-    One function because four call sites built this name by hand: the rating server, the
-    dyad rating server, the Hyper Preparation page and the Data Prep page. They agreed on
-    the parts by convention alone, and the Hyper Preparation one left the session out, so
-    on a two-session tree it reads a path the others never write. That call still passes no
-    session because the page holds none; the mismatch is now in one place instead of four.
+    One function for the four call sites: the rating server, the dyad rating server, the
+    Hyper Preparation page and the Data Prep page. The Hyper Preparation page passes no
+    session because it holds none, so on a two-session tree it reads a path the others
+    never write.
     """
     path = derivative_path(output_dir, "qc", ".json",
                            subject=str(subject).removeprefix("sub-"),

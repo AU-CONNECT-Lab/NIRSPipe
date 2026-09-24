@@ -1,9 +1,7 @@
 """Run a CLI command in the background and let a page poll its output as it arrives.
 
-The GUI's run buttons used to block on ``subprocess.run`` and show the tail once the command
-had finished, which on a real dataset means half an hour of a frozen page. Here the process is
-launched detached, one reader thread drains its output into a bounded buffer, and the page
-reads that buffer on a timer.
+The process is launched detached, one reader thread drains its output into a bounded buffer,
+and the page reads that buffer on a timer, so a long command never freezes the page.
 
     run_id = start(["fnirs-pipe", "..."])
     lines, returncode = poll(run_id)     # returncode is None while it is still running
