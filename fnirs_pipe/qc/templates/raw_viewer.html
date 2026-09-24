@@ -322,6 +322,7 @@ select#run-select {
        <b>Read those rows down a column, not across one.</b> Corrected per channel is the
        exception, being an average over the set, and is the one column two rows can be
        compared on.</p>
+    <p class="qm-note" id="motion-post-note"></p>
     <div style="overflow-x:auto"><table class="qm-table qm-flat" id="motion-split-table"></table></div>
   </div>
   <div id="bad-list"></div>
@@ -347,6 +348,7 @@ select#run-select {
      numbers are in the channel metrics CSV written beside the quality record. Rows in red
      were rejected by screening, and Status names the criterion. Click the decision chip
      to cycle: &#8212; &#8594; good &#8594; bad. Saves automatically.</p>
+  <p class="qm-note" id="ch-decisions-hint"></p>
   <div style="overflow-x:auto">
   <table id="ch-decisions-table" class="qm-table">
     <thead><tr>
@@ -847,8 +849,7 @@ function renderSqm(d) {
     var corrected = ((_STATIC_DATA[_run_idx] || {}).summary || {}).motion_correction;
     mp.innerHTML = (corrected && corrected !== "none")
       ? "Each cell is <b>before &rarr; after " + _esc(corrected) + "</b>. Both sides are "
-        + "counted against the uncorrected side's cutoff, or the pair would be two shape "
-        + "statistics of two different distributions rather than a before and an after."
+        + "counted against the uncorrected side's cutoff."
       : "";
   }
 }
