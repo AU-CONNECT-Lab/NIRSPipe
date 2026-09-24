@@ -132,8 +132,19 @@ def test_no_usable_partner_is_an_error_rather_than_an_empty_table():
 
 def test_a_per_frequency_level_is_drawn_for_the_real_pair(stub):
     null = _run(["sub-p2d02", "sub-p2d03"])
-    assert set(null.levels) == {(TRUE[0], TRUE[1], "S1_D1"), (TRUE[0], TRUE[1], "S1_D2")}
-    assert all(level.shape == FREQS.shape for level in null.levels.values())
+    levels = null.cond_levels["early"]
+    assert set(levels) == {(TRUE[0], TRUE[1], "S1_D1"), (TRUE[0], TRUE[1], "S1_D2")}
+    assert all(level.shape == FREQS.shape for level in levels.values())
+
+
+def test_each_condition_gets_its_own_level_and_the_whole_run_none(stub):
+    """A re-paired draw is one condition, so pooling them would rank one condition's cells
+    against another's, and there is no whole-run draw to count a whole-run level from."""
+    null = _run(["sub-p2d02", "sub-p2d03"], labels=("early", "late"))
+    assert null.levels == {}
+    early = null.cond_levels["early"][(TRUE[0], TRUE[1], "S1_D1")]
+    late = null.cond_levels["late"][(TRUE[0], TRUE[1], "S1_D1")]
+    assert not np.allclose(early, late)
 
 
 # ---- the conditions ----

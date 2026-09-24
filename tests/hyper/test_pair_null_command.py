@@ -94,7 +94,7 @@ def test_the_crossing_is_its_own_decision():
 
 
 @pytest.mark.parametrize("flag", ["--wtc-band-fmin", "--wtc-band-fmax", "--wtc-mask-coi",
-                                  "--wtc-fmin", "--tstart"])
+                                  "--wtc-fmin", "--tstart", "--wtc-whiten"])
 def test_it_does_not_take_from_the_command_line_what_it_reads_off_the_table(flag):
     """Retyping any of these is how a null and its real table come to disagree."""
     with pytest.raises(SystemExit):

@@ -88,14 +88,15 @@ def _clears(wtc_data: dict, arrow_min: float = ARROW_MIN_COHERENCE) -> str:
 
       a map carrying the phase-scrambled null's level -> "the phase-scrambled null"
 
-    Three sources and three wordings, because two of them are tests and the third is not: a
+    Four sources and four wordings, because three of them are tests and the last is not: a
     caption reading "the Monte Carlo level" over arrows drawn at a flat display threshold
     would be claiming a test nobody ran.
     """
     if wtc_data.get("sig") is None:
         return f"{arrow_min:g}"
-    return ("the phase-scrambled null" if wtc_data.get("sig_source") == "null"
-            else "the Monte Carlo level")
+    return {"null": "the phase-scrambled null",
+            "pair": "the re-paired null"}.get(wtc_data.get("sig_source"),
+                                              "the Monte Carlo level")
 
 
 def _arrow_mask(wtc_arr, sig, freqs, freq_coi, arrow_min: float = ARROW_MIN_COHERENCE):
@@ -669,6 +670,7 @@ def _arc_rule(
     threshold: "float | None",
     level: "np.ndarray | None",
     quantile: "float | None",
+    level_name: str = "its own null",
 ) -> "tuple[np.ndarray, str]":
     """Which cells get a chord, and the sentence over the circle saying why.
 
@@ -694,7 +696,7 @@ def _arc_rule(
     if level is not None:
         level = np.asarray(level, dtype=float)
         keep = finite & np.isfinite(level) & (np.abs(z) >= level)
-        return keep, f"above its own null ({int(keep.sum())} of {int(finite.sum())})"
+        return keep, f"above {level_name} ({int(keep.sum())} of {int(finite.sum())})"
     if quantile is not None and finite.any():
         cut = float(np.nanquantile(np.abs(z[finite]), quantile))
         share = int(round((1.0 - quantile) * 100))
@@ -785,6 +787,7 @@ def build_cross_panel(
     arc_threshold: "float | None",
     arc_level: "np.ndarray | None" = None,
     arc_quantile: "float | None" = None,
+    arc_level_name: str = "its own null",
     kind: str = "",
 ):
     """A cross-brain matrix as two live panels: the heatmap, and the same numbers as a circle.
@@ -827,7 +830,8 @@ def build_cross_panel(
     sub1 = subject_ids[0] if subject_ids else "Sub1"
     sub2 = subject_ids[1] if len(subject_ids) > 1 else "Sub2"
 
-    keep, rule = _arc_rule(z, value_label, arc_threshold, arc_level, arc_quantile)
+    keep, rule = _arc_rule(z, value_label, arc_threshold, arc_level, arc_quantile,
+                           arc_level_name)
 
     # both panels are squares centred in their half, so the space between them is whatever
     # the square constraint leaves over rather than a gap set here
@@ -989,6 +993,7 @@ def build_isc_panel(
     ch_type: str = "hbo",
     isc_threshold: "float | None" = None,
     arc_level: "np.ndarray | None" = None,
+    arc_level_name: str = "its own null",
 ):
     """The 2-panel ISC summary: ISC matrix | connectogram.
 
@@ -1002,7 +1007,8 @@ def build_isc_panel(
         ch_type:       "hbo" or "hbr", shown in titles.
         isc_threshold: Absolute ``|ISC|`` a pairing must clear for a chord. None, the
                        default, leaves the choice to :func:`_arc_rule`.
-        arc_level:     Per-cell level out of the phase-scrambled null, when one was drawn.
+        arc_level:     Per-cell |r| level out of a null, when one was drawn.
+        arc_level_name: How the chord subtitle names that null.
     """
     if isc_mat is None or len(ch_names) == 0:
         return None
@@ -1018,6 +1024,7 @@ def build_isc_panel(
         arc_threshold=isc_threshold,
         arc_level=arc_level,
         arc_quantile=ARC_FALLBACK_QUANTILE,
+        arc_level_name=arc_level_name,
     )
 
 

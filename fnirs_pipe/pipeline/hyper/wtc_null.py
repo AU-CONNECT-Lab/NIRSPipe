@@ -52,6 +52,7 @@ def run_wtc_null(
     sep_bands=None,
     windows: "list[tuple[str, float, float]] | None" = None,
     analysis_window: "tuple[float, float] | None" = None,
+    whiten_s: float = 0.0,
 ) -> dict:
     """Draw the null for one dyad and write the level its phase arrows are read against.
 
@@ -74,8 +75,10 @@ def run_wtc_null(
     # imported in the call, not at module load: the wiring tests patch these on the module
     # that defines them, which only a lookup made at call time can see
     from fnirs_pipe.io.derivatives import group_output_path
-    from fnirs_pipe.pipeline.hyper import compute_wtc_phase_null
-    from fnirs_pipe.pipeline.hyper.wtc_store import save_null_levels
+    from fnirs_pipe.pipeline.hyper import _hyper_sidecar, compute_wtc_phase_null
+    from fnirs_pipe.pipeline.hyper.whiten import whiten_raws
+    from fnirs_pipe.pipeline.hyper.wtc_store import level_params, save_null_levels
+    from fnirs_pipe.utils.lineage import path_from
 
     band_fmin = band_fmin if band_fmin is not None else wtc_fmin
     band_fmax = band_fmax if band_fmax is not None else wtc_fmax
@@ -89,19 +92,27 @@ def run_wtc_null(
         "per chromophore (%s).",
         n_iter, "crossed" if cross else "homologous", "+".join(chroma))
 
+    # whitened before it is scrambled, the order the real table's transform sees it in
+    wtc_raws = whiten_raws(aligned_raws, whiten_s, sep_bands) if whiten_s else aligned_raws
     nulls: dict = {}
     for ch_type in chroma:
         null = compute_wtc_phase_null(
-            aligned_raws, band_fmin, band_fmax, n_iter=n_iter,
+            wtc_raws, band_fmin, band_fmax, n_iter=n_iter,
             fmin=wtc_fmin, fmax=wtc_fmax, seed=seed, cross=cross,
             limit_scales=limit_scales, mask_coi=mask_coi, ch_type=ch_type,
             sep_bands=sep_bands, windows=windows, analysis_window=analysis_window)
         nulls[ch_type] = null
         if getattr(null, "levels", None):
-            save_null_levels(null.levels, group_output_path(
+            path = save_null_levels(null.levels, group_output_path(
                 output_dir, group_id,
                 {"task": task, "chromophore": ch_type, "nulldist": "phase",
                  "statistic": "wtc", "desc": "level"}, "relmat", ".npz"))
+            # what the report checks before it thresholds its arrows against this level
+            _hyper_sidecar(path, "hyper_wtc_phasenull_level",
+                           [p for p in (path_from(r) for r in aligned_raws.values()) if p],
+                           **level_params(aligned_raws, wtc_fmin=wtc_fmin, wtc_fmax=wtc_fmax,
+                                          mask_coi=mask_coi, whiten_s=whiten_s),
+                           n_iter=n_iter, seed=seed)
     return nulls
 
 
@@ -123,6 +134,7 @@ def write_wtc_null(
     analysis_window: "tuple[float, float] | None" = None,
     roi_map: "dict[str, list[str]] | None" = None,
     roi_map_name: str = "custom",
+    whiten_s: float = 0.0,
 ) -> Path:
     """Rank what :func:`run_wtc_null` drew against the real band means, and write it.
 
@@ -207,6 +219,7 @@ def write_wtc_null(
         **({"analysis_window_s": [round(t, 3) for t in analysis_window]}
            if analysis_window is not None else {}),
         wtc_fmin=wtc_fmin, wtc_fmax=wtc_fmax, n_iter=n_iter, cross=cross, seed=seed,
+        **({"wtc_whiten_s": float(whiten_s)} if whiten_s else {}),
         chroma=list(chroma), **wtc_grid_params(aligned_raws),
         # the null is subtracted from the real table row by row, so the two have to say
         # they were built on the same clock for that subtraction to mean anything

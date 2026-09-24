@@ -225,6 +225,18 @@ def test_the_caption_names_the_level_it_actually_used():
     assert _clears({"sig": level, "sig_source": "null"}) == "the phase-scrambled null"
 
 
+def test_a_condition_window_keeps_the_source_of_its_level():
+    """Every condition page is drawn from a window of the whole-record map; losing the source
+    there captioned arrows drawn against the phase-scrambled null as the Monte Carlo level."""
+    from fnirs_pipe.pipeline.hyper.wtc import window_result
+    from fnirs_pipe.qc.figures.hyper.hyper_post_figures import _clears
+
+    whole = _map([0.5, 0.5, 0.5])
+    whole.pairs[("a", "b")]["S1_D1"].update(sig=np.full(len(FREQS), 0.4), sig_source="null")
+    windowed = window_result(whole, 5.0, 30.0)
+    assert _clears(windowed.pairs[("a", "b")]["S1_D1"]) == "the phase-scrambled null"
+
+
 # ---- what lands on disk ----
 
 def test_the_level_survives_a_round_trip_to_disk(tmp_path):
@@ -250,3 +262,63 @@ def test_reband_leaves_the_level_archive_alone(tmp_path):
                      tmp_path / "group-d01_task-full_hyper-wtc-nulllevel-hbo.npz")
 
     assert reband_tree(tmp_path, 0.06, 0.15) == []
+
+
+# ---- the per-condition levels and what decides whether a report may use one ----
+
+def test_per_condition_levels_survive_a_round_trip_to_disk(tmp_path):
+    from fnirs_pipe.pipeline.hyper.wtc_store import load_cond_null_levels, save_cond_null_levels
+
+    levels = {"game1#2": {("a", "b", "S1_D1"): np.array([0.3, 0.4, 0.5])},
+              "talk": {("a", "b", ("S1_D1", "S2_D2")): np.array([0.6, 0.7, 0.8])}}
+    back = load_cond_null_levels(save_cond_null_levels(levels, tmp_path / "level.npz"))
+    assert np.allclose(back["game1#2"][("a", "b")]["S1_D1"], [0.3, 0.4, 0.5])
+    assert np.allclose(back["talk"][("a", "b")][("S1_D1", "S2_D2")], [0.6, 0.7, 0.8])
+
+
+def _stamped(tmp_path, **params):
+    import json
+    path = tmp_path / "level.npz"
+    path.with_suffix(".json").write_text(json.dumps({"Sources": [], "parameters": params}))
+    return path
+
+
+def test_a_level_matching_this_run_is_usable(tmp_path):
+    from fnirs_pipe.pipeline.hyper.wtc_store import level_mismatch
+
+    path = _stamped(tmp_path, wtc_fmin=0.02, align_offset_s={"a": 0.0}, n_iter=5)
+    assert level_mismatch(path, {"wtc_fmin": 0.02, "align_offset_s": {"a": 0.0}}, {}) is None
+
+
+def test_a_level_without_its_sidecar_is_not_usable(tmp_path):
+    from fnirs_pipe.pipeline.hyper.wtc_store import level_mismatch
+
+    assert "missing" in level_mismatch(tmp_path / "level.npz", {}, {})
+
+
+def test_a_setting_the_writer_recorded_and_this_run_lacks_counts_as_a_difference(tmp_path):
+    """A level drawn on trigger-aligned recordings does not fit a run aligned on none."""
+    from fnirs_pipe.pipeline.hyper.wtc_store import level_mismatch
+
+    path = _stamped(tmp_path, wtc_fmin=0.02, align_trigger={"a": "start"})
+    assert "align_trigger" in level_mismatch(path, {"wtc_fmin": 0.02}, {})
+
+
+def test_the_re_paired_isc_null_carries_a_level_for_the_size_of_r(tmp_path):
+    """The chords compare |r| with a level, so a p95 over signed r is the wrong number:
+    a null whose draws swing both ways has a low signed p95 and a high |r| one."""
+    from fnirs_pipe.pipeline.hyper.pair_null import _write_isc_null
+
+    draws = [pd.DataFrame({"chromophore": ["hbo"], "condition": ["talk"], "sub1": ["a"],
+                           "sub2": ["b"], "label": ["S1_D1"], "label2": ["S1_D1"],
+                           "coherence": [r], "n_valid_frac": [1.0]})
+             for r in (-0.9, -0.8, 0.1, 0.2, 0.1, -0.85)]
+
+    def path_of(entities):
+        return tmp_path / ("_".join(f"{k}-{v}" for k, v in sorted(entities.items())) + ".tsv")
+
+    _write_isc_null([], draws, [], path_of, [], {}, [("talk", 0.0, 60.0)], 0, 0.0, None)
+    table = pd.read_csv(path_of({"condition": "all", "nulldist": "pair", "statistic": "isc"}),
+                        sep="\t")
+    assert table["null_p95"].iloc[0] < 0.3
+    assert table["null_abs_p95"].iloc[0] > 0.8

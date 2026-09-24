@@ -87,6 +87,9 @@ class NullDraws:
     # out one row per draw, which a test that averages them before ranking needs and the
     # summary cannot be taken apart to give
     cond_draw_ids: "list[str] | None" = None
+    # condition -> (sub1, sub2, label) -> level, re-pairing only: its draws are conditions,
+    # so its level is counted per condition and there is no whole-run one
+    cond_levels: "dict | None" = None
 
     def summarise(self, real: "pd.DataFrame | None" = None,
                   real_by_cond: "pd.DataFrame | None" = None,
@@ -410,24 +413,27 @@ def compute_wtc_pair_null(
     # no whole-run list: a re-paired draw is one condition, cut from each side's own marker
     cond_frames: list[pd.DataFrame] = []
     cond_draw_ids: list[str] = []
-    hists: dict[tuple, np.ndarray] = {}
+    cond_hists: dict[str, dict[tuple, np.ndarray]] = {}
     partners: list[str] = []
     # Keyed per condition and per segment, not per condition alone: a draw pads the condition
     # with whatever both recordings can spare either side, so the fixed member's stretch is
     # the same only across draws that got the same pad. Most of a pool does, so the cache
     # still pays; a stand-in near the end of its recording simply gets its own entry
     caches: dict[tuple, dict[tuple[str, str], _ChannelWavelet]] = {}
-    for partner_id, label, pair, inner in draws:
+    # a fifth element is the pair the coherence reads, whitened, where --wtc-whiten is on
+    for partner_id, label, pair, inner, *whitened in draws:
         # Making a draw is the expensive half: two recordings read and cut. Any other metric
         # wanting the same re-paired pool has to be computed here rather than over a second
         # pass, which would double that cost to save a few seconds of its own.
         if on_draw is not None:
             on_draw(partner_id, label, pair, inner)
-        signals = {sid: _long_signals(raw, ch_type, sep_bands) for sid, raw in pair.items()}
+        wtc_pair = whitened[0] if whitened else pair
+        signals = {sid: _long_signals(raw, ch_type, sep_bands)
+                   for sid, raw in wtc_pair.items()}
         segment = float(min(raw.times[-1] for raw in pair.values()))
         cache_key = (label, round(float(inner[0]), 3), round(segment, 3))
         result = _wtc_over_pairs(
-            pair, signals, fmin, fmax, significance=False, seed=None,
+            wtc_pair, signals, fmin, fmax, significance=False, seed=None,
             cross=cross, limit_scales=limit_scales,
             cache1=caches.setdefault(cache_key, {}), axis=axis)
         result = WTCResult(pairs={true_pair: next(iter(result.pairs.values()))},
@@ -437,7 +443,7 @@ def compute_wtc_pair_null(
         # collect, the two recordings being alignable one condition at a time or not at all.
         result = window_result(result, *inner)
         before = len(cond_frames)
-        _collect_draw(result, [], cond_frames, hists,
+        _collect_draw(result, [], cond_frames, cond_hists.setdefault(label, {}),
                       band_fmin=band_fmin, band_fmax=band_fmax,
                       mask_coi=mask_coi, windows=[(label, *inner)],
                       analysis_window=None)
@@ -452,9 +458,10 @@ def compute_wtc_pair_null(
             "the log says which test each one failed.")
 
     keys = ["sub1", "sub2", "label"] + (["label2"] if "label2" in cond_frames[0].columns else [])
-    return NullDraws(draws=[], cond_draws=cond_frames, keys=keys,
-                     levels={key: _null_level(hist) for key, hist in hists.items()},
-                     partners=partners, cond_draw_ids=cond_draw_ids)
+    return NullDraws(draws=[], cond_draws=cond_frames, keys=keys, levels={},
+                     partners=partners, cond_draw_ids=cond_draw_ids,
+                     cond_levels={label: {key: _null_level(hist) for key, hist in hists.items()}
+                                  for label, hists in cond_hists.items()})
 
 
 def _average_iterations(frames: "list[pd.DataFrame]", keys: "list[str]",

@@ -25,6 +25,7 @@ from scipy.signal import lfilter
 from fnirs_pipe.io.snirf import long_channel_picks
 from fnirs_pipe.pipeline.hyper._helpers import _fisher_z, _shared_sfreq, long_axis_over
 from fnirs_pipe.pipeline.hyper.surrogate import phase_scramble
+from fnirs_pipe.pipeline.hyper.whiten import autocov
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("pipeline.isc")
@@ -68,10 +69,7 @@ def _ar_whiten(x: np.ndarray, max_order: int = ISC_MAX_AR_ORDER) -> tuple[np.nda
     n_lag = min(int(max_order), n // 4)
     if n_lag < 1:
         return x, 0
-    # only the first n_lag lags are needed, and each is one dot product; a full correlation
-    # would be quadratic in the record length and this runs once per surrogate iteration
-    acov = np.array([centred @ centred] + [centred[:-k] @ centred[k:]
-                                           for k in range(1, n_lag + 1)]) / n
+    acov = autocov(centred, n_lag)
     if acov[0] <= 0:
         return x, 0
 

@@ -21,9 +21,11 @@ import pandas as pd
 
 from fnirs_pipe.exceptions import StageError
 from fnirs_pipe.io.derivatives import group_output_path
-from fnirs_pipe.pipeline.hyper.surrogate import compute_wtc_pair_null, _average_iterations
+from fnirs_pipe.pipeline.hyper.surrogate import compute_wtc_pair_null, _average_iterations, _p95
 from fnirs_pipe.pipeline.hyper.wtc import cone_margin_s
 from fnirs_pipe.pipeline.hyper.wtc_null import _for_chroma, _real_table, write_tsv
+from fnirs_pipe.pipeline.hyper.whiten import whiten_raws
+from fnirs_pipe.pipeline.hyper.wtc_store import level_params, save_cond_null_levels
 from fnirs_pipe.qc.common.windows import condition_windows, split_windows
 
 logger = logging.getLogger(__name__)
@@ -202,8 +204,14 @@ def _draw_condition_pairs(
     n_max: "int | None",
     refused: dict,
     window_sources: "dict[str, tuple[str, float]] | None" = None,
+    whiten_s: float = 0.0,
+    sep_bands=None,
 ):
-    """Yield ``(partner_id, label, {fixed, partner} segments, the condition's place in them)``.
+    """Yield ``(partner_id, label, segments, the condition's place in them, whitened segments)``.
+
+    The segments are ``{fixed, partner}`` cuts of the two recordings, and the whitened ones
+    the same cuts of their whole-record ``--wtc-whiten`` copies, which is what the coherence
+    reads; with whitening off the two are the same objects.
 
     Each condition is taken from **the stand-in's own onset**, not from where it sat in the
     real dyad's clock. Sessions that run to one timetable drift: the first trigger lines up
@@ -222,6 +230,9 @@ def _draw_condition_pairs(
 
     margin = cone_margin_s(band_fmin)
     window_sources = window_sources or {}
+    # fitted on the whole record and then cut, as the real table's transform was
+    fixed_white = (whiten_raws({fixed_id: fixed_raw}, whiten_s, sep_bands)[fixed_id]
+                   if whiten_s else fixed_raw)
     drawn = 0
     for entry in candidates:
         if n_max is not None and drawn >= n_max:
@@ -286,13 +297,23 @@ def _draw_condition_pairs(
 
         if not segments:
             continue
+        try:
+            partner_white = (whiten_raws({pid: partner_raw}, whiten_s, sep_bands)[pid]
+                             if whiten_s else partner_raw)
+        except StageError:
+            # too short for the order the real table was whitened at
+            refused.setdefault("too_short_to_whiten", []).append(pid)
+            continue
         drawn += 1
         for label, start, span, real_t0, lead, trail in segments:
-            pair = {fixed_id: fixed_raw.copy().crop(tmin=real_t0 - lead,
-                                                    tmax=real_t0 + span + trail),
-                    pid: partner_raw.copy().crop(tmin=start - lead,
-                                                 tmax=start + span + trail)}
-            yield pid, label, pair, (lead, lead + span)
+            fixed_cut = (real_t0 - lead, real_t0 + span + trail)
+            partner_cut = (start - lead, start + span + trail)
+            pair = {fixed_id: fixed_raw.copy().crop(*fixed_cut),
+                    pid: partner_raw.copy().crop(*partner_cut)}
+            white = (pair if not whiten_s else
+                     {fixed_id: fixed_white.copy().crop(*fixed_cut),
+                      pid: partner_white.copy().crop(*partner_cut)})
+            yield pid, label, pair, (lead, lead + span), white
 
 
 def run_pair_null(
@@ -358,6 +379,8 @@ def run_pair_null(
     mask_coi = bool(real_params["mask_coi"])
     window_s = real_params.get("analysis_window_s")
     analysis_window = tuple(window_s) if window_s else None
+    # absent on a table written before the option existed, which was never whitened
+    whiten_s = float(real_params.get("wtc_whiten_s") or 0.0)
 
     isc_whiten, isc_max_lag_s, isc_band = _isc_settings_of(
         _path({"statistic": "isc"}).with_suffix(".json"),
@@ -458,12 +481,13 @@ def run_pair_null(
         return _collect
 
     partners: list[str] = []
+    cond_levels: dict = {}
     for ch_type in chroma:
         draws = _draw_condition_pairs(
             derivatives_dir, task, fixed_id, aligned_real[fixed_id], candidates, desc=desc,
             bads_scope=bads_scope, scope_tasks=scope_tasks, windows=windows,
             band_fmin=band_fmin, n_max=n_max, refused=refused,
-            window_sources=window_sources)
+            window_sources=window_sources, whiten_s=whiten_s, sep_bands=sep_bands)
         null = compute_wtc_pair_null(
             draws, true_pair, long_axis_over(aligned_real.values(), ch_type, sep_bands),
             band_fmin, band_fmax, fmin=wtc_fmin, fmax=wtc_fmax, cross=cross,
@@ -471,6 +495,7 @@ def run_pair_null(
             sep_bands=sep_bands, windows=windows, analysis_window=analysis_window,
             on_draw=_isc_collector(ch_type))
         partners = null.partners or []
+        cond_levels[ch_type] = null.cond_levels or {}
         for draw_id, frame in zip(null.cond_draw_ids or [], null.cond_draws):
             draw_frames.append(frame.assign(chromophore=ch_type, draw=draw_id))
 
@@ -514,6 +539,11 @@ def run_pair_null(
         **({"wtc_window_s": float(real_params["wtc_window_s"])}
            if real_params.get("wtc_window_s") else {}),
         pair_cond_pad_s=round(cone_margin_s(band_fmin), 3),
+        **({"wtc_whiten_s": whiten_s} if whiten_s else {}),
+        # where each condition sat on the real dyad's clock, which a report checks its own
+        # conditions against before it thresholds one against this null's level
+        condition_windows_s={w[0]: [round(float(w[1]), 3), round(float(w[2]), 3)]
+                             for w in windows},
         **wtc_grid_params(aligned_real),
         # the null is subtracted from the real table row by row, so the two have to say
         # they were built on the same clock for that subtraction to mean anything
@@ -548,6 +578,19 @@ def run_pair_null(
         raise ValueError(
             "no usable stand-in was drawn for any condition, so there is no null. The log "
             "says which test each candidate failed.")
+
+    # what `fnirs-hyper` thresholds each condition's phase arrows against on its next run
+    for ch_type, levels in cond_levels.items():
+        if not levels:
+            continue
+        path = save_cond_null_levels(levels, _path({
+            "chromophore": ch_type, "condition": "all", "nulldist": "pair",
+            "statistic": "wtc", "desc": "level"}).with_suffix(".npz"))
+        _hyper_sidecar(path, "hyper_wtc_bycondition_pairnull_level", sources,
+                       **level_params(aligned_real, wtc_fmin=wtc_fmin, wtc_fmax=wtc_fmax,
+                                      mask_coi=mask_coi, whiten_s=whiten_s),
+                       condition_windows_s=params["condition_windows_s"],
+                       n_iter=len(partners), pair_partners=sorted(partners))
 
     _write_isc_null(isc_frames, isc_cond_frames, isc_draw_frames, _path, sources,
                     params, windows, isc_whiten, isc_max_lag_s, isc_band)
@@ -620,7 +663,17 @@ def _write_isc_null(frames, cond_frames, draw_frames, path_of, sources, params,
         if not bucket:
             continue
         real = _isc_real(path_of({"statistic": "isc"}), by_condition=cond)
-        table = _average_iterations(bucket, (["condition"] if cond else []) + keys, real=real)
+        group_keys = (["condition"] if cond else []) + keys
+        table = _average_iterations(bucket, group_keys, real=real)
+        # the level the connectogram compares |r| against, which null_p95 over signed r is not
+        stacked = pd.concat(bucket, ignore_index=True)
+        abs_p95 = (stacked["coherence"].abs().groupby([stacked[k] for k in group_keys],
+                                                      sort=False, dropna=False)
+                   .apply(lambda v: _p95(v.to_numpy(dtype=float)))
+                   .rename("null_abs_p95").reset_index())
+        table = table.merge(abs_p95, on=group_keys, how="left")
+        table.insert(table.columns.get_loc("null_p95") + 1, "null_abs_p95",
+                     table.pop("null_abs_p95"))
         path = write_tsv(table, path_of(entities))
         _hyper_sidecar(path, step, sources,
                        **({"conditions": [w[0] for w in windows]} if cond and windows else {}),

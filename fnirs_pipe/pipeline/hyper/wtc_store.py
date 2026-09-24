@@ -13,11 +13,15 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from fnirs_pipe.pipeline.hyper.wtc import WTCResult, wtc_band_mean
+import json
+
+from fnirs_pipe.pipeline.hyper.alignment import alignment_params
+from fnirs_pipe.pipeline.hyper.wtc import WTCResult, wtc_band_mean, wtc_grid_params
 from fnirs_pipe.utils.logging import get_logger
 from fnirs_pipe import __version__
 from fnirs_pipe.io.derivatives import write_sidecar_json
 from fnirs_pipe.io.naming import bids_label, derivative_path, parse_path
+from fnirs_pipe.utils.lineage import path_from
 
 logger = get_logger("pipeline.wtc_store")
 
@@ -117,6 +121,77 @@ def load_null_levels(path: Path) -> dict:
     return out
 
 
+def save_cond_null_levels(levels: dict, path: Path) -> Path:
+    """Write per-condition levels, ``{condition: {(sub1, sub2, label): ndarray}}``, to one npz."""
+    arrays = {_SEP.join((cond, _flatten_key(sub1, sub2, label))): np.asarray(level,
+                                                                          dtype=np.float32)
+              for cond, per_key in levels.items()
+              for (sub1, sub2, label), level in per_key.items()}
+    path.parent.mkdir(parents=True, exist_ok=True)
+    np.savez_compressed(path, **arrays)
+    logger.info("WTC null levels per condition saved: %s (%d conditions)", path, len(levels))
+    return path
+
+
+def load_cond_null_levels(path: Path) -> dict:
+    """Read back :func:`save_cond_null_levels`, as ``{condition: {(sub1, sub2): {label: level}}}``."""
+    with np.load(path) as npz:
+        out: dict = {}
+        for name in npz.files:
+            cond, key = name.split(_SEP, 1)
+            sub1, sub2, label = _restore_key(key)
+            out.setdefault(cond, {}).setdefault((sub1, sub2), {})[label] = npz[name]
+    return out
+
+
+def level_params(raws: dict, *, wtc_fmin: float, wtc_fmax: float, mask_coi: bool,
+                 whiten_s: float = 0.0) -> dict:
+    """What a per-frequency level depends on, so a report can tell whether one still fits it.
+
+    The writer of a level and the report that thresholds against it both call this on their
+    own recordings, and a level is used only when the two dicts agree. The band is not in
+    it: a level is per frequency, and the band only chooses which frequencies are averaged.
+    Nor is ``--tstart``/``--tend``: the phase-scrambled level is counted over the whole
+    record, and a re-paired one is checked condition by condition against its spans.
+    """
+    return {"wtc_fmin": wtc_fmin, "wtc_fmax": wtc_fmax, "mask_coi": bool(mask_coi),
+            "wtc_whiten_s": float(whiten_s or 0.0),
+            **wtc_grid_params(raws), **alignment_params(raws)}
+
+
+def level_mismatch(path: Path, expected: dict, raws: dict) -> "str | None":
+    """Why the level at ``path`` cannot be used for these recordings, or None if it can.
+
+    ::
+
+      a level written on desc-preproc, read by a run on desc-errts -> "its Sources differ"
+    """
+    sidecar = path.with_suffix(".json")
+    if not sidecar.exists():
+        return f"{sidecar.name} is missing, so nothing says what the level was drawn on"
+    try:
+        side = json.loads(sidecar.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return f"{sidecar.name} is unreadable: {exc}"
+    sources = sorted(p for p in (path_from(r) for r in raws.values()) if p)
+    if sorted(side.get("Sources") or []) != sources:
+        return "its Sources differ from the recordings this run read"
+    recorded = side.get("parameters") or {}
+    # through JSON so a tuple here and the list it was written as compare equal
+    wanted = json.loads(json.dumps(expected))
+    differ = sorted(k for k in set(wanted) | {k for k in recorded if k in _LEVEL_KEYS}
+                    if recorded.get(k) != wanted.get(k))
+    if differ:
+        return f"it was drawn with different {', '.join(differ)}"
+    return None
+
+
+# every key level_params can write, so a key the writer recorded and this run lacks counts
+_LEVEL_KEYS = {"wtc_fmin", "wtc_fmax", "mask_coi", "wtc_whiten_s", "wtc_dj",
+               "wtc_time_step_s", "wtc_scale_smooth_dj0", "aligned", "align_step",
+               "align_trigger", "align_offset_s", "aligned_duration_s"}
+
+
 def reband(path: Path, fmin: float, fmax: float, mask_coi: bool = True) -> pd.DataFrame:
     """Band means over a new band, from saved maps rather than a new wavelet transform.
 
@@ -124,6 +199,15 @@ def reband(path: Path, fmin: float, fmax: float, mask_coi: bool = True) -> pd.Da
     before saving cannot be recovered here, and :func:`wtc_band_mean` says so if it is empty.
     """
     return wtc_band_mean(load_wtc(path), fmin, fmax, mask_coi=mask_coi)
+
+
+def _maps_params(npz_path: Path) -> dict:
+    """The parameters a saved map's sidecar records, or none for a map saved without one."""
+    try:
+        side = json.loads(npz_path.with_suffix(".json").read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return side.get("parameters") or {}
 
 
 def reband_tree(
@@ -169,7 +253,9 @@ def reband_tree(
             "pipeline_version": __version__,
             "step": "wtc_reband",
             "Sources": [str(npz_path)],
-            "parameters": {"band_fmin": fmin, "band_fmax": fmax, "mask_coi": mask_coi},
+            # everything the maps were computed with, which a new band changes none of
+            "parameters": {**_maps_params(npz_path),
+                           "band_fmin": fmin, "band_fmax": fmax, "mask_coi": mask_coi},
         })
         logger.info("reband -> %s (%d rows)", out_path, len(df))
         written.append(out_path)

@@ -39,7 +39,10 @@ logger = get_logger("pipeline.wtc_aggregate")
 # path: they answer different questions and a table holding both answers neither
 # n_iter is not here: it is a column of the table, not a property of one, so mixing it
 # leaves every row readable and separable. `_warn_mixed_iterations` says what it costs
-_MUST_AGREE = ("band_fmin", "band_fmax", "mask_coi", "null_kind", "pair_pool")
+_MUST_AGREE = ("band_fmin", "band_fmax", "mask_coi", "null_kind", "pair_pool", "wtc_whiten_s")
+# an unwhitened table carries no wtc_whiten_s, and that absence is an opinion: it was not
+# whitened, so it must not merge with one that was
+_ABSENT_MEANS = {"wtc_whiten_s": 0.0}
 
 # never merged, whatever else they carry. The draws are the same null at full detail and
 # would double every row of it; the per-scale phase table is a different measurement that
@@ -108,7 +111,8 @@ def _refuse_mixed_bands(seen: dict[str, dict]) -> None:
     warned about it.
     """
     for key in _MUST_AGREE:
-        values = {name: params[key] for name, params in seen.items() if key in params}
+        values = {name: params.get(key, _ABSENT_MEANS.get(key)) for name, params in seen.items()
+                  if key in params or key in _ABSENT_MEANS}
         distinct = set(values.values())
         if len(distinct) > 1:
             spread = "\n".join(f"  {name}: {key}={value}"

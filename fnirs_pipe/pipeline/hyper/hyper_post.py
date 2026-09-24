@@ -8,9 +8,11 @@ pairing, so the two are separated; :mod:`fnirs_pipe.qc.hyper.hyper_report` draws
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import json
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import pandas as pd
 
 from fnirs_pipe.utils.logging import get_logger
@@ -18,8 +20,9 @@ from fnirs_pipe.exceptions import StageError
 from fnirs_pipe.io.derivatives import group_output_path
 from fnirs_pipe.pipeline.hyper.roi import roi_mean_of_channels, roi_mean_of_homologous
 from fnirs_pipe.pipeline.hyper.isc import compute_isc_pairs, roi_mean_of_isc
+from fnirs_pipe.pipeline.hyper.whiten import whiten_order, whiten_raws
 from fnirs_pipe.qc.common.figure_io import _pair_fname, get_channel_pairs, pair_slug
-from fnirs_pipe.qc.common.windows import condition_windows
+from fnirs_pipe.qc.common.windows import condition_windows, refuse_colliding_labels
 
 logger = get_logger("pipeline.hyper_post")
 
@@ -49,6 +52,8 @@ class HyperPostConfig:
     wtc_mask_coi: bool = True
     wtc_roi_min_channels: int = 2
     wtc_chroma: Any = ("hbo", "hbr")
+    # seconds of AR order for prewhitening before the coherence, 0 for none
+    wtc_whiten_s: float = 0.0
     isc_whiten: int = 0
     isc_max_lag_s: float = 0.0
     isc_phase_null: int = 0
@@ -119,8 +124,26 @@ class HyperPostResult:
     # chord is drawn against when --isc-phase-null ran. Its own field rather than a third slot
     # in `isc`, so nothing reading that pair has to learn a new shape
     isc_levels: dict = field(default_factory=dict)
+    # {pairing: {condition: {chromophore: partner count}}} where a chord level came from the
+    # re-paired null rather than the phase-scrambled one, so the wording can say which
+    isc_level_sources: dict = field(default_factory=dict)
     align_info: dict = field(default_factory=dict)
     tables: dict = field(default_factory=dict)
+
+
+def _level_source(result) -> "str | list[str]":
+    """Which per-frequency level a map's phase cells were gated by, for a sidecar.
+
+    ::
+
+      maps thresholded against the re-paired null -> "pair"
+      no level at all                             -> "none", only the cone applied
+    """
+    found = {({"null": "phase", "pair": "pair"}.get(data.get("sig_source"))
+              or ("montecarlo" if data.get("sig") is not None else "none"))
+             for labels in (result.pairs.values() if result is not None else [])
+             for data in labels.values() if data is not None}
+    return found.pop() if len(found) == 1 else sorted(found)
 
 
 def write_isc_matrix(
@@ -229,6 +252,15 @@ def run_hyper_post(
     # the entities every ROI table carries, so one tree can hold two ROI definitions
     roi_entities           = {"segmentation": config.roi_map_name}
     analysis_window        = config.analysis_window
+    wtc_whiten_s           = float(config.wtc_whiten_s or 0.0)
+    # the coherence alone reads the whitened copies; the correlation has its own whitening
+    wtc_raws = (whiten_raws(aligned_raws, wtc_whiten_s, sep_bands) if wtc_whiten_s
+                else aligned_raws)
+
+    def _whiten_params() -> dict:
+        return ({"wtc_whiten_s": wtc_whiten_s,
+                 "wtc_whiten_order": whiten_order(aligned_raws, wtc_whiten_s)}
+                if wtc_whiten_s else {})
 
     ref_raw = aligned_raws.get(subject_ids[0]) if subject_ids else None
     # the channel axis follows the first chromophore; the labels do not carry one, so one
@@ -246,9 +278,15 @@ def run_hyper_post(
         tsv_path = group_output_path(output_dir, group_id, {"task": task, **entities},
                                      "relmat", ".tsv")
         df.to_csv(tsv_path, sep="\t", index=False)
-        _hyper_sidecar(
-            tsv_path, step,
-            [p for p in (path_from(r) for r in aligned_raws.values()) if p],
+        _hyper_sidecar(tsv_path, step,
+                       [p for p in (path_from(r) for r in aligned_raws.values()) if p],
+                       **_wtc_params(), **extra)
+        tables[tsv_path.name] = tsv_path
+        return tsv_path
+
+    def _wtc_params() -> dict:
+        """What every WTC table and map records about how it was computed."""
+        return dict(
             band_fmin=band_fmin, band_fmax=band_fmax, mask_coi=wtc_mask_coi,
             # --tstart/--tend, without which a reader cannot tell a table describing the
             # whole recording from one describing a stretch of it, and the null that ranks
@@ -260,10 +298,8 @@ def run_hyper_post(
             **({"wtc_window_s": round(float(config.wtc_window_s), 3)}
                if config.wtc_window_s else {}),
             wtc_fmin=wtc_fmin, wtc_fmax=wtc_fmax, chroma=list(chroma),
-            **wtc_grid_params(aligned_raws), **align_info, **extra,
+            **wtc_grid_params(aligned_raws), **align_info, **_whiten_params(),
         )
-        tables[tsv_path.name] = tsv_path
-        return tsv_path
 
     def _transform_condition(tstart: float, tstop: float, ch_type: str):
         """One condition's own transform, taken over a padded cut and windowed back.
@@ -287,9 +323,9 @@ def run_hyper_post(
         is why it is not the default.
         """
         lo = max(0.0, tstart - cond_pad_s)
-        hi = min(min(float(r.times[-1]) for r in aligned_raws.values()), tstop + cond_pad_s)
+        hi = min(min(float(r.times[-1]) for r in wtc_raws.values()), tstop + cond_pad_s)
         cut = {sid: raw.copy().crop(tmin=lo, tmax=hi)
-               for sid, raw in aligned_raws.items()}
+               for sid, raw in wtc_raws.items()}
         res = compute_wtc(cut, fmin=wtc_fmin, fmax=wtc_fmax,
                           significance=wtc_significance, seed=wtc_seed,
                           mc_count=wtc_mc_count, cross=wtc_channel_cross,
@@ -320,6 +356,40 @@ def run_hyper_post(
                                       "statistic": "wtc"}, "relmat", ".npz")
         with guard(f"Saving WTC maps ({ch_type})", errors, scope):
             save_wtc(result, npz_path)
+            # what `fnirs-hyper band` carries onto the tables it re-averages from this
+            _hyper_sidecar(npz_path, "hyper_wtc_maps",
+                           [p for p in (path_from(r) for r in aligned_raws.values()) if p],
+                           **_wtc_params())
+
+    def _level_path(ch_type: str, nulldist: str) -> Path:
+        return group_output_path(output_dir, group_id,
+                                 {"task": task, "chromophore": ch_type,
+                                  **({"condition": "all"} if nulldist == "pair" else {}),
+                                  "nulldist": nulldist, "statistic": "wtc", "desc": "level"},
+                                 "relmat", ".npz")
+
+    def _usable_level(path: Path, what: str) -> bool:
+        """Whether a level on disk was drawn on these recordings with these settings."""
+        from fnirs_pipe.pipeline.hyper.wtc_store import level_mismatch, level_params
+        if not path.exists():
+            return False
+        why = level_mismatch(path, level_params(aligned_raws, wtc_fmin=wtc_fmin,
+                                                wtc_fmax=wtc_fmax, mask_coi=wtc_mask_coi,
+                                                whiten_s=wtc_whiten_s),
+                             aligned_raws)
+        if why:
+            note(notes, scope, f"{path.name} is on disk but was not used for the {what}: "
+                               f"{why}. Rerun the null that wrote it on this tree.")
+            logger.warning("%s | %s not used: %s", scope, path.name, why)
+        return why is None
+
+    def _set_level(data: dict, level, source: str, n_freqs: int) -> bool:
+        # a level of the wrong length would be ignored by the arrows yet named in the caption
+        if data is None or level is None or len(level) != n_freqs:
+            return False
+        data["sig"] = level
+        data["sig_source"] = source
+        return True
 
     def _apply_null_level(result, ch_type: str) -> None:
         """Put the phase-scrambled null's per-frequency level on each pair, where one was drawn.
@@ -330,25 +400,53 @@ def run_hyper_post(
         slot rather than a second one the figures would have to choose between.
 
         Absent unless --wtc-phase-null ran for this dyad, which is the usual case: the maps then
-        keep whatever they had, and the arrows fall back to the flat --wtc-arrow-min.
+        keep whatever they had, and the arrows fall back to the flat --wtc-arrow-min. A level
+        drawn on other recordings or settings is refused rather than used.
         """
         from fnirs_pipe.pipeline.hyper.wtc_store import load_null_levels
-        npz_path = group_output_path(output_dir, group_id,
-                                     {"task": task, "chromophore": ch_type,
-                                      "nulldist": "phase", "statistic": "wtc",
-                                      "desc": "level"}, "relmat", ".npz")
-        if result is None or not npz_path.exists():
+        npz_path = _level_path(ch_type, "phase")
+        if result is None or not _usable_level(npz_path, f"{ch_type} phase arrows"):
             return
         with guard(f"WTC null level ({ch_type})", errors, scope):
             levels = load_null_levels(npz_path)
             for pair_key, labels in result.pairs.items():
                 for label, data in labels.items():
-                    level = levels.get(pair_key, {}).get(label)
-                    if data is not None and level is not None:
-                        data["sig"] = level
-                        data["sig_source"] = "null"
+                    _set_level(data, levels.get(pair_key, {}).get(label), "null",
+                               len(result.freqs))
             logger.info("%s | phase arrows drawn against the phase-scrambled null (%s)",
                         scope, ch_type)
+
+    pair_levels: dict = {}
+
+    def _apply_pair_level(cond_wtc, label: str, tstart: float, tstop: float,
+                          ch_type: str) -> None:
+        """Threshold one condition's arrows against the re-paired null, where one fits it.
+
+        The re-paired null is drawn one condition at a time, so it has a level per condition
+        and none for the whole run: the whole-run page keeps what :func:`_apply_null_level`
+        gave it. A condition whose span on this run's clock differs from the one the null was
+        drawn on keeps that too.
+        """
+        from fnirs_pipe.pipeline.hyper.wtc_store import load_cond_null_levels
+        if ch_type not in pair_levels:
+            path = _level_path(ch_type, "pair")
+            pair_levels[ch_type] = None
+            if _usable_level(path, f"{ch_type} condition arrows"):
+                side = json.loads(path.with_suffix(".json").read_text(encoding="utf-8"))
+                pair_levels[ch_type] = (load_cond_null_levels(path),
+                                        side["parameters"].get("condition_windows_s") or {})
+        if cond_wtc is None or pair_levels[ch_type] is None:
+            return
+        levels, spans = pair_levels[ch_type]
+        if spans.get(label) != [round(float(tstart), 3), round(float(tstop), 3)]:
+            logger.info("%s | condition %s: no re-paired level for its span", scope, label)
+            return
+        used = sum(_set_level(data, levels.get(label, {}).get(pair_key, {}).get(ch), "pair",
+                              len(cond_wtc.freqs))
+                   for pair_key, labels in cond_wtc.pairs.items() for ch, data in labels.items())
+        if used:
+            logger.info("%s | condition %s: phase arrows drawn against the re-paired null "
+                        "(%s, %d channel pairs)", scope, label, ch_type, used)
 
     def _phase_scale(result, scope_name: str, ch_type: str):
         """The per-frequency phase for one scope, which is where an angle becomes a delay."""
@@ -397,6 +495,8 @@ def run_hyper_post(
         if cond_windows is None:
             cond_windows = (condition_windows(ref_raw, min_duration=1.0 / wtc_fmin)
                             if ref_raw else [])
+        # after any split into equal windows, which makes labels of its own
+        refuse_colliding_labels([w[0] for w in cond_windows], reserved=("all",))
         if not cond_windows:
             note(notes, scope,
                  "--wtc-by-condition asked for, but no annotation window is long enough "
@@ -469,7 +569,7 @@ def run_hyper_post(
         with guard(f"WTC computation ({ch_type})", errors, scope):
             logger.info("Computing WTC on %s for %d subjects...", ch_type, len(subject_ids))
             wtc_result = compute_wtc(
-                aligned_raws, fmin=wtc_fmin, fmax=wtc_fmax, significance=wtc_significance,
+                wtc_raws, fmin=wtc_fmin, fmax=wtc_fmax, significance=wtc_significance,
                 seed=wtc_seed, mc_count=wtc_mc_count, cross=wtc_channel_cross,
                 limit_scales=wtc_limit_scales, ch_type=ch_type, sep_bands=sep_bands)
 
@@ -516,6 +616,7 @@ def run_hyper_post(
                     cond_wtc = window_result(wtc_result, tstart, tstop)
                 else:
                     cond_wtc = _transform_condition(tstart, tstop, ch_type)
+                _apply_pair_level(cond_wtc, label, tstart, tstop, ch_type)
                 cond_chan = wtc_band_mean(cond_wtc, band_fmin, band_fmax,
                                           mask_coi=wtc_mask_coi)
             if cond_chan is None:
@@ -560,6 +661,13 @@ def run_hyper_post(
 
     passes = {ch_type: _wtc_pass(ch_type) for ch_type in chroma}
 
+    # which level decided the cells every phase column below was averaged over, since the
+    # column cannot say so itself and two runs of one dyad can differ only in this
+    run_level = {c: _level_source(passes[c]["result"]) for c in chroma}
+    cond_level = {c: {label: _level_source(got)
+                      for (label, _, _), got in zip(cond_windows, passes[c]["cond_wtc"])}
+                  for c in chroma}
+
     def _stack(key: str):
         """One kind's rows from every chromophore, tagged, or None when nothing ran."""
         frames = []
@@ -572,25 +680,25 @@ def run_hyper_post(
     chan_band_df = _stack("chan")
     if chan_band_df is not None:
         logger.info("WTC band means saved: %s",
-                    _write_df_tsv(chan_band_df, {"statistic": "wtc"}, "hyper_wtc"))
+                    _write_df_tsv(chan_band_df, {"statistic": "wtc"}, "hyper_wtc", phase_level_source=run_level))
     roi_band_df = _stack("roichan")
     if roi_band_df is not None:
         logger.info("WTC ROI means from channels saved: %s",
                     _write_df_tsv(roi_band_df,
                                   {**roi_entities, "aggregation": "roi",
-                                   "statistic": "wtc"}, "hyper_wtc_roichan"))
+                                   "statistic": "wtc"}, "hyper_wtc_roichan", phase_level_source=run_level))
     roi_hom_df = _stack("roihom")
     if roi_hom_df is not None:
         logger.info("WTC homologous ROI means saved: %s",
                     _write_df_tsv(roi_hom_df,
                                   {**roi_entities, "aggregation": "homologous",
-                                   "statistic": "wtc"}, "hyper_wtc_roihom"))
+                                   "statistic": "wtc"}, "hyper_wtc_roihom", phase_level_source=run_level))
 
     phase_scale_df = _stack("phasescale")
     if phase_scale_df is not None:
         logger.info("WTC phase per scale saved: %s",
                     _write_df_tsv(phase_scale_df, {"statistic": "wtcphase"},
-                                  "hyper_wtc_phasescale"))
+                                  "hyper_wtc_phasescale", phase_level_source=run_level))
 
     # the windows are the one thing a reader cannot reconstruct from the table
     spans = {label: [round(t0, 3), round(t1, 3)] for label, t0, t1 in cond_windows}
@@ -601,14 +709,16 @@ def run_hyper_post(
                     _write_df_tsv(pd.concat(cond_chan_frames, ignore_index=True),
                                   {"condition": "all", "statistic": "wtc"},
                                   "hyper_wtc_bycondition",
-                                  condition_windows_s=spans))
+                                  condition_windows_s=spans,
+                                  phase_level_source=cond_level))
     if cond_roi_frames:
         logger.info("WTC ROI means per condition saved: %s",
                     _write_df_tsv(pd.concat(cond_roi_frames, ignore_index=True),
                                   {**roi_entities, "aggregation": "roi",
                                    "condition": "all", "statistic": "wtc"},
                                   "hyper_wtc_bycondition_roichan",
-                                  condition_windows_s=spans))
+                                  condition_windows_s=spans,
+                                  phase_level_source=cond_level))
     cond_hom_frames = [f for r in passes.values() for f in r["cond_roihom"]]
     if cond_hom_frames:
         logger.info("WTC homologous ROI means per condition saved: %s",
@@ -616,7 +726,8 @@ def run_hyper_post(
                                   {**roi_entities, "aggregation": "homologous",
                                    "condition": "all", "statistic": "wtc"},
                                   "hyper_wtc_bycondition_roihom",
-                                  condition_windows_s=spans))
+                                  condition_windows_s=spans,
+                                  phase_level_source=cond_level))
 
     cond_scale_frames = [f for r in passes.values() for f in r["cond_phasescale"]]
     if cond_scale_frames:
@@ -624,7 +735,8 @@ def run_hyper_post(
                     _write_df_tsv(pd.concat(cond_scale_frames, ignore_index=True),
                                   {"condition": "all", "statistic": "wtcphase"},
                                   "hyper_wtc_bycondition_phasescale",
-                                  condition_windows_s=spans))
+                                  condition_windows_s=spans,
+                                  phase_level_source=cond_level))
 
     # ---- ISC, which is a cut and not a slice ----
     # Always both chromophores, not --wtc-chroma: ISC is cheap, and its matrix cannot share a
@@ -644,6 +756,52 @@ def run_hyper_post(
                 "isc_whiten_max_order": isc_whiten,
                 "isc_max_lag_s": isc_max_lag_s,
                 "isc_phase_null_iter": isc_phase_null}
+
+    def _apply_pair_isc_levels(isc: dict, isc_levels: dict) -> dict:
+        """Put each condition's re-paired |r| level in place of its chord level, where it fits.
+
+        Written by `fnirs-hyper-pairnull` for the members it re-paired, one condition at a
+        time, so only that pairing's condition pages can take it. A table drawn with other ISC
+        settings, on other recordings, or over a condition span this run does not share is
+        left unused and the chords keep the phase-scrambled level or the fallback.
+        """
+        from fnirs_pipe.pipeline.hyper.wtc import wtc_grid_params
+        from fnirs_pipe.pipeline.hyper.wtc_store import level_mismatch
+        path = group_output_path(output_dir, group_id,
+                                 {"task": task, "condition": "all", "nulldist": "pair",
+                                  "statistic": "isc"}, "relmat", ".tsv")
+        expected = {**wtc_grid_params(aligned_raws), **align_info,
+                    "isc_whiten_max_order": isc_whiten, "isc_max_lag_s": isc_max_lag_s,
+                    "isc_band_hz": list(isc_band) if isc_band else None}
+        if not path.exists():
+            return {}
+        why = level_mismatch(path, expected, aligned_raws)
+        if why:
+            note(notes, scope, f"{path.name} is on disk but was not used for the chords: "
+                               f"{why}. Rerun fnirs-hyper-pairnull on this tree.")
+            return {}
+        side = json.loads(path.with_suffix(".json").read_text(encoding="utf-8"))["parameters"]
+        spans = side.get("condition_windows_s") or {}
+        n_partners = int(side.get("n_iter") or 0)
+        table = pd.read_csv(path, sep="	")
+        sources: dict = {}
+        for pr, by_label in isc.items():
+            for label, t0, t1 in cond_windows:
+                if spans.get(label) != [round(float(t0), 3), round(float(t1), 3)]:
+                    continue
+                for c, (mat, names) in (by_label.get(label) or {}).items():
+                    rows = table[(table["chromophore"] == c) & (table["condition"] == label)
+                                 & (table["sub1"] == pr[0]) & (table["sub2"] == pr[1])]
+                    if mat is None or rows.empty:
+                        continue
+                    level = (rows.pivot_table(index="label", columns="label2",
+                                              values="null_abs_p95", aggfunc="first")
+                             .reindex(index=names, columns=names).to_numpy(dtype=float))
+                    if not np.isfinite(level).any():
+                        continue
+                    isc_levels[pr][label][c] = level
+                    sources.setdefault(pr, {}).setdefault(label, {})[c] = n_partners
+        return sources
 
     def _isc_of(ch_type: str, label, window, pair) -> tuple:
         """One scope's ISC: ``((matrix, channels), (matrix, regions), arc level)``."""
@@ -707,6 +865,8 @@ def run_hyper_post(
         isc_levels[pr] = {lab: {c: got[2] for c, got in by_chroma.items()}
                           for lab, by_chroma in both.items()}
 
+    isc_level_sources = _apply_pair_isc_levels(isc, isc_levels)
+
     if isc_pair_frames:
         # its own writer rather than _write_df_tsv: that one stamps the WTC band and grid on
         # everything it writes, and a correlation was averaged over no band at all
@@ -742,6 +902,7 @@ def run_hyper_post(
         isc=isc,
         isc_roi=isc_roi,
         isc_levels=isc_levels,
+        isc_level_sources=isc_level_sources,
         align_info=align_info,
         tables=tables,
     )

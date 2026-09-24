@@ -11,7 +11,8 @@ from pathlib import Path
 
 import mne
 
-from fnirs_pipe.qc.common.figure_io import extract_markers
+from fnirs_pipe.exceptions import StageError
+from fnirs_pipe.qc.common.figure_io import _pair_fname, extract_markers
 from fnirs_pipe.utils.lineage import path_from
 from fnirs_pipe.utils.logging import get_logger
 
@@ -139,7 +140,37 @@ def condition_windows(
 
     logger.info("condition windows: %d kept, %d took their own duration and %d ran to the "
                 "next trigger", len(windows), n_from_duration, len(markers) - n_from_duration)
+    refuse_colliding_labels([w[0] for w in windows])
     return windows
+
+
+def refuse_colliding_labels(labels, reserved: "tuple[str, ...]" = ()) -> None:
+    """Raise when two condition labels would name one file, or one takes a reserved name.
+
+    ::
+
+      ["game 1", "game1"]            -> StageError: both are cond-game1
+      ["all"], reserved=("all",)     -> StageError: cond-all is the table of every condition
+
+    A label reaches a file name through a slug of its letters and digits, so two labels that
+    differ only in the rest would write the same file, the later one replacing the earlier.
+    """
+    by_slug: dict[str, list[str]] = {}
+    for label in labels:
+        by_slug.setdefault(_pair_fname(str(label)), []).append(str(label))
+    clashes = [names for names in by_slug.values() if len(names) > 1]
+    if clashes:
+        shown = "; ".join(" and ".join(repr(n) for n in names) for names in clashes)
+        raise StageError(
+            f"conditions {shown} would be written to one file, since a file name keeps only "
+            "the letters and digits of a condition. Rename the annotations so that they "
+            "differ in a letter or digit.")
+    taken = sorted(set(by_slug) & set(reserved))
+    if taken:
+        raise StageError(
+            f"a condition named {', '.join(repr(t) for t in taken)} takes a name the output "
+            f"reserves: cond-{taken[0]} is the table holding every condition. Rename the "
+            "annotation.")
 
 
 def split_windows(

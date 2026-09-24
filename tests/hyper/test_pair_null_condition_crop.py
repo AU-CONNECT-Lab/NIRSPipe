@@ -118,7 +118,7 @@ def test_a_block_a_hair_past_the_end_is_cut_to_the_end(wired):
 def test_both_sides_of_a_draw_stay_the_same_length(wired):
     wired["onsets"] = {"baseline": 0.0, "game1": 500.0004}
     drawn, _ = _run(wired)
-    for _, _, pair, _ in drawn:
+    for _, _, pair, _, _ in drawn:
         spans = [float(raw.times[-1]) for raw in pair.values()]
         assert max(spans) - min(spans) < 0.1  # a sample period, what crop rounds to
 
@@ -135,7 +135,7 @@ def test_the_condition_is_padded_and_its_place_reported(wired):
     """A draw carries context either side, and says where the condition sits inside it."""
     wired["onsets"] = {"baseline": 0.0, "game1": 500.0}
     drawn, _ = _run(wired)
-    by_label = {label: (pair, inner) for _, label, pair, inner in drawn}
+    by_label = {label: (pair, inner) for _, label, pair, inner, _ in drawn}
 
     # game1 has room for the full 47.1 s either side
     pair, (lo, hi) = by_label["game1"]
@@ -184,7 +184,7 @@ def test_every_window_of_a_draw_is_the_same_length(wired):
     wired["onsets"] = {"baseline": 0.0, "game1": 450.0}
     drawn, _ = _run_windows(wired, windows, sources)
     spans = set()
-    for _, _, pair, inner in drawn:
+    for _, _, pair, inner, _ in drawn:
         for raw in pair.values():
             spans.add(round(float(raw.times[-1]), 3))
         assert round(inner[1] - inner[0], 3) == 300.0

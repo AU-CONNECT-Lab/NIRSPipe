@@ -49,7 +49,7 @@ from fnirs_pipe.qc.common.windows import crop_provenance, markers_on_data_axis
 from fnirs_pipe.utils.logging import get_logger
 from fnirs_pipe.qc.common.record_views import condition_set_view
 from fnirs_pipe.qc.figures.hyper.hyper_post_figures import (
-    ARROW_MIN_COHERENCE, build_isc_panel, build_isc_roi_matrix, build_wtc_channel,
+    ARROW_MIN_COHERENCE, _clears, build_isc_panel, build_isc_roi_matrix, build_wtc_channel,
     build_wtc_cross_matrix, build_wtc_map_interactive, wtc_condition_views,
 )
 
@@ -683,14 +683,33 @@ def _merge_scopes(kind: str, axis: list[str], per_scope: list) -> dict:
     }
 
 
-def _isc_arc_rule(isc_threshold: "float | None", isc_phase_null: int) -> str:
+def _arrow_rule(maps: list, pair, arrow_min: float) -> str:
+    """What this page's phase arrows had to clear, read off the maps it was drawn from.
+
+    ::
+
+      whole-run maps against the phase-scrambled null -> "the phase-scrambled null"
+      HbO against the re-paired null, HbR with none    -> "0.5; the re-paired null"
+    """
+    rules = {_clears(data, arrow_min)
+             for result in maps if result is not None
+             for key, labels in result.pairs.items() if pair is None or tuple(key) == tuple(pair)
+             for data in labels.values() if data is not None}
+    return "; ".join(sorted(rules)) if rules else f"{arrow_min:g}"
+
+
+def _isc_arc_rule(isc_threshold: "float | None", isc_phase_null: int,
+                  repaired: "int | None" = None) -> str:
     """One sentence naming which of the three rules drew the connectogram's chords.
 
     The figure's own subtitle says the same thing; this is the page's parameter table, which
-    a reader reaches without opening a panel.
+    a reader reaches without opening a panel. ``repaired`` is the partner count where this
+    page's chords were drawn against the re-paired null instead.
     """
     if isc_threshold is not None:
         return f"|r| &ge; {isc_threshold:.2f}"
+    if repaired:
+        return f"above each pairing's re-paired null, {repaired} partners"
     if isc_phase_null:
         return f"above each pairing's own null, {isc_phase_null} surrogates"
     return "the strongest 10%, a display cut rather than a test"
@@ -724,6 +743,7 @@ def build_hyper_post_report(
     wtc_roi_min_channels: int = 2,
     wtc_arrow_min: "float | None" = None,
     wtc_chroma: "tuple[str, ...] | list[str]" = ("hbo", "hbr"),
+    wtc_whiten_s: float = 0.0,
     isc_threshold: "float | None" = None,
     isc_whiten: int = 0,
     isc_max_lag_s: float = 0.0,
@@ -1147,7 +1167,7 @@ def build_hyper_post_report(
                 wtc_cond_pad_s=wtc_cond_pad_s,
                 wtc_limit_scales=wtc_limit_scales, wtc_save_maps=wtc_save_maps,
                 wtc_mask_coi=wtc_mask_coi, wtc_roi_min_channels=wtc_roi_min_channels,
-                wtc_chroma=wtc_chroma, isc_whiten=isc_whiten,
+                wtc_chroma=wtc_chroma, wtc_whiten_s=wtc_whiten_s, isc_whiten=isc_whiten,
                 isc_max_lag_s=isc_max_lag_s, isc_phase_null=isc_phase_null,
                 isc_band=isc_band,
                 roi_map=roi_map, roi_map_name=roi_map_name, sep_bands=sep_bands,
@@ -1187,6 +1207,7 @@ def build_hyper_post_report(
         if isc_mat is None:
             return {}
         arc_level = result.isc_levels.get(pair, {}).get(label, {}).get(ch_type)
+        repaired = result.isc_level_sources.get(pair, {}).get(label, {}).get(ch_type)
         what = f"condition {label}" if label else "whole run"
         fig_name = figure_namer(scope, _pair_fname(label) if label else None)
         panel: dict = {}
@@ -1194,6 +1215,7 @@ def build_hyper_post_report(
             panel = _fig_html(build_isc_panel(
                 isc_mat, isc_ch_names, list(pair),
                 ch_type=ch_type, isc_threshold=isc_threshold, arc_level=arc_level,
+                arc_level_name="its re-paired null" if repaired else "its own null",
             ), fig_name("iscpanel", chromophore=ch_type,
                         pairing=_pair_slug(pair).lstrip("_") or None)) or {}
         return panel
@@ -1303,7 +1325,7 @@ def build_hyper_post_report(
 
     def _render_page(figs: dict, matrices: dict, number_scopes: list, label: "str | None",
                      window: "tuple[float, float] | None",
-                     pair: "tuple[str, str] | None" = None) -> Path:
+                     pair: "tuple[str, str] | None" = None, maps: "list | None" = None) -> Path:
         """One page: the whole run's when ``label`` is None, else that condition's.
 
         Both go through this, so a panel cannot exist on the run's page and be missing from
@@ -1395,6 +1417,7 @@ def build_hyper_post_report(
             wtc_band_fmin=band_fmin,
             wtc_band_fmax=band_fmax,
             arrow_min=arrow_min,
+            arrow_rule=_arrow_rule(maps or [], pair, arrow_min),
             mask_coi=wtc_mask_coi,
             sci_threshold=sci_threshold,
             run_command=" ".join(sys.argv),
@@ -1405,7 +1428,10 @@ def build_hyper_post_report(
                                    default=0.0),
             wtc_chroma_labels=[_CHROMA_LABEL[c] for c in chroma],
             wtc_chroma_json=json.dumps(list(chroma)),
-            isc_arc_rule=_isc_arc_rule(isc_threshold, isc_phase_null),
+            isc_arc_rule=_isc_arc_rule(
+                isc_threshold, isc_phase_null,
+                max((result.isc_level_sources.get(pair, {}).get(label) or {}).values(),
+                    default=None)),
             alignment_json=json.dumps(alignment_rows),
             per_channel_post_json=json.dumps(per_channel),
             # the long axis, not `ch_pairs_post`: the selector has to name the set the
@@ -1475,7 +1501,9 @@ def build_hyper_post_report(
                 figs,
                 _matrix_set(bands, _pair_fname(label), f"condition {label}",
                             (pr, label), pr),
-                [(label, bands, label)], label, (tstart, tstop), pr)
+                [(label, bands, label)], label, (tstart, tstop), pr,
+                maps=[passes[c]["cond_wtc"][i] if i < len(passes[c]["cond_wtc"]) else None
+                      for c in chroma])
             logger.info("group-%s | %s condition %s -> %s",
                         group_id, " × ".join(pr), label, written.name)
 
@@ -1486,7 +1514,7 @@ def build_hyper_post_report(
             [("Whole run", run_bands, None)]
             + [(label, _cond_bands(i), label)
                for i, (label, _, _) in enumerate(cond_windows)],
-            None, None, pr)
+            None, None, pr, maps=[passes[c]["result"] for c in chroma])
         logger.info("Hyper post report saved: %s", written)
         output_path = output_path or written
     return output_path

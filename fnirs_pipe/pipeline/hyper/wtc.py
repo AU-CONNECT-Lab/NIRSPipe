@@ -689,6 +689,7 @@ def window_result(result: WTCResult, tstart: float, tstop: float) -> WTCResult:
                 "wtc": np.asarray(data["wtc"])[:, keep],
                 "coi": np.asarray(data["coi"])[keep],
                 "sig": data.get("sig"),
+                **({"sig_source": data["sig_source"]} if "sig_source" in data else {}),
                 "phase": np.asarray(data["phase"])[:, keep],
             })
             for label, data in labels.items()

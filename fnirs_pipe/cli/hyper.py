@@ -228,7 +228,7 @@ def cmd_run(
     wtc_channel_cross: bool,
     wtc_by_condition: bool, wtc_chroma: str, wtc_window_s: "float | None",
     wtc_cond_transform: bool, wtc_cond_pad_s: "float | None",
-    wtc_limit_scales: bool, wtc_save_maps: bool,
+    wtc_limit_scales: bool, wtc_save_maps: bool, wtc_whiten: float,
     wtc_phase_null: int | None, wtc_phase_null_cross: bool,
     bads_scope: str, isc_threshold: "float | None", isc_whiten: int,
     isc_max_lag: float, isc_phase_null: int,
@@ -397,6 +397,7 @@ def cmd_run(
             sep_bands=sep_bands,
             windows=cond_windows,
             analysis_window=analysis_window,
+            whiten_s=wtc_whiten,
         ) if wtc_phase_null else None
 
         report_path = build_hyper_post_report(
@@ -427,6 +428,7 @@ def cmd_run(
             wtc_roi_min_channels=wtc_roi_min_channels,
             wtc_arrow_min=wtc_arrow_min,
             wtc_chroma=chroma,
+            wtc_whiten_s=wtc_whiten,
             isc_threshold=isc_threshold,
             isc_whiten=isc_whiten,
             isc_max_lag_s=isc_max_lag,
@@ -456,6 +458,7 @@ def cmd_run(
                 analysis_window=analysis_window,
                 roi_map=roi_map,
                 roi_map_name=roi_name,
+                whiten_s=wtc_whiten,
             )
             print(f"     null   -> {null_path}")
 
@@ -884,6 +887,18 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
                           "recording did not have.")
     run.add_argument("--isc-fmax", type=float, default=None, metavar="HZ",
                      help="The high edge of that band. No default: see --isc-fmin.")
+    run.add_argument("--wtc-whiten", type=float, default=0.0, metavar="SECONDS",
+                     help="Prewhiten each long channel with an autoregressive model of this "
+                          "many seconds of order before the wavelet coherence, one order for "
+                          "every channel of both members, fitted on the whole aligned record; "
+                          "0, the default, transforms the signals themselves. Identical "
+                          "filters on both members leave the coherence nearly unchanged, so "
+                          "the effect comes from the two members' haemodynamics differing, "
+                          "and the phase and lag_s then describe the whitened signals. The "
+                          "phase-scrambled null follows it, the re-paired null reads it off "
+                          "the real table, and the sidecars record wtc_whiten_s. The first "
+                          "order's worth of samples is a filter transient and is zeroed. The "
+                          "correlation is not affected; see --isc-whiten.")
     run.add_argument("--isc-whiten", type=int, default=0, metavar="ORDER",
                      help="Fit an autoregressive model of at most this order to each channel "
                           "before the inter-subject correlation and correlate the residuals; "

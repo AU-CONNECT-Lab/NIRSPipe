@@ -91,7 +91,7 @@
             {%- if window_cycles %} &bull; {{ "%.0f"|format(window_cycles) }} cycles of the slowest
             band frequency{% endif %}</td></tr>
       <tr><th>Chromophores</th><td>{{ wtc_chroma_labels | join(' + ') }}</td></tr>
-      <tr><th>Arrow threshold</th><td>{{ "%g"|format(arrow_min) }}</td></tr>
+      <tr><th>Arrow threshold</th><td>{{ arrow_rule }}</td></tr>
       <tr><th>Outside the COI</th><td>{{ "masked out of every band mean" if mask_coi
                                         else "kept in the band means" }}</td></tr>
       <tr><th>ISC chords</th><td>{{ isc_arc_rule }}</td></tr>
