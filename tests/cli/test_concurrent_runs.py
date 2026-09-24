@@ -62,6 +62,7 @@ def _log_one_execution(db_path: str, subject: str) -> int:
     )
     job_db.log_run_start(db, execution_id, subject, bids_task="rest")
     job_db.log_run_end(db, execution_id, subject, status="COMPLETED")
+    job_db.update_execution(db, execution_id, "COMPLETED")
     return execution_id
 
 
@@ -154,15 +155,12 @@ def test_concurrent_merges_do_not_report_a_locked_database(tmp_path):
 
     with ProcessPoolExecutor(max_workers=WORKERS) as pool:
         futures = [pool.submit(_merge, str(db)) for _ in range(WORKERS)]
-        for f in as_completed(futures):
-            files, _rows = f.result()   # an OperationalError would surface here
-            assert files == WORKERS * 2  # one _pipeline and one _runs file per worker
+        # an OperationalError would surface here
+        merged = [f.result()[0] for f in as_completed(futures)]
+    # one _pipeline and one _runs file per worker, each merged by exactly one of the merges
+    assert sum(merged) == WORKERS * 2
 
 
-@pytest.mark.xfail(reason="merge is not idempotent: runs, sqm and command_outputs have no "
-                          "unique key, so every merge inserts again. Not a concurrency bug; "
-                          "two merges in a row do it too.",
-                   strict=True)
 def test_merge_is_idempotent(tmp_path):
     """Several merges racing must not multiply the rows, or a study's counts are wrong."""
     db = tmp_path / "logs" / "pipeline.db"

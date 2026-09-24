@@ -6,7 +6,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- `fnirs-log rebuild` builds a new database from every JSONL log, archived ones included, leaving the old one untouched
+
 ### Changed
+- **Breaking**: `fnirs-log merge` merges only finished executions, moves their logs to `archived/`, and backs up the database first
 - **Breaking**: the raw viewer's condition pages are `cond-<label>_desc-raw_report.html` under the run's own label; they swapped the condition into `task-`
 - **Breaking**: the dyad cohort page's figures are `desc-groups<panel>_nirs.html`, not `cohort_hyper_<panel>.html`
 - `.bidsignore` names the five JSON-only records (quality, ratings, channel decisions); every table stays checked
@@ -31,6 +35,7 @@ All notable changes to this project will be documented in this file.
 - The re-paired null cut every repeat of a condition from the stand-in's first block of it, not the matching one
 - A segment cropped from a recording kept the source's `TaskName` and `RecordingDuration` and recorded no source or window
 - `fnirs-hyper` reported a `StageError`, such as an optical-density `--desc`, as an unexpected error with a traceback
+- `fnirs-log merge` inserted every row again each time it ran
 - `fnirs-hyper-band --wtc-suffix` is reduced to a valid `band-` value, and its help shows the real default
 - The `fnirs-hyper-merge` help lists what refuses a merge and what only warns
 - The raw viewer's condition pages name their channel-summary and trial tables `_qc`, as its run page does

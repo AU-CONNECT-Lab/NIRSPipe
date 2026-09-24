@@ -1,7 +1,7 @@
 """JSONL-based job tracking with SQLite merge for fnirs-pipe.
 
 Write flow: pipeline events → JSONL files under logs/json/
-Merge flow: fnirs-db merge → reads all JSONLs → inserts into logs/fnirs_pipe.db
+Merge flow: fnirs-log merge → finished executions into logs/fnirs_pipe.db, their JSONLs to archived/
 """
 
 from __future__ import annotations
@@ -381,37 +381,152 @@ def _get_conn(db_path: Path) -> sqlite3.Connection:
 
 # --- Merge ---
 
+# How many database backups a merge keeps beside the database.
+_BACKUPS_KEPT = 10
+
+
 def merge_jsonl(db_path: Path) -> tuple[int, int]:
-    """Read all JSONL files and insert into SQLite. Returns (files_processed, rows_inserted)."""
+    """Move every finished execution's logs into SQLite, once. Returns (files merged, rows).
+
+    A merged execution's files go to ``archived/`` beside where they were, which is what keeps
+    the next merge from inserting them again; one still running is left for a later merge.
+    The pass holds the write lock from before it looks at the files, so a merge started
+    alongside waits and then finds them already moved.
+    """
     json_dir = _json_dir(db_path)
     if not json_dir.exists():
         return 0, 0
+    if db_path.exists():
+        _backup(db_path)
 
     conn = _get_conn(db_path)
+    files = rows = unfinished = 0
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        for paths in _logs_by_execution(json_dir, include_archived=False).values():
+            records = [rec for path in paths for rec in _read_jsonl(path)]
+            if not _finished(records):
+                unfinished += 1
+                continue
+            conn.execute("SAVEPOINT execution")
+            moved: list[tuple[Path, Path]] = []
+            try:
+                n = _insert_execution(conn, records)
+                for path in paths:
+                    moved.append((path, _archive(path)))
+            except OSError as exc:
+                # merged but not moved, it would be inserted again by the next merge
+                conn.execute("ROLLBACK TO execution")
+                for src, dst in moved:
+                    dst.replace(src)
+                print(f"[warn] not merged, its logs could not be archived: {exc}")
+            else:
+                files += len(paths)
+                rows += n
+            conn.execute("RELEASE execution")
+        conn.commit()
+    finally:
+        conn.close()
+
+    if unfinished:
+        print(f"[info] {unfinished} execution(s) have not finished and were left for a later "
+              "merge; one that was killed never finishes and stays in logs/json/.")
+    return files, rows
+
+
+def rebuild_db(db_path: Path) -> Path:
+    """A new database from every finished execution's logs, archived ones included.
+
+    Written beside ``db_path`` under a timestamped name. The original database is never
+    opened for writing and no log is moved, so this is the way back from a merge that went
+    wrong.
+    """
+    json_dir = _json_dir(db_path)
+    if not json_dir.exists():
+        raise FileNotFoundError(f"no JSONL log directory: {json_dir}")
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    new_path = db_path.with_name(f"{db_path.stem}_rebuild_{stamp}{db_path.suffix}")
+
+    conn = _get_conn(new_path)
+    try:
+        for paths in _logs_by_execution(json_dir, include_archived=True).values():
+            records = [rec for path in paths for rec in _read_jsonl(path)]
+            if _finished(records):
+                _insert_execution(conn, records)
+        conn.commit()
+    finally:
+        conn.close()
+    return new_path
+
+
+def _logs_by_execution(json_dir: Path, include_archived: bool) -> dict[int, list[Path]]:
+    """Every log file, grouped by the execution its records belong to, `_pipeline` first."""
+    folders = [d for d in sorted(json_dir.iterdir()) if d.is_dir()]
+    if include_archived:
+        folders += [d / "archived" for d in folders if (d / "archived").is_dir()]
+    grouped: dict[int, list[Path]] = {}
+    for folder in folders:
+        for path in sorted(folder.glob("*.jsonl")):
+            records = _read_jsonl(path)
+            if records:
+                grouped.setdefault(records[0].get("execution_id"), []).append(path)
+    # the execution's own file first: its start event has to be read before its update
+    for paths in grouped.values():
+        paths.sort(key=lambda p: ("_pipeline" not in p.parts, p.name))
+    return grouped
+
+
+def _read_jsonl(path: Path) -> list[dict]:
+    out = []
+    with path.open(encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                out.append(json.loads(line))
+            except json.JSONDecodeError:
+                continue
+    return out
+
+
+def _finished(records: list[dict]) -> bool:
+    return any(r.get("event") == "execution_update" and r.get("status") != "RUNNING"
+               for r in records)
+
+
+def _insert_execution(conn: sqlite3.Connection, records: list[dict]) -> int:
     executions: dict[int, dict] = {}
-    files = 0
-    rows = 0
-
-    for jsonl_file in sorted(json_dir.rglob("*.jsonl")):
-        files += 1
-        with jsonl_file.open(encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    rec = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-                rows += _dispatch(conn, rec, executions)
-
+    rows = sum(_dispatch(conn, rec, executions) for rec in records)
     for ex in executions.values():
         _upsert_execution(conn, ex)
         rows += 1
+    return rows
 
-    conn.commit()
-    conn.close()
-    return files, rows
+
+def _archive(path: Path) -> Path:
+    target = path.parent / "archived" / path.name
+    target.parent.mkdir(exist_ok=True)
+    path.replace(target)
+    return target
+
+
+def _backup(db_path: Path) -> Path:
+    """Copy the database aside through sqlite's own backup, which a WAL file cannot fool."""
+    folder = db_path.parent / "backup"
+    folder.mkdir(exist_ok=True)
+    target = folder / (f"{db_path.stem}.backup_{datetime.now():%Y%m%d_%H%M%S_%f}"
+                       f"{db_path.suffix}")
+    src = sqlite3.connect(db_path, timeout=_LOCK_TIMEOUT_S)
+    dst = sqlite3.connect(target)
+    try:
+        src.backup(dst)
+    finally:
+        dst.close()
+        src.close()
+    for old in sorted(folder.glob(f"{db_path.stem}.backup_*{db_path.suffix}"))[:-_BACKUPS_KEPT]:
+        old.unlink()
+    return target
 
 
 def _dispatch(
