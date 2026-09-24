@@ -779,7 +779,10 @@ def _write_condition_views(ctx: dict, payload: dict, output_path: Path, run_labe
 
     def save_figure(panel: str, slug: str, fig) -> "dict | None":
         """One condition's own figure file, named so `figure_leaks` can recognise it."""
-        fname = figure_namer(run_label, slug, prefix="raw")(panel.replace("_", ""))
+        desc = panel.replace("_", "")
+        # the two quality tables carry qc, as the run page names them
+        fname = figure_namer(run_label, slug, prefix="raw")(
+            desc, suffix="qc" if desc in ("chsummary", "trialqc") else "nirs")
         h = _save_figure_html(fig, fig_dir / fname)
         return {"src": f"figures/{fname}", "h": h}
 

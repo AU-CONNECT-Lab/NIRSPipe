@@ -117,8 +117,9 @@ def _build_parser() -> argparse.ArgumentParser:
     prep_opt.add_argument("--epoch-tmin", type=float, default=None,
                           help="Trial window start relative to event onset in s, for the "
                                "report's epoch figures and per-trial scoring; negative pulls "
-                               "in a baseline. Omit for -5 to 25 s, which suits a single "
-                               "trial and not a 60 s block.")
+                               "in a baseline. Omitted, the epoch figures use -5 to 25 s, "
+                               "which suits a single trial and not a 60 s block, and each "
+                               "trial is scored over its event's own duration.")
     prep_opt.add_argument("--epoch-tmax", type=float, default=None,
                           help="Trial window end relative to event onset in s. Given together "
                                "with --epoch-tmin, or neither.")

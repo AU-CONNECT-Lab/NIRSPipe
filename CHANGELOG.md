@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 - **Breaking**: the raw viewer's condition pages are `cond-<label>_desc-raw_report.html` under the run's own label; they swapped the condition into `task-`
 - **Breaking**: the dyad cohort page's figures are `desc-groups<panel>_nirs.html`, not `cohort_hyper_<panel>.html`
 - `.bidsignore` names the five JSON-only records (quality, ratings, channel decisions); every table stays checked
+- **Breaking**: the append-only rating logs are `logs/group_ratings.jsonl` and `logs/group_raw_ratings.jsonl`, not at the tree root
 - **Breaking**: `fnirs-prep align` records each member's offset in its own `_nirs.json` and no longer writes `align-offsets.tsv`
 - 128 function-level imports of modules their file already loads move to module level; startup is unchanged
 - `mne_nirs` is imported only when a SNIRF is written; `fnirs-hyper --help` takes 0.9 s instead of 2.3 s
@@ -22,6 +23,11 @@ All notable changes to this project will be documented in this file.
 - Raw condition pages dropped every panel redrawn for the condition as a leak
 - The dyad rating server read its task as `unknown`, so channel decisions went to a file the raw page never reads
 - A collapsed provenance box counted no conditions, the `cond-` entity being unknown to its parser
+- Merging the per-pairing tables of groups of three or more wrote every pairing to one file; the merged name keeps `pair-`
+- `fnirs-hyper-band --wtc-suffix` is reduced to a valid `band-` value, and its help shows the real default
+- The `fnirs-hyper-merge` help lists what refuses a merge and what only warns
+- The raw viewer's condition pages name their channel-summary and trial tables `_qc`, as its run page does
+- The `--epoch-tmin` help and the report docs say per-trial scoring uses each event's duration when no window is set
 - Without `--session-label`, `fnirs-pipe participant` wrote a session tree's outputs to `sub-<id>/nirs` with no `ses-`, one session overwriting another
 - The run report, the subject index and the rating server read and link each session's own `nirs/`
 - The generated reproduction script keeps each run's task, run and session in its file names, and its GLM step runs again

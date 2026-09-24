@@ -154,7 +154,9 @@ class FNIRSRatingApp:
         out.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
     def _append_jsonl(self, subject: str, ratings: dict, notes: dict) -> None:
-        out = self.output_dir / "group_ratings.jsonl"
+        # beside the run logs, which .bidsignore already waves through
+        out = self.output_dir / "logs" / "group_ratings.jsonl"
+        out.parent.mkdir(parents=True, exist_ok=True)
         record = {
             "subject": subject,
             "rated_at": _utc_now_iso(),
@@ -214,7 +216,9 @@ class RawRatingApp:
         same reason: the per-page files are what a page loads, this is what a group-level
         read needs. Append-only, so the history of a change survives.
         """
-        out = self.output_dir / "group_raw_ratings.jsonl"
+        # beside the run logs, which .bidsignore already waves through
+        out = self.output_dir / "logs" / "group_raw_ratings.jsonl"
+        out.parent.mkdir(parents=True, exist_ok=True)
         record = {"stem": stem, "rated_at": _utc_now_iso(), **ratings, "notes": notes}
         with out.open("a", encoding="utf-8") as fh:
             fh.write(json.dumps(record, ensure_ascii=False) + "\n")

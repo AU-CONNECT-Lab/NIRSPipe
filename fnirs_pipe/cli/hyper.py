@@ -1,10 +1,11 @@
 """fnirs-hyper CLI (argparse) — dyad analysis over a derivatives tree.
 
 Hyperscanning is its own domain: its input is a pairs table, its unit is a dyad, and it
-reads derivatives rather than BIDS raw. It was `fnirs-qc hyper-post` until 0.26.0, which
-put a wavelet-coherence analysis inside the quality-control tool.
+reads derivatives rather than BIDS raw.
 
-Every command here takes one derivatives directory and nothing else positional.
+Each command is its own console script. `fnirs-hyper` and `fnirs-hyper-pairnull` read the
+subject tree and write a separate dyad tree (`<source> <output> group`); the rest re-read
+only the dyad tree (`<output> group`).
 """
 
 from __future__ import annotations
@@ -939,8 +940,9 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
                     "transform runs a second time. Writes tables, not a report. "
                     "--wtc-band-fmin and --wtc-band-fmax are both required here.")
     band.add_argument("--wtc-suffix", default=None,
-                      help="Name added to each output TSV. Defaults to the band, e.g. "
-                           "'band0p05-0p2', so the new tables sit beside the originals "
+                      help="Value of the band- entity on each output TSV, letters and "
+                           "digits only. Defaults to the band, e.g. 0p05to0p2 for "
+                           "band-0p05to0p2, so the new tables sit beside the originals "
                            "rather than replacing them.")
 
     group_null = _command_parser(
@@ -1043,8 +1045,10 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
         description="Concatenates every group-*_task-*_*_relmat.tsv under the tree into "
                     "one table per kind at its root, adding group_id and task columns, so a "
                     "cohort analysis reads one file. Refuses to merge tables that disagree "
-                    "on the band, on mask_coi, on the null's iteration count or on which null "
-                    "they are.")
+                    "on the band, on mask_coi, on which null they are or on the stand-in "
+                    "pool, crossed with homologous tables, and matrices over different "
+                    "channels. A differing null iteration count only warns: n_iter is kept "
+                    "per row.")
 
     return {p.prog: p for p in (run, band, group_null, index, pair, merge)}
 

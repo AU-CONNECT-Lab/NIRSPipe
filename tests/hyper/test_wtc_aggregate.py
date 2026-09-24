@@ -197,6 +197,17 @@ def test_the_two_kinds_land_in_separate_files(tmp_path):
                        "seg-custom_agg-roi_stat-wtc_relmat.tsv"}
 
 
+def test_two_pairings_of_a_larger_group_merge_to_two_files(tmp_path):
+    # the root name pattern had no pair- entity, so both merges were written to one path
+    # and the second silently replaced the first
+    for pairing in ("01x02", "01x03"):
+        _table(tmp_path, "01", "rest", {"pairing": pairing, **WTC})
+        _table(tmp_path, "02", "rest", {"pairing": pairing, **WTC})
+
+    written = {p.name for p in write_all_aggregates(tmp_path)}
+    assert written == {"pair-01x02_stat-wtc_relmat.tsv", "pair-01x03_stat-wtc_relmat.tsv"}
+
+
 def test_the_merged_name_is_the_inputs_name_without_group_and_task(tmp_path):
     """The rule a merge follows: drop what varied, keep what agreed. Being at the root with
     no analysis unit in the name is what marks a table as cross-dyad."""
