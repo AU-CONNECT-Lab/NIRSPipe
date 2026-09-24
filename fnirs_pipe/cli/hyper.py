@@ -23,7 +23,7 @@ from fnirs_pipe.qc.metrics import SCI_PASS
 from fnirs_pipe.utils.logging import get_logger, setup_logging
 from fnirs_pipe import __version__
 from fnirs_pipe.cli._shared import separation_bands_from_args
-from fnirs_pipe.exceptions import GroupCSVError, AlignmentError, MissingDerivativesError
+from fnirs_pipe.exceptions import GroupCSVError, AlignmentError, MissingDerivativesError, StageError
 from fnirs_pipe.io.derivatives import group_report_dir, write_bidsignore, write_dataset_description
 from fnirs_pipe.io.snirf import long_channel_picks
 from fnirs_pipe.pipeline.hyper import (
@@ -77,6 +77,9 @@ def _run_groups(groups: dict, process) -> None:
             n_fail += 1
         except AlignmentError as exc:
             print(f"     [skip] alignment failed: {exc}", file=sys.stderr)
+            n_fail += 1
+        except StageError as exc:
+            print(f"     [error] {exc}", file=sys.stderr)
             n_fail += 1
         except Exception as exc:
             logger.exception("group %s task %s failed", gid, task)

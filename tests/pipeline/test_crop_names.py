@@ -5,13 +5,17 @@ name: a numbered file carries no meaning a reader can select on, and two segment
 label write the same file.
 """
 
+import json
 from pathlib import Path
 
 import pandas as pd
 import pytest
 
-from fnirs_pipe.io.snirf import write_snirf
+from fnirs_pipe.cli import prep as prep_cli
+from fnirs_pipe.io.snirf import read_snirf, write_snirf
+from fnirs_pipe.pipeline import crop
 from fnirs_pipe.pipeline.crop import crop_snirf_from_path
+from fnirs_pipe.qc.common.windows import crop_provenance
 from tests._synth import synth_raw
 
 
@@ -77,9 +81,6 @@ def test_combining_needs_no_labels(source, tmp_path):
 
 def test_the_command_checks_the_table_once_before_any_subject(tmp_path, monkeypatch, capsys):
     """One bad table is one error, not the same error once per subject."""
-    from fnirs_pipe.cli import prep as prep_cli
-    from fnirs_pipe.pipeline import crop
-
     table = tmp_path / "segments.tsv"
     pd.DataFrame({"onset": [10.0, 150.0], "duration": [60.0, 60.0]}).to_csv(
         table, sep="\t", index=False)
@@ -97,13 +98,11 @@ def test_the_command_checks_the_table_once_before_any_subject(tmp_path, monkeypa
 # ---- a segment cut from a recording says what it is ----
 
 def _sidecar(path: Path) -> dict:
-    import json
     return json.loads(path.with_suffix(".json").read_text(encoding="utf-8"))
 
 
 @pytest.fixture
 def source_with_sidecar(source) -> Path:
-    import json
     source.with_suffix(".json").write_text(json.dumps(
         {"TaskName": "full", "RecordingDuration": 300.0, "SamplingFrequency": 10.0}))
     return source
@@ -129,11 +128,8 @@ def test_a_segment_records_its_own_length_and_where_it_came_from(source_with_sid
     assert (lo, hi) == (pytest.approx(10.0, abs=0.2), pytest.approx(70.0, abs=0.2))
 
 
-def test_a_segment_of_a_recording_is_seen_as_a_segment_downstream(source_with_sidecar, tmp_path):
-    """The edge-inflation guard reads crop_windows_s, which only a derivative input got."""
-    from fnirs_pipe.io.snirf import read_snirf
-    from fnirs_pipe.qc.common.windows import crop_provenance
-
+def test_a_segment_of_a_recording_reads_back_as_a_segment(source_with_sidecar, tmp_path):
+    """crop_provenance reads crop_windows_s, which only a derivative input used to get."""
     out = crop_snirf_from_path(source_with_sidecar, tmp_path / "deriv", "01",
                                tmin=10.0, tmax=70.0)[0]
     found = crop_provenance(read_snirf(out))

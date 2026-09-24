@@ -29,6 +29,8 @@ All notable changes to this project will be documented in this file.
 - Merging the per-pairing tables of groups of three or more wrote every pairing to one file; the merged name keeps `pair-`
 - `fnirs-prep crop` wrote two segments sharing a `task` label to one file; it now refuses them
 - The re-paired null cut every repeat of a condition from the stand-in's first block of it, not the matching one
+- A segment cropped from a recording kept the source's `TaskName` and `RecordingDuration` and recorded no source or window
+- `fnirs-hyper` reported a `StageError`, such as an optical-density `--desc`, as an unexpected error with a traceback
 - `fnirs-hyper-band --wtc-suffix` is reduced to a valid `band-` value, and its help shows the real default
 - The `fnirs-hyper-merge` help lists what refuses a merge and what only warns
 - The raw viewer's condition pages name their channel-summary and trial tables `_qc`, as its run page does
