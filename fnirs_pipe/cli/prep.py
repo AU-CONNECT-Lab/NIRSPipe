@@ -64,6 +64,19 @@ def cmd_crop(
         print("[error] --align trigger requires --trigger-name.", file=sys.stderr)
         raise SystemExit(1)
 
+    from fnirs_pipe.pipeline.crop import _segment_stems, crop_snirf
+
+    # every subject reads the same table, so a table that cannot name its segments is one
+    # error here rather than the same error once per subject
+    if segments_path is not None and not combine:
+        from fnirs_pipe.io.tables import read_table
+
+        try:
+            _segment_stems(read_table(segments_path), stem="")
+        except ValueError as exc:
+            print(f"[error] {segments_path}: {exc}", file=sys.stderr)
+            raise SystemExit(1)
+
     # "auto" is the width the lowest analysed frequency needs, so it can only be resolved
     # once that frequency is known; a crop made for a band nobody has chosen yet keeps none
     margin = 0.0
@@ -78,8 +91,6 @@ def cmd_crop(
         else:
             margin = float(margin_s)
         print(f"[info] keeping a {margin:.1f}s margin on each side of every segment")
-
-    from fnirs_pipe.pipeline.crop import crop_snirf
 
     def _crop_one(sub):
         return crop_snirf(

@@ -17,7 +17,7 @@ import mne
 
 from fnirs_pipe import __version__
 from fnirs_pipe.io.auxiliary import write_aux_window
-from fnirs_pipe.io.derivatives import data_state, write_sidecar_json
+from fnirs_pipe.io.derivatives import data_state, entity_of, write_sidecar_json
 from fnirs_pipe.io.snirf import read_snirf, write_snirf
 from fnirs_pipe.io.tables import read_table
 from fnirs_pipe.utils.logging import get_logger
@@ -111,14 +111,46 @@ def _write_crop_sidecar(out_snirf: Path, raw_seg, source_path: Path,
         "step": "crop",
         "Sources": [source_path.as_posix()],
         "parameters": {**parameters,
-                       "crop_windows_s": [[round(a, 3), round(b, 3)] for a, b in windows],
-                       **({"crop_analysis_windows_s":
-                           [[round(a, 3), round(b, 3)] for a, b in analysis_windows],
-                           "crop_margin_s": round(float(margin_s), 3)}
-                          if analysis_windows is not None else {})},
+                       **_crop_parameters(windows, analysis_windows, margin_s)},
         "data": data_state(raw_seg),
         "bad_channels": list(raw_seg.info["bads"]),
     })
+
+
+def _retitle_recording_sidecar(out_snirf: Path, raw_seg, source_path: Path,
+                               windows: list[tuple[float, float]],
+                               analysis_windows: "list[tuple[float, float]] | None" = None,
+                               margin_s: float = 0.0) -> None:
+    """Correct the copied sidecar of a segment cut from a recording, keeping its other fields.
+
+    ::
+
+        source TaskName "full", 3000 s; segment named task-early, 120 s from 30 s
+          -> TaskName "early", RecordingDuration 120.0, crop_windows_s [[30.0, 150.0]]
+
+    BIDS derives the task label from ``TaskName``, so a segment renamed onto its own task
+    has to carry that name too. The crop windows go where :func:`_write_crop_sidecar` puts
+    them, since that is where a later stage looks to tell a segment from a whole recording.
+    """
+    try:
+        side = json.loads(out_snirf.with_suffix(".json").read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        side = {}
+    side.update(TaskName=entity_of(out_snirf.name, "task"),
+                RecordingDuration=round(float(raw_seg.times[-1]), 3),
+                Sources=[source_path.as_posix()],
+                parameters={**(side.get("parameters") or {}),
+                            **_crop_parameters(windows, analysis_windows, margin_s)})
+    out_snirf.with_suffix(".json").write_text(json.dumps(side, indent=4), encoding="utf-8")
+
+
+def _crop_parameters(windows, analysis_windows, margin_s) -> dict:
+    """The sidecar fields that record which span of the source a segment holds."""
+    return {"crop_windows_s": [[round(a, 3), round(b, 3)] for a, b in windows],
+            **({"crop_analysis_windows_s":
+                [[round(a, 3), round(b, 3)] for a, b in analysis_windows],
+                "crop_margin_s": round(float(margin_s), 3)}
+               if analysis_windows is not None else {})}
 
 
 def _setup_deriv_dir(derivatives_dir: Path, sub: str, ses: str | None) -> Path:
@@ -205,6 +237,8 @@ def _crop_raw(
         # source stage over the whole recording, and this segment is neither
         if derivative:
             _write_crop_sidecar(out, seg, snirf_path, windows, analysis, margin_s)
+        else:
+            _retitle_recording_sidecar(out, seg, snirf_path, windows, analysis, margin_s)
         return out
 
     if segments_df is not None:

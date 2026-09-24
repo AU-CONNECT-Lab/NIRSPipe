@@ -18,6 +18,7 @@ All notable changes to this project will be documented in this file.
 - Provenance node labels read every entity, so a table's label names its measure and slices instead of repeating the filename
 - **Breaking**: `fnirs-prep crop` refuses several segments without a `task` column instead of naming them `_seg-<NN>`; the GUI segment tables gain a Task column
 - Removed the unused whole-run re-pairing helpers `_draw_pairs` and `condition_coverage`
+- `fnirs-prep crop` checks the segments table once before any subject, so a bad table is one error and writes nothing
 
 ### Fixed
 - The subject index linked no raw condition page, looking for the pre-rename `desc-raw_nirs` spelling

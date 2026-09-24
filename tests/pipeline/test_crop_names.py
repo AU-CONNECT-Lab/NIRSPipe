@@ -73,3 +73,69 @@ def test_combining_needs_no_labels(source, tmp_path):
     outs = crop_snirf_from_path(source, tmp_path / "deriv", "01", segments_df=segments,
                                 combine=True)
     assert [p.name for p in outs] == ["sub-01_task-full_nirs.snirf"]
+
+
+def test_the_command_checks_the_table_once_before_any_subject(tmp_path, monkeypatch, capsys):
+    """One bad table is one error, not the same error once per subject."""
+    from fnirs_pipe.cli import prep as prep_cli
+    from fnirs_pipe.pipeline import crop
+
+    table = tmp_path / "segments.tsv"
+    pd.DataFrame({"onset": [10.0, 150.0], "duration": [60.0, 60.0]}).to_csv(
+        table, sep="\t", index=False)
+    called = []
+    monkeypatch.setattr(crop, "crop_snirf", lambda *a, **k: called.append(a) or [])
+
+    with pytest.raises(SystemExit) as exc:
+        prep_cli.main(["crop", str(tmp_path), str(tmp_path / "out"),
+                       "--participant-label", "01", "02", "03", "--segments-path", str(table)])
+    assert exc.value.code == 1
+    assert called == []
+    assert capsys.readouterr().err.count("[error]") == 1
+
+
+# ---- a segment cut from a recording says what it is ----
+
+def _sidecar(path: Path) -> dict:
+    import json
+    return json.loads(path.with_suffix(".json").read_text(encoding="utf-8"))
+
+
+@pytest.fixture
+def source_with_sidecar(source) -> Path:
+    import json
+    source.with_suffix(".json").write_text(json.dumps(
+        {"TaskName": "full", "RecordingDuration": 300.0, "SamplingFrequency": 10.0}))
+    return source
+
+
+def test_a_renamed_segment_names_its_own_task(source_with_sidecar, tmp_path):
+    """BIDS derives the task label from TaskName; the copied one named the source's."""
+    segments = pd.DataFrame({"onset": [10.0, 150.0], "duration": [60.0, 60.0],
+                             "task": ["early", "late"]})
+    outs = crop_snirf_from_path(source_with_sidecar, tmp_path / "deriv", "01",
+                                segments_df=segments)
+    assert [_sidecar(p)["TaskName"] for p in outs] == ["early", "late"]
+
+
+def test_a_segment_records_its_own_length_and_where_it_came_from(source_with_sidecar, tmp_path):
+    out = crop_snirf_from_path(source_with_sidecar, tmp_path / "deriv", "01",
+                               tmin=10.0, tmax=70.0)[0]
+    side = _sidecar(out)
+    assert side["RecordingDuration"] == pytest.approx(60.0, abs=0.2)
+    assert side["SamplingFrequency"] == 10.0                     # the rest is kept
+    assert side["Sources"] == [source_with_sidecar.as_posix()]
+    (lo, hi), = side["parameters"]["crop_windows_s"]
+    assert (lo, hi) == (pytest.approx(10.0, abs=0.2), pytest.approx(70.0, abs=0.2))
+
+
+def test_a_segment_of_a_recording_is_seen_as_a_segment_downstream(source_with_sidecar, tmp_path):
+    """The edge-inflation guard reads crop_windows_s, which only a derivative input got."""
+    from fnirs_pipe.io.snirf import read_snirf
+    from fnirs_pipe.qc.common.windows import crop_provenance
+
+    out = crop_snirf_from_path(source_with_sidecar, tmp_path / "deriv", "01",
+                               tmin=10.0, tmax=70.0)[0]
+    found = crop_provenance(read_snirf(out))
+    assert found is not None
+    assert found["window"][0] == pytest.approx(10.0, abs=0.2)
