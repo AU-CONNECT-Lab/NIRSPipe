@@ -233,7 +233,7 @@ def test_a_run_says_when_nothing_has_been_merged(tmp_path, capsys):
 
     out = capsys.readouterr().out
     assert "2 table(s) for stat-wtc_relmat.tsv, never merged" in out
-    assert "fnirs-hyper merge" in out
+    assert "fnirs-hyper-merge" in out
 
 
 def test_a_run_says_when_the_merged_table_is_behind(tmp_path, capsys):
