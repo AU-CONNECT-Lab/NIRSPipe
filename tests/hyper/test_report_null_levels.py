@@ -171,3 +171,40 @@ def test_the_chords_name_the_re_paired_null_where_it_drew_them(dyad, tmp_path):
     assert _cell(_page(tmp_path, "talk"), "ISC chords") == (
         "above each pairing's re-paired null, 5 partners")
     assert "re-paired" not in _cell(_page(tmp_path), "ISC chords")
+
+
+def _drawn_null(dyad, out):
+    from fnirs_pipe.pipeline.hyper.wtc_null import run_wtc_null
+    return run_wtc_null(group_id="G1", task="tap", aligned_raws=dyad, output_dir=out,
+                        n_iter=2, wtc_fmin=FMIN, wtc_fmax=FMAX, band_fmin=0.03,
+                        band_fmax=0.10, seed=0, chroma=("hbo",))
+
+
+def _build_with_null(dyad, out, **extra):
+    build_hyper_post_report(
+        group_id="G1", task="tap",
+        group=[GroupEntry("G1", s, "tap") for s in SUBS],
+        aligned_raws=dyad, offsets={s: 0.0 for s in SUBS}, output_dir=out,
+        wtc_fmin=FMIN, wtc_fmax=FMAX, wtc_band_fmin=0.03, wtc_band_fmax=0.10,
+        wtc_seed=0, wtc_chroma=("hbo",), wtc_nulls=_drawn_null(dyad, out),
+        wtc_phase_null=2, **extra)
+
+
+def _null_table(out):
+    return group_output_path(out, "G1", {"task": "tap", "nulldist": "phase",
+                                         "statistic": "wtc"}, "relmat", ".tsv")
+
+
+def test_the_null_table_is_on_the_first_runs_provenance_diagram(dyad, tmp_path):
+    # the diagram is drawn from the sidecars on disk, so a table written after the report
+    # only reached it on the next run
+    _build_with_null(dyad, tmp_path)
+    assert _null_table(tmp_path).exists()
+    (mmd,) = (tmp_path / "group-G1").rglob("*provenance*.mmd")
+    assert _null_table(tmp_path).stem.replace("-", "_") in mmd.read_text(encoding="utf-8")
+
+
+def test_the_null_table_is_written_without_a_report(dyad, tmp_path):
+    _build_with_null(dyad, tmp_path, no_report=True)
+    assert _null_table(tmp_path).exists()
+    assert not list((tmp_path / "group-G1").rglob("*provenance*.mmd"))

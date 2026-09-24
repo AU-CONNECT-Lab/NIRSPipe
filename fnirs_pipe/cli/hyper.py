@@ -264,7 +264,7 @@ def cmd_run(
 
     from fnirs_pipe.qc.hyper.hyper_report import build_hyper_post_report
     from fnirs_pipe.qc.common.windows import condition_windows, split_windows
-    from fnirs_pipe.pipeline.hyper.wtc_null import run_wtc_null, write_wtc_null
+    from fnirs_pipe.pipeline.hyper.wtc_null import run_wtc_null
     from fnirs_pipe.utils.run_record import write_group_run_record
 
     setup_logging(verbose=verbose)
@@ -376,9 +376,8 @@ def cmd_run(
                       "enough for one window, so there is nothing per condition to report",
                       file=sys.stderr)
         # Before the report, not after: the level the phase arrows are drawn against comes
-        # out of the surrogates, and the figures are built inside the report. The table this
-        # returns is written after it instead, its percentile column being a rank against
-        # the real band means the same report writes.
+        # out of the surrogates, and the figures are built inside the report. The report
+        # writes the table this returns, once the real band means it is ranked against exist.
         nulls = run_wtc_null(
             group_id=gid,
             task=task,
@@ -429,6 +428,9 @@ def cmd_run(
             wtc_arrow_min=wtc_arrow_min,
             wtc_chroma=chroma,
             wtc_whiten_s=wtc_whiten,
+            wtc_nulls=nulls,
+            wtc_phase_null=wtc_phase_null,
+            wtc_phase_null_cross=wtc_phase_null_cross,
             isc_threshold=isc_threshold,
             isc_whiten=isc_whiten,
             isc_max_lag_s=isc_max_lag,
@@ -439,29 +441,6 @@ def cmd_run(
             sep_bands=sep_bands,
             analysis_window=analysis_window,
         )
-        if nulls:
-            null_path = write_wtc_null(
-                nulls,
-                group_id=gid,
-                task=task,
-                aligned_raws=aligned_raws,
-                output_dir=output_dir,
-                n_iter=wtc_phase_null,
-                wtc_fmin=wtc_fmin,
-                wtc_fmax=wtc_fmax,
-                band_fmin=wtc_band_fmin,
-                band_fmax=wtc_band_fmax,
-                seed=wtc_seed,
-                cross=wtc_phase_null_cross,
-                mask_coi=wtc_mask_coi,
-                windows=cond_windows,
-                analysis_window=analysis_window,
-                roi_map=roi_map,
-                roi_map_name=roi_name,
-                whiten_s=wtc_whiten,
-            )
-            print(f"     null   -> {null_path}")
-
         try:
             # the resolved bands under the keys the SQM record stamps them with, so the two
             # can be compared directly; run_args holds only the flags as typed. An absent

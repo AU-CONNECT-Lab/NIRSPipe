@@ -60,6 +60,7 @@ All notable changes to this project will be documented in this file.
 - On a tree both commands wrote, no page linked the raw condition pages; the index's Conditions rows now list them beside the pipeline's
 - `fnirs-pipe group` warned of a split tree whenever a `qc/` or `derivatives/` folder existed, and looked for pre-rename record names
 - The dyad index warned that each optional table the run did not write was unreadable
+- A dyad report's provenance diagram left out the phase-scrambled null table until the next run
 
 ## [0.47.0] - 2026-09-23
 

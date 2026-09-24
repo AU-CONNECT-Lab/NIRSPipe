@@ -15,6 +15,7 @@ from fnirs_pipe.io.derivatives import (
     group_data_dir, group_report_dir, subject_report_dir, subject_nirs_dirs,
 )
 from fnirs_pipe.pipeline.hyper.hyper_post import HyperPostResult, HyperPostConfig, run_hyper_post
+from fnirs_pipe.pipeline.hyper.wtc_null import write_wtc_null
 from fnirs_pipe.pipeline.hyper import (
     GroupEntry, alignment_params, unfiltered_stage_note, WTCResult, roi_maps_from_channels,
 )
@@ -744,6 +745,9 @@ def build_hyper_post_report(
     wtc_arrow_min: "float | None" = None,
     wtc_chroma: "tuple[str, ...] | list[str]" = ("hbo", "hbr"),
     wtc_whiten_s: float = 0.0,
+    wtc_nulls: "dict | None" = None,
+    wtc_phase_null: int = 0,
+    wtc_phase_null_cross: bool = False,
     isc_threshold: "float | None" = None,
     isc_whiten: int = 0,
     isc_max_lag_s: float = 0.0,
@@ -833,6 +837,11 @@ def build_hyper_post_report(
     ``wtc_arrow_min`` is the coherence a cell has to reach before its phase arrow is drawn
     when no Monte Carlo level was computed. Display only: no table or figure value changes
     with it. ``None`` takes :data:`~fnirs_pipe.qc.figures.hyper.hyper_post_figures.ARROW_MIN_COHERENCE`.
+
+    ``wtc_nulls`` is what :func:`~fnirs_pipe.pipeline.hyper.wtc_null.run_wtc_null` drew, with
+    ``wtc_phase_null`` and ``wtc_phase_null_cross`` the iteration count and crossing it was
+    drawn with. Its table is written here, once the real tables it is ranked against exist
+    and before the provenance diagram is drawn, so the diagram lists it on the first run.
     """
     arrow_min = ARROW_MIN_COHERENCE if wtc_arrow_min is None else float(wtc_arrow_min)
 
@@ -1176,6 +1185,14 @@ def build_hyper_post_report(
             subject_ids=subject_ids, pairings=pairings, align_info=align_info,
             cond_windows=cond_windows, errors=errors, notes=notes, scope=scope,
         )
+    if wtc_nulls:
+        write_wtc_null(
+            wtc_nulls, group_id=group_id, task=task, aligned_raws=aligned_raws,
+            output_dir=output_dir, n_iter=wtc_phase_null, wtc_fmin=wtc_fmin,
+            wtc_fmax=wtc_fmax, band_fmin=wtc_band_fmin, band_fmax=wtc_band_fmax,
+            seed=wtc_seed, cross=wtc_phase_null_cross, mask_coi=wtc_mask_coi,
+            windows=cond_windows, analysis_window=analysis_window, roi_map=roi_map,
+            roi_map_name=roi_map_name, whiten_s=wtc_whiten_s)
     # Everything above is the analysis and has already written its tables; everything below
     # draws them. The figures are most of this step's output on disk, and a study that reads
     # the tables never opens them.
