@@ -90,9 +90,8 @@
     the same window grid and the same filter as the run and as every other condition. The
     verdict is this condition&rsquo;s own; the recording was processed under the run&rsquo;s.
     {% if epoch_preview_path %}The epoch and topography panels are rebuilt on a crop of this
-    condition, and preprocessing and GLM are deliberately empty, one model being fitted over the
-    whole recording.{% else %}Preprocessing, epoch, topography and GLM are deliberately empty:
-    the epoch window is set for a trial rather than a block.{% endif %}
+    condition; preprocessing and GLM are empty here and are on the run&rsquo;s page.{% else %}Preprocessing,
+    epoch, topography and GLM are empty here and are on the run&rsquo;s page.{% endif %}
     {%- if not (trial_qc_path or trial_image_pairs or trial_image_roi_pairs) %}
     The trial panels are absent because
     {{ condition_trial_reason or 'this condition holds too few trials to compare' }}.
@@ -160,7 +159,7 @@
         screening, whatever its SCI; every channel that survived is then graded green to
         amber by its own SCI against the run's line. The two are different questions: a
         channel is rejected on how many windows it was coupled in, so one can be dropped at
-        an SCI of 0.96.{% if condition_label %} Both maps carry this condition's own SCI and its own
+        a high SCI.{% if condition_label %} Both maps carry this condition's own SCI and its own
         rejected channels, which is the verdict printed on this page. The recording was
         processed under the run's; its page has that map.{% endif %}</p>
       <img class="responsive" src="{{ brain_views_path }}" alt="Brain views + optode" />
@@ -223,8 +222,8 @@
       <p style="font-size:0.82rem;color:#666;margin:0 0 0.3rem;">
         The after stage on this run is the GLM residual, so the task model came out of it
         along with the confounds. A weaker anticorrelation there can mean the model explained
-        part of the shared response rather than that the data got worse, which is why the
-        −0.3 rule reads the before stage only.
+        part of the shared response rather than that the data got worse, so judge the run on
+        the before stage.
       </p>
     {% endif %}
     {% if hbo_hbr_path %}
@@ -305,10 +304,8 @@
     {% elif psd_too_short %}
       <div class="placeholder">
         {% if condition_label %}&ldquo;{{ condition_label }}&rdquo; holds{% else %}This cut holds{% endif %}
-        fewer samples than the transform, so its spectrum would sit on a coarser frequency
-        grid than the run's rather than being a noisier view of it. Absent rather than
-        misleading: the run's own page carries the spectrum, and the sliced PSP row above
-        carries what a per-condition page reads a spectrum for.
+        fewer samples than the transform, so no spectrum is drawn here. The run's own page
+        carries the spectrum, and the PSP row above is sliced to this condition.
       </div>
     {% else %}
       <div class="placeholder">Figure generation failed; see Errors section.</div>
@@ -342,9 +339,8 @@
       condition that stopped being delivered partway through or a block that was started
       twice; this can. Same panel the raw QC viewer opens with.
       {%- if condition_label %}
-      <strong>This is the whole run, not just &ldquo;{{ condition_label }}&rdquo;</strong>, and
-      deliberately so: both of those failures are visible only against the conditions around
-      the one you are reading, so a timeline cut to one condition could show neither.
+      <strong>This is the whole run, not just &ldquo;{{ condition_label }}&rdquo;</strong>:
+      both of those failures show only against the conditions around the one you are reading.
       {%- endif %}
     </p>
     <iframe class="plotly-frame" src="{{ trigger_timeline_path }}" title="Event timeline"
@@ -550,7 +546,7 @@
   {#- this help is about the Channel set column rather than about any one metric, so it
       hangs off that column's header -#}
   {%- set set_help = "Long is the set the verdict is read off. Short is left uncoloured: a"
-      ~ " short channel's coupling is high by construction and has no established threshold,"
+      ~ " short channel's coupling is high by construction,"
       ~ " so the column answers whether the regressors those channels feed are trustworthy"
       ~ " rather than whether the run is usable. Rejection is per channel, against the"
       ~ " screening criteria over the whole montage, and is not read off these averages."
@@ -628,12 +624,9 @@
     neither.
     {% if stage_banded %}
       The quality panels are recomputed with the analysis passband applied at every stage, so
-      the columns measure the same thing: a stage before the bandpass and one after it carry
-      different frequency content, and the raw difference between their metrics is mostly the
-      filter. They will not match the per-stage values in the metrics table, which are
-      measured on each stage as stored, and the gap is expected mostly on the stage the
-      bandpass has not reached: the stages after it already carry the passband, so applying
-      it again changes them little, while the unfiltered stage can move a long way.
+      the columns measure the same thing. They will not match the per-stage values in the
+      metrics table, which are measured on each stage as stored; the gap is largest on the
+      stage before the bandpass.
     {% else %}
       No passband was requested, so every panel is measured on each stage as stored and
       differences across a filtering step should be read with that in mind.

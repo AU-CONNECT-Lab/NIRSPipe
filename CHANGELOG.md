@@ -15,7 +15,7 @@ All notable changes to this project will be documented in this file.
 - **Breaking**: `fnirs-hyper-groupnull --task` is required; it had a study-specific default
 - Comments, docstrings, help and report text no longer carry study-specific numbers, change history or documentation links
 - The Hyper Analysis page names each command by its console script, not the retired subcommand names
-- Help text says what each option does, without design rationale or references to other tools
+- Help, GUI and report text say what each option or panel does, without design rationale or references to other tools
 - **Breaking**: `fnirs-log merge` merges only finished executions, moves their logs to `archived/`, and backs up the database first
 - A null level on disk is used only when its sidecar matches the run; each page names the null its arrows and chords used
 - WTC table sidecars record `phase_level_source`, and saved maps get a sidecar that `fnirs-hyper band` carries onto its tables

@@ -107,10 +107,9 @@ tr.whole td.num { font-weight: 600; }
   averaged into this column. <b>inside COI</b> is the share of band cells that fell inside
   the cone of influence, so a window near either end of the recording keeps fewer.
   <b>ISC</b> is the mean same-channel inter-brain correlation. Unlike the coherence it is
-  cut from the recording rather than read out of a whole-record transform, and both are
-  right: a correlation has no frequency axis and nothing in it filters, so a window carries
-  no edge the record would not have had, while a wavelet transform of a cut window would
-  have two edges and a cone of its own. Each window is z-scored inside itself, the
+  cut from the recording rather than read out of a whole-record transform; a correlation has
+  no frequency axis, so a cut window carries no edge of its own. Each window is z-scored
+  inside itself, the
   correlation over a stretch being against that stretch's mean. Open a window for its
   coherence maps, its matrices and the phase arrows.
   {% if has_null %}

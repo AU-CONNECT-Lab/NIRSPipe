@@ -223,9 +223,8 @@ def _group_null_section():
                   dbc.Input(id="hy-gn-seed", type="number", placeholder="none")),
         ),
         subtitle="Averages the channels before ranking, once per occasion and once over the "
-                 "cohort. It cannot say which channel, and in exchange it can say whether the "
-                 "pairing beats its null at all. Reads what fnirs-hyper-pairnull wrote and runs no "
-                 "transform, so one chromophore at a time.",
+                 "cohort, so it tests the pairing as a whole, not each channel. Reads what "
+                 "fnirs-hyper-pairnull wrote and runs no transform, so one chromophore at a time.",
     ))
 
 

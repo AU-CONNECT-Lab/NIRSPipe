@@ -110,7 +110,7 @@
     recording&rsquo;s cone of influence and not two edges of its own.
     {%- elif analysis_window %}
     Restricted to {{ analysis_window }} by <code>--tstart</code>/<code>--tend</code>, taken
-    out of the transform of the whole recording rather than cut from it. The coherence is
+    out of the transform of the whole recording. The coherence is
     averaged across every condition inside that window.
     {%- else %}
     The coherence over the whole recording, averaged across every condition in it. The
@@ -124,7 +124,7 @@
     <code>--wtc-band-fmin</code>, the slowest frequency being averaged. A coherence there is
     a statement about a phase relationship this window has seen about that many times, so
     the low-frequency end of every number below rests on very few independent looks at it.
-    Four to six cycles is the usual minimum. Raise <code>--wtc-band-fmin</code>, or read
+    Raise <code>--wtc-band-fmin</code>, or read
     that end as indicative. Nothing is masked or dropped on account of this.
   </div>
   {% endif %}
@@ -174,15 +174,13 @@
   Every panel below shows {{ wtc_chroma_labels | join(" above ") }}, stacked and labelled,
   and <code>hyper-wtc.tsv</code> carries {{ wtc_chroma_labels | join(" and ") }} in a
   <code>chromophore</code> column. <b>HbO and HbR are two parallel passes, never mixed and
-  never averaged.</b> The reason to have both is a consistency check, not two results: HbO
-  has the larger amplitude and the better SNR, HbR is the less contaminated by scalp and
-  systemic circulation, so a coupling that shows in HbO and not in HbR is a caution flag. It
-  is not a quantitative test: coherence is unsigned and bounded, so there is no
-  expected relationship between an HbO value and an HbR one. Read it as present or absent.
-  The maps are the panels that stack: a map is one pairing and there is nothing to compare
-  inside it. The two matrix panels put the chromophores side by side on one colour scale
-  instead, which is that check in one figure, and the inter-brain correlation panels below
-  do the same.
+  never averaged.</b> Read them as a consistency check, not two results: HbR is the less
+  contaminated by scalp and systemic circulation, so a coupling that shows in HbO and not in
+  HbR is a caution flag. It is not a quantitative test: coherence is unsigned and bounded, so
+  there is no expected relationship between an HbO value and an HbR one. Read it as present
+  or absent. The maps stack; the two matrix panels put the chromophores side by side on one
+  colour scale, which is that check in one figure, and the inter-brain correlation panels
+  below do the same.
 </p>
 
 <details id="WTCChannel" open>
@@ -217,10 +215,9 @@
     <p class="step-desc">The member channels&rsquo; maps averaged cell by cell, bad channels
       excluded; arrows and cone as above. <b>These ones are live</b>: hover for the time,
       frequency and coherence under the pointer, and drag to zoom. The per-channel maps
-      above stay stills because there are an order of magnitude more of them.
+      above are stills.
       {%- if roi_crossed %} The left selector is {{ subject_ids[0] }} and the right
-      {{ subject_ids[1] }}, so an off-diagonal pairing reads at the size of a homologous
-      one.{% endif %}</p>
+      {{ subject_ids[1] }}, the order the map title reads in.{% endif %}</p>
     <div class="map-pick">
       <select id="roi-select-post" aria-label="{{ subject_ids[0] }} region"></select>
       {% if roi_crossed %}
@@ -400,8 +397,7 @@
 <div class="qm-box">
   <p class="step-desc">One table per channel set. &uarr; / &darr; marks the better
     direction; SCI is coloured against this run&rsquo;s own threshold and HbO&ndash;HbR by
-    sign. Last on the page for the reason the subject report puts its own metrics after the
-    pictures: these are each member&rsquo;s numbers, and what the page is about is the pair.</p>
+    sign.</p>
   {{ subject_metrics(subject_metrics_rows) }}
   <p class="qm-note">Each table is its own measurement, not a subset of the one above it:
     GVTD is an RMS across the channels of its set and a retention rate is a fraction of
@@ -410,8 +406,8 @@
   <p class="qm-note">Over this window only, read off each member&rsquo;s own record, so
     these are the numbers that member&rsquo;s per-condition page prints. A blank row is one
     the record has no per-condition value for. This reports, it does not re-decide: the
-    channel set is the whole recording&rsquo;s, since one montage has to serve every
-    condition, so a channel that came loose here is still in.
+    channel set is the whole recording&rsquo;s, so a channel that came loose here is still
+    in.
     <a href="{{ run_href }}">Whole-run page</a>.</p>
   {% endif %}
 </div>
@@ -419,8 +415,8 @@
 <h2 id="Quality">Per-subject quality: not available for this window</h2>
 <div class="qm-box">
   <p class="qm-note">Neither member&rsquo;s record carries a <code>by_condition</code>
-    section, so nothing is shown rather than the whole recording&rsquo;s numbers under this
-    condition&rsquo;s heading. Those are on the
+    section, so there are no per-condition numbers for this window. The whole
+    recording&rsquo;s are on the
     <a href="{{ run_href }}">whole-run page</a>; re-running <code>fnirs-pipe</code> on
     these subjects writes the section.</p>
 </div>

@@ -533,9 +533,9 @@ def band_note(mode, high_pass, drift_model, drift_high_pass):
     # cosine without a cutoff stops the run in PostConfig, so say it here instead
     if drift_model == "cosine" and drift_high_pass is None:
         return dbc.Alert(
-            "A cosine drift model needs a cutoff, and there is no value that suits every "
-            "design. Load a run on Data Preparation: it reads the slowest repeat of each "
-            "condition off the markers and gives the number to put here.",
+            "A cosine drift model needs a cutoff. Load a run on Data Preparation: it reads "
+            "the slowest repeat of each condition off the markers and gives the number to "
+            "put here.",
             color="warning", className="mb-0")
 
     if mode != "glm" or high_pass is None:
@@ -558,5 +558,5 @@ def band_note(mode, high_pass, drift_model, drift_high_pass):
 
     return dbc.Alert(
         f"The high-pass and the cosine drift basis are both at {high_pass} Hz and doing the "
-        "same job. Leaving the high-pass empty is the usual choice for a task model.",
+        "same job. The high-pass can be left empty.",
         color="info", className="mb-0")

@@ -296,7 +296,7 @@ def test_a_condition_page_draws_its_own_roi_isc_matrix(pages):
 
 # the count is always printed; this sentence only appears when it is below it
 COUNT = "cycles of the slowest"
-CAVEAT = "Four to six cycles is the usual minimum"
+CAVEAT = "rests on very few independent looks"
 
 
 @pytest.mark.parametrize("window, band_fmin, expected", [

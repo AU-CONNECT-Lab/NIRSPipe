@@ -139,8 +139,8 @@
 <h2 id="Usable">2 &middot; Shared usable time</h2>
 <p class="step-desc">A channel is usable by the dyad only while it is coupled in
   <em>both</em> members at the same moment, so the dyad&rsquo;s usable time is the
-  intersection of the two and not the smaller of them: two members can each keep 13 of 14
-  pairs and share only 12, if the pair they each lose is a different one.</p>
+  intersection of the two and not the smaller of them: two members can each keep all but one
+  pair and share one fewer than either, if the pair they each lose is a different one.</p>
 
 {% if figure_paths.usable_time %}
 <details id="UsablePanel" open>
@@ -162,12 +162,11 @@
 <h2 id="Motion">3 &middot; Motion, and whether they moved together</h2>
 <p class="step-desc">SCI and PSP are blind to movement by construction, so the carpet above
   can say a pair decoupled but never that the member moved. Each trace is that
-  member&rsquo;s GVTD divided by its own median: GVTD is an RMS of optical-density
-  derivatives in the recording&rsquo;s own units, so two members&rsquo; raw traces are not on
-  one scale and &ldquo;who moved more&rdquo; is the one reading a shared axis could not
-  support. At &times; its own median, 1.0 is that member&rsquo;s usual level for both. The
+  member&rsquo;s GVTD divided by its own median, so 1.0 is that member&rsquo;s usual level.
+  GVTD is in each recording&rsquo;s own units, so the traces say when each member moved, not
+  who moved more. The
   grey floor under the two traces is their pointwise minimum, which is high only where both
-  are high: simultaneous movement, with no cutoff to choose.</p>
+  are high: simultaneous movement.</p>
 
 <details id="MotionPanel" open>
   <summary>a. As it arrived</summary>
@@ -390,8 +389,7 @@
     <span class="hint">signal overlay and PSD</span></summary>
   <div class="details-body">
     <p class="step-desc">The one view an individual report cannot give: two members on the
-      same axes. No epoch panel: this design gives one block per condition, so a
-      &ldquo;mean epoch&rdquo; would average a single trial.</p>
+      same axes.</p>
     <select id="ch-select" class="ch-select"></select>
     <iframe id="ch-detail-iframe" class="plotly-frame" title="per-channel detail"
             style="height:600px"></iframe>

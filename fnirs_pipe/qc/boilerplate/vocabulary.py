@@ -276,14 +276,14 @@ def step_summary(step: str | None) -> str:
 METRIC_SUMMARY = {
     # coupling
     "sci_mean": "Scalp coupling over the whole recording: how well the two wavelengths share a pulse, near 1 being good and low meaning poor optode contact. A slow drift shared by both wavelengths lifts it, which is what sci_win_mean is beside it for.",
-    "sci_win_mean": "The same coupling measured inside 10 s windows and then averaged, on the grid psp_mean and cv_mean use. Read this one for coupling; the whole-run sci_mean is what the published cutoffs were set on, and the two can disagree about which channel set coupled better.",
+    "sci_win_mean": "The same coupling measured inside 10 s windows and then averaged, on the grid psp_mean and cv_mean use. Read this one for coupling; it is printed without cutoffs, which refer to the whole-run sci_mean, and the two can disagree about which channel set coupled better.",
     "channel_retention_rate": "Fraction of channels that survived screening. Higher is better.",
     "psp_mean": "Strength of the shared cardiac peak across the two wavelengths, averaged over 10 s windows and then over channels; higher is a more clearly detected heartbeat.",
     "good_frac_mean": "Share of 10 s windows in which SCI and PSP both pass, averaged over channels; higher is better. This is the line a channel is rejected on.",
     "cp_mean": "How peaked one channel's spectrum is inside the cardiac band, 0 to 1; higher is sharper. Experimental, and it never compares the two wavelengths, so read SCI and PSP for coupling.",
 
     # raw intensity
-    "cv_mean": "Noise relative to a channel's own brightness (SD / mean), per wavelength, measured inside 10 s windows and then averaged, lower being cleaner. Over the whole recording it would read the drift instead of the noise.",
+    "cv_mean": "Noise relative to a channel's own brightness (SD / mean), per wavelength, measured inside 10 s windows and then averaged, lower being cleaner.",
     "snr_mean": "Signal size relative to its fluctuation (mean / SD), the exact reciprocal of CV and on the same 10 s windows. Higher is better.",
     "snr_pass_rate": "Fraction of channels whose SNR clears the per-channel line. Higher is better.",
     "n_flat_channels": "How many channels carry no variation at all, flat or saturated; zero is what you want. They count as failures in snr_pass_rate but cannot enter the SNR and CV means.",

@@ -23,8 +23,7 @@ from __future__ import annotations
 SECTION_NOTES = {
     "channel_detail.picker":
         "Select a channel to view its HbO/HbR timeseries and its PSD. This channel's epoch "
-        "average is in the epoch section below, on the denoised signal: an epoch average on "
-        "this unfiltered stage shows cardiac ripple rather than the shape of a response. Pairs "
+        "average is in the epoch section below, on the denoised signal. Pairs "
         "marked <em>(short)</em> are short-separation: too shallow to reach cortex, so what "
         "they show is scalp haemodynamics.",
     "steps.raw_quality":
@@ -32,10 +31,9 @@ SECTION_NOTES = {
         "(CV) per channel and per window, all measured on <code>desc-sci</code>, the optical "
         "density before motion correction. SCI and PSP cross-correlate the two wavelengths, so "
         "they exist only in the optical density domain and have no counterpart after "
-        "Beer-Lambert. CV is the row where low is good, and it carries SNR in its hover rather "
-        "than in a row of its own, SNR being 1/CV exactly; its colour is pinned to twice the "
-        "<strong>{cv}</strong> line rather than to the recording's worst window. SCI threshold: "
-        "<strong>{sci}</strong>.",
+        "Beer-Lambert. CV is the row where low is good, and its hover also gives SNR, which is "
+        "1/CV exactly; its colour scale tops out at twice the <strong>{cv}</strong> line. SCI "
+        "threshold: <strong>{sci}</strong>.",
     "steps.motion_correction":
         "Motion correction method: <strong>{method}</strong>. GVTD covers the "
         "<strong>{gvtd_set}</strong> channels, the set the analysis uses; the count is on the "
@@ -95,10 +93,9 @@ SECTION_NOTES = {
         "in no seed. Short channels are not drawn.",
     "glm.activation":
         "HbO betas projected onto the surface, three views per condition. The colour scale is "
-        "shared across every condition, so this switch is a comparison rather than five "
-        "separate pictures: a condition that barely activated reads as weak instead of being "
-        "stretched to fill its own scale. One model over the whole recording, so every "
-        "condition here rests on the same channel set. Select a condition.",
+        "shared across every condition, so a condition that barely activated reads as weak "
+        "instead of being stretched to fill its own scale. One model over the whole recording, "
+        "so every condition here rests on the same channel set. Select a condition.",
     "metrics.intro":
         'Hover a metric for what it means, which way is good and what it was measured on. <span '
         'class="ql-dot" aria-hidden="true">&#9679;</span> marks the ones that decide whether '
@@ -119,9 +116,8 @@ SECTION_NOTES = {
         "rows down a column, not across one.</b> Corrected per channel is the exception, being "
         "an average over the set, and is the one column two rows can be compared on.",
     "metrics.no_drift":
-        "Low-frequency drift is not among these: it grows with the span it is fitted over, so a "
-        "per-condition value would compare the conditions' durations. The run's own page "
-        "carries it.",
+        "Low-frequency drift is not among these: it grows with the span it is fitted over. The "
+        "run's own page carries it.",
     "metrics.per_channel":
         "Grouped by source-detector separation, every block screened by the same criteria, so a "
         "short channel marked BAD should not be used as a regressor. Screening is a union of "

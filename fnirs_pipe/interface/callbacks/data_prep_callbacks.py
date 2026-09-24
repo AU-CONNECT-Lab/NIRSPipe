@@ -1184,9 +1184,7 @@ _TD_STYLE = {"padding": "3px 8px", "borderBottom": "1px solid #f0f0f0",
 
 def _sqm_scope_text(sqm: dict) -> str:
     if sqm.get("channel_set") == "long channels":
-        return ("Measured on long channels only. A short channel returns far more light and "
-                "a far stronger pulse, so averaging the two together lifts SCI, PSP and SNR "
-                "and can make a poorly coupled recording read as a good one.")
+        return ("Measured on long channels only.")
     return "Measured on every channel: this montage carries no short channels."
 
 
@@ -1208,8 +1206,7 @@ def _build_split_table(split: dict) -> "html.Div | None":
         for r in split["rows"]])
     return html.Div([
         html.Small("The same recording over three channel sets. Long is what the verdict is "
-                   "read off; Short carries no colouring, since a short channel's coupling "
-                   "is high by construction and has no established threshold.",
+                   "read off; Short carries no colouring.",
                    className="text-muted d-block mb-1"),
         html.Table([head, body],
                    style={"borderCollapse": "collapse", "width": "100%",

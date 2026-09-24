@@ -93,8 +93,8 @@ measure from. Read the panels as the dyads' own values side by side.{% endset %}
       &bull; usable means coupled in both members at the same moment</span></summary>
   <div class="details-body">
     <p class="step-desc">The intersection, not the smaller of the two members: two members
-      can each keep 13 of 14 pairs and share only 12, if the pair they each lose is a
-      different one. The middle band is an asymmetric loss, one cap or one electrode, and
+      can each keep all but one pair and share one fewer than either, if the pair they each
+      lose is a different one. The middle band is an asymmetric loss, one cap or one electrode, and
       the right band a shared one, both members out at the same moment. Two dyads with the
       same usable share and different middles are two different problems.</p>
     {% if small_cohort %}<p class="qm-note">{{ small_caveat }}</p>{% endif %}
@@ -111,9 +111,7 @@ measure from. Read the panels as the dyads' own values side by side.{% endset %}
       columns ordered worst first</span></summary>
   <div class="details-body">
     <p class="step-desc">A column pale down the whole cohort is the cap or the optode rather
-      than the dyad, which is the one finding no single dyad page can carry. The ramp runs
-      pale for a lost pair on purpose: nearly every cell is high, so the rare low one should
-      be the bright dot in a dark field rather than one shade among many.</p>
+      than the dyad, which is the one finding no single dyad page can carry.</p>
     <iframe class="plot-frame" src="{{ figure_paths.pair_field.src }}"
             style="height:{{ figure_paths.pair_field.h }}px"></iframe>
     {% if figure_paths.condition_dials %}
@@ -143,10 +141,10 @@ measure from. Read the panels as the dyads' own values side by side.{% endset %}
       top {{ "%.0f"|format(100 - alpha) }}%</span></summary>
   <div class="details-body">
     <p class="step-desc">Raw coherence cannot share an axis across windows: the estimator's
-      floor moves with the window length, so 0.03 is unremarkable in one window and out of
-      reach in another. The rank inside that window's own surrogate null is what is
+      floor moves with the window length, so one value can be unremarkable in one window and
+      out of reach in another. The rank inside that window's own surrogate null is what is
       comparable, and it is the channel mean's rank, the channels pooled before the
-      comparison rather than a hundred draws ranked one channel at a time.</p>
+      comparison.</p>
     <iframe class="plot-frame" src="{{ figure_paths.null_strip.src }}"
             style="height:{{ figure_paths.null_strip.h }}px"></iframe>
   </div>

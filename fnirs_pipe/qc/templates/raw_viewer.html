@@ -309,7 +309,7 @@ select#run-select {
     <h3 class="qm-sub">Original recording: optical density</h3>
     <p class="qm-note">The same recording measured over three channel sets. <b>Long</b> is
        the set the verdict is read off; <b>Short</b> is left uncoloured, a short channel's
-       coupling being high by construction and having no established threshold, so that row
+       coupling being high by construction, so that row
        answers whether the regressors those channels feed are trustworthy rather than whether
        the run is usable.</p>
     <div style="overflow-x:auto"><table class="qm-table qm-flat" id="sqm-split-table"></table></div>
@@ -923,8 +923,8 @@ function loadIssues() {
 
   var html = "";
   if (notes.length) {
-    html += "<p class='qm-note' style='margin:0 0 0.35rem'>Sections this run left out on "
-          + "purpose, because the recording does not carry what they need. Not failures.</p>"
+    html += "<p class='qm-note' style='margin:0 0 0.35rem'>Sections this run skipped "
+          + "because the recording does not carry what they need. Not failures.</p>"
           + "<ul class='note-list'>"
           + notes.map(function(x) { return "<li>" + _esc(x) + "</li>"; }).join("")
           + "</ul>";

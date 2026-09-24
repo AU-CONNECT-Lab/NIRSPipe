@@ -799,8 +799,7 @@ def condition_payloads(
             "run's line. The recording was processed under the run's verdict, not this one; "
             "the run's page carries it.",
             "The spectrum is the one panel measured on a cut of the recording rather than "
-            "sliced out of the run's pass. Nothing in it reads outside the samples it is "
-            "given, so the cut carries no edge the run would not have had.",
+            "sliced out of the run's pass.",
         ]
         out.append((label, d))
     return out
