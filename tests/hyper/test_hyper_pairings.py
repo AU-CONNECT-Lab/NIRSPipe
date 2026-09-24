@@ -12,7 +12,7 @@ the wrong pairing's numbers cannot come out looking right: it would report the n
 coherence or the rhythm as noise.
 
 A dyad has exactly one pairing and carries no pairing suffix, which
-:func:`test_a_dyad_is_named_the_way_it_always_was` holds to.
+:func:`test_a_dyad_carries_no_pairing_suffix` holds to.
 """
 
 import re
@@ -144,7 +144,7 @@ def test_a_triad_writes_one_page_per_pairing(triad, tmp_path):
         assert any(f"sub{a}xsub{b}" in name for name in pages), (a, b, pages)
 
 
-def test_a_dyad_is_named_the_way_it_always_was(triad, tmp_path):
+def test_a_dyad_carries_no_pairing_suffix(triad, tmp_path):
     """The pairing dimension must cost a dyad nothing: one pairing, no suffix."""
     dyad = {sid: triad[sid] for sid in ("sub-01", "sub-02")}
     folder = _run(dyad, tmp_path)

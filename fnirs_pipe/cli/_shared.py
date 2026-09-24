@@ -64,16 +64,14 @@ def add_separation_bands(container, note: str = "") -> None:
     container.add_argument(
         "--long-min-dist", type=float, default=None, metavar="MM",
         help=f"Separation at or above which a channel is long, in mm (default "
-             f"{LONG_MIN_DIST * 1e3:.0f}). The gap above --short-max-dist is deliberate: a "
-             f"channel in it is too far to be scalp-only and too near to reach cortex, and "
-             f"screening cannot catch that because such a channel scores well."
+             f"{LONG_MIN_DIST * 1e3:.0f}). A channel in the gap above --short-max-dist "
+             f"counts as neither short nor long."
              + (f" {note}" if note else ""))
     container.add_argument(
         "--long-max-dist", type=float, default=None, metavar="MM",
         help="Separation above which a channel is too far to be long, in mm. Off by "
              "default, so any separation past --long-min-dist counts as long. Set it on a "
-             "montage carrying pairs too far apart to trust, which SCI and PSP catch only "
-             "most of the time."
+             "montage carrying pairs too far apart to trust."
              + (f" {note}" if note else ""))
 
 
@@ -137,9 +135,8 @@ def add_psp_threshold(container, note: str = "") -> None:
 
     container.add_argument(
         "--psp-threshold", type=float, default=None,
-        help=f"Peak spectral power a window must reach (default {PSP_PASS}). PSP catches "
-             f"the movement that fakes a high SCI, so a window counts as coupled only when "
-             f"it clears this line and --sci-threshold together."
+        help=f"Peak spectral power a window must reach (default {PSP_PASS}). A window "
+             f"counts as coupled only when it clears this line and --sci-threshold together."
              + (f" {note}" if note else ""))
 
 
@@ -152,9 +149,7 @@ def add_min_good_frac(container, note: str = "") -> None:
         help=f"Share of windows a channel must be coupled in to be kept, 0 to 1 (default "
              f"{GOOD_FRAC_PASS}). A window counts when SCI and PSP both clear their lines "
              f"in it. This is the criterion that rejects; the two lines above set what a "
-             f"coupled window is. Counting windows rather than averaging them is what stops "
-             f"a channel that was fine for the first half of a long recording and dead for "
-             f"the second half from passing."
+             f"coupled window is."
              + (f" {note}" if note else ""))
 
 
@@ -163,11 +158,10 @@ def add_screen_scope(container, note: str = "") -> None:
     container.add_argument(
         "--screen-scope", choices=["run", "task"], default="run",
         help="Which windows count toward --min-good-frac. 'run' (default) counts the whole "
-             "recording. 'task' counts only the annotated task blocks, so the lead-in "
-             "before the first block and the gaps between them stop being held against a "
-             "channel that is coupled throughout every block. 'task' falls back to 'run' "
-             "when no annotation is long enough to hold two screening windows, which is "
-             "what a recording carrying only short triggers looks like."
+             "recording. 'task' counts only the annotated task blocks, leaving out the "
+             "lead-in before the first block and the gaps between them. 'task' falls back "
+             "to 'run' when no annotation is long enough to hold two screening windows, as "
+             "in a recording carrying only short triggers."
              + (f" {note}" if note else ""))
 
 

@@ -44,7 +44,7 @@ CASES = [
     ("the auxiliary regressors",
      dict(subject="01", task="rest", desc="aux"), "timeseries", ".tsv",
      "sub-01/nirs/sub-01_task-rest_desc-aux_timeseries.tsv"),
-    ("four orthogonal dimensions that used to be one hyphen-stacked token",
+    ("four orthogonal dimensions, each its own entity",
      dict(group="G1", task="rest", segmentation="custom", aggregation="homologous",
           condition="all", nulldist="pair", statistic="wtc"), "relmat", ".tsv",
      "group-G1/nirs/group-G1_task-rest_seg-custom_agg-homologous_cond-all_null-pair"

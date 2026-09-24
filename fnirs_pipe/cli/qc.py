@@ -339,11 +339,9 @@ def _build_parser() -> argparse.ArgumentParser:
                     help="Also write one report per annotated condition, beside the run's "
                          "own, as <run>_cond-<condition>_desc-raw_report.html. Their numbers "
                          "are sliced out "
-                         "of the run's windowed pass, so every condition sits on the same "
-                         "window grid and the same filter as the run; nothing is cut and "
-                         "nothing is re-measured. Each page screens on its own stretch, so "
-                         "the verdict on it is that condition's; the recording was processed "
-                         "under the run's, which its own page carries.")
+                         "of the run's windowed pass, on the same window grid and filter as "
+                         "the run. Each page's screening verdict is that condition's; the "
+                         "run's own page carries the run's.")
     pr.add_argument("--motion-correction", choices=["tddr", "wavelet", "none"],
                     default="none",
                     help="Run this correction on a copy of the optical density and report "
@@ -352,9 +350,8 @@ def _build_parser() -> argparse.ArgumentParser:
                          "carries, and one carpet showing both. Nothing is written back and "
                          "no other preprocessing runs, so the screening verdict and every "
                          "coupling metric still describe the recording as delivered. "
-                         "Default none, which reports it uncorrected; the counts and the "
-                         "GVTD series then have no corrected stage to be measured on, which "
-                         "is what `fnirs-pipe run` gives them.")
+                         "Default none, which reports it uncorrected, with no corrected-stage "
+                         "counts or GVTD series.")
     pr.add_argument(
         "--skip-bids-validation", "--skip_bids_validation",
         "--skip_bids_validator", dest="skip_bids_validation",
@@ -393,7 +390,7 @@ def _build_parser() -> argparse.ArgumentParser:
     gr = sub.add_parser(
         "cohort",
         help="Every subject in a tree on one page.",
-        description="Aggregates the quality record of every run under OUTPUT_DIR. A run processed by both `fnirs-pipe` and `prep-raw` has two records and the pipeline one wins, being a superset, so the page carries every stage the run was measured at rather than the original recording alone.")
+        description="Aggregates the quality record of every run under OUTPUT_DIR. A run processed by both `fnirs-pipe` and `prep-raw` has two records and the pipeline one is used, so the page carries every stage the run was measured at.")
     gr.add_argument("output_dir", type=Path,
                     help="fnirs-pipe derivatives directory (contains sub-*/nirs/ SQM JSONs)")
     gr.set_defaults(func=cmd_group_raw)

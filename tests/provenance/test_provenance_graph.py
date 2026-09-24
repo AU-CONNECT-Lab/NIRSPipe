@@ -321,9 +321,9 @@ def test_the_table_names_the_record_rather_than_the_metrics(tmp_path):
 # ---- data shape on the node ----
 
 @pytest.mark.parametrize("data, expected", [
-    ({"n_channels": 56, "n_bad": 16, "sfreq": 2.0, "duration_s": 595.2}, "40/56 ch · 2 Hz · 595.2 s"),
-    ({"n_channels": 56, "n_bad": 0, "sfreq": 10.0, "duration_s": 60.0}, "56 ch · 10 Hz · 60 s"),
-    ({"n_channels": 56}, "56 ch"),
+    ({"n_channels": 20, "n_bad": 4, "sfreq": 2.0, "duration_s": 120.5}, "16/20 ch · 2 Hz · 120.5 s"),
+    ({"n_channels": 20, "n_bad": 0, "sfreq": 10.0, "duration_s": 60.0}, "20 ch · 10 Hz · 60 s"),
+    ({"n_channels": 20}, "20 ch"),
     ({}, ""),                                    # a sidecar with no data field
 ])
 def test_the_node_carries_the_shape_of_its_data(tmp_path, data, expected):

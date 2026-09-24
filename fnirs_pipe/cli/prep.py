@@ -266,23 +266,16 @@ def _build_parser() -> argparse.ArgumentParser:
                       help="Concatenate multi-segment output into one file.")
     crop.add_argument("--margin", dest="margin_s", default=None, metavar="SEC|auto",
                       help="Keep this many extra seconds on each side of every segment, and "
-                           "record the span that was asked for in the sidecar. A segment cut "
-                           "to its own boundaries cannot be analysed at those boundaries by "
-                           "anything that convolves, and a wavelet coherence over a short "
-                           "segment loses a share of its band that grows as the segment "
-                           "shortens. 'auto' asks --band-fmin for the width that suffices. "
-                           "Off by default, which is the behaviour cropping has always had.")
+                           "record the span that was asked for in the sidecar. 'auto' takes "
+                           "the width from --band-fmin. Off by default.")
     crop.add_argument("--band-fmin", type=float, default=None, metavar="HZ",
                       help="Lowest frequency the later analysis will average over, used only "
                            "to resolve --margin auto. Give the same value as "
                            "fnirs-hyper --wtc-band-fmin.")
     crop.add_argument("--input-desc", default=None, metavar="DESC",
                       help="Cut a processed stage instead of a recording, e.g. 'errts' or "
-                           "'filtered'. bids_dir is then a derivatives tree. This is the "
-                           "order to prefer: motion correction and the bandpass read "
-                           "whatever series they are handed, so cutting first makes each "
-                           "of them see one condition. The desc- entity is kept on the "
-                           "output.")
+                           "'filtered'. bids_dir is then a derivatives tree. The desc- "
+                           "entity is kept on the output.")
     crop.set_defaults(func=cmd_crop)
 
     align = sub.add_parser("align", help="Align multi-subject recordings by shared trigger.")

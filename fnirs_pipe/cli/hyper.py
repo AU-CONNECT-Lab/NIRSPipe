@@ -671,9 +671,8 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
     band_opts.add_argument("--wtc-mask-coi", action=argparse.BooleanOptionalAction,
                            default=True,
                            help="Average each band mean only over cells inside the cone of "
-                                "influence. On by default: cells outside it are wavelet "
-                                "coefficients padded against the edges of the record, near "
-                                "1 whatever the data did. --no-wtc-mask-coi averages the "
+                                "influence (default on), so cells affected by the edges of "
+                                "the record are left out. --no-wtc-mask-coi averages the "
                                 "whole band instead; the share inside the cone is reported "
                                 "as n_valid_frac either way.")
 
@@ -718,17 +717,12 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
                           "on-disk cache, which is not keyed on the seed.")
     run.add_argument("--wtc-chroma", choices=("hbo", "hbr", "both"), default="both",
                      help="Chromophore(s) the coherence runs on (default both). HbO and HbR "
-                          "are two parallel passes over the same code: a member's HbO pairs "
-                          "only with the other member's HbO, they are never mixed and never "
-                          "averaged, so 'both' costs exactly twice as much. The reason to "
-                          "run both is a consistency check rather than two results -- HbO "
-                          "has the larger amplitude and the better SNR, HbR is the less "
-                          "contaminated by scalp and systemic circulation, so a coupling in "
-                          "HbO with nothing in HbR is a caution flag. Every band-mean table "
-                          "gains a chromophore column, and the report gains a switch "
-                          "that moves every coherence panel between the chromophores at "
-                          "once. The null of --wtc-phase-null follows, since a null on one "
-                          "chromophore says nothing about the other.")
+                          "are two parallel passes: a member's HbO pairs only with the other "
+                          "member's HbO, they are never mixed and never averaged, so 'both' "
+                          "costs twice as much. Every band-mean table gains a chromophore "
+                          "column, and the report gains a switch that moves every coherence "
+                          "panel between the chromophores at once. The null of "
+                          "--wtc-phase-null follows.")
     run.add_argument("--wtc-roi-min-channels", type=int, default=2, metavar="N",
                      help="Drop an ROI cell resting on fewer than N channel pairs, so one "
                           "surviving optode does not stand in for a region (default 2).")
@@ -737,33 +731,19 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
                           "the WTC maps, when neither null was computed (default 0.5). "
                           "Display only: no table or figure value changes with it. Both "
                           "--wtc-phase-null and --wtc-significance override it with a level per "
-                          "frequency, the phase-scrambled one winning where both ran, and that "
-                          "is the form to prefer: surrogate coherence rises at both ends of "
-                          "the computed range, so one number over the whole map marks the "
-                          "band edges first. The flat threshold is what is left when nothing "
-                          "was drawn to compare against, and the relative phase of two "
-                          "uncorrelated series being a uniformly random direction, a map "
-                          "drawn with no threshold at all fills with arrows that read as "
-                          "structure.")
+                          "frequency, the phase-scrambled one winning where both ran.")
     run.add_argument("--wtc-channel-cross", action="store_true",
                      help="Cross every long channel with every other across the two brains "
                           "instead of pairing each channel with its counterpart, so n "
                           "channels give n^2 coherence values rather than n. The extra "
                           "pairs reach the channel TSV with a label2 column; the "
-                          "time-frequency heatmaps stay on the homologous pairs. Single "
-                          "channels are noisier than ROI averages, so treat the off-diagonal "
-                          "as exploratory and correct for the number of tests. Does not "
+                          "time-frequency heatmaps stay on the homologous pairs. Does not "
                           "affect the null: see --wtc-phase-null-cross.")
     run.add_argument("--wtc-window-s", type=float, default=None, metavar="SECONDS",
                      help="Cut every condition into non-overlapping windows of this length "
                           "and make the window the unit instead of the condition. Needs "
-                          "--by-condition. A condition's own length decides the width of a "
-                          "resampled null and how many cycles of the band's slowest "
-                          "oscillation the block holds, so conditions of different length "
-                          "are not estimating the same quantity; equal windows remove that "
-                          "and what is left between windows is the condition. The remainder "
-                          "past the last whole window is dropped, and a condition too short "
-                          "for one window is left out rather than entered on other terms. "
+                          "--by-condition. The remainder past the last whole window is "
+                          "dropped, and a condition too short for one window is left out. "
                           "fnirs-hyper-pairnull reads this off the sidecar, so both sides resolve the "
                           "same grid.")
     run.add_argument("--by-condition", "--wtc-by-condition", dest="wtc_by_condition",
@@ -776,103 +756,78 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
                           "trigger with a duration uses it; one without runs to the next "
                           "trigger, and the last to the end. Windows shorter than one cycle "
                           "of --wtc-fmin are skipped. Each window is read off the whole-run "
-                          "transform rather than transformed on its own, so it costs almost "
-                          "nothing and a short condition is not inflated by its own edges.")
+                          "transform, so it costs almost nothing; --wtc-cond-transform "
+                          "transforms each condition on its own instead.")
     run.add_argument("--wtc-cond-transform", action="store_true",
                      help="Transform each condition on its own instead of reading it out of "
-                          "the whole-run transform. With the margin below this gives the "
-                          "same numbers as the default route, so it is a form a methods "
-                          "section can describe rather than a different result; it costs one "
-                          "extra transform per condition per chromophore. Requires "
-                          "--wtc-by-condition.")
+                          "the whole-run transform, over a cut padded by --wtc-cond-pad-s. "
+                          "Costs one extra transform per condition per chromophore. Requires "
+                          "--wtc-by-condition; refused with --wtc-phase-null.")
     run.add_argument("--wtc-cond-pad-s", type=str, default="auto", metavar="SEC|auto",
                      help="Seconds kept on each side of a condition under "
-                          "--wtc-cond-transform, then windowed back off. 'auto' is "
-                          "2*sqrt(2)/--wtc-band-fmin, the width at which a condition's band "
-                          "mean stops moving (47 s at 0.06 Hz). 0 cuts each condition to its "
-                          "own boundaries, which is what most published per-condition "
-                          "pipelines do and is biased upward by an amount that grows as the "
-                          "condition shortens; it is here to reproduce such a result.")
+                          "--wtc-cond-transform, then windowed back off. 'auto' (default) is "
+                          "2*sqrt(2)/--wtc-band-fmin, e.g. 47 s at 0.06 Hz. 0 cuts each "
+                          "condition to its own boundaries, which biases a short condition's "
+                          "band mean upward.")
     run.add_argument("--wtc-limit-scales", action=argparse.BooleanOptionalAction, default=True,
                      help="Compute only the wavelet scales inside --wtc-fmin/--wtc-fmax "
                           "plus margin, instead of every scale the record length allows "
-                          "(default on). A narrow band over a long record leaves most of the "
-                          "default scale range unused, and the saving is proportional. The "
-                          "kept scales land on pycwt's own grid and the margin is wider than "
-                          "the scale-smoothing window, so the coherences match the "
-                          "unrestricted ones bit for bit. --no-wtc-limit-scales computes "
-                          "every scale.")
+                          "(default on). The coherences match the unrestricted ones. "
+                          "--no-wtc-limit-scales computes every scale.")
     run.add_argument("--wtc-save-maps", action="store_true",
                      help="Save the full time-frequency coherence maps beside each TSV as "
-                          "npz, so a different band can be averaged later with `fnirs-hyper "
-                          "band` instead of a second wavelet transform. Large: one array "
+                          "npz, so a different band can be averaged later with "
+                          "`fnirs-hyper-band` instead of a second wavelet transform. Large: one array "
                           "per pair per dyad per task.")
     run.add_argument("--wtc-phase-null", type=int, default=None, metavar="N",
                      help="Also write the phase-scrambled null: the same band means against a "
-                          "phase-scrambled partner, averaged over N iterations (100 is what "
-                          "published work uses). Coherence between two unrelated recordings "
-                          "is not zero, so this is what a real value is read against. Omit "
-                          "it and no null is computed: each iteration costs a full WTC run, "
-                          "so this is the expensive half of a hyper run. With "
+                          "phase-scrambled partner, averaged over N iterations. Omit it and "
+                          "no null is computed; each iteration costs a full WTC run. With "
                           "--wtc-by-condition the null follows the same windows and lands in "
-                          "a second table, at no extra transform: a short condition tested "
-                          "against a whole-record null looks further above chance than it "
-                          "is. Each table carries the spread the mean came out of and each "
+                          "a second table, at no extra transform. Each table carries the spread the mean came out of and each "
                           "cell's percentile inside its own draws, and the maps draw their "
                           "phase arrows against the null's level rather than "
                           "--wtc-arrow-min.")
     run.add_argument("--wtc-phase-null-cross", action="store_true",
-                     help="Cross the channels for the null too. Deliberately separate from "
-                          "--wtc-channel-cross: crossing squares the pair count, and the null "
-                          "pays that on every iteration. The homologous null is still the "
-                          "null for the homologous cells of a crossed real table, which are "
-                          "the rows where label and label2 agree.")
+                     help="Cross the channels for the null too. Independent of "
+                          "--wtc-channel-cross; crossing squares the pair count on every "
+                          "iteration. Without it, the homologous null still covers the "
+                          "homologous rows of a crossed real table (label equal to label2).")
     run.add_argument("--bads-scope", choices=_BADS_SCOPE_CHOICES, default="run",
                      help="Which rejected channels are excluded from the inter-brain "
                           "metrics. 'run' (default) uses this task's own rejections. "
                           "'subject' unions them over the subject's runs that the pairs "
                           "table names, so all conditions rest on the same channel set. "
                           "The two differ only where the conditions were cropped to "
-                          "separate tasks before preprocessing: a recording preprocessed "
-                          "whole is screened once, so its conditions already rest on one "
-                          "channel set and the union is that one run's own rejections. A "
-                          "line in the log says which case a given run is.")
+                          "separate tasks before preprocessing; a recording preprocessed "
+                          "whole is screened once. A line in the log says which case a "
+                          "given run is.")
     run.add_argument("--isc-threshold", type=float, default=None,
                      help="Absolute |ISC| a pairing has to clear to get a chord in the "
-                          "connectivity circle. Left alone the rule is chosen instead of the "
-                          "number: with --isc-phase-null a chord is drawn where the pairing beats "
-                          "the 95th percentile of its own surrogate draws, and without one "
-                          "the strongest tenth are drawn and the subtitle says they are a "
-                          "display cut rather than a test. Naming a number here forces the "
-                          "absolute cut, which is what reproducing a fixed threshold needs; "
-                          "it is scale-dependent, and the scale moves with --desc, the "
-                          "passband, --isc-whiten and --isc-max-lag.")
+                          "connectivity circle. By default, with --isc-phase-null a chord is "
+                          "drawn where the pairing beats the 95th percentile of its own "
+                          "surrogate draws, and without it the strongest tenth are drawn and "
+                          "the subtitle labels them a display cut. A number here forces the "
+                          "absolute cut; its scale moves with --desc, the passband, "
+                          "--isc-whiten and --isc-max-lag.")
     run.add_argument("--no-report", action="store_true",
-                     help="Write the tables and skip the HTML report and its figures. The "
-                          "figures are most of what this step puts on disk, and an analysis "
-                          "that reads the tables never opens them. Everything else is "
-                          "unchanged: the same numbers, the same files, the same npz when "
+                     help="Write the tables and skip the HTML report and its figures. "
+                          "Everything else is unchanged: the same numbers, the same files, the same npz when "
                           "--wtc-save-maps is given.")
     run.add_argument("--isc-fmin", type=float, default=None, metavar="HZ",
                      help="Band-limit each member before the correlation, low edge. Without "
-                          "it ISC reads whatever the preprocessing passband left, which on a "
-                          "stage with no low-pass is dominated by the cardiac component; the "
-                          "run warns when that leaves it on different frequencies than "
-                          "--wtc-band-fmin/fmax, since the two metrics are averages of one "
-                          "complex coherency and comparing them needs one band. Set it equal "
-                          "to --wtc-band-fmin for that. Filtering happens before a condition "
-                          "window is cut, so a short condition carries no edge the whole "
-                          "recording did not have.")
+                          "it ISC reads whatever the preprocessing passband left. The run "
+                          "warns when the ISC band differs from --wtc-band-fmin/fmax; set "
+                          "the two equal to compare ISC with the coherence. Filtering "
+                          "happens on the whole recording, before a condition window is cut.")
     run.add_argument("--isc-fmax", type=float, default=None, metavar="HZ",
                      help="The high edge of that band. No default: see --isc-fmin.")
     run.add_argument("--wtc-whiten", type=float, default=0.0, metavar="SECONDS",
                      help="Prewhiten each long channel with an autoregressive model of this "
                           "many seconds of order before the wavelet coherence, one order for "
                           "every channel of both members, fitted on the whole aligned record; "
-                          "0, the default, transforms the signals themselves. Identical "
-                          "filters on both members leave the coherence nearly unchanged, so "
-                          "the effect comes from the two members' haemodynamics differing, "
-                          "and the phase and lag_s then describe the whitened signals. The "
+                          "0, the default, transforms the signals themselves. The phase and "
+                          "lag_s then describe the whitened signals. The "
                           "phase-scrambled null follows it, the re-paired null reads it off "
                           "the real table, and the sidecars record wtc_whiten_s. The first "
                           "order's worth of samples is a filter transient and is zeroed. The "
@@ -880,44 +835,31 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
     run.add_argument("--isc-whiten", type=int, default=0, metavar="ORDER",
                      help="Fit an autoregressive model of at most this order to each channel "
                           "before the inter-subject correlation and correlate the residuals; "
-                          "0, the default, correlates the signals themselves. A haemoglobin "
-                          "trace is strongly autocorrelated, so a correlation between two of "
-                          "them rests on far fewer independent observations than it has "
-                          "samples and the value it reaches with nothing coupled is "
-                          "correspondingly large; whitening puts r back on the scale its "
-                          "sample count implies. It also shrinks r, so a whitened matrix is "
-                          "not comparable with an unwhitened "
-                          f"one. The published work that whitens uses {ISC_MAX_AR_ORDER} as "
-                          "the ceiling and picks the order per channel by BIC, which is what "
-                          "passing that number does. The order each channel used reaches "
+                          "0, the default, correlates the signals themselves. The order is "
+                          f"picked per channel by BIC up to this ceiling, e.g. {ISC_MAX_AR_ORDER}. "
+                          "Whitening shrinks r, so a whitened matrix is not comparable with "
+                          "an unwhitened one. The order each channel used reaches "
                           "stat-isc_relmat.tsv as ar_order.")
     run.add_argument("--isc-max-lag", type=float, default=0.0, metavar="SECONDS",
                      help="Re-correlate the pair at every shift within this many seconds "
                           "either way and keep the strongest, instead of correlating sample "
-                          "against sample (default 0, no search). Two people's haemodynamic "
-                          "responses do not peak at the same instant, so a same-sample "
-                          "correlation reads a coupling a second apart as no coupling; the "
-                          "cross-correlation strand of the literature searches 2 s either "
-                          "way for that reason. Strongest means largest in magnitude with "
-                          "the sign kept, which differs from the published largest-signed "
-                          "form only where a pairing is anticorrelated. The winning shift "
+                          "against sample (default 0, no search). Strongest means largest in "
+                          "magnitude with the sign kept. The winning shift "
                           "reaches stat-isc_relmat.tsv as lag_s, positive where the second "
                           "member follows the first. A maximum over many shifts is larger "
                           "than any one of them under no coupling, so pair this with "
                           "--isc-phase-null, whose surrogates are searched the same way.")
     run.add_argument("--isc-phase-null", type=int, default=0, metavar="N",
                      help="Also rank each correlation against N phase-scrambled surrogates "
-                          "of the second member, which is the null a correlation between "
-                          "two recordings needs: scrambling preserves each signal's own "
-                          "spectrum and so its autocorrelation. Adds null_abs_mean, "
+                          "of the second member, which keep its spectrum. Adds null_abs_mean, "
                           "null_abs_sd, null_abs_p95 and percentile to stat-isc_relmat.tsv, "
                           "all of them magnitudes, since a correlation is two-sided. Off by default; "
                           "it costs N extra correlations per chromophore per window.")
     run.add_argument("--check-only", action="store_true",
                      help="Load and align each dyad, print what the metrics would be "
                           "computed on, and stop. Nothing is written. Use it to look over a "
-                          "cohort's channel budget before committing to a run, which with "
-                          "--wtc-phase-null is hours.")
+                          "cohort's channel budget before committing to a long run, such as "
+                          "one with --wtc-phase-null.")
     # not the shared screening block: nothing is screened here, the rejections were decided
     # upstream and are read off the sidecars, so a --psp-threshold would do nothing at all
     run.add_argument("--sci-threshold", type=float, default=SCI_PASS,
@@ -927,8 +869,8 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
     _shared.add_separation_bands(run, note="An override, not the source: the bands are "
                                  "read back from what fnirs-pipe stamped in each member's "
                                  "record, and members prepped with different bands are "
-                                 "refused. Pass this only for a tree prepped before the "
-                                 "stamp existed. A band left off keeps the records' value.")
+                                 "refused. Pass this only for a tree whose records carry "
+                                 "no bands. A band left off keeps the records' value.")
 
     band = _command_parser(
         "fnirs-hyper-band", reads_subjects=False, parents=[common, band_opts],
@@ -943,20 +885,16 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
 
     group_null = _command_parser(
         "fnirs-hyper-groupnull", reads_subjects=False, parents=[common],
-        description="fnirs-hyper-pairnull ranks each channel of each dyad inside its own draws, which "
-                    "says where a channel stands and spends the pool's resolution on saying "
-                    "it: against n stand-ins no cell can reach a p under 1/(n+1), so a test "
-                    "corrected over a thousand cells rejects almost nothing whatever the "
-                    "data does. This averages the channels first and ranks that, once per "
-                    "occasion and once over the cohort, which cannot say which channel and "
-                    "can say whether the pairing beats its null at all. It reads the draws "
-                    "fnirs-hyper-pairnull wrote and runs no transform.")
+        description="Averages each dyad's channels first and ranks that mean inside a null's "
+                    "draws, once per occasion and once over the cohort. It says whether the "
+                    "pairing beats its null, not which channel does; fnirs-hyper-pairnull "
+                    "ranks each channel inside its own draws, where against n stand-ins no "
+                    "cell can reach a p under 1/(n+1). It reads draws already on disk and "
+                    "runs no transform.")
     group_null.add_argument("--task", required=True,
                             help="Task whose tables to read, one at a time.")
     group_null.add_argument("--wtc-chroma", choices=("hbo", "hbr"), default="hbo",
-                            help="Chromophore to read (default hbo). One at a time: the two "
-                                 "are separate measurements and averaging across them means "
-                                 "nothing.")
+                            help="Chromophore to read (default hbo), one at a time.")
     group_null.add_argument("--null", choices=("repaired", "phase"), default="repaired",
                             help="Which null's draws to read (default repaired). Both are "
                                  "read the same way above the cell; they differ in what a "
@@ -991,10 +929,8 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
         description="Recomputes the coherence of one member against people they never "
                     "interacted with, drawn from the other groups of the same task, and "
                     "writes the null-pair tables beside the real ones. "
-                    "Unlike --wtc-phase-null, which destroys every temporal structure "
-                    "including each member's own time-locked response to the task, a "
-                    "re-paired partner did the same task, so what survives is coupling "
-                    "beyond what the shared task explains. Needs a cohort: the number of "
+                    "Unlike --wtc-phase-null, a re-paired partner did the same task, so the "
+                    "null keeps the shared task response. Needs a cohort: the number of "
                     "draws is the number of other groups, which is what limits how finely "
                     "the percentile can rank. Run it after `fnirs-hyper`, whose tables "
                     "it reads its band, its mask, its frequency range and its window off.")
@@ -1008,26 +944,23 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
                       help="Which rejected channels are excluded, as in fnirs-hyper. A stand-in "
                            "with no quality record is refused rather than kept whole.")
     pair.add_argument("--wtc-chroma", choices=("hbo", "hbr", "both"), default="both",
-                      help="Chromophore(s) to draw the null on (default both). A null drawn "
-                           "on HbO says nothing about an HbR coupling.")
+                      help="Chromophore(s) to draw the null on (default both).")
     pair.add_argument("--wtc-pair-pool", choices=("position", "any"), default="position",
                       help="Who may stand in. 'position' (default) replaces a member only "
-                           "with another group's member at the same index, which keeps a "
-                           "role where the two members are not interchangeable and is the "
-                           "only safe pool where one person appears in several groups, as "
-                           "in a cohort of the same pair recorded over many days. 'any' "
-                           "draws from every other group's members, doubling the pool, and "
-                           "is refused where the table shows anybody repeated: there it "
-                           "would rank a person against themselves.")
+                           "with another group's member at the same index, which keeps "
+                           "roles apart and is the only safe pool where one person appears "
+                           "in several groups. 'any' draws from every other group's "
+                           "members, doubling the pool, and is refused where the table "
+                           "shows anybody repeated: there it would rank a person against "
+                           "themselves.")
     pair.add_argument("--wtc-pair-max", type=int, default=None, metavar="N",
                       help="Stop after N draws. The pool is finite, so this is a ceiling "
                            "rather than a count: without it every eligible stand-in is "
                            "used, which is what gives the percentile its best resolution.")
     pair.add_argument("--wtc-pair-cross", action="store_true",
                       help="Draw the null over every channel pair rather than homologous "
-                           "ones only. Kept separate from the real run's --wtc-channel-cross "
-                           "for the same reason --wtc-phase-null-cross is: a crossed null "
-                           "costs one full run per channel pair.")
+                           "ones only. Independent of the real run's --wtc-channel-cross; "
+                           "a crossed null costs one full run per channel pair.")
     pair.add_argument("--wtc-roi-min-channels", type=int, default=2, metavar="N",
                       help="Drop an ROI cell resting on fewer than N channel pairs "
                            "(default 2). Match the value the real tables used.")

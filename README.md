@@ -70,8 +70,8 @@ Wherever a command takes a table from you (events, segments, the pairs file, `pa
 Four flags decide which channels survive, and they are the same on `fnirs-pipe`, `fnirs-qc prep-raw` and `fnirs-qc hyper-raw`:
 
 - `--sci-threshold` and `--psp-threshold` define a *coupled window*: it has to clear both. PSP catches the movement that fakes a high SCI.
-- `--min-good-frac` (default 0.75) is the criterion that actually rejects: the share of windows a channel has to be coupled in. Counting windows rather than averaging them is what catches a channel that was fine for the first half of a recording and dead for the second.
-- `--screen-scope` picks which windows count: `run` (default) the whole recording, `task` only the annotated blocks, so the lead-in and the gaps stop being held against a channel that is coupled throughout every block. `task` falls back to `run` when no annotation holds two windows.
+- `--min-good-frac` (default 0.75) is the criterion that actually rejects: the share of windows a channel has to be coupled in.
+- `--screen-scope` picks which windows count: `run` (default) the whole recording, `task` only the annotated blocks, so the lead-in and the gaps between blocks do not count. `task` falls back to `run` when no annotation holds two windows.
 
 `--window-length` (default 10 s) sets the window grid these, and the GVTD series, are measured on.
 
@@ -109,12 +109,11 @@ Preprocessing:
                                Short channels see scalp only and are measured, and regressed,
                                separately from the long ones.
   --long-min-dist MM           Separation at or above which a channel is long. [default: 15]
-                               The gap above --short-max-dist is deliberate: channels inside it
-                               reach neither scalp nor cortex cleanly, join no section, and are
-                               named in a run note.
+                               A channel in the gap above --short-max-dist counts as neither
+                               short nor long, joins no section, and is named in a run note.
   --long-max-dist MM           Separation above which a channel is too far to be long. Off by
                                default; set it on a montage carrying pairs too far apart to
-                               trust, since SCI and PSP catch most but not all of them.
+                               trust.
   --epoch-tmin FLOAT           Trial window for the epoch figures and per-trial scoring,
   --epoch-tmax FLOAT           relative to each event onset. Both or neither. Omitted, the
                                figures use -5 to 25 s and the scoring uses each event's own
@@ -123,15 +122,15 @@ Preprocessing:
                                so a block design gets one trial per piece. A 240 s block at
                                25 s gives 9 trials, remainder dropped.
   --epoch-single-trial         Draw the epoch section even when no condition repeats. Skipped
-                               by default there: nothing is averaged, and a 30 s window off a
-                               block running for minutes reads as a response.
-  --by-condition               One QC report page per annotated condition, as desc-<condition>.
+                               by default there, since one trial leaves nothing to average.
+  --by-condition               One QC report page per annotated condition, as cond-<condition>.
                                Sliced out of the windowed pass already in the quality record, so
                                nothing is cut and nothing is measured again.
   --gvtd-censor [SET]          Mark the frames GVTD flags as BAD_gvtd annotations. Off by
-                               default; takes the channel set to flag on, default long, `all`
-                               being the conservative choice. Nothing is cut: epoching drops the
-                               trials the spans overlap, continuous analyses take what survives.
+                               default; takes the channel set to flag on, default long; `all`
+                               also flags movement seen only on the short channels. Nothing is
+                               cut: epoching drops the trials the spans overlap, continuous
+                               analyses take what survives.
   --gvtd-censor-n-std FLOAT    Censoring threshold, in left-tail SDs above the GVTD mode.
                                [default: 10.0, the lenient value; the reports score at 3]
   --gvtd-min-epoch-s FLOAT     Shortest surviving stretch censoring keeps (s). Anything
@@ -146,8 +145,8 @@ Filtering / resampling (all modes):
   --high-pass FLOAT            High-pass filter cutoff in Hz (e.g. 0.01).
   --low-pass  FLOAT            Low-pass filter cutoff in Hz (e.g. 0.5).
   --filter-method              {iir,fir}   [default: iir]
-                               iir is a zero-phase Butterworth, what the fNIRS toolboxes use;
-                               fir is hamming-windowed linear-phase and is refused when its
+                               iir is a zero-phase Butterworth; fir is hamming-windowed
+                               linear-phase and is refused when its
                                3.3 * sfreq / transition samples exceed the recording.
   --filter-order INT           Butterworth order, ignored by --filter-method fir. [default: 4]
                                Applied with filtfilt, so the rolloff is twice this and the
@@ -159,10 +158,8 @@ GLM (--mode glm):
   --hrf-model                  {spm,spm + derivative,spm + derivative + dispersion,
                                 glover,glover + derivative,glover + derivative + dispersion,fir}
   --noise-model                ols | auto | arN                            [default: auto]
-                               auto is an AR order of 4x the sampling rate, which is what
-                               the fNIRS implementations use; the low orders come from fMRI,
-                               where a slower sampling rate makes one lag enough. An order
-                               too low leaves a contrast's t values several times too large.
+                               auto is an AR order of 4x the sampling rate. An order too low
+                               for the sampling rate leaves a contrast's t values too large.
                                Honoured by every mode, not only glm.
   --drift-model                {cosine,polynomial,none}  Required by glm and rest; optional in
                                denoise, where the bandpass detrends.
@@ -248,7 +245,7 @@ fnirs-hyper-pairnull  DERIVATIVES_DIR OUTPUT_DIR group --pairs-csv PATH
                       [--wtc-pair-max N] [--wtc-pair-cross]
                       [--wtc-roi-min-channels N] [--wtc-limit-scales | --no-wtc-limit-scales]
 
-fnirs-hyper-groupnull OUTPUT_DIR group [--task TEXT] [--wtc-chroma {hbo,hbr}]
+fnirs-hyper-groupnull OUTPUT_DIR group --task TEXT [--wtc-chroma {hbo,hbr}]
                       [--null {repaired,phase}] [--roi-mapping PATH]
                       [--n-resample N] [--seed INT]
 
@@ -262,25 +259,25 @@ fnirs-hyper-merge     OUTPUT_DIR group
 
 Keep `OUTPUT_DIR` apart from `DERIVATIVES_DIR`, so each tree carries its own `dataset_description.json`; the hyper tree records the source tree in `SourceDatasets`.
 
-`fnirs-hyper` computes wavelet coherence and inter-subject correlation for each dyad in the pairs file, one report per group. A group of more than two gets one report, one set of figures and one ISC table per pairing, tagged `pair-<sub1>x<sub2>`, the transform still running once over the whole group. `--check-only` aligns each dyad, prints what the metrics would be computed on, and stops, which is how to check a cohort's channel budget before a run that with a null takes hours. `--no-report` writes the tables and skips the HTML and its figures.
+`fnirs-hyper` computes wavelet coherence and inter-subject correlation for each dyad in the pairs file, one report per group. A group of more than two gets one report, one set of figures and one ISC table per pairing, tagged `pair-<sub1>x<sub2>`, the transform still running once over the whole group. `--check-only` aligns each dyad, prints what the metrics would be computed on, and stops, which is how to check a cohort's channel budget before a long run. `--no-report` writes the tables and skips the HTML and its figures.
 
 `--wtc-significance` draws `--wtc-mc-count` surrogate series per channel pair, 300 by default, and the runtime scales with that count. `--wtc-channel-cross` pairs every long channel with every other across the two brains, n² values instead of n, and adds the channel x channel matrix of band means, the ROI x ROI matrix under `--roi-mapping`, and a per-brain selector on each map panel. Every map carries relative phase as arrows, so a pair moving together is distinguishable from one moving together a few seconds apart; they are drawn against the null's per-frequency level where one exists, and above the flat `--wtc-arrow-min` where none does.
 
-Per-condition results are on by default: the coherence is read out of each task annotation's own window, one result per block, and `--no-by-condition` turns that off. Each window is read off the whole-run transform rather than transformed on its own, so it costs almost nothing and a short condition is not inflated by its own edges. `--wtc-cond-transform` transforms each condition separately instead, keeping `--wtc-cond-pad-s` seconds either side and windowing them back off; with the `auto` margin the numbers match the default route, so it is a form a methods section can describe rather than a different result. `--wtc-limit-scales`, on by default, computes only the scales inside the band plus margin, bit for bit identical to the unrestricted transform. `--wtc-window-s` cuts every condition into non-overlapping windows of that length and makes the window the unit, so conditions of different length estimate the same thing.
+Per-condition results are on by default: the coherence is read out of each task annotation's own window, one result per block, and `--no-by-condition` turns that off. Each window is read off the whole-run transform rather than transformed on its own, so it costs almost nothing and a short condition is not inflated by its own edges. `--wtc-cond-transform` transforms each condition separately instead, keeping `--wtc-cond-pad-s` seconds either side and windowing them back off; with the `auto` margin the numbers match the default route. `--wtc-limit-scales`, on by default, computes only the scales inside the band plus margin, bit for bit identical to the unrestricted transform. `--wtc-window-s` cuts every condition into non-overlapping windows of that length and makes the window the unit, so conditions of different length estimate the same thing.
 
-`--wtc-chroma` picks the chromophore(s), both by default: two parallel passes, HbO pairing only with HbO, so nothing is mixed and the cost is exactly twice. The point is a consistency check rather than two results: HbO has the better SNR, HbR is less contaminated by the respiration and heart rate two people in one room share, and coupling in HbO with nothing in HbR is a caution flag, though not a quantitative one, coherence being unsigned and bounded. One switch moves every panel between them, and every band-mean table carries a `chromophore` column.
+`--wtc-chroma` picks the chromophore(s), both by default: two parallel passes, HbO pairing only with HbO, so nothing is mixed and the cost is exactly twice. Read HbR as a consistency check on HbO rather than a second result. One switch moves every panel between them, and every band-mean table carries a `chromophore` column.
 
-`--wtc-phase-null N` adds the phase-scrambled null: the same band means against a phase-scrambled partner, averaged over N iterations. Coherence between two unrelated recordings is not zero, so this is what a real value is read against, and each iteration being a full WTC run makes it the expensive half. It shares this run's stage, band and window by construction, and follows `--by-condition`'s windows at no extra transform, a short condition tested against a whole-record null looking further above chance than it is. Crossing is the one thing it does not share, being paid on every iteration; ask for it with `--wtc-phase-null-cross`. Each null table carries `null_sd`, `null_p95`, `n_iter` and each cell's `percentile`.
+`--wtc-phase-null N` adds the phase-scrambled null: the same band means against a phase-scrambled partner, averaged over N iterations. It is what a real value is read against, and each iteration is a full WTC run. It shares this run's stage, band and window, and follows `--by-condition`'s windows at no extra transform. Crossing is the one thing it does not share, being paid on every iteration; ask for it with `--wtc-phase-null-cross`. Each null table carries `null_sd`, `null_p95`, `n_iter` and each cell's `percentile`.
 
 `--wtc-whiten SECONDS` prewhitens each long channel with an autoregressive model of that many seconds of order before the coherence, one order for every channel of both members. Off by default; the phase-scrambled null follows it and the sidecars record it.
 
-The correlation side has its own flags, all off by default. `--isc-fmin` / `--isc-fmax` band-limit each member before the correlation; without them ISC reads whatever the preprocessing passband left, and the run warns when that differs from the WTC band. `--isc-whiten ORDER` correlates autoregressive residuals rather than the series, putting r back on the scale its sample count implies; it shrinks r substantially, so a whitened matrix does not compare with an unwhitened one. `--isc-max-lag SECONDS` keeps the strongest correlation over every shift within that many seconds either way and reports the winning shift, since two people's responses do not peak at the same instant. `--isc-phase-null N` ranks each correlation against N phase-scrambled surrogates, the null a maximum over many shifts needs. All of them write into the long `stat-isc_relmat.tsv`, one row per channel pair. `--isc-threshold` forces an absolute cut on the connectogram; left alone, a chord is drawn where the pairing beats its own null, or for the strongest tenth when none was drawn.
+The correlation side has its own flags, all off by default. `--isc-fmin` / `--isc-fmax` band-limit each member before the correlation; without them ISC reads whatever the preprocessing passband left, and the run warns when that differs from the WTC band. `--isc-whiten ORDER` correlates autoregressive residuals rather than the series, putting r back on the scale its sample count implies; it shrinks r substantially, so a whitened matrix does not compare with an unwhitened one. `--isc-max-lag SECONDS` keeps the strongest correlation over every shift within that many seconds either way and reports the winning shift. `--isc-phase-null N` ranks each correlation against N phase-scrambled surrogates, the null a maximum over many shifts needs. All of them write into the long `stat-isc_relmat.tsv`, one row per channel pair. `--isc-threshold` forces an absolute cut on the connectogram; left alone, a chord is drawn where the pairing beats its own null, or for the strongest tenth when none was drawn.
 
-`fnirs-hyper-pairnull` is the second null: each member's coherence against people they never interacted with, drawn from the other groups of the same task. A phase-scrambled partner destroys each member's own time-locked response to the task; a re-paired one did the same task, so what survives is coupling beyond what the shared task explains. It needs a cohort, reads its band, mask, frequency range and window off the real tables, and so runs after `fnirs-hyper`. `--wtc-pair-pool position` (the default) replaces a member only with another group's member at the same index, which is the only safe pool when one person appears in several groups. The next `fnirs-hyper` run picks up its per-condition arrow levels.
+`fnirs-hyper-pairnull` is the second null: each member's coherence against people they never interacted with, drawn from the other groups of the same task. A re-paired partner did the same task, so what survives is coupling beyond what the shared task explains. It needs a cohort, reads its band, mask, frequency range and window off the real tables, and so runs after `fnirs-hyper`. `--wtc-pair-pool position` (the default) replaces a member only with another group's member at the same index, which is the only safe pool when one person appears in several groups. The next `fnirs-hyper` run picks up its per-condition arrow levels.
 
-`fnirs-hyper-groupnull` averages the channels first and ranks that mean against the draws, once per occasion and once over the cohort. A per-cell rank against a few dozen stand-ins cannot reach a p small enough to survive correction over many cells; the averaged level cannot say which channel, but can say whether the pairing beats its null at all. It reads the draws `fnirs-hyper-pairnull` (or `--wtc-phase-null`) wrote and runs no transform.
+`fnirs-hyper-groupnull` averages the channels first and ranks that mean against the draws, once per occasion and once over the cohort. It cannot say which channel, but can say whether the pairing beats its null at all. It reads the draws `fnirs-hyper-pairnull` (or `--wtc-phase-null`) wrote and runs no transform.
 
-`fnirs-hyper-band` re-averages the maps `fnirs-hyper --wtc-save-maps` saved over a different band, with no second wavelet transform, taking the same `--wtc-band-fmin` / `--wtc-band-fmax` / `--wtc-mask-coi` as `fnirs-hyper` so the two cannot drift apart under two spellings. Its tables carry a `band-` entity and sit beside the originals.
+`fnirs-hyper-band` re-averages the maps `fnirs-hyper --wtc-save-maps` saved over a different band, with no second wavelet transform, taking the same `--wtc-band-fmin` / `--wtc-band-fmax` / `--wtc-mask-coi` as `fnirs-hyper`. Its tables carry a `band-` entity and sit beside the originals.
 
 `fnirs-hyper-index` rebuilds `group-<id>_desc-index_report.html`, one row per analysed window. `fnirs-hyper` writes it too; this is for a tree produced earlier, or after the pages were regenerated by hand.
 

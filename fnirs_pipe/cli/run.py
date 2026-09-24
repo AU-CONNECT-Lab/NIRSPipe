@@ -126,18 +126,15 @@ def _build_parser() -> argparse.ArgumentParser:
                           help="Cut each task annotation into trials this long before any "
                                "epoching, so a block design gets one trial per piece instead "
                                "of one per block. A 240 s block at 25 s gives 9 trials and "
-                               "drops the remainder, which is what MNE does. Nothing can "
-                               "average a single 240 s trial, so without this the epoch "
-                               "figures describe the start of each block.")
+                               "drops the remainder. Without this, the epoch figures of a "
+                               "block design describe the start of each block.")
     prep_opt.add_argument("--epoch-single-trial", action="store_true",
-                          help="Draw the epoch section even when no condition repeats. It "
-                               "is skipped by default there: with one trial per condition "
-                               "nothing is averaged, and a 30 s window off a block running "
-                               "for minutes reads as a response without being one. Pass "
-                               "this when the single trial is the thing to look at, such as "
-                               "a block-onset transient. Has no effect when the run carries "
-                               "no events or no event leaves room for the window, which no "
-                               "flag can fix.")
+                          help="Draw the epoch section even when no condition repeats, where "
+                               "it is skipped by default because one trial per condition "
+                               "leaves nothing to average. Pass this when the single trial is "
+                               "the thing to look at, such as a block-onset transient. Has no "
+                               "effect when the run carries no events or no event leaves room "
+                               "for the window.")
     prep_opt.add_argument("--by-condition", action="store_true",
                           help="Also write one QC report page per annotated condition, "
                                "beside the run's own, as cond-<condition>. Their numbers "
@@ -167,8 +164,7 @@ def _build_parser() -> argparse.ArgumentParser:
                                "score at 3, which censors far more.")
     prep_opt.add_argument("--gvtd-min-epoch-s", type=float, default=30.0,
                           help="Shortest surviving stretch --gvtd-censor keeps (s). Anything "
-                               "shorter is censored with the artifacts around it, since a few "
-                               "seconds between two of them cannot carry an analysis.")
+                               "shorter is censored with the artifacts around it.")
 
     post = p.add_argument_group("postprocessing (requires --mode)")
     post.add_argument("--mode", choices=_MODE_CHOICES,
@@ -180,7 +176,7 @@ def _build_parser() -> argparse.ArgumentParser:
     post.add_argument("--low-pass",  type=float, help="Low-pass filter cutoff in Hz, e.g. 0.5.")
     post.add_argument("--filter-method", choices=FILTER_METHODS,
                       help=f"Bandpass design, default {DEFAULT_FILTER_METHOD!r}. 'iir' is a zero-phase "
-                           "Butterworth, what the fNIRS toolboxes use. 'fir' is a hamming-windowed "
+                           "Butterworth. 'fir' is a hamming-windowed "
                            "linear-phase filter, which needs 3.3 * sfreq / transition samples and "
                            "is refused when that is longer than the recording.")
     post.add_argument("--filter-order", type=int,
@@ -200,11 +196,9 @@ def _build_parser() -> argparse.ArgumentParser:
     glm.add_argument("--noise-model", type=_noise_model, metavar="MODEL",
                      help="Residual autocorrelation model, default 'auto'. 'ols', 'auto', "
                           "'arN' for any order, or 'ar_irls'. 'auto' is an AR order of 4x the "
-                          "sampling rate, which is what the fNIRS implementations use; the "
-                          "low orders come from fMRI, where a sampling rate an order of "
-                          "magnitude slower makes one lag enough. An order too low for the "
-                          "sampling rate leaves a task contrast's t values several times too "
-                          "large. 'ar_irls' adds a robust norm on top of the whitening, so "
+                          "sampling rate. An order too low for the sampling rate leaves a "
+                          "task contrast's t values too large. 'ar_irls' adds a robust norm "
+                          "on top of the whitening, so "
                           "residual motion is down-weighted instead of fitted; 'ar_irlsN' "
                           "pins the largest order it may choose, which otherwise follows the "
                           "same 4x rule.")
@@ -221,8 +215,7 @@ def _build_parser() -> argparse.ArgumentParser:
                           "glm fits it alongside the task, denoise and rest on its own. "
                           "'mean' gives one column per chromophore; 'pca' gives one column "
                           "per short channel, orthogonalised, which fits the same as entering "
-                          "every short channel and is what the published comparison ranks "
-                          "above the mean.")
+                          "every short channel.")
     # withheld from --help pending evaluation; both still work when named explicitly
     glm.add_argument("--aux-regressors", action="store_true", default=None,
                      help=argparse.SUPPRESS)

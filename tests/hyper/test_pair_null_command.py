@@ -116,7 +116,7 @@ def _write_null(root, gid, task, kind, **params):
 
 def test_the_two_nulls_merge_into_separate_files(tmp_path):
     _write_null(tmp_path, "G01", "main", "wtc-phasenull", n_iter=100, null_kind="phase")
-    _write_null(tmp_path, "G01", "main", "wtc-pairnull", n_iter=22,
+    _write_null(tmp_path, "G01", "main", "wtc-pairnull", n_iter=9,
                 null_kind="repaired", pair_pool="position")
     assert len(_merge(tmp_path, "wtc-phasenull")) == 1
     assert len(_merge(tmp_path, "wtc-pairnull")) == 1
@@ -124,17 +124,17 @@ def test_the_two_nulls_merge_into_separate_files(tmp_path):
 
 def test_a_pair_null_renamed_onto_the_phase_null_path_is_refused(tmp_path):
     """Filenames already keep them apart; this catches one moved by hand."""
-    _write_null(tmp_path, "G01", "main", "wtc-phasenull", n_iter=22, null_kind="phase")
-    _write_null(tmp_path, "G02", "main", "wtc-phasenull", n_iter=22, null_kind="repaired")
+    _write_null(tmp_path, "G01", "main", "wtc-phasenull", n_iter=9, null_kind="phase")
+    _write_null(tmp_path, "G02", "main", "wtc-phasenull", n_iter=9, null_kind="repaired")
     with pytest.raises(ValueError, match="null_kind"):
         _merge(tmp_path, "wtc-phasenull")
 
 
 def test_two_pools_refuse_to_merge(tmp_path):
     """`any` draws from twice the people, so its null is not the same null."""
-    _write_null(tmp_path, "G01", "main", "wtc-pairnull", n_iter=22,
+    _write_null(tmp_path, "G01", "main", "wtc-pairnull", n_iter=9,
                 null_kind="repaired", pair_pool="position")
-    _write_null(tmp_path, "G02", "main", "wtc-pairnull", n_iter=44,
+    _write_null(tmp_path, "G02", "main", "wtc-pairnull", n_iter=18,
                 null_kind="repaired", pair_pool="any")
     with pytest.raises(ValueError, match="n_iter|pair_pool"):
         _merge(tmp_path, "wtc-pairnull")
@@ -142,7 +142,7 @@ def test_two_pools_refuse_to_merge(tmp_path):
 
 def test_one_pool_merges(tmp_path):
     for gid in ("G01", "G02"):
-        _write_null(tmp_path, gid, "main", "wtc-pairnull", n_iter=22,
+        _write_null(tmp_path, gid, "main", "wtc-pairnull", n_iter=9,
                     null_kind="repaired", pair_pool="position")
     assert sorted(_merge(tmp_path, "wtc-pairnull")["group_id"]) == ["G01", "G02"]
 
@@ -150,7 +150,7 @@ def test_one_pool_merges(tmp_path):
 def test_merge_covers_the_new_kinds(tmp_path):
     from fnirs_pipe.cli.hyper import cmd_merge
 
-    _write_null(tmp_path, "G01", "main", "wtc-pairnull", n_iter=22,
+    _write_null(tmp_path, "G01", "main", "wtc-pairnull", n_iter=9,
                 null_kind="repaired", pair_pool="position")
     cmd_merge(tmp_path, verbose=False)
     assert (tmp_path / "null-pair_stat-wtc_relmat.tsv").exists()
