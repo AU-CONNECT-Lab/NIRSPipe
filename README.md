@@ -2,16 +2,20 @@
 
 A BIDS-compatible fNIRS preprocessing, postprocessing, hyperscanning, and QC pipeline.
 
+> **Status: in active development.** fnirs-pipe is changing quickly. Command-line options, output file names and defaults can change between releases without a deprecation period, so it is not yet recommended for production use. Pin a version for any analysis you intend to publish.
+
 ## Overview
 
-`fnirs-pipe` runs two levels; dyad analysis is a separate tool, `fnirs-hyper`:
+`fnirs-pipe` runs two levels; dyad analysis is a separate tool, `fnirs-hyper`, which reads the tree `fnirs-pipe` wrote and writes its own:
 
 | Level | What it does |
 |-------|--------------|
 | `participant` | `prep`: fixed-order preprocessing, OD conversion → windowed channel screening → motion correction (TDDR or wavelet) → Beer-Lambert. Then `post` when `--mode` is given: `denoise`, `glm`, or `rest` (bandpass + resample; confound regression; GLM residuals or ALFF/FC) |
-| `group` | Cohort aggregation of the per-subject and per-dyad quality records |
+| `group` | Cohort aggregation of the per-subject quality records, and of the per-dyad ones where the tree holds groups |
 
-Outputs follow the [BIDS Derivatives](https://bids-specification.readthedocs.io/en/stable/derivatives/introduction.html) spec. Each run gets an HTML QC report with figures, a provenance graph and an auto-generated Methods paragraph, and each subject an index page over their runs. Cohort-level QC, hyperscanning (dyad WTC/ISC), an interactive rating viewer, a Dash desktop GUI, and a JSONL→SQLite run-log database are all first-class features.
+Outputs follow the [BIDS Derivatives](https://bids-specification.readthedocs.io/en/stable/derivatives/introduction.html) spec. Each run gets an HTML QC report with figures, a provenance graph and an auto-generated Methods paragraph, and each subject an index page over their runs. Cohort-level QC, hyperscanning (dyad WTC/ISC with phase-scrambled and re-paired nulls), an interactive rating viewer, a Dash desktop GUI, and a JSONL→SQLite run-log database are all first-class features.
+
+![fnirs-pipe overview: inputs, preprocessing, postprocessing, hyperscanning, quality control, and outputs](assets/fnirs_pipe_overview.jpg)
 
 ## Requirements
 
@@ -53,7 +57,7 @@ fnirs-pipe /data/bids /data/derivatives participant \
   --short-channel mean
 ```
 
-See [`docs/pipeline/common-scenarios.md`](docs/pipeline/common-scenarios.md) for resting-state, FIR GLM, paediatric, parallel, dry-run, and config-file examples. Per-command references live under [`docs/cli/`](docs/cli/) — one page per `fnirs-*` entry point.
+See [`docs/pipeline/common-scenarios.md`](docs/pipeline/common-scenarios.md) for resting-state, FIR GLM, paediatric, parallel, dry-run, and config-file examples. Per-command references live under [`docs/cli/`](docs/cli/), one page per `fnirs-*` entry point.
 
 ## CLI Reference
 
@@ -160,14 +164,16 @@ GLM (--mode glm):
                                where a slower sampling rate makes one lag enough. An order
                                too low leaves a contrast's t values several times too large.
                                Honoured by every mode, not only glm.
-  --drift-model                {cosine,polynomial,none}
+  --drift-model                {cosine,polynomial,none}  Required by glm and rest; optional in
+                               denoise, where the bandpass detrends.
   --drift-high-pass FLOAT      Cosine drift high-pass cutoff in Hz. No default: it has to sit
                                at or above --high-pass and below the rate a condition repeats
                                at, and the run warns when it does not.
   --drift-order INT            Polynomial drift order.                                [default: 1]
   --fir-delays STR             FIR delay bins in scans, e.g. "0,1,2,3,4,5"
-  --short-channel              {none,mean}  Refused on a montage with no short channel.
-                                                                                   [default: none]
+  --short-channel              {none,mean,pca}  Refused on a montage with no short channel.
+                               mean is one column per chromophore, pca one orthogonalised
+                               column per short channel.                          [default: none]
   --fc                         Also write the connectivity products rest mode writes,
                                from the residual. Works in glm and denoise modes.
   --events-path FILE           Optional. BIDS *_events.tsv overriding SNIRF annotations.
@@ -206,12 +212,14 @@ Other:
   --version
 ```
 
-`participant` preprocesses each subject, and postprocesses when `--mode` is given. `group` aggregates the per-subject quality records into cohort reports. Dyad analysis is `fnirs-hyper`, below.
+`participant` preprocesses each subject, and postprocesses when `--mode` is given. `group` aggregates the per-subject quality records into `desc-subjects_qc.tsv` and `desc-subjects_report.html`, and, where the tree holds groups, the per-dyad ones into `desc-groups_qc.tsv` and `desc-groups_report.html`. Dyad analysis is `fnirs-hyper`, below.
 
-### `fnirs-hyper` — dyad analysis
+### `fnirs-hyper`: dyad analysis
+
+Dyad analysis is six commands. The two that read member recordings take the `fnirs-pipe` tree as input and write a separate hyper tree; the other four only re-read tables already in the hyper tree. `group` is the only analysis level, since every metric needs both members.
 
 ```
-fnirs-hyper run OUTPUT_DIR --pairs-csv PATH
+fnirs-hyper DERIVATIVES_DIR OUTPUT_DIR group --pairs-csv PATH
                 [--group-id TEXT] [--task-label LABEL ...] [--desc TEXT]
                 [--roi-mapping PATH]
                 [--wtc-fmin/--wtc-fmax FLOAT]        [default: 0.004 / 0.20]
@@ -221,45 +229,64 @@ fnirs-hyper run OUTPUT_DIR --pairs-csv PATH
                 [--wtc-mask-coi | --no-wtc-mask-coi] [--wtc-roi-min-channels N]
                 [--wtc-arrow-min R]                  [default: 0.5]
                 [--wtc-channel-cross] [--by-condition | --no-by-condition]
+                [--wtc-window-s SECONDS]
                 [--wtc-cond-transform] [--wtc-cond-pad-s SEC|auto]
                 [--wtc-limit-scales | --no-wtc-limit-scales] [--wtc-save-maps]
-                [--wtc-pseudo N] [--wtc-pseudo-cross]
-                [--isc-threshold FLOAT] [--isc-whiten ORDER]
-                [--isc-max-lag SECONDS] [--isc-pseudo N]
-                [--bads-scope {run,subject}] [--check-only]
+                [--wtc-phase-null N] [--wtc-phase-null-cross]
+                [--wtc-whiten SECONDS]
+                [--isc-fmin/--isc-fmax HZ] [--isc-threshold FLOAT]
+                [--isc-whiten ORDER] [--isc-max-lag SECONDS] [--isc-phase-null N]
+                [--bads-scope {run,subject}] [--check-only] [--no-report]
                 [--sci-threshold FLOAT]
                 [--short-max-dist/--long-min-dist/--long-max-dist MM]
                 [--normalize] [--no-align] [--tstart/--tend FLOAT]
 
-fnirs-hyper band  OUTPUT_DIR --wtc-band-fmin FLOAT --wtc-band-fmax FLOAT
-                             [--wtc-mask-coi | --no-wtc-mask-coi] [--wtc-suffix TEXT]
+fnirs-hyper-pairnull  DERIVATIVES_DIR OUTPUT_DIR group --pairs-csv PATH
+                      [--group-id TEXT] [--task-label LABEL ...] [--desc TEXT]
+                      [--roi-mapping PATH] [--bads-scope {run,subject}]
+                      [--wtc-chroma {hbo,hbr,both}] [--wtc-pair-pool {position,any}]
+                      [--wtc-pair-max N] [--wtc-pair-cross]
+                      [--wtc-roi-min-channels N] [--wtc-limit-scales | --no-wtc-limit-scales]
 
-fnirs-hyper index OUTPUT_DIR [--group-id TEXT]
+fnirs-hyper-groupnull OUTPUT_DIR group [--task TEXT] [--wtc-chroma {hbo,hbr}]
+                      [--null {repaired,phase}] [--roi-mapping PATH]
+                      [--n-resample N] [--seed INT]
 
-fnirs-hyper merge OUTPUT_DIR
+fnirs-hyper-band      OUTPUT_DIR group --wtc-band-fmin FLOAT --wtc-band-fmax FLOAT
+                      [--wtc-mask-coi | --no-wtc-mask-coi] [--wtc-suffix TEXT]
+
+fnirs-hyper-index     OUTPUT_DIR group [--group-id TEXT]
+
+fnirs-hyper-merge     OUTPUT_DIR group
 ```
 
-Every subcommand reads the derivatives tree `fnirs-pipe` wrote and takes no BIDS input, which is why there is one positional and not two.
+Keep `OUTPUT_DIR` apart from `DERIVATIVES_DIR`, so each tree carries its own `dataset_description.json`; the hyper tree records the source tree in `SourceDatasets`.
 
-`run` computes wavelet coherence and inter-subject correlation for each dyad in the pairs file, one report per group. A group of more than two gets one report, one set of figures and one ISC table per pairing, suffixed `_<sub1>x<sub2>`, the transform still running once over the whole group. `--check-only` aligns each dyad, prints what the metrics would be computed on, and stops, which is how to check a cohort's channel budget before a run that with a null takes hours.
+`fnirs-hyper` computes wavelet coherence and inter-subject correlation for each dyad in the pairs file, one report per group. A group of more than two gets one report, one set of figures and one ISC table per pairing, tagged `pair-<sub1>x<sub2>`, the transform still running once over the whole group. `--check-only` aligns each dyad, prints what the metrics would be computed on, and stops, which is how to check a cohort's channel budget before a run that with a null takes hours. `--no-report` writes the tables and skips the HTML and its figures.
 
 `--wtc-significance` draws `--wtc-mc-count` surrogate series per channel pair, 300 by default, and the runtime scales with that count. `--wtc-channel-cross` pairs every long channel with every other across the two brains, 196 values instead of 14, and adds the channel x channel matrix of band means, the ROI x ROI matrix under `--roi-mapping`, and a per-brain selector on each map panel. Every map carries relative phase as arrows, so a pair moving together is distinguishable from one moving together a few seconds apart; they are drawn against the null's per-frequency level where one exists, and above the flat `--wtc-arrow-min` where none does.
 
-Per-condition results are on by default: the coherence is read out of each task annotation's own window, one result per block, and `--no-by-condition` turns that off. Each window is read off the whole-run transform rather than transformed on its own, so it costs almost nothing and a short condition is not inflated by its own edges. `--wtc-cond-transform` transforms each condition separately instead, keeping `--wtc-cond-pad-s` seconds either side and windowing them back off; with the `auto` margin the numbers match the default route, so it is a form a methods section can describe rather than a different result. `--wtc-limit-scales`, on by default, computes only the scales inside the band plus margin, bit for bit identical to the unrestricted transform.
+Per-condition results are on by default: the coherence is read out of each task annotation's own window, one result per block, and `--no-by-condition` turns that off. Each window is read off the whole-run transform rather than transformed on its own, so it costs almost nothing and a short condition is not inflated by its own edges. `--wtc-cond-transform` transforms each condition separately instead, keeping `--wtc-cond-pad-s` seconds either side and windowing them back off; with the `auto` margin the numbers match the default route, so it is a form a methods section can describe rather than a different result. `--wtc-limit-scales`, on by default, computes only the scales inside the band plus margin, bit for bit identical to the unrestricted transform. `--wtc-window-s` cuts every condition into non-overlapping windows of that length and makes the window the unit, so conditions of different length estimate the same thing.
 
 `--wtc-chroma` picks the chromophore(s), both by default: two parallel passes, HbO pairing only with HbO, so nothing is mixed and the cost is exactly twice. The point is a consistency check rather than two results: HbO has the better SNR, HbR is less contaminated by the respiration and heart rate two people in one room share, and coupling in HbO with nothing in HbR is a caution flag, though not a quantitative one, coherence being unsigned and bounded. One switch moves every panel between them, and every band-mean table carries a `chromophore` column.
 
-`--wtc-pseudo N` adds the pseudo-dyad null: the same band means against a phase-scrambled partner, averaged over N iterations. Coherence between two unrelated recordings is not zero, so this is what a real value is read against, and each iteration being a full WTC run makes it the expensive half. It shares this run's stage, band and window by construction, and follows `--by-condition`'s windows at no extra transform, a short condition tested against a whole-record null looking further above chance than it is. Crossing is the one thing it does not share, being paid on every iteration; ask for it with `--wtc-pseudo-cross`. Each null table carries `null_sd`, `null_p95`, `n_iter` and each cell's `percentile`.
+`--wtc-phase-null N` adds the phase-scrambled null: the same band means against a phase-scrambled partner, averaged over N iterations. Coherence between two unrelated recordings is not zero, so this is what a real value is read against, and each iteration being a full WTC run makes it the expensive half. It shares this run's stage, band and window by construction, and follows `--by-condition`'s windows at no extra transform, a short condition tested against a whole-record null looking further above chance than it is. Crossing is the one thing it does not share, being paid on every iteration; ask for it with `--wtc-phase-null-cross`. Each null table carries `null_sd`, `null_p95`, `n_iter` and each cell's `percentile`.
 
-The correlation side has three flags of its own, all off by default. `--isc-whiten ORDER` correlates autoregressive residuals rather than the series, putting r back on the scale its sample count implies; it shrinks r by roughly a factor of six, so a whitened matrix does not compare with an unwhitened one. `--isc-max-lag SECONDS` keeps the strongest correlation over every shift within that many seconds either way and reports the winning shift, since two people's responses do not peak at the same instant. `--isc-pseudo N` ranks each correlation against N phase-scrambled surrogates, the null a maximum over many shifts needs. All three write into `hyper-iscpairs.tsv`, one row per channel pair. `--isc-threshold` forces an absolute cut on the connectogram; left alone, a chord is drawn where the pairing beats its own null, or for the strongest tenth when none was drawn.
+`--wtc-whiten SECONDS` prewhitens each long channel with an autoregressive model of that many seconds of order before the coherence, one order for every channel of both members. Off by default; the phase-scrambled null follows it and the sidecars record it.
 
-`band` re-averages the maps `run --wtc-save-maps` saved over a different band, with no second wavelet transform, taking the same `--wtc-band-fmin` / `--wtc-band-fmax` / `--wtc-mask-coi` as `run` so the two cannot drift apart under two spellings.
+The correlation side has its own flags, all off by default. `--isc-fmin` / `--isc-fmax` band-limit each member before the correlation; without them ISC reads whatever the preprocessing passband left, and the run warns when that differs from the WTC band. `--isc-whiten ORDER` correlates autoregressive residuals rather than the series, putting r back on the scale its sample count implies; it shrinks r by roughly a factor of six, so a whitened matrix does not compare with an unwhitened one. `--isc-max-lag SECONDS` keeps the strongest correlation over every shift within that many seconds either way and reports the winning shift, since two people's responses do not peak at the same instant. `--isc-phase-null N` ranks each correlation against N phase-scrambled surrogates, the null a maximum over many shifts needs. All of them write into the long `stat-isc_relmat.tsv`, one row per channel pair. `--isc-threshold` forces an absolute cut on the connectogram; left alone, a chord is drawn where the pairing beats its own null, or for the strongest tenth when none was drawn.
 
-`index` rebuilds `group-<id>_index.html`, one row per analysed window. `run` writes it too; this is for a tree produced earlier, or after the pages were regenerated by hand.
+`fnirs-hyper-pairnull` is the second null: each member's coherence against people they never interacted with, drawn from the other groups of the same task. A phase-scrambled partner destroys each member's own time-locked response to the task; a re-paired one did the same task, so what survives is coupling beyond what the shared task explains. It needs a cohort, reads its band, mask, frequency range and window off the real tables, and so runs after `fnirs-hyper`. `--wtc-pair-pool position` (the default) replaces a member only with another group's member at the same index, which is the only safe pool when one person appears in several groups. The next `fnirs-hyper` run picks up its per-condition arrow levels.
 
-`merge` concatenates every per-dyad band-mean table into one per kind at the root of the tree, adding `group_id` and `task` columns, so a cohort analysis reads one file. It refuses to merge tables that disagree on the band, on the cone-of-influence masking, or on the null's iteration count.
+`fnirs-hyper-groupnull` averages the channels first and ranks that mean against the draws, once per occasion and once over the cohort. A per-cell rank against a few dozen stand-ins cannot reach a p small enough to survive correction over many cells; the averaged level cannot say which channel, but can say whether the pairing beats its null at all. It reads the draws `fnirs-hyper-pairnull` (or `--wtc-phase-null`) wrote and runs no transform.
 
-### `fnirs-recon` — raw SNIRF → BIDS
+`fnirs-hyper-band` re-averages the maps `fnirs-hyper --wtc-save-maps` saved over a different band, with no second wavelet transform, taking the same `--wtc-band-fmin` / `--wtc-band-fmax` / `--wtc-mask-coi` as `fnirs-hyper` so the two cannot drift apart under two spellings. Its tables carry a `band-` entity and sit beside the originals.
+
+`fnirs-hyper-index` rebuilds `group-<id>_desc-index_report.html`, one row per analysed window. `fnirs-hyper` writes it too; this is for a tree produced earlier, or after the pages were regenerated by hand.
+
+`fnirs-hyper-merge` concatenates every per-dyad table into one per kind at the root of the tree, adding `group_id` and `task` columns, so a cohort analysis reads one file. It refuses to merge tables that disagree on the band, on the cone-of-influence masking, on which null they are or on the stand-in pool, crossed tables with homologous ones, and matrices over different channels. A differing null iteration count only warns, `n_iter` being kept per row.
+
+### `fnirs-recon`: raw SNIRF → BIDS
 
 ```
 fnirs-recon INPUT_FILE BIDS_DIR --participant-label LABEL --task-label LABEL
@@ -270,35 +297,39 @@ fnirs-recon INPUT_FILE BIDS_DIR --participant-label LABEL --task-label LABEL
 
 `--optode-frame` names the space the SNIRF's optode coordinates were measured in. SNIRF does not record it, and without it no `_optodes.tsv` or `_coordsystem.json` is written, both of which BIDS requires. Use `head` for positions digitised against the nasion and preauricular points.
 
-### `fnirs-prep` — headless data-preparation utilities
+### `fnirs-prep`: headless data-preparation utilities
 
 ```
-fnirs-prep crop BIDS_DIR DERIVATIVES_DIR --participant-label SUB ...
+fnirs-prep crop BIDS_DIR OUTPUT_DIR --participant-label SUB ...
                 ( --tmin FLOAT [--tmax FLOAT] | --segments-path PATH [--combine] )
                 [--align none|trigger] [--trigger-name TEXT]
                 [--margin SEC|auto] [--band-fmin HZ] [--input-desc DESC]
                 [--session-label / --task-label / --run-label]
                 [--n-jobs INT] [--skip-bids-validation]
 
-fnirs-prep align BIDS_DIR DERIVATIVES_DIR --group-csv PATH
+fnirs-prep align BIDS_DIR OUTPUT_DIR --group-csv PATH
                  [--skip-bids-validation]
 
 fnirs-prep edit-markers export BIDS_DIR OUT_DIR --participant-label SUB ...
                                [--session-label / --task-label / --run-label] [--n-jobs INT]
 
-fnirs-prep edit-markers apply BIDS_DIR DERIVATIVES_DIR --participant-label SUB ...
+fnirs-prep edit-markers apply BIDS_DIR OUTPUT_DIR --participant-label SUB ...
                               ( --tsv PATH | --shift FLOAT | --set-duration FLOAT
                                 | --rename OLD:NEW ... )
                               [--session-label / --task-label / --run-label] [--n-jobs INT]
 ```
 
-`crop` takes its window from `--tmin` / `--tmax` or from a segments table passed to `--segments-path`, which holds `onset` and `duration` plus an optional `task` column naming each segment's output task entity instead of the default `_seg-NN`. Under `--align trigger`, times are measured from the first annotation named by `--trigger-name`, so one window selects the same stretch of task in every subject.
+Each command writes a new tree under `OUTPUT_DIR` (`cropped/`, `aligned/`, `marker_edited/`) with its own `dataset_description.json`, so point it at a derivatives root rather than at one dataset.
+
+`crop` takes its window from `--tmin` / `--tmax` or from a segments table passed to `--segments-path`, which holds `onset` and `duration`. Each segment written to its own file is named by a `task` column, which more than one segment needs unless `--combine` is given; the table is checked once before any subject, so a bad one is one error and writes nothing. Under `--align trigger`, times are measured from the first annotation named by `--trigger-name`, so one window selects the same stretch of task in every subject.
+
+`align` puts every member of a group on one clock by their shared trigger and records each member's offset in its own `_nirs.json`. A member two groups share is refused rather than silently re-cut by the second group.
 
 `--margin` keeps extra seconds either side of every segment and records the span asked for in the sidecar: a segment cut to its own boundaries cannot be analysed at those boundaries by anything that convolves. `auto` takes the width from `--band-fmin`, the lowest frequency the later analysis will average over.
 
 `--input-desc` cuts a processed stage instead of a recording (`errts`, `filtered`, and so on), `BIDS_DIR` then being a derivatives tree. This is the order to prefer: cutting first makes motion correction and the bandpass each see one condition.
 
-### `fnirs-qc` — QC reports
+### `fnirs-qc`: QC reports
 
 `prep-raw` and `hyper-raw` read raw recordings, so both require `--cardiac-l-freq` / `--cardiac-h-freq`, population-dependent and without a default, and `--dpf`, used to convert to haemoglobin internally. Both screen channels and split the montage, so both take the same screening and separation flags as `fnirs-pipe`; pass what the run was prepped with.
 
@@ -332,13 +363,13 @@ fnirs-qc cohort-hyper OUTPUT_DIR
 fnirs-qc provenance   OUTPUT_DIR
 ```
 
-`prep-raw` takes more than one subject, one subject's failure does not stop the rest, and it writes the subject index too. Its `--by-condition` writes one report per annotated condition beside the run's own, the condition becoming the `task-` entity. Its `--motion-correction` runs that correction on a copy of the optical density and reports the recording either side of it, writing nothing back, so the screening verdict still describes the recording as delivered.
+`prep-raw` takes more than one subject, one subject's failure does not stop the rest, and it writes the subject index too. Its report is `sub-<id>_task-<t>_desc-raw_report.html` beside the pipeline's own. Its `--by-condition` writes one page per annotated condition, `sub-<id>_task-<t>_cond-<label>_desc-raw_report.html`, keeping the run's own task. Its `--motion-correction` runs that correction on a copy of the optical density and reports the recording either side of it, writing nothing back, so the screening verdict still describes the recording as delivered.
 
-`cohort` puts every subject in a tree on one page. `cohort-hyper` is about dyads: how much of each recording both members could use at the same moment, split into one member's loss and the shared loss; where that time went, per channel pair and per condition; and each window's coherence as its rank inside its own null. `provenance` redraws the graphs from the sidecars already on disk.
+`hyper-raw` writes into the hyper tree, the same one `fnirs-hyper` writes, as `group-<id>/group-<id>_task-<t>_desc-raw_report.html`. Its per-subject quality table is the long-channel view the individual reports print, so a subject's SCI, CV, SNR and GVTD can be read against their own raw page.
 
-`hyper-raw`'s per-subject quality table is the long-channel view the individual reports print, so a subject's SCI, CV, SNR and GVTD can be read against their own `sub-*_desc-raw` page.
+`cohort` puts every subject in a tree on one page (`desc-subjects_report.html`). `cohort-hyper` is about dyads (`desc-groups_report.html`): how much of each recording both members could use at the same moment, split into one member's loss and the shared loss; where that time went, per channel pair and per condition; and each window's coherence as its rank inside its own null. It reads the records `hyper-raw` writes. `provenance` redraws the graphs from the sidecars already on disk.
 
-Renamed since earlier versions: `--fmin` / `--fmax` on `hyper-raw` are now `--coh-fmin` / `--coh-fmax`, the old names still accepted as aliases; `hyper-post`, `hyper-null`, `wtc-band` and `group-hyper-wtc` are now `fnirs-hyper run`, its `--wtc-pseudo` flag, `fnirs-hyper band` and `fnirs-hyper merge`; `group-raw` and `group-hyper-raw` are now `cohort` and `cohort-hyper`, writing `cohort_nirs` and `cohort_hyper_nirs`.
+Renamed since earlier versions: `--fmin` / `--fmax` on `hyper-raw` are now `--coh-fmin` / `--coh-fmax`, the old names still accepted as aliases. The `fnirs-hyper` subcommands `run`, `band`, `index` and `merge` are now the separate commands `fnirs-hyper`, `fnirs-hyper-band`, `fnirs-hyper-index` and `fnirs-hyper-merge`, and `--wtc-pseudo` / `--isc-pseudo` are `--wtc-phase-null` / `--isc-phase-null`. `cohort` and `cohort-hyper` write `desc-subjects_*` and `desc-groups_*` in place of `cohort_nirs` and `cohort_hyper_nirs`.
 
 For a cohort report over one time window, crop first and then run the usual pair of commands:
 
@@ -350,7 +381,7 @@ fnirs-qc   prep-raw DERIV_DIR/cropped OUTPUT_DIR --participant-label LABEL ... -
 fnirs-qc   cohort OUTPUT_DIR
 ```
 
-### `fnirs-rate` — Flask rating viewers
+### `fnirs-rate`: Flask rating viewers
 
 ```
 fnirs-rate rate  OUTPUT_DIR [--participant-label SUB ...] [--port INT]   # default 8765
@@ -360,94 +391,120 @@ fnirs-rate hyper OUTPUT_DIR --group-id GROUP_ID --task-label TASK_LABEL --pairs-
                  [--session-label TEXT] [--sci-threshold FLOAT] [--port INT]             # default 5053
 ```
 
-### `fnirs-gui` — Dash desktop interface
+Ratings and channel decisions are written into the subject's `nirs/` folder, one file per rated page (`desc-rating_qc.json`, `desc-rawrating_qc.json`) and one per run (`desc-rawdecision_qc.json`), with append-only logs in `logs/group_ratings.jsonl` and `logs/group_raw_ratings.jsonl`. A rerun of the pipeline never overwrites them.
+
+### `fnirs-gui`: Dash desktop interface
 
 ```
-fnirs-gui [--port INT]        # default 8050
+fnirs-gui [--port INT]        # default 8050, or the next free port above it
 ```
 
-### `fnirs-log` — JSONL → SQLite merge
+### `fnirs-log`: JSONL → SQLite run-log database
 
 ```
-fnirs-log merge OUTPUT_DIR [--db-path PATH]
+fnirs-log merge   OUTPUT_DIR [--db-path PATH]
+fnirs-log rebuild OUTPUT_DIR [--db-path PATH]
 ```
+
+`merge` adds every finished execution's JSONL logs to the database, backing the database up to `logs/backup/` first and moving the merged logs to `archived/`, so a second merge adds nothing. `rebuild` builds a new, timestamped database from every log, archived ones included, and leaves the existing database untouched.
 
 Full per-command references (parameter tables, examples, sidecar formats) live in [`docs/cli/`](docs/cli/).
 
 ## Output Structure
 
+Every name is built from BIDS entities: `desc-` is the processing stage, `stat-` the measure, `chromo-` the chromophore, `seg-` / `agg-` the ROI definition and how it aggregates, `cond-` a condition, `null-` which null a table holds, `pair-` a pairing inside a group of more than two. The suffix says what shape the file holds: `nirs` a signal, `relmat` a relation between channels or ROIs, `nirsmap` one value per channel or ROI, `qc` quality numbers, `report` a rendered page. An entity appears only where it tells two otherwise identical files apart.
+
+`fnirs-pipe` tree:
+
 ```
-output/
+derivatives/fnirs-pipe/
 ├── dataset_description.json
+├── .bidsignore                          # reports, logs, figures, JSON-only records
+├── desc-subjects_qc.tsv                 # fnirs-qc cohort / fnirs-pipe group
+├── desc-subjects_report.html
 ├── logs/
-│   ├── fnirs-pipe_{ts}.log             # text log
-│   ├── json/                            # JSONL event stream per run
-│   │   ├── _pipeline/execution_*.jsonl
-│   │   ├── _runs/sub-*_*.jsonl
-│   │   ├── _sqm/sub-*_*.jsonl
-│   │   └── _outputs/sub-*_*.jsonl
-│   └── fnirs_pipe.db                    # SQLite (after fnirs-log merge)
-├── sub-01/
-│   ├── sub-01_qc.html                   # index over the subject's runs
-│   ├── sub-01_task-<t>_qc.html          # QC report, one per run
-│   ├── sub-01_task-<t>_desc-<cond>_qc.html   # + --by-condition, one per condition
-│   ├── figures/
-│   │   └── sub-01_task-<t>/             # figures, one directory per run
-│   │       ├── provenance.png           # provenance graph (embedded in that run's report)
-│   │       └── provenance.mmd           # same graph, mermaid source
-│   ├── logs/
-│   │   ├── sub-01_{ts}.toml             # run record (env + params)
-│   │   └── sub-01_script.py             # reproduction script
-│   └── nirs/
-│       ├── sub-01_desc-od_nirs.snirf              # prep step 1
-│       ├── sub-01_desc-sci_nirs.snirf             # prep step 2 (channel screening)
-│       ├── sub-01_desc-motcorrected_nirs.snirf    # prep step 3
-│       ├── sub-01_desc-preproc_nirs.snirf         # prep step 4 (terminus)
-│       ├── sub-01_desc-filtered_nirs.snirf        # post: bandpass applied
-│       ├── sub-01_desc-resampled_nirs.snirf       # post: resample applied
-│       ├── sub-01_desc-errts_nirs.snirf           # post glm/rest/denoise: GLM residuals
-│       ├── sub-01_desc-errtsbroad_nirs.snirf      # rest: un-bandpassed residual, ALFF input
-│       ├── sub-01_task-<t>_desc-aux_timeseries.tsv.gz  # aux channels, if the file had any
-│       ├── sub-01_task-<t>_desc-sqm_nirs.json     # SQM record, one per run
-│       ├── sub-01_task-<t>_channel_metrics.csv    # per-channel metrics, one per run
-│       ├── sub-01_design_matrix.csv                # glm mode
-│       ├── sub-01_glm_results.csv                  # glm mode
-│       ├── sub-01_contrasts.csv                    # glm mode + --contrast-file
-│       ├── sub-01_alff.tsv                         # rest mode
-│       ├── sub-01_desc-hbo_fc.tsv                  # channel × channel, per chromophore
-│       ├── sub-01_desc-hbo_fcz.tsv                 # Fisher z of the above
-│       ├── sub-01_desc-hbo_fcroi.tsv               # + --roi-mapping (ROI × ROI)
-│       ├── sub-01_desc-hbo_fcroiz.tsv              # + --roi-mapping
-│       ├── sub-01_desc-hbo_fcseed.tsv              # + --roi-mapping (ROI × channel)
-│       └── sub-01_desc-hbo_fcseedz.tsv             # + --roi-mapping
-├── cohort_nirs.{tsv,html}                # fnirs-qc cohort
-└── cohort_hyper_nirs.{tsv,html}          # fnirs-qc cohort-hyper
+│   ├── json/                            # JSONL event stream, moved to archived/ once merged
+│   │   ├── _pipeline/
+│   │   ├── _runs/
+│   │   └── _sqm/
+│   └── fnirs_pipe.db                    # SQLite, after fnirs-log merge
+└── sub-01/
+    ├── sub-01_desc-index_report.html               # index over the subject's runs
+    ├── sub-01_task-<t>_report.html                 # QC report, one per run
+    ├── sub-01_task-<t>_cond-<c>_report.html        # + --by-condition, one per condition
+    ├── sub-01_task-<t>_desc-raw_report.html        # fnirs-qc prep-raw
+    ├── sub-01_task-<t>_desc-mne_report.html        # MNE's own report of the run
+    ├── figures/                                    # one flat folder, entities name each figure
+    │   ├── sub-01_task-<t>_desc-provenance_nirs.png
+    │   ├── sub-01_task-<t>_desc-provenance_nirs.mmd
+    │   └── ...
+    ├── logs/
+    │   ├── sub-01.log
+    │   ├── sub-01.toml                             # run record (env + params)
+    │   └── sub-01_script.py                        # reproduction script
+    └── nirs/                                       # every data file has a .json sidecar
+        ├── sub-01_task-<t>_desc-od_nirs.snirf              # prep 1: optical density
+        ├── sub-01_task-<t>_desc-sci_nirs.snirf             # prep 2: channel screening
+        ├── sub-01_task-<t>_desc-motcorrected_nirs.snirf    # prep 3: motion correction
+        ├── sub-01_task-<t>_desc-preproc_nirs.snirf         # prep 4: Beer-Lambert (terminus)
+        ├── sub-01_task-<t>_desc-filtered_nirs.snirf        # post: bandpass
+        ├── sub-01_task-<t>_desc-resampled_nirs.snirf       # post: + --resample-sfreq
+        ├── sub-01_task-<t>_desc-errts_nirs.snirf           # post: confound-regression residual
+        ├── sub-01_task-<t>_desc-errtsbroad_nirs.snirf      # rest: un-bandpassed residual, ALFF input
+        ├── sub-01_task-<t>_desc-aux_timeseries.tsv.gz      # aux channels, if the file had any
+        ├── sub-01_task-<t>_desc-sqm_qc.json                # quality record, one per run
+        ├── sub-01_task-<t>_desc-channel_qc.tsv             # per-channel metrics and verdicts
+        ├── sub-01_task-<t>_design.tsv                      # design matrix
+        ├── sub-01_task-<t>_desc-glm_nirsmap.tsv            # GLM estimates per channel
+        ├── sub-01_task-<t>_desc-contrast_nirsmap.tsv       # glm + --contrast-file
+        ├── sub-01_task-<t>_stat-alff_nirsmap.tsv           # rest: ALFF / fALFF per channel
+        ├── sub-01_task-<t>_seg-<roi>_agg-roi_stat-alff_nirsmap.tsv            # + --roi-mapping
+        ├── sub-01_task-<t>_chromo-hbo_stat-pearson_relmat.tsv                 # FC, channel x channel
+        ├── sub-01_task-<t>_chromo-hbo_stat-fisherz_relmat.tsv                 # Fisher z of the above
+        ├── sub-01_task-<t>_chromo-hbo_seg-<roi>_agg-roi_stat-pearson_relmat.tsv   # + --roi-mapping, ROI x ROI
+        ├── sub-01_task-<t>_chromo-hbo_seg-<roi>_agg-seed_stat-pearson_relmat.tsv  # + --roi-mapping, ROI x channel
+        └── ...                                     # the same for chromo-hbr and each fisherz
 ```
 
-The `fc*` files are written in rest mode, or in any mode run with `--fc`.
+The `relmat` and `stat-alff` files are written in rest mode, or in any mode run with `--fc`. `seg-<roi>` is the ROI mapping file's stem. Ratings and channel decisions from `fnirs-rate` land in the same `nirs/` folder as `desc-rating_qc.json`, `desc-rawrating_qc.json` and `desc-rawdecision_qc.json`.
 
-Standalone HTMLs from `fnirs-qc prep-raw` / `hyper-raw` and everything `fnirs-hyper run` writes sit at the derivatives root:
+`fnirs-hyper` tree, which `fnirs-qc hyper-raw`, `fnirs-hyper-pairnull` and the other hyper commands write into as well:
 
 ```
-output/
-├── sub-01_task-tapping_desc-raw_nirs.html               # fnirs-qc prep-raw
-├── sub-01_task-tapping_raw_channel_decisions.json       # fnirs-rate raw sidecar
-├── sub-01_task-tapping_raw_ratings.json
-├── group-G1003_task-tapping_desc-hyperraw_nirs.html     # fnirs-qc hyper-raw
+derivatives/fnirs-hyper/
+├── dataset_description.json             # SourceDatasets names the fnirs-pipe tree
+├── .bidsignore
+├── desc-groups_qc.tsv                   # fnirs-qc cohort-hyper
+├── desc-groups_report.html
+├── stat-wtc_relmat.tsv                  # fnirs-hyper-merge: every dyad in one table per kind
+├── stat-isc_relmat.tsv
+├── ...
 └── group-G1003/
-    ├── group-G1003_index.html                           # one row per analysed window
-    ├── group-G1003_task-tapping_desc-hyperpost_nirs.html
-    ├── group-G1003_task-tapping_hyper-wtc.tsv           # band means, one row per channel pair
-    ├── group-G1003_task-tapping_hyper-wtcbycond.tsv     # the same, one row per condition
-    ├── group-G1003_task-tapping_hyper-wtc-*.npz         # + --wtc-save-maps
-    ├── group-G1003_task-tapping_hyper-isc-hbo.tsv       # ISC matrix, per chromophore
-    ├── group-G1003_task-tapping_hyper-isc-roichan-*.tsv # ROI-level ISC, per condition
-    ├── group-G1003_task-tapping_hyper-iscpairs.tsv      # one row per channel pair
-    ├── group-G1003_task-tapping_hyper-usable.tsv        # shared usable time
-    └── figures/
+    ├── group-G1003_desc-index_report.html           # one row per analysed window
+    ├── group-G1003_task-<t>_report.html             # dyad report
+    ├── group-G1003_task-<t>_cond-<c>_report.html    # one per condition
+    ├── group-G1003_task-<t>_desc-raw_report.html    # fnirs-qc hyper-raw
+    ├── figures/
+    ├── logs/group-G1003_task-<t>.toml
+    └── nirs/                                        # every table has a .json sidecar
+        ├── group-G1003_task-<t>_stat-wtc_relmat.tsv                 # band means, one row per channel pair
+        ├── group-G1003_task-<t>_cond-all_stat-wtc_relmat.tsv        # the same, one row per condition window
+        ├── group-G1003_task-<t>_stat-wtcphase_relmat.tsv            # relative phase and lag, per frequency
+        ├── group-G1003_task-<t>_seg-<roi>_agg-homologous_stat-wtc_relmat.tsv  # + --roi-mapping
+        ├── group-G1003_task-<t>_null-phase_stat-wtc_relmat.tsv      # + --wtc-phase-null
+        ├── group-G1003_task-<t>_null-pair_stat-wtc_relmat.tsv       # fnirs-hyper-pairnull
+        ├── group-G1003_task-<t>_cond-all_null-pair_stat-wtc_desc-draws_relmat.tsv  # every draw
+        ├── group-G1003_task-<t>_chromo-hbo_stat-wtc_relmat.npz      # + --wtc-save-maps
+        ├── group-G1003_task-<t>_chromo-hbo_band-<band>_stat-wtc_relmat.tsv  # fnirs-hyper-band
+        ├── group-G1003_task-<t>_chromo-hbo_stat-isc_relmat.tsv      # ISC matrix, per chromophore
+        ├── group-G1003_task-<t>_stat-isc_relmat.tsv                 # ISC, one row per channel pair
+        ├── group-G1003_task-<t>_desc-usable_qc.tsv                  # shared usable time
+        ├── group-G1003_task-<t>_desc-subject_qc.tsv                 # per-member quality
+        ├── group-G1003_task-<t>_desc-channel_qc.tsv
+        └── group-G1003_task-<t>_desc-bad_qc.tsv
 ```
 
-A group of more than two members writes one report and one ISC table per pairing, suffixed `_<sub1>x<sub2>`. `fnirs-hyper merge` concatenates the band-mean tables into one file per kind at the root of the tree.
+Long tables (WTC band means, the ISC pair table, ALFF) carry a `chromophore` column; wide matrices take `chromo-` in the name instead. A group of more than two members writes one report and one set of pairwise tables per pairing, tagged `pair-<sub1>x<sub2>`. `fnirs-hyper-merge` writes each merged table under the per-dyad name with `group-` and `task-` dropped, since the merged table spans every group and task.
 
 ## QC Reports
 
@@ -457,14 +514,14 @@ A group of more than two members writes one report and one ISC table per pairing
 |--------|---------|---------------|
 | Per-run | (pipeline, automatic) | individual: raw + post, one report per run plus a subject index |
 | Per-condition | `--by-condition`, pipeline or `prep-raw` | individual: one page per annotated condition |
-| Raw pre-flight viewer | `fnirs-qc prep-raw` | individual — raw only |
-| Cohort | `fnirs-qc cohort` | cohort — every subject in a tree |
-| Dyad cohort | `fnirs-qc cohort-hyper` | cohort — every dyad in a tree |
-| Time-window cohort | `fnirs-prep crop` then `prep-raw` + `cohort` | cohort — raw, cropped window |
-| Per-trial | `fnirs-qc prep-raw --epoch-qc` | individual — SQM per task event, in the raw report |
-| Dyad raw | `fnirs-qc hyper-raw` | hyperscanning — raw coherence |
-| Dyad post | `fnirs-hyper run` | hyperscanning — post: WTC + ISC (ROI-level with `--roi-mapping`) |
-| Dyad index | `fnirs-hyper run` / `index` | hyperscanning — one row per analysed window |
+| Raw pre-flight viewer | `fnirs-qc prep-raw` | individual: raw only |
+| Cohort | `fnirs-qc cohort` or `fnirs-pipe group` | cohort: every subject in a tree |
+| Dyad cohort | `fnirs-qc cohort-hyper` | cohort: every dyad in a tree |
+| Time-window cohort | `fnirs-prep crop` then `prep-raw` + `cohort` | cohort: raw, cropped window |
+| Per-trial | `fnirs-qc prep-raw --epoch-qc` | individual: SQM per task event, in the raw report |
+| Dyad raw | `fnirs-qc hyper-raw` | hyperscanning: raw coherence |
+| Dyad post | `fnirs-hyper` | hyperscanning, post: WTC + ISC (ROI-level with `--roi-mapping`), one page per condition |
+| Dyad index | `fnirs-hyper` / `fnirs-hyper-index` | hyperscanning: one row per analysed window |
 
 ### Per-run report contents
 
@@ -489,13 +546,16 @@ Cohort and window reports add subject × metric heatmaps, per-scale grouped boxp
 
 ```
 fnirs_pipe/
-  cli/          fnirs-pipe, fnirs-recon, fnirs-prep, fnirs-qc, fnirs-hyper, fnirs-rate,
-                fnirs-gui, fnirs-log
-  pipeline/     prep_pipeline, post_pipeline, glm, denoise, restingstate, motion,
-                hyperscanning, hyper_post, synchrony, alignment, crop, edit_markers,
-                wtc_store, wtc_null, wtc_aggregate, group_io, group_quality
-  io/           BIDS layout, snirf read/write, derivatives output, snirf aux group,
-                delimiter-sniffing table reader
+  cli/          fnirs-pipe, fnirs-recon, fnirs-prep, fnirs-qc, fnirs-hyper (and its five
+                companions), fnirs-rate, fnirs-gui, fnirs-log
+  pipeline/     prep_pipeline, post_pipeline, glm, ar_irls, denoise, restingstate, motion,
+                crop, edit_markers
+    hyper/      alignment, wtc, isc, coherence, whiten, surrogate, roi, hyper_post,
+                wtc_store, wtc_null, wtc_aggregate, pair_null, pair_null_group,
+                group_io, group_quality
+  io/           BIDS layout, output naming (BIDS entities), snirf read/write,
+                derivatives output, snirf aux group, delimiter-sniffing table reader
+  data/         pybids config declaring the package's entities and path patterns
   qc/
     common/     report shell, channel table, provenance graph, window grid, figure IO
     metrics/    coupling, screening, motion, GVTD, haemoglobin, windowed, hyper, aggregate
@@ -505,14 +565,15 @@ fnirs_pipe/
     hyper/      dyad raw and post reports, dyad index, usable time, cohort-hyper writer
     rating/     Flask rating apps
     boilerplate/  Methods text and references
-  interface/    Dash GUI (analysis, batch prep, data prep, hyper align, qc, recon)
-  utils/        logging, run_record, job_db, lineage, run_script, snirf_prep
-  exceptions.py AlignmentError, GroupCSVError, MissingDerivativesError, ...
+  interface/    Dash GUI (analysis, batch prep, data prep, hyper align, hyper analysis,
+                qc, recon)
+  utils/        logging, run_record, job_db, lineage, run_script, snirf_prep, net
+  exceptions.py AlignmentError, GroupCSVError, MissingDerivativesError, StageError, ...
 ```
 
 ## Documentation
 
-See [`docs/`](docs/) for the full handbook — installation, quickstart, configuration, per-command references, QC anatomy, hyperscanning, GUI, and the logging + database subsystem.
+See [`docs/`](docs/) for the full handbook: installation, quickstart, configuration, per-command references, QC anatomy, hyperscanning, GUI, and the logging + database subsystem.
 
 ## Development
 
