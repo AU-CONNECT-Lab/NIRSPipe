@@ -201,11 +201,13 @@ def test_two_runs_in_one_raw_report_get_pages_of_their_own(tmp_path, monkeypatch
 
 def test_a_label_that_repeats_once_reduced_gets_no_second_page(tmp_path, monkeypatch):
     # its figures and URL fragments carry the same slug, so a page of its own would show
-    # the first condition's files under the second one's numbers
+    # the first condition's files under the second one's numbers. Neither gets a page: the
+    # figures of both were written under that one slug before any page was, so the first
+    # page could not be trusted either, and the run page says which two collided
     _write_raw_condition_pages(monkeypatch, tmp_path, "sub-01_task-rest", "sub-01_task-rest",
                                ["game-1", "game 1"])
 
-    assert len(list(tmp_path.glob("*_cond-*_report.html"))) == 1
+    assert len(list(tmp_path.glob("*_cond-*_report.html"))) == 0
 
 
 def test_a_condition_both_commands_wrote_links_both_pages(tmp_path, monkeypatch):

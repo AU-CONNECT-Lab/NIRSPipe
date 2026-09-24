@@ -140,7 +140,6 @@ def condition_windows(
 
     logger.info("condition windows: %d kept, %d took their own duration and %d ran to the "
                 "next trigger", len(windows), n_from_duration, len(markers) - n_from_duration)
-    refuse_colliding_labels([w[0] for w in windows])
     return windows
 
 

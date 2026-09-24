@@ -8,6 +8,7 @@ from pathlib import Path
 import mne
 import numpy as np
 
+from fnirs_pipe.exceptions import StageError
 from fnirs_pipe.io.naming import report_name
 from fnirs_pipe.qc.subject.condition_views import (
     carpet_view_table as _carpet_views, condition_view_table, PSD_NFFT_CAP,
@@ -16,7 +17,7 @@ from fnirs_pipe.qc.common.figure_io import (
     _pair_fname, _save_figure_html, _save_multi_fig_html,
     extract_markers, figure_namer, get_channel_pairs,
 )
-from fnirs_pipe.qc.common.windows import markers_on_data_axis
+from fnirs_pipe.qc.common.windows import markers_on_data_axis, refuse_colliding_labels
 from fnirs_pipe.qc.common.channel_table import (
     MOTION_SPLIT_COLUMNS, OD_SPLIT_COLUMNS, channel_columns, channel_rows, format_rows,
     heatmap_args, pair_rows, registration_note, save_channel_csv, separation_blocks,
@@ -244,6 +245,15 @@ def _process_run(
             cond_frac = condition_window_fractions(
                 raw_od, cond_windows, cardiac_l_freq, cardiac_h_freq,
                 sci_cutoff=cutoffs["sci"], psp_cutoff=cutoffs["psp"])
+    # measured under every label, but the views and pages below are named by a slug of it;
+    # two labels sharing one would overwrite each other, so neither is drawn
+    view_windows = cond_windows
+    try:
+        refuse_colliding_labels([w[0] for w in cond_windows])
+    except StageError as exc:
+        errors.append(f"Per-condition views: {exc}")
+        logger.error("%s | %s", label, exc)
+        view_windows = []
     if cond_frac and "raw" in raw_secs:
         raw_secs["raw"]["good_frac_by_condition"] = {
             label_: _mean_or_none(shares.values()) for label_, shares in cond_frac.items()}
@@ -389,7 +399,7 @@ def _process_run(
         # and its colour scale taken over the run, so a cut would give each condition a
         # scale no other one can be read against. One file, narrowed by URL fragment.
         h     = _save_figure_html(fig, fig_dir / fname,
-                                  views=_carpet_views(fig, cond_windows))
+                                  views=_carpet_views(fig, view_windows))
         figure_paths["carpet"] = {"src": f"figures/{fname}", "h": h}
         carpet_inline = {"figure": fig.to_dict()}
 
@@ -498,7 +508,7 @@ def _process_run(
             if built:
                 saved = _section_motion_detail(
                     built, label, errors, fig_dir, fig_name,
-                    condition_spans=cond_windows,
+                    condition_spans=view_windows,
                 )["motion_detail_pairs"]
                 motion_channels = [entry["pair"] for entry in saved]
                 # every one of these is the same four-row layout, so one height serves the
@@ -515,12 +525,12 @@ def _process_run(
     # holding fewer than two trials draws nothing, which is what a block design is.
     trial_img_pairs: list = []
     trial_img_by_cond: dict = {}
-    if raw_haemo is not None and cond_windows:
+    if raw_haemo is not None and view_windows:
         hbo_names = [c for c in raw_haemo.ch_names if c.endswith(" hbo")]
         for ch in hbo_names:
             with guard("Trial image", errors, f"{label} | {ch}"):
                 by_label = build_trial_image_by_condition(
-                    raw_haemo, ch, cond_windows, fig_tmin, fig_tmax)
+                    raw_haemo, ch, view_windows, fig_tmin, fig_tmax)
                 if not by_label:
                     continue
                 pair = ch.rsplit(" ", 1)[0]
@@ -544,7 +554,7 @@ def _process_run(
         # shifted onto it before its views are measured
         detail_origin = float(raw.first_time)
         detail_spans = [(lab, t0 + detail_origin, t1 + detail_origin)
-                        for lab, t0, t1 in cond_windows]
+                        for lab, t0, t1 in view_windows]
         channel_pairs = get_channel_pairs(raw_haemo)
         for pair in channel_pairs:
             with guard("Channel detail", errors, f"{label} | {pair}"):
@@ -773,6 +783,12 @@ def _write_condition_views(ctx: dict, payload: dict, output_path: Path, run_labe
     if not by_condition:
         logger.info("%s | the record carries no by_condition section; no per-condition "
                     "pages", run_label)
+        return
+    try:
+        refuse_colliding_labels(list(by_condition))
+    except StageError as exc:
+        # the run's own page already lists it; its views were dropped for the same reason
+        logger.error("%s | no per-condition pages: %s", run_label, exc)
         return
 
     fig_dir = Path(ctx["fig_dir"])

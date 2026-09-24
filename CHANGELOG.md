@@ -15,7 +15,7 @@ All notable changes to this project will be documented in this file.
 - **Breaking**: `fnirs-log merge` merges only finished executions, moves their logs to `archived/`, and backs up the database first
 - A null level on disk is used only when its sidecar matches the run; each page names the null its arrows and chords used
 - WTC table sidecars record `phase_level_source`, and saved maps get a sidecar that `fnirs-hyper band` carries onto its tables
-- Conditions whose file names would collide are refused, as is a dyad condition named `all`
+- Conditions whose file names would collide get no subject report pages, with an error naming them; a dyad run refuses them, and a condition named `all`
 - **Breaking**: the raw viewer's condition pages are `cond-<label>_desc-raw_report.html` under the run's own label; they swapped the condition into `task-`
 - **Breaking**: the dyad cohort page's figures are `desc-groups<panel>_nirs.html`, not `cohort_hyper_<panel>.html`
 - `.bidsignore` names the five JSON-only records (quality, ratings, channel decisions); every table stays checked

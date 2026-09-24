@@ -52,6 +52,7 @@ Report sections
 import base64
 import json
 from contextlib import contextmanager
+from fnirs_pipe.exceptions import StageError
 from fnirs_pipe.io.derivatives import entity_of
 from fnirs_pipe.io.naming import parse_path, report_name
 import matplotlib
@@ -124,6 +125,7 @@ from fnirs_pipe.qc.boilerplate.vocabulary import (
     format_metric, is_key_metric, metric_class, metric_summary,
 )
 from fnirs_pipe.qc.common.record_views import condition_verdict_view
+from fnirs_pipe.qc.common.windows import refuse_colliding_labels
 from fnirs_pipe.qc.subject.condition_views import (
     condition_view_table, carpet_view_table, slice_record, with_condition_corr,
 )
@@ -1728,6 +1730,15 @@ def build_subject_report(
         for desc in ("filtered", "resampled", "errts")
         if (raw := _load_stage_raw(nirs_dir, sqm_label, desc, subject, errors)) is not None
     ] or None
+    # measured under every label, but the views and pages are named by a slug of it; two
+    # labels sharing one would overwrite each other, so the record keeps both and none is drawn
+    if by_condition:
+        try:
+            refuse_colliding_labels(list(record.get("by_condition") or {}))
+        except StageError as exc:
+            errors.append(f"Per-condition pages: {exc}")
+            logger.error("sub-%s | %s", subject, exc)
+            by_condition = False
     sci_vars          = _section_sci(
                             raw_intensity, sci_scores, bad_channels, config,
                             windowed_section, subject, errors, figures_dir, fig_name)
