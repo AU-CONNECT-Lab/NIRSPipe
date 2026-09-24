@@ -10,7 +10,7 @@ must keep the column off rather than print a zero that reads as a result.
 import pandas as pd
 
 from fnirs_pipe.io.naming import report_name
-from fnirs_pipe.qc.hyper.hyper_index import NULL_PERCENTILE, _links, _past_null
+from fnirs_pipe.qc.hyper.hyper_index import NULL_PERCENTILE, _links, _past_null, collect_rows
 from tests.hyper._names import name
 
 
@@ -67,3 +67,28 @@ def test_only_the_artefacts_on_disk_are_linked(tmp_path):
     links = _links(tmp_path, stem)
     assert [link["text"] for link in links] == ["raw QC", "coherence"]
     assert links[0]["href"] == report_name(stem, desc="raw")
+
+
+def _whole_run_only(tmp_path):
+    (tmp_path / "nirs").mkdir()
+    pd.DataFrame({"chromophore": ["hbo"], "label": ["S1_D1"], "label2": ["S1_D1"],
+                  "coherence": [0.4]}).to_csv(
+        tmp_path / "nirs" / name("d01", "full"), sep="\t", index=False)
+
+
+def test_a_table_the_run_did_not_write_is_not_reported_unreadable(tmp_path, caplog):
+    # the per-condition and null tables are optional; their absence is the normal case
+    _whole_run_only(tmp_path)
+    with caplog.at_level("WARNING", logger="fnirs_pipe.qc.hyper_index"):
+        rows = collect_rows(tmp_path, "d01")
+    assert [row["kind"] for row in rows] == ["whole run"]
+    assert rows[0]["past_null"] == {}
+    assert "unreadable" not in caplog.text
+
+
+def test_a_table_on_disk_that_cannot_be_read_is_still_reported(tmp_path, caplog):
+    _whole_run_only(tmp_path)
+    (tmp_path / "nirs" / name("d01", "full", "wtc-phasenull")).write_text("", encoding="utf-8")
+    with caplog.at_level("WARNING", logger="fnirs_pipe.qc.hyper_index"):
+        collect_rows(tmp_path, "d01")
+    assert "unreadable" in caplog.text

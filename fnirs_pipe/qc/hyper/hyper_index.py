@@ -65,6 +65,8 @@ def _table(stem: str, **entities) -> str:
 
 
 def _read_tsv(path: Path) -> "pd.DataFrame | None":
+    if not path.exists():
+        return None
     try:
         return pd.read_csv(path, sep="\t")
     except (OSError, pd.errors.ParserError, pd.errors.EmptyDataError) as exc:
