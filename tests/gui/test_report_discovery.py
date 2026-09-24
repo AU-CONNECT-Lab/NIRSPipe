@@ -64,7 +64,7 @@ def _second_panel(stored):
 
 
 def test_a_command_that_writes_no_report_says_only_that(tmp_path, _ran_fine):
-    panel = _second_panel({"argv": ["fnirs-hyper", "merge"], "command": "merge",
+    panel = _second_panel({"argv": ["fnirs-hyper-merge"], "command": "merge",
                            "output_dir": str(tmp_path)})
     assert isinstance(panel, html.Small)
     assert "tables" in panel.children
