@@ -1,11 +1,8 @@
 """Per-condition numbers come from slicing one whole-run pass, not from cutting the run.
 
 This is the primitive the per-condition views rest on, and it is pure array work: the
-matrix and its window grid are already computed, so a condition is a column selection. The
-alternative, cropping each condition and measuring it, filters every piece against its own
-two edges and lands each on a grid starting at its own onset, so its windows are not the
-run's windows. Nothing here can catch that; what it can catch is the selection rule going
-wrong, which is what these pin.
+matrix and its window grid are already computed, so a condition is a column selection and
+its windows are the run's windows. These pin the selection rule.
 """
 
 import numpy as np

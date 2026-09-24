@@ -39,7 +39,7 @@ def _sci_window_centers(raw):
     return np.asarray(times, dtype=float).mean(axis=1)
 
 
-# ---- F2: the GVTD grid is the SCI/PSP grid ----
+# ---- the GVTD grid is the SCI/PSP grid ----
 def test_gvtd_windows_land_on_the_sci_window_grid(od_raw):
     sci_centers = _sci_window_centers(od_raw)
     _, _, gvtd_centers = compute_windowed_gvtd(od_raw, WINDOW_S)
@@ -49,14 +49,14 @@ def test_gvtd_windows_land_on_the_sci_window_grid(od_raw):
 
 
 def test_gvtd_centers_are_read_off_real_sample_times(od_raw):
-    """Regression pin: centres derived from the nominal window length drift, and this is by how much."""
+    """Centres derived from the nominal window length drift, and this is by how much."""
     _, _, gvtd_centers = compute_windowed_gvtd(od_raw, WINDOW_S)
     nominal = np.arange(len(gvtd_centers)) * WINDOW_S + WINDOW_S / 2
 
     assert abs(gvtd_centers[-1] - nominal[-1]) > 1.0
 
 
-# ---- F3: psp_mean is pinned, because the score scales with the window ----
+# ---- psp_mean is pinned, because the score scales with the window ----
 def test_psp_scales_with_window_length_and_sci_does_not(od_raw):
     from mne_nirs.preprocessing import peak_power
 
@@ -92,7 +92,7 @@ def test_psp_mean_uses_the_pinned_window_not_the_library_default(od_raw, monkeyp
     assert seen["time_window"] == PSP_WINDOW_S
 
 
-# ---- F4: a cardiac band the filter rejects must not take GVTD down with it ----
+# ---- a cardiac band the filter rejects must not take GVTD down with it ----
 def test_gvtd_series_survives_an_unusable_cardiac_band(od_raw):
     sqm: dict = {}
     above_nyquist = SFREQ / 2 + 1.0
@@ -139,7 +139,7 @@ def test_an_older_database_gains_the_columns_it_is_missing(tmp_path):
     assert set(job_db._SQM_COLS) <= cols
 
 
-# ---- F6: the heatmap gets one x value per column ----
+# ---- the heatmap gets one x value per column ----
 def test_window_centers_collapses_start_end_pairs():
     from fnirs_pipe.qc.figures.subject.sci_psp_panel import _window_centers
 
@@ -152,7 +152,7 @@ def test_our_heatmap_has_one_column_per_window_like_mne_nirs_own_figure(od_raw):
     """The cross-check proper: mne_nirs plots the same scores itself, so the two can be compared.
 
     It labels each column by the window start; we use the centre. What must match is the
-    column count, which is what the flattening bug got wrong.
+    column count.
     """
     import matplotlib.pyplot as plt
     from mne_nirs.visualisation import plot_timechannel_quality_metric

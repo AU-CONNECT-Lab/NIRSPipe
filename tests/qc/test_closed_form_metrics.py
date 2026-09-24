@@ -118,7 +118,7 @@ SECONDS = np.arange(5.0)
 
 
 # A run of n samples is n sample periods wide, at the end of the recording as anywhere else.
-# The last-sample cases used to expect zero width, which is the span no figure can draw.
+# A zero width at the last sample would be the span no figure can draw.
 @pytest.mark.parametrize("mask, expected", [
     ([0, 1, 1, 0, 1], [(1.0, 2.0), (4.0, 1.0)]),   # the docstring's own example
     ([0, 0, 0, 0, 0], []),
@@ -433,7 +433,7 @@ def test_a_loud_channel_does_not_set_the_threshold_for_a_quiet_one():
 
 def test_the_mad_threshold_resists_the_spikes_it_is_measuring():
     """std is taken over the derivative including the spikes, so enough of them lift the
-    threshold above the very samples it should flag. MAD is the fix, and this pins it."""
+    threshold above the very samples it should flag. MAD resists that, and this pins it."""
     rng = np.random.default_rng(2)
     data = rng.normal(0.0, 1.0, size=(1, 1000))
     data[0, :100] = 30.0                                # 10% of the channel is spike

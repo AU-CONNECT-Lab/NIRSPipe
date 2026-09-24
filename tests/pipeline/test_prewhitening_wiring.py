@@ -5,8 +5,7 @@ Nothing else checks this. The model name is threaded from the CLI through `PostC
 fit OLS while the record claimed AR(1), which changes the standard errors of every beta
 without changing a single fitted value.
 
-Durbin-Watson is the measurement that shows it. It is no longer reported as a metric, but
-it is exactly the right assertion here: whitening is supposed to remove the serial
+Durbin-Watson is the measurement that shows it: whitening is supposed to remove the serial
 correlation the residuals carry, driving DW from wherever it started toward 2.
 
 The trap this encodes, and the reason the attribute matters more than the number: DW on
@@ -15,7 +14,7 @@ attribute would have shown a plausible-looking number that proved nothing.
 `.whitened_residuals` is where prewhitening is visible.
 
 `.residuals` is not the unwhitened residual either, which is the second trap and the one
-that reached a written file. nilearn builds it as `Y - whitened_design @ theta`, mixing the
+that matters for a written file. nilearn builds it as `Y - whitened_design @ theta`, mixing the
 two spaces, so under an AR model it is neither residual; the last test here pins the stage
 file against `Y - design @ theta` instead. Under `ols` the two agree, because whitening is
 the identity there.

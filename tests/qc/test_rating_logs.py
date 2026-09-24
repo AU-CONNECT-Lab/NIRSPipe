@@ -1,8 +1,4 @@
-"""The two append-only rating logs sit under `logs/`, which `.bidsignore` already exempts.
-
-They were written at the tree root, the one place no exemption reaches, so a validator ran
-against every rated tree reported them.
-"""
+"""The two append-only rating logs sit under `logs/`, which `.bidsignore` already exempts."""
 
 from fnirs_pipe.io.derivatives import write_bidsignore
 from fnirs_pipe.io.naming import report_name

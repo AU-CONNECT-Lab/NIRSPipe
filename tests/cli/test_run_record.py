@@ -1,12 +1,11 @@
 """The per-subject TOML record must state what actually ran.
 
-Parameters supplied through --config never appear in argv. The record used to be
-built from argv and therefore listed them as absent while the pipeline was using
-them. It is now built from the resolved config objects, so this drives a real run
-with a TOML config plus one CLI override and reads the record back.
+Parameters supplied through --config never appear in argv, so the record is built
+from the resolved config objects. This drives a real run with a TOML config plus
+one CLI override and reads the record back.
 
 test_config_resolution.py covers whether the values resolve correctly; this covers
-whether the resolved values reach the record, which is where the bug actually was.
+whether the resolved values reach the record.
 """
 
 import sys
@@ -87,7 +86,7 @@ def test_record_has_the_expected_sections(record):
     ("low_pass", 0.5),
 ])
 def test_toml_supplied_values_reach_the_record(record, field, expected):
-    # None of these appear in argv, which is exactly why they used to go missing.
+    # None of these appear in argv.
     assert record["post"][field] == expected
 
 

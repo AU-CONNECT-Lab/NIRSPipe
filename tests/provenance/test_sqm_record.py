@@ -159,7 +159,7 @@ def test_each_haemo_section_measured_its_own_file(run):
 
 def test_a_skipped_step_leaves_no_section(tmp_path_factory):
     """A section exists only when its file does. Nothing stands in for a step that was
-    skipped, which is what the old `final` did when it fell back to `preproc`."""
+    skipped."""
     _, nirs_dir = _run(tmp_path_factory.mktemp("sqm_prep_only"), post=False)
     sections = compute_run_sections(scan_runs(nirs_dir)["sub-01_task-tapping"], **_BANDS)
     assert sections["preproc"]
@@ -171,9 +171,9 @@ def test_the_long_short_split_keeps_bad_channels():
     """It answers a question about separation, so marking a channel bad must not move it.
 
     pick_types drops bads by default, and the record marks them before asking for the
-    split, so a bad channel used to fall out of both lists. Everything computed from them
-    then averaged over channels that were kept for being good: raw_long's sci_mean could
-    not fall below the threshold, and its channel_retention_rate was always 1.0.
+    split, so a split through pick_types would lose a bad channel from both lists. Everything
+    computed from them would then average over channels kept for being good: raw_long's
+    sci_mean could not fall below the threshold, and its channel_retention_rate would be 1.0.
     """
     raw = synth_raw("01", "tapping")
     before = long_short_channels(raw)
@@ -218,7 +218,7 @@ def test_a_tree_alone_rebuilds_the_same_numbers(run):
 
 
 def test_two_tasks_get_two_records_not_one(tmp_path_factory):
-    """A subject with several tasks used to collapse into whichever finished last."""
+    """Each task keeps its own record rather than one that keeps whichever finished last."""
     out = tmp_path_factory.mktemp("sqm_two_tasks")
     _run(out, task="tapping")
     _run(out, task="rest")
@@ -284,7 +284,7 @@ def test_the_config_the_run_was_given_is_what_censored_it(censored_run):
     censor = sections["censor"]
     assert censor["gvtd_censor_n_std"] == _CENSOR["gvtd_censor_n_std"]
     assert censor["gvtd_censor_min_epoch_s"] == _CENSOR["gvtd_min_epoch_s"]
-    # not a config value any more: the set follows the separation bands, and the record
+    # not a config value: the set follows the separation bands, and the record
     # stores which one the picks actually landed on
     assert censor["gvtd_censor_channel_set"] == "long"
     assert censor["gvtd_censor_n_spans"] == len(prep.censor_spans)

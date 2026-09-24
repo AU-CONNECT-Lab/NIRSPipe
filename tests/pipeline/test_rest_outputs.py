@@ -1,8 +1,8 @@
 """What a rest-mode run actually leaves on disk.
 
-The FC write path had no test of any kind: nothing asserted a connectivity TSV was written,
-and no test ever gave `run_post` a `roi_map`, so everything behind `if config.roi_map:` never
-ran. That covers the ROI matrix, the seed map, and both Fisher z companions.
+Every connectivity TSV is asserted on disk, and `run_post` is given a `roi_map` so that
+everything behind `if config.roi_map:` runs. That covers the ROI matrix, the seed map, and
+both Fisher z companions.
 
 These read the files back rather than the returned frames, because the write is where the
 index label, the NaN convention and the sidecar live, and none of those survive a check made
@@ -28,8 +28,7 @@ _BANDS = dict(cardiac_l_freq=0.7, cardiac_h_freq=1.5, resp_l_freq=0.2, resp_h_fr
 _UNGATED = ("fc", "fcz")
 _ROI_GATED = ("fcroi", "fcroiz", "fcseed", "fcseedz")
 
-# What each product is, now that the name carries it in entities rather than in a made-up
-# suffix. The keys are the old names, kept because they read well in the tests below.
+# The entities that name each product. The keys are short labels for the tests below.
 _PRODUCTS = {
     "fc":      dict(statistic="pearson"),
     "fcz":     dict(statistic="fisherz"),

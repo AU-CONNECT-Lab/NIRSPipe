@@ -80,9 +80,9 @@ def test_channel_names_and_types_survive_the_round_trip(raw, tmp_path):
 
 # ---- bad channels ----
 #
-# A field-by-field audit of the round trip found bads to be the only thing SNIRF drops:
-# the format has nowhere to put them, so post-processing silently un-rejected every
-# channel SCI had marked. The sidecar carries them instead, which couples the two files.
+# Bads are the only thing the SNIRF round trip drops: the format has nowhere to put them,
+# so without the sidecar post-processing would silently un-reject every channel SCI had
+# marked. The sidecar carries them instead, which couples the two files.
 
 def _write(raw, path, bads=None):
     """Write a SNIRF and the sidecar the pipeline writes beside it."""

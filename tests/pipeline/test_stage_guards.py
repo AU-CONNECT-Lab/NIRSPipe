@@ -104,8 +104,8 @@ def test_prep_haemo_sqm_accepts_the_preproc_stage(preproc_haemo, bads):
     #
     # Values, not just keys: @_safe_metrics inserts every key it was given as None
     # when the function raises, so key presence alone is satisfied by total failure.
-    # That is how eight of these went silently missing once, and only when bad
-    # channels were present, hence the second case.
+    # A failure that shows only with bad channels present would pass the clean case,
+    # hence the second one.
     haemo = preproc_haemo.copy()
     haemo.info["bads"] = bads
 

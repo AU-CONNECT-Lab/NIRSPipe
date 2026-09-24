@@ -73,7 +73,7 @@ def _panel_labels(fig):
 
 
 def test_carpet_draws_only_the_motion_band_gvtd(od_with_cardiac):
-    """One GVTD panel, the band-limited one. The unfiltered trace was dropped: it is the
+    """One GVTD panel, the band-limited one. There is no unfiltered trace: it is the
     pipeline stage with the worst artifact-to-background ratio."""
     raw = synth_raw("01", "tapping", duration=200.0)
     fig = carpet_gvtd_figure(raw, raw.ch_names[:6])
@@ -126,8 +126,8 @@ def test_correction_footprint_sits_above_the_gvtd_trace(span_fig):
 
 def test_single_sample_span_is_one_sample_wide():
     """A run of one flagged sample covers one sample period. Closing it at its own timestamp
-    instead gave a zero-width span, which no renderer draws, so a spike on the last sample of
-    the recording was silently missing from the figure."""
+    would give a zero-width span, which no renderer draws, so a spike on the last sample of
+    the recording would be silently missing from the figure."""
     times = np.arange(5, dtype=float)                  # 1 Hz
     flagged = np.array([False, True, True, False, True])
 

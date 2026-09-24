@@ -1,8 +1,7 @@
 """The two cohort pages share one root ``figures/``, so their panels must never share a name.
 
 `fnirs-pipe group` writes the subjects' page and, where the tree holds groups, the dyads'
-page beside it. The dyads' panels kept their old `cohort_hyper_*` names after the subjects'
-moved to entity names; these pin both pages on one rendered tree.
+page beside it; these pin both pages on one rendered tree.
 """
 
 import json

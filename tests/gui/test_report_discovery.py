@@ -1,9 +1,7 @@
 """The page has to find the report the command just wrote, or say that it could not.
 
-Until these existed, `find_report` returning nothing and a command that writes no report
-looked the same on the page: one grey line reading "writes tables rather than a report, or
-the report was not found". A pattern left behind by a rename was therefore invisible, which
-is exactly the failure a naming rework produces.
+`find_report` returning nothing and a command that writes no report must look different on
+the page, or a pattern that no longer matches its writer would be invisible.
 """
 
 from __future__ import annotations
@@ -21,8 +19,7 @@ from fnirs_pipe.interface.callbacks._cli_run import (
 )
 
 # What each command actually writes. Built rather than spelled out, so this cannot agree
-# with REPORT_PATTERNS while both disagree with the writers: that is what happened when the
-# reports were renamed and two hand-written tables were edited to match each other.
+# with REPORT_PATTERNS while both disagree with the writers.
 WRITTEN = {
     "prep-raw":     "sub-01/" + report_name("sub-01_task-rest", desc="raw"),
     "hyper-raw":    "group-G1/" + report_name("group-G1_task-rest", desc="raw"),

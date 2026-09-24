@@ -56,7 +56,7 @@ def test_the_run_that_sits_apart_is_marked():
 
 def test_three_runs_are_too_few_to_compare():
     # with three values one of them is always the furthest out, and calling it an outlier
-    # would mark a run on every three-task subject in the study
+    # would mark a run on every three-run subject
     assert _outlier_flags([0.96, 0.95, 0.10]) == [False, False, False]
 
 
@@ -112,7 +112,7 @@ def test_the_pair_rejected_most_often_comes_first(tmp_path):
 
 
 def test_a_tree_without_channel_metrics_says_nothing(tmp_path):
-    # the section is skipped rather than drawn empty, which is what an older tree gets
+    # the section is skipped rather than drawn empty
     (tmp_path / "nirs").mkdir()
     assert collect_bad_channels(tmp_path, ["sub-01_task-rest"]) == {}
 
@@ -140,13 +140,7 @@ def test_the_index_rows_carry_the_links_and_the_marks(tmp_path):
 # ---- the condition pages, whose name the writer and this reader must agree on ----
 
 def test_a_condition_page_is_found_where_the_report_writes_it(tmp_path):
-    """The two ends of one name, bound together rather than spelled twice.
-
-    They came apart once already: the writer still spelled `_desc-<slug>_qc.html` after the
-    reports were renamed, the nav strip inside those pages already asked for the new name,
-    and this reader looked for a third spelling. Nothing was red, and every per-condition
-    link on the index and on the pages themselves was dead.
-    """
+    """The two ends of one name, bound together rather than spelled twice."""
     from fnirs_pipe.qc.subject.report import condition_page_name
 
     label = _run(tmp_path, "rest")
@@ -173,12 +167,7 @@ def _write_raw_condition_pages(monkeypatch, sub_dir, run_label, report_stem, con
 
 
 def test_a_raw_condition_page_is_found_where_prep_raw_writes_it(tmp_path, monkeypatch):
-    """The raw viewer's writer and this reader, end to end.
-
-    The writer took its name from the report's stem, `..._desc-raw_report` since the rename,
-    while this reader still asked for `..._desc-raw_nirs`, so every raw condition link on
-    the index was dead.
-    """
+    """The raw viewer's writer and this reader, end to end."""
     label = _run(tmp_path, "rest")
     _write_raw_condition_pages(monkeypatch, tmp_path, label, label, ["game 1", "video"])
 
@@ -211,11 +200,7 @@ def test_a_label_that_repeats_once_reduced_gets_no_second_page(tmp_path, monkeyp
 
 
 def test_a_condition_both_commands_wrote_links_both_pages(tmp_path, monkeypatch):
-    """The index row links the pipeline's page and lists the raw viewer's beside it.
-
-    It linked only the first page it found, so on a tree both commands wrote every raw
-    condition page was reachable from nowhere, the raw run page not linking them either.
-    """
+    """The index row links the pipeline's page and lists the raw viewer's beside it."""
     from fnirs_pipe.qc.subject.report import condition_page_name
 
     label = _run(tmp_path, "rest")
@@ -228,7 +213,7 @@ def test_a_condition_both_commands_wrote_links_both_pages(tmp_path, monkeypatch)
 
 
 def test_a_run_in_a_session_folder_is_listed_and_linked_there(tmp_path):
-    """The index read only `sub-<id>/nirs`, so every run of a session tree was missing."""
+    """The index reads a session folder's `nirs` as well as `sub-<id>/nirs`."""
     ses_dir = tmp_path / "ses-a"
     label = _run(ses_dir, "rest").replace("sub-01_", "sub-01_ses-a_", 1)
     for f in (ses_dir / "nirs").iterdir():

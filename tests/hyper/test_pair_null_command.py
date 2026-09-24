@@ -156,10 +156,10 @@ def test_merge_covers_the_new_kinds(tmp_path):
     assert (tmp_path / "null-pair_stat-wtc_relmat.tsv").exists()
 
 
-# ---- the ROI mapping path, which only a real run exercised ----
+# ---- the ROI mapping path ----
 
 def test_an_roi_mapping_is_read_rather_than_crashing(tmp_path, monkeypatch):
-    """It crashed on `json` being unimported: no test had ever passed --roi-mapping.
+    """--roi-mapping is read and handed to the draw.
 
     The call is stubbed because what is under test is the command's own argument handling,
     not the draw; the draw has its own tests and needs a derivatives tree.
@@ -203,12 +203,12 @@ def test_an_unreadable_roi_mapping_exits_rather_than_tracebacks(tmp_path):
 
 
 def test_the_real_table_records_the_window_it_describes():
-    """The null that ranks this table has always recorded --tstart/--tend; the table had not.
+    """The real table records --tstart/--tend, as the null that ranks it does.
 
-    Found by running on real recordings: a cohort whose triggers sit minutes apart needs a
-    common analysis window for its dyads to be comparable, and nothing downstream could read
-    that window back off the table it was applied to. Same argument as the alignment stamp:
-    a windowed table and a whole-recording one cannot be told apart by their numbers.
+    A cohort whose triggers sit apart needs a common analysis window for its dyads to be
+    comparable, so the window has to be readable back off the table it was applied to. Same
+    argument as the alignment stamp: a windowed table and a whole-recording one cannot be
+    told apart by their numbers.
     """
     import inspect
 

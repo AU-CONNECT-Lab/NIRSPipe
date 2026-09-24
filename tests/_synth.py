@@ -4,8 +4,7 @@ Nothing here is recorded data. Every property a test depends on is constructed
 rather than hoped for: a dataset asked for a bad channel really has one, at a
 known index, because that pair's two wavelengths are filled with uncorrelated
 noise and therefore cannot correlate in the cardiac band. Real recordings only
-sometimes contain the situation a test is about, which is why the PSD bad-channel
-bug survived so long.
+sometimes contain the situation a test is about.
 
 The SNIRF files are written through the pipeline's own ``write_snirf``, so the
 round trip a test exercises is the real one.
@@ -257,7 +256,7 @@ def make_hyper_dataset(
     """Write a dyad dataset plus its pairs CSV. Returns (bids_dir, pairs_csv).
 
     ``hold`` carries triggers so alignment has something to align on; ``rest``
-    carries none, which is the case that currently fails alignment outright.
+    carries none, which is the case trigger alignment refuses outright.
     """
     groups = groups or {"G01": ("11", "12")}
     subjects = [s for members in groups.values() for s in members]

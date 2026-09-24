@@ -3,11 +3,11 @@
 Blanking rather than dropping is the whole point: every subject's matrix keeps the same
 shape and the same channel order, so a group analysis can stack subjects whose rejections
 differ. Dropping rows would make position mean something different in every file. It is the
-convention `compute_isc` already followed before the resting-state products caught up.
+convention `compute_isc` follows too.
 
-The failure these guard against is silent: before, a rejected channel carried an ordinary
-looking correlation into `fc.tsv`, the figures drew it like any other, and a group analysis
-reading the table had no way to tell. So each test asserts both halves (the cell is blank,
+The failure these guard against is silent: a rejected channel that carried an ordinary
+looking correlation into `fc.tsv` would be drawn like any other, and a group analysis
+reading the table would have no way to tell. So each test asserts both halves (the cell is blank,
 and the cells around it are not) because a function that blanked everything would pass on
 the first half alone.
 
@@ -107,8 +107,8 @@ def test_a_rejected_channel_is_blank_in_every_seed_row(haemo):
     """Blank whether or not it was listed in the seed, which are two different reasons.
 
     `S2_D2` is inside "left", so its cell there was already blank by membership. Its cell in
-    "right" is the one this is about: it never entered that average, and before the change it
-    carried an ordinary correlation.
+    "right" is the one this is about: it never entered that average, so only the rejection
+    blanks it.
     """
     seed = compute_fc_seed(_with_bads(haemo, [REJECTED]), ROI_MAP, "hbo")
 
@@ -160,9 +160,8 @@ def _od(n_pairs: int = 3) -> mne.io.Raw:
 def test_naming_a_pair_or_either_wavelength_marks_both(label):
     """Both wavelengths are one measurement, and Beer-Lambert turns them into HbO and HbR.
 
-    Naming only 760 used to mark only 760, so after the conversion the pair's HbO was
-    rejected and its HbR was not, and every HbR product kept a channel the operator had
-    thrown out.
+    Marking only 760 would reject the pair's HbO after the conversion and not its HbR, so
+    every HbR product would keep a channel the operator had thrown out.
     """
     assert _expand_bad_pairs(_od(), [label]) == ["S2_D2 760", "S2_D2 850"]
 

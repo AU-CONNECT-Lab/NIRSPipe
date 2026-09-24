@@ -1,8 +1,7 @@
 """The Hyper Preparation page files a member's channel decisions where the raw QC page does.
 
-The page holds no session of its own, and it passed none, so on a tree with sessions it read
-and wrote a path the raw QC page never touches. The session now comes off the file the
-member was read from.
+The page holds no session of its own, so the session comes off the file the member was
+read from.
 """
 
 from pathlib import Path

@@ -5,7 +5,7 @@ FC reads the bandpassed residual, whose high-pass edge removes drift whatever th
 model does. ALFF reads the broadband one, because fALFF's denominator has to span the full
 spectrum. Nothing else on that path removes a linear trend, and a ramp's spectral leakage
 lands inside the ALFF band, so a drift model that does not detrend produces ALFF values that
-are wrong rather than noisy: measured against a linear ramp, by fifteen orders of magnitude.
+are wrong rather than noisy.
 
 `--drift-model none` stays legal, since it is a defensible choice for an FC-only run. What
 these tests pin is that it costs the ALFF outputs instead of silently corrupting them.

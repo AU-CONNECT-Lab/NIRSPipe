@@ -216,8 +216,7 @@ def test_a_shifted_copy_is_found_at_the_shift_it_was_made_with():
 
 
 def test_the_search_keeps_the_sign_of_an_anticorrelated_pairing():
-    """Largest in magnitude, not largest signed: the published form suits a metric built for
-    positive coupling, and this matrix carries both signs."""
+    """Largest in magnitude, not largest signed: this matrix carries both signs."""
     rng = np.random.default_rng(7)
     source = _ar(rng, np.array([0.9]))
     a = np.vstack([source])

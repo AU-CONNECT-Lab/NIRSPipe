@@ -5,10 +5,9 @@ of every scale the record length allows. That is a speed change dressed as a cor
 risk: it is safe only because the scales it picks land on pycwt's own grid, and because the
 margin is wider than the boxcar `wct` smooths across scales with.
 
-Both halves have already been wrong once. The first version anchored the grid at `2 * dt`
-where pycwt anchors it at `2 * dt / flambda`, which shifted every frequency and moved the
-band means with it. Nothing failed; the numbers were just quietly different. These tests
-compare against the unrestricted transform so that cannot happen silently again.
+pycwt anchors the grid at `2 * dt / flambda`; anchoring it at `2 * dt` instead would shift
+every frequency and move the band means with it, and nothing would fail. These tests
+compare against the unrestricted transform so that cannot happen silently.
 """
 
 import numpy as np

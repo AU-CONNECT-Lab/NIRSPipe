@@ -1,10 +1,8 @@
 """The GLM activation panel is one figure per condition behind a switch, not one tall image.
 
-Five conditions stacked reached roughly 3500 px, where a condition could not be looked at
-on its own and two could not be compared without scrolling between them. What matters about
-the split is the part that is easy to lose: the colour scale has to stay shared, or the
-switch stops being a comparison and a condition that barely activated fills its own scale
-and reads as strong.
+What matters about the split is the part that is easy to lose: the colour scale has to
+stay shared, or the switch stops being a comparison and a condition that barely activated
+fills its own scale and reads as strong.
 
 `_save_glm_brain` needs pyvista, fsaverage and an offscreen GL context, so it is stubbed
 here. That is the point: everything these tests pin sits either side of the render, and the
@@ -57,8 +55,8 @@ def test_the_coefficient_column_is_found_under_either_name():
 
 
 def test_haemoglobin_sized_betas_are_not_pushed_under_a_floor():
-    # betas land around 1e-7 M; a fixed floor above that set the limit for every run and
-    # left the strongest channel at a fraction of the scale, i.e. background grey
+    # betas land around 1e-7 M; a fixed floor above that would set the limit for every run
+    # and leave the strongest channel at a fraction of the scale, i.e. background grey
     clim = _shared_clim(_results(tap=[2.4e-7, -4.2e-8]))
     assert clim["pos_lims"][-1] == pytest.approx(2.4e-7, rel=0.05)
 

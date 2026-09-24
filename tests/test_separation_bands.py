@@ -1,6 +1,6 @@
 """The long/short separation rule: one definition, configurable, and stamped.
 
-Four things are worth pinning here, and the first three have each failed on their own.
+Four things are worth pinning here.
 
 The *rule* itself: two bands that do not meet, so a channel between them belongs to
 neither. Channel screening cannot stand in for the lower edge, because a 12 mm channel
@@ -11,8 +11,8 @@ The *threading*: one run resolves the bands once and every path reads that value
 threading is worse than a constant, since the reports would then describe a different
 montage than the regression used. The consistency test at the end is what enforces that.
 
-The *stamp*: the record carries the bands it was split with, so a reader of an old record
-can tell which separations produced its numbers rather than assuming today's defaults.
+The *stamp*: the record carries the bands it was split with, so a reader of a record can
+tell which separations produced its numbers rather than assuming the defaults.
 
 The *read-back*: `fnirs-hyper` takes the bands off the members' records rather than
 off its own flags, so the dyad metrics cannot be split one way while the member reports
@@ -62,7 +62,7 @@ def _montage(distances_mm, ch_type="fnirs_cw_amplitude", positioned=True):
     ``[8, 30]`` -> channels "S1_D1" at 8 mm and "S2_D2" at 30 mm.
 
     ``positioned=False`` leaves every loc at zero, which is what a recording with no
-    registered optodes looks like and what mne_nirs used to read as "every channel short".
+    registered optodes looks like and what mne_nirs reads as "every channel short".
     """
     names, locs = [], []
     for i, mm in enumerate(distances_mm):
@@ -126,16 +126,15 @@ def test_the_bands_move_the_split():
 
 def test_a_montage_with_no_positions_splits_into_nothing():
     """Every distance reads as zero there. mne_nirs' `get_short_channels` counts that as
-    short, which is how `--short-channel mean` came to build its regressors out of the
-    whole montage; the `0 < d` guard here is what refuses it."""
+    short, so `--short-channel mean` would build its regressors out of the whole
+    montage; the `0 < d` guard here is what refuses it."""
     long, short = long_short_channels(_montage([8, 30], positioned=False))
     assert (long, short) == ([], [])
 
 
 def test_the_short_edge_is_inclusive():
-    """mne_nirs compares with strict `<`, so a montage specified at exactly 10.0 mm had
-    no short channels by its reckoning and some by ours. One rule now, and it includes
-    the edge."""
+    """mne_nirs compares with strict `<`, so a montage specified at exactly 10.0 mm has
+    no short channels by its reckoning. The rule here includes the edge."""
     assert _labels(_montage([SHORT_MAX_DIST * 1e3]))["S1_D1 760"] == "short"
 
 
@@ -227,10 +226,8 @@ def test_every_cli_that_splits_channels_offers_the_flags():
 
 
 def test_no_cli_offers_a_gvtd_channel_set_any_more():
-    """`--gvtd-channels all` used to widen the GVTD scalars to every channel, which judged
-    a run on channels `long_channel_picks` and the GLM never touch. The bands decide the
-    set now, and both values were in the record either way, so the flag is gone from all
-    three parsers rather than deprecated in one."""
+    """The bands decide the GVTD channel set, so no parser offers a flag that would widen
+    it to channels `long_channel_picks` and the GLM never touch."""
     from fnirs_pipe.cli.qc import _build_parser as qc_parser
     from fnirs_pipe.cli.run import _build_parser as run_parser
 
@@ -247,8 +244,8 @@ def test_no_cli_offers_a_gvtd_channel_set_any_more():
 
 
 def test_the_old_channel_set_argument_cannot_be_passed_by_position():
-    """The second positional is `sep_bands` now. A caller left over from the flag would
-    hand it "long", which has to fail loudly rather than be read as a set of bands."""
+    """The second positional is `sep_bands`. A caller handing it a channel-set name such as
+    "long" has to fail loudly rather than have it read as a set of bands."""
     from fnirs_pipe.qc.metrics import gvtd_channel_picks
 
     with pytest.raises(ValueError):
@@ -285,8 +282,7 @@ def test_the_stamp_is_in_millimetres():
 
 
 def test_a_record_with_nothing_stamped_falls_back_to_the_defaults():
-    """Every record written before prep started stamping the bands. The alternative,
-    refusing to read it, would make an existing tree unreportable."""
+    """Refusing to read an unstamped record would make its tree unreportable."""
     assert bands_from_record({"n_long_channels": 28}) == separation_bands()
 
 
@@ -345,8 +341,8 @@ def test_the_refusal_names_both_members_and_their_bands():
 
 
 def test_an_unstamped_dyad_falls_back_to_the_defaults_with_a_warning(caplog):
-    """Every tree prepped before the bands were stamped. Refusing those outright would make
-    them unanalysable, so it is a warning; the value is a guess and says so."""
+    """Refusing an unstamped dyad outright would make it unanalysable, so it is a warning;
+    the value is a guess and says so."""
     from fnirs_pipe.pipeline.hyper import resolve_group_bands
     with caplog.at_level(logging.WARNING):
         assert resolve_group_bands(_dyad(), _sqm(None, None)) == separation_bands()
@@ -354,8 +350,8 @@ def test_an_unstamped_dyad_falls_back_to_the_defaults_with_a_warning(caplog):
 
 
 def test_an_unstamped_member_is_warned_with_the_bands_it_is_being_given(caplog):
-    """The other member's stamp is the best evidence available, so it is what gets applied
-    -- but the warning has to name that value rather than the package defaults, or a reader
+    """The other member's stamp is the best evidence available, so it is what gets applied,
+    but the warning has to name that value rather than the package defaults, or a reader
     is told 10 mm was assumed while 12 mm was used."""
     from fnirs_pipe.pipeline.hyper import resolve_group_bands
     with caplog.at_level(logging.WARNING):
@@ -416,10 +412,9 @@ def test_a_record_stamps_whether_it_carries_bands_at_all():
 # ---- One run, one split ----
 
 def test_the_analysis_paths_agree_with_the_split():
-    """`long_channel_picks` and `has_short_channels` used to reach mne_nirs directly, so
-    "long" meant 15-45 mm to the reports and "anything over 10 mm" to the dyad metrics.
-    A 58 mm channel was outside the montage in one half of the package and inside it in
-    the other."""
+    """`long_channel_picks` and `has_short_channels` read the same split as the reports,
+    so a 58 mm channel is never outside the montage in one half of the package and inside
+    it in the other."""
     raw = _montage([8, 12, 30, 58], ch_type="hbo")
     for sep_bands in [None, (0.01, 0.015, 0.045), (0.014, 0.015, None)]:
         long, short = long_short_channels(raw, sep_bands)
@@ -429,10 +424,10 @@ def test_the_analysis_paths_agree_with_the_split():
 
 
 def test_a_positionless_montage_builds_no_short_channel_regressors():
-    """The bug this closes: every separation reads as zero, mne_nirs called that short,
-    and the "systemic" signal regressed out of every channel was the whole montage.
+    """Every separation reads as zero, which mne_nirs calls short, so the "systemic"
+    signal regressed out of every channel would be the whole montage.
 
-    The refusal replaced an empty return: a skip would leave the methods text naming
+    It is a refusal rather than an empty return: a skip would leave the methods text naming
     regressors the residual does not carry."""
     from fnirs_pipe.exceptions import StageError
     from fnirs_pipe.pipeline.glm import _short_channel_regressors
@@ -533,9 +528,9 @@ def test_a_config_toml_can_carry_the_separation_bands():
 def test_the_record_is_split_on_the_run_s_own_bands(tmp_path, monkeypatch):
     """Nothing on disk records them, so build_sqm_records has to be told.
 
-    The record's `*_long` / `*_short` metrics used to be split on the package defaults
-    whatever the run was given, which on a montage with no channel under 10 mm meant the
-    report described a channel set the regression had not used.
+    Splitting the record's `*_long` / `*_short` metrics on the package defaults instead
+    would, on a montage with no channel under 10 mm, describe a channel set the regression
+    had not used.
     """
     from fnirs_pipe.cli import _shared
     from fnirs_pipe.qc.subject import sqm_record
@@ -563,8 +558,8 @@ def test_the_record_is_split_on_the_run_s_own_bands(tmp_path, monkeypatch):
 def test_the_report_note_quotes_the_run_s_own_gap():
     """The subject report assembles its scalars in memory and does not stamp the bands.
 
-    Reading them back off that dict gave the note the package defaults, so a run measured
-    on any other pair was told its channels sat in a gap it does not have.
+    Reading them back off that dict would give the note the package defaults, so a run
+    measured on any other pair would be told its channels sat in a gap it does not have.
     """
     from fnirs_pipe.qc.subject.report import _note_separation
 
@@ -603,8 +598,8 @@ def _split_record() -> dict:
 def test_a_channel_in_neither_range_carries_the_whole_montage_scores():
     """It is screened like any other channel, so a blank row cannot explain its verdict.
 
-    Its scores were only ever in the whole-montage section, and reading the row off the
-    long sections left every column None.
+    Its scores are only in the whole-montage section, so reading the row off the split
+    sections would leave every column None.
     """
     from fnirs_pipe.qc.common.channel_table import channel_rows
 
@@ -622,8 +617,8 @@ def test_a_channel_in_neither_range_carries_the_whole_montage_scores():
 
 
 def test_a_rejected_channel_in_neither_range_prints_why_it_went():
-    """The reason is derived from the row's own scores, so an empty row read as a manual
-    rejection the screening never made."""
+    """The reason is derived from the row's own scores, so an empty row would read as a
+    manual rejection the screening never made."""
     from fnirs_pipe.qc.common.channel_table import channel_rows, format_rows
 
     sci = {"L 760": 0.90, "S 760": 0.99, "O 760": 0.30}

@@ -369,8 +369,6 @@ fnirs-qc provenance   OUTPUT_DIR
 
 `cohort` puts every subject in a tree on one page (`desc-subjects_report.html`). `cohort-hyper` is about dyads (`desc-groups_report.html`): how much of each recording both members could use at the same moment, split into one member's loss and the shared loss; where that time went, per channel pair and per condition; and each window's coherence as its rank inside its own null. It reads the records `hyper-raw` writes. `provenance` redraws the graphs from the sidecars already on disk.
 
-Renamed since earlier versions: `--fmin` / `--fmax` on `hyper-raw` are now `--coh-fmin` / `--coh-fmax`, the old names still accepted as aliases. The `fnirs-hyper` subcommands `run`, `band`, `index` and `merge` are now the separate commands `fnirs-hyper`, `fnirs-hyper-band`, `fnirs-hyper-index` and `fnirs-hyper-merge`, and `--wtc-pseudo` / `--isc-pseudo` are `--wtc-phase-null` / `--isc-phase-null`. `cohort` and `cohort-hyper` write `desc-subjects_*` and `desc-groups_*` in place of `cohort_nirs` and `cohort_hyper_nirs`.
-
 For a cohort report over one time window, crop first and then run the usual pair of commands:
 
 ```

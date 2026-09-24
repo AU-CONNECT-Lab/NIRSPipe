@@ -1,10 +1,9 @@
 """One bad recording must not strand the subjects queued behind it, serial or parallel.
 
-The participant loop used to re-raise, so the first failure ended the batch and every
-subject after it went unprocessed. `fnirs-qc` and `fnirs-prep` already isolated theirs.
-`--n-jobs` then made the same loop run several subjects at once, which is only safe if each
-one's log goes to its own file: `setup_logging` replaces the root handlers, so the second
-subject used to take the first one's log away.
+A failure is logged and the loop moves on to the next subject. With `--n-jobs` the same
+loop runs several subjects at once, which is only safe if each one's log goes to its own
+file: `setup_logging` replaces the root handlers, so a shared log would be taken over by the
+next subject.
 """
 
 import sys

@@ -4,12 +4,11 @@ Rejection is decided in prep and written to the ``desc-sci`` sidecar. The channe
 CSV carries the same set, but the *report* writes that one, so `--no-report` leaves a tree
 with sidecars and no CSVs.
 
-Reading the CSV alone was silent when it was absent. It did not matter for `--desc preproc`,
-whose SNIRF sidecar restores ``info["bads"]`` on read, but `desc-errts` is written with an
-empty ``info["bads"]`` and the CSV was its only other record: a `--no-report` prep followed
-by an `errts` dyad analysis excluded nothing at all, and every coherence value on a dyad
-with a rejected channel was wrong. `--bads-scope subject` was worse, since it reads every
-run's CSV and so degraded to nothing whatever the stage.
+The CSV alone is not enough. `--desc preproc` restores ``info["bads"]`` from its SNIRF
+sidecar on read, but `desc-errts` is written with an empty ``info["bads"]``, so read off the
+CSV alone a `--no-report` prep followed by an `errts` dyad analysis would exclude nothing,
+and every coherence value on a dyad with a rejected channel would be wrong. `--bads-scope
+subject` reads every run's record, so it depends on the sidecar whatever the stage.
 
 These tests pin the source, the fallback, and the warning.
 """
@@ -72,14 +71,14 @@ def test_subject_scope_unions_over_runs_without_any_csv(nirs_dir):
 
 
 def test_the_csv_still_works_on_a_tree_that_has_no_sidecars(nirs_dir):
-    """Older outputs, and anything written before prep recorded the sidecar."""
+    """A tree with no sidecar record falls back to the CSV."""
     _csv(nirs_dir, "tap", BADS_TAP)
     assert _load(nirs_dir)["bad_channels"] == BADS_TAP
 
 
 def test_the_per_channel_sci_comes_from_the_table_when_there_is_no_sidecar(nirs_dir):
-    # the table is tab separated; read as a CSV it came back as one column and the SCI
-    # was silently absent while the rejected channels, read another way, were not
+    # the table is tab separated; read as a CSV it would come back as one column and the
+    # SCI would be silently absent while the rejected channels, read another way, were not
     _csv(nirs_dir, "tap", BADS_TAP)
     assert _load(nirs_dir)["sci_per_channel"]["S6_D5 760"] == 0.2
 
@@ -164,11 +163,10 @@ def test_the_summary_says_nothing_it_does_not_know(capsys):
 
 
 # ---- session trees ----
-# A session goes in its own folder (`sub-01/ses-a/nirs`), and every reader that built that
-# path by hand instead looked in `sub-01/nirs` and found nothing there. The recording itself
-# raised "directory not found", so a dyad analysis on a session tree did not start at all;
-# with the session folder reached but the quality record still read from the flat path, it
-# started and rejected no channel. Both halves are pinned here.
+# A session goes in its own folder (`sub-01/ses-a/nirs`), and both the recording and its
+# quality record are read from there. A reader that looked in `sub-01/nirs` instead would
+# either stop the dyad analysis on "directory not found" or let it start and reject no
+# channel. Both halves are pinned here.
 
 def _ses_sidecar(root, session, task, bads):
     d = root / "sub-01" / f"ses-{session}" / "nirs"
@@ -202,7 +200,7 @@ def test_a_named_session_does_not_read_the_other_ones_rejections(tmp_path):
 
 
 def test_the_flat_tree_is_unchanged(nirs_dir):
-    """The layout almost every dataset here uses. It must not have moved."""
+    """The flat layout, with no session folder, still reads its sidecar."""
     # nirs_dir, not tmp_path: `_sidecar` does not create the directory, `_ses_sidecar` does
     _sidecar(nirs_dir, "tap", BADS_TAP)
     assert _load(nirs_dir)["bad_channels"] == BADS_TAP

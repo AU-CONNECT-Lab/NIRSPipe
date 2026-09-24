@@ -1,15 +1,14 @@
 """What happens when several workers process one dataset into one output tree at once.
 
-Two fixes were made for this and neither had been tested under load, which is the whole point
-of this file: a batch runs for hours, and a sharing violation or a locked database near the
-end of one costs more than these tests do.
+A batch runs for hours, and a sharing violation or a locked database near the end of one
+costs more than these tests do.
 
 Real processes, not threads. The Windows failure these guard against is a file being opened
 for writing by one process while another holds it, which threads inside one interpreter do not
 reproduce.
 
-Two things turned out **not** to need a guard, and the tests say so rather than leaving it to
-be rediscovered: per-run JSONL is written to a path keyed by execution id, so parallel workers
+Two things need **no** guard, and the tests say why: per-run JSONL is written to a path
+keyed by execution id, so parallel workers
 never share a file, and an execution id carries the pid, so two started in the same
 millisecond still differ.
 """
@@ -85,7 +84,7 @@ def test_concurrent_writers_leave_a_valid_description(tmp_path):
 
 
 def test_a_reader_never_sees_a_half_written_description(tmp_path):
-    """The defect this replaced: a plain write truncates, so a reader saw an empty file.
+    """The write is atomic: a reader never sees a truncated or empty file.
 
     A reader can still be told the path is busy at the instant of the rename, which Windows
     offers no way around; that is caught above and is a retry. What must never happen is
@@ -182,7 +181,7 @@ def test_merge_is_idempotent(tmp_path):
 
 
 def test_wal_is_actually_on(tmp_path):
-    # the fix is one PRAGMA; without this the tests above could pass by luck on a fast machine
+    # WAL is one PRAGMA; without this the tests above could pass by luck on a fast machine
     db = tmp_path / "logs" / "pipeline.db"
     _log_one_execution(str(db), "001")
     job_db.merge_jsonl(db)

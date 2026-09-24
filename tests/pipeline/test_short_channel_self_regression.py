@@ -4,8 +4,7 @@ The `mean` regressor is the mean of the good short channels of a chromophore, an
 matrix is applied to every channel including the ones it was built from. With one surviving
 short channel that mean *is* that channel sample for sample, so its own residual is
 numerically zero and every measure read off the residual is an artefact of the method rather
-than a measurement: ALFF came out around 1e-20 beside 1e-8 everywhere else, and no bar chart
-could show a bar twelve orders short.
+than a measurement.
 
 What is pinned here is the line, at one channel and not at some share, and that the
 correction reaches the tables without touching any other channel.

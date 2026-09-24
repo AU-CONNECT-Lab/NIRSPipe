@@ -23,11 +23,7 @@ def _src(name: str) -> dict:
 
 
 def test_a_figure_named_for_the_condition_is_kept():
-    """The name `prep-raw` gives a condition's own figure is the one this check accepts.
-
-    It used to look for a `_<slug>_nirs` ending, which no figure has carried since the
-    condition moved into its own entity, so every rewritten panel was dropped as a leak.
-    """
+    """The name `prep-raw` gives a condition's own figure is the one this check accepts."""
     name = figure_namer("sub-01_task-rest", "game1", prefix="raw")("psd")
     assert figure_leaks({"psd": _src(name)}, "game1") == []
 
@@ -213,7 +209,7 @@ def carpet_fig():
 
 def test_both_gvtd_rows_are_given_one_top(carpet_fig):
     # long and short are the same unit at comparable magnitudes, and scaling each to itself
-    # would hide the difference the second row was added to show
+    # would hide the difference the second row is there to show
     spec = carpet_window_spec(carpet_fig, 0.0, 300.0)
     tops = {tuple(v) for v in spec["y"].values()}
     assert len(spec["y"]) == 2 and len(tops) == 1

@@ -56,7 +56,7 @@ def _at_length(grid, n_fft):
 # ---- the length itself ----
 
 def test_the_length_is_never_worse_than_the_power_of_two():
-    """A recording shorter than its own padding must not be padded further than today."""
+    """A recording shorter than its own padding must not be padded past the power of two."""
     for n, fmin in ((3052, 0.01), (7800, 0.01), (5000, 0.05), (39611, 0.01), (120000, 0.01)):
         dt = 1 / SFREQ
         grid = _wavelet_grid(dt, n, fmin, 0.20, limit_scales=True)
@@ -76,7 +76,7 @@ def test_the_length_clears_the_widest_wavelet():
 
 
 def test_the_saving_is_real_on_an_hour_long_recording():
-    """The case the change exists for: 39611 samples sit just above a power of two."""
+    """39611 samples sit just above a power of two."""
     grid = _wavelet_grid(1 / SFREQ, 39611, 0.01, 0.20, limit_scales=True)
     assert grid.n_fft < 0.80 * 65536
 

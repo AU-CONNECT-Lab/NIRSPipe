@@ -1,9 +1,8 @@
 """What `fnirs-prep align` leaves on disk: one aligned tree, every offset beside its file.
 
-It also wrote `group-<id>_task-<task>_align-offsets.tsv` at the tree's root, a name with no
-suffix and a data product nothing read. A shift a step applied to one file is recorded in
-that file's sidecar instead, which is what the reference BIDS Apps do with a time shift, and
-this tree is read as an input next, where a group table has no place.
+A shift a step applied to one file is recorded in that file's sidecar, and no offsets table
+is written at the tree's root: this tree is read as an input next, where a group table has
+no place.
 """
 
 import json
@@ -70,8 +69,8 @@ def _into_sessions(bids_dir, sessions=("a", "b")):
 def test_a_two_session_tree_aligns_the_session_the_csv_names(tmp_path):
     """The recording aligned, the file written and the sidecars copied are the same one.
 
-    Loading honoured the CSV's session column, but the writer looked the file up again with
-    no session, so on a two-session tree it could not tell the two apart.
+    The writer looks the file up by the CSV's session column, as loading does, so a
+    two-session tree keeps the two apart.
     """
     bids_dir, pairs_csv = make_hyper_dataset(tmp_path, tasks=("hold",))
     _into_sessions(bids_dir)

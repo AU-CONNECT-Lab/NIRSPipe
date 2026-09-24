@@ -2,9 +2,7 @@
 
 This is the failure the pages are most exposed to and the one no other check sees. `ruff`
 passes, the CLI guards pass, the run exits zero, and the page still shows the run's carpet
-under numbers that describe one condition, with nothing on it saying so. It happened once
-already: `denoise_carpet_path` reached the template as a loose keyword rather than inside a
-section dict, so the blanking pass never saw it and every condition page kept it.
+under numbers that describe one condition, with nothing on it saying so.
 
 Two halves are pinned here. `_blanked` empties whatever it is handed, and `_figure_leaks`
 catches what it was not handed, by looking at the assembled values rather than at a list of
@@ -23,8 +21,8 @@ RUN = figure_namer("sub-01_task-main")
 def fig(desc, condition=None, **entities):
     """A figure URL as a page carries it, named by the writers' own namer.
 
-    Spelling these by hand is how the check and the writers drifted apart before: the test
-    agreed with itself and neither half agreed with what lands on disk.
+    Spelled by hand, the test would agree with itself while neither half agreed with what
+    lands on disk.
     """
     return "figures/" + figure_namer("sub-01_task-main", condition)(desc, **entities)
 
@@ -99,7 +97,7 @@ def test_the_glm_activation_still_has_to_be_this_conditions():
 
 
 def test_a_run_wide_figure_is_reported():
-    # the case that actually happened
+    # a loose keyword outside any section dict, which the blanking pass never sees
     name = RUN("carpetstage")
     leaks = _figure_leaks({"denoise_carpet_path": f"figures/{name}"}, "game1")
     assert leaks == [f"denoise_carpet_path={name}"]
@@ -150,8 +148,8 @@ def test_a_fragment_naming_another_condition_is_a_leak():
 
 
 def test_the_per_channel_panels_are_checked_at_all():
-    # they arrive as a list of dicts rather than a path, which the check used to skip, and
-    # they are the panels there are the most files of
+    # they arrive as a list of dicts rather than a path, and they are the panels there are
+    # the most files of
     detail = RUN("detail", channel="S1D1")
     page = {"ch_detail_pairs": [{"pair": "S1D1", "path": f"figures/{detail}"}]}
     assert _figure_leaks(page, "game1") == [f"ch_detail_pairs={detail}"]
@@ -208,8 +206,8 @@ SEGMENTS = {"BAD_gvtd": [(10.0, 5.0), (150.0, 40.0), (900.0, 30.0)],
 
 
 def test_the_zoom_shows_only_what_happened_during_this_condition():
-    # it used to show the ten longest in the recording whatever the page, so a quiet
-    # condition's page carried the segments another condition was censored for
+    # the recording's segments on a quiet condition's page would show what another
+    # condition was censored for
     assert _segments_in_window(SEGMENTS, (100.0, 300.0)) == [(150.0, 40.0), (95.0, 20.0)]
 
 
@@ -243,8 +241,8 @@ def test_the_shell_reads_page_heading_and_page_title():
 
 
 def test_a_condition_page_sets_the_keys_the_shell_reads():
-    # it used to set `heading`, which nothing reads, so every condition page carried the
-    # run's own title and the Scope row was the only thing telling them apart
+    # nothing reads `heading`, so a page setting it would carry the run's own title and the
+    # Scope row would be the only thing telling them apart
     import inspect
 
     from fnirs_pipe.qc.subject.report import _write_condition_reports

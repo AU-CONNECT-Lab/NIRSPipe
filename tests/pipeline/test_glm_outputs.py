@@ -1,8 +1,7 @@
 """GLM output naming and the sidecars that go with it.
 
-The three CSVs used to be written under fixed names, so a second task overwrote the
-first subject's results in place and the run still reported success. The names are now
-prefixed from the input file, which is a claim about entities the tests below pin down.
+Every output name is prefixed from the input file, so a second task writes beside the
+first rather than over it. Which entities carry over is what the tests below pin down.
 """
 
 import json

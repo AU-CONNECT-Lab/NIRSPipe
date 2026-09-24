@@ -1,8 +1,8 @@
 """The generated script has to name the noise model the run actually fitted.
 
-Every mode honours --noise-model now, but the generator kept the constant inside its glm
-branch and hard-coded "ols" in the denoise and rest blocks, so a denoise run fitted with an
-AR model handed the reader a script that would reproduce something else.
+Every mode honours --noise-model, so the denoise and rest blocks carry the constant too;
+otherwise a denoise run fitted with an AR model hands the reader a script that reproduces
+something else.
 """
 
 import sys
@@ -42,5 +42,5 @@ def test_denoise_reports_the_model_it_was_given(mini_bids, tmp_path_factory, ask
 
     assert f"NOISE_MODEL    = {asked!r}" in text
     assert "noise_model=NOISE_MODEL," in text
-    # the defect spelled it straight into the call, so the constant alone does not prove it
+    # a literal in the call would bypass the constant, so the constant alone does not prove it
     assert 'noise_model="ols"' not in text

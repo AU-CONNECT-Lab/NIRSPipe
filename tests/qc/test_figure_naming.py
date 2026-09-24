@@ -1,12 +1,10 @@
 """Every figure this package writes is named by one namer, and three things depend on it.
 
-The figures used to be kept apart by a subdirectory per run, and the panel names inside
-those directories were bare (`carpet_gvtd.html`). Flattening to one ``figures/`` per subject
-made the run part of every name instead, which is only safe if three collisions cannot
-happen: two runs of a subject, the raw viewer against the pipeline's own report, and a
-condition page against the run's. Each is pinned below on the namer rather than on a
-rendered tree, because a collision is a file silently overwritten and a rendered tree shows
-nothing.
+A subject's figures share one ``figures/``, so the run is part of every name, which is
+only safe if three collisions cannot happen: two runs of a subject, the raw viewer against
+the pipeline's own report, and a condition page against the run's. Each is pinned below on
+the namer rather than on a rendered tree, because a collision is a file silently
+overwritten and a rendered tree shows nothing.
 
 `_figure_leaks` is the fourth reader of these names and lives in
 `tests/qc/test_condition_page_isolation.py`, which builds its cases from this same namer.
@@ -57,7 +55,6 @@ def _names(namer) -> list[str]:
 # ---- the three collisions the flat directory is exposed to ----
 
 def test_two_runs_of_one_subject_share_no_filename():
-    """What the per-run subdirectory used to prevent."""
     rest = _names(figure_namer("sub-01_task-rest"))
     tapping = _names(figure_namer("sub-01_task-tapping"))
     assert not set(rest) & set(tapping)

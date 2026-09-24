@@ -152,9 +152,9 @@ def test_each_condition_gets_its_own_level_and_the_whole_run_none(stub):
 def test_each_condition_gets_its_own_draw(stub):
     """Each condition is its own pair of segments, cut at each side's own marker.
 
-    They used to be windowed out of one whole-record draw, which needed both sessions on
-    one timetable. They drift, so the window that held one dyad's conversation held part of
-    another's game, and the null was of that overlap rather than of the condition.
+    Not windowed out of one whole-record draw: that needs both sessions on one timetable,
+    and two sessions drift apart, so the null would be of an overlap rather than of the
+    condition.
     """
     null = _run(["sub-02G02", "sub-02G03"], labels=("early", "late"))
     _, by_cond = null.summarise()

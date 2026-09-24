@@ -138,9 +138,7 @@ def test_notes_are_kept_apart_from_errors():
 
 def test_the_default_sheet_is_the_look_the_tokens_and_the_footer():
     # There is one look. A report that names no `css` gets it, which is the point of the
-    # default: it used to be a second, dashboard look, and by the time the last report
-    # stopped wearing that one the default was a look nothing wore and a new report could
-    # reach it by forgetting a keyword.
+    # default: no report can reach a second look by forgetting a keyword.
     sheet = page_vars(title="T", heading="T")["base_css"]
     assert "font-size: 14px" in sheet, "the look is missing"
     assert ":root" in sheet, "the tokens are missing"
@@ -176,8 +174,8 @@ def test_the_look_keeps_no_copy_of_the_token_rules():
 
 
 def test_the_raw_viewer_takes_the_shells_sheet_rather_than_copying_it():
-    # a fourth copy of the look lived here; the viewer cannot extend the shell (it is one
-    # JavaScript-driven document) but it can take the sheet page_vars composes
+    # the viewer cannot extend the shell (it is one JavaScript-driven document) but it
+    # can take the sheet page_vars composes
     text = (TEMPLATE_DIR / "raw_viewer.html").read_text(encoding="utf-8")
     assert "{{ base_css }}" in text
     for rule in ("#qc-nav {", ".card {", ".panel-title {", "box-sizing: border-box"):
@@ -191,15 +189,15 @@ def test_the_footer_styles_ship_with_the_footer():
 
 
 def test_the_look_keeps_no_copy_of_the_footer_rules():
-    # it carried a verbatim copy until the rules moved to _footer.css; a copy coming back
-    # means the look has quietly started overriding the footer
+    # the footer rules live in _footer.css; a copy here means the look has quietly
+    # started overriding the footer
     sheet = stylesheet("document.css")
     for cls in (".tab-btn {", ".boilerplate-html {", ".error-list {"):
         assert cls not in sheet, f"document.css has a second copy of {cls}"
 
 
 def test_no_report_writer_names_a_stylesheet():
-    # The arrangement the deletion rests on: `stylesheet` is how a caller names a look, and
+    # The arrangement the one look rests on: `stylesheet` is how a caller names a look, and
     # nothing outside the shell calls it, so the one look reaches every page through
     # page_vars and there is no keyword to forget. Not `extra_css`, which is per-figure CSS
     # injected into an iframe and is a different thing.
@@ -214,8 +212,8 @@ def test_no_report_writer_names_a_stylesheet():
 
 
 def test_the_index_shares_the_one_stylesheet():
-    # the index used to carry a near-copy of the subject report's CSS; only the rules that
-    # differ belong in its own block, and a block this long means they have re-forked
+    # only the rules that differ from the subject report's CSS belong in the index's own
+    # block, and a block this long means they have re-forked
     text = (TEMPLATE_DIR / "subject_index.html.j2").read_text(encoding="utf-8")
     block = re.search(r"{% block css %}(.*?){% endblock %}", text, re.S)
     assert block, "the index defines no css block; check it still loads document.css"

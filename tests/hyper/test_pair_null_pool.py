@@ -49,7 +49,7 @@ def test_another_task_is_never_a_stand_in():
 
 
 def test_the_same_two_people_over_many_days_still_get_a_position_pool():
-    """The shape this null was asked for: p1 on one day against p2 on another."""
+    """One member on one day against the other member on another."""
     got = partner_pool(_cohort(repeated_people=True), "G01", "main")
     # the same person, but a different recording of them, and never the target's own rows
     assert len(got) == 2
@@ -95,7 +95,7 @@ def test_a_group_absent_from_the_task_is_refused():
 # ---- the refusal cannot see every repeated cohort, so it says when it could not look ----
 
 def test_any_warns_when_every_subject_id_is_unique(caplog):
-    """The real cohort this null was built for defeats the refusal.
+    """A cohort that bakes the visit into the subject id defeats the refusal.
 
     BIDS puts one person under one `sub-` label and separates visits with `ses-`, and the
     pairs table takes a `session` column for exactly that. A table that instead bakes the

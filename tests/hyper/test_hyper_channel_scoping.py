@@ -7,8 +7,7 @@ to TSV has to agree with the map the report draws, cone of influence included, o
 figures and the group statistics end up answering different questions.
 
 And the third: ISC and WTC are one code path up to the statistic, so what one of them
-refuses the other refuses. The tests at the end of this file hold the parts of that which
-have come apart before.
+refuses the other refuses. The tests at the end of this file hold that.
 
 The band-mean tests build a WTCResult by hand rather than running pycwt: the quantity under
 test is the collapse, and a hand-built map is the only way to know what the right answer is.
@@ -154,7 +153,7 @@ def test_the_blanked_column_is_the_one_that_was_named():
 # ---- what the pair refuses, and what it flags ----
 
 def test_isc_refuses_two_sampling_rates():
-    """WTC raises on this; ISC used to pair sample i with sample i and answer anyway."""
+    """WTC raises on this, and so does ISC rather than pairing sample i with sample i."""
     from fnirs_pipe.pipeline.hyper.isc import compute_isc
 
     a, b = _tagged("11"), _tagged("12")
@@ -213,9 +212,9 @@ def test_coherence_matches_channels_by_label():
 
 
 def test_screening_coherence_drops_a_pair_one_member_lacks():
-    # the windowed coherence this replaced kept a blank row per window; the screening pass
-    # drops the pair instead, because a channel one member does not have is not a channel
-    # the dyad can be screened on and a NaN row would be averaged into the window's mean
+    # the screening pass drops the pair rather than keeping a blank row per window, because
+    # a channel one member does not have is not a channel the dyad can be screened on and a
+    # NaN row would be averaged into the window's mean
     from fnirs_pipe.pipeline.hyper.coherence import screening_coherence
 
     raws = {"sub-A": _tagged("11"), "sub-B": _tagged("12", drop="S2_D2")}
@@ -511,10 +510,9 @@ def test_a_subject_with_nothing_rejected_keeps_every_channel():
 
 
 # ---- session trees ----
-# `derivatives_path` writes a session to its own folder, and this used to build
-# `sub-01/nirs` by hand: a session tree raised "Derivatives directory not found" and the
-# dyad analysis stopped at its first member. The `ses-` entity also sorts before `task-` in
-# a BIDS filename, so the old `{subject}_task-{task}_*` glob missed those names as well.
+# `derivatives_path` writes a session to its own folder, and the dyad analysis reads each
+# member from there rather than from `sub-01/nirs`. The `ses-` entity also sorts before
+# `task-` in a BIDS filename, so a `{subject}_task-{task}_*` glob would miss those names.
 
 def test_a_named_session_is_found_in_its_own_folder(tmp_path):
     nirs = tmp_path / "sub-01" / "ses-a" / "nirs"

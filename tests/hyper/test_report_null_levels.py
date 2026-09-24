@@ -197,7 +197,7 @@ def _null_table(out):
 
 def test_the_null_table_is_on_the_first_runs_provenance_diagram(dyad, tmp_path):
     # the diagram is drawn from the sidecars on disk, so a table written after the report
-    # only reached it on the next run
+    # would only reach it on the next run
     _build_with_null(dyad, tmp_path)
     assert _null_table(tmp_path).exists()
     (mmd,) = (tmp_path / "group-G1").rglob("*provenance*.mmd")

@@ -44,7 +44,7 @@ def _sidecar(directory, name, step, sources=(), **params):
     ("od_conversion", {}, "od_conversion"),
     ("beer_lambert", {}, "beer_lambert"),
     ("resample", {}, "resample"),
-    ("sci_pruning", {}, "sci_marking"),                         # renamed, same thing
+    ("sci_pruning", {}, "sci_marking"),                         # other name, same thing
     ("motion_correction", {"motion_correction": "tddr"}, "motion_tddr"),
     ("motion_correction", {"motion_correction": "wavelet"}, "motion_wavelet"),
     ("motion_correction", {"motion_correction": "none"}, None),  # nothing to describe
@@ -92,8 +92,8 @@ def test_the_lower_edge_of_the_band_is_called_two_things():
 
 
 def test_the_filter_sentence_names_the_filter_that_ran():
-    # the template used to spell one family into the prose, so a Butterworth run was
-    # described as an FIR one
+    # the family comes from the sidecar, so a Butterworth run is not described as an
+    # FIR one
     iir = template_slots("bandpass", {"high_pass": 0.01, "low_pass": 0.5,
                                       "filter_method": "iir", "filter_order": 4})
     assert "Butterworth" in iir["filter"] and "order 4" in iir["filter"]
@@ -102,16 +102,16 @@ def test_the_filter_sentence_names_the_filter_that_ran():
                                       "filter_method": "fir", "filter_order": None})
     assert "FIR" in fir["filter"] and "Butterworth" not in fir["filter"]
 
-    # a stage written before the method was recorded names no family at all
+    # a sidecar that records no method names no family at all
     assert template_slots("highpass", {"high_pass": 0.01})["filter"] == "a zero-phase filter"
 
 
 def test_the_noise_model_is_spelled_out_rather_than_pasted():
-    # `auto` reaches the sidecar unexpanded, and "a auto noise model" is what it printed
+    # `auto` reaches the sidecar unexpanded, and pasted in it would read "a auto noise model"
     assert "four times the sampling rate" in template_slots("glm", {"noise_model": "auto"})["noise_model"]
     assert template_slots("glm", {"noise_model": "ar12"})["noise_model"].endswith("order 12")
     assert "prewhitening" in template_slots("glm", {"noise_model": "ols"})["noise_model"]
-    # every mode fits one now, so the confound sentence has to name it too
+    # every mode fits one, so the confound sentence has to name it too
     assert "order 1" in template_slots("confound_regression", {"noise_model": "ar1"})["noise_model"]
 
 
@@ -134,9 +134,7 @@ def test_resample_accepts_either_key():
 
 def test_the_screening_sentence_names_every_cutoff_that_rejects_a_channel():
     """The Methods have to state the thresholds a channel was rejected on, and this is the
-    sentence a paper copies. It named SCI and PSP alone for one release after the two
-    stopped deciding anything on their own, so it described a rule the code had replaced:
-    `min_good_frac` is what rejects, and it was not in the paragraph at all.
+    sentence a paper copies.
 
     Driven off CRITERIA rather than a list written here, so a new screening criterion that
     never reaches the prose fails instead of shipping silently.
@@ -206,7 +204,7 @@ def test_every_citation_key_has_a_reference():
     """A key with no entry in references.bib prints as the bare key, in the paper text.
 
     ``_fmt_citations`` falls back to the key itself rather than raising, so a step citing
-    "Pollonini2016" with no such entry renders "(Pollonini et al., 2014; Pollonini2016)"
+    "Author2016" with no such entry renders "(Author et al., 2014; Author2016)"
     into the Methods paragraph and into the reference list under it. Nothing else notices,
     and the Methods paragraph is the part of the report that ends up in a manuscript.
     """

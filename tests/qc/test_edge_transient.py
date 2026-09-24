@@ -1,9 +1,9 @@
-"""Edge/mid RMS: the filter transient the reports never mentioned.
+"""Edge/mid RMS: the filter transient at the two ends of a filtered record.
 
 A high-pass with a low cutoff needs a long impulse response, so its output starts and ends
-with the filter settling. On real recordings that runs well above the middle of the record,
-and a detrend does not touch it, so the report says the number rather than leaving every
-figure drawn on a filtered stage to include it silently.
+with the filter settling. That can run well above the middle of the record, and a detrend
+does not touch it, so the report says the number rather than leaving every figure drawn on
+a filtered stage to include it silently.
 """
 
 import numpy as np
@@ -40,8 +40,7 @@ def test_a_loud_pair_of_ends_is_detected(raw):
 
 
 def test_a_real_high_pass_leaves_the_ends_louder(raw):
-    """The measurement that opened this: a bandpass alone produces the elevation, with no
-    artefact put in by hand."""
+    """A bandpass alone produces the elevation, with no artefact put in by hand."""
     import mne
 
     od = mne.preprocessing.nirs.optical_density(raw, verbose="error")

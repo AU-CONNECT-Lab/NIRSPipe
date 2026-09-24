@@ -1,13 +1,13 @@
 """The null keeps its spread, and the arrows are drawn against it per frequency.
 
-Two defects, one cause. `--wtc-phase-null` averaged its iterations on the spot, so a table said
-where the null sat but not how wide it was, and nothing could be ranked inside it. And the
-phase arrows on every coherence map were drawn at a flat 0.5, a display threshold that is
-not a test: surrogate coherence is not flat in frequency, it rises at both ends of the
-computed range, so one number over the whole map draws arrows preferentially where the data
-is least trustworthy.
+`--wtc-phase-null` keeps its iterations, so a table says how wide the null is as well as
+where it sits, and a real value can be ranked inside it. The phase arrows are drawn against
+a per-frequency level rather than a flat display threshold, which is not a test: surrogate
+coherence is not flat in frequency, it rises at both ends of the computed range, so one
+number over the whole map would draw arrows preferentially where the data is least
+trustworthy.
 
-Both are fixed by keeping what the surrogates already produced. The draws survive to be
+Both come from keeping what the surrogates already produce. The draws survive to be
 ranked against; each surrogate map is counted into a per-frequency histogram on the way past.
 """
 
@@ -117,8 +117,8 @@ def _crossed_real(diagonal, off_diagonal):
 
 def test_a_homologous_null_ranks_the_crossed_table_s_diagonal():
     """`--wtc-channel-cross` without `--wtc-phase-null-cross` is the recommended pair, and the
-    null is the null for the pairings it was drawn for. Keying on `label` alone took the
-    row that label came first in, which is its pairing with the *first* channel of the other
+    null is the null for the pairings it was drawn for. Keying on `label` alone would take
+    the row that label came first in, which is its pairing with the *first* channel of the other
     montage: right for the first label by coincidence and wrong for every other."""
     null = NullDraws(draws=[_homologous_draw(v) for v in (0.10, 0.20, 0.30)],
                       cond_draws=[], keys=KEYS, levels={})
@@ -141,7 +141,7 @@ def test_the_off_diagonal_is_not_what_the_homologous_null_is_ranked_against():
 # ---- the level is per frequency ----
 
 def test_the_level_is_read_per_frequency_not_over_the_whole_map():
-    """The defect the flat --wtc-arrow-min has. A map whose rows sit at different levels
+    """Unlike the flat --wtc-arrow-min: a map whose rows sit at different levels
     gets one threshold per row, so a cell is judged against its own frequency's null."""
     hists: dict = {}
     _accumulate_null_hist(hists, _map([0.9, 0.2, 0.7]), mask_coi=True)
@@ -227,7 +227,7 @@ def test_the_caption_names_the_level_it_actually_used():
 
 def test_a_condition_window_keeps_the_source_of_its_level():
     """Every condition page is drawn from a window of the whole-record map; losing the source
-    there captioned arrows drawn against the phase-scrambled null as the Monte Carlo level."""
+    there would caption arrows drawn against the phase-scrambled null as the Monte Carlo level."""
     from fnirs_pipe.pipeline.hyper.wtc import window_result
     from fnirs_pipe.qc.figures.hyper.hyper_post_figures import _clears
 
@@ -254,7 +254,7 @@ def test_the_level_survives_a_round_trip_to_disk(tmp_path):
 
 
 def test_reband_leaves_the_level_archive_alone(tmp_path):
-    """It sits under the same `*_hyper-wtc*.npz` prefix `fnirs-hyper band` globs, but holds
+    """It sits under the same `*_hyper-wtc*.npz` prefix `fnirs-hyper-band` globs, but holds
     one row per pair rather than a map, so opening it only produces a warning."""
     from fnirs_pipe.pipeline.hyper.wtc_store import reband_tree, save_null_levels
 

@@ -57,10 +57,8 @@ def test_the_selected_coefficients_are_yule_walkers(seed, truth):
 
 
 def test_the_periodogram_autocovariance_equals_the_direct_one():
-    """The order search takes its autocovariance through an FFT because `np.correlate` is a
-    direct O(n^2) convolution: 18 ms against 0.8 ms on a ten-minute recording, called once
-    per pass per channel. Same numbers, so this pins that the speed changed and the estimate
-    did not."""
+    """The order search takes its autocovariance through an FFT rather than `np.correlate`'s
+    direct O(n^2) convolution; the two must give the same numbers."""
     rng = np.random.default_rng(20)
     for n in (997, 4096, 5000):                 # one prime, one power of two, one neither
         x = _ar_series(rng, n, [0.6, -0.2])
@@ -200,11 +198,8 @@ def test_the_solver_agrees_with_an_independent_transcription():
     estimators and treat the first few samples differently, so this compares two readings of
     one algorithm rather than one implementation with itself.
 
-    The yardstick is the estimate's own sampling variability. Measured over these eight
-    draws the gap runs 0.003 to 0.41 standard errors with a median near 0.15, against a
-    distance from the truth of roughly 1 standard error, so the two implementations agree far
-    more closely than either agrees with what it is estimating. The thresholds are that
-    measurement with room, not a tolerance picked to pass.
+    The yardstick is the estimate's own sampling variability: the two implementations should
+    agree far more closely than either agrees with what it is estimating.
     """
     truth = 1.0
     gaps, from_truth = [], []
@@ -249,9 +244,8 @@ def test_the_model_object_reproduces_the_robust_fit():
 @pytest.mark.parametrize("n_bursts", [0, 10])
 def test_the_standard_error_is_the_robust_one(n_bursts):
     """The estimate is only half of it: the t value divides by this, so a covariance rebuilt
-    from the weighted normal equations instead of taken from the robust fit is a silent 3%
-    error on every t in the run. Rebuilding it was the first version of this solver and this
-    is what caught it."""
+    from the weighted normal equations instead of taken from the robust fit is a silent
+    error on every t in the run."""
     rng = np.random.default_rng(19)
     n = 4000
     X = _task_design(n)
@@ -334,10 +328,7 @@ def _null_rejection_rates(n_draws, n, n_bursts, seed0):
 def test_the_t_value_is_calibrated_under_a_clean_ar_null():
     """The estimator's job. Under noise with no effect in it, a nominal 5% test should reject
     about 5% of the time. OLS is the control: it is known to be badly inflated at these
-    sampling rates, so a run where it also looked fine would mean the null was too easy.
-
-    Measured over 250 draws the three arms come out 0.056, 0.052 and 0.304; the bounds here
-    are that with room for 120 draws' binomial noise."""
+    sampling rates, so a run where it also looked fine would mean the null was too easy."""
     r = _null_rejection_rates(n_draws=120, n=2000, n_bursts=0, seed0=5000)
     assert r["ols"] > 0.20, f"the control is not inflated ({r['ols']:.3f}); the null is too easy"
     assert 0.01 < r["ar_irls"] < 0.13, f"ar_irls {r['ar_irls']:.3f} against a nominal 0.05"
@@ -346,11 +337,7 @@ def test_the_t_value_is_calibrated_under_a_clean_ar_null():
 @pytest.mark.slow
 def test_the_robust_norm_holds_calibration_when_the_null_is_contaminated():
     """Where AR-IRLS is supposed to beat plain whitening. Bursts the AR model cannot absorb
-    push the unweighted arm off nominal; the robust one should stay near it.
-
-    Measured over 250 draws with eight bursts: ar_irls 0.060, AR alone 0.072, OLS 0.684. The
-    same construction with no bursts gives 0.056 and 0.052, so the gap is the contamination
-    and not the estimator."""
+    push the unweighted arm off nominal; the robust one should stay near it."""
     r = _null_rejection_rates(n_draws=120, n=2000, n_bursts=8, seed0=5000)
     assert r["ols"] > 0.40, f"the control is not inflated ({r['ols']:.3f})"
     assert r["ar_irls"] < 0.14, f"ar_irls {r['ar_irls']:.3f} against a nominal 0.05"

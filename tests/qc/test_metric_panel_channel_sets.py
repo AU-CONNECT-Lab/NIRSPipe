@@ -1,10 +1,8 @@
 """Every row of the haemoglobin panel names the channel set its caption claims.
 
-The panel says "measured on long channels" and prints eight rows. Seven came off the
-record's ``*_long`` sections; the GCOR pair did not. It was measured a second time inside
-``run_post``, over every channel, and handed to the report as a function argument, so the
-two sat in one list under one caption and disagreed. The two readings can move in opposite
-directions across the confound regression: the short channels are what the regression
+The panel says "measured on long channels", so the GCOR pair comes off the record's
+``*_long`` sections like the rows beside it. A reading over every channel can move the
+opposite way across the confound regression: the short channels are what the regression
 removes, so including them in the measure of what the regression did makes it look like it
 worked.
 
@@ -50,7 +48,7 @@ def _panel(tmp_path, record=None) -> dict:
 
 def test_the_regression_pair_is_the_same_channel_set_as_the_rows_beside_it(tmp_path):
     sqm = _panel(tmp_path)
-    # the caption's set, shown by a row that was always right
+    # the caption's set, as the correlation row reads it
     assert sqm["hbo_hbr_corr_mean"] == RECORD["preproc_long"]["hbo_hbr_corr_mean"]
     for chroma in ("hbo", "hbr"):
         assert sqm[f"gcor_{chroma}_prereg"] == RECORD["filtered_long"][f"gcor_{chroma}"]

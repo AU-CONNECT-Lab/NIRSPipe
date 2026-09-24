@@ -1,8 +1,8 @@
 """`fnirs-pipe participant` on a subject recorded in two sessions, without `--session-label`.
 
-The configs took their session from the `--session-label` loop, which is None when the flag
-is not given, rather than from the file being processed. Every output of a session tree then
-went to `sub-<id>/nirs` without its `ses-` entity, and the second session overwrote the first.
+Each config takes its session from the file being processed, not from the `--session-label`
+loop (None when the flag is not given), so every output keeps its `ses-` entity and neither
+session overwrites the other.
 """
 
 import shutil

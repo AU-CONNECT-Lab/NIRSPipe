@@ -1,13 +1,10 @@
 """The denoise mode's two independent halves: the confound regression, and `--fc`.
 
 Either can run without the other, which is what separates this mode from rest. rest forces
-a drift model and always writes ALFF, so "bandpass, then correlate" -- the most common FC
-recipe there is -- had no route through the package that did not also run a GLM nobody asked
+a drift model and always writes ALFF, so "bandpass, then correlate" (the most common FC
+recipe there is) needs a route through the package that does not also run a GLM nobody asked
 for. These tests pin that route, and they pin which signal the correlation was taken on,
 because that is the only thing distinguishing the two ways of reaching it.
-
-The regression half had no coverage at all before this file: `_has_confounds` was there and
-nothing reached it.
 """
 
 import json

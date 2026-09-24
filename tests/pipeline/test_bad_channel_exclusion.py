@@ -1,8 +1,8 @@
 """Rejected channels must not reach an aggregate that every good channel is scaled by.
 
-Three places had this wrong. The worst was the short-channel regressor: it sits in the
-design matrix, so one bad short channel shifted every channel's fit. None of the three
-raises, none of them shows up on clean data, and all three change numbers silently,
+Three aggregates are covered. The short-channel regressor matters most: it sits in the
+design matrix, so one bad short channel would shift every channel's fit. A leak into any
+of the three raises nothing, does not show up on clean data, and changes numbers silently,
 which is why each is tested the same way: mark a channel bad, then make that channel
 absurd, and assert the aggregate did not move. Each pairing has a companion test that
 the same distortion *does* move the aggregate while the channel is good, so a function

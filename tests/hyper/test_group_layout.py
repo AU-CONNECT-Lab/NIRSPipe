@@ -1,9 +1,8 @@
 """Where a group's outputs land on disk.
 
-A subject owns a folder; a group did not, and wrote its tables and reports loose in the
-derivatives root instead. A study of any size puts thousands of files there, between the
-reader and the subject folders. These pin the folder, not the filenames, which did not
-change.
+A group owns a folder, as a subject does, so its tables and reports do not land loose in
+the derivatives root, where a study of any size would put thousands of files between the
+reader and the subject folders. These pin the folder, not the filenames.
 """
 
 import pandas as pd
@@ -65,7 +64,7 @@ def test_a_subject_folder_is_named_the_same_way_from_either_form(tmp_path):
 
 
 def test_the_raw_qc_report_lands_in_the_subject_folder(tmp_path):
-    """It used to sit loose in the root, one file per run beside the study's own."""
+    """Not loose in the root, one file per run beside the study's own."""
     from fnirs_pipe.qc.subject.prep_raw_report import build_prep_raw_report
 
     from fnirs_pipe.io.naming import report_name

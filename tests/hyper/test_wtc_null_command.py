@@ -1,15 +1,14 @@
 """The null shares the hyper run but not its crossing.
 
-`hyper-post --wtc-phase-null` used to pass `cross=wtc_channel_cross` straight through, so asking
-for the exploratory 196-pair channel table also multiplied every surrogate iteration by 14.
-That coupling was invisible on disk too: the null's sidecar recorded the band but neither the
-iteration count nor the shape, so a 5-iteration probe and a 100-iteration null looked alike.
+The null's crossing is set by its own flag, `--wtc-phase-null-cross`, not by the table's:
+crossing the channel table multiplies the cost of every surrogate iteration. The null's
+sidecar records the iteration count and the shape as well as the band, so a short probe and
+a full null do not look alike.
 
 The null runs inside `fnirs-hyper`, which is what keeps its band and its stage identical
-to the table it sits beside, and the independence is carried by `--wtc-phase-null-cross`
-instead. These tests hold that independence in place: the null is off unless asked for, its
-crossing is its own decision, the sidecar says what was run, and a merge refuses to mix
-iteration counts.
+to the table it sits beside. These tests hold that in place: the null is off unless asked
+for, its crossing is its own decision, the sidecar says what was run, and a merge keeps
+mixed iteration counts visible while refusing mixed bands.
 """
 
 import json
@@ -114,8 +113,8 @@ def test_the_sidecar_records_the_iteration_count_and_the_shape(tmp_path, monkeyp
 
 def test_the_null_tags_each_chromophore_without_mutating_the_frame(tmp_path, monkeypatch, make_raw):
     """One pass per chromophore, and the frame each returns is not the null's to
-    change. Inserting the column in place worked for HbO and raised on HbR as soon as
-    two passes were handed the same object, which a cache or a stub does."""
+    change. Inserting the column in place would raise on the second pass as soon as
+    two passes are handed the same object, which a cache or a stub does."""
     import fnirs_pipe.pipeline.hyper as hyper
     from fnirs_pipe.pipeline.hyper import wtc_null
 
@@ -170,11 +169,11 @@ def _write_null(root, gid, task, n_iter, band_fmin=0.06):
 
 
 def test_nulls_of_different_lengths_merge_but_say_so(tmp_path, caplog):
-    """They used to be refused. n_iter is a column, so the rows survive the merge intact.
+    """n_iter is a column, so the rows survive the merge intact.
 
-    A refusal here stopped the whole cohort because one group had a coarser null, on a
-    dataset where the re-paired pool is finite and its size tracks recording length. What
-    the reader needs is the count beside the percentile, and that is in the table.
+    A re-paired pool is finite and its size can differ by group, so one group's coarser null
+    must not stop the whole cohort. What the reader needs is the count beside the
+    percentile, and that is in the table.
     """
     _write_null(tmp_path, "G01", "baseline", 100)
     _write_null(tmp_path, "G02", "baseline", 5)
@@ -201,7 +200,7 @@ def test_nulls_of_one_length_merge(tmp_path):
 
 
 def test_merge_covers_whatever_is_on_disk(tmp_path):
-    """It used to iterate a hardcoded list of kinds and skip anything not on it."""
+    """Every kind on disk is merged, not only the kinds on a fixed list."""
     from fnirs_pipe.cli.hyper import cmd_merge
 
     _write_null(tmp_path, "G01", "baseline", 100)

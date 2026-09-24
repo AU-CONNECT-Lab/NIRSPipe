@@ -6,26 +6,22 @@ unchanged; the padding region must stay out of the statistics; the output must s
 with its input, which is what makes the noise normalisation a no-op; and correct_motion
 must stamp what it returns.
 
-The bench exists because two choices inside _wl_filter_coeffs were carried over from a
-reference implementation rather than decided here, and either one changes results:
+The bench exists because two choices inside _wl_filter_coeffs admit another reading, and
+either one changes results:
 
-  blocks   Each detail level used to be split into 2**(n_levels - i - 1) chunks with the
-           IQR taken per chunk. The reference that came from stored its coefficients as
-           shift branches, so a chunk there was the whole recording seen through one
-           phase; SWT arrays are time-ordered, so a chunk here was a time window instead.
-           The method is defined over one distribution per level across the entire time
-           span, so the split is gone. _filter_blocked keeps the old behaviour so the bench
-           can measure what the change cost or bought.
-  level    Used to be fixed at 4, reaching scales of roughly 0.2 to 1.6 s at 10 Hz, so a
-           baseline shift was never reached. The depth now follows the recording length and
-           reaches about 25 s. The reference also picks which of those levels to clean by
-           contamination; _filter_level_pick shows why that rule does not survive the move
-           to SWT, and the bench keeps it so the decision is not re-litigated from scratch.
+  blocks   _wl_filter_coeffs takes one IQR distribution per detail level across the entire
+           time span. The alternative splits each level into 2**(n_levels - i - 1) chunks
+           with the IQR taken per chunk; SWT arrays are time-ordered, so a chunk is a time
+           window. _filter_blocked keeps that form so the bench can measure the difference.
+  level    The depth follows the recording length and reaches about 25 s. A depth fixed at
+           4 reaches scales of roughly 0.2 to 1.6 s at 10 Hz, so a baseline shift is never
+           reached. Picking which levels to clean by contamination is the other alternative;
+           _filter_level_pick shows why that rule does not survive the move to SWT.
 
 test_bench prints the metrics for both choices on two traces. It asserts nothing about
 which wins: that call needs real recordings. Run it with
 
-    pytest tests/test_motion_wavelet.py -k bench -s
+    pytest tests/pipeline/test_motion_wavelet.py -k bench -s
 
 The two traces are not interchangeable. With n_levels = 4 the block counts run 8 / 4 / 2
 / 1 from the coarsest level to the finest, so the finest level is not split at all and a
@@ -209,7 +205,7 @@ def test_spline_says_it_has_no_backend():
 
 
 def test_spline_is_not_offered_by_the_clis():
-    # it used to pass argparse and fail at the correction step, the worst moment to find out
+    # offering it would pass argparse and fail only at the correction step
     import argparse
 
     from fnirs_pipe.cli.qc import _build_parser as qc_parser
@@ -276,7 +272,7 @@ def _filter_level_pick(coeffs, iqr_factor: float, signal_length: int):
 
 
 def _filter_blocked(coeffs, iqr_factor: float, signal_length: int):
-    """What _wl_filter_coeffs did before: one IQR per time window per level."""
+    """The chunked alternative: one IQR per time window per level."""
     n = len(coeffs[0][0])
     n_levels = len(coeffs)
     cAf = coeffs[0][0].copy()

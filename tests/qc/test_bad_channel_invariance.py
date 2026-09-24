@@ -1,11 +1,11 @@
 """A good channel's metric must not depend on which *other* channels are bad.
 
 `test_bad_channel_exclusion.py` pins three named functions against a leak. This is the
-general statement behind them, and it is the shape of the bug that prompted them:
-`_spectral_metrics` indexed a PSD array with indices taken from `raw.info`, but
-`Spectrum.get_data()` drops bad channels, so the array was shorter than the index space. It
-raised only once enough channels were bad, and `@_safe_metrics` turned the exception into
-eight silently missing metrics. Clean data never showed it.
+general statement behind them. The shape of the leak: a PSD array indexed with indices
+taken from `raw.info`, while `Spectrum.get_data()` drops bad channels, so the array is
+shorter than the index space. That raises only once enough channels are bad, and
+`@_safe_metrics` turns the exception into silently missing metrics. Clean data never
+shows it.
 
 So there are two assertions here and the second matters as much as the first:
 
@@ -99,8 +99,8 @@ def test_the_per_channel_dicts_hold_the_good_channels_and_only_those(haemo):
 # ---- the regression guard: heavy exclusion must not silence a metric ----
 
 def test_no_metric_goes_missing_when_most_channels_are_bad(haemo):
-    # the original defect needed 16 of 56 bad before it raised, so a two-channel case
-    # would not have caught it. Leave two pairs standing and nothing more
+    # the leak raises only once many channels are bad, so a two-channel case would not
+    # catch it. Leave two pairs standing and nothing more
     names = haemo.ch_names
     clean = _haemo_record(haemo, [])
     heavy = _haemo_record(haemo, names[:-4])
@@ -111,8 +111,8 @@ def test_no_metric_goes_missing_when_most_channels_are_bad(haemo):
 
 
 def test_the_spectral_metrics_specifically_survive_it(haemo):
-    # named explicitly because these eight are the ones that went missing, and a future
-    # refactor that reintroduces info-derived indexing would land here first
+    # named explicitly because these eight index the PSD, so info-derived indexing
+    # would silence them first
     names = haemo.ch_names
     heavy = _haemo_record(haemo, names[:-4])
     for key in ("cardiac_band_power_hbo", "cardiac_band_power_hbr",

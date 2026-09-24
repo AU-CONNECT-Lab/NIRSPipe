@@ -1,8 +1,8 @@
 """The dyad rating server reads its group, session and task off the report it serves.
 
-It matched a `desc-hyperraw_nirs` stem the raw dyad report stopped carrying when the reports
-were renamed, so every served page fell back to task `unknown` and each member's channel
-decisions went to a file the raw QC page never reads.
+It matches the stem the raw dyad report carries: a stem it missed would send every served
+page to task `unknown` and each member's channel decisions to a file the raw QC page never
+reads.
 """
 
 from fnirs_pipe.io.derivatives import channel_decisions_path

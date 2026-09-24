@@ -137,7 +137,7 @@ def test_the_roi_average_wraps_too():
 
 
 def test_a_frame_with_no_phase_columns_still_averages():
-    # callers that built a band frame by hand predate these columns
+    # a band frame built by hand may not carry these columns
     frame = _band_frame([0.0, 0.0]).drop(columns=["phase_angle", "phase_sd", "phase_n"])
     out = roi_mean_of_channels(frame, {"pfc": ["S1_D1", "S1_D2"]})
     assert "phase_angle" not in out.columns

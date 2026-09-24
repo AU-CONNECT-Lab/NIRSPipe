@@ -79,7 +79,7 @@ def test_only_a_cosine_basis_is_bounded_this_way(caplog):
     assert caplog.text == ""
 
 
-# ---- the data side, which was already checked ----
+# ---- the data side ----
 
 def test_a_cutoff_below_the_data_high_pass_warns(caplog):
     with caplog.at_level("WARNING"):
@@ -113,9 +113,9 @@ def test_the_two_bounds_can_exclude_each_other(caplog):
 # ---- the high end: a low-pass and an AR noise model do not mix ----
 
 def test_a_low_pass_under_an_ar_model_is_warned_about(caplog):
-    """Measured consequence, so it is not a style note: whitening a low-passed series takes
-    the AR coefficient to the stationarity boundary and leaves the residual as correlated as
-    it started, which moves the t values and not the betas."""
+    """Whitening a low-passed series takes the AR coefficient to the stationarity boundary
+    and leaves the residual as correlated as it started, which moves the t values and not the
+    betas."""
     import logging
 
     with caplog.at_level(logging.WARNING):
@@ -125,8 +125,8 @@ def test_a_low_pass_under_an_ar_model_is_warned_about(caplog):
 
 
 def test_the_modes_whose_product_is_the_residual_are_warned_too(caplog):
-    """denoise and rest stopped hard-coding ols, so the same combination now moves the file
-    they exist to write. The warning has to name that, not the t values they do not compute:
+    """denoise and rest fit the requested noise model too, so the same combination moves the
+    file they exist to write. The warning has to name that, not the t values they do not compute:
     a reader whose coherence changed needs to be told the residual did."""
     import logging
 
@@ -163,16 +163,9 @@ def test_ols_and_an_unfiltered_run_are_both_silent(caplog):
 # ---- the noise model a caller lands on by default ----
 
 def test_the_cli_takes_any_order_the_library_takes():
-    """`auto` was reachable until the CLI moved from typer to argparse. Typer took its
-    choices from the `NoiseModel` Literal, which has always listed it; argparse took them
-    from a list transcribed by hand, and the transcription dropped it. Two months later
-    nobody had noticed, and it was the only listed model that whitens a recording at fNIRS
-    sampling rates.
-
-    A closed list is the thing that failed, so there is no longer one: what the package has
-    measured is a reason to pick a default, not a reason to refuse an order. The suggestion
-    list still has to be acceptable to the validator, or the GUI dropdown would offer a value
-    the CLI rejects."""
+    """The CLI validates by rule rather than against a closed list. The suggestion list still
+    has to be acceptable to the validator, or the GUI dropdown would offer a value the CLI
+    rejects."""
     import argparse
 
     import pytest as _pytest
@@ -192,11 +185,7 @@ def test_the_cli_takes_any_order_the_library_takes():
 def test_the_default_does_not_shadow_a_config_file():
     """`pick` takes the CLI value when it is not None, so a default declared in argparse
     would make the TOML unreachable. It belongs in the `pick` call, as every other defaulted
-    field here has it.
-
-    Asserted off the built parser rather than off the source text: the first version of this
-    matched the argument's source line and broke the moment that line was reformatted, which
-    is what testing how something is written instead of what it does buys you."""
+    field here has it."""
     import inspect
 
     from fnirs_pipe.cli import workflows
@@ -210,12 +199,8 @@ def test_the_default_does_not_shadow_a_config_file():
 
 
 def test_every_mode_fits_the_model_that_was_asked_for():
-    """denoise and rest used to hard-code ols, which made `--noise-model` a flag they
-    accepted and dropped. They report no statistic, so nothing there needs calibrating, and
-    it was measured that the choice moves their coherence by 0.0034 against a 0.0181 window
-    placement noise. That is a reason exposing it is safe, not a reason to hide it: a
-    confound regression under autocorrelated noise is a place where someone may reasonably
-    want generalised least squares, and the package has no standing to refuse."""
+    """denoise and rest pass `--noise-model` through to their fit rather than accepting it
+    and dropping it."""
     import inspect
 
     from fnirs_pipe.pipeline import post_pipeline
@@ -226,11 +211,10 @@ def test_every_mode_fits_the_model_that_was_asked_for():
 
 
 def test_the_gui_field_takes_what_the_cli_takes():
-    """The Analysis page used a dropdown over the same hand-written list, which made it the
-    narrower surface the moment the CLI stopped using one, and it pre-selected `ar1`. It is
-    free text with a suggestion list now, and its `pattern` is the CLI's rule.
+    """The Analysis page's field is free text with a suggestion list, and its `pattern` is
+    the CLI's rule.
 
-    The rule is now written once and the page imports it, so what is left to pin is that the
+    The rule is written once and the page imports it, so what is left to pin is that the
     page still reaches for it: a `pattern=` spelled out again here would be the second copy
     this test exists to prevent. A user typing `ar16` into the page and having the browser
     refuse it, or the page accepting something the CLI then rejects, are both silent.

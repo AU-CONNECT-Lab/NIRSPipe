@@ -1,10 +1,9 @@
-"""The picked-at-load view must render as the written-out view did, pixel for pixel.
+"""The picked-at-load view must render as the written-out view does, pixel for pixel.
 
-A condition's window used to be baked into a file of its own: the figure was narrowed, its y
-axes refitted, and the result saved. Now one file carries every condition's window in a
-table and the page applies one on load, which moves part of the work into JavaScript that no
-Python test can see. `rescale_y_to_window` is kept as the reference for exactly that reason:
-it is what the rendering is *supposed* to be, and the shim has to reproduce it.
+One file carries every condition's window in a table and the page applies one on load, so
+part of the work runs in JavaScript that no Python test can see. The written-out view, the
+figure narrowed and its y axes refitted by `rescale_y_to_window`, is the reference: it is
+what the rendering is *supposed* to be, and the shim has to reproduce it.
 
 So this compares the two by rendering both in a browser and hashing the pixels. It needs
 Chrome and reaches the Plotly CDN the saved files name, and skips when either is missing

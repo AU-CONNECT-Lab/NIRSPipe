@@ -33,7 +33,7 @@ def preview_text(argv: list[str], shell: str) -> str:
 REPORT_PATTERNS: dict[str, list[str]] = {
     "prep-raw":     ["sub-*/sub-*_desc-raw_report.html"],
     "hyper-raw":    ["group-*/group-*_desc-raw_report.html"],
-    # the dyad's landing page is its index, which `run` writes too; the task page is the
+    # the dyad's landing page is its index, which `fnirs-hyper` writes too; the task page is the
     # fallback for a tree whose index failed. A bare `_task-*_report.html` glob would also
     # match the per-condition and per-pairing pages, and those are not where to land
     "run":          ["group-*/group-*_desc-index_report.html",

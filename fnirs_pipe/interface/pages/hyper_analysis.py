@@ -22,12 +22,12 @@ _DEFAULT_SHELL = "cmd" if platform.system() == "Windows" else "bash"
 _DESC_CHOICES = [desc for desc, domain in _DOMAIN.items() if domain == "haemo"]
 
 _COMMANDS = [
-    {"label": "Analyse dyads (run)", "value": "run"},
-    {"label": "Re-paired null (pair-null)", "value": "pair-null"},
-    {"label": "Read the draws above the cell (group-null)", "value": "group-null"},
-    {"label": "Re-average saved WTC maps (band)", "value": "band"},
-    {"label": "Merge WTC tables across dyads (merge)", "value": "merge"},
-    {"label": "Rebuild the dyad landing pages (index)", "value": "index"},
+    {"label": "Analyse dyads (fnirs-hyper)", "value": "run"},
+    {"label": "Re-paired null (fnirs-hyper-pairnull)", "value": "pair-null"},
+    {"label": "Read the draws above the cell (fnirs-hyper-groupnull)", "value": "group-null"},
+    {"label": "Re-average saved WTC maps (fnirs-hyper-band)", "value": "band"},
+    {"label": "Merge WTC tables across dyads (fnirs-hyper-merge)", "value": "merge"},
+    {"label": "Rebuild the dyad landing pages (fnirs-hyper-index)", "value": "index"},
 ]
 
 
@@ -190,8 +190,8 @@ def _pair_null_section():
             )),
         ),
         subtitle="Pairs one member with people from the other groups who did the same task. "
-                 "Run it after a run: the band, the mask and the window come off the tables "
-                 "that run wrote, not off this form. The number of draws is the number of "
+                 "Run it after fnirs-hyper: the band, the mask and the window come off the "
+                 "tables fnirs-hyper wrote, not off this form. The number of draws is the number of "
                  "other groups, which is what limits how finely it can rank.",
     ))
 
@@ -224,7 +224,7 @@ def _group_null_section():
         ),
         subtitle="Averages the channels before ranking, once per occasion and once over the "
                  "cohort. It cannot say which channel, and in exchange it can say whether the "
-                 "pairing beats its null at all. Reads what pair-null wrote and runs no "
+                 "pairing beats its null at all. Reads what fnirs-hyper-pairnull wrote and runs no "
                  "transform, so one chromophore at a time.",
     ))
 

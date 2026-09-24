@@ -2,8 +2,8 @@
 
 These cover the mechanism itself: does the stamp survive the MNE operations the
 pipeline actually performs, and does Recorder resolve an output's source to the
-right file. Both have produced silent wrong answers before, so the assertions
-here are about correctness of attribution, not about any numeric result.
+right file. Both fail silently, so the assertions here are about correctness
+of attribution, not about any numeric result.
 """
 
 import pytest
@@ -199,8 +199,7 @@ def test_written_records_the_entry_and_last(make_raw, tmp_path):
 
 def test_writing_the_same_stage_twice_raises(make_raw, tmp_path):
     # Two files sharing one stage makes source resolution pick whichever was written
-    # last, which once credited ALFF to the wrong residual. A parallel branch needs
-    # its own stage name (that is why errtsbroad exists).
+    # last. A parallel branch needs its own stage name (that is why errtsbroad exists).
     rec = Recorder()
     first = stamp(make_raw(), stage="errts", step="glm_residuals")
     second = stamp(make_raw(), stage="errts", step="glm_residuals_broadband")
@@ -215,10 +214,10 @@ def test_writing_the_same_stage_twice_raises(make_raw, tmp_path):
 def test_alignment_carries_the_passband_forward(make_raw):
     """Every inter-brain consumer sees only the aligned stamp, so the filter has to survive.
 
-    `stamp` replaces the whole entry, so the errts stage's `high_pass` was dropped the moment
-    the recordings were put on one clock. The ISC panel reads that key to decide whether a
-    whole-record correlation is being run on drift, and with it gone it said so on every run,
-    filtered or not.
+    `stamp` replaces the whole entry, so the errts stage's `high_pass` has to be carried onto
+    the aligned stamp. The ISC panel reads that key to decide whether a whole-record
+    correlation is being run on drift, and without it would say so on every run, filtered or
+    not.
     """
     from fnirs_pipe.pipeline.hyper.alignment import trim_to_shortest
     from fnirs_pipe.pipeline.hyper.group_io import unfiltered_stage_note

@@ -1,8 +1,7 @@
 """The seed map's route from run_post to the report figure.
 
-`compute_fc_seed` and its TSVs were covered by test_rest_outputs; nothing carried the frames
-any further, so the report could not draw them at all. These pin the two halves of that route:
-run_post handing the frames back, and the figure turning them into a flat map.
+These pin the two halves of that route: run_post handing the frames back, and the figure
+turning them into a flat map.
 
 The figure is a Plotly figure, so what is asserted is the geometry that carries the meaning:
 one row of panels per seed ROI, one column per chromophore, and None rather than an exception
@@ -150,7 +149,7 @@ def test_the_head_carries_the_long_channels_and_only_those(haemo):
     assert drawn.isdisjoint({c.split(" ")[0] for c in short_names})
 
 
-# ---- the head outline moved to _utils, so the figure that had it inline must still draw ----
+# ---- the optode layout draws on the shared head outline ----
 
 def test_optode_layout_still_renders_after_the_outline_moved(haemo):
     from fnirs_pipe.qc.figures import optode_layout_static

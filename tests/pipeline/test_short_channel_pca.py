@@ -1,12 +1,10 @@
 """`--short-channel pca`: every short channel as its own column, orthogonalised.
 
-The published comparison ranks the nonselective strategies above picking one short channel
-per long one, and puts the pooled decomposition above the mean. What it does not do, and
-what neither AnalyzIR nor the paper's own fork of it does, is drop components: the basis is
-kept whole. That matters for reading the result, because a full-rank orthonormal basis spans
-exactly what the raw short channels span, so the fit is the one entering them all would give
-and the decomposition is only there to keep the columns from being collinear. The first test
-here is that equivalence, since it is what the methods text has to be honest about.
+No components are dropped: the basis is kept whole. That matters for reading the result,
+because a full-rank orthonormal basis spans exactly what the raw short channels span, so the
+fit is the one entering them all would give and the decomposition is only there to keep the
+columns from being collinear. The first test here is that equivalence, since it is what the
+methods text has to be honest about.
 
 Everything the mean strategy refuses, this refuses the same way: a montage with no short
 channel at all, and a chromophore whose short channels were all rejected.
@@ -72,7 +70,7 @@ def test_the_components_are_orthogonal():
 
 
 def test_each_component_is_scaled_to_unit_variance():
-    """So the columns sit beside the drift basis on one scale, as AnalyzIR also does."""
+    """So the columns sit beside the drift basis on one scale."""
     basis = np.array(list(_short_channel_basis(_block()).values()))
     assert np.allclose(basis.std(axis=1), 1.0)
 
@@ -96,7 +94,7 @@ def test_an_unknown_strategy_is_refused_by_name(fake_raw):
 
 
 def test_a_config_file_saying_true_still_means_mean(monkeypatch, fake_raw):
-    """`short_channel = true` in a TOML predates there being a strategy to name."""
+    """`short_channel = true` in a TOML names no strategy, so it reads as the mean."""
     captured = {}
 
     def fake_short(raw, sep_bands=None):
@@ -114,9 +112,8 @@ def test_a_config_file_saying_true_still_means_mean(monkeypatch, fake_raw):
 def test_it_spans_the_same_subspace_as_scipys_orth():
     """The properties above are self-consistency: any orthonormal basis of the space passes.
 
-    This pins the space itself against a routine written by somebody else. `scipy.linalg.orth`
-    is the analogue of the MATLAB `orth` both reference implementations call, so agreeing with
-    it is agreeing with them. The comparison is the projection matrix rather than the vectors,
+    This pins the space itself against a routine written by somebody else. The comparison is
+    the projection matrix rather than the vectors,
     because a basis is only defined up to rotation and sign inside its span and the GLM sees
     nothing but the span.
     """

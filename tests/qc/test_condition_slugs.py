@@ -2,7 +2,7 @@
 
 A condition reaches a file name through a slug that keeps letters and digits only, so
 "game 1" and "game1" name one file, and so do a second "game1" block ("game1#2") and a
-condition called "game12". The later file replaced the earlier one without a word.
+condition called "game12", and the later file would replace the earlier one without a word.
 
 What is measured is keyed by the label itself and keeps both; what is named by the slug is
 refused. The dyad report fails the group, since its per-condition tables are named by the

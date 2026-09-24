@@ -1,11 +1,8 @@
 """Cutting conditions into equal-length windows, and what the cut has to preserve.
 
-The unit of analysis moves from the condition to the window so that the estimation problem
-is identical everywhere: a condition's own length sets the width of a resampled null and how
-many cycles of the band's slowest oscillation the block holds, so two conditions of different
-length are not estimating the same quantity. These hold the two properties that make the move
-worth anything, equal spans and a recoverable origin, plus the refusals that keep a window of
-some other length out of the result.
+Equal spans make every window the same estimation problem. These hold the two properties
+the cut exists for, equal spans and a recoverable origin, plus the refusals that keep a
+window of some other length out of the result.
 """
 
 import pytest

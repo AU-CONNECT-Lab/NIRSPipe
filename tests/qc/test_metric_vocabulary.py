@@ -193,7 +193,7 @@ def test_the_chromophore_pairs_are_complete():
 
 def test_a_tooltip_stays_short_enough_to_read():
     # a native title tooltip is a hover, not a paragraph: past about three sentences readers
-    # stop opening them, and the long ones used to repeat the same stage line on every metric
+    # stop opening them
     for metric in METRIC_SUMMARY:
         text = metric_summary(metric)
         n = len([p for p in re.split(r"(?<=[.!?])\s+", text) if p.strip()])
@@ -271,7 +271,7 @@ def test_the_per_trial_heatmap_can_orient_every_row_it_draws():
 
 
 def test_gvtd_points_at_the_threshold_that_applies_to_it():
-    """The one pairing that was documented wrongly once already.
+    """The GVTD threshold is described against the trace it is compared with.
 
     `gvtd_thresh` is computed from the band-passed trace and compared against it, so it is
     a cutoff for `gvtd_filt_*` and not for the unfiltered `gvtd_mean` / `gvtd_p95`.

@@ -88,7 +88,7 @@ def test_every_row_still_belongs_to_its_own_frequency(short_pair, raw_pycwt):
 
 
 def test_the_phase_is_carried_through_the_same_reordering_as_the_coherence(short_pair, raw_pycwt):
-    """pycwt's second return is the relative phase, and we used to drop it.
+    """pycwt's second return is the relative phase, and it is kept.
 
     It is the one output that has to travel through the identical sort, band mask and
     decimation as the coherence: a mismatch anywhere in that chain rotates every arrow on

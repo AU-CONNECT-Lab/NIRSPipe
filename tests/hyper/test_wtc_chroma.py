@@ -109,8 +109,8 @@ def test_the_error_names_the_chromophore_that_has_no_channel(dyad):
 
 
 def test_the_screening_coherence_stays_hbo():
-    """`fnirs-qc hyper-raw`'s coherence is a screening number rather than a result, and was
-    deliberately left out of scope, so it takes no chromophore at all."""
+    """`fnirs-qc hyper-raw`'s coherence is a screening number rather than a result, so it
+    takes no chromophore at all."""
     import inspect
     assert "ch_type" not in inspect.signature(compute_pairwise_coherence).parameters
 
@@ -181,7 +181,7 @@ def test_a_reband_puts_the_chromophore_column_back(report):
 
 def test_the_isc_tables_stay_one_file_each(report):
     """ISC is a channel-by-channel matrix, and two cannot share a file the way two long
-    tables can, so it keeps the per-chromophore filenames it has always had."""
+    tables can, so it keeps per-chromophore filenames."""
     for ch_type in ("hbo", "hbr"):
         assert (report / name("G1", "tap", "iscpairs", chromophore=ch_type)).exists()
 
@@ -265,8 +265,7 @@ def test_the_null_refuses_an_unknown_chromophore(dyad, tmp_path):
 # ---- the CLI surface ----
 
 def test_the_flag_defaults_to_both():
-    """Taken knowing it doubles the runtime of every existing command: reporting HbO alone
-    is the field's habit rather than a defended choice, and the references do not back it."""
+    """Both chromophores by default, at twice the runtime of HbO alone."""
     from fnirs_pipe.cli.hyper import _parsers
 
     args = _parsers()["fnirs-hyper"].parse_args(
@@ -404,13 +403,13 @@ def _page(dyad, where, chroma, **kwargs):
 
 
 def test_each_stacked_figure_is_labelled_with_its_chromophore(dyad, tmp_path):
-    """The label moved from the panel title to the figure, because a panel now holds more
+    """The label sits on the figure rather than the panel title, because a panel holds more
     than one. A screenshot of a single image still says which chromophore it is, and a
     one-chromophore run names no other."""
     html = _page(dyad, tmp_path, ("hbr",))
     assert '<span class="chroma-name">HbR</span>' in html
     # the label, not the word: the stylesheet explains the stack in a comment that names
-    # both chromophores, and a bare `"HbO" not in html` caught that instead
+    # both chromophores, and a bare `"HbO" not in html` would catch that instead
     assert '<span class="chroma-name">HbO</span>' not in html
     assert "hbo" not in _js_var(html, "_PER_CH")
 
@@ -481,8 +480,7 @@ def test_an_uncrossed_run_fills_the_diagonal_and_shows_one_selector(dyad, tmp_pa
 
 def test_a_crossed_run_reaches_every_pairing_from_two_selectors(dyad, tmp_path):
     """The point of the pair: an off-diagonal pairing is what says whether two sites couple
-    at a different time or frequency from the homologous one, and it used to be readable
-    only as a thumbnail in a grid of every ROI pair."""
+    at a different time or frequency from the homologous one."""
     html = _page(dyad, tmp_path, ("hbo",), wtc_channel_cross=True,
                  roi_map={"L": ["S1_D1", "S2_D2"], "R": ["S3_D3"]},
                  wtc_roi_min_channels=1)
@@ -501,8 +499,8 @@ def test_a_crossed_run_reaches_every_pairing_from_two_selectors(dyad, tmp_path):
 
 def test_a_condition_boundary_is_drawn_on_the_axis_the_window_was_cut_on(dyad, tmp_path):
     """An aligned recording keeps its crop offset in `first_time` while everything computed
-    from it starts at zero, so the two have to be read through one function. They were not,
-    and every boundary line on every coherence map came out late by that offset."""
+    from it starts at zero, so the two have to be read through one function, or every
+    boundary line on every coherence map comes out late by that offset."""
     from fnirs_pipe.qc.common.windows import condition_windows, markers_on_data_axis
 
     raw = dyad["sub-01"].copy()
@@ -515,12 +513,12 @@ def test_a_condition_boundary_is_drawn_on_the_axis_the_window_was_cut_on(dyad, t
 
 
 def test_both_chromophores_are_on_the_page_at_once(dyad, tmp_path):
-    """There is no chromophore control any more: every panel stacks one labelled image per
+    """There is no chromophore control: every panel stacks one labelled image per
     chromophore, in `_CHROMA` order, which is the order the template laid them out in. A
     reader can compare HbO against HbR without operating anything, and nothing is hidden."""
     # the ROI panel needs an ROI map and the channel matrix needs crossing, so a page built
-    # without them has nothing to stack there and the loop below asserted against panels
-    # that were never asked for
+    # without them has nothing to stack there and the loop below would assert against
+    # panels that were never asked for
     html = _page(dyad, tmp_path, ("hbo", "hbr"),
                  roi_map={"L": ["S1_D1", "S2_D2"], "R": ["S3_D3"]},
                  wtc_roi_min_channels=1, wtc_channel_cross=True)

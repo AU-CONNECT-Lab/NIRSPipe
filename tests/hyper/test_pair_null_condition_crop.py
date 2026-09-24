@@ -2,7 +2,7 @@
 
 The alignment crop leaves the anchor marker a rounding error either side of zero, and the
 duration tolerance lets a block run a millisecond past the end. Both reach `Raw.crop`, which
-refuses outright rather than rounding, so a single stand-in took a whole dyad down.
+refuses outright rather than rounding, so a single stand-in would take a whole dyad down.
 """
 
 import numpy as np
@@ -203,7 +203,7 @@ def test_a_partner_too_short_for_a_late_window_is_refused_by_condition_name(wire
 
 
 def test_without_a_mapping_the_labels_are_the_conditions_themselves(wired):
-    """No window grid means the old behaviour, exactly."""
+    """Without a window grid nothing is relabelled and nothing is refused."""
     wired["onsets"] = {"baseline": 0.0, "game1": 480.0}
     drawn, refused = _run_windows(wired, WINDOWS, {})
     assert [label for _, label, *_ in drawn] == ["baseline", "game1"]

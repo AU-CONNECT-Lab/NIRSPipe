@@ -1,6 +1,6 @@
 """External confound regressors read out of a SNIRF file's aux group.
 
-Three contracts live here, and each exists because getting it wrong is silent.
+Four contracts live here, and each exists because getting it wrong is silent.
 
 Reading: MNE does not touch the aux group and the helper in mne-nirs raises on two shapes
 the format permits, a scalar channel name and a (T, 1) data array. Both appear in files from

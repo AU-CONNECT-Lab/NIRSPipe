@@ -149,7 +149,7 @@ def test_every_entity_survives_the_round_trip(note, entities, suffix, extension,
 @pytest.mark.parametrize("note,entities,suffix,extension,expected", CASES, ids=IDS)
 def test_no_name_carries_a_stray_separator(note, entities, suffix, extension, expected):
     """An optional segment written with the underscore outside leaves one behind when the
-    entity is absent, which is the mistake xcp_d's first config made."""
+    entity is absent."""
     assert "__" not in expected and "/_" not in expected and not expected.startswith("_")
 
 
@@ -162,7 +162,7 @@ def test_an_entity_left_as_none_is_simply_absent():
 
 
 def test_a_suffix_outside_the_scheme_is_refused():
-    """Silently returning a name no pattern covers is how hand-built strings drifted."""
+    """Silently returning a name no pattern covers would let hand-built strings drift."""
     with pytest.raises(ValueError, match="no path pattern fits"):
         derivative_path(OUT, "fc", ".tsv", subject="01", task="rest")
 
@@ -170,9 +170,8 @@ def test_a_suffix_outside_the_scheme_is_refused():
 def test_pybids_can_index_and_query_a_tree_written_this_way(tmp_path):
     """The point of the scheme: somebody else's BIDS tooling can read the dyad results.
 
-    Exempting `group-*/` from the validator would have been easier, and this is what that
-    would have cost. Every entity queried here is one that used to be a hyphen-separated
-    fragment of a suffix, findable only by globbing the whole tree and parsing names by hand.
+    Every entity queried here is found by a query, not by globbing the whole tree and
+    parsing names by hand.
     """
     import json
 

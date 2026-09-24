@@ -2,12 +2,9 @@
 
 The analysis page does not run the pipeline; it assembles an argv and hands it to
 `fnirs-pipe`. That makes `_build_cli_args` a hand-written copy of the CLI's flag surface,
-and a copy falls behind. It had: `--drift-model` was never emitted at all, so the GLM and
-Rest entries in the mode picker could only ever produce a command that died in `run_post`,
-and `--short-channel` was locked to glm long after rest and denoise honoured it.
+and a copy falls behind with nothing to announce it.
 
-Nothing announced any of that, because the two surfaces are only compared by a person
-reading both. These tests do the comparing. `NOT_EXPOSED` is the deliberate half of the
+These tests do the comparing. `NOT_EXPOSED` is the deliberate half of the
 contract, in the same spirit as `ALL_STEPS` in `test_step_vocabulary.py`: a flag may be left
 out of the GUI, but only on purpose and only in writing.
 """
@@ -135,12 +132,7 @@ def _post_flags() -> set[str]:
 
 
 def _cli_flags() -> set[str]:
-    """Preprocessing and postprocessing together: both halves drift the same way.
-
-    The preprocessing half was uncovered until `--min-good-frac` and `--screen-scope` had
-    been in the CLI for a while with no way to set them here, which meant the page could
-    only ever screen at the default share of coupled windows.
-    """
+    """Preprocessing and postprocessing together: both halves drift the same way."""
     return _group_flags("preprocessing") | _post_flags()
 
 
@@ -193,7 +185,7 @@ def test_the_generated_command_parses(mode):
 
 @pytest.mark.parametrize("mode", _MODES)
 def test_the_generated_command_satisfies_its_modes_requirements(mode):
-    """The regression test for the bug: GLM and Rest used to arrive without a drift model."""
+    """GLM and Rest arrive with a drift model, and GLM with its HRF and noise models."""
     argv = _build_cli_args({**_FULL_OPTS, "post_mode": mode})
     args = vars(_build_parser().parse_args(argv[1:]))
     config = _build_post_config("001", None, args, {})
@@ -208,7 +200,6 @@ def test_the_generated_command_satisfies_its_modes_requirements(mode):
 
 @pytest.mark.parametrize("mode", _MODES)
 def test_short_channel_reaches_every_mode(mode):
-    """It was locked behind glm, long after rest and denoise both honoured it."""
     argv = _build_cli_args({**_FULL_OPTS, "post_mode": mode})
     assert "--short-channel" in _emitted(post_mode=mode)
     args = vars(_build_parser().parse_args(argv[1:]))
@@ -298,10 +289,9 @@ def test_every_control_the_callbacks_bind_to_exists_on_the_page(analysis_page):
 
 
 def test_no_control_on_the_page_is_decoration(analysis_page):
-    """`an-stim-dur` was drawn, never read, and never reached a command for two releases.
+    """A control wired to nothing in either direction is decoration.
 
-    An Output counts: a preview pane is driven by a callback rather than read by one. What
-    this catches is a control wired to nothing in either direction.
+    An Output counts: a preview pane is driven by a callback rather than read by one.
     """
     on_page, bound = analysis_page
     unread = ({i for i in on_page if i.startswith(_PREFIXES)}
@@ -357,11 +347,10 @@ QC_NOT_EXPOSED = {
             # checkbox turns it off with the canonical --no-by-condition; offering the
             # aliases would be three controls doing one thing
             "--by-condition", "--wtc-by-condition", "--no-wtc-by-condition",
-            # route P: transform each condition on its own instead of reading it out of the
-            # whole-run transform. With the default padding it reproduces the default route
-            # to four decimals, and without it the cone eats a share that grows as the
-            # condition shortens. It exists to reproduce a published result, which is not a
-            # thing to put in front of someone filling in a form
+            # transform each condition on its own instead of reading it out of the whole-run
+            # transform. Without the padding the cone eats a share that grows as the
+            # condition shortens. It is a reproduction route, which is not a thing to put in
+            # front of someone filling in a form
             "--wtc-cond-transform", "--wtc-cond-pad-s"},
     "band":  {"--verbose",
               # as above: the default, and the checkbox emits --no-wtc-mask-coi
@@ -459,7 +448,7 @@ def test_the_declined_subcommands_still_exist():
 
 
 def test_the_dyad_analysis_left_fnirs_qc():
-    """hyper-post, hyper-null, wtc-band and group-hyper-wtc are fnirs-hyper now."""
+    """fnirs-qc carries none of the dyad analysis; that is fnirs-hyper's."""
     gone = {"hyper-post", "hyper-null", "wtc-band", "group-hyper-wtc"} & set(_qc_subparsers())
     assert not gone, f"fnirs-qc still carries {sorted(gone)}"
 

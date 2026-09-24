@@ -6,13 +6,12 @@ can go wrong with that is silent in a way no other test here catches: the page r
 selectors populate, and a viewer sees *a* coherence map. It is the wrong one, or the same one
 twice, or a broken image on a pairing nobody clicked during review.
 
-These started as a scratchpad smoke script and are here because it caught three real defects
-that the report's other tests did not:
+These catch three failures the report's other tests would not:
 
-- both chromophores pointing at one dict, so HbR showed HbO's figures
+- both chromophores pointing at one dict, so HbR shows HbO's figures
 - a condition page linking the whole-run figures, the window slug never reaching the filename
 - a rejected channel blanking its *row* as well as its column, losing every pairing the
-  surviving member could still have been read against
+  surviving member could still be read against
 
 Each of the three has a test below saying so. The build is module-scoped: one report serves
 every assertion, since the failures are all in what it wrote rather than in how it was asked.
@@ -65,8 +64,8 @@ def dyad():
     shared = np.sin(2 * np.pi * 0.05 * t)
     bads = tuple(f"{REJECTED} {c}" for c in ("hbo", "hbr"))
     pair = {"sub-01": _raw(1, shared), "sub-02": _raw(2, shared, bads=bads)}
-    # a nonzero first_time on both members: the condition boundaries used to be drawn at the
-    # raw onset, which is late by exactly this much
+    # a nonzero first_time on both members: condition boundaries drawn at the raw onset
+    # would be late by exactly this much
     return {sid: raw.copy().crop(tmin=20.0) for sid, raw in pair.items()}
 
 
@@ -140,7 +139,7 @@ def test_every_pairing_of_the_axis_is_present_at_both_levels(pages):
 
 
 def test_the_two_chromophores_are_two_tables(pages):
-    """The shared-mutable-default defect: one dict filled twice, so the switch moved the
+    """Not one shared mutable default: one dict filled twice would let the switch move the
     label and not the figure."""
     for page in pages:
         per_ch, _, _, _ = _tables(page)
@@ -173,8 +172,8 @@ def test_every_url_on_the_page_exists_on_disk(pages):
 
 
 def test_a_condition_page_links_its_own_window_and_no_other(pages):
-    """The defect: the window slug never reached the filename, so all six pages linked the
-    whole-run figures and every condition looked identical to the run."""
+    """The window slug reaches the filename; without it every page would link the whole-run
+    figures and every condition would look identical to the run."""
     for page in pages:
         expected = _window_of(page)
         for url in _urls(*_tables(page)):
@@ -197,8 +196,8 @@ def test_a_rejected_channel_blanks_the_column_it_is_read_as(pages):
 
 
 def test_the_rejected_channel_keeps_the_row_the_other_member_can_still_be_read_against(pages):
-    """Blanking both directions was the third defect. sub-01's S2_D2 is fine; only sub-02's
-    was rejected, so that row is real data and dropping it loses three pairings."""
+    """Only one direction is blanked. sub-01's S2_D2 is fine; only sub-02's was rejected, so
+    that row is real data and dropping it loses three pairings."""
     for page in pages:
         per_ch, _, _, _ = _tables(page)
         assert per_ch["hbo"][REJECTED]["S1_D1"]["wtc"], page.name
@@ -224,8 +223,8 @@ def test_the_page_carries_a_second_selector_per_panel(pages):
 
 
 def test_the_roi_thumbnail_grid_is_gone(pages):
-    """Replaced by the selector pair. It rendered every ROI pairing at a size nothing could
-    be read at, and it is the reason the page was measured in megabytes."""
+    """The selector pair stands in for it: a grid renders every ROI pairing at a size nothing
+    can be read at, and runs the page into megabytes."""
     for page in pages:
         html = page.read_text(encoding="utf-8")
         assert "_ROI_GRID" not in html and "wtc-roi-grid-img" not in html, page.name
@@ -251,8 +250,8 @@ def _iframe_srcs(html: str, desc: str, aggregation: "str | None" = None) -> list
 
 
 def test_every_page_draws_the_roi_isc_matrix(pages):
-    """The ROI ISC was computed and written to a TSV long before anything drew it, and the
-    number table it fed reads the same whether the figure is there or not."""
+    """Asserted on its own because the number table the ROI ISC feeds reads the same whether
+    the figure is there or not."""
     for page in pages:
         found = _iframe_srcs(page.read_text(encoding="utf-8"), "iscmatrix", "roi")
         assert len(found) == 1, page.name
@@ -279,7 +278,7 @@ def test_the_roi_isc_matrix_is_one_figure_for_both_chromophores(pages):
 
 
 def test_a_condition_page_draws_its_own_roi_isc_matrix(pages):
-    """The window slug reaching the filename, the defect the coherence panels had."""
+    """The window slug reaches the filename, as it does for the coherence panels."""
     seen = {}
     for page in pages:
         src = _iframe_srcs(page.read_text(encoding="utf-8"), "iscmatrix", "roi")[0]
@@ -293,7 +292,7 @@ def test_a_condition_page_draws_its_own_roi_isc_matrix(pages):
 # Not a cone and not contamination: the count stays the same however clean the edges are.
 # A coherence at `--wtc-band-fmin` is a claim about a phase relationship, and a window
 # holding one cycle of that frequency has seen the relationship once. Lowering the band
-# without lengthening the blocks is the way into that, and nothing used to say so.
+# without lengthening the blocks is the way into that, so the page says so.
 
 # the count is always printed; this sentence only appears when it is below it
 COUNT = "cycles of the slowest"
@@ -361,9 +360,9 @@ def test_a_condition_too_short_for_the_band_says_so(dyad, tmp_path_factory):
 def test_a_failed_panel_reaches_its_own_page_and_no_other(dyad, tmp_path, monkeypatch):
     """One window's figures fail; its page says so and the pages beside it do not.
 
-    Every page used to print the run's running total of failures, because one ``errors`` list
-    was shared and each page read it at the moment it was rendered. A reader of the "rest"
-    page was told about a panel that is missing from "talk".
+    One ``errors`` list shared by every page and read at render time would print the run's
+    running total on each, telling a reader of the "rest" page about a panel that is missing
+    from "talk".
 
     The failure is injected at the point that knows which window it is drawing: the figure
     filename carries the window slug and nothing above it does.
@@ -436,8 +435,8 @@ KINDS = ["Channel pairs", "ROI pairs", "ROI homologous pairs"]
 
 def test_the_run_page_prints_every_condition_beside_the_whole_run(pages):
     """A block design is read by comparing conditions, and no condition page can show that.
-    Beside rather than under: stacked, a pairing's whole-run value and its condition's were
-    hundreds of rows apart in a crossed channel table."""
+    Beside rather than under: stacked, a pairing's whole-run value and its condition's would
+    be hundreds of rows apart in a crossed channel table."""
     html = next(p for p in pages if not _window_of(p)).read_text(encoding="utf-8")
     for kind in KINDS:
         assert _scope_headers(_table_of(html, kind)) == ["Whole run", *CONDITIONS], kind
@@ -455,8 +454,8 @@ def test_a_condition_page_prints_its_own_window_and_no_other(pages):
 
 
 def test_the_conditions_do_not_all_print_the_run_s_numbers(pages):
-    """The defect this guards is the run's frames reaching every column group, which looks
-    right until two conditions agree cell for cell with the whole run."""
+    """Guards against the run's frames reaching every column group, which looks right until
+    two conditions agree cell for cell with the whole run."""
     html = next(p for p in pages if not _window_of(p)).read_text(encoding="utf-8")
     for kind in KINDS:
         per_scope = _values_by_scope(_table_of(html, kind))
@@ -466,8 +465,8 @@ def test_the_conditions_do_not_all_print_the_run_s_numbers(pages):
 
 def test_the_coi_share_is_stated_once_per_scope_rather_than_as_a_column(pages):
     """It is the share of band cells inside the cone, which depends on the window length and
-    the band and not on the channels, so as a column it was one number repeated down every
-    row of the table and again for the second chromophore."""
+    the band and not on the channels, so as a column it would be one number repeated down
+    every row of the table and again for the second chromophore."""
     for page in pages:
         html = page.read_text(encoding="utf-8")
         assert "valid</th>" not in html, page.name
@@ -478,8 +477,8 @@ def test_the_coi_share_is_stated_once_per_scope_rather_than_as_a_column(pages):
 
 
 def test_the_roi_rows_carry_an_isc_of_their_own(pages):
-    """The ROI block used to print dashes under the ISC columns, the matrix being
-    channel-level and never grouped."""
+    """The ISC matrix is grouped by region too, so the ROI block prints values rather than
+    dashes under the ISC columns."""
     for page in pages:
         table = _table_of(page.read_text(encoding="utf-8"), "ROI pairs")
         rows = re.findall(r"<tr><td>(L|R)</td>(.*?)</tr>", table, re.S)
@@ -492,8 +491,8 @@ def test_the_roi_rows_carry_an_isc_of_their_own(pages):
 
 def test_the_homologous_table_holds_the_diagonal_alone(pages):
     """The correlation matrix is a full ROI x ROI whatever the coherence beside it covers, so
-    this table used to grow a row per crossed region: no coherence in it, and the correlation
-    a copy of the one the crossed table above already prints."""
+    this table must not grow a row per crossed region: there would be no coherence in it, and
+    the correlation a copy of the one the crossed table above already prints."""
     for page in pages:
         table = _table_of(page.read_text(encoding="utf-8"), "ROI homologous pairs")
         pairs = re.findall(r"<tr><td>([^<]+)</td><td>([^<]+)</td>", table)
@@ -502,8 +501,8 @@ def test_the_homologous_table_holds_the_diagonal_alone(pages):
 
 
 def test_the_coherence_column_is_named_for_the_statistic(pages):
-    """It is a wavelet coherence and the index page already calls it WTC; "coherence" left a
-    reader guessing which of the page's two coherences a column held."""
+    """It is a wavelet coherence and the index page already calls it WTC; "coherence" would
+    leave a reader guessing which of the page's two coherences a column held."""
     for page in pages:
         html = page.read_text(encoding="utf-8")
         assert re.search(r"<th[^>]*>HbO WTC</th>", html), page.name
@@ -523,7 +522,7 @@ def test_the_roi_correlation_reaches_disk_for_every_scope(pages):
 
 
 def test_a_rejected_pairing_reads_as_a_dash_and_not_as_nan(pages):
-    """It kept its row so the surviving direction can be read; the empty half printed the
-    string "nan", which is a number to anyone scanning the column."""
+    """It keeps its row so the surviving direction can be read; the empty half must not print
+    the string "nan", which is a number to anyone scanning the column."""
     for page in pages:
         assert "<td>nan</td>" not in page.read_text(encoding="utf-8"), page.name

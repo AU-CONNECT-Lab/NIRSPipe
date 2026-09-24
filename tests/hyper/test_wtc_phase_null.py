@@ -1,4 +1,4 @@
-"""The phase-scrambled null, and the two band-mean changes that came with it.
+"""The phase-scrambled null, and the band mean it is read against.
 
 `phase_scramble` has to preserve the magnitude spectrum exactly and return a real series;
 those are the two properties that make the surrogate a fair null rather than a different
@@ -7,8 +7,8 @@ few low-frequency bins keeps that rhythm and only shifts its phase, which is the
 null asks whether two people's timing is related given both have these rhythms, not whether
 one of them has a rhythm at all.
 
-The rest covers `wtc_band_mean` now defaulting to no COI mask while still reporting the share
-inside the cone, the Fisher z column, and the ROI grouping that replaced the ROI-signal route.
+The rest covers `wtc_band_mean` masking the cone by default while still reporting the share
+inside it, the Fisher z column, and the ROI grouping of the channel values.
 """
 
 import numpy as np
@@ -274,11 +274,10 @@ def test_the_windowed_null_carries_the_same_columns_as_the_whole_run_one(stub_nu
 
 # ---- --tstart/--tend reaches the whole-run row too ----
 #
-# `windows` fixed the per-condition rows; the whole-run row had the same defect and no
-# parameter to fix it. With `--tstart`/`--tend` the real whole-run table describes the
-# window, and the null described the whole recording: one row, compared against a row
-# measuring a different span, with nothing saying so. The ramp map makes the arithmetic
-# exact, 0.2 over the first half and 0.8 over the second.
+# With `--tstart`/`--tend` the real whole-run table describes the window, so the null's
+# whole-run row has to describe the same window rather than the whole recording, as
+# `windows` does for the per-condition rows. The ramp map makes the arithmetic exact, 0.2
+# over the first half and 0.8 over the second.
 
 def test_without_an_analysis_window_the_whole_run_row_covers_the_record(stub_null):
     whole, _ = stub_null.compute_wtc_phase_null({"s1": None, "s2": None}, 0.02, 0.30, n_iter=1).summarise()
@@ -318,8 +317,8 @@ def test_the_conditions_are_unaffected_by_the_analysis_window(stub_null):
 
 
 def test_the_writer_passes_the_window_down(monkeypatch, tmp_path):
-    """The wiring, which is where this bug lived: both functions had the parameter for the
-    conditions and neither had it for the run."""
+    """The wiring: both functions take the window for the run as well as the ones for the
+    conditions."""
     from fnirs_pipe.pipeline.hyper import wtc_null
     seen = {}
 

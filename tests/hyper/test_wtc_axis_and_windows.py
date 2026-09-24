@@ -61,7 +61,7 @@ def test_a_band_holding_no_round_number_still_gets_labels():
 
 
 def test_the_rule_does_not_change_with_the_band():
-    """What the fix is for: two figures in one report must not tick by different rules.
+    """Two figures in one report must not tick by different rules.
 
     Plotly switches between "D1" and "D2" at a threshold that a slightly narrower band
     crosses, so the same report could label every digit on one panel and only 1-2-5 on the
@@ -179,12 +179,11 @@ def test_a_window_is_clipped_to_the_recording(windows):
 
 
 def test_a_window_is_on_the_aligned_clock_not_the_original_one(windows):
-    """The regression test for windows landing late by the alignment offset.
+    """Windows must not land late by the alignment offset.
 
     `align_recordings` crops every member from its first shared trigger, and a cropped Raw
     keeps its annotations on the original recording's axis while its data axis restarts at
     zero. Cropping to a window measured on the wrong one of those selects the wrong stretch.
-    Invisible while each input file held one condition already cropped to its own start.
     """
     raw = _raw_with(["baseline", "game1"], [22, 500], [300, 100], end=1000.0)
     aligned = raw.copy().crop(tmin=22.0)

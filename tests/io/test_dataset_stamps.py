@@ -1,9 +1,8 @@
 """What each output tree says about itself: who wrote it, from what, and what to skip.
 
-The two stamps are the whole reason the dyad results live in a tree of their own. While one
-tool wrote back into the tree it read, `GeneratedBy` could only name one of the two and
-`SourceDatasets` had no correct value at all, so a reader of a coherence table had no way to
-recover which preprocessing produced its inputs.
+The two stamps are the whole reason the dyad results live in a tree of their own:
+`GeneratedBy` names the one tool that wrote the tree and `SourceDatasets` names the tree it
+read, so a reader of a coherence table can recover which preprocessing produced its inputs.
 """
 
 from __future__ import annotations
@@ -60,7 +59,7 @@ def test_only_reports_logs_figures_and_json_only_records_are_waved_through(tmp_p
     lines = _ignore_lines(tmp_path)
 
     # no trailing slash: bids-validator 3.0.2 matches nothing against `figures/`, so the
-    # gitignore spelling for a directory left every figure on its books
+    # gitignore spelling for a directory leaves every figure on its books
     assert set(lines) == {"*.html", "logs", "figures",
                           *(f"*_desc-{desc}_qc.json" for desc in JSON_ONLY_DESCS)}
     assert not any(line.endswith("/") for line in lines)

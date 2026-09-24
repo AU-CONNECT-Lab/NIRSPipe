@@ -1,10 +1,10 @@
 """What the dyad index adds on top of the links: the scale the coherence is read against.
 
-The Windows table listed a coherence per window and nothing to judge it by. Coherence has a
-floor that moves with the window length, so those values do not compare down the column, and
-the phase-scrambled null's tables carrying each pair's own rank sat unread beside the page. These cover
-the column that reads them, and the one thing that goes wrong quietly: a tree with no null
-must keep the column off rather than print a zero that reads as a result.
+Coherence has a floor that moves with the window length, so the Windows table's per-window
+values do not compare down the column on their own. The phase-scrambled null's tables carry
+each pair's own rank, and these cover the column that reads them, and the one thing that
+goes wrong quietly: a tree with no null must keep the column off rather than print a zero
+that reads as a result.
 """
 
 import pandas as pd

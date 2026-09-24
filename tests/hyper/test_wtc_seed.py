@@ -120,7 +120,7 @@ def test_seeding_bypasses_the_cache(calls, inputs):
 
 
 def test_without_a_seed_the_cache_is_left_alone(calls, inputs):
-    # unseeded runs keep the previous behaviour, including the speed the cache buys
+    # unseeded runs keep the cache, and the speed it buys
     _run(inputs, seed=None)
     assert all("cache" not in c["kwargs"] for c in calls)
 

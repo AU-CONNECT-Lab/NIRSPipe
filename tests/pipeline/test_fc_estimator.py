@@ -1,9 +1,8 @@
 """The one estimator every FC product uses, and the seed map's shape.
 
-The FC estimator used to be a connectivity library's default, which shrinks correlations
-toward zero rather than reporting Pearson. These pin what made that a defect rather than a
-preference: all three products agree on one estimator, and it carries no bias that varies
-with the shape of the recording.
+FC is Pearson, not a shrinkage estimator that pulls correlations toward zero. These pin
+that: all three products agree on one estimator, and it carries no bias that varies with the
+shape of the recording.
 """
 
 import numpy as np

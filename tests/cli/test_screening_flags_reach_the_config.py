@@ -6,11 +6,6 @@ call that logs the run to the job database. A splat written into the wrong one o
 calls parses fine, records fine, and never reaches the config: the flag becomes a silent
 no-op when its default is None, and a `TypeError` on every run when it is not.
 
-Both happened. `--psp-threshold` sat in the job-database call from the start and was a
-no-op whenever it was passed; `--min-good-frac` was added beside it and inherited that; then
-`--screen-scope`, whose default is a string rather than None, turned the latent version into
-an unconditional crash.
-
 `test_cli_dispatch_surface.py` cannot see this. That one compares a command's parsed dests
 against its own signature, and both calls here are internal.
 """
@@ -52,7 +47,7 @@ def test_each_screening_flag_reaches_the_config(flag, value, field, expected):
 
 
 def test_all_three_at_once():
-    """Together, since the bug was one splat landing in the wrong call among several."""
+    """Together, since each splat has to land in the right call among several."""
     config = _config(["--psp-threshold", "0.2", "--min-good-frac", "0.6",
                       "--screen-scope", "task"])
     assert (config.psp_threshold, config.min_good_frac, config.screen_scope) == (

@@ -109,7 +109,7 @@ def source_with_sidecar(source) -> Path:
 
 
 def test_a_renamed_segment_names_its_own_task(source_with_sidecar, tmp_path):
-    """BIDS derives the task label from TaskName; the copied one named the source's."""
+    """BIDS derives the task label from TaskName, so a copied one would name the source's."""
     segments = pd.DataFrame({"onset": [10.0, 150.0], "duration": [60.0, 60.0],
                              "task": ["early", "late"]})
     outs = crop_snirf_from_path(source_with_sidecar, tmp_path / "deriv", "01",
@@ -129,7 +129,7 @@ def test_a_segment_records_its_own_length_and_where_it_came_from(source_with_sid
 
 
 def test_a_segment_of_a_recording_reads_back_as_a_segment(source_with_sidecar, tmp_path):
-    """crop_provenance reads crop_windows_s, which only a derivative input used to get."""
+    """crop_provenance reads crop_windows_s, so a segment of a raw recording carries it too."""
     out = crop_snirf_from_path(source_with_sidecar, tmp_path / "deriv", "01",
                                tmin=10.0, tmax=70.0)[0]
     found = crop_provenance(read_snirf(out))

@@ -79,8 +79,7 @@ def test_label_shortens_the_filename(tmp_path, key, expected):
 def test_a_collapsed_box_counts_the_conditions_it_holds(tmp_path):
     """Two chromophores times the whole run and two conditions, drawn as one box.
 
-    The condition count reads the `cond-` entity, which the entity pattern here did not
-    know, so every member counted as the whole run and the box said no condition at all.
+    The condition count reads the `cond-` entity; a member without one is the whole run.
     """
     from fnirs_pipe.qc.common.provenance import simplify
 
@@ -197,8 +196,8 @@ def test_the_settings_reach_the_mermaid_edge(tmp_path):
 
 # ---- SQM checkpoints ----
 #
-# Both checkpoints are named after their step, so before this they read "sqm" and nothing
-# else, and the graph could not tell a 27-metric raw checkpoint from a 4-metric final one.
+# Both checkpoints are named after their step, so the node's data is what tells a raw
+# checkpoint from a final one.
 
 _RAW_METRICS = ["sci_mean", "channel_retention_rate", "ch_dist_mean", "psp_mean",
                 "cp_mean", "cv_mean_760", "snr_mean", "mean_amp_mean",
@@ -325,7 +324,7 @@ def test_the_table_names_the_record_rather_than_the_metrics(tmp_path):
     ({"n_channels": 56, "n_bad": 16, "sfreq": 2.0, "duration_s": 595.2}, "40/56 ch · 2 Hz · 595.2 s"),
     ({"n_channels": 56, "n_bad": 0, "sfreq": 10.0, "duration_s": 60.0}, "56 ch · 10 Hz · 60 s"),
     ({"n_channels": 56}, "56 ch"),
-    ({}, ""),                                    # sidecar written before the field existed
+    ({}, ""),                                    # a sidecar with no data field
 ])
 def test_the_node_carries_the_shape_of_its_data(tmp_path, data, expected):
     _sidecar(tmp_path, "out", step="bandpass", sources=["/bids/in.snirf"], data=data)
@@ -372,8 +371,7 @@ def test_cmd_provenance_writes_where_the_report_looks_for_it(tmp_path, capsys):
 def test_a_group_gets_the_graph_its_dyad_report_links(tmp_path):
     """One graph per task, under the name the dyad report embeds.
 
-    This used to write `group-G01_desc-provenance`, while the report links
-    `group-G01_task-rest_desc-provenance`, so re-rendering never reached the report.
+    The report links `group-G01_task-rest_desc-provenance`, so the name carries the task.
     """
     from fnirs_pipe.cli.qc import cmd_provenance
 

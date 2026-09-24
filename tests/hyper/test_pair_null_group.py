@@ -230,7 +230,7 @@ def _paths(root, occ):
 
 
 def test_a_part_crossed_tree_gets_no_all_pairings_level(tmp_path, caplog):
-    """196 pairings for one occasion and 14 for the next is not one statistic."""
+    """Crossed pairings for one occasion and homologous ones for the next are not one statistic."""
     _write_tree(tmp_path)
     for occ in OCCASIONS:
         _cross(_paths(tmp_path, occ)[1])
@@ -242,7 +242,7 @@ def test_a_part_crossed_tree_gets_no_all_pairings_level(tmp_path, caplog):
 
 
 def test_crossed_draws_against_a_diagonal_real_table_are_refused(tmp_path, caplog):
-    """The half that was missed: it would rank 14 cells inside a null built from 196."""
+    """It would rank the homologous cells inside a null built from every crossed pairing."""
     _write_tree(tmp_path)
     for occ in OCCASIONS:
         _cross(_paths(tmp_path, occ)[0])
@@ -278,7 +278,7 @@ def test_two_bands_in_one_tree_are_refused(tmp_path):
 # ---- the per-cell tables, corrected ----
 
 def _write_cells(root, percentiles, n_iter=22):
-    """One per-cell null table per occasion, the shape `pair-null` writes."""
+    """One per-cell null table per occasion, the shape `fnirs-hyper-pairnull` writes."""
     for occ, pcts in zip(OCCASIONS, percentiles):
         d = root / f"group-{occ}" / "nirs"
         d.mkdir(parents=True, exist_ok=True)
@@ -325,7 +325,7 @@ def test_no_cell_tables_is_not_an_error(tmp_path):
     assert len(written) == 2
 
 
-# ---- the paired read, which is what the released implementations report ----
+# ---- the paired read ----
 
 def test_both_reads_report_the_same_lift():
     """They divide it by different things; the numerator is one number."""

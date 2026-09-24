@@ -1,8 +1,4 @@
-"""--dry-run has to stop before the pipeline, not merely be recorded as having been asked for.
-
-The flag reached the run log and nothing else, so a run launched with it processed the whole
-recording while saying it was a dry run.
-"""
+"""--dry-run has to stop before the pipeline, not merely be recorded as having been asked for."""
 
 import sys
 

@@ -7,8 +7,7 @@ in the design matrix, so the frames come back from a GLM run, and ALFF stays abs
 it needs a broadband residual this mode never produces.
 
 The flag defaulting to off matters as much as the flag working. `--fc` adds twelve files to
-every subject directory, and a run that was not asked for them should look exactly as it did
-before the flag existed.
+every subject directory, and a run that was not asked for them should write none of them.
 """
 
 import pytest
@@ -62,7 +61,7 @@ def _names(out_dir, pattern):
 
 @pytest.fixture(scope="module")
 def plain(haemo, tmp_path_factory):
-    """No --fc: the run the flag has to leave looking exactly as it did before it existed."""
+    """No --fc: the run the flag has to leave untouched."""
     out_dir = tmp_path_factory.mktemp("glm_plain")
     return _glm(haemo, out_dir), out_dir
 
@@ -132,11 +131,7 @@ def test_alff_is_not_written_by_the_glm_mode(fc_no_roi):
 
 
 def test_the_glm_tables_sit_beside_the_runs_snirfs_on_a_session_tree(tmp_path):
-    """The design and the GLM tables go to the session folder, as every stage file does.
-
-    The GLM writer was handed `sub-<id>/nirs` with no session level, so on a session tree
-    a run's tables and its snirfs landed in two different folders.
-    """
+    """The design and the GLM tables go to the session folder, as every stage file does."""
     config = PrepConfig(subject="01", session="a", dpf=[6.0, 6.0], sci_threshold=0.8,
                         motion_correction="tddr", **_BANDS)
     result = run_prep(synth_raw("01", "tapping"), config, output_dir=tmp_path,

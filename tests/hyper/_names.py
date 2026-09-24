@@ -70,7 +70,7 @@ def archive(group: str, task: str, chromophore: str, **entities) -> str:
 
 
 def cohort(nulldist: str, desc: str, task: str = "main", chromophore: str = "hbo") -> str:
-    """One cross-dyad verdict table at the tree root, from `fnirs-hyper group-null`.
+    """One cross-dyad verdict table at the tree root, from `fnirs-hyper-groupnull`.
 
     No group- and no sub-: having no analysis unit in the name is what marks a table as
     cross-dyad. The task and the chromophore stay, both being a filter the command was given.

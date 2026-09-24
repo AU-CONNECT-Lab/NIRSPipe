@@ -119,9 +119,8 @@ def test_pca_gives_one_column_per_surviving_short_channel():
 def test_a_rejected_short_channel_stays_out_of_the_pca():
     """One bad pair out of three leaves four columns, not six: the bad one is not a column.
 
-    The reference implementations do not exclude rejected short channels. One of them in the
-    design matrix reaches every channel's fit, so this keeps the exclusion the mean strategy
-    already had rather than following them.
+    A rejected short channel in the design matrix would reach every channel's fit, so pca
+    keeps the same exclusion as the mean strategy.
     """
     raw = _haemo([8.0, 9.0, 9.5, 35.0])
     raw.info["bads"] = [ch for ch in raw.ch_names if ch.startswith("S2_D2")]

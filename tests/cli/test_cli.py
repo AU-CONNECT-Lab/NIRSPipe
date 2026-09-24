@@ -1,7 +1,7 @@
-"""CLI parsing tests: framework-agnostic safety net for the argparse migration.
+"""CLI parsing tests: user-facing behaviour of the parsers.
 
-These assert user-facing behaviour (option names, defaults, nargs, choices,
-required args, dispatch), so they survive the Typer -> argparse switch.
+These assert option names, defaults, nargs, choices, required args and dispatch,
+not parser internals.
 """
 
 import shutil
@@ -65,8 +65,8 @@ def test_participant_label_repeated_flag():
 
 
 def test_gvtd_censor_is_off_present_or_given_a_channel_set():
-    """One flag carries both the switch and the set, so `--gvtd-censor` keeps meaning what
-    it always did and `--gvtd-censor all` is the conservative variant. Absent must be None
+    """One flag carries both the switch and the set: bare `--gvtd-censor` picks the long
+    channels and `--gvtd-censor all` is the conservative variant. Absent must be None
     rather than a falsy string, since the pipeline gates censoring on the field itself."""
     assert _parse(_MIN).gvtd_censor is None
     assert _parse(_MIN + ["--gvtd-censor"]).gvtd_censor == "long"
@@ -104,7 +104,7 @@ def test_bands_have_no_default(flag, capsys):
     #
     # Driven through main() rather than the parser: the bands describe preprocessing, so
     # they are required of the participant level rather than of every invocation, and the
-    # group level no longer has to name four frequencies it never uses.
+    # group level does not name four frequencies it never uses.
     argv = list(_MIN)
     i = argv.index(flag)
     del argv[i:i + 2]
@@ -292,8 +292,8 @@ def test_hyper_reads_derivatives_and_never_raw_bids():
 
 
 def test_the_band_flags_are_shared_between_run_and_band():
-    """One name per parameter: `band` reuses the `run` flags rather than carrying
-    --band-fmin / --mask-coi under a second name that has to be kept in step."""
+    """One name per parameter: `fnirs-hyper-band` reuses the `fnirs-hyper` flags rather
+    than carrying them under a second name that has to be kept in step."""
     flags = {f for parser in hyper_cli._parsers().values()
              for a in parser._actions for f in a.option_strings}
     assert not ({"--band-fmin", "--band-fmax", "--mask-coi", "--suffix"} & flags)

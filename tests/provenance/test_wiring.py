@@ -65,8 +65,8 @@ def test_dpf_reaches_beer_lambert(tmp_path_factory):
 def test_sci_threshold_reaches_the_comparison(tmp_path_factory):
     """Raising the per-window line can only add channels, and past a point it takes them all.
 
-    The line is applied inside each window now, so a threshold between two channels'
-    whole-run values no longer separates them: the synthetic signal is stationary, so a
+    The line is applied inside each window, so a threshold between two channels'
+    whole-run values does not separate them: the synthetic signal is stationary, so a
     channel that clears the line clears it in every window and one that does not clears it
     in none. What still moves with the setting is where the whole montage goes: the good
     pairs sit at about 0.976, so 0.95 keeps them and 0.98 leaves no channel coupled for

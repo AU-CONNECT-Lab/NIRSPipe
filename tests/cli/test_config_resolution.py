@@ -6,8 +6,7 @@ builders are private, but they are the only seam here that does not require
 running a subject, so they are addressed directly.
 
 The precedence rules matter because values supplied through TOML never appear in
-argv, which once left the run record claiming they were absent while the pipeline
-was using them.
+argv.
 """
 
 from enum import Enum
@@ -41,8 +40,7 @@ def test_absent_in_both_is_none():
 
 
 def test_cli_override_does_not_discard_the_rest_of_the_toml():
-    # The shape of a real invocation: a config file plus one flag overriding it. The
-    # run record used to show only the flag.
+    # The shape of a real invocation: a config file plus one flag overriding it.
     cfg = _post(
         {"noise_model": "ar2"},
         {"hrf_model": "spm", "drift_model": "cosine", "drift_high_pass": 0.01,

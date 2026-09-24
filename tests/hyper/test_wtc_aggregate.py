@@ -26,7 +26,7 @@ ROI = {"segmentation": "custom", "aggregation": "roi", "statistic": "wtc"}
 
 def _table(root, group_id, task, entities=None, band=(0.01, 0.1), mask_coi=True,
            crossed=False, sidecar=True, chroma=None):
-    """One dyad's band-mean table, laid out the way hyper-post lays it out."""
+    """One dyad's band-mean table, laid out the way the WTC pass lays it out."""
     path = group_output_path(root, group_id, {"task": task, **(entities or WTC)},
                              "relmat", ".tsv")
 
@@ -198,8 +198,8 @@ def test_the_two_kinds_land_in_separate_files(tmp_path):
 
 
 def test_two_pairings_of_a_larger_group_merge_to_two_files(tmp_path):
-    # the root name pattern had no pair- entity, so both merges were written to one path
-    # and the second silently replaced the first
+    # the root name carries the pair- entity, or both merges would be written to one path
+    # and the second would silently replace the first
     for pairing in ("01x02", "01x03"):
         _table(tmp_path, "01", "rest", {"pairing": pairing, **WTC})
         _table(tmp_path, "02", "rest", {"pairing": pairing, **WTC})
@@ -293,9 +293,9 @@ def test_uniform_chromophores_warn_about_nothing(tmp_path, caplog):
     assert "same chromophores" not in caplog.text
 
 
-# ---- wide matrices, which the entity-driven discovery started merging ----
-# The old kind table listed only the long band-mean tables, so the ISC matrices were never
-# merged. Discovering kinds by entity picks them up, and a matrix's columns are its data.
+# ---- wide matrices, which the entity-driven discovery merges ----
+# Discovering kinds by entity picks up the ISC matrices as well as the long band-mean
+# tables, and a matrix's columns are its data.
 
 def _matrix(root, group_id, task, channels, index="channel"):
     """One dyad's ISC matrix, the shape `write_isc_matrix` writes."""

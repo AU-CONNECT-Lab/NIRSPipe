@@ -1,10 +1,10 @@
-"""The two rest-mode figures whose numbers already existed with nothing drawing them.
+"""The two rest-mode figures: the ROI FC matrix and the ALFF flat map.
 
-`_fcroi.tsv` had been written since ROI FC landed and no panel showed it; ALFF had a bar
-chart ordered by channel name, which cannot be read as the spatial claim it is. Both are
-Plotly figures, so what is asserted is the geometry that carries the meaning and the
-refusals: no frames and no optode positions must give None rather than an exception, because
-the report treats None as "skip the panel" and an exception as a broken report.
+The ALFF bar chart orders channels by name, which cannot be read as the spatial claim it
+is. Both are Plotly figures, so what is asserted is the geometry that carries the meaning
+and the refusals: no frames and no optode positions must give None rather than an
+exception, because the report treats None as "skip the panel" and an exception as a broken
+report.
 
 The seed map's own route is pinned in test_rest_seed_figure.
 """
@@ -129,8 +129,8 @@ def test_the_panel_declines_rather_than_raises():
 
 
 def test_both_matrices_use_the_report_s_one_correlation_scale():
-    """Three figures used to carry their own copy, so a red cell could have meant +1 in one
-    panel and -1 in the next."""
+    """A copy of the scale per figure would let a red cell mean +1 in one panel and -1 in
+    the next."""
     for fig in (rest_channel_panel(_fc_frame(["S1_D1", "S1_D2"], "hbo"), None, None),
                 fc_roi_matrix_figure({"hbo": _roi_frame(["A", "B"])})):
         heat = next(t for t in fig.data if t.type == "heatmap")
@@ -169,9 +169,9 @@ def test_the_flat_map_is_drawn_from_the_montage(haemo, alff_df):
 
 
 def test_a_channel_is_one_disc_and_not_a_path(haemo, alff_df):
-    """An amplitude is a property of a place. Drawn as a source-to-detector bar it chained
-    into the neighbouring channels wherever they share an optode, and a montage of
-    independent measurements read as one connected polyline."""
+    """An amplitude is a property of a place. Drawn as a source-to-detector bar it would
+    chain into the neighbouring channels wherever they share an optode, and a montage of
+    independent measurements would read as one connected polyline."""
     from fnirs_pipe.qc.metrics import long_short_channels
 
     long_names, _ = long_short_channels(haemo, None)
@@ -186,7 +186,7 @@ def test_a_channel_is_one_disc_and_not_a_path(haemo, alff_df):
 
 def test_the_two_chromophores_of_a_row_share_one_bar(haemo, alff_df):
     """mALFF and fALFF are both dimensionless, so HbO and HbR can be read against each
-    other; the four-bar version could compare nothing with anything."""
+    other; a bar per panel could compare nothing with anything."""
     fig = alff_topo_figure(haemo, alff_df)
     bars = [t for t in fig.data if getattr(t.marker, "showscale", False)]
     assert len(bars) == 2

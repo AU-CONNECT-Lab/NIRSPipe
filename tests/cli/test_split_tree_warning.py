@@ -1,9 +1,4 @@
-"""`fnirs-pipe group` says so when quality records sit in a subtree it does not aggregate.
-
-It looked for the pre-rename `desc-sqm_nirs.json`, and handed `any` the glob generators
-themselves, which are always true: an empty `qc/` folder warned, and a real split tree was
-found only by that accident.
-"""
+"""`fnirs-pipe group` says so when quality records sit in a subtree it does not aggregate."""
 
 from fnirs_pipe.cli.workflows import _warn_on_split_tree
 from fnirs_pipe.qc.subject.sqm_record import record_path

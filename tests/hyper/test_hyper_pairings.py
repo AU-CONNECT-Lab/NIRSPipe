@@ -1,17 +1,17 @@
 """A group of more than two members: one report per pairing, and no pairing's numbers on
 another pairing's page.
 
-Every inter-brain figure is of two brains, so three members are three pairings. The defect
-this pins is that the band-mean table has always carried every pairing while the page keyed
-its matrices and its numbers table by channel pair alone: the three collapsed onto one cell,
-whichever row was read last winning, under axes naming the first two members.
+Every inter-brain figure is of two brains, so three members are three pairings. The
+band-mean table carries every pairing, so a page keying its matrices and its numbers table by
+channel pair alone would collapse the three onto one cell, whichever row was read last
+winning, under axes naming the first two members.
 
 The decisive test is :func:`test_a_pairing_page_carries_its_own_pairing_s_coherence`. Two of
 the three members share a rhythm and the third carries independent noise, so a page showing
 the wrong pairing's numbers cannot come out looking right: it would report the noise as
 coherence or the rhythm as noise.
 
-A dyad has exactly one pairing and must be spelled the way it always was, which
+A dyad has exactly one pairing and carries no pairing suffix, which
 :func:`test_a_dyad_is_named_the_way_it_always_was` holds to.
 """
 
@@ -152,7 +152,7 @@ def test_a_dyad_is_named_the_way_it_always_was(triad, tmp_path):
     assert not list(folder.glob("*_pair-*"))
 
 
-# ---- the numbers, which is what the collapse got wrong ----
+# ---- the numbers, which is what a collapse gets wrong ----
 
 def test_a_pairing_page_carries_its_own_pairings_coherence(triad, tmp_path):
     """Only sub-01 and sub-02 share a rhythm, so their page has to read high and the other
@@ -172,7 +172,7 @@ def test_a_pairing_page_carries_its_own_pairings_coherence(triad, tmp_path):
 
 
 def test_no_two_pairings_print_the_same_numbers(triad, tmp_path):
-    """The collapse showed up as two pages agreeing cell for cell."""
+    """A collapse shows up as two pages agreeing cell for cell."""
     folder = _run(triad, tmp_path, wtc_channel_cross=True)
     seen = {slug: _coherence_cells(
                 folder / report_name("group-G1_task-tap", pairing=slug))
@@ -184,8 +184,8 @@ def test_no_two_pairings_print_the_same_numbers(triad, tmp_path):
 
 
 def test_an_uncrossed_run_still_prints_the_coherence_it_measured(triad, tmp_path):
-    """Without crossing there is no `label2` column, and the table used to drop the whole
-    metric rather than read those rows as the diagonal they are."""
+    """Without crossing there is no `label2` column, and the table reads those rows as the
+    diagonal they are rather than dropping the whole metric."""
     dyad = {sid: triad[sid] for sid in ("sub-01", "sub-02")}
     folder = _run(dyad, tmp_path)
     cells = _coherence_cells(folder / report_name("group-G1_task-tap"))
