@@ -242,7 +242,9 @@ def _build_parser() -> argparse.ArgumentParser:
     crop.add_argument("--tmin", type=float, default=None, help="Start time in seconds (single segment).")
     crop.add_argument("--tmax", type=float, default=None, help="End time in seconds (single segment).")
     crop.add_argument("--segments-path", type=Path, default=None,
-                      help="TSV with onset/duration columns defining segments to keep.")
+                      help="TSV with onset/duration columns defining segments to keep. Each "
+                           "segment written to its own file is named by a `task` column, "
+                           "which more than one segment needs unless --combine is given.")
     crop.add_argument("--align", choices=["none", "trigger"], default="none",
                       help="t=0 for --tmin/--tmax and segment onsets: 'none' = recording start, "
                            "'trigger' = first annotation named --trigger-name.")

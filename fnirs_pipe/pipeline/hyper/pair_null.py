@@ -19,7 +19,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from fnirs_pipe.exceptions import StageError, AlignmentError
+from fnirs_pipe.exceptions import StageError
 from fnirs_pipe.io.derivatives import group_output_path
 from fnirs_pipe.pipeline.hyper.surrogate import compute_wtc_pair_null, _average_iterations
 from fnirs_pipe.pipeline.hyper.wtc import cone_margin_s
@@ -159,48 +159,6 @@ def real_table_params(real_tsv: Path) -> dict:
     return params
 
 
-def condition_coverage(
-    partner_raw,
-    windows: list[tuple[str, float, float]],
-) -> dict[str, float]:
-    """How much of each condition window the partner spent in the same-named condition.
-
-    ::
-
-        windows [("game1", 100.0, 400.0)], partner annotated "game1" over 150-400 s
-          -> {"game1": 0.833}
-
-    The windows come from the real dyad, so on a cohort whose sessions ran to the same
-    timetable every draw scores 1.0. A draw that scores low is still counted: dropping it
-    would make the number of draws depend on the partner's timing, and the table would
-    quietly hold a different null per condition. It is reported instead, here, in the log
-    and on the sidecar, so a cohort whose sessions drifted is visible rather than silent.
-    """
-    from fnirs_pipe.qc.common.windows import markers_on_data_axis
-
-    markers = markers_on_data_axis(partner_raw)
-    end = float(partner_raw.times[-1])
-    out: dict[str, float] = {}
-    for label, tstart, tstop in windows:
-        span = max(float(tstop) - float(tstart), 0.0)
-        if span <= 0:
-            out[label] = 0.0
-            continue
-        covered = 0.0
-        for m in markers:
-            # condition_windows numbers a repeated description "desc#1", "desc#2"; the
-            # annotation it came from carries the bare description
-            if str(label).split("#")[0] != str(m["description"]):
-                continue
-            m_start = float(m["onset"])
-            m_stop = m_start + float(m["duration"] or 0.0)
-            if m_stop <= m_start:
-                m_stop = end
-            covered += max(0.0, min(m_stop, float(tstop)) - max(m_start, float(tstart)))
-        out[label] = round(min(covered / span, 1.0), 4)
-    return out
-
-
 def _partner_condition_onsets(partner_raw, labels) -> "dict[str, float]":
     """Where each named condition starts in the stand-in's own recording.
 
@@ -326,97 +284,6 @@ def _draw_condition_pairs(
                     pid: partner_raw.copy().crop(tmin=start - lead,
                                                  tmax=start + span + trail)}
             yield pid, label, pair, (lead, lead + span)
-
-
-def _draw_pairs(
-    derivatives_dir: Path,
-    task: str,
-    fixed_id: str,
-    fixed_raw,
-    candidates: list,
-    *,
-    desc: str,
-    bads_scope: str,
-    scope_tasks: "list[str] | None",
-    real_duration: float,
-    real_offset: float,
-    n_max: "int | None",
-    refused: dict,
-    coverage: dict,
-    windows: "list[tuple[str, float, float]] | None",
-):
-    """Yield ``(partner_id, aligned_pair)`` for every candidate that can stand in.
-
-    Each pair is aligned the way the real dyad was and then cut to the real dyad's analysed
-    length, so every draw describes a stretch of the same length as the table it will be
-    subtracted from. Three things disqualify a candidate, and each is counted in ``refused``
-    rather than raised: coherence is not comparable across sampling rates, a recording too
-    short to reach the real length would make the draws a mixture of lengths, and a candidate
-    that moves the fixed member's own crop would put the draw on a different clock than the
-    real table and invalidate the cached transforms this reuses.
-    """
-    from fnirs_pipe.pipeline.hyper.group_io import load_group_haemo
-    from fnirs_pipe.pipeline.hyper.group_quality import apply_group_bads, load_group_sqm
-    from fnirs_pipe.pipeline.hyper import align_recordings
-
-    drawn = 0
-    for entry in candidates:
-        if n_max is not None and drawn >= n_max:
-            logger.info("stopping at %d draws, the limit asked for; %d candidates unused",
-                        drawn, len(candidates) - drawn)
-            break
-        pid = entry.subject_id
-        try:
-            partner = load_group_haemo(derivatives_dir, [entry], desc=desc)
-        except Exception as exc:
-            refused.setdefault("unreadable", []).append(pid)
-            # one line each would be the whole log on a cohort only partly preprocessed;
-            # _log_draw_quality names them together
-            logger.debug("%s refused as a stand-in: %s", pid, exc)
-            continue
-
-        partner_raw = next(iter(partner.values()))
-        if abs(float(partner_raw.info["sfreq"]) - float(fixed_raw.info["sfreq"])) > 1e-6:
-            refused.setdefault("sampling_rate", []).append(pid)
-            continue
-
-        try:
-            apply_group_bads(partner, load_group_sqm(derivatives_dir, [entry], bads_scope=bads_scope,
-                                                     scope_tasks=scope_tasks))
-        except Exception as exc:
-            # a stand-in with no quality record keeps every channel, which would let a
-            # channel the real dyad rejected into the null and nowhere else
-            refused.setdefault("no_quality_record", []).append(pid)
-            logger.warning("%s refused as a stand-in, no quality record: %s", pid, exc)
-            continue
-
-        try:
-            aligned, offsets = align_recordings({fixed_id: fixed_raw.copy(), pid: partner_raw},
-                                                task)
-        except AlignmentError:
-            refused.setdefault("no_shared_trigger", []).append(pid)
-            continue
-
-        if abs(float(offsets[fixed_id]) - float(real_offset)) > _DURATION_TOL_S:
-            # the earliest trigger this pair shares is not the one the real dyad was cut
-            # from, so the fixed member sits on a different clock than the real table
-            refused.setdefault("moves_the_clock", []).append(pid)
-            continue
-
-        drawn_duration = min(float(r.times[-1]) for r in aligned.values())
-        if drawn_duration < float(real_duration) - _DURATION_TOL_S:
-            refused.setdefault("too_short", []).append(pid)
-            continue
-
-        for raw in aligned.values():
-            # never past the record's own end: real_duration comes from another recording's
-            # float, and a difference of 1e-9 is enough for crop to refuse outright. The
-            # length test above already holds the draw to real_duration within tolerance.
-            raw.crop(tmax=min(float(real_duration), float(raw.times[-1])))
-        if windows:
-            coverage[pid] = condition_coverage(aligned[pid], windows)
-        drawn += 1
-        yield pid, aligned
 
 
 def run_pair_null(
@@ -581,7 +448,6 @@ def run_pair_null(
 
         return _collect
 
-    coverage: dict[str, dict[str, float]] = {}
     partners: list[str] = []
     for ch_type in chroma:
         draws = _draw_condition_pairs(
@@ -622,7 +488,7 @@ def run_pair_null(
                     part.insert(0, "chromophore", ch_type)
                     bucket.append(part)
 
-    _log_draw_quality(partners, refused, coverage, len(candidates))
+    _log_draw_quality(partners, refused, len(candidates))
 
     sources = [p for p in (path_from(r) for r in aligned_real.values()) if p]
     params = dict(
@@ -762,18 +628,7 @@ def _write_isc_null(frames, cond_frames, draw_frames, path_of, sources, params,
         logger.info("re-paired ISC draws saved: %s", path)
 
 
-def _median_coverage(coverage: dict) -> dict:
-    """Per condition, the median of how much of it each stand-in spent in that condition."""
-    labels = {label for per_draw in coverage.values() for label in per_draw}
-    out = {}
-    for label in sorted(labels):
-        vals = sorted(per_draw[label] for per_draw in coverage.values() if label in per_draw)
-        mid = len(vals) // 2
-        out[label] = round(vals[mid] if len(vals) % 2 else (vals[mid - 1] + vals[mid]) / 2, 4)
-    return out
-
-
-def _log_draw_quality(partners: list, refused: dict, coverage: dict, n_candidates: int) -> None:
+def _log_draw_quality(partners: list, refused: dict, n_candidates: int) -> None:
     """Say what the pool gave and what it cost, since the pool is what limits the ranking."""
     n = len(partners)
     logger.info("re-paired null built from %d of %d candidates; a percentile off %d draws "
@@ -784,9 +639,3 @@ def _log_draw_quality(partners: list, refused: dict, coverage: dict, n_candidate
                        "cohort, not of any setting.", n, n)
     for reason, subs in sorted(refused.items()):
         logger.info("  %d refused, %s: %s", len(set(subs)), reason, ", ".join(sorted(set(subs))))
-    if coverage:
-        for label, med in sorted(_median_coverage(coverage).items()):
-            if med < 0.8:
-                logger.warning("condition %r: the stand-ins were in that condition for a "
-                               "median %.0f%% of the window the real table used, so this "
-                               "condition null is only partly task-matched", label, med * 100)

@@ -16,6 +16,8 @@ All notable changes to this project will be documented in this file.
 - `mne_nirs` is imported only when a SNIRF is written; `fnirs-hyper --help` takes 0.9 s instead of 2.3 s
 - A further 41 cheap package imports move to module level; no command's startup loads anything more
 - Provenance node labels read every entity, so a table's label names its measure and slices instead of repeating the filename
+- **Breaking**: `fnirs-prep crop` refuses several segments without a `task` column instead of naming them `_seg-<NN>`; the GUI segment tables gain a Task column
+- Removed the unused whole-run re-pairing helpers `_draw_pairs` and `condition_coverage`
 
 ### Fixed
 - The subject index linked no raw condition page, looking for the pre-rename `desc-raw_nirs` spelling
@@ -24,6 +26,7 @@ All notable changes to this project will be documented in this file.
 - The dyad rating server read its task as `unknown`, so channel decisions went to a file the raw page never reads
 - A collapsed provenance box counted no conditions, the `cond-` entity being unknown to its parser
 - Merging the per-pairing tables of groups of three or more wrote every pairing to one file; the merged name keeps `pair-`
+- `fnirs-prep crop` wrote two segments sharing a `task` label to one file; it now refuses them
 - `fnirs-hyper-band --wtc-suffix` is reduced to a valid `band-` value, and its help shows the real default
 - The `fnirs-hyper-merge` help lists what refuses a merge and what only warns
 - The raw viewer's condition pages name their channel-summary and trial tables `_qc`, as its run page does

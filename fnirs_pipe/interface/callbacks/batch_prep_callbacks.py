@@ -224,7 +224,7 @@ def _write_segments(deriv_dir: str, rows) -> str:
 
     path = Path(deriv_dir) / _SEGMENTS_TSV
     path.parent.mkdir(parents=True, exist_ok=True)
-    pd.DataFrame(rows, columns=["onset", "duration"]).to_csv(path, sep="\t", index=False)
+    pd.DataFrame(rows, columns=["onset", "duration", "task"]).to_csv(path, sep="\t", index=False)
     return str(path)
 
 

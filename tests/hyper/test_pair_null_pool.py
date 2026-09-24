@@ -11,7 +11,7 @@ import pytest
 
 from fnirs_pipe.exceptions import StageError
 from fnirs_pipe.pipeline.hyper.group_io import GroupEntry
-from fnirs_pipe.pipeline.hyper.pair_null import condition_coverage, partner_pool
+from fnirs_pipe.pipeline.hyper.pair_null import partner_pool
 
 
 def _cohort(task="full", n_groups=3, repeated_people=False):
@@ -90,56 +90,6 @@ def test_an_unknown_pool_is_refused():
 def test_a_group_absent_from_the_task_is_refused():
     with pytest.raises(StageError, match="no task"):
         partner_pool(_cohort(), "d09", "full")
-
-
-# ---- condition coverage ----
-
-class _FakeRaw:
-    """Just enough of a Raw for the coverage helper: annotations already on the data axis."""
-
-    def __init__(self, markers, duration=1000.0):
-        import numpy as np
-        self._markers = markers
-        self.first_time = 0.0
-        self.times = np.array([0.0, duration])
-
-
-@pytest.fixture
-def _no_offset(monkeypatch):
-    monkeypatch.setattr("fnirs_pipe.qc.common.windows.markers_on_data_axis",
-                        lambda raw: raw._markers)
-
-
-def _m(desc, onset, duration):
-    return {"description": desc, "onset": onset, "duration": duration}
-
-
-def test_a_stand_in_on_the_same_timetable_covers_the_window_fully(_no_offset):
-    raw = _FakeRaw([_m("game1", 100.0, 300.0)])
-    assert condition_coverage(raw, [("game1", 100.0, 400.0)]) == {"game1": 1.0}
-
-
-def test_a_stand_in_running_late_covers_part_of_it(_no_offset):
-    raw = _FakeRaw([_m("game1", 150.0, 300.0)])
-    assert condition_coverage(raw, [("game1", 100.0, 400.0)])["game1"] == pytest.approx(0.8333,
-                                                                                       abs=1e-3)
-
-
-def test_a_stand_in_doing_something_else_covers_none_of_it(_no_offset):
-    raw = _FakeRaw([_m("game2", 100.0, 300.0)])
-    assert condition_coverage(raw, [("game1", 100.0, 400.0)]) == {"game1": 0.0}
-
-
-def test_a_numbered_repeat_matches_the_annotation_it_came_from(_no_offset):
-    """condition_windows numbers a repeated description; the annotation keeps the bare one."""
-    raw = _FakeRaw([_m("game1", 100.0, 300.0)])
-    assert condition_coverage(raw, [("game1#2", 100.0, 400.0)]) == {"game1#2": 1.0}
-
-
-def test_a_zero_duration_trigger_runs_to_the_end_of_the_recording(_no_offset):
-    """Many systems write triggers with no duration, which is why the window rule exists."""
-    raw = _FakeRaw([_m("game1", 100.0, 0.0)], duration=1000.0)
-    assert condition_coverage(raw, [("game1", 100.0, 400.0)]) == {"game1": 1.0}
 
 
 # ---- the refusal cannot see every repeated cohort, so it says when it could not look ----

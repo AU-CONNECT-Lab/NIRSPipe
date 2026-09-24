@@ -1102,7 +1102,7 @@ def apply_crop(n_clicks, mode, tmin, tmax, seg_rows, combine_val, store, output_
         else:
             if not seg_rows:
                 return dbc.Alert("Add at least one segment.", color="warning", className="mb-0 py-2")
-            df = pd.DataFrame(seg_rows, columns=["onset", "duration"])
+            df = pd.DataFrame(seg_rows, columns=["onset", "duration", "task"])
             df["onset"]    = pd.to_numeric(df["onset"],    errors="coerce").fillna(0.0)
             df["duration"] = pd.to_numeric(df["duration"], errors="coerce").fillna(0.0)
             out_paths = crop_snirf_from_path(

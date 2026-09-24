@@ -30,6 +30,7 @@ _SEG_COLS = [
     DEL_COL,
     {"headerName": "Onset (s)",    "field": "onset",    **_NUM},
     {"headerName": "Duration (s)", "field": "duration", **_NUM},
+    {"headerName": "Task", "field": "task", "editable": True},
 ]
 
 _HIDDEN = {"display": "none"}

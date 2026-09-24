@@ -128,6 +128,41 @@ def _setup_deriv_dir(derivatives_dir: Path, sub: str, ses: str | None) -> Path:
     return out_nirs_dir
 
 
+def _segment_stems(segments_df: pd.DataFrame, stem: str) -> list[str]:
+    """One output stem per segment, each named by its task label, or ValueError.
+
+    ::
+
+        stem "sub-01_task-full", task column ["early", "late"]
+          -> ["sub-01_task-early", "sub-01_task-late"]
+        one row and no task column -> ["sub-01_task-full"]
+
+    A column with nothing typed in it counts as absent, which is what the GUI sends.
+    """
+    labels = ([("" if pd.isna(v) else str(v).strip()) for v in segments_df["task"]]
+              if "task" in segments_df.columns else [])
+    if not any(labels):
+        if len(segments_df) == 1:
+            return [stem]
+        raise ValueError(
+            f"{len(segments_df)} segments and no task column: a segment written to its own "
+            "file is named by its task label. Add a task column naming each segment, or "
+            "combine them into one file (--combine).")
+    blank = [i for i, label in enumerate(labels, start=1) if not label]
+    if blank:
+        raise ValueError(f"segment {', '.join(map(str, blank))} has no task label")
+    invalid = [label for label in labels if not re.fullmatch(r"[A-Za-z0-9]+", label)]
+    if invalid:
+        raise ValueError(f"task labels are letters and digits only, got {invalid}")
+    repeated = sorted({label for label in labels if labels.count(label) > 1})
+    if repeated:
+        raise ValueError(
+            f"task label {', '.join(repeated)} names more than one segment, so the later file "
+            "would overwrite the earlier. Give each segment its own label, or combine them "
+            "into one file (--combine).")
+    return [re.sub(r"task-[^_]+", f"task-{label}", stem) for label in labels]
+
+
 def _crop_raw(
     raw,
     snirf_path: Path,
@@ -173,6 +208,8 @@ def _crop_raw(
         return out
 
     if segments_df is not None:
+        # before anything is cut, so a table that cannot name its segments writes nothing
+        names = None if combine else _segment_stems(segments_df, stem)
         # the span asked for, and the wider span actually cut. A wavelet coefficient near a
         # cut edge is computed partly against padding, so a segment cut to its own boundaries
         # cannot be analysed at its own edges; the margin is what a later stage windows back
@@ -193,13 +230,8 @@ def _crop_raw(
             out = _write(mne.concatenate_raws(segs), stem, windows, asked or None)
             logger.info("Written combined: %s", out)
             return [out]
-        tasks = segments_df["task"] if "task" in segments_df.columns else None
         out_paths: list[Path] = []
-        for i, seg in enumerate(segs, start=1):
-            if tasks is None:
-                name = f"{stem}_seg-{i:02d}"
-            else:
-                name = re.sub(r"task-[^_]+", f"task-{tasks.iloc[i - 1]}", stem)
+        for i, (seg, name) in enumerate(zip(segs, names), start=1):
             out = _write(seg, name, [_window(seg)], [asked[i - 1]])
             logger.info("Written segment %d: %s", i, out)
             out_paths.append(out)
@@ -269,10 +301,8 @@ def crop_snirf(
 
     Single segment: use tmin/tmax.
     Multi-segment: use segments_path (table with onset/duration columns).
-    An optional `task` column names each segment, and its output takes that task entity
-    instead of `_seg-NN`, which makes the segments separate tasks of a valid BIDS dataset
-    rather than one task the pipeline cannot tell apart.
-    combine=True concatenates multi-segment output into one file.
+    A `task` column names each segment, and its output takes that task entity. More than one
+    segment without it is refused unless combine=True, which concatenates them into one file.
 
     align="trigger" measures tmin/tmax (and every segment onset) from the first annotation
     named `trigger_name` rather than from the recording start, so one window selects the same

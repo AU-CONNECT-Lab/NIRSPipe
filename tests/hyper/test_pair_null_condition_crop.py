@@ -38,11 +38,11 @@ class _Raw:
 
 @pytest.fixture
 def wired(monkeypatch):
-    state = {"onsets": {}, "duration": {}}
+    state = {"onsets": {}, "duration": {}, "sfreq": {}}
 
     def fake_haemo(output_dir, entries, desc="preproc"):
         pid = entries[0].subject_id
-        return {pid: _Raw(state["duration"].get(pid, 1600.0))}
+        return {pid: _Raw(state["duration"].get(pid, 1600.0), state["sfreq"].get(pid, 10.0))}
 
     monkeypatch.setattr(group_io, "load_group_haemo", fake_haemo)
     monkeypatch.setattr(group_quality, "load_group_sqm", lambda *a, **k: {})
@@ -52,14 +52,52 @@ def wired(monkeypatch):
     return state
 
 
-def _run(state, partners=("sub-p2d02",), fixed_duration=1600.0):
+def _run(state, partners=("sub-p2d02",), fixed_duration=1600.0, n_max=None):
     refused: dict = {}
     drawn = list(_draw_condition_pairs(
         "/out", "full", FIXED, _Raw(fixed_duration),
         [GroupEntry("dXX", p, "full") for p in partners],
         desc="preproc", bads_scope="run", scope_tasks=["full"],
-        windows=WINDOWS, band_fmin=BAND_FMIN, n_max=None, refused=refused))
+        windows=WINDOWS, band_fmin=BAND_FMIN, n_max=n_max, refused=refused))
     return drawn, refused
+
+
+def _partners_drawn(drawn) -> list:
+    """One entry per stand-in, in draw order: each stand-in yields once per condition."""
+    return list(dict.fromkeys(pid for pid, *_ in drawn))
+
+
+# ---- which stand-ins are refused, counted by name rather than raised ----
+
+def test_a_different_sampling_rate_is_refused_without_losing_the_others(wired):
+    """Coherence is not comparable across rates, and one such stand-in is not a lost cohort."""
+    wired["onsets"] = {"baseline": 0.0, "game1": 500.0}
+    wired["sfreq"] = {"sub-p2d03": 25.0}
+    drawn, refused = _run(wired, partners=("sub-p2d02", "sub-p2d03", "sub-p2d04"))
+    assert _partners_drawn(drawn) == ["sub-p2d02", "sub-p2d04"]
+    assert refused == {"sampling_rate": ["sub-p2d03"]}
+
+
+def test_the_cap_counts_stand_ins_not_conditions(wired):
+    wired["onsets"] = {"baseline": 0.0, "game1": 500.0}
+    drawn, _ = _run(wired, partners=("sub-p2d02", "sub-p2d03", "sub-p2d04"), n_max=2)
+    assert _partners_drawn(drawn) == ["sub-p2d02", "sub-p2d03"]
+    assert len(drawn) == 2 * len(WINDOWS)
+
+
+def test_an_unreadable_stand_in_is_counted_rather_than_raised(wired, monkeypatch):
+    real_haemo = group_io.load_group_haemo
+
+    def partly_missing(output_dir, entries, desc="preproc"):
+        if entries[0].subject_id == "sub-p2d02":
+            raise FileNotFoundError("no derivative for this one")
+        return real_haemo(output_dir, entries, desc=desc)
+
+    monkeypatch.setattr(group_io, "load_group_haemo", partly_missing)
+    wired["onsets"] = {"baseline": 0.0, "game1": 500.0}
+    drawn, refused = _run(wired, partners=("sub-p2d02", "sub-p2d03"))
+    assert _partners_drawn(drawn) == ["sub-p2d03"]
+    assert refused == {"unreadable": ["sub-p2d02"]}
 
 
 def test_an_onset_a_hair_below_zero_is_still_drawn(wired):
