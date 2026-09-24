@@ -255,7 +255,8 @@ def align_like(
                            "(0-%.1f s); dropping it from the motion panel",
                            sid, tmin, tmax, float(raw.times[-1]))
             continue
-        out[sid] = raw.copy().crop(tmin=max(tmin, 0.0), tmax=tmax)
+        # the tolerance above lets float round-off past the last sample through; crop refuses it
+        out[sid] = raw.copy().crop(tmin=max(tmin, 0.0), tmax=min(tmax, float(raw.times[-1])))
     return out
 
 

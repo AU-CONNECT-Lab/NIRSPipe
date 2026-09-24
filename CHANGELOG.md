@@ -30,6 +30,8 @@ All notable changes to this project will be documented in this file.
 - `fnirs-prep crop` checks the segments table once before any subject, so a bad table is one error and writes nothing
 
 ### Fixed
+- `fnirs-qc hyper-raw` failed on recordings whose aligned window ended a float round-off past the last sample
+- `fnirs-hyper` and its companions' help and merge hint named the old `run` / `band` / `merge` / `pair-null` subcommands
 - The subject index linked no raw condition page, looking for the pre-rename `desc-raw_nirs` spelling
 - Two runs in one raw report wrote their condition pages to one file
 - Raw condition pages dropped every panel redrawn for the condition as a leak
