@@ -816,7 +816,7 @@ def build_trial_image_figure(
     if res is None:
         return None
     return _trial_image_figures(
-        res, lambda label, n: f"Trial image — {ch_name} / {label} ({_n_trials(n)})", trial_smooth)
+        res, lambda label, n: f"Trial image: {ch_name} / {label} ({_n_trials(n)})", trial_smooth)
 
 
 def _roi_picks(raw_haemo: mne.io.Raw, channels: "list[str]") -> "list[int]":
@@ -935,7 +935,7 @@ def build_trial_image_by_condition(
         return None
     return _condition_trial_images(
         raw_haemo, [raw_haemo.ch_names.index(ch_name)], spans, epoch_tmin, epoch_tmax,
-        lambda label, n: f"Trial image — {ch_name} / {label} ({_n_trials(n)})",
+        lambda label, n: f"Trial image: {ch_name} / {label} ({_n_trials(n)})",
         trial_smooth, min_trials)
 
 
@@ -955,7 +955,7 @@ def build_roi_trial_image_by_condition(
         return None
     return _condition_trial_images(
         raw_haemo, picks, spans, epoch_tmin, epoch_tmax,
-        lambda label, n: (f"Trial image — ROI {roi_name} / {label} "
+        lambda label, n: (f"Trial image: ROI {roi_name} / {label} "
                           f"({len(picks)} ch, {_n_trials(n)})"),
         trial_smooth, min_trials)
 
@@ -981,7 +981,7 @@ def build_roi_trial_image_figure(
         return None
     return _trial_image_figures(
         res,
-        lambda label, n: f"Trial image — ROI {roi_name} / {label} ({len(picks)} ch, {_n_trials(n)})",
+        lambda label, n: f"Trial image: ROI {roi_name} / {label} ({len(picks)} ch, {_n_trials(n)})",
         trial_smooth,
     )
 

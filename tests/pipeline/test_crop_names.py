@@ -21,8 +21,8 @@ from tests._synth import synth_raw
 
 @pytest.fixture
 def source(tmp_path) -> Path:
-    path = tmp_path / "sub-01_task-full_nirs.snirf"
-    write_snirf(synth_raw("01", "full", duration=300.0, motion_onset=None, bad_pair=None), path)
+    path = tmp_path / "sub-01_task-main_nirs.snirf"
+    write_snirf(synth_raw("01", "main", duration=300.0, motion_onset=None, bad_pair=None), path)
     return path
 
 
@@ -69,14 +69,14 @@ def test_distinct_labels_name_the_segments(source, tmp_path):
 def test_one_unlabelled_segment_keeps_the_source_name(source, tmp_path):
     segments = pd.DataFrame({"onset": [10.0], "duration": [60.0]})
     outs = crop_snirf_from_path(source, tmp_path / "deriv", "01", segments_df=segments)
-    assert [p.name for p in outs] == ["sub-01_task-full_nirs.snirf"]
+    assert [p.name for p in outs] == ["sub-01_task-main_nirs.snirf"]
 
 
 def test_combining_needs_no_labels(source, tmp_path):
     segments = pd.DataFrame({"onset": [10.0, 150.0], "duration": [60.0, 60.0]})
     outs = crop_snirf_from_path(source, tmp_path / "deriv", "01", segments_df=segments,
                                 combine=True)
-    assert [p.name for p in outs] == ["sub-01_task-full_nirs.snirf"]
+    assert [p.name for p in outs] == ["sub-01_task-main_nirs.snirf"]
 
 
 def test_the_command_checks_the_table_once_before_any_subject(tmp_path, monkeypatch, capsys):
@@ -104,7 +104,7 @@ def _sidecar(path: Path) -> dict:
 @pytest.fixture
 def source_with_sidecar(source) -> Path:
     source.with_suffix(".json").write_text(json.dumps(
-        {"TaskName": "full", "RecordingDuration": 300.0, "SamplingFrequency": 10.0}))
+        {"TaskName": "main", "RecordingDuration": 300.0, "SamplingFrequency": 10.0}))
     return source
 
 

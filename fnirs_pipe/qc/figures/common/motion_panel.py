@@ -677,7 +677,7 @@ def bad_segment_zoom_figure(
         ax0.legend(fontsize=6, loc="upper left", framealpha=0.7)
 
     fig.suptitle(
-        f"Bad segment zoom — top {n_segs} by duration (red = artifact window)",
+        f"Bad segment zoom: top {n_segs} by duration (red = artifact window)",
         fontsize=9, y=1.01,
     )
 

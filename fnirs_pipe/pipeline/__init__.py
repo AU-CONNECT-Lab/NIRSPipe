@@ -1,1 +1,1 @@
-"""Pipeline subpackage — prep and post orchestration."""
+"""Pipeline subpackage: prep and post orchestration."""

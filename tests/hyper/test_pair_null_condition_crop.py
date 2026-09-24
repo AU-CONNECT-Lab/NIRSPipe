@@ -12,7 +12,7 @@ from fnirs_pipe.pipeline.hyper import group_io, group_quality, pair_null
 from fnirs_pipe.pipeline.hyper.group_io import GroupEntry
 from fnirs_pipe.pipeline.hyper.pair_null import _draw_condition_pairs
 
-FIXED = "sub-p1d01"
+FIXED = "sub-01G01"
 WINDOWS = [("baseline", 0.0, 300.0), ("game1", 500.0, 1400.0)]
 BAND_FMIN = 0.06                 # cone_margin_s(0.06) is 47.1 s of pad either side
 
@@ -52,12 +52,12 @@ def wired(monkeypatch):
     return state
 
 
-def _run(state, partners=("sub-p2d02",), fixed_duration=1600.0, n_max=None):
+def _run(state, partners=("sub-02G02",), fixed_duration=1600.0, n_max=None):
     refused: dict = {}
     drawn = list(_draw_condition_pairs(
-        "/out", "full", FIXED, _Raw(fixed_duration),
-        [GroupEntry("dXX", p, "full") for p in partners],
-        desc="preproc", bads_scope="run", scope_tasks=["full"],
+        "/out", "main", FIXED, _Raw(fixed_duration),
+        [GroupEntry("GXX", p, "main") for p in partners],
+        desc="preproc", bads_scope="run", scope_tasks=["main"],
         windows=WINDOWS, band_fmin=BAND_FMIN, n_max=n_max, refused=refused))
     return drawn, refused
 
@@ -72,16 +72,16 @@ def _partners_drawn(drawn) -> list:
 def test_a_different_sampling_rate_is_refused_without_losing_the_others(wired):
     """Coherence is not comparable across rates, and one such stand-in is not a lost cohort."""
     wired["onsets"] = {"baseline": 0.0, "game1": 500.0}
-    wired["sfreq"] = {"sub-p2d03": 25.0}
-    drawn, refused = _run(wired, partners=("sub-p2d02", "sub-p2d03", "sub-p2d04"))
-    assert _partners_drawn(drawn) == ["sub-p2d02", "sub-p2d04"]
-    assert refused == {"sampling_rate": ["sub-p2d03"]}
+    wired["sfreq"] = {"sub-02G03": 25.0}
+    drawn, refused = _run(wired, partners=("sub-02G02", "sub-02G03", "sub-02G04"))
+    assert _partners_drawn(drawn) == ["sub-02G02", "sub-02G04"]
+    assert refused == {"sampling_rate": ["sub-02G03"]}
 
 
 def test_the_cap_counts_stand_ins_not_conditions(wired):
     wired["onsets"] = {"baseline": 0.0, "game1": 500.0}
-    drawn, _ = _run(wired, partners=("sub-p2d02", "sub-p2d03", "sub-p2d04"), n_max=2)
-    assert _partners_drawn(drawn) == ["sub-p2d02", "sub-p2d03"]
+    drawn, _ = _run(wired, partners=("sub-02G02", "sub-02G03", "sub-02G04"), n_max=2)
+    assert _partners_drawn(drawn) == ["sub-02G02", "sub-02G03"]
     assert len(drawn) == 2 * len(WINDOWS)
 
 
@@ -89,15 +89,15 @@ def test_an_unreadable_stand_in_is_counted_rather_than_raised(wired, monkeypatch
     real_haemo = group_io.load_group_haemo
 
     def partly_missing(output_dir, entries, desc="preproc"):
-        if entries[0].subject_id == "sub-p2d02":
+        if entries[0].subject_id == "sub-02G02":
             raise FileNotFoundError("no derivative for this one")
         return real_haemo(output_dir, entries, desc=desc)
 
     monkeypatch.setattr(group_io, "load_group_haemo", partly_missing)
     wired["onsets"] = {"baseline": 0.0, "game1": 500.0}
-    drawn, refused = _run(wired, partners=("sub-p2d02", "sub-p2d03"))
-    assert _partners_drawn(drawn) == ["sub-p2d03"]
-    assert refused == {"unreadable": ["sub-p2d02"]}
+    drawn, refused = _run(wired, partners=("sub-02G02", "sub-02G03"))
+    assert _partners_drawn(drawn) == ["sub-02G03"]
+    assert refused == {"unreadable": ["sub-02G02"]}
 
 
 def test_an_onset_a_hair_below_zero_is_still_drawn(wired):
@@ -109,7 +109,7 @@ def test_an_onset_a_hair_below_zero_is_still_drawn(wired):
 
 def test_a_block_a_hair_past_the_end_is_cut_to_the_end(wired):
     wired["onsets"] = {"baseline": 0.0, "game1": 500.0004}
-    wired["duration"] = {"sub-p2d02": 1400.0}
+    wired["duration"] = {"sub-02G02": 1400.0}
     drawn, refused = _run(wired)
     assert [label for _, label, *_ in drawn] == ["baseline", "game1"]
     assert refused == {}
@@ -125,10 +125,10 @@ def test_both_sides_of_a_draw_stay_the_same_length(wired):
 
 def test_a_block_genuinely_past_the_end_is_still_refused(wired):
     wired["onsets"] = {"baseline": 0.0, "game1": 600.0}
-    wired["duration"] = {"sub-p2d02": 1400.0}
+    wired["duration"] = {"sub-02G02": 1400.0}
     drawn, refused = _run(wired)
     assert [label for _, label, *_ in drawn] == ["baseline"]
-    assert refused["short_game1"] == ["sub-p2d02"]
+    assert refused["short_game1"] == ["sub-02G02"]
 
 
 def test_the_condition_is_padded_and_its_place_reported(wired):
@@ -153,12 +153,12 @@ def test_the_condition_is_padded_and_its_place_reported(wired):
 
 # ---- equal-length windows: the stand-in is cut at its own marker plus the offset ----
 
-def _run_windows(state, windows, sources, partners=("sub-p2d02",), fixed_duration=1600.0):
+def _run_windows(state, windows, sources, partners=("sub-02G02",), fixed_duration=1600.0):
     refused: dict = {}
     drawn = list(_draw_condition_pairs(
-        "/out", "full", FIXED, _Raw(fixed_duration),
-        [GroupEntry("dXX", p, "full") for p in partners],
-        desc="preproc", bads_scope="run", scope_tasks=["full"],
+        "/out", "main", FIXED, _Raw(fixed_duration),
+        [GroupEntry("GXX", p, "main") for p in partners],
+        desc="preproc", bads_scope="run", scope_tasks=["main"],
         windows=windows, band_fmin=BAND_FMIN, n_max=None, refused=refused,
         window_sources=sources))
     return drawn, refused

@@ -390,7 +390,7 @@ _QC_FULL_OPTS = dict(
                  "no_by_condition", "bads_subject", "wtc_save_maps", "no_align", "normalize",
                  "check_only"],
     wtc_pair_pool="position", wtc_pair_max=20, pair_flags=["wtc_pair_cross"],
-    gn_task="full", gn_chroma="hbo", gn_null="repaired",
+    gn_task="main", gn_chroma="hbo", gn_null="repaired",
     gn_roi_mapping="/roi.json", gn_resample=20000, gn_seed=7,
     band_fmin=0.05, band_fmax=0.2, band_suffix="band0p05-0p2",
     band_flags=["band_no_mask_coi"],
@@ -681,7 +681,7 @@ _RAW_QC_FULL_OPTS = dict(
     dpf=6.0, cardiac_l=0.7, cardiac_h=1.5, sci_threshold=0.8,
     window_length=10.0, epoch_tmin=-5.0, epoch_tmax=25.0, epoch_qc=True,
     short_max_dist=10.0, long_min_dist=15.0, long_max_dist=45.0,
-    pairs_csv="/pairs.csv", group_id="1003",
+    pairs_csv="/pairs.csv", group_id="G01",
 )
 
 

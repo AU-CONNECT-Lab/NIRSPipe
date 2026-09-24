@@ -210,7 +210,7 @@ select#run-select {
 <!-- step b: concentration and spectrum, one channel at a time. Directly under the trace
      they are picked off, so a channel clicked above is read without scrolling. -->
 <details id="ChannelDetail" open>
-  <summary>c. HbO / HbR &amp; PSD &mdash; per channel</summary>
+  <summary>c. HbO / HbR &amp; PSD per channel</summary>
   <div class="details-body">
     <p class="step-desc" id="detail-title">Pick a channel here or click its trace above.
        The panel holds that channel's concentration after Beer-Lambert and its spectrum.</p>
@@ -224,7 +224,7 @@ select#run-select {
 <!-- step c: the whole recording's spectrum. No picker: it is a mean across channels, and
      the per-channel version is the panel above. -->
 <details id="PSD" open>
-  <summary>d. PSD &mdash; mean across channels</summary>
+  <summary>d. Mean PSD across channels</summary>
   <div class="details-body">
     <p class="step-desc">Averaged over every channel, on optical density, before
        Beer-Lambert.</p>
@@ -288,7 +288,7 @@ select#run-select {
 </details>
 
 <details id="TrialImage" open>
-  <summary>i. Trial image &mdash; single-channel trials</summary>
+  <summary>i. Trial image: single-channel trials</summary>
   <div class="details-body">
     <p class="step-desc">Trials down the rows, time across, one panel per condition. A
        channel that was fine for the first half of a block and lost for the second reads as
@@ -306,7 +306,7 @@ select#run-select {
   <p class="qm-note" id="sqm-scope"></p>
   <ul id="sqm-list" class="qm-list"></ul>
   <div id="sqm-split-wrap" style="display:none">
-    <h3 class="qm-sub">Original recording &mdash; optical density</h3>
+    <h3 class="qm-sub">Original recording: optical density</h3>
     <p class="qm-note">The same recording measured over three channel sets. <b>Long</b> is
        the set the verdict is read off; <b>Short</b> is left uncoloured, a short channel's
        coupling being high by construction and having no established threshold, so that row
@@ -587,7 +587,7 @@ function selectChannel(pair) {
   var sel = document.getElementById("ch-detail-select");
   if (sel && sel.value !== pair) sel.value = pair;
   document.getElementById("detail-title").innerHTML =
-    _esc(pair) + " &mdash; concentration, spectrum and epoch average, after Beer-Lambert.";
+    _esc(pair) + ": concentration, spectrum and epoch average, after Beer-Lambert.";
   document.getElementById("detail-placeholder").style.display = "none";
   document.getElementById("detail-plot").style.display = "block";
 

@@ -12,6 +12,8 @@ All notable changes to this project will be documented in this file.
 - `fnirs-log rebuild` builds a new database from every JSONL log, archived ones included, leaving the old one untouched
 
 ### Changed
+- **Breaking**: `fnirs-hyper-groupnull --task` is required; it had a study-specific default
+- Comments, docstrings, help and report text no longer carry study-specific numbers, change history or documentation links
 - **Breaking**: `fnirs-log merge` merges only finished executions, moves their logs to `archived/`, and backs up the database first
 - A null level on disk is used only when its sidecar matches the run; each page names the null its arrows and chords used
 - WTC table sidecars record `phase_level_source`, and saved maps get a sidecar that `fnirs-hyper band` carries onto its tables

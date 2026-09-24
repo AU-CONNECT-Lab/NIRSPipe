@@ -2,7 +2,7 @@
 
 Each section is an independent _section_*() builder that returns a dict of
 template variables. Failures are caught by _guard() and appended to the errors
-list — the rest of the report still renders. A section skipped because the run does
+list, and the rest of the report still renders. A section skipped because the run does
 not carry what it needs is not a failure: it goes to the notes list instead.
 
 Report sections
@@ -260,7 +260,7 @@ def _prepare_long_raw(
 
 
 # ---------------------------------------------------------------------------
-# Section builders — each returns a dict of template variables
+# Section builders: each returns a dict of template variables
 # ---------------------------------------------------------------------------
 
 def _section_sci(
@@ -521,7 +521,7 @@ def _section_psd_detail(
                     if (present := [c for c in picks if c in raw.ch_names])
                 ]
             fig = psd_figure(raw_sub, l_freq=l_freq, h_freq=h_freq, fmax=2.0,
-                             title=f"PSD — {pair}", cardiac=cardiac, resp=resp,
+                             title=f"PSD: {pair}", cardiac=cardiac, resp=resp,
                              stages=stages_sub)
             fname = fig_name("psddetail", channel=_pair_fname(pair))
             path, h = _save_plotly_html(fig, figures_dir / fname)
@@ -2471,8 +2471,8 @@ def _write_condition_reports(
                 if key not in WHOLE_RUN_ONLY_COLUMNS),
             # `page_heading` and `page_title` are what the shell reads; a `heading` key
             # here reached nothing, so every condition page carried the run's own title
-            "page_heading": f"{report_vars['page_heading']} \u2014 {label}",
-            "page_title": f"{report_vars['page_title']} \u2014 {label}",
+            "page_heading": f"{report_vars['page_heading']}  \u00b7  {label}",
+            "page_title": f"{report_vars['page_title']}  \u00b7  {label}",
             "condition_label": label,
             # what keeps this page's rating keys out of the run's; see the template's `_rk`
             "condition_slug": slug,

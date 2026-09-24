@@ -92,7 +92,7 @@ def manage_subjects(detect_clicks, select_all_clicks, clear_clicks, bids_dir, cu
             inline=True,
         )
         result = dbc.Alert(
-            f"Found {len(subjects)} subject(s) — all selected",
+            f"Found {len(subjects)} subject(s), all selected",
             color="success", className="mb-0 py-2",
         )
         return result, checklist

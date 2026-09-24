@@ -5,7 +5,7 @@ a sphere at the channel midpoint. Colours follow the 2-D optode flat map so the
 two panels of the combined figure read the same way.
 
 Three camera perspectives (frontal, left lateral, superior) assembled into a
-single base64 PNG (no Plotly wrapper — avoids large go.Image JSON overhead).
+single base64 PNG (no Plotly wrapper, which avoids large go.Image JSON overhead).
 brain_viewer.py is intentionally not touched.
 """
 

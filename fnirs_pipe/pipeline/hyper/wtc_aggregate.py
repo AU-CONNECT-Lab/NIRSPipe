@@ -193,9 +193,9 @@ def _warn_mixed_iterations(seen: dict[str, dict]) -> None:
     at ``n_iter`` treats those as the same number.
 
     For the re-paired null it is worse than uneven, it is **systematic**. The pool is the
-    other groups whose recording reaches this one's length, so a long recording has few
-    stand-ins and a short one has many, and the resolution of the null ends up correlated
-    with duration. Duration also moves coherence, since a shorter transform loses a larger
+    other groups whose own block of the condition is at least as long as this one's, so a
+    long block has few stand-ins and a short one has many, and the resolution of the null
+    ends up correlated with duration. Duration also moves coherence, since a shorter transform loses a larger
     share of its band to the cone. So the groups with the coarsest null are not a random
     subset. Report ``n_iter`` beside any percentile drawn from this table.
     """

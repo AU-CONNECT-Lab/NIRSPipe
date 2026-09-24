@@ -15,7 +15,7 @@ from fnirs_pipe.interface.cli_args import build_raw_qc_args, missing_raw_qc
 from fnirs_pipe.interface.theme import style_figure
 from fnirs_pipe.exceptions import AlignmentError
 
-# aligned_raws not JSON-serializable — keep in process memory
+# aligned_raws not JSON-serializable, so keep in process memory
 _ALIGNED_CACHE: dict[str, dict] = {}
 
 

@@ -7,8 +7,8 @@ convention `compute_isc` already followed before the resting-state products caug
 
 The failure these guard against is silent: before, a rejected channel carried an ordinary
 looking correlation into `fc.tsv`, the figures drew it like any other, and a group analysis
-reading the table had no way to tell. So each test asserts both halves — the cell is blank,
-and the cells around it are not — because a function that blanked everything would pass on
+reading the table had no way to tell. So each test asserts both halves (the cell is blank,
+and the cells around it are not) because a function that blanked everything would pass on
 the first half alone.
 
 The input helpers are here too. A rejection is only as good as the naming that produced it,

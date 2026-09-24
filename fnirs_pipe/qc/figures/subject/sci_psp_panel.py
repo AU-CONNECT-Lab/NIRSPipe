@@ -105,15 +105,15 @@ def channel_quality_heatmap(
             if metric == "Status":
                 bad = is_bad[i]
                 colors.append(_BAD_COLOR if bad else _GOOD_COLOR)
-                hover.append(f"{ch} — Status: {'BAD' if bad else 'OK'}")
+                hover.append(f"{ch} · Status: {'BAD' if bad else 'OK'}")
             else:
                 v = lookup.get(ch)
                 if v is None or (isinstance(v, float) and np.isnan(v)):
                     colors.append(_MISSING)
-                    hover.append(f"{ch} — {metric}: —")
+                    hover.append(f"{ch} · {metric}: —")
                 else:
                     colors.append(_GOOD_COLOR if chk(v) else _BAD_COLOR)
-                    hover.append(f"{ch} — {metric}: {v:{fmt}}")
+                    hover.append(f"{ch} · {metric}: {v:{fmt}}")
 
     fig = go.Figure(go.Scatter(
         x=xs, y=ys,
@@ -230,7 +230,7 @@ def trial_quality_heatmap(
             z.append([None if v is None
                       else ((v - lo) / span if better_high else (hi - v) / span)
                       for v in vals])
-        text.append([f"{t} \u2014 {label}: {format_metric(key, v)}"
+        text.append([f"{t} \u00b7 {label}: {format_metric(key, v)}"
                      for t, v in zip(trial_labels, vals)])
 
     n_trials, n_met = len(trial_labels), len(present)

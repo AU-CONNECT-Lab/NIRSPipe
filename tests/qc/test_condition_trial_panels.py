@@ -19,7 +19,7 @@ from fnirs_pipe.qc.common.figure_io import figure_namer
 from fnirs_pipe.qc.subject.report import _condition_trial_qc
 from tests._synth import synth_raw
 
-TALK = figure_namer("sub-01_task-full", "talk")
+TALK = figure_namer("sub-01_task-main", "talk")
 EPOCH = (-5.0, 25.0)
 
 

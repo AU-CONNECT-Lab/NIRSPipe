@@ -125,8 +125,8 @@ def compute_group_sqm_raw(
     """Compute raw-level SQM (SCI, bad channels) for each group member.
 
     Writes two TSVs under group-{gid}/nirs/, where a subject's own tables sit:
-      group-{gid}_task-{task}_desc-subject_qc.tsv  — one row per subject (scalars)
-      group-{gid}_task-{task}_desc-channel_qc.tsv  — one row per subject × channel
+      group-{gid}_task-{task}_desc-subject_qc.tsv: one row per subject (scalars)
+      group-{gid}_task-{task}_desc-channel_qc.tsv: one row per subject × channel
 
     Returns {subject_id: sqm_dict} for use in the HTML report.
 

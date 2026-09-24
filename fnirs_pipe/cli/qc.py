@@ -1,4 +1,4 @@
-"""fnirs-qc CLI (argparse) — quality control for fNIRS data."""
+"""fnirs-qc CLI (argparse): quality control for fNIRS data."""
 
 from __future__ import annotations
 

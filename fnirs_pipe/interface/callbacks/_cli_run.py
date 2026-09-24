@@ -63,7 +63,7 @@ def run_and_report(stored: dict | None):
     try:
         proc = subprocess.run(argv, capture_output=True, text=True)
     except FileNotFoundError:
-        return dbc.Alert(f"`{argv[0]}` not found on PATH — make sure fnirs-pipe is installed.",
+        return dbc.Alert(f"`{argv[0]}` not found on PATH. Make sure fnirs-pipe is installed.",
                          color="danger", className="mb-0"), None
     except Exception as exc:
         return dbc.Alert(f"Failed to launch: {exc}", color="danger", className="mb-0"), None

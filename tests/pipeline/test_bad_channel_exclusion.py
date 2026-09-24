@@ -3,7 +3,7 @@
 Three places had this wrong. The worst was the short-channel regressor: it sits in the
 design matrix, so one bad short channel shifted every channel's fit. None of the three
 raises, none of them shows up on clean data, and all three change numbers silently,
-which is why each is tested the same way — mark a channel bad, then make that channel
+which is why each is tested the same way: mark a channel bad, then make that channel
 absurd, and assert the aggregate did not move. Each pairing has a companion test that
 the same distortion *does* move the aggregate while the channel is good, so a function
 that stopped reading the channel at all cannot pass by accident.
@@ -147,7 +147,7 @@ def test_the_malff_reference_ignores_a_bad_channel(make_raw):
     clean = _alff(make_raw, bads=[2])
     boosted = _alff(make_raw, bads=[2], boost=2)
 
-    good = clean["bad"] == False  # noqa: E712 — pandas mask, not a truth test
+    good = clean["bad"] == False  # noqa: E712 (pandas mask, not a truth test)
     assert good.sum() == 3
     assert_allclose(clean.loc[good, "malff"], boosted.loc[good, "malff"])
     assert_allclose(clean.loc[good, "zalff"], boosted.loc[good, "zalff"])

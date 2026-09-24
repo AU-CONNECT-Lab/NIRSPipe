@@ -1,4 +1,4 @@
-"""fnirs-log CLI (argparse) — database management for fnirs-pipe."""
+"""fnirs-log CLI (argparse): database management for fnirs-pipe."""
 
 from __future__ import annotations
 

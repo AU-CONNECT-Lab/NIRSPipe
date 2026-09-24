@@ -1,4 +1,4 @@
-"""fnirs-hyper CLI (argparse) — dyad analysis over a derivatives tree.
+"""fnirs-hyper CLI (argparse): dyad analysis over a derivatives tree.
 
 Hyperscanning is its own domain: its input is a pairs table, its unit is a dyad, and it
 reads derivatives rather than BIDS raw.

@@ -1,4 +1,4 @@
-"""Page: Hyperscanning align — align multi-subject recordings by shared trigger."""
+"""Page: Hyperscanning align: align multi-subject recordings by shared trigger."""
 
 from __future__ import annotations
 
@@ -59,7 +59,7 @@ layout = dbc.Container([
         ),
 
         card("Trigger Timeline",
-            html.Small("aligned time axis — each row is one subject",
+            html.Small("aligned time axis: each row is one subject",
                        className="text-muted d-block mb-1"),
             dbc.Row([
                 dbc.Col(

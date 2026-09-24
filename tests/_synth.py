@@ -259,7 +259,7 @@ def make_hyper_dataset(
     ``hold`` carries triggers so alignment has something to align on; ``rest``
     carries none, which is the case that currently fails alignment outright.
     """
-    groups = groups or {"1003": ("10031", "10032")}
+    groups = groups or {"G01": ("11", "12")}
     subjects = [s for members in groups.values() for s in members]
 
     bids_dir = Path(root) / name

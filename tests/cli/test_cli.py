@@ -1,4 +1,4 @@
-"""CLI parsing tests — framework-agnostic safety net for the argparse migration.
+"""CLI parsing tests: framework-agnostic safety net for the argparse migration.
 
 These assert user-facing behaviour (option names, defaults, nargs, choices,
 required args, dispatch), so they survive the Typer -> argparse switch.

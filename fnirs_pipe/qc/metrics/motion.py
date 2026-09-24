@@ -141,7 +141,7 @@ def motion_correction_metrics(
     rel_thresh: float = 1.0,
     ch_frac: float = 0.1,
 ) -> dict[str, Any]:
-    """Experimental: motion-correction footprint — which timepoints a correction repaired.
+    """Experimental: motion-correction footprint, the timepoints a correction repaired.
 
     Per channel a sample is a correction event when the frame-to-frame rate of correction
     exceeds ``rel_thresh`` times the channel's sample-to-sample noise. A timepoint is

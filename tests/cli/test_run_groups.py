@@ -13,7 +13,7 @@ def test_a_stage_error_is_reported_as_its_message(capsys, caplog):
         raise StageError("desc-od holds optical density, not haemoglobin concentration")
 
     with caplog.at_level(logging.ERROR), pytest.raises(SystemExit) as exc:
-        _run_groups({("d01", "full"): []}, process)
+        _run_groups({("G01", "main"): []}, process)
 
     assert exc.value.code == 1
     err = capsys.readouterr().err
@@ -27,10 +27,10 @@ def test_the_other_groups_still_run(capsys):
 
     def process(gid, task, members):
         seen.append(gid)
-        if gid == "d01":
+        if gid == "G01":
             raise StageError("no real WTC table to rank against")
 
     with pytest.raises(SystemExit):
-        _run_groups({("d01", "full"): [], ("d02", "full"): []}, process)
-    assert seen == ["d01", "d02"]
+        _run_groups({("G01", "main"): [], ("G02", "main"): []}, process)
+    assert seen == ["G01", "G02"]
     assert "1 succeeded, 1 failed" in capsys.readouterr().out

@@ -259,7 +259,7 @@ def test_reband_leaves_the_level_archive_alone(tmp_path):
     from fnirs_pipe.pipeline.hyper.wtc_store import reband_tree, save_null_levels
 
     save_null_levels({("a", "b", "S1_D1"): np.array([0.3, 0.4, 0.5])},
-                     tmp_path / "group-d01_task-full_hyper-wtc-nulllevel-hbo.npz")
+                     tmp_path / "group-G01_task-main_hyper-wtc-nulllevel-hbo.npz")
 
     assert reband_tree(tmp_path, 0.06, 0.15) == []
 

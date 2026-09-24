@@ -29,7 +29,7 @@ _REAL = {"band_fmin": 0.06, "band_fmax": 0.15, "wtc_fmin": 0.004, "wtc_fmax": 0.
          "mask_coi": True, "aligned_duration_s": 900.0}
 
 
-def _real_table(root, gid="d01", task="full", params=None, kind="wtc"):
+def _real_table(root, gid="G01", task="main", params=None, kind="wtc"):
     d = root / f"group-{gid}" / "nirs"
     d.mkdir(parents=True, exist_ok=True)
     tsv = d / name(gid, task, kind)
@@ -49,7 +49,7 @@ def test_the_band_and_the_mask_are_read_back_rather_than_retyped(tmp_path):
 
 def test_no_real_table_is_refused_by_name(tmp_path):
     with pytest.raises(StageError, match="no real WTC table"):
-        real_table_params(tmp_path / name("d01", "full"))
+        real_table_params(tmp_path / name("G01", "main"))
 
 
 def test_a_sidecar_missing_the_band_is_refused_rather_than_defaulted(tmp_path):
@@ -115,8 +115,8 @@ def _write_null(root, gid, task, kind, **params):
 
 
 def test_the_two_nulls_merge_into_separate_files(tmp_path):
-    _write_null(tmp_path, "d01", "full", "wtc-phasenull", n_iter=100, null_kind="phase")
-    _write_null(tmp_path, "d01", "full", "wtc-pairnull", n_iter=22,
+    _write_null(tmp_path, "G01", "main", "wtc-phasenull", n_iter=100, null_kind="phase")
+    _write_null(tmp_path, "G01", "main", "wtc-pairnull", n_iter=22,
                 null_kind="repaired", pair_pool="position")
     assert len(_merge(tmp_path, "wtc-phasenull")) == 1
     assert len(_merge(tmp_path, "wtc-pairnull")) == 1
@@ -124,33 +124,33 @@ def test_the_two_nulls_merge_into_separate_files(tmp_path):
 
 def test_a_pair_null_renamed_onto_the_phase_null_path_is_refused(tmp_path):
     """Filenames already keep them apart; this catches one moved by hand."""
-    _write_null(tmp_path, "d01", "full", "wtc-phasenull", n_iter=22, null_kind="phase")
-    _write_null(tmp_path, "d02", "full", "wtc-phasenull", n_iter=22, null_kind="repaired")
+    _write_null(tmp_path, "G01", "main", "wtc-phasenull", n_iter=22, null_kind="phase")
+    _write_null(tmp_path, "G02", "main", "wtc-phasenull", n_iter=22, null_kind="repaired")
     with pytest.raises(ValueError, match="null_kind"):
         _merge(tmp_path, "wtc-phasenull")
 
 
 def test_two_pools_refuse_to_merge(tmp_path):
     """`any` draws from twice the people, so its null is not the same null."""
-    _write_null(tmp_path, "d01", "full", "wtc-pairnull", n_iter=22,
+    _write_null(tmp_path, "G01", "main", "wtc-pairnull", n_iter=22,
                 null_kind="repaired", pair_pool="position")
-    _write_null(tmp_path, "d02", "full", "wtc-pairnull", n_iter=44,
+    _write_null(tmp_path, "G02", "main", "wtc-pairnull", n_iter=44,
                 null_kind="repaired", pair_pool="any")
     with pytest.raises(ValueError, match="n_iter|pair_pool"):
         _merge(tmp_path, "wtc-pairnull")
 
 
 def test_one_pool_merges(tmp_path):
-    for gid in ("d01", "d02"):
-        _write_null(tmp_path, gid, "full", "wtc-pairnull", n_iter=22,
+    for gid in ("G01", "G02"):
+        _write_null(tmp_path, gid, "main", "wtc-pairnull", n_iter=22,
                     null_kind="repaired", pair_pool="position")
-    assert sorted(_merge(tmp_path, "wtc-pairnull")["group_id"]) == ["d01", "d02"]
+    assert sorted(_merge(tmp_path, "wtc-pairnull")["group_id"]) == ["G01", "G02"]
 
 
 def test_merge_covers_the_new_kinds(tmp_path):
     from fnirs_pipe.cli.hyper import cmd_merge
 
-    _write_null(tmp_path, "d01", "full", "wtc-pairnull", n_iter=22,
+    _write_null(tmp_path, "G01", "main", "wtc-pairnull", n_iter=22,
                 null_kind="repaired", pair_pool="position")
     cmd_merge(tmp_path, verbose=False)
     assert (tmp_path / "null-pair_stat-wtc_relmat.tsv").exists()
@@ -169,15 +169,15 @@ def test_an_roi_mapping_is_read_rather_than_crashing(tmp_path, monkeypatch):
 
     (tmp_path / "roi.json").write_text('{"pfc": ["S1_D1", "S1_D2"]}')
     (tmp_path / "pairs.csv").write_text(
-        "group_id,subject_id,task\nd01,sub-a,full\nd01,sub-b,full\n"
-        "d02,sub-c,full\nd02,sub-d,full\n")
+        "group_id,subject_id,task\nG01,sub-a,main\nG01,sub-b,main\n"
+        "G02,sub-c,main\nG02,sub-d,main\n")
 
     seen = {}
     monkeypatch.setattr(pair_null, "run_pair_null",
                         lambda *a, **k: seen.update(k) or tmp_path / "out.tsv")
     cmd_pair_null(
         derivatives_dir=tmp_path, output_dir=tmp_path,
-        pairs_csv=tmp_path / "pairs.csv", group_id="d01",
+        pairs_csv=tmp_path / "pairs.csv", group_id="G01",
         task_label=None, desc="errts", roi_mapping=str(tmp_path / "roi.json"),
         bads_scope="run", wtc_chroma="both", wtc_pair_pool="position",
         wtc_pair_max=None, wtc_pair_cross=False, wtc_roi_min_channels=2,
@@ -191,7 +191,7 @@ def test_an_unreadable_roi_mapping_exits_rather_than_tracebacks(tmp_path):
 
     (tmp_path / "roi.json").write_text("{not json")
     (tmp_path / "pairs.csv").write_text(
-        "group_id,subject_id,task\nd01,sub-a,full\nd01,sub-b,full\n")
+        "group_id,subject_id,task\nG01,sub-a,main\nG01,sub-b,main\n")
     with pytest.raises(SystemExit):
         cmd_pair_null(
             derivatives_dir=tmp_path, output_dir=tmp_path,

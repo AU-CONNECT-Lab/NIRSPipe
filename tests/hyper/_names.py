@@ -69,7 +69,7 @@ def archive(group: str, task: str, chromophore: str, **entities) -> str:
     return name(group, task, extension=".npz", chromophore=chromophore, **entities)
 
 
-def cohort(nulldist: str, desc: str, task: str = "full", chromophore: str = "hbo") -> str:
+def cohort(nulldist: str, desc: str, task: str = "main", chromophore: str = "hbo") -> str:
     """One cross-dyad verdict table at the tree root, from `fnirs-hyper group-null`.
 
     No group- and no sub-: having no analysis unit in the name is what marks a table as

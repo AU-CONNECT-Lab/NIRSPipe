@@ -1,4 +1,4 @@
-"""Page: the hyperscanning pipeline — `fnirs-hyper`, which runs on what `fnirs-pipe` wrote."""
+"""Page: the hyperscanning pipeline (`fnirs-hyper`), which runs on what `fnirs-pipe` wrote."""
 
 from __future__ import annotations
 

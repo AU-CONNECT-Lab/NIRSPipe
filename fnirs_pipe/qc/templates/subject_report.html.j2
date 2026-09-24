@@ -155,7 +155,7 @@
     {% endif %}
 
     {% if brain_views_path %}
-      <h3>Channel quality — 3D &amp; optode map</h3>
+      <h3>Channel quality: 3D &amp; optode map</h3>
       <p style="font-size:0.82rem; color:#666; margin:0 0 0.3rem;">Red = rejected by the
         screening, whatever its SCI; every channel that survived is then graded green to
         amber by its own SCI against the run's line. The two are different questions: a
@@ -184,7 +184,7 @@
       <div class="placeholder">GVTD + Carpet not available.</div>
     {% endif %}
     {% if bad_segment_zoom_path %}
-      <h3>Bad segment zoom — top segments by duration</h3>
+      <h3>Bad segment zoom: top segments by duration</h3>
       <img src="{{ bad_segment_zoom_path }}" alt="Bad segment zoom" />
       <p class="fig-path">{{ bad_segment_zoom_path }}</p>
     {% endif %}
@@ -232,7 +232,7 @@
               style="height:{{ hbo_hbr_h }}px"></iframe>
       <p class="fig-path">{{ hbo_hbr_path }}</p>
     {% else %}
-      <div class="placeholder">Figure generation failed — see Errors section.</div>
+      <div class="placeholder">Figure generation failed; see Errors section.</div>
     {% endif %}
 
 
@@ -311,7 +311,7 @@
         carries what a per-condition page reads a spectrum for.
       </div>
     {% else %}
-      <div class="placeholder">Figure generation failed — see Errors section.</div>
+      <div class="placeholder">Figure generation failed; see Errors section.</div>
     {% endif %}
 
     {% if psd_detail_pairs %}
@@ -357,7 +357,7 @@
       <iframe class="plotly-frame" src="{{ epoch_preview_path }}" title="Epoch preview" style="height:{{ epoch_preview_h }}px"></iframe>
       <p class="fig-path">{{ epoch_preview_path }}</p>
     {% else %}
-      <div class="placeholder">No stimulus events found — epoch preview not available.</div>
+      <div class="placeholder">No stimulus events found, so the epoch preview is not available.</div>
     {% endif %}
 
     {% if evoked_topomap_path %}
@@ -369,7 +369,7 @@
     {% endif %}
 
     {% if trial_image_roi_pairs %}
-    <h3>Trial image — ROI (channel-averaged)</h3>
+    <h3>Trial image: ROI (channel-averaged)</h3>
     <p style="font-size:0.82rem;color:#666;margin:0 0 0.3rem;">{{ section_note('epoch.trial_image_roi') }}</p>
     <select class="ch-select"
             onchange="document.getElementById('trialimg-roi-frame').src=this.value">
@@ -383,7 +383,7 @@
     {% endif %}
 
     {% if trial_image_pairs %}
-    <h3>Trial image — single-channel trials</h3>
+    <h3>Trial image: single-channel trials</h3>
     <p style="font-size:0.82rem;color:#666;margin:0 0 0.3rem;">{{ section_note('epoch.trial_image_single') }}</p>
     <select class="ch-select"
             onchange="document.getElementById('trialimg-frame').src=this.value">
@@ -414,7 +414,7 @@
               style="height:{{ rest_alff_topo_h }}px"></iframe>
       <p class="fig-path">{{ rest_alff_topo_path }}</p>
     {% else %}
-      <div class="placeholder">ALFF not computed — --high-pass and --low-pass are required.</div>
+      <div class="placeholder">ALFF not computed: --high-pass and --low-pass are required.</div>
     {% endif %}
   </div>
 </details>
@@ -458,15 +458,15 @@
     {% if glm_design_path or glm_design_heatmap_path %}
       <h3>Design matrix</h3>
       {% if glm_design_path %}
-        <img class="responsive" src="{{ glm_design_path }}" alt="Design matrix — regressor time series" />
+        <img class="responsive" src="{{ glm_design_path }}" alt="Design matrix: regressor time series" />
         <p class="fig-path">{{ glm_design_path }}</p>
       {% endif %}
       {% if glm_design_heatmap_path %}
-        <img class="responsive" src="{{ glm_design_heatmap_path }}" alt="Design matrix — heatmap" style="margin-top:0.5rem;" />
+        <img class="responsive" src="{{ glm_design_heatmap_path }}" alt="Design matrix: heatmap" style="margin-top:0.5rem;" />
         <p class="fig-path">{{ glm_design_heatmap_path }}</p>
       {% endif %}
     {% else %}
-      <div class="placeholder">Design matrix not available — pass design_matrix to build_subject_report.</div>
+      <div class="placeholder">Design matrix not available: pass design_matrix to build_subject_report.</div>
     {% endif %}
 
     {% if glm_activation_conditions %}
@@ -578,7 +578,7 @@
   {%- macro qm_row(name, d, cols, is_long, lead=none) %}<tr><td>{{ name }}</td>{% if lead is not none %}<td>{{ lead }}</td>{% endif %}{{ qm_cells(d, cols, is_long) }}</tr>{% endmacro -%}
   {#- one table per signal domain, so a reader has no join to find and each table gets the
       column spacing of its own content -#}
-  <h3 class="qm-sub">Original recording &mdash; optical density</h3>
+  <h3 class="qm-sub">Original recording: optical density</h3>
   <div style="overflow-x:auto;">
   <table class="qm-table qm-split qm-flat">
     <thead>
@@ -593,7 +593,7 @@
   </table>
   </div>
   {% if hb_split %}
-  <h3 class="qm-sub">Haemoglobin &mdash; before denoising</h3>
+  <h3 class="qm-sub">Haemoglobin: before denoising</h3>
   <div style="overflow-x:auto;">
   <table class="qm-table qm-split qm-flat">
     <thead>
@@ -776,7 +776,7 @@
     {% if sqm.get('cnr_hbo_mean') is not none or sqm.get('cnr_hbo_mean_errts') is not none %}
     {% for chroma, key in [('HbO', 'cnr_hbo_mean'), ('HbR', 'cnr_hbr_mean')] %}
     {{ qm_tr_pair(key, 'CNR ' ~ chroma
-                  ~ (' — %d epochs'|format(sqm.get('cnr_n_epochs')) if sqm.get('cnr_n_epochs') else ''),
+                  ~ (', %d epochs'|format(sqm.get('cnr_n_epochs')) if sqm.get('cnr_n_epochs') else ''),
                   '_errts', ' (denoising)') }}
     {% endfor %}
     {% endif %}

@@ -372,19 +372,19 @@ def test_cmd_provenance_writes_where_the_report_looks_for_it(tmp_path, capsys):
 def test_a_group_gets_the_graph_its_dyad_report_links(tmp_path):
     """One graph per task, under the name the dyad report embeds.
 
-    This used to write `group-d01_desc-provenance`, while the report links
-    `group-d01_task-rest_desc-provenance`, so re-rendering never reached the report.
+    This used to write `group-G01_desc-provenance`, while the report links
+    `group-G01_task-rest_desc-provenance`, so re-rendering never reached the report.
     """
     from fnirs_pipe.cli.qc import cmd_provenance
 
-    nirs = tmp_path / "group-d01" / "nirs"
+    nirs = tmp_path / "group-G01" / "nirs"
     nirs.mkdir(parents=True)
-    _sidecar(nirs, "group-d01_task-rest_stat-wtc_relmat", step="hyper_wtc")
+    _sidecar(nirs, "group-G01_task-rest_stat-wtc_relmat", step="hyper_wtc")
 
     cmd_provenance(tmp_path)
 
-    name = figure_namer("group-d01_task-rest")("provenance", extension=".png")
-    assert (tmp_path / "group-d01" / "figures" / name).exists()
+    name = figure_namer("group-G01_task-rest")("provenance", extension=".png")
+    assert (tmp_path / "group-G01" / "figures" / name).exists()
 
 
 def test_a_session_tree_is_found_and_drawn_beside_the_reports(tmp_path):

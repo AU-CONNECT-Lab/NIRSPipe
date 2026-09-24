@@ -149,7 +149,7 @@ def populate_runs(subject, bids_dir):
 
 
 # ── Load run → write everything into the shared store ─────────────────────────
-# (No direct figure outputs — restore_from_store handles all graphs)
+# (No direct figure outputs: restore_from_store handles all graphs)
 
 @callback(
     Output("dp-run-store",   "data"),
@@ -517,7 +517,7 @@ def update_channel_detail(channel_pair, store):
         # lazy compute
         raw_haemo = _HAEMO_CACHE.get(cache_key)
         if raw_haemo is None:
-            # loaded from disk cache — recompute haemo from SNIRF
+            # loaded from disk cache, so recompute haemo from SNIRF
             try:
                 import mne
                 snirf_path = store.get("snirf_path", "")
@@ -562,7 +562,7 @@ def update_channel_detail(channel_pair, store):
         style_figure(ch_data.get("detail_figure") or _placeholder_fig("No channel data", 160)),
         style_figure(ch_data.get("psd_figure")    or _placeholder_fig("No PSD available", 220)),
         style_figure(ch_data.get("epoch_figure")
-                     or _placeholder_fig("No markers — epoch preview not available", 220)),
+                     or _placeholder_fig("No markers: epoch preview not available", 220)),
         _SHOW,
         _SHOW,
         _SHOW,
@@ -948,7 +948,7 @@ def on_topo_click(click_data, store):
         return no_update
 
     # Use curveNumber to index into the figure's stored trace list and read
-    # its customdata — avoids the "nearest point across subplots" misfire.
+    # its customdata, which avoids the "nearest point across subplots" misfire.
     curve_num = points[0].get("curveNumber", 0)
     fig_dict = cached.get("evoked_topo", {}).get("figure", {})
     traces = fig_dict.get("data", [])
@@ -1337,7 +1337,7 @@ def click_cd(_, dec_state, run_store):
         except Exception as exc:
             msg = f"Save failed: {exc}"
     else:
-        msg = "No output dir set — decisions not saved."
+        msg = "No output dir set: decisions not saved."
 
     pair_cells, blocks, notes = _cached_channels((run_store or {}).get("cache_key"))
     table = _build_decisions_table(pair_cells, blocks, notes, run_decisions)

@@ -1,4 +1,4 @@
-"""fnirs-prep CLI (argparse) — data preparation utilities (marker editing, crop, etc.)."""
+"""fnirs-prep CLI (argparse): data preparation utilities (marker editing, crop, etc.)."""
 
 from __future__ import annotations
 

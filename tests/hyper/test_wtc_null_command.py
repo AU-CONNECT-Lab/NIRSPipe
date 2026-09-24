@@ -99,11 +99,11 @@ def test_the_sidecar_records_the_iteration_count_and_the_shape(tmp_path, monkeyp
     raws = {"a": make_raw(n_ch=1), "b": make_raw(n_ch=1)}
     out = _draw_and_write(
         wtc_null,
-        group_id="d01", task="baseline", aligned_raws=raws, output_dir=tmp_path,
+        group_id="G01", task="baseline", aligned_raws=raws, output_dir=tmp_path,
         n_iter=7, wtc_fmin=0.01, wtc_fmax=0.25, band_fmin=0.06, band_fmax=0.15,
         seed=1, cross=False, mask_coi=True)
 
-    assert out.name == name("d01", "baseline", "wtc-phasenull")
+    assert out.name == name("G01", "baseline", "wtc-phasenull")
     params = json.loads(out.with_suffix(".json").read_text())["parameters"]
     assert params["n_iter"] == 7
     assert params["cross"] is False
@@ -127,7 +127,7 @@ def test_the_null_tags_each_chromophore_without_mutating_the_frame(tmp_path, mon
     raws = {"a": make_raw(n_ch=1), "b": make_raw(n_ch=1)}
     out = _draw_and_write(
         wtc_null,
-        group_id="d01", task="baseline", aligned_raws=raws, output_dir=tmp_path,
+        group_id="G01", task="baseline", aligned_raws=raws, output_dir=tmp_path,
         n_iter=1, chroma=("hbo", "hbr"))
 
     df = pd.read_csv(out, sep="\t")
@@ -147,7 +147,7 @@ def test_one_chromophore_writes_one_set_of_rows(tmp_path, monkeypatch, make_raw)
     raws = {"a": make_raw(n_ch=1), "b": make_raw(n_ch=1)}
     out = _draw_and_write(
         wtc_null,
-        group_id="d01", task="baseline", aligned_raws=raws, output_dir=tmp_path,
+        group_id="G01", task="baseline", aligned_raws=raws, output_dir=tmp_path,
         n_iter=1, chroma=("hbr",))
 
     df = pd.read_csv(out, sep="\t")
@@ -176,35 +176,35 @@ def test_nulls_of_different_lengths_merge_but_say_so(tmp_path, caplog):
     dataset where the re-paired pool is finite and its size tracks recording length. What
     the reader needs is the count beside the percentile, and that is in the table.
     """
-    _write_null(tmp_path, "d01", "baseline", 100)
-    _write_null(tmp_path, "d02", "baseline", 5)
+    _write_null(tmp_path, "G01", "baseline", 100)
+    _write_null(tmp_path, "G02", "baseline", 5)
     with caplog.at_level(logging.WARNING, logger="fnirs_pipe.pipeline.hyper.wtc_aggregate"):
         merged = _merge(tmp_path)
-    assert sorted(merged["group_id"].unique()) == ["d01", "d02"]
+    assert sorted(merged["group_id"].unique()) == ["G01", "G02"]
     assert sorted(merged["n_iter"].unique()) == [5, 100]
     assert any("do not have one resolution" in r.getMessage() for r in caplog.records)
 
 
 def test_a_band_still_refuses_to_merge(tmp_path):
     """Loosening n_iter must not loosen the band: that one changes what a column means."""
-    _write_null(tmp_path, "d01", "baseline", 100)
-    _write_null(tmp_path, "d02", "baseline", 100, band_fmin=0.02)
+    _write_null(tmp_path, "G01", "baseline", 100)
+    _write_null(tmp_path, "G02", "baseline", 100, band_fmin=0.02)
     with pytest.raises(ValueError, match="band_fmin"):
         _merge(tmp_path)
 
 
 def test_nulls_of_one_length_merge(tmp_path):
-    _write_null(tmp_path, "d01", "baseline", 100)
-    _write_null(tmp_path, "d02", "baseline", 100)
+    _write_null(tmp_path, "G01", "baseline", 100)
+    _write_null(tmp_path, "G02", "baseline", 100)
     merged = _merge(tmp_path)
-    assert sorted(merged["group_id"]) == ["d01", "d02"]
+    assert sorted(merged["group_id"]) == ["G01", "G02"]
 
 
 def test_merge_covers_whatever_is_on_disk(tmp_path):
     """It used to iterate a hardcoded list of kinds and skip anything not on it."""
     from fnirs_pipe.cli.hyper import cmd_merge
 
-    _write_null(tmp_path, "d01", "baseline", 100)
+    _write_null(tmp_path, "G01", "baseline", 100)
     cmd_merge(tmp_path, verbose=False)
 
     assert (tmp_path / "null-phase_stat-wtc_relmat.tsv").exists()
@@ -227,8 +227,8 @@ def test_a_run_says_when_nothing_has_been_merged(tmp_path, capsys):
     would fail on a band a later run legitimately changed."""
     from fnirs_pipe.cli.hyper import _merge_reminder
 
-    _write_table(tmp_path, "d01", "baseline")
-    _write_table(tmp_path, "d02", "baseline")
+    _write_table(tmp_path, "G01", "baseline")
+    _write_table(tmp_path, "G02", "baseline")
     _merge_reminder(tmp_path)
 
     out = capsys.readouterr().out
@@ -241,7 +241,7 @@ def test_a_run_says_when_the_merged_table_is_behind(tmp_path, capsys):
 
     from fnirs_pipe.cli.hyper import _merge_reminder
 
-    tsv = _write_table(tmp_path, "d01", "baseline")
+    tsv = _write_table(tmp_path, "G01", "baseline")
     merged = tmp_path / "stat-wtc_relmat.tsv"
     merged.write_text("stale")
     os.utime(merged, (1, 1))                       # older than the dyad table
@@ -257,8 +257,8 @@ def test_the_reminder_counts_what_the_merge_would_take(tmp_path, capsys):
     """Same discovery as the aggregator, so the count cannot disagree with what merge does."""
     from fnirs_pipe.cli.hyper import _merge_reminder
 
-    _write_table(tmp_path, "d01", "baseline", kind="wtc")
-    _write_table(tmp_path, "d01", "baseline", kind="wtc-phasenull")
+    _write_table(tmp_path, "G01", "baseline", kind="wtc")
+    _write_table(tmp_path, "G01", "baseline", kind="wtc-phasenull")
     _merge_reminder(tmp_path)
 
     out = capsys.readouterr().out
@@ -291,11 +291,11 @@ def test_windows_add_a_second_table_beside_the_whole_run_one(tmp_path, monkeypat
     raws = {"a": make_raw(n_ch=1), "b": make_raw(n_ch=1)}
     out = _draw_and_write(
         wtc_null,
-        group_id="d01", task="full", aligned_raws=raws, output_dir=tmp_path,
+        group_id="G01", task="main", aligned_raws=raws, output_dir=tmp_path,
         n_iter=2, chroma=("hbo",), windows=[("rest", 0.0, 30.0), ("talk", 30.0, 60.0)])
 
-    assert out.name == name("d01", "full", "wtc-phasenull")
-    cond_path = out.with_name(name("d01", "full", "wtcbycond-phasenull"))
+    assert out.name == name("G01", "main", "wtc-phasenull")
+    cond_path = out.with_name(name("G01", "main", "wtcbycond-phasenull"))
     assert cond_path.exists()
     df = pd.read_csv(cond_path, sep="\t")
     assert list(df.columns[:2]) == ["chromophore", "condition"]
@@ -314,10 +314,10 @@ def test_the_windowed_sidecar_names_the_conditions(tmp_path, monkeypatch, make_r
     raws = {"a": make_raw(n_ch=1), "b": make_raw(n_ch=1)}
     out = _draw_and_write(
         wtc_null,
-        group_id="d01", task="full", aligned_raws=raws, output_dir=tmp_path,
+        group_id="G01", task="main", aligned_raws=raws, output_dir=tmp_path,
         n_iter=2, chroma=("hbo",), windows=[("rest", 0.0, 30.0), ("talk", 30.0, 60.0)])
 
-    cond_path = out.with_name(name("d01", "full", "wtcbycond-phasenull"))
+    cond_path = out.with_name(name("G01", "main", "wtcbycond-phasenull"))
     params = json.loads(cond_path.with_suffix(".json").read_text())["parameters"]
     assert params["conditions"] == ["rest", "talk"]
     assert params["n_iter"] == 2
@@ -333,10 +333,10 @@ def test_no_windows_writes_only_the_whole_run_table(tmp_path, monkeypatch, make_
     raws = {"a": make_raw(n_ch=1), "b": make_raw(n_ch=1)}
     out = _draw_and_write(
         wtc_null,
-        group_id="d01", task="full", aligned_raws=raws, output_dir=tmp_path,
+        group_id="G01", task="main", aligned_raws=raws, output_dir=tmp_path,
         n_iter=1, chroma=("hbo",))
 
-    assert not out.with_name(name("d01", "full", "wtcbycond-phasenull")).exists()
+    assert not out.with_name(name("G01", "main", "wtcbycond-phasenull")).exists()
 
 
 def test_the_per_condition_null_is_its_own_merge_kind(tmp_path):
@@ -347,6 +347,6 @@ def test_the_per_condition_null_is_its_own_merge_kind(tmp_path):
     """
     from fnirs_pipe.pipeline.hyper.wtc_aggregate import merge_kinds
 
-    _write_table(tmp_path, "d01", "full", kind="wtc-phasenull")
-    _write_table(tmp_path, "d01", "full", kind="wtcbycond-phasenull")
+    _write_table(tmp_path, "G01", "main", kind="wtc-phasenull")
+    _write_table(tmp_path, "G01", "main", kind="wtcbycond-phasenull")
     assert len(merge_kinds(tmp_path)) == 2

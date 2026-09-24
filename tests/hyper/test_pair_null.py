@@ -17,7 +17,7 @@ from tests.hyper._names import name
 
 FREQS = np.linspace(0.02, 0.30, 12)
 TIMES = np.arange(40.0)
-TRUE = ("sub-p1d01", "sub-p2d01")
+TRUE = ("sub-01G01", "sub-02G01")
 
 
 def _map(value):
@@ -78,7 +78,7 @@ def _run(partners, axis=("S1_D1", "S1_D2"), labels=("early",), **kwargs):
 # ---- the pair key ----
 
 def test_every_draw_lands_on_the_real_dyads_row(stub):
-    null = _run(["sub-p2d02", "sub-p2d03", "sub-p2d04"])
+    null = _run(["sub-02G02", "sub-02G03", "sub-02G04"])
     _, by_cond = null.summarise()
     assert set(by_cond["sub1"]) == {TRUE[0]}
     assert set(by_cond["sub2"]) == {TRUE[1]}
@@ -86,7 +86,7 @@ def test_every_draw_lands_on_the_real_dyads_row(stub):
 
 def test_the_draws_are_averaged_rather_than_kept_apart(stub):
     """Three partners give one row per channel with n_iter 3, not three rows of one."""
-    null = _run(["sub-p2d02", "sub-p2d03", "sub-p2d04"])
+    null = _run(["sub-02G02", "sub-02G03", "sub-02G04"])
     _, by_cond = null.summarise()
     assert len(by_cond) == 2                     # one row per channel on the axis
     assert set(by_cond["n_iter"]) == {3}
@@ -95,28 +95,28 @@ def test_the_draws_are_averaged_rather_than_kept_apart(stub):
 
 
 def test_a_partners_own_id_never_reaches_the_table(stub):
-    null = _run(["sub-p2d02"])
+    null = _run(["sub-02G02"])
     _, by_cond = null.summarise()
-    assert "sub-p2d02" not in set(by_cond["sub1"]) | set(by_cond["sub2"])
+    assert "sub-02G02" not in set(by_cond["sub1"]) | set(by_cond["sub2"])
 
 
 def test_who_each_draw_was_against_is_kept(stub):
     """The pool is finite and named, so the sidecar can say which recordings it used."""
-    null = _run(["sub-p2d02", "sub-p2d03"])
-    assert null.partners == ["sub-p2d02", "sub-p2d03"]
+    null = _run(["sub-02G02", "sub-02G03"])
+    assert null.partners == ["sub-02G02", "sub-02G03"]
 
 
 # ---- the axis ----
 
 def test_the_real_dyads_axis_is_used_for_every_draw(stub):
     """Recomputing it per draw would move the rows a stand-in's montage disagrees on."""
-    _run(["sub-p2d02", "sub-p2d03"], axis=("S1_D1", "S1_D2"))
+    _run(["sub-02G02", "sub-02G03"], axis=("S1_D1", "S1_D2"))
     assert stub["axes"] == [["S1_D1", "S1_D2"], ["S1_D1", "S1_D2"]]
 
 
 def test_a_label_no_stand_in_carries_still_gets_a_row(stub):
     """A blank row keeps the null subtractable from the real table row by row."""
-    null = _run(["sub-p2d02"], axis=("S1_D1", "S1_D2", "S9_D9"))
+    null = _run(["sub-02G02"], axis=("S1_D1", "S1_D2", "S9_D9"))
     _, by_cond = null.summarise()
     assert sorted(by_cond["label"]) == ["S1_D1", "S1_D2", "S9_D9"]
 
@@ -131,7 +131,7 @@ def test_no_usable_partner_is_an_error_rather_than_an_empty_table():
 # ---- the levels ----
 
 def test_a_per_frequency_level_is_drawn_for_the_real_pair(stub):
-    null = _run(["sub-p2d02", "sub-p2d03"])
+    null = _run(["sub-02G02", "sub-02G03"])
     levels = null.cond_levels["early"]
     assert set(levels) == {(TRUE[0], TRUE[1], "S1_D1"), (TRUE[0], TRUE[1], "S1_D2")}
     assert all(level.shape == FREQS.shape for level in levels.values())
@@ -140,7 +140,7 @@ def test_a_per_frequency_level_is_drawn_for_the_real_pair(stub):
 def test_each_condition_gets_its_own_level_and_the_whole_run_none(stub):
     """A re-paired draw is one condition, so pooling them would rank one condition's cells
     against another's, and there is no whole-run draw to count a whole-run level from."""
-    null = _run(["sub-p2d02", "sub-p2d03"], labels=("early", "late"))
+    null = _run(["sub-02G02", "sub-02G03"], labels=("early", "late"))
     assert null.levels == {}
     early = null.cond_levels["early"][(TRUE[0], TRUE[1], "S1_D1")]
     late = null.cond_levels["late"][(TRUE[0], TRUE[1], "S1_D1")]
@@ -156,7 +156,7 @@ def test_each_condition_gets_its_own_draw(stub):
     one timetable. They drift, so the window that held one dyad's conversation held part of
     another's game, and the null was of that overlap rather than of the condition.
     """
-    null = _run(["sub-p2d02", "sub-p2d03"], labels=("early", "late"))
+    null = _run(["sub-02G02", "sub-02G03"], labels=("early", "late"))
     _, by_cond = null.summarise()
     assert sorted(set(by_cond["condition"])) == ["early", "late"]
     assert set(by_cond["n_iter"]) == {2}
@@ -164,7 +164,7 @@ def test_each_condition_gets_its_own_draw(stub):
 
 def test_no_whole_run_draw_is_collected(stub):
     """There is no stretch standing in for the whole session, so that half stays empty."""
-    null = _run(["sub-p2d02"], labels=("early", "late"))
+    null = _run(["sub-02G02"], labels=("early", "late"))
     whole, by_cond = null.summarise()
     assert whole is None
     assert by_cond is not None and len(by_cond)
@@ -176,17 +176,17 @@ def test_no_whole_run_draw_is_collected(stub):
 
 def test_every_draw_reaches_the_hook(stub):
     seen = []
-    _run(["sub-p1d03", "sub-p1d04"],
+    _run(["sub-01G03", "sub-01G04"],
          on_draw=lambda pid, label, pair, inner: seen.append(pid))
-    assert seen == ["sub-p1d03", "sub-p1d04"]
+    assert seen == ["sub-01G03", "sub-01G04"]
 
 
 def test_the_hook_gets_the_condition_and_the_pair(stub):
     got = []
-    _run(["sub-p1d03"], labels=("early", "late"),
+    _run(["sub-01G03"], labels=("early", "late"),
          on_draw=lambda pid, label, pair, inner: got.append((label, sorted(pair))))
-    assert got == [("early", sorted([TRUE[0], "sub-p1d03"])),
-                   ("late", sorted([TRUE[0], "sub-p1d03"]))]
+    assert got == [("early", sorted([TRUE[0], "sub-01G03"])),
+                   ("late", sorted([TRUE[0], "sub-01G03"]))]
 
 
 # ---- a null with no whole-run draw ----
@@ -195,7 +195,7 @@ def test_the_roi_summary_survives_a_null_that_has_no_whole_run_draw(stub):
     """The re-paired null is per condition only, so its whole-run list is empty by design."""
     from fnirs_pipe.pipeline.hyper.roi import roi_mean_of_homologous  # noqa: F401  re-exported
 
-    null = _run(["sub-p2d02", "sub-p2d03"], labels=("early", "late"))
+    null = _run(["sub-02G02", "sub-02G03"], labels=("early", "late"))
     whole, by_cond = null.summarise_roi({"front": ["S1_D1", "S1_D2"]}, min_channels=2)
     assert whole is None
     assert by_cond is not None and set(by_cond["condition"]) == {"early", "late"}
@@ -210,15 +210,15 @@ def test_the_correlation_keeps_its_draws_too(tmp_path):
 
     rows = [{"chromophore": "hbo", "condition": "early", "sub1": TRUE[0], "sub2": TRUE[1],
              "label": "S1_D1", "label2": "S1_D1", "coherence": 0.2 + 0.01 * i,
-             "n_valid_frac": 1.0, "draw": f"sub-p2d{i:02d}"} for i in range(3)]
+             "n_valid_frac": 1.0, "draw": f"sub-02G{i:02d}"} for i in range(3)]
     draws = [pd.DataFrame([r]) for r in rows]
 
     def _path(entities):
-        return tmp_path / name("d01", "full", "iscpairs", **entities)
+        return tmp_path / name("G01", "main", "iscpairs", **entities)
 
     _write_isc_null([], draws, draws, _path, [], {}, [],
                     isc_whiten=32, isc_max_lag_s=2.0, isc_band=(0.06, 0.15))
 
-    out = tmp_path / name("d01", "full", "iscbycond-pairnull-draws")
+    out = tmp_path / name("G01", "main", "iscbycond-pairnull-draws")
     assert out.exists() and out.with_suffix(".json").exists()
-    assert sorted(pd.read_csv(out, sep="\t").draw) == [f"sub-p2d{i:02d}" for i in range(3)]
+    assert sorted(pd.read_csv(out, sep="\t").draw) == [f"sub-02G{i:02d}" for i in range(3)]

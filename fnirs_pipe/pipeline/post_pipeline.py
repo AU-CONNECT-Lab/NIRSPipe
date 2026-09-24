@@ -1,4 +1,4 @@
-"""Postprocessing pipeline — mode-driven, parameter-configured.
+"""Postprocessing pipeline: mode-driven, parameter-configured.
 
 Parameters come from PostConfig, which can be populated from CLI flags or a TOML file.
 All steps within a mode are still individually controllable via PostConfig fields.

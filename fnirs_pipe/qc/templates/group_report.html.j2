@@ -195,7 +195,7 @@ to measure from. Read the panels as the runs' own values side by side.{% endset 
     {% if outliers %}
     <ul>
       {%- for sid, metrics in outliers.items() %}
-      <li><b>{{ sid }}</b> &mdash;
+      <li><b>{{ sid }}</b>:
         {% for m in metrics %}<span class="outlier-metric">{{ m }}</span>{% endfor %}
       </li>
       {%- endfor %}

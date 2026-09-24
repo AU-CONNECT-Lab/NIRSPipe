@@ -980,7 +980,7 @@ def build_trigger_timeline(
 
 
 # ---------------------------------------------------------------------------
-# Figure: HbO + HbR signal overlay — 2-row subplot, channel switching via select
+# Figure: HbO + HbR signal overlay (2-row subplot, channel switching via select)
 # ---------------------------------------------------------------------------
 
 def build_signal_overlay(
@@ -1174,7 +1174,7 @@ def build_psd(
 
 
 # ---------------------------------------------------------------------------
-# Figure: channel quality summary — group status, channels on x-axis
+# Figure: channel quality summary (group status, channels on x-axis)
 # ---------------------------------------------------------------------------
 
 def build_channel_summary(

@@ -19,8 +19,8 @@ from tests.hyper._names import cohort as _cohort, name
 SEP = chr(9)
 
 CHANNELS = ["S1_D1", "S1_D2", "S2_D1", "S2_D2"]
-OCCASIONS = ["d01", "d03", "d04"]
-DRAWS = [f"sub-p2d{n:02d}" for n in (5, 6, 7, 8)]
+OCCASIONS = ["G01", "G03", "G04"]
+DRAWS = [f"sub-02G{n:02d}" for n in (5, 6, 7, 8)]
 
 
 def _draws(level=0.30, spread=0.01, seed=0):
@@ -116,14 +116,14 @@ def _write_tree(root, crossed=False):
             # a crossed real table carries the cells the homologous null never drew
             real = pd.concat([real.assign(label2=real.label),
                               real.assign(label2="S9_D9", coherence=0.9)])
-        draws.to_csv(d / name(occ, "full", "wtcbycond-pairnull-draws"),
+        draws.to_csv(d / name(occ, "main", "wtcbycond-pairnull-draws"),
                      sep="\t", index=False)
-        real.to_csv(d / name(occ, "full", "wtcbycond"), sep="\t", index=False)
+        real.to_csv(d / name(occ, "main", "wtcbycond"), sep="\t", index=False)
 
 
 def test_both_tables_and_their_sidecars_are_written(tmp_path):
     _write_tree(tmp_path)
-    written = write_group_null(tmp_path, "full", n_resample=500, seed=3)
+    written = write_group_null(tmp_path, "main", n_resample=500, seed=3)
     assert [p.name for p in written] == [
         _cohort("pair", "byoccasion"), _cohort("pair", "cohort")]
     for path in written:
@@ -133,15 +133,15 @@ def test_both_tables_and_their_sidecars_are_written(tmp_path):
 def test_a_crossed_real_table_contributes_only_its_homologous_cells(tmp_path):
     """The null draws homologous pairings, so the 0.9 crossed cells have nothing to rank against."""
     _write_tree(tmp_path, crossed=True)
-    write_group_null(tmp_path, "full", n_resample=500, seed=3)
+    write_group_null(tmp_path, "main", n_resample=500, seed=3)
     out = pd.read_csv(tmp_path / _cohort("pair", "cohort"), sep="\t")
     assert out.coherence.iloc[0] == pytest.approx(0.40)
 
 
 def test_a_tree_with_no_draws_says_what_has_to_run(tmp_path):
-    (tmp_path / "group-d01" / "nirs").mkdir(parents=True)
+    (tmp_path / "group-G01" / "nirs").mkdir(parents=True)
     with pytest.raises(FileNotFoundError, match="pair-null"):
-        write_group_null(tmp_path, "full")
+        write_group_null(tmp_path, "main")
 
 
 # ---- the same reading, whichever null drew the draws ----
@@ -151,9 +151,9 @@ def test_the_phase_nulls_draws_are_read_the_same_way(tmp_path):
     _write_tree(tmp_path)
     for occ in OCCASIONS:
         d = tmp_path / f"group-{occ}" / "nirs"
-        src = d / name(occ, "full", "wtcbycond-pairnull-draws")
-        src.rename(d / name(occ, "full", "wtcbycond-phasenull-draws"))
-    written = write_group_null(tmp_path, "full", null="phase", n_resample=500, seed=3)
+        src = d / name(occ, "main", "wtcbycond-pairnull-draws")
+        src.rename(d / name(occ, "main", "wtcbycond-phasenull-draws"))
+    written = write_group_null(tmp_path, "main", null="phase", n_resample=500, seed=3)
     assert [p.name for p in written] == [
         _cohort("phase", "byoccasion"), _cohort("phase", "cohort")]
     import json
@@ -186,7 +186,7 @@ def test_a_region_map_adds_one_level_per_region_that_has_the_channels():
 
 def test_the_written_tables_carry_the_granularity_and_the_pairings(tmp_path):
     _write_tree(tmp_path)
-    written = write_group_null(tmp_path, "full", roi_map=ROI, n_resample=500, seed=3)
+    written = write_group_null(tmp_path, "main", roi_map=ROI, n_resample=500, seed=3)
     cohort = pd.read_csv(written[1], sep="	")
     assert list(cohort.columns[:4]) == ["granularity", "level", "pairings", "condition"]
     assert set(cohort.granularity) == {"whole", "roi", "channel"}
@@ -196,7 +196,7 @@ def test_the_written_tables_carry_the_granularity_and_the_pairings(tmp_path):
 
 def test_a_region_is_the_mean_of_its_own_channels(tmp_path):
     _write_tree(tmp_path)
-    written = write_group_null(tmp_path, "full", roi_map=ROI, n_resample=500, seed=3)
+    written = write_group_null(tmp_path, "main", roi_map=ROI, n_resample=500, seed=3)
     cohort = _resample_rows(pd.read_csv(written[1], sep="	")).set_index("level")
     # every real value is 0.40 here, so each region reports it and so does the whole brain
     for level in ("whole", "front", "back"):
@@ -208,12 +208,12 @@ def test_a_region_is_the_mean_of_its_own_channels(tmp_path):
 def test_a_table_predating_the_draw_column_is_refused_not_dropped(tmp_path):
     """Concatenating it gives NaN and the occasion leaves the groupby without a word."""
     _write_tree(tmp_path)
-    stale = (tmp_path / "group-d03" / "nirs"
-             / name("d03", "full", "wtcbycond-pairnull-draws"))
+    stale = (tmp_path / "group-G03" / "nirs"
+             / name("G03", "main", "wtcbycond-pairnull-draws"))
     old = pd.read_csv(stale, sep="\t").rename(columns={"draw": "stand_in"})
     old.to_csv(stale, sep="\t", index=False)
     with pytest.raises(ValueError, match="no draw column"):
-        write_group_null(tmp_path, "full", n_resample=200, seed=3)
+        write_group_null(tmp_path, "main", n_resample=200, seed=3)
 
 
 def _cross(path):
@@ -225,8 +225,8 @@ def _cross(path):
 
 def _paths(root, occ):
     nirs = root / f"group-{occ}" / "nirs"
-    return (nirs / name(occ, "full", "wtcbycond-pairnull-draws"),
-            nirs / name(occ, "full", "wtcbycond"))
+    return (nirs / name(occ, "main", "wtcbycond-pairnull-draws"),
+            nirs / name(occ, "main", "wtcbycond"))
 
 
 def test_a_part_crossed_tree_gets_no_all_pairings_level(tmp_path, caplog):
@@ -234,9 +234,9 @@ def test_a_part_crossed_tree_gets_no_all_pairings_level(tmp_path, caplog):
     _write_tree(tmp_path)
     for occ in OCCASIONS:
         _cross(_paths(tmp_path, occ)[1])
-    _cross(_paths(tmp_path, "d03")[0])
+    _cross(_paths(tmp_path, "G03")[0])
 
-    written = write_group_null(tmp_path, "full", n_resample=200, seed=3)
+    written = write_group_null(tmp_path, "main", n_resample=200, seed=3)
     assert set(pd.read_csv(written[1], sep=SEP).pairings) == {"homologous"}
     assert "homologous only" in caplog.text
 
@@ -247,7 +247,7 @@ def test_crossed_draws_against_a_diagonal_real_table_are_refused(tmp_path, caplo
     for occ in OCCASIONS:
         _cross(_paths(tmp_path, occ)[0])
 
-    written = write_group_null(tmp_path, "full", n_resample=200, seed=3)
+    written = write_group_null(tmp_path, "main", n_resample=200, seed=3)
     assert set(pd.read_csv(written[1], sep=SEP).pairings) == {"homologous"}
     assert "the real table is not" in caplog.text
 
@@ -257,7 +257,7 @@ def test_a_fully_crossed_tree_does_get_it(tmp_path):
     for occ in OCCASIONS:
         for f in _paths(tmp_path, occ):
             _cross(f)
-    written = write_group_null(tmp_path, "full", n_resample=200, seed=3)
+    written = write_group_null(tmp_path, "main", n_resample=200, seed=3)
     assert set(pd.read_csv(written[1], sep=SEP).pairings) == {"homologous", "all"}
 
 
@@ -271,7 +271,7 @@ def test_two_bands_in_one_tree_are_refused(tmp_path):
             f.with_suffix(".json").write_text(json.dumps(
                 {"parameters": {"band_fmin": band[0], "band_fmax": band[1]}}))
     with pytest.raises(ValueError, match="not on one band"):
-        write_group_null(tmp_path, "full", n_resample=200, seed=3)
+        write_group_null(tmp_path, "main", n_resample=200, seed=3)
 
 
 
@@ -285,26 +285,26 @@ def _write_cells(root, percentiles, n_iter=22):
         pd.DataFrame([{"chromophore": "hbo", "condition": "game", "sub1": "a", "sub2": "b",
                        "label": c, "coherence": 0.3, "percentile": pct, "n_iter": n_iter}
                       for c, pct in zip(CHANNELS, pcts)]).to_csv(
-            d / name(occ, "full", "wtcbycond-pairnull"), sep="\t", index=False)
+            d / name(occ, "main", "wtcbycond-pairnull"), sep="\t", index=False)
 
 
 def test_the_percentile_becomes_an_exact_p(tmp_path):
     """Beating all 22 is rank 1 of 23, which is the finest p the pool can express."""
     _write_cells(tmp_path, [[100, 50, 0, 100]] * 3)
-    out = by_cell(tmp_path, "full", "hbo", "repaired")
+    out = by_cell(tmp_path, "main", "hbo", "repaired")
     assert out.p.min() == pytest.approx(1 / 23)
     assert out.p.max() == pytest.approx(1.0)
 
 
 def test_nothing_clears_the_correction_when_the_cells_are_middling(tmp_path):
     _write_cells(tmp_path, [[50, 55, 45, 50]] * 3)
-    out = by_cell(tmp_path, "full", "hbo", "repaired")
+    out = by_cell(tmp_path, "main", "hbo", "repaired")
     assert int((out.q < 0.05).sum()) == 0
 
 
 def test_the_family_is_one_condition_and_is_reported(tmp_path):
     _write_cells(tmp_path, [[100, 100, 100, 100]] * 3)
-    out = by_cell(tmp_path, "full", "hbo", "repaired")
+    out = by_cell(tmp_path, "main", "hbo", "repaired")
     assert set(out.family) == {12}          # 3 occasions x 4 channels, one condition
     assert set(out.level) == {"channel"}
 
@@ -312,7 +312,7 @@ def test_the_family_is_one_condition_and_is_reported(tmp_path):
 def test_the_cell_table_is_written_beside_the_others(tmp_path):
     _write_tree(tmp_path)
     _write_cells(tmp_path, [[100, 50, 0, 100]] * 3)
-    written = write_group_null(tmp_path, "full", n_resample=200, seed=3)
+    written = write_group_null(tmp_path, "main", n_resample=200, seed=3)
     assert [p.name for p in written][0] == (
         _cohort("pair", "bycell"))
 
@@ -320,7 +320,7 @@ def test_the_cell_table_is_written_beside_the_others(tmp_path):
 def test_no_cell_tables_is_not_an_error(tmp_path):
     """A tree with draws but no per-cell summary still gets the aggregate levels."""
     _write_tree(tmp_path)
-    written = write_group_null(tmp_path, "full", n_resample=200, seed=3)
+    written = write_group_null(tmp_path, "main", n_resample=200, seed=3)
     assert all("bycell" not in p.name for p in written)
     assert len(written) == 2
 
@@ -452,7 +452,7 @@ def test_a_row_without_a_p_takes_no_part_in_its_family():
 
 def test_the_written_cohort_table_carries_the_corrections(tmp_path):
     _write_tree(tmp_path)
-    written = write_group_null(tmp_path, "full", roi_map=ROI, n_resample=500, seed=3)
+    written = write_group_null(tmp_path, "main", roi_map=ROI, n_resample=500, seed=3)
     cohort = pd.read_csv(written[1], sep="	")
     for col in ("q", "q_by", "q_holm", "q_bonferroni", "family"):
         assert col in cohort.columns

@@ -107,7 +107,7 @@ def optode_layout_static(
             ax.text(x, y, did, fontsize=6, ha="center", va="top", color="#1a5276", zorder=4)
 
     ax.legend(fontsize=8, loc="upper right", framealpha=0.7)
-    ax.set_title(f"Optode flat map — {sci_legend(sci_threshold)}", fontsize=8)
+    ax.set_title(f"Optode flat map: {sci_legend(sci_threshold)}", fontsize=8)
 
     buf = io.BytesIO()
     fig.savefig(buf, format="png", dpi=300, bbox_inches="tight")
@@ -282,7 +282,7 @@ def optode_layout_figure(
             )
 
     fig.update_layout(
-        title=f"Optode flat map — channel {sci_legend(sci_threshold)}",
+        title=f"Optode flat map: channel {sci_legend(sci_threshold)}",
         xaxis=dict(showgrid=False, zeroline=False, showticklabels=False,
                    constrain="domain"),
         yaxis=dict(showgrid=False, zeroline=False, showticklabels=False,

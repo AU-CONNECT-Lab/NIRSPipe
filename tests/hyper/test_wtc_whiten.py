@@ -175,7 +175,7 @@ def test_a_re_paired_draw_hands_the_coherence_whitened_cuts_and_the_correlation_
     monkeypatch.setattr(group_quality, "load_group_sqm", lambda *a, **k: {})
     monkeypatch.setattr(group_quality, "apply_group_bads", lambda *a, **k: None)
     drawn = list(pair_null._draw_condition_pairs(
-        "/out", "tap", "sub-01", dyad["sub-01"], [GroupEntry("dXX", "sub-09", "tap")],
+        "/out", "tap", "sub-01", dyad["sub-01"], [GroupEntry("GXX", "sub-09", "tap")],
         desc="preproc", bads_scope="run", scope_tasks=["tap"],
         windows=[("talk", 190.0, 370.0)], band_fmin=0.03, n_max=None, refused={},
         whiten_s=10.0))
@@ -197,7 +197,7 @@ def test_tables_whitened_differently_refuse_to_merge(tmp_path):
     from fnirs_pipe.pipeline.hyper.wtc_aggregate import aggregate_wtc
 
     paths = []
-    for gid, extra in (("d01", {}), ("d02", {"wtc_whiten_s": 10.0})):
+    for gid, extra in (("G01", {}), ("G02", {"wtc_whiten_s": 10.0})):
         tsv = tmp_path / f"group-{gid}" / "nirs" / f"group-{gid}_task-tap_stat-wtc_relmat.tsv"
         tsv.parent.mkdir(parents=True)
         pd.DataFrame({"chromophore": ["hbo"], "sub1": ["a"], "sub2": ["b"],
@@ -232,7 +232,7 @@ def test_a_stand_in_too_short_to_whiten_is_counted_rather_than_raised(dyad, monk
     monkeypatch.setattr(group_quality, "apply_group_bads", lambda *a, **k: None)
     refused: dict = {}
     drawn = list(pair_null._draw_condition_pairs(
-        "/out", "tap", "sub-01", dyad["sub-01"], [GroupEntry("dXX", "sub-09", "tap")],
+        "/out", "tap", "sub-01", dyad["sub-01"], [GroupEntry("GXX", "sub-09", "tap")],
         desc="preproc", bads_scope="run", scope_tasks=["tap"],
         windows=[("rest", 0.0, 30.0)], band_fmin=0.03, n_max=None, refused=refused,
         whiten_s=10.0))

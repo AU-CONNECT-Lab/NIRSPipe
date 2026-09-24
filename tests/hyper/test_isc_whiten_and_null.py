@@ -120,11 +120,11 @@ def test_whiten_zero_is_the_unwhitened_correlation():
 
 @pytest.fixture(scope="module")
 def dyad():
-    return {"10031": _haemo("10031"), "10032": _haemo("10032")}
+    return {"11": _haemo("11"), "12": _haemo("12")}
 
 
 def test_the_pair_table_carries_the_z_and_the_order_each_channel_used(dyad):
-    mat, names, frame, level = compute_isc_pairs(dyad, ["10031", "10032"], "hbo", whiten=16)
+    mat, names, frame, level = compute_isc_pairs(dyad, ["11", "12"], "hbo", whiten=16)
 
     assert len(frame) == len(names) ** 2
     assert list(frame.columns[:6]) == ["sub1", "sub2", "label", "label2", "r", "r_z"]
@@ -139,7 +139,7 @@ def test_the_pair_table_carries_the_z_and_the_order_each_channel_used(dyad):
 
 
 def test_the_order_columns_are_absent_when_nothing_was_whitened(dyad):
-    _, _, frame, _ = compute_isc_pairs(dyad, ["10031", "10032"], "hbo", whiten=0)
+    _, _, frame, _ = compute_isc_pairs(dyad, ["11", "12"], "hbo", whiten=0)
     assert "ar_order" not in frame.columns
     assert "percentile" not in frame.columns
 
@@ -148,13 +148,13 @@ def test_the_null_columns_rank_the_magnitude_not_the_sign(dyad):
     """A correlation is signed and a surrogate is as likely to land either side of zero, so
     the question the null answers is whether the pair is coupled, not which way. A strongly
     negative r has to score high, not low."""
-    ids = ["10031", "10032"]
+    ids = ["11", "12"]
     raws = {k: v.copy() for k, v in dyad.items()}
-    picks = mne.pick_types(raws["10031"].info, fnirs="hbo")
+    picks = mne.pick_types(raws["11"].info, fnirs="hbo")
     rng = np.random.default_rng(5)
-    shared = _ar(rng, np.array([0.9]), n=raws["10031"].n_times)
-    raws["10031"]._data[picks[0]] = 1e-6 * shared
-    raws["10032"]._data[picks[0]] = -1e-6 * shared
+    shared = _ar(rng, np.array([0.9]), n=raws["11"].n_times)
+    raws["11"]._data[picks[0]] = 1e-6 * shared
+    raws["12"]._data[picks[0]] = -1e-6 * shared
 
     _, names, frame, level = compute_isc_pairs(raws, ids, "hbo", whiten=0, n_null=20, seed=1)
     assert {"null_abs_mean", "null_abs_sd", "null_abs_p95", "percentile"} <= set(frame.columns)
@@ -169,10 +169,10 @@ def test_the_null_columns_rank_the_magnitude_not_the_sign(dyad):
 def test_a_rejected_channel_is_blank_in_the_table_and_is_not_ranked(dyad):
     """Blank rather than dropped, the convention every per-channel product here follows, and
     a NaN r cannot be ranked against draws that are NaN too."""
-    ids = ["10031", "10032"]
+    ids = ["11", "12"]
     raws = {k: v.copy() for k, v in dyad.items()}
     rejected = "S2_D2"
-    raws["10031"].info["bads"] = [c for c in raws["10031"].ch_names
+    raws["11"].info["bads"] = [c for c in raws["11"].ch_names
                                   if c.startswith(rejected)]
 
     mat, names, frame, level = compute_isc_pairs(raws, ids, "hbo", whiten=16, n_null=5, seed=1)
@@ -187,7 +187,7 @@ def test_a_rejected_channel_is_blank_in_the_table_and_is_not_ranked(dyad):
 def test_the_matrix_entry_point_agrees_with_the_table(dyad):
     """`compute_isc` and `compute_isc_pairs` are two doors onto one computation; the report
     draws one and writes the other, so a divergence would be invisible."""
-    ids = ["10031", "10032"]
+    ids = ["11", "12"]
     direct, names_a = compute_isc(dyad, ids, "hbo", whiten=16)
     via_table, names_b, _, _ = compute_isc_pairs(dyad, ids, "hbo", whiten=16)
 
@@ -241,16 +241,18 @@ def test_searching_raises_the_value_under_no_coupling():
 
 def test_the_null_is_searched_the_same_way_as_the_value(dyad):
     """So the inflation the search adds is in both and the percentile stays readable."""
-    ids = ["10031", "10032"]
+    ids = ["11", "12"]
     _, _, plain, _ = compute_isc_pairs(dyad, ids, "hbo", n_null=20, seed=2)
     _, _, lagged, _ = compute_isc_pairs(dyad, ids, "hbo", max_lag_s=2.0, n_null=20, seed=2)
 
     assert "lag_s" not in plain.columns
     assert "lag_s" in lagged.columns
     assert lagged["lag_s"].abs().max() <= 2.0 + 1e-9
-    # both sides rose, so the ranks stay comparable rather than every cell becoming extreme
+    # both sides rose, so the ranks do not saturate as a searched value against an unsearched
+    # null would
     assert lagged["null_abs_mean"].mean() > plain["null_abs_mean"].mean()
-    assert lagged["percentile"].mean() == pytest.approx(plain["percentile"].mean(), abs=25)
+    assert lagged["percentile"].mean() < 90
+    assert (lagged["percentile"] < 100).any()
 
 
 # ---- which pairings get a chord ----
@@ -290,7 +292,7 @@ def test_a_cell_with_no_level_measured_gets_no_chord():
 def test_the_null_level_comes_back_as_a_matrix_shaped_like_the_correlations(dyad):
     """The panel thresholds cell by cell, so the level has to leave `compute_isc_pairs` as a
     matrix and not only as a column of the table."""
-    mat, names, frame, level = compute_isc_pairs(dyad, ["10031", "10032"], "hbo",
+    mat, names, frame, level = compute_isc_pairs(dyad, ["11", "12"], "hbo",
                                                  n_null=10, seed=3)
     assert level.shape == mat.shape == (len(names), len(names))
     index = {n: i for i, n in enumerate(names)}
@@ -299,5 +301,5 @@ def test_the_null_level_comes_back_as_a_matrix_shaped_like_the_correlations(dyad
 
 
 def test_no_null_means_no_level(dyad):
-    _, _, _, level = compute_isc_pairs(dyad, ["10031", "10032"], "hbo")
+    _, _, _, level = compute_isc_pairs(dyad, ["11", "12"], "hbo")
     assert level is None

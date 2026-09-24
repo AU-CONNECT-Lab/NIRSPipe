@@ -647,7 +647,7 @@ def _warn_on_split_tree(output_dir: Path) -> None:
 
 
 def run_group_level(args: dict[str, Any]) -> None:
-    """BIDS Apps `group` entry point — aggregates per-subject (and per-group hyper,
+    """BIDS Apps `group` entry point: aggregates per-subject (and per-group hyper,
     if present) SQM JSONs into cohort HTML reports under <output_dir>."""
     from fnirs_pipe.qc.hyper.group_hyper_writer import build_group_hyper_report
     from fnirs_pipe.qc.subject.group_writer import build_group_raw_report

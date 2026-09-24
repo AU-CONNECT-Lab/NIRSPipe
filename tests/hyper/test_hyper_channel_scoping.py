@@ -46,20 +46,20 @@ def _labels(raw: mne.io.Raw, ch_type: str = "hbo") -> set[str]:
 # ---- channel scoping ----
 
 def test_the_short_pair_is_dropped_from_the_picks():
-    raw = _haemo("10031")
+    raw = _haemo("11")
     assert SHORT_DISTANCE < 0.01                                   # the premise of the layout
     assert _labels(raw) == {"S1_D1", "S2_D2", "S3_D3", "S4_D4"}
     assert _labels(raw, "hbr") == _labels(raw, "hbo")
 
 
 def test_bad_channels_stay_excluded_alongside_the_short_ones():
-    raw = _haemo("10031")
+    raw = _haemo("11")
     raw.info["bads"] = [c for c in raw.ch_names if c.startswith("S2_D2")]
     assert _labels(raw) == {"S1_D1", "S3_D3", "S4_D4"}
 
 
 def test_a_montage_with_no_short_channel_loses_nothing():
-    raw = synth_raw("10031", "hold", duration=40.0, motion_onset=None,
+    raw = synth_raw("11", "hold", duration=40.0, motion_onset=None,
                     bad_pair=None, short_channels=False)
     od = mne.preprocessing.nirs.optical_density(raw, verbose="error")
     haemo = mne.preprocessing.nirs.beer_lambert_law(od, ppf=6.0)
@@ -67,7 +67,7 @@ def test_a_montage_with_no_short_channel_loses_nothing():
 
 
 def test_wtc_never_pairs_the_short_channel():
-    raws = {"sub-10031": _haemo("10031"), "sub-10032": _haemo("10032")}
+    raws = {"sub-11": _haemo("11"), "sub-12": _haemo("12")}
     result = compute_wtc(raws, fmin=0.02, fmax=0.5)
     labels = set(next(iter(result.pairs.values())))
     assert SHORT_PAIR not in labels
@@ -77,8 +77,8 @@ def test_wtc_never_pairs_the_short_channel():
 def test_isc_reads_the_same_channels_as_wtc():
     from fnirs_pipe.pipeline.hyper.isc import compute_isc
 
-    subject_ids = ["sub-10031", "sub-10032"]
-    raws = dict(zip(subject_ids, (_haemo("10031"), _haemo("10032"))))
+    subject_ids = ["sub-11", "sub-12"]
+    raws = dict(zip(subject_ids, (_haemo("11"), _haemo("12"))))
     _, ch_names = compute_isc(raws, subject_ids, "hbo")
     assert SHORT_PAIR not in ch_names
 
@@ -105,7 +105,7 @@ def test_isc_matches_channels_by_label_not_position():
 
     # sub-B rejected S2_D2, so its remaining channels sit one position earlier than sub-A's
     subject_ids = ["sub-A", "sub-B"]
-    raws = {"sub-A": _tagged("10031"), "sub-B": _tagged("10032", drop="S2_D2")}
+    raws = {"sub-A": _tagged("11"), "sub-B": _tagged("12", drop="S2_D2")}
     isc_mat, ch_names = compute_isc(raws, subject_ids, "hbo")
 
     assert ch_names == ["S1_D1", "S2_D2", "S3_D3", "S4_D4"]
@@ -118,7 +118,7 @@ def test_the_axis_is_the_union_of_the_two_montages():
     """One member's montage is not the axis: each side can carry a label the other lost."""
     from fnirs_pipe.pipeline.hyper._helpers import long_axis_over
 
-    a, b = _tagged("10031"), _tagged("10032")
+    a, b = _tagged("11"), _tagged("12")
     a.drop_channels([c for c in a.ch_names if c.startswith("S4_D4")])
     b.drop_channels([c for c in b.ch_names if c.startswith("S1_D1")])
 
@@ -129,7 +129,7 @@ def test_isc_keeps_a_channel_only_one_member_has():
     from fnirs_pipe.pipeline.hyper.isc import compute_isc
 
     subject_ids = ["sub-A", "sub-B"]
-    a, b = _tagged("10031"), _tagged("10032")
+    a, b = _tagged("11"), _tagged("12")
     b.drop_channels([c for c in b.ch_names if c.startswith("S1_D1")])
     isc_mat, ch_names = compute_isc({"sub-A": a, "sub-B": b}, subject_ids, "hbo")
 
@@ -145,7 +145,7 @@ def test_the_blanked_column_is_the_one_that_was_named():
     # rejections reach ISC on info["bads"], the way load_group_haemo leaves them and the
     # way the WTC path reads them
     subject_ids = ["sub-A", "sub-B"]
-    raws = {"sub-A": _tagged("10031"), "sub-B": _tagged("10032", drop="S3_D3")}
+    raws = {"sub-A": _tagged("11"), "sub-B": _tagged("12", drop="S3_D3")}
     isc_mat, ch_names = compute_isc(raws, subject_ids, "hbo")
     assert np.isnan(isc_mat[:, ch_names.index("S3_D3")]).all()
     assert not np.isnan(isc_mat[:, ch_names.index("S2_D2")]).any()
@@ -157,7 +157,7 @@ def test_isc_refuses_two_sampling_rates():
     """WTC raises on this; ISC used to pair sample i with sample i and answer anyway."""
     from fnirs_pipe.pipeline.hyper.isc import compute_isc
 
-    a, b = _tagged("10031"), _tagged("10032")
+    a, b = _tagged("11"), _tagged("12")
     b.resample(b.info["sfreq"] / 2, verbose="error")
     with pytest.raises(ValueError, match="differ in sampling rate"):
         compute_isc({"sub-A": a, "sub-B": b}, ["sub-A", "sub-B"], "hbo")
@@ -168,7 +168,7 @@ def test_an_unrecorded_bandpass_is_flagged():
     from fnirs_pipe.pipeline.hyper import unfiltered_stage_note
     from fnirs_pipe.utils.lineage import stamp
 
-    raws = {"sub-A": _haemo("10031"), "sub-B": _haemo("10032")}
+    raws = {"sub-A": _haemo("11"), "sub-B": _haemo("12")}
     for raw in raws.values():
         stamp(raw, stage="preproc", step="load")
 
@@ -181,7 +181,7 @@ def test_a_recorded_bandpass_is_not_flagged():
     from fnirs_pipe.pipeline.hyper import unfiltered_stage_note
     from fnirs_pipe.utils.lineage import stamp
 
-    raws = {"sub-A": _haemo("10031"), "sub-B": _haemo("10032")}
+    raws = {"sub-A": _haemo("11"), "sub-B": _haemo("12")}
     for raw in raws.values():
         stamp(raw, stage="errts", step="load", high_pass=0.01, low_pass=0.5)
 
@@ -193,7 +193,7 @@ def test_one_filtered_member_is_still_flagged():
     from fnirs_pipe.pipeline.hyper import unfiltered_stage_note
     from fnirs_pipe.utils.lineage import stamp
 
-    raws = {"sub-A": _haemo("10031"), "sub-B": _haemo("10032")}
+    raws = {"sub-A": _haemo("11"), "sub-B": _haemo("12")}
     stamp(raws["sub-A"], stage="errts", step="load", high_pass=0.01, low_pass=0.5)
     stamp(raws["sub-B"], stage="preproc", step="load")
 
@@ -204,7 +204,7 @@ def test_one_filtered_member_is_still_flagged():
 def test_coherence_matches_channels_by_label():
     from fnirs_pipe.pipeline.hyper.coherence import compute_pairwise_coherence
 
-    raws = {"sub-A": _tagged("10031"), "sub-B": _tagged("10032", drop="S2_D2")}
+    raws = {"sub-A": _tagged("11"), "sub-B": _tagged("12", drop="S2_D2")}
     df = compute_pairwise_coherence(raws, fmin=0.05, fmax=0.15).set_index("ch_name")
 
     assert list(df.index) == ["S1_D1", "S2_D2", "S3_D3", "S4_D4"]
@@ -218,7 +218,7 @@ def test_screening_coherence_drops_a_pair_one_member_lacks():
     # the dyad can be screened on and a NaN row would be averaged into the window's mean
     from fnirs_pipe.pipeline.hyper.coherence import screening_coherence
 
-    raws = {"sub-A": _tagged("10031"), "sub-B": _tagged("10032", drop="S2_D2")}
+    raws = {"sub-A": _tagged("11"), "sub-B": _tagged("12", drop="S2_D2")}
     df = screening_coherence(raws, 0.05, 0.15, n_iter=3, seed=0)
 
     assert set(df["ch_name"]) == {"S1_D1", "S3_D3", "S4_D4"}
@@ -230,10 +230,10 @@ def test_screening_coherence_drops_a_pair_one_member_lacks():
 def test_a_sampling_rate_mismatch_is_refused():
     # alignment equalises duration, not rate, and every metric here takes the rate off one
     # participant, so a mismatch would mislabel the other's frequency axis
-    fast, slow = _haemo("10031"), _haemo("10032")
+    fast, slow = _haemo("11"), _haemo("12")
     slow.resample(slow.info["sfreq"] / 2, verbose="error")
     with pytest.raises(ValueError, match="differ in sampling rate"):
-        _shared_sfreq({"sub-10031": fast, "sub-10032": slow})
+        _shared_sfreq({"sub-11": fast, "sub-12": slow})
 
 
 # ---- band mean ----
@@ -471,7 +471,7 @@ def test_the_roi_matrix_is_written_beside_the_channel_one(tmp_path):
 def test_a_rejected_pair_is_marked_at_both_chromophores():
     from fnirs_pipe.pipeline.hyper import apply_group_bads
 
-    raw = _haemo("10031")
+    raw = _haemo("11")
     raws = {"sub-A": raw}
     # the record names channels by wavelength; the haemo Raw names them by chromophore
     apply_group_bads(raws, {"sub-A": {"bad_channels": ["S2_D2 760", "S2_D2 850"]}})
@@ -489,10 +489,10 @@ def test_a_rejected_pair_never_reaches_the_coherence():
     """
     from fnirs_pipe.pipeline.hyper import apply_group_bads
 
-    raws = {"sub-10031": _haemo("10031"), "sub-10032": _haemo("10032")}
+    raws = {"sub-11": _haemo("11"), "sub-12": _haemo("12")}
     assert all(not r.info["bads"] for r in raws.values())          # the state on disk
 
-    apply_group_bads(raws, {"sub-10031": {"bad_channels": ["S2_D2 760"]}})
+    apply_group_bads(raws, {"sub-11": {"bad_channels": ["S2_D2 760"]}})
     maps = next(iter(compute_wtc(raws, fmin=0.02, fmax=0.5).pairs.values()))
 
     assert maps["S2_D2"] is None, "a rejected pair must carry no map"
@@ -504,7 +504,7 @@ def test_a_rejected_pair_never_reaches_the_coherence():
 def test_a_subject_with_nothing_rejected_keeps_every_channel():
     from fnirs_pipe.pipeline.hyper import apply_group_bads
 
-    raw = _haemo("10031")
+    raw = _haemo("11")
     apply_group_bads({"sub-A": raw}, {"sub-A": {"bad_channels": []}})
     assert raw.info["bads"] == []
     assert _labels(raw) == {"S1_D1", "S2_D2", "S3_D3", "S4_D4"}

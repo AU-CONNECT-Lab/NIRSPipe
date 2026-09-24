@@ -97,7 +97,7 @@ def save_null_levels(levels: dict, path: Path) -> Path:
 
     ::
 
-      {("sub-p1", "sub-p2", "S1_D1"): ndarray(51,)} -> one npz of 51-long float32 arrays
+      {("sub-01", "sub-02", "S1_D1"): ndarray(51,)} -> one npz of 51-long float32 arrays
 
     Tiny beside the maps: one row per pair, not one map per pair, so it is written whether or
     not ``--wtc-save-maps`` was asked for. The report needs it to draw arrows against the

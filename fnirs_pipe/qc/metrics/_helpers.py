@@ -295,8 +295,8 @@ def _safe_metrics(label: str, keys):
     every key None instead of each function hand-writing an all-None fallback.
 
     A key ending in ``*`` declares a family whose members are only known at runtime, one
-    per wavelength for instance. Those cannot be pre-filled — on failure there is no way
-    to know which members would have existed — so the wildcard documents them and keeps
+    per wavelength for instance. Those cannot be pre-filled (on failure there is no way
+    to know which members would have existed), so the wildcard documents them and keeps
     them from reading as an undeclared key. Anything else the function returns that the
     schema does not mention is logged, because it is present on success and absent on
     failure, which is exactly what this decorator exists to prevent.

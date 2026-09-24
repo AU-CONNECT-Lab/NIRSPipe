@@ -110,10 +110,10 @@ def write_run_record(
     Output: sub_dir/logs/sub-{subject}.toml  (sub_dir defaults to output_dir)
 
     Sections:
-      [environment]  — software versions + system info
-      [execution]    — invocation: the verbatim command, paths, selection filters
-      [prep]         — preprocessing parameters as resolved, from PrepConfig
-      [post]         — postprocessing parameters as resolved, from PostConfig (only with --mode)
+      [environment]: software versions + system info
+      [execution]:   invocation: the verbatim command, paths, selection filters
+      [prep]:        preprocessing parameters as resolved, from PrepConfig
+      [post]:        postprocessing parameters as resolved, from PostConfig (only with --mode)
 
     [execution] answers "what was run" and stays copy-pasteable; [prep]/[post] answer
     "what was used" and come from the config objects the pipeline actually received.

@@ -17,7 +17,7 @@ from fnirs_pipe.qc.subject.report import (
     _segments_in_window,
 )
 
-RUN = figure_namer("sub-01_task-full")
+RUN = figure_namer("sub-01_task-main")
 
 
 def fig(desc, condition=None, **entities):
@@ -26,7 +26,7 @@ def fig(desc, condition=None, **entities):
     Spelling these by hand is how the check and the writers drifted apart before: the test
     agreed with itself and neither half agreed with what lands on disk.
     """
-    return "figures/" + figure_namer("sub-01_task-full", condition)(desc, **entities)
+    return "figures/" + figure_namer("sub-01_task-main", condition)(desc, **entities)
 
 
 # ---- blanking a section keeps its type ----
@@ -115,7 +115,7 @@ def test_another_conditions_figure_is_a_leak():
 
 def test_values_that_are_not_figure_paths_are_ignored():
     page = {"subject": "01", "sqm": {"sci_mean": 0.9}, "n_bad": 2,
-            "index_href": "sub-01_task-full_report.html", "nothing": None}
+            "index_href": "sub-01_task-main_report.html", "nothing": None}
     assert _figure_leaks(page, "game1") == []
 
 

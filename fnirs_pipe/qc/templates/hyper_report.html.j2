@@ -269,7 +269,7 @@
             title="screening coherence against its null"
             style="height:{{ figure_paths.screening_strip.h }}px"></iframe>
     <p class="qm-note">One pale dot per channel, the diamond is the window&rsquo;s own rank
-      with the channels pooled &mdash; read the diamond. A per-channel rank over a hundred
+      with the channels pooled; read the diamond. A per-channel rank over a hundred
       draws moves with the draw; the window&rsquo;s does not.</p>
     <p class="fig-path">{{ figure_paths.screening_strip.src }}</p>
   </div>
@@ -390,7 +390,7 @@
     <span class="hint">signal overlay and PSD</span></summary>
   <div class="details-body">
     <p class="step-desc">The one view an individual report cannot give: two members on the
-      same axes. No epoch panel &mdash; this design gives one block per condition, so a
+      same axes. No epoch panel: this design gives one block per condition, so a
       &ldquo;mean epoch&rdquo; would average a single trial.</p>
     <select id="ch-select" class="ch-select"></select>
     <iframe id="ch-detail-iframe" class="plotly-frame" title="per-channel detail"
@@ -481,11 +481,11 @@ function _set(id, text, cls) {
   var pct = q.pct_all_good;
   var goodCls = pct != null ? (pct >= 80 ? "qm-ok" : pct >= 50 ? "qm-warn" : "qm-bad") : "";
   document.getElementById("sqm-list").innerHTML =
-    li("Channels — all good",
+    li("Channels: all good",
        (q.n_all_good != null ? q.n_all_good : "—") +
          (q.n_total ? " / " + q.n_total : ""), goodCls) +
-    li("Channels — mixed",   q.n_mixed   != null ? q.n_mixed   : "—") +
-    li("Channels — all bad", q.n_all_bad != null ? q.n_all_bad : "—",
+    li("Channels: mixed",   q.n_mixed   != null ? q.n_mixed   : "—") +
+    li("Channels: all bad", q.n_all_bad != null ? q.n_all_bad : "—",
        q.n_all_bad > 0 ? "qm-bad" : "") +
     // the measured value is worth printing but cannot be graded on its own: this
     // estimator's floor moves with the window, and 0.008 on a whole run is the floor and
@@ -537,14 +537,14 @@ function _set(id, text, cls) {
   var el = document.getElementById("compare-verdict");
   if (!el) return;
   if (sameRate && sameSet) {
-    el.innerHTML = "<span class='badge-green'>Comparable</span> — same sampling rate and "
+    el.innerHTML = "<span class='badge-green'>Comparable</span>: same sampling rate and "
       + "the same " + counts[0] + " S-D pairs.";
   } else {
     var why = [];
     if (!sameRate) why.push("sampling rates differ (" + rates.join(", ") + " Hz)");
     if (!sameSet) why.push("the montages carry different channel counts ("
       + counts.join(", ") + ")");
-    el.innerHTML = "<span class='badge-red'>Not comparable</span> — " + why.join("; ") + ".";
+    el.innerHTML = "<span class='badge-red'>Not comparable</span>: " + why.join("; ") + ".";
   }
 })();
 
@@ -652,7 +652,7 @@ function _set(id, text, cls) {
 
 </script>
 
-<!-- Channel Decisions — populated by fnirs-rate hyper when served via Flask -->
+<!-- Channel Decisions: populated by fnirs-rate hyper when served via Flask -->
 <script>
 (function(){
   var _hyperDecisions = {};

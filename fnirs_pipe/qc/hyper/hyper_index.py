@@ -328,8 +328,8 @@ def write_hyper_index(
     html = render(
         "hyper_index.html.j2",
         **page_vars(
-            title=f"fnirs-pipe hyper — group-{group_id}",
-            heading=f"fnirs-pipe hyper — group-{group_id}",
+            title=f"fnirs-pipe hyper  ·  group-{group_id}",
+            heading=f"fnirs-pipe hyper  ·  group-{group_id}",
         ),
         **footer_vars(versions=collect_software_versions()),
         group_id=group_id,

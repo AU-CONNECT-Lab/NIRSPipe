@@ -213,7 +213,7 @@ def _save_glm_brain(
         raw_hbo = raw_haemo.copy().pick("hbo")
 
         # stc_near_sensors._get_channel_positions skips bad channels but evoked.data
-        # includes them, causing a matmul shape mismatch — drop bads before passing
+        # includes them, causing a matmul shape mismatch, so drop bads before passing
         bads_in_hbo = [b for b in raw_hbo.info["bads"] if b in raw_hbo.ch_names]
         if bads_in_hbo:
             raw_hbo.drop_channels(bads_in_hbo)
@@ -227,7 +227,7 @@ def _save_glm_brain(
         coef_col = _coef_col(results_df)
 
         # Replicate plot_glm_surface_projection internally so we can pass
-        # time_viewer=False — required for offscreen rendering (no iren available)
+        # time_viewer=False, required for offscreen rendering (no iren available)
         if ch_col is not None:
             results_df = results_df.set_index(ch_col).loc[raw_hbo.ch_names].reset_index()
         ea = EvokedArray(results_df[coef_col].values[:, np.newaxis], raw_hbo.info.copy())

@@ -1,4 +1,4 @@
-"""Page: cohort-level quality control — `fnirs-qc`, which aggregates records already on disk."""
+"""Page: cohort-level quality control (`fnirs-qc`), which aggregates records already on disk."""
 
 from __future__ import annotations
 

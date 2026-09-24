@@ -1,4 +1,4 @@
-"""Page: Recon — batch-convert raw snirf files into a BIDS dataset."""
+"""Page: Recon, which batch-converts raw snirf files into a BIDS dataset."""
 
 from __future__ import annotations
 
@@ -82,7 +82,7 @@ def _command_panel():
 
 
 layout = dbc.Container([
-    html.H3("Recon — raw snirf → BIDS"),
+    html.H3("Recon: raw snirf → BIDS"),
     html.Hr(),
 
     split(

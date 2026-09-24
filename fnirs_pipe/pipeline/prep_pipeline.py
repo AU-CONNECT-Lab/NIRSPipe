@@ -1,4 +1,4 @@
-"""Preprocessing pipeline — all prep steps in a single module.
+"""Preprocessing pipeline: all prep steps in a single module.
 
 Step outputs written to output_dir/sub-XX/[ses-YY/]nirs/:
   desc-od            raw intensity → ΔOD
@@ -244,7 +244,7 @@ def run_prep(
     logger.info(
         "sub-%s | bad channels: %d/%d%s",
         config.subject, n_bad, n_total,
-        f" — {bad_chs}" if bad_chs else "",
+        f" ({bad_chs})" if bad_chs else "",
     )
     # before desc-sci is written, so that file carries the marks and every
     # derivative taken from it inherits them

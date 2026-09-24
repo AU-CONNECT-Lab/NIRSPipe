@@ -62,7 +62,7 @@ SECTION_NOTES = {
         "Denoised signal; runs with enough repetitions are also smoothed across adjacent "
         "trials. One panel per condition, pooled panel first. Select an ROI.",
     "epoch.trial_image_single":
-        "Each stimulus repetition is a row (trial × time from onset), coloured by HbO — the "
+        "Each stimulus repetition is a row (trial × time from onset), coloured by HbO: the "
         "un-averaged view of the response, on the denoised signal. Runs with enough repetitions "
         "are also smoothed across adjacent trials. One panel per condition, pooled panel first. "
         "Select a channel.",

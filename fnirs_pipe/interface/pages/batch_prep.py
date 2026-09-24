@@ -1,4 +1,4 @@
-"""Page: Batch data preparation — marker editing and crop across multiple subjects."""
+"""Page: Batch data preparation: marker editing and crop across multiple subjects."""
 
 from __future__ import annotations
 

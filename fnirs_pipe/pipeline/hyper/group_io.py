@@ -84,7 +84,7 @@ def parse_group_csv(csv_path: Path) -> dict[tuple[str, str], list[GroupEntry]]:
     for (gid, task), members in result.items():
         if len(members) < 2:
             raise GroupCSVError(
-                f"Group '{gid}' task '{task}' has only {len(members)} subject — need at least 2"
+                f"Group '{gid}' task '{task}' has only {len(members)} subject, need at least 2"
             )
 
     return result

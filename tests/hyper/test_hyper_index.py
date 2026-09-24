@@ -59,10 +59,10 @@ def test_a_tree_with_no_null_gets_no_column():
 
 
 def test_only_the_artefacts_on_disk_are_linked(tmp_path):
-    stem = "group-d01_task-full"
+    stem = "group-G01_task-main"
     (tmp_path / "nirs").mkdir()
     (tmp_path / report_name(stem, desc="raw")).write_text("x", encoding="utf-8")
-    (tmp_path / "nirs" / name("d01", "full")).write_text("x", encoding="utf-8")
+    (tmp_path / "nirs" / name("G01", "main")).write_text("x", encoding="utf-8")
 
     links = _links(tmp_path, stem)
     assert [link["text"] for link in links] == ["raw QC", "coherence"]
@@ -73,14 +73,14 @@ def _whole_run_only(tmp_path):
     (tmp_path / "nirs").mkdir()
     pd.DataFrame({"chromophore": ["hbo"], "label": ["S1_D1"], "label2": ["S1_D1"],
                   "coherence": [0.4]}).to_csv(
-        tmp_path / "nirs" / name("d01", "full"), sep="\t", index=False)
+        tmp_path / "nirs" / name("G01", "main"), sep="\t", index=False)
 
 
 def test_a_table_the_run_did_not_write_is_not_reported_unreadable(tmp_path, caplog):
     # the per-condition and null tables are optional; their absence is the normal case
     _whole_run_only(tmp_path)
     with caplog.at_level("WARNING", logger="fnirs_pipe.qc.hyper_index"):
-        rows = collect_rows(tmp_path, "d01")
+        rows = collect_rows(tmp_path, "G01")
     assert [row["kind"] for row in rows] == ["whole run"]
     assert rows[0]["past_null"] == {}
     assert "unreadable" not in caplog.text
@@ -88,7 +88,7 @@ def test_a_table_the_run_did_not_write_is_not_reported_unreadable(tmp_path, capl
 
 def test_a_table_on_disk_that_cannot_be_read_is_still_reported(tmp_path, caplog):
     _whole_run_only(tmp_path)
-    (tmp_path / "nirs" / name("d01", "full", "wtc-phasenull")).write_text("", encoding="utf-8")
+    (tmp_path / "nirs" / name("G01", "main", "wtc-phasenull")).write_text("", encoding="utf-8")
     with caplog.at_level("WARNING", logger="fnirs_pipe.qc.hyper_index"):
-        collect_rows(tmp_path, "d01")
+        collect_rows(tmp_path, "G01")
     assert "unreadable" in caplog.text

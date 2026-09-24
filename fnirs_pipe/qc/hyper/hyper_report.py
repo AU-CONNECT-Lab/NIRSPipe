@@ -763,13 +763,13 @@ def build_hyper_post_report(
     """Build hyperscanning post-QC report.
 
     Sections:
-      1. Per-channel WTC  — Morlet wavelet coherence, one heatmap per channel
-      2. Per-ROI WTC      — the member channels' maps averaged cell by cell (when roi_map given)
-      3. Cross matrices   — band-mean coherence per channel pair and per ROI pair, HbO
-                            beside HbR on one scale (when wtc_channel_cross)
-      4. ISC              — inter-brain Pearson r, a ROI × ROI heatmap (when roi_map
-                            given) and then per chromophore a channel heatmap beside its
-                            connectogram, whose arcs are chosen by `_arc_rule`
+      1. Per-channel WTC: Morlet wavelet coherence, one heatmap per channel
+      2. Per-ROI WTC:     the member channels' maps averaged cell by cell (when roi_map given)
+      3. Cross matrices:  band-mean coherence per channel pair and per ROI pair, HbO
+                          beside HbR on one scale (when wtc_channel_cross)
+      4. ISC:             inter-brain Pearson r, a ROI × ROI heatmap (when roi_map
+                          given) and then per chromophore a channel heatmap beside its
+                          connectogram, whose arcs are chosen by `_arc_rule`
 
     Each WTC map is also collapsed to one number per channel over
     [wtc_band_fmin, wtc_band_fmax] and written as a TSV under the group's nirs/, so a
@@ -1412,7 +1412,7 @@ def build_hyper_post_report(
             "hyper_post_report.html.j2",
             **page_vars(
                 title=f"{heading} post" + (f" / {label}" if label else ""),
-                heading=heading + (f" — {label}" if label else ""),
+                heading=heading + (f"  ·  {label}" if label else ""),
                 nav_meta=nav_meta,
                 nav_note=(f"WTC: {wtc_fmin:.3f}–{wtc_fmax:.3f} Hz · "
                           f"{'+'.join(_CHROMA_LABEL[c] for c in chroma)}"),
