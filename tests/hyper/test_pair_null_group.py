@@ -1,6 +1,6 @@
 """The two levels above the cell, and the resolution each one can express.
 
-The point of averaging before ranking is that a pool of 22 cannot express a p under 1/23 per
+The point of averaging before ranking is that a pool of k cannot express a p under 1/(k+1) per
 cell, so these hold the arithmetic that makes a cohort verdict possible at all.
 """
 
@@ -45,12 +45,11 @@ def _real(level):
 # ---- the exact p ----
 
 def test_beating_every_draw_gives_the_finest_p_the_pool_allows():
-    assert _exact_p(22, 22) == pytest.approx(1 / 23)
-    assert _exact_p(4, 4) == pytest.approx(1 / 5)
+    assert _exact_p(9, 9) == pytest.approx(1 / 10)
 
 
 def test_beating_none_of_them_gives_one():
-    assert _exact_p(0, 22) == pytest.approx(1.0)
+    assert _exact_p(0, 9) == pytest.approx(1.0)
 
 
 # ---- per occasion ----
@@ -277,7 +276,7 @@ def test_two_bands_in_one_tree_are_refused(tmp_path):
 
 # ---- the per-cell tables, corrected ----
 
-def _write_cells(root, percentiles, n_iter=22):
+def _write_cells(root, percentiles, n_iter=9):
     """One per-cell null table per occasion, the shape `fnirs-hyper-pairnull` writes."""
     for occ, pcts in zip(OCCASIONS, percentiles):
         d = root / f"group-{occ}" / "nirs"
@@ -289,10 +288,10 @@ def _write_cells(root, percentiles, n_iter=22):
 
 
 def test_the_percentile_becomes_an_exact_p(tmp_path):
-    """Beating all 22 is rank 1 of 23, which is the finest p the pool can express."""
+    """Beating all k draws is rank 1 of k + 1, which is the finest p the pool can express."""
     _write_cells(tmp_path, [[100, 50, 0, 100]] * 3)
     out = by_cell(tmp_path, "main", "hbo", "repaired")
-    assert out.p.min() == pytest.approx(1 / 23)
+    assert out.p.min() == pytest.approx(1 / 10)
     assert out.p.max() == pytest.approx(1.0)
 
 

@@ -283,7 +283,7 @@ def test_the_stamp_is_in_millimetres():
 
 def test_a_record_with_nothing_stamped_falls_back_to_the_defaults():
     """Refusing to read an unstamped record would make its tree unreportable."""
-    assert bands_from_record({"n_long_channels": 28}) == separation_bands()
+    assert bands_from_record({"n_long_channels": 1}) == separation_bands()
 
 
 def test_an_upper_bound_switched_off_is_not_the_same_as_one_never_stamped():
@@ -403,7 +403,7 @@ def test_a_forced_band_is_still_validated():
 def test_a_record_stamps_whether_it_carries_bands_at_all():
     from fnirs_pipe.qc.metrics._helpers import record_has_bands
     assert record_has_bands(bands_to_record((0.01, 0.015, None)))
-    assert not record_has_bands({"n_long_channels": 28})
+    assert not record_has_bands({"n_long_channels": 1})
     # partial is not a stamp: the writer always writes the three together, and mixing a
     # stamped value with a defaulted one is worse than defaulting all three
     assert not record_has_bands({"sep_short_max_mm": 10.0})
