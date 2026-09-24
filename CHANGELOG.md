@@ -22,6 +22,9 @@ All notable changes to this project will be documented in this file.
 - Raw condition pages dropped every panel redrawn for the condition as a leak
 - The dyad rating server read its task as `unknown`, so channel decisions went to a file the raw page never reads
 - A collapsed provenance box counted no conditions, the `cond-` entity being unknown to its parser
+- Without `--session-label`, `fnirs-pipe participant` wrote a session tree's outputs to `sub-<id>/nirs` with no `ses-`, one session overwriting another
+- The run report, the subject index and the rating server read and link each session's own `nirs/`
+- The generated reproduction script keeps each run's task, run and session in its file names, and its GLM step runs again
 - The GLM tables go to the session folder their run's snirfs use, not `sub-<id>/nirs`
 - `fnirs-qc provenance` refreshes the graph a dyad report links, and finds subjects with sessions
 - The dyad quality loader read SCI from the per-channel table as comma separated and silently got none

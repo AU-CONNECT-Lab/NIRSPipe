@@ -107,10 +107,10 @@ class FNIRSRatingApp:
             )
 
         @app.route("/sub-<pid>/nirs/<path:filename>")
-        def nirs_files(pid, filename):
-            return send_from_directory(
-                self.output_dir / f"sub-{pid}" / "nirs", filename
-            )
+        @app.route("/sub-<pid>/ses-<ses>/nirs/<path:filename>")
+        def nirs_files(pid, filename, ses=None):
+            folder = self.output_dir / f"sub-{pid}" / (f"ses-{ses}" if ses else "") / "nirs"
+            return send_from_directory(folder, filename)
 
         # the report page owns its own module list: only it knows which panels were drawn
         @app.route("/load_ratings/sub-<pid>", methods=["GET"])

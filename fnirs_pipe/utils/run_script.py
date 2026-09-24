@@ -184,14 +184,15 @@ def _build_script_text(
         '}',
         '',
         '',
-        'def save_step(raw_step, desc, step, session=None, extra=None):',
+        'def save_step(raw_step, desc, step, src, extra=None):',
+        '    # src: the entities of the recording, so each run keeps its task, run and session',
         '    path = build_output_path(',
         '        output_dir=OUTPUT_DIR, subject=SUBJECT,',
-        '        entities={**carry_entities(None), "desc": desc},',
-        '        suffix="nirs", extension=".snirf", session=session)',
+        '        entities={**carry_entities(src), "desc": desc},',
+        '        suffix="nirs", extension=".snirf", session=src.get("session"))',
         '    write_snirf(raw_step, path)',
         '    write_sidecar_json(path, {"pipeline_version": __version__, "step": step,',
-        '        "parameters": {**PREP_PARAMS, "session": session},',
+        '        "parameters": {**PREP_PARAMS, "session": src.get("session")},',
         '        "data": data_state(raw_step),',
         '        # read back by read_snirf: SNIRF itself cannot carry the marks',
         '        "bad_channels": list(raw_step.info["bads"]), **(extra or {})})',
@@ -213,6 +214,9 @@ def _build_script_text(
         f'{i1}for task in {tasks_repr}:',
         f'{i2}files = get_nirs_files(layout, subject=SUBJECT, session=session, task=task)',
         f'{i2}for snirf_path in files:',
+        # the file's own session: the loop variable is only the --session-label filter
+        f'{i3}src = layout.parse_file_entities(str(snirf_path))',
+        f'{i3}ses = src.get("session")',
         f'{i3}raw = mne.io.read_raw_snirf(str(snirf_path), preload=True)',
     )
 
@@ -226,7 +230,7 @@ def _build_script_text(
         '',
         '# ===== block: od | raw intensity -> optical density =====',
         'raw_od = raw.copy() if is_optical_density(raw) else intensity_to_od(raw)',
-        'save_step(raw_od, "od", "od_conversion", session=session)',
+        'save_step(raw_od, "od", "od_conversion", src)',
         '',
         '# ===== block: sci | channel screening =====',
         '#   mark a channel bad when too few windows are coupled: a window counts when its',
@@ -238,7 +242,7 @@ def _build_script_text(
         'if BAD_CHANNELS:  # merge manual --bad-channels, both wavelengths of each pair',
         '    bad_chs = sorted(set(bad_chs) | set(_expand_bad_pairs(raw_od, BAD_CHANNELS)))',
         '    raw_od.info["bads"] = bad_chs',
-        'save_step(raw_od, "sci", "sci_pruning", session=session,',
+        'save_step(raw_od, "sci", "sci_pruning", src,',
         '          extra={"bad_channels": bad_chs})',
         '# QC (not run here): none of these steps measures anything. The quality record is',
         '#   assembled from the files they leave on disk, once both passes have finished',
@@ -246,11 +250,11 @@ def _build_script_text(
         '',
         '# ===== block: motion | MOTION_METHOD artifact correction =====',
         'raw_od = correct_motion(raw_od, method=MOTION_METHOD)',
-        'save_step(raw_od, "motcorrected", "motion_correction", session=session)',
+        'save_step(raw_od, "motcorrected", "motion_correction", src)',
         '',
         '# ===== block: beer_lambert | OD -> HbO/HbR (Beer-Lambert, dpf=DPF) =====',
         'raw_haemo = od_to_haemo(raw_od, dpf=DPF)',
-        'preproc_path = save_step(raw_haemo, "preproc", "beer_lambert", session=session)',
+        'preproc_path = save_step(raw_haemo, "preproc", "beer_lambert", src)',
         '# QC (not run here): the `preproc`, `motion` and `motion_post` sections are read',
         '#   back from desc-preproc, desc-sci and desc-motcorrected.',
         '',
@@ -262,7 +266,7 @@ def _build_script_text(
         '    write_sidecar_json(aux_path, {',
         '        "pipeline_version": __version__, "step": "aux_extract",',
         '        "Sources": [Path(snirf_path).as_posix()],',
-        '        "parameters": {**PREP_PARAMS, "session": session}, **_aux[1]})',
+        '        "parameters": {**PREP_PARAMS, "session": ses}, **_aux[1]})',
     )
 
     if mode:
@@ -276,7 +280,7 @@ def _build_script_text(
                 '                         method=FILTER_METHOD, order=FILTER_ORDER)',
             )
             if mode in ("denoise", "glm"):
-                b('save_step(result, "filtered", "bandpass", session=session)')
+                b('save_step(result, "filtered", "bandpass", src)')
 
         if resample_sfreq is not None:
             b(
@@ -285,7 +289,7 @@ def _build_script_text(
                 'result = resample(result, RESAMPLE_SFREQ)',
             )
             if mode in ("denoise", "glm"):
-                b('save_step(result, "resampled", "resample", session=session)')
+                b('save_step(result, "resampled", "resample", src)')
 
         if denoise_regress:
             b(
@@ -298,9 +302,10 @@ def _build_script_text(
                 '    fir_delays=None, short_channel=SHORT_CHANNEL,',
                 *_aux_lines,
                 '    events=pd.DataFrame({"trial_type": [], "onset": [], "duration": []}),',
-                '    output_dir=str(OUTPUT_DIR / f"sub-{SUBJECT}" / "nirs"),',
+                '    output_dir=str(OUTPUT_DIR / f"sub-{SUBJECT}" / (f"ses-{ses}" if ses else "") / "nirs"),',
+                '    source_path=str(preproc_path),',
                 ')',
-                'save_step(raw_resid, "errts", "glm_residuals", session=session)',
+                'save_step(raw_resid, "errts", "glm_residuals", src)',
             )
 
         if mode == "denoise":
@@ -326,9 +331,10 @@ def _build_script_text(
                 '    fir_delays=FIR_DELAYS, short_channel=SHORT_CHANNEL, events_path=EVENTS_PATH,',
                 *_aux_lines,
                 ('    contrast_def=_contrast_def,' if contrast_file else '    contrast_def=None,'),
-                '    output_dir=str(OUTPUT_DIR / f"sub-{SUBJECT}" / "nirs"),',
+                '    output_dir=str(OUTPUT_DIR / f"sub-{SUBJECT}" / (f"ses-{ses}" if ses else "") / "nirs"),',
+                '    source_path=str(preproc_path),',
                 ')',
-                'save_step(raw_resid, "errts", "glm_residuals", session=session)',
+                'save_step(raw_resid, "errts", "glm_residuals", src)',
             )
             if fc:
                 b('# Derivatives (not run here): FC, ROI-FC and the seed maps are written by'
@@ -346,9 +352,10 @@ def _build_script_text(
                 '    fir_delays=None, short_channel=SHORT_CHANNEL,',
                 *_aux_lines,
                 '    events=pd.DataFrame({"trial_type": [], "onset": [], "duration": []}),',
-                '    output_dir=str(OUTPUT_DIR / f"sub-{SUBJECT}" / "nirs"),',
+                '    output_dir=str(OUTPUT_DIR / f"sub-{SUBJECT}" / (f"ses-{ses}" if ses else "") / "nirs"),',
+                '    source_path=str(preproc_path),',
                 ')',
-                'save_step(raw_resid, "errts", "glm_residuals", session=session)',
+                'save_step(raw_resid, "errts", "glm_residuals", src)',
                 '# Derivatives/QC (not run here): ALFF/fALFF, FC, ROI-FC and regression',
                 '#   GCOR are written by run_post (_write_rest_derivatives / gcor_metrics).',
             )

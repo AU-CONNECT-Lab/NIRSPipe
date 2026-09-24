@@ -223,3 +223,16 @@ def test_a_condition_both_commands_wrote_links_both_pages(tmp_path, monkeypatch)
     pages = _condition_pages(tmp_path, label, ["game1", "video"])
     assert [[p["text"] for p in found] for found in pages] == [
         ["pipeline QC", "raw QC"], ["raw QC"]]
+
+
+def test_a_run_in_a_session_folder_is_listed_and_linked_there(tmp_path):
+    """The index read only `sub-<id>/nirs`, so every run of a session tree was missing."""
+    ses_dir = tmp_path / "ses-a"
+    label = _run(ses_dir, "rest").replace("sub-01_", "sub-01_ses-a_", 1)
+    for f in (ses_dir / "nirs").iterdir():
+        f.rename(f.with_name(f.name.replace("sub-01_", "sub-01_ses-a_", 1)))
+
+    (row,) = collect_runs(tmp_path)
+    assert row["label"] == label
+    assert {"text": "channels", "href": f"ses-a/nirs/{label}{CHANNEL_METRICS_SUFFIX}"} \
+        in row["links"]

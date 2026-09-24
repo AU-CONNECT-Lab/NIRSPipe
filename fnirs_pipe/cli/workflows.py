@@ -261,7 +261,10 @@ def run_participant_level(args: dict[str, Any]) -> None:
 
                             for snirf_path in files:
                                 src_entities = layout.parse_file_entities(str(snirf_path))
-                                prep_config = _make_prep_config(subject, session, args)
+                                # the file's own session, which --session-label only filters on;
+                                # without it every output of a session tree lost its ses- level
+                                prep_config = _make_prep_config(
+                                    subject, src_entities.get("session") or session, args)
                                 logger.info("processing: %s", snirf_path)
                                 try:
                                     raw = read_snirf(snirf_path)
@@ -283,13 +286,17 @@ def run_participant_level(args: dict[str, Any]) -> None:
                     import json as _json
                     from fnirs_pipe.qc.subject.sqm_record import SECTIONS, build_sqm_records, entities_of
                     try:
-                        sqm_paths = build_sqm_records(
-                            sub_dir / "nirs", bids_root=bids_dir,
-                            qc_window_s=args.get("window_length", 10.0),
-                            # nothing on disk records them, so the record would otherwise be
-                            # split on the package defaults whatever this run was told
-                            sep_bands=_shared.resolved_separation_bands(args),
-                            labels=set(prep_runs))
+                        # one nirs/ per session the runs came from
+                        sqm_paths = []
+                        for ses in sorted({entity_of(label, "ses") or "" for label in prep_runs}):
+                            sqm_paths += build_sqm_records(
+                                sub_dir / (f"ses-{ses}" if ses else "") / "nirs",
+                                bids_root=bids_dir,
+                                qc_window_s=args.get("window_length", 10.0),
+                                # nothing on disk records them, so the record would otherwise
+                                # be split on the package defaults whatever this run was told
+                                sep_bands=_shared.resolved_separation_bands(args),
+                                labels=set(prep_runs))
                     except Exception:
                         logger.error("sub-%s | SQM records failed", subject, exc_info=True)
                         sqm_paths = []
@@ -591,7 +598,6 @@ def _run_post_for_subject(
     subject_root = (output_dir / f"sub-{subject}").resolve()
     post_runs: dict[str, dict] = {}
     for session in sessions:
-        post_config = _build_post_config(subject, session, args, toml, roi_map=roi_map)
         for task in tasks:
             preproc_files = [
                 p for p in get_nirs_files(
@@ -606,6 +612,9 @@ def _run_post_for_subject(
 
             for snirf_path in preproc_files:
                 src_entities = post_layout.parse_file_entities(str(snirf_path))
+                # per file, for the session the file sits in; see the prep loop
+                post_config = _build_post_config(subject, src_entities.get("session") or session,
+                                                 args, toml, roi_map=roi_map)
                 logger.info("post (%s): %s", mode, snirf_path.name)
                 try:
                     raw_haemo = read_snirf(snirf_path)

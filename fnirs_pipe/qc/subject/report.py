@@ -52,6 +52,7 @@ Report sections
 import base64
 import json
 from contextlib import contextmanager
+from fnirs_pipe.io.derivatives import entity_of
 from fnirs_pipe.io.naming import parse_path, report_name
 import matplotlib
 matplotlib.use("Agg")
@@ -1709,7 +1710,9 @@ def build_subject_report(
     # in two places. A run with no label falls back to the subject, as out_path does.
     fig_name = figure_namer(sqm_label or f"sub-{subject}")
 
-    nirs_dir = out_path.parent / "nirs"
+    # the run's own nirs/, session level included; the report itself sits above sessions
+    ses = entity_of(sqm_label, "ses") if sqm_label else None
+    nirs_dir = out_path.parent / (f"ses-{ses}" if ses else "") / "nirs"
     record            = _load_record(nirs_dir, sqm_label, subject, errors)
     windowed_section  = record.get("windowed") or None
     raw_before_motion = _load_stage_raw(nirs_dir, sqm_label, "sci", subject, errors)
@@ -1850,7 +1853,7 @@ def build_subject_report(
                                       fc_seed=fc_seed, fc_roi=fc_roi, raw_haemo=raw_haemo,
                                       roi_map_name=roi_map_name, sep_bands=sep_bands)
     sqm_vars          = _section_sqm(sci_scores, bad_channels, subject, errors,
-                                     out_dir=out_path.parent / "nirs",
+                                     out_dir=nirs_dir,
                                      sqm_label=sqm_label,
                                      sci_threshold=getattr(config, "sci_threshold", SCI_PASS),
                                      psp_threshold=getattr(config, "psp_threshold", None))
@@ -1903,10 +1906,10 @@ def build_subject_report(
         ),
         **footer_vars(
             scope=f"sub-{subject}", errors=errors, notes=notes,
-            nirs_dir=out_path.parent / "nirs", mode=mode, label=sqm_label,
+            nirs_dir=nirs_dir, mode=mode, label=sqm_label,
             provenance_path=provenance_path,
             methods=generate_methods_text(config, versions=versions, mode=mode,
-                                          nirs_dir=out_path.parent / "nirs"),
+                                          nirs_dir=nirs_dir),
             versions=versions,
         ),
         metric_summary=metric_summary,

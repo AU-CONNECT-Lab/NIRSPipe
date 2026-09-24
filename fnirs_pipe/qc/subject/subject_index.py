@@ -28,6 +28,7 @@ from fnirs_pipe.qc.boilerplate import collect_software_versions
 from fnirs_pipe.qc.common.report_shell import (
     OUTLIER_Z, footer_vars, guard, outlier_flags, page_vars, render)
 from fnirs_pipe.qc.common.figure_io import figure_namer, _save_figure_html
+from fnirs_pipe.io.derivatives import entity_of
 from fnirs_pipe.io.naming import report_name
 from fnirs_pipe.qc.common.channel_table import CHANNEL_METRICS_SUFFIX
 from fnirs_pipe.qc.subject.sqm_record import (
@@ -73,8 +74,8 @@ _REPORTS = (
 _ARTEFACTS = (
     ("MNE",        "{mne_report}"),
     ("provenance", "figures/{provenance}"),
-    ("channels",   "nirs/{label}" + CHANNEL_METRICS_SUFFIX),
-    ("aux",        "nirs/{label}_desc-aux_timeseries.tsv.gz"),
+    ("channels",   "{nirs}/{label}" + CHANNEL_METRICS_SUFFIX),
+    ("aux",        "{nirs}/{label}_desc-aux_timeseries.tsv.gz"),
 )
 
 
@@ -82,6 +83,7 @@ def _names(label: str) -> dict[str, str]:
     """The substitutions the two tables above use, so each page is spelled in one place."""
     return {
         "label": label,
+        "nirs": _nirs_dir(Path(), label).as_posix(),
         "report": report_name(label),
         "raw_report": report_name(label, desc="raw"),
         "mne_report": report_name(label, desc="mne"),
@@ -174,6 +176,19 @@ def _links(sub_dir: Path, label: str, extra: list[dict[str, str]] = ()) -> list[
                           if (sub_dir / (rel := template.format(**_names(label)))).exists()]
 
 
+def _nirs_dir(sub_dir: Path, label: str) -> Path:
+    """A run's own nirs/, session level included."""
+    ses = entity_of(label, "ses")
+    return sub_dir / (f"ses-{ses}" if ses else "") / "nirs"
+
+
+def _all_records(sub_dir: Path) -> list[tuple[str, dict, Path]]:
+    """:func:`_records` over every nirs/ of the subject, with the folder each run came from."""
+    return [(label, record, nirs_dir)
+            for nirs_dir in [sub_dir / "nirs", *sorted(sub_dir.glob("ses-*/nirs"))]
+            for label, record in _records(nirs_dir)]
+
+
 def _records(nirs_dir: Path) -> list[tuple[str, dict]]:
     """One (label, record) per run under nirs_dir, the pipeline record winning.
 
@@ -228,7 +243,7 @@ def collect_bad_channels(sub_dir: Path, labels: list[str]) -> dict:
     bad_by_label: dict[str, set[str]] = {}
 
     for label in labels:
-        path = sub_dir / "nirs" / (label + CHANNEL_METRICS_SUFFIX)
+        path = _nirs_dir(sub_dir, label) / (label + CHANNEL_METRICS_SUFFIX)
         if not path.exists():
             continue
         bad: set[str] = set()
@@ -277,9 +292,8 @@ def _metric_cell(flat: dict, keys: tuple, fmt: str) -> dict:
 
 def collect_runs(sub_dir: Path) -> list[dict]:
     """One row per run under sub_dir, newest BIDS entity order, for the index table."""
-    nirs_dir = sub_dir / "nirs"
     rows: list[dict] = []
-    for label, record in _records(nirs_dir):
+    for label, record, nirs_dir in _all_records(sub_dir):
         flat = _flat(record)
         shape = _shape(nirs_dir, label, record)
         reports = _reports(sub_dir, label)
@@ -349,9 +363,8 @@ def collect_conditions(sub_dir: Path) -> list[dict]:
     without a ``by_condition`` block contribute nothing, which is what a tree produced
     without ``--by-condition``, or cropped per condition first, looks like.
     """
-    nirs_dir = sub_dir / "nirs"
     groups: list[dict] = []
-    for label, record in _records(nirs_dir):
+    for label, record, nirs_dir in _all_records(sub_dir):
         by_condition = record.get("by_condition") or {}
         if len(by_condition) < 2:
             continue
