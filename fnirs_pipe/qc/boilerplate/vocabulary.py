@@ -295,7 +295,7 @@ METRIC_SUMMARY = {
     "cnr_hbo_mean": "How far the evoked HbO response clears its own noise, averaged over channels; higher is better. Absent on a run with no stimulus annotations.",
     "cnr_hbr_mean": "The same for HbR. HbR falls with a response, so this one runs negative and more negative is better.",
     "cnr_n_epochs": "How many stimulus epochs the CNR was averaged over. Descriptive; a handful of epochs makes the value noisy.",
-    "gcor_hbo": "How much every HbO channel moves together, higher meaning a stronger shared systemic or global component rather than localised activity. A pair's before side is the bandpassed signal, since the bandpass alone raises this.",
+    "gcor_hbo": "How much every HbO channel moves together, higher meaning a stronger shared systemic or global component rather than localised activity. A pair's before side is the bandpassed signal.",
     "gcor_hbr": "The same for HbR.",
     "lowfreq_drift_amplitude_hbo": "Peak-to-peak of a fitted trend: how far the HbO baseline travelled, not how slowly, so a step moves it more than a slow sag does and lower is more stable. Non-standard, and not comparable between recordings of different length.",
     "lowfreq_drift_amplitude_hbr": "The same for HbR.",
@@ -365,8 +365,7 @@ _STAGE_MOTION = (
     "Measured across the motion-correction step, on the optical density either side of it."
 )
 _STAGE_PREPROC = (
-    "Measured after Beer-Lambert and before filtering, since a bandpass would otherwise be "
-    "measuring itself."
+    "Measured after Beer-Lambert and before filtering."
 )
 _STAGE_BOTH = (
     "Measured on every haemoglobin file the run wrote, so which stage you are reading is the "
