@@ -202,6 +202,9 @@ def by_occasion(draws: pd.DataFrame, real: pd.DataFrame) -> pd.DataFrame:
             "percentile": beaten / pool.size * 100,
             "p": _exact_p(beaten, pool.size), "n_iter": int(pool.size),
         })
+    # a channel no occasion has both a real value and draws for
+    if not rows:
+        return pd.DataFrame(columns=["condition", "occasion"])
     return pd.DataFrame(rows).sort_values(["condition", "occasion"], ignore_index=True)
 
 
@@ -247,6 +250,8 @@ def by_cohort(draws: pd.DataFrame, real: pd.DataFrame,
             "n_resample": n_resample,
         })
         rows.append(_paired_row(cond, observed, pools))
+    if not rows:
+        return pd.DataFrame(columns=["condition", "test"])
     return (pd.DataFrame(rows)
             .sort_values(["condition", "test"], ignore_index=True))
 
@@ -392,8 +397,12 @@ def write_group_null(output_dir: Path, task: str, chroma: str = "hbo",
             logger.info("%s null, level %s over %s pairings: %d occasions, %d channels",
                         null, level, pairings, d.occasion.nunique(), d.label.nunique())
         tag = dict(granularity=gran, level=level, pairings=pairings)
-        occ_parts.append(by_occasion(d, r).assign(**tag))
-        coh_parts.append(by_cohort(d, r, n_resample=n_resample, seed=seed).assign(**tag))
+        occ = by_occasion(d, r)
+        coh = by_cohort(d, r, n_resample=n_resample, seed=seed)
+        if len(occ):
+            occ_parts.append(occ.assign(**tag))
+        if len(coh):
+            coh_parts.append(coh.assign(**tag))
     n_ch = sum(1 for p in coh_parts if (p["granularity"] == "channel").all())
     logger.info("%s null, and one level per channel pairing: %d of them", null, n_ch)
 

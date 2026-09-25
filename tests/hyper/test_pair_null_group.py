@@ -137,6 +137,28 @@ def test_a_crossed_real_table_contributes_only_its_homologous_cells(tmp_path):
     assert out.coherence.iloc[0] == pytest.approx(0.40)
 
 
+def test_no_occasion_with_both_a_real_value_and_draws_gives_no_rows():
+    real = _real(0.40)[lambda f: f.occasion != "G01"]
+    draws = _draws()[lambda f: f.occasion == "G01"]
+    assert by_occasion(draws, real).empty
+    assert by_cohort(draws, real, n_resample=100, seed=0).empty
+
+
+def test_a_channel_no_occasion_can_rank_is_left_out_rather_than_raised(tmp_path):
+    """Rejected in the real member where it survives in the stand-ins, and the reverse elsewhere."""
+    _write_tree(tmp_path)
+    for occ in OCCASIONS:
+        d = tmp_path / f"group-{occ}" / "nirs"
+        kind = "wtcbycond" if occ == "G01" else "wtcbycond-pairnull-draws"
+        path = d / name(occ, "main", kind)
+        table = pd.read_csv(path, sep="\t")
+        table[table.label != "S1_D1"].to_csv(path, sep="\t", index=False)
+    write_group_null(tmp_path, "main", n_resample=500, seed=3)
+    out = pd.read_csv(tmp_path / _cohort("pair", "byoccasion"), sep="\t")
+    assert "S1_D1" not in set(out.level)
+    assert {"S1_D2", "S2_D1", "S2_D2"} <= set(out.level)
+
+
 def test_a_tree_with_no_draws_says_what_has_to_run(tmp_path):
     (tmp_path / "group-G01" / "nirs").mkdir(parents=True)
     with pytest.raises(FileNotFoundError, match="pair-null"):

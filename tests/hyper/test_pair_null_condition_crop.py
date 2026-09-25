@@ -85,6 +85,16 @@ def test_the_cap_counts_stand_ins_not_conditions(wired):
     assert len(drawn) == 2 * len(WINDOWS)
 
 
+def test_one_person_standing_in_from_two_sessions_is_two_draws(wired):
+    """A draw is named by its recording, so a repeated person does not merge two draws into one."""
+    wired["onsets"] = {"baseline": 0.0, "game1": 500.0}
+    entries = [GroupEntry(g, "sub-02", "main", session=s) for g, s in (("G02", "a"), ("G03", "b"))]
+    drawn = list(_draw_condition_pairs(
+        "/out", "main", FIXED, _Raw(), entries, desc="preproc", bads_scope="run",
+        scope_tasks=["main"], windows=WINDOWS, band_fmin=BAND_FMIN, n_max=None, refused={}))
+    assert _partners_drawn(drawn) == ["sub-02_ses-a", "sub-02_ses-b"]
+
+
 def test_an_unreadable_stand_in_is_counted_rather_than_raised(wired, monkeypatch):
     real_haemo = group_io.load_group_haemo
 
