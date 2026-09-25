@@ -225,7 +225,9 @@ def _draw_condition_pairs(
             logger.info("stopping at %d stand-ins, the limit asked for", drawn)
             break
         # a stand-in is a recording, not a person: one person can stand in from several sessions
-        pid = entry.subject_id if entry.session is None else f"{entry.subject_id}_ses-{entry.session}"
+        pid = "_".join([entry.subject_id]
+                       + [f"{key}-{value}" for key, value in (("ses", entry.session),
+                                                              ("run", entry.run)) if value])
         try:
             partner = load_group_haemo(derivatives_dir, [entry], desc=desc)
         except Exception as exc:

@@ -95,6 +95,18 @@ def test_one_person_standing_in_from_two_sessions_is_two_draws(wired):
     assert _partners_drawn(drawn) == ["sub-02_ses-a", "sub-02_ses-b"]
 
 
+@pytest.mark.parametrize("session,run,expected", [
+    (None, None, "sub-02"), ("a", None, "sub-02_ses-a"), (None, "2", "sub-02_run-2"),
+    ("a", "2", "sub-02_ses-a_run-2")])
+def test_a_draw_is_named_by_whichever_labels_its_row_carries(wired, session, run, expected):
+    wired["onsets"] = {"baseline": 0.0, "game1": 500.0}
+    entries = [GroupEntry("G02", "sub-02", "main", session=session, run=run)]
+    drawn = list(_draw_condition_pairs(
+        "/out", "main", FIXED, _Raw(), entries, desc="preproc", bads_scope="run",
+        scope_tasks=["main"], windows=WINDOWS, band_fmin=BAND_FMIN, n_max=None, refused={}))
+    assert _partners_drawn(drawn) == [expected]
+
+
 def test_an_unreadable_stand_in_is_counted_rather_than_raised(wired, monkeypatch):
     real_haemo = group_io.load_group_haemo
 

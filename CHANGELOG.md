@@ -35,7 +35,7 @@ All notable changes to this project will be documented in this file.
 - `fnirs-prep crop` checks the segments table once before any subject, so a bad table is one error and writes nothing
 
 ### Fixed
-- `fnirs-hyper-pairnull` merged one person's stand-ins from different sessions into one draw; a draw is now named by subject and session
+- `fnirs-hyper-pairnull` merged one person's stand-ins from different sessions or runs into one draw; a draw is now named by subject, session and run
 - `fnirs-hyper-groupnull` failed on a channel with no occasion holding both a real value and draws; that channel is now left out
 - The raw viewer never showed its before/after motion note or its read-only channel-decisions hint; both had lost their element
 - `fnirs-qc hyper-raw` failed on recordings whose aligned window ended a float round-off past the last sample
