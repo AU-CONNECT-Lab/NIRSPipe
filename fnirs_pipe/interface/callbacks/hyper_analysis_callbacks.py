@@ -23,8 +23,6 @@ _SECTIONS = {
 _ALL_SECTIONS = ("hy-run-section", "hy-pairnull-section", "hy-groupnull-section",
                  "hy-band-section", "hy-window-section")
 
-# report each command writes, relative to output_dir, best match first. The hyper level names
-# its file after the group, so it is found by glob rather than named here.
 _STATES = [
     State("hy-output-dir", "value"),
     State("hy-derivatives-dir", "value"),

@@ -4,7 +4,6 @@ snirf file read/write (wraps MNE-NIRS + h5py).
 
 
 import json
-import re
 from pathlib import Path
 from typing import Any
 

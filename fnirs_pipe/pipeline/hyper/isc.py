@@ -245,8 +245,8 @@ def compute_isc(
     ``window`` restricts it to ``(tstart, tstop)`` on the aligned clock, which is how a
     condition gets a correlation of its own. Unlike the wavelet coherence this really is a
     cut and not a slice of a whole-record computation: a correlation has no frequency axis
-    and nothing here filters, so a window carries no edge that the whole record would not
-    have had. Both sides are z-scored inside the window, because the correlation over a
+    and ``band`` is applied over the whole record before the cut (see :func:`_band_limit`),
+    so a window carries no edge that the whole record would not have had. Both sides are z-scored inside the window, because the correlation over a
     stretch is against that stretch's mean, not the recording's. The wavelet coherence is
     windowed instead; see :func:`~fnirs_pipe.pipeline.hyper.wtc.window_result`.
 

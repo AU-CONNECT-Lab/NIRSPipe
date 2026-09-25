@@ -433,8 +433,7 @@ def carpet_gvtd_figure(
     data_z, t_carpet, stats = carpet_z(od_data, times, z_threshold)
     data_z_after = (None if not has_after else
                     carpet_z(od_after, times, z_threshold, stats=stats)[0])
-    # a blank row between blocks, so where one set ends is visible without counting channels.
-    # the labels are spaces because they still have to be distinct categories on the y axis
+    # blocks stacked directly, the seam drawn as a thin rule (see _carpet_band_marks)
     data_z, data_z_after, carpet_rows, band_spans = _blocked_carpet(
         data_z, data_z_after, blocks)
 

@@ -42,9 +42,8 @@ logger = get_logger("qc.subject_index")
 # say whether a run is usable at a glance; everything else stays in the run's own report.
 #
 # Long channels first, all channels as the fallback, which is the same preference the run's
-# own report and the hyperscanning tables use. The last two `Motion corr.` has no
-# long-channel form: the correction footprint counts what the correction touched, over
-# every channel.
+# own report and the hyperscanning tables use. `Motion corr.` has no long-channel form: the
+# correction footprint counts what the correction touched, over every channel.
 _COLUMNS = (
     ("Channels kept", ("raw_long_channel_retention_rate", "raw_channel_retention_rate"), "{:.0%}"),
     ("SCI mean",      ("raw_long_sci_mean", "raw_sci_mean"),                             "{:.2f}"),

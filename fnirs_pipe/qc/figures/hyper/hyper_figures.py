@@ -18,7 +18,7 @@ from fnirs_pipe.qc.figures.common._utils import (CONDITION_PALETTE, PSD_NFFT,
                                           timeline_row_bands, timeline_row_traces)
 # imported rather than restated, so the dyad and subject reports draw the same heads
 from fnirs_pipe.qc.figures.common.head_map import (
-    head_axes as _head_axes, head_geometry, head_ground as _head_ground,
+    head_axes as _head_axes, head_ground as _head_ground,
     head_glyph as _head_glyph,
 )
 from fnirs_pipe.utils.logging import get_logger
@@ -815,8 +815,6 @@ def build_head_slider(
 # Figure: screening synchrony against its null
 # ---------------------------------------------------------------------------
 
-# The conventional line a surrogate test is read at. One number, because the figure shades
-# it and the table flags against it and the two must not drift.
 def build_screening_strip(coherence_df: "pd.DataFrame") -> "go.Figure | None":
     """Each window's coherence as its rank inside its own surrogate null, one row per window.
 

@@ -39,9 +39,7 @@ _MUST_AGREE = ("band_fmin", "band_fmax", "mask_coi", "null_kind", "pair_pool", "
 # whitened, so it must not merge with one that was
 _ABSENT_MEANS = {"wtc_whiten_s": 0.0}
 
-# never merged, whatever else they carry. The draws are the same null at full detail and
-# would double every row of it; the per-scale phase table is a different measurement that
-# happens to share these entities. Both are per-dyad files a study reads one at a time.
+# never merged: the draws are the same null at full detail and would double every row of it
 _NOT_MERGED = frozenset({"draws"})
 
 

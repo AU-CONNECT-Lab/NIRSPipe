@@ -548,7 +548,7 @@ def format_rows(
     hand that line over or the reason comes out naming the wrong criterion.
     ``name_key`` is ``"pair"`` for rows that came through :func:`pair_rows`.
 
-Status names the criterion a rejected channel failed. Screening is a union, so a channel
+    Status names the criterion a rejected channel failed. Screening is a union, so a channel
     can be BAD with a passing SCI cell; without the reason printed beside it that reads as a
     contradiction rather than as a PSP failure.
     """

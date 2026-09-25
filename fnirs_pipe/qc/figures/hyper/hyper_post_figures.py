@@ -242,8 +242,8 @@ PANEL_HEIGHT = 720
 # Arrow length in pixels, since an annotation's tail is offset in pixels; near the still's.
 _INTERACTIVE_ARROW_PX = 23.0
 
-# Name every arrow carries, so the resize hook can find them among the figure's annotations
-# and a per-condition view can swap the whole set without disturbing the caption.
+# Name every arrow carries, so a per-condition view can swap the whole set without
+# disturbing the caption.
 _ARROW_NAME = "wtcarrow"
 
 # Wide and flat: the page caps the still at the live ROI map's height, so the aspect decides
@@ -256,11 +256,6 @@ WTC_QUIVER_SCALE = 52.0
 # same number in Plotly's CSS pixels; every width below is the still's own times this.
 _LIVE_LINE_SCALE = 2.2
 
-# Height from width, and arrow length from the plot area, on every draw and every resize.
-# It runs again after a relayout because that is when a condition view swaps in its own
-# arrows, and each pass renormalises whatever length it finds rather than scaling what is
-# there, so running twice is the same as running once. The one-pixel guard is what stops
-# the relayout it makes from calling it forever.
 def _arrow_annotations(wtc_data: dict, freqs: np.ndarray, times: np.ndarray,
                        freq_coi: np.ndarray,
                        arrow_min: float = ARROW_MIN_COHERENCE) -> list[dict]:
@@ -531,17 +526,16 @@ def _png_b64(fig) -> str:
 # rather than a red and a blue, which on these pages mean HbO and HbR.
 NODE_COLORS = ("#8e44ad", "#27ae60")
 
-# One scale per quantity, each over its own full range. A correlation is signed and takes a
 # The scales, the blank cell and the printed cell value are the report's, not this figure's;
 # see figures.common.matrix_map for which quantity takes which and why
 from fnirs_pipe.qc.figures.common.matrix_map import (  # noqa: E402
-    BLANK_CELL, COHERENCE_SCALE, CORRELATION_SCALE, cell_values as _cell_values,
+    COHERENCE_SCALE, CORRELATION_SCALE, cell_values as _cell_values,
     matrix_ground, scale_color as _arc_color,
 )
 # The circle itself is the report's, not this figure's: one subject's channels against each
 # other and two members' against each other are the same picture on different matrices
 from fnirs_pipe.qc.figures.common.circle_map import (  # noqa: E402
-    DYAD_GAP as _CIRCLE_GAP, bezier as _bezier, circle_axes, node_arc, radial_label,
+    DYAD_GAP as _CIRCLE_GAP, bezier as _bezier, node_arc, radial_label,
     ring_angles,
 )
 

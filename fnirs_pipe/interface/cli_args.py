@@ -2,7 +2,7 @@
 
 The batch editing is `fnirs-prep`, the dyad analysis is `fnirs-hyper`, the aggregate reports
 are `fnirs-qc`. Kept beside the pages rather than derived from the parsers, because argparse
-can say a flag exists but not which widget should fill it. `tests/test_gui_cli_surface.py` is
+can say a flag exists but not which widget should fill it. `tests/gui/test_gui_cli_surface.py` is
 what stops the two surfaces drifting apart.
 """
 

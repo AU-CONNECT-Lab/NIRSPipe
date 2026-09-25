@@ -57,7 +57,6 @@ always complete, every channel, whichever section they sit under.
 from __future__ import annotations
 
 import json
-import re
 from pathlib import Path
 from typing import Any
 

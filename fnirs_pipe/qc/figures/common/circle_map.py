@@ -4,8 +4,7 @@ Where a node sits, how a chord between two of them bows, and how a node's label 
 against the ring. The geometry is kept apart from the figure that fills it.
 
 Groups are separated by blank circle rather than by a drawn rule. A dyad circle has two
-groups, the two members. **Nodes carry no colour of their own**: the chords need the colour
-for their value.
+groups, the two members. Nodes are ``NODE_INK`` unless the caller passes a colour.
 """
 
 from __future__ import annotations
